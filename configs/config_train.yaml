@@ -1,0 +1,97 @@
+SHORTTEST:  false
+STORAGE_TYPE: mem # disk
+MODEL_NICKNAME: 'lstm' # 'TCN_vs_LSTM' any str or None
+PRECISION:  'float' # double , bfloat16
+ALLOW_TF32: true
+MODEL_NUM: 4
+MODEL_MODULE: 'GeneralRNN' 
+MODEL_DATATYPE:
+  GRU: 'day'
+  GeneralRNN: 'day'
+  LSTM: 'day'
+  TCN: 'day'
+  Transformer: 'day'
+  other: ['day' , '15m' , 'gp' , 'day+15m']
+MODEL_PARAM:
+  hidden_dim:  [32 , 64 , 32 , 64] #  2**5
+  seqlens:     [{'day': 40 , '15m': 20 , 'dms': 40 }] # although not a param for model, but can be different values(dict of SEQLEN)
+  rnn_layers:  [2]
+  mlp_layers:  [2] 
+  dropout:     [0.1 , 0.1 , 0.2 , 0.2]
+  fc_in:       [true]
+  fc_att:      [true] 
+  type_rnn:    ['lstm'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
+  rnn_att:     [false]
+  num_output:  [1]
+  kernel_size: [3] 
+  hidden_as_factor:    [false]
+  ordered_param_group: [false]  # multiple data input , if train sequentially
+  ATF_mask: {'causal': false , 'gaussian': false , 'tradegap': false }
+COMPT_PARAM: 
+  cuda_first: true
+  num_worker: 10
+TRAIN_PARAM:
+  dataloader:
+    random_seed:     null
+    random_tv_split: true
+    train_ratio:     0.8
+  trainer:
+    optimizer: {'name' : 'Adam' , 'param' : {} ,}  #{'name' : 'SGD' , 'param' : {} ,}
+    scheduler: {'name' : 'cycle' , 'param' : {'base_lr': 1.0e-7 , 'step_size_up': 4} ,}  #{'name' : 'SGD' , 'param' : {} ,}
+    learn_rate:
+      base:    0.005
+      ratio:   {'attempt':[1 , 0.1 , 10 , 0.01 , 100] , 'round' : [1.] , 'transfer' : 0.1 , } 
+      reset:   {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
+    nanloss:   {'retry' : 2}
+    gradient:  {'clip_value' : 10.0}
+    retrain:   {'attempts' : 4 , 'min_epoch' : 20 , 'min_epoch_round' : 10} 
+  criterion:
+    loss:      'ccc' # mse , pearson , ccc
+    metric:    'pearson' #mse,pearson,ccc,spearman
+    penalty:   {'hidden_orthogonality' : 0.001 ,}
+  transfer:    false
+  output_types: ['best' , 'swalast' , 'swabest']
+  multitask:
+    type: 'hybrid'
+    param_dict:
+      dwa: {'tau' : 2}
+      ruw: {'phi' : null}
+      ewa: {}
+      gls: {}
+      rws: {}
+      hybrid: {'phi' : null , 'tau' : 2}
+  terminate:
+    overall:
+      early_stop: 10
+      max_epoch: 100
+      valid_converge: {'min_epoch' : 5 , 'eps' : 1.0e-5} 
+      #'train_converge' : {'min_epoch' : 5 , 'eps' : 1.0e-5} 
+      #'tv_converge'    : {'min_epoch' : 5 , 'eps' : 1.0e-5}
+    round:
+      early_stop: 5
+      max_epoch: 50
+      valid_converge: {'min_epoch' : 5 , 'eps' : 1.0e-5} 
+SPECIAL_CONFIG:
+  SHORTTEST:
+    BEG_DATE:   20221206
+    INPUT_SPAN: 480
+    MAX_EPOCH:  20
+    VERBOSITY:  3
+    MODEL_NICKNAME: 'SHORTTEST'
+  TRANSFORMER:
+    trainer:
+      gradient:  {'clip_value' : 10.}
+      learn_rate:
+        base:    0.005
+        ratio:   {'attempt':[1 , 0.1 , 10 , 0.01 , 100] , 'round' : [1.] , 'transfer' : 0.1 , } 
+        reset:   {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }
+      scheduler: {'name' : 'cycle' , 'param' : {'base_lr':1.0e-7,'step_size_up':4} ,}
+BEG_DATE:   20170103
+END_DATE:   99991231
+INPUT_SPAN: 2400
+INTERVAL:   120
+MAX_EPOCH:  100
+VERBOSITY:  2
+BATCH_SIZE: 10000
+TEST_STEP_DAY:  1
+INPUT_STEP_DAY: 5

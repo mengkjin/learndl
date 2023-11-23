@@ -1,0 +1,9 @@
+DATATYPE:
+  trade:
+    - 'day'
+    - '30m'
+    - '15m'
+  factor:
+    - 'gp'
+    - 'dms'
+
