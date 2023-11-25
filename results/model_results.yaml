@@ -1,0 +1,14 @@
+0_start: Sat Nov 25 21:17:28 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x2)
+3_time: 20221206-99991231
+4_typeNN: tcn
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.5 Min/model, 1.5 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 11.0 Secs
+7_result:
+  0.best: 7.023526306380518
+  0.swabest: 6.68795547389891
+  0.swalast: 7.54261577950092
+  1.best: 6.372629823512398
+  1.swabest: 6.47836076663225
+  1.swalast: 7.078214344326625

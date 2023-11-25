@@ -21,7 +21,7 @@ import argparse
 import torch
 import torch.nn as nn
 import numpy as np
-import itertools , random , os, shutil , gc , time ,h5py
+import itertools , random , os, shutil , gc , time , h5py , yaml
 
 from torch.optim.swa_utils import AveragedModel , update_bn
 from my_utils import lr_cosine_scheduler , Mydataset , multiloss_calculator , versatile_storage
@@ -44,7 +44,7 @@ config = get_config()
 
 torch.set_default_dtype(getattr(torch , config['PRECISION']))
 torch.backends.cuda.matmul.allow_tf32 = config['ALLOW_TF32']
-torch.autograd.set_detect_anomaly(False)
+torch.autograd.set_detect_anomaly(config['DETECT_ANOMALY'])
 
 storage_model  = versatile_storage(config['STORAGE_TYPE'])
 storage_loader = versatile_storage(config['STORAGE_TYPE'])
@@ -212,7 +212,12 @@ class model_controller():
     5. text: model , round , attempt , epoch , exit , stat , time , trainer
     """
     def __init__(self , **kwargs):
+        self.model_info = dict()
+        self.model_info['global_start_time'] = time.ctime()
+        self.model_info['config'] = config
+
         self.init_time = time.time()
+        
         self.display = {
             'tqdm' : True if config['VERBOSITY'] >= 10 else False ,
             'once' : True if config['VERBOSITY'] <=  2 else False ,
@@ -233,6 +238,7 @@ class model_controller():
     def SetProcessName(self , key = 'data'):
         ShareNames.process_name = key.lower()
         self.model_count = 0
+        self.epoch_count = 0
         if 'data' in vars(self) : self.data.reset_dataloaders()
         if ShareNames.process_name == 'data': 
             pass
@@ -263,6 +269,7 @@ class model_controller():
         1. loop over model(model_date , model_num)
         2. loop over round(if necessary) , attempt(if converge too soon) , epoch(most prevailing loops)
         """
+        self.model_info['train_start_time'] = time.ctime()
         self.train_time = time.time()
         logger.critical(f'Start Process [Train Model]!')
         self.printer('model_specifics')
@@ -273,9 +280,13 @@ class model_controller():
             self.ModelPreparation('train')
             self.TrainModel()
         total_time = time.time() - self.train_time
-        logger.critical('Finish Process [Train Model]! Cost {:.1f} Hours, {:.1f} Min/Training'.format(total_time / 3600 , total_time / 60 / max(self.model_count , 1)))
-    
+        train_process = 'Finish Process [Train Model]! Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
+            total_time / 3600 , total_time / 60 / max(self.model_count , 1) , total_time / max(self.epoch_count , 1))
+        logger.critical(train_process)
+        self.model_info['train_process'] = train_process
+
     def model_process_test(self):
+        self.model_info['test_start_time'] = time.ctime()
         self.test_time = time.time()
         logger.critical(f'Start Process [Test Model]!')        
         logger.warning('Each Model Date Testing Mean Rank_ic:')
@@ -288,8 +299,10 @@ class model_controller():
             self.ModelPreparation('test')
             self.TestModel()
         self.ModelResult()
-        logger.critical('Finish Process [Test Model]! Cost {:.1f} Secs'.format(time.time() - self.test_time))
-        
+        test_process = 'Finish Process [Test Model]! Cost {:.1f} Secs'.format(time.time() - self.test_time)
+        logger.critical(test_process)
+        self.model_info['test_process'] = test_process
+
     def model_process_instance(self):
         if ShareNames.anchoring < 0:
             logger.critical(f'Do you want to copy the model to instance?')
@@ -417,6 +430,7 @@ class model_controller():
         self._init_variables(self.cond.get('loop_status'))
         self.epoch_i += 1
         self.epoch_all += 1
+        self.epoch_count += 1
         if self.cond.get('loop_status') in ['attempt' , 'round']:
             self.attempt_i += 1
             self.text['attempt'] = f'FirstBite' if self.attempt_i == 0 else f'Retrain#{self.attempt_i}'
@@ -643,7 +657,36 @@ class model_controller():
         #    df = pd.DataFrame(self.y_pred.T, index = self.data.model_test_dates, columns = self.data.index_stock.astype(str))
         #    with open(f'{ShareNames.instance_path}/{ShareNames.model_name}_fac{self.model_num}.csv', 'a') as f:
         #        df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)
+
+    def ResultOutput(self):
+        out_dict = {
+            '0_start':self.model_info.get('global_start_time'),
+            '1_basic':'+'.join([
+                'short' if config['SHORTTEST'] else 'long' ,
+                config['STORAGE_TYPE'] , config['PRECISION']
+            ]),
+            '2_model':''.join([
+                ShareNames.model_module , '_' , ShareNames.model_data_type ,
+                '(x' , str(config['MODEL_NUM']) , ')'
+            ]),
+            '3_time':'-'.join([str(config['BEG_DATE']),str(config['END_DATE'])]),
+            '4_typeNN':'+'.join(list(set(config['MODEL_PARAM']['type_rnn']))),
+            '5_train':self.model_info.get('train_process'),
+            '6_test':self.model_info.get('test_process'),
+            '7_result':self.model_info.get('test_ic_sum'),
+        }
+
+        out_path = f'./results/model_results.yaml'
+        if os.path.exists(out_path):
+            out_type = 'a'
+        else:
+            os.makedirs(os.path.dirname(out_path) , exist_ok=True)
+            out_type = 'w'
         
+        with open(out_path , out_type) as f:
+            yaml.dump(out_dict , f)
+
+
     def StorePreds(self):
         assert ShareNames.process_name == 'instance'
         if self.model_num == 0:
@@ -694,6 +737,8 @@ class model_controller():
         for i in range(len(add_row_key)):
             logger.info('{: <11s}'.format(add_row_key[i]) + (add_row_fmt[i]*len(self.test_result_model_num)).format(*add_row_value[i]))
     
+        self.model_info['test_ic_sum'] = {k:v for k,v in zip(df.columns , ic_sum.tolist())}
+
     def InstanceStart(self):
         exec(open(f'{ShareNames.instance_path}/globalvars.py').read())
         self.shared_ctrl.assign_variables()
@@ -1325,4 +1370,5 @@ if __name__ == '__main__':
 
     Controller = model_controller()
     Controller.main_process()
+    Controller.ResultOutput()
     Controller.print_time_recorder()

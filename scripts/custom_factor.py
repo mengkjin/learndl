@@ -13,7 +13,7 @@ logger = get_logger()
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-dir_data   = f'./data'
+dir_data      = f'./data'
 dir_fund_port = f'{dir_data}/fund_stock_port.h5'
 dir_trading   = f'{dir_data}/day_trading_data.h5'
 dir_info      = f'{dir_data}/stock_info.h5'

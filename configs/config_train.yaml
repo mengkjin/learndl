@@ -1,10 +1,10 @@
+# most frequently changing variables
 SHORTTEST:  false
 STORAGE_TYPE: mem # disk
-MODEL_NICKNAME: 'lstm' # 'TCN_vs_LSTM' any str or None
+MODEL_NICKNAME: 'tcn' # 'TCN_vs_LSTM' any str or None
 PRECISION:  'float' # double , bfloat16
-ALLOW_TF32: true
-MODEL_NUM: 4
 MODEL_MODULE: 'GeneralRNN' 
+MODEL_NUM: 4
 MODEL_DATATYPE:
   GRU: 'day'
   GeneralRNN: 'day'
@@ -15,12 +15,12 @@ MODEL_DATATYPE:
 MODEL_PARAM:
   hidden_dim:  [32 , 64 , 32 , 64] #  2**5
   seqlens:     [{'day': 40 , '15m': 20 , 'dms': 40 }] # although not a param for model, but can be different values(dict of SEQLEN)
-  rnn_layers:  [2]
+  rnn_layers:  [4]
   mlp_layers:  [2] 
   dropout:     [0.1 , 0.1 , 0.2 , 0.2]
   fc_in:       [true]
   fc_att:      [true] 
-  type_rnn:    ['lstm'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
+  type_rnn:    ['tcn'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
   rnn_att:     [false]
   num_output:  [1]
   kernel_size: [3] 
@@ -95,3 +95,7 @@ VERBOSITY:  2
 BATCH_SIZE: 10000
 TEST_STEP_DAY:  1
 INPUT_STEP_DAY: 5
+
+# torch utility
+ALLOW_TF32: true
+DETECT_ANOMALY: false

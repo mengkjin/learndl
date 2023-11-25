@@ -4,107 +4,7 @@ import colorlog
 from logging import handlers
 import yaml
 
-'''
-LOG_CONFIG = {
-    'name' : 'default_log',
-    'handlers': ['console' , 'file'],
-    'level': 'DEBUG',
-    'datefmt' : '%y-%m-%d %H:%M:%S',
-    # 处理器集合
-    'console': {
-        'level': 'INFO',  # 输出信息的最低级别
-        'class': 'logging.StreamHandler',
-        'param' : {},
-        'formatter_class' : '_LevelColorFormatter', 
-        # 'colorlog.ColoredFormatter' , '_LevelFormatter' , 'logging.Formatter'
-        'formatter': 'levelcolor',  # 'color' , 'level' , 'standard'
-    },
-    # 输出到文件
-    'file': {
-        'level': 'DEBUG',
-        'class': 'logging.handlers.TimedRotatingFileHandler',
-        'param' : {
-            'filename' : './logs/nn_fac_log.log',
-            'when' : 'D',
-            'backupCount': 5,  # 备份份数
-            'encoding': 'utf-8',  # 文件编码
-        },
-        'formatter_class' : '_LevelFormatter',
-        'formatter': 'level', 
-    },
-    # 日志格式集合
-    'formatters': {
-        # 标准输出格式 , omit part : 'TRD:%(threadName)-10s|LVL:%(levelno)s|'
-        'standard': {
-            'fmt': '%(asctime)s|MOD:%(module)-12s|: %(message)s',
-        },
-        'level' : {
-            'fmt': '%(asctime)s|MOD:%(module)-12s|: %(message)s',
-            'level_fmts' : {
-                'DEBUG' : '%(message)s',
-                'INFO' : '%(message)s',
-            },
-        },
-        'color' : {
-            'fmt': '%(log_color)s%(asctime)s|MOD:%(module)-12s|%(reset_log_color)s: %(message_log_color)s%(message)s',
-            'log_colors' : {
-                'DEBUG':'bold,white,bg_cyan',
-                'INFO':'bold,white,bg_green',
-                'WARNING':'bold,white,bg_blue',
-                'ERROR':'bold,white,bg_purple',
-                'CRITICAL':'bold,white,bg_red',
-            },
-            'secondary_log_colors' : {
-                'reset': {
-                    'DEBUG':'reset',
-                    'INFO':'reset',
-                    'WARNING':'reset',
-                    'ERROR':'reset',
-                    'CRITICAL':'reset',
-                },
-                'message': {
-                    'DEBUG':'cyan',
-                    'INFO':'green',
-                    'WARNING':'bold,blue',
-                    'ERROR':'bold,purple',
-                    'CRITICAL':'bold,red',
-                },
-            },
-        },
-        'levelcolor' : {
-            #'fmt': '%(log_color)s%(asctime)s|MOD:%(module)-12s|TRD:%(threadName)-12s|LVL:%(levelno)s|%(reset_log_color)s: %(message_log_color)s%(message)s',
-            'fmt': '%(log_color)s%(asctime)s|MOD:%(module)-12s|%(reset_log_color)s: %(message_log_color)s%(message)s',
-            'level_fmts' : {
-                'DEBUG' : '%(message_log_color)s%(message)s',
-                'INFO' : '%(message_log_color)s%(message)s',
-            },
-            'log_colors' : {
-                'DEBUG':'bold,white,bg_cyan',
-                'INFO':'bold,white,bg_green',
-                'WARNING':'bold,white,bg_blue',
-                'ERROR':'bold,white,bg_purple',
-                'CRITICAL':'bold,white,bg_red',
-            },
-            'secondary_log_colors' : {
-                'reset': {
-                    'DEBUG':'reset',
-                    'INFO':'reset',
-                    'WARNING':'reset',
-                    'ERROR':'reset',
-                    'CRITICAL':'reset',
-                },
-                'message': {
-                    'DEBUG':'cyan',
-                    'INFO':'green',
-                    'WARNING':'bold,blue',
-                    'ERROR':'bold,purple',
-                    'CRITICAL':'bold,red',
-                },
-            },
-        },
-    },
-}
-'''
+
 
 class _LevelFormatter(logging.Formatter):
     def __init__(self, fmt=None, datefmt=None, level_fmts={}):
@@ -136,6 +36,7 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
 
     
 def get_logger(test_output = False):
+    
     config_logger = get_config('logger')
     os.makedirs(os.path.dirname(config_logger['file']['param']['filename']), exist_ok = True)
     log = logging.getLogger(config_logger['name'])
