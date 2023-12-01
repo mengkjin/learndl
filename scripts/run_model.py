@@ -38,7 +38,7 @@ from mymodel import *
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-TIME_RECODER = False
+TIME_RECODER = False # dict()
 logger = get_logger()
 config = get_config()
 
@@ -225,7 +225,6 @@ class model_controller():
             'once' : True if config['VERBOSITY'] <=  2 else False ,
             'step' : [10,5,5,3,3,1][min(config['VERBOSITY'] // 2 , 5)],
         }
-        self.process_time = {}
         self.shared_ctrl = ShareNames_conctroller()
         
     def main_process(self):
@@ -353,28 +352,28 @@ class model_controller():
     
     def ModelPreparation(self , process , last_n = 30 , best_n = 5):
         assert process in ['train' , 'test' , 'instance']
-        _start_time = time.time()
-        param = ShareNames.model_params[self.model_num]
-        
-        # variable updates for train_params
-        if process in ['train' , 'instance']:
-            if 'hidden_orthogonality' in self.f_penalty.keys(): self.f_penalty['hidden_orthogonality'][1] = 1 * (param.get('hidden_as_factors') == True)
-        
-        path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
-        path = {k:f'{path_prefix}.{k}.pt' for k in ShareNames.output_types} #['best','swalast','swabest']
-        path.update({f'src_model.{k}':[] for k in ShareNames.output_types})
-        if 'swalast' in ShareNames.output_types: 
-            path['lastn'] = [f'{path_prefix}.lastn.{i}.pt' for i in range(last_n)]
-        if 'swabest' in ShareNames.output_types: 
-            path['bestn'] = [f'{path_prefix}.bestn.{i}.pt' for i in range(best_n)]
-            path['bestn_ic'] = [-10000. for i in range(best_n)]
-        
-        if ShareNames.train_params['transfer'] and self.model_date > ShareNames.model_date_list[0]:
-            path['transfer'] = '{}/{}.best.pt'.format(param.get('path') , max([d for d in ShareNames.model_date_list if d < self.model_date])) 
+        with process_timer('ModelPreparation' , process):
+            param = ShareNames.model_params[self.model_num]
             
-        self.Param = param
-        self.path = path
-        self.time_recoder(_start_time , ['ModelPreparation' , process])
+            # variable updates for train_params
+            if process in ['train' , 'instance']:
+                if 'hidden_orthogonality' in self.f_penalty.keys(): self.f_penalty['hidden_orthogonality'][1] = 1 * (param.get('hidden_as_factors') == True)
+            
+            path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
+            path = {k:f'{path_prefix}.{k}.pt' for k in ShareNames.output_types} #['best','swalast','swabest']
+            path.update({f'src_model.{k}':[] for k in ShareNames.output_types})
+            if 'swalast' in ShareNames.output_types: 
+                path['lastn'] = [f'{path_prefix}.lastn.{i}.pt' for i in range(last_n)]
+            if 'swabest' in ShareNames.output_types: 
+                path['bestn'] = [f'{path_prefix}.bestn.{i}.pt' for i in range(best_n)]
+                path['bestn_ic'] = [-10000. for i in range(best_n)]
+            
+            if ShareNames.train_params['transfer'] and self.model_date > ShareNames.model_date_list[0]:
+                path['transfer'] = '{}/{}.best.pt'.format(param.get('path') , max([d for d in ShareNames.model_date_list if d < self.model_date])) 
+                
+            self.Param = param
+            self.path = path
+
     
     def TrainModel(self):
         self.TrainModelStart()
@@ -396,51 +395,40 @@ class model_controller():
         """
         Reset model specific variables
         """
-        _start_time = time.time()
-        
-        self._init_variables('model')
-        self.nanloss_life = ShareNames.train_params['trainer']['nanloss']['retry']
-        
-        self.text['model'] = '{:s} #{:d} @{:4d}'.format(ShareNames.model_name , self.model_num , self.model_date)
-
-        if (self.data.dataloader_param != (self.model_date , self.Param['seqlens'])):
-            self.data.new_train_dataloader(self.model_date , self.Param['seqlens']) 
-            self.time[1] = time.time()
-            self.printer('train_dataloader')
-            
-        self.time_recoder(_start_time , ['TrainModelStart'])
+        with process_timer('TrainModelStart'):
+            self._init_variables('model')
+            self.nanloss_life = ShareNames.train_params['trainer']['nanloss']['retry']
+            self.text['model'] = '{:s} #{:d} @{:4d}'.format(ShareNames.model_name , self.model_num , self.model_date)
+            if (self.data.dataloader_param != (self.model_date , self.Param['seqlens'])):
+                self.data.new_train_dataloader(self.model_date , self.Param['seqlens']) 
+                self.time[1] = time.time()
+                self.printer('train_dataloader')
             
     def TrainModelEnd(self):
         """
         Do necessary things of ending a model(model_data , model_num)
         """
-        _start_time = time.time()
-        
-        storage_model.del_path(self.path.get('rounds') , self.path.get('lastn') , self.path.get('bestn'))
-        if ShareNames.process_name == 'train' : self.model_count += 1
-        self.time[2] = time.time()
-        self.printer('model_end')
-        
-        self.time_recoder(_start_time , ['TrainModelEnd'])
+        with process_timer('TrainModelEnd'):
+            storage_model.del_path(self.path.get('rounds') , self.path.get('lastn') , self.path.get('bestn'))
+            if ShareNames.process_name == 'train' : self.model_count += 1
+            self.time[2] = time.time()
+            self.printer('model_end')
         
     def NewLoop(self):
         """
         Reset and loop variables giving loop_status
         """
-        _start_time = time.time()
-        
-        self._init_variables(self.cond.get('loop_status'))
-        self.epoch_i += 1
-        self.epoch_all += 1
-        self.epoch_count += 1
-        if self.cond.get('loop_status') in ['attempt' , 'round']:
-            self.attempt_i += 1
-            self.text['attempt'] = f'FirstBite' if self.attempt_i == 0 else f'Retrain#{self.attempt_i}'
-        if self.cond.get('loop_status') in ['round']:
-            self.round_i += 1
-            self.text['round'] = 'Round{:2d}'.format(self.round_i)
-            
-        self.time_recoder(_start_time , ['NewLoop'])
+        with process_timer('NewLoop'):
+            self._init_variables(self.cond.get('loop_status'))
+            self.epoch_i += 1
+            self.epoch_all += 1
+            self.epoch_count += 1
+            if self.cond.get('loop_status') in ['attempt' , 'round']:
+                self.attempt_i += 1
+                self.text['attempt'] = f'FirstBite' if self.attempt_i == 0 else f'Retrain#{self.attempt_i}'
+            if self.cond.get('loop_status') in ['round']:
+                self.round_i += 1
+                self.text['round'] = 'Round{:2d}'.format(self.round_i)
         
     def TrainerInit(self):
         """
@@ -450,157 +438,133 @@ class model_controller():
         optimizer : Adam or SGD
         scheduler : Cosine or StepLR
         """
-        _start_time = time.time()
-
-        if self.cond.get('loop_status') == 'epoch': return
-        self.net       = self.load_model('train')
-        self.max_round = self.net.max_round() if 'max_round' in self.net.__dir__() else 1
-        self.optimizer = self.load_optimizer()
-        self.scheduler = self.load_scheduler() 
-        self.multiloss = self.load_multiloss()
-
-        self.time_recoder(_start_time , ['TrainerInit'])
+        with process_timer('TrainerInit'):
+            if self.cond.get('loop_status') == 'epoch': return
+            self.net       = self.load_model('train')
+            self.max_round = self.net.max_round() if 'max_round' in self.net.__dir__() else 1
+            self.optimizer = self.load_optimizer()
+            self.scheduler = self.load_scheduler() 
+            self.multiloss = self.load_multiloss()
         
     def TrainEpoch(self):
         """
         Iterate train and valid dataset, calculate loss/metrics , update values
         If nan loss occurs, turn to _deal_nanloss
         """
-        _start_time = time.time()
-        loss_train , loss_valid , ic_train , ic_valid = [] , [] , [] , []
-        clip_value = ShareNames.train_params['trainer']['gradient'].get('clip_value')
+        with process_timer('TrainEpoch/assign_loader'):
+            loss_train , loss_valid , ic_train , ic_valid = [] , [] , [] , []
+            clip_value = ShareNames.train_params['trainer']['gradient'].get('clip_value')
+            
+            if self.display.get('tqdm'):
+                iter_train , iter_valid = tqdm(self.data.dataloaders['train']) , tqdm(self.data.dataloaders['valid'])
+                disp_train = lambda x:iter_train.set_description(f'Ep#{self.epoch_i:3d} train loss:{np.mean(x):.5f}')
+                disp_valid = lambda x:iter_valid.set_description(f'Ep#{self.epoch_i:3d} valid ic:{np.mean(x):.5f}')
+            else:
+                iter_train , iter_valid = self.data.dataloaders['train'] , self.data.dataloaders['valid']
+                disp_train = disp_valid = lambda x:0
+
+
+        with process_timer('TrainEpoch/train_epochs'):
+            self.net.train()
+            for i , (x , y , w) in enumerate(iter_train):
+                self.optimizer.zero_grad()
+                with process_timer('TrainEpoch/train/forward'):
+                    pred , hidden = self.net(x)
+                with process_timer('TrainEpoch/train/loss'):
+                    loss , metric = self._loss_and_metric(y , pred , 'train' , hidden = hidden , weight = w)
+                with process_timer('TrainEpoch/train/backward'):
+                    loss.backward()
+                with process_timer('TrainEpoch/train/step'):
+                    if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value)
+                    self.optimizer.step()
+                loss_train.append(loss.item()) , ic_train.append(metric)
+                disp_train(loss_train)
+
+            if np.isnan(sum(loss_train)): return self._deal_nanloss()
+            self.loss_list['train'].append(np.mean(loss_train)) , self.ic_list['train'].append(np.mean(ic_train))
         
-        if self.display.get('tqdm'):
-            iter_train , iter_valid = tqdm(self.data.dataloaders['train']) , tqdm(self.data.dataloaders['valid'])
-            disp_train = lambda x:iter_train.set_description(f'Ep#{self.epoch_i:3d} train loss:{np.mean(x):.5f}')
-            disp_valid = lambda x:iter_valid.set_description(f'Ep#{self.epoch_i:3d} valid ic:{np.mean(x):.5f}')
-        else:
-            iter_train , iter_valid = self.data.dataloaders['train'] , self.data.dataloaders['valid']
-            disp_train = disp_valid = lambda x:0
+        with process_timer('TrainEpoch/valid_epochs'):
+            self.net.eval()     
+            for i , (x , y , w) in enumerate(iter_valid):
+                # print(torch.cuda.memory_allocated(DEVICE) / 1024**3 , torch.cuda.memory_reserved(DEVICE) / 1024**3)
+                with process_timer('TrainEpoch/valid/forward'):
+                    pred , _ = self.net(x)
+                with process_timer('TrainEpoch/valid/loss'):
+                    loss , metric = self._loss_and_metric(y , pred , 'valid' , weight = w)
+                
+                loss_valid.append(loss) , ic_valid.append(metric)
+                disp_valid(ic_valid)
 
-        self.time_recoder(_start_time , ['TrainEpoch' , 'assign_loader'])
-        _start_time = time.time()
-
-        self.net.train()
-        _start_time_1 = time.time()
-        for i , (x , y , w) in enumerate(iter_train):
-            self.time_recoder(_start_time_1 , ['TrainEpoch' , 'train' , 'fetch'])
-            self.optimizer.zero_grad()
-            _start_time_1 = time.time()
-            pred , hidden = self.net(x)
-            self.time_recoder(_start_time_1 , ['TrainEpoch' , 'train' , 'forward'])
-            _start_time_1 = time.time()
-            loss , metric = self._loss_and_metric(y , pred , 'train' , hidden = hidden , weight = w)
-            self.time_recoder(_start_time_1 , ['TrainEpoch' , 'train' , 'loss'])
-            _start_time_1 = time.time()
-            loss.backward()
-            self.time_recoder(_start_time_1 , ['TrainEpoch' , 'train' , 'backward'])
-            _start_time_1 = time.time()
-            if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value)
-            self.optimizer.step()
-
-            loss_train.append(loss.item()) , ic_train.append(metric)
-            disp_train(loss_train)
-            _start_time_1 = time.time()
-        if np.isnan(sum(loss_train)): return self._deal_nanloss()
-        self.loss_list['train'].append(np.mean(loss_train)) , self.ic_list['train'].append(np.mean(ic_train))
-        
-        self.time_recoder(_start_time , ['TrainEpoch' , 'train_epochs'])
-        _start_time = time.time()
-
-        self.net.eval()     
-        _start_time_1 = time.time()  
-        for i , (x , y , w) in enumerate(iter_valid):
-            # print(torch.cuda.memory_allocated(DEVICE) / 1024**3 , torch.cuda.memory_reserved(DEVICE) / 1024**3)
-            self.time_recoder(_start_time_1 , ['TrainEpoch' , 'valid' , 'fetch'])
-            _start_time_1 = time.time()
-            pred , _ = self.net(x)
-            self.time_recoder(_start_time_1 , ['TrainEpoch' , 'valid' , 'forward'])
-            _start_time_1 = time.time()
-            loss , metric = self._loss_and_metric(y , pred , 'valid' , weight = w)
-            self.time_recoder(_start_time_1 , ['TrainEpoch' , 'valid' , 'loss'])
-            _start_time_1 = time.time()
-            loss_valid.append(loss) , ic_valid.append(metric)
-            disp_valid(ic_valid)
-            _start_time_1 = time.time()
-        self.loss_list['valid'].append(np.mean(loss_valid)) , self.ic_list['valid'].append(np.mean(ic_valid))
-        self.lr_list.append(self.scheduler.get_last_lr()[0])
-        self.scheduler.step()
-        self.reset_scheduler()
-
-        self.time_recoder(_start_time , ['TrainEpoch' , 'valid_epochs'])
+            self.loss_list['valid'].append(np.mean(loss_valid)) , self.ic_list['valid'].append(np.mean(ic_valid))
+            self.lr_list.append(self.scheduler.get_last_lr()[0])
+            self.scheduler.step()
+            self.reset_scheduler()
 
     def LoopCondition(self):
         """
         Update condition of continuing training epochs , restart attempt if early exit , proceed to next round if convergence , reset round if nan loss
         """
-        _start_time = time.time()
-
-        if self.cond['nan_loss']:
-            logger.error(f'Initialize a new model to retrain! Lives remaining {self.nanloss_life}')
-            self._init_variables('model')
-            self.cond['loop_status'] = 'round'
-            return
-            
-        valid_ic = self.ic_list['valid'][-1]
-        
-        save_targets = [] 
-        if valid_ic > self.ic_attempt_best: 
-            self.epoch_attempt_best  = self.epoch_i 
-            self.ic_attempt_best = valid_ic
-            
-        if valid_ic > self.ic_round_best:
-            self.ic_round_best = valid_ic
-            self.path['src_model.best']  = [self.path['best']]
-            save_targets.append(self.path['best'])
-
-        if 'swalast' in ShareNames.output_types:
-            self.path['lastn'] = self.path['lastn'][1:] + self.path['lastn'][:1]
-            save_targets.append(self.path['lastn'][-1])
-            
-            p_valid = self.path['lastn'][-len(self.ic_list['valid']):]
-            arg_max = np.argmax(self.ic_list['valid'][-len(p_valid):])
-            arg_swa = (lambda x:x[(x>=0) & (x<len(p_valid))])(min(5,len(p_valid)//3)*np.arange(-5,3)+arg_max)[-5:]
-            self.path['src_model.swalast'] = [p_valid[i] for i in arg_swa]
-            
-        if 'swabest' in ShareNames.output_types:
-            arg_min = np.argmin(self.path['bestn_ic'])
-            if valid_ic > self.path['bestn_ic'][arg_min]:
-                self.path['bestn_ic'][arg_min] = valid_ic
-                save_targets.append(self.path['bestn'][arg_min])
-                if self.path['bestn'][arg_min] not in self.path['src_model.swabest']: self.path['src_model.swabest'].append(self.path['bestn'][arg_min])
-            
-        storage_model.save_model_state(self.net , save_targets)
-        self.printer('epoch_step')
-        self.time_recoder(_start_time , ['LoopCondition' , 'assess'])
-        _start_time = time.time()
-        
-        self.cond['terminate'] = {k:self._terminate_cond(k,v) for k , v in ShareNames.train_params['terminate'].get('overall' if self.max_round <= 1 else 'round').items()}
-        if any(self.cond.get('terminate').values()):
-            self.text['exit'] = {
-                'max_epoch'      : 'Max Epoch' , 
-                'early_stop'     : 'EarlyStop' ,
-                'tv_converge'    : 'T&V Convg' , 
-                'train_converge' : 'Tra Convg' , 
-                'valid_converge' : 'Val Convg' ,
-            }[[k for k,v in self.cond.get('terminate').items() if v][0]] 
-            if (self.epoch_i < ShareNames.train_params['trainer']['retrain'].get('min_epoch' if self.max_round <= 1 else 'min_epoch_round') - 1 and 
-                self.attempt_i < ShareNames.train_params['trainer']['retrain']['attempts'] - 1):
-                self.cond['loop_status'] = 'attempt'
-                self.printer('new_attempt')
-            elif self.round_i < self.max_round - 1:
+        with process_timer('LoopCondition/assess'):
+            if self.cond['nan_loss']:
+                logger.error(f'Initialize a new model to retrain! Lives remaining {self.nanloss_life}')
+                self._init_variables('model')
                 self.cond['loop_status'] = 'round'
-                self.save_model('best')
-                self.printer('new_round')
-            else:
-                self.cond['loop_status'] = 'model'
-                self.save_model(ShareNames.output_types)
-        else:
-            self.cond['loop_status'] = 'epoch'
+                return
+                
+            valid_ic = self.ic_list['valid'][-1]
+            
+            save_targets = [] 
+            if valid_ic > self.ic_attempt_best: 
+                self.epoch_attempt_best  = self.epoch_i 
+                self.ic_attempt_best = valid_ic
+                
+            if valid_ic > self.ic_round_best:
+                self.ic_round_best = valid_ic
+                self.path['src_model.best']  = [self.path['best']]
+                save_targets.append(self.path['best'])
 
-        _start_time = time.time()
-        self.time_recoder(_start_time , ['LoopCondition' , 'confirm_status'])
+            if 'swalast' in ShareNames.output_types:
+                self.path['lastn'] = self.path['lastn'][1:] + self.path['lastn'][:1]
+                save_targets.append(self.path['lastn'][-1])
+                
+                p_valid = self.path['lastn'][-len(self.ic_list['valid']):]
+                arg_max = np.argmax(self.ic_list['valid'][-len(p_valid):])
+                arg_swa = (lambda x:x[(x>=0) & (x<len(p_valid))])(min(5,len(p_valid)//3)*np.arange(-5,3)+arg_max)[-5:]
+                self.path['src_model.swalast'] = [p_valid[i] for i in arg_swa]
+                
+            if 'swabest' in ShareNames.output_types:
+                arg_min = np.argmin(self.path['bestn_ic'])
+                if valid_ic > self.path['bestn_ic'][arg_min]:
+                    self.path['bestn_ic'][arg_min] = valid_ic
+                    save_targets.append(self.path['bestn'][arg_min])
+                    if self.path['bestn'][arg_min] not in self.path['src_model.swabest']: self.path['src_model.swabest'].append(self.path['bestn'][arg_min])
+                
+            storage_model.save_model_state(self.net , save_targets)
+            self.printer('epoch_step')
         
+        with process_timer('LoopCondition/confirm_status'):
+            self.cond['terminate'] = {k:self._terminate_cond(k,v) for k , v in ShareNames.train_params['terminate'].get('overall' if self.max_round <= 1 else 'round').items()}
+            if any(self.cond.get('terminate').values()):
+                self.text['exit'] = {
+                    'max_epoch'      : 'Max Epoch' , 
+                    'early_stop'     : 'EarlyStop' ,
+                    'tv_converge'    : 'T&V Convg' , 
+                    'train_converge' : 'Tra Convg' , 
+                    'valid_converge' : 'Val Convg' ,
+                }[[k for k,v in self.cond.get('terminate').items() if v][0]] 
+                if (self.epoch_i < ShareNames.train_params['trainer']['retrain'].get('min_epoch' if self.max_round <= 1 else 'min_epoch_round') - 1 and 
+                    self.attempt_i < ShareNames.train_params['trainer']['retrain']['attempts'] - 1):
+                    self.cond['loop_status'] = 'attempt'
+                    self.printer('new_attempt')
+                elif self.round_i < self.max_round - 1:
+                    self.cond['loop_status'] = 'round'
+                    self.save_model('best')
+                    self.printer('new_round')
+                else:
+                    self.cond['loop_status'] = 'model'
+                    self.save_model(ShareNames.output_types)
+            else:
+                self.cond['loop_status'] = 'epoch'
             
     def TestModelStart(self):
         """
@@ -883,46 +847,44 @@ class model_controller():
     
     def save_model(self , key = 'best'):
         assert isinstance(key , (list,tuple,str))
-        _start_time = time.time()
-        if isinstance(key , (list,tuple)):
-            [self.save_model(k) for k in key]
-        else:
-            assert key in ['best' , 'swalast' , 'swabest']
-            if key == 'best':
-                model_state = storage_model.load(self.path['best'])
-                if self.round_i < self.max_round - 1:
-                    if 'rounds' not in self.path.keys():
-                        self.path['rounds'] = ['{}/{}.round.{}.pt'.format(self.Param.get('path') , self.model_date , r) for r in range(self.max_round - 1)]
-                    # self.path[f'round.{self.round_i}'] = '{}/{}.round.{}.pt'.format(self.Param.get('path') , self.model_date , self.round_i)
-                    storage_model.save(model_state , self.path['rounds'][self.round_i])
-                storage_model.save(model_state , self.path['best'] , to_disk = True)
+        with process_timer('save_model'):
+            if isinstance(key , (list,tuple)):
+                [self.save_model(k) for k in key]
             else:
-                p_exists = storage_model.valid_paths(self.path[f'src_model.{key}'])
-                if len(p_exists) == 0:
-                    print(key , self.path[f'bestn'] , self.path[f'bestn_ic'] , self.path[f'src_model.{key}'])
-                    raise Exception(f'Model Error')
+                assert key in ['best' , 'swalast' , 'swabest']
+                if key == 'best':
+                    model_state = storage_model.load(self.path['best'])
+                    if self.round_i < self.max_round - 1:
+                        if 'rounds' not in self.path.keys():
+                            self.path['rounds'] = ['{}/{}.round.{}.pt'.format(self.Param.get('path') , self.model_date , r) for r in range(self.max_round - 1)]
+                        # self.path[f'round.{self.round_i}'] = '{}/{}.round.{}.pt'.format(self.Param.get('path') , self.model_date , self.round_i)
+                        storage_model.save(model_state , self.path['rounds'][self.round_i])
+                    storage_model.save(model_state , self.path['best'] , to_disk = True)
                 else:
-                    model = self.swa_model(p_exists)
-                    storage_model.save_model_state(model , self.path[key] , to_disk = True) 
-        self.time_recoder(_start_time , ['save_model'])
+                    p_exists = storage_model.valid_paths(self.path[f'src_model.{key}'])
+                    if len(p_exists) == 0:
+                        print(key , self.path[f'bestn'] , self.path[f'bestn_ic'] , self.path[f'src_model.{key}'])
+                        raise Exception(f'Model Error')
+                    else:
+                        model = self.swa_model(p_exists)
+                        storage_model.save_model_state(model , self.path[key] , to_disk = True) 
     
     def load_model(self , process , key = 'best'):
         assert process in ['train' , 'test']
-        _start_time = time.time()
-        net = globals()[f'My{ShareNames.model_module}'](**self.Param)
-        if process == 'train':           
-            if self.round_i > 0:
-                model_path = self.path['rounds'][self.round_i-1]
-            elif 'transfer' in self.path.keys():
-                model_path = self.path['transfer']
+        with process_timer('load_model'):
+            net = globals()[f'My{ShareNames.model_module}'](**self.Param)
+            if process == 'train':           
+                if self.round_i > 0:
+                    model_path = self.path['rounds'][self.round_i-1]
+                elif 'transfer' in self.path.keys():
+                    model_path = self.path['transfer']
+                else:
+                    model_path = -1
+                if os.path.exists(model_path): net = storage_model.load_model_state(net , model_path , from_disk = True)
+                if 'training_round' in net.__dir__(): net.training_round(self.round_i)
             else:
-                model_path = -1
-            if os.path.exists(model_path): net = storage_model.load_model_state(net , model_path , from_disk = True)
-            if 'training_round' in net.__dir__(): net.training_round(self.round_i)
-        else:
-            net = storage_model.load_model_state(net , self.path[key] , from_disk = True)
-        net = cuda(net)
-        self.time_recoder(_start_time , ['load_model'])
+                net = storage_model.load_model_state(net , self.path[key] , from_disk = True)
+            net = cuda(net)
         return net
     
     def swa_model(self , model_path_list = []):
@@ -1009,32 +971,21 @@ class model_controller():
             multiloss = multiloss_calculator(multi_type = ShareNames.train_params['multitask']['type'])
             multiloss.reset_multi_type(self.Param['num_output'] , **ShareNames.train_params['multitask']['param_dict'][multiloss.multi_type])
         return multiloss
-
-    def time_recoder(self , start_time , keys , init_length = 100):
-        if TIME_RECODER:
-            if isinstance(keys , (list , tuple)): k = '/'.join(keys)
-            if self.process_time.get(k) is None: 
-                self.process_time[k] = {
-                    'value' : np.zeros(init_length) , 
-                    'index' : -1 , 
-                    'length' : init_length , 
-                }
-            d = self.process_time[k]
-            d['index'] += 1
-            if d['length'] <= d['index']: 
-                d['value'] = np.append(d['value'] , np.zeros(init_length))
-                d['length'] += init_length
-            d['value'][d['index']] = time.time() - start_time
     
-    def print_time_recorder(self):
-        if TIME_RECODER:
-            keys = list(self.process_time.keys())
-            num_calls = [self.process_time[k]['index']+1 for k in keys]
-            total_time = [self.process_time[k]['value'].sum() for k in keys]
-            tb = pd.DataFrame({'keys':keys , 'num_calls': num_calls, 'total_time': total_time})
-            tb['avg_time'] = tb['total_time'] / tb['num_calls']
-            print(tb.sort_values(by=['total_time'],ascending=False))
-    
+class process_timer:
+    def __init__(self , *args):
+        if isinstance(TIME_RECODER , dict):
+            self.key = '/'.join(args)
+            if self.key not in TIME_RECODER.keys():
+                TIME_RECODER[self.key] = []
+    def __enter__(self):
+        if isinstance(TIME_RECODER , dict):
+            self.start_time = time.time()
+    def __exit__(self, type, value, trace):
+        if isinstance(TIME_RECODER , dict):
+            time_cost = time.time() - self.start_time
+            TIME_RECODER[self.key].append(time_cost)
+        
 class FilteredIterator:
     def __init__(self, iterable, condition):
         self.iterable = iterable
@@ -1385,6 +1336,15 @@ def penalty_function(key):
         return _cat_tensor(kwargs.get('hidden')).T.corrcoef().triu(1).nan_to_num().square().sum()
     return locals()[f'_{key}']
 
+def print_time_recorder():
+    if isinstance(TIME_RECODER , dict):
+        keys = list(TIME_RECODER.keys())
+        num_calls = [len(TIME_RECODER[k]) for k in keys]
+        total_time = [np.sum(TIME_RECODER[k]) for k in keys]
+        tb = pd.DataFrame({'keys':keys , 'num_calls': num_calls, 'total_time': total_time})
+        tb['avg_time'] = tb['total_time'] / tb['num_calls']
+        print(tb.sort_values(by=['total_time'],ascending=False))
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='manual to this script')
     parser.add_argument("--process",     type=int, default=-1)
@@ -1396,4 +1356,4 @@ if __name__ == '__main__':
     Controller = model_controller()
     Controller.main_process()
     Controller.ResultOutput()
-    Controller.print_time_recorder()
+    print_time_recorder()
