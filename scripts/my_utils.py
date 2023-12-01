@@ -50,14 +50,18 @@ class lr_cosine_scheduler:
         self._cos_phase = math.pi / 2 * (self._step_count - self.warmup_stage) / self.anneal_stage
         
 class Mydataset(Dataset):
-    def __init__(self, data1 , label) -> None:
+    def __init__(self, data1 , label , weight = None) -> None:
             super().__init__()
             self.data1 = data1
             self.label = label
+            self.weight = weight
     def __len__(self):
         return len(self.data1)
     def __getitem__(self , ii):
-        return self.data1[ii], self.label[ii]
+        if self.weight is None:
+            return self.data1[ii], self.label[ii]
+        else:
+            return self.data1[ii], self.label[ii], self.weight[ii]
 
 class MyIterdataset(IterableDataset):
     def __init__(self, data1 , label) -> None:

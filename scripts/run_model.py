@@ -4,7 +4,7 @@
 # @Author : Mathew Jin
 # @File : ${run_model.py}
 # chmod +x run_model.py
-# ./run_model.py --process=0 --rawname=1 --resume=0 --anchoring=0
+# python3 scripts/run_model.py --process=0 --rawname=1 --resume=0 --anchoring=0
 '''
 1.TRA
 https://arxiv.org/pdf/2106.12950.pdf
@@ -84,6 +84,8 @@ class ShareNames_conctroller():
         ShareNames.raw_model_params = deepcopy(config['MODEL_PARAM'])
         ShareNames.model_params = self._load_model_param()
         ShareNames.output_types = ShareNames.train_params['output_types']
+        ShareNames.weight_train = config['WEIGHT_TRAIN']
+        ShareNames.weight_test  = config['WEIGHT_TEST']
 
     def _model_name(self):
         name_element = [
@@ -481,14 +483,14 @@ class model_controller():
 
         self.net.train()
         _start_time_1 = time.time()
-        for i , (x , y) in enumerate(iter_train):
+        for i , (x , y , w) in enumerate(iter_train):
             self.time_recoder(_start_time_1 , ['TrainEpoch' , 'train' , 'fetch'])
             self.optimizer.zero_grad()
             _start_time_1 = time.time()
             pred , hidden = self.net(x)
             self.time_recoder(_start_time_1 , ['TrainEpoch' , 'train' , 'forward'])
             _start_time_1 = time.time()
-            loss , metric = self._loss_and_metric(y , pred , 'train' , hidden = hidden)
+            loss , metric = self._loss_and_metric(y , pred , 'train' , hidden = hidden , weight = w)
             self.time_recoder(_start_time_1 , ['TrainEpoch' , 'train' , 'loss'])
             _start_time_1 = time.time()
             loss.backward()
@@ -508,14 +510,14 @@ class model_controller():
 
         self.net.eval()     
         _start_time_1 = time.time()  
-        for i , (x , y) in enumerate(iter_valid):
+        for i , (x , y , w) in enumerate(iter_valid):
             # print(torch.cuda.memory_allocated(DEVICE) / 1024**3 , torch.cuda.memory_reserved(DEVICE) / 1024**3)
             self.time_recoder(_start_time_1 , ['TrainEpoch' , 'valid' , 'fetch'])
             _start_time_1 = time.time()
             pred , _ = self.net(x)
             self.time_recoder(_start_time_1 , ['TrainEpoch' , 'valid' , 'forward'])
             _start_time_1 = time.time()
-            loss , metric = self._loss_and_metric(y , pred , 'valid')
+            loss , metric = self._loss_and_metric(y , pred , 'valid' , weight = w)
             self.time_recoder(_start_time_1 , ['TrainEpoch' , 'valid' , 'loss'])
             _start_time_1 = time.time()
             loss_valid.append(loss) , ic_valid.append(metric)
@@ -632,13 +634,15 @@ class model_controller():
 
             m_test = []         
             with torch.no_grad():
-                for i , (x , y) in enumerate(iter_test):
+                for i , (x , y , w) in enumerate(iter_test):
                     stock_pos = np.where(self.data.test_nonnan_sample[:,i])[0]
                     for batch_j in torch.utils.data.DataLoader(np.arange(len(y)) , batch_size = ShareNames.batch_size):
                         x_j = tuple([xx[batch_j] for xx in x]) if isinstance(x , tuple) else x[batch_j]
                         output , _ = self.net(x_j)
                         self.y_pred[stock_pos[batch_j],i,oi] = output.select(-1,0).detach()
-                    metric = self.f_metric(y.select(-1,0) , self.y_pred[stock_pos,i,oi]).item()
+
+                    batch_w = None if w is None else w.select(-1,0)
+                    metric = self.f_metric(y.select(-1,0) , self.y_pred[stock_pos,i,oi] , batch_w).item()
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
                     m_test.append(metric) 
                     disp_test((i , m_test))
@@ -816,7 +820,7 @@ class model_controller():
             self.text = {k : '' for k in ['model','round','attempt','epoch','exit','stat','time','trainer']}
             self.cond = {'terminate' : {} , 'nan_loss' : False , 'loop_status' : 'round'}
             
-    def _loss_and_metric(self, labels , pred , key , **kwargs):
+    def _loss_and_metric(self, labels , pred , key , weight = None , **kwargs):
         """
         Calculate loss(with gradient), metric
         Inputs : 
@@ -832,18 +836,19 @@ class model_controller():
             # if more labels than output
             assert labels.shape[:-1] == pred.shape[:-1] , (labels.shape , pred.shape)
             labels = labels.transpose(0,-1)[:pred.shape[-1]].transpose(0,-1)
-            
+
+        weight0 = None if weight is None else weight.select(-1,0)  
         if key == 'train':
             if self.Param['num_output'] > 1:
-                loss = self.f_loss(labels , pred , dim = 0)[:self.Param['num_output']]
+                loss = self.f_loss(labels , pred , weight , dim = 0)[:self.Param['num_output']]
                 loss = self.multiloss.calculate_multi_loss(loss , self.net.get_multiloss_params())
             else:
-                loss    = self.f_loss(labels.select(-1,0) , pred.select(-1,0))
-            metric  = self.f_metric(labels.select(-1,0) , pred.select(-1,0)).item()
+                loss = self.f_loss(labels.select(-1,0) , pred.select(-1,0) , weight0)
+            metric  = self.f_metric(labels.select(-1,0) , pred.select(-1,0) , weight0).item()
             penalty = sum([w * f(**kwargs) for k,(f,w) in self.f_penalty.items() if w != 0])
             loss = loss + penalty  
         else:
-            metric  = self.f_metric(labels.select(-1,0) , pred.select(-1,0)).item()
+            metric  = self.f_metric(labels.select(-1,0) , pred.select(-1,0) , weight0).item()
             loss    = 0.
         return loss , metric
     
@@ -1111,6 +1116,7 @@ class ModelData():
         x , y = None , None
         self.i_train , self.i_valid , self.ii_train , self.ii_valid = None , None , None , None
         self.y_train , self.y_valid , self.train_nonnan_sample = None , None , None
+        self.w_train , self.w_valid = None , None
         gc.collect() , torch.cuda.empty_cache()
         
     def new_test_dataloader(self , model_date , seqlens):
@@ -1191,10 +1197,14 @@ class ModelData():
         y_tv = torch.zeros(self.stock_n , self.step_len , self.labels_n)
         y_tv[:] = y[:,self.lstepped + self.seq0 - 1].nan_to_num(0)
         y_tv[self.train_nonnan_sample == 0] = np.nan
-        y_tv , w_tv = tensor_standardize_and_weight(y_tv , dim = 0)
-        y_tv , w_tv = y_tv.reshape(-1,y_tv.shape[-1]) , w_tv.reshape(-1,w_tv.shape[-1]) 
+        y_tv , w_tv = tensor_standardize_and_weight(y_tv , 0 , ShareNames.weight_train)
+        y_tv = y_tv.reshape(-1,y_tv.shape[-1]) 
         self.y_train , self.y_valid = (y_tv[self.ii_train] , y_tv[self.ii_valid])
-        # self.w_train , self.w_valid = (w_tv[self.ii_train] , w_tv[self.ii_valid])
+        if w_tv is None:
+            self.w_train , self.w_valid = None , None
+        else:
+            w_tv = w_tv.reshape(-1,w_tv.shape[-1]) 
+            self.w_train , self.w_valid = (w_tv[self.ii_train] , w_tv[self.ii_valid])
         
     def _train_dataloader(self , x):
         """
@@ -1207,21 +1217,28 @@ class ModelData():
             x_tv = x_tv.reshape(-1 , self.seq[mdt] , self.feat_dims[mdt])
             x_train , x_valid = x_tv[self.ii_train] , x_tv[self.ii_valid]
             num_worker = min(os.cpu_count() , ShareNames.compt_params['num_worker'])
-            self.dataloaders['train'] = self.dataloader_oneshot((x_train , self.y_train) , num_worker , ShareNames.compt_params['cuda_first'])
-            self.dataloaders['valid'] = self.dataloader_oneshot((x_valid , self.y_valid) , num_worker , ShareNames.compt_params['cuda_first'])
+            self.dataloaders['train'] = self.dataloader_oneshot((x_train, self.y_train, self.w_train) , num_worker , ShareNames.compt_params['cuda_first'])
+            self.dataloaders['valid'] = self.dataloader_oneshot((x_valid, self.y_valid, self.w_valid) , num_worker , ShareNames.compt_params['cuda_first'])
         else:
             storage_loader.del_group('train')
-            set_iter = [('train' , self.i_train , self.y_train) , ('valid' , self.i_valid , self.y_valid)]
-            for set_name , set_i , set_y in set_iter:
+            set_iter = [('train' , self.i_train , self.y_train , self.w_train) , 
+                        ('valid' , self.i_valid , self.y_valid , self.w_valid)]
+            for set_name , set_i , set_y , set_w in set_iter:
                 batch_sampler = torch.utils.data.BatchSampler(range(len(set_i)) , ShareNames.batch_size , drop_last = False)
                 batch_file_list = []
                 for batch_num , batch_pos in enumerate(batch_sampler):
                     batch_file_list.append(ShareNames.batch_dir[set_name] + f'/{set_name}.{batch_num}.pt')
-                    i0 , i1 , batch_y , batch_x = set_i[batch_pos , 0] , set_i[batch_pos , 1] , set_y[batch_pos] , []
+                    i0 , i1 = set_i[batch_pos , 0] , set_i[batch_pos , 1]
+                    batch_x = []
+                    batch_y = set_y[batch_pos]
+                    batch_w = None if set_w is None else set_w[batch_pos]
+                    
                     for mdt in ShareNames.data_type_list:
                         batch_x.append(self._norm_x(torch.cat([x[mdt][i0,i1+i+1-self.seq[mdt]] for i in range(self.seq[mdt])],dim=1),mdt))
                     batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
-                    storage_loader.save((batch_x, batch_y), batch_file_list[-1] , group = 'train')
+                    
+                    batch_data = (batch_x, batch_y, batch_w)
+                    storage_loader.save(batch_data, batch_file_list[-1] , group = 'train')
                 self.dataloaders[set_name] = self.dataloader_saved(batch_file_list)
 
     def _test_nonnan_sample(self , x , y):
@@ -1241,7 +1258,7 @@ class ModelData():
         y_test = torch.zeros(self.stock_n , self.step_len , self.labels_n)
         y_test[:] = y[:,self.lstepped + self.seq0 - 1].nan_to_num(0)
         y_test[self.test_nonnan_sample == 0] = np.nan
-        self.y_test , _ = tensor_standardize_and_weight(y_test , dim = 0)
+        self.y_test , self.w_test = tensor_standardize_and_weight(y_test , 0 , ShareNames.weight_test)
     
     def _test_dataloader(self , x):
         """
@@ -1251,18 +1268,24 @@ class ModelData():
         if ShareNames.model_data_type == 'day' and False:
             mdt = 'day'
             x_test = self._norm_x(torch.cat([x[mdt][:,i+self.lstepped] for i in range(self.seq[mdt])],dim=2) , mdt)
-            self.dataloaders['test'] = self.dataloader_oneshot((x_test , self.y_test) , 0 , ShareNames.compt_params['cuda_first'] , 1) # iter over col(date)
+            self.dataloaders['test'] = self.dataloader_oneshot((x_test , self.y_test , self.w_test) , 0 , ShareNames.compt_params['cuda_first'] , 1) # iter over col(date)
         else:
             storage_loader.del_group('test')
             batch_sampler = [(np.where(self.test_nonnan_sample[:,i])[0] , self.lstepped[i]) for i in range(self.step_len)] # self.test_nonnan_sample.permute(1,0)
             batch_file_list = []
             for batch_num , batch_pos in enumerate(batch_sampler):
                 batch_file_list.append(ShareNames.batch_dir['test'] + f'/test.{batch_num}.pt')
-                i0 , i1 , batch_y , batch_x = batch_pos[0] , batch_pos[1] + self.seq0 - 1 , self.y_test[batch_pos[0] , batch_num] , []
+                i0 , i1 = batch_pos[0] , batch_pos[1] + self.seq0 - 1
+                batch_x = []
+                batch_y = self.y_test[batch_pos[0] , batch_num]
+                batch_w = None if self.w_test is None else self.w_test[batch_pos[0] , batch_num]
+
                 for mdt in ShareNames.data_type_list:
                     batch_x.append(self._norm_x(torch.cat([x[mdt][i0,i1+i+1-self.seq[mdt]] for i in range(self.seq[mdt])],dim=1),mdt))
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
-                storage_loader.save((batch_x, batch_y), batch_file_list[-1] , group = 'test')
+                
+                batch_data = (batch_x, batch_y, batch_w)
+                storage_loader.save(batch_data, batch_file_list[-1] , group = 'test')
             self.dataloaders['test'] = self.dataloader_saved(batch_file_list)
         
     def _norm_x(self , x , key):
@@ -1290,7 +1313,7 @@ class ModelData():
                 self.dataset = Mydataset(*data)  
                 self.dataloader = torch.utils.data.DataLoader(self.dataset , batch_size = ShareNames.batch_size , num_workers = (1 - cuda_first)*num_worker)
             else:
-                self.x , self.y = data
+                self.x , self.y , self.w = data
                 
         def __iter__(self):
             if self.batch_by_axis is None:
@@ -1298,14 +1321,16 @@ class ModelData():
                     yield cuda(batch_data)
             else:
                 for batch_i in range(self.y.shape[self.batch_by_axis]):
-                    x , y = self.x.select(self.batch_by_axis , batch_i) , self.y.select(self.batch_by_axis , batch_i)
+                    x = self.x.select(self.batch_by_axis , batch_i) 
+                    y = self.y.select(self.batch_by_axis , batch_i)
                     if y.dim() == 1:
                         valid_row = y.isnan() == 0
                     elif y.dim() == 2:
                         valid_row = y.isnan().sum(-1) == 0
                     else:
                         valid_row = y.isnan().sum(list(range(y.dim()))[1:]) == 0
-                    batch_data = (x[valid_row] , y[valid_row])
+                    w = None if self.w is None else self.w.select(self.batch_by_axis , batch_i)[valid_row]
+                    batch_data = (x[valid_row] , y[valid_row] , w)
                     yield cuda(batch_data)
                 
     class dataloader_saved:
@@ -1322,7 +1347,7 @@ def cuda(x):
     if isinstance(x , (list,tuple)):
         return type(x)(map(cuda , x))
     else:
-        return x.to(DEVICE)
+        return x.to(DEVICE) if x is not None else None
 
 def loss_function(key):
     """

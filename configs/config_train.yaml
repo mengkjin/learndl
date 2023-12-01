@@ -3,8 +3,10 @@ SHORTTEST:  false
 STORAGE_TYPE: mem # disk
 MODEL_NICKNAME: 'tcn' # 'TCN_vs_LSTM' any str or None
 PRECISION:  'float' # double , bfloat16
+WEIGHT_TRAIN: 'equal' # equal
+WEIGHT_TEST:  'equal' # equal
 MODEL_MODULE: 'GeneralRNN' 
-MODEL_NUM: 4
+MODEL_NUM: 1
 MODEL_DATATYPE:
   GRU: 'day'
   GeneralRNN: 'day'
@@ -13,17 +15,17 @@ MODEL_DATATYPE:
   Transformer: 'day'
   other: ['day' , '15m' , 'gp' , 'day+15m']
 MODEL_PARAM:
-  hidden_dim:  [32 , 64 , 32 , 64] #  2**5
+  hidden_dim:  [32] #  2**5
   seqlens:     [{'day': 40 , '15m': 20 , 'dms': 40 }] # although not a param for model, but can be different values(dict of SEQLEN)
-  rnn_layers:  [4]
-  mlp_layers:  [2] 
-  dropout:     [0.1 , 0.1 , 0.2 , 0.2]
+  rnn_layers:  [5]
+  mlp_layers:  [1] 
+  dropout:     [0.1]
   fc_in:       [true]
   fc_att:      [true] 
   type_rnn:    ['tcn'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
   rnn_att:     [false]
   num_output:  [1]
-  kernel_size: [3] 
+  kernel_size: [3 , 3] 
   hidden_as_factor:    [false]
   ordered_param_group: [false]  # multiple data input , if train sequentially
   ATF_mask: {'causal': false , 'gaussian': false , 'tradegap': false }

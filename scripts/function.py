@@ -40,16 +40,22 @@ def tensor_nanmedian(x, dim=None, keepdim=False):
         else:
             return x.to(torch.float).nanmedian(dim = dim , keepdim = keepdim).values.to(raw_dtype)
         
-def tensor_standardize_and_weight(x, dim=None):
+def tensor_standardize_and_weight(x, dim=None , weight_scheme = None):
     if x.isnan().all().item():
-        return x , x       
+        return (x , None)       
     x = (x - tensor_nanmean(x,dim=dim,keepdim=True)) / (tensor_nanstd(x,dim=dim,correction=0,keepdim=True) + 1e-4)
-    w = torch.ones_like(x)
-    try: 
-        w[x > tensor_nanmedian(x , dim , True)] = 2
-    except:    
-        w[x > tensor_nanmedian(x)] = 2
-    return x, w
+    w = None
+    if weight_scheme is None: 
+        pass
+    else:
+        weight_scheme = 'equal' if weight_scheme not in ['top'] else weight_scheme
+        if weight_scheme == 'top':
+            w = torch.ones_like(x)
+            try: 
+                w[x > tensor_nanmedian(x , dim , True)] = 2
+            except:    
+                w[x > tensor_nanmedian(x)] = 2
+    return (x, w)
 
 def standardize_x(x , dim=None):
     if np.all(np.isnan(x)):
