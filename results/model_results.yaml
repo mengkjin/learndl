@@ -116,3 +116,154 @@
   0.best: 144.3514477031713
   0.swabest: 144.0416135937703
   0.swalast: 143.74835088417967
+0_start: Sun Dec  3 12:02:42 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.5 Min/model, 1.4 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 10.4 Secs
+7_result:
+  0.best: -6.17861539708997e-10
+  0.swabest: 3.6856578016332756e-10
+  0.swalast: 3.667196870607223e-10
+0_start: Sun Dec  3 12:09:56 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.5 Min/model, 1.4 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 9.9 Secs
+7_result:
+  0.best: 7.852914050369281e-10
+  0.swabest: 4.801665358725171e-10
+  0.swalast: -4.195738049529718e-10
+0_start: Sun Dec  3 12:17:15 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.5 Min/model, 1.4 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 10.5 Secs
+7_result:
+  0.best: -8.262224671790053e-11
+  0.swabest: 2.8667335150688034e-10
+  0.swalast: -9.368010434225582e-10
+0_start: Sun Dec  3 12:18:48 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.5 Min/model, 1.4 Sec/Epoch
+6_test: null
+7_result: null
+0_start: Sun Dec  3 12:22:14 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: null
+6_test: Finish Process [Test Model]! Cost 11.6 Secs
+7_result:
+  0.best: 5.1266220869178314e-11
+  0.swabest: 1.662060971708082e-10
+  0.swalast: 2.2468461813307528e-10
+0_start: Sun Dec  3 12:25:06 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: null
+6_test: Finish Process [Test Model]! Cost 10.5 Secs
+7_result:
+  0.best: 1.1892240447605729e-10
+  0.swabest: 2.36713239396176e-10
+  0.swalast: 2.0790738575193757e-10
+0_start: Sun Dec  3 12:27:40 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: null
+6_test: Finish Process [Test Model]! Cost 11.6 Secs
+7_result:
+  0.best: 5.130655579207999e-11
+  0.swabest: 1.9098142522728373e-10
+  0.swalast: 2.2464980223291242e-10
+0_start: Sun Dec  3 12:33:01 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: null
+6_test: Finish Process [Test Model]! Cost 11.3 Secs
+7_result:
+  0.best: 7.235825437088006e-11
+  0.swabest: 2.2787905167454686e-10
+  0.swalast: 2.333749235527982e-10
+0_start: Sun Dec  3 12:45:41 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: null
+6_test: Finish Process [Test Model]! Cost 10.8 Secs
+7_result:
+  0.best: 6.767856037127785
+  0.swabest: 6.463742212072248
+  0.swalast: 5.685097594250692
+0_start: Sun Dec  3 12:46:54 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: null
+6_test: Finish Process [Test Model]! Cost 12.6 Secs
+7_result:
+  0.best: 6.767856037127785
+  0.swabest: 6.463742212072248
+  0.swalast: 5.685097594250692
+0_start: Sun Dec  3 13:44:01 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: null
+6_test: Finish Process [Test Model]! Cost 10.9 Secs
+7_result:
+  0.best: 6.768147947150283
+  0.swabest: 6.464010835305089
+  0.swalast: 5.6851558868947905
+0_start: Sun Dec  3 13:54:06 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: null
+6_test: Finish Process [Test Model]! Cost 11.0 Secs
+7_result:
+  0.best: 6.767856037127785
+  0.swabest: 6.463742212072248
+  0.swalast: 5.685097594250692
+0_start: Sun Dec  3 13:57:47 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: null
+6_test: Finish Process [Test Model]! Cost 10.3 Secs
+7_result:
+  0.best: 6.767856037127785
+  0.swabest: 6.463742212072248
+  0.swalast: 5.685097594250692
+0_start: Sun Dec  3 13:58:14 2023
+1_basic: short+mem+float
+2_model: GeneralRNN_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.5 Min/model, 1.4 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 10.6 Secs
+7_result:
+  0.best: 7.189750479126815
+  0.swabest: 6.991016012732871
+  0.swalast: 6.628702012996655

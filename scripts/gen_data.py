@@ -1,16 +1,15 @@
 import torch , h5py
 import numpy as np
 import pandas as pd
-import os, shutil , gc , copy , time
-import yaml
+import os, shutil , gc , time , argparse
 from function import *
-# from globalvars import *
 from environ import get_logger , get_config
 
 NBARS      = {'day' : 1 , '15m' : 16 ,}
 BEFORE_DAY = 20170101
 STEP_DAY   = 5
 DATATYPE   = get_config('data_type')['DATATYPE']
+
 
 update_files = ['day_trading_data' , 'day_ylabels_data' , '15m_trading_data']
 data_index_dict = {'day' : ('SecID' , 'TradeDate') , '15m' : ('SecID' , 'TradeDateTime') , '30m' : ('SecID' , 'TradeDateTime') ,
@@ -229,12 +228,19 @@ def load_trading_data(model_data_type , dtype = torch.float):
     return x_data , y_data , norm_param , (row , col)
 
 if __name__ == '__main__':
-    t1 = time.time()
-    logger.critical('Data loading start!')
-        
-    update_trading_data()
-    prepare_model_data()
-    cal_norm_param()
-    
-    t2 = time.time()
-    logger.critical('Data loading Finished! Cost {:.2f} Seconds'.format(t2-t1))
+    parser = argparse.ArgumentParser(description='manual to this script')
+    parser.add_argument("--confirm", type=str, default='')
+    if parser.parse_args().confirm == 'no':
+        pass
+    else:
+        a = input('You want to update data? print "yes" to confirm!')
+        if a == 'yes':
+            t1 = time.time()
+            logger.critical('Data loading start!')
+
+            update_trading_data()
+            prepare_model_data()
+            cal_norm_param()
+            
+            t2 = time.time()
+            logger.critical('Data loading Finished! Cost {:.2f} Seconds'.format(t2-t1))

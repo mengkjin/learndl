@@ -1,9 +1,29 @@
 import numpy as np
 import pandas as pd
+import collections
 import torch
-import time , os , shutil , pprint
+import os , shutil , pprint , psutil
 from scipy import stats
 from pytimedinput import timedInput
+
+def average_params(params_list):
+    assert isinstance(params_list, (tuple, list, collections.deque))
+    n = len(params_list)
+    if n == 1:
+        return params_list[0]
+    new_params = collections.OrderedDict()
+    keys = None
+    for i, params in enumerate(params_list):
+        if keys is None:
+            keys = params.keys()
+        for k, v in params.items():
+            if k not in keys:
+                raise ValueError("the %d-th model has different params" % i)
+            if k not in new_params:
+                new_params[k] = v / n
+            else:
+                new_params[k] += v / n
+    return new_params
 
 def emphasize_header(header=''):
     print('{: ^100}'.format(''))
@@ -177,7 +197,7 @@ def wmse(x , y , dim = None , reduction='mean' , **kwargs):
 
 def wspearman(x , y , dim = None , **kwargs):
     w = nd_rank_weight(y , dim = dim)
-    return spearman(x,y,w,dim,reduction)
+    return spearman(x,y,w,dim)
 
 def np_rankic(x , y , w = None , dim = None):
     return stats.spearmanr(x,y)[0]
@@ -194,7 +214,7 @@ def transpose_output(X,num_heads):
 
 def np_nanrankic(x , y):
     assert len(x) == len(y)
-    pairwise_nonnan = (np.isnan(pxred)*1.0 + np.isnan(y) * 1.0 == 0)
+    pairwise_nonnan = (np.isnan(x)*1.0 + np.isnan(y) * 1.0 == 0)
     try:
         return np_rankic(x[pairwise_nonnan],y[pairwise_nonnan])
     except:

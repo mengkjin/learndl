@@ -1,8 +1,9 @@
 # most frequently changing variables
-SHORTTEST:  false
+SHORTTEST:  true
 STORAGE_TYPE: mem # disk
-MODEL_NICKNAME: 'tcn' # 'TCN_vs_LSTM' any str or None
+MODEL_NICKNAME: 'LSTM' # 'TCN_vs_LSTM' any str or None
 PRECISION:  'float' # double , bfloat16
+TRA_switch: true
 WEIGHT_TRAIN: 'equal' # equal
 WEIGHT_TEST:  'equal' # equal
 MODEL_MODULE: 'GeneralRNN' 
@@ -16,18 +17,19 @@ MODEL_DATATYPE:
   other: ['day' , '15m' , 'gp' , 'day+15m']
 MODEL_PARAM:
   hidden_dim:  [32] #  2**5
-  seqlens:     [{'day': 40 , '15m': 20 , 'dms': 40 }] # although not a param for model, but can be different values(dict of SEQLEN)
+  seqlens:     [{'day': 40 , '15m': 20 , 'dms': 40 , 'hist_loss': 40}] # although not a param for model, but can be different values(dict of SEQLEN)
   rnn_layers:  [5]
   mlp_layers:  [1] 
   dropout:     [0.1]
   fc_in:       [true]
   fc_att:      [true] 
-  type_rnn:    ['tcn'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
+  type_rnn:    ['lstm'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
   rnn_att:     [false]
   num_output:  [1]
   kernel_size: [3 , 3] 
   hidden_as_factor:    [false]
   ordered_param_group: [false]  # multiple data input , if train sequentially
+  tra_num_states:      [3]
   ATF_mask: {'causal': false , 'gaussian': false , 'tradegap': false }
 COMPT_PARAM: 
   cuda_first: true
@@ -49,7 +51,7 @@ TRAIN_PARAM:
     retrain:   {'attempts' : 4 , 'min_epoch' : 20 , 'min_epoch_round' : 10} 
   criterion:
     loss:      'ccc' # mse , pearson , ccc
-    metric:    'pearson' #mse,pearson,ccc,spearman
+    score:     'pearson' #mse,pearson,ccc,spearman
     penalty:   {'hidden_orthogonality' : 0.001 ,}
   transfer:    false
   output_types: ['best' , 'swalast' , 'swabest']
@@ -97,6 +99,7 @@ VERBOSITY:  2
 BATCH_SIZE: 10000
 TEST_STEP_DAY:  1
 INPUT_STEP_DAY: 5
+SKIP_HORIZON: 20
 
 # torch utility
 ALLOW_TF32: true

@@ -9,15 +9,31 @@ from copy import deepcopy
 from function import *
 
 __all__ = [
+    'FilteredIterator' ,
     'lr_cosine_scheduler' , # learn rate scheduler
     'Mydataset' , 'MyIterdataset' , 'Mydataloader_basic' , 'Mydataloader_saved' , 'DesireBatchSampler' , # dataset , dataloader , sampler
-    'multiloss_calculator' , 'model_storage' ,
+    'multiloss_calculator' , 'versatile_storage'
 ]    
+
+class FilteredIterator:
+    def __init__(self, iterable, condition):
+        self.iterable = iterable
+        self.condition = condition
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        while True:
+            item = next(self.iterable)
+            cond = self.condition(item) if callable(self.condition) else next(self.condition)
+            if cond: return item
 
 class lr_cosine_scheduler:
     def __init__(self , optimizer , warmup_stage = 10 , anneal_stage = 40 , initial_lr_div = 10 , final_lr_div = 1e4):
         self.warmup_stage= warmup_stage
         self.anneal_stage= anneal_stage
+        self.optimizer = optimizer
         self.base_lrs = [x['lr'] for x in optimizer.param_groups]
         self.initial_lr= [x / initial_lr_div for x in self.base_lrs]
         self.final_lr= [x / final_lr_div for x in self.base_lrs]
@@ -43,7 +59,7 @@ class lr_cosine_scheduler:
             self._last_lr = [y+(x-y)*math.cos(self._cos_phase) for x,y in zip(self.base_lrs,self.final_lr)]
         else:
             self._last_lr = self.final_lr
-        for x , param_group in zip(self._last_lr,optimizer.param_groups):
+        for x , param_group in zip(self._last_lr,self.optimizer.param_groups):
             param_group['lr'] = x
         self._step_count += 1
         self._linear_phase = self._step_count / self.warmup_stage
@@ -322,7 +338,7 @@ class multiloss_calculator:
             ls = torch.tensor(np.repeat(np.linspace(0.2, 10, 40),num_task).reshape(-1,num_task))
             fig,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(ls[:,0].numpy(), ls[:,1].numpy())
-            l = torch.stack([torch.stack([(torch.tensor([s1[i,j],s2[i,j]])*torch.nn.functional.softmax(torch.rand(ntask),-1)).sum() for j in range(s1.shape[1])]) 
+            l = torch.stack([torch.stack([(torch.tensor([s1[i,j],s2[i,j]])*torch.nn.functional.softmax(torch.rand(num_task),-1)).sum() for j in range(s1.shape[1])]) 
                              for i in range(s1.shape[0])]).numpy()
             ax.plot_surface(s1, s2, l, cmap='viridis')
             ax.set_xlabel('loss-1')
@@ -337,7 +353,7 @@ class multiloss_calculator:
             tau = 2
             w1 = np.exp(np.concatenate((np.array([1,1]),l1[2:]/l1[1:-1]))/tau)
             w2 = np.exp(np.concatenate((np.array([1,1]),l2[2:]/l1[1:-1]))/tau)
-            w1 , w2 = ntask * w1 / (w1+w2) , ntask * w2 / (w1+w2)
+            w1 , w2 = num_task * w1 / (w1+w2) , num_task * w2 / (w1+w2)
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
             ax1.plot(s, l1, color='blue', label='task1')
             ax1.plot(s, l2, color='red', label='task2')
@@ -357,7 +373,11 @@ class multiloss_calculator:
         plt.show()
         
 class versatile_storage():
-    def __init__(self , default = 'disk'):
+    def __init__(self , *args):
+        if len(args) > 0 and args[0] in ['disk' , 'mem']:
+            self.activate(args[0])
+
+    def activate(self , default = 'mem'):
         assert default in ['disk' , 'mem']
         self.default = default
         self.mem_disk = dict()

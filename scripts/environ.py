@@ -3,8 +3,9 @@ import logging
 import colorlog
 from logging import handlers
 import yaml
+import torch
 
-
+DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 class _LevelFormatter(logging.Formatter):
     def __init__(self, fmt=None, datefmt=None, level_fmts={}):
@@ -36,7 +37,6 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
 
     
 def get_logger(test_output = False):
-    
     config_logger = get_config('logger')
     os.makedirs(os.path.dirname(config_logger['file']['param']['filename']), exist_ok = True)
     log = logging.getLogger(config_logger['name'])
@@ -78,3 +78,11 @@ def get_config(config_files = ['data_type' , 'train']):
                 del cfg['SPECIAL_CONFIG']['TRANSFORMER']
         config_dict.update(cfg)
     return config_dict
+
+def cuda(x):
+    if isinstance(x , (list,tuple)):
+        return type(x)(map(cuda , x))
+    elif isinstance(x , (dict)):
+        return {k:cuda(v) for k,v in x.items()}
+    else:
+        return x.to(DEVICE) if x is not None else None
