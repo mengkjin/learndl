@@ -1,5 +1,3 @@
-from scripts.dataset import ModelData
-from scripts.my_models import *
 import torch
 import torch.nn as nn
 
@@ -18,17 +16,14 @@ class TRA(nn.Module):
         rho (float): calculate Optimal Transport penalty
     """
 
-    def __init__(self, base_model , input_size , num_states=1, hidden_size=8, tau=1.0, rho = 0.999 , lamb = 0.0 ,
-                 horizon = 20 , src_info = 'LR_TPE' , hist_loss_source = None):
+    def __init__(self, base_model , base_dim , num_states=1, horizon = 20 , 
+                 hidden_size = 8, tau=1.0, src_info = 'LR_TPE'):
         super().__init__()
         self.base_model = base_model
         self.num_states = num_states
-        self.tau = tau
-        self.rho = rho
-        self.lamb = lamb
         self.horizon = horizon
+        self.tau = tau
         self.src_info = src_info
-        self.hist_loss_source = hist_loss_source
 
         if num_states > 1:
             self.router = nn.LSTM(
@@ -37,34 +32,35 @@ class TRA(nn.Module):
                 num_layers=1,
                 batch_first=True,
             )
-            self.fc = nn.Linear(hidden_size + input_size, num_states)
-        self.predictors = nn.Linear(input_size, num_states)
-        self.new_model()
+            self.fc = nn.Linear(hidden_size + base_dim, num_states)
+        self.predictors = nn.Linear(base_dim, num_states)
+        self.global_steps = 0
 
     def forward(self, inputs):
+        x , hist_loss = (inputs , None) if self.num_states == 1 else inputs
+        hidden = self.base_model(x)
+        # in-case multiple output of base_model
+        if isinstance(hidden , (list , tuple)): hidden = hidden[0]
+        # in-case time-series output of base_model , use the latest one
+        if hidden.dim() == 3: hidden = hidden[:,-1]
+        preds = self.predictors(hidden)
+
         if self.num_states == 1:
-            hidden = self.base_model(inputs)
-            if isinstance(hidden , (list , tuple)): hidden = hidden[0]
-            preds = self.predictors(hidden[:,-1])
             final_pred = preds
             probs = None
         else:
-            x , hist_loss = inputs
-            hidden = self.base_model(x)
-            if isinstance(hidden , (list , tuple)): hidden = hidden[0]
-            preds = self.predictors(hidden[:,-1])
-        
             # information type
             router_out, _ = self.router(hist_loss[:,:-self.horizon])
             if "LR" in self.src_info:
-                latent_representation = hidden[:,-1]
+                latent_representation = hidden
             else:
-                latent_representation = torch.randn(hidden[:,-1].shape).to(hidden)
+                latent_representation = torch.randn(hidden.shape).to(hidden)
             if "TPE" in self.src_info:
                 temporal_pred_error = router_out[:, -1]
             else:
                 temporal_pred_error = torch.randn(router_out[:, -1].shape).to(hidden)
 
+            # print(hidden.shape , preds.shape , temporal_pred_error.shape , latent_representation.shape)
             out = self.fc(torch.cat([temporal_pred_error, latent_representation], dim=-1))
             probs = nn.functional.gumbel_softmax(out, dim=-1, tau=self.tau, hard=False)
 
@@ -75,15 +71,7 @@ class TRA(nn.Module):
 
         self.preds = preds
         self.probs = probs
-        return final_pred , hidden
-    
-    def hist_pred(self):
-        return self.preds
-    
-    def new_model(self):
-        self.global_steps = 0
-        self.preds = None
-        self.probs = None
+        return final_pred , preds
     
     def modifier_inputs(self , inputs , batch_data , ModelData):
         if self.num_states > 1:
@@ -97,6 +85,7 @@ class TRA(nn.Module):
             return inputs
     
     def modifier_metric(self , metric , batch_data , ModelData):
+        return metric
         if self.training and self.probs is not None and self.lamb != 0 and self.num_states > 1:
             label = batch_data['y']
             square_error = (self.preds - label).square()
@@ -110,12 +99,13 @@ class TRA(nn.Module):
         else:
             return metric
     
-    def modifier_update(self , batch_data , ModelDate):
+    def modifier_update(self , update , batch_data , ModelDate):
         if self.num_states > 1 and self.preds is not None:
             i = batch_data['i']
             v = self.preds.detach().to(ModelDate.buffer['hist_preds'])
             ModelDate.buffer['hist_preds'][i[:,0],i[:,1]] = v[:]
             ModelDate.buffer['hist_loss'][i[:,0],i[:,1]] = (v - ModelDate.buffer['hist_labels'][i[:,0],i[:,1]]).square()
+            del self.preds , self.probs
 
 def shoot_infs(inp_tensor):
     """Replaces inf by maximum of tensor"""
@@ -144,23 +134,3 @@ def sinkhorn(Q, n_iters=3, epsilon=0.01):
             Q /= Q.sum(dim=0, keepdim=True)
             Q /= Q.sum(dim=1, keepdim=True)
     return Q
-
-def buffer_init(tra_num_states):
-    def wrapper(container , *args, **kwargs):
-        buffer = dict()
-        if tra_num_states > 1:
-            hist_loss_shape = list(container.y.shape)
-            hist_loss_shape[2] = tra_num_states
-            buffer['hist_labels'] = container.y
-            buffer['hist_preds'] = torch.randn(hist_loss_shape)
-            buffer['hist_loss']  = (buffer['hist_preds'] - buffer['hist_labels']).square()
-        return buffer
-    return wrapper
-
-def buffer_process(tra_num_states):
-    def wrapper(container , *args, **kwargs):
-        buffer = dict()
-        if tra_num_states > 1:
-            buffer['hist_loss']  = (container.buffer['hist_preds'] - container.buffer['hist_labels']).square()
-        return buffer
-    return wrapper

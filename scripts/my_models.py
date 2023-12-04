@@ -4,8 +4,10 @@ import collections
 from torch.nn.utils.parametrizations import weight_norm
 from copy import deepcopy
 from function import *
+import special.TRA as TRA
     
 __all__ = [
+    'MyTRA_LSTM' , 
     'mod_tcn_block' , 'mod_tcn' , 'mod_transformer' , 'mod_lstm' , 'mod_gru', 'mod_ewlinear' , 'mod_parallel' , 
     'rnn_univariate' , 'rnn_multivariate' ,  # base models
     'MyGRU', 'MyLSTM', 'MyTCN' , 'MyGeneralRNN' , 'MynTaskRNN' , 'MyTransformer' ,  # finished nn
@@ -14,6 +16,21 @@ __all__ = [
     'uni_rnn_mapping' , 'multi_rnn_mapping' , 
     'PositionalEncoding', 'ModuleWiseAttention' , 'TimeWiseAttention' , 'SampleWiseTranformer' ,  'TimeWiseTranformer' , # attention mechanism and transformers
 ]    
+
+"""
+class TRA_LSTM(TRA.TRA):
+    def __init__(self , input_dim , hidden_dim , tra_num_states=1, tra_horizon = 20 , 
+                 tra_hidden_size=8, tra_tau=1.0, tra_rho = 0.999 , tra_lamb = 0.0):
+        base_model = mod_lstm(input_dim , hidden_dim , dropout=0.0 , num_layers = 2)
+        super().__init__(base_model , hidden_dim , num_states = tra_num_states, 
+                         horizon = tra_horizon , hidden_size = tra_hidden_size, 
+                         tau = tra_tau, rho = tra_rho , lamb = tra_lamb)
+"""
+class MyTRA_LSTM(TRA.TRA):
+    def __init__(self , input_dim , hidden_dim , tra_num_states=1, tra_horizon = 20 , num_output = 1 , **kwargs):
+        temp_model = MyLSTM(input_dim , hidden_dim = hidden_dim , num_output = 1 , **kwargs)
+        base_model = nn.Sequential(temp_model.encoder , temp_model.decoder)
+        super().__init__(base_model , hidden_dim , num_states = tra_num_states,  horizon = tra_horizon)
 
 class mod_tcn_block(nn.Module):
     def __init__(self, input_dim , output_dim , dilation, dropout=0.0 , kernel_size=3):

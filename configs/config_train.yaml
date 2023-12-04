@@ -6,7 +6,7 @@ PRECISION:  'float' # double , bfloat16
 TRA_switch: true
 WEIGHT_TRAIN: 'equal' # equal
 WEIGHT_TEST:  'equal' # equal
-MODEL_MODULE: 'GeneralRNN' 
+MODEL_MODULE: 'TRA_LSTM' # 'GeneralRNN' 
 MODEL_NUM: 1
 MODEL_DATATYPE:
   GRU: 'day'
@@ -14,6 +14,7 @@ MODEL_DATATYPE:
   LSTM: 'day'
   TCN: 'day'
   Transformer: 'day'
+  TRA_LSTM: 'day'
   other: ['day' , '15m' , 'gp' , 'day+15m']
 MODEL_PARAM:
   hidden_dim:  [32] #  2**5
@@ -52,7 +53,12 @@ TRAIN_PARAM:
   criterion:
     loss:      'ccc' # mse , pearson , ccc
     score:     'pearson' #mse,pearson,ccc,spearman
-    penalty:   {'hidden_orthogonality' : 0.001 ,}
+    penalty:   
+      hidden_orthogonality : 
+        lamb : 0.001
+      tra_ot_penalty : 
+        lamb : &tra_ot_penalty 0.01
+        rho : 0.999
   transfer:    false
   output_types: ['best' , 'swalast' , 'swabest']
   multitask:
@@ -66,15 +72,16 @@ TRAIN_PARAM:
       hybrid: {'phi' : null , 'tau' : 2}
   terminate:
     overall:
-      early_stop: 10
-      max_epoch: 100
+      early_stop: 20
+      max_epoch: 200
       valid_converge: {'min_epoch' : 5 , 'eps' : 1.0e-5} 
       #'train_converge' : {'min_epoch' : 5 , 'eps' : 1.0e-5} 
       #'tv_converge'    : {'min_epoch' : 5 , 'eps' : 1.0e-5}
     round:
-      early_stop: 5
-      max_epoch: 50
+      early_stop: 10
+      max_epoch: 100
       valid_converge: {'min_epoch' : 5 , 'eps' : 1.0e-5} 
+
 SPECIAL_CONFIG:
   SHORTTEST:
     BEG_DATE:   20221206
@@ -99,7 +106,14 @@ VERBOSITY:  2
 BATCH_SIZE: 10000
 TEST_STEP_DAY:  1
 INPUT_STEP_DAY: 5
-SKIP_HORIZON: 20
+SKIP_HORIZON: &SKIP_HORIZON 20 
+
+buffer_type: tra
+buffer_param: 
+  tra_num_states: &tra_num_states 3
+tra_param:
+  tra_num_states : *tra_num_states
+  tra_horizon : *SKIP_HORIZON
 
 # torch utility
 ALLOW_TF32: true

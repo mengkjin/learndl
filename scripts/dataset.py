@@ -10,7 +10,6 @@ from torch.utils.data.dataset import IterableDataset , Dataset
 
 storage_loader = versatile_storage()
 num_states = 3
-
 class ModelData():
     """
     A class to store relavant training data , includes:
@@ -19,31 +18,33 @@ class ModelData():
     3. Dataloader : yield x , y of training samples , create new ones if necessary
     """
     def __init__(self , model_data_type , config = None):
-        CONFIG = get_config()
-        if config is not None: CONFIG.update(config)
-        storage_loader.activate(CONFIG['STORAGE_TYPE'])
+        self.CONFIG = get_config()
+        if config is not None: self.CONFIG.update(config)
+        storage_loader.activate(self.CONFIG['STORAGE_TYPE'])
         try:  
-            self.precision = getattr(torch , CONFIG['PRECISION'])
+            self.precision = getattr(torch , self.CONFIG['PRECISION'])
         except:
             self.precision = torch.float
         self.model_data_type = model_data_type
         self.data_type_list  = self.model_data_type.split('+')
         self.x_data , self.y_data , self.norm_param , (self.index_stock , self.index_date) = load_trading_data(model_data_type , self.precision)
         self.stock_n , self.all_day_len = self.y_data.shape[:2]
-        self.labels_n = min(self.y_data.shape[-1] , (lambda x:max(x) if isinstance(x,(list,tuple)) else x)(CONFIG['MODEL_PARAM']['num_output']))
+        if isinstance(self.CONFIG['MODEL_PARAM']['num_output'],(list,tuple)):
+            self.labels_n = min(self.y_data.shape[-1] , max(self.CONFIG['MODEL_PARAM']['num_output']))
+        else:
+            self.labels_n = min(self.y_data.shape[-1] , self.CONFIG['MODEL_PARAM']['num_output'])
         self.feat_dims = {mdt:v.shape[-1] for mdt,v in self.x_data.items()}
 
-        self.model_date_list = self.index_date[(self.index_date >= CONFIG['BEG_DATE']) & (self.index_date <= CONFIG['END_DATE'])][::CONFIG['INTERVAL']]
-        self.test_full_dates = self.index_date[(self.index_date > CONFIG['BEG_DATE']) & (self.index_date <= CONFIG['END_DATE'])]
+        _beg , _end , _int = self.CONFIG['BEG_DATE'] , self.CONFIG['END_DATE'] , self.CONFIG['INTERVAL']
+        self.model_date_list = self.index_date[(self.index_date >= _beg) & (self.index_date <= _end)][::_int]
+        self.test_full_dates = self.index_date[(self.index_date > _beg) & (self.index_date <= _end)]
         
-        self.input_step = CONFIG['INPUT_STEP_DAY']
-        self.test_step  = CONFIG['TEST_STEP_DAY']
+        self.input_step = self.CONFIG['INPUT_STEP_DAY']
+        self.test_step  = self.CONFIG['TEST_STEP_DAY']
         self.reset_dataloaders()
 
         self.buffer = {}
-        self.buffer_init = None
-        self.buffer_process = None
-        self.CONFIG = CONFIG
+        self.buffer_functions()
         rmdir([f'./data/{k}_batch_path' for k in ['train' , 'valid' , 'test']] , remake_dir = True)
 
     def reset_dataloaders(self):        
@@ -110,19 +111,20 @@ class ModelData():
         index = self.sample_index(self.nonnan_sample)
         y_step , w_step = self.process_y_data(self.y , self.nonnan_sample)
         self.y[:,self.step_idx] = y_step[:]
-        if self.buffer_process is not None: self.buffer.update(self.buffer_process(self))
+        if self.buffer_proc is not None: self.buffer.update(self.buffer_proc(self))
 
         self.buffer = cuda(self.buffer)
         self.static_dataloader(x , y_step , w_step , index , self.nonnan_sample)
 
         gc.collect() , torch.cuda.empty_cache()
         
-    def buffer_functions(self , 
-                         init = None , 
-                         process = None ,
-                         ):
-        if init is not None: self.buffer_init = init
-        if process is not None: self.buffer_process = process
+    def buffer_functions(self):
+        self.buffer_type  = self.CONFIG['buffer_type']
+        self.buffer_param = self.CONFIG['buffer_param']
+        if self.CONFIG['TRA_switch'] and self.buffer_type == 'tra':
+            self.buffer_type == None
+        self.buffer_init = buffer_init(self.buffer_type , **self.buffer_param) 
+        self.buffer_proc = buffer_proc(self.buffer_type , **self.buffer_param)
     
     def cal_nonnan_sample(self , x , y , **kwargs):
         """
@@ -284,4 +286,33 @@ class MyIterdataset(IterableDataset):
     def __iter__(self):
         for ii in range(len(self.data1)):
             yield self.data1[ii], self.label[ii]
+
+def buffer_init(key , **param):
+    # first param of wrapper is container, which represent self in ModelData
+    if key == 'tra':
+        def wrapper(self_container , *args, **kwargs):
+            buffer = dict()
+            if param['tra_num_states'] > 1:
+                hist_loss_shape = list(self_container.y.shape)
+                hist_loss_shape[2] = param['tra_num_states']
+                buffer['hist_labels'] = self_container.y
+                buffer['hist_preds'] = torch.randn(hist_loss_shape)
+                buffer['hist_loss']  = (buffer['hist_preds'] - buffer['hist_labels']).square()
+            return buffer
+    else:
+        wrapper = None
+    return wrapper
+
+def buffer_proc(key , **param):
+    # first param of wrapper is container, which represent self in ModelData
+    if key == 'tra':
+        def wrapper(self_container , *args, **kwargs):
+            buffer = dict()
+            if param['tra_num_states'] > 1:
+                buffer['hist_loss']  = (self_container.buffer['hist_preds'] - 
+                                        self_container.buffer['hist_labels']).square()
+            return buffer
+    else:
+        wrapper = None
+    return wrapper
     

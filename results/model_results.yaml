@@ -267,3 +267,14 @@
   0.best: 7.189750479126815
   0.swabest: 6.991016012732871
   0.swalast: 6.628702012996655
+0_start: Tue Dec  5 01:17:27 2023
+1_basic: short+mem+float
+2_model: TRA_LSTM_day(x1)
+3_time: 20221206-99991231
+4_typeNN: lstm
+5_train: null
+6_test: Finish Process [Test Model]! Cost 18.9 Secs
+7_result:
+  0.best: 9.308486284862738
+  0.swabest: 9.545056559960358
+  0.swalast: 7.202812429983169
