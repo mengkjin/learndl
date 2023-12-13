@@ -66,7 +66,7 @@ def get_config(config_files = ['data_type' , 'train']):
     config_dict = dict()
     if isinstance(config_files , str): config_files = [config_files]
     for cfg_name in config_files:
-        with open(f'./configs/config_{cfg_name}.yaml' ,'r') as f:
+        with open(f'../../configs/config_{cfg_name}.yaml' ,'r') as f:
             cfg = yaml.load(f , Loader = yaml.FullLoader)
         if cfg_name == 'train':
             if 'SPECIAL_CONFIG' in cfg.keys() and 'SHORTTEST' in cfg['SPECIAL_CONFIG'].keys(): 

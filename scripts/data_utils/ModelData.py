@@ -1,15 +1,62 @@
 
 import torch
-import gc , random
+import gc , random , math , time
 import numpy as np
-from function import *
-from environ import get_config , cuda
-from my_utils import versatile_storage
-from gen_data import load_trading_data
+from ..functional.func import *
+from ..util.environ import get_config , cuda
+from ..util.basic import versatile_storage
+from learndl.scripts.data_utils.gen_data import load_trading_data
 from torch.utils.data.dataset import IterableDataset , Dataset
 
 storage_loader = versatile_storage()
-num_states = 3
+
+class Mydataset(Dataset):
+    def __init__(self, data1 , label , weight = None) -> None:
+            super().__init__()
+            self.data1 = data1
+            self.label = label
+            self.weight = weight
+    def __len__(self):
+        return len(self.data1)
+    def __getitem__(self , ii):
+        if self.weight is None:
+            return self.data1[ii], self.label[ii]
+        else:
+            return self.data1[ii], self.label[ii], self.weight[ii]
+
+class MyIterdataset(IterableDataset):
+    def __init__(self, data1 , label) -> None:
+            super().__init__()
+            self.data1 = data1
+            self.label = label
+    def __len__(self):
+        return len(self.data1)
+    def __iter__(self):
+        for ii in range(len(self.data1)):
+            yield self.data1[ii], self.label[ii]
+            
+class Mydataloader_basic:
+    def __init__(self, x_set , y_set , batch_size = 1, num_worker = 0, set_name = '', batch_num = None):
+        self.dataset = Mydataset(x_set, y_set)
+        self.batch_size = batch_size
+        self.num_worker = num_worker
+        self.dataloader = torch.utils.data.DataLoader(self.dataset , batch_size = batch_size , num_workers = num_worker)
+        self.set_name = set_name
+        self.batch_num = math.ceil(len(y_set)/batch_size)
+    def __iter__(self):
+        for d in self.dataloader: 
+            yield d
+
+class Mydataloader_saved:
+    def __init__(self, set_name , batch_num , batch_folder):
+        self.set_name = set_name
+        self.batch_num = batch_num
+        self.batch_folder = batch_folder
+        self.batch_path = [f'{self.batch_folder}/{self.set_name}.{ii}.pt' for ii in range(self.batch_num)]
+    def __iter__(self):
+        for ii in range(self.batch_num): 
+            yield torch.load(self.batch_path[ii])
+            
 class ModelData():
     """
     A class to store relavant training data , includes:
@@ -315,4 +362,62 @@ def buffer_proc(key , **param):
     else:
         wrapper = None
     return wrapper
+
+
+def load_trading_data(model_data_type , dtype = torch.float , dir_data = f'../../data'):
+    t0 = time.time()
+
+    data_type = get_config('data_type')['DATATYPE']
+    path_ydata = lambda x=None:f'{dir_data}/Ys.npz'
+    path_xdata = lambda x:f'{dir_data}/Xs_{x}.npz'
+    path_norm_param = f'{dir_data}/norm_param.pt'
+    def set_precision(data):
+        if isinstance(data , dict):
+            return {k:set_precision(v) for k,v in data.items()}
+        elif isinstance(data , (list,tuple)):
+            return type(data)(map(set_precision , data))
+        else:
+            return data.to(dtype)
     
+    read_index = lambda x:(np.array(x['row'],dtype=int),np.array(x['col'],dtype=int))
+    read_data  = lambda x:torch.tensor(x['arr']).detach()
+    i_exact  = lambda x,y:np.intersect1d(x , y , assume_unique=True , return_indices = True)[1]
+    i_latest = lambda x,y:np.array([np.where(x<=i)[0][-1] for i in y])
+    
+    data_type_list = model_data_type.split('+')
+    y_file = np.load(path_ydata())
+    x_file = {mdt:np.load(path_xdata(mdt)) for mdt in data_type_list}
+    
+    # aligned row,col
+    yr , yc = read_index(y_file)
+    x_index = {mdt:read_index(f) for mdt,f in x_file.items()}
+    
+    row , xc_trade , xc_factor = yr , None , None
+    for mdt , (xr , xc) in x_index.items():
+        row = np.intersect1d(row , xr)
+        if mdt in data_type['trade']:
+            xc_trade = xc if xc_trade is None else np.intersect1d(xc_trade , xc)
+        else:
+            xc_factor = xc if xc_factor is None else np.union1d(xc_factor , xc)
+
+    col = xc_factor if xc_trade is None else xc_trade
+    if xc_factor: col = col[col >= xc_factor.min()]
+    col , xc_tail = np.intersect1d(col , yc) , col[col > yc.max()]
+
+    y_data = read_data(y_file)[i_exact(yr,row),:][:,i_exact(yc,col)]
+    y_data = set_precision(torch.nn.functional.pad(y_data , (0,0,0,0,0,len(xc_tail),0,0) , value=np.nan))
+    col = np.concatenate((col , xc_tail))
+    
+    x_data = {}
+    for mdt,(xr , xc) in x_index.items():
+        i0 , i1 = i_exact(xr,row) , i_exact(xc,col) if mdt in data_type['trade'] else i_latest(xc,col)
+        x_data.update({mdt:set_precision(read_data(x_file[mdt])[i0,:][:,i1])})
+    
+    # norm_param
+    norm_param = {k:set_precision(v) for k,v in torch.load(path_norm_param).items()}
+
+    # check
+    assert all([d.shape[0] == y_data.shape[0] == len(row) for mdt,d in x_data.items()])
+    assert all([d.shape[1] == y_data.shape[1] == len(col) for mdt,d in x_data.items()])
+    
+    return x_data , y_data , norm_param , (row , col)

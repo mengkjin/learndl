@@ -2,7 +2,7 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from dataset import pivot_factor , melt_factor
+from learndl.scripts.data_utils.ModelData import pivot_factor , melt_factor
 import h5py
 file_path = '/root/autodl-tmp/rnn_fac/data/risk_model.h5'
 rm_file = h5py.File(file_path , mode='r+')

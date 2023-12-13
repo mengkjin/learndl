@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
-import collections
 from torch.nn.utils.parametrizations import weight_norm
 from copy import deepcopy
-from function import *
-import special.TRA as TRA
+from learndl.scripts.functional.func import *
+from . import TRA
     
 __all__ = [
     'MyTRA_LSTM' , 

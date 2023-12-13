@@ -3,17 +3,17 @@ import numpy as np
 import pandas as pd
 import torch.nn as nn
 import matplotlib.pyplot as plt
-import random , h5py
-from gen_data import save_data_file
-from logger import get_logger
+import h5py , time
+from learndl.scripts.data_utils.gen_data import save_data_file
+from ..util.environ import get_logger
 from datetime import datetime,timedelta
-from function import *
+from ..functional.func import *
 
 logger = get_logger()
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-dir_data      = f'./data'
+dir_data      = f'../../data/'
 dir_fund_port = f'{dir_data}/fund_stock_port.h5'
 dir_trading   = f'{dir_data}/day_trading_data.h5'
 dir_info      = f'{dir_data}/stock_info.h5'
@@ -213,7 +213,7 @@ class dynamic_market_state():
         _j1 , _j2 = np.where(self.MarketStateDate == d)[0] , np.where(self.FactorDate <= d)[0]
         return (self.MarketState[_j1] * self.Factor[:,_j2.max()]).sum(axis=1)
         
-if __name__ == '__main__':
+def main():
     t1 = time.time()
     logger.critical('Factor Calculating start!')
 

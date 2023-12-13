@@ -4,7 +4,7 @@
 # @Author : Mathew Jin
 # @File : ${run_model.py}
 # chmod +x run_model.py
-# python3 scripts/run_model.py --process=0 --rawname=1 --resume=0 --anchoring=0
+# python3 scripts/run_model3.py --process=0 --rawname=1 --resume=0 --anchoring=0
 '''
 1.TRA
 https://arxiv.org/pdf/2106.12950.pdf
@@ -22,16 +22,16 @@ import torch
 import torch.nn as nn
 import numpy as np
 import itertools , random , os, shutil , gc , time , h5py , yaml
-
-from torch.optim.swa_utils import AveragedModel , update_bn
-from my_utils import FilteredIterator , lr_cosine_scheduler , multiloss_calculator , versatile_storage
-from dataset import ModelData
-from environ import get_logger , get_config , cuda , DEVICE
 from tqdm import tqdm
 from copy import deepcopy
-
-from function import *
-from my_models import *
+from torch.optim.swa_utils import AveragedModel , update_bn
+from .scripts.util.environ import get_logger , get_config , cuda , DEVICE
+from .scripts.util.basic import FilteredIterator , lr_cosine_scheduler , versatile_storage
+from .scripts.util.multiloss import multiloss_calculator 
+from .scripts.data_utils.ModelData import ModelData
+from .scripts.functional.func import *
+from .scripts.functional.algo import sinkhorn
+from .scripts.nn.My import *
 # from audtorch.metrics.functional import *
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -79,6 +79,7 @@ class ShareNames_conctroller():
         ShareNames.raw_model_params = deepcopy(CONFIG['MODEL_PARAM'])
         ShareNames.model_params = self._load_model_param()
         ShareNames.output_types = ShareNames.train_params['output_types']
+        ShareNames.TRA_model = (CONFIG['TRA_switch'] == True) and CONFIG['MODEL_MODULE'].startswith('TRA')
         ShareNames.weight_train = CONFIG['WEIGHT_TRAIN']
         ShareNames.weight_test  = CONFIG['WEIGHT_TEST']
 
@@ -237,9 +238,11 @@ class model_controller():
         elif ShareNames.process_name == 'train': 
             self.f_loss    = loss_function(ShareNames.train_params['criterion']['loss'])
             self.f_score   = score_function(ShareNames.train_params['criterion']['score'])
-            self.f_penalty = {k:[penalty_function(k),v] for k,v in ShareNames.train_params['criterion']['penalty'].items() if v > 0.}
+            self.f_penalty = {k:penalty_function(k,v) for k,v in ShareNames.train_params['criterion']['penalty'].items()}
         elif ShareNames.process_name == 'test':
+            self.f_loss    = lambda x:None 
             self.f_score   = score_function(ShareNames.train_params['criterion']['score'])
+            self.f_penalty = {}
             self.ic_by_date , self.ic_by_model = None , None
         elif ShareNames.process_name == 'instance':
             self.ic_by_date , self.ic_by_model = None , None
@@ -355,11 +358,13 @@ class model_controller():
         assert process in ['train' , 'test' , 'instance']
         with process_timer('ModelPreparation' , process):
             param = ShareNames.model_params[self.model_num]
-            
-            # variable updates for train_params
-            if process in ['train' , 'instance']:
-                if 'hidden_orthogonality' in self.f_penalty.keys(): self.f_penalty['hidden_orthogonality'][1] = 1 * (param.get('hidden_as_factors') == True)
-            
+
+            # In a new model , alters the penalty function's lamb
+            if 'hidden_orthogonality' in self.f_penalty.keys():
+                self.f_penalty['hidden_orthogonality']['cond'] = (param.get('hidden_as_factors') == True) or ShareNames.TRA_model
+            if 'tra_ot_penalty' in self.f_penalty.keys(): 
+                self.f_penalty['tra_ot_penalty']['cond'] = ShareNames.TRA_model
+
             path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
             path = {k:f'{path_prefix}.{k}.pt' for k in ShareNames.output_types} #['best','swalast','swabest']
             path.update({f'src_model.{k}':[] for k in ShareNames.output_types})
@@ -441,7 +446,7 @@ class model_controller():
         """
         with process_timer('TrainerInit'):
             if self.cond.get('loop_status') == 'epoch': return
-            self.net       = self.load_model('train')
+            self.load_model('train')
             self.max_round = self.net.max_round() if 'max_round' in self.net.__dir__() else 1
             self.optimizer = self.load_optimizer()
             self.scheduler = self.load_scheduler() 
@@ -467,17 +472,20 @@ class model_controller():
         with process_timer('TrainEpoch/train_epochs'):
             self.net.train()
             for _ , batch_data in enumerate(iter_train):
-                x , y , w = tuple([batch_data[k] for k in ['x','y','w']])
+                x = self.modifier['inputs'](batch_data['x'] , batch_data , self.data)
                 self.optimizer.zero_grad()
                 with process_timer('TrainEpoch/train/forward'):
                     pred , hidden = self.net(x)
                 with process_timer('TrainEpoch/train/loss'):
-                    metric = self.metric_calculator(y , pred , 'train' , hidden = hidden , weight = w)
+                    penalty_kwargs = {'net' : self.net , 'hidden' : hidden , 'label' : batch_data['y']}
+                    metric = self.metric_calculator(batch_data['y'] , pred , 'train' , weight = batch_data['w'] , **penalty_kwargs)
+                    metric = self.modifier['metric'](metric, batch_data, self.data)
                 with process_timer('TrainEpoch/train/backward'):
                     metric['loss'].backward()
                 with process_timer('TrainEpoch/train/step'):
                     if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value)
                     self.optimizer.step()
+                self.modifier['update'](None , batch_data , self.data)
                 loss_train.append(metric['loss'].item()) , ic_train.append(metric['score'])
                 disp_train(loss_train)
 
@@ -487,13 +495,14 @@ class model_controller():
         with process_timer('TrainEpoch/valid_epochs'):
             self.net.eval()     
             for _ , batch_data in enumerate(iter_valid):
-                x , y , w = tuple([batch_data[k] for k in ['x','y','w']])
+                x = self.modifier['inputs'](batch_data['x'] , batch_data , self.data)
                 # print(torch.cuda.memory_allocated(DEVICE) / 1024**3 , torch.cuda.memory_reserved(DEVICE) / 1024**3)
                 with process_timer('TrainEpoch/valid/forward'):
                     pred , _ = self.net(x)
                 with process_timer('TrainEpoch/valid/loss'):
-                    metric = self.metric_calculator(y , pred , 'valid' , weight = batch_data['w'])
-                
+                    metric = self.metric_calculator(batch_data['y'] , pred , 'valid' , weight = batch_data['w'])
+                    metric = self.modifier['metric'](metric, batch_data, self.data)
+                self.modifier['update'](None , batch_data , self.data)
                 loss_valid.append(metric['loss']) , ic_valid.append(metric['score'])
                 disp_valid(ic_valid)
 
@@ -591,7 +600,7 @@ class model_controller():
         iter_dates = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
         assert self.data.dataloaders['test'].__len__() == len(iter_dates)
         for oi , okey in enumerate(ShareNames.output_types):
-            self.net = self.load_model('test' , okey)
+            self.load_model('test' , okey)
             self.net.eval()
             
             if self.display.get('tqdm'):
@@ -604,16 +613,37 @@ class model_controller():
             m_test = []    
             with torch.no_grad():
                 for i , batch_data in enumerate(iter_test):
+                    """
                     x , y , w , nonnan = tuple([batch_data[k] for k in ['x','y','w','nonnan']])
                     pred = torch.zeros_like(y).fill_(np.nan)
                     for batch_j in torch.utils.data.DataLoader(np.arange(len(y)) , batch_size = ShareNames.batch_size):
-                        x_j = tuple([xx[nonnan[batch_j]] for xx in x]) if isinstance(x , tuple) else x[nonnan[batch_j]]
-                        pred[nonnan[batch_j],0] = self.net(x_j)[0].select(-1,0).detach()
+                        nnj = batch_j[nonnan[batch_j]]
+                        x_j = tuple([xx[nnj] for xx in x]) if isinstance(x , tuple) else x[nnj]
+                        pred[nnj,0] = self.net(x_j)[0].select(-1,0).detach()
                     
                     if i >= len(self.data.early_test_dates):
                         self.y_pred[:,i-len(self.data.early_test_dates),oi] = pred[:,0]
                         w = None if w is None else w.select(-1,0)[nonnan]
                         score = self.f_score(y.select(-1,0)[nonnan] , pred.select(-1,0)[nonnan] , w).item()
+                        m_test.append(score) 
+                    if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
+                    """
+                    nonnan = batch_data['nonnan']
+                    pred = torch.zeros_like(batch_data['y']).fill_(np.nan)
+                    for batch_j in torch.utils.data.DataLoader(torch.arange(len(nonnan)).to(nonnan.device) , batch_size = ShareNames.batch_size):
+                        nnj = batch_j[nonnan[batch_j]]
+                        batch_nnj = subset(batch_data , nnj)
+                        x = self.modifier['inputs'](batch_nnj['x'] , batch_nnj , self.data)
+                        pred_nnj = self.net(x)[0].detach()
+                        pred[nnj,0] = pred_nnj[:,0]
+                        self.modifier['update'](None , batch_nnj , self.data)
+                    
+                    if i >= len(self.data.early_test_dates):
+                        self.y_pred[:,i-len(self.data.early_test_dates),oi] = pred[:,0]
+                        y = batch_data['y'].select(-1,0)[nonnan]
+                        pred = pred.select(-1,0)[nonnan]
+                        w = None if batch_data['w'] is None else batch_data['w'].select(-1,0)[nonnan]
+                        score = self.f_score(y , pred , w).item()
                         m_test.append(score) 
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
                     
@@ -792,14 +822,14 @@ class model_controller():
             self.text = {k : '' for k in ['model','round','attempt','epoch','exit','stat','time','trainer']}
             self.cond = {'terminate' : {} , 'nan_loss' : False , 'loop_status' : 'round'}
             
-    def metric_calculator(self, labels , pred , key , weight = None , **kwargs):
+    def metric_calculator(self, labels , pred , key , weight = None , **penalty_kwargs):
         """
         Calculate loss(with gradient), score
         Inputs : 
             kwargs : other inputs used in calculating loss , penalty and score
         Possible Methods :
         loss:    pearsonr , mse , ccc
-        penalty: none , hidden_orthogonality
+        penalty: hidden_orthogonality , tra_ot_penalty
         score:  pearsonr , rankic , mse , ccc
         """
         assert key in ['train' , 'valid'] , key
@@ -816,8 +846,9 @@ class model_controller():
             else:
                 loss = self.f_loss(labels.select(-1,0) , pred.select(-1,0) , weight0)
             score  = self.f_score(labels.select(-1,0) , pred.select(-1,0) , weight0).item()
-            penalty = sum([w * f(**kwargs) for k,(f,w) in self.f_penalty.items() if w != 0])
-            loss = loss + penalty  
+
+            for k,d in self.f_penalty.items():
+                if d['lamb'] > 0 and d['cond']: loss = loss + d['lamb'] * d['func'](**penalty_kwargs)  
         else:
             score  = self.f_score(labels.select(-1,0) , pred.select(-1,0) , weight0).item()
             loss    = 0.
@@ -892,7 +923,15 @@ class model_controller():
             else:
                 net = storage_model.load_model_state(net , self.path[key] , from_disk = True)
             net = cuda(net)
-        return net
+            self.net = net
+            # default : none modifier
+            # input : (inputs/metric/update , batch_data , self.data)
+            # output : new_inputs/new_metric/None 
+            self.modifier = {'inputs': lambda x,b,d:x, 'metric': lambda x,b,d:x, 'update': lambda x,b,d:None}
+            if 'modifier_inputs' in self.net.__dir__(): self.modifier['inputs'] = lambda x,b,d:self.net.modifier_inputs(x,b,d)
+            if 'modifier_metric' in self.net.__dir__(): self.modifier['metric'] = lambda x,b,d:self.net.modifier_metric(x,b,d)
+            if 'modifier_update' in self.net.__dir__(): self.modifier['update'] = lambda x,b,d:self.net.modifier_update(x,b,d)
+
     
     def swa_model(self , model_path_list = []):
         net = globals()[f'My{ShareNames.model_module}'](**self.Param)
@@ -1023,14 +1062,31 @@ def score_function(key):
     func = globals()[key]
     return decorator(globals()[key] , key)
     
-def penalty_function(key):
-    _cat_tensor = lambda x:(torch.cat(x,dim=-1) if isinstance(x,(tuple,list)) else x)
+def penalty_function(key , param):
     def _none(**kwargs):
         return 0.
     def _hidden_orthogonality(**kwargs):
-        _cat_tensor = lambda x:(torch.cat(x,dim=-1) if isinstance(x,(tuple,list)) else x)
-        return _cat_tensor(kwargs.get('hidden')).T.corrcoef().triu(1).nan_to_num().square().sum()
-    return locals()[f'_{key}']
+        hidden = kwargs['hidden']
+        if hidden.shape[-1] == 1:
+            return 0
+        if isinstance(hidden,(tuple,list)):
+            hidden = torch.cat(hidden,dim=-1)
+        return hidden.T.corrcoef().triu(1).nan_to_num().square().sum()
+    def _tra_ot_penalty(**kwargs):
+        net = kwargs['net']
+        if net.training and net.probs is not None and net.num_states > 1:
+            pred , label = kwargs['hidden'] , kwargs['label']
+            square_error = (pred - label).square()
+            square_error -= square_error.min(dim=-1, keepdim=True).values  # normalize & ensure positive input
+            P = sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
+            lamb = (param['rho'] ** net.global_steps)
+            reg = net.probs.log().mul(P).sum(dim=-1).mean()
+            net.global_steps += 1
+            return - lamb * reg
+        else:
+            return 0
+        
+    return {'lamb': param['lamb'] , 'cond' : True , 'func' : locals()[f'_{key}']}
 
 def print_time_recorder():
     if isinstance(TIME_RECODER , dict):

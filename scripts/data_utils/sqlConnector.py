@@ -1,0 +1,295 @@
+from sqlalchemy import create_engine , exc , text
+from datetime import date , datetime
+import pandas as pd
+import numpy as np
+import os , time
+
+from .DataTank import *
+
+connect_dict = {
+    'haitong':{
+        'dialect'  : 'mssql+pyodbc' ,
+        'driver'   : 'FreeTDS' ,
+        'username' : 'JSJJDataReader' ,
+        'password' : 'JSJJDataReader' ,
+        'host'     : 'rm-uf6777pp2098v0um6hm.sqlserver.rds.aliyuncs.com' ,
+        'port'     : 3433 ,
+        'database' : 'daily_factor_db' ,
+    },
+    'dongfang':{
+        'dialect'  : 'mysql+pymysql' ,
+        'username' : 'hfq_jiashi' ,
+        'password' : 'LTBi94we' ,
+        'host'     : '139.196.77.199' ,
+        'port'     : 81 ,
+        'database' : 'model' ,
+    },
+    'kaiyuan':{
+        'dialect'  : 'postgresql' ,
+        'username' : 'harvest_user' ,
+        'password' : 'harvest' ,
+        'host'     : '1.15.124.26' ,
+        'port'     : 5432 ,
+        'database' : 'kyfactor' ,
+    },
+    'guojin':{
+        'dialect'  : 'mysql+pymysql' ,
+        'username' : 'jsfund' ,
+        'password' : 'Gjquant_js!' ,
+        'host'     : 'quantstudio.tpddns.cn' ,
+        'port'     : 3306 ,
+        'database' : 'gjquant' ,
+    },
+}
+
+data_start_dt = {
+    'haitong':{'hf_factors': 20130101,
+               'dl_factors': 20161230},
+    'dongfang':{'hfq_chars'     : 20050101 ,
+                'l2_chars'      : 20130930 ,
+                'ms_chars'      : 20050101 ,
+                'order_flow'    : 20130930 ,
+                'gp'            : 20170101 ,
+                'tra'           : 20200101} ,
+    'kaiyuan':{
+        'positive': 20140130,
+        'negative': 20140130},
+    'guojin':{}
+}
+query_params = {
+    'haitong':{'hf_factors':{}, 'dl_factors':{},},
+    'dongfang':{'hfq_chars' :{'date_col':'tradingdate','date_fmt':'%Y%m%d'},
+                'l2_chars'  :{'date_col':'trade_date' ,'date_fmt':'%Y%m%d'},
+                'ms_chars'  :{'date_col':'trade_date' ,'date_fmt':'%Y%m%d'},
+                'order_flow':{'date_col':'trade_date' ,'date_fmt':'%Y%m%d'},
+                'gp'        :{'date_col':'tradingdate','date_fmt':'%Y-%m-%d'},
+                'tra'       :{'date_col':'tradingdate','date_fmt':'%Y-%m-%d'},
+                } ,
+    'kaiyuan':{
+        'positive':{'factors' : 
+                    ['active_trading','apm','opt_synergy_effect','large_trader_ret_error',
+                     'offense_defense','high_freq_shareholder','pe_change',],},
+        'negative':{'factors' : 
+                    ['smart_money','ideal_vol','ideal_reverse','herd_effect','small_trader_ret_error',],},
+        # +1 : 'traction_f' , 'traction_ns' , 'traction_si', , 'long_momentum2' , 'merge_sue', 'consensus_adjustment',
+    },
+    'guojin':{},
+}
+
+# class hfdl_connector
+class hfdl_connector():
+    def __init__(self):
+        os.makedirs(os.path.dirname(self.target_path),exist_ok = True)
+        self.connect_dict = connect_dict
+        self.engines = dict()
+        self.connections = dict()
+        self.data_start_dt = data_start_dt
+        self.query_params = query_params
+        [self.create_engines(src) for src in self.connect_dict.keys()]
+        self.dtank = None
+
+    def init_datatank(self , mode = None):
+        if mode is None: mode = 'r+' if os.path.exists(self.target_path) else 'w'
+        self.dtank = DataTank.DataTank(self.target_path , open=True , mode = mode)
+
+    def create_engines(self , srcs):
+        if not isinstance(srcs , (list,tuple)): srcs = [srcs]
+        for src in srcs:
+            self.engines[src] = self._single_engine(self.connect_dict[src])
+            
+    def create_connections(self , srcs):
+        if not isinstance(srcs , (list,tuple)): srcs = [srcs]
+        for src in srcs:
+            if self.connections.get(src) is not None:
+                self.connections.get(src).close()
+            self.connections[src] = self.engines[src].connect()
+
+    def close_all(self):
+        [connection.close() for _,connection in self.connections.items()]
+        
+    def _single_engine(self , src_dict):
+        connect_url = '{dialect}://{username}:{password}@{host}:{port}/{database}'.format(
+            dialect  = src_dict['dialect'],
+            username = src_dict['username'],
+            password = src_dict['password'],
+            host     = src_dict['host'],
+            port     = src_dict['port'],
+            database = src_dict['database'],
+        )
+        
+        if src_dict.get('driver'): connect_url += f'?driver={src_dict.get("driver")}'
+        return create_engine(connect_url)
+    
+    def _single_default_query(self , src , query_type , start_dt , end_dt):
+        assert query_type in self.query_params[src].keys()
+        if src == 'haitong':
+            if query_type == 'hf_factors':
+                query = '''
+                select *  
+                from daily_factor_db.dbo.JSJJHFFactors t 
+                where t.trade_dt between \'{}\' and \'{}\'
+                '''.format(start_dt , end_dt)
+            else:
+                query = '''
+                select s_info_windcode , trade_dt , f_value , model 
+                from daily_factor_db.dbo.JSJJDeepLearnFactorsV2 t 
+                where t.trade_dt between \'{}\' and \'{}\'
+                '''.format(start_dt , end_dt)
+        elif src == 'dongfang':
+            date_col = self.query_params[src][query_type]['date_col']
+            date_fmt = self.query_params[src][query_type]['date_fmt']
+            query = '''
+            select *  
+            from {} t 
+            where t.{} between \'{}\' and \'{}\'
+            '''.format(query_type , date_col , 
+                        datetime.strptime(str(start_dt) , '%Y%m%d').strftime(date_fmt) ,
+                        datetime.strptime(str(end_dt) , '%Y%m%d').strftime(date_fmt))
+        elif src == 'kaiyuan':
+            query = {v:f'select * from public.{v} where date >= \'{start_dt}\' and date <= \'{end_dt}\''
+                    for v in self.query_params[src][query_type]['factors']}
+        elif src == 'guojin':
+            query = 'select * from gjquant.factordescription'
+        return query
+    
+    def query_start_dt(self , src , query_type):
+        assert query_type in self.query_params[src].keys()
+        if src == 'haitong':
+            if query_type == 'hf_factors':
+                query = 'select min(trade_dt) from daily_factor_db.dbo.JSJJHFFactors'
+            else:
+                query = 'select min(trade_dt) daily_factor_db.dbo.JSJJDeepLearnFactorsV2'
+        elif src == 'dongfang':
+            date_col = self.query_params[src][query_type]['date_col']
+            query = 'select min({}) from {}'.format(date_col , query_type)
+        elif src == 'kaiyuan':
+            query = 'select min(date) from public.smart_money'
+        elif src == 'guojin':
+            return 99991231
+        return pd.read_sql_query(query , self.connections[src])
+
+    def default_query(self , src , query_type , start_dt = 20231101, end_dt = 20231103):
+        query = self._single_default_query(src , query_type , start_dt , end_dt)
+        if src not in self.connections.keys(): self.create_connections(src)
+        try:
+            if src == 'kaiyuan':
+                df = {k:pd.read_sql_query(q , self.connections[src]) for k,q in query.items()}
+            else:
+                df = pd.read_sql_query(query , self.connections[src])
+        except exc.ResourceClosedError:
+            print(f'{src} Connection is closed, re-connect')
+            self.create_connections(src)
+            if src == 'kaiyuan':
+                pass
+            else:
+                df = pd.read_sql_query(query , self.connections[src])
+        except:
+            raise Exception
+        df = self.df_process(df , src , query_type)
+        return df
+    
+    def df_process(self , df , src , query_type):
+        if src == 'haitong':
+            df.columns = map(str.lower , df.columns)
+            df = df.rename(columns={'s_info_windcode':'secid','trade_dt':'date'})
+            df['date'] = df['date'].astype(int)
+            df['secid'] = self._IDconvert(df['secid'])
+            if query_type == 'hf_factors':
+                df = df.reset_index(drop = True)
+            else:
+                df.loc[:,'model'] = 'haitong_dl_' + df.loc[:,'model'].astype(str)
+                df = df.pivot_table('f_value',['date','secid'],'model').reset_index()
+        elif src == 'dongfang':
+            df.columns = map(str.lower , df.columns)
+            if 'stockcode' in df.columns: df['stockcode'] = df['stockcode'].astype(int)
+            if 'ticker' in df.columns: df['ticker'] = df['ticker'].str.slice(2,8).astype(int)
+            df = df.rename(columns={'stockcode':'secid','ticker':'secid',
+                                    'tradingdate':'date','trade_dt':'date' , 'trade_date':'date'})
+            # df['sec_id'] = df['sec_id'].astype(int)
+            df['date'] = df['date'].astype(str).str.replace('-','').astype(int)
+        elif src == 'kaiyuan':
+            df0 = pd.DataFrame(columns = ['date','code'])
+            for k,subdf in df.items():
+                subdf.rename(columns = {'factor':k})
+                # print(subdf.iloc[:5])
+                df0 = df0.merge(subdf.rename(columns = {'factor':k}),how='outer',on=['date','code'])
+            df = df0.rename(columns={'code':'secid'})
+            df['secid'] = df['secid'].str.slice(0,6).astype(int)
+            df['date']  = df['date'].astype(int)
+            df = df.set_index(['date','secid']).reset_index()
+        elif src == 'guojin':
+            pass
+        return df.fillna(np.nan)
+    
+    def _IDconvert(self , x):
+        if isinstance(x , (bytes)):
+            return int(x.decode('utf-8').split('.')[0].split('!')[0])
+        if isinstance(x , (str)):
+            return int(x.split('.')[0].split('!')[0])
+        else:
+            return type(x)([self._IDconvert(xx) for xx in x])
+
+    def download_since(self , dtank , src , query_type , end_dt = 99991231 , ask = True):
+        assert isinstance(dtank , DataTank)
+        portal = dtank.get_object([src , query_type])
+        start_dt = self.data_start_dt[src][query_type]
+        if portal is not None and len(portal.keys()) > 0:
+            portal_last_date = np.array(list(portal.keys())).astype(int).max()
+            start_dt = max(start_dt , self.numdate_offset(int(portal_last_date),1))
+
+        end_dt = min(end_dt , int(date.today().strftime('%Y%m%d')))
+        if end_dt < start_dt: return
+
+        freq = 'Q'
+        date_segs = self.date_seg(start_dt , end_dt , freq = freq)
+        prompt = f'since {start_dt} to {end_dt}, total {len(date_segs)} periods({freq})'
+        if ask:
+            assert input(prompt + ', print "yes" to confirm!') == 'yes'
+        else:
+            print(prompt)
+
+        for (s , e) in date_segs:
+            data = self.default_query(src , query_type , s , e).set_index('date')
+            for d in data.index.unique():
+                dtank.write_data1D([src , query_type , str(d)] , Data1D(src = data.loc[d]) , True)
+            print(f'{time.ctime()} : {src}:{query_type}:{s // 100}{" "*20}' , end='\r')
+        print('\n')
+
+    def download_allaround(self , dtank , src , query_type , start_dt = 20000101, end_dt = 99991231 , ask = True):
+        if ask: assert input('print "yes" to confirm!') == 'yes'
+        assert isinstance(dtank , DataTank)
+        start_dt = max(start_dt , self.data_start_dt[src][query_type])
+        end_dt   = min(end_dt , int(date.today().strftime('%Y%m%d')))
+        freq = 'Q'
+        date_segs = self.date_seg(start_dt , end_dt , freq = freq)
+        if ask: assert input(f'total {len(date_segs)} periods({freq}), print "yes" to confirm!') == 'yes'
+        for (s , e) in date_segs:
+            data = self.default_query(src , query_type , s , e).set_index('date')
+            for d in data.index.unique():
+                dtank.write_data1D([src , query_type , str(d)] , Data1D(src = data.loc[d]) , True)
+            print(f'{time.ctime()} : {src}/{query_type}:{s // 100}{" "*20}' , end='\r')
+        print('\n')
+
+    def date_seg(self , start_dt , end_dt , freq='Q'):
+        dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
+        dt_starts = [start_dt , *self.numdate_offset(dt_list[:-1],1)]
+        dt_ends = [*dt_list[:-1] , end_dt]
+        return [(s,e) for s,e in zip(dt_starts , dt_ends)]
+    
+    def numdate_offset(self , date , offset):
+        if offset == 0:
+            return date
+        else:
+            if isinstance(date , (np.ndarray,pd.Index , pd.Series)):
+                return (pd.DatetimeIndex(date.astype(str))+pd.DateOffset(offset)).strftime('%Y%m%d').astype(int).values
+            else:
+                return (pd.DatetimeIndex([str(date)])+pd.DateOffset(offset)).strftime('%Y%m%d').astype(int)[0]
+                
+def update_connector(path , connector):
+    assert isinstance(connector , (hfdl_connector))
+    dtank = DataTank(path , mode = 'guess')
+    for src in connector.query_params.keys():
+        for qtype in connector.query_params[src].keys():
+            print(src , qtype)
+            connector.download_since(dtank,src,qtype,ask=False)
+    dtank.print_tree()
