@@ -260,6 +260,7 @@ class DataTank():
         self.file = None
         if open: self.open(mode = mode)
         self._zip = compression
+        self.str_dtype = h5py.string_dtype(encoding = 'utf-8')
 
     def __repr__(self):
         return f'{self.__class__} : {self.filename} -- ({"Closed" if self.file is None else "Opened"})'
@@ -270,7 +271,8 @@ class DataTank():
 
     def open(self , mode = 'guess'): 
         if mode == 'guess': mode = 'r+' if os.path.exists(self.filename) else 'w'
-        self.file = h5py.File(self.filename , mode)
+        if mode == 'w': h5py.File(self.filename , mode).close()
+        self.file = h5py.File(self.filename , 'r+')
         return self.file
 
     def _check_read_mode(self):
@@ -336,25 +338,24 @@ class DataTank():
         if input(f'press {rand_str} to confirm') != rand_str: return
         [self.del_object(k) for k in self.file.keys()]
     
-    def create_object(self , file , data = None , **kwargs):
+    def create_object(self , file , data = None , dtype = None , **kwargs):
         assert self.file.mode in ['w' ,'r+'] , self.file.mode
         file = self._full_path(file)
         assert self.get_object(file) is None, file
         if data is None:
             return self.file.create_group(file)
         else:
-            return self.file.create_dataset(file , data = data , **kwargs)
+            return self.file.create_dataset(file , data = data , dtype = dtype , **kwargs)
 
     def write_dataframe(self , file , data , overwrite = False):
         assert self.file.mode in ['w' ,'r+'] , self.file.mode
         if not isinstance(data , pd.DataFrame): data = pd.DataFrame(data)
         file = self._full_path(file)
         self.del_object(file , ask = not overwrite)
-        str_dtype = h5py.string_dtype(encoding='utf-8')
         columns , columns_dtype = data.columns.values.tolist() , data.dtypes.values.astype(str).tolist()
-        save_dtype = [str_dtype if dtype == 'object' else None for dtype in columns_dtype]
-        for col , sdtype in zip(columns , save_dtype):
-            self.create_object([file, col], data=data.loc[:,col], dtype=sdtype, compression=self._zip)
+        save_dtype = [self.str_dtype if dtype == 'object' else None for dtype in columns_dtype]
+        for col , dtype in zip(columns , save_dtype):
+            self.create_object([file, col], data=data.loc[:,col], dtype=dtype, compression=self._zip)
         self.set_group_attrs(file , __columns__ = columns)
         self.set_group_attrs(file , __columns_dtype__ = columns_dtype)
         
@@ -377,9 +378,12 @@ class DataTank():
         if not isinstance(data , Data1D): data = Data1D(src=data)
         file = self._full_path(file)
         self.del_object(file , ask = not overwrite)
-        self.create_object([file , 'secid'] , data = data.secid , compression = self._zip)
-        self.create_object([file , 'feature'] , data = data.feature , compression = self._zip)
-        self.create_object([file , 'values'] , data = data.values.astype(float) , compression = self._zip)
+        for key in ['secid','feature','values']:
+            v , dtype = getattr(data , key) , None
+            if isinstance(v[0] , str):
+                dtype = self.str_dtype
+                v = list(v)
+            self.create_object([file , key] , data = v , dtype = dtype , compression = self._zip)
 
     def read_data1D(self , file):
         return Data1D(src=self.get_object(file))

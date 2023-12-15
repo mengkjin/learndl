@@ -5,7 +5,7 @@ import numpy as np
 from ..functional.func import *
 from ..util.environ import get_config , cuda
 from ..util.basic import versatile_storage
-from learndl.scripts.data_utils.gen_data import load_trading_data
+from learndl.gen_data import load_trading_data
 from torch.utils.data.dataset import IterableDataset , Dataset
 
 storage_loader = versatile_storage()

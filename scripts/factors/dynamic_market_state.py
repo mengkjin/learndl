@@ -4,7 +4,7 @@ import pandas as pd
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import h5py , time
-from learndl.scripts.data_utils.gen_data import save_data_file
+from learndl.gen_data import save_data_file
 from ..util.environ import get_logger
 from datetime import datetime,timedelta
 from ..functional.func import *

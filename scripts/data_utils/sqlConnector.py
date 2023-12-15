@@ -79,18 +79,12 @@ query_params = {
 # class hfdl_connector
 class hfdl_connector():
     def __init__(self):
-        os.makedirs(os.path.dirname(self.target_path),exist_ok = True)
         self.connect_dict = connect_dict
         self.engines = dict()
         self.connections = dict()
         self.data_start_dt = data_start_dt
         self.query_params = query_params
         [self.create_engines(src) for src in self.connect_dict.keys()]
-        self.dtank = None
-
-    def init_datatank(self , mode = None):
-        if mode is None: mode = 'r+' if os.path.exists(self.target_path) else 'w'
-        self.dtank = DataTank.DataTank(self.target_path , open=True , mode = mode)
 
     def create_engines(self , srcs):
         if not isinstance(srcs , (list,tuple)): srcs = [srcs]
@@ -229,15 +223,15 @@ class hfdl_connector():
         else:
             return type(x)([self._IDconvert(xx) for xx in x])
 
-    def download_since(self , dtank , src , query_type , end_dt = 99991231 , ask = True):
+    def download_since(self , dtank , src , query_type , trace = 1 , ask = True):
         assert isinstance(dtank , DataTank)
         portal = dtank.get_object([src , query_type])
         start_dt = self.data_start_dt[src][query_type]
         if portal is not None and len(portal.keys()) > 0:
             portal_last_date = np.array(list(portal.keys())).astype(int).max()
-            start_dt = max(start_dt , self.numdate_offset(int(portal_last_date),1))
+            start_dt = max(start_dt , self.numdate_offset(int(portal_last_date),1 - trace))
 
-        end_dt = min(end_dt , int(date.today().strftime('%Y%m%d')))
+        end_dt = min(99991231 , int(date.today().strftime('%Y%m%d')))
         if end_dt < start_dt: return
 
         freq = 'Q'
@@ -287,9 +281,11 @@ class hfdl_connector():
                 
 def update_connector(path , connector):
     assert isinstance(connector , (hfdl_connector))
-    dtank = DataTank(path , mode = 'guess')
+    os.makedirs(os.path.dirname(path) , exist_ok=True)
+    dtank = DataTank(path , mode = 'guess' , open=True)
     for src in connector.query_params.keys():
         for qtype in connector.query_params[src].keys():
             print(src , qtype)
             connector.download_since(dtank,src,qtype,ask=False)
     dtank.print_tree()
+    
