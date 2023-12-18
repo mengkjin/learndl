@@ -4,6 +4,7 @@ import h5py
 import pandas as pd
 import numpy as np
 import random, string , os , time
+import traceback
 from .DataTank import *
 from .DataTransmitter import *
 
@@ -30,7 +31,7 @@ def _get_dates(date_source , old_keys , trace = 1):
     if isinstance(date_source , str):
         tar_dates = get_path_date(get_directory_files(date_source))
     elif isinstance(date_source , h5py.Group):
-        tar_dates = np.array(list(date_source.keys()))
+        tar_dates = np.array(list(date_source.keys())).astype(int)
     else:
         tar_dates = np.array(date_source)
     old_dates = np.array(list(old_keys)).astype(int)
@@ -88,18 +89,22 @@ def update_information():
         'stock/industry'   : {'__information__': 'SW 2021 industry criterion'},
         'stock/concepts'   : {'__information__': 'wind concepts'},}
     for param in file_params.values(): param.update({'__create_time__' : _ctime , '__data_func__' : _dfunc ,})
-    for dtank_file , param in file_params.items():
-        key = dtank_file.split('/')[-1]
-        if dtank.get_object(dtank_file) is None:
-            dtank.create_object(dtank_file)
-            dtank.set_group_attrs(dtank_file , **{k:param[k] for k in attr_create})
-        data = param['__data_func__'](key)
-        dtank.write_dataframe(dtank_file , data = data , overwrite = True)
-        param.update({'__update_time__':_str_time()})
-        dtank.set_group_attrs(dtank_file , **{k:param.get(k) for k in attr_EOL})
-        if updater is not None: updater.write_dataframe([dtank.filename,dtank_file] , data = data , overwrite = True)
-        print(f'{dtank_file} Done!')
-    dtank.close()
+    try :
+        for dtank_file , param in file_params.items():
+            key = dtank_file.split('/')[-1]
+            if dtank.get_object(dtank_file) is None:
+                dtank.create_object(dtank_file)
+                dtank.set_group_attrs(dtank_file , **{k:param[k] for k in attr_create})
+            data = param['__data_func__'](key)
+            dtank.write_dataframe(dtank_file , data = data , overwrite = True)
+            param.update({'__update_time__':_str_time()})
+            dtank.set_group_attrs(dtank_file , **{k:param.get(k) for k in attr_EOL})
+            if updater is not None: updater.write_dataframe([dtank.filename,dtank_file] , data = data , overwrite = True)
+            print(f'{dtank_file} Done!')
+    except Exception as e:
+        traceback.print_exc()
+    finally :
+        dtank.close()
 
 def update_model_data(start_dt = None , end_dt = None):
     dtank = choose_data_tank('model_data')
@@ -114,8 +119,12 @@ def update_model_data(start_dt = None , end_dt = None):
             '__date_source__' : 'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/A1_Analyst' ,
             '__create_time__': _ctime , '__data_func__' : read_alpha_longcl,}
     }
-    _update_by_date(dtank , file_params , start_dt = start_dt , end_dt = end_dt)
-    dtank.close()
+    try:
+        _update_by_date(dtank , file_params , start_dt = start_dt , end_dt = end_dt)
+    except Exception as e:
+        traceback.print_exc()
+    finally :
+        dtank.close()
 
 def update_day_trade_data(start_dt = None , end_dt = None):
     dtank = choose_data_tank('day_trade')
@@ -125,8 +134,12 @@ def update_day_trade_data(start_dt = None , end_dt = None):
             '__date_source__' : 'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_vwap' ,
             '__create_time__': _str_time() , '__data_func__' : get_day_trade} ,
     }
-    _update_by_date(dtank , file_params , start_dt = start_dt , end_dt = end_dt)
-    dtank.close()
+    try:
+        _update_by_date(dtank , file_params , start_dt = start_dt , end_dt = end_dt)
+    except Exception as e:
+        traceback.print_exc()
+    finally :
+        dtank.close()
 
 def update_min_trade_data(start_dt = None , end_dt = None):
     dtank = choose_data_tank('min_trade')
@@ -136,8 +149,12 @@ def update_min_trade_data(start_dt = None , end_dt = None):
             '__date_source__' : 'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin' ,
             '__create_time__': _str_time() , '__data_func__' : get_min_trade,} ,
     }
-    _update_by_date(dtank , file_params , start_dt = start_dt , end_dt = end_dt)
-    dtank.close()
+    try:
+        _update_by_date(dtank , file_params , start_dt = start_dt , end_dt = end_dt)
+    except Exception as e:
+        traceback.print_exc()
+    finally :
+        dtank.close()
 
 def update_Xmin_trade_data(start_dt = None , end_dt = None):
     dtank = choose_data_tank('Xmin_trade')
@@ -149,8 +166,12 @@ def update_Xmin_trade_data(start_dt = None , end_dt = None):
             '__create_time__': _str_time() , '__data_func__' : get_Xmin_trade,
             'min_DataTank': min_dtank , 'x':x} for x in [5,10,15,30,60]
     }
-    _update_by_date(dtank , file_params , start_dt = start_dt , end_dt = end_dt)
-    dtank.close()
+    try:
+        _update_by_date(dtank , file_params , start_dt = start_dt , end_dt = end_dt)
+    except Exception as e:
+        traceback.print_exc()
+    finally :
+        dtank.close()
 
 def update_labels(start_dt = None , end_dt = None):
     dtank = choose_data_tank('labels')
@@ -162,8 +183,12 @@ def update_labels(start_dt = None , end_dt = None):
             '__information__': f'forward labels of {v["days"]} days, with lag {v["lag1"]}' ,
             '__date_source__' : f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
             '__create_time__': _str_time() , '__data_func__' : get_labels , **v}
-    _update_by_date(dtank , file_params , start_dt = start_dt , end_dt = end_dt)
-    dtank.close()
+    try:
+        _update_by_date(dtank , file_params , start_dt = start_dt , end_dt = end_dt)
+    except Exception as e:
+        traceback.print_exc()
+    finally :
+        dtank.close()
 
 if __name__ == '__main__':
     if do_updater:

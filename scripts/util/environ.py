@@ -6,6 +6,11 @@ import yaml
 import torch
 
 DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+current_dir = os.path.dirname(os.path.abspath(__file__)) 
+DIR_main = f'{current_dir}/../..'
+DIR_data = f'{current_dir}/../../data'
+DIR_conf = f'{current_dir}/../../configs'
+DIR_logs = f'{current_dir}/../../logs'
 
 class _LevelFormatter(logging.Formatter):
     def __init__(self, fmt=None, datefmt=None, level_fmts={}):
@@ -65,8 +70,9 @@ def get_logger(test_output = False):
 def get_config(config_files = ['data_type' , 'train']):
     config_dict = dict()
     if isinstance(config_files , str): config_files = [config_files]
+   
     for cfg_name in config_files:
-        with open(f'../../configs/config_{cfg_name}.yaml' ,'r') as f:
+        with open(f'{DIR_conf}/config_{cfg_name}.yaml' ,'r') as f:
             cfg = yaml.load(f , Loader = yaml.FullLoader)
         if cfg_name == 'train':
             if 'SPECIAL_CONFIG' in cfg.keys() and 'SHORTTEST' in cfg['SPECIAL_CONFIG'].keys(): 
@@ -76,6 +82,8 @@ def get_config(config_files = ['data_type' , 'train']):
                 if cfg['MODEL_MODULE'] == 'Transformer' or (cfg['MODEL_MODULE'] in ['GeneralRNN'] and 'transformer' in cfg['MODEL_PARAM']['type_rnn']):
                     cfg['TRAIN_PARAM']['trainer'].update(cfg['SPECIAL_CONFIG']['TRANSFORMER']['trainer'])
                 del cfg['SPECIAL_CONFIG']['TRANSFORMER']
+        elif cfg_name == 'logger':
+            cfg['file']['param']['filename'] = '/'.join([DIR_logs,cfg['file']['param']['filename']])
         config_dict.update(cfg)
     return config_dict
 

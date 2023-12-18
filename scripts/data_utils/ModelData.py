@@ -1,11 +1,10 @@
 
 import torch
-import gc , random , math , time
+import gc , random , math , time , copy
 import numpy as np
 from ..functional.func import *
 from ..util.environ import get_config , cuda
 from ..util.basic import versatile_storage
-from learndl.gen_data import load_trading_data
 from torch.utils.data.dataset import IterableDataset , Dataset
 
 storage_loader = versatile_storage()
@@ -363,7 +362,6 @@ def buffer_proc(key , **param):
         wrapper = None
     return wrapper
 
-
 def load_trading_data(model_data_type , dtype = torch.float , dir_data = f'../../data'):
     t0 = time.time()
 
@@ -371,53 +369,129 @@ def load_trading_data(model_data_type , dtype = torch.float , dir_data = f'../..
     path_ydata = lambda x=None:f'{dir_data}/Ys.npz'
     path_xdata = lambda x:f'{dir_data}/Xs_{x}.npz'
     path_norm_param = f'{dir_data}/norm_param.pt'
-    def set_precision(data):
+    def precision(data):
         if isinstance(data , dict):
-            return {k:set_precision(v) for k,v in data.items()}
+            return {k:precision(v) for k,v in data.items()}
         elif isinstance(data , (list,tuple)):
-            return type(data)(map(set_precision , data))
+            return type(data)(map(precision , data))
         else:
             return data.to(dtype)
-    
-    read_index = lambda x:(np.array(x['row'],dtype=int),np.array(x['col'],dtype=int))
-    read_data  = lambda x:torch.tensor(x['arr']).detach()
-    i_exact  = lambda x,y:np.intersect1d(x , y , assume_unique=True , return_indices = True)[1]
-    i_latest = lambda x,y:np.array([np.where(x<=i)[0][-1] for i in y])
-    
+
     data_type_list = model_data_type.split('+')
-    y_file = np.load(path_ydata())
-    x_file = {mdt:np.load(path_xdata(mdt)) for mdt in data_type_list}
+    paths = {'y_data':path_ydata(),**{mdt:path_xdata(mdt) for mdt in data_type_list}}
+    paths_factor = {mdt:path_xdata(mdt) for mdt in data_type_list if mdt in data_type['factor']}
+    data_dict = block_data_align(list(paths.values()) , list(paths_factor.values()))
     
-    # aligned row,col
-    yr , yc = read_index(y_file)
-    x_index = {mdt:read_index(f) for mdt,f in x_file.items()}
-    
-    row , xc_trade , xc_factor = yr , None , None
-    for mdt , (xr , xc) in x_index.items():
-        row = np.intersect1d(row , xr)
-        if mdt in data_type['trade']:
-            xc_trade = xc if xc_trade is None else np.intersect1d(xc_trade , xc)
-        else:
-            xc_factor = xc if xc_factor is None else np.union1d(xc_factor , xc)
-
-    col = xc_factor if xc_trade is None else xc_trade
-    if xc_factor: col = col[col >= xc_factor.min()]
-    col , xc_tail = np.intersect1d(col , yc) , col[col > yc.max()]
-
-    y_data = read_data(y_file)[i_exact(yr,row),:][:,i_exact(yc,col)]
-    y_data = set_precision(torch.nn.functional.pad(y_data , (0,0,0,0,0,len(xc_tail),0,0) , value=np.nan))
-    col = np.concatenate((col , xc_tail))
-    
-    x_data = {}
-    for mdt,(xr , xc) in x_index.items():
-        i0 , i1 = i_exact(xr,row) , i_exact(xc,col) if mdt in data_type['trade'] else i_latest(xc,col)
-        x_data.update({mdt:set_precision(read_data(x_file[mdt])[i0,:][:,i1])})
+    y_data = torch.tensor(data_dict[paths['y_data']]['values']).to(dtype)
+    x_data = {torch.tensor(data_dict[paths[mdt]]['values']).to(dtype) for mdt in data_type_list}
+    row = data_dict[paths['y_data']]['index']['secid']
+    col = data_dict[paths['y_data']]['index']['date']
     
     # norm_param
-    norm_param = {k:set_precision(v) for k,v in torch.load(path_norm_param).items()}
+    norm_param = {k:precision(v) for k,v in torch.load(path_norm_param).items()}
 
     # check
     assert all([d.shape[0] == y_data.shape[0] == len(row) for mdt,d in x_data.items()])
     assert all([d.shape[1] == y_data.shape[1] == len(col) for mdt,d in x_data.items()])
     
     return x_data , y_data , norm_param , (row , col)
+
+def save_block_data(file_path , values , index):
+    assert isinstance(index , dict) , type(index)
+    for k , v in index.items(): 
+        index[k] = np.array([v] if not isinstance(v,(list,tuple,np.ndarray)) else v)
+    shape = values.shape
+    index_keys , index_values = list(index.keys()) , list(index.values())
+    assert len(shape) == len(index)
+    assert 2 <= len(shape) <= 4 , shape
+    assert list(shape) == [len(v) for v in index_values] , (list(shape) , [len(v) for v in index_values])
+    # input dim can be 2,3,4, but save to 3,4
+    os.makedirs(os.path.dirname(file_path),exist_ok=True)
+    if len(index) == 2:
+        values       = values.reshape(shape[0],shape[1],1)
+        index_keys   = [index_keys[0],index_keys[1],'feature']
+        index_values = [index_values[0],index_values[1],np.array(['unspecified'])]
+    index = {k:v for k,v in zip(index_keys , index_values)}
+    np.savez_compressed(file_path , values = values , index_keys = index_keys , **index)
+
+def block_data_values(file_path):
+    data = np.load(file_path)
+    return data['values']
+
+def block_data_index(file_path):
+    data = np.load(file_path)
+    index_key = data['index_key']
+    return {k:data[k] for k in index_key}
+
+def _index_intersect(idxs , min_value = None , max_value = None):
+    new_idx = None
+    for idx in idxs:
+        if new_idx is None or idx is None:
+            new_idx = new_idx if idx is None else idx
+        else:
+            new_idx = np.intersect1d(new_idx , idx)
+    if min_value is not None: new_idx = new_idx[new_idx >= min_value]
+    if max_value is not None: new_idx = new_idx[new_idx <= max_value]
+    new_idx = np.sort(new_idx)
+    inter   = [None if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
+    pos_new = tuple([None if v is None else v[1] for v in inter])
+    pos_old = tuple([None if v is None else v[2] for v in inter])
+    return new_idx , pos_new , pos_old
+
+def _index_union(idxs , min_value = None , max_value = None):
+    new_idx = None
+    for idx in idxs:
+        if new_idx is None or idx is None:
+            new_idx = new_idx if idx is None else idx
+        else:
+            new_idx = np.union1d(new_idx , idx)
+    if min_value is not None: new_idx = new_idx[new_idx >= min_value]
+    if max_value is not None: new_idx = new_idx[new_idx <= max_value]
+    inter   = [None if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
+    pos_new = tuple([None if v is None else v[1] for v in inter])
+    pos_old = tuple([None if v is None else v[2] for v in inter])
+    return new_idx , pos_new , pos_old
+
+def block_data_align(paths , paths_forward_fillna = None , 
+                     start_dt = None , end_dt = None , align_dim = True):
+    """
+    concatenate block data of paths , 
+    secid : intersect of index(['secid']) of [*paths , *paths_forward_fillna]
+    date : union of index(['date']) between start_dt and end_dt
+    feature : union if concat
+    paths_forard_fillna : datas not for everyday
+    """
+    paths = np.union1d(paths , paths_forward_fillna)
+    indexes = {p:block_data_index(p) for p in paths}
+
+    assert np.all([('secid' in v) for v in indexes.values()])
+    assert np.all([('date' in v) for v in indexes.values()])
+    assert np.all([('feature' in v) for v in indexes.values()])
+
+    list_secid = [v['secid'] for v in indexes.values()]
+    list_date  = [v['date']  for v in indexes.values()]
+    max_dim = max([len(v) for v in indexes.values()])
+    secid, pos_secid, pos_secid_old = _index_intersect(list_secid)
+    date , pos_date , pos_date_old  = _index_union(list_date, start_dt , end_dt)
+    
+    data_dict = {}
+    for i,(p,old_index) in enumerate(indexes.items()):
+        old_values = block_data_values(p)
+        assert old_values.shape[:2] == (len(old_index['secid']) , len(old_index['date']))
+        assert old_values.shape[-1] == len(old_index['feature'])
+        new_shape = (len(secid),len(date),*old_values.shape[2:])
+        new_values = np.full(new_shape, np.nan, dtype=float)
+
+        tmp = new_values[pos_secid[i]]
+        tmp[:,pos_date[i]] = old_values[pos_secid_old[i]][:,pos_date_old[i]]
+        new_values[pos_secid[i]] = tmp
+        new_index = {'secid':secid,'date':date}
+        if p in paths_forward_fillna: new_values = forward_fillna(new_values,axis=1)
+        if align_dim and (len(new_values.shape) < max_dim):
+            assert (len(new_values.shape),max_dim)==(3,4), (len(new_values.shape),max_dim)
+            new_values = new_values.reshape(*new_values.shape[:2],1,-1)
+            new_index.update({'inday':np.array([0]),'feature':old_index['feature']})
+        else:
+            [new_index.update({k:v}) for k,v in old_values if k not in ['secid','date']]
+        data_dict.update({p:{'values':new_values,'index':new_index}})
+    return data_dict

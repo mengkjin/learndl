@@ -320,3 +320,37 @@ def subset(x , i):
         return {k:v if v is None else v[i] for k,v in x.items()}
     else:
         return x[i]
+    
+def forward_fillna(arr , axis = 0):
+    shape = arr.shape
+    if axis < 0: axis = len(shape) + axis
+    new_axes  = [axis , *[i for i in range(len(shape)) if i != axis]]
+    new_shape = [shape[i] for i in new_axes]
+    old_axes  = list(range(len(shape)))[1:]
+    old_axes.insert(axis,0)
+
+    new_arr   = arr.transpose(*new_axes).reshape(shape[axis],-1).transpose(1,0)
+    mask = np.isnan(new_arr)
+    idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+    idx = np.maximum.accumulate(idx, axis=1, out=idx)
+    out = new_arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
+    out = out.reshape(new_shape).transpose(*old_axes)
+
+    return out
+
+def backward_fillna(arr, axis = 0):
+    shape = arr.shape
+    if axis < 0: axis = len(shape) + axis
+    new_axes  = [axis , *[i for i in range(len(shape)) if i != axis]]
+    new_shape = [shape[i] for i in new_axes]
+    old_axes  = list(range(len(shape)))[1:]
+    old_axes.insert(axis,0)
+
+    new_arr   = arr.transpose(*new_axes).reshape(shape[axis],-1).transpose(1,0)
+    mask = np.isnan(new_arr)
+    idx = np.where(~mask, np.arange(mask.shape[1]), mask.shape[1] - 1)
+    idx = np.minimum.accumulate(idx[:, ::-1], axis=1)[:, ::-1]
+    out = new_arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
+    out = out.reshape(new_shape).transpose(*old_axes)
+
+    return out

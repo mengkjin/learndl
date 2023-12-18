@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine , exc , text
 from datetime import date , datetime
+import traceback
 import pandas as pd
 import numpy as np
 import os , time
@@ -76,8 +77,8 @@ query_params = {
     'guojin':{},
 }
 
-# class hfdl_connector
-class hfdl_connector():
+# class online_sql_connector
+class online_sql_connector():
     def __init__(self):
         self.connect_dict = connect_dict
         self.engines = dict()
@@ -228,8 +229,10 @@ class hfdl_connector():
         portal = dtank.get_object([src , query_type])
         start_dt = self.data_start_dt[src][query_type]
         if portal is not None and len(portal.keys()) > 0:
-            portal_last_date = np.array(list(portal.keys())).astype(int).max()
-            start_dt = max(start_dt , self.numdate_offset(int(portal_last_date),1 - trace))
+            portal_dt = np.array(list(portal.keys()))
+            portal_dt_valid = np.array([dtank.is_Data1D(portal[pdt]) for pdt in portal_dt])
+            portal_last_date = sorted(portal_dt[portal_dt_valid].astype(int))[-1-trace]
+            start_dt = max(start_dt , self.numdate_offset(int(portal_last_date),1))
 
         end_dt = min(99991231 , int(date.today().strftime('%Y%m%d')))
         if end_dt < start_dt: return
@@ -243,9 +246,12 @@ class hfdl_connector():
             print(prompt)
 
         for (s , e) in date_segs:
-            data = self.default_query(src , query_type , s , e).set_index('date')
+            data = self.default_query(src , query_type , s , e)
+            data = data.sort_values(['date' , 'secid']).set_index('date')
             for d in data.index.unique():
-                dtank.write_data1D([src , query_type , str(d)] , Data1D(src = data.loc[d]) , True)
+                dtank.write_data1D(file = [src , query_type , str(d)] , 
+                                   data = Data1D(src = data.loc[d]) , 
+                                   overwrite = True)
             print(f'{time.ctime()} : {src}:{query_type}:{s // 100}{" "*20}' , end='\r')
         print('\n')
 
@@ -260,7 +266,9 @@ class hfdl_connector():
         for (s , e) in date_segs:
             data = self.default_query(src , query_type , s , e).set_index('date')
             for d in data.index.unique():
-                dtank.write_data1D([src , query_type , str(d)] , Data1D(src = data.loc[d]) , True)
+                dtank.write_data1D(file = [src , query_type , str(d)] , 
+                                   data = Data1D(src = data.loc[d]) , 
+                                   overwrite = True)
             print(f'{time.ctime()} : {src}/{query_type}:{s // 100}{" "*20}' , end='\r')
         print('\n')
 
@@ -279,13 +287,20 @@ class hfdl_connector():
             else:
                 return (pd.DatetimeIndex([str(date)])+pd.DateOffset(offset)).strftime('%Y%m%d').astype(int)[0]
                 
-def update_connector(path , connector):
-    assert isinstance(connector , (hfdl_connector))
+def update_connector(path , connector , trace = 1):
+    assert path == './data/DB_3rdPartySQL.h5' , path
+    assert isinstance(connector , (online_sql_connector))
     os.makedirs(os.path.dirname(path) , exist_ok=True)
     dtank = DataTank(path , mode = 'guess' , open=True)
-    for src in connector.query_params.keys():
-        for qtype in connector.query_params[src].keys():
-            print(src , qtype)
-            connector.download_since(dtank,src,qtype,ask=False)
-    dtank.print_tree()
+    try:
+        for src in connector.query_params.keys():
+            for qtype in connector.query_params[src].keys():
+                print('/'.join([src,qtype]))
+                connector.download_since(dtank,src,qtype,trace=trace,ask=False)
+        dtank.print_tree()
+    except Exception as e:
+        traceback.print_exc()
+    finally :
+        dtank.close()
+
     

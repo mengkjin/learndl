@@ -11,8 +11,10 @@ def _index_union(idxs):
         else:
             new_idx = np.union1d(new_idx , idx)
     new_idx = np.sort(new_idx)
-    pos = tuple([None if idx is None else np.intersect1d(new_idx , idx , return_indices=True)[1] for idx in idxs])
-    return new_idx , pos
+    inter   = [None if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
+    pos_new = tuple([None if v is None else v[1] for v in inter])
+    pos_old = tuple([None if v is None else v[2] for v in inter])
+    return new_idx , pos_new , pos_old
 
 def _update_rcv(old_rowcolval , upd_rowcolval , replace = False , all_within = False , all_without = False):
     old_row , old_col , old_val = old_rowcolval
@@ -27,8 +29,8 @@ def _update_rcv(old_rowcolval , upd_rowcolval , replace = False , all_within = F
     if all_within:  assert all(all(in_row) , all(in_col))
     if all_without: assert not any(any(in_row) , any(in_col))
 
-    new_row, pos_row = _index_union([old_row , upd_row])  
-    new_col, pos_col = _index_union([old_col , upd_col]) 
+    new_row, pos_row, _ = _index_union([old_row , upd_row])  
+    new_col, pos_col, _ = _index_union([old_col , upd_col]) 
     new_val = np.full((len(new_row),len(new_col)) , np.nan)
     for r, c, v in zip(pos_row , pos_col , [old_val , upd_val]): 
         if r is not None and c is not None: new_val[r][:,c] = v[:]
@@ -78,6 +80,18 @@ class Data1D():
         old_rcv = (self.secid,self.feature,self.values)
         upd_rcv = (None,new_feature,new_values)
         self.init_attr(*_update_rcv(old_rcv,upd_rcv,all_without=True))
+
+    def slice(self , secid = None , feature = None):
+        if secid is not None:
+            self.secid = self.secid[secid]
+            self.values = self.values[secid]
+        if feature is not None:
+            self.feature = self.feature[feature]
+            self.values = self.values[:,feature]
+        return self
+    
+    def to_dataframe(self):
+        return pd.DataFrame(self.values,index=pd.Index(self.secid,name='secid'),columns=self.feature)
     
 class DataDSF():
     # Date-Sec-Feature
@@ -137,10 +151,10 @@ class DataDSF():
 
     def to_FDS(self):
         date = self.date
-        secid, pos_secid = _index_union([d.secid for d in self.data.values()])
-        feat , pos_feat  = _index_union([d.feature for d in self.data.values()])
+        secid, pos_secid, _ = _index_union([d.secid for d in self.data.values()])
+        feat , pos_feat , _ = _index_union([d.feature for d in self.data.values()])
         datas = self.data.values()
-        all_values = np.full((len(date) , len(secid),len(feat)) , np.nan)
+        all_values = np.full((len(date),len(secid),len(feat)) , np.nan)
         for i_date , (data , i_sec , i_feat) in enumerate(zip(datas , pos_secid , pos_feat)):
             tmp = all_values[i_date,i_sec,:]
             tmp[:,i_feat] = data.values[:]
@@ -243,8 +257,8 @@ class DataFDS():
         self.data[str(feature)] = self._data1f(data)
 
     def to_DSF(self):
-        date , pos_date  = _index_union([d.date for d in self.data.values()])
-        secid, pos_secid = _index_union([d.secid for d in self.data.values()])
+        date , pos_date ,_ = _index_union([d.date for d in self.data.values()])
+        secid, pos_secid,_ = _index_union([d.secid for d in self.data.values()])
         feat  = self.feature
         datas = self.data.values()
         all_values = np.full((len(date) , len(secid),len(feat)) , np.nan)
@@ -326,7 +340,13 @@ class DataTank():
         file = self._full_path(file)
         if self.file.get(file) is None: return
         if ask and input('press yes to confirm') != 'yes': return
-        del self.file[file]
+        try:
+            del self.file[file]
+            return True
+        except:
+            g = self.file[file]
+            for key in g.keys(): del g[key]
+            return False
 
     def delete_all(self , allow = False):
         if not allow: return NotImplemented
@@ -385,8 +405,20 @@ class DataTank():
                 v = list(v)
             self.create_object([file , key] , data = v , dtype = dtype , compression = self._zip)
 
-    def read_data1D(self , file):
-        return Data1D(src=self.get_object(file))
+    def read_data1D(self , file , feature = None):
+        if feature is None:
+            return Data1D(src=self.get_object(file))
+        else:
+            if isinstance(feature , str): feature = [feature]
+            portal = self.get_object(file)
+            all_feature = portal['feature'][:].astype(str)
+            assert np.isin(feature , all_feature) , np.setdiff1d(feature , all_feature)
+            ifeat = np.array([np.where(all_feature == f)[0][0] for f in feature])
+            secid = portal['secid'][:]
+            feature = all_feature[ifeat]
+            values = portal['values'][:,ifeat]
+            return Data1D(secid , feature , values)
+
     
     def write_dataDSF(self , file , data , overwrite = True):
         assert self.file.mode in ['w' ,'r+'] , self.file.mode
@@ -413,8 +445,8 @@ class DataTank():
         portal = self.get_object(file)
         date = np.array(list(portal.keys())).astype(int)
         date = date[(date >= start) & (date <= end)]
-        secid, pos_secid = _index_union([portal[str(d)]['secid'][:] for d in date])
-        feat , pos_feat  = _index_union([portal[str(d)]['feature'][:] for d in date])
+        secid, pos_secid, _ = _index_union([portal[str(d)]['secid'][:] for d in date])
+        feat , pos_feat , _ = _index_union([portal[str(d)]['feature'][:] for d in date])
         feat = feat.astype(str)
         datas = [portal[str(d)]['values'] for d in date]
         all_values = np.full((len(date) , len(secid), len(feat)) , np.nan)
@@ -448,3 +480,7 @@ class DataTank():
 
     def _full_path(self , file):
         return '/'.join([str(f) for f in file]) if isinstance(file , (list,tuple)) else file
+    
+    def is_Data1D(self , obj):
+        if not np.isin(['secid','feature','values'],list(obj.keys())).all(): return False
+        return obj['values'].shape == (len(obj['secid']) , len(obj['feature']))

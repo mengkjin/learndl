@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import random, string , os , time
 from .DataTank import *
+from ..functional.func import *
 
 def get_path_date(path , startswith = '' , endswith = ''):
     if isinstance(path , (list,tuple)):
@@ -44,7 +45,7 @@ def col_filter(df , remain = None):
     if remain is None:
         pass
     else:
-        if isinstance(remain , str): remain = [remain]
+        if isinstance(remain , (str,bytes,int,float)): remain = [remain]
         df = df.loc[:,remain]
     return df
 
@@ -248,29 +249,6 @@ def get_labels(date : (int,str) , days : int , lag1 : bool , tol = 1e-8 , **kwar
     df['secid'] = windid_to_secid(df['secid'])
     return df
 
-def forward_fillna(arr):
-    raw_shape = arr.shape
-    if len(raw_shape) == 1: arr = arr.reshape(1 , len(arr))
-    assert len(arr.shape) == 2 , len(arr.shape)
-    mask = np.isnan(arr)
-    idx = np.where(~mask, np.arange(mask.shape[1]), 0)
-    np.maximum.accumulate(idx, axis=1, out=idx)
-    out = arr[np.arange(idx.shape[0])[:,None], idx]
-    if len(raw_shape) == 1: out = out.flatten()
-    return out
-
-# My modification to do a backward-fill
-def backward_fillna(arr):
-    raw_shape = arr.shape
-    if len(raw_shape) == 1: arr = arr.reshape(1 , len(arr))
-    assert len(arr.shape) == 2 , len(arr.shape)
-    mask = np.isnan(arr)
-    idx = np.where(~mask, np.arange(mask.shape[1]), mask.shape[1] - 1)
-    idx = np.minimum.accumulate(idx[:, ::-1], axis=1)[:, ::-1]
-    out = arr[np.arange(idx.shape[0])[:,None], idx]
-    if len(raw_shape) == 1: out = out.flatten()
-    return out
-
 def fill_na_min_data(data):
     #'amount' , 'volume' to 0
     imin = np.where(data.feature == 'minute')[0][0]
@@ -297,11 +275,16 @@ def fill_na_min_data(data):
         rnan = np.where((np.isnan(data.values[:,icol]) * (data.values[:,imin] > 0)) != 0)[0]
         if len(rnan) > 0: data.values[rnan,icol] = data.values[rnan-1,iccp]
 
+def filter_min_Data1D(data):
+    assert isinstance(data , Data1D) , type(data)
+    x1 = (data.secid>=0)*(data.secid<100000)+(data.secid>=300000)*(data.secid<=398999)+(data.secid>=600000)*(data.secid<=699999)
+    x2 = data.values[:,0] <= 240
+    return data.slice(secid = (x1*x2)>0)
+
 def Data1D_to_kline(data):
     assert isinstance(data , Data1D) , type(data)
     assert data.feature[0] == 'minute' , data.feature[0]
-    if np.isnan(data.values).sum() > 0:
-        data = fill_na_min_data(data)
+    if np.isnan(data.values).sum() > 0: data = fill_na_min_data(data)
     assert np.isnan(data.values).sum() == 0
     minute = data.values[:,0].astype(int)
     u_secid , u_minute = np.unique(data.secid) , np.unique(minute)
@@ -358,6 +341,7 @@ def kline_aggregate(data , keys):
 
 def get_Xmin_trade(date , min_DataTank , x , tol = 1e-8 , **kwargs):
     data = min_DataTank.read_data1D(f'/minute/trade/{date}')
+    data = filter_min_Data1D(data)
     data , index = Data1D_to_kline(data)
     data , index = kline_reform(data , index , by = x)
     return kline_to_Data1D(data , index)

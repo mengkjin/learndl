@@ -172,6 +172,64 @@ def cal_norm_param(maxday = 60 , before_day = BEFORE_DAY , step_day = STEP_DAY):
         
     torch.save(norm_param , path_norm_param)
 
+def load_trading_data(model_data_type , dtype = torch.float , dir_data = f'../../data'):
+    t0 = time.time()
+
+    data_type = get_config('data_type')['DATATYPE']
+    path_ydata = lambda x=None:f'{dir_data}/Ys.npz'
+    path_xdata = lambda x:f'{dir_data}/Xs_{x}.npz'
+    path_norm_param = f'{dir_data}/norm_param.pt'
+    def set_precision(data):
+        if isinstance(data , dict):
+            return {k:set_precision(v) for k,v in data.items()}
+        elif isinstance(data , (list,tuple)):
+            return type(data)(map(set_precision , data))
+        else:
+            return data.to(dtype)
+    
+    read_index = lambda x:(np.array(x['row'],dtype=int),np.array(x['col'],dtype=int))
+    read_data  = lambda x:torch.tensor(x['arr']).detach()
+    i_exact  = lambda x,y:np.intersect1d(x , y , assume_unique=True , return_indices = True)[1]
+    i_latest = lambda x,y:np.array([np.where(x<=i)[0][-1] for i in y])
+    
+    data_type_list = model_data_type.split('+')
+    y_file = np.load(path_ydata())
+    x_file = {mdt:np.load(path_xdata(mdt)) for mdt in data_type_list}
+    
+    # aligned row,col
+    yr , yc = read_index(y_file)
+    x_index = {mdt:read_index(f) for mdt,f in x_file.items()}
+    
+    row , xc_trade , xc_factor = yr , None , None
+    for mdt , (xr , xc) in x_index.items():
+        row = np.intersect1d(row , xr)
+        if mdt in data_type['trade']:
+            xc_trade = xc if xc_trade is None else np.intersect1d(xc_trade , xc)
+        else:
+            xc_factor = xc if xc_factor is None else np.union1d(xc_factor , xc)
+
+    col = xc_factor if xc_trade is None else xc_trade
+    if xc_factor: col = col[col >= xc_factor.min()]
+    col , xc_tail = np.intersect1d(col , yc) , col[col > yc.max()]
+
+    y_data = read_data(y_file)[i_exact(yr,row),:][:,i_exact(yc,col)]
+    y_data = set_precision(torch.nn.functional.pad(y_data , (0,0,0,0,0,len(xc_tail),0,0) , value=np.nan))
+    col = np.concatenate((col , xc_tail))
+    
+    x_data = {}
+    for mdt,(xr , xc) in x_index.items():
+        i0 , i1 = i_exact(xr,row) , i_exact(xc,col) if mdt in data_type['trade'] else i_latest(xc,col)
+        x_data.update({mdt:set_precision(read_data(x_file[mdt])[i0,:][:,i1])})
+    
+    # norm_param
+    norm_param = {k:set_precision(v) for k,v in torch.load(path_norm_param).items()}
+
+    # check
+    assert all([d.shape[0] == y_data.shape[0] == len(row) for mdt,d in x_data.items()])
+    assert all([d.shape[1] == y_data.shape[1] == len(col) for mdt,d in x_data.items()])
+    
+    return x_data , y_data , norm_param , (row , col)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='manual to this script')
     parser.add_argument("--confirm", type=str, default='')
