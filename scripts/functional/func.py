@@ -324,18 +324,19 @@ def subset(x , i):
 def forward_fillna(arr , axis = 0):
     shape = arr.shape
     if axis < 0: axis = len(shape) + axis
-    new_axes  = [axis , *[i for i in range(len(shape)) if i != axis]]
-    new_shape = [shape[i] for i in new_axes]
-    old_axes  = list(range(len(shape)))[1:]
-    old_axes.insert(axis,0)
-
-    new_arr   = arr.transpose(*new_axes).reshape(shape[axis],-1).transpose(1,0)
-    mask = np.isnan(new_arr)
+    if axis > 0:
+        new_axes  = [axis , *[i for i in range(len(shape)) if i != axis]]
+        new_shape = [shape[i] for i in new_axes]
+        old_axes  = list(range(len(shape)))[1:]
+        old_axes.insert(axis,0)
+        arr = arr.transpose(*new_axes)
+    arr = arr.reshape(shape[axis],-1).transpose(1,0)
+    mask = np.isnan(arr)
     idx = np.where(~mask, np.arange(mask.shape[1]), 0)
     idx = np.maximum.accumulate(idx, axis=1, out=idx)
-    out = new_arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
-    out = out.reshape(new_shape).transpose(*old_axes)
-
+    out = arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
+    if axis > 0:
+        out = out.reshape(new_shape).transpose(*old_axes)
     return out
 
 def backward_fillna(arr, axis = 0):
@@ -354,3 +355,32 @@ def backward_fillna(arr, axis = 0):
     out = out.reshape(new_shape).transpose(*old_axes)
 
     return out
+
+def index_intersect(idxs , min_value = None , max_value = None):
+    new_idx = None
+    for idx in idxs:
+        if new_idx is None or idx is None:
+            new_idx = new_idx if idx is None else idx
+        else:
+            new_idx = np.intersect1d(new_idx , idx)
+    if min_value is not None: new_idx = new_idx[new_idx >= min_value]
+    if max_value is not None: new_idx = new_idx[new_idx <= max_value]
+    new_idx = np.sort(new_idx)
+    inter   = [None if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
+    pos_new = tuple([None if v is None else v[1] for v in inter])
+    pos_old = tuple([None if v is None else v[2] for v in inter])
+    return new_idx , pos_new , pos_old
+
+def index_union(idxs , min_value = None , max_value = None):
+    new_idx = None
+    for idx in idxs:
+        if new_idx is None or idx is None:
+            new_idx = new_idx if idx is None else idx
+        else:
+            new_idx = np.union1d(new_idx , idx)
+    if min_value is not None: new_idx = new_idx[new_idx >= min_value]
+    if max_value is not None: new_idx = new_idx[new_idx <= max_value]
+    inter   = [None if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
+    pos_new = tuple([None if v is None else v[1] for v in inter])
+    pos_old = tuple([None if v is None else v[2] for v in inter])
+    return new_idx , pos_new , pos_old

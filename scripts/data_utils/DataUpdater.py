@@ -17,9 +17,12 @@ target_files = {
     'Xmin_trade'  : 'DB_trade_Xmin.h5' , 
     'labels'      : 'DB_labels.h5' , 
 }
-updater_file = 'DataUpdater.h5'
+i = 0
+while not os.path.exists(f'DataUpdater.{i:d}.h5'):
+    i += 1
+updater_file = f'DataUpdater.{i:d}.h5'
 updater_mode = 'w'
-do_updater = False
+do_updater = True
 updater = None
 attr_create = ['__information__' , '__create_time__'] # on creation
 attr_EOL    = ['__last_date__'   , '__update_time__'] # End of Loop

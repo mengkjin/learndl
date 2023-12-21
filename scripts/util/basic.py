@@ -1,9 +1,18 @@
 import torch
 import numpy as np
-import gc , math
+import gc , math , time
 from copy import deepcopy
 from ..functional.func import *
 
+class timer:
+    def __init__(self , *args):
+        self.key = '/'.join(args)
+    def __enter__(self):
+        self.start_time = time.time()
+        print(self.key , '...', end='')
+    def __exit__(self, type, value, trace):
+        print(f'... cost {time.time()-self.start_time:.2f} secs')
+        
 class FilteredIterator:
     def __init__(self, iterable, condition):
         self.iterable = iterable

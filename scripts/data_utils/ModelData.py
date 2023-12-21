@@ -3,7 +3,7 @@ import torch
 import gc , random , math , time , copy
 import numpy as np
 from ..functional.func import *
-from ..util.environ import get_config , cuda
+from ..util.environ import get_config , cuda , DIR_data
 from ..util.basic import versatile_storage
 from torch.utils.data.dataset import IterableDataset , Dataset
 
@@ -289,7 +289,7 @@ class ModelData():
         2.for seq-mormalized x , normalized by history avg and std
         """
         if key in self.CONFIG['DATATYPE']['trade']:
-            x /= x.select(-2,-1).unsqueeze(-2)
+            x /= x.select(-2,-1).unsqueeze(-2) + 1e-4
             x -= self.norm_param[key]['avg'][-x.shape[-2]:]
             x /= self.norm_param[key]['std'][-x.shape[-2]:] + 1e-4
         else:
@@ -362,57 +362,44 @@ def buffer_proc(key , **param):
         wrapper = None
     return wrapper
 
-def load_trading_data(model_data_type , dtype = torch.float , dir_data = f'../../data'):
+def load_trading_data(model_data_type , dtype = torch.float):
     t0 = time.time()
 
+    DIR_block  = f'{DIR_data}/block_data'
     data_type = get_config('data_type')['DATATYPE']
-    path_ydata = lambda x=None:f'{dir_data}/Ys.npz'
-    path_xdata = lambda x:f'{dir_data}/Xs_{x}.npz'
-    path_norm_param = f'{dir_data}/norm_param.pt'
-    def precision(data):
-        if isinstance(data , dict):
-            return {k:precision(v) for k,v in data.items()}
-        elif isinstance(data , (list,tuple)):
-            return type(data)(map(precision , data))
-        else:
-            return data.to(dtype)
+    path_yfunc = lambda x:f'{DIR_block}/Y.npz'
+    path_xfunc = lambda x:f'{DIR_block}/X_{x}.npz'
+    path_xnorm = f'{DIR_block}/X_normdict.pt'
 
     data_type_list = model_data_type.split('+')
-    paths = {'y_data':path_ydata(),**{mdt:path_xdata(mdt) for mdt in data_type_list}}
-    paths_factor = {mdt:path_xdata(mdt) for mdt in data_type_list if mdt in data_type['factor']}
+    paths = {'y_data':path_yfunc(),**{mdt:path_xfunc(mdt) for mdt in data_type_list}}
+    paths_factor = {mdt:path_xfunc(mdt) for mdt in data_type_list if mdt in data_type['factor']}
     data_dict = block_data_align(list(paths.values()) , list(paths_factor.values()))
     
-    y_data = torch.tensor(data_dict[paths['y_data']]['values']).to(dtype)
-    x_data = {torch.tensor(data_dict[paths[mdt]]['values']).to(dtype) for mdt in data_type_list}
+    y_data = torch.tensor(data_dict[paths['y_data']]['values'])
+    x_data = {torch.tensor(data_dict[paths[mdt]]['values']) for mdt in data_type_list}
     row = data_dict[paths['y_data']]['index']['secid']
     col = data_dict[paths['y_data']]['index']['date']
     
     # norm_param
-    norm_param = {k:precision(v) for k,v in torch.load(path_norm_param).items()}
+    x_norm = {k:v for k,v in torch.load(path_xnorm).items()}
 
     # check
     assert all([d.shape[0] == y_data.shape[0] == len(row) for mdt,d in x_data.items()])
     assert all([d.shape[1] == y_data.shape[1] == len(col) for mdt,d in x_data.items()])
     
-    return x_data , y_data , norm_param , (row , col)
+    x_data = _astype(x_data , dtype)
+    y_data = _astype(y_data , dtype)
+    x_norm = _astype(x_norm , dtype)
+    return x_data , y_data , x_norm , (row , col)
 
-def save_block_data(file_path , values , index):
-    assert isinstance(index , dict) , type(index)
-    for k , v in index.items(): 
-        index[k] = np.array([v] if not isinstance(v,(list,tuple,np.ndarray)) else v)
-    shape = values.shape
-    index_keys , index_values = list(index.keys()) , list(index.values())
-    assert len(shape) == len(index)
-    assert 2 <= len(shape) <= 4 , shape
-    assert list(shape) == [len(v) for v in index_values] , (list(shape) , [len(v) for v in index_values])
-    # input dim can be 2,3,4, but save to 3,4
-    os.makedirs(os.path.dirname(file_path),exist_ok=True)
-    if len(index) == 2:
-        values       = values.reshape(shape[0],shape[1],1)
-        index_keys   = [index_keys[0],index_keys[1],'feature']
-        index_values = [index_values[0],index_values[1],np.array(['unspecified'])]
-    index = {k:v for k,v in zip(index_keys , index_values)}
-    np.savez_compressed(file_path , values = values , index_keys = index_keys , **index)
+def _astype(data , dtype):
+    if isinstance(data , dict):
+        return {k:_astype(v,dtype) for k,v in data.items()}
+    elif isinstance(data , (list,tuple)):
+        return type(data)([_astype(v,dtype) for v in data])
+    else:
+        return data.to(dtype)
 
 def block_data_values(file_path):
     data = np.load(file_path)
@@ -420,37 +407,7 @@ def block_data_values(file_path):
 
 def block_data_index(file_path):
     data = np.load(file_path)
-    index_key = data['index_key']
-    return {k:data[k] for k in index_key}
-
-def _index_intersect(idxs , min_value = None , max_value = None):
-    new_idx = None
-    for idx in idxs:
-        if new_idx is None or idx is None:
-            new_idx = new_idx if idx is None else idx
-        else:
-            new_idx = np.intersect1d(new_idx , idx)
-    if min_value is not None: new_idx = new_idx[new_idx >= min_value]
-    if max_value is not None: new_idx = new_idx[new_idx <= max_value]
-    new_idx = np.sort(new_idx)
-    inter   = [None if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
-    pos_new = tuple([None if v is None else v[1] for v in inter])
-    pos_old = tuple([None if v is None else v[2] for v in inter])
-    return new_idx , pos_new , pos_old
-
-def _index_union(idxs , min_value = None , max_value = None):
-    new_idx = None
-    for idx in idxs:
-        if new_idx is None or idx is None:
-            new_idx = new_idx if idx is None else idx
-        else:
-            new_idx = np.union1d(new_idx , idx)
-    if min_value is not None: new_idx = new_idx[new_idx >= min_value]
-    if max_value is not None: new_idx = new_idx[new_idx <= max_value]
-    inter   = [None if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
-    pos_new = tuple([None if v is None else v[1] for v in inter])
-    pos_old = tuple([None if v is None else v[2] for v in inter])
-    return new_idx , pos_new , pos_old
+    return {k:data[k] for k in ['secid' , 'date' , 'feature']}
 
 def block_data_align(paths , paths_forward_fillna = None , 
                      start_dt = None , end_dt = None , align_dim = True):
@@ -468,19 +425,18 @@ def block_data_align(paths , paths_forward_fillna = None ,
     assert np.all([('date' in v) for v in indexes.values()])
     assert np.all([('feature' in v) for v in indexes.values()])
 
-    list_secid = [v['secid'] for v in indexes.values()]
-    list_date  = [v['date']  for v in indexes.values()]
+    l_secid = [v['secid'] for v in indexes.values()]
+    l_date  = [v['date']  for v in indexes.values()]
     max_dim = max([len(v) for v in indexes.values()])
-    secid, pos_secid, pos_secid_old = _index_intersect(list_secid)
-    date , pos_date , pos_date_old  = _index_union(list_date, start_dt , end_dt)
+    secid, pos_secid, pos_secid_old = index_intersect(l_secid)
+    date , pos_date , pos_date_old  = index_union(l_date, start_dt , end_dt)
     
     data_dict = {}
     for i,(p,old_index) in enumerate(indexes.items()):
         old_values = block_data_values(p)
         assert old_values.shape[:2] == (len(old_index['secid']) , len(old_index['date']))
         assert old_values.shape[-1] == len(old_index['feature'])
-        new_shape = (len(secid),len(date),*old_values.shape[2:])
-        new_values = np.full(new_shape, np.nan, dtype=float)
+        new_values = np.full((len(secid),len(date),*old_values.shape[2:]), np.nan)
 
         tmp = new_values[pos_secid[i]]
         tmp[:,pos_date[i]] = old_values[pos_secid_old[i]][:,pos_date_old[i]]
@@ -490,8 +446,199 @@ def block_data_align(paths , paths_forward_fillna = None ,
         if align_dim and (len(new_values.shape) < max_dim):
             assert (len(new_values.shape),max_dim)==(3,4), (len(new_values.shape),max_dim)
             new_values = new_values.reshape(*new_values.shape[:2],1,-1)
-            new_index.update({'inday':np.array([0]),'feature':old_index['feature']})
+            new_index.update({'feature':old_index['feature']})
         else:
             [new_index.update({k:v}) for k,v in old_values if k not in ['secid','date']]
         data_dict.update({p:{'values':new_values,'index':new_index}})
     return data_dict
+
+def merge_data1d(data_dict , to_data_block = True):
+    if len(data_dict) == 0: return None
+    secid , p_s0 , p_s1 = index_union([data.secid for data in data_dict.values()])
+    date    = np.array(list(data_dict.keys())).astype(int)
+    feature , _ , p_f1 = index_intersect([data.feature for data in data_dict.values()])
+    newdata = np.full((len(secid),len(date),len(feature)) , np.nan , dtype = float)
+    for i,(k,v) in enumerate(data_dict.items()):
+        newdata[p_s0[i],i,:] = v.values[p_s1[i]][:,p_f1[i]]
+    if to_data_block:
+        return DataBlock(newdata , secid , date , feature)
+    else:
+        return newdata , (secid , date , feature)
+
+def merge_block(blocks):
+    if len(blocks) == 0: return None
+    if len(blocks) == 1: return blocks[0]
+    if isinstance(blocks[0] , DataBlock): 
+        return DataBlock.merge_others(blocks)
+    
+    values = [b[0] for b in blocks]
+    secid , p_s0 , p_s1 = index_union([b[1][0] for b in blocks])
+    date  , p_d0 , p_d1 = index_union([b[1][1] for b in blocks])
+    l1 = len(np.unique(np.concatenate([b[1][2] for b in blocks])))
+    l2 = sum([len(b[1][2]) for b in blocks])
+    distinct_feature = (l1 == l2)
+
+    for i , data in enumerate(values):
+        newdata = np.full((len(secid),len(date),*data.shape[2:]),np.nan)
+        tmp = newdata[p_s0[i]]
+        tmp[:,p_d0[i]] = data[p_s1[i]][:,p_d1[i]]
+        newdata[p_s0[i]] = tmp
+        values[i] = newdata
+
+    if distinct_feature:
+        feature = np.concatenate([b[1][2] for b in blocks])
+        newdata = np.concatenate(values , axis = -1)
+    else:
+        feature, p_f0 , p_f1 = index_union([b[1][2] for b in blocks])
+        newdata = np.full((*newdata[0].shape[:-1],len(feature)) , np.nan , dtype = float)
+        for i , data in enumerate(values):
+            newdata[...,p_f0[i]] = data[...,p_f1[i]]
+    return newdata , (secid , date , feature)
+
+class DataBlock():
+    def __init__(self , values = None , secid = None , date = None , feature = None) -> None:
+        self.initiate = False
+        if values is not None:
+            self._init_attr(values , secid , date , feature)
+
+    def _init_attr(self , values , secid , date , feature):
+        if values is None: 
+            self._clear_attr()
+            return NotImplemented
+        self.initiate = True
+        if isinstance(feature , str): feature = [feature]
+        if values.ndim == 3: values = values[:,:,None]
+        assert values.shape == (len(secid),len(date),values.shape[2],len(feature))
+        self.values  = values
+        self.secid   = secid
+        self.date    = date
+        self.feature = feature
+        self.shape   = self.values.shape
+
+    def _clear_attr(self):
+        self.initiate = False
+        for attr_name in ['values' , 'secid' , 'date' , 'feature' , 'shape']:
+            if hasattr(self,attr_name): delattr(self,attr_name)
+
+    def __repr__(self):
+        if self.initiate:
+            return '\n'.join([
+                'initiated ' + str(self.__class__) ,
+                f'values shape {self.values.shape}'
+            ])
+        else:
+            return 'uninitiate ' + str(self.__class__) 
+    
+    def update(self , **kwargs):
+        valid_keys = np.intersect1d(['values','secid','date','feature'],list(kwargs.keys()))
+        [setattr(self,k,kwargs[k]) for k in valid_keys]
+        self.shape  = self.values.shape
+
+    def from_dtank(self , dtank , file , start_dt = None , end_dt = None , feature = None , **kwargs):
+        date = np.array(list(dtank.get_object(file).keys())).astype(int)
+        if start_dt is not None: date = date[date >= start_dt]
+        if end_dt   is not None: date = date[date <= end_dt]
+        if len(date) == 0: return NotImplemented
+        datas = {str(d):dtank.read_data1D([file,str(d)],feature).to_kline() for d in date}
+        secid , p_s0 , p_s1 = index_union([data.secid for data in datas.values()])
+        date    = np.array(list(datas.keys())).astype(int)
+        feature , _ , p_f1 = index_intersect([data.feature for data in datas.values()])
+        new_shape = [len(secid),len(date),len(feature)]
+        if datas[str(date[0])].values.ndim == 3:
+            new_shape.insert(2 , datas[str(date[0])].values.shape[1])
+        newdata = np.full(tuple(new_shape) , np.nan , dtype = float)
+        for i,(k,v) in enumerate(datas.items()):
+            newdata[p_s0[i],i,:] = v.values[p_s1[i]][...,p_f1[i]]
+        self._init_attr(newdata , secid , date , feature)
+        
+        return self
+    
+    def merge_others(self , others : list):
+        if len(others) == 0: return NotImplemented
+        blocks = [self,*others] if self.initiate else others
+        if len(blocks) == 1:
+            b = blocks[0]
+            self._init_attr(b.values , b.secid , b.date , b.feature)
+            return self
+            
+        values = [blk.values for blk in blocks]
+        secid  , p_s0 , p_s1 = index_union([blk.secid for blk in blocks])
+        date   , p_d0 , p_d1 = index_union([blk.date for blk in blocks])
+        l1 = len(np.unique(np.concatenate([blk.feature for blk in blocks])))
+        l2 = sum([len(blk.feature) for blk in blocks])
+        distinct_feature = (l1 == l2)
+
+        for i , data in enumerate(values):
+            newdata = np.full((len(secid),len(date),*data.shape[2:]) , np.nan)
+            tmp = newdata[p_s0[i]]
+            tmp[:,p_d0[i]] = data[p_s1[i]][:,p_d1[i]]
+            newdata[p_s0[i]] = tmp
+            values[i] = newdata
+
+        if distinct_feature:
+            feature = np.concatenate([blk.feature for blk in blocks])
+            newdata = np.concatenate(values , axis = -1)
+        else:
+            feature, p_f0 , p_f1 = index_union([blk.feature for blk in blocks])
+            newdata = np.full((*newdata[0].shape[:-1],len(feature)) , np.nan , dtype = float)
+            for i , data in enumerate(values):
+                newdata[...,p_f0[i]] = data[...,p_f1[i]]
+        self._init_attr(newdata , secid , date , feature)
+        return self
+    
+    def save_npz(self , file_path):
+        index_vals = {k:getattr(self,k) for k in ['secid' , 'date' , 'feature']}
+        os.makedirs(os.path.dirname(file_path),exist_ok=True)
+        np.savez_compressed(file_path , values = self.values , **index_vals)
+    
+    def read_npz(self , file_path):
+        data = np.load(file_path)
+        index  = {k:data[k] for k in ['secid' , 'date' , 'feature']}
+        self._init_attr(data['values'] , **index)
+        return self
+    
+    def read_multiple_npz(self , file_paths , 
+                          forward_fillna  = 'guess' , 
+                          intersect_secid = True ,
+                          union_date = True , 
+                          start_dt = None , end_dt = None):
+        _guess = lambda ls,excl:[os.path.basename(x).lower().startswith(excl) == 0 for x in ls]
+        if forward_fillna == 'guess':
+            exclude_list = ('y','x_trade','x_day','x_15m','x_min','x_30m','x_60m')
+            forward_fillna = np.array(_guess(file_paths , exclude_list))
+        elif forward_fillna is None or isinstance(forward_fillna , bool):
+            forward_fillna = np.repeat(forward_fillna , len(file_paths))
+        else:
+            assert len(file_paths) == len(forward_fillna) , (len(file_paths) , len(forward_fillna))
+
+        portals = [np.load(p) for p in file_paths]
+        indexes = [block_data_index(p) for p in file_paths]
+        secid = date = None
+        if intersect_secid: secid,p_s0,p_s1 = index_intersect([idx['secid'] for idx in indexes])
+        if union_date: date,p_d0,p_d1 = index_union([idx['date'] for idx in indexes] , start_dt , end_dt)
+
+        block_dict = {}
+        for i , (portal , idx) in enumerate(zip(portals , indexes)):
+            values = portal['values']
+            if secid is not None: idx['secid'] = secid
+            if date  is not None: idx['date']  = date
+            if values.shape[:2] != (len(idx['secid']),len(idx['date'])): # no secid/date alter
+                values = np.full((len(idx['secid']),len(idx['date']),*values.shape[2:]) , np.nan)
+                if secid is None:
+                    values[:,p_d0[i]] = portal['values'][:,p_d1[i]]
+                elif date is None:
+                    values[p_s0[i]] = portal['values'][p_s1[i]]
+                else:
+                    tmp = values[p_s0[i]]
+                    tmp[:,p_d0[i]] = portal['values'][p_s1[i]][:,p_d1[i]]
+                    values[p_s0[i]] = tmp
+
+            date_slice = np.repeat(True , len(idx['date']))
+            if start_dt is not None: date_slice[idx['date'] < start_dt] = False
+            if end_dt   is not None: date_slice[idx['date'] > end_dt]   = False
+            values , idx['date'] = values[:,date_slice] , idx['date'][date_slice]
+
+            if forward_fillna[i]: values = forward_fillna(values , axis = 1)
+
+            block_dict.update({file_paths[i]:DataBlock(values , **idx)})
+        return block_dict

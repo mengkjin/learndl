@@ -3,14 +3,30 @@ import pandas as pd
 import numpy as np
 import random, string , os , time
 
-def _index_union(idxs):
+def index_intersect(idxs , min_value = None , max_value = None):
+    new_idx = None
+    for idx in idxs:
+        if new_idx is None or idx is None:
+            new_idx = new_idx if idx is None else idx
+        else:
+            new_idx = np.intersect1d(new_idx , idx)
+    if min_value is not None: new_idx = new_idx[new_idx >= min_value]
+    if max_value is not None: new_idx = new_idx[new_idx <= max_value]
+    new_idx = np.sort(new_idx)
+    inter   = [None if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
+    pos_new = tuple([None if v is None else v[1] for v in inter])
+    pos_old = tuple([None if v is None else v[2] for v in inter])
+    return new_idx , pos_new , pos_old
+
+def index_union(idxs , min_value = None , max_value = None):
     new_idx = None
     for idx in idxs:
         if new_idx is None or idx is None:
             new_idx = new_idx if idx is None else idx
         else:
             new_idx = np.union1d(new_idx , idx)
-    new_idx = np.sort(new_idx)
+    if min_value is not None: new_idx = new_idx[new_idx >= min_value]
+    if max_value is not None: new_idx = new_idx[new_idx <= max_value]
     inter   = [None if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
     pos_new = tuple([None if v is None else v[1] for v in inter])
     pos_old = tuple([None if v is None else v[2] for v in inter])
@@ -29,8 +45,8 @@ def _update_rcv(old_rowcolval , upd_rowcolval , replace = False , all_within = F
     if all_within:  assert all(all(in_row) , all(in_col))
     if all_without: assert not any(any(in_row) , any(in_col))
 
-    new_row, pos_row, _ = _index_union([old_row , upd_row])  
-    new_col, pos_col, _ = _index_union([old_col , upd_col]) 
+    new_row, pos_row, _ = index_union([old_row , upd_row])  
+    new_col, pos_col, _ = index_union([old_col , upd_col]) 
     new_val = np.full((len(new_row),len(new_col)) , np.nan)
     for r, c, v in zip(pos_row , pos_col , [old_val , upd_val]): 
         if r is not None and c is not None: new_val[r][:,c] = v[:]
@@ -93,6 +109,74 @@ class Data1D():
     def to_dataframe(self):
         return pd.DataFrame(self.values,index=pd.Index(self.secid,name='secid'),columns=self.feature)
     
+    def to_kline(self):
+        usecid = np.unique(self.secid)
+        if len(usecid) != len(self.secid): 
+            lookfor = ['minute' , 'inday']
+            assert any(np.isin(lookfor , self.feature)) , self.feature
+            inday_idx = np.isin(self.feature , lookfor)
+            inday  = self.values[:,inday_idx][:,0].astype(int)
+            values = self.values[:,inday_idx == 0].astype(int)
+            lsecid , linday = len(np.unique(self.secid)) , len(np.unique(inday))
+            feature = self.feature[inday_idx == 0]
+            if len(values) == lsecid * linday:
+                values = values.reshape(lsecid , linday , -1)
+                secid  = self.secid[::linday]
+            else:
+                new_values = np.zeros((lsecid , linday , len(feature)))
+                secid  = np.array(sorted(np.unique(self.secid)))
+                for mm in sorted(np.unique(inday)):
+                    msec , mpos = self.secid[inday == mm] , inday == mm
+                    if np.array_equal(secid , msec):
+                        new_values[:,mm] = self.values[mpos]
+                    else:
+                        i_sec = np.intersect1d(secid , msec , return_indices=True)[1]
+                        new_values[i_sec,mm] = values[mpos , 1:]
+                values = new_values
+            values = self._kline_fillna(values , feature)
+            return Data1DKline(secid , feature, values)
+        else:
+            return Data1DKline(self.secid , self.feature, self.values[:,None])
+
+    def _kline_fillna(self , kline , feature):
+        if np.isnan(kline).sum() == 0: return kline
+        for i , f in enumerate(feature):
+            if f == ['close','open','high','low','vwap']:
+                arr = kline[:,:,i]
+                mask = np.isnan(arr)
+                idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+                idx = np.maximum.accumulate(idx, axis=1, out=idx)
+                out = arr[np.arange(idx.shape[0])[:,None], idx]
+                kline[:,:,i] = out
+            else:
+                kline[:,:,i] = np.nan_to_num(kline[:,:,i])
+        return kline
+    
+class Data1DKline():
+    # Sec-Feature
+    def __init__(self , secid = None , feature = None , values = None) -> None:
+        self.init_attr(secid , feature , values)
+
+    def __repr__(self):
+        return '\n'.join([
+            str(self.__class__) ,
+            f'secid len ({len(self.secid)}): {self.secid.__repr__()}' ,
+            f'feature len ({len(self.feature)}): {self.feature.__repr__()}' ,
+            f'values shape {self.values.shape}'
+        ])
+    
+    def __eq__(self , other):
+        if self.__class__ != other.__class__:
+            return NotImplemented
+        return all([np.array_equal(getattr(self,obj),getattr(other,obj)) for obj in ['secid','feature','values']])
+
+    def init_attr(self , secid , feature , values):
+        assert values.ndim == 3 , values.shape
+        assert values.shape[0]  == len(secid)  , (values.shape , len(secid))
+        assert values.shape[-1] == len(feature), (values.shape , len(feature))
+        self.secid, self.feature, self.values = np.array(secid), np.array(feature), np.array(values)
+
+
 class DataDSF():
     # Date-Sec-Feature
     def __init__(self , date = None , datas = None , src = None , rand_new = False) -> None:
@@ -151,8 +235,8 @@ class DataDSF():
 
     def to_FDS(self):
         date = self.date
-        secid, pos_secid, _ = _index_union([d.secid for d in self.data.values()])
-        feat , pos_feat , _ = _index_union([d.feature for d in self.data.values()])
+        secid, pos_secid, _ = index_union([d.secid for d in self.data.values()])
+        feat , pos_feat , _ = index_union([d.feature for d in self.data.values()])
         datas = self.data.values()
         all_values = np.full((len(date),len(secid),len(feat)) , np.nan)
         for i_date , (data , i_sec , i_feat) in enumerate(zip(datas , pos_secid , pos_feat)):
@@ -257,8 +341,8 @@ class DataFDS():
         self.data[str(feature)] = self._data1f(data)
 
     def to_DSF(self):
-        date , pos_date ,_ = _index_union([d.date for d in self.data.values()])
-        secid, pos_secid,_ = _index_union([d.secid for d in self.data.values()])
+        date , pos_date ,_ = index_union([d.date for d in self.data.values()])
+        secid, pos_secid,_ = index_union([d.secid for d in self.data.values()])
         feat  = self.feature
         datas = self.data.values()
         all_values = np.full((len(date) , len(secid),len(feat)) , np.nan)
@@ -271,6 +355,7 @@ class DataFDS():
 class DataTank():
     def __init__(self , filename = None , open = False , mode = 'guess' , compression = 'gzip') -> None:
         self.filename = filename
+        self.mode = mode
         self.file = None
         if open: self.open(mode = mode)
         self._zip = compression
@@ -279,14 +364,26 @@ class DataTank():
     def __repr__(self):
         return f'{self.__class__} : {self.filename} -- ({"Closed" if self.file is None else "Opened"})'
 
+    def __enter__(self):
+        if self.file is None: self.open()
+        return self
+    
+    def __exit__(self , exc_type, exc_value, traceback):
+        self.close()
+
     def change_file(self , filename):
         self.filename = filename
         if isinstance(self.file , h5py.File): self.open(self.file.mode)
 
-    def open(self , mode = 'guess'): 
-        if mode == 'guess': mode = 'r+' if os.path.exists(self.filename) else 'w'
-        if mode == 'w': h5py.File(self.filename , mode).close()
-        self.file = h5py.File(self.filename , 'r+')
+    def open(self , mode = None): 
+        if mode is None: mode = self.mode
+        if mode == 'guess': 
+            mode = 'r+' if os.path.exists(self.filename) else 'w'
+        if mode == 'w': 
+            h5py.File(self.filename , mode).close()
+            self.file = h5py.File(self.filename , 'r+')
+        else:
+            self.file = h5py.File(self.filename , mode)
         return self.file
 
     def _check_read_mode(self):
@@ -295,7 +392,9 @@ class DataTank():
     def _check_write_mode(self):
         return self.open() if self.file is None or self.file.mode not in ['w' ,'r+'] else self.file
     
-    def close(self): self.file.close()
+    def close(self): 
+        self.file.close()
+        self.file = None
 
     def tree(self , object = None):
         if object is None: object = self._check_read_mode()
@@ -409,16 +508,17 @@ class DataTank():
         if feature is None:
             return Data1D(src=self.get_object(file))
         else:
-            if isinstance(feature , str): feature = [feature]
             portal = self.get_object(file)
             all_feature = portal['feature'][:].astype(str)
-            assert np.isin(feature , all_feature) , np.setdiff1d(feature , all_feature)
+            if feature is None: feature = all_feature
+            if isinstance(feature , str): feature = [feature]
+            # assert np.isin(feature , all_feature).all() , np.setdiff1d(feature , all_feature)
             ifeat = np.array([np.where(all_feature == f)[0][0] for f in feature])
+            ifeat.sort()
             secid = portal['secid'][:]
             feature = all_feature[ifeat]
             values = portal['values'][:,ifeat]
             return Data1D(secid , feature , values)
-
     
     def write_dataDSF(self , file , data , overwrite = True):
         assert self.file.mode in ['w' ,'r+'] , self.file.mode
@@ -445,8 +545,8 @@ class DataTank():
         portal = self.get_object(file)
         date = np.array(list(portal.keys())).astype(int)
         date = date[(date >= start) & (date <= end)]
-        secid, pos_secid, _ = _index_union([portal[str(d)]['secid'][:] for d in date])
-        feat , pos_feat , _ = _index_union([portal[str(d)]['feature'][:] for d in date])
+        secid, pos_secid, _ = index_union([portal[str(d)]['secid'][:] for d in date])
+        feat , pos_feat , _ = index_union([portal[str(d)]['feature'][:] for d in date])
         feat = feat.astype(str)
         datas = [portal[str(d)]['values'] for d in date]
         all_values = np.full((len(date) , len(secid), len(feat)) , np.nan)
