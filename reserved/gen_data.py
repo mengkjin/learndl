@@ -2,8 +2,8 @@ import torch , h5py
 import numpy as np
 import pandas as pd
 import os, shutil , gc , time , argparse
-from learndl.scripts.functional.func import *
-from .scripts.util.environ import get_logger , get_config
+from learndl.scripts.function.basic import *
+from ..scripts.util.environ import get_logger , get_config
 
 NBARS      = {'day' : 1 , '15m' : 16 ,}
 BEFORE_DAY = 20170101

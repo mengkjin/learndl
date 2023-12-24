@@ -1,6 +1,4 @@
 import torch
-import numpy as np
-import pandas as pd
 
 def shoot_infs(inp_tensor):
     """Replaces inf by maximum of tensor"""

@@ -1,8 +1,7 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from copy import deepcopy
-from ..functional.func import *
+from ..function.basic import *
         
 class multiloss_calculator:
     def __init__(self , multi_type = None):

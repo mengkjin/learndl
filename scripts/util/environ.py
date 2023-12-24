@@ -1,7 +1,7 @@
 import os
 import logging
-import colorlog
 from logging import handlers
+import colorlog
 import yaml
 import torch
 
@@ -67,7 +67,7 @@ def get_logger(test_output = False):
         log.critical('This is the CRITICAL message...')
     return log
 
-def get_config(config_files = ['data_type' , 'train']):
+def get_config(config_files = ['train']):
     config_dict = dict()
     if isinstance(config_files , str): config_files = [config_files]
    

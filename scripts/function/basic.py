@@ -1,7 +1,7 @@
+import torch
 import numpy as np
 import pandas as pd
 import collections
-import torch
 import os , shutil , pprint , psutil
 from scipy import stats
 from pytimedinput import timedInput

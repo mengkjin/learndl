@@ -4,7 +4,6 @@ import traceback
 import pandas as pd
 import numpy as np
 import os , time
-
 from .DataTank import *
 
 connect_dict = {
@@ -249,7 +248,7 @@ class online_sql_connector():
             data = self.default_query(src , query_type , s , e)
             data = data.sort_values(['date' , 'secid']).set_index('date')
             for d in data.index.unique():
-                dtank.write_data1D(file = [src , query_type , str(d)] , 
+                dtank.write_data1D(path = [src , query_type , str(d)] , 
                                    data = Data1D(src = data.loc[d]) , 
                                    overwrite = True)
             print(f'{time.ctime()} : {src}:{query_type}:{s // 100}{" "*20}' , end='\r')
@@ -266,7 +265,7 @@ class online_sql_connector():
         for (s , e) in date_segs:
             data = self.default_query(src , query_type , s , e).set_index('date')
             for d in data.index.unique():
-                dtank.write_data1D(file = [src , query_type , str(d)] , 
+                dtank.write_data1D(path = [src , query_type , str(d)] , 
                                    data = Data1D(src = data.loc[d]) , 
                                    overwrite = True)
             print(f'{time.ctime()} : {src}/{query_type}:{s // 100}{" "*20}' , end='\r')

@@ -3,10 +3,10 @@ SHORTTEST:  true
 STORAGE_TYPE: mem # disk
 MODEL_NICKNAME: 'LSTM' # 'TCN_vs_LSTM' any str or None
 PRECISION:  'float' # double , bfloat16
-TRA_switch: true
+TRA_switch: False
 WEIGHT_TRAIN: 'equal' # equal
 WEIGHT_TEST:  'equal' # equal
-MODEL_MODULE: 'TRA_LSTM' # 'GeneralRNN' 
+MODEL_MODULE: 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
 MODEL_NUM: 1
 MODEL_DATATYPE:
   GRU: 'day'
@@ -16,6 +16,9 @@ MODEL_DATATYPE:
   Transformer: 'day'
   TRA_LSTM: 'day'
   other: ['day' , '15m' , 'gp' , 'day+15m']
+LABELS: 
+  - rtn_lag1_10
+  - res_lag1_10
 MODEL_PARAM:
   hidden_dim:  [32] #  2**5
   seqlens:     [{'day': 40 , '15m': 20 , 'dms': 40 , 'hist_loss': 40}] # although not a param for model, but can be different values(dict of SEQLEN)

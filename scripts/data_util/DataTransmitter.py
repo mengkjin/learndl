@@ -1,10 +1,9 @@
-import h5py
 import pyreadr
 import pandas as pd
 import numpy as np
-import random, string , os , time
+import os
+
 from .DataTank import *
-from ..functional.func import *
 
 def get_path_date(path , startswith = '' , endswith = ''):
     if isinstance(path , (list,tuple)):
@@ -345,6 +344,24 @@ def get_Xmin_trade(date , min_DataTank , x , tol = 1e-8 , **kwargs):
     data , index = Data1D_to_kline(data)
     data , index = kline_reform(data , index , by = x)
     return kline_to_Data1D(data , index)
+
+def forward_fillna(arr , axis = 0):
+    shape = arr.shape
+    if axis < 0: axis = len(shape) + axis
+    if axis > 0:
+        new_axes  = [axis , *[i for i in range(len(shape)) if i != axis]]
+        new_shape = [shape[i] for i in new_axes]
+        old_axes  = list(range(len(shape)))[1:]
+        old_axes.insert(axis,0)
+        arr = arr.transpose(*new_axes)
+    arr = arr.reshape(shape[axis],-1).transpose(1,0)
+    mask = np.isnan(arr)
+    idx = np.where(~mask, np.arange(mask.shape[1]), 0)
+    idx = np.maximum.accumulate(idx, axis=1, out=idx)
+    out = arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
+    if axis > 0:
+        out = out.reshape(new_shape).transpose(*old_axes)
+    return out
 
 class unfetched_data():
     def __init__(self , date = None , keys = []) -> None:

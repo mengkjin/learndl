@@ -28,9 +28,9 @@ from torch.optim.swa_utils import AveragedModel , update_bn
 from .scripts.util.environ import get_logger , get_config , cuda , DEVICE
 from .scripts.util.basic import FilteredIterator , lr_cosine_scheduler , versatile_storage
 from .scripts.util.multiloss import multiloss_calculator 
-from .scripts.data_utils.ModelData import ModelData
-from .scripts.functional.func import *
-from .scripts.functional.algo import sinkhorn
+from .scripts.data_util.ModelData import ModelData
+from .scripts.function.basic import *
+from .scripts.function.algos import sinkhorn
 from .scripts.nn.My import *
 # from audtorch.metrics.functional import *
 
@@ -57,7 +57,7 @@ class ShareNames_conctroller():
     def assign_variables(self , if_process = False , if_rawname = False):
         ShareNames.max_epoch       = CONFIG['MAX_EPOCH']
         ShareNames.batch_size      = CONFIG['BATCH_SIZE']
-        ShareNames.precision       = getattr(torch , CONFIG['PRECISION'])
+        ShareNames.precision       = CONFIG['PRECISION']
         ShareNames.allow_tf32      = CONFIG['ALLOW_TF32']
         
         ShareNames.model_module    = CONFIG['MODEL_MODULE']
@@ -264,7 +264,6 @@ class model_controller():
             [smp.update({'input_dim':tuple([self.data.feat_dims[mdt] for mdt in ShareNames.data_type_list])}) for smp in ShareNames.model_params]
         else:
             [smp.update({'input_dim':self.data.feat_dims[ShareNames.data_type_list[0]]}) for smp in ShareNames.model_params]
-
 
         logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.data_time))
         
@@ -595,8 +594,10 @@ class model_controller():
     def Forecast(self):
         if not os.path.exists(self.path['best']): self.TrainModel()
         
-        #self.y_pred = cuda(torch.zeros(self.data.stock_n,len(self.data.model_test_dates),self.data.labels_n,len(ShareNames.output_types)).fill_(np.nan))
-        self.y_pred = cuda(torch.zeros(self.data.stock_n,len(self.data.model_test_dates),len(ShareNames.output_types)).fill_(np.nan))
+        #self.y_pred = cuda(torch.zeros(len(self.data.index[0]),len(self.data.model_test_dates),self.data.labels_n,len(ShareNames.output_types)).fill_(np.nan))
+        self.y_pred = cuda(torch.zeros(len(self.data.index[0]),
+                                       len(self.data.model_test_dates),
+                                       len(ShareNames.output_types)).fill_(np.nan))
         iter_dates = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
         assert self.data.dataloaders['test'].__len__() == len(iter_dates)
         for oi , okey in enumerate(ShareNames.output_types):

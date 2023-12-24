@@ -1,8 +1,7 @@
 import torch
 import numpy as np
-import gc , math , time
+import gc , math , time , os , psutil
 from copy import deepcopy
-from ..functional.func import *
 
 class timer:
     def __init__(self , *args):
@@ -12,7 +11,16 @@ class timer:
         print(self.key , '...', end='')
     def __exit__(self, type, value, trace):
         print(f'... cost {time.time()-self.start_time:.2f} secs')
-        
+
+class memory_printer:
+    def __init__(self) -> None:
+        pass
+    def __repr__(self) -> str:
+        return 'Used: {:.2f}G; Free {:.2f}G'.format(
+            float(psutil.virtual_memory().used)/1024**3,
+            float(psutil.virtual_memory().free)/1024**3)
+    def print(self):
+        print(self.__repr__())
 class FilteredIterator:
     def __init__(self, iterable, condition):
         self.iterable = iterable

@@ -4,16 +4,17 @@ import pandas as pd
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import h5py , time , traceback
-from scripts.data_utils.ModelData import DataBlock
-from scripts.data_utils.DataTank import DataTank
-from scripts.util.environ import get_logger,DEVICE,DIR_data
-from scripts.functional.func import *
+from ..data_util.ModelData import DataBlock
+from ..data_util.DataTank import DataTank
+from ..util.environ import get_logger,DEVICE,DIR_data
+from ..function.basic import *
 from datetime import datetime,timedelta
 
 logger = get_logger()
 path_port  = f'{DIR_data}/fund_stock_port.h5'
 path_trade = f'{DIR_data}/DB_trade_day.h5'
 path_info  = f'{DIR_data}/DB_information.h5'
+save_path = f'{DIR_data}/block_data/X_top_similarity.npz'
 
 class matrix_factorization():
     def __init__(self , m , learn_rates = [0.1,0.05,0.01,0.005,0.001]):
@@ -250,7 +251,6 @@ def main(start_dt = None , end_dt = None):
         dms.update_factors(fs.secid , port_date , np.expand_dims(fs.Q,1))
         print(f'{port_date} factor update done!')
     dms.calculate_market_state(start_dt=start_dt , end_dt = end_dt)
-    save_path = f'{DIR_data}/block_data/X_top_similarity.npz'
     values = dms.top_similarity if len(dms.top_similarity.shape) == 3 else dms.top_similarity[:,:,None]
     block = DataBlock(values , dms.secid , dms.state_date , 'top_similarity')
     block.save_npz(save_path)

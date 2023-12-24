@@ -2,19 +2,8 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.parametrizations import weight_norm
 from copy import deepcopy
-from learndl.scripts.functional.func import *
+from ..function.basic import *
 from . import TRA
-    
-__all__ = [
-    'MyTRA_LSTM' , 
-    'mod_tcn_block' , 'mod_tcn' , 'mod_transformer' , 'mod_lstm' , 'mod_gru', 'mod_ewlinear' , 'mod_parallel' , 
-    'rnn_univariate' , 'rnn_multivariate' ,  # base models
-    'MyGRU', 'MyLSTM', 'MyTCN' , 'MyGeneralRNN' , 'MynTaskRNN' , 'MyTransformer' ,  # finished nn
-    'uni_rnn_encoder' , 'multi_rnn_encoder' , 
-    'uni_rnn_decoder' , 'multi_rnn_decoder' , 
-    'uni_rnn_mapping' , 'multi_rnn_mapping' , 
-    'PositionalEncoding', 'ModuleWiseAttention' , 'TimeWiseAttention' , 'SampleWiseTranformer' ,  'TimeWiseTranformer' , # attention mechanism and transformers
-]    
 
 """
 class TRA_LSTM(TRA.TRA):

@@ -396,6 +396,10 @@ class DataTank():
         self.file.close()
         self.file = None
 
+    def reopen(self):
+        if self.file is not None: self.close()
+        self.open(mode = 'r+' if self.mode == 'w' else self.mode)
+
     def tree(self , object = None):
         if object is None: object = self._check_read_mode()
         if isinstance(object , h5py.Group):
@@ -431,19 +435,19 @@ class DataTank():
                     self.print_tree(obj,f'{print_pre}{afpre} ',depth-1,width,depth_full_width-1,num_tail_keys,full_tree)
 
 
-    def get_object(self , file):
-        file = self._full_path(file)
-        return self.file.get(file)
+    def get_object(self , path):
+        path = self._full_path(path)
+        return self.file.get(path)
     
-    def del_object(self , file , ask = True):
-        file = self._full_path(file)
-        if self.file.get(file) is None: return
+    def del_object(self , path , ask = True):
+        path = self._full_path(path)
+        if self.file.get(path) is None: return
         if ask and input('press yes to confirm') != 'yes': return
         try:
-            del self.file[file]
+            del self.file[path]
             return True
         except:
-            g = self.file[file]
+            g = self.file[path]
             for key in g.keys(): del g[key]
             return False
 
@@ -457,33 +461,33 @@ class DataTank():
         if input(f'press {rand_str} to confirm') != rand_str: return
         [self.del_object(k) for k in self.file.keys()]
     
-    def create_object(self , file , data = None , dtype = None , **kwargs):
+    def create_object(self , path , data = None , dtype = None , **kwargs):
         assert self.file.mode in ['w' ,'r+'] , self.file.mode
-        file = self._full_path(file)
-        assert self.get_object(file) is None, file
+        path = self._full_path(path)
+        assert self.get_object(path) is None, path
         if data is None:
-            return self.file.create_group(file)
+            return self.file.create_group(path)
         else:
-            return self.file.create_dataset(file , data = data , dtype = dtype , **kwargs)
+            return self.file.create_dataset(path , data = data , dtype = dtype , **kwargs)
 
-    def write_dataframe(self , file , data , overwrite = False):
+    def write_dataframe(self , path , data , overwrite = False):
         assert self.file.mode in ['w' ,'r+'] , self.file.mode
         if not isinstance(data , pd.DataFrame): data = pd.DataFrame(data)
-        file = self._full_path(file)
-        self.del_object(file , ask = not overwrite)
+        path = self._full_path(path)
+        self.del_object(path , ask = not overwrite)
         columns , columns_dtype = data.columns.values.tolist() , data.dtypes.values.astype(str).tolist()
         save_dtype = [self.str_dtype if dtype == 'object' else None for dtype in columns_dtype]
         for col , dtype in zip(columns , save_dtype):
-            self.create_object([file, col], data=data.loc[:,col], dtype=dtype, compression=self._zip)
-        self.set_group_attrs(file , __columns__ = columns)
-        self.set_group_attrs(file , __columns_dtype__ = columns_dtype)
+            self.create_object([path, col], data=data.loc[:,col], dtype=dtype, compression=self._zip)
+        self.set_group_attrs(path , __columns__ = columns)
+        self.set_group_attrs(path , __columns_dtype__ = columns_dtype)
         
-    def read_dataframe(self , file):
-        file = self._full_path(file)
-        data = self.get_object(file)
-        assert data is not None, file
-        columns = self.get_group_attrs(file , '__columns__') # self.get_object([file , '__columns__'])[:].astype(str)
-        col_dtype = self.get_group_attrs(file , '__columns_dtype__') # self.get_object([file , '__columns_dtype__'])[:].astype(str)
+    def read_dataframe(self , path):
+        file = self._full_path(path)
+        data = self.get_object(path)
+        assert data is not None, path
+        columns = self.get_group_attrs(path , '__columns__') # self.get_object([path , '__columns__'])[:].astype(str)
+        col_dtype = self.get_group_attrs(path , '__columns_dtype__') # self.get_object([path , '__columns_dtype__'])[:].astype(str)
         df = pd.DataFrame()
         for col , dtype in zip(columns , col_dtype): 
             if dtype == 'object':
@@ -492,23 +496,23 @@ class DataTank():
                 df[col] = data[col][:].astype(getattr(np , dtype))            
         return df
 
-    def write_data1D(self , file , data , overwrite = False):
+    def write_data1D(self , path , data , overwrite = False):
         assert self.file.mode in ['w' ,'r+'] , self.file.mode
         if not isinstance(data , Data1D): data = Data1D(src=data)
-        file = self._full_path(file)
-        self.del_object(file , ask = not overwrite)
+        path = self._full_path(path)
+        self.del_object(path , ask = not overwrite)
         for key in ['secid','feature','values']:
             v , dtype = getattr(data , key) , None
             if isinstance(v[0] , str):
                 dtype = self.str_dtype
                 v = list(v)
-            self.create_object([file , key] , data = v , dtype = dtype , compression = self._zip)
+            self.create_object([path , key] , data = v , dtype = dtype , compression = self._zip)
 
-    def read_data1D(self , file , feature = None):
+    def read_data1D(self , path , feature = None):
         if feature is None:
-            return Data1D(src=self.get_object(file))
+            return Data1D(src=self.get_object(path))
         else:
-            portal = self.get_object(file)
+            portal = self.get_object(path)
             all_feature = portal['feature'][:].astype(str)
             if feature is None: feature = all_feature
             if isinstance(feature , str): feature = [feature]
@@ -520,29 +524,29 @@ class DataTank():
             values = portal['values'][:,ifeat]
             return Data1D(secid , feature , values)
     
-    def write_dataDSF(self , file , data , overwrite = True):
+    def write_dataDSF(self , path , data , overwrite = True):
         assert self.file.mode in ['w' ,'r+'] , self.file.mode
         # assert isinstance(data , DataDSF) , data.__class__
-        file = self._full_path(file)
+        path = self._full_path(path)
         for k , v in data.data.items():
-            self.write_data1D([file , str(k)] , v , overwrite = overwrite)
+            self.write_data1D([path , str(k)] , v , overwrite = overwrite)
 
-    def read_dataDSF(self , file , start = None, end = None):
+    def read_dataDSF(self , path , start = None, end = None):
         __start_time__ = time.time()
         if start is None: start = -1
         if end is None: end = 99999999
-        fileDSF = self.get_object(file)
-        date = np.array(list(fileDSF.keys())).astype(int)
+        portal = self.get_object(path)
+        date = np.array(list(portal.keys())).astype(int)
         date = date[(date >= start) & (date <= end)]
-        result = DataDSF(src={str(k):self.read_data1D([file,str(k)]) for k in date})
+        result = DataDSF(src={str(k):self.read_data1D([path,str(k)]) for k in date})
         print(f'loading: {time.time() - __start_time__:.2f} secs')
         return result
 
-    def read_dataFDS(self , file , start = None , end = None , dict_only = True) -> None:
+    def read_dataFDS(self , path , start = None , end = None , dict_only = True) -> None:
         __start_time__ = time.time()
         if start is None: start = -1
         if end is None: end = 99999999
-        portal = self.get_object(file)
+        portal = self.get_object(path)
         date = np.array(list(portal.keys())).astype(int)
         date = date[(date >= start) & (date <= end)]
         secid, pos_secid, _ = index_union([portal[str(d)]['secid'][:] for d in date])
@@ -568,18 +572,22 @@ class DataTank():
             print(f'Transform: {time.time() - __start_time__:.2f} secs')
             return result
     
-    def get_group_attrs(self , file , attr = ['__information__' , '__create_time__','__last_date__', '__update_time__']):
-        g = self.get_object(file)
-        assert g is not None, file
+    def get_group_attrs(self , path , attr = ['__information__' , '__create_time__','__last_date__', '__update_time__']):
+        g = self.get_object(path)
+        assert g is not None, path
         return g.attrs.get(attr) if isinstance(attr , str) else {a:g.attrs.get(a) for a in attr}
 
-    def set_group_attrs(self , file , **kwargs):
-        g = self.get_object(file)
-        assert g is not None, file
-        [g.attrs.modify(k , v) for k,v in kwargs.items() if v is not None] 
-
-    def _full_path(self , file):
-        return '/'.join([str(f) for f in file]) if isinstance(file , (list,tuple)) else file
+    def set_group_attrs(self , path , overwrite = True , **kwargs):
+        g = self.get_object(path)
+        assert g is not None, path
+        attr = {k:v for k,v in kwargs.items() if v is not None}
+        if not overwrite:
+            exist_attrs = g.attrs.__dir__()
+            attr = {k:v for k,v in attr.items() if v not in exist_attrs}
+        [g.attrs.modify(k , v) for k,v in attr.items() if v is not None]
+    
+    def _full_path(self , path):
+        return '/'.join([str(f) for f in path]) if isinstance(path , (list,tuple)) else path
     
     def is_Data1D(self , obj):
         if not np.isin(['secid','feature','values'],list(obj.keys())).all(): return False
