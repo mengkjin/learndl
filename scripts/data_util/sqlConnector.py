@@ -50,7 +50,8 @@ data_start_dt = {
                 'ms_chars'      : 20050101 ,
                 'order_flow'    : 20130930 ,
                 'gp'            : 20170101 ,
-                'tra'           : 20200101} ,
+                'tra'           : 20200101 ,
+                'scores_v0'     : 20171229} ,
     'kaiyuan':{
         'positive': 20140130,
         'negative': 20140130},
@@ -64,6 +65,7 @@ query_params = {
                 'order_flow':{'date_col':'trade_date' ,'date_fmt':'%Y%m%d'},
                 'gp'        :{'date_col':'tradingdate','date_fmt':'%Y-%m-%d'},
                 'tra'       :{'date_col':'tradingdate','date_fmt':'%Y-%m-%d'},
+                'scores_v0' :{'date_col':'tradingdate','date_fmt':'%Y-%m-%d'},
                 } ,
     'kaiyuan':{
         'positive':{'factors' : 
@@ -195,11 +197,9 @@ class online_sql_connector():
                 df = df.pivot_table('f_value',['date','secid'],'model').reset_index()
         elif src == 'dongfang':
             df.columns = map(str.lower , df.columns)
-            if 'stockcode' in df.columns: df['stockcode'] = df['stockcode'].astype(int)
-            if 'ticker' in df.columns: df['ticker'] = df['ticker'].str.slice(2,8).astype(int)
             df = df.rename(columns={'stockcode':'secid','ticker':'secid',
                                     'tradingdate':'date','trade_dt':'date' , 'trade_date':'date'})
-            # df['sec_id'] = df['sec_id'].astype(int)
+            df['secid'] = df['secid'].str.replace('[-.a-zA-Z]','',regex=True).astype(int)
             df['date'] = df['date'].astype(str).str.replace('-','').astype(int)
         elif src == 'kaiyuan':
             df0 = pd.DataFrame(columns = ['date','code'])
@@ -208,13 +208,13 @@ class online_sql_connector():
                 # print(subdf.iloc[:5])
                 df0 = df0.merge(subdf.rename(columns = {'factor':k}),how='outer',on=['date','code'])
             df = df0.rename(columns={'code':'secid'})
-            df['secid'] = df['secid'].str.slice(0,6).astype(int)
+            df['secid'] = df['secid'].str.replace('[-.a-zA-Z]','',regex=True).astype(int)
             df['date']  = df['date'].astype(int)
             df = df.set_index(['date','secid']).reset_index()
         elif src == 'guojin':
             pass
         return df.fillna(np.nan)
-    
+
     def _IDconvert(self , x):
         if isinstance(x , (bytes)):
             return int(x.decode('utf-8').split('.')[0].split('!')[0])
@@ -287,10 +287,10 @@ class online_sql_connector():
                 return (pd.DatetimeIndex([str(date)])+pd.DateOffset(offset)).strftime('%Y%m%d').astype(int)[0]
                 
 def update_connector(path , connector , trace = 1):
-    assert path == './data/DB_3rdPartySQL.h5' , path
+    assert path == './data/DB_data/DB_3rdPartySQL.h5' , path
     assert isinstance(connector , (online_sql_connector))
     os.makedirs(os.path.dirname(path) , exist_ok=True)
-    dtank = DataTank(path , mode = 'guess' , open=True)
+    dtank = DataTank(path , mode = 'guess' , open=True , compression='gzip')
     try:
         for src in connector.query_params.keys():
             for qtype in connector.query_params[src].keys():

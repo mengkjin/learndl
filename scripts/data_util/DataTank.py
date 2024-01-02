@@ -2,6 +2,7 @@ import h5py
 import pandas as pd
 import numpy as np
 import random, string , os , time
+import inspect , traceback
 
 def index_intersect(idxs , min_value = None , max_value = None):
     new_idx = None
@@ -353,61 +354,71 @@ class DataFDS():
         return DataDSF(date , [Data1D(secid,feat,all_values[i]) for i in range(len(date))])
 
 class DataTank():
-    def __init__(self , filename = None , open = False , mode = 'guess' , compression = 'gzip') -> None:
+    def __init__(self , filename = None , open = False , mode = 'guess' , compress = False) -> None:
         self.filename = filename
         self.mode = mode
         self.file = None
         if open: self.open(mode = mode)
-        self._zip = compression
+        self.compress = compress
         self.str_dtype = h5py.string_dtype(encoding = 'utf-8')
 
     def __repr__(self):
-        return f'{self.__class__} : {self.filename} -- ({"Closed" if self.file is None else "Opened"})'
+        return f'{self.__class__} : {self.filename} -- ({"Opened" if self.isopen() else "Closed"})'
 
     def __enter__(self):
-        if self.file is None: self.open()
+        if not self.isopen(): self.open()
         return self
     
     def __exit__(self , exc_type, exc_value, traceback):
         self.close()
 
+    def _check_read_mode(self):
+        return self.open() if not self.isopen() or self.file.mode not in ['r' ,'r+'] else self.file
+    
+    def _check_write_mode(self):
+        return self.open() if not self.isopen() or self.file.mode not in ['r+'] else self.file
+    
+    def _full_path(self , path):
+        return '/'.join([str(f) for f in path]) if isinstance(path , (list,tuple)) else path
+    
+    def keys(self):
+        return self.file.keys()
+
     def change_file(self , filename):
         self.filename = filename
-        if isinstance(self.file , h5py.File): self.open(self.file.mode)
+        if self.isopen(): self.open(self.file.mode)
 
     def open(self , mode = None): 
         if mode is None: mode = self.mode
         if mode == 'guess': 
             mode = 'r+' if os.path.exists(self.filename) else 'w'
-        if mode == 'w': 
-            h5py.File(self.filename , mode).close()
-            self.file = h5py.File(self.filename , 'r+')
-        else:
-            self.file = h5py.File(self.filename , mode)
+        if not os.path.exists(self.filename):
+            h5py.File(self.filename , 'w' , fs_strategy='fsm' , fs_persist = False).close()
+        self.file = h5py.File(self.filename , 'r+' if mode == 'w' else mode)
         return self.file
-
-    def _check_read_mode(self):
-        return self.open() if self.file is None or self.file.mode not in ['r' ,'r+'] else self.file
-    
-    def _check_write_mode(self):
-        return self.open() if self.file is None or self.file.mode not in ['w' ,'r+'] else self.file
     
     def close(self): 
-        self.file.close()
-        self.file = None
+        if self.isopen():
+            self.file.close()
+            self.file = None
+
+    def isopen(self):
+        return self.file is not None and isinstance(self.file , h5py.File)
 
     def reopen(self):
-        if self.file is not None: self.close()
+        self.close()
         self.open(mode = 'r+' if self.mode == 'w' else self.mode)
 
-    def tree(self , object = None):
+    def tree(self , object = None , leaf_method = None):
         if object is None: object = self._check_read_mode()
-        if isinstance(object , h5py.Group):
-            result = {}
-            for k,v in object.items(): result.update({k:self.tree(v)})
-            return {object.filename:result} if isinstance(object , h5py.File) else result
+        if isinstance(object , (h5py.Group,h5py.File)):
+            return {key:self.tree(val , leaf_method) for key,val in object.items()}
         else:
-            return object.__repr__()
+            if leaf_method is None:
+                return -1
+            else:
+                x = getattr(object , leaf_method)
+                return x() if inspect.ismethod(x) else x
 
     def print_tree(self, object = None , print_pre='' , depth = 3 , width = 4 , depth_full_width = 2 , num_tail_keys = 3 , full_tree = False):
         if object is None: object = self._check_read_mode()
@@ -425,19 +436,25 @@ class DataTank():
                 inter = '└──'
                 afpre = '   '                
             obj = object.get(key)
-            if not full_tree and isinstance(obj , h5py.Group) and depth <= 1:
-                _tailkeys , _n_omitkeys = [str(k) for k in list(obj.keys())[:num_tail_keys]] , len(obj.keys()) - num_tail_keys
-                print_tail = '('+', '.join(_tailkeys)+('' if _n_omitkeys <= 0 else f' and {_n_omitkeys} more')+')'
-                print(f'{print_pre}{inter} {key}' , obj , print_tail)
-            else:
-                print(f'{print_pre}{inter} {key}' , obj)
-                if isinstance(obj , h5py.Group): 
-                    self.print_tree(obj,f'{print_pre}{afpre} ',depth-1,width,depth_full_width-1,num_tail_keys,full_tree)
-
+            print(f'{print_pre}{inter} {key}' , self.repr_object(obj))
+            if full_tree or (depth > 1 and (not self.end_of_leaf(obj))):
+                self.print_tree(obj,f'{print_pre}{afpre} ',depth-1,width,depth_full_width-1,num_tail_keys,full_tree)
 
     def get_object(self , path):
         path = self._full_path(path)
         return self.file.get(path)
+    
+    def repr_object(self , obj , num_tail_keys = 3):
+        str_list = [obj.__repr__()]
+        if isinstance(obj , h5py.Group) and self.end_of_leaf(obj):
+            _tailkeys   = [str(k) for k in list(obj.keys())[:num_tail_keys]]
+            _n_omitkeys = len(obj.keys()) - num_tail_keys
+            str_list.append('('+', '.join(_tailkeys)+('' if _n_omitkeys <= 0 else f' and {_n_omitkeys} more')+')')
+        else:
+            if len(obj) > 50: 
+                v = sorted(list(obj.keys()))
+                str_list.append('-'.join([v[0] , v[-1]]))
+        return ' '.join(str_list)
     
     def del_object(self , path , ask = True):
         path = self._full_path(path)
@@ -459,54 +476,82 @@ class DataTank():
         if input(f'press {rand_num} to confirm') != str(rand_num): return
         rand_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
         if input(f'press {rand_str} to confirm') != rand_str: return
-        [self.del_object(k) for k in self.file.keys()]
+        [self.del_object(k , ask = False) for k in self.file.keys()]
     
-    def create_object(self , path , data = None , dtype = None , **kwargs):
-        assert self.file.mode in ['w' ,'r+'] , self.file.mode
+    def create_object(self , path , data = None , dtype = None , overwrite = False , compress = None , **kwargs):
+        assert self.file.mode in ['r+'] , self.file.mode
         path = self._full_path(path)
-        assert self.get_object(path) is None, path
+        if self.get_object(path) is not None:
+            if overwrite:
+                self.del_object(path , ask = False)
+            else:
+                raise Exception(f'{path} already exists!')
         if data is None:
             return self.file.create_group(path)
         else:
-            return self.file.create_dataset(path , data = data , dtype = dtype , **kwargs)
+            compression = 'gzip' if compress or self.compress else None
+            return self.file.create_dataset(path , data = data , dtype = dtype , compression = compression)
 
-    def write_dataframe(self , path , data , overwrite = False):
-        assert self.file.mode in ['w' ,'r+'] , self.file.mode
+    def is_Data1D(self , obj):
+        if not np.isin(['secid','feature','values'],list(obj.keys())).all(): return False
+        return obj['values'].shape == (len(obj['secid']) , len(obj['feature']))
+
+    def is_DataFrame(self , obj):
+        return np.isin(['__columns__','__columns_dtype__'],list(obj.attrs.keys())).all()
+
+    def read_guess(self , path , feature = None):
+        path = self._full_path(path)
+        if self.is_DataFrame(self.get_object(path)):
+            return self.read_dataframe(path , feature = feature)
+        else:
+            return self.read_data1D(path , feature = feature)
+        
+    def write_guess(self , path , data , overwrite = False , compress = None):
+        if isinstance(data , pd.DataFrame):
+            self.write_dataframe(path , data = data , overwrite = overwrite , compress = compress)
+        elif isinstance(data , Data1D):
+            self.write_data1D(path , data = data , overwrite = overwrite , compress = compress)
+        else:
+            raise Exception(TypeError)
+
+    def write_dataframe(self , path , data , overwrite = False , compress = None):
+        assert self.file.mode in ['r+'] , self.file.mode
         if not isinstance(data , pd.DataFrame): data = pd.DataFrame(data)
         path = self._full_path(path)
         self.del_object(path , ask = not overwrite)
         columns , columns_dtype = data.columns.values.tolist() , data.dtypes.values.astype(str).tolist()
         save_dtype = [self.str_dtype if dtype == 'object' else None for dtype in columns_dtype]
         for col , dtype in zip(columns , save_dtype):
-            self.create_object([path, col], data=data.loc[:,col], dtype=dtype, compression=self._zip)
+            self.create_object([path, col], data=data.loc[:,col], dtype=dtype, compress = compress)
         self.set_group_attrs(path , __columns__ = columns)
         self.set_group_attrs(path , __columns_dtype__ = columns_dtype)
         
-    def read_dataframe(self , path):
-        file = self._full_path(path)
+    def read_dataframe(self , path , feature = None):
+        path = self._full_path(path)
         data = self.get_object(path)
         assert data is not None, path
         columns = self.get_group_attrs(path , '__columns__') # self.get_object([path , '__columns__'])[:].astype(str)
         col_dtype = self.get_group_attrs(path , '__columns_dtype__') # self.get_object([path , '__columns_dtype__'])[:].astype(str)
+        if feature is not None: assert all(np.isin(feature , columns)) , np.setdiff1d(feature , columns)
         df = pd.DataFrame()
         for col , dtype in zip(columns , col_dtype): 
+            if (feature is not None) and (col not in feature): continue
             if dtype == 'object':
                 df[col] = np.char.decode(data[col][:].astype(bytes) , 'utf-8')
             else:
-                df[col] = data[col][:].astype(getattr(np , dtype))            
+                df[col] = data[col][:].astype(getattr(np , dtype))  
+        if feature is not None: df = df.loc[:,feature]          
         return df
 
-    def write_data1D(self , path , data , overwrite = False):
-        assert self.file.mode in ['w' ,'r+'] , self.file.mode
+    def write_data1D(self , path , data , overwrite = False , compress = None):
+        assert self.file.mode in ['r+'] , self.file.mode
         if not isinstance(data , Data1D): data = Data1D(src=data)
         path = self._full_path(path)
         self.del_object(path , ask = not overwrite)
-        for key in ['secid','feature','values']:
-            v , dtype = getattr(data , key) , None
-            if isinstance(v[0] , str):
-                dtype = self.str_dtype
-                v = list(v)
-            self.create_object([path , key] , data = v , dtype = dtype , compression = self._zip)
+        for key in ['secid','feature']:
+            dtype = self.str_dtype if isinstance(getattr(data , key)[0] , str) else None
+            self.create_object([path , key] , data = list(getattr(data , key)) , dtype = dtype , compress = compress)
+        self.create_object([path , 'values'] , data = data.values , compress = compress)
 
     def read_data1D(self , path , feature = None):
         if feature is None:
@@ -525,7 +570,7 @@ class DataTank():
             return Data1D(secid , feature , values)
     
     def write_dataDSF(self , path , data , overwrite = True):
-        assert self.file.mode in ['w' ,'r+'] , self.file.mode
+        assert self.file.mode in ['r+'] , self.file.mode
         # assert isinstance(data , DataDSF) , data.__class__
         path = self._full_path(path)
         for k , v in data.data.items():
@@ -578,6 +623,7 @@ class DataTank():
         return g.attrs.get(attr) if isinstance(attr , str) else {a:g.attrs.get(a) for a in attr}
 
     def set_group_attrs(self , path , overwrite = True , **kwargs):
+        if len(kwargs) == 0: return NotImplemented
         g = self.get_object(path)
         assert g is not None, path
         attr = {k:v for k,v in kwargs.items() if v is not None}
@@ -586,9 +632,85 @@ class DataTank():
             attr = {k:v for k,v in attr.items() if v not in exist_attrs}
         [g.attrs.modify(k , v) for k,v in attr.items() if v is not None]
     
-    def _full_path(self , path):
-        return '/'.join([str(f) for f in path]) if isinstance(path , (list,tuple)) else path
+    def repack(self , target_path = None , compress = None):
+        # repack h5 file to avoid aggregating file size to unlimited amount
+        # if target_path is None , repack to self
+        is_open = self.isopen()
+        self.close()
+        if target_path is None: target_path = self.filename
+        self.filename = repack_DataTank(self.filename , target_path , compress = compress)
+        if is_open: self.reopen()
+
+    def end_of_leaf(self , object = None):
+        if object is None: object = self.file
+        return isinstance(object , h5py.Dataset) or all([isinstance(object[key] , h5py.Dataset) for key in object.keys()])
     
-    def is_Data1D(self , obj):
-        if not np.isin(['secid','feature','values'],list(obj.keys())).all(): return False
-        return obj['values'].shape == (len(obj['secid']) , len(obj['feature']))
+def tree_diff(tree1 , tree2):
+    keys1 = list(tree1.keys()) if isinstance(tree1 , dict) else []
+    keys2 = list(tree2.keys()) if isinstance(tree2 , dict) else []
+    keys_diff = np.setdiff1d(keys1 , keys2)
+    keys_share = np.intersect1d(keys1 , keys2)
+    result = {key:tree1[key] for key in keys_diff}
+    for key in keys_share:
+        result.update(tree_diff(tree1[key] , tree2[key]))
+    return result
+
+def copy_tree(source , source_path ,  target , target_path , print_process = True , compress = None, **kwargs):
+    if not isinstance(source , DataTank): return NotImplemented
+    assert isinstance(target , DataTank) , type(target)
+    assert isinstance(source_path , str) and isinstance(target_path , str) , (source_path , target_path)
+
+    portal = source.get_object(source_path)
+    if source.end_of_leaf(portal):
+        source_compress = (portal[list(portal.keys())[0]].compression is not None) or compress
+        data = source.read_guess(source_path)
+        target.write_guess(target_path , data , overwrite = True , compress = source_compress)
+    elif isinstance(portal , h5py.Dataset):
+        print('Not here!!!')
+        data , dtype , source_compress = portal[:] , portal.dtype , portal.compression is not None or compress
+        target.create_object(target_path,data=data,dtype=dtype,overwrite=True,compress=source_compress)
+        return
+    else:
+        for key in source.get_object(source_path).keys():
+            key_source_path = '/'.join([source_path , key])
+            key_target_path = '/'.join([target_path , key])
+            copy_tree(source , key_source_path ,  target , key_target_path , compress = compress , **kwargs)
+    attrs = {k:v for k,v in source.get_group_attrs(source_path).items() if v is not None}
+    target.set_group_attrs(target_path , overwrite = True , **attrs) 
+    if len(attrs) > 0:
+        target.set_group_attrs(target_path , overwrite = True , **attrs) 
+        if print_process: print(f'{time.ctime()} : UPDATER > {target.filename}/{target_path} copying Done!')
+
+def repack_DataTank(source_tank_path , target_tank_path = None):
+    # repack h5 file to avoid aggregating file size to unlimited amount
+    # if target_tank_path is None , create a new file name to repack to
+    # if target_tank_path == source_tank_path , repack and replace source_tank_path
+    if target_tank_path is None:
+        target_tank_path = file_shadow_name(source_tank_path , 'new')
+
+    if source_tank_path == target_tank_path:
+        new_target_tank_path = file_shadow_name(source_tank_path , 'shadow')
+        repack_DataTank(source_tank_path , new_target_tank_path)
+        os.unlink(source_tank_path)
+        os.rename(new_target_tank_path , source_tank_path)
+    else:
+        assert not os.path.exists(target_tank_path) , target_tank_path
+        if input(f'Repack to {target_tank_path} , press yes to confirm') != 'yes': return
+        source_dtank = DataTank(source_tank_path , True , 'r') 
+        target_dtank = DataTank(target_tank_path , True , 'w')
+        try:
+            copy_tree(source_dtank , '.' , target_dtank , '.')
+        except:
+            traceback.print_exc()
+        finally:
+            source_dtank.close()
+            target_dtank.close()
+    return target_tank_path
+
+def file_shadow_name(old_name , insert = 'new'):
+    arr = os.path.basename(old_name).split('.')
+    arr.insert(-1,insert)
+    return os.path.join(os.path.dirname(old_name) , '.'.join(arr))
+
+
+

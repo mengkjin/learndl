@@ -132,7 +132,9 @@ def bin_label(x):
 
 def tensor_rank(x):    
     assert x.dim() == 1 , x.dim()
-    return torch.zeros_like(x).index_copy_(0,x.argsort(),torch.arange(0.,len(x)))
+    # faster than x.argsort().argsort().to(x) for longer x
+    return torch.zeros_like(x).index_copy_(0,x.argsort(),torch.arange(len(x)).to(x))
+
 def rank_weight(x):    
     r = tensor_rank(x)
     w = torch.pow(0.5,((r.numel() - 1 - r) * 2 / (r.numel() - 1)))

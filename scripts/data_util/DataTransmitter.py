@@ -3,7 +3,10 @@ import pandas as pd
 import numpy as np
 import os
 
-from .DataTank import *
+try:
+    from .DataTank import *
+except:
+    from DataTank import *
 
 def get_path_date(path , startswith = '' , endswith = ''):
     if isinstance(path , (list,tuple)):
@@ -62,7 +65,7 @@ def read_risk_model(date = None , path = None , tol = 1e-8 , **kwargs):
     df = df.rename(columns={'wind_id':'secid'})
     df[df.abs() < tol] = 0
     df['secid'] = df['secid'].astype(int)
-    return df
+    return Data1D(src=df)
 
 def read_alpha_longcl(date , tol = 1e-8 , **kwargs):
     a_names = {
@@ -94,10 +97,11 @@ def read_alpha_longcl(date , tol = 1e-8 , **kwargs):
         df = pd.merge(df , df_new.set_index('secid') , how='outer' , on='secid')
     df[df.abs() < tol] = 0
     df = df.reset_index()
-    return df
+    return Data1D(src=df)
 
 def get_basic_information(key = None , **kwargs):
     if key is None: return 
+    key = key.split('/')[-1]
     d_secid = {'wind_id'   : {'newcol' : 'secid' , 'use_func' : windid_to_secid}}
     d_entrm = {'entry_dt'  : {'fillna' : -1 , 'astype' : int} ,
                       'remove_dt' : {'fillna' : 99991231 , 'astype' : int}}
@@ -158,7 +162,7 @@ def get_basic_information(key = None , **kwargs):
     df = df.reset_index(drop=True)
     return df
 
-def get_day_trade(date , tol = 1e-8 , **kwargs):
+def get_trade_day(date , tol = 1e-8 , **kwargs):
     data_params = {
         'wind_id'   : ['1_basic_info'  , 'wind_id'] ,
         'adjfactor' : ['2_market_data' , 'day_adjfactor'] ,
@@ -183,9 +187,9 @@ def get_day_trade(date , tol = 1e-8 , **kwargs):
     df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
     df['wind_id'] = windid_to_secid(df['wind_id'])
     df = df.rename(columns={'wind_id':'secid'}).reset_index(drop=True)
-    return df
+    return Data1D(src=df)
 
-def get_min_trade(date , tol = 1e-8 , **kwargs):
+def get_trade_min(date , tol = 1e-8 , **kwargs):
     data_params = {
         'ticker'    : 'secid'  ,
         'secoffset' : 'minute' ,
@@ -208,7 +212,7 @@ def get_min_trade(date , tol = 1e-8 , **kwargs):
     df['minute'] = df['minute']/60
     df['minute'] = (df['minute'] - 90) * (df['minute'] <= 240) + (df['minute'] - 180) * (df['minute'] > 240)
     df = df.sort_values(['secid','minute'])
-    return df
+    return Data1D(src=df)
 
 def get_labels(date : (int,str) , days : int , lag1 : bool , tol = 1e-8 , **kwargs):
     path_param = {
@@ -246,7 +250,7 @@ def get_labels(date : (int,str) , days : int , lag1 : bool , tol = 1e-8 , **kwar
     df = pd.merge(rtn,res,how='left',on='id')
     df.columns = ['secid' , f'rtn_lag{int(lag1)}_{days}' , f'res_lag{int(lag1)}_{days}']
     df['secid'] = windid_to_secid(df['secid'])
-    return df
+    return Data1D(src=df)
 
 def fill_na_min_data(data):
     #'amount' , 'volume' to 0
@@ -338,12 +342,24 @@ def kline_aggregate(data , keys):
         new_data[:,-1:,keys=='vwap']  = v # vwap
     return new_data
 
-def get_Xmin_trade(date , min_DataTank , x , tol = 1e-8 , **kwargs):
-    data = min_DataTank.read_data1D(f'/minute/trade/{date}')
-    data = filter_min_Data1D(data)
-    data , index = Data1D_to_kline(data)
-    data , index = kline_reform(data , index , by = x)
-    return kline_to_Data1D(data , index)
+def get_trade_Xmin(date , x_minute , src_min = None , src_update = None , tol = 1e-8 , group = None , **kwargs):
+    data = None
+    if isinstance(src_min , DataTank) and src_min.get_object(f'/minute/trade/{date}') is not None:
+        data = src_min.read_data1D(f'/minute/trade/{date}')
+    elif isinstance(src_update , DataTank) and src_update.get_object(f'DB_trade_min.h5/minute/trade/{date}') is not None:
+        data = src_update.read_data1D(f'DB_trade_min.h5/minute/trade/{date}')
+    elif isinstance(src_min , str) and group is not None and os.path.exists(src_min.format(group)):
+        src = DataTank(src_min.format(group) , True , 'r')
+        if src.get_object(f'/minute/trade/{date}') is not None:
+            data = src.read_data1D(f'/minute/trade/{date}')
+    if data is None: data = get_trade_min(date , tol = tol , **kwargs)
+    if x_minute == 1:
+        return data
+    else:
+        data = filter_min_Data1D(data)
+        data , index = Data1D_to_kline(data)
+        data , index = kline_reform(data , index , by = x_minute)
+        return kline_to_Data1D(data , index)
 
 def forward_fillna(arr , axis = 0):
     shape = arr.shape
@@ -372,3 +388,12 @@ class unfetched_data():
         assert isinstance(new , unfetched_data) , (type(new))
         self.dates = np.union1d(self.dates , new.dates)
         self.unfetched_detail.update(new.unfetched_detail)
+
+    def __len__(self):
+        return len(self.dates)
+    
+    def __repr__(self) -> str:
+        if len(self) > 0:
+            return f'{len(self)} Unfetched Dates: {str(list(self.dates))}'
+        else:
+            return ''
