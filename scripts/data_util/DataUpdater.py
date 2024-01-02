@@ -2,7 +2,7 @@ import h5py
 import numpy as np
 import os , time
 import traceback
-import socket
+import socket , platform
 
 try:
     from .DataTransmitter import *
@@ -14,7 +14,8 @@ except:
 # %%
 do_updater = True
 print_tree = False
-required_params=['__information__' , '__create_time__' , '__date_source__' , '__data_func__']
+remake_key_list = ['information']
+required_params = ['__information__' , '__create_time__' , '__date_source__' , '__data_func__']
 
 def get_data_dir():
     if socket.gethostname() == 'mengkjin-server':
@@ -36,6 +37,13 @@ def inner_path_join(*args):
 def outer_path_join(*args):
     return os.path.join(*args)
 
+def updater_key_to_path(key):
+    os_name = platform.system()
+    if os_name == 'Linux':
+        return outer_path_join(*key.split('\\'))
+    else:
+        return key
+
 class DataUpdater():
     def __init__(self , do_updater = False) -> None:
         self.do_updater = do_updater
@@ -43,19 +51,26 @@ class DataUpdater():
         self.UPDATER = self.get_new_updater()
         self.UNFETCH = dict()
         self.update_order = []
-        self.remake_key_list = ['information']
     
     def _get_db_dir(self):
         dir_db = 'DB_data'
         os.makedirs(outer_path_join(DIR_data , dir_db) , exist_ok=True)
         return dir_db
 
-    def _get_updater_path(self , title = 'DB_updater'):
-        return [outer_path_join(DIR_data , self.DIR_db , path) for path in os.listdir(self.DIR_db) if path.startswith(title + '.')]
+    def get_updater_paths(self , title = 'DB_updater'):
+        # order matters!
+        search_dirs = [outer_path_join(DIR_data , self.DIR_db)]
+        if socket.gethostname() == 'mengkjin-server':
+            search_dirs.append('/home/mengkjin/Workspace/SharedFolder')
+        paths = []
+        for sdir in search_dirs:
+            add_paths = [outer_path_join(sdir , p) for p in os.listdir(sdir) if p.startswith(title + '.')]
+            paths = np.concatenate([paths , sorted(add_paths)])
+        return list(paths)
 
     def get_new_updater(self, title = 'DB_updater'):
         if self.do_updater:
-            old_updaters = self._get_updater_path(title)
+            old_updaters = self.get_updater_paths(title)
             updater_i = [int(os.path.basename(p).split('.')[1]) for p in old_updaters]
             updater_n = 0 if len(updater_i) == 0 else max(updater_i) + 1
             return DataTank(outer_path_join(DIR_data , self.DIR_db , f'{title}.{updater_n:d}.h5') , open = True , mode = 'guess')
@@ -183,7 +198,7 @@ class DataUpdater():
                 self.update_attr(param , dtank , path)
 
                 if isinstance(self.UPDATER , DataTank):
-                    target_str = f'UPDATER ~ {db_path}/{path}'
+                    target_str = f'UPDATER ~ {os.path.relpath(db_path)}/{path}'
                 else:
                     target_str = f'{os.path.basename(db_path)} ~ {path}'
                 print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - __start_time__:.2f} Secs')
@@ -233,9 +248,9 @@ class DataUpdater():
         db_path , db_update_params = self.get_db_params(KEY)
 
         if KEY in ['information']:
-            self.update_by_key(db_path , db_update_params , remake = KEY in self.remake_key_list)
+            self.update_by_key(db_path , db_update_params , remake = KEY in remake_key_list)
         elif KEY in ['models' , 'trade_day' , 'trade_min' , 'trade_Xmin' , 'labels']:
-            self.update_by_date(db_path , db_update_params , start_dt , end_dt , remake = KEY in self.remake_key_list)
+            self.update_by_date(db_path , db_update_params , start_dt , end_dt , remake = KEY in remake_key_list)
         else:
             raise Exception(KEY)
 
@@ -248,8 +263,8 @@ class DataUpdater():
     def close(self):
         if isinstance(self.UPDATER , DataTank): self.UPDATER.close()
 
-    def dump_exists_updaters(self):
-        old_updaters = self._get_updater_path()
+    def dump_exist_updaters(self):
+        old_updaters = self.get_updater_paths()
         updater = None
         try:
             for updater_path in old_updaters:
@@ -260,6 +275,18 @@ class DataUpdater():
             traceback.print_exc()
         finally:
             if isinstance(updater , DataTank): updater.close()
+
+    def del_exist_updaters(self):
+        if not input('''You must confirm to delete existing updaters 
+                     (press yes/y)''').lower() in ['y','yes']: 
+            return NotImplemented
+        old_updaters = self.get_updater_paths()
+        print(old_updaters)
+        if not input(f'''Delete {len(old_updaters)} updaters (press yes/y) : 
+                     {old_updaters}''').lower() in ['y','yes']: 
+            return NotImplemented
+        for updater_path in old_updaters:
+            os.remove(updater_path)
 
 def get_target_dates(db_name , path):
     db_dir , old_keys = os.path.dirname(db_name) ,  []
@@ -313,9 +340,19 @@ def dump_updater(Updater , print_tree = print_tree):
         db_path_list = list(updater.keys())
 
     for db_path in db_path_list:
+        true_path = outer_path_join(DIR_data , updater_key_to_path(db_path))
+        key  = os.path.basename(true_path).split('.')[0].replace('DB_','')
+        mode ='guess' 
+        if not isinstance(updater , DataTank): 
+            mode = 'r'
+        elif key in remake_key_list:
+            if os.path.exists(true_path): os.remove(true_path)
+            mode = 'w'
         try:
-            dtank = DataTank(db_path , open = True , mode ='guess' if isinstance(updater , DataTank) else 'r')
-            copy_tree(updater , db_path , dtank , '.')
+            dtank = DataTank(true_path ,  open = True , mode = mode)
+            if isinstance(dtank , DataTank):
+                copy_tree(updater , db_path , dtank , '.' , 
+                        print_pre = f'{os.path.basename(updater.filename)} > ')
             if print_tree:
                 print(f'Current {db_path} Tree:')
                 dtank.print_tree()
@@ -331,7 +368,8 @@ if __name__ == '__main__':
     if socket.gethostname() == 'mengkjin-server':
         try:
             Updater = DataUpdater(False)
-            Updater.dump_exists_updaters()
+            Updater.dump_exist_updaters()
+            Updater.del_exist_updaters()
         except:
             traceback.print_exc()
         finally:
@@ -349,3 +387,6 @@ if __name__ == '__main__':
         finally:
             Updater.close()
     print(f'{time.ctime()} : All Updates Done! Cost {time.time() - __start_time__:.2f} Secs')
+
+# %%
+

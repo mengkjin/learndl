@@ -655,7 +655,9 @@ def tree_diff(tree1 , tree2):
         result.update(tree_diff(tree1[key] , tree2[key]))
     return result
 
-def copy_tree(source , source_path ,  target , target_path , print_process = True , compress = None, **kwargs):
+def copy_tree(source , source_path ,  target , target_path , compress = None, 
+              print_process = True , print_time = True , print_pre = '' ,
+              **kwargs):
     if not isinstance(source , DataTank): return NotImplemented
     assert isinstance(target , DataTank) , type(target)
     assert isinstance(source_path , str) and isinstance(target_path , str) , (source_path , target_path)
@@ -674,12 +676,16 @@ def copy_tree(source , source_path ,  target , target_path , print_process = Tru
         for key in source.get_object(source_path).keys():
             key_source_path = '/'.join([source_path , key])
             key_target_path = '/'.join([target_path , key])
-            copy_tree(source , key_source_path ,  target , key_target_path , compress = compress , **kwargs)
+            copy_tree(source , key_source_path ,  target , key_target_path , compress = compress , 
+                      print_process = print_process , print_time = print_time , print_pre = print_pre ,
+                      **kwargs)
     attrs = {k:v for k,v in source.get_group_attrs(source_path).items() if v is not None}
     target.set_group_attrs(target_path , overwrite = True , **attrs) 
     if len(attrs) > 0:
         target.set_group_attrs(target_path , overwrite = True , **attrs) 
-        if print_process: print(f'{time.ctime()} : UPDATER > {target.filename}/{target_path} copying Done!')
+        if print_process: 
+            print_msg = f'{print_pre}{os.path.relpath(target.filename)}/{target_path} copying Done!'
+            print(f'{time.ctime()} : {print_msg}' if print_time else print_msg)
 
 def repack_DataTank(source_tank_path , target_tank_path = None):
     # repack h5 file to avoid aggregating file size to unlimited amount
