@@ -58,7 +58,6 @@ process_param = {
 """
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='manual to this script')
     parser.add_argument("--confirm", type=str, default='')
@@ -76,7 +75,7 @@ if __name__ == '__main__':
                 print(f'{time.ctime()} : {key} start ...')
                 
                 blocks = []
-                dtank  = DataTank('/'.join([DIR_data,param['__path_DB__']]) , open = True , mode = 'r')
+                dtank  = DataTank('/'.join([DIR_data,param['__path_DB__']]) , 'r')
                 if isinstance(param['__path_data__'] , str): param['__path_data__'] = [param['__path_data__']]
                 for f in param['__path_data__']:
                     with timer(f'{key} blocks reading {f} Data1D\'s') as t:

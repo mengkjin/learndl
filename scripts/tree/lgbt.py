@@ -63,6 +63,7 @@ class lgbm():
             'force_col_wise': True, 
             'monotone_constraints': 1 , 
             'early_stopping' : 50 , 
+            'zero_as_missing' : True ,
             'device_type': 'gpu' if cuda else 'cpu', # 'cuda' 'cpu'
             'seed': 42,
         }
@@ -347,5 +348,4 @@ if __name__ == '__main__':
     a.plot_pdp('train')
     if a.train_param['linear_tree']==False:
         a.plot_shap('train') # Error now due to Numpy >= 1.24 and shap from pip not compatible
-
 

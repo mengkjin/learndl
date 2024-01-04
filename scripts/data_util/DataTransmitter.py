@@ -348,10 +348,12 @@ def get_trade_Xmin(date , x_minute , src_min = None , src_update = None , tol = 
         data = src_min.read_data1D(f'/minute/trade/{date}')
     elif isinstance(src_update , DataTank) and src_update.get_object(f'DB_trade_min.h5/minute/trade/{date}') is not None:
         data = src_update.read_data1D(f'DB_trade_min.h5/minute/trade/{date}')
-    elif isinstance(src_min , str) and group is not None and os.path.exists(src_min.format(group)):
-        src = DataTank(src_min.format(group) , True , 'r')
-        if src.get_object(f'/minute/trade/{date}') is not None:
-            data = src.read_data1D(f'/minute/trade/{date}')
+    elif isinstance(src_min , str) and group is not None:
+        src_files = [f for f in os.listdir(src_min) if str(group) in f.split('.')]
+        if len(src_files) == 1:
+            src = DataTank(src_files[0] , 'r')
+            if src.get_object(f'/minute/trade/{date}') is not None:
+                data = src.read_data1D(f'/minute/trade/{date}')
     if data is None: data = get_trade_min(date , tol = tol , **kwargs)
     if x_minute == 1:
         return data

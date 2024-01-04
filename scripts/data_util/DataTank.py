@@ -354,7 +354,7 @@ class DataFDS():
         return DataDSF(date , [Data1D(secid,feat,all_values[i]) for i in range(len(date))])
 
 class DataTank():
-    def __init__(self , filename = None , open = False , mode = 'guess' , compress = False) -> None:
+    def __init__(self , filename = None , mode = 'guess' , open = True , compress = False) -> None:
         self.filename = filename
         self.mode = mode
         self.file = None
@@ -389,6 +389,7 @@ class DataTank():
         if self.isopen(): self.open(self.file.mode)
 
     def open(self , mode = None): 
+        if self.filename is None: return NotImplemented
         if mode is None: mode = self.mode
         if mode == 'guess': 
             mode = 'r+' if os.path.exists(self.filename) else 'w'
@@ -498,6 +499,15 @@ class DataTank():
 
     def is_DataFrame(self , obj):
         return np.isin(['__columns__','__columns_dtype__'],list(obj.attrs.keys())).all()
+    
+    def is_compress(self , obj):
+        if isinstance(obj , h5py.Group):
+            if len(obj) > 0:
+                return obj[list(obj.keys())[0]].compression is not None
+            else:
+                return False
+        else:
+            return obj.compression is not None
 
     def read_guess(self , path , feature = None):
         path = self._full_path(path)
@@ -553,15 +563,17 @@ class DataTank():
             self.create_object([path , key] , data = list(getattr(data , key)) , dtype = dtype , compress = compress)
         self.create_object([path , 'values'] , data = data.values , compress = compress)
 
-    def read_data1D(self , path , feature = None):
+    def read_data1D(self , path , feature = None , none_if_incomplete = False):
+        portal = self.get_object(path)
+        if none_if_incomplete:
+            if not all(np.isin(['secid','feature','values'] , list(portal.keys()))): return None
         if feature is None:
-            return Data1D(src=self.get_object(path))
+            return Data1D(src = portal)
         else:
             portal = self.get_object(path)
             all_feature = portal['feature'][:].astype(str)
             if feature is None: feature = all_feature
             if isinstance(feature , str): feature = [feature]
-            # assert np.isin(feature , all_feature).all() , np.setdiff1d(feature , all_feature)
             ifeat = np.array([np.where(all_feature == f)[0][0] for f in feature])
             ifeat.sort()
             secid = portal['secid'][:]
@@ -645,6 +657,21 @@ class DataTank():
         if object is None: object = self.file
         return isinstance(object , h5py.Dataset) or all([isinstance(object[key] , h5py.Dataset) for key in object.keys()])
     
+    def leaf_list(self , object = None , call_list = []):
+        if object is None: object = self.file
+        if isinstance(call_list , str): call_list = list(call_list)
+        assert all(np.isin(call_list , ['is_DataFrame' , 'is_Data1D' , 'is_compress']))
+        leafs = []
+        for key in object.keys():
+            obj = object[key]
+            if self.end_of_leaf(obj):
+                leaf_char = {'path' :obj.name , 'key'  :key}
+                for _call in call_list: leaf_char[_call] = getattr(self , _call)(obj)
+                leafs.append(leaf_char)
+            else:
+                leafs = np.concatenate([leafs , self.leaf_list(obj , call_list)])
+        return leafs
+    
 def tree_diff(tree1 , tree2):
     keys1 = list(tree1.keys()) if isinstance(tree1 , dict) else []
     keys2 = list(tree2.keys()) if isinstance(tree2 , dict) else []
@@ -664,7 +691,7 @@ def copy_tree(source , source_path ,  target , target_path , compress = None,
 
     portal = source.get_object(source_path)
     if source.end_of_leaf(portal):
-        source_compress = (portal[list(portal.keys())[0]].compression is not None) or compress
+        source_compress = source.is_compress(portal)
         data = source.read_guess(source_path)
         target.write_guess(target_path , data , overwrite = True , compress = source_compress)
     elif isinstance(portal , h5py.Dataset):
@@ -702,8 +729,8 @@ def repack_DataTank(source_tank_path , target_tank_path = None):
     else:
         assert not os.path.exists(target_tank_path) , target_tank_path
         if input(f'Repack to {target_tank_path} , press yes to confirm') != 'yes': return
-        source_dtank = DataTank(source_tank_path , True , 'r') 
-        target_dtank = DataTank(target_tank_path , True , 'w')
+        source_dtank = DataTank(source_tank_path , 'r') 
+        target_dtank = DataTank(target_tank_path , 'w')
         try:
             copy_tree(source_dtank , '.' , target_dtank , '.')
         except:
@@ -717,6 +744,3 @@ def file_shadow_name(old_name , insert = 'new'):
     arr = os.path.basename(old_name).split('.')
     arr.insert(-1,insert)
     return os.path.join(os.path.dirname(old_name) , '.'.join(arr))
-
-
-
