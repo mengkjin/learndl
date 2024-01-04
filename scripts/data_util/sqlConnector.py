@@ -240,11 +240,9 @@ class online_sql_connector():
         
         freq = 'Q'
         date_segs = self.date_seg(start_dt , end_dt , freq = freq)
-        prompt = f'since {start_dt} to {end_dt}, total {len(date_segs)} periods({freq})'
-        if ask:
-            assert input(prompt + ', print "yes" to confirm!') == 'yes'
-        else:
-            print(prompt)
+        prompt = f'{time.ctime()} : {src}/{query_type} since {start_dt} to {end_dt}, total {len(date_segs)} periods({freq})'
+        if ask: assert input(prompt + ', print "yes" to confirm!') == 'yes'
+        print(prompt)
 
         dtank = DataTank()
         group_file_list = []
@@ -264,9 +262,8 @@ class online_sql_connector():
                 dtank.write_data1D(path = [src , query_type , str(d)] , 
                                    data = Data1D(src = data_at_d) , 
                                    overwrite = True)
-            print(f'{time.ctime()} : {src}:{query_type}:{s // 100}{" "*20}' , end='\r')
+            print(f'{time.ctime()} : {src}/{query_type}:{s // 100}{" "*10}' , end='\r')
         dtank.close()
-        print('\n')
         return group_file_list
 
     def download_dates(self , db_path , src , query_type , dates = []):
@@ -286,9 +283,8 @@ class online_sql_connector():
             dtank.write_data1D(path = [src , query_type , str(d)] , 
                                data = Data1D(src = data) , 
                                overwrite = True)
-            print(f'{time.ctime()} : {src}:{query_type}:{d}{" "*20}' , end='\r')
+            print(f'{time.ctime()} : {src}/{query_type}:{d}{" "*10}' , end='\r')
         dtank.close()
-        print('\n')
         return group_file_list
 
     def old_dtank_dates(self , db_path , src , query_type):
@@ -309,7 +305,9 @@ class online_sql_connector():
         end_dt   = min(end_dt , int(date.today().strftime('%Y%m%d')))
         freq = 'Q'
         date_segs = self.date_seg(start_dt , end_dt , freq = freq)
-        if ask: assert input(f'total {len(date_segs)} periods({freq}), print "yes" to confirm!') == 'yes'
+        prompt = f'{time.ctime()} : {src}/{query_type} since {start_dt} to {end_dt}, total {len(date_segs)} periods({freq})'
+        if ask: assert input(prompt + ', print "yes" to confirm!') == 'yes'
+        print(prompt)
         dtank = DataTank()
         group_file_list = []
         for (s , e) in date_segs:
@@ -328,7 +326,7 @@ class online_sql_connector():
                 dtank.write_data1D(path = [src , query_type , str(d)] , 
                                    data = Data1D(src = data_at_d) , 
                                    overwrite = True)
-            print(f'{time.ctime()} : {src}/{query_type}:{s // 100}{" "*20}' , end='\r')
+            print(f'{time.ctime()} : {src}/{query_type}:{s // 100}{" "*10}' , end='\r')
         print('\n')
         return group_file_list
 
@@ -356,11 +354,11 @@ def update_sql_since(db_key , connector , trace = 0):
     try:
         for src in connector.query_params.keys():
             for qtype in connector.query_params[src].keys():
-                print('/'.join([src,qtype]))
                 group_files = connector.download_since(db_path , src , qtype , trace = trace , ask = False)
                 group_file_list = [*group_file_list , *group_files]
-        dtank = DataTank(sorted(group_file_list)[-1] , 'r')
-        dtank.print_tree()
+        if group_file_list:
+            dtank = DataTank(sorted(group_file_list)[-1] , 'r')
+            dtank.print_tree()
     except Exception as e:
         traceback.print_exc()
     finally:
@@ -375,11 +373,11 @@ def update_sql_dates(db_key , connector , dates):
     try:
         for src in connector.query_params.keys():
             for qtype in connector.query_params[src].keys():
-                print('/'.join([src,qtype]))
                 group_files = connector.download_dates(db_path , src , qtype , dates)
                 group_file_list = [*group_file_list , *group_files]
-        dtank = DataTank(sorted(group_file_list)[-1] , 'r')
-        dtank.print_tree()
+        if group_file_list:
+            dtank = DataTank(sorted(group_file_list)[-1] , 'r')
+            dtank.print_tree()
     except Exception as e:
         traceback.print_exc()
     finally:
