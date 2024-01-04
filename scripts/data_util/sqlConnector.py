@@ -256,7 +256,7 @@ class online_sql_connector():
                 data_at_d = data.loc[d]
                 if len(data_at_d) == 0: continue
                 group = get_date_groups(d)
-                group_file = full_data_path(get_db_file(db_path , group))
+                group_file = get_db_file(db_path , group)
                 if dtank.filename != group_file: 
                     dtank.close()
                     dtank = DataTank(group_file , 'r+' , compress=True)
@@ -278,7 +278,7 @@ class online_sql_connector():
             data = data.sort_values(['date' , 'secid']).set_index('date')
 
             group = get_date_groups(d)
-            group_file = full_data_path(get_db_file(db_path , group))
+            group_file = get_db_file(db_path , group)
             if dtank.filename != group_file: 
                 dtank.close()
                 dtank = DataTank(group_file , 'r+' , compress=True)
@@ -293,9 +293,8 @@ class online_sql_connector():
 
     def old_dtank_dates(self , db_path , src , query_type):
         dates = []
-        dir_path = full_data_path(db_path)
-        for sub_path in os.listdir(dir_path):
-            dtank = DataTank(outer_path_join(dir_path , sub_path) , 'r')
+        for sub_path in os.listdir(db_path):
+            dtank = DataTank(outer_path_join(db_path , sub_path) , 'r')
             portal = dtank.get_object([src , query_type])
             if portal is not None and len(portal.keys()) > 0:
                 portal_dt = np.array(list(portal.keys()))
@@ -321,7 +320,7 @@ class online_sql_connector():
                 data_at_d = data.loc[d]
                 if len(data_at_d) == 0: continue
                 group = get_date_groups(d)
-                group_file = full_data_path(get_db_file(db_path , group))
+                group_file = get_db_file(db_path , group)
                 if dtank.filename != group_file: 
                     dtank.close()
                     dtank = DataTank(group_file , 'r+' , compress=True)
