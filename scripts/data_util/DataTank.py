@@ -382,7 +382,7 @@ class DataTank():
         return '/'.join([str(f) for f in path]) if isinstance(path , (list,tuple)) else path
     
     def keys(self):
-        return self.file.keys()
+        return self.file.keys() if self.file is not None else None
 
     def change_file(self , filename):
         self.filename = filename
