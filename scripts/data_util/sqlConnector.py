@@ -1,6 +1,7 @@
 # %%
 from sqlalchemy import create_engine , exc , text
 from datetime import date , datetime
+
 import traceback
 import pandas as pd
 import numpy as np
@@ -329,22 +330,27 @@ class online_sql_connector():
             print(f'{time.ctime()} : {src}/{query_type}:{s // 100}{" "*10}' , end='\r')
         print('\n')
         return group_file_list
-
-    def date_seg(self , start_dt , end_dt , freq='Q'):
-        dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
-        dt_starts = [start_dt , *self.numdate_offset(dt_list[:-1],1)]
-        dt_ends = [*dt_list[:-1] , end_dt]
-        return [(s,e) for s,e in zip(dt_starts , dt_ends)]
     
-    def numdate_offset(self , date , offset):
-        if offset == 0:
-            return date
+    def date_offset(self, date , offset = 0 , astype = str):
+        if isinstance(date , (np.ndarray,pd.Index,pd.Series,list,tuple,np.ndarray)):
+            is_scalar = False
+            new_date = pd.DatetimeIndex(np.array(date).astype(str))
         else:
-            if isinstance(date , (np.ndarray,pd.Index , pd.Series)):
-                return (pd.DatetimeIndex(date.astype(str))+pd.DateOffset(offset)).strftime('%Y%m%d').astype(int).values
-            else:
-                return (pd.DatetimeIndex([str(date)])+pd.DateOffset(offset)).strftime('%Y%m%d').astype(int)[0]
-                
+            is_scalar = True
+            new_date = pd.DatetimeIndex([str(date)])
+        if offset == 0:
+            new_date = new_date.strftime('%Y%m%d')
+        else:
+            new_date = (new_date + pd.DateOffset(offset)).strftime('%Y%m%d')
+        new_date = new_date.astype(astype)
+        return new_date[0] if is_scalar else new_date.values
+
+    def date_seg(self, start_dt , end_dt , freq='Q' , astype = str):
+        dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
+        dt_starts = [self.date_offset(start_dt) , *self.date_offset(dt_list[:-1],1)]
+        dt_ends = [*dt_list[:-1] , self.date_offset(end_dt)]
+        return [(astype(s),astype(e)) for s,e in zip(dt_starts , dt_ends)]
+                    
 def update_sql_since(db_key , connector , trace = 0):
     assert db_key == 'SellSideFactors' , db_key
     assert isinstance(connector , (online_sql_connector))

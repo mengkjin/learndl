@@ -661,7 +661,7 @@ class model_controller():
             self.ic_by_model[-1,:] = np.nanmean(self.ic_by_date[-len(self.data.model_test_dates):,],axis = 0)
             logger.info('{: <11d}'.format(self.model_date)+('{:>8.4f}'*len(self.test_result_model_num)).format(*self.ic_by_model[-1,:]))
         #if False:
-        #    df = pd.DataFrame(self.y_pred.T, index = self.data.model_test_dates, columns = self.data.index_stock.astype(str))
+        #    df = pd.DataFrame(self.y_pred.T, index = self.data.model_test_dates, columns = self.data.secid.astype(str))
         #    with open(f'{ShareNames.instance_path}/{ShareNames.model_name}_fac{self.model_num}.csv', 'a') as f:
         #        df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)
 
@@ -702,11 +702,11 @@ class model_controller():
         self.y_pred_models.append(self.y_pred)
         if self.model_num == ShareNames.model_num_list[-1]:
             self.y_pred_models = np.concatenate(self.y_pred_models,axis=-1).transpose(1,0,2)
-            # idx = np.array(np.meshgrid(self.data.model_test_dates , self.data.index_stock)).T.reshape(-1,2)
+            # idx = np.array(np.meshgrid(self.data.model_test_dates , self.data.sec_id)).T.reshape(-1,2)
             mode = 'r+' if os.path.exists(f'{ShareNames.instance_path}/{ShareNames.model_name}.h5') else 'w'
             with h5py.File(f'{ShareNames.instance_path}/{ShareNames.model_name}.h5' , mode = mode) as f:
                 for di in range(len(self.data.model_test_dates)):
-                    arr , row = self.y_pred_models[di] , self.data.index_stock 
+                    arr , row = self.y_pred_models[di] , self.data.sec_id 
                     arr , row = arr[np.isnan(arr).all(axis=1) == 0] , row[np.isnan(arr).all(axis=1) == 0]
                     col = [f'{mn}.{o}' for mn,o in zip(self.test_result_model_num,self.test_result_output_type)]
                     if str(self.data.model_test_dates[di]) in f.keys():

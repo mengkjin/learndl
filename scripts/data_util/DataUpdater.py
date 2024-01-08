@@ -168,6 +168,7 @@ class DataUpdater():
             return NotImplemented
         if isinstance(self.UPDATER , DataTank):  
             inner_path = inner_path_join(updater_path_to_key(dtank.filename), path)
+            self.update_order.append(updater_path_to_key(dtank.filename))
             self.UPDATER.write_guess(inner_path , data = data , overwrite = True , compress = compress)
         else:
             dtank.write_guess(path , data = data , overwrite = True , compress = compress)
@@ -187,12 +188,11 @@ class DataUpdater():
             dtank.set_group_attrs(path , overwrite = False , **attrs_create)
             dtank.set_group_attrs(path , overwrite = True  , **attrs_update)
 
-    def update_by_key(self , db_path , update_params , remake = False):
-        self.update_order.append(db_path)
+    def update_by_key(self , db_path , update_params):
         dtank = None
         try:
             db_file = get_db_file(db_path)
-            if remake and os.path.exists(db_file): os.remove(db_file)
+            if os.path.exists(db_file): os.remove(db_file)
             dtank = DataTank(db_file , 'r+')
             for path , param in update_params.items():
                 __start_time__ = time.time()
@@ -214,7 +214,7 @@ class DataUpdater():
         finally:
             if isinstance(dtank , DataTank): dtank.close()
 
-    def update_by_date(self , db_path , update_params , start_dt = None , end_dt = None , remake = False):
+    def update_by_date(self , db_path , update_params , start_dt = None , end_dt = None):
         self.update_order.append(db_path)
         dtank = None
         try:
@@ -252,14 +252,15 @@ class DataUpdater():
 
     def update_something(self , KEY , start_dt = None , end_dt = None):
         # selected DB is totally refreshed , so delete first
-        db_path , db_update_params = self.get_db_params(KEY)
-
-        if KEY in l_update_by_key:
-            self.update_by_key(db_path , db_update_params , remake = True)
-        elif KEY in l_update_by_date:
-            self.update_by_date(db_path , db_update_params , start_dt , end_dt , remake = False)
-        else:
-            raise Exception(KEY)
+        if not isinstance(KEY , (list,tuple)): KEY = [KEY]
+        for key in KEY:
+            db_path , db_update_params = self.get_db_params(key)
+            if key in l_update_by_key:
+                self.update_by_key(db_path , db_update_params)
+            elif key in l_update_by_date:
+                self.update_by_date(db_path , db_update_params , start_dt , end_dt)
+            else:
+                raise Exception(key)
 
     def _update_information(self , KEY = 'information'):
         self.update_by_key(*self.get_db_params(KEY))
@@ -270,19 +271,27 @@ class DataUpdater():
     def close(self):
         if isinstance(self.UPDATER , DataTank): self.UPDATER.close()
 
+    def print_current_unfetch(self):
+        unfetch_keys = list(self.UNFETCH.keys())
+        _order = [*self.update_order , *unfetch_keys]
+        unfetch_keys.sort(key = lambda x:_order.index(x))
+        for key in unfetch_keys:
+            for _path , _unfetch in self.UNFETCH[key].items():
+                if len(_unfetch) > 0: print(_path,_unfetch) 
+
     def dump_exist_updaters(self , del_after_dumping = True):
         old_updaters = self.get_updater_paths()
-        updater = None
         for updater_path in old_updaters:
-            updater = DataTank(updater_path , 'r')
-            dump_updater(updater)
-            updater.close()
-
+            with DataTank(updater_path , 'r') as updater:
+                dump_updater(updater , key_order = self.update_order)
         if del_after_dumping:
             print(old_updaters)
             if input(f'''Delete {len(old_updaters)} updaters (press yes/y) : 
                         {old_updaters}''').lower() in ['y','yes']: 
                 for updater_path in old_updaters: os.remove(updater_path)
+
+    def dump_current_updater(self):
+        dump_updater(self.UPDATER , key_order = self.update_order)
 
 def get_target_dates(db_path , inner_path):
     old_keys = []
@@ -319,38 +328,27 @@ def get_new_dates(date_source , db_path , inner_path , start_dt = None , end_dt 
 
     return new_dates
 
-def dump_updater(Updater , print_tree = print_tree):
-    if isinstance(Updater , DataUpdater):
-        updater = Updater.UPDATER
-        unfetch = Updater.UNFETCH
-        db_path_list = list(updater.keys())
-        _order = [*Updater.update_order , *db_path_list]
-        db_path_list.sort(key = lambda x:_order.index(x))
-    elif isinstance(Updater , (DataTank , str)):
-        updater = Updater if isinstance(Updater , DataTank) else DataTank(Updater , 'r')
-        unfetch = {}
-        db_path_list = list(updater.keys())
+def dump_updater(updater , print_tree = print_tree , key_order = []):
+    assert isinstance(updater , (DataTank,dict)) , updater
+    if isinstance(updater , dict) and not print_tree: return NotImplemented
+    db_path_list = list(updater.keys())
+    key_order += db_path_list
+    db_path_list.sort(key = lambda x:key_order.index(x))
+    copy_mode = isinstance(updater , DataTank)
 
     for db_path in db_path_list:
         true_path = updater_key_to_path(db_path)
-        key  = os.path.basename(true_path).split('.')[0].replace('DB_','')
-        mode ='guess' 
-        if not isinstance(updater , DataTank): 
-            mode = 'r'
-        elif key in l_update_by_key:
-            if os.path.exists(true_path): os.remove(true_path)
-            mode = 'w'
         os.makedirs(os.path.dirname(true_path),exist_ok=True)
+        key  = os.path.basename(true_path).split('.')[0].replace('DB_','')
+
+        if copy_mode and (key in l_update_by_key) and os.path.exists(true_path): os.remove(true_path)
         try:
-            dtank = DataTank(true_path ,  mode)
-            if isinstance(dtank , DataTank):
-                copy_tree(updater , db_path , dtank , '.' , 
-                        print_pre = f'{os.path.basename(updater.filename)} > ')
+            dtank = DataTank(true_path ,  'r+' if copy_mode else 'r')
+            if copy_mode: 
+                copy_tree(updater , db_path , dtank , '.' , print_pre = f'{os.path.basename(updater.filename)} > ')
             if print_tree:
                 print(f'Current {db_path} Tree:')
                 dtank.print_tree()
-            if db_path in unfetch.keys(): 
-                [print(_path,_unfetch) for _path,_unfetch in unfetch[db_path].items() if len(_unfetch) > 0]
         except:
             traceback.print_exc()
         finally:
@@ -402,25 +400,19 @@ def repack_DB_bygroup(source_tank_path , db_key = None , compress = None):
 
 def update_main():
     __start_time__ = time.time()
-    if socket.gethostname() == 'mengkjin-server':
-        print(f'Merge Update Files')
-        try:
+    try:
+        if socket.gethostname() == 'mengkjin-server':
+            print(f'Merge Update Files') 
             Updater = DataUpdater(False)
             Updater.dump_exist_updaters(del_after_dumping=True)
-        except:
-            traceback.print_exc()
-        finally:
-            Updater.close()
-    else:
-        print(f'Create Update Files')
-        try:
+        else:
+            print(f'Create Update Files')
             Updater = DataUpdater(do_updater)
-            update_list = [*l_update_by_key , *l_update_by_date]
-            for key in update_list:
-                Updater.update_something(KEY = key)
-            dump_updater(Updater)
-        except:
-            traceback.print_exc()
-        finally:
-            Updater.close()
+            Updater.update_something(KEY = l_update_by_key + l_update_by_date)
+            Updater.print_current_unfetch()
+            Updater.dump_current_updater()
+    except:
+        traceback.print_exc()
+    finally:
+        Updater.close()
     print(f'{time.ctime()} : All Updates Done! Cost {time.time() - __start_time__:.2f} Secs')
