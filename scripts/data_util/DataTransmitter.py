@@ -344,16 +344,20 @@ def kline_aggregate(data , keys):
 
 def get_trade_Xmin(date , x_minute , src_min = None , src_update = None , tol = 1e-8 , group = None , **kwargs):
     data = None
-    if isinstance(src_min , DataTank) and src_min.get_object(f'/minute/trade/{date}') is not None:
-        data = src_min.read_data1D(f'/minute/trade/{date}')
-    elif isinstance(src_update , DataTank) and src_update.get_object(f'DB_trade_min.h5/minute/trade/{date}') is not None:
-        data = src_update.read_data1D(f'DB_trade_min.h5/minute/trade/{date}')
-    elif isinstance(src_min , str) and group is not None:
+    date_key = f'/minute/trade/{date}'
+    if isinstance(src_update , DataTank):
+        for key in src_update.keys():
+            if os.path.basename(key).startswith('DB_trade_min'):
+                if src_update.get_object(f'{key}{date_key}') is not None: 
+                    data = src_update.read_data1D(f'{key}{date_key}')
+                    break
+    if data is None and isinstance(src_min , DataTank):
+        if src_min.get_object(date_key) is not None: data = src_min.read_data1D(date_key)
+    if data is None and isinstance(src_min , str) and group is not None:
         src_files = [f for f in os.listdir(src_min) if str(group) in f.split('.')]
         if len(src_files) == 1:
-            src = DataTank(src_files[0] , 'r')
-            if src.get_object(f'/minute/trade/{date}') is not None:
-                data = src.read_data1D(f'/minute/trade/{date}')
+            src = DataTank(os.path.join(src_min , src_files[0]) , 'r')
+            if src.get_object(date_key) is not None: data = src.read_data1D(date_key)
     if data is None: data = get_trade_min(date , tol = tol , **kwargs)
     if x_minute == 1:
         return data
