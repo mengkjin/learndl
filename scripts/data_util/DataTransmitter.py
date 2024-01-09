@@ -2,6 +2,7 @@ import pyreadr
 import pandas as pd
 import numpy as np
 import os
+from ..util.environ import DIR_data
 
 try:
     from .DataTank import *
@@ -183,10 +184,70 @@ def get_trade_day(date , tol = 1e-8 , **kwargs):
     }
     paths = {k:f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/{v[0]}/{v[1]}/{v[1]}_{date}.Rdata' for k,v in data_params.items()}
     paths_not_exists = {k:os.path.exists(p)==0 for k,p in paths.items()}
-    if any(paths_not_exists.values()): return unfetched_data(date , [k for k,v in paths_not_exists.items() if v != 0])
+    if any(paths_not_exists.values()): 
+        # something wrong
+        return unfetched_data(date , [k for k,v in paths_not_exists.items() if v != 0])
     df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
     df['wind_id'] = windid_to_secid(df['wind_id'])
     df = df.rename(columns={'wind_id':'secid'}).reset_index(drop=True)
+    return Data1D(src=df)
+
+def get_trade_Xday(date , x_day , tol = 1e-8 , **kwargs):
+    np.seterr(invalid='ignore')
+    db_path_info = f'{DIR_data}/DB_data/DB_information/DB_information.h5'
+    with DataTank(db_path_info , 'r') as info:
+        calendar = info.read_dataframe('basic/calendar')
+    rolling_dates = calendar.calendar[calendar.trade > 0].to_numpy().astype(int)
+    rolling_dates = sorted(rolling_dates[rolling_dates <= int(date)])[-x_day:]
+    assert rolling_dates[-1] == date , (rolling_dates[-1] , date)
+    groups = np.array(rolling_dates).astype(int) // 10000
+    
+    db_path_day = DIR_data + '/DB_data/DB_trade_day/DB_trade_day.{}.h5'
+    src_files = [db_path_day.format(group) for group in groups]
+    if not all([os.path.exists(file) for file in src_files]): return unfetched_data()
+
+    price_feat  = ['open','close','high','low','vwap']
+    volume_feat = ['amount','volume','turn_tt','turn_fl','turn_fr']
+    pctchg_feat = ['pctchange']
+    all_feat = price_feat + volume_feat + pctchg_feat
+
+    dtank , datas , secid = DataTank() , [] , None
+    for d , src in zip(rolling_dates , src_files):
+        src_path , inner_path = os.path.join(db_path_day , src) , f'/day/trade/{d}'
+        if dtank.filename != src_path: 
+            dtank.close()
+            dtank = DataTank(src_path , 'r')
+        if dtank.get_object(inner_path) is None:
+            data = get_trade_day(date , tol = tol , **kwargs)
+        else:
+            data = dtank.read_data1D(inner_path)
+        if isinstance(data , unfetched_data) or data is None:
+            return unfetched_data()
+        secid = data.secid if secid is None else np.intersect1d(secid , data.secid)
+        datas.append(data)
+    dtank.close()
+    
+    for i , data in enumerate(datas):
+        data = data.to_dataframe().loc[secid]
+        data.loc[:,price_feat] = data.loc[:,price_feat] * data.loc[:,'adjfactor'].values[:,None]
+        datas[i] = data.loc[:,all_feat].values
+
+    data = np.stack([data for data in datas] , axis = 0)
+    del datas
+
+    df = pd.DataFrame({'secid':secid})
+    # price_feat
+    df['open']   = data[...,all_feat.index('open')][0]
+    df['close']  = data[...,all_feat.index('close')][-1]
+    df['high']   = data[...,all_feat.index('high')].max(axis = 0)
+    df['low']    = data[...,all_feat.index('low')].min(axis = 0)
+
+    for feat in volume_feat: df[feat] = data[...,all_feat.index(feat)].sum(axis = 0)
+
+    df['vwap']      = (data[...,all_feat.index('vwap')]*data[...,all_feat.index('volume')]).sum(axis = 0) / df['volume']
+    df['pctchange'] = (data[...,all_feat.index('pctchange')] / 100 + 1).prod(axis = 0) * 100 - 100
+
+    np.seterr(invalid='warn')
     return Data1D(src=df)
 
 def get_trade_min(date , tol = 1e-8 , **kwargs):
@@ -227,8 +288,10 @@ def get_labels(date : (int,str) , days : int , lag1 : bool , tol = 1e-8 , **kwar
     for v in _files.values(): v.sort()
 
     pos = list(_dates['id']).index(date)
-    if pos + lag1 + days >= len(_dates['id']): return unfetched_data()
-    if os.path.exists(path_param['res']+'/'+os.path.basename(path_param['res'])+f'_{date}.Rdata') == 0: return unfetched_data()
+    if pos + lag1 + days >= len(_dates['id']): 
+        return unfetched_data()
+    if os.path.exists(path_param['res']+'/'+os.path.basename(path_param['res'])+f'_{date}.Rdata') == 0: 
+        return unfetched_data()
     
     f_read = lambda k,d,p='':pyreadr.read_r(path_param[k]+'/'+os.path.basename(path_param[k])+f'_{d}.Rdata')['data'].rename(columns={'data':k+p})
     wind_id = f_read('id',date)
@@ -244,7 +307,8 @@ def get_labels(date : (int,str) , days : int , lag1 : bool , tol = 1e-8 , **kwar
     res_pos = list(_dates['res']).index(d0)
     res_dates = [_dates['res'][res_pos + i] for i in range(days)]
     res = wind_id
-    for i,di in enumerate(res_dates): res = res.merge(pd.concat([f_read('id',di),f_read('res',di,str(i))],axis=1),how='left',on='id')
+    for i , di in enumerate(res_dates): 
+        res = res.merge(pd.concat([f_read('id',di),f_read('res',di,str(i))],axis=1),how='left',on='id')
     res = pd.DataFrame({'id':res['id'],'res':res.set_index('id').fillna(np.nan).values.sum(axis=1)})
 
     df = pd.merge(rtn,res,how='left',on='id')
@@ -277,6 +341,7 @@ def fill_na_min_data(data):
         icol = np.where(data.feature == f)[0][0]
         rnan = np.where((np.isnan(data.values[:,icol]) * (data.values[:,imin] > 0)) != 0)[0]
         if len(rnan) > 0: data.values[rnan,icol] = data.values[rnan-1,iccp]
+    return data
 
 def filter_min_Data1D(data):
     assert isinstance(data , Data1D) , type(data)
@@ -342,23 +407,26 @@ def kline_aggregate(data , keys):
         new_data[:,-1:,keys=='vwap']  = v # vwap
     return new_data
 
-def get_trade_Xmin(date , x_minute , src_min = None , src_update = None , tol = 1e-8 , group = None , **kwargs):
+def get_trade_Xmin(date , x_minute , src_updater = None , tol = 1e-8 , **kwargs):
     data = None
-    date_key = f'/minute/trade/{date}'
-    if isinstance(src_update , DataTank):
-        for key in src_update.keys():
-            if os.path.basename(key).startswith('DB_trade_min'):
-                if src_update.get_object(f'{key}{date_key}') is not None: 
-                    data = src_update.read_data1D(f'{key}{date_key}')
-                    break
-    if data is None and isinstance(src_min , DataTank):
-        if src_min.get_object(date_key) is not None: data = src_min.read_data1D(date_key)
-    if data is None and isinstance(src_min , str) and group is not None:
-        src_files = [f for f in os.listdir(src_min) if str(group) in f.split('.')]
-        if len(src_files) == 1:
-            src = DataTank(os.path.join(src_min , src_files[0]) , 'r')
-            if src.get_object(date_key) is not None: data = src.read_data1D(date_key)
+    inner_path = f'minute/trade/{date}'
+    if isinstance(src_updater , DataTank):
+        for key in src_updater.keys():
+            if (os.path.basename(key).startswith('DB_trade_min') and 
+                src_updater.get_object(f'{key}/{inner_path}') is not None): 
+                data = src_updater.read_data1D(f'{key}/{inner_path}')
+                break
+
+    if data is None:
+        src_path  = f'{DIR_data}/DB_data/DB_trade_min/DB_trade_min.{int(date) // 10000}.h5'
+        if os.path.exists(src_path):
+            dtank = DataTank(src_path , 'r')
+            if dtank.get_object(inner_path) is not None: 
+                data = dtank.read_data1D(inner_path)
+            dtank.close()
+        
     if data is None: data = get_trade_min(date , tol = tol , **kwargs)
+
     if x_minute == 1:
         return data
     else:

@@ -153,6 +153,13 @@ class Data1D():
                 kline[:,:,i] = np.nan_to_num(kline[:,:,i])
         return kline
     
+    def align_secid(self , secid):
+        values = np.full((len(secid) , len(self.feature)) , np.nan)
+        _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
+        values[p0s] = self.values[p1s]
+        self.init_attr(secid , self.feature , values)
+        return self
+    
 class Data1DKline():
     # Sec-Feature
     def __init__(self , secid = None , feature = None , values = None) -> None:

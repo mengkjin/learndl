@@ -16,7 +16,7 @@ except:
 do_updater = True
 print_tree = False
 l_update_by_key  = ['information']
-l_update_by_date = ['models' , 'trade_day' , 'trade_min' , 'trade_Xmin' , 'labels']
+l_update_by_date = ['models' , 'trade_day' ,  'trade_Xday' , 'trade_min' , 'trade_Xmin' , 'labels']
 required_params  = ['__information__' , '__create_time__' , '__date_source__' , '__data_func__']
         
 def stime():
@@ -121,6 +121,15 @@ class DataUpdater():
                     '__date_source__': 'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_vwap' ,
                     '__data_func__'  : get_trade_day,'compress':False} ,
             }
+        elif key == 'trade_Xday':
+            db_update_params = {
+                f'{x_day}day/trade' : {
+                    '__information__': f'daily {x_day} days trading data of A shares' ,
+                    '__date_source__': 'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_vwap' ,
+                    '__data_func__'  : get_trade_Xday, 'compress' : True , 
+                    'src_update' : self.UPDATER , 
+                    'x_day':x_day , } for x_day in [5,10,20]
+            }
         elif key == 'trade_min':
             db_update_params = {
                 'minute/trade' : {
@@ -134,10 +143,8 @@ class DataUpdater():
                     '__information__': f'daily {x_minute} minute trading data of A shares' ,
                     '__date_source__': 'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin' ,
                     '__data_func__'  : get_trade_Xmin, 'compress' : True , 
-                    'src_min' : get_db_path('trade_min' , db_dir=self.DIR_db) , 
-                    'src_update' : self.UPDATER , 
-                    'x_minute':x_minute , 
-                } for x_minute in [5,10,15,30,60]
+                    'src_updater' : self.UPDATER , 
+                    'x_minute':x_minute , } for x_minute in [5,10,15,30,60]
             }
         elif key == 'labels':
             db_update_params = {}
@@ -192,7 +199,8 @@ class DataUpdater():
         dtank = None
         try:
             db_file = get_db_file(db_path)
-            if os.path.exists(db_file): os.remove(db_file)
+            if os.path.exists(db_file) and not isinstance(self.UPDATER , DataTank):
+                os.remove(db_file)
             dtank = DataTank(db_file , 'r+')
             for path , param in update_params.items():
                 __start_time__ = time.time()
@@ -231,7 +239,7 @@ class DataUpdater():
 
                     valid_day = 0
                     for date in dates_group:
-                        data = param['__data_func__'](date , group = group , **func_kwargs)                      
+                        data = param['__data_func__'](date , **func_kwargs)                      
                         self.update_data(data , dtank , inner_path_join(path , date) , **func_kwargs)
                         if not isinstance(data , unfetched_data): 
                             valid_day += 1
@@ -299,7 +307,10 @@ def get_target_dates(db_path , inner_path):
         with DataTank(outer_path_join(db_path , db_basename) , 'r') as dtank:
             portal = dtank.get_object(inner_path)
             if portal is not None: old_keys.append(list(portal.keys()))
-    target_dates = np.unique(np.concatenate(old_keys)).astype(int)
+    if len(old_keys) == 0:
+        target_dates = np.array([])
+    else:
+        target_dates = np.unique(np.concatenate(old_keys)).astype(int)
     return target_dates
 
 def get_source_dates(date_source):
@@ -341,7 +352,8 @@ def dump_updater(updater , print_tree = print_tree , key_order = []):
         os.makedirs(os.path.dirname(true_path),exist_ok=True)
         key  = os.path.basename(true_path).split('.')[0].replace('DB_','')
 
-        if copy_mode and (key in l_update_by_key) and os.path.exists(true_path): os.remove(true_path)
+        if copy_mode and (key in l_update_by_key) and os.path.exists(true_path): 
+            os.remove(true_path)
         try:
             dtank = DataTank(true_path ,  'r+' if copy_mode else 'r')
             if copy_mode: 

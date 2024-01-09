@@ -42,7 +42,7 @@ TRAIN_PARAM:
   dataloader:
     random_seed:     null
     random_tv_split: True
-    sample_method:   total_shuffle # sequential , both_shuffle , train_shuffle
+    sample_method:   train_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
     train_ratio:     0.8
   trainer:
     optimizer: {'name' : 'Adam' , 'param' : {} ,}  #{'name' : 'SGD' , 'param' : {} ,}

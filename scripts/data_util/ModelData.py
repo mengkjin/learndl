@@ -9,6 +9,10 @@ from ..function.date import *
 from ..util.environ import get_config , cuda , DIR_data
 from ..util.basic import versatile_storage , timer
 from torch.utils.data.dataset import IterableDataset , Dataset
+from numpy import savez_compressed as save_npz
+from numpy import load as load_npz
+from torch import save as save_pt
+from torch import load as load_pt
 
 DIR_block      = f'{DIR_data}/block_data'
 DIR_hist_norm  = f'{DIR_data}/hist_norm'
@@ -607,32 +611,23 @@ class DataBlock():
 def _save_dict_data(data , file_path):
     if file_path is None: return NotImplemented
     os.makedirs(os.path.dirname(file_path) , exist_ok=True)
-    if file_path.endswith('.npz'):
-        np.savez_compressed(file_path , **data)
-    elif file_path.endswith('.pt'):
-        torch.save(data , file_path , pickle_protocol = 4)
+    if file_path.endswith(('.npz' , '.np')):
+        save_npz(file_path , **data)
+    elif file_path.endswith(('.pt' , '.pth')):
+        save_pt(data , file_path , pickle_protocol = 4)
     else:
         raise Exception(file_path)
     
 def _load_dict_data(file_path , keys = None):
-    if file_path.endswith('.npz'):
-        file = np.load(file_path)
-    elif file_path.endswith('.pt'):
-        file = torch.load(file_path)
+    if file_path.endswith(('.npz' , '.np')):
+        file = load_npz(file_path)
+    elif file_path.endswith(('.pt' , '.pth')):
+        file = load_pt(file_path)
     else:
         raise Exception(file_path)
-    if keys is None: 
-        keys = file.keys()
-    else:
-        keys = np.intersect1d(keys , list(file.keys()))
-    return {k:file[k] for k in keys}
-
-def _alias_path(file_path , _alias = lambda x:[x , f'trade_{x}' , x.replace('trade_','')]):
-    dirname , basename = os.path.dirname(file_path) , os.path.basename(file_path)
-    for _basename in _alias(basename):
-        if os.path.exists(f'{dirname}/{_basename}'): 
-            return f'{dirname}/{_basename}'
-    raise Exception(f'No file of key {basename} in {dirname}')
+    keys = file.keys() if keys is None else np.intersect1d(keys , list(file.keys()))
+    data = {k:file[k] for k in keys}
+    return data
 
 def load_blocks(file_paths , 
                 fillna = 'guess' , 
@@ -888,6 +883,5 @@ def _alias_search(path , key):
         if os.path.exists(path.format(alias)): 
             return path.format(alias)
     raise path.format(key)
-    
     
 
