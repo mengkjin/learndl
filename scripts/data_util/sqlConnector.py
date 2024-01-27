@@ -6,6 +6,7 @@ import traceback
 import pandas as pd
 import numpy as np
 import os , time
+import platform
 try:
     from .DataTank import *
     from .DataUpdater import *
@@ -17,7 +18,7 @@ except:
 connect_dict = {
     'haitong':{
         'dialect'  : 'mssql+pyodbc' ,
-        'driver'   : 'FreeTDS' ,
+        'driver'   : 'FreeTDS' if platform.system() == 'Linux' else 'SQL Server',
         'username' : 'JSJJDataReader' ,
         'password' : 'JSJJDataReader' ,
         'host'     : 'rm-uf6777pp2098v0um6hm.sqlserver.rds.aliyuncs.com' ,
@@ -232,10 +233,10 @@ class online_sql_connector():
             return type(x)([self._IDconvert(xx) for xx in x])
 
     def download_since(self , db_path , src , query_type , trace = 1 , ask = True):
-        start_dt = self.data_start_dt[src][query_type]
+        start_dt = int(self.data_start_dt[src][query_type])
         old_dates = sorted(np.array(self.old_dtank_dates(db_path , src , query_type)).astype(int))
         if trace > 0: old_dates = old_dates[:-trace]
-        if len(old_dates): start_dt = max(start_dt , self.numdate_offset(old_dates[-1],1))
+        if len(old_dates): start_dt = max(start_dt , self.date_offset(old_dates[-1],1,astype=int))
         end_dt = min(99991231 , int(date.today().strftime('%Y%m%d')))
         if end_dt < start_dt: return
         
@@ -331,7 +332,7 @@ class online_sql_connector():
         print('\n')
         return group_file_list
     
-    def date_offset(self, date , offset = 0 , astype = str):
+    def date_offset(self, date , offset = 0 , astype = int):
         if isinstance(date , (np.ndarray,pd.Index,pd.Series,list,tuple,np.ndarray)):
             is_scalar = False
             new_date = pd.DatetimeIndex(np.array(date).astype(str))
@@ -345,7 +346,7 @@ class online_sql_connector():
         new_date = new_date.astype(astype)
         return new_date[0] if is_scalar else new_date.values
 
-    def date_seg(self, start_dt , end_dt , freq='Q' , astype = str):
+    def date_seg(self, start_dt , end_dt , freq='Q' , astype = int):
         dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
         dt_starts = [self.date_offset(start_dt) , *self.date_offset(dt_list[:-1],1)]
         dt_ends = [*dt_list[:-1] , self.date_offset(end_dt)]

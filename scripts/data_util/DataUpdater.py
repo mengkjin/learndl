@@ -239,7 +239,7 @@ class DataUpdater():
 
                     valid_day = 0
                     for date in dates_group:
-                        data = param['__data_func__'](date , **func_kwargs)                      
+                        data = param['__data_func__'](date , **func_kwargs)         
                         self.update_data(data , dtank , inner_path_join(path , date) , **func_kwargs)
                         if not isinstance(data , unfetched_data): 
                             valid_day += 1

@@ -25,179 +25,25 @@ import itertools , random , os, shutil , gc , time , h5py , yaml
 from tqdm import tqdm
 from copy import deepcopy
 from torch.optim.swa_utils import AveragedModel , update_bn
-from .scripts.util.environ import get_logger , get_config , cuda , DEVICE
-from .scripts.util.basic import FilteredIterator , lr_cosine_scheduler , versatile_storage
-from .scripts.util.multiloss import multiloss_calculator 
-from .scripts.data_util.ModelData import ModelData
-from .scripts.function.basic import *
-from .scripts.function.algos import sinkhorn
-from .scripts.nn.My import *
+from scripts.util.environ import get_logger
+from scripts.util.basic import process_timer , FilteredIterator , lr_cosine_scheduler , versatile_storage
+from scripts.util.multiloss import multiloss_calculator 
+from scripts.data_util.ModelData import ModelData
+from scripts.trainer.config import *
+from scripts.function.basic import *
+from scripts.nn.My import *
 # from audtorch.metrics.functional import *
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-TIME_RECODER = False #False # dict()
+try:
+    parser = trainer_parser().parse_args()
+except:
+    parser = trainer_parser().parse_args(args=[])
+
+TIME_RECODER = process_timer(True)
 logger = get_logger()
-CONFIG = get_config()
-
-torch.set_default_dtype(getattr(torch , CONFIG['PRECISION']))
-torch.backends.cuda.matmul.allow_tf32 = CONFIG['ALLOW_TF32']
-torch.autograd.set_detect_anomaly(CONFIG['DETECT_ANOMALY'])
-
-storage_model  = versatile_storage(CONFIG['STORAGE_TYPE'])
-
-class ShareNames_conctroller():
-    """
-    1. Assign variables into shared namespace.
-    2. Ask what process would anyone want to run : 0 : train & test(default) , 1 : train only , 2 : test only , 3 : copy to instance only
-    3. Ask if model_name and model_base_path should be changed if old dir exists
-    """
-    def __init__(self):
-        self.assign_variables(if_process = True , if_rawname = True)
-        
-    def assign_variables(self , if_process = False , if_rawname = False):
-        ShareNames.max_epoch       = CONFIG['MAX_EPOCH']
-        ShareNames.batch_size      = CONFIG['BATCH_SIZE']
-        ShareNames.precision       = CONFIG['PRECISION']
-        ShareNames.allow_tf32      = CONFIG['ALLOW_TF32']
-        
-        ShareNames.model_module    = CONFIG['MODEL_MODULE']
-        ShareNames.model_data_type = CONFIG['MODEL_DATATYPE'][ShareNames.model_module]
-        ShareNames.model_nickname  = CONFIG['MODEL_NICKNAME']
-        
-        ShareNames.model_num_list  = list(range(CONFIG['MODEL_NUM']))
-        ShareNames.data_type_list  = ShareNames.model_data_type.split('+')
-        
-        ShareNames.model_name      = self._model_name()
-        ShareNames.model_base_path = f'./model/{ShareNames.model_name}'
-        ShareNames.instance_path   = f'./instance/{ShareNames.model_name}'
-        
-        if if_process  : self._process_confirmation()
-        if if_rawname  : self._rawname_confirmation()
-        
-        ShareNames.train_params = deepcopy(CONFIG['TRAIN_PARAM'])
-        ShareNames.compt_params = deepcopy(CONFIG['COMPT_PARAM'])
-        ShareNames.raw_model_params = deepcopy(CONFIG['MODEL_PARAM'])
-        ShareNames.model_params = self._load_model_param()
-        ShareNames.output_types = ShareNames.train_params['output_types']
-        ShareNames.TRA_model = (CONFIG['TRA_switch'] == True) and CONFIG['MODEL_MODULE'].startswith('TRA')
-        ShareNames.weight_train = CONFIG['WEIGHT_TRAIN']
-        ShareNames.weight_test  = CONFIG['WEIGHT_TEST']
-
-    def _model_name(self):
-        name_element = [
-            ShareNames.model_module ,
-            ShareNames.model_data_type , 
-            ShareNames.model_nickname
-        ]
-        return '_'.join([x for x in name_element if x is not None])
-                          
-    def _load_model_param(self):
-        """
-        Load and return model_params of each model_num , or save one for later use
-        """
-        try:
-            model_params = torch.load(f'{ShareNames.model_base_path}/model_params.pt')
-        except:
-            model_params = []
-            for mm in ShareNames.model_num_list:
-                dict_mm = {'path':f'{ShareNames.model_base_path}/{mm}'}
-                dict_mm.update({k:(v[mm % len(v)] if isinstance(v,list) else v) for k,v in ShareNames.raw_model_params.items()})
-                model_params.append(dict_mm)
-        return model_params
-        
-    def _process_confirmation(self):
-        if ShareNames.process < 0:
-            logger.critical(f'What process would you want to run? 0: all (default), 1: train only, 2: test only , 3: copy to instance')
-            promt_text = f'[0,all] , [1,train] , [2,test] , [3,instance]: '
-            _text , _cond = ask_for_confirmation(promt_text , proceed_condition = lambda x:False)
-            key = _text[0]
-        else:
-            key = str(ShareNames.process)
-
-        if key in ['' , '0' , 'all']:
-            ShareNames.process_queue = ['data' , 'train' , 'test' , 'instance']
-        elif key in ['1' , 'train']:
-            ShareNames.process_queue = ['data' , 'train']
-        elif key in ['2' , 'test']:
-            ShareNames.process_queue = ['data' , 'test' , 'instance']
-        elif key in ['3' , 'instance']:
-            ShareNames.process_queue = ['data' , 'instance']
-        else:
-            raise Exception(f'Error input : {key}')
-        logger.critical('Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]),ShareNames.process_queue))))
-                
-    def _rawname_confirmation(self , recurrent = 1):
-        """
-        Confirm the model_name and model_base_path if multifple model_name dirs exists.
-        If include train: check if dir of model_name exists, if so ask to remove the old ones or continue with a sequential one
-        If test only :    check if model_name exists multiple dirs, if so ask to use the raw one or the last one(default)
-        Also ask if resume training, since unexpected end of training may happen
-        """
-        if_rawname = None if (ShareNames.rawname < 0) else (ShareNames.rawname > 0)
-        if_resume  = None if (ShareNames.resume < 0)  else (ShareNames.resume > 0)
-        
-        if 'train' in ShareNames.process_queue:
-            if os.path.exists(ShareNames.model_base_path) == False:
-                if_rawname = True
-                if_resume = False
-              
-            if if_resume is None:
-                logger.critical(f'[{ShareNames.model_base_path}] exists, input [yes] to resume training, or start a new one!')
-                promt_text = f'Confirm resume training [{ShareNames.model_name}]? [yes/no] : '
-                _text , _cond = ask_for_confirmation(promt_text ,  recurrent = recurrent)
-                if_resume = all([_t.lower() in ['' , 'yes' , 'y'] for _t in _text])
-            
-            if if_resume:
-                logger.critical(f'Resume training {ShareNames.model_name}!') 
-                file_appendix = sorted([int(x.split('.')[-1]) for x in os.listdir(f'./model') if x.startswith(ShareNames.model_name + '.')])
-                if if_rawname is None and len(file_appendix) > 0:
-                    logger.critical(f'Multiple model path of {ShareNames.model_name} exists, input [yes] to confirm using the raw one, or [no] the latest!')
-                    promt_text = f'Use the raw one? [yes/no] : '
-                    _text , _cond = ask_for_confirmation(promt_text ,  recurrent = recurrent)
-                    if_rawname = all([_t.lower() in ['' , 'yes' , 'y'] for _t in _text])
-                    
-                if if_rawname or len(file_appendix) == 0:
-                    logger.critical(f'model_name is still {ShareNames.model_name}!') 
-                else:
-                    ShareNames.model_name = f'{ShareNames.model_name}.{file_appendix[-1]}'
-                    ShareNames.model_base_path = f'./model/{ShareNames.model_name}'
-                    logger.critical(f'model_name is now {ShareNames.model_name}!')
-            else:
-                if if_rawname is None:
-                    logger.critical(f'[{ShareNames.model_base_path}] exists, input [yes] to confirm deletion, or a new directory will be made!')
-                    promt_text = f'Confirm Deletion of all old directories with model name [{ShareNames.model_name}]? [yes/no] : '
-                    _text , _cond = ask_for_confirmation(promt_text ,  recurrent = recurrent)
-                    if_rawname = all([_t.lower() in ['' , 'yes' , 'y'] for _t in _text])
-
-                if if_rawname:
-                    rmdir([f'./model/{d}' for d in os.listdir(f'./model') if d.startswith(ShareNames.model_name)])
-                    logger.critical(f'Directories of [{ShareNames.model_name}] deletion Confirmed!')
-                else:
-                    ShareNames.model_name += '.'+str(max([1]+[int(d.split('.')[-1])+1 for d in os.listdir(f'./model') if d.startswith(ShareNames.model_name+'.')]))
-                    ShareNames.model_base_path = f'./model/{ShareNames.model_name}'
-                    logger.critical(f'A new directory [{ShareNames.model_name}] will be made!')
-
-                os.makedirs(ShareNames.model_base_path, exist_ok = True)
-                [os.makedirs(f'{ShareNames.model_base_path}/{mm}' , exist_ok = True) for mm in ShareNames.model_num_list]
-                for copy_filename in ['configs/config_train.yaml']:
-                    shutil.copyfile(f'./{copy_filename}', f'{ShareNames.model_base_path}/{os.path.basename(copy_filename)}')
-                    
-        elif 'test' in ShareNames.process_queue:
-            file_appendix = sorted([int(x.split('.')[-1]) for x in os.listdir(f'./model') if x.startswith(ShareNames.model_name + '.')])
-            if if_rawname is None and len(file_appendix) > 0:
-                logger.critical(f'Multiple model path of {ShareNames.model_name} exists, input [yes] to confirm using the raw one, or [no] the latest!')
-                promt_text = f'Use the raw one? [yes/no] : '
-                _text , _cond = ask_for_confirmation(promt_text ,  recurrent = recurrent)
-                if_rawname = all([_t.lower() in ['' , 'yes' , 'y'] for _t in _text])
-
-            if if_rawname or len(file_appendix) == 0:
-                logger.critical(f'model_name is still {ShareNames.model_name}!') 
-            else:
-                ShareNames.model_name = f'{ShareNames.model_name}.{file_appendix[-1]}'
-                ShareNames.model_base_path = f'./model/{ShareNames.model_name}'
-                logger.critical(f'model_name is now {ShareNames.model_name}!')
-                
-        ShareNames.resume_training = if_resume
+config = train_config(parser = parser , do_process=True)
+set_trainer_configs(config)
                 
 class model_controller():
     """
@@ -214,11 +60,10 @@ class model_controller():
         self.model_info['global_start_time'] = time.ctime()
         self.init_time = time.time()
         self.display = {
-            'tqdm' : True if CONFIG['VERBOSITY'] >= 10 else False ,
-            'once' : True if CONFIG['VERBOSITY'] <=  2 else False ,
-            'step' : [10,5,5,3,3,1][min(CONFIG['VERBOSITY'] // 2 , 5)],
+            'tqdm' : True if config.verbosity >= 10 else False ,
+            'once' : True if config.verbosity <=  2 else False ,
+            'step' : [10,5,5,3,3,1][min(config.verbosity // 2 , 5)],
         }
-        self.shared_ctrl = ShareNames_conctroller()
         
     def main_process(self):
         """
@@ -255,7 +100,7 @@ class model_controller():
         """
         self.data_time = time.time()
         logger.critical(f'Start Process [Load Data]!')
-        self.data = ModelData(ShareNames.model_data_type , CONFIG)
+        self.data = ModelData(ShareNames.model_data_type , config)
         # retrieve data
         ShareNames.data_type_list  = self.data.data_type_list
         ShareNames.model_date_list = self.data.model_date_list
@@ -355,7 +200,7 @@ class model_controller():
     
     def ModelPreparation(self , process , last_n = 30 , best_n = 5):
         assert process in ['train' , 'test' , 'instance']
-        with process_timer('ModelPreparation' , process):
+        with TIME_RECODER('ModelPreparation' , process):
             param = ShareNames.model_params[self.model_num]
 
             # In a new model , alters the penalty function's lamb
@@ -400,7 +245,7 @@ class model_controller():
         """
         Reset model specific variables
         """
-        with process_timer('TrainModelStart'):
+        with TIME_RECODER('TrainModelStart'):
             self._init_variables('model')
             self.nanloss_life = ShareNames.train_params['trainer']['nanloss']['retry']
             self.text['model'] = '{:s} #{:d} @{:4d}'.format(ShareNames.model_name , self.model_num , self.model_date)
@@ -413,7 +258,7 @@ class model_controller():
         """
         Do necessary things of ending a model(model_data , model_num)
         """
-        with process_timer('TrainModelEnd'):
+        with TIME_RECODER('TrainModelEnd'):
             storage_model.del_path(self.path.get('rounds') , self.path.get('lastn') , self.path.get('bestn'))
             if ShareNames.process_name == 'train' : self.model_count += 1
             self.time[2] = time.time()
@@ -423,7 +268,7 @@ class model_controller():
         """
         Reset and loop variables giving loop_status
         """
-        with process_timer('NewLoop'):
+        with TIME_RECODER('NewLoop'):
             self._init_variables(self.cond.get('loop_status'))
             self.epoch_i += 1
             self.epoch_all += 1
@@ -443,7 +288,7 @@ class model_controller():
         optimizer : Adam or SGD
         scheduler : Cosine or StepLR
         """
-        with process_timer('TrainerInit'):
+        with TIME_RECODER('TrainerInit'):
             if self.cond.get('loop_status') == 'epoch': return
             self.load_model('train')
             self.max_round = self.net.max_round() if 'max_round' in self.net.__dir__() else 1
@@ -456,7 +301,7 @@ class model_controller():
         Iterate train and valid dataset, calculate loss/score , update values
         If nan loss occurs, turn to _deal_nanloss
         """
-        with process_timer('TrainEpoch/assign_loader'):
+        with TIME_RECODER('TrainEpoch/assign_loader'):
             loss_train , loss_valid , ic_train , ic_valid = [] , [] , [] , []
             clip_value = ShareNames.train_params['trainer']['gradient'].get('clip_value')
             
@@ -468,20 +313,20 @@ class model_controller():
                 iter_train , iter_valid = self.data.dataloaders['train'] , self.data.dataloaders['valid']
                 disp_train = disp_valid = lambda x:0
 
-        with process_timer('TrainEpoch/train_epochs'):
+        with TIME_RECODER('TrainEpoch/train_epochs'):
             self.net.train()
             for _ , batch_data in enumerate(iter_train):
                 x = self.modifier['inputs'](batch_data['x'] , batch_data , self.data)
                 self.optimizer.zero_grad()
-                with process_timer('TrainEpoch/train/forward'):
+                with TIME_RECODER('TrainEpoch/train/forward'):
                     pred , hidden = self.net(x)
-                with process_timer('TrainEpoch/train/loss'):
+                with TIME_RECODER('TrainEpoch/train/loss'):
                     penalty_kwargs = {'net' : self.net , 'hidden' : hidden , 'label' : batch_data['y']}
                     metric = self.metric_calculator(batch_data['y'] , pred , 'train' , weight = batch_data['w'] , **penalty_kwargs)
                     metric = self.modifier['metric'](metric, batch_data, self.data)
-                with process_timer('TrainEpoch/train/backward'):
+                with TIME_RECODER('TrainEpoch/train/backward'):
                     metric['loss'].backward()
-                with process_timer('TrainEpoch/train/step'):
+                with TIME_RECODER('TrainEpoch/train/step'):
                     if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value)
                     self.optimizer.step()
                 self.modifier['update'](None , batch_data , self.data)
@@ -491,14 +336,14 @@ class model_controller():
             if np.isnan(sum(loss_train)): return self._deal_nanloss()
             self.loss_list['train'].append(np.mean(loss_train)) , self.ic_list['train'].append(np.mean(ic_train))
         
-        with process_timer('TrainEpoch/valid_epochs'):
+        with TIME_RECODER('TrainEpoch/valid_epochs'):
             self.net.eval()     
             for _ , batch_data in enumerate(iter_valid):
                 x = self.modifier['inputs'](batch_data['x'] , batch_data , self.data)
                 # print(torch.cuda.memory_allocated(DEVICE) / 1024**3 , torch.cuda.memory_reserved(DEVICE) / 1024**3)
-                with process_timer('TrainEpoch/valid/forward'):
+                with TIME_RECODER('TrainEpoch/valid/forward'):
                     pred , _ = self.net(x)
-                with process_timer('TrainEpoch/valid/loss'):
+                with TIME_RECODER('TrainEpoch/valid/loss'):
                     metric = self.metric_calculator(batch_data['y'] , pred , 'valid' , weight = batch_data['w'])
                     metric = self.modifier['metric'](metric, batch_data, self.data)
                 self.modifier['update'](None , batch_data , self.data)
@@ -514,7 +359,7 @@ class model_controller():
         """
         Update condition of continuing training epochs , restart attempt if early exit , proceed to next round if convergence , reset round if nan loss
         """
-        with process_timer('LoopCondition/assess'):
+        with TIME_RECODER('LoopCondition/assess'):
             if self.cond['nan_loss']:
                 logger.error(f'Initialize a new model to retrain! Lives remaining {self.nanloss_life}')
                 self._init_variables('model')
@@ -552,7 +397,7 @@ class model_controller():
             storage_model.save_model_state(self.net , save_targets)
             self.printer('epoch_step')
         
-        with process_timer('LoopCondition/confirm_status'):
+        with TIME_RECODER('LoopCondition/confirm_status'):
             self.cond['terminate'] = {k:self._terminate_cond(k,v) for k , v in ShareNames.train_params['terminate'].get('overall' if self.max_round <= 1 else 'round').items()}
             if any(self.cond.get('terminate').values()):
                 self.text['exit'] = {
@@ -668,16 +513,10 @@ class model_controller():
     def ResultOutput(self):
         out_dict = {
             '0_start':self.model_info.get('global_start_time'),
-            '1_basic':'+'.join([
-                'short' if CONFIG['SHORTTEST'] else 'long' ,
-                CONFIG['STORAGE_TYPE'] , CONFIG['PRECISION']
-            ]),
-            '2_model':''.join([
-                ShareNames.model_module , '_' , ShareNames.model_data_type ,
-                '(x' , str(CONFIG['MODEL_NUM']) , ')'
-            ]),
-            '3_time':'-'.join([str(CONFIG['BEG_DATE']),str(CONFIG['END_DATE'])]),
-            '4_typeNN':'+'.join(list(set(CONFIG['MODEL_PARAM']['type_rnn']))),
+            '1_basic':'+'.join(['short' if config.shorttest else 'long' , config.storage_type , config.precision]),
+            '2_model':''.join([config.model_module , '_' , config.model_data_type , '(x' , str(config.model_num) , ')']),
+            '3_time':'-'.join([str(config.beg_date),str(config.end_date)]),
+            '4_typeNN':'+'.join(list(set(config.MODEL_PARAM['type_rnn']))),
             '5_train':self.model_info.get('train_process'),
             '6_test':self.model_info.get('test_process'),
             '7_result':self.model_info.get('test_ic_sum'),
@@ -751,6 +590,7 @@ class model_controller():
         self.shared_ctrl.assign_variables()
         for mm in range(len(ShareNames.model_params)): 
             ShareNames.model_params[mm].update({'path':f'{ShareNames.instance_path}/{mm}'})
+        config = new_config(model_path=f'./instantance/{config.instance_path}')
     
     def printer(self , key):
         """
@@ -760,10 +600,10 @@ class model_controller():
         if key == 'model_specifics':
             logger.warning('Model Parameters:')
             logger.info(f'Basic Parameters : ')
-            print(f'STORAGE [{CONFIG["STORAGE_TYPE"]}] | DEVICE [{DEVICE}] | PRECISION [{ShareNames.precision}] | BATCH_SIZE [{ShareNames.batch_size}].') 
-            print(f'NAME [{ShareNames.model_name}] | MODULE [{ShareNames.model_module}] | DATATYPE [{ShareNames.model_data_type}] | MODEL_NUM [{len(ShareNames.model_num_list)}].')
-            print(f'BEG_DATE [{CONFIG["BEG_DATE"]}] | END_DATE [{ShareNames.test_full_dates[-1]}] | ' +
-                  f'INTERVAL [{CONFIG["INTERVAL"]}] | INPUT_STEP_DAY [{CONFIG["INPUT_STEP_DAY"]}] | TEST_STEP_DAY [{CONFIG["TEST_STEP_DAY"]}].') 
+            print(f'STORAGE [{config.storage_type}] | DEVICE [{DEVICE}] | PRECISION [{config.precision}] | BATCH_SIZE [{config.batch_size}].') 
+            print(f'NAME [{config.model_name}] | MODULE [{config.model_module}] | DATATYPE [{config.model_data_type}] | MODEL_NUM [{len(config.model_num_list)}].')
+            print(f'BEG_DATE [{config.beg_date}] | END_DATE [{config.test_full_dates[-1]}] | ' +
+                  f'INTERVAL [{config.interval}] | INPUT_STEP_DAY [{config.input_step_day}] | TEST_STEP_DAY [{config.test_step_day}].') 
             logger.info(f'MODEL_PARAM : ')
             pretty_print_dict(ShareNames.raw_model_params)
             logger.info(f'TRAIN_PARAM : ')
@@ -887,7 +727,7 @@ class model_controller():
     
     def save_model(self , key = 'best'):
         assert isinstance(key , (list,tuple,str))
-        with process_timer('save_model'):
+        with TIME_RECODER('save_model'):
             if isinstance(key , (list,tuple)):
                 [self.save_model(k) for k in key]
             else:
@@ -911,7 +751,7 @@ class model_controller():
     
     def load_model(self , process , key = 'best'):
         assert process in ['train' , 'test']
-        with process_timer('load_model'):
+        with TIME_RECODER('load_model'):
             net = globals()[f'My{ShareNames.model_module}'](**self.Param)
             if process == 'train':           
                 if self.round_i > 0:
@@ -933,7 +773,6 @@ class model_controller():
             if 'modifier_inputs' in self.net.__dir__(): self.modifier['inputs'] = lambda x,b,d:self.net.modifier_inputs(x,b,d)
             if 'modifier_metric' in self.net.__dir__(): self.modifier['metric'] = lambda x,b,d:self.net.modifier_metric(x,b,d)
             if 'modifier_update' in self.net.__dir__(): self.modifier['update'] = lambda x,b,d:self.net.modifier_update(x,b,d)
-
     
     def swa_model(self , model_path_list = []):
         net = globals()[f'My{ShareNames.model_module}'](**self.Param)
@@ -1022,82 +861,6 @@ class model_controller():
             multiloss = multiloss_calculator(multi_type = ShareNames.train_params['multitask']['type'])
             multiloss.reset_multi_type(self.Param['num_output'] , **ShareNames.train_params['multitask']['param_dict'][multiloss.multi_type])
         return multiloss
-    
-class process_timer:
-    def __init__(self , *args):
-        if isinstance(TIME_RECODER , dict):
-            self.key = '/'.join(args)
-            if self.key not in TIME_RECODER.keys():
-                TIME_RECODER[self.key] = []
-    def __enter__(self):
-        if isinstance(TIME_RECODER , dict):
-            self.start_time = time.time()
-    def __exit__(self, type, value, trace):
-        if isinstance(TIME_RECODER , dict):
-            time_cost = time.time() - self.start_time
-            TIME_RECODER[self.key].append(time_cost)
-
-def loss_function(key):
-    """
-    loss function , pearson/ccc should * -1.
-    """
-    assert key in ('mse' , 'pearson' , 'ccc')
-    def decorator(func , key):
-        def wrapper(*args, **kwargs):
-            v = func(*args, **kwargs)
-            if key != 'mse':  
-                v = torch.exp(-v)
-            return v
-        return wrapper
-    func = globals()[key]
-    return decorator(func , key)
-
-def score_function(key):
-    assert key in ('mse' , 'pearson' , 'ccc' , 'spearman')
-    def decorator(func , key , item_only = False):
-        def wrapper(*args, **kwargs):
-            with torch.no_grad():
-                v = func(*args, **kwargs)
-            if key == 'mse' : v = -v
-            return v
-        return wrapper
-    func = globals()[key]
-    return decorator(globals()[key] , key)
-    
-def penalty_function(key , param):
-    def _none(**kwargs):
-        return 0.
-    def _hidden_orthogonality(**kwargs):
-        hidden = kwargs['hidden']
-        if hidden.shape[-1] == 1:
-            return 0
-        if isinstance(hidden,(tuple,list)):
-            hidden = torch.cat(hidden,dim=-1)
-        return hidden.T.corrcoef().triu(1).nan_to_num().square().sum()
-    def _tra_ot_penalty(**kwargs):
-        net = kwargs['net']
-        if net.training and net.probs is not None and net.num_states > 1:
-            pred , label = kwargs['hidden'] , kwargs['label']
-            square_error = (pred - label).square()
-            square_error -= square_error.min(dim=-1, keepdim=True).values  # normalize & ensure positive input
-            P = sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
-            lamb = (param['rho'] ** net.global_steps)
-            reg = net.probs.log().mul(P).sum(dim=-1).mean()
-            net.global_steps += 1
-            return - lamb * reg
-        else:
-            return 0
-        
-    return {'lamb': param['lamb'] , 'cond' : True , 'func' : locals()[f'_{key}']}
-
-def print_time_recorder():
-    if isinstance(TIME_RECODER , dict):
-        keys = list(TIME_RECODER.keys())
-        num_calls = [len(TIME_RECODER[k]) for k in keys]
-        total_time = [np.sum(TIME_RECODER[k]) for k in keys]
-        tb = pd.DataFrame({'keys':keys , 'num_calls': num_calls, 'total_time': total_time})
-        tb['avg_time'] = tb['total_time'] / tb['num_calls']
-        print(tb.sort_values(by=['total_time'],ascending=False))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='manual to this script')
@@ -1110,4 +873,4 @@ if __name__ == '__main__':
     Controller = model_controller()
     Controller.main_process()
     Controller.ResultOutput()
-    print_time_recorder()
+    TIME_RECODER.print()

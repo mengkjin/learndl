@@ -261,6 +261,7 @@ def total_memory(unit = 1e9):
     return psutil.Process(os.getpid()).memory_info().rss / unit
 
 def match_values(arr , values , ambiguous = 0):
+    if not isinstance(values , np.ndarray): values = np.array(values)
     sorter = np.argsort(arr)
     index = np.tile(len(arr) , values.shape)
     if ambiguous == 0:

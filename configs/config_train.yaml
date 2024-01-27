@@ -85,7 +85,6 @@ TRAIN_PARAM:
       early_stop: 10
       max_epoch: 100
       valid_converge: {'min_epoch' : 5 , 'eps' : 1.0e-5} 
-
 SPECIAL_CONFIG:
   SHORTTEST:
     BEG_DATE:   20221206

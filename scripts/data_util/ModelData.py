@@ -6,8 +6,9 @@ from .DataTank import DataTank
 from .DataUpdater import get_db_path , get_db_file
 from ..function.basic import *
 from ..function.date import *
-from ..util.environ import get_config , cuda , DIR_data
+from ..util.environ import DIR_data
 from ..util.basic import versatile_storage , timer
+from ..trainer.config import *
 from torch.utils.data.dataset import IterableDataset , Dataset
 from numpy import savez_compressed as save_npz
 from numpy import load as load_npz
@@ -76,23 +77,22 @@ class ModelData():
     3. Dataloader : yield x , y of training samples , create new ones if necessary
     """
     def __init__(self , model_data_type , config = None):
-        self.CONFIG = get_config()
-        if config is not None: self.CONFIG.update(config)
-        storage_loader.activate(self.CONFIG['STORAGE_TYPE'])
+        self.config = train_config() if config is None else config
+        storage_loader.activate(self.config.storage_type)
         self.data_type_list = _type_list(model_data_type)
-        self.x_data , self.y_data , self.norms , self.index = load_model_data(self.data_type_list , self.CONFIG['LABELS'] , self.CONFIG['PRECISION'])
+        self.x_data , self.y_data , self.norms , self.index = load_model_data(self.data_type_list , self.config.labels , self.config.precision)
         self.date , self.secid = self.index
 
-        num_out = self.CONFIG['MODEL_PARAM']['num_output']
+        num_out = self.config.MODEL_PARAM['num_output']
         self.labels_n = min(self.y_data.shape[-1] , max(num_out) if isinstance(num_out,(list,tuple)) else num_out)
         self.feat_dims = {mdt:v.shape[-1] for mdt,v in self.x_data.items()}
 
-        _beg , _end , _int = self.CONFIG['BEG_DATE'] , self.CONFIG['END_DATE'] , self.CONFIG['INTERVAL']
+        _beg , _end , _int = self.config.beg_date , self.config.end_date , self.config.interval
         self.model_date_list = self.index[1][(self.index[1] >= _beg) & (self.index[1] <= _end)][::_int]
         self.test_full_dates = self.index[1][(self.index[1] >  _beg) & (self.index[1] <= _end)]
         
-        self.input_step = self.CONFIG['INPUT_STEP_DAY']
-        self.test_step  = self.CONFIG['TEST_STEP_DAY']
+        self.input_step = self.config.input_step_day
+        self.test_step  = self.config.test_step_day
         self.reset_dataloaders()
 
         self.buffer = {}
@@ -127,8 +127,8 @@ class ModelData():
 
         if self.dataloader_style == 'train':
             model_date_col = (self.index[1] < model_date).sum()    
-            d0 = max(0 , model_date_col - self.CONFIG['SKIP_HORIZON'] - self.CONFIG['INPUT_SPAN'] - self.seq0)
-            d1 = max(0 , model_date_col - self.CONFIG['SKIP_HORIZON'])
+            d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.input_span - self.seq0)
+            d1 = max(0 , model_date_col - self.config.skip_horizon)
             self.day_len  = d1 - d0
             self.step_len = (self.day_len - self.seqx) // self.input_step
             # ValueError: At least one stride in the given numpy array is negative, and tensors with negative strides are not currently supported.
@@ -137,7 +137,7 @@ class ModelData():
             self.date_idx = d0 + self.step_idx
         else:
             if model_date == self.model_date_list[-1]:
-                next_model_date = self.CONFIG['END_DATE'] + 1
+                next_model_date = self.config.end_date + 1
             else:
                 next_model_date = self.model_date_list[self.model_date_list > model_date][0]
             test_step  = (1 if self.process_name == 'instance' else self.test_step)
@@ -175,9 +175,9 @@ class ModelData():
         gc.collect() , torch.cuda.empty_cache()
         
     def buffer_functions(self):
-        self.buffer_type  = self.CONFIG['buffer_type']
-        self.buffer_param = self.CONFIG['buffer_param']
-        if self.CONFIG['TRA_switch'] and self.buffer_type == 'tra':
+        self.buffer_type  = self.config.buffer_type
+        self.buffer_param = self.config.buffer_param
+        if self.config.tra_switch and self.buffer_type == 'tra':
             self.buffer_type == None
         self.buffer_init = buffer_init(self.buffer_type , **self.buffer_param) 
         self.buffer_proc = buffer_proc(self.buffer_type , **self.buffer_param)
@@ -185,13 +185,13 @@ class ModelData():
     def cal_nonnan_sample(self , x , y , **kwargs):
         """
         return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
-        x : rolling window non-nan , end non-zero if in self.CONFIG['DATATYPE']['trade']
+        x : rolling window non-nan , end non-zero if in k is 'day'
         y : exact point non-nan 
         others : rolling window non-nan , default as self.seqy
         """
         valid_sample = self._nonnan_sample_sub(y)
         for k , v in x.items():
-            valid_sample *= self._nonnan_sample_sub(v , self.seqs[k] , k in self.CONFIG['DATATYPE']['trade'])
+            valid_sample *= self._nonnan_sample_sub(v , self.seqs[k] , _type_abbr(k) in ['day'])
         for k , v in kwargs.items():
             valid_sample *= self._nonnan_sample_sub(v , self.seqs[k])
         return valid_sample > 0
@@ -208,13 +208,17 @@ class ModelData():
         data_pad = torch.cat([torch.zeros_like(data)[:,:rolling_window] , data],dim=1)
         sum_dim = tuple(np.arange(data.dim())[2:])
         invalid_samp = data_pad[:,index_pad].isnan().sum(sum_dim)
-        if endpoint_nonzero: invalid_samp += (data_pad[:,index_pad] == 0).sum(sum_dim)
+        if endpoint_nonzero: 
+            invalid_samp += (data_pad[:,index_pad] == 0).sum(sum_dim)
         for i in range(rolling_window - 1):
             invalid_samp += data_pad[:,index_pad - i - 1].isnan().sum(sum_dim)
         return (invalid_samp == 0)
      
     def process_y_data(self , y , nonnan_sample , no_weight = False):
-        weight_scheme = None if no_weight else self.CONFIG[f'WEIGHT_{self.dataloader_style.upper()}']
+        if no_weight:
+            weight_scheme = None 
+        else:
+            weight_scheme = self.config.weight_train if self.dataloader_style.upper() == 'train' else self.config.weight_test
         if nonnan_sample is None:
             y_new = y
         else:
@@ -233,9 +237,8 @@ class ModelData():
         if self.dataloader_style == 'train':
             ii_stock_wise = np.arange(shp[0] * shp[1])[nonnan_sample.flatten()]
             ii_time_wise  = np.arange(shp[0] * shp[1]).reshape(shp[1] , shp[0]).transpose().flatten()[ii_stock_wise]
-            train_samples = int(len(ii_stock_wise) * self.CONFIG['TRAIN_PARAM']['dataloader']['train_ratio'])
-            random.seed(self.CONFIG['TRAIN_PARAM']['dataloader']['random_seed'])
-            if self.CONFIG['TRAIN_PARAM']['dataloader']['random_tv_split']:
+            train_samples = int(len(ii_stock_wise) * self.config.TRAIN_PARAM['dataloader']['train_ratio'])
+            if self.config.TRAIN_PARAM['dataloader']['random_tv_split']:
                 random.shuffle(ii_stock_wise)
                 ii_train , ii_valid = ii_stock_wise[:train_samples] , ii_stock_wise[train_samples:]
             else:
@@ -269,7 +272,7 @@ class ModelData():
         for set_name in set_iter:
             if self.dataloader_style == 'train':
                 set_i = index[set_name]
-                batch_sampler = torch.utils.data.BatchSampler(range(len(set_i)) , self.CONFIG['BATCH_SIZE'] , drop_last = False)
+                batch_sampler = torch.utils.data.BatchSampler(range(len(set_i)) , self.config.batch_size , drop_last = False)
             else:
                 set_i = [index[set_name][index[set_name][:,1] == i1] for i1 in index[set_name][:,1].unique()]
                 batch_sampler = range(len(set_i))
@@ -284,7 +287,9 @@ class ModelData():
                 batch_y = y[i0,yi1]
                 batch_w = None if w is None else w[i0,yi1]
                 for mdt in x.keys():
-                    batch_x.append(self._norm_x(torch.cat([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1),mdt))
+                    data = torch.cat([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1)
+                    data = self._norm_x(data,mdt)
+                    batch_x.append(data)
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
@@ -301,12 +306,10 @@ class ModelData():
         test sample method: sequential
         """
 
-        train_ratio = self.CONFIG['TRAIN_PARAM']['dataloader']['train_ratio']
-        sample_method = self.CONFIG['TRAIN_PARAM']['dataloader']['sample_method']
+        train_ratio = self.config.TRAIN_PARAM['dataloader']['train_ratio']
+        sample_method = self.config.TRAIN_PARAM['dataloader']['sample_method']
         assert sample_method in ['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] , sample_method
-        batch_size = self.CONFIG['BATCH_SIZE']
-        
-        random.seed(self.CONFIG['TRAIN_PARAM']['dataloader']['random_seed'])
+        batch_size = self.config.batch_size
 
         shp = nonnan_sample.shape
         ipos = torch.zeros(shp[0] , shp[1] , 2 , dtype = int)
@@ -383,7 +386,9 @@ class ModelData():
                 batch_y = y[i0,yi1]
                 batch_w = None if w is None else w[i0,yi1]
                 for mdt in x.keys():
-                    batch_x.append(self._norm_x(torch.cat([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1),mdt))
+                    data = torch.cat([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1)
+                    data = self._norm_x(data,mdt)
+                    batch_x.append(data)
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
@@ -398,9 +403,10 @@ class ModelData():
         2.for seq-mormalized x , normalized by history avg and std
         """
         if key in self.norms[key]:
-            x /= x.select(-2,-1).unsqueeze(-2) + 1e-4
+            if _type_abbr(key) in ['day']:
+                x /= x.select(-2,-1).unsqueeze(-2) + 1e-6
             x -= self.norms[key]['avg'][-x.shape[-2]:]
-            x /= self.norms[key]['std'][-x.shape[-2]:] + 1e-4
+            x /= self.norms[key]['std'][-x.shape[-2]:] + 1e-6
         else:
             pass
         return x
@@ -509,17 +515,20 @@ class DataBlock():
         valid_keys = np.intersect1d(['values','secid','date','feature'],list(kwargs.keys()))
         [setattr(self,k,kwargs[k]) for k in valid_keys]
         self.shape  = self.values.shape
+        assert self.values.shape[:2] == (len(self.secid) , len(self.date))
+        assert self.values.shape[-1] == len(self.feature)
+        return self
 
-    def from_dtank(self , dtank , inner_path , 
+    def _from_dtank(self , dtank , inner_path , 
                    start_dt = None , end_dt = None , 
                    feature = None , **kwargs):
         portal = dtank.get_object(inner_path)
-        if portal is None: return NotImplemented
+        if portal is None: return
 
         date = np.array(list(portal.keys())).astype(int)
         if start_dt is not None: date = date[date >= start_dt]
         if end_dt   is not None: date = date[date <= end_dt]
-        if len(date) == 0: return NotImplemented
+        if len(date) == 0: return
 
         datas = {str(d):dtank.read_data1D([inner_path , str(d)],feature).to_kline() for d in date}
         secid , p_s0 , p_s1 = index_union([data.secid for data in datas.values()])
@@ -535,29 +544,31 @@ class DataBlock():
     
     def from_db(self , db_key , inner_path , start_dt = None , end_dt = None , feature = None , **kwargs):
         db_path = get_db_path(db_key)
-        dtanks = [DataTank(os.path.join(db_path,fn),'r') for fn in os.listdir(db_path)]
-        datas = [self.from_dtank(dtank,inner_path,start_dt,end_dt,feature) for dtank in dtanks]
-        [dtank.close() for dtank in dtanks]
 
-        if len(datas) == 0: 
-            pass
-        elif len(datas) == 1:
+        datas = []
+        for fn in os.listdir(db_path):
+            with DataTank(os.path.join(db_path,fn),'r') as dtank:
+                data = self._from_dtank(dtank , inner_path , start_dt , end_dt , feature)
+                if data is not None: datas.append(data)
+
+        if len(datas) == 1:
             self._init_attr(*datas[0])
-        else:
+        elif len(datas) > 1:
             secid , p_s0 , p_s1 = index_union([data[1] for data in datas])
             date  , p_d0 , p_d1 = index_union([data[2] for data in datas])
             feature , _  , p_f1 = index_intersect([data[3] for data in datas])
             new_shape = [len(secid),len(date),datas[0][0].shape[2],len(feature)]
             newdata = np.full(tuple(new_shape) , np.nan , dtype = float)
             for i , data in enumerate(datas):
-                tmp = newdata[p_s0[i]]
-                tmp[:,p_d0[i]] = data[0][p_s1[i]][:,p_d1[i]][...,p_f1[i]]
-                newdata[p_s0[i]] = tmp[:]
+                #tmp = newdata[p_s0[i]]
+                #tmp[:,p_d0[i]] = data[0][p_s1[i]][:,p_d1[i]][...,p_f1[i]]
+                #newdata[p_s0[i]] = tmp[:]
+                newdata[np.ix_(p_s0[i],p_d0[i])] = data[0][np.ix_(p_s1[i],p_d1[i])][...,p_f1[i]]
             self._init_attr(newdata , secid , date , feature)
         return self
     
     def merge_others(self , others : list):
-        if len(others) == 0: return NotImplemented
+        if len(others) == 0: return self
         blocks = [self,*others] if self.initiate else others
         if len(blocks) == 1:
             b = blocks[0]
@@ -566,16 +577,17 @@ class DataBlock():
             
         values = [blk.values for blk in blocks]
         secid  , p_s0 , p_s1 = index_union([blk.secid for blk in blocks])
-        date   , p_d0 , p_d1 = index_union([blk.date for blk in blocks])
+        date   , p_d0 , p_d1 = index_union([blk.date  for blk in blocks])
         l1 = len(np.unique(np.concatenate([blk.feature for blk in blocks])))
         l2 = sum([len(blk.feature) for blk in blocks])
         distinct_feature = (l1 == l2)
 
         for i , data in enumerate(values):
             newdata = np.full((len(secid),len(date),*data.shape[2:]) , np.nan)
-            tmp = newdata[p_s0[i]]
-            tmp[:,p_d0[i]] = data[p_s1[i]][:,p_d1[i]]
-            newdata[p_s0[i]] = tmp
+            #tmp = newdata[p_s0[i]]
+            #tmp[:,p_d0[i]] = data[p_s1[i]][:,p_d1[i]]
+            #newdata[p_s0[i]] = tmp
+            newdata[np.ix_(p_s0[i],p_d0[i])] = data[np.ix_(p_s1[i],p_d1[i])]
             values[i] = newdata
 
         if distinct_feature:
@@ -598,17 +610,63 @@ class DataBlock():
                 'date'    : self.date[date_slice].astype(int) ,
                 'secid'   : self.secid.astype(int) , 
                 'feature' : self.feature}
-        _save_dict_data(data , file_path)
+        save_dict_data(data , file_path)
     
     def load(self , file_path):
-        self._init_attr(**_load_dict_data(file_path))
+        self._init_attr(**load_dict_data(file_path))
         return self
     
     def to(self , asTensor = None, dtype = None):
         if asTensor: self.values = torch.Tensor(self.values)
         if dtype: self.values = self.values.to(dtype)
+        return self
 
-def _save_dict_data(data , file_path):
+    def align_secid(self , secid):
+        if secid is None or len(secid) == 0: return self
+        values = np.full((len(secid) , *self.shape[1:]) , np.nan)
+        _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
+        values[p0s] = self.values[p1s]
+        self.values  = values
+        self.secid   = secid
+        self.shape   = self.values.shape
+        return self
+    
+    def align_feature(self , feature):
+        if feature is None or len(feature) == 0: return self
+        values = np.full((*self.shape[:-1],len(feature)) , np.nan)
+        _ , p0f , p1f = np.intersect1d(feature , self.feature , return_indices=True)
+        values[...,p0f] = self.values[...,p1f]
+        self.values  = values
+        self.feature = feature
+        self.shape   = self.values.shape
+        return self
+    
+    def rename_feature(self , rename_dict):
+        if len(rename_dict) == 0: return self
+        feature = self.feature.astype(object)
+        for k,v in rename_dict.items(): feature[feature == k] = v
+        self.feature = feature.astype(str)
+        return self
+    
+    def get(self , **kwargs):
+        values = self.values
+        for k,v in kwargs.items():  
+            if isinstance(v , (str,int,float)): kwargs[k] = [v]
+        if 'feature' in kwargs.keys(): 
+            index  = match_values(self.feature , kwargs['feature'])
+            values = values[:,:,:,index]
+        if 'inday'   in kwargs.keys(): 
+            index  = match_values(range(values.shape[2]) , kwargs['inday'])
+            values = values[:,:,index]
+        if 'date'    in kwargs.keys(): 
+            index  = match_values(self.date    , kwargs['date'])
+            values = values[:,index]
+        if 'secid'   in kwargs.keys(): 
+            index  = match_values(self.secid   , kwargs['secid'])
+            values = values[index]
+        return values
+
+def save_dict_data(data , file_path):
     if file_path is None: return NotImplemented
     os.makedirs(os.path.dirname(file_path) , exist_ok=True)
     if file_path.endswith(('.npz' , '.np')):
@@ -618,7 +676,7 @@ def _save_dict_data(data , file_path):
     else:
         raise Exception(file_path)
     
-def _load_dict_data(file_path , keys = None):
+def load_dict_data(file_path , keys = None):
     if file_path.endswith(('.npz' , '.np')):
         file = load_npz(file_path)
     elif file_path.endswith(('.pt' , '.pth')):
@@ -637,7 +695,7 @@ def load_blocks(file_paths ,
                 dtype = torch.float):
     _guess = lambda ls,excl:[os.path.basename(x).lower().startswith(excl) == 0 for x in ls]
     if fillna == 'guess':
-        exclude_list = ('y','x_trade','x_day','x_15m','x_min','x_30m','x_60m')
+        exclude_list = ('y','x_trade','x_day','x_15m','x_min','x_30m','x_60m','week')
         fillna = np.array(_guess(file_paths , exclude_list))
     elif fillna is None or isinstance(fillna , bool):
         fillna = np.repeat(fillna , len(file_paths))
@@ -664,10 +722,10 @@ def load_blocks(file_paths ,
                 elif newdate is None:
                     values[p_s0[i]] = blk.values[p_s1[i]]
                 else:
-                    tmp = values[p_s0[i]]
-                    tmp[:,p_d0[i]] = blk.values[p_s1[i]][:,p_d1[i]]
-                    values[p_s0[i]] = tmp
-            else:
+                    #tmp = values[p_s0[i]]
+                    #tmp[:,p_d0[i]] = blk.values[p_s1[i]][:,p_d1[i]]
+                    #values[p_s0[i]] = tmp
+                    values[np.ix_(p_s0[i],p_d0[i])] = blk.values[np.ix_(p_s1[i],p_d1[i])]
                 values = blk.values
 
             date_slice = np.repeat(True , len(date))
@@ -686,13 +744,14 @@ def load_norms(file_paths , dtype = None):
         if not os.path.exists(path):
             norms.append(None)
         else:
-            data = _load_dict_data(path)
+            data = load_dict_data(path)
             avg , std = torch.Tensor(data['avg']) , torch.Tensor(data['std'])
             if dtype: avg , std = avg.to(dtype) , std.to(dtype)
             norms.append({'avg':avg,'std':std})
     return norms
     
 def load_model_data(data_type_list , y_labels = None , dtype = torch.float):
+    data_type_list = _type_list(data_type_list)
     data = load_torch_pack(data_type_list , y_labels)
     if isinstance(data , str):
         path_torch_pack = data
@@ -718,13 +777,13 @@ def load_model_data(data_type_list , y_labels = None , dtype = torch.float):
         assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
 
         data = {'x':x,'y':y,'norms':norms,'secid':secid,'date':date}
-        _save_dict_data(data , path_torch_pack)
+        save_dict_data(data , path_torch_pack)
 
     x, y, norms, secid, date = data['x'], data['y'], data['norms'], data['secid'], data['date']
     return x , y , norms , (secid , date)
 
 def load_torch_pack(data_type_list , y_labels):
-    last_date = max(_load_dict_data(path_block_data('y'))['date'])
+    last_date = max(load_dict_data(path_block_data('y'))['date'])
     path_torch_pack = f'{DIR_torchpack}/{_modal_data_code(data_type_list , y_labels)}.{last_date}.pt'
 
     if os.path.exists(path_torch_pack):
@@ -757,6 +816,94 @@ def _astype(data , dtype):
         return type(data)([_astype(v,dtype) for v in data])
     else:
         return data.to(dtype)
+    
+def block_load_DB(DB_source , **kwargs):
+    BlockDict = {}
+    for src_key in DB_source.keys():
+        blocks = []
+        db_key = src_key if DB_source[src_key].get('db') is None else DB_source[src_key].get('db')
+        inner_path= DB_source[src_key]['inner_path']
+        inner_path = [inner_path] if isinstance(inner_path,str) else inner_path
+        feature = DB_source[src_key].get('feature')
+        for path in inner_path:
+            with timer(f'{db_key} blocks reading {path} Data1D\'s') as t:
+                blocks.append(DataBlock().from_db(db_key , path , feature = feature , **kwargs))
+        with timer(f'{src_key} blocks merging') as t:
+            BlockDict[src_key] = DataBlock().merge_others(blocks)
+    return BlockDict
+
+def block_price_adjust(data_block , adjfactor = True , multiply = None , divide = None , 
+                       price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap']):
+    
+    adjfactor = adjfactor and ('adjfactor' in data_block.feature)
+    if multiply is None and divide is None and (not adjfactor): return data_block  
+
+    if isinstance(price_feat , (str,)): price_feat = [price_feat]
+    i_price = np.where(np.isin(data_block.feature , price_feat))[0]
+    if len(i_price) == 0: return data_block
+    v_price = data_block.values[...,i_price]
+
+    if adjfactor : v_price = np.multiply(v_price , data_block.get(feature=['adjfactor']))
+    if multiply  is not None: v_price = np.multiply(v_price , multiply)
+    if divide    is not None: v_price = np.divide(v_price , divide)
+
+    data_block.values[...,i_price] = v_price
+    return data_block
+
+def block_vol_adjust(data_block , multiply = None , divide = None , 
+                     vol_feat = ['volume' , 'amount', 'turn_tt', 'turn_fl', 'turn_fr']):
+    if multiply is None and divide is None: return data_block
+
+    if isinstance(vol_feat , (str,)): vol_feat = [vol_feat]
+    i_vol = np.where(np.isin(data_block.feature , vol_feat))[0]
+    if len(i_vol) == 0: return data_block
+    v_vol = data_block.values[...,i_vol]
+    if multiply is not None: v_vol = np.multiply(v_vol , multiply)
+    if divide   is not None: v_vol = np.divide(v_vol , divide)
+    data_block.values[...,i_vol] = v_vol
+    return data_block
+
+def block_process(BlockDict , key):
+    np.seterr(invalid='ignore' , divide = 'ignore')
+    assert isinstance(BlockDict , dict) , type(BlockDict)
+    assert all([isinstance(block , DataBlock) for block in BlockDict.values()]) , DataBlock
+    
+    key_abbr = _type_abbr(key)
+
+    if key_abbr == 'y':
+        final_feat = None
+        data_block = BlockDict['labels']
+        
+    elif key_abbr == 'day':
+        final_feat = ['open','close','high','low','vwap','turn_fl']
+        data_block = block_price_adjust(BlockDict[key])
+
+    elif key_abbr in ['15m','30m','60m']:
+        final_feat = ['open','close','high','low','vwap','turn_fl']
+        data_block = BlockDict[key]
+        db_day = BlockDict['trade_day'].align_secid(data_block.secid)
+        
+        data_block = block_price_adjust(data_block,divide=db_day.get(feature='preclose'))
+        data_block = block_vol_adjust(data_block,divide=db_day.get(feature='volume')/db_day.get(feature='turn_fl'),vol_feat='volume')
+        
+        data_block.rename_feature({'volume':'turn_fl'})
+    elif key_abbr in ['week']:
+        
+        final_feat = ['open','close','high','low','vwap','turn_fl']
+        num_days = 5
+        data_block = BlockDict['trade_day']
+
+        data_block=block_price_adjust(data_block)
+        new_values = np.full(np.multiply(data_block.shape,(1,1,num_days,1)),np.nan)
+        for i in range(num_days): new_values[:,num_days-1-i:,i] = data_block.values[:,:len(data_block.date)-num_days+1+i,0]
+        data_block.update(values = new_values)
+        data_block = block_price_adjust(data_block , adjfactor = False , divide=data_block.get(inday=0,feature='preclose'))
+    else:
+        raise Exception(key)
+    
+    data_block.align_feature(final_feat)
+    np.seterr(invalid='warn' , divide = 'warn')
+    return data_block
 
 def block_mask(data_block , mask = True , after_ipo = 91 , **kwargs):
     if not mask: return data_block
@@ -785,39 +932,19 @@ def block_mask(data_block , mask = True , after_ipo = 91 , **kwargs):
     data_block.values[mask] = np.nan
     return data_block
 
-def block_process(data_block , process_method = 'default' , feature = [] , **kwargs):
-    np.seterr(invalid='ignore')
-    assert isinstance(data_block , DataBlock) , type(data_block)
-    if process_method == 'default':
-        process_method = 'order'
-    if 'adj' in process_method and 'adjfactor' in data_block.feature:
-        price_feat = np.intersect1d(['close', 'high', 'low', 'open', 'vwap'] , data_block.feature)
-        ifeat = np.where(np.isin(data_block.feature,price_feat))[0]
-        iadj  = np.where(data_block.feature == 'adjfactor')[0]
-        data_block.values[...,ifeat] = np.multiply(data_block.values[...,ifeat],data_block.values[...,iadj])
-        ifeat  = np.where(data_block.feature != 'adjfactor')[0]
-        data_block.update(values = data_block.values[...,ifeat] , feature = data_block.feature[ifeat])
-    if 'order' in process_method:
-        raw_order = feature
-        raw_order = [o for o in raw_order if o in data_block.feature]
-        raw_order += [o for o in data_block.feature if o not in raw_order]
-        ifeat = np.array([raw_order.index(f) for f in data_block.feature])
-        data_block.update(values = data_block.values[...,ifeat] , feature = data_block.feature[ifeat])
-    
-    np.seterr(invalid='warn')
-    return data_block
-
-def block_hist_norm(data_block , key , save_path = None , 
+def block_hist_norm(data_block , key , 
                     start_dt = None , end_dt = 20161231 , 
-                    step_day = 5 , tol = 1e-6 , **kwargs):
-    if not key.startswith(('x_trade','trade','day','15m','min','30m','60m')): 
-        return NotImplemented
-
+                    step_day = 5 , tol = 1e-6 , 
+                    save_path = None , **kwargs):
+    if not key.startswith(('x_trade','trade','day','15m','min','30m','60m','week')): 
+        return None
+    
+    key = _type_abbr(key)
     maxday = {
-        'trade_day' : 60 ,
-        'others'    : 1 ,
+        'day'   : 60 ,
+        'other' : 1 ,
     }
-    maxday = maxday[key] if key in maxday.keys() else maxday['others']
+    maxday = maxday[key] if key in maxday.keys() else maxday['other']
 
     date_slice = np.repeat(True , len(data_block.date))
     if start_dt is not None: date_slice[data_block.date < start_dt] = False
@@ -841,16 +968,19 @@ def block_hist_norm(data_block , key , save_path = None ,
     x_endpoint = x.shape[1]-1 + step_day * np.arange(-len_step + 1 , 1)
     x_div = torch.ones(len(secid) , len_step , 1 , len(feat)).to(x)
     re_shape = (*x_div.shape[:2] , -1)
-    if key == 'trade_day':
+    if key in ['day']:
         # day : divide by endpoint
         x_div.copy_(x[:,x_endpoint,-1:])
     else:
+        # will not do anything, just sample mean and std
+        pass
+        """
         # Xmin day : price divide by preclose , other divide by day sum
         x_div.copy_(x[:,x_endpoint].sum(dim=2 , keepdim=True))
-        price_feat = [f for f in ['close', 'high', 'low', 'open', 'vwap'] if f in feat]
-        if len(price_feat) > 0:
-            x_div[...,np.isin(feat , price_feat)] = x[:,x_endpoint-1,-1:][...,feat == price_feat[0]]
-
+        price_feat = [f for f in ['preclose' , 'close', 'high', 'low', 'open', 'vwap'] if f in feat]
+        if len(price_feat) > 0: x_div[...,np.isin(feat , price_feat)] = x[:,x_endpoint-1,-1:][...,feat == price_feat[0]]
+        """
+        
     nan_sample = (x_div == 0).reshape(*re_shape).any(dim = -1)
     nan_sample += x_div.isnan().reshape(*re_shape).any(dim = -1)
     for i in range(maxday):
@@ -864,7 +994,7 @@ def block_hist_norm(data_block , key , save_path = None ,
     assert avg_x.isnan().sum() + std_x.isnan().sum() == 0 , ((nan_sample == 0).sum())
     
     data = {'avg' : avg_x , 'std' : std_x}
-    _save_dict_data(data , save_path)
+    save_dict_data(data , save_path)
     return data
 
 def path_block_data(data_name , method = save_block_method , alias_search = False):
@@ -882,6 +1012,6 @@ def _alias_search(path , key):
     for alias in alias_list:
         if os.path.exists(path.format(alias)): 
             return path.format(alias)
-    raise path.format(key)
+    raise Exception(path.format(key)) 
     
 

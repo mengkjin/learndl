@@ -50,7 +50,7 @@ def _update_rcv(old_rowcolval , upd_rowcolval , replace = False , all_within = F
     new_col, pos_col, _ = index_union([old_col , upd_col]) 
     new_val = np.full((len(new_row),len(new_col)) , np.nan)
     for r, c, v in zip(pos_row , pos_col , [old_val , upd_val]): 
-        if r is not None and c is not None: new_val[r][:,c] = v[:]
+        if r is not None and c is not None: new_val[np.ix_(r,c)] = v[:]
     assert new_val.shape == (len(new_row) , len(new_col))
     return new_row, new_col, new_val
 
@@ -81,7 +81,7 @@ class Data1D():
 
     def init_attr(self , secid , feature , values):
         assert values.shape == (len(secid) , len(feature))
-        self.secid, self.feature, self.values = np.array(secid), np.array(feature), np.array(values)
+        self.secid, self.feature, self.values = np.array(secid), np.array(feature), np.array(values,dtype=float)
 
     def replace_values(self , values): 
         old_rcv = (self.secid,self.feature,self.values)
@@ -117,7 +117,7 @@ class Data1D():
             assert any(np.isin(lookfor , self.feature)) , self.feature
             inday_idx = np.isin(self.feature , lookfor)
             inday  = self.values[:,inday_idx][:,0].astype(int)
-            values = self.values[:,inday_idx == 0].astype(int)
+            values = self.values[:,inday_idx == 0]
             lsecid , linday = len(np.unique(self.secid)) , len(np.unique(inday))
             feature = self.feature[inday_idx == 0]
             if len(values) == lsecid * linday:
@@ -248,9 +248,10 @@ class DataDSF():
         datas = self.data.values()
         all_values = np.full((len(date),len(secid),len(feat)) , np.nan)
         for i_date , (data , i_sec , i_feat) in enumerate(zip(datas , pos_secid , pos_feat)):
-            tmp = all_values[i_date,i_sec,:]
-            tmp[:,i_feat] = data.values[:]
-            all_values[i_date,i_sec,:] = tmp
+            #tmp = all_values[i_date,i_sec,:]
+            #tmp[:,i_feat] = data.values[:]
+            #all_values[i_date,i_sec,:] = tmp
+            all_values[np.ix_([i_date],i_sec,i_feat)] = data.values[None]
         return DataFDS(feat , [Data1F(date,secid,all_values[:,:,i]) for i in range(len(feat))])
 
 class Data1F():
@@ -355,9 +356,10 @@ class DataFDS():
         datas = self.data.values()
         all_values = np.full((len(date) , len(secid),len(feat)) , np.nan)
         for i_feat , (data , i_date , i_sec) in enumerate(zip(datas , pos_date , pos_secid)):
-            tmp = all_values[i_date,:,i_feat]
-            tmp[:,i_sec] = data.values[:]
-            all_values[i_date,:,i_feat] = tmp
+            #tmp = all_values[i_date,:,i_feat]
+            #tmp[:,i_sec] = data.values[:]
+            #all_values[i_date,:,i_feat] = tmp
+            all_values[np.ix_(i_date,i_sec,[i_feat])] = data.values[:,:,None]
         return DataDSF(date , [Data1D(secid,feat,all_values[i]) for i in range(len(date))])
 
 class DataTank():
@@ -619,9 +621,11 @@ class DataTank():
         datas = [portal[str(d)]['values'] for d in date]
         all_values = np.full((len(date) , len(secid), len(feat)) , np.nan)
         for i_date , (data , i_sec , i_feat) in enumerate(zip(datas , pos_secid , pos_feat)):
-            tmp = all_values[i_date,i_sec,:]
-            tmp[:,i_feat] = data[:]
-            all_values[i_date,i_sec,:] = tmp
+            #tmp = all_values[i_date,i_sec,:]
+            #tmp[:,i_feat] = data[:]
+            #all_values[i_date,i_sec,:] = tmp
+            all_values[np.ix_([i_date],i_sec,i_feat)] = data.values[None]
+            
         print(f'loading: {time.time() - __start_time__:.2f} secs')
         if dict_only : 
             return {

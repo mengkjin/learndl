@@ -193,7 +193,7 @@ def get_trade_day(date , tol = 1e-8 , **kwargs):
     return Data1D(src=df)
 
 def get_trade_Xday(date , x_day , tol = 1e-8 , **kwargs):
-    np.seterr(invalid='ignore')
+    np.seterr(invalid='ignore' , divide = 'ignore')
     db_path_info = f'{DIR_data}/DB_data/DB_information/DB_information.h5'
     with DataTank(db_path_info , 'r') as info:
         calendar = info.read_dataframe('basic/calendar')
@@ -247,7 +247,7 @@ def get_trade_Xday(date , x_day , tol = 1e-8 , **kwargs):
     df['vwap']      = (data[...,all_feat.index('vwap')]*data[...,all_feat.index('volume')]).sum(axis = 0) / df['volume']
     df['pctchange'] = (data[...,all_feat.index('pctchange')] / 100 + 1).prod(axis = 0) * 100 - 100
 
-    np.seterr(invalid='warn')
+    np.seterr(invalid='warn' , divide = 'warn')
     return Data1D(src=df)
 
 def get_trade_min(date , tol = 1e-8 , **kwargs):

@@ -1,16 +1,15 @@
-import os
+import os , shutil
 import logging
 from logging import handlers
+from typing import Any
 import colorlog
 import yaml
-import torch
 
-DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-current_dir = os.path.dirname(os.path.abspath(__file__)) 
-DIR_main = f'{current_dir}/../..'
-DIR_data = f'{current_dir}/../../data'
-DIR_conf = f'{current_dir}/../../configs'
-DIR_logs = f'{current_dir}/../../logs'
+_current_dir = os.path.dirname(os.path.abspath(__file__)) 
+DIR_main = f'{_current_dir}/../..'
+DIR_data = f'{_current_dir}/../../data'
+DIR_conf = f'{_current_dir}/../../configs'
+DIR_logs = f'{_current_dir}/../../logs'
 
 class _LevelFormatter(logging.Formatter):
     def __init__(self, fmt=None, datefmt=None, level_fmts={}):
@@ -43,6 +42,7 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
     
 def get_logger(test_output = False):
     config_logger = get_config('logger')
+    config_logger['file']['param']['filename'] = '/'.join([DIR_logs,config_logger['file']['param']['filename']])
     os.makedirs(os.path.dirname(config_logger['file']['param']['filename']), exist_ok = True)
     log = logging.getLogger(config_logger['name'])
     exec("log.setLevel(logging."+config_logger['level']+")")
@@ -72,25 +72,8 @@ def get_config(config_files = ['train']):
     if isinstance(config_files , str): config_files = [config_files]
    
     for cfg_name in config_files:
-        with open(f'{DIR_conf}/config_{cfg_name}.yaml' ,'r') as f:
+        cfg_file = cfg_name if cfg_name.endswith('.yaml') else f'{DIR_conf}/config_{cfg_name}.yaml'
+        with open(cfg_file ,'r') as f:
             cfg = yaml.load(f , Loader = yaml.FullLoader)
-        if cfg_name == 'train':
-            if 'SPECIAL_CONFIG' in cfg.keys() and 'SHORTTEST' in cfg['SPECIAL_CONFIG'].keys(): 
-                if cfg['SHORTTEST']: cfg.update(cfg['SPECIAL_CONFIG']['SHORTTEST'])
-                del cfg['SPECIAL_CONFIG']['SHORTTEST']
-            if 'SPECIAL_CONFIG' in cfg.keys() and 'TRANSFORMER' in cfg['SPECIAL_CONFIG'].keys():
-                if cfg['MODEL_MODULE'] == 'Transformer' or (cfg['MODEL_MODULE'] in ['GeneralRNN'] and 'transformer' in cfg['MODEL_PARAM']['type_rnn']):
-                    cfg['TRAIN_PARAM']['trainer'].update(cfg['SPECIAL_CONFIG']['TRANSFORMER']['trainer'])
-                del cfg['SPECIAL_CONFIG']['TRANSFORMER']
-        elif cfg_name == 'logger':
-            cfg['file']['param']['filename'] = '/'.join([DIR_logs,cfg['file']['param']['filename']])
         config_dict.update(cfg)
     return config_dict
-
-def cuda(x):
-    if isinstance(x , (list,tuple)):
-        return type(x)(map(cuda , x))
-    elif isinstance(x , (dict)):
-        return {k:cuda(v) for k,v in x.items()}
-    else:
-        return x.to(DEVICE) if x is not None else None
