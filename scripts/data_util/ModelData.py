@@ -8,7 +8,7 @@ from ..function.basic import *
 from ..function.date import *
 from ..util.environ import DIR_data
 from ..util.basic import versatile_storage , timer
-from ..trainer.config import *
+from ..util.trainer import *
 from torch.utils.data.dataset import IterableDataset , Dataset
 from numpy import savez_compressed as save_npz
 from numpy import load as load_npz
@@ -20,8 +20,6 @@ DIR_block      = f'{DIR_data}/block_data'
 DIR_hist_norm  = f'{DIR_data}/hist_norm'
 DIR_torchpack  = f'{DIR_data}/torch_pack'
 save_block_method = 'npz'
-    
-storage_loader = versatile_storage()
 
 class Mydataset(Dataset):
     def __init__(self, data1 , label , weight = None) -> None:
@@ -79,8 +77,8 @@ class ModelData():
     """
     def __init__(self , model_data_type , config = None):
         self.config = train_config() if config is None else config
-        self.DEVICE = Device(self.config.device)
-        storage_loader.activate(self.config.storage_type)
+        self.loader_device  = Device(self.config.device)
+        self.loader_storage = versatile_storage(self.config.storage_type)
         self.data_type_list = _type_list(model_data_type)
         self.x_data , self.y_data , self.norms , self.index = load_model_data(self.data_type_list , self.config.labels , self.config.precision)
         self.date , self.secid = self.index
@@ -123,7 +121,7 @@ class ModelData():
         y_keys , x_keys = [k for k in seqlens.keys() if k in ['hist_loss','hist_preds','hist_labels']] , self.data_type_list
         self.seqs = {k:(seqlens[k] if k in seqlens.keys() else 1) for k in y_keys + x_keys}
         assert all([v > 0 for v in self.seqs.values()]) , self.seqs
-        self.seqy = max([v for k,v in self.seqs.items() if k in y_keys])
+        self.seqy = max([1]+[v for k,v in self.seqs.items() if k in y_keys])
         self.seqx = max([v for k,v in self.seqs.items() if k in x_keys])
         self.seq0 = self.seqx + self.seqy - 1
 
@@ -166,13 +164,13 @@ class ModelData():
         self.y[:,self.step_idx] = y_step[:]
         if self.buffer_proc is not None: self.buffer.update(self.buffer_proc(self))
 
-        self.buffer = self.DEVICE(self.buffer)
+        self.buffer = self.loader_device(self.buffer)
 
-        #index = self.sample_index(self.nonnan_sample)
-        #self.static_dataloader(x , y_step , w_step , index , self.nonnan_sample)
+        index = self.sample_index(self.nonnan_sample)
+        self.static_dataloader(x , y_step , w_step , index , self.nonnan_sample)
 
-        index = self.sample_index2(self.nonnan_sample)
-        self.static_dataloader2(x , y_step , w_step , index , self.nonnan_sample)
+        #index = self.sample_index2(self.nonnan_sample)
+        #self.static_dataloader2(x , y_step , w_step , index , self.nonnan_sample)
 
         gc.collect() , torch.cuda.empty_cache()
         
@@ -265,7 +263,7 @@ class ModelData():
         """
         # init i (row , col position) and y (labels) matrix
         set_iter = ['train' , 'valid'] if self.dataloader_style == 'train' else ['test']
-        storage_loader.del_group(self.dataloader_style)
+        self.loader_storage.del_group(self.dataloader_style)
         loaders = dict()
         #self.x = x
         #self.y = y
@@ -295,8 +293,8 @@ class ModelData():
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
-                storage_loader.save(batch_data, batch_file_list[-1] , group = self.dataloader_style)
-            loaders[set_name] = dataloader_saved(batch_file_list , mapping = self.DEVICE , progress_bar = self.config.verbosity >= 10)
+                self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.dataloader_style)
+            loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.config.verbosity >= 10)
         self.dataloaders.update(loaders)
         
     def sample_index2(self , nonnan_sample = None):
@@ -376,7 +374,7 @@ class ModelData():
         1. update dataloaders dict(set_name = ['train' , 'valid']), save batch_data to './model/{model_name}/{set_name}_batch_data' and later load them
         """
         # init i (row , col position) and y (labels) matrix
-        storage_loader.del_group(self.dataloader_style)
+        self.loader_storage.del_group(self.dataloader_style)
         loaders = dict()
         for set_name in sample_index.keys():
             batch_file_list = []
@@ -394,8 +392,8 @@ class ModelData():
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
-                storage_loader.save(batch_data, batch_file_list[-1] , group = self.dataloader_style)
-            loaders[set_name] = dataloader_saved(batch_file_list , progress_bar = self.config.verbosity >= 10)
+                self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.dataloader_style)
+            loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.config.verbosity >= 10)
         self.dataloaders.update(loaders)
         
     def _norm_x(self , x , key):
@@ -417,15 +415,17 @@ class dataloader_saved:
     """
     class of saved dataloader , retrieve batch_data from './model/{model_name}/{set_name}_batch_data'
     """
-    def __init__(self, batch_file_list , mapping = None , progress_bar = False):
+    def __init__(self, loader_storage , batch_file_list , mapping = None , progress_bar = False):
         self.progress_bar = progress_bar
+        self.loader_storage = loader_storage
+        self.mapping = mapping
         self.iterator = tqdm(batch_file_list) if progress_bar else batch_file_list
-        self.mapping = lambda x:x if mapping is None else mapping
     def __len__(self):
         return len(self.iterator)
     def __iter__(self):
         for batch_file in self.iterator: 
-            yield self.mapping(storage_loader.load(batch_file))
+            batch_data = self.loader_storage.load(batch_file)
+            yield batch_data if self.mapping is None else self.mapping(batch_data)
     def display(self , text = ''):
         if self.progress_bar: self.iterator.set_description(text)
     
@@ -721,18 +721,16 @@ def load_blocks(file_paths ,
         for i , blk in enumerate(blocks):
             secid = newsecid if newsecid is not None else blk.secid
             date  = newdate  if newdate  is not None else blk.date
-            if blk.shape[:2] != (len(secid),len(date)): # secid/date alter
+            if blk.shape[:2] == (len(secid),len(date)): 
+                values = blk.values
+            else: # secid/date alter
                 values = np.full((len(secid),len(date),*blk.shape[2:]) , np.nan)
                 if newsecid is None:
                     values[:,p_d0[i]] = blk.values[:,p_d1[i]]
                 elif newdate is None:
                     values[p_s0[i]] = blk.values[p_s1[i]]
                 else:
-                    #tmp = values[p_s0[i]]
-                    #tmp[:,p_d0[i]] = blk.values[p_s1[i]][:,p_d1[i]]
-                    #values[p_s0[i]] = tmp
                     values[np.ix_(p_s0[i],p_d0[i])] = blk.values[np.ix_(p_s1[i],p_d1[i])]
-                values = blk.values
 
             date_slice = np.repeat(True , len(date))
             if start_dt is not None: date_slice[date < start_dt] = False

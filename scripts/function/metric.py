@@ -1,7 +1,7 @@
 import torch
-from ..function.basic import mse,pearson,ccc,spearman
+from .basic import mse,pearson,ccc,spearman
 
-_criterion_funcs = {
+_metric_funcs = {
     'mse':mse ,
     'pearson':pearson,
     'ccc':ccc,
@@ -48,7 +48,7 @@ def loss_function(key):
                 v = torch.exp(-v)
             return v
         return wrapper
-    return decorator(_criterion_funcs[key] , key)
+    return decorator(_metric_funcs[key] , key)
 
 def score_function(key):
     assert key in ('mse' , 'pearson' , 'ccc' , 'spearman')
@@ -59,7 +59,7 @@ def score_function(key):
             if key == 'mse' : v = -v
             return v
         return wrapper
-    return decorator(_criterion_funcs[key] , key)
+    return decorator(_metric_funcs[key] , key)
     
 def penalty_function(key , param):
     def _none(**kwargs):

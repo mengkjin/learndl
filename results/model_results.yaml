@@ -278,3 +278,14 @@
   0.best: 9.308486284862738
   0.swabest: 9.545056559960358
   0.swalast: 7.202812429983169
+0_start: Mon Jan 29 00:27:23 2024
+1_basic: short+mem+float
+2_model: TCN_day(x1)
+3_time: 20230606-99991231
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.5 Min/model, 1.6 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 16.2 Secs
+7_result:
+  0.best: 1.3332449165754952
+  0.swabest: 2.587443843774963
+  0.swalast: 1.8597185981197981

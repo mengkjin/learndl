@@ -17,24 +17,22 @@ https://github.com/microsoft/LightGBM/blob/master/examples/python-guide/plot_exa
 https://lightgbm.readthedocs.io/en/latest/pythonapi/lightgbm.plot_tree.html
 3.other factors
 '''
-import argparse
 import torch
 import torch.nn as nn
 import numpy as np
-import itertools , random , os, shutil , gc , time , h5py , yaml
+import itertools , os, shutil , gc , time , h5py , yaml
 from copy import deepcopy
 from torch.optim.swa_utils import AveragedModel , update_bn
 from scripts.util.environ import get_logger
 from scripts.util.basic import process_timer , FilteredIterator , lr_cosine_scheduler , versatile_storage
 from scripts.util.multiloss import multiloss_calculator 
+from scripts.util.trainer import trainer_parser , train_config , set_trainer_environment , Device
 from scripts.data_util.ModelData import ModelData
-from scripts.trainer.config import *
-from scripts.trainer.criteria import loss_function , score_function , penalty_function
 from scripts.function.basic import *
+from scripts.function.metric import loss_function,score_function,penalty_function
 from scripts.nn.My import *
 # from audtorch.metrics.functional import *
 
-# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 try:
     parser = trainer_parser().parse_args()
 except:
@@ -42,11 +40,16 @@ except:
 
 logger = get_logger()
 config = train_config(parser = parser , do_process=True)
-set_trainer_configs(config)
+set_trainer_environment(config)
+trainer_timer   = process_timer(True)
+trainer_storage = versatile_storage(config.storage_type)
+trainer_device  = Device(config.device)
 
-time_recorder = process_timer(True)
-model_storage = versatile_storage(config.storage_type)
-cuda_device   = Device(train_config.device)
+logger.warning('Model Specifics:')
+pretty_print_dict(config.get_dict([
+    'storage_type' , 'device' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 'model_data_type' , 'model_num' ,
+    'beg_date' , 'test_dates_end' , 'interval' , 'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' , 'compt_params'
+]))
 
 class model_controller():
     """
@@ -88,7 +91,7 @@ class model_controller():
         """
         Main process of loading basic data
         """
-        self.model_time['data'] = time.time()
+        self.model_info['data_time'] = time.time()
         logger.critical(f'Start Process [Load Data]!')
         self.data = ModelData(config.model_data_type , config)
         # retrieve from data object
@@ -99,7 +102,7 @@ class model_controller():
         input_dim = tuple(self.data.feat_dims[mdt] for mdt in config.data_type_list)
         for smp in config.model_params: 
             smp.update({'input_dim':input_dim if len(input_dim) > 1 else input_dim[0]})
-        logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.model_time['data']))
+        logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.model_info['data_time']))
         
     def model_process_train(self):
         """
@@ -109,9 +112,6 @@ class model_controller():
         """
         self.model_info['train_time'] = time.time()
         logger.critical(f'Start Process [Train Model]!')
-        logger.warning('Model Specifics:')
-        self.printer('model_specifics')
-        logger.error(f'Start Training Models!')
         torch.save(config.model_params , f'{config.model_base_path}/model_params.pt')    
         for model_date , model_num in self.ModelIter():
             self.model_date , self.model_num = model_date , model_num
@@ -181,7 +181,7 @@ class model_controller():
     
     def ModelPreparation(self , process , last_n = 30 , best_n = 5):
         assert process in ['train' , 'test' , 'instance']
-        with time_recorder('ModelPreparation' , process):
+        with trainer_timer('ModelPreparation' , process):
             param = config.model_params[self.model_num]
 
             # In a new model , alters the penalty function's lamb
@@ -249,7 +249,7 @@ class model_controller():
         """
         Reset model specific variables
         """
-        with time_recorder('TrainModelStart'):
+        with trainer_timer('TrainModelStart'):
             self._init_variables('model')
             self.nanloss_life = config.train_params['trainer']['nanloss']['retry']
             self.text['model'] = '{:s} #{:d} @{:4d}'.format(config.model_name , self.model_num , self.model_date)
@@ -262,8 +262,8 @@ class model_controller():
         """
         Do necessary things of ending a model(model_data , model_num)
         """
-        with time_recorder('TrainModelEnd'):
-            model_storage.del_path(self.path.get('rounds') , self.path.get('lastn') , self.path.get('bestn'))
+        with trainer_timer('TrainModelEnd'):
+            trainer_storage.del_path(self.path.get('rounds') , self.path.get('lastn') , self.path.get('bestn'))
             if config.process_name == 'train' : self.model_count += 1
             self.tick[2] = time.time()
             self.printer('model_end')
@@ -272,7 +272,7 @@ class model_controller():
         """
         Reset and loop variables giving loop_status
         """
-        with time_recorder('NewLoop'):
+        with trainer_timer('NewLoop'):
             self._init_variables(self.cond.get('loop_status'))
             self.epoch_i += 1
             self.epoch_all += 1
@@ -292,7 +292,7 @@ class model_controller():
         optimizer : Adam or SGD
         scheduler : Cosine or StepLR
         """
-        with time_recorder('TrainerInit'):
+        with trainer_timer('TrainerInit'):
             if self.cond.get('loop_status') == 'epoch': return
             self.load_model('train')
             self.max_round = self.net.max_round() if 'max_round' in self.net.__dir__() else 1
@@ -305,7 +305,7 @@ class model_controller():
         Iterate train and valid dataset, calculate loss/score , update values
         If nan loss occurs, turn to _deal_nanloss
         """
-        with time_recorder('TrainEpoch/train_epochs'):
+        with trainer_timer('TrainEpoch/train_epochs'):
             self.net.train()
             clip_value = config.train_params['trainer']['gradient'].get('clip_value')
             iterator = self.data.dataloaders['train']
@@ -313,15 +313,15 @@ class model_controller():
             for i , batch_data in enumerate(iterator):
                 x = self.modifier['inputs'](batch_data['x'] , batch_data , self.data)
                 self.optimizer.zero_grad()
-                with time_recorder('TrainEpoch/train/forward'):
+                with trainer_timer('TrainEpoch/train/forward'):
                     pred , hidden = self.net(x)
-                with time_recorder('TrainEpoch/train/loss'):
+                with trainer_timer('TrainEpoch/train/loss'):
                     penalty_kwargs = {'net' : self.net , 'hidden' : hidden , 'label' : batch_data['y']}
                     metric = self.metric_calculator(batch_data['y'] , pred , 'train' , weight = batch_data['w'] , **penalty_kwargs)
                     metric = self.modifier['metric'](metric, batch_data, self.data)
-                with time_recorder('TrainEpoch/train/backward'):
+                with trainer_timer('TrainEpoch/train/backward'):
                     metric['loss'].backward()
-                with time_recorder('TrainEpoch/train/step'):
+                with trainer_timer('TrainEpoch/train/step'):
                     if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value)
                     self.optimizer.step()
                 self.modifier['update'](None , batch_data , self.data)
@@ -330,16 +330,16 @@ class model_controller():
             if np.isnan(sum(_loss)): return self._deal_nanloss()
             self.loss_list['train'].append(np.mean(_loss)) , self.score_list['train'].append(np.mean(_score))
         
-        with time_recorder('TrainEpoch/valid_epochs'):
+        with trainer_timer('TrainEpoch/valid_epochs'):
             self.net.eval()     
             iterator = self.data.dataloaders['valid']
             _loss , _score = np.full(len(iterator),np.nan) , np.full(len(iterator),np.nan)
             for i , batch_data in enumerate(iterator):
                 x = self.modifier['inputs'](batch_data['x'] , batch_data , self.data)
-                # cuda_device.print_cuda_memory()
-                with time_recorder('TrainEpoch/valid/forward'):
+                # trainer_device.print_cuda_memory()
+                with trainer_timer('TrainEpoch/valid/forward'):
                     pred , _ = self.net(x)
-                with time_recorder('TrainEpoch/valid/loss'):
+                with trainer_timer('TrainEpoch/valid/loss'):
                     metric = self.metric_calculator(batch_data['y'] , pred , 'valid' , weight = batch_data['w'])
                     metric = self.modifier['metric'](metric, batch_data, self.data)
                 self.modifier['update'](None , batch_data , self.data)
@@ -355,7 +355,7 @@ class model_controller():
         """
         Update condition of continuing training epochs , restart attempt if early exit , proceed to next round if convergence , reset round if nan loss
         """
-        with time_recorder('LoopCondition/assess'):
+        with trainer_timer('LoopCondition/assess'):
             if self.cond['nan_loss']:
                 logger.error(f'Initialize a new model to retrain! Lives remaining {self.nanloss_life}')
                 self._init_variables('model')
@@ -390,10 +390,10 @@ class model_controller():
                     save_targets.append(self.path['bestn'][arg_min])
                     if self.path['bestn'][arg_min] not in self.path['src_model.swabest']: self.path['src_model.swabest'].append(self.path['bestn'][arg_min])
                 
-            model_storage.save_model_state(self.net , save_targets)
+            trainer_storage.save_model_state(self.net , save_targets)
             self.printer('epoch_step')
         
-        with time_recorder('LoopCondition/confirm_status'):
+        with trainer_timer('LoopCondition/confirm_status'):
             self.cond['terminate'] = {k:self._terminate_cond(k,v) for k , v in config.train_params['terminate'].get('overall' if self.max_round <= 1 else 'round').items()}
             if any(self.cond.get('terminate').values()):
                 self.text['exit'] = {
@@ -429,28 +429,28 @@ class model_controller():
         if self.model_num == 0:
             score_date  = np.zeros((len(self.data.model_test_dates) , len(self.test_result_model_num)))
             score_model = np.zeros((1 , len(self.test_result_model_num)))
-            self.score_by_date  = score_date  if self.score_by_date  is None else np.concatenate([self.score_by_date , score_date])
-            self.score_by_model = score_model if self.score_by_model is None else np.concatenate([self.score_by_model, score_model])
+            self.score_by_date  = np.concatenate([getattr(self,'score_by_date' ,np.empty((0,len(self.test_result_model_num)))) , score_date])
+            self.score_by_model = np.concatenate([getattr(self,'score_by_model',np.empty((0,len(self.test_result_model_num)))) , score_model])
+            #self.score_by_date  = score_date  if self.score_by_date  is None else np.concatenate([self.score_by_date , score_date])
+            #self.score_by_model = score_model if self.score_by_model is None else np.concatenate([self.score_by_model, score_model])
                 
     def Forecast(self):
         if not os.path.exists(self.path['best']): self.TrainModel()
-        
-        #self.y_pred = cuda(torch.zeros(len(self.data.index[0]),len(self.data.model_test_dates),self.data.labels_n,len(config.output_types)).fill_(np.nan))
-        self.y_pred = cuda_device.torch_nans(len(self.data.index[0]), len(self.data.model_test_dates), len(config.output_types))
-        iter_dates = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
-        assert self.data.dataloaders['test'].__len__() == len(iter_dates)
-        for oi , okey in enumerate(config.output_types):
-            self.load_model('test' , okey)
-
-            with torch.no_grad():
+        with trainer_timer('TestModel/Forcast') , torch.no_grad():
+            #self.y_pred = cuda(torch.zeros(len(self.data.index[0]),len(self.data.model_test_dates),self.data.labels_n,len(config.output_types)).fill_(np.nan))
+            self.y_pred = trainer_device.torch_nans(len(self.data.index[0]), len(self.data.model_test_dates), len(config.output_types))
+            iter_dates = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
+            assert self.data.dataloaders['test'].__len__() == len(iter_dates)
+            for oi , okey in enumerate(config.output_types):
+                self.load_model('test' , okey)
                 self.net.eval()
                 iterator = self.data.dataloaders['test']
-                test_score = np.full(len(iterator),np.nan)
+                test_score = np.full(len(iter_dates),np.nan)
                 for i , batch_data in enumerate(iterator):
-                    nonnan = batch_data['nonnan']
+                    nonnan = torch.where(batch_data['nonnan'])[0]
                     pred = torch.full_like(batch_data['y'], fill_value=torch.nan)
-                    for batch_j in torch.utils.data.DataLoader(cuda_device.torch_arange(len(nonnan)) , batch_size = config.batch_size):
-                        nnj = batch_j[nonnan[batch_j]]
+                    for batch_j in torch.utils.data.DataLoader(trainer_device.torch_arange(len(nonnan)) , batch_size = config.batch_size):
+                        nnj = nonnan[batch_j]
                         batch_nnj = subset(batch_data , nnj)
                         x = self.modifier['inputs'](batch_nnj['x'] , batch_nnj , self.data)
                         pred_nnj = self.net(x)[0].detach()
@@ -464,8 +464,8 @@ class model_controller():
                         test_score[i] = metric['score']
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
                     if iterator.progress_bar: iterator.display(f'Date#{i-len(self.data.early_test_dates):3d} :{np.mean(test_score[i+1]):.5f}')
-            self.score_by_date[-len(self.data.model_test_dates):,self.model_num*len(config.output_types) + oi] = torch.tensor(test_score).nan_to_num(0).cpu().numpy() 
-        self.y_pred = self.y_pred.cpu().numpy()
+            self.score_by_date[-len(self.data.model_test_dates):,self.model_num*len(config.output_types) + oi] = np.nan_to_num(test_score[-len(self.data.model_test_dates):])
+            self.y_pred = self.y_pred.cpu().numpy()
         
     def TestModelEnd(self):
         """
@@ -554,13 +554,7 @@ class model_controller():
         """
         printer = [logger.info] if (config.verbosity > 2 or self.model_count < config.model_num) else [logger.debug]
         sdout   = None
-        if key == 'model_specifics':
-            sdout = config.get_dict([
-                'storage_type' , 'device' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 'model_data_type' , 'model_num' ,
-                'beg_date' , 'test_dates_end' , 'interval' , 'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' , 'compt_params'
-            ])
-            printer = [pretty_print_dict]
-        elif key == 'model_end':
+        if key == 'model_end':
             self.text['epoch'] = 'Ep#{:3d}'.format(self.epoch_all)
             self.text['stat']  = 'Train{: .4f} Valid{: .4f} BestVal{: .4f}'.format(self.score_list['train'][-1],self.score_list['valid'][-1],self.score_round_best)
             self.text['time']  = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format((self.tick[2]-self.tick[0])/60 , (self.tick[2]-self.tick[1])/(self.epoch_all+1))
@@ -656,27 +650,27 @@ class model_controller():
             [self.save_model(k) for k in key]
         else:
             assert key in ['best' , 'swalast' , 'swabest']
-            with time_recorder('save_model'):
+            with trainer_timer('save_model'):
                 if key == 'best':
-                    model_state = model_storage.load(self.path['best'])
+                    model_state = trainer_storage.load(self.path['best'])
                     if self.round_i < self.max_round - 1:
                         if 'rounds' not in self.path.keys():
                             self.path['rounds'] = ['{}/{}.round.{}.pt'.format(self.param.get('path') , self.model_date , r) for r in range(self.max_round - 1)]
                         # self.path[f'round.{self.round_i}'] = '{}/{}.round.{}.pt'.format(self.param.get('path') , self.model_date , self.round_i)
-                        model_storage.save(model_state , self.path['rounds'][self.round_i])
-                    model_storage.save(model_state , self.path['best'] , to_disk = True)
+                        trainer_storage.save(model_state , self.path['rounds'][self.round_i])
+                    trainer_storage.save(model_state , self.path['best'] , to_disk = True)
                 else:
-                    p_exists = model_storage.valid_paths(self.path[f'src_model.{key}'])
+                    p_exists = trainer_storage.valid_paths(self.path[f'src_model.{key}'])
                     if len(p_exists) == 0:
                         print(key , self.path[f'bestn'] , self.path[f'bestn_score'] , self.path[f'src_model.{key}'])
                         raise Exception(f'Model Error')
                     else:
                         model = self.swa_model(p_exists)
-                        model_storage.save_model_state(model , self.path[key] , to_disk = True) 
+                        trainer_storage.save_model_state(model , self.path[key] , to_disk = True) 
     
     def load_model(self , process , key = 'best'):
         assert process in ['train' , 'test' , 'instance']
-        with time_recorder('load_model'):
+        with trainer_timer('load_model'):
             net = globals()[f'My{config.model_module}'](**self.param)
             if process == 'train':           
                 if self.round_i > 0:
@@ -685,11 +679,11 @@ class model_controller():
                     model_path = self.path['transfer']
                 else:
                     model_path = -1
-                if os.path.exists(model_path): net = model_storage.load_model_state(net , model_path , from_disk = True)
+                if os.path.exists(model_path): net = trainer_storage.load_model_state(net , model_path , from_disk = True)
                 if 'training_round' in net.__dir__(): net.training_round(self.round_i)
             else:
-                net = model_storage.load_model_state(net , self.path[key] , from_disk = True)
-            net = cuda_device(net)
+                net = trainer_storage.load_model_state(net , self.path[key] , from_disk = True)
+            net = trainer_device(net)
             self.net = net
             # default : none modifier
             # input : (inputs/metric/update , batch_data , self.data)
@@ -701,9 +695,9 @@ class model_controller():
     
     def swa_model(self , model_path_list = []):
         net = globals()[f'My{config.model_module}'](**self.param)
-        swa_net = cuda_device(AveragedModel(net))
+        swa_net = trainer_device(AveragedModel(net))
         for p in model_path_list:
-            swa_net.update_parameters(model_storage.load_model_state(net , p))
+            swa_net.update_parameters(trainer_storage.load_model_state(net , p))
         update_bn(self._swa_update_bn_loader(self.data.dataloaders['train']) , swa_net)
         return swa_net.module
     
@@ -787,14 +781,8 @@ class model_controller():
         return multiloss
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='manual to this script')
-    parser.add_argument("--process",     type=int, default=-1)
-    parser.add_argument("--rawname",     type=int, default=-1)
-    parser.add_argument("--resume",      type=int, default=-1)
-    parser.add_argument("--anchoring",   type=int, default=-1)
-    config = parser.parse_args()
 
     controller = model_controller()
     controller.main_process()
     controller.ResultOutput()
-    time_recorder.print()
+    trainer_timer.print()
