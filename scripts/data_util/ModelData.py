@@ -14,6 +14,7 @@ from numpy import savez_compressed as save_npz
 from numpy import load as load_npz
 from torch import save as save_pt
 from torch import load as load_pt
+from tqdm import tqdm
 
 DIR_block      = f'{DIR_data}/block_data'
 DIR_hist_norm  = f'{DIR_data}/hist_norm'
@@ -78,6 +79,7 @@ class ModelData():
     """
     def __init__(self , model_data_type , config = None):
         self.config = train_config() if config is None else config
+        self.DEVICE = Device(self.config.device)
         storage_loader.activate(self.config.storage_type)
         self.data_type_list = _type_list(model_data_type)
         self.x_data , self.y_data , self.norms , self.index = load_model_data(self.data_type_list , self.config.labels , self.config.precision)
@@ -164,7 +166,7 @@ class ModelData():
         self.y[:,self.step_idx] = y_step[:]
         if self.buffer_proc is not None: self.buffer.update(self.buffer_proc(self))
 
-        self.buffer = cuda(self.buffer)
+        self.buffer = self.DEVICE(self.buffer)
 
         #index = self.sample_index(self.nonnan_sample)
         #self.static_dataloader(x , y_step , w_step , index , self.nonnan_sample)
@@ -224,7 +226,7 @@ class ModelData():
         else:
             y_new = torch.rand(*nonnan_sample.shape , *y.shape[2:])
             y_new[:] = y[:,self.step_idx].nan_to_num(0)
-            y_new[nonnan_sample == 0] = np.nan
+            y_new[nonnan_sample == 0] = torch.nan
         y_new , w_new = tensor_standardize_and_weight(y_new , 0 , weight_scheme)
         return y_new if no_weight else (y_new , w_new)
     
@@ -294,7 +296,7 @@ class ModelData():
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
                 storage_loader.save(batch_data, batch_file_list[-1] , group = self.dataloader_style)
-            loaders[set_name] = dataloader_saved(batch_file_list)
+            loaders[set_name] = dataloader_saved(batch_file_list , mapping = self.DEVICE , progress_bar = self.config.verbosity >= 10)
         self.dataloaders.update(loaders)
         
     def sample_index2(self , nonnan_sample = None):
@@ -313,7 +315,7 @@ class ModelData():
 
         shp = nonnan_sample.shape
         ipos = torch.zeros(shp[0] , shp[1] , 2 , dtype = int)
-        ipos[:,:,0] = torch.tensor(np.arange(shp[0] , dtype = int)).reshape(-1,1) 
+        ipos[:,:,0] = torch.arange(shp[0] , dtype = int).reshape(-1,1) 
         ipos[:,:,1] = torch.tensor(self.step_idx)
 
         if self.dataloader_style == 'train':
@@ -393,7 +395,7 @@ class ModelData():
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
                 storage_loader.save(batch_data, batch_file_list[-1] , group = self.dataloader_style)
-            loaders[set_name] = dataloader_saved(batch_file_list)
+            loaders[set_name] = dataloader_saved(batch_file_list , progress_bar = self.config.verbosity >= 10)
         self.dataloaders.update(loaders)
         
     def _norm_x(self , x , key):
@@ -415,13 +417,17 @@ class dataloader_saved:
     """
     class of saved dataloader , retrieve batch_data from './model/{model_name}/{set_name}_batch_data'
     """
-    def __init__(self, batch_file_list):
-        self.batch_file_list = batch_file_list
+    def __init__(self, batch_file_list , mapping = None , progress_bar = False):
+        self.progress_bar = progress_bar
+        self.iterator = tqdm(batch_file_list) if progress_bar else batch_file_list
+        self.mapping = lambda x:x if mapping is None else mapping
     def __len__(self):
-        return len(self.batch_file_list)
+        return len(self.iterator)
     def __iter__(self):
-        for batch_file in self.batch_file_list: 
-            yield cuda(storage_loader.load(batch_file))
+        for batch_file in self.iterator: 
+            yield self.mapping(storage_loader.load(batch_file))
+    def display(self , text = ''):
+        if self.progress_bar: self.iterator.set_description(text)
     
 class Mydataset(Dataset):
     def __init__(self, data1 , label , weight = None) -> None:
@@ -960,7 +966,7 @@ def block_hist_norm(data_block , key ,
 
     x = torch.tensor(data_block.values[:,date_slice])
     pad_array = (0,0,0,0,maxday,0,0,0)
-    x = torch.nn.functional.pad(x , pad_array , value = np.nan)
+    x = torch.nn.functional.pad(x , pad_array , value = torch.nan)
     
     avg_x = torch.zeros(len_bars , len(feat))
     std_x = torch.zeros(len_bars , len(feat))

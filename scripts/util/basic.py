@@ -55,12 +55,10 @@ class memory_printer:
         print(self.__repr__())
 class FilteredIterator:
     def __init__(self, iterable, condition):
-        self.iterable = iterable
-        self.condition = condition
-
+        self.iterable  = iter(iterable)
+        self.condition = condition if callable(condition) else iter(condition)
     def __iter__(self):
         return self
-
     def __next__(self):
         while True:
             item = next(self.iterable)

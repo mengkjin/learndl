@@ -305,13 +305,12 @@ def rmdir(d , remake_dir = False):
     else:
         raise Exception(f'KeyError : {str(d)}')
         
-def list_converge(l , n = None , eps = None):
+def list_converge(l , n = None , eps = 1e-6):
     """
     Last n element of l has range smaller than eps
     """
-    n = len(l) if n is None else n
-    eps = 0 if eps is None else eps
-    return len(l) >= n and (max(l[-n:]) - min(l[-n:])) < eps   
+    if n is None: return max(l) - min(l) < eps   
+    return len(l) >= n and (max(l[-n:]) - min(l[-n:]) < eps)
 
 def pretty_print_dict(dictionary , width = 140 , sort_dicts = False):
     pprint.pprint(dictionary, indent = 1, width = width , sort_dicts = sort_dicts)

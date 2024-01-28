@@ -56,7 +56,10 @@ TRAIN_PARAM:
     retrain:   {'attempts' : 4 , 'min_epoch' : 20 , 'min_epoch_round' : 10} 
   criterion:
     loss:      'ccc' # mse , pearson , ccc
-    score:     'pearson' #mse,pearson,ccc,spearman
+    score:     #mse,pearson,ccc,spearman
+      train:   'pearson'
+      valid:   'pearson'
+      test:    'pearson'
     penalty:   
       hidden_orthogonality : 
         lamb : 0.001

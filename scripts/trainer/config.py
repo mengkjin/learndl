@@ -1,4 +1,5 @@
 import random , os , shutil
+from typing import Any
 import numpy as np
 import torch
 import argparse
@@ -6,8 +7,7 @@ from types import SimpleNamespace
 from copy import deepcopy
 from ..util.environ import *
 
-DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
+use_device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 class TrainConfig(SimpleNamespace):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -31,6 +31,10 @@ class TrainConfig(SimpleNamespace):
             key_list = list(self.keys())
             for k in key_list: delattr(self,k)
             for k,v in raw_config_dict.items(): setattr(self,k,v)
+    def get_dict(self , keys = None):
+        if keys is None: keys = self.items()
+        d = {k:getattr(self,k,None) for k in keys}
+        return d
 
 def trainer_parser(default = -1 , description='manual to this script'):
     parser = argparse.ArgumentParser(description=description)
@@ -81,7 +85,7 @@ def train_config(config = None , parser = SimpleNamespace() , do_process = False
         raw_config = _load_raw_config()
     else:
         raw_config = deepcopy(config)
-    config = TrainConfig()
+    config = TrainConfig(device = use_device)
     for key in raw_config.keys():
         newkey = key if key in ['TRAIN_PARAM' , 'COMPT_PARAM' , 'MODEL_PARAM'] else key.lower()
         value = raw_config.get(key)
@@ -186,10 +190,28 @@ def train_config(config = None , parser = SimpleNamespace() , do_process = False
     config.tra_model = config.tra_switch and config.model_module.lower().startswith('tra')
     return config
 
-def cuda(x):
-    if isinstance(x , (list,tuple)):
-        return type(x)(map(cuda , x))
-    elif isinstance(x , (dict)):
-        return {k:cuda(v) for k,v in x.items()}
-    else:
-        return x.to(DEVICE) if x is not None else None
+class Device:
+    def __init__(self , device = use_device) -> None:
+        self.device = device
+    def __call__(self, *args: Any, **kwds: Any) -> Any:
+        args = self.to_device(args)
+        kwds = self.to_device(kwds)
+        return args , kwds
+    def _to(self , x):
+        if isinstance(x , (list,tuple)):
+            return type(x)(self._to(v) for v in x)
+        elif isinstance(x , (dict)):
+            return {k:self._to(v) for k,v in x.items()}
+        else:
+            return x.to(self.device) if x is not None else None
+    def torch_nans(self,*args,**kwargs):
+        return torch.ones(*args , device = self.device , **kwargs).fill_(torch.nan)
+    def torch_zeros(self,*args , **kwargs):
+        return torch.zeros(*args , device = self.device , **kwargs)
+    def torch_ones(self,*args,**kwargs):
+        return torch.ones(*args , device = self.device , **kwargs)
+    def torch_arange(self,*args,**kwargs):
+        return torch.arange(*args , device = self.device , **kwargs)
+    def print_cuda_memory(self):
+        print(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
+              f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G')
