@@ -81,7 +81,8 @@ class ModelData():
         self.loader_storage = versatile_storage(self.config.storage_type)
         self.data_type_list = _type_list(model_data_type)
         self.x_data , self.y_data , self.norms , self.index = load_model_data(self.data_type_list , self.config.labels , self.config.precision)
-        self.date , self.secid = self.index
+        # self.x_data , self.y_data , self.norms , self.index = load_old_valid_data()
+        # self.date , self.secid = self.index
 
         num_out = self.config.MODEL_PARAM['num_output']
         self.labels_n = min(self.y_data.shape[-1] , max(num_out) if isinstance(num_out,(list,tuple)) else num_out)
@@ -637,6 +638,16 @@ class DataBlock():
         self.shape   = self.values.shape
         return self
     
+    def align_date(self , date):
+        if date is None or len(date) == 0: return self
+        values = np.full((self.shape[0] , len(date) , *self.shape[2:]) , np.nan)
+        _ , p0d , p1d = np.intersect1d(date , self.date , return_indices=True)
+        values[:,p0d] = self.values[:,p1d]
+        self.values  = values
+        self.secid   = date
+        self.shape   = self.values.shape
+        return self
+    
     def align_feature(self , feature):
         if feature is None or len(feature) == 0: return self
         values = np.full((*self.shape[:-1],len(feature)) , np.nan)
@@ -783,6 +794,33 @@ def load_model_data(data_type_list , y_labels = None , dtype = torch.float):
         data = {'x':x,'y':y,'norms':norms,'secid':secid,'date':date}
         save_dict_data(data , path_torch_pack)
 
+    x, y, norms, secid, date = data['x'], data['y'], data['norms'], data['secid'], data['date']
+    return x , y , norms , (secid , date)
+
+def load_old_valid_data():
+    '''
+    data2 = {'x':{}}
+
+    d = np.load('X1_day.npz')
+    data2['x']['day'] = DataBlock(d['arr'],d['row'],d['col'],['open', 'high', 'low', 'close', 'volume', 'vwap'])
+
+    d = np.load('Ys.npz')
+    data2['y'] = DataBlock(d['arr'],d['row'],d['col'],['rtn_lag1_10','rtn_lag1_5'])
+
+    d = torch.load('stat_dict.pt')
+    data2['norms'] = {'day':d['day']}
+
+    secid = np.intersect1d(data2['x']['day'].secid , data2['y'].secid)
+    date  = np.intersect1d(data2['x']['day'].date  , data2['y'].date)
+    data2['x']['day'] = data2['x']['day'].align_secid(secid).align_date(date)
+    data2['y'] = data2['y'].align_secid(secid).align_date(date)
+
+    data2['secid'] = secid
+    data2['date']  = date
+
+    torch.save(data2 , './data/torch_pack/test_old_valid_data.pt')
+    '''
+    data = torch.load('./data/torch_pack/test_old_valid_data.pt')
     x, y, norms, secid, date = data['x'], data['y'], data['norms'], data['secid'], data['date']
     return x , y , norms , (secid , date)
 
