@@ -5,7 +5,7 @@ PRECISION:  'float' # double , bfloat16
 TRA_switch: False
 WEIGHT_TRAIN: 'equal' # equal
 WEIGHT_TEST:  'equal' # equal
-MODEL_MODULE: 'TCN' # 'TRA_LSTM' # 'GeneralRNN' 
+MODEL_MODULE: 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
 MODEL_NICKNAME: 'None' # 'LSTM' # 'TCN_vs_LSTM' any str or None
 MODEL_NUM: 1
 MODEL_DATATYPE:
@@ -20,13 +20,13 @@ LABELS:
   - rtn_lag1_10
   - res_lag1_10
 MODEL_PARAM:
-  hidden_dim:  [32] #  2**5
-  seqlens:     [{'day': 40 , '15m': 20 , 'dms': 40 , 'hist_loss': 40}] # although not a param for model, but can be different values(dict of SEQLEN)
-  rnn_layers:  [5]
+  hidden_dim:  [64] #  2**5
+  seqlens:     [{'day': 40 , '15m': 20 , 'dms': 40}] # although not a param for model, but can be different values(dict of SEQLEN) #'hist_loss': 40
+  rnn_layers:  [2]
   mlp_layers:  [1] 
   dropout:     [0.1]
   fc_in:       [true]
-  fc_att:      [true] 
+  fc_att:      [false] 
   type_rnn:    ['lstm'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
   rnn_att:     [false]
   num_output:  [1]
@@ -42,13 +42,13 @@ TRAIN_PARAM:
   dataloader:
     random_seed:     null
     random_tv_split: True
-    sample_method:   sequential # total_shuffle , sequential , both_shuffle , train_shuffle
+    sample_method:   total_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
     train_ratio:     0.8
   trainer:
     optimizer: {'name' : 'Adam' , 'param' : {} ,}  #{'name' : 'SGD' , 'param' : {} ,}
     scheduler: {'name' : 'cycle' , 'param' : {'base_lr': 1.0e-7 , 'step_size_up': 4} ,}  #{'name' : 'SGD' , 'param' : {} ,}
     learn_rate:
-      base:    0.05
+      base:    0.005
       ratio:   {'attempt':[1 , 0.1 , 10 , 0.01 , 100] , 'round' : [1.] , 'transfer' : 0.1 , } 
       reset:   {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
     nanloss:   {'retry' : 2}
@@ -90,9 +90,10 @@ TRAIN_PARAM:
       valid_converge: {'min_epoch' : 5 , 'eps' : 1.0e-5} 
 SPECIAL_CONFIG:
   SHORTTEST:
-    BEG_DATE:   20230606
+    BEG_DATE:   20170103
+    END_DATE:   20171201
     INPUT_SPAN: 480
-    MAX_EPOCH:  20
+    MAX_EPOCH:  50
     VERBOSITY:  3
     MODEL_NICKNAME: 'SHORTTEST'
   TRANSFORMER:

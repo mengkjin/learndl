@@ -80,8 +80,10 @@ class ModelData():
         self.loader_device  = Device(self.config.device)
         self.loader_storage = versatile_storage(self.config.storage_type)
         self.data_type_list = _type_list(model_data_type)
-        self.x_data , self.y_data , self.norms , self.index = load_model_data(self.data_type_list , self.config.labels , self.config.precision)
-        # self.x_data , self.y_data , self.norms , self.index = load_old_valid_data()
+        #self.x_data , self.y_data , self.norms , self.index = load_model_data(self.data_type_list , self.config.labels , self.config.precision)
+        self.x_data , self.y_data , self.norms , self.index = load_old_valid_data()
+        for k in self.x_data.keys(): self.x_data[k] = self.x_data[k].to(asTensor=True , dtype = torch.float)
+        self.y_data = self.y_data.to(asTensor=True , dtype = torch.float)
         # self.date , self.secid = self.index
 
         num_out = self.config.MODEL_PARAM['num_output']
@@ -145,10 +147,10 @@ class ModelData():
             before_test_dates = self.index[1][self.index[1] < min(self.test_full_dates)][-self.seqy:]
             test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::test_step]
             self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
-            self.early_test_dates = test_dates[test_dates <= model_date][-(self.seqy-1) // test_step:]
-
-            d0 = np.where(self.index[1] == self.early_test_dates[0])[0][0] - self.seqx + 1
-            d1 = np.where(self.index[1] == self.model_test_dates[-1])[0][0] + 1
+            self.early_test_dates = test_dates[test_dates <= model_date][-(self.seqy-1) // test_step:] if self.seqy > 1 else test_dates[-1:-1]
+            _cal_test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
+            d0 = np.where(self.index[1] == _cal_test_dates[0])[0][0] - self.seqx + 1
+            d1 = np.where(self.index[1] == _cal_test_dates[-1])[0][0] + 1
             self.day_len  = d1 - d0
             self.step_len = (self.day_len - self.seqx + 1) // test_step + (0 if self.day_len % test_step == 0 else 1)
             self.step_idx = np.flip(self.day_len - 1 - np.arange(0 , self.step_len) * self.test_step).copy() 

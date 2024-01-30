@@ -289,3 +289,113 @@
   0.best: 1.3332449165754952
   0.swabest: 2.587443843774963
   0.swalast: 1.8597185981197981
+0_start: Tue Jan 30 23:18:47 2024
+1_basic: short+mem+float
+2_model: TCN_day(x1)
+3_time: 20230606-99991231
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.5 Min/model, 1.6 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 4.4 Secs
+7_result:
+  0.best: 0.0
+  0.swabest: 0.09893874544650316
+  0.swalast: 0.0
+0_start: Tue Jan 30 23:20:16 2024
+1_basic: short+mem+float
+2_model: TCN_day(x1)
+3_time: 20170103-20171231
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 0.9 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 25.0 Secs
+7_result:
+  0.best: 0.0
+  0.swabest: -2.5000153220917127
+  0.swalast: 0.0
+0_start: Tue Jan 30 23:22:51 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171231
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 0.9 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 18.9 Secs
+7_result:
+  0.best: 0.0
+  0.swabest: -1.5013543729437515
+  0.swalast: 0.0
+0_start: Tue Jan 30 23:24:39 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.9 Min/model, 1.8 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 16.5 Secs
+7_result:
+  0.best: 0.0
+  0.swabest: -6.119860280232388
+  0.swalast: 0.0
+0_start: Tue Jan 30 23:37:20 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 0.8 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 18.2 Secs
+7_result:
+  0.best: 0.0
+  0.swabest: -1.5572007427472272
+  0.swalast: 0.0
+0_start: Tue Jan 30 23:39:17 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 0.8 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 21.0 Secs
+7_result:
+  0.best: 0.0
+  0.swabest: -0.6732241170248017
+  0.swalast: 0.0
+0_start: Tue Jan 30 23:42:37 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 0.8 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 22.4 Secs
+7_result:
+  0.best: -1.39019576300052
+  0.swabest: -1.4554480233346112
+  0.swalast: -0.23069427045993507
+0_start: Tue Jan 30 23:49:01 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 0.8 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 18.0 Secs
+7_result:
+  0.best: -0.6455194016598398
+  0.swabest: -2.477314722840674
+  0.swalast: -1.7821819199889433
+0_start: Tue Jan 30 23:56:30 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.7 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 12.4 Secs
+7_result:
+  0.best: 0.21767309848655714
+  0.swabest: 0.3593559918003848
+  0.swalast: -0.7038652768969769
+0_start: Tue Jan 30 23:58:36 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.5 Min/model, 0.6 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 11.9 Secs
+7_result:
+  0.best: 1.227034567447845
+  0.swabest: 1.9772684821145958
+  0.swalast: -0.10635756945703179

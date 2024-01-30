@@ -41,7 +41,7 @@ except:
 logger = get_logger()
 config = train_config(parser = parser , do_process=True)
 set_trainer_environment(config)
-trainer_timer   = process_timer(True)
+trainer_timer   = process_timer(False)
 trainer_storage = versatile_storage(config.storage_type)
 trainer_device  = Device(config.device)
 
@@ -464,7 +464,7 @@ class model_controller():
                         test_score[i] = metric['score']
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
                     if iterator.progress_bar: iterator.display(f'Date#{i-len(self.data.early_test_dates):3d} :{np.mean(test_score[i+1]):.5f}')
-            self.score_by_date[-len(self.data.model_test_dates):,self.model_num*len(config.output_types) + oi] = np.nan_to_num(test_score[-len(self.data.model_test_dates):])
+                self.score_by_date[-len(self.data.model_test_dates):,self.model_num*len(config.output_types) + oi] = np.nan_to_num(test_score[-len(self.data.model_test_dates):])
             self.y_pred = self.y_pred.cpu().numpy()
         
     def TestModelEnd(self):
