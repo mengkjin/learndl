@@ -35,10 +35,10 @@ class TrainConfig(SimpleNamespace):
         d = {k:getattr(self,k,None) for k in keys}
         return d
 
-def trainer_parser(default = -1 , description='manual to this script'):
+def trainer_parser(input = {} , default = -1 , description='manual to this script'):
     parser = argparse.ArgumentParser(description=description)
     for arg in ['process' , 'rawname' , 'resume' , 'anchoring']:
-        parser.add_argument(f'--{arg}', type=int, default=default)
+        parser.add_argument(f'--{arg}', type=int, default = default if input.get(arg) is None else input.get(arg))
     return parser
 
 def set_trainer_environment(config , manual_random_seed = None):
@@ -74,14 +74,14 @@ def _load_raw_config(config_files = None):
     return config
 
 def train_config(config = None , parser = SimpleNamespace() , do_process = False , 
-                 reload_name = None , reload_base_path = None):
+                 reload_name = None , reload_base_path = None , config_files = None):
     """
     1. namespace type of config
     2. Ask what process would anyone want to run : 0 : train & test(default) , 1 : train only , 2 : test only , 3 : copy to instance only
     3. Ask if model_name and model_base_path should be changed if old dir exists
     """
     if config is None:
-        raw_config = _load_raw_config()
+        raw_config = _load_raw_config(config_files)
     else:
         raw_config = deepcopy(config)
     config = TrainConfig(device = use_device)

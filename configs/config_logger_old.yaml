@@ -1,0 +1,75 @@
+console:
+  class: logging.StreamHandler
+  formatter: levelcolor
+  formatter_class: _LevelColorFormatter
+  level: INFO
+  param: {}
+datefmt: '%y-%m-%d %H:%M:%S'
+file:
+  class: logging.handlers.TimedRotatingFileHandler
+  formatter: level
+  formatter_class: _LevelFormatter
+  level: DEBUG
+  param:
+    backupCount: 5
+    encoding: utf-8
+    filename: ./logs/nn_fac_log.log
+    when: D
+formatters:
+  color:
+    fmt: '%(log_color)s%(asctime)s|MOD:%(module)-12s|%(reset_log_color)s: %(message_log_color)s%(message)s'
+    log_colors:
+      CRITICAL: bold,white,bg_red
+      DEBUG: bold,white,bg_cyan
+      ERROR: bold,white,bg_purple
+      INFO: bold,white,bg_green
+      WARNING: bold,white,bg_blue
+    secondary_log_colors:
+      message:
+        CRITICAL: bold,red
+        DEBUG: cyan
+        ERROR: bold,purple
+        INFO: green
+        WARNING: bold,blue
+      reset:
+        CRITICAL: reset
+        DEBUG: reset
+        ERROR: reset
+        INFO: reset
+        WARNING: reset
+  level:
+    fmt: '%(asctime)s|MOD:%(module)-12s|: %(message)s'
+    level_fmts:
+      DEBUG: '%(message)s'
+      INFO: '%(message)s'
+  levelcolor:
+    fmt: '%(log_color)s%(asctime)s|MOD:%(module)-12s|%(reset_log_color)s: %(message_log_color)s%(message)s'
+    level_fmts:
+      DEBUG: '%(message_log_color)s%(message)s'
+      INFO: '%(message_log_color)s%(message)s'
+    log_colors:
+      CRITICAL: bold,white,bg_red
+      DEBUG: bold,white,bg_cyan
+      ERROR: bold,white,bg_purple
+      INFO: bold,white,bg_green
+      WARNING: bold,white,bg_blue
+    secondary_log_colors:
+      message:
+        CRITICAL: bold,red
+        DEBUG: cyan
+        ERROR: bold,purple
+        INFO: green
+        WARNING: bold,blue
+      reset:
+        CRITICAL: reset
+        DEBUG: reset
+        ERROR: reset
+        INFO: reset
+        WARNING: reset
+  standard:
+    fmt: '%(asctime)s|MOD:%(module)-12s|: %(message)s'
+handlers:
+- console
+- file
+level: DEBUG
+name: default_log
