@@ -1,6 +1,7 @@
 # most frequently changing variables
 SHORTTEST:  true
 STORAGE_TYPE: mem # disk
+OUTPUT_PREDICTION: False
 PRECISION:  'float' # double , bfloat16
 TRA_switch: False
 WEIGHT_TRAIN: 'equal' # equal

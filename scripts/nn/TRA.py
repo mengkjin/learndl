@@ -96,8 +96,6 @@ class TRA(nn.Module):
             self.global_steps += 1
             metric['loss'] = metric['loss'] - lamb * reg
             return metric
-        else:
-            return metric
     
     def modifier_update(self , update , batch_data , ModelDate):
         if self.num_states > 1 and self.preds is not None:

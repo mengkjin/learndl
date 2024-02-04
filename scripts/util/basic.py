@@ -159,8 +159,11 @@ class versatile_storage():
         return torch.load(path) if self.default == 'disk' or from_disk else self.mem_disk[path]
 
     def _pathlist(self , p):
-        if p is None: return []
-        return [p] if isinstance(p , str) else p
+        if p is None: 
+            return []
+        elif isinstance(p , str):
+            p = [p]
+        return p
     
     def _saveone(self , obj , p , to_disk = False):
         if to_disk:
@@ -176,7 +179,10 @@ class versatile_storage():
             self.file_group[group] = np.union1d(self.file_group[group] , [p])
     
     def save_model_state(self , model , paths , to_disk = False , group = 'default'):
-        sd = model.state_dict() if (self.default == 'disk' or to_disk) else deepcopy(model).cpu().state_dict()
+        if isinstance(model , torch.nn.Module):
+            sd = model.state_dict() if (self.default == 'disk' or to_disk) else deepcopy(model).cpu().state_dict()
+        elif isinstance(model , dict):
+            sd = model
         self.save(sd , paths , to_disk , group)
         
     def load_model_state(self , model , path , from_disk = False):

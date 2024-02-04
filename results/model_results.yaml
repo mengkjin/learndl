@@ -481,3 +481,124 @@
   0.best: 24.205462188459933
   0.swabest: 24.071705352995195
   0.swalast: 20.83032763004303
+0_start: Sun Feb  4 19:27:40 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.7 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 11.7 Secs
+7_result:
+  0.best: 23.327269102912396
+  0.swabest: 23.396341353829484
+  0.swalast: 20.71980506251566
+0_start: Sun Feb  4 19:29:36 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.7 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 12.0 Secs
+7_result:
+  0.best: 22.533877909649163
+  0.swabest: 23.028735821484588
+  0.swalast: 20.735858655010816
+0_start: Sun Feb  4 19:54:29 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 0.9 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 13.8 Secs
+7_result:
+  0.best: 11.65242972940905
+  0.swabest: 12.263073371257633
+  0.swalast: 9.600755677209236
+0_start: Sun Feb  4 19:55:43 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.7 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 12.8 Secs
+7_result:
+  0.best: 23.20646333170589
+  0.swabest: 23.87298121061758
+  0.swalast: 21.430453342443798
+0_start: Sun Feb  4 21:22:52 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.7 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 10.5 Secs
+7_result:
+  0.best: 20.015091608423973
+  0.swabest: 19.633539572823793
+  0.swalast: 18.28817386412993
+0_start: Sun Feb  4 21:39:51 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.7 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 12.0 Secs
+7_result:
+  0.best: 22.07141967001371
+  0.swabest: 21.599229303014
+  0.swalast: 18.202405599309714
+0_start: Mon Feb  5 05:53:32 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.1 Min/model, 1.2 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 13.0 Secs
+7_result:
+  0.best: 3.5445881501655094
+  0.swabest: -0.021929868933511898
+  0.swalast: -4.223762341978727
+0_start: Mon Feb  5 05:55:25 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.1 Min/model, 1.2 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 10.3 Secs
+7_result:
+  0.best: 0.5555742517171893
+  0.swabest: -1.3150820415685303
+  0.swalast: -3.6559784138662508
+0_start: Mon Feb  5 06:00:42 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.7 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 10.5 Secs
+7_result:
+  0.best: 23.13004092819756
+  0.swabest: 23.46030136954505
+  0.swalast: 22.32439175772015
+0_start: Mon Feb  5 06:28:15 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.7 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 11.0 Secs
+7_result:
+  0.best: 24.126649431767873
+  0.swabest: 24.423581567127258
+  0.swalast: 22.63559444830753
+0_start: Mon Feb  5 06:29:38 2024
+1_basic: short+mem+float
+2_model: LSTM_day(x1)
+3_time: 20170103-20171201
+4_typeNN: lstm
+5_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.7 Sec/Epoch
+6_test: Finish Process [Test Model]! Cost 10.3 Secs
+7_result:
+  0.best: 24.460164482006803
+  0.swabest: 24.491750430781394
+  0.swalast: 21.128018262359546

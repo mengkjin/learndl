@@ -314,7 +314,7 @@ class ModelData2():
                 batch_w = None if w is None else w[i0,yi1]
                 for mdt in x.keys():
                     data = torch.cat([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1)
-                    data = self._norm_x(data,mdt)
+                    data = self.prenorm(data,mdt)
                     batch_x.append(data)
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
                 batch_nonnan = nonnan_sample[i0,yi1]
@@ -438,12 +438,12 @@ class ModelData2():
                 batch_file_list.append(batch_dir[set_name] + f'/{set_name}.{batch_num}.pt')
                 i0 , i1 , batch_y , batch_x = set_i[batch_pos , 0] , set_i[batch_pos , 1] , set_y[batch_pos] , []
                 for mdt in ['day']:
-                    batch_x.append(self._norm_x(torch.cat([x[mdt][i0,i1+i+1-self.seq[mdt]] for i in range(self.seq[mdt])],dim=1),mdt))
+                    batch_x.append(self.prenorm(torch.cat([x[mdt][i0,i1+i+1-self.seq[mdt]] for i in range(self.seq[mdt])],dim=1),mdt))
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
                 self.storage_loader.save((batch_x, batch_y), batch_file_list[-1] , group = 'train')
             self.dataloaders[set_name] = self.dataloader_saved(batch_file_list , self.storage_loader)    
 
-    def _norm_x(self , x , key):
+    def prenorm(self , x , key):
         """
         return panel_normalized x
         1.for ts-cols , divide by the last value, get seq-mormalized x
@@ -488,11 +488,11 @@ class ModelData():
         self.config = train_config() if config is None else config
         self.loader_device  = Device(self.config.device)
         self.loader_storage = versatile_storage(self.config.storage_type)
-        self.norming_method = {}
+        self.prenorming_method = {}
 
         self.data_type_list = _type_list(model_data_type)
-        #self.x_data , self.y_data , self.norms , self.index = load_model_data(self.data_type_list , self.config.labels , self.config.precision)
-        self.x_data , self.y_data , self.norms , self.index = load_old_valid_data()
+        self.x_data , self.y_data , self.norms , self.index = load_model_data(self.data_type_list , self.config.labels , self.config.precision)
+        #self.x_data , self.y_data , self.norms , self.index = load_old_valid_data()
         for k in self.x_data.keys(): self.x_data[k] = self.x_data[k].to(asTensor=True , dtype = torch.float)
         self.y_data = self.y_data.to(asTensor=True , dtype = torch.float)
         # self.date , self.secid = self.index
@@ -568,11 +568,11 @@ class ModelData():
             self.date_idx = d0 + self.step_idx
 
         # data_func = lambda x:torch.nn.functional.pad(x[:,d0:d1] , (0,0,0,0,0,self.seq0-self.input_step,0,0) , value=np.nan)
-        DataFunc = lambda d:d[:,d0:d1]
-        x = {k:DataFunc(v.values) for k,v in self.x_data.items()}
-        self.y = self.process_y_data(DataFunc(self.y_data.values).squeeze(2)[:,:,:self.labels_n] , None , no_weight = True)
-        self.y_secid = self.y_data.secid
-        self.y_date  = self.y_data.date[d0:d1]
+
+        x = {k:v.values[:,d0:d1] for k,v in self.x_data.items()}
+        self.y = self.process_y_data(self.y_data.values[:,d0:d1].squeeze(2)[...,:self.labels_n] , None , no_weight = True)
+        self.y_secid , self.y_date = self.y_data.secid , self.y_data.date[d0:d1]
+
         if self.buffer_init is not None: self.buffer.update(self.buffer_init(self))
 
         self.nonnan_sample = self.cal_nonnan_sample(x, self.y, **{k:v for k,v in self.buffer.items() if k in self.seqs.keys()})
@@ -582,11 +582,11 @@ class ModelData():
 
         self.buffer = self.loader_device(self.buffer)
 
-        index = self.sample_index(self.nonnan_sample)
-        self.static_dataloader(x , y_step , w_step , index , self.nonnan_sample)
+        #index = self.sample_index(self.nonnan_sample)
+        #self.static_dataloader(x , y_step , w_step , index , self.nonnan_sample)
 
-        #index = self.sample_index2(self.nonnan_sample)
-        #self.static_dataloader2(x , y_step , w_step , index , self.nonnan_sample)
+        index = self.sample_index2(self.nonnan_sample)
+        self.static_dataloader2(x , y_step , w_step , index , self.nonnan_sample)
 
         gc.collect() , torch.cuda.empty_cache()
         
@@ -702,7 +702,7 @@ class ModelData():
                 batch_w = None if w is None else w[i0,yi1]
                 for mdt in x.keys():
                     data = torch.cat([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1)
-                    data = self._norm_x(data,mdt)
+                    data = self.prenorm(data,mdt)
                     batch_x.append(data)
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
                 batch_nonnan = nonnan_sample[i0,yi1]
@@ -801,7 +801,7 @@ class ModelData():
                 batch_w = None if w is None else w[i0,yi1]
                 for mdt in x.keys():
                     data = torch.cat([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1)
-                    data = self._norm_x(data,mdt)
+                    data = self.prenorm(data,mdt)
                     batch_x.append(data)
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
                 batch_nonnan = nonnan_sample[i0,yi1]
@@ -810,22 +810,22 @@ class ModelData():
             loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.config.verbosity >= 10)
         self.dataloaders.update(loaders)
         
-    def _norm_x(self , x , key , static = True):
+    def prenorm(self , x , key , static = True):
         """
         return panel_normalized x
         1.for ts-cols , divide by the last value, get seq-mormalized x
         2.for seq-mormalized x , normalized by history avg and std
         """
-        if static and self.norming_method.get(key) is not None:
-            norming_method = self.norming_method.get(key)
+        if static and self.prenorming_method.get(key) is not None:
+            prenorming_method = self.prenorming_method.get(key)
         else:
-            norming_method = [_type_abbr(key) in ['day'] , self.norms.get(key) is not None]
+            prenorming_method = [_type_abbr(key) in ['day'] , self.norms.get(key) is not None]
             if static:
-                self.norming_method.update({key:norming_method})
-                print(f'Norming method of [{key}] : [endpoint_division({norming_method[0]}) , history_standardize({norming_method[1]})]')
-        if norming_method[0]:
+                self.prenorming_method.update({key:prenorming_method})
+                print(f'Pre-Norming method of [{key}] : [endpoint_division({prenorming_method[0]}) , history_standardize({prenorming_method[1]})]')
+        if prenorming_method[0]:
             x /= x.select(-2,-1).unsqueeze(-2) + _div_tol
-        if norming_method[1]:
+        if prenorming_method[1]:
             x -= self.norms[key]['avg'][-x.shape[-2]:]
             x /= self.norms[key]['std'][-x.shape[-2]:] + _div_tol
         """

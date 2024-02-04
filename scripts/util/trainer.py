@@ -30,6 +30,8 @@ class TrainConfig(SimpleNamespace):
             key_list = list(self.keys())
             for k in key_list: delattr(self,k)
             for k,v in raw_config_dict.items(): setattr(self,k,v)
+    def get(self , key):
+        return getattr(self,key,None)
     def get_dict(self , keys = None):
         if keys is None: keys = self.items()
         d = {k:getattr(self,k,None) for k in keys}
@@ -175,7 +177,12 @@ def train_config(config = None , parser = SimpleNamespace() , do_process = False
     if reload_base_path is not None: config.model_base_path = reload_base_path
         
     config.train_params = deepcopy(config.TRAIN_PARAM)
+    if 'best' not in config.train_params['output_types']:
+        config.train_params['output_types'] = ['best'] + config.train_params['output_types']
+    config.output_types = config.train_params['output_types']
+    
     config.compt_params = deepcopy(config.COMPT_PARAM)
+
     if config.resume_training and os.path.exists(f'{config.model_base_path}/model_params.pt'):
         config.model_params = torch.load(f'{config.model_base_path}/model_params.pt')
     else:
@@ -185,8 +192,9 @@ def train_config(config = None , parser = SimpleNamespace() , do_process = False
                        k,v in config.MODEL_PARAM.items()}
             dict_mm.update({'path':f'{config.model_base_path}/{mm}'}) 
             config.model_params.append(deepcopy(dict_mm))
-    config.output_types = config.train_params['output_types']
+
     config.tra_model = config.tra_switch and config.model_module.lower().startswith('tra')
+    
     return config
 
 class Device:

@@ -45,11 +45,11 @@ trainer_timer   = process_timer(False)
 trainer_storage = versatile_storage(config.storage_type)
 trainer_device  = Device(config.device)
 
-if config.verbosity > 3:
+if not config.shorttest:
     logger.warning('Model Specifics:')
     pretty_print_dict(config.get_dict([
         'verbosity' , 'storage_type' , 'device' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 'model_data_type' , 'model_num' ,
-        'beg_date' , 'test_dates_end' , 'interval' , 'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' , 'compt_params'
+        'beg_date' , 'end_date' , 'interval' , 'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' , 'compt_params'
     ]))
 
 class model_controller():
@@ -73,17 +73,17 @@ class model_controller():
             self.__getattribute__(f'model_process_{process_name.lower()}')()
     
     def SetProcessName(self , key = 'data'):
-        config.process_name = key.lower()
+        self.process_name = key.lower()
         self.model_count = 0
         self.epoch_count = 0
-        if config.process_name == 'data': 
+        if self.process_name == 'data': 
             pass
-        elif config.process_name in ['train' , 'test' , 'instance']: 
+        elif self.process_name in ['train' , 'test' , 'instance']: 
             self.data.reset_dataloaders()
             self.metric_function = {
                 'loss'    : loss_function(config.train_params['criterion']['loss']) , 
-                'score'   : {k:score_function(v) for k,v in config.train_params['criterion']['score'].items()} ,
-                'penalty' : {k:penalty_function(k,v) for k,v in config.train_params['criterion']['penalty'].items()}
+                'penalty' : {pentype:penalty_function(pentype,param) for pentype,param  in config.train_params['criterion']['penalty'].items()} ,
+                'score'   : {process:score_function(metric)          for process,metric in config.train_params['criterion']['score'].items()} ,
             }
         else:
             raise Exception(f'KeyError : {key}')
@@ -96,11 +96,9 @@ class model_controller():
         logger.critical(f'Start Process [Load Data]!')
         self.data = ModelData(config.model_data_type , config)
         # retrieve from data object
-        config.data_type_list  = self.data.data_type_list
-        config.model_date_list = self.data.model_date_list
-        config.test_full_dates = self.data.test_full_dates
-        config.test_dates_end  = self.data.test_full_dates[-1]
-        input_dim = tuple(self.data.feat_dims[mdt] for mdt in config.data_type_list)
+        #config.test_full_dates = self.data.test_full_dates
+        #config.test_dates_end  = self.data.test_full_dates[-1]
+        input_dim = tuple(self.data.feat_dims[mdt] for mdt in self.data.data_type_list)
         for smp in config.model_params: 
             smp.update({'input_dim':input_dim if len(input_dim) > 1 else input_dim[0]})
         logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.model_info['data_time']))
@@ -135,6 +133,7 @@ class model_controller():
             self.model_date , self.model_num = model_date , model_num
             self.ModelPreparation('test')
             self.TestModel()
+            self.StorePreds()
         self.ModelResult()
         self.model_info['test_process'] = 'Finish Process [Test Model]! Cost {:.1f} Secs'.format(time.time()-self.model_info['test_time'])
         logger.critical(self.model_info['test_process'])
@@ -170,8 +169,8 @@ class model_controller():
         logger.critical('Finish Process [Copy to Instance]! Cost {:.1f} Secs'.format(time.time() - self.model_info['instance_time']))  
 
     def ModelIter(self):
-        model_iter = list(itertools.product(config.model_date_list , config.model_num_list))
-        if config.resume_training and (config.process_name == 'train'):
+        model_iter = list(itertools.product(self.data.model_date_list , config.model_num_list))
+        if config.resume_training and (self.process_name == 'train'):
             models_trained = np.full(len(model_iter) , True)
             for i,(model_date,model_num) in enumerate(model_iter):
                 if not os.path.exists(f'{config.model_base_path}/{model_num}/{model_date}.pt'):
@@ -185,23 +184,46 @@ class model_controller():
         with trainer_timer('ModelPreparation' , process):
             param = config.model_params[self.model_num]
 
+            if config.get('output_prediction') or self.process_name == 'instance':
+                self.prediction = {op_type:[] for op_type in config.output_types}
+            else:
+                self.prediction = None
+
             # In a new model , alters the penalty function's lamb
             if 'hidden_orthogonality' in self.metric_function['penalty'].keys():
                 self.metric_function['penalty']['hidden_orthogonality']['cond'] = (param.get('hidden_as_factors') == True) or config.tra_model
             if 'tra_ot_penalty' in self.metric_function['penalty'].keys(): 
                 self.metric_function['penalty']['tra_ot_penalty']['cond'] = config.tra_model
 
-            path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
-            path = {k:f'{path_prefix}.{k}.pt' for k in config.output_types} #['best','swalast','swabest']
+            model_path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
+            """
+            path = {k:f'{model_path_prefix}.{k}.pt' for k in config.output_types} #['best','swalast','swabest']
             path.update({f'src_model.{k}':[] for k in config.output_types})
             if 'swalast' in config.output_types: 
-                path['lastn'] = [f'{path_prefix}.lastn.{i}.pt' for i in range(last_n)]
+                path['lastn'] = [f'{model_path_prefix}.lastn.{i}.pt' for i in range(last_n)]
             if 'swabest' in config.output_types: 
-                path['bestn'] = [f'{path_prefix}.bestn.{i}.pt' for i in range(best_n)]
+                path['bestn'] = [f'{model_path_prefix}.bestn.{i}.pt' for i in range(best_n)]
                 path['bestn_score'] = [-10000. for i in range(best_n)]
-            
-            if config.train_params['transfer'] and self.model_date > config.model_date_list[0]:
-                path['transfer'] = '{}/{}.best.pt'.format(param.get('path') , max([d for d in config.model_date_list if d < self.model_date])) 
+            if config.train_params['transfer'] and self.model_date > self.data.model_date_list[0]:
+                path['transfer'] = '{}/{}.best.pt'.format(param.get('path') , max([d for d in self.data.model_date_list if d < self.model_date])) 
+            self.path = path
+            """
+            path = {'target'      : {op_type:f'{model_path_prefix}.{op_type}.pt' for op_type in config.output_types} , 
+                    'source'      : {op_type:[] for op_type in (config.output_types + ['rounds'])} , # del at each model train
+                    'candidate'   : {op_type:None for op_type in (config.output_types + ['transfer'])} , # not del at each model train
+                    'performance' : {op_type:None for op_type in config.output_types}}
+            if 'best'    in config.output_types:
+                path['candidate']['best'] = f'{model_path_prefix}.best.pt'
+            if 'swalast' in config.output_types: 
+                path['source']['swalast'] = [f'{model_path_prefix}.lastn.{i}.pt' for i in range(last_n)]
+            if 'swabest' in config.output_types: 
+                path['source']['swabest']      = [f'{model_path_prefix}.bestn.{i}.pt' for i in range(best_n)] 
+                path['candidate']['swabest']   = path['source']['swabest']
+                path['performance']['swabest'] = [-10000. for i in range(best_n)]
+  
+            if config.train_params['transfer'] and self.model_date > self.data.model_date_list[0]:
+                last_model_date = max([d for d in self.data.model_date_list if d < self.model_date])
+                path['candidate']['transfer'] = '{}/{}.best.pt'.format(param.get('path') , last_model_date)
                 
             self.param , self.path = param , path
     
@@ -255,7 +277,7 @@ class model_controller():
             self.nanloss_life = config.train_params['trainer']['nanloss']['retry']
             self.text['model'] = '{:s} #{:d} @{:4d}'.format(config.model_name , self.model_num , self.model_date)
             if (self.data.dataloader_param != (self.model_date , self.param['seqlens'])):
-                self.data.create_dataloader(config.process_name , 'train' , self.model_date , self.param['seqlens']) 
+                self.data.create_dataloader(self.process_name , 'train' , self.model_date , self.param['seqlens']) 
                 self.tick[1] = time.time()
                 self.printer('train_dataloader')
             
@@ -264,8 +286,8 @@ class model_controller():
         Do necessary things of ending a model(model_data , model_num)
         """
         with trainer_timer('TrainModelEnd'):
-            trainer_storage.del_path(self.path.get('rounds') , self.path.get('lastn') , self.path.get('bestn'))
-            if config.process_name == 'train' : self.model_count += 1
+            trainer_storage.del_path(*[list(v) for v in self.path['source'].values()])
+            if self.process_name == 'train' : self.model_count += 1
             self.tick[2] = time.time()
             self.printer('model_end')
 
@@ -372,38 +394,29 @@ class model_controller():
                 
             if valid_score > self.score_round_best:
                 self.score_round_best = valid_score
-                self.path['src_model.best']  = [self.path['best']]
-                save_targets.append(self.path['best'])
+                save_targets.append(self.path['target']['best'])
 
             if 'swalast' in config.output_types:
-                self.path['lastn'] = self.path['lastn'][1:] + self.path['lastn'][:1]
-                save_targets.append(self.path['lastn'][-1])
+                self.path['source']['swalast'] = self.path['source']['swalast'][1:] + self.path['source']['swalast'][:1]
+                save_targets.append(self.path['source']['swalast'][-1])
                 
-                p_valid = self.path['lastn'][-len(self.score_list['valid']):]
+                p_valid = self.path['source']['swalast'][-len(self.score_list['valid']):]
                 arg_max = np.argmax(self.score_list['valid'][-len(p_valid):])
                 arg_swa = (lambda x:x[(x>=0) & (x<len(p_valid))])(min(5,len(p_valid)//3)*np.arange(-5,3)+arg_max)[-5:]
-                self.path['src_model.swalast'] = [p_valid[i] for i in arg_swa]
+                self.path['candidate']['swalast'] = [p_valid[i] for i in arg_swa]
                 
             if 'swabest' in config.output_types:
-                arg_min = np.argmin(self.path['bestn_score'])
-                if valid_score > self.path['bestn_score'][arg_min]:
-                    self.path['bestn_score'][arg_min] = valid_score
-                    save_targets.append(self.path['bestn'][arg_min])
-                    if self.path['bestn'][arg_min] not in self.path['src_model.swabest']: self.path['src_model.swabest'].append(self.path['bestn'][arg_min])
+                arg_min = np.argmin(self.path['performance']['swabest'])
+                if valid_score > self.path['performance']['swabest'][arg_min]:
+                    self.path['performance']['swabest'][arg_min] = valid_score
+                    save_targets.append(self.path['candidate']['swabest'][arg_min])
                 
             trainer_storage.save_model_state(self.net , save_targets)
             self.printer('epoch_step')
         
         with trainer_timer('LoopCondition/confirm_status'):
-            self.cond['terminate'] = {k:self._terminate_cond(k,v) for k , v in config.train_params['terminate'].get('overall' if self.max_round <= 1 else 'round').items()}
-            if any(self.cond.get('terminate').values()):
-                self.text['exit'] = {
-                    'max_epoch'      : 'Max Epoch' , 
-                    'early_stop'     : 'EarlyStop' ,
-                    'tv_converge'    : 'T&V Convg' , 
-                    'train_converge' : 'Tra Convg' , 
-                    'valid_converge' : 'Val Convg' ,
-                }[[k for k,v in self.cond.get('terminate').items() if v][0]] 
+            self.text['exit'] , self.cond['terminate'] = self._terminate_cond()
+            if self.text['exit']:
                 if (self.epoch_i < config.train_params['trainer']['retrain'].get('min_epoch' if self.max_round <= 1 else 'min_epoch_round') - 1 and 
                     self.attempt_i < config.train_params['trainer']['retrain']['attempts'] - 1):
                     self.cond['loop_status'] = 'attempt'
@@ -423,7 +436,7 @@ class model_controller():
         Reset model specific variables
         """
         self._init_variables('model')
-        dataloader_param = (config.process_name , 'test' , self.model_date , self.param['seqlens'])   
+        dataloader_param = (self.process_name , 'test' , self.model_date , self.param['seqlens'])   
         if (self.data.dataloader_param != dataloader_param):
             self.data.create_dataloader(*dataloader_param)
             
@@ -436,15 +449,15 @@ class model_controller():
             #self.score_by_model = score_model if self.score_by_model is None else np.concatenate([self.score_by_model, score_model])
                 
     def Forecast(self):
-        if not os.path.exists(self.path['best']): self.TrainModel()
-        if not hasattr(self , 'y_pred'): self.y_pred = {okey:[] for okey in config.output_types}
+        if not os.path.exists(self.path['target']['best']): self.TrainModel()
+        
         with trainer_timer('TestModel/Forcast') , torch.no_grad():
             #self.y_pred = cuda(torch.zeros(len(self.data.index[0]),len(self.data.model_test_dates),self.data.labels_n,len(config.output_types)).fill_(np.nan))
             #self.y_pred = trainer_device.torch_nans(len(self.data.index[0]), len(self.data.model_test_dates), len(config.output_types))
             iter_dates = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
             assert self.data.dataloaders['test'].__len__() == len(iter_dates)
-            for oi , okey in enumerate(config.output_types):
-                self.load_model('test' , okey)
+            for oi , op_type in enumerate(config.output_types):
+                self.load_model('test' , op_type)
                 self.net.eval()
                 iterator = self.data.dataloaders['test']
                 test_score = np.full(len(iter_dates),np.nan)
@@ -465,9 +478,9 @@ class model_controller():
                         test_score[i] = metric['score']
 
                         assert iter_dates[i] == self.data.y_date[batch_data['i'][0,1]] , (iter_dates[i] , self.data.y_date[batch_data['i'][0,1]])
-                        #self.y_pred[:,i-len(self.data.early_test_dates),oi] = pred[:,0]
-                        batch_index , pred = batch_data['i'].cpu() , pred.cpu()
-                        self.y_pred[okey].append([self.data.y_secid[batch_index[:,0]],self.data.y_date[batch_index[:,1]], pred[:,0]])
+                        if hasattr(self , 'output_prediction'):
+                            batch_index , batch_pred = batch_data['i'].cpu() , pred.cpu()
+                            self.output_prediction[op_type].append([self.data.y_secid[batch_index[:,0]],self.data.y_date[batch_index[:,1]], batch_pred[:,0]])
 
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
                     if iterator.progress_bar: iterator.display(f'Date#{i-len(self.data.early_test_dates):3d} :{np.mean(test_score[i+1]):.5f}')
@@ -481,10 +494,6 @@ class model_controller():
         if self.model_num == config.model_num_list[-1]:
             self.score_by_model[-1,:] = np.nanmean(self.score_by_date[-len(self.data.model_test_dates):,],axis = 0)
             logger.info('{: <11d}'.format(self.model_date)+('{:>8.4f}'*len(self.test_result_model_num)).format(*self.score_by_model[-1,:]))
-        #if False:
-        #    df = pd.DataFrame(self.y_pred.T, index = self.data.model_test_dates, columns = self.data.secid.astype(str))
-        #    with open(f'{config.instance_path}/{config.model_name}_fac{self.model_num}.csv', 'a') as f:
-        #        df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)
 
     def ResultOutput(self):
         out_dict = {
@@ -503,14 +512,20 @@ class model_controller():
             yaml.dump(out_dict , f)
 
     def StorePreds(self):
-        assert config.process_name == 'instance'
+        if not hasattr(self , 'output_prediction') and self.process_name != 'instance': return NotImplemented
+        #if False:
+        #    df = pd.DataFrame(self.y_pred.T, index = self.data.model_test_dates, columns = self.data.secid.astype(str))
+        #    with open(f'{config.instance_path}/{config.model_name}_fac{self.model_num}.csv', 'a') as f:
+        #        df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)
+
+        df_new = 1
         if self.model_num == 0:
             self.y_pred_models = []
             gc.collect()
         self.y_pred_models.append(self.y_pred)
         if self.model_num == config.model_num_list[-1]:
             self.y_pred_models = np.concatenate(self.y_pred_models,axis=-1).transpose(1,0,2)
-            # idx = np.array(np.meshgrid(self.data.model_test_dates , self.data.sec_id)).T.reshape(-1,2)
+
             mode = 'r+' if os.path.exists(f'{config.instance_path}/{config.model_name}.h5') else 'w'
             with h5py.File(f'{config.instance_path}/{config.model_name}.h5' , mode = mode) as f:
                 for di in range(len(self.data.model_test_dates)):
@@ -526,26 +541,26 @@ class model_controller():
   
     def ModelResult(self):
         # date ic writed down
-        date_step = (1 if config.process_name == 'instance' else self.data.test_step)
-        date_list = config.test_full_dates[::date_step]
+        date_step = (1 if self.process_name == 'instance' else self.data.test_step)
+        date_list = self.data.test_full_dates[::date_step]
         for model_num in config.model_num_list:
             df = pd.DataFrame({'dates' : date_list} , index = map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , date_list.astype(str)))
-            for oi , okey in enumerate(config.output_types):
-                df[f'score.{okey}'] = self.score_by_date[:,model_num*len(config.output_types) + oi]
-                df[f'cum_score.{okey}'] = np.nancumsum(self.score_by_date[:,model_num*len(config.output_types) + oi])
+            for oi , op_type in enumerate(config.output_types):
+                df[f'score.{op_type}'] = self.score_by_date[:,model_num*len(config.output_types) + oi]
+                df[f'cum_score.{op_type}'] = np.nancumsum(self.score_by_date[:,model_num*len(config.output_types) + oi])
             df.to_csv(config.model_params[model_num]['path'] + f'/{config.model_name}_score_by_date_{model_num}.csv')
 
         # model ic presentation
         add_row_key   = ['AllTimeAvg' , 'AllTimeSum' , 'Std'      , 'TValue'   , 'AnnIR']
         add_row_fmt   = ['{:>8.4f}'   , '{:>8.2f}'   , '{:>8.4f}' , '{:>8.2f}' , '{:>8.4f}']
         score_mean   = np.nanmean(self.score_by_date , axis = 0)
-        score_sum    = np.nansum(self.score_by_date , axis = 0) 
-        score_std    = np.nanstd(self.score_by_date , axis = 0)
+        score_sum    = np.nansum(self.score_by_date  , axis = 0) 
+        score_std    = np.nanstd(self.score_by_date  , axis = 0)
         score_tvalue = score_mean / score_std * (len(self.score_by_date)**0.5) # 10 days return predicted
         score_annir  = score_mean / score_std * ((240 / 10)**0.5) # 10 days return predicted
         add_row_value = (score_mean , score_sum , score_std , score_tvalue , score_annir)
         df = pd.DataFrame(np.concatenate([self.score_by_model , np.stack(add_row_value)]) , 
-                          index = [str(d) for d in config.model_date_list] + add_row_key , 
+                          index   = [str(d) for d in self.data.model_date_list] + add_row_key , 
                           columns = [f'{mn}.{o}' for mn,o in zip(self.test_result_model_num,self.test_result_output_type)])
         df.to_csv(f'{config.model_base_path}/{config.model_name}_score_by_model.csv')
         for i in range(len(add_row_key)):
@@ -633,24 +648,36 @@ class model_controller():
             self.cond['nan_loss'] = True
         else:
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
-    
-    def _terminate_cond(self , key , arg):
+
+    def _terminate_cond(self):
         """
         Whether terminate condition meets
         """
-        if key == 'early_stop':
-            return self.epoch_i - self.epoch_attempt_best >= arg
-        elif key == 'max_epoch':
-            return self.epoch_i >= min(arg , config.max_epoch) - 1
-        elif key == 'train_converge':
-            return list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps'))
-        elif key == 'valid_converge':
-            return list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps'))
-        elif key == 'tv_converge':
-            return (list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps')) and 
-                    list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps')))
-        else:
-            raise Exception(f'KeyError : {key}')
+        term_dict = config.train_params['terminate'].get('overall')
+        if self.max_round > 1 and config.train_params['terminate'].get('round') is not None:
+            term_dict = config.train_params['terminate'].get('round')
+        term_cond = {}
+        exit_text = None
+        for key , arg in term_dict.items():
+            if key == 'max_epoch':
+                term_cond[key] = self.epoch_i >= min(arg , config.max_epoch) - 1
+                if term_cond[key] and exit_text is None: exit_text = 'Max Epoch'
+            elif key == 'early_stop':
+                term_cond[key] = self.epoch_i - self.epoch_attempt_best >= arg
+                if term_cond[key] and exit_text is None: exit_text = 'EarlyStop'
+            elif key == 'tv_converge':
+                term_cond[key] = (list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps')) and
+                             list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps')))
+                if term_cond[key] and exit_text is None: exit_text = 'T&V Convg'
+            elif key == 'train_converge':
+                term_cond[key] = list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps'))
+                if term_cond[key] and exit_text is None: exit_text = 'Tra Convg'
+            elif key == 'valid_converge':
+                term_cond[key] = list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps'))
+                if term_cond[key] and exit_text is None: exit_text = 'Val Convg'
+            else:
+                raise Exception(f'KeyError : {key}')
+        return exit_text , term_cond
     
     def save_model(self , key = 'best'):
         if isinstance(key , (list,tuple)):
@@ -658,22 +685,17 @@ class model_controller():
         else:
             assert key in ['best' , 'swalast' , 'swabest']
             with trainer_timer('save_model'):
+                p_exists = trainer_storage.valid_paths(self.path['candidate'][key])
+                if len(p_exists) == 0: print(key , self.path['candidate'][key] , self.path['performance'][key])
                 if key == 'best':
-                    model_state = trainer_storage.load(self.path['best'])
+                    model = trainer_storage.load(p_exists[0])
                     if self.round_i < self.max_round - 1:
-                        if 'rounds' not in self.path.keys():
-                            self.path['rounds'] = ['{}/{}.round.{}.pt'.format(self.param.get('path') , self.model_date , r) for r in range(self.max_round - 1)]
-                        # self.path[f'round.{self.round_i}'] = '{}/{}.round.{}.pt'.format(self.param.get('path') , self.model_date , self.round_i)
-                        trainer_storage.save(model_state , self.path['rounds'][self.round_i])
-                    trainer_storage.save(model_state , self.path['best'] , to_disk = True)
+                        if not self.path['source']['rounds']:
+                            self.path['source']['rounds'] = ['{}/{}.round.{}.pt'.format(self.param.get('path'),self.model_date,r) for r in range(self.max_round-1)]
+                        trainer_storage.save_model_state(model , self.path['source']['rounds'][self.round_i])
                 else:
-                    p_exists = trainer_storage.valid_paths(self.path[f'src_model.{key}'])
-                    if len(p_exists) == 0:
-                        print(key , self.path[f'bestn'] , self.path[f'bestn_score'] , self.path[f'src_model.{key}'])
-                        raise Exception(f'Model Error')
-                    else:
-                        model = self.swa_model(p_exists)
-                        trainer_storage.save_model_state(model , self.path[key] , to_disk = True) 
+                    model = self.swa_model(p_exists)
+                trainer_storage.save_model_state(model , self.path['target'][key] , to_disk = True) 
     
     def load_model(self , process , key = 'best'):
         assert process in ['train' , 'test' , 'instance']
@@ -681,15 +703,16 @@ class model_controller():
             net = globals()[f'My{config.model_module}'](**self.param)
             if process == 'train':           
                 if self.round_i > 0:
-                    model_path = self.path['rounds'][self.round_i-1]
-                elif 'transfer' in self.path.keys():
-                    model_path = self.path['transfer']
+                    model_path = self.path['source']['rounds'][self.round_i-1]
+                elif self.path['candidate'].get('transfer'):
+                    if not config.train_params['transfer']: raise Exception('get transfer')
+                    model_path = self.path['candidate']['transfer']
                 else:
                     model_path = -1
                 if os.path.exists(model_path): net = trainer_storage.load_model_state(net , model_path , from_disk = True)
                 if 'training_round' in net.__dir__(): net.training_round(self.round_i)
             else:
-                net = trainer_storage.load_model_state(net , self.path[key] , from_disk = True)
+                net = trainer_storage.load_model_state(net , self.path['target'][key] , from_disk = True)
             net = trainer_device(net)
             self.net = net
             # default : none modifier
@@ -701,6 +724,7 @@ class model_controller():
             if 'modifier_update' in self.net.__dir__(): self.modifier['update'] = lambda x,b,d:self.net.modifier_update(x,b,d)
     
     def swa_model(self , model_path_list = []):
+        if len(model_path_list) == 0: raise Exception('empty swa input')
         net = globals()[f'My{config.model_module}'](**self.param)
         swa_net = trainer_device(AveragedModel(net))
         for p in model_path_list:
@@ -723,22 +747,10 @@ class model_controller():
         else:
             lr_kwargs = deepcopy(config.train_params['trainer']['learn_rate'])
             lr_kwargs.update(new_lr_kwargs)
-
         base_lr = lr_kwargs['base'] * lr_kwargs['ratio']['attempt'][:self.attempt_i+1][-1] * lr_kwargs['ratio']['round'][:self.round_i+1][-1]
-        if 'transfer' in self.path.keys():
-            # define param list to train with different learn rate
-            p_enc = [(p if p.dim()<=1 else nn.init.xavier_uniform_(p)) for x,p in self.net.named_parameters() if 'encoder' in x.split('.')[:3]]
-            p_dec = [p for x,p in self.net.named_parameters() if 'encoder' not in x.split('.')[:3]]
-            self.net_param_gourps = [{'params': p_dec , 'lr': base_lr , 'lr_param' : base_lr},
-                                     {'params': p_enc , 'lr': base_lr * lr_kwargs['ratio']['transfer'] , 'lr_param': base_lr * lr_kwargs['ratio']['transfer']}]
-        else:
-            self.net_param_gourps = [{'params': [p for p in self.net.parameters()] , 'lr' : base_lr , 'lr_param' : base_lr} ]
-
-        optimizer = {
-            'Adam': torch.optim.Adam ,
-            'SGD' : torch.optim.SGD ,
-        }[opt_kwargs['name']](self.net_param_gourps , **opt_kwargs['param'])
-        return optimizer
+        
+        return new_optimizer(opt_kwargs['name'] , self.net , base_lr , transfer = self.path['candidate'].get('transfer') , 
+                             encoder_lr_ratio = lr_kwargs['ratio']['transfer'], **opt_kwargs['param'])
     
     def load_scheduler(self , new_shd_kwargs = None):
         if new_shd_kwargs is None:
@@ -746,15 +758,7 @@ class model_controller():
         else:
             shd_kwargs = deepcopy(config.train_params['trainer']['scheduler'])
             shd_kwargs.update(new_shd_kwargs)
-
-        if shd_kwargs['name'] == 'cos':
-            scheduler = lr_cosine_scheduler(self.optimizer, **shd_kwargs['param'])
-        elif shd_kwargs['name'] == 'step':
-            scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, **shd_kwargs['param'])
-        elif shd_kwargs['name'] == 'cycle':
-            scheduler = torch.optim.lr_scheduler.CyclicLR(self.optimizer, max_lr=[pg['lr_param'] for pg in self.optimizer.param_groups],cycle_momentum=False,mode='triangular2',**shd_kwargs['param'])
-
-        return scheduler
+        return new_scheduler(shd_kwargs['name'] , self.optimizer , **shd_kwargs['param'])
     
     def reset_scheduler(self):
         rst_kwargs = config.train_params['trainer']['learn_rate']['reset']
@@ -786,6 +790,31 @@ class model_controller():
             multiloss = multiloss_calculator(multi_type = config.train_params['multitask']['type'])
             multiloss.reset_multi_type(self.param['num_output'] , **config.train_params['multitask']['param_dict'][multiloss.multi_type])
         return multiloss
+    
+def new_scheduler(key , optimizer , **kwargs):
+    if key == 'cos':
+        scheduler = lr_cosine_scheduler(optimizer, **kwargs)
+    elif key == 'step':
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **kwargs)
+    elif key == 'cycle':
+        scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, max_lr=[pg['lr_param'] for pg in optimizer.param_groups],cycle_momentum=False,mode='triangular2',**kwargs)
+    return scheduler
+
+def new_optimizer(key , net , base_lr , transfer = False , encoder_lr_ratio = 1., decoder_lr_ratio = 1., **kwargs):
+    if transfer:
+        # define param list to train with different learn rate
+        p_enc = [(p if p.dim()<=1 else nn.init.xavier_uniform_(p)) for x,p in net.named_parameters() if 'encoder' in x.split('.')[:3]]
+        p_dec = [p for x,p in net.named_parameters() if 'encoder' not in x.split('.')[:3]]
+        net_param_groups = [{'params': p_dec , 'lr': base_lr * decoder_lr_ratio , 'lr_param': base_lr * decoder_lr_ratio},
+                            {'params': p_enc , 'lr': base_lr * encoder_lr_ratio , 'lr_param': base_lr * encoder_lr_ratio}]
+    else:
+        net_param_groups = [{'params': [p for p in net.parameters()] , 'lr' : base_lr , 'lr_param' : base_lr} ]
+
+    optimizer = {
+        'Adam': torch.optim.Adam ,
+        'SGD' : torch.optim.SGD ,
+    }[key](net_param_groups , **kwargs)
+    return optimizer
 
 if __name__ == '__main__':
 
