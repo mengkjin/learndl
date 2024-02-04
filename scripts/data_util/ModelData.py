@@ -21,6 +21,8 @@ DIR_hist_norm  = f'{DIR_data}/hist_norm'
 DIR_torchpack  = f'{DIR_data}/torch_pack'
 save_block_method = 'npz'
 
+_div_tol = 1e-6
+
 class Mydataset(Dataset):
     def __init__(self, data1 , label , weight = None) -> None:
             super().__init__()
@@ -68,6 +70,7 @@ class Mydataloader_saved:
         for ii in range(self.batch_num): 
             yield torch.load(self.batch_path[ii])
             
+'''
 class ModelData2():
     """
     A class to store relavant training data , includes:
@@ -319,107 +322,6 @@ class ModelData2():
                 batch_data = batch_x , batch_y
                 self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.dataloader_style)
             self.dataloaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.config.verbosity >= 10)
-
-    '''
-    def sample_index2(self , nonnan_sample = None):
-        """
-        update index of train/valid sub-samples of flattened all-samples(with in 0:len(index[0]) * step_len - 1)
-        sample_tensor should be boolean tensor , True indicates non
-
-        train/valid sample method: total_shuffle , sequential , both_shuffle , train_shuffle
-        test sample method: sequential
-        """
-
-        train_ratio = self.config.TRAIN_PARAM['dataloader']['train_ratio']
-        sample_method = self.config.TRAIN_PARAM['dataloader']['sample_method']
-        assert sample_method in ['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] , sample_method
-        batch_size = self.config.batch_size
-
-        shp = nonnan_sample.shape
-        ipos = torch.zeros(shp[0] , shp[1] , 2 , dtype = int)
-        ipos[:,:,0] = torch.arange(shp[0] , dtype = int).reshape(-1,1) 
-        ipos[:,:,1] = torch.tensor(self.step_idx)
-
-        if self.dataloader_style == 'train':
-            sample_index = {'train': [] , 'valid': []} 
-            train_dates = int(shp[1] * train_ratio)
-
-            if sample_method == 'total_shuffle':
-                iipos = ipos[nonnan_sample]
-                train_samples = int(len(iipos) * train_ratio)
-                pool = np.arange(len(iipos))
-                random.shuffle(pool)
-                ii_train , ii_valid = iipos[:train_samples] , iipos[train_samples:]
-
-                pool = np.arange(len(ii_train))
-                random.shuffle(pool)
-                batch_sampler = torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)
-                for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
-
-                pool = np.arange(len(ii_valid))
-                random.shuffle(pool)
-                batch_sampler = torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)
-                for pos in batch_sampler: sample_index['valid'].append(ii_valid[pos])
-
-            elif sample_method == 'both_shuffle':
-                ii_train = ipos[:,:train_dates][nonnan_sample[:,:train_dates]]
-                pool = np.arange(len(ii_train))
-                random.shuffle(pool)
-                batch_sampler = torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)
-                for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
-
-                ii_valid = ipos[:,train_dates:][nonnan_sample[:,train_dates:]]
-                pool = np.arange(len(ii_valid))
-                random.shuffle(pool)
-                batch_sampler = torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)
-                for pos in batch_sampler: sample_index['valid'].append(ii_valid[pos])
-
-            elif sample_method == 'train_shuffle':
-                ii_train = ipos[:,:train_dates][nonnan_sample[:,:train_dates]]
-                pool = np.arange(len(ii_train))
-                random.shuffle(pool)
-                batch_sampler = torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)
-                for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
-
-                for pos in range(train_dates , shp[1]): sample_index['valid'].append(ipos[:,pos][nonnan_sample[:,pos]])
-
-            else:
-                for pos in range(0 , train_dates): sample_index['train'].append(ipos[:,pos][nonnan_sample[:,pos]])
-
-                for pos in range(train_dates , shp[1]): sample_index['valid'].append(ipos[:,pos][nonnan_sample[:,pos]])
-        else:
-            sample_index = {'test': []} 
-            for pos in range(shp[1]): sample_index['test'].append(ipos[:,pos][nonnan_sample[:,pos]])
-
-        return sample_index
-        
-    def static_dataloader2(self , x , y , w , sample_index , nonnan_sample):
-        """
-        1. update dataloaders dict(set_name = ['train' , 'valid']), save batch_data to './model/{model_name}/{set_name}_batch_data' and later load them
-        """
-        # init i (row , col position) and y (labels) matrix
-        self.loader_storage.del_group(self.dataloader_style)
-
-        for set_name in sample_index.keys():
-            batch_file_list = []
-            for batch_num , batch_i in enumerate(sample_index[set_name]):
-                batch_file_list.append(f'./data/minibatch/{set_name}/{set_name}.{batch_num}.pt')
-                assert torch.isin(batch_i[:,1] , torch.tensor(self.step_idx)).all()
-                i0 , i1 , yi1 = batch_i[:,0] , batch_i[:,1] , match_values(self.step_idx , batch_i[:,1])
-                batch_x = []
-                batch_y = y[i0,yi1]
-                batch_w = None if w is None else w[i0,yi1]
-                for mdt in x.keys():
-                    data = torch.cat([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1)
-                    data = self._norm_x(data,mdt)
-                    batch_x.append(data)
-                batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
-                batch_nonnan = nonnan_sample[i0,yi1]
-                batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
-                self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.dataloader_style)
-            self.dataloaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.config.verbosity >= 10)
-
-    '''
         
     def new_train_dataloader(self , model_date , seqlens):
         """
@@ -550,9 +452,9 @@ class ModelData2():
 
         if self.norms.get(key) is not None:
             if _type_abbr(key) in ['day']:
-                x /= x.select(-2,-1).unsqueeze(-2) + 1e-6
+                x /= x.select(-2,-1).unsqueeze(-2) + _div_tol
             x -= self.norms[key]['avg'][-x.shape[-2]:]
-            x /= self.norms[key]['std'][-x.shape[-2]:] + 1e-6
+            x /= self.norms[key]['std'][-x.shape[-2]:] + _div_tol
         else:
             pass
         return x
@@ -572,7 +474,8 @@ class ModelData2():
             if isinstance(x , (list,tuple)):
                 return type(x)(self.cuda(xx) for xx in x)
             else:
-                return x.to(DEVICE)
+                return x.to(self.DEVICE)
+'''
 
 class ModelData():
     """
@@ -585,6 +488,8 @@ class ModelData():
         self.config = train_config() if config is None else config
         self.loader_device  = Device(self.config.device)
         self.loader_storage = versatile_storage(self.config.storage_type)
+        self.norming_method = {}
+
         self.data_type_list = _type_list(model_data_type)
         #self.x_data , self.y_data , self.norms , self.index = load_model_data(self.data_type_list , self.config.labels , self.config.precision)
         self.x_data , self.y_data , self.norms , self.index = load_old_valid_data()
@@ -666,6 +571,8 @@ class ModelData():
         DataFunc = lambda d:d[:,d0:d1]
         x = {k:DataFunc(v.values) for k,v in self.x_data.items()}
         self.y = self.process_y_data(DataFunc(self.y_data.values).squeeze(2)[:,:,:self.labels_n] , None , no_weight = True)
+        self.y_secid = self.y_data.secid
+        self.y_date  = self.y_data.date[d0:d1]
         if self.buffer_init is not None: self.buffer.update(self.buffer_init(self))
 
         self.nonnan_sample = self.cal_nonnan_sample(x, self.y, **{k:v for k,v in self.buffer.items() if k in self.seqs.keys()})
@@ -774,10 +681,8 @@ class ModelData():
         set_iter = ['train' , 'valid'] if self.dataloader_style == 'train' else ['test']
         self.loader_storage.del_group(self.dataloader_style)
         loaders = dict()
-        #self.x = x
-        #self.y = y
-        #self.w = w
-        #self.index = index
+        # mapping = lambda d:{k:(d[k] if k == 'i' else self.loader_device(d[k])) for k in d.keys()}
+
         for set_name in set_iter:
             if self.dataloader_style == 'train':
                 set_i = index[set_name]
@@ -905,19 +810,34 @@ class ModelData():
             loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.config.verbosity >= 10)
         self.dataloaders.update(loaders)
         
-    def _norm_x(self , x , key):
+    def _norm_x(self , x , key , static = True):
         """
         return panel_normalized x
         1.for ts-cols , divide by the last value, get seq-mormalized x
         2.for seq-mormalized x , normalized by history avg and std
         """
+        if static and self.norming_method.get(key) is not None:
+            norming_method = self.norming_method.get(key)
+        else:
+            norming_method = [_type_abbr(key) in ['day'] , self.norms.get(key) is not None]
+            if static:
+                self.norming_method.update({key:norming_method})
+                print(f'Norming method of [{key}] : [endpoint_division({norming_method[0]}) , history_standardize({norming_method[1]})]')
+        if norming_method[0]:
+            x /= x.select(-2,-1).unsqueeze(-2) + _div_tol
+        if norming_method[1]:
+            x -= self.norms[key]['avg'][-x.shape[-2]:]
+            x /= self.norms[key]['std'][-x.shape[-2]:] + _div_tol
+        """
         if self.norms.get(key) is not None:
             if _type_abbr(key) in ['day']:
-                x /= x.select(-2,-1).unsqueeze(-2) + 1e-6
+                x /= x.select(-2,-1).unsqueeze(-2) + _div_tol
             x -= self.norms[key]['avg'][-x.shape[-2]:]
-            x /= self.norms[key]['std'][-x.shape[-2]:] + 1e-6
+            x /= self.norms[key]['std'][-x.shape[-2]:] + _div_tol
         else:
             pass
+        
+        """
         return x
             
 class dataloader_saved:
@@ -934,7 +854,9 @@ class dataloader_saved:
     def __iter__(self):
         for batch_file in self.iterator: 
             batch_data = self.loader_storage.load(batch_file)
-            yield batch_data if self.mapping is None else self.mapping(batch_data)
+            if self.mapping is not None:
+                batch_data = self.mapping(batch_data)
+            yield batch_data
     def display(self , text = ''):
         if self.progress_bar: self.iterator.set_description(text)
     
@@ -1484,7 +1406,7 @@ def block_mask(data_block , mask = True , after_ipo = 91 , **kwargs):
 
 def block_hist_norm(data_block , key , 
                     start_dt = None , end_dt = 20161231 , 
-                    step_day = 5 , tol = 1e-6 , 
+                    step_day = 5 , 
                     save_path = None , **kwargs):
     if not key.startswith(('x_trade','trade','day','15m','min','30m','60m','week')): 
         return None
@@ -1537,7 +1459,7 @@ def block_hist_norm(data_block , key ,
         nan_sample += x[:,x_endpoint-i].reshape(*re_shape).isnan().any(dim=-1)
 
     for i in range(maxday):
-        vijs = ((x[:,x_endpoint - maxday+1 + i]) / (x_div + tol))[nan_sample == 0]
+        vijs = ((x[:,x_endpoint - maxday+1 + i]) / (x_div + _div_tol))[nan_sample == 0]
         avg_x[i*inday:(i+1)*inday] = vijs.mean(dim = 0)
         std_x[i*inday:(i+1)*inday] = vijs.std(dim = 0)
 

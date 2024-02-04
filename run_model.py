@@ -45,11 +45,12 @@ trainer_timer   = process_timer(False)
 trainer_storage = versatile_storage(config.storage_type)
 trainer_device  = Device(config.device)
 
-logger.warning('Model Specifics:')
-pretty_print_dict(config.get_dict([
-    'storage_type' , 'device' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 'model_data_type' , 'model_num' ,
-    'beg_date' , 'test_dates_end' , 'interval' , 'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' , 'compt_params'
-]))
+if config.verbosity > 3:
+    logger.warning('Model Specifics:')
+    pretty_print_dict(config.get_dict([
+        'verbosity' , 'storage_type' , 'device' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 'model_data_type' , 'model_num' ,
+        'beg_date' , 'test_dates_end' , 'interval' , 'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' , 'compt_params'
+    ]))
 
 class model_controller():
     """
@@ -436,9 +437,10 @@ class model_controller():
                 
     def Forecast(self):
         if not os.path.exists(self.path['best']): self.TrainModel()
+        if not hasattr(self , 'y_pred'): self.y_pred = {okey:[] for okey in config.output_types}
         with trainer_timer('TestModel/Forcast') , torch.no_grad():
             #self.y_pred = cuda(torch.zeros(len(self.data.index[0]),len(self.data.model_test_dates),self.data.labels_n,len(config.output_types)).fill_(np.nan))
-            self.y_pred = trainer_device.torch_nans(len(self.data.index[0]), len(self.data.model_test_dates), len(config.output_types))
+            #self.y_pred = trainer_device.torch_nans(len(self.data.index[0]), len(self.data.model_test_dates), len(config.output_types))
             iter_dates = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
             assert self.data.dataloaders['test'].__len__() == len(iter_dates)
             for oi , okey in enumerate(config.output_types):
@@ -459,13 +461,18 @@ class model_controller():
                     
                     if i >= len(self.data.early_test_dates):
                         # before this date is warmup stage
-                        self.y_pred[:,i-len(self.data.early_test_dates),oi] = pred[:,0]
                         metric = self.metric_calculator(batch_data['y'],pred,'test',weight=batch_data['w'],valid_sample=nonnan)
                         test_score[i] = metric['score']
+
+                        assert iter_dates[i] == self.data.y_date[batch_data['i'][0,1]] , (iter_dates[i] , self.data.y_date[batch_data['i'][0,1]])
+                        #self.y_pred[:,i-len(self.data.early_test_dates),oi] = pred[:,0]
+                        batch_index , pred = batch_data['i'].cpu() , pred.cpu()
+                        self.y_pred[okey].append([self.data.y_secid[batch_index[:,0]],self.data.y_date[batch_index[:,1]], pred[:,0]])
+
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
                     if iterator.progress_bar: iterator.display(f'Date#{i-len(self.data.early_test_dates):3d} :{np.mean(test_score[i+1]):.5f}')
                 self.score_by_date[-len(self.data.model_test_dates):,self.model_num*len(config.output_types) + oi] = np.nan_to_num(test_score[-len(self.data.model_test_dates):])
-            self.y_pred = self.y_pred.cpu().numpy()
+            #self.y_pred = self.y_pred.cpu().numpy()
         
     def TestModelEnd(self):
         """

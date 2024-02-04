@@ -358,6 +358,7 @@ def update_sql_since(db_key , connector , trace = 0):
 
     db_path = get_db_path(db_key)
     group_file_list = []
+    dtank = DataTank()
     try:
         for src in connector.query_params.keys():
             for qtype in connector.query_params[src].keys():

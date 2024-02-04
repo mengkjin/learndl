@@ -5,6 +5,7 @@ import collections
 import os , shutil , pprint , psutil
 from scipy import stats
 from pytimedinput import timedInput
+_div_tol = 1e-4
 
 def average_params(params_list):
     assert isinstance(params_list, (tuple, list, collections.deque))
@@ -63,7 +64,7 @@ def tensor_nanmedian(x, dim=None, keepdim=False):
 def tensor_standardize_and_weight(x, dim=None , weight_scheme = None):
     if x.isnan().all().item():
         return (x , None)       
-    x = (x - tensor_nanmean(x,dim=dim,keepdim=True)) / (tensor_nanstd(x,dim=dim,correction=0,keepdim=True) + 1e-4)
+    x = (x - tensor_nanmean(x,dim=dim,keepdim=True)) / (tensor_nanstd(x,dim=dim,correction=0,keepdim=True) + _div_tol)
     w = None
     if weight_scheme is None: 
         pass
@@ -81,7 +82,7 @@ def standardize_x(x , dim=None):
     if np.all(np.isnan(x)):
         pass
     elif dim is None or len(x.shape) == 1:
-        x = (x - np.nanmean(x)) / (np.nanstd(x) + 1e-4)
+        x = (x - np.nanmean(x)) / (np.nanstd(x) + _div_tol)
     else:
         tran_dim = np.arange(len(x.shape))
         tran_dim[0],tran_dim[dim] = dim,0
@@ -95,7 +96,7 @@ def standardize_and_weight(x , dim=None):
     if np.all(np.isnan(x)):
         pass
     elif dim is None or len(x.shape) == 1:
-        x = (x - np.nanmean(x)) / (np.nanstd(x) + 1e-4)
+        x = (x - np.nanmean(x)) / (np.nanstd(x) + _div_tol)
         w = np.ones_like(x)
         w[x >= np.nanmedian(x)] = 2.
     else:
@@ -167,14 +168,14 @@ def nd_minus_mean(x , w , dim = None):
 def pearson(x, y , w = None, dim = None , **kwargs):
     w = 1. if w is None else w / w.sum(dim=dim,keepdim=True) * (w.numel() if dim is None else w.size(dim=dim))
     x1 , y1 = nd_minus_mean(x , w , dim) , nd_minus_mean(y , w , dim)
-    return (w * x1 * y1).mean(dim = dim) / ((w * x1.square()).mean(dim=dim).sqrt() + 1e-4) / ((w * y1.square()).mean(dim=dim).sqrt() + 1e-4)
+    return (w * x1 * y1).mean(dim = dim) / ((w * x1.square()).mean(dim=dim).sqrt() + _div_tol) / ((w * y1.square()).mean(dim=dim).sqrt() + _div_tol)
     
 def ccc(x , y , w = None, dim = None , **kwargs):
     w = 1. if w is None else w / w.sum(dim=dim,keepdim=True) * (w.numel() if dim is None else w.size(dim=dim))
     x1 , y1 = nd_minus_mean(x , w , dim) , nd_minus_mean(y , w , dim)
     cov_xy = (w * x1 * y1).mean(dim=dim)
     mse_xy = (w * (x1 - y1).square()).mean(dim=dim)
-    return (2 * cov_xy) / (mse_xy + 2 * cov_xy + 1e-4)
+    return (2 * cov_xy) / (mse_xy + 2 * cov_xy + _div_tol)
 
 def mse(x , y , w = None, dim = None , reduction='mean' , **kwargs):
     w = 1. if w is None else w / w.sum(dim=dim,keepdim=True) * (w.numel() if dim is None else w.size(dim=dim))
