@@ -6,9 +6,6 @@
 # chmod +x run_model.py
 # python3 scripts/run_model3.py --process=0 --rawname=1 --resume=0 --anchoring=0
 '''
-1.TRA
-https://arxiv.org/pdf/2106.12950.pdf
-https://github.com/microsoft/qlib/blob/main/examples/benchmarks/TRA/src/model.py
 1.1 HIST
 https://arxiv.org/pdf/2110.13716.pdf
 https://github.com/Wentao-Xu/HIST
@@ -30,7 +27,7 @@ from scripts.util.trainer import trainer_parser , train_config , set_trainer_env
 from scripts.data_util.ModelData import ModelData
 from scripts.function.basic import *
 from scripts.function.metric import loss_function,score_function,penalty_function
-from scripts.nn.My import *
+from scripts.nn import My
 # from audtorch.metrics.functional import *
 
 try:
@@ -45,7 +42,7 @@ trainer_timer   = process_timer(False)
 trainer_storage = versatile_storage(config.storage_type)
 trainer_device  = Device(config.device)
 
-if not config.shorttest:
+if not config.short_test:
     logger.warning('Model Specifics:')
     pretty_print_dict(config.get_dict([
         'verbosity' , 'storage_type' , 'device' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 'model_data_type' , 'model_num' ,
@@ -190,10 +187,8 @@ class model_controller():
                 self.prediction = None
 
             # In a new model , alters the penalty function's lamb
-            if 'hidden_orthogonality' in self.metric_function['penalty'].keys():
-                self.metric_function['penalty']['hidden_orthogonality']['cond'] = (param.get('hidden_as_factors') == True) or config.tra_model
-            if 'tra_ot_penalty' in self.metric_function['penalty'].keys(): 
-                self.metric_function['penalty']['tra_ot_penalty']['cond'] = config.tra_model
+            self.metric_function['penalty'].get('hidden_orthogonality',{})['cond'] = config.tra_model or param.get('hidden_as_factors',False)
+            self.metric_function['penalty'].get('tra_ot_penalty',{})['cond']       = config.tra_model
 
             model_path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
             """
@@ -276,8 +271,9 @@ class model_controller():
             self._init_variables('model')
             self.nanloss_life = config.train_params['trainer']['nanloss']['retry']
             self.text['model'] = '{:s} #{:d} @{:4d}'.format(config.model_name , self.model_num , self.model_date)
-            if (self.data.dataloader_param != (self.model_date , self.param['seqlens'])):
-                self.data.create_dataloader(self.process_name , 'train' , self.model_date , self.param['seqlens']) 
+            dataloader_param = self.data.get_dataloader_param('train' , namespace=self)   
+            if (self.data.dataloader_param != dataloader_param):
+                self.data.create_dataloader(*dataloader_param) 
                 self.tick[1] = time.time()
                 self.printer('train_dataloader')
             
@@ -413,6 +409,7 @@ class model_controller():
                 
             trainer_storage.save_model_state(self.net , save_targets)
             self.printer('epoch_step')
+
         
         with trainer_timer('LoopCondition/confirm_status'):
             self.text['exit'] , self.cond['terminate'] = self._terminate_cond()
@@ -427,6 +424,7 @@ class model_controller():
                     self.printer('new_round')
                 else:
                     self.cond['loop_status'] = 'model'
+                    print(self.net.get_probs())
                     self.save_model(config.output_types)
             else:
                 self.cond['loop_status'] = 'epoch'
@@ -436,9 +434,8 @@ class model_controller():
         Reset model specific variables
         """
         self._init_variables('model')
-        dataloader_param = (self.process_name , 'test' , self.model_date , self.param['seqlens'])   
-        if (self.data.dataloader_param != dataloader_param):
-            self.data.create_dataloader(*dataloader_param)
+        dataloader_param = self.data.get_dataloader_param('test' , namespace=self)   
+        self.data.create_dataloader(*dataloader_param)
             
         if self.model_num == 0:
             score_date  = np.zeros((len(self.data.model_test_dates) , len(self.test_result_model_num)))
@@ -498,7 +495,7 @@ class model_controller():
     def ResultOutput(self):
         out_dict = {
             '0_start' : time.ctime(self.model_info.get('init_time')),
-            '1_basic' :'+'.join(['short' if config.shorttest else 'long' , config.storage_type , config.precision]),
+            '1_basic' :'+'.join(['short' if config.short_test else 'long' , config.storage_type , config.precision]),
             '2_model' :''.join([config.model_module , '_' , config.model_data_type , '(x' , str(config.model_num) , ')']),
             '3_time'  :'-'.join([str(config.beg_date),str(config.end_date)]),
             '4_typeNN':'+'.join(list(set(config.MODEL_PARAM['type_rnn']))),
@@ -668,13 +665,13 @@ class model_controller():
             elif key == 'tv_converge':
                 term_cond[key] = (list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps')) and
                              list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps')))
-                if term_cond[key] and exit_text is None: exit_text = 'T&V Convg'
+                if term_cond[key] and exit_text is None: exit_text = 'T & V Cvg'
             elif key == 'train_converge':
                 term_cond[key] = list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps'))
-                if term_cond[key] and exit_text is None: exit_text = 'Tra Convg'
+                if term_cond[key] and exit_text is None: exit_text = 'Train Cvg'
             elif key == 'valid_converge':
                 term_cond[key] = list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps'))
-                if term_cond[key] and exit_text is None: exit_text = 'Val Convg'
+                if term_cond[key] and exit_text is None: exit_text = 'Valid Cvg'
             else:
                 raise Exception(f'KeyError : {key}')
         return exit_text , term_cond
@@ -700,7 +697,6 @@ class model_controller():
     def load_model(self , process , key = 'best'):
         assert process in ['train' , 'test' , 'instance']
         with trainer_timer('load_model'):
-            net = globals()[f'My{config.model_module}'](**self.param)
             if process == 'train':           
                 if self.round_i > 0:
                     model_path = self.path['source']['rounds'][self.round_i-1]
@@ -709,12 +705,12 @@ class model_controller():
                     model_path = self.path['candidate']['transfer']
                 else:
                     model_path = -1
-                if os.path.exists(model_path): net = trainer_storage.load_model_state(net , model_path , from_disk = True)
-                if 'training_round' in net.__dir__(): net.training_round(self.round_i)
             else:
-                net = trainer_storage.load_model_state(net , self.path['target'][key] , from_disk = True)
-            net = trainer_device(net)
-            self.net = net
+                model_path = self.path['target'][key]
+
+            self.net = trainer_device(new_net(config.model_module , self.param , trainer_storage.load(model_path , from_disk = True)))
+            if 'training_round' in self.net.__dir__(): self.net.training_round(self.round_i)
+
             # default : none modifier
             # input : (inputs/metric/update , batch_data , self.data)
             # output : new_inputs/new_metric/None 
@@ -725,7 +721,7 @@ class model_controller():
     
     def swa_model(self , model_path_list = []):
         if len(model_path_list) == 0: raise Exception('empty swa input')
-        net = globals()[f'My{config.model_module}'](**self.param)
+        net = new_net(config.model_module , self.param)
         swa_net = trainer_device(AveragedModel(net))
         for p in model_path_list:
             swa_net.update_parameters(trainer_storage.load_model_state(net , p))
@@ -791,6 +787,11 @@ class model_controller():
             multiloss.reset_multi_type(self.param['num_output'] , **config.train_params['multitask']['param_dict'][multiloss.multi_type])
         return multiloss
     
+def new_net(module , param = {} , state_dict = None):
+    net = getattr(My , f'My{module}')(**param)
+    if state_dict: net.load_state_dict(state_dict)
+    return net
+
 def new_scheduler(key , optimizer , **kwargs):
     if key == 'cos':
         scheduler = lr_cosine_scheduler(optimizer, **kwargs)

@@ -30,7 +30,7 @@ from ..scripts.util.basic import FilteredIterator , lr_cosine_scheduler , versat
 from ..scripts.util.multiloss import multiloss_calculator 
 from ..scripts.data_util.ModelData import ModelData
 from ..scripts.function.basic import *
-from ..scripts.function.algos import sinkhorn
+from .algos import sinkhorn
 from ..scripts.nn.My import *
 # from audtorch.metrics.functional import *
 

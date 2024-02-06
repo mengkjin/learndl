@@ -24,6 +24,7 @@ class TRA(nn.Module):
         self.horizon = horizon
         self.tau = tau
         self.src_info = src_info
+        self.probs_record = None
 
         if num_states > 1:
             self.router = nn.LSTM(
@@ -71,7 +72,12 @@ class TRA(nn.Module):
 
         self.preds = preds
         self.probs = probs
+        probs_sum  = probs.detach().sum(dim = 0 , keepdim = True)
+        self.probs_record = probs_sum if self.probs_record is None else torch.concat([self.probs_record , probs_sum])
         return final_pred , preds
+    
+    def get_probs(self):
+        return self.probs_record / self.probs_record.sum(dim=1 , keepdim = True)
     
     def modifier_inputs(self , inputs , batch_data , ModelData):
         if self.num_states > 1:
@@ -86,17 +92,7 @@ class TRA(nn.Module):
     
     def modifier_metric(self , metric , batch_data , ModelData):
         return metric
-        if self.training and self.probs is not None and self.lamb != 0 and self.num_states > 1:
-            label = batch_data['y']
-            square_error = (self.preds - label).square()
-            square_error -= square_error.min(dim=-1, keepdim=True).values  # normalize & ensure positive input
-            P = sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
-            lamb = self.lamb * (self.rho ** self.global_steps)
-            reg = self.probs.log().mul(P).sum(dim=-1).mean()
-            self.global_steps += 1
-            metric['loss'] = metric['loss'] - lamb * reg
-            return metric
-    
+
     def modifier_update(self , update , batch_data , ModelDate):
         if self.num_states > 1 and self.preds is not None:
             i = batch_data['i']

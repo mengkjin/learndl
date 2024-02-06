@@ -156,7 +156,10 @@ class versatile_storage():
             self._addrecord(p , group)
             
     def load(self , path , from_disk = False):
-        return torch.load(path) if self.default == 'disk' or from_disk else self.mem_disk[path]
+        if self.default == 'disk' or from_disk:
+            return torch.load(path) if os.path.exists(path) else None
+        else:
+            return self.mem_disk.get(path)
 
     def _pathlist(self , p):
         if p is None: 

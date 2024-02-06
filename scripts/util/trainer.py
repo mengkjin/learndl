@@ -64,15 +64,15 @@ def _set_random_seed(seed = None):
 def _load_raw_config(config_files = None):
     config_files = ['train'] if config_files is None else config_files
     config = get_config(config_files)
-    if 'SPECIAL_CONFIG' in config.keys() and 'SHORTTEST' in config['SPECIAL_CONFIG'].keys(): 
-        if config['SHORTTEST']: config.update(config['SPECIAL_CONFIG']['SHORTTEST'])
-        del config['SPECIAL_CONFIG']['SHORTTEST']
-    if 'SPECIAL_CONFIG' in config.keys() and 'TRANSFORMER' in config['SPECIAL_CONFIG'].keys():
-        if (config['MODEL_MODULE'] == 'Transformer' or
-            (config['MODEL_MODULE'] in ['GeneralRNN'] and 
+    if 'special_config' in config.keys() and 'short_test' in config['special_config'].keys(): 
+        if config['short_test']: config.update(config['special_config']['short_test'])
+        del config['special_config']['short_test']
+    if 'special_config' in config.keys() and 'transformer' in config['special_config'].keys():
+        if (config['model_module'].lower() == 'transformer' or
+            (config['model_module'].lower() in ['generalrnn'] and 
              'transformer' in config['MODEL_PARAM']['type_rnn'])):
-            config['TRAIN_PARAM']['trainer'].update(config['SPECIAL_CONFIG']['TRANSFORMER']['trainer'])
-        del config['SPECIAL_CONFIG']['TRANSFORMER']
+            config['TRAIN_PARAM']['trainer'].update(config['special_config']['transformer']['trainer'])
+        del config['special_config']['transformer']
     return config
 
 def train_config(config = None , parser = SimpleNamespace() , do_process = False , 
@@ -87,10 +87,7 @@ def train_config(config = None , parser = SimpleNamespace() , do_process = False
     else:
         raw_config = deepcopy(config)
     config = TrainConfig(device = use_device)
-    for key in raw_config.keys():
-        newkey = key if key in ['TRAIN_PARAM' , 'COMPT_PARAM' , 'MODEL_PARAM'] else key.lower()
-        value = raw_config.get(key)
-        config.update({newkey:value})
+    config.update(raw_config)
 
     config.model_data_type = config.model_datatype[config.model_module]
     config.data_type_list  = config.model_data_type.split('+')

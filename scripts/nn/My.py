@@ -19,7 +19,7 @@ class MyTRA_LSTM(TRA.TRA):
         temp_model = MyLSTM(input_dim , hidden_dim = hidden_dim , num_output = 1 , **kwargs)
         base_model = nn.Sequential(temp_model.encoder , temp_model.decoder)
         super().__init__(base_model , hidden_dim , num_states = tra_num_states,  horizon = tra_horizon)
-
+        
 class mod_tcn_block(nn.Module):
     def __init__(self, input_dim , output_dim , dilation, dropout=0.0 , kernel_size=3):
         super().__init__()

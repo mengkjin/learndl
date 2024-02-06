@@ -1,28 +1,24 @@
 # most frequently changing variables
-SHORTTEST:  true
-STORAGE_TYPE: mem # disk
-OUTPUT_PREDICTION: False
-PRECISION:  'float' # double , bfloat16
-TRA_switch: False
-WEIGHT_TRAIN: 'equal' # equal
-WEIGHT_TEST:  'equal' # equal
-MODEL_MODULE: 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
-MODEL_NICKNAME: 'None' # 'LSTM' # 'TCN_vs_LSTM' any str or None
-MODEL_NUM: 1
-MODEL_DATATYPE:
-  GRU: 'day'
-  GeneralRNN: 'day'
-  LSTM: 'day'
-  TCN: 'day'
-  Transformer: 'day'
-  TRA_LSTM: 'day'
-  other: ['day' , '15m' , 'gp' , 'day+15m']
-LABELS: 
+short_test:  false
+tra_switch: true
+model_module: TRA_LSTM # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
+model_nickname: null # 'LSTM' # 'TCN_vs_LSTM' any str or None
+model_num: 1
+model_datatype:
+  GRU: day
+  GeneralRNN: day
+  LSTM: day
+  TCN: day
+  Transformer: day
+  TRA_LSTM: day
+  other: [day , 15m , gp , 'day+15m']
+labels: 
   - rtn_lag1_10
   - res_lag1_10
 MODEL_PARAM:
   hidden_dim:  [64] #  2**5
-  seqlens:     [{'day': 40 , '15m': 20 , 'dms': 40}] # although not a param for model, but can be different values(dict of SEQLEN) #'hist_loss': 40
+  seqlens:     [{'day': 40 , '15m': 20 , 'dms': 40}] # although not a param for model, but can be different values(dict of SEQLEN) #
+  tra_seqlens: [{'hist_loss': 40}]
   rnn_layers:  [2]
   mlp_layers:  [1] 
   dropout:     [0.1]
@@ -35,15 +31,14 @@ MODEL_PARAM:
   hidden_as_factor:    [false]
   ordered_param_group: [false]  # multiple data input , if train sequentially
   tra_num_states:      [3]
-  ATF_mask: {'causal': false , 'gaussian': false , 'tradegap': false }
 COMPT_PARAM: 
   cuda_first: true
   num_worker: 10
 TRAIN_PARAM:
   dataloader:
     random_seed:     null
-    random_tv_split: True
-    sample_method:   total_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
+    random_tv_split: true
+    sample_method:   train_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
     train_ratio:     0.8
   trainer:
     optimizer: {'name' : 'Adam' , 'param' : {} ,}  #{'name' : 'SGD' , 'param' : {} ,}
@@ -56,21 +51,24 @@ TRAIN_PARAM:
     gradient:  {'clip_value' : 10.0}
     retrain:   {'attempts' : 4 , 'min_epoch' : 20 , 'min_epoch_round' : 10} 
   criterion:
-    loss:      'pearson' # mse , pearson , ccc
+    loss:      pearson # mse , pearson , ccc
     score:     #mse,pearson,ccc,spearman
-      train:   'pearson'
-      valid:   'pearson'
-      test:    'pearson'
+      train:   pearson
+      valid:   pearson
+      test:    pearson
     penalty:   
       hidden_orthogonality : 
         lamb : 0.001
       tra_ot_penalty : 
         lamb : &tra_ot_penalty 0.01
         rho : 0.999
+    weight:
+      train:    'equal' # 'top'
+      test:     'equal' # 'top'
   transfer:    false
-  output_types: ['best' , 'swalast' , 'swabest']
+  output_types: [best , swalast , swabest]
   multitask:
-    type: 'hybrid'
+    type: hybrid
     param_dict:
       dwa: {'tau' : 2}
       ruw: {'phi' : null}
@@ -89,15 +87,15 @@ TRAIN_PARAM:
       early_stop: 10
       max_epoch: 100
       valid_converge: {'min_epoch' : 5 , 'eps' : 1.0e-5} 
-SPECIAL_CONFIG:
-  SHORTTEST:
-    BEG_DATE:   20170103
-    END_DATE:   20171201
-    INPUT_SPAN: 480
-    MAX_EPOCH:  20
-    VERBOSITY:  3
-    MODEL_NICKNAME: 'SHORTTEST'
-  TRANSFORMER:
+special_config:
+  short_test:
+    beg_date:   20170103
+    end_date:   20171201
+    input_span: 480
+    max_epoch:  20
+    verbosity:  3
+    model_nickname: ShortTest
+  transformer:
     trainer:
       gradient:  {'clip_value' : 10.}
       learn_rate:
@@ -105,24 +103,29 @@ SPECIAL_CONFIG:
         ratio:   {'attempt':[1 , 0.1 , 10 , 0.01 , 100] , 'round' : [1.] , 'transfer' : 0.1 , } 
         reset:   {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }
       scheduler: {'name' : 'cycle' , 'param' : {'base_lr':1.0e-7,'step_size_up':4} ,}
-BEG_DATE:   20170103
-END_DATE:   99991231
-INPUT_SPAN: 2400
-INTERVAL:   120
-MAX_EPOCH:  100
-VERBOSITY:  2
-BATCH_SIZE: 10000
-TEST_STEP_DAY:  1
-INPUT_STEP_DAY: 5
-SKIP_HORIZON: &SKIP_HORIZON 20 
+
+storage_type: mem # disk
+output_prediction: False
+precision:  float # double , bfloat16
+
+beg_date:   20170103
+end_date:   99991231
+input_span: 2400
+interval:   120
+max_epoch:  100
+verbosity:  2
+batch_size: 10000
+test_step_day:  1
+input_step_day: 5
+skip_horizon: &skip_horizon 20 
 
 buffer_type: tra
 buffer_param: 
   tra_num_states: &tra_num_states 3
 tra_param:
   tra_num_states : *tra_num_states
-  tra_horizon : *SKIP_HORIZON
+  tra_horizon : *skip_horizon
 
 # torch utility
-ALLOW_TF32: true
-DETECT_ANOMALY: false
+allow_tf32: true
+detect_anomaly: false

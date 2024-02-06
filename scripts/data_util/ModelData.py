@@ -128,16 +128,16 @@ class ModelData2():
         self.dataloader_param = ()
         gc.collect() , torch.cuda.empty_cache()        
     
-    def create_dataloader(self , process_name , style , model_date , seqlens):
+    def create_dataloader(self , process_name , loader_type , model_date , seqlens):
         """
         Create train/valid dataloaders, used recurrently
         """
-        assert style in ['train' , 'test']
-        assert process_name in [style , 'instance']
-        self.dataloader_param = (process_name , style , model_date , seqlens)
+        assert loader_type in ['train' , 'test']
+        assert process_name in [loader_type , 'instance']
+        self.dataloader_param = (process_name , loader_type , model_date , seqlens)
         gc.collect() , torch.cuda.empty_cache()
 
-        self.dataloader_style = style
+        self.loader_type = loader_type
         self.process_name = process_name
         y_keys , x_keys = [k for k in seqlens.keys() if k in ['hist_loss','hist_preds','hist_labels']] , self.data_type_list
         self.seqs = {k:(seqlens[k] if k in seqlens.keys() else 1) for k in y_keys + x_keys}
@@ -146,7 +146,7 @@ class ModelData2():
         self.seqx = max([v for k,v in self.seqs.items() if k in x_keys])
         self.seq0 = self.seqx + self.seqy - 1
 
-        if self.dataloader_style == 'train':
+        if self.loader_type == 'train':
             model_date_col = (self.index[1] < model_date).sum()    
             d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.input_span - self.seq0)
             d1 = max(0 , model_date_col - self.config.skip_horizon)
@@ -248,7 +248,7 @@ class ModelData2():
         if no_weight:
             weight_scheme = None 
         else:
-            weight_scheme = self.config.weight_train if self.dataloader_style.upper() == 'train' else self.config.weight_test
+            weight_scheme = self.config.weight_train if self.loader_type.upper() == 'train' else self.config.weight_test
         if nonnan_sample is None:
             y_new = y
         else:
@@ -264,7 +264,7 @@ class ModelData2():
         sample_tensor should be boolean tensor , True indicates non
         """
         shp = nonnan_sample.shape
-        if self.dataloader_style == 'train':
+        if self.loader_type == 'train':
             ii_stock_wise = np.arange(shp[0] * shp[1])[nonnan_sample.flatten()]
             ii_time_wise  = np.arange(shp[0] * shp[1]).reshape(shp[1] , shp[0]).transpose().flatten()[ii_stock_wise]
             train_samples = int(len(ii_stock_wise) * self.config.TRAIN_PARAM['dataloader']['train_ratio'])
@@ -281,7 +281,7 @@ class ModelData2():
         ipos[:,:,1] = torch.tensor(self.step_idx)
         ipos = ipos.reshape(-1 , ipos.shape[-1])
 
-        if self.dataloader_style == 'train':
+        if self.loader_type == 'train':
             i_train , i_valid = (ipos[ii_train] , ipos[ii_valid])
             return {'train': i_train, 'valid': i_valid} 
         else:
@@ -292,11 +292,11 @@ class ModelData2():
         1. update dataloaders dict(set_name = ['train' , 'valid']), save batch_data to './model/{model_name}/{set_name}_batch_data' and later load them
         """
         # init i (row , col position) and y (labels) matrix
-        set_iter = ['train' , 'valid'] if self.dataloader_style == 'train' else ['test']
-        self.loader_storage.del_group(self.dataloader_style)
+        set_iter = ['train' , 'valid'] if self.loader_type == 'train' else ['test']
+        self.loader_storage.del_group(self.loader_type)
 
         for set_name in set_iter:
-            if self.dataloader_style == 'train':
+            if self.loader_type == 'train':
                 set_i = index[set_name]
                 batch_sampler = torch.utils.data.BatchSampler(range(len(set_i)) , self.config.batch_size , drop_last = False)
             else:
@@ -320,7 +320,7 @@ class ModelData2():
                 batch_nonnan = nonnan_sample[i0,yi1]
                 # batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
                 batch_data = batch_x , batch_y
-                self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.dataloader_style)
+                self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.loader_type)
             self.dataloaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.config.verbosity >= 10)
         
     def new_train_dataloader(self , model_date , seqlens):
@@ -521,16 +521,26 @@ class ModelData():
         self.dataloader_param = ()
         gc.collect() , torch.cuda.empty_cache()        
     
-    def create_dataloader(self , process_name , style , model_date , seqlens):
+    def get_dataloader_param(self , loader_type , process_name = '' , model_date = -1 , param = {} , namespace = None):
+        if namespace is not None:
+            process_name , model_date , param = namespace.process_name , namespace.model_date , namespace.param
+        seqlens = param['seqlens']
+        if self.config.tra_model: seqlens.update(param.get('tra_seqlens',{}))
+        return loader_type , process_name , model_date , seqlens
+
+    def create_dataloader(self , *dataloader_param):
         """
         Create train/valid dataloaders, used recurrently
         """
-        assert style in ['train' , 'test']
-        assert process_name in [style , 'instance']
-        self.dataloader_param = (process_name , style , model_date , seqlens)
+        if self.dataloader_param == dataloader_param: return NotImplemented
+        self.dataloader_param = process_name , loader_type , model_date , seqlens = dataloader_param
+
+        assert loader_type in ['train' , 'test'] , loader_type
+        assert process_name in [loader_type , 'instance'] , process_name
+    
         gc.collect() , torch.cuda.empty_cache()
 
-        self.dataloader_style = style
+        self.loader_type = loader_type
         self.process_name = process_name
         y_keys , x_keys = [k for k in seqlens.keys() if k in ['hist_loss','hist_preds','hist_labels']] , self.data_type_list
         self.seqs = {k:(seqlens[k] if k in seqlens.keys() else 1) for k in y_keys + x_keys}
@@ -539,7 +549,7 @@ class ModelData():
         self.seqx = max([v for k,v in self.seqs.items() if k in x_keys])
         self.seq0 = self.seqx + self.seqy - 1
 
-        if self.dataloader_style == 'train':
+        if self.loader_type == 'train':
             model_date_col = (self.index[1] < model_date).sum()    
             d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.input_span - self.seq0)
             d1 = max(0 , model_date_col - self.config.skip_horizon)
@@ -566,8 +576,6 @@ class ModelData():
             self.step_len = (self.day_len - self.seqx + 1) // test_step + (0 if self.day_len % test_step == 0 else 1)
             self.step_idx = np.flip(self.day_len - 1 - np.arange(0 , self.step_len) * self.test_step).copy() 
             self.date_idx = d0 + self.step_idx
-
-        # data_func = lambda x:torch.nn.functional.pad(x[:,d0:d1] , (0,0,0,0,0,self.seq0-self.input_step,0,0) , value=np.nan)
 
         x = {k:v.values[:,d0:d1] for k,v in self.x_data.items()}
         self.y = self.process_y_data(self.y_data.values[:,d0:d1].squeeze(2)[...,:self.labels_n] , None , no_weight = True)
@@ -633,8 +641,10 @@ class ModelData():
     def process_y_data(self , y , nonnan_sample , no_weight = False):
         if no_weight:
             weight_scheme = None 
+        elif self.loader_type.upper() == 'train':
+            weight_scheme = self.config.train_params['criterion']['weight']['train'] 
         else:
-            weight_scheme = self.config.weight_train if self.dataloader_style.upper() == 'train' else self.config.weight_test
+            weight_scheme = self.config.train_params['criterion']['weight']['test']
         if nonnan_sample is None:
             y_new = y
         else:
@@ -650,7 +660,7 @@ class ModelData():
         sample_tensor should be boolean tensor , True indicates non
         """
         shp = nonnan_sample.shape
-        if self.dataloader_style == 'train':
+        if self.loader_type == 'train':
             ii_stock_wise = np.arange(shp[0] * shp[1])[nonnan_sample.flatten()]
             ii_time_wise  = np.arange(shp[0] * shp[1]).reshape(shp[1] , shp[0]).transpose().flatten()[ii_stock_wise]
             train_samples = int(len(ii_stock_wise) * self.config.TRAIN_PARAM['dataloader']['train_ratio'])
@@ -667,7 +677,7 @@ class ModelData():
         ipos[:,:,1] = torch.tensor(self.step_idx)
         ipos = ipos.reshape(-1 , ipos.shape[-1])
 
-        if self.dataloader_style == 'train':
+        if self.loader_type == 'train':
             i_train , i_valid = (ipos[ii_train] , ipos[ii_valid])
             return {'train': i_train, 'valid': i_valid} 
         else:
@@ -678,13 +688,13 @@ class ModelData():
         1. update dataloaders dict(set_name = ['train' , 'valid']), save batch_data to './model/{model_name}/{set_name}_batch_data' and later load them
         """
         # init i (row , col position) and y (labels) matrix
-        set_iter = ['train' , 'valid'] if self.dataloader_style == 'train' else ['test']
-        self.loader_storage.del_group(self.dataloader_style)
+        set_iter = ['train' , 'valid'] if self.loader_type == 'train' else ['test']
+        self.loader_storage.del_group(self.loader_type)
         loaders = dict()
         # mapping = lambda d:{k:(d[k] if k == 'i' else self.loader_device(d[k])) for k in d.keys()}
 
         for set_name in set_iter:
-            if self.dataloader_style == 'train':
+            if self.loader_type == 'train':
                 set_i = index[set_name]
                 batch_sampler = torch.utils.data.BatchSampler(range(len(set_i)) , self.config.batch_size , drop_last = False)
             else:
@@ -707,7 +717,7 @@ class ModelData():
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
-                self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.dataloader_style)
+                self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.loader_type)
             loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.config.verbosity >= 10)
         self.dataloaders.update(loaders)
         
@@ -730,7 +740,7 @@ class ModelData():
         ipos[:,:,0] = torch.arange(shp[0] , dtype = int).reshape(-1,1) 
         ipos[:,:,1] = torch.tensor(self.step_idx)
 
-        if self.dataloader_style == 'train':
+        if self.loader_type == 'train':
             sample_index = {'train': [] , 'valid': []} 
             train_dates = int(shp[1] * train_ratio)
 
@@ -788,7 +798,7 @@ class ModelData():
         1. update dataloaders dict(set_name = ['train' , 'valid']), save batch_data to './model/{model_name}/{set_name}_batch_data' and later load them
         """
         # init i (row , col position) and y (labels) matrix
-        self.loader_storage.del_group(self.dataloader_style)
+        self.loader_storage.del_group(self.loader_type)
         loaders = dict()
         for set_name in sample_index.keys():
             batch_file_list = []
@@ -806,7 +816,7 @@ class ModelData():
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
-                self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.dataloader_style)
+                self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.loader_type)
             loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.config.verbosity >= 10)
         self.dataloaders.update(loaders)
         
