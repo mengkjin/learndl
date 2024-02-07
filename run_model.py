@@ -136,6 +136,7 @@ class model_controller():
         logger.critical(self.model_info['test_process'])
 
     def model_process_instance(self):
+        self.model_info['instance_time'] = time.time()
         if config.anchoring < 0:
             _text , _cond = ask_for_confirmation(f'Do you want to copy the model to instance?[yes/else no]: ' , timeout = -1)
             anchoring = all([_t.lower() in ['yes','y'] for _t in _text])
@@ -154,7 +155,8 @@ class model_controller():
         else:
             logger.critical(f'Will not copy to instance!')
             return
-                
+        self.test_result_model_num = np.repeat(config.model_num_list,len(config.output_types))
+        self.test_result_output_type = np.tile(config.output_types,len(config.model_num_list))
         logger.warning('Copy from model to instance finished , Start going forward')
         self.InstanceStart()
         for model_date , model_num in self.ModelIter():
@@ -167,10 +169,10 @@ class model_controller():
 
     def ModelIter(self):
         model_iter = list(itertools.product(self.data.model_date_list , config.model_num_list))
-        if config.resume_training and (self.process_name == 'train'):
+        if config.resume_training and self.process_name == 'train':
             models_trained = np.full(len(model_iter) , True)
             for i,(model_date,model_num) in enumerate(model_iter):
-                if not os.path.exists(f'{config.model_base_path}/{model_num}/{model_date}.pt'):
+                if not os.path.exists(f'{config.model_base_path}/{model_num}/{model_date}.best.pt'):
                     models_trained[max(i-1,0):] = False
                     break
             model_iter = FilteredIterator(model_iter , models_trained == 0)
@@ -182,7 +184,7 @@ class model_controller():
             param = config.model_params[self.model_num]
 
             if config.get('output_prediction') or self.process_name == 'instance':
-                self.prediction = {op_type:[] for op_type in config.output_types}
+                self.prediction = []
             else:
                 self.prediction = None
 
@@ -339,7 +341,7 @@ class model_controller():
                     metric = self.metric_calculator(batch_data['y'] , pred , 'train' , weight = batch_data['w'] , **penalty_kwargs)
                     metric = self.modifier['metric'](metric, batch_data, self.data)
                 with trainer_timer('TrainEpoch/train/backward'):
-                    metric['loss'].backward()
+                    (metric['loss'] + metric['penalty']).backward()
                 with trainer_timer('TrainEpoch/train/step'):
                     if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value)
                     self.optimizer.step()
@@ -424,7 +426,7 @@ class model_controller():
                     self.printer('new_round')
                 else:
                     self.cond['loop_status'] = 'model'
-                    print(self.net.get_probs())
+                    # print(self.net.get_probs())
                     self.save_model(config.output_types)
             else:
                 self.cond['loop_status'] = 'epoch'
@@ -469,15 +471,20 @@ class model_controller():
                         pred[nnj,0] = pred_nnj[:,0]
                         self.modifier['update'](None , batch_nnj , self.data)
                     
-                    if i >= len(self.data.early_test_dates):
+                    if i >= len(self.data.early_test_dates) and len(nonnan) > 0:
                         # before this date is warmup stage
                         metric = self.metric_calculator(batch_data['y'],pred,'test',weight=batch_data['w'],valid_sample=nonnan)
                         test_score[i] = metric['score']
 
                         assert iter_dates[i] == self.data.y_date[batch_data['i'][0,1]] , (iter_dates[i] , self.data.y_date[batch_data['i'][0,1]])
-                        if hasattr(self , 'output_prediction'):
+                        if hasattr(self , 'prediction'):
                             batch_index , batch_pred = batch_data['i'].cpu() , pred.cpu()
-                            self.output_prediction[op_type].append([self.data.y_secid[batch_index[:,0]],self.data.y_date[batch_index[:,1]], batch_pred[:,0]])
+                            self.prediction.append({
+                                'secid' : self.data.y_secid[batch_index[:,0]] , 
+                                'date'  : self.data.y_date[batch_index[:,1]] ,
+                                'model' : f'{self.model_num}/{op_type}' ,
+                                'values': batch_pred[:,0]
+                            })
 
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
                     if iterator.progress_bar: iterator.display(f'Date#{i-len(self.data.early_test_dates):3d} :{np.mean(test_score[i+1]):.5f}')
@@ -509,32 +516,13 @@ class model_controller():
             yaml.dump(out_dict , f)
 
     def StorePreds(self):
-        if not hasattr(self , 'output_prediction') and self.process_name != 'instance': return NotImplemented
-        #if False:
-        #    df = pd.DataFrame(self.y_pred.T, index = self.data.model_test_dates, columns = self.data.secid.astype(str))
-        #    with open(f'{config.instance_path}/{config.model_name}_fac{self.model_num}.csv', 'a') as f:
-        #        df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)
-
-        df_new = 1
-        if self.model_num == 0:
-            self.y_pred_models = []
-            gc.collect()
-        self.y_pred_models.append(self.y_pred)
-        if self.model_num == config.model_num_list[-1]:
-            self.y_pred_models = np.concatenate(self.y_pred_models,axis=-1).transpose(1,0,2)
-
-            mode = 'r+' if os.path.exists(f'{config.instance_path}/{config.model_name}.h5') else 'w'
-            with h5py.File(f'{config.instance_path}/{config.model_name}.h5' , mode = mode) as f:
-                for di in range(len(self.data.model_test_dates)):
-                    arr , row = self.y_pred_models[di] , self.data.sec_id 
-                    arr , row = arr[np.isnan(arr).all(axis=1) == 0] , row[np.isnan(arr).all(axis=1) == 0]
-                    col = [f'{mn}.{o}' for mn,o in zip(self.test_result_model_num,self.test_result_output_type)]
-                    if str(self.data.model_test_dates[di]) in f.keys():
-                        del f[str(self.data.model_test_dates[di])]
-                    g = f.create_group(str(self.data.model_test_dates[di]))
-                    g.create_dataset('arr' , data=arr , compression='gzip')
-                    g.create_dataset('row' , data=row , compression='gzip')
-                    g.create_dataset('col' , data=col , compression='gzip')     
+        if not hasattr(self , 'prediction') and self.process_name != 'instance': return NotImplemented
+        path_output = f'{config.instance_path}/{config.model_name}_allpreds.csv'
+        for op_data in self.prediction:
+            df = pd.concat([pd.DataFrame(op_data_alist) for op_data_alist in op_data])
+            df = df.pivot_table('values' , ['secid' , 'date'] , ['model'])
+            with open(path_output , 'a') as f:
+                df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)   
   
     def ModelResult(self):
         # date ic writed down
@@ -612,28 +600,31 @@ class model_controller():
         score:  pearson , spearman , mse , ccc
         """
         assert key in ['train' , 'valid' , 'test'] , key
-        if labels.shape != pred.shape:
-            # if more labels than output
+        if labels.shape != pred.shape: # if more labels than output
             assert labels.shape[:-1] == pred.shape[:-1] , (labels.shape , pred.shape)
             labels = labels.transpose(0,-1)[:pred.shape[-1]].transpose(0,-1)
         if valid_sample is not None:
             labels , pred = labels[valid_sample] , pred[valid_sample]
             if weight is not None: weight = weight[valid_sample]
         score_dim = lambda x:None if x is None else x.select(-1,0)
+
         if key == 'train':
             if self.param['num_output'] > 1:
                 loss = self.metric_function['loss'](labels , pred , weight , dim = 0)[:self.param['num_output']]
                 loss = self.multiloss.calculate_multi_loss(loss , self.net.get_multiloss_params())
             else:
                 loss = self.metric_function['loss'](score_dim(labels) , score_dim(pred) , score_dim(weight))
+            
+            penalty = 0.
             for _pen_dict in self.metric_function['penalty'].values():
                 if _pen_dict['lamb'] > 0 and _pen_dict['cond']: 
-                    loss = loss + _pen_dict['lamb'] * _pen_dict['func'](**penalty_kwargs)  
+                    penalty = penalty + _pen_dict['lamb'] * _pen_dict['func'](**penalty_kwargs)  
             loss_item = loss.item()
         else:
-            loss_item = loss = 0.
+            loss_item = loss = penalty = 0.
+
         score = self.metric_function['score'][key](score_dim(labels) , score_dim(pred) , score_dim(weight)).item()
-        return {'loss' : loss , 'loss_item' : loss_item , 'score' : score}
+        return {'loss' : loss , 'loss_item' : loss_item , 'score' : score , 'penalty' : penalty}
     
     def _deal_nanloss(self):
         """

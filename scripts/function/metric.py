@@ -66,7 +66,7 @@ def penalty_function(key , param):
             square_error -= square_error.min(dim=-1, keepdim=True).values  # normalize & ensure positive input
             P = sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
             lamb = (param['rho'] ** net.global_steps)
-            reg = net.probs.log().mul(P).sum(dim=-1).mean()
+            reg = (net.probs + 1e-4).log().mul(P).sum(dim=-1).mean()
             net.global_steps += 1
             pen = - lamb * reg
         return pen

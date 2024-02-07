@@ -153,8 +153,14 @@ def train_config(config = None , parser = SimpleNamespace() , do_process = False
             config.model_base_path = f'./model/{config.model_name}'
             os.makedirs(config.model_base_path, exist_ok = True)
             [os.makedirs(f'{config.model_base_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
-            for copy_filename in ['configs/config_train.yaml']:
-                shutil.copyfile(f'./{copy_filename}', f'{config.model_base_path}/{os.path.basename(copy_filename)}')
+            if config.resume_training and os.path.exists(f'{config.model_base_path}/config_train.yaml'):
+                config_resume = _load_raw_config(f'{config.model_base_path}/config_train.yaml')
+                config.update(config_resume)
+                config.model_data_type = config.model_datatype[config.model_module]
+                config.data_type_list  = config.model_data_type.split('+')
+                config.model_num_list  = list(range(config.model_num))
+            else:
+                shutil.copyfile(f'./configs/config_train.yaml', f'{config.model_base_path}/config_train.yaml')
         elif 'test' in config.process_queue:
             if rawname < 0 and config.resume_training and len(candidate_name) > 0:
                 if len(candidate_name) > 1:

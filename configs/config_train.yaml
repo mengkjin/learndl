@@ -47,7 +47,7 @@ TRAIN_PARAM:
       base:    0.005
       ratio:   {'attempt':[1 , 0.1 , 10 , 0.01 , 100] , 'round' : [1.] , 'transfer' : 0.1 , } 
       reset:   {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
-    nanloss:   {'retry' : 2}
+    nanloss:   {'retry' : 5}
     gradient:  {'clip_value' : 10.0}
     retrain:   {'attempts' : 4 , 'min_epoch' : 20 , 'min_epoch_round' : 10} 
   criterion:

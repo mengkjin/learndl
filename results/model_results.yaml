@@ -657,3 +657,41 @@
   0.best: 23.815250711748376
   0.swabest: 23.68769418874581
   0.swalast: 20.47546377708204
+0_start: Thu Feb  8 06:12:24 2024
+1_basic: long+mem+float
+2_model: TRA_LSTM_day(x1)
+3_time: 20170103-99991231
+4_typeNN: lstm
+5_train: null
+6_test: Finish Process [Test Model]! Cost 150.0 Secs
+7_result:
+  0.best: 163.5276742327842
+  0.swabest: 144.13639031801358
+  0.swalast: 164.58573065523524
+0_start: Thu Feb  8 06:30:06 2024
+1_basic: long+mem+float
+2_model: TRA_LSTM_day(x1)
+3_time: 20170103-99991231
+4_typeNN: lstm
+5_train: null
+6_test: null
+7_result: null
+0_start: Thu Feb  8 06:33:08 2024
+1_basic: long+mem+float
+2_model: TRA_LSTM_day(x1)
+3_time: 20170103-99991231
+4_typeNN: lstm
+5_train: null
+6_test: null
+7_result: null
+0_start: Thu Feb  8 06:55:39 2024
+1_basic: long+mem+float
+2_model: TRA_LSTM_day(x1)
+3_time: 20170103-99991231
+4_typeNN: lstm
+5_train: null
+6_test: null
+7_result:
+  0.best: 163.55449335152662
+  0.swabest: 144.27896716838495
+  0.swalast: 164.58924311769078
