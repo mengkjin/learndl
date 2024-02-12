@@ -36,7 +36,7 @@ except:
     parser = trainer_parser().parse_args(args=[])
 
 logger = get_logger()
-config = train_config(parser = parser , do_process=True)
+config = train_config(parser = parser , do_process = __name__ == '__main__')
 set_trainer_environment(config)
 trainer_timer   = process_timer(False)
 trainer_storage = versatile_storage(config.storage_type)
@@ -93,11 +93,8 @@ class model_controller():
         logger.critical(f'Start Process [Load Data]!')
         self.data = ModelData(config.model_data_type , config)
         # retrieve from data object
-        #config.test_full_dates = self.data.test_full_dates
-        #config.test_dates_end  = self.data.test_full_dates[-1]
-        input_dim = tuple(self.data.feat_dims[mdt] for mdt in self.data.data_type_list)
-        for smp in config.model_params: 
-            smp.update({'input_dim':input_dim if len(input_dim) > 1 else input_dim[0]})
+        filler = model_params_filler(self.data.x_data , self.data.data_type_list)
+        for smp in config.model_params:  smp.update(filler)
         logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.model_info['data_time']))
         
     def model_process_train(self):
@@ -807,6 +804,21 @@ def new_optimizer(key , net , base_lr , transfer = False , encoder_lr_ratio = 1.
         'SGD' : torch.optim.SGD ,
     }[key](net_param_groups , **kwargs)
     return optimizer
+
+def model_params_filler(x_data = {} , data_type_list = None):
+    if data_type_list is None: data_type_list = list(x_data.keys())
+
+    filler = {}
+    input_dim = tuple(x_data[mdt].shape[-1]  for mdt in data_type_list)
+    inday_dim = tuple(x_data[mdt].shape[-2]  for mdt in data_type_list)
+    if len(data_type_list) > 1:
+        filler.update({'input_dim':input_dim , 'inday_dim':inday_dim})
+    elif len(data_type_list) == 1:
+        filler.update({'input_dim':input_dim[0] , 'inday_dim':inday_dim[0]})
+    else:
+        filler.update({'input_dim':6 , 'inday_dim':8})
+
+    return filler
 
 if __name__ == '__main__':
 

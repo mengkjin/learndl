@@ -30,12 +30,11 @@ class TrainConfig(SimpleNamespace):
             key_list = list(self.keys())
             for k in key_list: delattr(self,k)
             for k,v in raw_config_dict.items(): setattr(self,k,v)
-    def get(self , key):
-        return getattr(self,key,None)
+    def get(self , key , default = None):
+        return getattr(self,key,default)
     def get_dict(self , keys = None):
         if keys is None: keys = self.items()
-        d = {k:getattr(self,k,None) for k in keys}
-        return d
+        return {k:self.get(k) for k in keys}
 
 def trainer_parser(input = {} , default = -1 , description='manual to this script'):
     parser = argparse.ArgumentParser(description=description)
@@ -76,7 +75,7 @@ def _load_raw_config(config_files = None):
     return config
 
 def train_config(config = None , parser = SimpleNamespace() , do_process = False , 
-                 reload_name = None , reload_base_path = None , config_files = None):
+                 reload_name = None , reload_base_path = None , config_files = None , override_config = {}):
     """
     1. namespace type of config
     2. Ask what process would anyone want to run : 0 : train & test(default) , 1 : train only , 2 : test only , 3 : copy to instance only
@@ -88,6 +87,7 @@ def train_config(config = None , parser = SimpleNamespace() , do_process = False
         raw_config = deepcopy(config)
     config = TrainConfig(device = use_device)
     config.update(raw_config)
+    config.update(override_config)
 
     config.model_data_type = config.model_datatype[config.model_module]
     config.data_type_list  = config.model_data_type.split('+')
@@ -201,7 +201,8 @@ def train_config(config = None , parser = SimpleNamespace() , do_process = False
     return config
 
 class Device:
-    def __init__(self , device = use_device) -> None:
+    def __init__(self , device = None) -> None:
+        if device is None: device = use_device
         self.device = device
     def __call__(self, *args):
         if len(args) == 0: return None

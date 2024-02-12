@@ -3,10 +3,11 @@ import torch.nn as nn
 from torch.nn.utils.parametrizations import weight_norm
 from copy import deepcopy
 from ..function.basic import *
-from . import TRA
+from .TRA import TRA
+from .ResNet import resnet_1d , resnet_2d
 
 """
-class TRA_LSTM(TRA.TRA):
+class TRA_LSTM(TRA):
     def __init__(self , input_dim , hidden_dim , tra_num_states=1, tra_horizon = 20 , 
                  tra_hidden_size=8, tra_tau=1.0, tra_rho = 0.999 , tra_lamb = 0.0):
         base_model = mod_lstm(input_dim , hidden_dim , dropout=0.0 , num_layers = 2)
@@ -14,11 +15,21 @@ class TRA_LSTM(TRA.TRA):
                          horizon = tra_horizon , hidden_size = tra_hidden_size, 
                          tau = tra_tau, rho = tra_rho , lamb = tra_lamb)
 """
-class MyTRA_LSTM(TRA.TRA):
+class MyTRA_LSTM(TRA):
     def __init__(self , input_dim , hidden_dim , tra_num_states=1, tra_horizon = 20 , num_output = 1 , **kwargs):
         temp_model = MyLSTM(input_dim , hidden_dim = hidden_dim , num_output = 1 , **kwargs)
         base_model = nn.Sequential(temp_model.encoder , temp_model.decoder)
         super().__init__(base_model , hidden_dim , num_states = tra_num_states,  horizon = tra_horizon)
+
+class MyResNet_LSTM(nn.Module):
+    def __init__(self, input_dim , inday_dim , hidden_dim = 64 , **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.resnet = resnet_1d(inday_dim , input_dim , hidden_dim // 4 , *kwargs) 
+        self.lstm   = MyLSTM(hidden_dim // 4 , hidden_dim , **kwargs)
+    def forward(self , x):
+        hidden = self.resnet(x)
+        output = self.lstm(hidden)[:,-1,:]
+        return output
         
 class mod_tcn_block(nn.Module):
     def __init__(self, input_dim , output_dim , dilation, dropout=0.0 , kernel_size=3):
