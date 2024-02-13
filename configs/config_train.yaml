@@ -17,18 +17,18 @@ labels:
   - rtn_lag1_10
   - res_lag1_10
 MODEL_PARAM:
-  hidden_dim:  [64] #  2**5
-  seqlens:     [{'day': 40 , '30m': 30 , '15m': 20 , 'dms': 40}] # although not a param for model, but can be different values(dict of SEQLEN) #
-  tra_seqlens: [{'hist_loss': 40}]
-  rnn_layers:  [2]
-  mlp_layers:  [1] 
-  dropout:     [0.1]
-  fc_in:       [true]
-  fc_att:      [false] 
-  type_rnn:    ['lstm'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
-  rnn_att:     [false]
-  num_output:  [1]
-  kernel_size: [3 , 3] 
+  hidden_dim:     [64] #  2**5
+  seqlens:        [{'day': 40 , '30m': 30 , '15m': 20 , 'dms': 40}] # although not a param for model, but can be different values(dict of SEQLEN) #
+  tra_seqlens:    [{'hist_loss': 40}]
+  dropout:        [0.1]
+  fc_in:          [true]
+  fc_att:         [false] 
+  rnn_type:       ['lstm'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
+  rnn_att:        [false]
+  rnn_layers:     [2]
+  dec_mlp_layers: [1] 
+  num_output:     [1]
+  kernel_size:    [3 , 3] # for tcn
   hidden_as_factor:    [false]
   ordered_param_group: [false]  # multiple data input , if train sequentially
   tra_num_states:      [3]
@@ -38,7 +38,7 @@ COMPT_PARAM:
 TRAIN_PARAM:
   dataloader:
     random_seed:     null
-    random_tv_split: true
+    random_split:    true
     sample_method:   train_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
     train_ratio:     0.8
   trainer:

@@ -42,7 +42,7 @@ trainer_timer   = process_timer(False)
 trainer_storage = versatile_storage(config.storage_type)
 trainer_device  = Device(config.device)
 
-if not config.short_test:
+if __name__ == '__main__' and not config.short_test:
     logger.warning('Model Specifics:')
     pretty_print_dict(config.get_dict([
         'verbosity' , 'storage_type' , 'device' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 'model_data_type' , 'model_num' ,
@@ -77,11 +77,7 @@ class model_controller():
             pass
         elif self.process_name in ['train' , 'test' , 'instance']: 
             self.data.reset_dataloaders()
-            self.metric_function = {
-                'loss'    : loss_function(config.train_params['criterion']['loss']) , 
-                'penalty' : {pentype:penalty_function(pentype,param) for pentype,param  in config.train_params['criterion']['penalty'].items()} ,
-                'score'   : {process:score_function(metric)          for process,metric in config.train_params['criterion']['score'].items()} ,
-            }
+            self.metric_function = new_metric_function(config.train_params)
         else:
             raise Exception(f'KeyError : {key}')
         
@@ -180,41 +176,23 @@ class model_controller():
         with trainer_timer('ModelPreparation' , process):
             param = config.model_params[self.model_num]
 
-            if config.get('output_prediction') or self.process_name == 'instance':
-                self.prediction = []
-            else:
-                self.prediction = None
-
+            self.prediction = [] if config.get('output_prediction') or self.process_name == 'instance' else None
             # In a new model , alters the penalty function's lamb
-            self.metric_function['penalty'].get('hidden_orthogonality',{})['cond'] = config.tra_model or param.get('hidden_as_factors',False)
-            self.metric_function['penalty'].get('tra_ot_penalty',{})['cond']       = config.tra_model
+            self.metric_function = update_metric_function(self.metric_function , param , config)
 
-            model_path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
-            """
-            path = {k:f'{model_path_prefix}.{k}.pt' for k in config.output_types} #['best','swalast','swabest']
-            path.update({f'src_model.{k}':[] for k in config.output_types})
-            if 'swalast' in config.output_types: 
-                path['lastn'] = [f'{model_path_prefix}.lastn.{i}.pt' for i in range(last_n)]
-            if 'swabest' in config.output_types: 
-                path['bestn'] = [f'{model_path_prefix}.bestn.{i}.pt' for i in range(best_n)]
-                path['bestn_score'] = [-10000. for i in range(best_n)]
-            if config.train_params['transfer'] and self.model_date > self.data.model_date_list[0]:
-                path['transfer'] = '{}/{}.best.pt'.format(param.get('path') , max([d for d in self.data.model_date_list if d < self.model_date])) 
-            self.path = path
-            """
-            path = {'target'      : {op_type:f'{model_path_prefix}.{op_type}.pt' for op_type in config.output_types} , 
+            path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
+            path = {'target'      : {op_type:f'{path_prefix}.{op_type}.pt' for op_type in config.output_types} , 
                     'source'      : {op_type:[] for op_type in (config.output_types + ['rounds'])} , # del at each model train
                     'candidate'   : {op_type:None for op_type in (config.output_types + ['transfer'])} , # not del at each model train
                     'performance' : {op_type:None for op_type in config.output_types}}
             if 'best'    in config.output_types:
-                path['candidate']['best'] = f'{model_path_prefix}.best.pt'
+                path['candidate']['best'] = f'{path_prefix}.best.pt'
             if 'swalast' in config.output_types: 
-                path['source']['swalast'] = [f'{model_path_prefix}.lastn.{i}.pt' for i in range(last_n)]
+                path['source']['swalast'] = [f'{path_prefix}.lastn.{i}.pt' for i in range(last_n)]
             if 'swabest' in config.output_types: 
-                path['source']['swabest']      = [f'{model_path_prefix}.bestn.{i}.pt' for i in range(best_n)] 
+                path['source']['swabest']      = [f'{path_prefix}.bestn.{i}.pt' for i in range(best_n)] 
                 path['candidate']['swabest']   = path['source']['swabest']
                 path['performance']['swabest'] = [-10000. for i in range(best_n)]
-  
             if config.train_params['transfer'] and self.model_date > self.data.model_date_list[0]:
                 last_model_date = max([d for d in self.data.model_date_list if d < self.model_date])
                 path['candidate']['transfer'] = '{}/{}.best.pt'.format(param.get('path') , last_model_date)
@@ -441,15 +419,11 @@ class model_controller():
             score_model = np.zeros((1 , len(self.test_result_model_num)))
             self.score_by_date  = np.concatenate([getattr(self,'score_by_date' ,np.empty((0,len(self.test_result_model_num)))) , score_date])
             self.score_by_model = np.concatenate([getattr(self,'score_by_model',np.empty((0,len(self.test_result_model_num)))) , score_model])
-            #self.score_by_date  = score_date  if self.score_by_date  is None else np.concatenate([self.score_by_date , score_date])
-            #self.score_by_model = score_model if self.score_by_model is None else np.concatenate([self.score_by_model, score_model])
                 
     def Forecast(self):
         if not os.path.exists(self.path['target']['best']): self.TrainModel()
         
         with trainer_timer('TestModel/Forcast') , torch.no_grad():
-            #self.y_pred = cuda(torch.zeros(len(self.data.index[0]),len(self.data.model_test_dates),self.data.labels_n,len(config.output_types)).fill_(np.nan))
-            #self.y_pred = trainer_device.torch_nans(len(self.data.index[0]), len(self.data.model_test_dates), len(config.output_types))
             iter_dates = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
             assert self.data.dataloaders['test'].__len__() == len(iter_dates)
             for oi , op_type in enumerate(config.output_types):
@@ -502,7 +476,7 @@ class model_controller():
             '1_basic' :'+'.join(['short' if config.short_test else 'long' , config.storage_type , config.precision]),
             '2_model' :''.join([config.model_module , '_' , config.model_data_type , '(x' , str(config.model_num) , ')']),
             '3_time'  :'-'.join([str(config.beg_date),str(config.end_date)]),
-            '4_typeNN':'+'.join(list(set(config.MODEL_PARAM['type_rnn']))),
+            '4_typeNN':'+'.join(list(set(config.MODEL_PARAM['rnn_type']))),
             '5_train' :self.model_info.get('train_process'),
             '6_test'  :self.model_info.get('test_process'),
             '7_result':self.model_info.get('test_score_sum'),
@@ -523,7 +497,7 @@ class model_controller():
   
     def ModelResult(self):
         # date ic writed down
-        date_step = (1 if self.process_name == 'instance' else self.data.test_step)
+        date_step = (1 if self.process_name == 'instance' else self.data.kwarg.test_step_day)
         date_list = self.data.test_full_dates[::date_step]
         for model_num in config.model_num_list:
             df = pd.DataFrame({'dates' : date_list} , index = map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , date_list.astype(str)))
@@ -780,6 +754,19 @@ def new_net(module , param = {} , state_dict = None):
     if state_dict: net.load_state_dict(state_dict)
     return net
 
+def new_metric_function(train_params , **kwargs):
+    metric_funcs = {
+        'loss'    : loss_function(train_params['criterion']['loss']) , 
+        'penalty' : {pentype:penalty_function(pentype,param) for pentype,param  in train_params['criterion']['penalty'].items()} ,
+        'score'   : {process:score_function(metric)          for process,metric in train_params['criterion']['score'].items()} ,
+    }
+    return metric_funcs
+
+def update_metric_function(metric_funcs , model_param , config , **kwargs):
+    metric_funcs['penalty'].get('hidden_orthogonality',{})['cond'] = config.tra_model or model_param.get('hidden_as_factors',False)
+    metric_funcs['penalty'].get('tra_ot_penalty',{})['cond']       = config.tra_model
+    return metric_funcs
+
 def new_scheduler(key , optimizer , **kwargs):
     if key == 'cos':
         scheduler = lr_cosine_scheduler(optimizer, **kwargs)
@@ -819,6 +806,31 @@ def model_params_filler(x_data = {} , data_type_list = None):
         filler.update({'input_dim':6 , 'inday_dim':8})
 
     return filler
+
+def new_random_input(module = 'ResNet_LSTM' , model_data_type = '30m' , batch = 2):
+    config = train_config(override_config = {'model_module' : module , 'model_data_type' : model_data_type} , do_process=False)
+    for smp in config.model_params: smp.update(model_params_filler())
+    data_type_list = config.data_type_list
+    model_param = config.model_params[0]
+
+    x = []
+    for i , mdt in enumerate(data_type_list):
+        seqlen = model_param['seqlens'].get(mdt , 20)
+        inday_dim = (lambda x,i:x[i] if isinstance(x,(tuple,list)) else x)(model_param.get('inday_dim',8) , i)
+        input_dim = (lambda x,i:x[i] if isinstance(x,(tuple,list)) else x)(model_param.get('input_dim',6) , i)
+        x.append(torch.rand(batch , seqlen , inday_dim , input_dim))
+    x = tuple(x) if len(x) > 1 else x[0]
+    y = torch.rand(batch , 1)
+    net = new_net(module , param = model_param)
+    return net , x , y
+
+"""
+config = train_config(override_config = {'model_module' : 'ResNet_LSTM' , 'model_data_type' : '30m'} , do_process=False)
+for smp in config.model_params: smp.update(model_params_filler())
+
+data_type_list = config.data_type_list
+model_params = config.model_params
+"""
 
 if __name__ == '__main__':
 

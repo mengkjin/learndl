@@ -14,6 +14,16 @@ class TRA_LSTM(TRA):
         super().__init__(base_model , hidden_dim , num_states = tra_num_states, 
                          horizon = tra_horizon , hidden_size = tra_hidden_size, 
                          tau = tra_tau, rho = tra_rho , lamb = tra_lamb)
+
+class MyResNet_LSTM(nn.Module):
+    def __init__(self, input_dim , inday_dim , hidden_dim = 64 , **kwargs) -> None:
+        super().__init__()
+        self.resnet = resnet_1d(inday_dim , input_dim , hidden_dim // 4 , **kwargs) 
+        self.lstm   = MyLSTM(hidden_dim // 4 , hidden_dim = hidden_dim , **kwargs)
+    def forward(self , x):
+        hidden = self.resnet(x)
+        output = self.lstm(hidden)
+        return output
 """
 class MyTRA_LSTM(TRA):
     def __init__(self , input_dim , hidden_dim , tra_num_states=1, tra_horizon = 20 , num_output = 1 , **kwargs):
@@ -21,15 +31,7 @@ class MyTRA_LSTM(TRA):
         base_model = nn.Sequential(temp_model.encoder , temp_model.decoder)
         super().__init__(base_model , hidden_dim , num_states = tra_num_states,  horizon = tra_horizon)
 
-class MyResNet_LSTM(nn.Module):
-    def __init__(self, input_dim , inday_dim , hidden_dim = 64 , **kwargs) -> None:
-        super().__init__(**kwargs)
-        self.resnet = resnet_1d(inday_dim , input_dim , hidden_dim // 4 , *kwargs) 
-        self.lstm   = MyLSTM(hidden_dim // 4 , hidden_dim , **kwargs)
-    def forward(self , x):
-        hidden = self.resnet(x)
-        output = self.lstm(hidden)[:,-1,:]
-        return output
+
         
 class mod_tcn_block(nn.Module):
     def __init__(self, input_dim , output_dim , dilation, dropout=0.0 , kernel_size=3):
@@ -65,6 +67,7 @@ class mod_tcn_block(nn.Module):
 class mod_tcn(nn.Module):
     def __init__(self, input_dim , output_dim , dropout=0.0 , num_layers = 2 , kernel_size = 3):
         super().__init__()
+        if kernel_size is None: kernel_size = 3
         num_layers = max(2 , num_layers)
         layers = []
         for i in range(num_layers):
@@ -135,26 +138,29 @@ class rnn_univariate(nn.Module):
         self,
         input_dim ,
         hidden_dim: int = 2**5,
-        rnn_layers: int = 2,
-        mlp_layers: int = 2,
         dropout:  float = 0.1,
-        fc_att:    bool = False,
-        fc_in:     bool = False,
-        type_rnn:   str = 'gru',
-        type_act:   str = 'LeakyReLU',
-        num_output: int = 1 ,
+        act_type:   str = 'LeakyReLU',
+        enc_in:     str = None,
+        enc_in_dim: int = None ,
+        enc_att:   bool = False,
+        rnn_type:   str = 'gru',
+        rnn_layers: int = 2,
+        dec_mlp_layers: int = 2,
         dec_mlp_dim:int = None,
+        num_output: int = 1 ,
         output_as_factors: bool = True,
         hidden_as_factors: bool = False,
         **kwargs
     ):
         super().__init__()
         self.num_output = num_output
+
         self.kwargs = kwargs
-        self.kwargs.update({'input_dim':input_dim,'hidden_dim':hidden_dim,'rnn_layers':rnn_layers,'mlp_layers':mlp_layers,'dropout':dropout,
-                            'fc_att':fc_att,'fc_in':fc_in,'type_rnn':type_rnn,'type_act':type_act,'num_output':num_output,'dec_mlp_dim':dec_mlp_dim,
-                            'output_as_factors':output_as_factors,'hidden_as_factors':hidden_as_factors, 
-                           })
+        for key in [
+            'input_dim','hidden_dim','dropout','act_type','enc_in','enc_in_dim','enc_att','rnn_type','rnn_layers',
+            'dec_mlp_layers','dec_mlp_dim','num_output','hidden_as_factors','output_as_factors'
+        ]: self.kwargs[key] = locals()[key]
+
         self.encoder = mod_parallel(uni_rnn_encoder(**self.kwargs) , num_mod = 1 , feedforward = False , concat_output = True)
         self.decoder = mod_parallel(uni_rnn_decoder(**self.kwargs) , num_mod = num_output , feedforward = False , concat_output = False)
         self.mapping = mod_parallel(uni_rnn_mapping(**self.kwargs) , num_mod = num_output , feedforward = True , concat_output = True)
@@ -178,17 +184,18 @@ class rnn_multivariate(nn.Module):
         self,
         input_dim ,
         hidden_dim: int = 2**5,
-        rnn_layers: int = 2,
-        mlp_layers: int = 2,
         dropout:  float = 0.1,
-        fc_att:    bool = False,
-        fc_in:     bool = False,
-        type_rnn:   str = 'gru',
-        type_act:   str = 'LeakyReLU',
-        num_output: int = 1 ,
+        act_type:   str = 'LeakyReLU',
+        enc_in:     str = None,
+        enc_in_dim: int = None ,
+        enc_att:    bool = False,
+        rnn_type:   str = 'gru',
+        rnn_layers: int = 2 ,
         rnn_att:   bool = False,
         num_heads:  int = None,
+        dec_mlp_layers: int = 2,
         dec_mlp_dim:int = None,
+        num_output: int = 1 ,
         ordered_param_group: bool = False,
         output_as_factors:   bool = True,
         hidden_as_factors:   bool = False,
@@ -198,12 +205,14 @@ class rnn_multivariate(nn.Module):
         self.num_output = num_output
         self.num_rnn = len(input_dim) if isinstance(input_dim , (list,tuple)) else 1
         self.ordered_param_group = ordered_param_group
+
         self.kwargs = kwargs
-        self.kwargs.update({'input_dim':input_dim,'hidden_dim':hidden_dim,'rnn_layers':rnn_layers,'mlp_layers':mlp_layers,'dropout':dropout,
-                            'fc_att':fc_att,'fc_in':fc_in,'type_rnn':type_rnn,'type_act':type_act,'num_output':num_output,'dec_mlp_dim':dec_mlp_dim,
-                            'rnn_att':rnn_att,'num_heads':num_heads,'num_rnn':self.num_rnn,
-                            'ordered_param_group':ordered_param_group,'output_as_factors':output_as_factors,'hidden_as_factors':hidden_as_factors,
-                           })
+        for key in [
+            'input_dim','hidden_dim','dropout','act_type','enc_in','enc_in_dim','enc_att','rnn_type','rnn_layers','rnn_att','num_heads',
+            'dec_mlp_layers','dec_mlp_dim','num_output','ordered_param_group','hidden_as_factors','output_as_factors'
+        ]: self.kwargs[key] = locals()[key]
+        self.kwargs.update({'num_rnn':self.num_rnn})
+
         mod_encoder = multi_rnn_encoder if self.num_rnn > 1 else uni_rnn_encoder
         mod_decoder = multi_rnn_decoder if self.num_rnn > 1 else uni_rnn_decoder
         mod_mapping = multi_rnn_mapping if self.num_rnn > 1 else uni_rnn_mapping
@@ -246,57 +255,78 @@ class rnn_multivariate(nn.Module):
         return {'alpha':self.multiloss_alpha}
     
 class MyGRU(rnn_univariate):
-    def __init__(self , input_dim , type_rnn = 'gru' , num_output = 1 , **kwargs):
-        super().__init__(input_dim , type_rnn = 'gru' , num_output = 1 , **kwargs)
+    def __init__(self , input_dim , hidden_dim , **kwargs):
+        kwargs.update({'rnn_type' : 'gru' , 'num_output' : 1})
+        super().__init__(input_dim , hidden_dim , **kwargs)
         
 class MyLSTM(rnn_univariate):
-    def __init__(self , input_dim , type_rnn = 'lstm' , num_output = 1 , **kwargs):
-        super().__init__(input_dim , type_rnn = 'lstm' , num_output = 1 , **kwargs)
+    def __init__(self , input_dim , hidden_dim , **kwargs):
+        kwargs.update({'rnn_type' : 'lstm' , 'num_output' : 1})
+        super().__init__(input_dim , hidden_dim , **kwargs)
         
+class MyResNet_LSTM(MyLSTM):
+    def __init__(self, input_dim , hidden_dim , inday_dim , **kwargs) -> None:
+        kwargs.update({'enc_in' : 'resnet' , 'enc_in_dim' : kwargs.get('enc_in_dim') if kwargs.get('enc_in_dim') else hidden_dim // 4})
+        super().__init__(input_dim , hidden_dim , inday_dim = inday_dim , **kwargs)
+
 class MyTransformer(rnn_univariate):
-    def __init__(self , input_dim , type_rnn = 'transformer' , num_output = 1 , **kwargs):
-        super().__init__(input_dim , type_rnn = 'transformer' , num_output = 1 , **kwargs)
+    def __init__(self , input_dim , hidden_dim , **kwargs):
+        kwargs.update({'rnn_type' : 'transformer' , 'num_output' : 1})
+        super().__init__(input_dim , hidden_dim , **kwargs)
         
 class MyTCN(rnn_univariate):
-    def __init__(self , input_dim , type_rnn = 'tcn' , num_output = 1 , **kwargs):
-        super().__init__(input_dim , type_rnn = 'tcn' , num_output = 1 , **kwargs)
+    def __init__(self , input_dim , hidden_dim , **kwargs):
+        kwargs.update({'rnn_type' : 'tcn' , 'num_output' : 1})
+        super().__init__(input_dim , hidden_dim , **kwargs)
         
 class MynTaskRNN(rnn_univariate):
-    def __init__(self , input_dim , num_output = 1 , **kwargs):
-        super().__init__(input_dim , num_output = num_output , **kwargs)
+    def __init__(self , input_dim , hidden_dim , num_output = 1 , **kwargs):
+        super().__init__(input_dim , hidden_dim , num_output = num_output , **kwargs)
 
 class MyGeneralRNN(rnn_multivariate):
     def __init__(self , input_dim , **kwargs):
         super().__init__(input_dim , **kwargs)
 
 class uni_rnn_encoder(nn.Module):
-    def __init__(self,input_dim,hidden_dim,rnn_layers,dropout,fc_att,fc_in,type_rnn,**kwargs):
+    def __init__(self,input_dim,hidden_dim,dropout,rnn_type,rnn_layers,enc_in=None,enc_in_dim=None,enc_att=False,**kwargs):
         super().__init__()
-        self.mod_rnn = {'transformer':mod_transformer,'lstm':mod_lstm,'gru':mod_gru,'tcn':mod_tcn,}[type_rnn]
-        if type_rnn == 'transformer': fc_in , fc_att = False , False
+        self.mod_rnn = {'transformer':mod_transformer,'lstm':mod_lstm,'gru':mod_gru,'tcn':mod_tcn,}[rnn_type]
+        if self.mod_rnn == mod_transformer: 
+            enc_in , enc_in_dim , enc_att = None , input_dim , False
+        else:
+            enc_in , enc_in_dim , enc_att = enc_in , enc_in_dim if enc_in_dim else hidden_dim // 4 , enc_att
         
-        self.rnn_kwargs = {'input_dim':hidden_dim if fc_in else input_dim, 'output_dim':hidden_dim,'num_layers':rnn_layers, 'dropout':dropout}
-        if 'kernel_size' in kwargs.keys() and type_rnn == 'tcn': self.rnn_kwargs['kernel_size'] = kwargs['kernel_size']
-        
-        self.fc_in = nn.Sequential(nn.Linear(input_dim, hidden_dim),nn.Tanh()) if fc_in else nn.Sequential()
-        self.fc_rnn = self.mod_rnn(**self.rnn_kwargs)
-        self.fc_enc_att = TimeWiseAttention(hidden_dim,hidden_dim,dropout=dropout) if fc_att else None
+        if enc_in == 'linear':
+            self.fc_enc_in = nn.Sequential(nn.Linear(input_dim, enc_in_dim),nn.Tanh()) if enc_in else nn.Sequential()
+        elif enc_in == 'resnet':
+            self.fc_enc_in = resnet_1d(kwargs['inday_dim'] , input_dim , enc_in_dim , **kwargs) 
+        else:
+            self.fc_enc_in = nn.Sequential()
+
+        rnn_kwargs = {'input_dim':enc_in_dim,'output_dim':hidden_dim,'num_layers':rnn_layers, 'dropout':dropout}
+        if rnn_type == 'tcn': rnn_kwargs['kernel_size'] = kwargs.get('kernel_size')
+        self.fc_rnn = self.mod_rnn(**rnn_kwargs)
+
+        if enc_att:
+            self.fc_enc_att = TimeWiseAttention(hidden_dim,hidden_dim,dropout=dropout) 
+        else:
+            self.fc_enc_att = None
+
     def forward(self, inputs):
         # inputs.shape : (bat_size, seq, input_dim)
         # output.shape : (bat_size, hidden_dim)
-        output = self.fc_in(inputs)
+        output = self.fc_enc_in(inputs)
         output = self.fc_rnn(output)
         output = self.fc_enc_att(output) if self.fc_enc_att else output[:,-1]
         return output
     
 class uni_rnn_decoder(nn.Module):
-    def __init__(self,hidden_dim,dec_mlp_dim,mlp_layers,dropout,type_act,hidden_as_factors,map_to_one=False,**kwargs):
+    def __init__(self,hidden_dim,act_type,dec_mlp_layers,dec_mlp_dim,dropout,hidden_as_factors,map_to_one=False,**kwargs):
         super().__init__()
-        assert type_act in ['LeakyReLU' , 'ReLU']
-        self.mod_act = getattr(nn , type_act)
+        self.mod_act = getattr(nn , act_type)
         self.fc_dec_mlp = nn.Sequential()
         mlp_dim = dec_mlp_dim if dec_mlp_dim else hidden_dim
-        for i in range(mlp_layers): 
+        for i in range(dec_mlp_layers): 
             self.fc_dec_mlp.append(nn.Sequential(nn.Linear(hidden_dim if i == 0 else mlp_dim , mlp_dim), self.mod_act(), nn.Dropout(dropout)))
         if hidden_as_factors:
             self.fc_hid_out = nn.Sequential(nn.Linear(mlp_dim , 1 if map_to_one else hidden_dim) , nn.BatchNorm1d(1 if map_to_one else hidden_dim)) 
@@ -310,7 +340,7 @@ class uni_rnn_decoder(nn.Module):
         return output
     
 class uni_rnn_mapping(nn.Module):
-    def __init__(self,hidden_dim,output_as_factors,hidden_as_factors,**kwargs):
+    def __init__(self,hidden_dim,hidden_as_factors,output_as_factors,**kwargs):
         super().__init__()
         self.fc_map_out = nn.Sequential(mod_ewlinear()) if hidden_as_factors else nn.Sequential(nn.Linear(hidden_dim, 1))
         if output_as_factors: self.fc_map_out.append(nn.BatchNorm1d(1))
@@ -322,7 +352,7 @@ class uni_rnn_mapping(nn.Module):
 class multi_rnn_encoder(nn.Module):
     def __init__(self,input_dim,hidden_dim,**kwargs):
         super().__init__()
-        self.enc_list = nn.ModuleList([uni_rnn_encoder(d_inp,hidden_dim,**kwargs) for d_inp in input_dim])
+        self.enc_list = nn.ModuleList([uni_rnn_encoder(input_dim=indim,hidden_dim=hidden_dim,**kwargs) for indim in input_dim])
     def forward(self, inputs):
         # inputs.shape : tuple of (bat_size, seq , input_dim[i_rnn]) , seq can be different 
         # output.shape : tuple of (bat_size, hidden_dim) or tuple of (bat_size, 1) if ordered_param_group
@@ -330,15 +360,16 @@ class multi_rnn_encoder(nn.Module):
         return output
     
 class multi_rnn_decoder(nn.Module):
-    def __init__(self, hidden_dim,num_rnn,rnn_att,ordered_param_group,hidden_as_factors,**kwargs):
+    def __init__(self,hidden_dim,dropout,num_rnn,rnn_att,num_heads,ordered_param_group,hidden_as_factors,**kwargs):
         super().__init__()
+        num_rnn = num_rnn
         self.dec_list = nn.ModuleList([uni_rnn_decoder(hidden_dim , hidden_as_factors = False , map_to_one = ordered_param_group , **kwargs) for _ in range(num_rnn)])
         self.fc_mod_att = nn.Sequential()
         if ordered_param_group:
             self.fc_hid_out =  nn.BatchNorm1d(num_rnn)
         else:
             if rnn_att: 
-                self.fc_mod_att = ModuleWiseAttention(hidden_dim,num_rnn , num_heads=kwargs['num_heads'] , dropout=kwargs['dropout'] , seperate_output=True)
+                self.fc_mod_att = ModuleWiseAttention(hidden_dim,num_rnn , num_heads=num_heads , dropout=dropout , seperate_output=True)
             if hidden_as_factors:
                 self.fc_hid_out = nn.Sequential(nn.Linear(num_rnn*hidden_dim , hidden_dim) , nn.BatchNorm1d(hidden_dim))
             else:
@@ -352,7 +383,7 @@ class multi_rnn_decoder(nn.Module):
         return output
     
 class multi_rnn_mapping(nn.Module):
-    def __init__(self,hidden_dim,num_rnn,ordered_param_group,output_as_factors, hidden_as_factors,**kwargs):
+    def __init__(self,hidden_dim,ordered_param_group,hidden_as_factors,output_as_factors,**kwargs):
         super().__init__()
         if ordered_param_group or hidden_as_factors: 
             self.fc_map_out = nn.Sequential(mod_ewlinear())

@@ -3,8 +3,8 @@ import torch.nn as nn
 
 # 1-d conv resnet
 class resnet_block_1d(nn.Module):
-    def __init__(self, dim_in , dim_out = 64 , dim_med = 64 // 4 , clip_value = 10 , *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, dim_in , dim_out = 64 , dim_med = 64 // 4 , clip_value = 10 , **kwargs) -> None:
+        super().__init__()
         self.clip_value = clip_value
         self.dim_in     = dim_in
         if dim_in == dim_out:
@@ -33,8 +33,8 @@ class resnet_block_1d(nn.Module):
         return x1 + x2
     
 class resnet_1d(nn.Module):
-    def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , n_blocks = 3 , *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , n_blocks = 3 , **kwargs) -> None:
+        super().__init__()
         self.seq_len = seq_len
         self.dim_in  = feat_len
         self.clip_value = clip_value
@@ -54,8 +54,8 @@ class resnet_1d(nn.Module):
     
 # 2-d conv resnet
 class resnet_block_2d(nn.Module):
-    def __init__(self, dim_in , dim_out = 64 , dim_med = 64 // 4 , clip_value = 10 , *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, dim_in , dim_out = 64 , dim_med = 64 // 4 , clip_value = 10 , **kwargs) -> None:
+        super().__init__()
         self.clip_value = clip_value
         self.dim_in     = dim_in
         if dim_in == dim_out:
@@ -84,8 +84,8 @@ class resnet_block_2d(nn.Module):
         return x1 + x2
     
 class resnet_2d(nn.Module):
-    def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , n_blocks = 3 , *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , n_blocks = 3 , **kwargs) -> None:
+        super().__init__()
         self.clip_value = clip_value
         self.blocks = nn.Sequential()
         d_in , d_out , d_med = 1 , dim_out , dim_out//4
@@ -109,8 +109,8 @@ from scripts.nn.My import mod_gru
 from scripts.nn.ResNet import resnet_1d, resnet_2d
     
 class resnet1d_gru(nn.Module):
-    def __init__(self, seq_len , feat_len , dim_res = 16 , dim_rnn = 64 , *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, seq_len , feat_len , dim_res = 16 , dim_rnn = 64 , **kwargs) -> None:
+        super().__init__()
         self.resnet = resnet_1d(seq_len , feat_len , dim_res , 10 , 3) 
         self.gru    = mod_gru(dim_res , dim_rnn , 0.1 , 2)
     def forward(self , x):
@@ -121,8 +121,8 @@ class resnet1d_gru(nn.Module):
         return output
     
 class resnet2d_gru(nn.Module):
-    def __init__(self, seq_len , feat_len , dim_res = 16 , dim_rnn = 64 , *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, seq_len , feat_len , dim_res = 16 , dim_rnn = 64 , **kwargs) -> None:
+        super().__init__()
         self.resnet = resnet_2d(seq_len , feat_len , dim_res , 10 , 3) 
         self.gru    = mod_gru(dim_res , dim_rnn , 0.1 , 2)
     def forward(self , x):

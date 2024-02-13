@@ -2,6 +2,7 @@
 import torch
 import gc , random , math , psutil , time , copy
 import numpy as np
+from types import SimpleNamespace
 from .DataTank import DataTank
 from .DataUpdater import get_db_path , get_db_file
 from ..function.basic import *
@@ -77,36 +78,49 @@ class ModelData():
     2. Datas: x_data , y_data , x_norm , index(secid , date)
     3. Dataloader : yield x , y of training samples , create new ones if necessary
     """
-    def __init__(self , model_data_type , config = None):
-        self.config = train_config() if config is None else config
-        self.loader_device  = Device(self.config.get('device'))
-        self.loader_storage = versatile_storage(self.config.get('storage_type','mem'))
-        self.prenorming_method = {}
+    def __init__(self , data_type_list , config = {} , **kwargs):
+        # self.config = train_config() if config is None else config
+        self.assign_kwarg(config , **kwargs)
+        self.data_type_list = _type_list(data_type_list)
 
-        self.data_type_list = _type_list(model_data_type)
+        self.load_model_data()
+        self.reset_dataloaders()
+        self.buffer_functions()
+
+    def assign_kwarg(self , config = {} , **kwargs):
+        kwarg = {}
+        keys = ['device' , 'storage_type' , 'labels' , 'precision' , 'beg_date' , 'end_date' , 'interval' , 'skip_horizon' ,
+                'input_span' , 'tra_model' , 'buffer_type','buffer_param','batch_size' , 'input_step_day','test_step_day' ,
+                'verbosity','num_output','weight_scheme','train_ratio','random_split','sample_method']
+        defaults = {'storage_type':'mem','beg_date':20170101,'end_date':20991231,'interval':120,
+                    'skip_horizon':20,'input_span':2400,'buffer_param':{},'weight_scheme':{},
+                    'num_output':1,'train_ratio':0.8,'random_split':True,'sample_method':'total_shuffle',
+                    'batch_size':10000}
+        for key in keys: 
+            default = defaults.get(key)
+            if kwargs.get(key):
+                kwarg[key] = kwargs.get(key , default)
+            else:
+                if key == 'num_output':
+                    kwarg[key] = config.get('MODEL_PARAM',{}).get('num_output' , default)
+                elif key == 'weight_scheme':
+                    kwarg[key] = config.get('train_params',{}).get('criterion',{}).get('weight' , default)
+                elif key in ['train_ratio','random_split','sample_method']:
+                    kwarg[key] = config.get('train_params',{}).get('dataloader',{}).get(key , default)
+                else:
+                    kwarg[key] = config.get(key , default)
+        self.kwarg = SimpleNamespace(**kwarg)
+
+    def load_model_data(self):
+        self.prenorming_method = {}
         self.x_data , self.y_data , self.norms , self.index = \
-            load_model_data(self.data_type_list , self.config.get('labels') , self.config.get('precision'))
-        #self.x_data , self.y_data , self.norms , self.index = load_old_valid_data()
-        for k in self.x_data.keys(): self.x_data[k] = self.x_data[k].to(asTensor=True , dtype = torch.float)
-        self.y_data = self.y_data.to(asTensor=True , dtype = torch.float)
+            load_model_data(self.data_type_list , self.kwarg.labels , self.kwarg.precision)
+        # self.x_data , self.y_data , self.norms , self.index = load_old_valid_data()
         # self.date , self.secid = self.index
 
-        num_out = self.config.get('MODEL_PARAM',{}).get('num_output',1)
-        self.labels_n = min(self.y_data.shape[-1] , max(num_out) if isinstance(num_out,(list,tuple)) else num_out)
-        self.feat_dims  = {mdt:v.shape[-1] for mdt,v in self.x_data.items()}
-        self.inday_dims = {mdt:v.shape[-2] for mdt,v in self.x_data.items()}
-
-        _beg , _end , _int = self.config.get('beg_date',20170101) , self.config.get('end_date',99991231) , self.config.get('interval',120)
-        self.model_date_list = self.index[1][(self.index[1] >= _beg) & (self.index[1] <= _end)][::_int]
-        self.test_full_dates = self.index[1][(self.index[1] >  _beg) & (self.index[1] <= _end)]
-        
-        self.input_step = self.config.get('input_step_day',5)
-        self.test_step  = self.config.get('test_step_day' ,5)
-        self.reset_dataloaders()
-
-        self.buffer = {}
-        self.buffer_functions()
-        rmdir([f'./data/minibatch/{k}' for k in ['train' , 'valid' , 'test']] , remake_dir = True)
+        self.labels_n = min(self.y_data.shape[-1] , max(self.kwarg.num_output) if isinstance(self.kwarg.num_output,(list,tuple)) else self.kwarg.num_output)
+        self.model_date_list = self.index[1][(self.index[1] >= self.kwarg.beg_date) & (self.index[1] <= self.kwarg.end_date)][::self.kwarg.interval]
+        self.test_full_dates = self.index[1][(self.index[1] >  self.kwarg.beg_date) & (self.index[1] <= self.kwarg.end_date)]
 
     def reset_dataloaders(self):        
         """
@@ -114,13 +128,16 @@ class ModelData():
         """
         self.dataloaders = {}
         self.dataloader_param = ()
+        self.loader_device  = Device(self.kwarg.device)
+        self.loader_storage = versatile_storage(self.kwarg.storage_type)
+        rmdir([f'./data/minibatch/{k}' for k in ['train' , 'valid' , 'test']] , remake_dir = True)
         gc.collect() , torch.cuda.empty_cache()        
     
     def get_dataloader_param(self , loader_type , process_name = '' , model_date = -1 , param = {} , namespace = None):
         if namespace is not None:
             process_name , model_date , param = namespace.process_name , namespace.model_date , namespace.param
         seqlens = param['seqlens']
-        if self.config.get('tra_model'): seqlens.update(param.get('tra_seqlens',{}))
+        if self.kwarg.tra_model: seqlens.update(param.get('tra_seqlens',{}))
         return process_name , loader_type , model_date , seqlens
 
     def create_dataloader(self , *dataloader_param):
@@ -146,20 +163,20 @@ class ModelData():
 
         if self.loader_type == 'train':
             model_date_col = (self.index[1] < model_date).sum()    
-            d0 = max(0 , model_date_col - self.config.get('skip_horizon',20) - self.config.get('input_span',2400) - self.seq0)
-            d1 = max(0 , model_date_col - self.config.get('skip_horizon',20))
+            d0 = max(0 , model_date_col - self.kwarg.skip_horizon - self.kwarg.input_span - self.seq0)
+            d1 = max(0 , model_date_col - self.kwarg.skip_horizon)
             self.day_len  = d1 - d0
-            self.step_len = (self.day_len - self.seqx) // self.input_step
+            self.step_len = (self.day_len - self.seqx) // self.kwarg.input_step_day
             # ValueError: At least one stride in the given numpy array is negative, and tensors with negative strides are not currently supported.
             #  (You can probably work around this by making a copy of your array  with array.copy().) 
-            self.step_idx = np.flip(self.day_len - 1 - np.arange(0 , self.step_len) * self.input_step).copy() 
+            self.step_idx = np.flip(self.day_len - 1 - np.arange(0 , self.step_len) * self.kwarg.input_step_day).copy() 
             self.date_idx = d0 + self.step_idx
         else:
             if model_date == self.model_date_list[-1]:
-                next_model_date = self.config.get('end_date',99991231) + 1
+                next_model_date = self.kwarg.end_date + 1
             else:
                 next_model_date = self.model_date_list[self.model_date_list > model_date][0]
-            test_step  = (1 if self.process_name == 'instance' else self.test_step)
+            test_step  = (1 if self.process_name == 'instance' else self.kwarg.test_step_day)
             before_test_dates = self.index[1][self.index[1] < min(self.test_full_dates)][-self.seqy:]
             test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::test_step]
             self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
@@ -169,7 +186,7 @@ class ModelData():
             d1 = np.where(self.index[1] == _cal_test_dates[-1])[0][0] + 1
             self.day_len  = d1 - d0
             self.step_len = (self.day_len - self.seqx + 1) // test_step + (0 if self.day_len % test_step == 0 else 1)
-            self.step_idx = np.flip(self.day_len - 1 - np.arange(0 , self.step_len) * self.test_step).copy() 
+            self.step_idx = np.flip(self.day_len - 1 - np.arange(0 , self.step_len) * test_step).copy() 
             self.date_idx = d0 + self.step_idx
 
         x = {k:v.values[:,d0:d1] for k,v in self.x_data.items()}
@@ -194,12 +211,10 @@ class ModelData():
         gc.collect() , torch.cuda.empty_cache()
         
     def buffer_functions(self):
-        self.buffer_type  = self.config.get('buffer_type')
-        self.buffer_param = self.config.get('buffer_param' , {})
-        if self.config.get('tra_model') and self.buffer_type == 'tra':
-            self.buffer_type == None
-        self.buffer_init = buffer_init(self.buffer_type , **self.buffer_param) 
-        self.buffer_proc = buffer_proc(self.buffer_type , **self.buffer_param)
+        self.buffer = {}
+        if self.kwarg.tra_model and self.kwarg.buffer_type == 'tra':
+            self.buffer_init = buffer_init(self.kwarg.buffer_type , **self.kwarg.buffer_param) 
+            self.buffer_proc = buffer_proc(self.kwarg.buffer_type , **self.kwarg.buffer_param)
     
     def cal_nonnan_sample(self , x , y , **kwargs):
         """
@@ -237,10 +252,7 @@ class ModelData():
         if no_weight:
             weight_scheme = None 
         else:
-            if self.config.get('train_params') is None:
-                weight_scheme = 'equal'
-            else:
-                weight_scheme = self.config.get('train_params')['criterion']['weight'][self.loader_type.lower()] 
+            weight_scheme = self.kwarg.weight_scheme.get(self.loader_type.lower() , 'equal')
         if nonnan_sample is None:
             y_new = y
         else:
@@ -256,17 +268,11 @@ class ModelData():
         sample_tensor should be boolean tensor , True indicates non
         """
         shp = nonnan_sample.shape
-        if self.config.get('train_params') is None:
-            train_ratio = 0.8
-            random_split = True
-        else:
-            train_ratio = self.config.get('train_params')['dataloader']['train_ratio']
-            random_split = self.config.get('train_params')['dataloader']['random_tv_split']
         if self.loader_type.lower() == 'train':
             ii_stock_wise = np.arange(shp[0] * shp[1])[nonnan_sample.flatten()]
             ii_time_wise  = np.arange(shp[0] * shp[1]).reshape(shp[1] , shp[0]).transpose().flatten()[ii_stock_wise]
-            train_samples = int(len(ii_stock_wise) * train_ratio)
-            if random_split:
+            train_samples = int(len(ii_stock_wise) * self.kwarg.train_ratio)
+            if self.kwarg.random_split:
                 random.shuffle(ii_stock_wise)
                 ii_train , ii_valid = ii_stock_wise[:train_samples] , ii_stock_wise[train_samples:]
             else:
@@ -298,7 +304,7 @@ class ModelData():
         for set_name in set_iter:
             if self.loader_type == 'train':
                 set_i = index[set_name]
-                batch_sampler = torch.utils.data.BatchSampler(range(len(set_i)) , self.config.get('batch_size' , 10000) , drop_last = False)
+                batch_sampler = torch.utils.data.BatchSampler(range(len(set_i)) , self.kwarg.batch_size , drop_last = False)
             else:
                 set_i = [index[set_name][index[set_name][:,1] == i1] for i1 in index[set_name][:,1].unique()]
                 batch_sampler = range(len(set_i))
@@ -320,7 +326,7 @@ class ModelData():
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
                 self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.loader_type)
-            loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.config.get('verbosity',1) >= 10)
+            loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.kwarg.verbosity >= 10)
         self.dataloaders.update(loaders)
         
     def sample_index2(self , nonnan_sample = None):
@@ -331,14 +337,7 @@ class ModelData():
         train/valid sample method: total_shuffle , sequential , both_shuffle , train_shuffle
         test sample method: sequential
         """
-        if self.config.get('train_params') is None:
-            train_ratio = 0.8
-            sample_method = 'total_shuffle'
-        else:
-            train_ratio = self.config.get('train_params')['dataloader']['train_ratio']
-            sample_method = self.config.get('train_params')['dataloader']['sample_method']
-        batch_size = self.config.get('batch_size' , 10000)
-        assert sample_method in ['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] , sample_method
+        assert self.kwarg.sample_method in ['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] , self.kwarg.sample_method
 
         shp = nonnan_sample.shape
         ipos = torch.zeros(shp[0] , shp[1] , 2 , dtype = int)
@@ -347,43 +346,43 @@ class ModelData():
 
         if self.loader_type == 'train':
             sample_index = {'train': [] , 'valid': []} 
-            train_dates = int(shp[1] * train_ratio)
+            train_dates = int(shp[1] * self.kwarg.train_ratio)
 
-            if sample_method == 'total_shuffle':
+            if self.kwarg.sample_method == 'total_shuffle':
                 iipos = ipos[nonnan_sample]
-                train_samples = int(len(iipos) * train_ratio)
+                train_samples = int(len(iipos) * self.kwarg.train_ratio)
                 pool = np.arange(len(iipos))
                 random.shuffle(pool)
                 ii_train , ii_valid = iipos[:train_samples] , iipos[train_samples:]
 
                 pool = np.arange(len(ii_train))
                 random.shuffle(pool)
-                batch_sampler = torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)
+                batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
                 for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
 
                 pool = np.arange(len(ii_valid))
                 random.shuffle(pool)
-                batch_sampler = torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)
+                batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
                 for pos in batch_sampler: sample_index['valid'].append(ii_valid[pos])
 
-            elif sample_method == 'both_shuffle':
+            elif self.kwarg.sample_method == 'both_shuffle':
                 ii_train = ipos[:,:train_dates][nonnan_sample[:,:train_dates]]
                 pool = np.arange(len(ii_train))
                 random.shuffle(pool)
-                batch_sampler = torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)
+                batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
                 for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
 
                 ii_valid = ipos[:,train_dates:][nonnan_sample[:,train_dates:]]
                 pool = np.arange(len(ii_valid))
                 random.shuffle(pool)
-                batch_sampler = torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)
+                batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
                 for pos in batch_sampler: sample_index['valid'].append(ii_valid[pos])
 
-            elif sample_method == 'train_shuffle':
+            elif self.kwarg.sample_method == 'train_shuffle':
                 ii_train = ipos[:,:train_dates][nonnan_sample[:,:train_dates]]
                 pool = np.arange(len(ii_train))
                 random.shuffle(pool)
-                batch_sampler = torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)
+                batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
                 for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
 
                 for pos in range(train_dates , shp[1]): sample_index['valid'].append(ipos[:,pos][nonnan_sample[:,pos]])
@@ -422,7 +421,7 @@ class ModelData():
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
                 self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.loader_type)
-            loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.config.get('verbosity',1) >= 10)
+            loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.kwarg.verbosity >= 10)
         self.dataloaders.update(loaders)
         
     def prenorm(self , x , key , static = True):
@@ -443,16 +442,7 @@ class ModelData():
         if prenorming_method[1]:
             x -= self.norms[key]['avg'][-x.shape[-2]:]
             x /= self.norms[key]['std'][-x.shape[-2]:] + _div_tol
-        """
-        if self.norms.get(key) is not None:
-            if _type_abbr(key) in ['day']:
-                x /= x.select(-2,-1).unsqueeze(-2) + _div_tol
-            x -= self.norms[key]['avg'][-x.shape[-2]:]
-            x /= self.norms[key]['std'][-x.shape[-2]:] + _div_tol
-        else:
-            pass
-        
-        """
+
         return x
             
 class dataloader_saved:
@@ -868,6 +858,8 @@ def load_old_valid_data():
     '''
     data = torch.load('./data/torch_pack/test_old_valid_data.pt')
     x, y, norms, secid, date = data['x'], data['y'], data['norms'], data['secid'], data['date']
+    for xk in x.keys(): x[xk] = x[xk].to(asTensor=True , dtype = torch.float)
+    y = y.to(asTensor=True , dtype = torch.float)
     return x , y , norms , (secid , date)
 
 def load_torch_pack(data_type_list , y_labels):
