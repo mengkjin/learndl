@@ -31,7 +31,7 @@ from ..scripts.util.multiloss import multiloss_calculator
 from ..scripts.data_util.ModelData import ModelData
 from ..scripts.function.basic import *
 from .algos import sinkhorn
-from ..scripts.nn.My import *
+from ..scripts.nn.rnn import *
 # from audtorch.metrics.functional import *
 
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'

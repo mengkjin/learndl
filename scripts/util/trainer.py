@@ -89,7 +89,7 @@ def train_config(config = None , parser = SimpleNamespace() , do_process = False
     config.update(raw_config)
     config.update(override_config)
 
-    config.model_data_type = config.model_datatype.get(config.model_module , config.get('model_data_type'))
+    config.model_data_type = config.get('model_data_type') if config.get('model_data_type') else config.model_datatype.get(config.model_module)
     config.data_type_list  = config.model_data_type.split('+')
     config.model_num_list  = list(range(config.model_num))
     

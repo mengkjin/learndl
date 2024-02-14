@@ -1,17 +1,17 @@
 # most frequently changing variables
 short_test:  false
 tra_switch: true
-model_module: TRA_LSTM # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
+model_module: tra_lstm # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
 model_nickname: null # 'LSTM' # 'TCN_vs_LSTM' any str or None
 model_num: 1
 model_datatype:
-  GRU: day
-  GeneralRNN: day
-  LSTM: day
-  TCN: day
-  Transformer: day
-  TRA_LSTM: day
-  ResNet_LSTM: 30m
+  rnn_general: day
+  gru: day
+  lstm: day
+  tcn: day
+  transformer: day
+  tra_lstm: day
+  resnet_lstm: 30m
   other: [day , 15m , 30m , gp , 'day+15m']
 labels: 
   - rtn_lag1_10
@@ -31,7 +31,7 @@ MODEL_PARAM:
   kernel_size:    [3 , 3] # for tcn
   hidden_as_factor:    [false]
   ordered_param_group: [false]  # multiple data input , if train sequentially
-  tra_num_states:      [3]
+  tra_num_states:      [5]
 COMPT_PARAM: 
   cuda_first: true
   num_worker: 10

@@ -27,7 +27,7 @@ from scripts.util.trainer import trainer_parser , train_config , set_trainer_env
 from scripts.data_util.ModelData import ModelData
 from scripts.function.basic import *
 from scripts.function.metric import loss_function,score_function,penalty_function
-from scripts.nn import My
+from scripts.nn import rnn
 # from audtorch.metrics.functional import *
 
 try:
@@ -283,7 +283,7 @@ class model_controller():
     def TrainerInit(self):
         """
         Initialize net , optimizer , scheduler if loop_status in ['round' , 'attempt']
-        net : 1. Create an instance of f'My{config.model_module}' or inherit from 'lastround'/'transfer'
+        net : 1. Create an instance of f'{config.model_module}' or inherit from 'lastround'/'transfer'
               2. In transfer mode , p_late and p_early with be trained with different lr's. If not net.parameters are trained by same lr
         optimizer : Adam or SGD
         scheduler : Cosine or StepLR
@@ -750,7 +750,7 @@ class model_controller():
         return multiloss
     
 def new_net(module , param = {} , state_dict = None):
-    net = getattr(My , f'My{module}')(**param)
+    net = getattr(rnn , f'{module}')(**param)
     if state_dict: net.load_state_dict(state_dict)
     return net
 
@@ -796,29 +796,38 @@ def model_params_filler(x_data = {} , data_type_list = None):
     if data_type_list is None: data_type_list = list(x_data.keys())
 
     filler = {}
-    input_dim = tuple(x_data[mdt].shape[-1]  for mdt in data_type_list)
-    inday_dim = tuple(x_data[mdt].shape[-2]  for mdt in data_type_list)
+    inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
+    input_dim , inday_dim = [] , []
+    for mdt in data_type_list:
+        x = x_data.get(mdt)
+        input_dim.append(x.shape[-1] if x else 6)
+        inday_dim.append(x.shape[-2] if x else inday_dim_dict.get(mdt , 1))
     if len(data_type_list) > 1:
-        filler.update({'input_dim':input_dim , 'inday_dim':inday_dim})
+        filler.update({'input_dim':tuple(input_dim), 'inday_dim':tuple(inday_dim)})
     elif len(data_type_list) == 1:
         filler.update({'input_dim':input_dim[0] , 'inday_dim':inday_dim[0]})
     else:
-        filler.update({'input_dim':6 , 'inday_dim':8})
-
+        filler.update({'input_dim':1            , 'inday_dim':1           })
     return filler
 
-def new_random_input(module = 'ResNet_LSTM' , model_data_type = '30m' , batch = 2):
+def new_random_input(module = 'ResNet_LSTM' , model_data_type = '30m'):
     config = train_config(override_config = {'model_module' : module , 'model_data_type' : model_data_type} , do_process=False)
-    for smp in config.model_params: smp.update(model_params_filler())
     data_type_list = config.data_type_list
+    for smp in config.model_params: smp.update(model_params_filler(data_type_list = data_type_list))
     model_param = config.model_params[0]
-
+    batch = 2
     x = []
+    #inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
     for i , mdt in enumerate(data_type_list):
         seqlen = model_param['seqlens'].get(mdt , 20)
-        inday_dim = (lambda x,i:x[i] if isinstance(x,(tuple,list)) else x)(model_param.get('inday_dim',8) , i)
-        input_dim = (lambda x,i:x[i] if isinstance(x,(tuple,list)) else x)(model_param.get('input_dim',6) , i)
-        x.append(torch.rand(batch , seqlen , inday_dim , input_dim))
+        inday_dim = (lambda x,i:x[i] if isinstance(x,(tuple,list)) else x)(model_param.get('inday_dim') , i)
+        input_dim = (lambda x,i:x[i] if isinstance(x,(tuple,list)) else x)(model_param.get('input_dim') , i)
+        #if inday_dim is None: inday_dim = inday_dim_dict.get(mdt , 1)
+        #if input_dim is None: input_dim = 6
+        if inday_dim == 1:
+            x.append(torch.rand(batch , seqlen , input_dim))
+        else:
+            x.append(torch.rand(batch , seqlen , inday_dim , input_dim))
     x = tuple(x) if len(x) > 1 else x[0]
     y = torch.rand(batch , 1)
     net = new_net(module , param = model_param)

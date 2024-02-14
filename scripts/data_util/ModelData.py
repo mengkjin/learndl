@@ -414,7 +414,8 @@ class ModelData():
                 batch_y = y[i0,yi1]
                 batch_w = None if w is None else w[i0,yi1]
                 for mdt in x.keys():
-                    data = torch.cat([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1)
+                    data = torch.stack([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1)
+                    data = data.squeeze(-2)
                     data = self.prenorm(data,mdt)
                     batch_x.append(data)
                 batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-class TRA(nn.Module):
+class mod_tra(nn.Module):
     """Temporal Routing Adaptor (TRA)
 
     TRA takes historical prediction errors & latent representation as inputs,
