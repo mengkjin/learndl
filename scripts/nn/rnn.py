@@ -43,11 +43,23 @@ class rnn_univariate(nn.Module):
         super().__init__()
         self.num_output = num_output
 
-        self.kwargs = kwargs
-        for key in [
-            'input_dim','hidden_dim','dropout','act_type','enc_in','enc_in_dim','enc_att','rnn_type','rnn_layers',
-            'dec_mlp_layers','dec_mlp_dim','num_output','hidden_as_factors','output_as_factors'
-        ]: self.kwargs[key] = locals()[key]
+        self.kwargs = {
+            'input_dim':        input_dim,
+            'hidden_dim':       hidden_dim,
+            'dropout':          dropout,
+            'act_type':         act_type,
+            'enc_in':           enc_in,
+            'enc_in_dim':       enc_in_dim,
+            'enc_att':          enc_att,
+            'rnn_type':         rnn_type,
+            'rnn_layers':       rnn_layers,
+            'dec_mlp_layers':   dec_mlp_layers,
+            'dec_mlp_dim':      dec_mlp_dim,
+            'num_output':       num_output,
+            'hidden_as_factors':hidden_as_factors,
+            'output_as_factors':output_as_factors,
+            **kwargs,
+        }
 
         self.encoder = mod_parallel(uni_rnn_encoder(**self.kwargs) , num_mod = 1 , feedforward = False , concat_output = True)
         self.decoder = mod_parallel(uni_rnn_decoder(**self.kwargs) , num_mod = num_output , feedforward = False , concat_output = False)
@@ -94,12 +106,27 @@ class rnn_multivariate(nn.Module):
         self.num_rnn = len(input_dim) if isinstance(input_dim , (list,tuple)) else 1
         self.ordered_param_group = ordered_param_group
 
-        self.kwargs = kwargs
-        for key in [
-            'input_dim','hidden_dim','dropout','act_type','enc_in','enc_in_dim','enc_att','rnn_type','rnn_layers','rnn_att','num_heads',
-            'dec_mlp_layers','dec_mlp_dim','num_output','ordered_param_group','hidden_as_factors','output_as_factors'
-        ]: self.kwargs[key] = locals()[key]
-        self.kwargs.update({'num_rnn':self.num_rnn})
+        self.kwargs = {
+            'input_dim':        input_dim,
+            'hidden_dim':       hidden_dim,
+            'dropout':          dropout,
+            'act_type':         act_type,
+            'enc_in':           enc_in,
+            'enc_in_dim':       enc_in_dim,
+            'enc_att':          enc_att,
+            'rnn_type':         rnn_type,
+            'rnn_layers':       rnn_layers,
+            'rnn_att':          rnn_att,
+            'num_heads':        num_heads,
+            'dec_mlp_layers':   dec_mlp_layers,
+            'dec_mlp_dim':      dec_mlp_dim,
+            'num_output':       num_output,
+            'ordered_param_group':ordered_param_group,
+            'hidden_as_factors':hidden_as_factors,
+            'output_as_factors':output_as_factors,
+            'num_rnn':          self.num_rnn,
+            **kwargs,
+        }
 
         mod_encoder = multi_rnn_encoder if self.num_rnn > 1 else uni_rnn_encoder
         mod_decoder = multi_rnn_decoder if self.num_rnn > 1 else uni_rnn_decoder
@@ -159,7 +186,7 @@ class uni_rnn_encoder(nn.Module):
             self.fc_enc_in = nn.Sequential()
 
         rnn_kwargs = {'input_dim':enc_in_dim,'output_dim':hidden_dim,'num_layers':rnn_layers, 'dropout':dropout}
-        if rnn_type == 'tcn': rnn_kwargs['kernel_size'] = kwargs.get('kernel_size')
+        if rnn_type == 'tcn': rnn_kwargs['kernel_size'] = kwargs['kernel_size']
         self.fc_rnn = self.mod_rnn(**rnn_kwargs)
 
         if enc_att:

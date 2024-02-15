@@ -59,15 +59,15 @@ def penalty_function(key , param):
         pen = hidden.T.corrcoef().triu(1).nan_to_num().square().sum()
         return pen
     def tra_ot_penalty(**kwargs):
-        net = kwargs['net']
+        tra_dynamic_data = kwargs['net'].dynamic_data_access()
         pen = 0.
-        if net.training and net.probs is not None and net.num_states > 1:
+        if kwargs['net'].training and tra_dynamic_data['probs'] is not None and tra_dynamic_data['num_states'] > 1:
             square_error = (kwargs['hidden'] - kwargs['label']).square()
             square_error -= square_error.min(dim=-1, keepdim=True).values  # normalize & ensure positive input
             P = sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
-            lamb = (param['rho'] ** net.global_steps)
-            reg = (net.probs + 1e-4).log().mul(P).sum(dim=-1).mean()
-            net.global_steps += 1
+            lamb = (param['rho'] ** tra_dynamic_data['global_steps'])
+            reg = (tra_dynamic_data['probs'] + 1e-4).log().mul(P).sum(dim=-1).mean()
+            tra_dynamic_data['global_steps'] += 1
             pen = - lamb * reg
         return pen
     new_func = locals().get(key , null_penalty)

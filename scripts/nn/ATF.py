@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-class MyATF(nn.Module):
+class mod_atf(nn.Module):
     def __init__(
         self , 
         input_dim: int = 6,

@@ -41,26 +41,6 @@ process_param = {
             }
         } ,
     } , 
-    'trade_15m' : {
-        'DB_source'  : {
-            'trade_15m': {
-                'db' : 'trade_Xmin' ,  'inner_path':'30min/trade' , 
-                'feature' : ['minute' , 'close', 'high', 'low', 'open', 'volume', 'vwap'] ,
-            },
-            'trade_day': {
-                'db' : None ,  'inner_path':'day/trade' ,
-                'feature' : ['volume' , 'turn_fl' , 'preclose'] ,
-            }
-        } ,
-    } , 
-    'trade_week' : {
-        'DB_source'  : {
-            'trade_day': {
-                'db' : None ,  'inner_path':'day/trade' ,
-                'feature' : ['adjfactor', 'preclose' ,'close', 'high', 'low', 'open', 'vwap' , 'turn_fl'],
-            },
-        } ,
-    } , 
     # 'gp' : {}
 }
 """
@@ -88,7 +68,7 @@ process_param = {
             }
         } ,
     } , 
-    'trade_15m' : {
+        'trade_15m' : {
         'DB_source'  : {
             'trade_15m': {
                 'db' : 'trade_Xmin' ,  'inner_path':'30min/trade' , 

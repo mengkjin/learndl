@@ -27,7 +27,7 @@ from scripts.util.trainer import trainer_parser , train_config , set_trainer_env
 from scripts.data_util.ModelData import ModelData
 from scripts.function.basic import *
 from scripts.function.metric import loss_function,score_function,penalty_function
-from scripts.nn import rnn
+from scripts.nn import model
 # from audtorch.metrics.functional import *
 
 try:
@@ -301,6 +301,9 @@ class model_controller():
         Iterate train and valid dataset, calculate loss/score , update values
         If nan loss occurs, turn to _deal_nanloss
         """
+
+        """
+        # with modifier
         with trainer_timer('TrainEpoch/train_epochs'):
             self.net.train()
             clip_value = config.train_params['trainer']['gradient'].get('clip_value')
@@ -325,7 +328,7 @@ class model_controller():
                 if iterator.progress_bar: iterator.display(f'Ep#{self.epoch_i:3d} train loss:{np.mean(_loss[:i+1]):.5f}')
             if np.isnan(sum(_loss)): return self._deal_nanloss()
             self.loss_list['train'].append(np.mean(_loss)) , self.score_list['train'].append(np.mean(_score))
-        
+
         with trainer_timer('TrainEpoch/valid_epochs'):
             self.net.eval()     
             iterator = self.data.dataloaders['valid']
@@ -342,6 +345,48 @@ class model_controller():
                 _loss[i] , _score[i] = metric['loss_item'] , metric['score']
                 if iterator.progress_bar: iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{np.mean(_score[:i+1]):.5f}')
             self.loss_list['valid'].append(np.mean(_loss)) , self.score_list['valid'].append(np.mean(_score))
+        """
+        with trainer_timer('TrainEpoch/train_epochs'):
+            self.net.train()
+            iterator = self.data.dataloaders['train']
+            _loss , _score = torch.ones(len(iterator)).fill_(torch.nan), torch.ones(len(iterator)).fill_(torch.nan)
+            for i , batch_data in enumerate(iterator):
+                x , y , w = batch_data['x'] , batch_data['y'] , batch_data['w']
+                self.optimizer.zero_grad()
+                with trainer_timer('TrainEpoch/train/forward'):
+                    if hasattr(self.net , 'dynamic_data_assign'): self.net.dynamic_data_assign(batch_data , self.data)
+                    pred , hidden = self.net(x)
+                with trainer_timer('TrainEpoch/train/loss'):
+                    penalty_kwargs = {'net' : self.net , 'hidden' : hidden , 'label' : y}
+                    metric = self.metric_calculator(y , pred , 'train' , weight = w , **penalty_kwargs)
+                with trainer_timer('TrainEpoch/train/backward'):
+                    (metric['loss'] + metric['penalty']).backward()
+                with trainer_timer('TrainEpoch/train/step'):
+                    clip_value = config.train_params['trainer']['gradient'].get('clip_value')
+                    if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value)
+                    self.optimizer.step()
+                _loss[i] , _score[i] = metric['loss_item'] , metric['score']
+                if iterator.progress_bar: iterator.display(f'Ep#{self.epoch_i:3d} train loss:{np.mean(_loss[:i+1]):.5f}')
+            if _loss.isnan().any(): return self._deal_nanloss()
+            self.loss_list['train'].append(_loss.mean()) , self.score_list['train'].append(_score.mean())
+        
+        with trainer_timer('TrainEpoch/valid_epochs'):
+            self.net.eval()     
+            iterator = self.data.dataloaders['valid']
+            _loss , _score = torch.ones(len(iterator)).fill_(torch.nan), torch.ones(len(iterator)).fill_(torch.nan)
+            for i , batch_data in enumerate(iterator):
+                x , y , w = batch_data['x'] , batch_data['y'] , batch_data['w']
+                # trainer_device.print_cuda_memory()
+                with trainer_timer('TrainEpoch/valid/forward'):
+                    if hasattr(self.net , 'dynamic_data_assign'): self.net.dynamic_data_assign(batch_data , self.data)
+                    pred , _ = self.net(x)
+
+                with trainer_timer('TrainEpoch/valid/loss'):
+                    metric = self.metric_calculator(y , pred , 'valid' , weight = w)
+
+                _loss[i] , _score[i] = metric['loss_item'] , metric['score']
+                if iterator.progress_bar: iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{np.mean(_score[:i+1]):.5f}')
+            self.loss_list['valid'].append(_loss.mean()) , self.score_list['valid'].append(_score.mean())
 
         self.lr_list.append(self.scheduler.get_last_lr()[0])
         self.scheduler.step()
@@ -437,10 +482,11 @@ class model_controller():
                     for batch_j in torch.utils.data.DataLoader(trainer_device.torch_arange(len(nonnan)) , batch_size = config.batch_size):
                         nnj = nonnan[batch_j]
                         batch_nnj = subset(batch_data , nnj)
-                        x = self.modifier['inputs'](batch_nnj['x'] , batch_nnj , self.data)
-                        pred_nnj = self.net(x)[0].detach()
+                        if hasattr(self.net , 'dynamic_data_assign'): self.net.dynamic_data_assign(batch_nnj , self.data)
+                        # x = self.modifier['inputs'](batch_nnj['x'] , batch_nnj , self.data)
+                        pred_nnj = self.net(batch_nnj['x'])[0].detach()
                         pred[nnj,0] = pred_nnj[:,0]
-                        self.modifier['update'](None , batch_nnj , self.data)
+                        # self.modifier['update'](None , batch_nnj , self.data)
                     
                     if i >= len(self.data.early_test_dates) and len(nonnan) > 0:
                         # before this date is warmup stage
@@ -476,10 +522,9 @@ class model_controller():
             '1_basic' :'+'.join(['short' if config.short_test else 'long' , config.storage_type , config.precision]),
             '2_model' :''.join([config.model_module , '_' , config.model_data_type , '(x' , str(config.model_num) , ')']),
             '3_time'  :'-'.join([str(config.beg_date),str(config.end_date)]),
-            '4_typeNN':'+'.join(list(set(config.MODEL_PARAM['rnn_type']))),
-            '5_train' :self.model_info.get('train_process'),
-            '6_test'  :self.model_info.get('test_process'),
-            '7_result':self.model_info.get('test_score_sum'),
+            '4_train' :self.model_info.get('train_process'),
+            '5_test'  :self.model_info.get('test_process'),
+            '6_result':self.model_info.get('test_score_sum'),
         }
         out_path = f'./results/model_results.yaml'
         os.makedirs(os.path.dirname(out_path) , exist_ok=True)
@@ -673,6 +718,7 @@ class model_controller():
             self.net = trainer_device(new_net(config.model_module , self.param , trainer_storage.load(model_path , from_disk = True)))
             if 'training_round' in self.net.__dir__(): self.net.training_round(self.round_i)
 
+            """
             # default : none modifier
             # input : (inputs/metric/update , batch_data , self.data)
             # output : new_inputs/new_metric/None 
@@ -680,7 +726,8 @@ class model_controller():
             if 'modifier_inputs' in self.net.__dir__(): self.modifier['inputs'] = lambda x,b,d:self.net.modifier_inputs(x,b,d)
             if 'modifier_metric' in self.net.__dir__(): self.modifier['metric'] = lambda x,b,d:self.net.modifier_metric(x,b,d)
             if 'modifier_update' in self.net.__dir__(): self.modifier['update'] = lambda x,b,d:self.net.modifier_update(x,b,d)
-    
+            """
+            
     def swa_model(self , model_path_list = []):
         if len(model_path_list) == 0: raise Exception('empty swa input')
         net = new_net(config.model_module , self.param)
@@ -750,7 +797,7 @@ class model_controller():
         return multiloss
     
 def new_net(module , param = {} , state_dict = None):
-    net = getattr(rnn , f'{module}')(**param)
+    net = getattr(model , f'{module}')(**param)
     if state_dict: net.load_state_dict(state_dict)
     return net
 

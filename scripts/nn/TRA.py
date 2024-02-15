@@ -1,6 +1,45 @@
 import torch
 import torch.nn as nn
+class tra_module:
+    '''
+    Decorator to grant a module dynamic data assign, and output probs (tra feature)
+    '''
+    def __call__(self, original_class):
+        class new_tra_class(original_class):
+            def __init__(self , *args , **kwargs):
+                super().__init__(*args , **kwargs)
+                self.dynamic_data_assigned = False
+            def __call__(self , *args , **kwargs):
+                assert self.dynamic_data_assigned , f'Run dynamic_data_assign first'
+                self.dynamic_data_assigned = False
+                return super().__call__(*args , **kwargs)
+            def dynamic_data_assign(self , batch_data , model_data , **kwargs):
+                if not hasattr(self, 'dynamic_data'): self.dynamic_data = {}
+                self.dynamic_data.update({'model_data':model_data,'batch_data':batch_data,**kwargs})
+                self.dynamic_data_assigned = True
+                return 
+            def get_probs(self):
+                if self.probs_record is not None: return self.probs_record/self.probs_record.sum(dim=1,keepdim=True)   
+        return new_tra_class
 
+class tra_component:
+    '''
+    Decorator to identify a component of a module as tra components, apply pipeline dynamic data assign, and output probs (tra feature)
+    '''
+    def __init__(self, *args):
+        self.tra_component_list = args
+    def __call__(self, original_class):
+        tra_component_list = self.tra_component_list
+        class new_tra_class(original_class):
+            def dynamic_data_assign(self , *args , **kwargs):
+                [getattr(self , comp).dynamic_data_assign(*args , **kwargs) for comp in tra_component_list]
+            def dynamic_data_access(self , *args , **kwargs):
+                dynamic_data = [getattr(self , comp).dynamic_data for comp in tra_component_list]
+                return dynamic_data if len(dynamic_data) > 1 else dynamic_data[0]
+            def get_probs(self , *args , **kwargs):
+                probs = [getattr(self,comp).get_probs(*args , **kwargs) for comp in tra_component_list]
+                return probs if len(probs) > 1 else probs[0]
+        return new_tra_class
 class mod_tra(nn.Module):
     """Temporal Routing Adaptor (TRA)
 
@@ -79,27 +118,100 @@ class mod_tra(nn.Module):
     def get_probs(self):
         return self.probs_record / self.probs_record.sum(dim=1 , keepdim = True)
     
-    def modifier_inputs(self , inputs , batch_data , ModelData):
+    def modifier_inputs(self , inputs , batch_data , model_data):
         if self.num_states > 1:
             x = batch_data['x']
             i = batch_data['i']
-            d = ModelData.buffer['hist_loss']
-            rw = ModelData.seqs['hist_loss']
+            d = model_data.buffer['hist_loss']
+            rw = model_data.seqs['hist_loss']
             hist_loss = torch.stack([d[i[:,0],i[:,1]+j+1-rw] for j in range(rw)],dim=-2).nan_to_num(1)
             return x , hist_loss
         else:
             return inputs
     
-    def modifier_metric(self , metric , batch_data , ModelData):
+    def modifier_metric(self , metric , batch_data , model_data):
         return metric
 
-    def modifier_update(self , update , batch_data , ModelDate):
+    def modifier_update(self , update , batch_data , model_data):
         if self.num_states > 1 and self.preds is not None:
             i = batch_data['i']
-            v = self.preds.detach().to(ModelDate.buffer['hist_preds'])
-            ModelDate.buffer['hist_preds'][i[:,0],i[:,1]] = v[:]
-            ModelDate.buffer['hist_loss'][i[:,0],i[:,1]] = (v - ModelDate.buffer['hist_labels'][i[:,0],i[:,1]]).square()
+            v = self.preds.detach().to(model_data.buffer['hist_preds'])
+            model_data.buffer['hist_preds'][i[:,0],i[:,1]] = v[:]
+            model_data.buffer['hist_loss'][i[:,0],i[:,1]] = (v - model_data.buffer['hist_labels'][i[:,0],i[:,1]]).square()
             del self.preds , self.probs
+@tra_module()
+class block_tra(nn.Module):
+    """
+    Temporal Routing Adaptor (TRA) mapping segment
+    """
+
+    def __init__(self, hidden_dim , tra_dim = 8 , num_states = 1, horizon = 20 , 
+                 tau=1.0, src_info = 'LR_TPE'):
+        super().__init__()
+        self.num_states = num_states
+        self.dynamic_data = {
+            'num_states' : num_states ,
+            'global_steps' : 0 ,
+            'probs' : None
+        }
+        self.horizon = horizon
+        self.tau = tau
+        self.src_info = src_info
+        self.probs_record = None
+
+        if num_states > 1:
+            self.router = nn.LSTM(
+                input_size=num_states,
+                hidden_size=tra_dim,
+                num_layers=1,
+                batch_first=True,
+            )
+            self.fc = nn.Linear(hidden_dim + tra_dim, num_states)
+        self.predictors = nn.Linear(hidden_dim, num_states)
+
+    def forward(self, inputs):
+        if self.num_states > 1:
+            i0 , i1 = self.dynamic_data['batch_data']['i'][:,0] , self.dynamic_data['batch_data']['i'][:,1]
+            d = self.dynamic_data['model_data'].buffer['hist_loss']
+            rw = self.dynamic_data['model_data'].seqs['hist_loss']
+            hist_loss = torch.stack([d[i0 , i1+j+1-rw] for j in range(rw)],dim=-2).nan_to_num(1)
+            preds = self.predictors(inputs)
+
+            # information type
+            router_out, _ = self.router(hist_loss[:,:-self.horizon])
+            if "LR" in self.src_info:
+                latent_representation = inputs
+            else:
+                latent_representation = torch.randn(inputs.shape).to(inputs)
+            if "TPE" in self.src_info:
+                temporal_pred_error = router_out[:, -1]
+            else:
+                temporal_pred_error = torch.randn(router_out[:, -1].shape).to(inputs)
+
+            # print(inputs.shape , preds.shape , latent_representation.shape) , temporal_pred_error.shape
+            probs = self.fc(torch.cat([latent_representation , temporal_pred_error], dim=-1))
+            probs = nn.functional.gumbel_softmax(probs, dim=-1, tau=self.tau, hard=False)
+            self.dynamic_data['probs'] = probs
+
+            # get final prediction in either train (weighted sum) or eval (max probability)
+            if self.training:
+                final_pred = (preds * probs).sum(dim=-1 , keepdim = True)
+            else:
+                final_pred = preds[range(len(preds)), probs.argmax(dim=-1)].unsqueeze(-1)
+
+            # record training history probs
+            probs_agg  = probs.detach().sum(dim = 0 , keepdim = True)
+            self.probs_record = probs_agg if self.probs_record is None else torch.concat([self.probs_record , probs_agg])
+
+            # update dynamic buffer
+            vp = preds.detach().to(self.dynamic_data['model_data'].buffer['hist_preds'])
+            v0 = self.dynamic_data['model_data'].buffer['hist_labels'][i0,i1].nan_to_num(0)
+            self.dynamic_data['model_data'].buffer['hist_preds'][i0,i1] = vp
+            self.dynamic_data['model_data'].buffer['hist_loss'][i0,i1] = (vp - v0).square()
+        else: 
+            final_pred = preds = self.predictors(inputs)
+            
+        return final_pred , preds
 
 def shoot_infs(inp_tensor):
     """Replaces inf by maximum of tensor"""

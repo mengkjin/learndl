@@ -501,7 +501,7 @@ def buffer_init(key , **param):
                 hist_loss_shape[2] = param['tra_num_states']
                 buffer['hist_labels'] = self_container.y
                 buffer['hist_preds'] = torch.randn(hist_loss_shape)
-                buffer['hist_loss']  = (buffer['hist_preds'] - buffer['hist_labels']).square()
+                buffer['hist_loss']  = (buffer['hist_preds'] - buffer['hist_labels'].nan_to_num(0)).square()
             return buffer
     else:
         wrapper = None
@@ -514,7 +514,7 @@ def buffer_proc(key , **param):
             buffer = dict()
             if param['tra_num_states'] > 1:
                 buffer['hist_loss']  = (self_container.buffer['hist_preds'] - 
-                                        self_container.buffer['hist_labels']).square()
+                                        self_container.buffer['hist_labels'].nan_to_num(0)).square()
             return buffer
     else:
         wrapper = None
