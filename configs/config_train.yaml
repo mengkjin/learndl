@@ -1,11 +1,11 @@
 # most frequently changing variables
-short_test:  false
+short_test:  true
 tra_switch: true
 buffer_type: tra
 buffer_param: 
   tra_num_states: &tra_num_states 5
 
-model_module: tra_lstm # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
+model_module: tra_lstm2 # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
 model_nickname: null # 'LSTM' # 'TCN_vs_LSTM' any str or None
 model_num: 1
 model_datatype:
@@ -25,8 +25,8 @@ MODEL_PARAM:
   seqlens:        [{'day': 40 , '30m': 30 , '15m': 20 , 'dms': 40}] # although not a param for model, but can be different values(dict of SEQLEN) #
   tra_seqlens:    [{'hist_loss': 40}]
   dropout:        [0.1]
-  fc_in:          [true]
-  fc_att:         [false] 
+  enc_in:         [true]
+  enc_att:        [false] 
   rnn_type:       ['lstm'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
   rnn_att:        [false]
   rnn_layers:     [2]

@@ -411,7 +411,8 @@ class RunModel():
                     self.path['performance']['swabest'][arg_min] = valid_score
                     save_targets.append(self.path['candidate']['swabest'][arg_min])
                 
-            self.storage.save_model_state(self.net , save_targets)
+            self.save_model(paths = save_targets)
+            # self.storage.save_model_state(self.net , save_targets)
             self._prints('epoch_step')
         
         with self.ptimer('LoopCondition/confirm_status'):
@@ -423,12 +424,12 @@ class RunModel():
                     self._prints('new_attempt')
                 elif self.round_i < self.max_round - 1:
                     self.cond['loop_status'] = 'round'
-                    self.save_model('best')
+                    self.save_model(key = 'best')
                     self._prints('new_round')
                 else:
                     self.cond['loop_status'] = 'model'
                     # print(self.net.get_probs())
-                    self.save_model(config.output_types)
+                    self.save_model(key = config.output_types)
             else:
                 self.cond['loop_status'] = 'epoch'
             
@@ -704,23 +705,30 @@ class RunModel():
                 raise Exception(f'KeyError : {key}')
         return exit_text , term_cond
     
-    def save_model(self , key = 'best'):
-        if isinstance(key , (list,tuple)):
-            [self.save_model(k) for k in key]
-        else:
-            assert key in ['best' , 'swalast' , 'swabest']
-            with self.ptimer('save_model'):
+    def save_model(self , key = None , paths = None , savable_net = None):
+        if key is None or paths is None: return NotImplemented
+        if savable_net is None:
+            savable_net = self.net
+            if hasattr(savable_net,'dynamic_data_unlink'):  savable_net = getattr(savable_net , 'dynamic_data_unlink')()
+
+        with self.ptimer('save_model'):
+            if isinstance(paths , (str,list,tuple)):
+                self.storage.save_model_state(savable_net , paths , to_disk=False)
+            if isinstance(key , (list,tuple)):
+                [self.save_model(k , savable_net = savable_net) for k in key]
+            elif isinstance(key , str):
+                assert key in ['best' , 'swalast' , 'swabest']
                 p_exists = self.storage.valid_paths(self.path['candidate'][key])
                 if len(p_exists) == 0: print(key , self.path['candidate'][key] , self.path['performance'][key])
                 if key == 'best':
-                    model = self.storage.load(p_exists[0])
+                    savable_net = self.storage.load(p_exists[0])
                     if self.round_i < self.max_round - 1:
                         if not self.path['source']['rounds']:
                             self.path['source']['rounds'] = ['{}/{}.round.{}.pt'.format(self.param.get('path'),self.model_date,r) for r in range(self.max_round-1)]
-                        self.storage.save_model_state(model , self.path['source']['rounds'][self.round_i])
+                        self.storage.save_model_state(savable_net , self.path['source']['rounds'][self.round_i])
                 else:
-                    model = self.load_swa_model(p_exists)
-                self.storage.save_model_state(model , self.path['target'][key] , to_disk = True) 
+                    savable_net = self.load_swa_model(p_exists)
+                self.storage.save_model_state(savable_net , self.path['target'][key] , to_disk = True) 
     
     def load_model(self , process , key = 'best'):
         assert process in ['train' , 'test' , 'instance']

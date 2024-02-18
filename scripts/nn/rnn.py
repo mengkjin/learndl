@@ -176,13 +176,14 @@ class uni_rnn_encoder(nn.Module):
         if self.mod_rnn == mod_transformer: 
             enc_in , enc_in_dim , enc_att = None , input_dim , False
         else:
-            enc_in , enc_in_dim , enc_att = enc_in , enc_in_dim if enc_in_dim else hidden_dim // 4 , enc_att
+            enc_in , enc_in_dim , enc_att = enc_in , enc_in_dim if enc_in_dim else hidden_dim , enc_att
         
-        if enc_in == 'linear':
-            self.fc_enc_in = nn.Sequential(nn.Linear(input_dim, enc_in_dim),nn.Tanh()) if enc_in else nn.Sequential()
+        if enc_in == 'linear' or enc_in == True:
+            self.fc_enc_in = nn.Sequential(nn.Linear(input_dim, enc_in_dim),nn.Tanh())
         elif enc_in == 'resnet':
             self.fc_enc_in = mod_resnet_1d(kwargs['inday_dim'] , input_dim , enc_in_dim , **kwargs) 
         else:
+            enc_in_dim = input_dim
             self.fc_enc_in = nn.Sequential()
 
         rnn_kwargs = {'input_dim':enc_in_dim,'output_dim':hidden_dim,'num_layers':rnn_layers, 'dropout':dropout}

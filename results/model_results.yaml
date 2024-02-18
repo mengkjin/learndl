@@ -695,3 +695,31 @@
   0.best: 163.55449335152662
   0.swabest: 144.27896716838495
   0.swalast: 164.58924311769078
+0_start: Mon Feb 19 01:40:04 2024
+1_basic: short+mem+float
+2_model: lstm_day(x1)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+5_test: null
+6_result: null
+0_start: Mon Feb 19 01:42:03 2024
+1_basic: short+mem+float
+2_model: lstm_day(x1)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.5 Sec/Epoch
+5_test: null
+6_result: null
+0_start: Mon Feb 19 01:42:40 2024
+1_basic: short+mem+float
+2_model: lstm_day(x1)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.5 Sec/Epoch
+5_test: null
+6_result: null
+0_start: Mon Feb 19 01:46:14 2024
+1_basic: short+mem+float
+2_model: tra_lstm2_day(x1)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 0.8 Sec/Epoch
+5_test: null
+6_result: null

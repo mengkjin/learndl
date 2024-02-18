@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+
 class tra_module:
     '''
     Decorator to grant a module dynamic data assign, and output probs (tra feature)
@@ -18,6 +19,15 @@ class tra_module:
                 self.dynamic_data.update({'model_data':model_data,'batch_data':batch_data,**kwargs})
                 self.dynamic_data_assigned = True
                 return 
+            def dynamic_data_access(self , *args , **kwargs):
+                if not hasattr(self, 'dynamic_data'): self.dynamic_data = {}
+                return self.dynamic_data
+            def penalty_data_access(self , *args , **kwargs):
+                self.global_steps += 1
+                return {'probs':self.probs,'num_states':self.num_states,'global_steps':self.global_steps,}
+            def dynamic_data_unlink(self , *args , **kwargs):
+                if hasattr(self, 'dynamic_data'): del self.dynamic_data
+                return self
             def get_probs(self):
                 if self.probs_record is not None: return self.probs_record/self.probs_record.sum(dim=1,keepdim=True)   
         return new_tra_class
@@ -34,12 +44,19 @@ class tra_component:
             def dynamic_data_assign(self , *args , **kwargs):
                 [getattr(self , comp).dynamic_data_assign(*args , **kwargs) for comp in tra_component_list]
             def dynamic_data_access(self , *args , **kwargs):
-                dynamic_data = [getattr(self , comp).dynamic_data for comp in tra_component_list]
+                dynamic_data = [getattr(self , comp).dynamic_data_access(*args , **kwargs) for comp in tra_component_list]
                 return dynamic_data if len(dynamic_data) > 1 else dynamic_data[0]
+            def dynamic_data_unlink(self , *args , **kwargs):
+                for comp in tra_component_list: getattr(self , comp).dynamic_data_unlink(*args , **kwargs)
+                return self
+            def penalty_data_access(self , *args , **kwargs):
+                penalty_data = [getattr(self , comp).penalty_data_access(*args , **kwargs) for comp in tra_component_list]
+                return penalty_data if len(penalty_data) > 1 else penalty_data[0]
             def get_probs(self , *args , **kwargs):
                 probs = [getattr(self,comp).get_probs(*args , **kwargs) for comp in tra_component_list]
                 return probs if len(probs) > 1 else probs[0]
         return new_tra_class
+    
 class mod_tra(nn.Module):
     """Temporal Routing Adaptor (TRA)
 
@@ -77,7 +94,11 @@ class mod_tra(nn.Module):
         self.global_steps = 0
 
     def forward(self, inputs):
-        x , hist_loss = (inputs , None) if self.num_states == 1 else inputs
+        if self.num_states == 1:
+            x , hist_loss = inputs , None
+        else:
+            x , hist_loss = inputs
+
         hidden = self.base_model(x)
         # in-case multiple output of base_model
         if isinstance(hidden , (list , tuple)): hidden = hidden[0]
@@ -85,7 +106,7 @@ class mod_tra(nn.Module):
         if hidden.dim() == 3: hidden = hidden[:,-1]
         preds = self.predictors(hidden)
 
-        if self.num_states == 1:
+        if self.num_states == 1 or hist_loss is None:
             final_pred = preds
             probs = None
         else:
@@ -108,15 +129,17 @@ class mod_tra(nn.Module):
                 final_pred = (preds * probs).sum(dim=-1 , keepdim = True)
             else:
                 final_pred = preds[range(len(preds)), probs.argmax(dim=-1)].unsqueeze(-1)
+            probs_sum  = probs.detach().sum(dim = 0 , keepdim = True)
+            self.probs_record = probs_sum if self.probs_record is None else torch.concat([self.probs_record , probs_sum])
 
         self.preds = preds
         self.probs = probs
-        probs_sum  = probs.detach().sum(dim = 0 , keepdim = True)
-        self.probs_record = probs_sum if self.probs_record is None else torch.concat([self.probs_record , probs_sum])
+        
         return final_pred , preds
     
     def get_probs(self):
-        return self.probs_record / self.probs_record.sum(dim=1 , keepdim = True)
+        if self.probs_record is not None:
+            return self.probs_record / self.probs_record.sum(dim=1 , keepdim = True)
     
     def modifier_inputs(self , inputs , batch_data , model_data):
         if self.num_states > 1:
@@ -139,6 +162,7 @@ class mod_tra(nn.Module):
             model_data.buffer['hist_preds'][i[:,0],i[:,1]] = v[:]
             model_data.buffer['hist_loss'][i[:,0],i[:,1]] = (v - model_data.buffer['hist_labels'][i[:,0],i[:,1]]).square()
             del self.preds , self.probs
+
 @tra_module()
 class block_tra(nn.Module):
     """
@@ -149,11 +173,7 @@ class block_tra(nn.Module):
                  tau=1.0, src_info = 'LR_TPE'):
         super().__init__()
         self.num_states = num_states
-        self.dynamic_data = {
-            'num_states' : num_states ,
-            'global_steps' : 0 ,
-            'probs' : None
-        }
+        self.global_steps = -1
         self.horizon = horizon
         self.tau = tau
         self.src_info = src_info
@@ -191,7 +211,7 @@ class block_tra(nn.Module):
             # print(inputs.shape , preds.shape , latent_representation.shape) , temporal_pred_error.shape
             probs = self.fc(torch.cat([latent_representation , temporal_pred_error], dim=-1))
             probs = nn.functional.gumbel_softmax(probs, dim=-1, tau=self.tau, hard=False)
-            self.dynamic_data['probs'] = probs
+            self.probs = probs
 
             # get final prediction in either train (weighted sum) or eval (max probability)
             if self.training:

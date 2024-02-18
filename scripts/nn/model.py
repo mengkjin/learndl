@@ -52,6 +52,7 @@ class tra_lstm(mod_tra):
         temp_model = lstm(input_dim , hidden_dim = hidden_dim , num_output = 1 , **kwargs)
         base_model = nn.Sequential(temp_model.encoder , temp_model.decoder)
         super().__init__(base_model , hidden_dim , num_states = tra_num_states,  horizon = tra_horizon)
+        
 @tra_component('mapping')
 class tra_lstm2(lstm):
     def __init__(self , input_dim , hidden_dim , tra_num_states=1, tra_horizon = 20 , num_output = 1 , **kwargs):

@@ -88,9 +88,7 @@ def train_config(config = None , parser = argparse.Namespace() , do_process = Fa
     config = TrainConfig(device = use_device)
     config.update(raw_config)
     config.update(override_config)
-    if config.get('model_data_type'):
-        config.model_data_type = config.model_data_type
-    else:
+    if config.get('model_data_type') is None:
         config.model_data_type = config.model_datatype.get(config.model_module , 'day')
     config.data_type_list  = config.model_data_type.split('+')
     config.model_num_list  = list(range(config.model_num))
@@ -158,7 +156,8 @@ def train_config(config = None , parser = argparse.Namespace() , do_process = Fa
             if config.resume_training and os.path.exists(f'{config.model_base_path}/config_train.yaml'):
                 config_resume = _load_raw_config(f'{config.model_base_path}/config_train.yaml')
                 config.update(config_resume)
-                config.model_data_type = config.model_datatype[config.model_module]
+                if config.get('model_data_type') is None:
+                    config.model_data_type = config.model_datatype.get(config.model_module , 'day')
                 config.data_type_list  = config.model_data_type.split('+')
                 config.model_num_list  = list(range(config.model_num))
             else:
