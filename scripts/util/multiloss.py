@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from ..function.basic import *
         
 class multiloss_calculator:
-    def __init__(self , multi_type = None):
+    def __init__(self , multi_type = None , num_task = -1 , **kwargs):
         """
         example:
             import torch
@@ -18,10 +18,13 @@ class multiloss_calculator:
             ml.view_plot(2 , 'rws')
         """
         self.multi_type = multi_type
-        
+        if num_task > 0: self.reset_multi_type(num_task,**kwargs)
+
     def reset_multi_type(self, num_task , **kwargs):
         self.num_task   = num_task
+        self.num_output = num_task
         self.multi_class = self.multi_class_dict()[self.multi_type](num_task , **kwargs)
+        return self
     
     def calculate_multi_loss(self , losses , mt_param , **kwargs):
         return self.multi_class.forward(losses , mt_param)

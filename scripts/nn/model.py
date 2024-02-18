@@ -24,6 +24,14 @@ class ResNet_LSTM(nn.Module):
         return output
 """     
 
+class simple_lstm(nn.Module):
+    def __init__(self , input_dim , hidden_dim , **kwargs):
+        super().__init__()
+        self.lstm = nn.LSTM(input_dim , hidden_dim , num_layers = 1 , dropout = 0 , batch_first = True)
+        self.fc = nn.Linear(hidden_dim , 1)
+    def forward(self, inputs):
+        o = self.lstm(inputs)[0][:,-1]
+        return self.fc(o) , o
 class gru(rnn_univariate):
     def __init__(self , input_dim , hidden_dim , **kwargs):
         kwargs.update({'rnn_type' : 'gru' , 'num_output' : 1})

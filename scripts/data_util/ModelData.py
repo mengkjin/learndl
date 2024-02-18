@@ -2,6 +2,7 @@
 import torch
 import gc , random , math , psutil , time , copy
 import numpy as np
+from typing import Union , Optional
 from types import SimpleNamespace
 from .DataTank import DataTank
 from .DataUpdater import get_db_path , get_db_file
@@ -23,32 +24,6 @@ DIR_torchpack  = f'{DIR_data}/torch_pack'
 save_block_method = 'npz'
 
 _div_tol = 1e-6
-
-class Mydataset(Dataset):
-    def __init__(self, data1 , label , weight = None) -> None:
-            super().__init__()
-            self.data1 = data1
-            self.label = label
-            self.weight = weight
-    def __len__(self):
-        return len(self.data1)
-    def __getitem__(self , ii):
-        if self.weight is None:
-            return self.data1[ii], self.label[ii]
-        else:
-            return self.data1[ii], self.label[ii], self.weight[ii]
-
-class MyIterdataset(IterableDataset):
-    def __init__(self, data1 , label) -> None:
-            super().__init__()
-            self.data1 = data1
-            self.label = label
-    def __len__(self):
-        return len(self.data1)
-    def __iter__(self):
-        for ii in range(len(self.data1)):
-            yield self.data1[ii], self.label[ii]
-            
 class Mydataloader_basic:
     def __init__(self, x_set , y_set , batch_size = 1, num_worker = 0, set_name = '', batch_num = None):
         self.dataset = Mydataset(x_set, y_set)
@@ -60,7 +35,6 @@ class Mydataloader_basic:
     def __iter__(self):
         for d in self.dataloader: 
             yield d
-
 class Mydataloader_saved:
     def __init__(self, set_name , batch_num , batch_folder):
         self.set_name = set_name
@@ -85,7 +59,13 @@ class ModelData():
 
         self.load_model_data()
         self.reset_dataloaders()
-        self.buffer_functions()
+        if self.kwarg.tra_model and self.kwarg.buffer_type == 'tra':
+            buffer_type = 'tra'
+        else:
+            buffer_type = None
+        self.buffer: dict = {}
+        self.buffer_init = buffer_init(buffer_type , **self.kwarg.buffer_param) 
+        self.buffer_proc = buffer_proc(buffer_type , **self.kwarg.buffer_param)  
 
     def assign_kwarg(self , config = {} , **kwargs):
         kwarg = {}
@@ -128,10 +108,11 @@ class ModelData():
         """
         self.dataloaders = {}
         self.dataloader_param = ()
-        self.loader_device  = Device(self.kwarg.device)
+        self.device         = Device(self.kwarg.device)
         self.loader_storage = versatile_storage(self.kwarg.storage_type)
         rmdir([f'./data/minibatch/{k}' for k in ['train' , 'valid' , 'test']] , remake_dir = True)
-        gc.collect() , torch.cuda.empty_cache()        
+        gc.collect() 
+        torch.cuda.empty_cache()   
     
     def get_dataloader_param(self , loader_type , process_name = '' , model_date = -1 , param = {} , namespace = None):
         if namespace is not None:
@@ -150,7 +131,8 @@ class ModelData():
         assert loader_type in ['train' , 'test'] , loader_type
         assert process_name in [loader_type , 'instance'] , process_name
     
-        gc.collect() , torch.cuda.empty_cache()
+        gc.collect() 
+        torch.cuda.empty_cache()
 
         self.loader_type = loader_type
         self.process_name = process_name
@@ -190,17 +172,17 @@ class ModelData():
             self.date_idx = d0 + self.step_idx
 
         x = {k:v.values[:,d0:d1] for k,v in self.x_data.items()}
-        self.y = self.process_y_data(self.y_data.values[:,d0:d1].squeeze(2)[...,:self.labels_n] , None , no_weight = True)
+        self.y , _ = self.process_y_data(self.y_data.values[:,d0:d1].squeeze(2)[...,:self.labels_n] , None , no_weight = True)
         self.y_secid , self.y_date = self.y_data.secid , self.y_data.date[d0:d1]
 
-        if self.buffer_init is not None: self.buffer.update(self.buffer_init(self))
+        self.buffer.update(self.buffer_init(self))
 
         self.nonnan_sample = self.cal_nonnan_sample(x, self.y, **{k:v for k,v in self.buffer.items() if k in self.seqs.keys()})
         y_step , w_step = self.process_y_data(self.y , self.nonnan_sample)
         self.y[:,self.step_idx] = y_step[:]
-        if self.buffer_proc is not None: self.buffer.update(self.buffer_proc(self))
-
-        self.buffer = self.loader_device(self.buffer)
+        
+        self.buffer.update(self.buffer_proc(self))
+        self.buffer = self.device(self.buffer) # type: ignore
 
         #index = self.sample_index(self.nonnan_sample)
         #self.static_dataloader(x , y_step , w_step , index , self.nonnan_sample)
@@ -208,13 +190,8 @@ class ModelData():
         index = self.sample_index2(self.nonnan_sample)
         self.static_dataloader2(x , y_step , w_step , index , self.nonnan_sample)
 
-        gc.collect() , torch.cuda.empty_cache()
-        
-    def buffer_functions(self):
-        self.buffer = {}
-        if self.kwarg.tra_model and self.kwarg.buffer_type == 'tra':
-            self.buffer_init = buffer_init(self.kwarg.buffer_type , **self.kwarg.buffer_param) 
-            self.buffer_proc = buffer_proc(self.kwarg.buffer_type , **self.kwarg.buffer_param)
+        gc.collect() 
+        torch.cuda.empty_cache()
     
     def cal_nonnan_sample(self , x , y , **kwargs):
         """
@@ -260,9 +237,9 @@ class ModelData():
             y_new[:] = y[:,self.step_idx].nan_to_num(0)
             y_new[nonnan_sample == 0] = torch.nan
         y_new , w_new = tensor_standardize_and_weight(y_new , 0 , weight_scheme)
-        return y_new if no_weight else (y_new , w_new)
+        return y_new , w_new
     
-    def sample_index(self , nonnan_sample = None):
+    def sample_index(self , nonnan_sample):
         """
         update index of train/valid sub-samples of flattened all-samples(with in 0:len(index[0]) * step_len - 1)
         sample_tensor should be boolean tensor , True indicates non
@@ -278,10 +255,11 @@ class ModelData():
             else:
                 early_samples = ii_time_wise < sorted(ii_time_wise)[train_samples]
                 ii_train , ii_valid = ii_stock_wise[early_samples] , ii_stock_wise[early_samples == 0]
-            random.shuffle(ii_train) , random.shuffle(ii_valid)
+            random.shuffle(ii_train) 
+            random.shuffle(ii_valid)
 
-        ipos = torch.zeros(shp[0] , shp[1] , 2 , dtype = int) # i_row (sec) , i_col_x (end)
-        ipos[:,:,0] = torch.tensor(np.arange(shp[0] , dtype = int)).reshape(-1,1) 
+        ipos = torch.zeros(shp[0] , shp[1] , 2 , dtype = torch.int) # i_row (sec) , i_col_x (end)
+        ipos[:,:,0] = torch.arange(shp[0] , dtype = torch.int).reshape(-1,1) 
         ipos[:,:,1] = torch.tensor(self.step_idx)
         ipos = ipos.reshape(-1 , ipos.shape[-1])
 
@@ -299,7 +277,7 @@ class ModelData():
         set_iter = ['train' , 'valid'] if self.loader_type == 'train' else ['test']
         self.loader_storage.del_group(self.loader_type)
         loaders = dict()
-        # mapping = lambda d:{k:(d[k] if k == 'i' else self.loader_device(d[k])) for k in d.keys()}
+        # mapping = lambda d:{k:(d[k] if k == 'i' else self.device(d[k])) for k in d.keys()}
 
         for set_name in set_iter:
             if self.loader_type == 'train':
@@ -326,10 +304,10 @@ class ModelData():
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
                 self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.loader_type)
-            loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.kwarg.verbosity >= 10)
+            loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.device , self.kwarg.verbosity >= 10)
         self.dataloaders.update(loaders)
         
-    def sample_index2(self , nonnan_sample = None):
+    def sample_index2(self , nonnan_sample):
         """
         update index of train/valid sub-samples of flattened all-samples(with in 0:len(index[0]) * step_len - 1)
         sample_tensor should be boolean tensor , True indicates non
@@ -340,8 +318,8 @@ class ModelData():
         assert self.kwarg.sample_method in ['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] , self.kwarg.sample_method
 
         shp = nonnan_sample.shape
-        ipos = torch.zeros(shp[0] , shp[1] , 2 , dtype = int)
-        ipos[:,:,0] = torch.arange(shp[0] , dtype = int).reshape(-1,1) 
+        ipos = torch.zeros(shp[0] , shp[1] , 2 , dtype = torch.int)
+        ipos[:,:,0] = torch.arange(shp[0] , dtype = torch.int).reshape(-1,1) 
         ipos[:,:,1] = torch.tensor(self.step_idx)
 
         if self.loader_type == 'train':
@@ -352,36 +330,36 @@ class ModelData():
                 iipos = ipos[nonnan_sample]
                 train_samples = int(len(iipos) * self.kwarg.train_ratio)
                 pool = np.arange(len(iipos))
-                random.shuffle(pool)
+                random.shuffle(pool) # type: ignore
                 ii_train , ii_valid = iipos[:train_samples] , iipos[train_samples:]
 
                 pool = np.arange(len(ii_train))
-                random.shuffle(pool)
+                random.shuffle(pool) # type: ignore
                 batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
                 for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
 
                 pool = np.arange(len(ii_valid))
-                random.shuffle(pool)
+                random.shuffle(pool) # type: ignore
                 batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
                 for pos in batch_sampler: sample_index['valid'].append(ii_valid[pos])
 
             elif self.kwarg.sample_method == 'both_shuffle':
                 ii_train = ipos[:,:train_dates][nonnan_sample[:,:train_dates]]
                 pool = np.arange(len(ii_train))
-                random.shuffle(pool)
+                random.shuffle(pool) # type: ignore
                 batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
                 for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
 
                 ii_valid = ipos[:,train_dates:][nonnan_sample[:,train_dates:]]
                 pool = np.arange(len(ii_valid))
-                random.shuffle(pool)
+                random.shuffle(pool) # type: ignore
                 batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
                 for pos in batch_sampler: sample_index['valid'].append(ii_valid[pos])
 
             elif self.kwarg.sample_method == 'train_shuffle':
                 ii_train = ipos[:,:train_dates][nonnan_sample[:,:train_dates]]
                 pool = np.arange(len(ii_train))
-                random.shuffle(pool)
+                random.shuffle(pool) # type: ignore
                 batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
                 for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
 
@@ -393,7 +371,8 @@ class ModelData():
                 for pos in range(train_dates , shp[1]): sample_index['valid'].append(ipos[:,pos][nonnan_sample[:,pos]])
         else:
             sample_index = {'test': []} 
-            for pos in range(shp[1]): sample_index['test'].append(ipos[:,pos][nonnan_sample[:,pos]])
+            test_dates = shp[1]
+            for pos in range(test_dates): sample_index['test'].append(ipos[:,pos][nonnan_sample[:,pos]])
 
         return sample_index
         
@@ -422,7 +401,7 @@ class ModelData():
                 batch_nonnan = nonnan_sample[i0,yi1]
                 batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
                 self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.loader_type)
-            loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.loader_device , self.kwarg.verbosity >= 10)
+            loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.device , self.kwarg.verbosity >= 10)
         self.dataloaders.update(loaders)
         
     def prenorm(self , x , key , static = True):
@@ -431,13 +410,14 @@ class ModelData():
         1.for ts-cols , divide by the last value, get seq-mormalized x
         2.for seq-mormalized x , normalized by history avg and std
         """
-        if static and self.prenorming_method.get(key) is not None:
-            prenorming_method = self.prenorming_method.get(key)
-        else:
-            prenorming_method = [_type_abbr(key) in ['day'] , self.norms.get(key) is not None]
+        if not static or self.prenorming_method.get(key) is None:
+            prenorming_method: list[bool] = [_type_abbr(key) in ['day'] , self.norms.get(key) is not None]
             if static:
                 self.prenorming_method.update({key:prenorming_method})
                 print(f'Pre-Norming method of [{key}] : [endpoint_division({prenorming_method[0]}) , history_standardize({prenorming_method[1]})]')
+        else:
+            prenorming_method: list[bool] = self.prenorming_method[key]
+        
         if prenorming_method[0]:
             x /= x.select(-2,-1).unsqueeze(-2) + _div_tol
         if prenorming_method[1]:
@@ -494,7 +474,7 @@ class MyIterdataset(IterableDataset):
 def buffer_init(key , **param):
     # first param of wrapper is container, which represent self in ModelData
     if key == 'tra':
-        def wrapper(self_container , *args, **kwargs):
+        def tra_wrapper(self_container , *args, **kwargs):
             buffer = dict()
             if param['tra_num_states'] > 1:
                 hist_loss_shape = list(self_container.y.shape)
@@ -503,22 +483,24 @@ def buffer_init(key , **param):
                 buffer['hist_preds'] = torch.randn(hist_loss_shape)
                 buffer['hist_loss']  = (buffer['hist_preds'] - buffer['hist_labels'].nan_to_num(0)).square()
             return buffer
+        return tra_wrapper
     else:
-        wrapper = None
-    return wrapper
+        def none_wrapper(*args, **kwargs): return {}
+        return none_wrapper
 
 def buffer_proc(key , **param):
     # first param of wrapper is container, which represent self in ModelData
     if key == 'tra':
-        def wrapper(self_container , *args, **kwargs):
+        def tra_wrapper(self_container , *args, **kwargs):
             buffer = dict()
             if param['tra_num_states'] > 1:
                 buffer['hist_loss']  = (self_container.buffer['hist_preds'] - 
                                         self_container.buffer['hist_labels'].nan_to_num(0)).square()
             return buffer
+        return tra_wrapper
     else:
-        wrapper = None
-    return wrapper
+        def none_wrapper(*args, **kwargs): return {}
+        return none_wrapper
 
 class DataBlock():
     def __init__(self , values = None , secid = None , date = None , feature = None) -> None:
@@ -531,7 +513,7 @@ class DataBlock():
             self._clear_attr()
             return NotImplemented
         self.initiate = True
-        if isinstance(feature , str): feature = [feature]
+        if isinstance(feature , str): feature = np.array([feature])
         if values.ndim == 3: values = values[:,:,None]
         assert values.shape == (len(secid),len(date),values.shape[2],len(feature))
         self.values  = values
@@ -563,8 +545,8 @@ class DataBlock():
         return self
 
     def _from_dtank(self , dtank , inner_path , 
-                   start_dt = None , end_dt = None , 
-                   feature = None , **kwargs):
+                    start_dt = None , end_dt = None , 
+                    feature = None , **kwargs):
         portal = dtank.get_object(inner_path)
         if portal is None: return
 
@@ -574,8 +556,8 @@ class DataBlock():
         if len(date) == 0: return
 
         datas = {str(d):dtank.read_data1D([inner_path , str(d)],feature).to_kline() for d in date}
-        secid , p_s0 , p_s1 = index_union([data.secid for data in datas.values()])
         date    = np.array(list(datas.keys())).astype(int)
+        secid , p_s0 , p_s1 = index_union([data.secid for data in datas.values()])
         feature , _ , p_f1 = index_intersect([data.feature for data in datas.values()])
         new_shape = [len(secid),len(date),len(feature)]
         if datas[str(date[0])].values.ndim == 3:
@@ -606,7 +588,7 @@ class DataBlock():
                 #tmp = newdata[p_s0[i]]
                 #tmp[:,p_d0[i]] = data[0][p_s1[i]][:,p_d1[i]][...,p_f1[i]]
                 #newdata[p_s0[i]] = tmp[:]
-                newdata[np.ix_(p_s0[i],p_d0[i])] = data[0][np.ix_(p_s1[i],p_d1[i])][...,p_f1[i]]
+                newdata[np.ix_(p_s0[i],p_d0[i])] = data[0][np.ix_(p_s1[i],p_d1[i])][...,p_f1[i]]# type: ignore
             self._init_attr(newdata , secid , date , feature)
         return self
     
@@ -630,7 +612,7 @@ class DataBlock():
             #tmp = newdata[p_s0[i]]
             #tmp[:,p_d0[i]] = data[p_s1[i]][:,p_d1[i]]
             #newdata[p_s0[i]] = tmp
-            newdata[np.ix_(p_s0[i],p_d0[i])] = data[np.ix_(p_s1[i],p_d1[i])]
+            newdata[np.ix_(p_s0[i],p_d0[i])] = data[np.ix_(p_s1[i],p_d1[i])] # type: ignore
             values[i] = newdata
 
         if distinct_feature:
@@ -660,8 +642,13 @@ class DataBlock():
         return self
     
     def to(self , asTensor = None, dtype = None):
-        if asTensor: self.values = torch.Tensor(self.values)
-        if dtype: self.values = self.values.to(dtype)
+        if asTensor and isinstance(self.values , np.ndarray): 
+            self.values = torch.Tensor(self.values)
+        if dtype: 
+            if isinstance(self.values , np.ndarray):
+                self.values = self.values.astype(dtype)
+            else:
+                self.values = self.values.to(dtype)
         return self
 
     def align_secid(self , secid):
@@ -775,9 +762,9 @@ def load_blocks(file_paths ,
                 if newsecid is None:
                     values[:,p_d0[i]] = blk.values[:,p_d1[i]]
                 elif newdate is None:
-                    values[p_s0[i]] = blk.values[p_s1[i]]
+                    values[p_s0[i]] = blk.values[p_s1[i]] #type:ignore
                 else:
-                    values[np.ix_(p_s0[i],p_d0[i])] = blk.values[np.ix_(p_s1[i],p_d1[i])]
+                    values[np.ix_(p_s0[i],p_d0[i])] = blk.values[np.ix_(p_s1[i],p_d1[i])] #type:ignore
 
             date_slice = np.repeat(True , len(date))
             if start_dt is not None: date_slice[date < start_dt] = False
@@ -1002,11 +989,11 @@ def block_mask(data_block , mask = True , after_ipo = 91 , **kwargs):
     desc = desc.sort_values('list_dt',ascending=False).drop_duplicates(subset=['secid'],keep='first').set_index('secid') 
     secid , date = data_block.secid , data_block.date
     
-    list_dt = desc.loc[secid , 'list_dt'] 
+    list_dt = np.array(desc.loc[secid , 'list_dt'])
     list_dt[list_dt < 0] = 21991231
     list_dt = date_offset(list_dt , after_ipo , astype = int)
 
-    delist_dt = desc.loc[secid , 'delist_dt'] 
+    delist_dt = np.array(desc.loc[secid , 'delist_dt'])
     delist_dt[delist_dt < 0] = 21991231
 
     mask = np.stack([(date <= l) + (date >= d) for l,d in zip(list_dt,delist_dt)],axis = 0) 

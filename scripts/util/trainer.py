@@ -46,7 +46,7 @@ def set_trainer_environment(config , manual_random_seed = None):
     _set_random_seed(manual_random_seed if manual_random_seed is not None else config.TRAIN_PARAM['dataloader']['random_seed'])
     torch.set_default_dtype(getattr(torch , config.precision))
     torch.backends.cuda.matmul.allow_tf32 = config.allow_tf32
-    torch.autograd.set_detect_anomaly(config.detect_anomaly)
+    torch.autograd.set_detect_anomaly(config.detect_anomaly) # type:ignore
     # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 def _set_random_seed(seed = None):
@@ -74,7 +74,7 @@ def _load_raw_config(config_files = None):
         del config['special_config']['transformer']
     return config
 
-def train_config(config = None , parser = SimpleNamespace() , do_process = False , 
+def train_config(config = None , parser = argparse.Namespace() , do_process = False , 
                  reload_name = None , reload_base_path = None , config_files = None , override_config = {}):
     """
     1. namespace type of config
@@ -88,9 +88,8 @@ def train_config(config = None , parser = SimpleNamespace() , do_process = False
     config = TrainConfig(device = use_device)
     config.update(raw_config)
     config.update(override_config)
-
     if config.get('model_data_type'):
-        config.model_data_type = config.get('model_data_type') 
+        config.model_data_type = config.model_data_type
     else:
         config.model_data_type = config.model_datatype.get(config.model_module , 'day')
     config.data_type_list  = config.model_data_type.split('+')
@@ -211,9 +210,12 @@ class Device:
         if device is None: device = use_device
         self.device = device
     def __call__(self, *args):
-        if len(args) == 0: return None
-        args = self._to(args)
-        return args[0] if len(args) == 1 else args
+        if len(args) == 0: 
+            return None
+        elif len(args) == 1:
+            return self._to(args[0])
+        else:
+            return self._to(args)
     def _to(self , x):
         if isinstance(x , (list,tuple)):
             return type(x)(self._to(v) for v in x)

@@ -17,7 +17,7 @@ https://lightgbm.readthedocs.io/en/latest/pythonapi/lightgbm.plot_tree.html
 import torch
 import torch.nn as nn
 import numpy as np
-import itertools , os, shutil , gc , time , h5py , yaml
+import itertools , os, shutil , gc , time , yaml
 from copy import deepcopy
 from torch.optim.swa_utils import AveragedModel , update_bn
 from scripts.util.environ import get_logger
@@ -30,26 +30,10 @@ from scripts.function.metric import loss_function,score_function,penalty_functio
 from scripts.nn import model
 # from audtorch.metrics.functional import *
 
-try:
-    parser = trainer_parser().parse_args()
-except:
-    parser = trainer_parser().parse_args(args=[])
+do_timer = True
+logger   = get_logger()
 
-logger = get_logger()
-config = train_config(parser = parser , do_process = __name__ == '__main__')
-set_trainer_environment(config)
-trainer_timer   = process_timer(False)
-trainer_storage = versatile_storage(config.storage_type)
-trainer_device  = Device(config.device)
-
-if __name__ == '__main__' and not config.short_test:
-    logger.warning('Model Specifics:')
-    pretty_print_dict(config.get_dict([
-        'verbosity' , 'storage_type' , 'device' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 'model_data_type' , 'model_num' ,
-        'beg_date' , 'end_date' , 'interval' , 'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' , 'compt_params'
-    ]))
-
-class model_controller():
+class RunModel():
     """
     A class to control the whole process of training , includes:
     1. Parameters: train_params , compt_params , model_data_type
@@ -58,18 +42,21 @@ class model_controller():
     4. file path: model , lastround , transfer(last model date)
     5. text: model , round , attempt , epoch , exit , stat , time , trainer
     """
-    def __init__(self , **kwargs):
+    def __init__(self , timer = False , storage_type = 'mem' , device = None , **kwargs):
         self.model_info = {'init_time' : time.time()}
+        self.ptimer     = process_timer(False)
+        self.storage    = versatile_storage(storage_type)
+        self.device     = Device(device)
         
     def main_process(self):
         """
         Main process of load_data + train + test + instance
         """
         for process_name in config.process_queue:
-            self.SetProcessName(process_name)
-            self.__getattribute__(f'model_process_{process_name.lower()}')()
+            self.process_setname(process_name)
+            self.__getattribute__(f'process_{process_name.lower()}')()
     
-    def SetProcessName(self , key = 'data'):
+    def process_setname(self , key = 'data'):
         self.process_name = key.lower()
         self.model_count = 0
         self.epoch_count = 0
@@ -77,11 +64,11 @@ class model_controller():
             pass
         elif self.process_name in ['train' , 'test' , 'instance']: 
             self.data.reset_dataloaders()
-            self.metric_function = new_metric_function(config.train_params)
+            self.metric_function = self.new_metricfunc(config.train_params['criterion'])
         else:
             raise Exception(f'KeyError : {key}')
         
-    def model_process_data(self):
+    def process_data(self):
         """
         Main process of loading basic data
         """
@@ -89,11 +76,11 @@ class model_controller():
         logger.critical(f'Start Process [Load Data]!')
         self.data = ModelData(config.model_data_type , config)
         # retrieve from data object
-        filler = model_params_filler(self.data.x_data , self.data.data_type_list)
+        filler = self.model_params_filler(self.data.x_data , self.data.data_type_list)
         for smp in config.model_params:  smp.update(filler)
         logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.model_info['data_time']))
         
-    def model_process_train(self):
+    def process_train(self):
         """
         Main process of training
         1. loop over model(model_date , model_num)
@@ -102,16 +89,17 @@ class model_controller():
         self.model_info['train_time'] = time.time()
         logger.critical(f'Start Process [Train Model]!')
         torch.save(config.model_params , f'{config.model_base_path}/model_params.pt')    
-        for model_date , model_num in self.ModelIter():
+        for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
-            self.ModelPreparation('train')
-            self.TrainModel()
+            self.model_preparation('train')
+            self.model_train()
         total_time = time.time() - self.model_info['train_time']
-        self.model_info['train_process'] = 'Finish Process [Train Model]! Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
+        _str = 'Finish Process [Train Model]! Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
             total_time / 3600 , total_time / 60 / max(self.model_count , 1) , total_time / max(self.epoch_count , 1))
+        self.model_info['train_process'] = _str #type:ignore
         logger.critical(self.model_info['train_process'])
 
-    def model_process_test(self):
+    def process_test(self):
         self.model_info['test_time'] = time.time()
         logger.critical(f'Start Process [Test Model]!')        
         logger.warning(f'Each Model Date Testing Mean Score({config.train_params["criterion"]["score"]}):')
@@ -119,16 +107,17 @@ class model_controller():
         self.test_result_output_type = np.tile(config.output_types,len(config.model_num_list))
         logger.info('{: <11s}'.format('Models') + ('{: >8d}'*len(self.test_result_model_num)).format(*self.test_result_model_num))
         logger.info('{: <11s}'.format('Output') + ('{: >8s}'*len(self.test_result_model_num)).format(*self.test_result_output_type))
-        for model_date , model_num in self.ModelIter():
+        for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
-            self.ModelPreparation('test')
-            self.TestModel()
-            self.StorePreds()
-        self.ModelResult()
-        self.model_info['test_process'] = 'Finish Process [Test Model]! Cost {:.1f} Secs'.format(time.time()-self.model_info['test_time'])
+            self.model_preparation('test')
+            self.model_test()
+            self.save_model_preds()
+        self.model_result()
+        _str = 'Finish Process [Test Model]! Cost {:.1f} Secs'.format(time.time()-self.model_info['test_time'])
+        self.model_info['test_process'] = _str # type: ignore
         logger.critical(self.model_info['test_process'])
 
-    def model_process_instance(self):
+    def process_instance(self):
         self.model_info['instance_time'] = time.time()
         if config.anchoring < 0:
             _text , _cond = ask_for_confirmation(f'Do you want to copy the model to instance?[yes/else no]: ' , timeout = -1)
@@ -151,34 +140,37 @@ class model_controller():
         self.test_result_model_num = np.repeat(config.model_num_list,len(config.output_types))
         self.test_result_output_type = np.tile(config.output_types,len(config.model_num_list))
         logger.warning('Copy from model to instance finished , Start going forward')
-        self.InstanceStart()
-        for model_date , model_num in self.ModelIter():
+
+        # load the exact config in the instance folder
+        config.reload(config_path = f'{config.instance_path}/config_train.yaml')
+
+        for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
-            self.ModelPreparation('instance')
-            self.TestModel()
-            self.StorePreds()
-        self.ModelResult()
+            self.model_preparation('instance')
+            self.model_test()
+            self.save_model_preds()
+        self.model_result()
         logger.critical('Finish Process [Copy to Instance]! Cost {:.1f} Secs'.format(time.time() - self.model_info['instance_time']))  
 
-    def ModelIter(self):
-        model_iter = list(itertools.product(self.data.model_date_list , config.model_num_list))
+    def model_iter(self):
+        new_iter = list(itertools.product(self.data.model_date_list , config.model_num_list))
         if config.resume_training and self.process_name == 'train':
-            models_trained = np.full(len(model_iter) , True)
-            for i,(model_date,model_num) in enumerate(model_iter):
+            models_trained = np.full(len(new_iter) , True)
+            for i,(model_date,model_num) in enumerate(new_iter):
                 if not os.path.exists(f'{config.model_base_path}/{model_num}/{model_date}.best.pt'):
                     models_trained[max(i-1,0):] = False
                     break
-            model_iter = FilteredIterator(model_iter , models_trained == 0)
-        return model_iter
+            new_iter = FilteredIterator(new_iter , models_trained == 0)
+        return new_iter
     
-    def ModelPreparation(self , process , last_n = 30 , best_n = 5):
+    def model_preparation(self , process , last_n = 30 , best_n = 5):
         assert process in ['train' , 'test' , 'instance']
-        with trainer_timer('ModelPreparation' , process):
+        with self.ptimer('model_preparation' , process):
             param = config.model_params[self.model_num]
 
             self.prediction = [] if config.get('output_prediction') or self.process_name == 'instance' else None
             # In a new model , alters the penalty function's lamb
-            self.metric_function = update_metric_function(self.metric_function , param , config)
+            self.metric_function = self.update_metricfunc(self.metric_function , param , config)
 
             path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
             path = {'target'      : {op_type:f'{path_prefix}.{op_type}.pt' for op_type in config.output_types} , 
@@ -199,7 +191,7 @@ class model_controller():
                 
             self.param , self.path = param , path
     
-    def TrainModel(self):
+    def model_train(self):
         self.TrainModelStart()
         while self.cond.get('loop_status') != 'model':
             self.NewLoop()
@@ -207,13 +199,15 @@ class model_controller():
             self.TrainEpoch()
             self.LoopCondition()
         self.TrainModelEnd()
-        gc.collect() , torch.cuda.empty_cache()
+        gc.collect() 
+        torch.cuda.empty_cache()
     
-    def TestModel(self):
-        self.TestModelStart()
-        self.Forecast()
-        self.TestModelEnd()
-        gc.collect() , torch.cuda.empty_cache()
+    def model_test(self):
+        self.model_test_start()
+        self.model_forecast()
+        self.model_test_end()
+        gc.collect() 
+        torch.cuda.empty_cache()
         
     def _init_variables(self , key = 'model'):
         """
@@ -244,7 +238,7 @@ class model_controller():
         """
         Reset model specific variables
         """
-        with trainer_timer('TrainModelStart'):
+        with self.ptimer('TrainModelStart'):
             self._init_variables('model')
             self.nanloss_life = config.train_params['trainer']['nanloss']['retry']
             self.text['model'] = '{:s} #{:d} @{:4d}'.format(config.model_name , self.model_num , self.model_date)
@@ -252,24 +246,24 @@ class model_controller():
             if (self.data.dataloader_param != dataloader_param):
                 self.data.create_dataloader(*dataloader_param) 
                 self.tick[1] = time.time()
-                self.printer('train_dataloader')
+                self._prints('train_dataloader')
             
     def TrainModelEnd(self):
         """
         Do necessary things of ending a model(model_data , model_num)
         """
-        with trainer_timer('TrainModelEnd'):
-            trainer_storage.del_path(*[list(v) for v in self.path['source'].values()])
+        with self.ptimer('TrainModelEnd'):
+            self.storage.del_path(*[list(v) for v in self.path['source'].values()])
             if self.process_name == 'train' : self.model_count += 1
             self.tick[2] = time.time()
-            self.printer('model_end')
+            self._prints('model_end')
 
     def NewLoop(self):
         """
         Reset and loop variables giving loop_status
         """
-        with trainer_timer('NewLoop'):
-            self._init_variables(self.cond.get('loop_status'))
+        with self.ptimer('NewLoop'):
+            self._init_variables(self.cond.get('loop_status' , ''))
             self.epoch_i += 1
             self.epoch_all += 1
             self.epoch_count += 1
@@ -288,14 +282,14 @@ class model_controller():
         optimizer : Adam or SGD
         scheduler : Cosine or StepLR
         """
-        with trainer_timer('TrainerInit'):
+        with self.ptimer('TrainerInit'):
             if self.cond.get('loop_status') == 'epoch': return
             self.load_model('train')
-            self.max_round = self.net.max_round() if 'max_round' in self.net.__dir__() else 1
+            self.max_round: int = getattr(self.net , 'max_round' , lambda x=0:1)()
             self.optimizer = self.load_optimizer()
             self.scheduler = self.load_scheduler() 
-            self.multiloss = self.load_multiloss()
-        
+            self.multiloss = self.new_multiloss(config.train_params['multitask'] , self.param['num_output'])
+
     def TrainEpoch(self):
         """
         Iterate train and valid dataset, calculate loss/score , update values
@@ -304,7 +298,7 @@ class model_controller():
 
         """
         # with modifier
-        with trainer_timer('TrainEpoch/train_epochs'):
+        with self.ptimer('TrainEpoch/train_epochs'):
             self.net.train()
             clip_value = config.train_params['trainer']['gradient'].get('clip_value')
             iterator = self.data.dataloaders['train']
@@ -312,81 +306,69 @@ class model_controller():
             for i , batch_data in enumerate(iterator):
                 x = self.modifier['inputs'](batch_data['x'] , batch_data , self.data)
                 self.optimizer.zero_grad()
-                with trainer_timer('TrainEpoch/train/forward'):
+                with self.ptimer('TrainEpoch/train/forward'):
                     pred , hidden = self.net(x)
-                with trainer_timer('TrainEpoch/train/loss'):
+                with self.ptimer('TrainEpoch/train/loss'):
                     penalty_kwargs = {'net' : self.net , 'hidden' : hidden , 'label' : batch_data['y']}
-                    metric = self.metric_calculator(batch_data['y'] , pred , 'train' , weight = batch_data['w'] , **penalty_kwargs)
+                    metric = self.model_metric(batch_data['y'] , pred , 'train' , weight = batch_data['w'] , penalty_kwargs=penalty_kwargs)
                     metric = self.modifier['metric'](metric, batch_data, self.data)
-                with trainer_timer('TrainEpoch/train/backward'):
+                with self.ptimer('TrainEpoch/train/backward'):
                     (metric['loss'] + metric['penalty']).backward()
-                with trainer_timer('TrainEpoch/train/step'):
+                with self.ptimer('TrainEpoch/train/step'):
                     if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value)
                     self.optimizer.step()
                 self.modifier['update'](None , batch_data , self.data)
                 _loss[i] , _score[i] = metric['loss_item'] , metric['score']
-                if iterator.progress_bar: iterator.display(f'Ep#{self.epoch_i:3d} train loss:{np.mean(_loss[:i+1]):.5f}')
+                if getattr(iterator , 'progress_bar'): iterator.display(f'Ep#{self.epoch_i:3d} train loss:{np.mean(_loss[:i+1]):.5f}')
             if np.isnan(sum(_loss)): return self._deal_nanloss()
             self.loss_list['train'].append(np.mean(_loss)) , self.score_list['train'].append(np.mean(_score))
 
-        with trainer_timer('TrainEpoch/valid_epochs'):
+        with self.ptimer('TrainEpoch/valid_epochs'):
             self.net.eval()     
             iterator = self.data.dataloaders['valid']
             _loss , _score = np.full(len(iterator),np.nan) , np.full(len(iterator),np.nan)
             for i , batch_data in enumerate(iterator):
                 x = self.modifier['inputs'](batch_data['x'] , batch_data , self.data)
-                # trainer_device.print_cuda_memory()
-                with trainer_timer('TrainEpoch/valid/forward'):
+                # self.device.print_cuda_memory()
+                with self.ptimer('TrainEpoch/valid/forward'):
                     pred , _ = self.net(x)
-                with trainer_timer('TrainEpoch/valid/loss'):
-                    metric = self.metric_calculator(batch_data['y'] , pred , 'valid' , weight = batch_data['w'])
+                with self.ptimer('TrainEpoch/valid/loss'):
+                    metric = self.model_metric(batch_data['y'] , pred , 'valid' , weight = batch_data['w'])
                     metric = self.modifier['metric'](metric, batch_data, self.data)
                 self.modifier['update'](None , batch_data , self.data)
                 _loss[i] , _score[i] = metric['loss_item'] , metric['score']
-                if iterator.progress_bar: iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{np.mean(_score[:i+1]):.5f}')
+                if getattr(iterator , 'progress_bar'): iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{np.mean(_score[:i+1]):.5f}')
             self.loss_list['valid'].append(np.mean(_loss)) , self.score_list['valid'].append(np.mean(_score))
         """
-        with trainer_timer('TrainEpoch/train_epochs'):
-            self.net.train()
+        with self.ptimer('TrainEpoch/train_epochs'):
+            self.net.train() # type:ignore
             iterator = self.data.dataloaders['train']
             _loss , _score = torch.ones(len(iterator)).fill_(torch.nan), torch.ones(len(iterator)).fill_(torch.nan)
             for i , batch_data in enumerate(iterator):
-                x , y , w = batch_data['x'] , batch_data['y'] , batch_data['w']
-                self.optimizer.zero_grad()
-                with trainer_timer('TrainEpoch/train/forward'):
-                    if hasattr(self.net , 'dynamic_data_assign'): self.net.dynamic_data_assign(batch_data , self.data)
-                    pred , hidden = self.net(x)
-                with trainer_timer('TrainEpoch/train/loss'):
-                    penalty_kwargs = {'net' : self.net , 'hidden' : hidden , 'label' : y}
-                    metric = self.metric_calculator(y , pred , 'train' , weight = w , **penalty_kwargs)
-                with trainer_timer('TrainEpoch/train/backward'):
-                    (metric['loss'] + metric['penalty']).backward()
-                with trainer_timer('TrainEpoch/train/step'):
-                    clip_value = config.train_params['trainer']['gradient'].get('clip_value')
-                    if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value)
-                    self.optimizer.step()
-                _loss[i] , _score[i] = metric['loss_item'] , metric['score']
-                if iterator.progress_bar: iterator.display(f'Ep#{self.epoch_i:3d} train loss:{np.mean(_loss[:i+1]):.5f}')
+                
+                outputs = self.model_forward('train' , batch_data)
+                metrics = self.model_metric('train' , outputs , batch_data , valid_sample = None)
+                self.model_backward('train' , metrics)
+
+                _loss[i] , _score[i] = metrics['loss_item'] , metrics['score']
+                if getattr(iterator , 'progress_bar'): iterator.display(f'Ep#{self.epoch_i:3d} train loss:{_loss[:i+1].mean():.5f}')
             if _loss.isnan().any(): return self._deal_nanloss()
-            self.loss_list['train'].append(_loss.mean()) , self.score_list['train'].append(_score.mean())
+            self.loss_list['train'].append(_loss.mean()) 
+            self.score_list['train'].append(_score.mean())
         
-        with trainer_timer('TrainEpoch/valid_epochs'):
-            self.net.eval()     
+        with self.ptimer('TrainEpoch/valid_epochs'):
+            self.net.eval()  # type:ignore
             iterator = self.data.dataloaders['valid']
             _loss , _score = torch.ones(len(iterator)).fill_(torch.nan), torch.ones(len(iterator)).fill_(torch.nan)
             for i , batch_data in enumerate(iterator):
-                x , y , w = batch_data['x'] , batch_data['y'] , batch_data['w']
-                # trainer_device.print_cuda_memory()
-                with trainer_timer('TrainEpoch/valid/forward'):
-                    if hasattr(self.net , 'dynamic_data_assign'): self.net.dynamic_data_assign(batch_data , self.data)
-                    pred , _ = self.net(x)
+                # self.device.print_cuda_memory()
+                outputs = self.model_forward('valid' , batch_data)
+                metrics = self.model_metric('valid' , outputs , batch_data , valid_sample = None)
 
-                with trainer_timer('TrainEpoch/valid/loss'):
-                    metric = self.metric_calculator(y , pred , 'valid' , weight = w)
-
-                _loss[i] , _score[i] = metric['loss_item'] , metric['score']
-                if iterator.progress_bar: iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{np.mean(_score[:i+1]):.5f}')
-            self.loss_list['valid'].append(_loss.mean()) , self.score_list['valid'].append(_score.mean())
+                _loss[i] , _score[i] = metrics['loss_item'] , metrics['score']
+                if getattr(iterator , 'progress_bar'): iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{_score[:i+1].mean():.5f}')
+            self.loss_list['valid'].append(_loss.mean()) 
+            self.score_list['valid'].append(_score.mean())
 
         self.lr_list.append(self.scheduler.get_last_lr()[0])
         self.scheduler.step()
@@ -396,7 +378,7 @@ class model_controller():
         """
         Update condition of continuing training epochs , restart attempt if early exit , proceed to next round if convergence , reset round if nan loss
         """
-        with trainer_timer('LoopCondition/assess'):
+        with self.ptimer('LoopCondition/assess'):
             if self.cond['nan_loss']:
                 logger.error(f'Initialize a new model to retrain! Lives remaining {self.nanloss_life}')
                 self._init_variables('model')
@@ -429,21 +411,20 @@ class model_controller():
                     self.path['performance']['swabest'][arg_min] = valid_score
                     save_targets.append(self.path['candidate']['swabest'][arg_min])
                 
-            trainer_storage.save_model_state(self.net , save_targets)
-            self.printer('epoch_step')
-
+            self.storage.save_model_state(self.net , save_targets)
+            self._prints('epoch_step')
         
-        with trainer_timer('LoopCondition/confirm_status'):
-            self.text['exit'] , self.cond['terminate'] = self._terminate_cond()
+        with self.ptimer('LoopCondition/confirm_status'):
+            self.text['exit'] , self.cond['terminate'] = self._terminate_cond() #type: ignore
             if self.text['exit']:
                 if (self.epoch_i < config.train_params['trainer']['retrain'].get('min_epoch' if self.max_round <= 1 else 'min_epoch_round') - 1 and 
                     self.attempt_i < config.train_params['trainer']['retrain']['attempts'] - 1):
                     self.cond['loop_status'] = 'attempt'
-                    self.printer('new_attempt')
+                    self._prints('new_attempt')
                 elif self.round_i < self.max_round - 1:
                     self.cond['loop_status'] = 'round'
                     self.save_model('best')
-                    self.printer('new_round')
+                    self._prints('new_round')
                 else:
                     self.cond['loop_status'] = 'model'
                     # print(self.net.get_probs())
@@ -451,7 +432,7 @@ class model_controller():
             else:
                 self.cond['loop_status'] = 'epoch'
             
-    def TestModelStart(self):
+    def model_test_start(self):
         """
         Reset model specific variables
         """
@@ -465,21 +446,25 @@ class model_controller():
             self.score_by_date  = np.concatenate([getattr(self,'score_by_date' ,np.empty((0,len(self.test_result_model_num)))) , score_date])
             self.score_by_model = np.concatenate([getattr(self,'score_by_model',np.empty((0,len(self.test_result_model_num)))) , score_model])
                 
-    def Forecast(self):
-        if not os.path.exists(self.path['target']['best']): self.TrainModel()
+    def model_forecast(self):
+        if not os.path.exists(self.path['target']['best']): self.model_train()
         
-        with trainer_timer('TestModel/Forcast') , torch.no_grad():
+        with self.ptimer('model_test/forecast') , torch.no_grad():
             iter_dates = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
+            l0 , l1 = len(self.data.early_test_dates) , len(self.data.model_test_dates)
             assert self.data.dataloaders['test'].__len__() == len(iter_dates)
             for oi , op_type in enumerate(config.output_types):
                 self.load_model('test' , op_type)
-                self.net.eval()
+                self.net.eval() # type:ignore
                 iterator = self.data.dataloaders['test']
                 test_score = np.full(len(iter_dates),np.nan)
                 for i , batch_data in enumerate(iterator):
-                    nonnan = torch.where(batch_data['nonnan'])[0]
+                    valid_sample=torch.where(batch_data['nonnan'])[0]
+                    if len(valid_sample) == 0: continue
+                    #batch_data_nn = subset(batch_data , torch.where(batch_data['nonnan'])[0])
+                    """
                     pred = torch.full_like(batch_data['y'], fill_value=torch.nan)
-                    for batch_j in torch.utils.data.DataLoader(trainer_device.torch_arange(len(nonnan)) , batch_size = config.batch_size):
+                    for batch_j in torch.utils.data.DataLoader(self.device.torch_arange(len(nonnan)) , batch_size = config.batch_size):
                         nnj = nonnan[batch_j]
                         batch_nnj = subset(batch_data , nnj)
                         if hasattr(self.net , 'dynamic_data_assign'): self.net.dynamic_data_assign(batch_nnj , self.data)
@@ -487,28 +472,34 @@ class model_controller():
                         pred_nnj = self.net(batch_nnj['x'])[0].detach()
                         pred[nnj,0] = pred_nnj[:,0]
                         # self.modifier['update'](None , batch_nnj , self.data)
-                    
-                    if i >= len(self.data.early_test_dates) and len(nonnan) > 0:
-                        # before this date is warmup stage
-                        metric = self.metric_calculator(batch_data['y'],pred,'test',weight=batch_data['w'],valid_sample=nonnan)
-                        test_score[i] = metric['score']
+                    """
+                    #batch_data_nn = subset(batch_data , torch.where(batch_data['nonnan'])[0])
+                    #x , y , w = batch_data_nn['x'] , batch_data_nn['y'] , batch_data_nn['w']
+                    #if hasattr(self.net , 'dynamic_data_assign'): self.net.dynamic_data_assign(batch_data_nn , self.data)
+                    outputs = self.model_forward('test' , batch_data)
 
-                        assert iter_dates[i] == self.data.y_date[batch_data['i'][0,1]] , (iter_dates[i] , self.data.y_date[batch_data['i'][0,1]])
-                        if hasattr(self , 'prediction'):
-                            batch_index , batch_pred = batch_data['i'].cpu() , pred.cpu()
-                            self.prediction.append({
-                                'secid' : self.data.y_secid[batch_index[:,0]] , 
-                                'date'  : self.data.y_date[batch_index[:,1]] ,
-                                'model' : f'{self.model_num}/{op_type}' ,
-                                'values': batch_pred[:,0]
-                            })
+                    assert not outputs[0].isnan().any()
+                    assert iter_dates[i] == self.data.y_date[batch_data['i'][0,1]] , (iter_dates[i] , self.data.y_date[batch_data['i'][0,1]])
+                    
+                    if i < l0: continue # before this date is warmup stage
+                    metrics = self.model_metric('test' , outputs, batch_data , valid_sample = None)
+                    test_score[i] = metrics['score']
+
+                    if hasattr(self , 'prediction'):
+                        batch_index , batch_pred = batch_data['i'].cpu() , outputs[0].detach().cpu()
+                        assert isinstance(self.prediction , list)
+                        self.prediction.append({
+                            'secid' : self.data.y_secid[batch_index[:,0]] , 
+                            'date'  : self.data.y_date[batch_index[:,1]] ,
+                            'model' : f'{self.model_num}/{op_type}' ,
+                            'values': batch_pred[:,0]
+                        })
 
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
-                    if iterator.progress_bar: iterator.display(f'Date#{i-len(self.data.early_test_dates):3d} :{np.mean(test_score[i+1]):.5f}')
-                self.score_by_date[-len(self.data.model_test_dates):,self.model_num*len(config.output_types) + oi] = np.nan_to_num(test_score[-len(self.data.model_test_dates):])
-            #self.y_pred = self.y_pred.cpu().numpy()
+                    if getattr(iterator , 'progress_bar'): iterator.display(f'Date {iter_dates[i]}:{test_score[l0:i+1].mean():.5f}')
+                self.score_by_date[-l1:,self.model_num*len(config.output_types) + oi] = np.nan_to_num(test_score[-l1:])
         
-    def TestModelEnd(self):
+    def model_test_end(self):
         """
         Do necessary things of ending a model(model_data , model_num)
         """
@@ -516,23 +507,9 @@ class model_controller():
             self.score_by_model[-1,:] = np.nanmean(self.score_by_date[-len(self.data.model_test_dates):,],axis = 0)
             logger.info('{: <11d}'.format(self.model_date)+('{:>8.4f}'*len(self.test_result_model_num)).format(*self.score_by_model[-1,:]))
 
-    def ResultOutput(self):
-        out_dict = {
-            '0_start' : time.ctime(self.model_info.get('init_time')),
-            '1_basic' :'+'.join(['short' if config.short_test else 'long' , config.storage_type , config.precision]),
-            '2_model' :''.join([config.model_module , '_' , config.model_data_type , '(x' , str(config.model_num) , ')']),
-            '3_time'  :'-'.join([str(config.beg_date),str(config.end_date)]),
-            '4_train' :self.model_info.get('train_process'),
-            '5_test'  :self.model_info.get('test_process'),
-            '6_result':self.model_info.get('test_score_sum'),
-        }
-        out_path = f'./results/model_results.yaml'
-        os.makedirs(os.path.dirname(out_path) , exist_ok=True)
-        with open(out_path , 'a' if os.path.exists(out_path) else 'w') as f:
-            yaml.dump(out_dict , f)
-
-    def StorePreds(self):
+    def save_model_preds(self):
         if not hasattr(self , 'prediction') and self.process_name != 'instance': return NotImplemented
+        assert isinstance(self.prediction , list)
         path_output = f'{config.instance_path}/{config.model_name}_allpreds.csv'
         for op_data in self.prediction:
             df = pd.concat([pd.DataFrame(op_data_alist) for op_data_alist in op_data])
@@ -540,12 +517,12 @@ class model_controller():
             with open(path_output , 'a') as f:
                 df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)   
   
-    def ModelResult(self):
+    def model_result(self):
         # date ic writed down
         date_step = (1 if self.process_name == 'instance' else self.data.kwarg.test_step_day)
         date_list = self.data.test_full_dates[::date_step]
         for model_num in config.model_num_list:
-            df = pd.DataFrame({'dates' : date_list} , index = map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , date_list.astype(str)))
+            df = pd.DataFrame({'dates' : date_list} , index = map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , date_list.astype(str))) #type:ignore
             for oi , op_type in enumerate(config.output_types):
                 df[f'score.{op_type}'] = self.score_by_date[:,model_num*len(config.output_types) + oi]
                 df[f'cum_score.{op_type}'] = np.nancumsum(self.score_by_date[:,model_num*len(config.output_types) + oi])
@@ -566,12 +543,93 @@ class model_controller():
         df.to_csv(f'{config.model_base_path}/{config.model_name}_score_by_model.csv')
         for i in range(len(add_row_key)):
             logger.info('{: <11s}'.format(add_row_key[i]) + (add_row_fmt[i]*len(self.test_result_model_num)).format(*add_row_value[i]))
-        self.model_info['test_score_sum'] = {k:v for k,v in zip(df.columns , score_sum.tolist())}
-
-    def InstanceStart(self):
-        config.reload(config_path = f'{config.instance_path}/config_train.yaml')
+        self.model_info['test_score_sum'] = {k:v for k,v in zip(df.columns , score_sum.tolist())}  # type:ignore
     
-    def printer(self , key):
+    def summary(self):
+        out_dict = {
+            '0_start' : time.ctime(self.model_info.get('init_time')),
+            '1_basic' :'+'.join(['short' if config.short_test else 'long' , config.storage_type , config.precision]),
+            '2_model' :''.join([config.model_module , '_' , config.model_data_type , '(x' , str(config.model_num) , ')']),
+            '3_time'  :'-'.join([str(config.beg_date),str(config.end_date)]),
+            '4_train' :self.model_info.get('train_process'),
+            '5_test'  :self.model_info.get('test_process'),
+            '6_result':self.model_info.get('test_score_sum'),
+        }
+        out_path = f'./results/model_results.yaml'
+        os.makedirs(os.path.dirname(out_path) , exist_ok=True)
+        with open(out_path , 'a' if os.path.exists(out_path) else 'w') as f:
+            yaml.dump(out_dict , f)
+        app.ptimer.print()
+
+    """     
+    def model_metric(self, label , pred , key , weight = None , valid_sample = None , penalty_kwargs={} , **kwargs):
+        '''
+        Calculate loss(with gradient), score
+        Inputs : 
+            kwargs : other inputs used in calculating loss , penalty and score
+        Possible Methods :
+        loss:    pearsonr , mse , ccc
+        penalty: hidden_orthogonality , tra_ot_penalty
+        score:  pearson , spearman , mse , ccc
+        '''
+
+        assert key in ['train' , 'valid' , 'test'] , key
+        if label.shape != pred.shape: # if more label than output
+            assert label.shape[:-1] == pred.shape[:-1] , (label.shape , pred.shape)
+            label = label.transpose(0,-1)[:pred.shape[-1]].transpose(0,-1)
+        if valid_sample is not None:
+            label , pred = label[valid_sample] , pred[valid_sample]
+            if weight is not None: weight = weight[valid_sample]
+        score_dim = lambda x:None if x is None else x.select(-1,0)
+
+        if key == 'train':
+            if self.param['num_output'] > 1:
+                loss = self.metric_function['loss'](label , pred , weight , dim = 0)[:self.param['num_output']]
+                loss = self.multiloss.calculate_multi_loss(loss , self.net.get_multiloss_params())
+            else:
+                loss = self.metric_function['loss'](score_dim(label) , score_dim(pred) , score_dim(weight))
+            
+            penalty = 0.
+            for _pen_dict in self.metric_function['penalty'].values():
+                if _pen_dict['lamb'] > 0 and _pen_dict['cond']: 
+                    penalty = penalty + _pen_dict['lamb'] * _pen_dict['func'](**penalty_kwargs)  
+            loss_item = loss.item()
+        else:
+            loss_item = loss = penalty = 0.
+
+        score = self.metric_function['score'][key](score_dim(label) , score_dim(pred) , score_dim(weight)).item()
+        return {'loss' : loss , 'loss_item' : loss_item , 'score' : score , 'penalty' : penalty}
+    """
+    
+    def model_forward(self , key , batch_data):
+        with self.ptimer(f'{key}/forward'):
+            if hasattr(self.net , 'dynamic_data_assign'): getattr(self.net , 'dynamic_data_assign')(batch_data , self.data)
+            return self.net(batch_data['x']) #type:ignore
+
+    def model_metric(self, key , outputs_of_net, batch_data , valid_sample = None, **kwargs):
+        # outputs_of_net = self.net(batch_data['x'])
+        # valid_sample = torch.where(batch_data['nonnan'])[0]
+        with self.ptimer(f'{key}/loss'):
+            pred , hidden  = outputs_of_net
+            label , weight = batch_data['y'] , batch_data['w']
+            penalty_kwargs = {}
+            if key == 'train': penalty_kwargs.update({'net' : self.net , 'hidden' : hidden , 'label' : label})
+            metrics = self.calculate_metrics(
+                key , self.metric_function , label=label , pred=pred , weight = weight ,
+                multiloss = self.multiloss , net = self.net ,
+                valid_sample = valid_sample , penalty_kwargs = penalty_kwargs)
+            return metrics
+        
+    def model_backward(self, key , metrics):
+        if key.lower() != 'train': return NotImplemented
+        clip_value = config.train_params['trainer']['gradient'].get('clip_value')
+        with self.ptimer(f'{key}/backward'):
+            self.optimizer.zero_grad()
+            (metrics['loss'] + metrics['penalty']).backward()
+            if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value) #type:ignore
+            self.optimizer.step()
+    
+    def _prints(self , key):
         """
         Print out status giving display conditions and looping conditions
         """
@@ -604,44 +662,7 @@ class model_controller():
         
         for prt in printer:
             if sdout is not None: prt(sdout)        
-            
-    def metric_calculator(self, labels , pred , key , weight = None , valid_sample = None , **penalty_kwargs):
-        """
-        Calculate loss(with gradient), score
-        Inputs : 
-            kwargs : other inputs used in calculating loss , penalty and score
-        Possible Methods :
-        loss:    pearsonr , mse , ccc
-        penalty: hidden_orthogonality , tra_ot_penalty
-        score:  pearson , spearman , mse , ccc
-        """
-        assert key in ['train' , 'valid' , 'test'] , key
-        if labels.shape != pred.shape: # if more labels than output
-            assert labels.shape[:-1] == pred.shape[:-1] , (labels.shape , pred.shape)
-            labels = labels.transpose(0,-1)[:pred.shape[-1]].transpose(0,-1)
-        if valid_sample is not None:
-            labels , pred = labels[valid_sample] , pred[valid_sample]
-            if weight is not None: weight = weight[valid_sample]
-        score_dim = lambda x:None if x is None else x.select(-1,0)
 
-        if key == 'train':
-            if self.param['num_output'] > 1:
-                loss = self.metric_function['loss'](labels , pred , weight , dim = 0)[:self.param['num_output']]
-                loss = self.multiloss.calculate_multi_loss(loss , self.net.get_multiloss_params())
-            else:
-                loss = self.metric_function['loss'](score_dim(labels) , score_dim(pred) , score_dim(weight))
-            
-            penalty = 0.
-            for _pen_dict in self.metric_function['penalty'].values():
-                if _pen_dict['lamb'] > 0 and _pen_dict['cond']: 
-                    penalty = penalty + _pen_dict['lamb'] * _pen_dict['func'](**penalty_kwargs)  
-            loss_item = loss.item()
-        else:
-            loss_item = loss = penalty = 0.
-
-        score = self.metric_function['score'][key](score_dim(labels) , score_dim(pred) , score_dim(weight)).item()
-        return {'loss' : loss , 'loss_item' : loss_item , 'score' : score , 'penalty' : penalty}
-    
     def _deal_nanloss(self):
         """
         Deal with nan loss, life -1 and change nan_loss condition to True
@@ -688,22 +709,22 @@ class model_controller():
             [self.save_model(k) for k in key]
         else:
             assert key in ['best' , 'swalast' , 'swabest']
-            with trainer_timer('save_model'):
-                p_exists = trainer_storage.valid_paths(self.path['candidate'][key])
+            with self.ptimer('save_model'):
+                p_exists = self.storage.valid_paths(self.path['candidate'][key])
                 if len(p_exists) == 0: print(key , self.path['candidate'][key] , self.path['performance'][key])
                 if key == 'best':
-                    model = trainer_storage.load(p_exists[0])
+                    model = self.storage.load(p_exists[0])
                     if self.round_i < self.max_round - 1:
                         if not self.path['source']['rounds']:
                             self.path['source']['rounds'] = ['{}/{}.round.{}.pt'.format(self.param.get('path'),self.model_date,r) for r in range(self.max_round-1)]
-                        trainer_storage.save_model_state(model , self.path['source']['rounds'][self.round_i])
+                        self.storage.save_model_state(model , self.path['source']['rounds'][self.round_i])
                 else:
-                    model = self.swa_model(p_exists)
-                trainer_storage.save_model_state(model , self.path['target'][key] , to_disk = True) 
+                    model = self.load_swa_model(p_exists)
+                self.storage.save_model_state(model , self.path['target'][key] , to_disk = True) 
     
     def load_model(self , process , key = 'best'):
         assert process in ['train' , 'test' , 'instance']
-        with trainer_timer('load_model'):
+        with self.ptimer('load_model'):
             if process == 'train':           
                 if self.round_i > 0:
                     model_path = self.path['source']['rounds'][self.round_i-1]
@@ -715,8 +736,8 @@ class model_controller():
             else:
                 model_path = self.path['target'][key]
 
-            self.net = trainer_device(new_net(config.model_module , self.param , trainer_storage.load(model_path , from_disk = True)))
-            if 'training_round' in self.net.__dir__(): self.net.training_round(self.round_i)
+            self.net = self.device(self.new_model(config.model_module , self.param , self.storage.load(model_path , from_disk = True))) # type:ignore
+            if hasattr(self.net , ''): getattr(self.net, 'training_round')(self.round_i)
 
             """
             # default : none modifier
@@ -728,14 +749,14 @@ class model_controller():
             if 'modifier_update' in self.net.__dir__(): self.modifier['update'] = lambda x,b,d:self.net.modifier_update(x,b,d)
             """
             
-    def swa_model(self , model_path_list = []):
+    def load_swa_model(self , model_path_list = []):
         if len(model_path_list) == 0: raise Exception('empty swa input')
-        net = new_net(config.model_module , self.param)
-        swa_net = trainer_device(AveragedModel(net))
+        net = self.new_model(config.model_module , self.param)
+        swa_net = self.device(AveragedModel(net))
         for p in model_path_list:
-            swa_net.update_parameters(trainer_storage.load_model_state(net , p))
-        update_bn(self._swa_update_bn_loader(self.data.dataloaders['train']) , swa_net)
-        return swa_net.module
+            swa_net.update_parameters(self.storage.load_model_state(net , p)) # type: ignore
+        update_bn(self._swa_update_bn_loader(self.data.dataloaders['train']) , swa_net) # type: ignore
+        return swa_net.module # type: ignore
     
     def _swa_update_bn_loader(self , loader):
         for data in loader: yield [data['x'] , data['y'] , data['w']]
@@ -754,8 +775,8 @@ class model_controller():
             lr_kwargs.update(new_lr_kwargs)
         base_lr = lr_kwargs['base'] * lr_kwargs['ratio']['attempt'][:self.attempt_i+1][-1] * lr_kwargs['ratio']['round'][:self.round_i+1][-1]
         
-        return new_optimizer(opt_kwargs['name'] , self.net , base_lr , transfer = self.path['candidate'].get('transfer') , 
-                             encoder_lr_ratio = lr_kwargs['ratio']['transfer'], **opt_kwargs['param'])
+        return self.new_optimizer(self.net , opt_kwargs['name'] , base_lr , transfer = self.path['candidate'].get('transfer') , 
+                                  encoder_lr_ratio = lr_kwargs['ratio']['transfer'], **opt_kwargs['param'])
     
     def load_scheduler(self , new_shd_kwargs = None):
         if new_shd_kwargs is None:
@@ -763,7 +784,7 @@ class model_controller():
         else:
             shd_kwargs = deepcopy(config.train_params['trainer']['scheduler'])
             shd_kwargs.update(new_shd_kwargs)
-        return new_scheduler(shd_kwargs['name'] , self.optimizer , **shd_kwargs['param'])
+        return self.new_scheduler(self.optimizer, shd_kwargs['name'], **shd_kwargs['param'])
     
     def reset_scheduler(self):
         rst_kwargs = config.train_params['trainer']['learn_rate']['reset']
@@ -787,110 +808,186 @@ class model_controller():
         else:
             shd_kwargs = None
         self.scheduler = self.load_scheduler(shd_kwargs)
-        self.printer('reset_learn_rate')
-        
-    def load_multiloss(self):
-        multiloss = None
-        if self.param['num_output'] > 1:
-            multiloss = multiloss_calculator(multi_type = config.train_params['multitask']['type'])
-            multiloss.reset_multi_type(self.param['num_output'] , **config.train_params['multitask']['param_dict'][multiloss.multi_type])
-        return multiloss
+        self._prints('reset_learn_rate')
     
-def new_net(module , param = {} , state_dict = None):
-    net = getattr(model , f'{module}')(**param)
-    if state_dict: net.load_state_dict(state_dict)
-    return net
+    @classmethod
+    def new_model(cls , module , param = {} , state_dict = None , **kwargs):
+        net = getattr(model , f'{module}')(**param)
+        if state_dict: net.load_state_dict(state_dict)
+        return net
 
-def new_metric_function(train_params , **kwargs):
-    metric_funcs = {
-        'loss'    : loss_function(train_params['criterion']['loss']) , 
-        'penalty' : {pentype:penalty_function(pentype,param) for pentype,param  in train_params['criterion']['penalty'].items()} ,
-        'score'   : {process:score_function(metric)          for process,metric in train_params['criterion']['score'].items()} ,
-    }
-    return metric_funcs
+    @classmethod
+    def new_metricfunc(cls , params , **kwargs):
+        return {
+            'loss'    : loss_function(params['loss']) , 
+            'penalty' : {k:penalty_function(k,v) for k,v  in params['penalty'].items()} ,
+            'score'   : {k:score_function(v)     for k,v in params['score'].items()} ,
+        }
 
-def update_metric_function(metric_funcs , model_param , config , **kwargs):
-    metric_funcs['penalty'].get('hidden_orthogonality',{})['cond'] = config.tra_model or model_param.get('hidden_as_factors',False)
-    metric_funcs['penalty'].get('tra_ot_penalty',{})['cond']       = config.tra_model
-    return metric_funcs
+    @classmethod
+    def new_multiloss(cls , params , num_output = 1 , **kwargs):
+        if num_output <= 1: return None
+        return multiloss_calculator(params['type'],num_output,**params['param_dict'][params['type']])
 
-def new_scheduler(key , optimizer , **kwargs):
-    if key == 'cos':
-        scheduler = lr_cosine_scheduler(optimizer, **kwargs)
-    elif key == 'step':
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **kwargs)
-    elif key == 'cycle':
-        scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, max_lr=[pg['lr_param'] for pg in optimizer.param_groups],cycle_momentum=False,mode='triangular2',**kwargs)
-    return scheduler
+    @classmethod
+    def update_metricfunc(cls , mf : dict , model_param , config , **kwargs):
+        mf['penalty'].get('hidden_orthogonality',{})['cond'] = config.tra_model or model_param.get('hidden_as_factors',False)
+        mf['penalty'].get('tra_ot_penalty',{})['cond']       = config.tra_model
+        return mf
 
-def new_optimizer(key , net , base_lr , transfer = False , encoder_lr_ratio = 1., decoder_lr_ratio = 1., **kwargs):
-    if transfer:
-        # define param list to train with different learn rate
-        p_enc = [(p if p.dim()<=1 else nn.init.xavier_uniform_(p)) for x,p in net.named_parameters() if 'encoder' in x.split('.')[:3]]
-        p_dec = [p for x,p in net.named_parameters() if 'encoder' not in x.split('.')[:3]]
-        net_param_groups = [{'params': p_dec , 'lr': base_lr * decoder_lr_ratio , 'lr_param': base_lr * decoder_lr_ratio},
-                            {'params': p_enc , 'lr': base_lr * encoder_lr_ratio , 'lr_param': base_lr * encoder_lr_ratio}]
-    else:
-        net_param_groups = [{'params': [p for p in net.parameters()] , 'lr' : base_lr , 'lr_param' : base_lr} ]
+    @classmethod
+    def calculate_metrics(cls , key , metrics , label , pred , weight = None , multiloss = None , net = None ,
+                        valid_sample = None , penalty_kwargs = {} , **kwargs):
+        """
+        Calculate loss(with gradient), penalty , score
+        """
+        if label.shape != pred.shape: # if more label than output
+            label = label[...,:pred.shape[-1]]
+            assert label.shape == pred.shape , (label.shape , pred.shape)
+        if valid_sample is not None:
+            label , pred = label[valid_sample] , pred[valid_sample]
+            weight = None if weight is None else weight[valid_sample]
 
-    optimizer = {
-        'Adam': torch.optim.Adam ,
-        'SGD' : torch.optim.SGD ,
-    }[key](net_param_groups , **kwargs)
-    return optimizer
+        label0 , pred0 = label.select(-1,0) , pred.select(-1,0)
+        weight0 = None if weight is None else weight.select(-1,0)
 
-def model_params_filler(x_data = {} , data_type_list = None):
-    if data_type_list is None: data_type_list = list(x_data.keys())
+        with torch.no_grad():
+            losses = None
+            loss_item = loss = penalty = 0.
+            score = metrics['score'][key](label0 , pred0 , weight0).item()
 
-    filler = {}
-    inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
-    input_dim , inday_dim = [] , []
-    for mdt in data_type_list:
-        x = x_data.get(mdt)
-        input_dim.append(x.shape[-1] if x else 6)
-        inday_dim.append(x.shape[-2] if x else inday_dim_dict.get(mdt , 1))
-    if len(data_type_list) > 1:
-        filler.update({'input_dim':tuple(input_dim), 'inday_dim':tuple(inday_dim)})
-    elif len(data_type_list) == 1:
-        filler.update({'input_dim':input_dim[0] , 'inday_dim':inday_dim[0]})
-    else:
-        filler.update({'input_dim':1            , 'inday_dim':1           })
-    return filler
+        if key == 'train':
+            # loss
+            if multiloss is not None:
+                losses = metrics['loss'](label , pred , weight , dim = 0)[:multiloss.num_task]
+                if hasattr(net , 'get_multiloss_params'):
+                    loss = multiloss.calculate_multi_loss(losses , net.get_multiloss_params())  # type:ignore
+                else:
+                    raise Exception('net has no attr: get_multiloss_params')
+            else:
+                losses = None
+                loss = metrics['loss'](label0 , pred0 , weight0)
+            loss_item = loss.item()
+            # penalty
+            for _pen_dict in metrics['penalty'].values():
+                if _pen_dict['lamb'] <= 0 or not _pen_dict['cond']: continue
+                penalty = penalty + _pen_dict['lamb'] * _pen_dict['func'](**penalty_kwargs)  
+            
+        return {'loss' : loss , 'loss_item' : loss_item , 'score' : score , 'penalty' : penalty , 'losses': losses}
 
-def new_random_input(module = 'ResNet_LSTM' , model_data_type = '30m'):
-    config = train_config(override_config = {'model_module' : module , 'model_data_type' : model_data_type} , do_process=False)
-    data_type_list = config.data_type_list
-    for smp in config.model_params: smp.update(model_params_filler(data_type_list = data_type_list))
-    model_param = config.model_params[0]
-    batch = 2
-    x = []
-    #inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
-    for i , mdt in enumerate(data_type_list):
-        seqlen = model_param['seqlens'].get(mdt , 20)
-        inday_dim = (lambda x,i:x[i] if isinstance(x,(tuple,list)) else x)(model_param.get('inday_dim') , i)
-        input_dim = (lambda x,i:x[i] if isinstance(x,(tuple,list)) else x)(model_param.get('input_dim') , i)
-        #if inday_dim is None: inday_dim = inday_dim_dict.get(mdt , 1)
-        #if input_dim is None: input_dim = 6
-        if inday_dim == 1:
-            x.append(torch.rand(batch , seqlen , input_dim))
+    @classmethod
+    def new_scheduler(cls , optimizer, key = 'cycle', **kwargs):
+        if key == 'cos':
+            scheduler = lr_cosine_scheduler(optimizer, **kwargs)
+        elif key == 'step':
+            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **kwargs)
+        elif key == 'cycle':
+            scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, max_lr=[pg['lr_param'] for pg in optimizer.param_groups],cycle_momentum=False,mode='triangular2',**kwargs)
+        return scheduler
+
+    @classmethod
+    def new_optimizer(cls , net , key ='Adam', base_lr = 0.005, transfer = False , encoder_lr_ratio = 1., decoder_lr_ratio = 1., **kwargs):
+        if transfer:
+            # define param list to train with different learn rate
+            p_enc = [(p if p.dim()<=1 else nn.init.xavier_uniform_(p)) for x,p in net.named_parameters() if 'encoder' in x.split('.')[:3]]
+            p_dec = [p for x,p in net.named_parameters() if 'encoder' not in x.split('.')[:3]]
+            net_param_groups = [{'params': p_dec , 'lr': base_lr * decoder_lr_ratio , 'lr_param': base_lr * decoder_lr_ratio},
+                                {'params': p_enc , 'lr': base_lr * encoder_lr_ratio , 'lr_param': base_lr * encoder_lr_ratio}]
         else:
-            x.append(torch.rand(batch , seqlen , inday_dim , input_dim))
-    x = tuple(x) if len(x) > 1 else x[0]
-    y = torch.rand(batch , 1)
-    net = new_net(module , param = model_param)
-    return net , x , y
+            net_param_groups = [{'params': [p for p in net.parameters()] , 'lr' : base_lr , 'lr_param' : base_lr} ]
+
+        optimizer = {
+            'Adam': torch.optim.Adam ,
+            'SGD' : torch.optim.SGD ,
+        }[key](net_param_groups , **kwargs)
+        return optimizer
+
+    @classmethod
+    def model_params_filler(cls , x_data = {} , data_type_list = None):
+        if data_type_list is None: data_type_list = list(x_data.keys())
+
+        filler = {}
+        inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
+        input_dim , inday_dim = [] , []
+        for mdt in data_type_list:
+            x = x_data.get(mdt)
+            input_dim.append(x.shape[-1] if x else 6)
+            inday_dim.append(x.shape[-2] if x else inday_dim_dict.get(mdt , 1))
+        if len(data_type_list) > 1:
+            filler.update({'input_dim':tuple(input_dim), 'inday_dim':tuple(inday_dim)})
+        elif len(data_type_list) == 1:
+            filler.update({'input_dim':input_dim[0] , 'inday_dim':inday_dim[0]})
+        else:
+            filler.update({'input_dim':1            , 'inday_dim':1           })
+        return filler
+
+    @classmethod
+    def new_random_input(cls , module = 'tra_lstm2' , model_data_type = 'day' , model_data = None):
+
+        config = train_config(override_config = {'model_module' : module , 'model_data_type' : model_data_type} , do_process=False)
+        data_type_list = config.data_type_list
+        for smp in config.model_params: smp.update(cls.model_params_filler(data_type_list = data_type_list))
+        model_data = ModelData(data_type_list , config)
+        model_data.create_dataloader(*model_data.get_dataloader_param('train','train',20170104,config.model_params[0]))
+
+        #inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
+        for i , batch_data in enumerate(model_data.dataloaders['train']):
+            batch_data = batch_data
+            break
+        net = cls.new_model(module , param = config.model_params[0])
+        metrics   = cls.update_metricfunc(cls.new_metricfunc(config.train_params['criterion']) , config.model_params[0] , config)
+        multiloss = cls.new_multiloss(config.train_params['multitask'] , config.model_params[0]['num_output'])
+
+        return config , net , batch_data , model_data , metrics , multiloss
 
 """
-config = train_config(override_config = {'model_module' : 'ResNet_LSTM' , 'model_data_type' : '30m'} , do_process=False)
-for smp in config.model_params: smp.update(model_params_filler())
+from run_model import RunModel
+from copy import deepcopy
+import torch
+import torch.nn as nn
 
-data_type_list = config.data_type_list
-model_params = config.model_params
+config , net , batch_data , model_data , metrics , multiloss = RunModel.new_random_input('simple_lstm' , 'day')
+optimizer = RunModel.new_optimizer(net)
+
+#pipeline 1
+
+sd = deepcopy(net.state_dict())
+optimizer = RunModel.new_optimizer(net)
+optimizer.zero_grad()
+if hasattr(net , 'dynamic_data_assign'): net.dynamic_data_assign(batch_data , model_data)
+pred , hidden = net(batch_data['x'])
+penalty_kwargs = {'net' : net , 'hidden' : hidden , 'label' : batch_data['y']}
+metric = RunModel.calculate_metrics('train' , metrics, label=batch_data['y'], pred=pred,
+                            weight=batch_data['w'], multiloss=multiloss,net=net,valid_sample=None,
+                            penalty_kwargs=penalty_kwargs)
+print(metric)
+(metric['loss'] + metric['penalty']).backward()
+print(net.get_parameter('fc.weight').grad)
+clip_value = config.train_params['trainer']['gradient'].get('clip_value')
+if clip_value is not None : nn.utils.clip_grad_value_(net.parameters(), clip_value = clip_value)
+optimizer.step()
+sd_step = deepcopy(net.state_dict())
+
 """
 
 if __name__ == '__main__':
+    try:
+        parser = trainer_parser().parse_args()
+    except:
+        parser = trainer_parser().parse_args(args=[])
 
-    controller = model_controller()
-    controller.main_process()
-    controller.ResultOutput()
-    trainer_timer.print()
+    config = train_config(parser = parser , do_process = True)
+    set_trainer_environment(config)
+
+    if not config.short_test:
+        logger.warning('Model Specifics:')
+        pretty_print_dict(config.get_dict([
+            'verbosity' , 'storage_type' , 'device' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 
+            'model_data_type' , 'model_num' , 'beg_date' , 'end_date' , 'interval' , 
+            'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' , 'compt_params'
+        ]))
+
+    app = RunModel(timer = do_timer , storage_type = config.storage_type , device = config.device)
+    app.main_process()
+    app.summary()
+ 
