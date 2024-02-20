@@ -119,6 +119,7 @@ class ModelData():
             process_name , model_date , param = namespace.process_name , namespace.model_date , namespace.param
         seqlens = param['seqlens']
         if self.kwarg.tra_model: seqlens.update(param.get('tra_seqlens',{}))
+        
         return process_name , loader_type , model_date , seqlens
 
     def create_dataloader(self , *dataloader_param):
@@ -129,7 +130,7 @@ class ModelData():
         self.dataloader_param = process_name , loader_type , model_date , seqlens = dataloader_param
 
         assert loader_type in ['train' , 'test'] , loader_type
-        assert process_name in [loader_type , 'instance'] , process_name
+        assert process_name in [loader_type , 'instance'] , (process_name,loader_type)
     
         gc.collect() 
         torch.cuda.empty_cache()

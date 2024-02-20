@@ -211,7 +211,6 @@ class block_tra(nn.Module):
             # print(inputs.shape , preds.shape , latent_representation.shape) , temporal_pred_error.shape
             probs = self.fc(torch.cat([latent_representation , temporal_pred_error], dim=-1))
             probs = nn.functional.gumbel_softmax(probs, dim=-1, tau=self.tau, hard=False)
-            self.probs = probs
 
             # get final prediction in either train (weighted sum) or eval (max probability)
             if self.training:
@@ -221,6 +220,8 @@ class block_tra(nn.Module):
 
             # record training history probs
             probs_agg  = probs.detach().sum(dim = 0 , keepdim = True)
+
+            self.probs = probs.detach()
             self.probs_record = probs_agg if self.probs_record is None else torch.concat([self.probs_record , probs_agg])
 
             # update dynamic buffer

@@ -18,16 +18,17 @@ class multiloss_calculator:
             ml.view_plot(2 , 'rws')
         """
         self.multi_type = multi_type
-        if num_task > 0: self.reset_multi_type(num_task,**kwargs)
+        self.reset_multi_type(num_task,**kwargs)
 
     def reset_multi_type(self, num_task , **kwargs):
         self.num_task   = num_task
         self.num_output = num_task
-        self.multi_class = self.multi_class_dict()[self.multi_type](num_task , **kwargs)
+        if num_task > 0 and self.multi_type is not None: 
+            self.multi_class = self.multi_class_dict()[self.multi_type](num_task , **kwargs)
         return self
     
     def calculate_multi_loss(self , losses , mt_param , **kwargs):
-        return self.multi_class.forward(losses , mt_param)
+        return self.multi_class(losses , mt_param)
     
     """
     def reset_loss_function(self, loss_type):
@@ -68,6 +69,10 @@ class multiloss_calculator:
             self.record_penalty = []
             self.kwargs = kwargs
             self.reset(**kwargs)
+        def __call__(self , losses , mt_param , **kwargs):
+            weight , penalty = self.weight(losses , mt_param) , self.penalty(losses , mt_param)
+            self.record(losses , weight , penalty)
+            return self.total_loss(losses , weight , penalty)
         def reset(self , **kwargs):
             pass
         def record(self , losses , weight , penalty):
@@ -75,10 +80,6 @@ class multiloss_calculator:
             self.record_losses.append(losses.detach() if isinstance(losses,torch.Tensor) else losses)
             self.record_weight.append(weight.detach() if isinstance(weight,torch.Tensor) else weight)
             self.record_penalty.append(penalty.detach() if isinstance(penalty,torch.Tensor) else penalty)
-        def forward(self , losses , mt_param , **kwargs):
-            weight , penalty = self.weight(losses , mt_param) , self.penalty(losses , mt_param)
-            self.record(losses , weight , penalty)
-            return self.total_loss(losses , weight , penalty)
         def weight(self , losses , mt_param):
             return torch.ones_like(losses)
         def penalty(self , losses , mt_param): 
@@ -174,10 +175,12 @@ class multiloss_calculator:
         if multi_type == 'ruw':
             if num_task > 2 : num_task = 2
             x,y = torch.rand(100,num_task),torch.rand(100,1)
+            ls = (x - y).sqrt().sum(dim = 0)
             alpha = torch.tensor(np.repeat(np.linspace(0.2, 10, 40),num_task).reshape(-1,num_task))
             fig,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(alpha[:,0].numpy(), alpha[:,1].numpy())
-            l = torch.stack([torch.stack([self.RUW(y,x,[s1[i,j],s2[i,j]])[0] for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
+            ruw = self.RUW(num_task)
+            l = torch.stack([torch.stack([ruw(ls,{'alpha':torch.tensor([s1[i,j],s2[i,j]])})[0] for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
             ax.plot_surface(s1, s2, l, cmap='viridis')
             ax.set_xlabel('alpha-1')
             ax.set_ylabel('alpha-2')

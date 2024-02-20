@@ -103,10 +103,10 @@ class RunModel():
         self.model_info['test_time'] = time.time()
         logger.critical(f'Start Process [Test Model]!')        
         logger.warning(f'Each Model Date Testing Mean Score({config.train_params["criterion"]["score"]}):')
-        self.test_result_model_num = np.repeat(config.model_num_list,len(config.output_types))
-        self.test_result_output_type = np.tile(config.output_types,len(config.model_num_list))
-        logger.info('{: <11s}'.format('Models') + ('{: >8d}'*len(self.test_result_model_num)).format(*self.test_result_model_num))
-        logger.info('{: <11s}'.format('Output') + ('{: >8s}'*len(self.test_result_model_num)).format(*self.test_result_output_type))
+        self.test_model_num = np.repeat(config.model_num_list,len(config.output_types))
+        self.test_output_type = np.tile(config.output_types,len(config.model_num_list))
+        self._print_rst('Models' , self.test_model_num , 0)
+        self._print_rst('Output' , self.test_output_type)
         for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
             self.model_preparation('test')
@@ -137,8 +137,8 @@ class RunModel():
         else:
             logger.critical(f'Will not copy to instance!')
             return
-        self.test_result_model_num = np.repeat(config.model_num_list,len(config.output_types))
-        self.test_result_output_type = np.tile(config.output_types,len(config.model_num_list))
+        self.test_model_num = np.repeat(config.model_num_list,len(config.output_types))
+        self.test_output_type = np.tile(config.output_types,len(config.model_num_list))
         logger.warning('Copy from model to instance finished , Start going forward')
 
         # load the exact config in the instance folder
@@ -192,13 +192,13 @@ class RunModel():
             self.param , self.path = param , path
     
     def model_train(self):
-        self.TrainModelStart()
+        self.model_train_start()
         while self.cond.get('loop_status') != 'model':
-            self.NewLoop()
-            self.TrainerInit()
-            self.TrainEpoch()
-            self.LoopCondition()
-        self.TrainModelEnd()
+            self.model_train_init_loop()
+            self.model_train_init_trainer()
+            self.model_train_epoch()
+            self.model_train_assess_status()
+        self.model_train_end()
         gc.collect() 
         torch.cuda.empty_cache()
     
@@ -234,11 +234,11 @@ class RunModel():
             self.text = {k : '' for k in ['model','round','attempt','epoch','exit','stat','time','trainer']}
             self.cond = {'terminate' : {} , 'nan_loss' : False , 'loop_status' : 'round'}
 
-    def TrainModelStart(self):
+    def model_train_start(self):
         """
         Reset model specific variables
         """
-        with self.ptimer('TrainModelStart'):
+        with self.ptimer('model_train/start'):
             self._init_variables('model')
             self.nanloss_life = config.train_params['trainer']['nanloss']['retry']
             self.text['model'] = '{:s} #{:d} @{:4d}'.format(config.model_name , self.model_num , self.model_date)
@@ -248,21 +248,21 @@ class RunModel():
                 self.tick[1] = time.time()
                 self._prints('train_dataloader')
             
-    def TrainModelEnd(self):
+    def model_train_end(self):
         """
         Do necessary things of ending a model(model_data , model_num)
         """
-        with self.ptimer('TrainModelEnd'):
+        with self.ptimer('model_train/end'):
             self.storage.del_path(*[list(v) for v in self.path['source'].values()])
             if self.process_name == 'train' : self.model_count += 1
             self.tick[2] = time.time()
             self._prints('model_end')
 
-    def NewLoop(self):
+    def model_train_init_loop(self):
         """
         Reset and loop variables giving loop_status
         """
-        with self.ptimer('NewLoop'):
+        with self.ptimer('model_train/init_loop'):
             self._init_variables(self.cond.get('loop_status' , ''))
             self.epoch_i += 1
             self.epoch_all += 1
@@ -274,7 +274,7 @@ class RunModel():
                 self.round_i += 1
                 self.text['round'] = 'Round{:2d}'.format(self.round_i)
         
-    def TrainerInit(self):
+    def model_train_init_trainer(self):
         """
         Initialize net , optimizer , scheduler if loop_status in ['round' , 'attempt']
         net : 1. Create an instance of f'{config.model_module}' or inherit from 'lastround'/'transfer'
@@ -282,7 +282,7 @@ class RunModel():
         optimizer : Adam or SGD
         scheduler : Cosine or StepLR
         """
-        with self.ptimer('TrainerInit'):
+        with self.ptimer('model_train/init_trainer'):
             if self.cond.get('loop_status') == 'epoch': return
             self.load_model('train')
             self.max_round: int = getattr(self.net , 'max_round' , lambda x=0:1)()
@@ -290,57 +290,12 @@ class RunModel():
             self.scheduler = self.load_scheduler() 
             self.multiloss = self.new_multiloss(config.train_params['multitask'] , self.param['num_output'])
 
-    def TrainEpoch(self):
+    def model_train_epoch(self):
         """
         Iterate train and valid dataset, calculate loss/score , update values
         If nan loss occurs, turn to _deal_nanloss
         """
-
-        """
-        # with modifier
-        with self.ptimer('TrainEpoch/train_epochs'):
-            self.net.train()
-            clip_value = config.train_params['trainer']['gradient'].get('clip_value')
-            iterator = self.data.dataloaders['train']
-            _loss , _score = np.full(len(iterator),np.nan) , np.full(len(iterator),np.nan)
-            for i , batch_data in enumerate(iterator):
-                x = self.modifier['inputs'](batch_data['x'] , batch_data , self.data)
-                self.optimizer.zero_grad()
-                with self.ptimer('TrainEpoch/train/forward'):
-                    pred , hidden = self.net(x)
-                with self.ptimer('TrainEpoch/train/loss'):
-                    penalty_kwargs = {'net' : self.net , 'hidden' : hidden , 'label' : batch_data['y']}
-                    metric = self.model_metric(batch_data['y'] , pred , 'train' , weight = batch_data['w'] , penalty_kwargs=penalty_kwargs)
-                    metric = self.modifier['metric'](metric, batch_data, self.data)
-                with self.ptimer('TrainEpoch/train/backward'):
-                    (metric['loss'] + metric['penalty']).backward()
-                with self.ptimer('TrainEpoch/train/step'):
-                    if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value)
-                    self.optimizer.step()
-                self.modifier['update'](None , batch_data , self.data)
-                _loss[i] , _score[i] = metric['loss_item'] , metric['score']
-                if getattr(iterator , 'progress_bar'): iterator.display(f'Ep#{self.epoch_i:3d} train loss:{np.mean(_loss[:i+1]):.5f}')
-            if np.isnan(sum(_loss)): return self._deal_nanloss()
-            self.loss_list['train'].append(np.mean(_loss)) , self.score_list['train'].append(np.mean(_score))
-
-        with self.ptimer('TrainEpoch/valid_epochs'):
-            self.net.eval()     
-            iterator = self.data.dataloaders['valid']
-            _loss , _score = np.full(len(iterator),np.nan) , np.full(len(iterator),np.nan)
-            for i , batch_data in enumerate(iterator):
-                x = self.modifier['inputs'](batch_data['x'] , batch_data , self.data)
-                # self.device.print_cuda_memory()
-                with self.ptimer('TrainEpoch/valid/forward'):
-                    pred , _ = self.net(x)
-                with self.ptimer('TrainEpoch/valid/loss'):
-                    metric = self.model_metric(batch_data['y'] , pred , 'valid' , weight = batch_data['w'])
-                    metric = self.modifier['metric'](metric, batch_data, self.data)
-                self.modifier['update'](None , batch_data , self.data)
-                _loss[i] , _score[i] = metric['loss_item'] , metric['score']
-                if getattr(iterator , 'progress_bar'): iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{np.mean(_score[:i+1]):.5f}')
-            self.loss_list['valid'].append(np.mean(_loss)) , self.score_list['valid'].append(np.mean(_score))
-        """
-        with self.ptimer('TrainEpoch/train_epochs'):
+        with self.ptimer('model_train/epoch/train'):
             self.net.train() # type:ignore
             iterator = self.data.dataloaders['train']
             _loss , _score = torch.ones(len(iterator)).fill_(torch.nan), torch.ones(len(iterator)).fill_(torch.nan)
@@ -356,7 +311,7 @@ class RunModel():
             self.loss_list['train'].append(_loss.mean()) 
             self.score_list['train'].append(_score.mean())
         
-        with self.ptimer('TrainEpoch/valid_epochs'):
+        with self.ptimer('model_train/epoch/valid'):
             self.net.eval()  # type:ignore
             iterator = self.data.dataloaders['valid']
             _loss , _score = torch.ones(len(iterator)).fill_(torch.nan), torch.ones(len(iterator)).fill_(torch.nan)
@@ -374,11 +329,11 @@ class RunModel():
         self.scheduler.step()
         self.reset_scheduler()
 
-    def LoopCondition(self):
+    def model_train_assess_status(self):
         """
         Update condition of continuing training epochs , restart attempt if early exit , proceed to next round if convergence , reset round if nan loss
         """
-        with self.ptimer('LoopCondition/assess'):
+        with self.ptimer('model_train/assess'):
             if self.cond['nan_loss']:
                 logger.error(f'Initialize a new model to retrain! Lives remaining {self.nanloss_life}')
                 self._init_variables('model')
@@ -415,7 +370,7 @@ class RunModel():
             # self.storage.save_model_state(self.net , save_targets)
             self._prints('epoch_step')
         
-        with self.ptimer('LoopCondition/confirm_status'):
+        with self.ptimer('model_train/status'):
             self.text['exit'] , self.cond['terminate'] = self._terminate_cond() #type: ignore
             if self.text['exit']:
                 if (self.epoch_i < config.train_params['trainer']['retrain'].get('min_epoch' if self.max_round <= 1 else 'min_epoch_round') - 1 and 
@@ -437,15 +392,16 @@ class RunModel():
         """
         Reset model specific variables
         """
-        self._init_variables('model')
-        dataloader_param = self.data.get_dataloader_param('test' , namespace=self)   
-        self.data.create_dataloader(*dataloader_param)
-            
-        if self.model_num == 0:
-            score_date  = np.zeros((len(self.data.model_test_dates) , len(self.test_result_model_num)))
-            score_model = np.zeros((1 , len(self.test_result_model_num)))
-            self.score_by_date  = np.concatenate([getattr(self,'score_by_date' ,np.empty((0,len(self.test_result_model_num)))) , score_date])
-            self.score_by_model = np.concatenate([getattr(self,'score_by_model',np.empty((0,len(self.test_result_model_num)))) , score_model])
+        with self.ptimer('model_test/start'):
+            self._init_variables('model')
+            dataloader_param = self.data.get_dataloader_param('test' , namespace=self)   
+            self.data.create_dataloader(*dataloader_param)
+                
+            if self.model_num == 0:
+                score_date  = np.zeros((len(self.data.model_test_dates) , len(self.test_model_num)))
+                score_model = np.zeros((1 , len(self.test_model_num)))
+                self.score_by_date  = np.concatenate([getattr(self,'score_by_date' ,np.empty((0,len(self.test_model_num)))) , score_date])
+                self.score_by_model = np.concatenate([getattr(self,'score_by_model',np.empty((0,len(self.test_model_num)))) , score_model])
                 
     def model_forecast(self):
         if not os.path.exists(self.path['target']['best']): self.model_train()
@@ -486,9 +442,8 @@ class RunModel():
                     metrics = self.model_metric('test' , outputs, batch_data , valid_sample = None)
                     test_score[i] = metrics['score']
 
-                    if hasattr(self , 'prediction'):
+                    if self.prediction is not None:
                         batch_index , batch_pred = batch_data['i'].cpu() , outputs[0].detach().cpu()
-                        assert isinstance(self.prediction , list)
                         self.prediction.append({
                             'secid' : self.data.y_secid[batch_index[:,0]] , 
                             'date'  : self.data.y_date[batch_index[:,1]] ,
@@ -504,16 +459,16 @@ class RunModel():
         """
         Do necessary things of ending a model(model_data , model_num)
         """
-        if self.model_num == config.model_num_list[-1]:
-            self.score_by_model[-1,:] = np.nanmean(self.score_by_date[-len(self.data.model_test_dates):,],axis = 0)
-            logger.info('{: <11d}'.format(self.model_date)+('{:>8.4f}'*len(self.test_result_model_num)).format(*self.score_by_model[-1,:]))
-
+        with self.ptimer('model_test/end'):
+            if self.model_num == config.model_num_list[-1]:
+                self.score_by_model[-1,:] = np.nanmean(self.score_by_date[-len(self.data.model_test_dates):,],axis = 0)
+                self._print_rst(self.model_date , self.score_by_model[-1,:] , 4)
+                
     def save_model_preds(self):
-        if not hasattr(self , 'prediction') and self.process_name != 'instance': return NotImplemented
-        assert isinstance(self.prediction , list)
-        path_output = f'{config.instance_path}/{config.model_name}_allpreds.csv'
-        for op_data in self.prediction:
-            df = pd.concat([pd.DataFrame(op_data_alist) for op_data_alist in op_data])
+        if self.prediction is None or self.process_name != 'instance': return NotImplemented
+        with self.ptimer('model_test/save_preds'):
+            path_output = f'{config.instance_path}/{config.model_name}_allpreds.csv'
+            df = pd.concat([pd.DataFrame(op_data) for op_data in self.prediction])
             df = df.pivot_table('values' , ['secid' , 'date'] , ['model'])
             with open(path_output , 'a') as f:
                 df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)   
@@ -531,7 +486,6 @@ class RunModel():
 
         # model ic presentation
         add_row_key   = ['AllTimeAvg' , 'AllTimeSum' , 'Std'      , 'TValue'   , 'AnnIR']
-        add_row_fmt   = ['{:>8.4f}'   , '{:>8.2f}'   , '{:>8.4f}' , '{:>8.2f}' , '{:>8.4f}']
         score_mean   = np.nanmean(self.score_by_date , axis = 0)
         score_sum    = np.nansum(self.score_by_date  , axis = 0) 
         score_std    = np.nanstd(self.score_by_date  , axis = 0)
@@ -540,11 +494,11 @@ class RunModel():
         add_row_value = (score_mean , score_sum , score_std , score_tvalue , score_annir)
         df = pd.DataFrame(np.concatenate([self.score_by_model , np.stack(add_row_value)]) , 
                           index   = [str(d) for d in self.data.model_date_list] + add_row_key , 
-                          columns = [f'{mn}.{o}' for mn,o in zip(self.test_result_model_num,self.test_result_output_type)])
+                          columns = [f'{mn}.{o}' for mn,o in zip(self.test_model_num , self.test_output_type)])
         df.to_csv(f'{config.model_base_path}/{config.model_name}_score_by_model.csv')
-        for i in range(len(add_row_key)):
-            logger.info('{: <11s}'.format(add_row_key[i]) + (add_row_fmt[i]*len(self.test_result_model_num)).format(*add_row_value[i]))
-        self.model_info['test_score_sum'] = {k:v for k,v in zip(df.columns , score_sum.tolist())}  # type:ignore
+        for i , digits in enumerate([4,2,4,2,4]):
+            self._print_rst(add_row_key[i] , add_row_value[i] , digits)
+        self.model_info['test_score_sum'] = {k:v for k,v in zip(df.columns , score_sum)}  # type:ignore
     
     def summary(self):
         out_dict = {
@@ -562,46 +516,6 @@ class RunModel():
             yaml.dump(out_dict , f)
         app.ptimer.print()
 
-    """     
-    def model_metric(self, label , pred , key , weight = None , valid_sample = None , penalty_kwargs={} , **kwargs):
-        '''
-        Calculate loss(with gradient), score
-        Inputs : 
-            kwargs : other inputs used in calculating loss , penalty and score
-        Possible Methods :
-        loss:    pearsonr , mse , ccc
-        penalty: hidden_orthogonality , tra_ot_penalty
-        score:  pearson , spearman , mse , ccc
-        '''
-
-        assert key in ['train' , 'valid' , 'test'] , key
-        if label.shape != pred.shape: # if more label than output
-            assert label.shape[:-1] == pred.shape[:-1] , (label.shape , pred.shape)
-            label = label.transpose(0,-1)[:pred.shape[-1]].transpose(0,-1)
-        if valid_sample is not None:
-            label , pred = label[valid_sample] , pred[valid_sample]
-            if weight is not None: weight = weight[valid_sample]
-        score_dim = lambda x:None if x is None else x.select(-1,0)
-
-        if key == 'train':
-            if self.param['num_output'] > 1:
-                loss = self.metric_function['loss'](label , pred , weight , dim = 0)[:self.param['num_output']]
-                loss = self.multiloss.calculate_multi_loss(loss , self.net.get_multiloss_params())
-            else:
-                loss = self.metric_function['loss'](score_dim(label) , score_dim(pred) , score_dim(weight))
-            
-            penalty = 0.
-            for _pen_dict in self.metric_function['penalty'].values():
-                if _pen_dict['lamb'] > 0 and _pen_dict['cond']: 
-                    penalty = penalty + _pen_dict['lamb'] * _pen_dict['func'](**penalty_kwargs)  
-            loss_item = loss.item()
-        else:
-            loss_item = loss = penalty = 0.
-
-        score = self.metric_function['score'][key](score_dim(label) , score_dim(pred) , score_dim(weight)).item()
-        return {'loss' : loss , 'loss_item' : loss_item , 'score' : score , 'penalty' : penalty}
-    """
-    
     def model_forward(self , key , batch_data):
         with self.ptimer(f'{key}/forward'):
             if hasattr(self.net , 'dynamic_data_assign'): getattr(self.net , 'dynamic_data_assign')(batch_data , self.data)
@@ -662,7 +576,11 @@ class RunModel():
             raise Exception(f'KeyError : {key}')
         
         for prt in printer:
-            if sdout is not None: prt(sdout)        
+            if sdout is not None: prt(sdout) 
+
+    def _print_rst(self , rowname , values , digits = 2):
+        fmt = 's' if isinstance(values[0] , str) else (f'd' if digits == 0 else f'.{digits}f')
+        logger.info(('{: <11s}'+('{: >8'+fmt+'}')*len(values)).format(str(rowname) , *values))
 
     def _deal_nanloss(self):
         """
@@ -706,8 +624,8 @@ class RunModel():
         return exit_text , term_cond
     
     def save_model(self , key = None , paths = None , savable_net = None):
-        if key is None or paths is None: return NotImplemented
-        if savable_net is None:
+        if key is None and paths is None: return NotImplemented # nothing to save
+        if savable_net is None: 
             savable_net = self.net
             if hasattr(savable_net,'dynamic_data_unlink'):  savable_net = getattr(savable_net , 'dynamic_data_unlink')()
 
@@ -746,16 +664,6 @@ class RunModel():
 
             self.net = self.device(self.new_model(config.model_module , self.param , self.storage.load(model_path , from_disk = True))) # type:ignore
             if hasattr(self.net , ''): getattr(self.net, 'training_round')(self.round_i)
-
-            """
-            # default : none modifier
-            # input : (inputs/metric/update , batch_data , self.data)
-            # output : new_inputs/new_metric/None 
-            self.modifier = {'inputs': lambda x,b,d:x, 'metric': lambda x,b,d:x, 'update': lambda x,b,d:None}
-            if 'modifier_inputs' in self.net.__dir__(): self.modifier['inputs'] = lambda x,b,d:self.net.modifier_inputs(x,b,d)
-            if 'modifier_metric' in self.net.__dir__(): self.modifier['metric'] = lambda x,b,d:self.net.modifier_metric(x,b,d)
-            if 'modifier_update' in self.net.__dir__(): self.modifier['update'] = lambda x,b,d:self.net.modifier_update(x,b,d)
-            """
             
     def load_swa_model(self , model_path_list = []):
         if len(model_path_list) == 0: raise Exception('empty swa input')
@@ -818,33 +726,33 @@ class RunModel():
         self.scheduler = self.load_scheduler(shd_kwargs)
         self._prints('reset_learn_rate')
     
-    @classmethod
-    def new_model(cls , module , param = {} , state_dict = None , **kwargs):
+    @staticmethod
+    def new_model(module , param = {} , state_dict = None , **kwargs):
         net = getattr(model , f'{module}')(**param)
         if state_dict: net.load_state_dict(state_dict)
         return net
 
-    @classmethod
-    def new_metricfunc(cls , params , **kwargs):
+    @staticmethod
+    def new_metricfunc(params , **kwargs):
         return {
             'loss'    : loss_function(params['loss']) , 
             'penalty' : {k:penalty_function(k,v) for k,v  in params['penalty'].items()} ,
             'score'   : {k:score_function(v)     for k,v in params['score'].items()} ,
         }
 
-    @classmethod
-    def new_multiloss(cls , params , num_output = 1 , **kwargs):
+    @staticmethod
+    def new_multiloss(params , num_output = 1 , **kwargs):
         if num_output <= 1: return None
         return multiloss_calculator(params['type'],num_output,**params['param_dict'][params['type']])
 
-    @classmethod
-    def update_metricfunc(cls , mf : dict , model_param , config , **kwargs):
+    @staticmethod
+    def update_metricfunc(mf : dict , model_param , config , **kwargs):
         mf['penalty'].get('hidden_orthogonality',{})['cond'] = config.tra_model or model_param.get('hidden_as_factors',False)
         mf['penalty'].get('tra_ot_penalty',{})['cond']       = config.tra_model
         return mf
 
-    @classmethod
-    def calculate_metrics(cls , key , metrics , label , pred , weight = None , multiloss = None , net = None ,
+    @staticmethod
+    def calculate_metrics(key , metrics , label , pred , weight = None , multiloss = None , net = None ,
                         valid_sample = None , penalty_kwargs = {} , **kwargs):
         """
         Calculate loss(with gradient), penalty , score
@@ -883,8 +791,8 @@ class RunModel():
             
         return {'loss' : loss , 'loss_item' : loss_item , 'score' : score , 'penalty' : penalty , 'losses': losses}
 
-    @classmethod
-    def new_scheduler(cls , optimizer, key = 'cycle', **kwargs):
+    @staticmethod
+    def new_scheduler(optimizer, key = 'cycle', **kwargs):
         if key == 'cos':
             scheduler = lr_cosine_scheduler(optimizer, **kwargs)
         elif key == 'step':
@@ -893,8 +801,8 @@ class RunModel():
             scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, max_lr=[pg['lr_param'] for pg in optimizer.param_groups],cycle_momentum=False,mode='triangular2',**kwargs)
         return scheduler
 
-    @classmethod
-    def new_optimizer(cls , net , key ='Adam', base_lr = 0.005, transfer = False , encoder_lr_ratio = 1., decoder_lr_ratio = 1., **kwargs):
+    @staticmethod
+    def new_optimizer(net , key ='Adam', base_lr = 0.005, transfer = False , encoder_lr_ratio = 1., decoder_lr_ratio = 1., **kwargs):
         if transfer:
             # define param list to train with different learn rate
             p_enc = [(p if p.dim()<=1 else nn.init.xavier_uniform_(p)) for x,p in net.named_parameters() if 'encoder' in x.split('.')[:3]]
@@ -910,8 +818,8 @@ class RunModel():
         }[key](net_param_groups , **kwargs)
         return optimizer
 
-    @classmethod
-    def model_params_filler(cls , x_data = {} , data_type_list = None):
+    @staticmethod
+    def model_params_filler(x_data = {} , data_type_list = None):
         if data_type_list is None: data_type_list = list(x_data.keys())
 
         filler = {}
