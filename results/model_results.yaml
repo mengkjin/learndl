@@ -733,3 +733,131 @@
   0.best: 17.256068863207474
   0.swabest: 19.893289127678145
   0.swalast: 16.734069270954933
+0_start: Wed Feb 21 19:57:09 2024
+1_basic: short+mem+float
+2_model: tra_lstm2_day(x1)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 0.8 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 9.9 Secs
+6_result:
+  0.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    AAAyLPnpMEA=
+  0.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AICbmpWFMUA=
+  0.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AEDsa4UjLEA=
+0_start: Wed Feb 21 20:39:03 2024
+1_basic: short+mem+float
+2_model: tra_lstm2_day(x1)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 0.8 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 11.2 Secs
+6_result:
+  0.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    AEB3KJB2M0A=
+  0.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AEBy820RMkA=
+  0.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AICUFaNcL0A=
+0_start: Wed Feb 21 20:42:20 2024
+1_basic: short+mem+float
+2_model: tra_lstm2_day(x1)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 0.8 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 10.8 Secs
+6_result:
+  0.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    ANCdUjyPNEA=
+  0.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AMABqHk8NEA=
+  0.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    APD1d1E7MEA=
+0_start: Wed Feb 21 20:43:26 2024
+1_basic: short+mem+float
+2_model: tra_lstm2_day(x1)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.7 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 9.8 Secs
+6_result:
+  0.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    AABjQPUCNUA=
+  0.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AMCJCP/vNEA=
+  0.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    ALD282StMkA=

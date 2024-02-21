@@ -22,7 +22,7 @@ from copy import deepcopy
 from torch.optim.swa_utils import AveragedModel , update_bn
 from scripts.util.environ import get_logger
 from scripts.util.basic import process_timer , FilteredIterator , lr_cosine_scheduler , versatile_storage
-from scripts.util.trainer import trainer_parser , train_config , set_trainer_environment , Device , MultiLosses
+from scripts.util.trainer import trainer_parser , train_config , set_trainer_environment , Device , MultiLosses , TrainConfig
 from scripts.data_util.ModelData import ModelData
 from scripts.function.basic import *
 from scripts.function.metric import loss_function,score_function,penalty_function
@@ -31,6 +31,7 @@ from scripts.nn import model
 
 do_timer = True
 logger   = get_logger()
+config   = TrainConfig()
 
 class RunModel():
     """
@@ -99,25 +100,20 @@ class RunModel():
         logger.critical(self.model_info['train_process'])
 
     def process_test(self):
-        self.model_info['test_time'] = time.time()
-        logger.critical(f'Start Process [Test Model]!')        
-        logger.warning(f'Each Model Date Testing Mean Score({config.train_params["criterion"]["score"]}):')
-        self.test_model_num = np.repeat(config.model_num_list,len(config.output_types))
-        self.test_output_type = np.tile(config.output_types,len(config.model_num_list))
-        self._print_rst('Models' , self.test_model_num , 0)
-        self._print_rst('Output' , self.test_output_type)
+
+        self.process_test_start()
+
         for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
             self.model_preparation('test')
             self.model_test()
             self.save_model_preds()
-        self.model_result()
+        self.process_test_result()
         _str = 'Finish Process [Test Model]! Cost {:.1f} Secs'.format(time.time()-self.model_info['test_time'])
         self.model_info['test_process'] = _str # type: ignore
         logger.critical(self.model_info['test_process'])
 
     def process_instance(self):
-        self.model_info['instance_time'] = time.time()
         if config.anchoring < 0:
             _text , _cond = ask_for_confirmation(f'Do you want to copy the model to instance?[yes/else no]: ' , timeout = -1)
             anchoring = all([_t.lower() in ['yes','y'] for _t in _text])
@@ -125,7 +121,6 @@ class RunModel():
             anchoring = config.anchoring > 0
 
         if anchoring:
-            self.model_info['instance_time'] = time.time()
             logger.critical(f'Start Process [Copy to Instance]!')        
             if os.path.exists(config.instance_path): 
                 logger.critical(f'Old instance {config.instance_path} exists , remove manually first to override!')
@@ -136,19 +131,16 @@ class RunModel():
         else:
             logger.critical(f'Will not copy to instance!')
             return
-        self.test_model_num = np.repeat(config.model_num_list,len(config.output_types))
-        self.test_output_type = np.tile(config.output_types,len(config.model_num_list))
         logger.warning('Copy from model to instance finished , Start going forward')
-
         # load the exact config in the instance folder
         config.reload(config_path = f'{config.instance_path}/config_train.yaml')
-
+        self.process_test_start()
         for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
             self.model_preparation('instance')
             self.model_test()
             self.save_model_preds()
-        self.model_result()
+        self.process_test_result()
         logger.critical('Finish Process [Copy to Instance]! Cost {:.1f} Secs'.format(time.time() - self.model_info['instance_time']))  
 
     def model_iter(self):
@@ -443,17 +435,6 @@ class RunModel():
                     test_score[i] = metrics['score']
 
                     self.model_preds.append_preds(batch_data , self.data , outputs , f'{self.model_num}/{op_type}')
-                    """
-                    if self.prediction is not None:
-                        batch_index , batch_pred = batch_data['i'].cpu() , outputs[0].detach().cpu()
-                        assert len(batch_index) == len(batch_pred) , (len(batch_index) , len(batch_pred))
-                        self.prediction.append({
-                            'secid' : self.data.y_secid[batch_index[:,0]] , 
-                            'date'  : self.data.y_date[batch_index[:,1]] ,
-                            'model' : f'{self.model_num}/{op_type}' ,
-                            'values': batch_pred[:,0]
-                        })
-                    """
 
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
                     if getattr(iterator , 'progress_bar'): iterator.display(f'Date {iter_dates[i]}:{test_score[l0:i+1].mean():.5f}')
@@ -482,12 +463,27 @@ class RunModel():
                 df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)   
             """
   
-    def model_result(self):
+    def process_test_start(self):
+        self.model_info[f'{self.process_name}_time'] = time.time()
+        logger.critical(f'Start Process [{self.process_name.capitalize()} Model]!')        
+        logger.warning(f'Each Model Date Testing Mean Score({config.train_params["criterion"]["score"]}):')
+
+        self.test_model_num = np.repeat(config.model_num_list,len(config.output_types))
+        self.test_output_type = np.tile(config.output_types,len(config.model_num_list))
+        self.score_by_date  = np.empty((0,len(self.test_model_num)))
+        self.score_by_model = np.empty((0,len(self.test_model_num)))
+
+        self._print_rst('Models' , self.test_model_num , 0)
+        self._print_rst('Output' , self.test_output_type)
+
+    def process_test_result(self):
         # date ic writed down
         date_step = (1 if self.process_name == 'instance' else self.data.kwarg.test_step_day)
         date_list = self.data.test_full_dates[::date_step]
         for model_num in config.model_num_list:
-            df = pd.DataFrame({'dates' : date_list} , index = map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , date_list.astype(str))) #type:ignore
+            date_str = np.array(list(map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , date_list.astype(str))))
+            df = pd.DataFrame({'dates' : date_list} , index = date_str)
+            # print(self.score_by_date.shape)
             for oi , op_type in enumerate(config.output_types):
                 df[f'score.{op_type}'] = self.score_by_date[:,model_num*len(config.output_types) + oi]
                 df[f'cum_score.{op_type}'] = np.nancumsum(self.score_by_date[:,model_num*len(config.output_types) + oi])
@@ -523,7 +519,7 @@ class RunModel():
         os.makedirs(os.path.dirname(out_path) , exist_ok=True)
         with open(out_path , 'a' if os.path.exists(out_path) else 'w') as f:
             yaml.dump(out_dict , f)
-        app.ptimer.print()
+        self.ptimer.print()
 
     def model_forward(self , key , batch_data):
         with self.ptimer(f'{key}/forward'):
@@ -920,13 +916,12 @@ sd_step = deepcopy(net.state_dict())
 
 """
 
-if __name__ == '__main__':
-    try:
-        parser = trainer_parser().parse_args()
-    except:
-        parser = trainer_parser().parse_args(args=[])
+def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser = None):
+    if parser is None:
+        input = {'process':process,'rawname':rawname,'resume':resume,'anchoring':anchoring}
+        parser = trainer_parser(input).parse_args(args=[])
 
-    config = train_config(parser = parser , do_process = True)
+    config.replace(train_config(parser = parser , do_process = True))
     set_trainer_environment(config)
 
     if not config.short_test:
@@ -940,4 +935,8 @@ if __name__ == '__main__':
     app = RunModel(timer = do_timer , storage_type = config.storage_type , device = config.device)
     app.main_process()
     app.summary()
+
+if __name__ == '__main__':
+    parser = trainer_parser().parse_args()
+    main(parser = parser)
  

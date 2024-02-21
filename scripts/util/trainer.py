@@ -21,7 +21,8 @@ class TrainConfig(SimpleNamespace):
     def items(self):
         return self.__dict__.items()
     def replace(self , new_config):
-        for k in self.keys(): delattr(self,k)
+        old_keys = list(self.keys())
+        for k in old_keys: delattr(self,k)
         for k,v in new_config.items(): setattr(self,k,v)
     def reload(self , config_path = ''):
         if os.path.exists(config_path):
@@ -37,10 +38,10 @@ class TrainConfig(SimpleNamespace):
         if keys is None: keys = self.items()
         return {k:self.get(k) for k in keys}
 
-def trainer_parser(input = {} , default = -1 , description='manual to this script'):
+def trainer_parser(input = {} , description='manual to this script'):
     parser = argparse.ArgumentParser(description=description)
     for arg in ['process' , 'rawname' , 'resume' , 'anchoring']:
-        parser.add_argument(f'--{arg}', type=int, default = default if input.get(arg) is None else input.get(arg))
+        parser.add_argument(f'--{arg}', type=int, default = input.get(arg , -1))
     return parser
 
 def set_trainer_environment(config , manual_random_seed = None):
