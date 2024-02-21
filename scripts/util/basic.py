@@ -183,7 +183,10 @@ class versatile_storage():
     
     def save_model_state(self , model , paths , to_disk = False , group = 'default'):
         if isinstance(model , torch.nn.Module):
-            sd = model.state_dict() if (self.default == 'disk' or to_disk) else deepcopy(model).cpu().state_dict()
+            if self.default == 'disk' or to_disk:
+                sd = model.state_dict() 
+            else:
+                sd = deepcopy(model).cpu().state_dict()
         elif isinstance(model , dict):
             sd = model
         self.save(sd , paths , to_disk , group)

@@ -22,8 +22,7 @@ from copy import deepcopy
 from torch.optim.swa_utils import AveragedModel , update_bn
 from scripts.util.environ import get_logger
 from scripts.util.basic import process_timer , FilteredIterator , lr_cosine_scheduler , versatile_storage
-from scripts.util.multiloss import multiloss_calculator 
-from scripts.util.trainer import trainer_parser , train_config , set_trainer_environment , Device
+from scripts.util.trainer import trainer_parser , train_config , set_trainer_environment , Device , MultiLosses
 from scripts.data_util.ModelData import ModelData
 from scripts.function.basic import *
 from scripts.function.metric import loss_function,score_function,penalty_function
@@ -168,7 +167,8 @@ class RunModel():
         with self.ptimer('model_preparation' , process):
             param = config.model_params[self.model_num]
 
-            self.prediction = [] if config.get('output_prediction') or self.process_name == 'instance' else None
+            self.model_preds = self.ModelPreds(config.get('output_prediction') or self.process_name == 'instance')
+            # self.prediction = [] if config.get('output_prediction') or self.process_name == 'instance' else None
             # In a new model , alters the penalty function's lamb
             self.metric_function = self.update_metricfunc(self.metric_function , param , config)
 
@@ -442,14 +442,18 @@ class RunModel():
                     metrics = self.model_metric('test' , outputs, batch_data , valid_sample = None)
                     test_score[i] = metrics['score']
 
+                    self.model_preds.append_preds(batch_data , self.data , outputs , f'{self.model_num}/{op_type}')
+                    """
                     if self.prediction is not None:
                         batch_index , batch_pred = batch_data['i'].cpu() , outputs[0].detach().cpu()
+                        assert len(batch_index) == len(batch_pred) , (len(batch_index) , len(batch_pred))
                         self.prediction.append({
                             'secid' : self.data.y_secid[batch_index[:,0]] , 
                             'date'  : self.data.y_date[batch_index[:,1]] ,
                             'model' : f'{self.model_num}/{op_type}' ,
                             'values': batch_pred[:,0]
                         })
+                    """
 
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
                     if getattr(iterator , 'progress_bar'): iterator.display(f'Date {iter_dates[i]}:{test_score[l0:i+1].mean():.5f}')
@@ -465,13 +469,18 @@ class RunModel():
                 self._print_rst(self.model_date , self.score_by_model[-1,:] , 4)
                 
     def save_model_preds(self):
-        if self.prediction is None or self.process_name != 'instance': return NotImplemented
+        #if self.prediction is None: return NotImplemented
         with self.ptimer('model_test/save_preds'):
-            path_output = f'{config.instance_path}/{config.model_name}_allpreds.csv'
+            self.model_preds.export_preds(f'{config.instance_path}/{config.model_name}_allpreds.csv')
+
+            """
             df = pd.concat([pd.DataFrame(op_data) for op_data in self.prediction])
             df = df.pivot_table('values' , ['secid' , 'date'] , ['model'])
+            
+            path_output = f'{config.instance_path}/{config.model_name}_allpreds.csv'
             with open(path_output , 'a') as f:
                 df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)   
+            """
   
     def model_result(self):
         # date ic writed down
@@ -725,6 +734,31 @@ class RunModel():
             shd_kwargs = None
         self.scheduler = self.load_scheduler(shd_kwargs)
         self._prints('reset_learn_rate')
+
+    class ModelPreds:
+        def __init__(self , turn_on = False) -> None:
+            self.turn_on = turn_on
+            self.pred_list = []
+        def append_preds(self , batch_data , model_data , outputs , model_name):
+            if not self.turn_on: return NotImplemented
+            batch_index = batch_data['i'].cpu()
+            batch_pred = outputs[0].detach().cpu()
+            assert len(batch_index) == len(batch_pred) , (len(batch_index) , len(batch_pred))
+            self.pred_list.append({
+                'secid' : model_data.y_secid[batch_index[:,0]] , 
+                'date'  : model_data.y_date[batch_index[:,1]] ,
+                'model' : model_name ,
+                'values': batch_pred[:,0] ,
+            })
+        def export_preds(self , path):
+            if not self.turn_on: return NotImplemented
+            df = pd.concat([pd.DataFrame(op_data) for op_data in self.pred_list] , axis=0)
+            df = df.pivot_table('values' , ['secid' , 'date'] , ['model'])
+            with open(path , 'a') as f:
+                df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)   
+            del self.pred_list
+            self.pred_list = []
+            gc.collect()
     
     @staticmethod
     def new_model(module , param = {} , state_dict = None , **kwargs):
@@ -743,7 +777,7 @@ class RunModel():
     @staticmethod
     def new_multiloss(params , num_output = 1 , **kwargs):
         if num_output <= 1: return None
-        return multiloss_calculator(params['type'],num_output,**params['param_dict'][params['type']])
+        return MultiLosses(params['type'],num_output,**params['param_dict'][params['type']])
 
     @staticmethod
     def update_metricfunc(mf : dict , model_param , config , **kwargs):

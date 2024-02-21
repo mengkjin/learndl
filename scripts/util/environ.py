@@ -39,7 +39,6 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
             return self._level_formatters[record.levelno].format(record)
         return super(_LevelColorFormatter, self).format(record)
 
-    
 def get_logger(test_output = False):
     config_logger = get_config('logger')
     config_logger['file']['param']['filename'] = '/'.join([DIR_logs,config_logger['file']['param']['filename']])

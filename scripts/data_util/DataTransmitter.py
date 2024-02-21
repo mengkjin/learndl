@@ -3,11 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 from ..util.environ import DIR_data
-
-try:
-    from .DataTank import *
-except:
-    from DataTank import *
+from .DataTank import Data1D , DataTank
 
 def get_path_date(path , startswith = '' , endswith = ''):
     if isinstance(path , (list,tuple)):
@@ -275,7 +271,7 @@ def get_trade_min(date , tol = 1e-8 , **kwargs):
     df = df.sort_values(['secid','minute'])
     return Data1D(src=df)
 
-def get_labels(date : (int,str) , days : int , lag1 : bool , tol = 1e-8 , **kwargs):
+def get_labels(date , days , lag1 , tol = 1e-8 , **kwargs):
     path_param = {
         'id'  : f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/1_basic_info/wind_id' ,
         'res' : f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
@@ -284,11 +280,11 @@ def get_labels(date : (int,str) , days : int , lag1 : bool , tol = 1e-8 , **kwar
     }
 
     _files = {k:get_directory_files(v) for k , v in path_param.items()}
-    _dates = {k:get_path_date(v) for k , v in _files.items()}
     for v in _files.values(): v.sort()
+    _dates = {k:get_path_date(v) for k , v in _files.items()}
 
-    pos = list(_dates['id']).index(date)
-    if pos + lag1 + days >= len(_dates['id']): 
+    pos = list(_dates['id']).index(date) #type: ignore
+    if pos + lag1 + days >= len(_dates['id']): #type: ignore
         return unfetched_data()
     if os.path.exists(path_param['res']+'/'+os.path.basename(path_param['res'])+f'_{date}.Rdata') == 0: 
         return unfetched_data()
@@ -296,7 +292,7 @@ def get_labels(date : (int,str) , days : int , lag1 : bool , tol = 1e-8 , **kwar
     f_read = lambda k,d,p='':pyreadr.read_r(path_param[k]+'/'+os.path.basename(path_param[k])+f'_{d}.Rdata')['data'].rename(columns={'data':k+p})
     wind_id = f_read('id',date)
 
-    d0 , d1 = _dates['id'][pos + lag1] , _dates['id'][pos + lag1 + days]
+    d0 , d1 = _dates['id'][pos + lag1] , _dates['id'][pos + lag1 + days] #type: ignore
     cp0 = pd.concat([f_read('id',d0),f_read('cp',d0,'0'),f_read('adj',d0,'0')]  , axis = 1)
     cp1 = pd.concat([f_read('id',d1),f_read('cp',d1,'1'),f_read('adj',d1,'1')]  , axis = 1)
 
@@ -304,8 +300,8 @@ def get_labels(date : (int,str) , days : int , lag1 : bool , tol = 1e-8 , **kwar
     rtn['rtn'] = rtn['adj1'] * rtn['cp1'] / rtn['adj0'] / rtn['cp0'] - 1
     rtn = rtn.loc[:,['id','rtn']]
 
-    res_pos = list(_dates['res']).index(d0)
-    res_dates = [_dates['res'][res_pos + i] for i in range(days)]
+    res_pos = list(_dates['res']).index(d0) #type: ignore
+    res_dates = [_dates['res'][res_pos + i] for i in range(days)] #type: ignore
     res = wind_id
     for i , di in enumerate(res_dates): 
         res = res.merge(pd.concat([f_read('id',di),f_read('res',di,str(i))],axis=1),how='left',on='id')
@@ -411,7 +407,7 @@ def get_trade_Xmin(date , x_minute , src_updater = None , tol = 1e-8 , **kwargs)
     data = None
     inner_path = f'minute/trade/{date}'
     if isinstance(src_updater , DataTank):
-        for key in src_updater.keys():
+        for key in src_updater.keys(): #type: ignore
             if (os.path.basename(key).startswith('DB_trade_min') and 
                 src_updater.get_object(f'{key}/{inner_path}') is not None): 
                 data = src_updater.read_data1D(f'{key}/{inner_path}')

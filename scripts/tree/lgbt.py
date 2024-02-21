@@ -147,7 +147,7 @@ class lgbm():
     
     def dataset_prepare(self , weight_param = None):
         weight_param = self.weight_param if weight_param is None else weight_param
-        x_train, x_valid = self.raw_dataset['train'].loc[:,self.features], self.raw_dataset['valid'].loc[:,self.features]
+        x_train, x_valid = self.raw_dataset['train'].loc[:,self.features], self.raw_dataset['valid'].loc[:,self.features] # type: ignore
         y_train, y_valid = self.raw_dataset['train'].iloc[:,-1], self.raw_dataset['valid'].iloc[:,-1]
         assert y_train.values.ndim == 1 , "XGBoost doesn't support multi-label training"
         w_train, w_valid = pd.DataFrame(1,index=y_train.index,columns=[y_train.name]) , pd.DataFrame(1,index=y_valid.index,columns=[y_valid.name])
@@ -155,8 +155,8 @@ class lgbm():
             w_train = self.weight_top_return(y_train,weight_param.get('tau'),w_train)
             w_valid = self.weight_top_return(y_valid,weight_param.get('tau'),w_valid)
         if 'time' in weight_param.keys():
-            w_train = self.weight_time_decay(y_train,weight_param.get('time'),weight_param.get('rate'),w_train)
-            w_valid = self.weight_time_decay(y_valid,weight_param.get('time'),weight_param.get('rate'),w_valid)
+            w_train = self.weight_time_decay(y_train,weight_param.get('time'),weight_param.get('rate'),w_train) # type: ignore
+            w_valid = self.weight_time_decay(y_valid,weight_param.get('time'),weight_param.get('rate'),w_valid) # type: ignore
 
         self.train_dataset = lgb.Dataset(x_train, y_train, weight=w_train.iloc[:,0])
         self.valid_dataset = lgb.Dataset(x_valid, y_valid, weight=w_valid.iloc[:,0] , reference=self.train_dataset)
@@ -189,7 +189,7 @@ class lgbm():
         if show_plot: self.plot_training()
         
     def test_prediction(self , show_plot = True):
-        pred = pd.Series(self.model.predict(self.raw_dataset['test'].loc[:,self.features]), index=self.raw_dataset['test'].index)
+        pred = pd.Series(self.model.predict(self.raw_dataset['test'].loc[:,self.features]),index=self.raw_dataset['test'].index) # type: ignore
         ic, ric = self.calc_ic(pred, self.raw_dataset['test'].iloc[:,-1], dropna=True)
         if show_plot: 
             plt.figure()
@@ -247,7 +247,7 @@ class lgbm():
     
     def plot_sdt(self , group='train'):
         x = self.raw_dataset[group].iloc[:,:-1] 
-        y_pred = pd.Series(self.model.predict(x.values), index=x.index) 
+        y_pred = pd.Series(self.model.predict(x.values), index=x.index)  # type: ignore
         dtrain = lgb.Dataset(x, label=y_pred)
         _params = copy.deepcopy(self.train_param)
         del _params['early_stopping']
@@ -272,7 +272,7 @@ class lgbm():
             pdp = np.zeros_like(x_range)
             for i, c in enumerate(x_range):
                 x.loc[:,feature] = c
-                pdp[i] = self.model.predict(x.values).mean()
+                pdp[i] = self.model.predict(x.values).mean() # type: ignore
 
             # plotPDP
             plt.figure()
@@ -325,7 +325,7 @@ if __name__ == '__main__':
 
 
     # %%
-    a = lgbm(**dict_df)
+    a = lgbm(**dict_df) # type: ignore
     a.train_model()
 
     # %%

@@ -4,13 +4,13 @@ import torch.nn as nn
 class mod_atf(nn.Module):
     def __init__(
         self , 
-        input_dim: int = 6,
-        hidden_dim: int = 2 ** 5,
-        num_blocks: int = 3,
-        num_heads: int = 4,
-        d_ff: int = None,
-        d_selfatt: int = None,
-        dropout: float = 0.,
+        input_dim = 6,
+        hidden_dim = 2 ** 5,
+        num_blocks = 3,
+        num_heads = 4,
+        d_ff = None,
+        d_selfatt = None,
+        dropout = 0.,
         input_shape = None,
         **kwargs,
     ):
@@ -47,9 +47,9 @@ class mod_atf(nn.Module):
     
     def MyATF_masks(
         self,
-        gaussian_prior_param: int = [5,10,20,40],
-        trading_gap_splitter_window: int = [16,80,1000],
-        max_len: int = 60 * 16,
+        gaussian_prior_param = [5,10,20,40],
+        trading_gap_splitter_window = [16,80,1000],
+        max_len = 60 * 16,
         **kwargs,
     ):
         # Define the masks
@@ -57,11 +57,11 @@ class mod_atf(nn.Module):
         # 4-D mask : num_blocks , num_head * batch_size(1 if not gaussian_prior) , seq_len , seq_len
         # first check if ATF_masking_param exists, if so use its elements to replace default ones
         mask_dict = {'causal':True,'gaussian':False,'tradegap':False} 
-        if kwargs.get('ATF_mask') is not None: mask_dict.update(kwargs.get('ATF_mask'))
+        if kwargs.get('ATF_mask') is not None: mask_dict.update(kwargs.get('ATF_mask')) # type: ignore
         
         batch_size = 10000
         SEQ_LEN = 30
-        seq_len = max(max_len , max(SEQ_LEN)) if kwargs.get('sequence_len') is None else kwargs.get('sequence_len')
+        seq_len = max(max_len , SEQ_LEN) if kwargs.get('sequence_len') is None else kwargs.get('sequence_len' , 1)
         causal_mask , gaussian_mask , tradegap_mask = None , None , None
         if self.input_shape is not None:
             batch_size , seq_len = self.input_shape[0] , self.input_shape[1]
@@ -76,7 +76,7 @@ class mod_atf(nn.Module):
 
             if mask_dict.get('gaussian'):
                 # expand prior_param if num_heads too much
-                gpp = (gaussian_prior_param + torch.zeros(self.num_heads,dtype=int).tolist())[:self.num_heads]
+                gpp = (gaussian_prior_param + torch.zeros(self.num_heads,dtype=torch.int).tolist())[:self.num_heads]
                 _a = torch.arange(1,seq_len+1).repeat(seq_len).reshape(seq_len,-1)
                 _b = torch.tril(torch.ones(seq_len,seq_len))
                 m2 = torch.stack([torch.exp(-torch.pow(_a - _a.t(),2)/2/d**2).nan_to_num() * _b for d in gpp])
@@ -84,7 +84,7 @@ class mod_atf(nn.Module):
 
             if mask_dict.get('tradegap'):
                 # expand trading_gap_splitter_window if num_blocks too much
-                tgsw = (trading_gap_splitter_window + 1000*torch.ones(self.num_blocks,dtype=int).tolist())[:self.num_blocks]
+                tgsw = (trading_gap_splitter_window + 1000*torch.ones(self.num_blocks,dtype=torch.int).tolist())[:self.num_blocks]
                 m3 = torch.zeros(self.num_blocks,1,seq_len,seq_len).fill_(-1e6)
                 for i_block , sub_len in enumerate(tgsw):
                     for sub_start in range(0,seq_len,sub_len): 

@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import h5py , time , traceback
 from ..data_util.ModelData import DataBlock
 from ..data_util.DataTank import DataTank
-from ..util.environ import get_logger,DEVICE,DIR_data
+from ..util.environ import get_logger,DIR_data
+from ..util.trainer import Device
 from ..function.basic import *
 from datetime import datetime,timedelta
 
@@ -18,7 +19,8 @@ save_path = f'{DIR_data}/block_data/X_top_similarity.npz'
 
 class matrix_factorization():
     def __init__(self , m , learn_rates = [0.1,0.05,0.01,0.005,0.001]):
-        self.mat = m.to(DEVICE)
+        self.device = Device()
+        self.mat  = self.device(m)
         self.nrow = m.shape[0]
         self.ncol = m.shape[1]
         self.learn_rates = learn_rates
@@ -27,13 +29,13 @@ class matrix_factorization():
         self.mod = []
         self.losses = []
         for learn_rate in self.learn_rates:
-            mod = self.factor_module((self.nrow , self.ncol , nfeat)).to(DEVICE)
+            mod = self.device(self.factor_module((self.nrow , self.ncol , nfeat)))
             criterion = nn.MSELoss(reduction = 'sum')
-            optimizer = torch.optim.Adam(mod.parameters(), lr = learn_rate)
+            optimizer = torch.optim.Adam(mod.parameters(), lr = learn_rate) #type: ignore
 
             losses = []  
             for epoch in range(num_epochs):
-                output , theta = mod()
+                output , theta = mod() # type: ignore
                 loss = criterion(output, self.mat) + ltheta * theta
 
                 optimizer.zero_grad()
@@ -103,7 +105,7 @@ class fund_stock():
 
     def load_port(self , date):
         with h5py.File(self.port_file , mode='r') as file:
-            tb = pd.DataFrame(file[str(date)][:])
+            tb = pd.DataFrame(file[str(date)][:]) #type: ignore
 
         tb.columns = ['fund_id','secid','weight']
         tb.fund_id = [self._IDconvert(s) for s in tb.fund_id]
@@ -127,8 +129,8 @@ class fund_stock():
         tb = pd.concat([pd.DataFrame({'fund_id':target_fund_id,'secid':target_secid[0],'weight':0.,}) ,
                         pd.DataFrame({'fund_id':target_fund_id[0],'secid':target_secid,'weight':0.,}) , 
                         tb, ])
-        self.wide_table = tb.pivot_table('weight','fund_id','secid',aggfunc='sum',fill_value=0.
-                                         ).loc[target_fund_id,target_secid]
+        self.wide_table = tb.pivot_table('weight','fund_id','secid',aggfunc='sum',fill_value=0.)
+        self.wide_table = self.wide_table.loc[target_fund_id,target_secid] #type: ignore
         assert np.array_equal(self.wide_table.columns.tolist() , target_secid)
         assert np.array_equal(self.wide_table.index.tolist() , target_fund_id)
         self.factorize(self.nfeat , self.print_process)
@@ -169,10 +171,9 @@ class dynamic_market_state():
             trade_calendar = self.calendar.loc[lambda x:(x.trade > 0)].calendar.to_numpy()
             trade_calendar = trade_calendar[(trade_calendar >= self.start_dt) * (trade_calendar <= self.end_dt) > 0]
 
-            valid_date = np.array(list(dtank_trade.get_object('/day/trade').keys())).astype(int)
+            valid_date = np.array(list(dtank_trade.get_object('/day/trade').keys())).astype(int) #type:ignore
             valid_date = np.intersect1d(valid_date , trade_calendar)
-            df_list = {str(date):dtank_trade.read_data1D(f'/day/trade/{date}',feature='pctchange'
-                                            ).to_dataframe().reset_index() for date in valid_date}
+            df_list = {str(date):dtank_trade.read_data1D(f'/day/trade/{date}',feature='pctchange').to_dataframe().reset_index() for date in valid_date}  #type:ignore
             for date , df in df_list.items(): df.insert(0,'date',int(date))
             df = pd.concat(df_list.values())
             df['pctchange'] = df['pctchange'] / 100
@@ -192,7 +193,8 @@ class dynamic_market_state():
         except:
             traceback.print_exc()
         finally:
-            dtank_info.close() , dtank_trade.close()
+            dtank_info.close() 
+            dtank_trade.close()
     
     def update_top_sec(self , func = None):
         self.top_sec = self._default_top_sec if func is None else func
@@ -214,7 +216,7 @@ class dynamic_market_state():
         
         if (self.port_date is not None):
             old_port_date = self.port_date[np.isin(self.port_date , port_date)]
-            old_port_factors = self.port_factors[:,np.isin(self.port_date , port_date)]
+            old_port_factors = self.port_factors[:,np.isin(self.port_date , port_date)]  #type:ignore
             
             new_port_date = np.append(old_port_date , new_port_date)
             new_port_factors = np.concatenate((old_port_factors , new_port_factors) , axis=1)
@@ -228,14 +230,14 @@ class dynamic_market_state():
         if start_dt is not None: date_range = date_range[date_range >= start_dt]
         if end_dt   is not None: date_range = date_range[date_range <= end_dt]
         
-        self.market_top_state = np.tile(np.nan , (len(date_range) , *self.port_factors.shape[2:]))
+        self.market_top_state = np.tile(np.nan , (len(date_range) , *self.port_factors.shape[2:]))  #type:ignore
         self.top_similarity = np.tile(np.nan , (len(self.secid) , len(date_range)))
         for i , d in enumerate(date_range):
             j1 , j2 = np.where(self.trade_date == d)[0] , np.where(self.port_date <= d)[0]
             if len(j1) * len(j2) != 0:
                 top_sec = self.top_sec(self.day_yield[:,j1].flatten())
-                self.market_top_state[i] = np.nanmean(self.port_factors[top_sec][:,j2.max()],axis=0)
-                self.top_similarity[:,i] = (self.market_top_state[i] * self.port_factors[:,j2.max()]).sum(axis=1)
+                self.market_top_state[i] = np.nanmean(self.port_factors[top_sec][:,j2.max()],axis=0)  #type:ignore
+                self.top_similarity[:,i] = (self.market_top_state[i] * self.port_factors[:,j2.max()]).sum(axis=1)  #type:ignore
         self.state_date = date_range
         
 def main(start_dt = None , end_dt = None):
@@ -253,7 +255,7 @@ def main(start_dt = None , end_dt = None):
     dms.calculate_market_state(start_dt=start_dt , end_dt = end_dt)
     values = dms.top_similarity if len(dms.top_similarity.shape) == 3 else dms.top_similarity[:,:,None]
     block = DataBlock(values , dms.secid , dms.state_date , 'top_similarity')
-    block.save_npz(save_path)
+    block.save(save_path)
     
     t2 = time.time()
     logger.critical('top_similarity Factor Calculating Finished! Cost {:.2f} Seconds'.format(t2-t1))

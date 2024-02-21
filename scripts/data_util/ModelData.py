@@ -985,7 +985,7 @@ def block_mask(data_block , mask = True , after_ipo = 91 , **kwargs):
         add_df = pd.DataFrame({
                  'secid':np.setdiff1d(data_block.secid , desc['secid']) ,
                  'list_dt':21991231 , 'delist_dt':21991231})
-        desc = pd.concat([desc,add_df]).reset_index(drop=True)
+        desc = pd.concat([desc,add_df],axis=0).reset_index(drop=True)
 
     desc = desc.sort_values('list_dt',ascending=False).drop_duplicates(subset=['secid'],keep='first').set_index('secid') 
     secid , date = data_block.secid , data_block.date
@@ -1003,8 +1003,7 @@ def block_mask(data_block , mask = True , after_ipo = 91 , **kwargs):
 
 def block_hist_norm(data_block , key , 
                     start_dt = None , end_dt = 20161231 , 
-                    step_day = 5 , 
-                    save_path = None , **kwargs):
+                    step_day = 5 , save_path = None , **kwargs):
     if not key.startswith(('x_trade','trade','day','15m','min','30m','60m','week')): 
         return None
     
@@ -1083,4 +1082,3 @@ def _alias_search(path , key):
             return path.format(alias)
     raise Exception(path.format(key)) 
     
-

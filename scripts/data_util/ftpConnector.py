@@ -37,4 +37,4 @@ class ftp_connector(object):
 
 connector = ftp_connector()
 df = connector.open_file('/StockFactor_cier/cier.csv')
-df
+print(df)

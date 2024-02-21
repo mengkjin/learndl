@@ -7,12 +7,9 @@ import pandas as pd
 import numpy as np
 import os , time
 import platform
-try:
-    from .DataTank import *
-    from .DataUpdater import *
-except:
-    from DataTank import *
-    from DataUpdater import *
+from .DataTank import DataTank , Data1D
+from .DataUpdater import get_date_groups,get_db_file,get_date_groups,get_db_path,outer_path_join,get_date_groups
+
 
 # %%
 connect_dict = {
@@ -106,7 +103,7 @@ class online_sql_connector():
         if not isinstance(srcs , (list,tuple)): srcs = [srcs]
         for src in srcs:
             if self.connections.get(src) is not None:
-                self.connections.get(src).close()
+                self.connections[src].close()
             self.connections[src] = self.engines[src].connect()
 
     def close_all(self):
@@ -178,8 +175,10 @@ class online_sql_connector():
         if src not in self.connections.keys(): self.create_connections(src)
         try:
             if src == 'kaiyuan':
+                assert isinstance(query , dict) , query
                 df = {k:pd.read_sql_query(q , self.connections[src]) for k,q in query.items()}
             else:
+                assert isinstance(query , str) , query
                 df = pd.read_sql_query(query , self.connections[src])
         except exc.ResourceClosedError:
             print(f'{src} Connection is closed, re-connect')
@@ -187,6 +186,7 @@ class online_sql_connector():
             if src == 'kaiyuan':
                 pass
             else:
+                assert isinstance(query , str) , query
                 df = pd.read_sql_query(query , self.connections[src])
         except:
             raise Exception
@@ -236,9 +236,9 @@ class online_sql_connector():
         start_dt = int(self.data_start_dt[src][query_type])
         old_dates = sorted(np.array(self.old_dtank_dates(db_path , src , query_type)).astype(int))
         if trace > 0: old_dates = old_dates[:-trace]
-        if len(old_dates): start_dt = max(start_dt , self.date_offset(old_dates[-1],1,astype=int))
+        if len(old_dates): start_dt = max(start_dt , self.date_offset(old_dates[-1],1,astype=int)) #type: ignore
         end_dt = min(99991231 , int(date.today().strftime('%Y%m%d')))
-        if end_dt < start_dt: return
+        if end_dt < start_dt: return []
         
         freq = 'Q'
         date_segs = self.date_seg(start_dt , end_dt , freq = freq)
@@ -294,9 +294,9 @@ class online_sql_connector():
         for sub_path in os.listdir(db_path):
             dtank = DataTank(outer_path_join(db_path , sub_path) , 'r')
             portal = dtank.get_object([src , query_type])
-            if portal is not None and len(portal.keys()) > 0:
-                portal_dt = np.array(list(portal.keys()))
-                portal_dt_valid = np.array([dtank.is_Data1D(portal[pdt]) for pdt in portal_dt])
+            if portal is not None and len(portal.keys()) > 0: #type: ignore
+                portal_dt = np.array(list(portal.keys())) #type: ignore
+                portal_dt_valid = np.array([dtank.is_Data1D(portal[pdt]) for pdt in portal_dt]) #type: ignore
                 dates = [*dates , *portal_dt[portal_dt_valid]]
             dtank.close()
         return dates
@@ -340,9 +340,9 @@ class online_sql_connector():
             is_scalar = True
             new_date = pd.DatetimeIndex([str(date)])
         if offset == 0:
-            new_date = new_date.strftime('%Y%m%d')
+            new_date = new_date.strftime('%Y%m%d') #type: ignore
         else:
-            new_date = (new_date + pd.DateOffset(offset)).strftime('%Y%m%d')
+            new_date = (new_date + pd.DateOffset(offset)).strftime('%Y%m%d') #type: ignore
         new_date = new_date.astype(astype)
         return new_date[0] if is_scalar else new_date.values
 

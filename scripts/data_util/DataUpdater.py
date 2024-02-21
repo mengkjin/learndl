@@ -4,13 +4,13 @@ import os , time
 import traceback
 import socket , platform
 from ..util.environ import DIR_data
-
-try:
-    from .DataTank import *
-    from .DataTransmitter import *
-except:
-    from DataTank import *
-    from DataTransmitter import *
+from .DataTank import DataTank,copy_tree
+from .DataTransmitter import (unfetched_data,
+                                read_risk_model,read_alpha_longcl,
+                                get_basic_information,get_labels,
+                                get_trade_day,get_trade_Xday,
+                                get_trade_min,get_trade_Xmin,
+                                get_directory_files,get_path_date)
 
 # %%
 do_updater = True
@@ -102,7 +102,8 @@ class DataUpdater():
                 'stock/st'         : {'__information__': 'st treatment of stocks'},
                 'stock/industry'   : {'__information__': 'SW 2021 industry criterion'},
                 'stock/concepts'   : {'__information__': 'wind concepts'},}
-            [param.update({'__data_func__':get_basic_information,'compress':True}) for param in db_update_params.values()]
+            for k in db_update_params.keys():
+                db_update_params[k].update({'__data_func__':get_basic_information,'compress':True}) #type:ignore
         elif key == 'models':
             db_update_params = {
                 'risk_model/exposure' : {
@@ -306,7 +307,7 @@ def get_target_dates(db_path , inner_path):
     for db_basename in os.listdir(db_path):
         with DataTank(outer_path_join(db_path , db_basename) , 'r') as dtank:
             portal = dtank.get_object(inner_path)
-            if portal is not None: old_keys.append(list(portal.keys()))
+            if portal is not None: old_keys.append(list(portal.keys())) # type: ignore
     if len(old_keys) == 0:
         target_dates = np.array([])
     else:
@@ -357,7 +358,7 @@ def dump_updater(updater , print_tree = print_tree , key_order = []):
         try:
             dtank = DataTank(true_path ,  'r+' if copy_mode else 'r')
             if copy_mode: 
-                copy_tree(updater , db_path , dtank , '.' , print_pre = f'{os.path.basename(updater.filename)} > ')
+                copy_tree(updater , db_path , dtank , '.' , print_pre = f'{os.path.basename(str(updater.filename))} > ')
             if print_tree:
                 print(f'Current {db_path} Tree:')
                 dtank.print_tree()

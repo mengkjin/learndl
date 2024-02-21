@@ -13,9 +13,9 @@ def date_offset(date , offset = 0 , astype = int):
         is_scalar = True
         new_date = pd.DatetimeIndex([str(date)])
     if offset == 0:
-        new_date = new_date.strftime('%Y%m%d')
+        new_date = new_date.strftime('%Y%m%d') #type:ignore
     else:
-        new_date = (new_date + pd.DateOffset(offset)).strftime('%Y%m%d')
+        new_date = (new_date + pd.DateOffset(offset)).strftime('%Y%m%d') #type:ignore
     new_date = new_date.astype(astype)
     return new_date[0] if is_scalar else new_date.values
 

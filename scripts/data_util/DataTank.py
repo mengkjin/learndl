@@ -5,32 +5,30 @@ import random, string , os , time
 import inspect , traceback
 
 def index_intersect(idxs , min_value = None , max_value = None):
-    new_idx = None
-    for idx in idxs:
-        if new_idx is None or idx is None:
+    for i , idx in enumerate(idxs):
+        if i == 0 or idx is None or new_idx is None:
             new_idx = new_idx if idx is None else idx
         else:
             new_idx = np.intersect1d(new_idx , idx)
     if min_value is not None: new_idx = new_idx[new_idx >= min_value]
     if max_value is not None: new_idx = new_idx[new_idx <= max_value]
     new_idx = np.sort(new_idx)
-    inter   = [None if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
-    pos_new = tuple([None if v is None else v[1] for v in inter])
-    pos_old = tuple([None if v is None else v[2] for v in inter])
+    inter   = [np.array([]) if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
+    pos_new = tuple(np.array([]) if v is None else v[1] for v in inter)
+    pos_old = tuple(np.array([]) if v is None else v[2] for v in inter)
     return new_idx , pos_new , pos_old
 
 def index_union(idxs , min_value = None , max_value = None):
-    new_idx = None
-    for idx in idxs:
-        if new_idx is None or idx is None:
+    for i , idx in enumerate(idxs):
+        if i == 0 or idx is None or new_idx is None:
             new_idx = new_idx if idx is None else idx
         else:
             new_idx = np.union1d(new_idx , idx)
     if min_value is not None: new_idx = new_idx[new_idx >= min_value]
     if max_value is not None: new_idx = new_idx[new_idx <= max_value]
-    inter   = [None if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
-    pos_new = tuple([None if v is None else v[1] for v in inter])
-    pos_old = tuple([None if v is None else v[2] for v in inter])
+    inter   = [np.array([]) if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
+    pos_new = tuple(np.array([]) if v is None else v[1] for v in inter)
+    pos_old = tuple(np.array([]) if v is None else v[2] for v in inter)
     return new_idx , pos_new , pos_old
 
 def _update_rcv(old_rowcolval , upd_rowcolval , replace = False , all_within = False , all_without = False):
@@ -43,8 +41,8 @@ def _update_rcv(old_rowcolval , upd_rowcolval , replace = False , all_within = F
     if replace: return upd_row , upd_col , upd_val
 
     in_row , in_col = np.isin(upd_row , old_row) , np.isin(upd_col , old_col)
-    if all_within:  assert all(all(in_row) , all(in_col))
-    if all_without: assert not any(any(in_row) , any(in_col))
+    if all_within:  assert all(in_row) and all(in_col)
+    if all_without: assert (not any(in_row)) and (not any(in_col))
 
     new_row, pos_row, _ = index_union([old_row , upd_row])  
     new_col, pos_col, _ = index_union([old_col , upd_col]) 
@@ -58,12 +56,12 @@ class Data1D():
     # Sec-Feature
     def __init__(self , secid = None , feature = None , values = None , src = None) -> None:
         if isinstance(src , (dict,h5py.Group)):
-            secid , feature , values = src['secid'][:] , src['feature'][:].astype(str) , src['values'][:]
+            secid , feature , values = src['secid'][:] , src['feature'][:].astype(str) , src['values'][:] # type: ignore
         elif isinstance(src , pd.DataFrame):
             if 'secid' in src.index.names: src = src.reset_index()
             secid = src['secid'] 
             feature = src.columns.values[np.isin(src.columns.values, ['secid']) == 0]
-            values = src.loc[:,feature].values
+            values = src.loc[:,feature].values # type: ignore
         self.init_attr(secid , feature , values)
 
     def __repr__(self):
@@ -199,8 +197,8 @@ class DataDSF():
                 datas = [{
                     'secid' : src['__secid__'] ,
                     'feature' : src['__feature__'] ,
-                    'values' : src['__values__'][i]
-                } for i,d in enumerate(date)]
+                    'values' : src['__values__'][i]  # type: ignore
+                } for i,d in enumerate(date)] # type: ignore
             else:
                 date , datas = list(src.keys()) , src.values()
         self.init_attr(date , datas)
@@ -248,17 +246,14 @@ class DataDSF():
         datas = self.data.values()
         all_values = np.full((len(date),len(secid),len(feat)) , np.nan)
         for i_date , (data , i_sec , i_feat) in enumerate(zip(datas , pos_secid , pos_feat)):
-            #tmp = all_values[i_date,i_sec,:]
-            #tmp[:,i_feat] = data.values[:]
-            #all_values[i_date,i_sec,:] = tmp
-            all_values[np.ix_([i_date],i_sec,i_feat)] = data.values[None]
+            all_values[np.ix_([i_date],i_sec,i_feat)] = data.values[None]  # type: ignore
         return DataFDS(feat , [Data1F(date,secid,all_values[:,:,i]) for i in range(len(feat))])
 
 class Data1F():
     # Date-Sec
     def __init__(self , date = None , secid = None , values = None , src = None) -> None:
         if isinstance(src , (dict,h5py.Group)):
-            date , secid , values = src['date'][:] , src['secid'][:] , src['values'][:]
+            date , secid , values = src['date'][:] , src['secid'][:] , src['values'][:] # type:ignore
         self.init_attr(date , secid , values)
 
     def __repr__(self):
@@ -307,8 +302,8 @@ class DataFDS():
                 datas = [{
                     'date' : src['__date__'] ,
                     'secid' : src['__secid__'] ,
-                    'values' : src['__values__'][:,:,i]
-                } for i,f in enumerate(feature)]
+                    'values' : src['__values__'][:,:,i] # type:ignore
+                } for i,f in enumerate(feature)] # type:ignore
             else:
                 feature , datas = list(src.keys()) , src.values()
         self.init_attr(feature , datas)
@@ -359,7 +354,7 @@ class DataFDS():
             #tmp = all_values[i_date,:,i_feat]
             #tmp[:,i_sec] = data.values[:]
             #all_values[i_date,:,i_feat] = tmp
-            all_values[np.ix_(i_date,i_sec,[i_feat])] = data.values[:,:,None]
+            all_values[np.ix_(i_date,i_sec,[i_feat])] = data.values[:,:,None] # type:ignore
         return DataDSF(date , [Data1D(secid,feat,all_values[i]) for i in range(len(date))])
 
 class DataTank():
@@ -382,20 +377,20 @@ class DataTank():
         self.close()
 
     def _check_read_mode(self):
-        return self.open() if not self.isopen() or self.file.mode not in ['r' ,'r+'] else self.file
+        return self.open() if not self.isopen() or self.file.mode not in ['r' ,'r+'] else self.file  # type:ignore
     
     def _check_write_mode(self):
-        return self.open() if not self.isopen() or self.file.mode not in ['r+'] else self.file
+        return self.open() if not self.isopen() or self.file.mode not in ['r+'] else self.file  # type:ignore
     
     def _full_path(self , path):
         return '/'.join([str(f) for f in path]) if isinstance(path , (list,tuple)) else path
     
     def keys(self):
-        return self.file.keys() if self.file is not None else None
+        return self.file.keys() if self.file is not None else ()
 
     def change_file(self , filename):
         self.filename = filename
-        if self.isopen(): self.open(self.file.mode)
+        if self.isopen(): self.open(self.file.mode) #type: ignore
 
     def open(self , mode = None): 
         if self.filename is None: return NotImplemented
@@ -409,7 +404,7 @@ class DataTank():
     
     def close(self): 
         if self.isopen():
-            self.file.close()
+            self.file.close()  #type: ignore
             self.file = None
 
     def isopen(self):
@@ -432,11 +427,11 @@ class DataTank():
 
     def print_tree(self, object = None , print_pre='' , depth = 3 , width = 4 , depth_full_width = 2 , num_tail_keys = 3 , full_tree = False):
         if object is None: object = self._check_read_mode()
-        if not full_tree and len(object.items()) > width and depth_full_width <= 0:
-            show_pre , show_pro = width - (width // 2) , len(object.items()) - width // 2
+        if not full_tree and len(object.items()) > width and depth_full_width <= 0:  #type: ignore
+            show_pre , show_pro = width - (width // 2) , len(object.items()) - width // 2  #type: ignore
         else:
-            show_pre , show_pro = len(object.items()) + 1 , len(object.items())
-        keys = list(object.keys())
+            show_pre , show_pro = len(object.items()) + 1 , len(object.items())  #type: ignore
+        keys = list(object.keys())  #type: ignore
         keys = keys[:show_pre] + keys[show_pro:]
         inter = '├──'
         afpre = '│  '
@@ -445,14 +440,14 @@ class DataTank():
             if i == len(keys) - 1: 
                 inter = '└──'
                 afpre = '   '                
-            obj = object.get(key)
+            obj = object.get(key)  #type: ignore
             print(f'{print_pre}{inter} {key}' , self.repr_object(obj))
             if full_tree or (depth > 1 and (not self.end_of_leaf(obj))):
                 self.print_tree(obj,f'{print_pre}{afpre} ',depth-1,width,depth_full_width-1,num_tail_keys,full_tree)
 
     def get_object(self , path):
         path = self._full_path(path)
-        return self.file.get(path)
+        return self.file.get(path)  #type: ignore
     
     def repr_object(self , obj , num_tail_keys = 3):
         str_list = [obj.__repr__()]
@@ -468,14 +463,14 @@ class DataTank():
     
     def del_object(self , path , ask = True):
         path = self._full_path(path)
-        if self.file.get(path) is None: return
+        if self.file.get(path) is None: return  #type: ignore
         if ask and input('press yes to confirm') != 'yes': return
         try:
-            del self.file[path]
+            del self.file[path]  #type: ignore
             return True
         except:
-            g = self.file[path]
-            for key in g.keys(): del g[key]
+            g = self.file[path]  #type: ignore
+            for key in g.keys(): del g[key]  #type: ignore
             return False
 
     def delete_all(self , allow = False):
@@ -486,10 +481,10 @@ class DataTank():
         if input(f'press {rand_num} to confirm') != str(rand_num): return
         rand_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
         if input(f'press {rand_str} to confirm') != rand_str: return
-        [self.del_object(k , ask = False) for k in self.file.keys()]
+        [self.del_object(k , ask = False) for k in self.file.keys()]  #type: ignore
     
     def create_object(self , path , data = None , dtype = None , overwrite = False , compress = None , **kwargs):
-        assert self.file.mode in ['r+'] , self.file.mode
+        assert self.file.mode in ['r+'] , self.file.mode  #type: ignore
         path = self._full_path(path)
         if self.get_object(path) is not None:
             if overwrite:
@@ -497,10 +492,10 @@ class DataTank():
             else:
                 raise Exception(f'{path} already exists!')
         if data is None:
-            return self.file.create_group(path)
+            return self.file.create_group(path)  #type: ignore
         else:
             compression = 'gzip' if compress or self.compress else None
-            return self.file.create_dataset(path , data = data , dtype = dtype , compression = compression)
+            return self.file.create_dataset(path , data = data , dtype = dtype , compression = compression)  #type: ignore
 
     def is_Data1D(self , obj):
         if not np.isin(['secid','feature','values'],list(obj.keys())).all(): return False
@@ -512,7 +507,7 @@ class DataTank():
     def is_compress(self , obj):
         if isinstance(obj , h5py.Group):
             if len(obj) > 0:
-                return obj[list(obj.keys())[0]].compression is not None
+                return obj[list(obj.keys())[0]].compression is not None  #type: ignore
             else:
                 return False
         else:
@@ -534,7 +529,7 @@ class DataTank():
             raise Exception(TypeError)
 
     def write_dataframe(self , path , data , overwrite = False , compress = None):
-        assert self.file.mode in ['r+'] , self.file.mode
+        assert self.file.mode in ['r+'] , self.file.mode  #type: ignore
         if not isinstance(data , pd.DataFrame): data = pd.DataFrame(data)
         path = self._full_path(path)
         self.del_object(path , ask = not overwrite)
@@ -551,19 +546,19 @@ class DataTank():
         assert data is not None, path
         columns = self.get_group_attrs(path , '__columns__') # self.get_object([path , '__columns__'])[:].astype(str)
         col_dtype = self.get_group_attrs(path , '__columns_dtype__') # self.get_object([path , '__columns_dtype__'])[:].astype(str)
-        if feature is not None: assert all(np.isin(feature , columns)) , np.setdiff1d(feature , columns)
+        if feature is not None: assert all(np.isin(feature , columns)) , np.setdiff1d(feature , columns)  #type: ignore
         df = pd.DataFrame()
-        for col , dtype in zip(columns , col_dtype): 
+        for col , dtype in zip(columns , col_dtype):  #type: ignore
             if (feature is not None) and (col not in feature): continue
             if dtype == 'object':
-                df[col] = np.char.decode(data[col][:].astype(bytes) , 'utf-8')
+                df[col] = np.char.decode(data[col][:].astype(bytes) , 'utf-8') #type: ignore
             else:
-                df[col] = data[col][:].astype(getattr(np , dtype))  
+                df[col] = data[col][:].astype(getattr(np , dtype))   #type: ignore
         if feature is not None: df = df.loc[:,feature]          
         return df
 
     def write_data1D(self , path , data , overwrite = False , compress = None):
-        assert self.file.mode in ['r+'] , self.file.mode
+        assert self.file.mode in ['r+'] , self.file.mode  #type: ignore
         if not isinstance(data , Data1D): data = Data1D(src=data)
         path = self._full_path(path)
         self.del_object(path , ask = not overwrite)
@@ -575,23 +570,23 @@ class DataTank():
     def read_data1D(self , path , feature = None , none_if_incomplete = False):
         portal = self.get_object(path)
         if none_if_incomplete:
-            if not all(np.isin(['secid','feature','values'] , list(portal.keys()))): return None
+            if not all(np.isin(['secid','feature','values'] , list(portal.keys()))): return None  #type: ignore
         if feature is None:
             return Data1D(src = portal)
         else:
             portal = self.get_object(path)
-            all_feature = portal['feature'][:].astype(str)
+            all_feature = portal['feature'][:].astype(str)  #type: ignore
             if feature is None: feature = all_feature
             if isinstance(feature , str): feature = [feature]
             ifeat = np.array([np.where(all_feature == f)[0][0] for f in feature])
             ifeat.sort()
-            secid = portal['secid'][:]
+            secid = portal['secid'][:]  #type: ignore
             feature = all_feature[ifeat]
-            values = portal['values'][:,ifeat]
+            values = portal['values'][:,ifeat]  #type: ignore
             return Data1D(secid , feature , values)
     
     def write_dataDSF(self , path , data , overwrite = True):
-        assert self.file.mode in ['r+'] , self.file.mode
+        assert self.file.mode in ['r+'] , self.file.mode  #type: ignore
         # assert isinstance(data , DataDSF) , data.__class__
         path = self._full_path(path)
         for k , v in data.data.items():
@@ -602,7 +597,7 @@ class DataTank():
         if start is None: start = -1
         if end is None: end = 99999999
         portal = self.get_object(path)
-        date = np.array(list(portal.keys())).astype(int)
+        date = np.array(list(portal.keys())).astype(int)  #type: ignore
         date = date[(date >= start) & (date <= end)]
         result = DataDSF(src={str(k):self.read_data1D([path,str(k)]) for k in date})
         print(f'loading: {time.time() - __start_time__:.2f} secs')
@@ -613,37 +608,32 @@ class DataTank():
         if start is None: start = -1
         if end is None: end = 99999999
         portal = self.get_object(path)
-        date = np.array(list(portal.keys())).astype(int)
+        date = np.array(list(portal.keys())).astype(int)  #type: ignore
         date = date[(date >= start) & (date <= end)]
-        secid, pos_secid, _ = index_union([portal[str(d)]['secid'][:] for d in date])
-        feat , pos_feat , _ = index_union([portal[str(d)]['feature'][:] for d in date])
+        secid, pos_secid, _ = index_union([portal[str(d)]['secid'][:] for d in date])  #type: ignore
+        feat , pos_feat , _ = index_union([portal[str(d)]['feature'][:] for d in date])  #type: ignore
         feat = feat.astype(str)
-        datas = [portal[str(d)]['values'] for d in date]
+        datas = [portal[str(d)]['values'] for d in date]  #type: ignore
         all_values = np.full((len(date) , len(secid), len(feat)) , np.nan)
         for i_date , (data , i_sec , i_feat) in enumerate(zip(datas , pos_secid , pos_feat)):
-            #tmp = all_values[i_date,i_sec,:]
-            #tmp[:,i_feat] = data[:]
-            #all_values[i_date,i_sec,:] = tmp
-            all_values[np.ix_([i_date],i_sec,i_feat)] = data.values[None]
+            all_values[np.ix_([i_date],i_sec,i_feat)] = data.values[None]  #type: ignore
             
         print(f'loading: {time.time() - __start_time__:.2f} secs')
         if dict_only : 
-            return {
-                '__feature__' : feat ,
-                '__date__'    : date ,
-                '__secid__'   : secid ,
-                '__values__'  : all_values
-            }
+            return {'__feature__' : feat ,
+                    '__date__'    : date ,
+                    '__secid__'   : secid ,
+                    '__values__'  : all_values}  #type: ignore
         else:
             __start_time__ = time.time()
             result = DataFDS(feat , [Data1F(date,secid,all_values[:,:,i]) for i in range(len(feat))])
             print(f'Transform: {time.time() - __start_time__:.2f} secs')
-            return result
+            return result  #type: ignore
     
     def get_group_attrs(self , path , attr = ['__information__' , '__create_time__','__last_date__', '__update_time__']):
         g = self.get_object(path)
         assert g is not None, path
-        return g.attrs.get(attr) if isinstance(attr , str) else {a:g.attrs.get(a) for a in attr}
+        return g.attrs.get(attr) if isinstance(attr , str) else {a:g.attrs.get(a) for a in attr}  #type: ignore
 
     def set_group_attrs(self , path , overwrite = True , **kwargs):
         if len(kwargs) == 0: return NotImplemented
@@ -651,9 +641,9 @@ class DataTank():
         assert g is not None, path
         attr = {k:v for k,v in kwargs.items() if v is not None}
         if not overwrite:
-            exist_attrs = g.attrs.__dir__()
+            exist_attrs = g.attrs.__dir__()  #type: ignore
             attr = {k:v for k,v in attr.items() if v not in exist_attrs}
-        [g.attrs.modify(k , v) for k,v in attr.items() if v is not None]
+        [g.attrs.modify(k , v) for k,v in attr.items() if v is not None]  #type: ignore
     
     def repack(self , target_path = None , compress = None):
         # repack h5 file to avoid aggregating file size to unlimited amount
@@ -666,19 +656,19 @@ class DataTank():
 
     def end_of_leaf(self , object = None):
         if object is None: object = self.file
-        return isinstance(object , h5py.Dataset) or all([isinstance(object[key] , h5py.Dataset) for key in object.keys()])
+        return isinstance(object , h5py.Dataset) or all([isinstance(object[key] , h5py.Dataset) for key in object.keys()])  #type: ignore
     
     def leaf_list(self , object = None , call_list = []):
         if object is None: object = self.file
         if isinstance(call_list , str): call_list = list(call_list)
         assert all(np.isin(call_list , ['is_DataFrame' , 'is_Data1D' , 'is_compress']))
         leafs = []
-        for key in object.keys():
-            obj = object[key]
+        for key in object.keys():  #type: ignore
+            obj = object[key]  #type: ignore
             if self.end_of_leaf(obj):
                 leaf_char = {'path' :obj.name , 'key'  :key}
                 for _call in call_list: leaf_char[_call] = getattr(self , _call)(obj)
-                leafs.append(leaf_char)
+                leafs.append(leaf_char)  #type: ignore
             else:
                 leafs = np.concatenate([leafs , self.leaf_list(obj , call_list)])
         return leafs
@@ -711,21 +701,21 @@ def copy_tree(source , source_path ,  target , target_path , compress = None,
         target.create_object(target_path,data=data,dtype=dtype,overwrite=True,compress=source_compress)
         return
     else:
-        for key in source.get_object(source_path).keys():
+        for key in source.get_object(source_path).keys():  #type: ignore
             key_source_path = '/'.join([source_path , key])
             key_target_path = '/'.join([target_path , key])
             copy_tree(source , key_source_path ,  target , key_target_path , compress = compress , 
                       print_process = print_process , print_time = print_time , print_pre = print_pre ,
                       **kwargs)
-    attrs = {k:v for k,v in source.get_group_attrs(source_path).items() if v is not None}
+    attrs = {k:v for k,v in source.get_group_attrs(source_path).items() if v is not None}  #type: ignore
     target.set_group_attrs(target_path , overwrite = True , **attrs) 
     if len(attrs) > 0:
         target.set_group_attrs(target_path , overwrite = True , **attrs) 
         if print_process: 
-            print_msg = f'{print_pre}{os.path.relpath(target.filename)}/{target_path} copying Done!'
+            print_msg = f'{print_pre}{os.path.relpath(target.filename)}/{target_path} copying Done!'  #type: ignore
             print(f'{time.ctime()} : {print_msg}' if print_time else print_msg)
 
-def repack_DataTank(source_tank_path , target_tank_path = None):
+def repack_DataTank(source_tank_path , target_tank_path = None , compress = None):
     # repack h5 file to avoid aggregating file size to unlimited amount
     # if target_tank_path is None , create a new file name to repack to
     # if target_tank_path == source_tank_path , repack and replace source_tank_path
@@ -734,7 +724,7 @@ def repack_DataTank(source_tank_path , target_tank_path = None):
 
     if source_tank_path == target_tank_path:
         new_target_tank_path = file_shadow_name(source_tank_path , 'shadow')
-        repack_DataTank(source_tank_path , new_target_tank_path)
+        repack_DataTank(source_tank_path , new_target_tank_path , compress = None)
         os.unlink(source_tank_path)
         os.rename(new_target_tank_path , source_tank_path)
     else:
@@ -743,7 +733,7 @@ def repack_DataTank(source_tank_path , target_tank_path = None):
         source_dtank = DataTank(source_tank_path , 'r') 
         target_dtank = DataTank(target_tank_path , 'w')
         try:
-            copy_tree(source_dtank , '.' , target_dtank , '.')
+            copy_tree(source_dtank , '.' , target_dtank , '.' , compress = compress)
         except:
             traceback.print_exc()
         finally:
