@@ -5,11 +5,11 @@ Desktop.ini
 
 # folder structure
 __old_version__/
-data/
-figures/
-logs/
-instance/
-model/
+/data
+/figures
+/logs
+/instance
+/model
 .vs/
 
 # Data
