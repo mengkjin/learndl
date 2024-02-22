@@ -2,10 +2,8 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import copy , h5py
+import copy
 import os
-
-plt.style.use('seaborn-v0_8-dark-palette') 
 
 # %%
 """
@@ -110,7 +108,7 @@ class lgbm():
             w = np.linspace(rate,1,len(dates))
         elif func == 'exp': # 指数衰减
             w = np.linspace(1,len(dates),len(dates))
-            w = np.power(2,(w-len(w))/int(rate*len(w)))
+            w = np.power(2 , (w-len(w)) / int(rate*len(w)))
         w = pd.Series(w,index=dates.values) 
         # w.plot() # 绘图
         for date in dates: weight.loc[date,:] = weight.loc[date,:].values * w[date]
@@ -311,18 +309,13 @@ class lgbm():
             shap.dependence_plot(feature,shap_values,X_df,interaction_index=None,title=f'SHAP of {feature}',show=False)
             plt.savefig('/'.join([self.plot_path , 'explainer_shap' , f'explainer_shap_dot_{feature}.png']),dpi=100,bbox_inches='tight')
 
-# %%
-if __name__ == '__main__':
-    # %%
-    from warnings import simplefilter
-    simplefilter(action="ignore",category=FutureWarning)
+def main():
     plt.style.use('seaborn-v0_8') 
     dict_df = {
         'train' : pd.read_csv('../../data/tree_data/df_train.csv' , index_col=[0,1]) , 
         'valid' : pd.read_csv('../../data/tree_data/df_valid.csv' , index_col=[0,1]) , 
         'test'  : pd.read_csv('../../data/tree_data/df_test.csv' , index_col=[0,1]) , 
     }
-
 
     # %%
     a = lgbm(**dict_df) # type: ignore
@@ -348,4 +341,9 @@ if __name__ == '__main__':
     a.plot_pdp('train')
     if a.train_param['linear_tree']==False:
         a.plot_shap('train') # Error now due to Numpy >= 1.24 and shap from pip not compatible
-
+# %%
+if __name__ == '__main__':
+    # %%
+    #from warnings import simplefilter
+    #simplefilter(action="ignore",category=FutureWarning)
+    main()

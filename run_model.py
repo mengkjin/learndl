@@ -17,21 +17,19 @@ https://lightgbm.readthedocs.io/en/latest/pythonapi/lightgbm.plot_tree.html
 import torch
 import torch.nn as nn
 import numpy as np
+import pandas as pd
 import itertools , os, shutil , gc , time , yaml
 from copy import deepcopy
 from torch.optim.swa_utils import AveragedModel , update_bn
-from scripts.util.environ import get_logger
-from scripts.util.basic import process_timer , FilteredIterator , lr_cosine_scheduler , versatile_storage
-from scripts.util.trainer import trainer_parser , train_config , set_trainer_environment , Device , MultiLosses , TrainConfig
-from scripts.data_util.ModelData import ModelData
-from scripts.function.basic import *
-from scripts.function.metric import loss_function,score_function,penalty_function
-from scripts.nn import model
+
+import scripts.util as U
+import scripts.function as F
+import scripts.nn.model as model
 # from audtorch.metrics.functional import *
 
 do_timer = True
-logger   = get_logger()
-config   = TrainConfig()
+logger   = U.logger.get_logger()
+config   = U.config.TrainConfig()
 
 class RunModel():
     """
@@ -44,9 +42,9 @@ class RunModel():
     """
     def __init__(self , timer = False , storage_type = 'mem' , device = None , **kwargs):
         self.model_info = {'init_time' : time.time()}
-        self.ptimer     = process_timer(False)
-        self.storage    = versatile_storage(storage_type)
-        self.device     = Device(device)
+        self.ptimer     = U.basic.ProcessTimer(False)
+        self.storage    = U.basic.SwiftStorage(storage_type)
+        self.device     = U.trainer.Device(device)
         
     def main_process(self):
         """
@@ -74,7 +72,7 @@ class RunModel():
         """
         self.model_info['data_time'] = time.time()
         logger.critical(f'Start Process [Load Data]!')
-        self.data = ModelData(config.model_data_type , config)
+        self.data = U.data.ModelData.ModelData(config.model_data_type , config)
         # retrieve from data object
         filler = self.model_params_filler(self.data.x_data , self.data.data_type_list)
         for smp in config.model_params:  smp.update(filler)
@@ -115,7 +113,7 @@ class RunModel():
 
     def process_instance(self):
         if config.anchoring < 0:
-            _text , _cond = ask_for_confirmation(f'Do you want to copy the model to instance?[yes/else no]: ' , timeout = -1)
+            _text , _cond = F.basic.ask_for_confirmation(f'Do you want to copy the model to instance?[yes/else no]: ' , timeout = -1)
             anchoring = all([_t.lower() in ['yes','y'] for _t in _text])
         else:
             anchoring = config.anchoring > 0
@@ -151,7 +149,7 @@ class RunModel():
                 if not os.path.exists(f'{config.model_base_path}/{model_num}/{model_date}.best.pt'):
                     models_trained[max(i-1,0):] = False
                     break
-            new_iter = FilteredIterator(new_iter , models_trained == 0)
+            new_iter = U.basic.FilteredIterator(new_iter , models_trained == 0)
         return new_iter
     
     def model_preparation(self , process , last_n = 30 , best_n = 5):
@@ -615,14 +613,14 @@ class RunModel():
                 term_cond[key] = self.epoch_i - self.epoch_attempt_best >= arg
                 if term_cond[key] and exit_text is None: exit_text = 'EarlyStop'
             elif key == 'tv_converge':
-                term_cond[key] = (list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps')) and
-                             list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps')))
+                term_cond[key] = (F.basic.list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps')) and
+                             F.basic.list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps')))
                 if term_cond[key] and exit_text is None: exit_text = 'T & V Cvg'
             elif key == 'train_converge':
-                term_cond[key] = list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps'))
+                term_cond[key] = F.basic.list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps'))
                 if term_cond[key] and exit_text is None: exit_text = 'Train Cvg'
             elif key == 'valid_converge':
-                term_cond[key] = list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps'))
+                term_cond[key] = F.basic.list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps'))
                 if term_cond[key] and exit_text is None: exit_text = 'Valid Cvg'
             else:
                 raise Exception(f'KeyError : {key}')
@@ -765,15 +763,15 @@ class RunModel():
     @staticmethod
     def new_metricfunc(params , **kwargs):
         return {
-            'loss'    : loss_function(params['loss']) , 
-            'penalty' : {k:penalty_function(k,v) for k,v  in params['penalty'].items()} ,
-            'score'   : {k:score_function(v)     for k,v in params['score'].items()} ,
+            'loss'    : F.metric.loss_function(params['loss']) , 
+            'penalty' : {k:F.metric.penalty_function(k,v) for k,v  in params['penalty'].items()} ,
+            'score'   : {k:F.metric.score_function(v)     for k,v in params['score'].items()} ,
         }
 
     @staticmethod
     def new_multiloss(params , num_output = 1 , **kwargs):
         if num_output <= 1: return None
-        return MultiLosses(params['type'],num_output,**params['param_dict'][params['type']])
+        return U.trainer.MultiLosses(params['type'],num_output,**params['param_dict'][params['type']])
 
     @staticmethod
     def update_metricfunc(mf : dict , model_param , config , **kwargs):
@@ -824,7 +822,7 @@ class RunModel():
     @staticmethod
     def new_scheduler(optimizer, key = 'cycle', **kwargs):
         if key == 'cos':
-            scheduler = lr_cosine_scheduler(optimizer, **kwargs)
+            scheduler = U.trainer.CosineScheduler(optimizer, **kwargs)
         elif key == 'step':
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **kwargs)
         elif key == 'cycle':
@@ -870,10 +868,10 @@ class RunModel():
     @classmethod
     def new_random_input(cls , module = 'tra_lstm2' , model_data_type = 'day' , model_data = None):
 
-        config = train_config(override_config = {'model_module' : module , 'model_data_type' : model_data_type} , do_process=False)
+        config = U.config.train_config(override_config = {'model_module' : module , 'model_data_type' : model_data_type} , do_process=False)
         data_type_list = config.data_type_list
         for smp in config.model_params: smp.update(cls.model_params_filler(data_type_list = data_type_list))
-        model_data = ModelData(data_type_list , config)
+        model_data = U.data.ModelData.ModelData(data_type_list , config)
         model_data.create_dataloader(*model_data.get_dataloader_param('train','train',20170104,config.model_params[0]))
 
         #inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
@@ -919,24 +917,24 @@ sd_step = deepcopy(net.state_dict())
 def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser = None):
     if parser is None:
         input = {'process':process,'rawname':rawname,'resume':resume,'anchoring':anchoring}
-        parser = trainer_parser(input).parse_args(args=[])
+        parser = U.config.config_parser(input).parse_args(args=[])
 
-    config.replace(train_config(parser = parser , do_process = True))
-    set_trainer_environment(config)
+    config.replace(U.config.train_config(parser = parser , do_process = True))
+    U.config.set_config_environment(config)
 
     if not config.short_test:
         logger.warning('Model Specifics:')
-        pretty_print_dict(config.get_dict([
-            'verbosity' , 'storage_type' , 'device' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 
+        F.basic.pretty_print_dict(config.get_dict([
+            'verbosity' , 'storage_type' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 
             'model_data_type' , 'model_num' , 'beg_date' , 'end_date' , 'interval' , 
             'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' , 'compt_params'
         ]))
 
-    app = RunModel(timer = do_timer , storage_type = config.storage_type , device = config.device)
+    app = RunModel(timer = do_timer , storage_type = config.storage_type)
     app.main_process()
     app.summary()
 
 if __name__ == '__main__':
-    parser = trainer_parser().parse_args()
+    parser = U.config.config_parser().parse_args()
     main(parser = parser)
  

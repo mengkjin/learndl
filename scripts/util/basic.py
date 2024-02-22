@@ -1,10 +1,9 @@
 import torch
 import numpy as np
 import pandas as pd
-import gc , math , time , os , psutil
+import gc , time , os , psutil
 from copy import deepcopy
-
-class timer:
+class Timer:
     def __init__(self , *args):
         self.key = '/'.join(args)
     def __enter__(self):
@@ -13,7 +12,7 @@ class timer:
     def __exit__(self, type, value, trace):
         print(f'... cost {time.time()-self.start_time:.2f} secs')
 
-class process_timer:
+class ProcessTimer:
     def __init__(self , record = True) -> None:
         self.recording = record
         self.recorder = {} if record else None
@@ -44,8 +43,7 @@ class process_timer:
             tb = pd.DataFrame({'keys':keys , 'num_calls': num_calls, 'total_time': total_time})
             tb['avg_time'] = tb['total_time'] / tb['num_calls']
             print(tb.sort_values(by=['total_time'],ascending=False))
-
-class memory_printer:
+class MemoryPrinter:
     def __init__(self) -> None:
         pass
     def __repr__(self) -> str:
@@ -66,79 +64,8 @@ class FilteredIterator:
             item = next(self.iterable)
             cond = self.condition(item) if callable(self.condition) else next(self.condition)
             if cond: return item
-
-class lr_cosine_scheduler:
-    def __init__(self , optimizer , warmup_stage = 10 , anneal_stage = 40 , initial_lr_div = 10 , final_lr_div = 1e4):
-        self.warmup_stage= warmup_stage
-        self.anneal_stage= anneal_stage
-        self.optimizer = optimizer
-        self.base_lrs = [x['lr'] for x in optimizer.param_groups]
-        self.initial_lr= [x / initial_lr_div for x in self.base_lrs]
-        self.final_lr= [x / final_lr_div for x in self.base_lrs]
-        self.last_epoch = 0
-        self._step_count= 1
-        self._linear_phase = self._step_count / self.warmup_stage
-        self._cos_phase = math.pi / 2 * (self._step_count - self.warmup_stage) / self.anneal_stage
-        self._last_lr= self.initial_lr
         
-    def get_last_lr(self):
-        #Return last computed learning rate by current scheduler.
-        return self._last_lr
-
-    def state_dict(self):
-        #Returns the state of the scheduler as a dict.
-        return self.__dict__
-    
-    def step(self):
-        self.last_epoch += 1
-        if self._step_count <= self.warmup_stage:
-            self._last_lr = [y+(x-y)*self._linear_phase for x,y in zip(self.base_lrs,self.initial_lr)]
-        elif self._step_count <= self.warmup_stage + self.anneal_stage:
-            self._last_lr = [y+(x-y)*math.cos(self._cos_phase) for x,y in zip(self.base_lrs,self.final_lr)]
-        else:
-            self._last_lr = self.final_lr
-        for x , param_group in zip(self._last_lr,self.optimizer.param_groups):
-            param_group['lr'] = x
-        self._step_count += 1
-        self._linear_phase = self._step_count / self.warmup_stage
-        self._cos_phase = math.pi / 2 * (self._step_count - self.warmup_stage) / self.anneal_stage
-                
-class DesireBatchSampler(torch.utils.data.Sampler):
-    def __init__(self, sampler , batch_size_list , drop_res = True):
-        self.sampler = sampler
-        self.batch_size_list = np.array(batch_size_list).astype(int)
-        assert (self.batch_size_list >= 0).all()
-        self.drop_res = drop_res
-        
-    def __iter__(self):
-        if (not self.drop_res) and (sum(self.batch_size_list) < len(self.sampler)):
-            new_list = np.append(self.batch_size_list , len(self.sampler) - sum(self.batch_size_list))
-        else:
-            new_list = self.batch_size_list
-        
-        batch_count , sample_idx = 0 , 0
-        while batch_count < len(new_list):
-            if new_list[batch_count] > 0:
-                batch = [0] * new_list[batch_count]
-                idx_in_batch = 0
-                while True:
-                    batch[idx_in_batch] = self.sampler[sample_idx]
-                    idx_in_batch += 1
-                    sample_idx +=1
-                    if idx_in_batch == new_list[batch_count]:
-                        yield batch
-                        break
-            batch_count += 1
-        if idx_in_batch > 0:
-            yield batch[:idx_in_batch]
-
-    def __len__(self):
-        if self.batch_size_list.sum() < len(self.sampler):
-            return len(self.batch_size_list) + 1 - self.drop_res
-        else:
-            return np.where(self.batch_size_list.cumsum() >= len(self.sampler))[0][0] + 1
-        
-class versatile_storage():
+class SwiftStorage():
     def __init__(self , *args):
         if len(args) > 0 and args[0] in ['disk' , 'mem']:
             self.activate(args[0])
@@ -181,20 +108,20 @@ class versatile_storage():
         else:
             self.file_group[group] = np.union1d(self.file_group[group] , [p])
     
-    def save_model_state(self , model , paths , to_disk = False , group = 'default'):
-        if isinstance(model , torch.nn.Module):
+    def save_model_state(self , net , paths , to_disk = False , group = 'default'):
+        if isinstance(net , torch.nn.Module):
             if self.default == 'disk' or to_disk:
-                sd = model.state_dict() 
+                sd = net.state_dict() 
             else:
-                sd = deepcopy(model).cpu().state_dict()
-        elif isinstance(model , dict):
-            sd = model
+                sd = deepcopy(net).cpu().state_dict()
+        elif isinstance(net , dict):
+            sd = net
         self.save(sd , paths , to_disk , group)
         
-    def load_model_state(self , model , path , from_disk = False):
+    def load_model_state(self , net , path , from_disk = False):
         sd = self.load(path , from_disk)
-        model.load_state_dict(sd)
-        return model
+        net.load_state_dict(sd)
+        return net
             
     def valid_paths(self , paths):
         return np.intersect1d(self._pathlist(paths) ,  self.file_record).tolist()
