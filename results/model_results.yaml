@@ -861,3 +861,211 @@
   - *id001
   - !!binary |
     ALD282StMkA=
+0_start: Thu Feb 22 19:52:44 2024
+1_basic: short+mem+float
+2_model: tra_lstm2_day(x1)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.2 Min/model, 0.7 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 11.6 Secs
+6_result:
+  0.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    AGBnrp0HM0A=
+  0.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AIBskrbKM0A=
+  0.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AEATTL/ZMkA=
+0_start: Thu Feb 22 19:57:12 2024
+1_basic: short+mem+float
+2_model: resnet_lstm_15m(x1)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.1 Hours, 1.5 Min/model, 4.5 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 17.0 Secs
+6_result:
+  0.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    AAAgunY4vj8=
+  0.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AAAwB9MFB0A=
+  0.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AACQWOrr+T8=
+0_start: Thu Feb 22 20:33:57 2024
+1_basic: short+mem+float
+2_model: resnet_lstm_15m(x1)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.0 Hours, 1.5 Min/model, 4.5 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 16.2 Secs
+6_result:
+  0.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    AAAEFkh+/z8=
+  0.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AACbezBJE0A=
+  0.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AMBvFsVmEEA=
+0_start: Thu Feb 22 23:20:02 2024
+1_basic: short+mem+float
+2_model: resnet_lstm_15m(x3)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.1 Hours, 1.4 Min/model, 4.3 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 25.3 Secs
+6_result:
+  0.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    AHAHUVxk9j8=
+  0.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AAC0mm0FEEA=
+  0.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AABpVgoSCUA=
+  1.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AADI2RWO4z8=
+  1.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AIClX/e0EUA=
+  1.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AABkDrtiEUA=
+  2.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AADYGBPJ0L8=
+  2.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AACMPxvPEUA=
+  2.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AACMvAeCDEA=
+0_start: Fri Feb 23 00:04:31 2024
+1_basic: short+mem+float
+2_model: resnet_lstm_15m(x3)
+3_time: 20170103-20171201
+4_train: Finish Process [Train Model]! Cost 0.1 Hours, 1.1 Min/model, 3.2 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 25.2 Secs
+6_result:
+  0.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    AAA8+YrgCEA=
+  0.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AAD8ra3lB0A=
+  0.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AAAhf/qzD0A=
+  1.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AADuLeHw8j8=
+  1.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AACcDYlK9j8=
+  1.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AAAQknzc/D8=
+  2.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AJBVgVaLHEA=
+  2.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AIDWPMKtHUA=
+  2.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    ALpAj0JeEEA=

@@ -290,14 +290,18 @@ class DataUpdater():
 
     def dump_exist_updaters(self , del_after_dumping = True):
         old_updaters = self.get_updater_paths()
-        for updater_path in old_updaters:
-            with DataTank(updater_path , 'r') as updater:
-                dump_updater(updater , key_order = self.update_order)
         if del_after_dumping:
             print(old_updaters)
             if input(f'''Delete {len(old_updaters)} updaters (press yes/y) : 
-                        {old_updaters}''').lower() in ['y','yes']: 
-                for updater_path in old_updaters: os.remove(updater_path)
+                        {old_updaters}''').lower() not in ['y','yes']: 
+                del_after_dumping = False
+
+        for updater_path in old_updaters:
+            with DataTank(updater_path , 'r') as updater:
+                dump_updater(updater , key_order = self.update_order)
+                
+        if del_after_dumping:
+            for updater_path in old_updaters: os.remove(updater_path)
 
     def dump_current_updater(self):
         dump_updater(self.UPDATER , key_order = self.update_order)
@@ -411,21 +415,36 @@ def repack_DB_bygroup(source_tank_path , db_key = None , compress = None):
         source_dtank.close()
         target_dtank.close()
 
-def update_main():
+def update_server_main():
     __start_time__ = time.time()
+    assert socket.gethostname() == 'mengkjin-server' , socket.gethostname()
     try:
-        if socket.gethostname() == 'mengkjin-server':
-            print(f'Merge Update Files') 
-            Updater = DataUpdater(False)
-            Updater.dump_exist_updaters(del_after_dumping=True)
-        else:
-            print(f'Create Update Files')
-            Updater = DataUpdater(l_do_updater)
-            Updater.update_something(KEY = l_update_by_key + l_update_by_date)
-            Updater.print_current_unfetch()
-            Updater.dump_current_updater()
+        print(f'Merge Update Files') 
+        Updater = DataUpdater(False)
+        Updater.dump_exist_updaters(del_after_dumping=True)
     except:
         traceback.print_exc()
     finally:
         Updater.close()
     print(f'{time.ctime()} : All Updates Done! Cost {time.time() - __start_time__:.2f} Secs')
+
+def update_laptop_main():
+    __start_time__ = time.time()
+    assert socket.gethostname() != 'mengkjin-server' , socket.gethostname()
+    try:
+        print(f'Create Update Files')
+        Updater = DataUpdater(l_do_updater)
+        Updater.update_something(KEY = l_update_by_key + l_update_by_date)
+        Updater.print_current_unfetch()
+        Updater.dump_current_updater()
+    except:
+        traceback.print_exc()
+    finally:
+        Updater.close()
+    print(f'{time.ctime()} : All Updates Done! Cost {time.time() - __start_time__:.2f} Secs')
+
+def main():
+    if socket.gethostname() == 'mengkjin-server':
+        update_server_main()
+    else:
+        update_laptop_main()

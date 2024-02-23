@@ -44,17 +44,15 @@ class lstm(rnn_univariate):
         
 class resnet_lstm(lstm):
     def __init__(self, input_dim , hidden_dim , inday_dim , **kwargs) -> None:
-        kwargs.update({'enc_in' : 'resnet' , 'enc_in_dim' : kwargs.get('enc_in_dim') if kwargs.get('enc_in_dim') else hidden_dim // 4})
+        kwargs.update({
+            'enc_in' : 'resnet' , 
+            'enc_in_dim' : kwargs.get('enc_in_dim') if kwargs.get('enc_in_dim') else hidden_dim // 4 ,
+            
+                       })
         super().__init__(input_dim , hidden_dim , inday_dim = inday_dim , **kwargs)
 
-class tra_lstm(mod_tra):
-    def __init__(self , input_dim , hidden_dim , tra_num_states=1, tra_horizon = 20 , num_output = 1 , **kwargs):
-        temp_model = lstm(input_dim , hidden_dim = hidden_dim , num_output = 1 , **kwargs)
-        base_model = nn.Sequential(temp_model.encoder , temp_model.decoder)
-        super().__init__(base_model , hidden_dim , num_states = tra_num_states,  horizon = tra_horizon)
-        
 @tra_component('mapping')
-class tra_lstm2(lstm):
+class tra_lstm(lstm):
     def __init__(self , input_dim , hidden_dim , tra_num_states=1, tra_horizon = 20 , num_output = 1 , **kwargs):
         super().__init__(input_dim , hidden_dim , **kwargs)
         self.mapping = block_tra(hidden_dim , num_states = tra_num_states, horizon = tra_horizon)

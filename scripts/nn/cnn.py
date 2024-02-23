@@ -50,7 +50,7 @@ class mod_tcn(nn.Module):
         output = self.net(inputs.permute(0,2,1)).permute(0,2,1)
         return output
 class _resnet_block_1d(nn.Module):
-    def __init__(self, dim_in , dim_out = 64 , dim_med = 64 // 4 , clip_value = 10 , **kwargs) -> None:
+    def __init__(self, dim_in , dim_out = 64 , dim_med = 64 // 4 , clip_value = 10 , act_type = 'LeakyReLU' , **kwargs) -> None:
         super().__init__()
         self.clip_value = clip_value
         self.dim_in     = dim_in
@@ -62,13 +62,13 @@ class _resnet_block_1d(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv1d(dim_in , dim_med , 1) , 
             nn.BatchNorm1d(dim_med),
-            nn.ReLU(),
+            getattr(nn , 'LeakyReLU')(),
             nn.Conv1d(dim_med, dim_med , kernel_size=3, stride=1, padding=1 , bias = False) , 
             nn.BatchNorm1d(dim_med),
-            nn.ReLU(),
+            getattr(nn , 'LeakyReLU')(),
             nn.Conv1d(dim_med, dim_out , 1) , 
             nn.BatchNorm1d(dim_out),
-            nn.ReLU(),
+            getattr(nn , 'LeakyReLU')(),
         )
 
     def forward(self , x):
@@ -80,14 +80,14 @@ class _resnet_block_1d(nn.Module):
         return x1 + x2
     
 class mod_resnet_1d(nn.Module):
-    def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , n_blocks = 3 , **kwargs) -> None:
+    def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , resnet_blocks = 3 , **kwargs) -> None:
         super().__init__()
         self.seq_len = seq_len
         self.dim_in  = feat_len
         self.clip_value = clip_value
         self.blocks = nn.Sequential()
         d_in , d_out , d_med = feat_len , dim_out , dim_out//4
-        for _ in range(n_blocks):
+        for _ in range(resnet_blocks):
             self.blocks.append(_resnet_block_1d(d_in , d_out , d_med , clip_value))
             d_in = d_out
         self.fc_out = nn.Linear(d_out * seq_len , dim_out)
@@ -113,13 +113,13 @@ class _resnet_block_2d(nn.Module):
         self.conv = nn.Sequential(
             nn.Conv2d(dim_in , dim_med , 1) , 
             nn.BatchNorm2d(dim_med),
-            nn.ReLU(),
+            getattr(nn , 'LeakyReLU')(),
             nn.Conv2d(dim_med, dim_med , kernel_size=3, stride=1, padding=1 , bias = False) , 
             nn.BatchNorm2d(dim_med),
-            nn.ReLU(),
+            getattr(nn , 'LeakyReLU')(),
             nn.Conv2d(dim_med, dim_out , 1) , 
             nn.BatchNorm2d(dim_out),
-            nn.ReLU(),
+            getattr(nn , 'LeakyReLU')(),
         )
 
     def forward(self , x):
@@ -131,12 +131,12 @@ class _resnet_block_2d(nn.Module):
         return x1 + x2
     
 class mod_resnet_2d(nn.Module):
-    def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , n_blocks = 3 , **kwargs) -> None:
+    def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , resnet_blocks = 3 , **kwargs) -> None:
         super().__init__()
         self.clip_value = clip_value
         self.blocks = nn.Sequential()
         d_in , d_out , d_med = 1 , dim_out , dim_out//4
-        for _ in range(n_blocks):
+        for _ in range(resnet_blocks):
             self.blocks.append(_resnet_block_2d(d_in , d_out , d_med , clip_value))
             d_in = d_out
         self.fc_out = nn.Linear(feat_len * seq_len * d_out , dim_out)

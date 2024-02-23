@@ -1,11 +1,12 @@
 
 import torch
-import os , gc , random , math , psutil , time , copy
+import os , gc , math
 import numpy as np
 import pandas as pd
 
 from types import SimpleNamespace
 from torch.utils.data.dataset import IterableDataset , Dataset
+from torch.utils.data import BatchSampler
 
 from .DataTank import DataTank
 from .DataUpdater import get_db_path , get_db_file
@@ -77,11 +78,10 @@ class ModelData():
         kwarg = {}
         keys = ['device' , 'storage_type' , 'labels' , 'precision' , 'beg_date' , 'end_date' , 'interval' , 'skip_horizon' ,
                 'input_span' , 'tra_model' , 'buffer_type','buffer_param','batch_size' , 'input_step_day','test_step_day' ,
-                'verbosity','num_output','weight_scheme','train_ratio','random_split','sample_method']
+                'verbosity','num_output','weight_scheme','train_ratio','sample_method']
         defaults = {'storage_type':'mem','beg_date':20170101,'end_date':20991231,'interval':120,
                     'skip_horizon':20,'input_span':2400,'buffer_param':{},'weight_scheme':{},
-                    'num_output':1,'train_ratio':0.8,'random_split':True,'sample_method':'total_shuffle',
-                    'batch_size':10000}
+                    'num_output':1,'train_ratio':0.8,'sample_method':'total_shuffle','batch_size':10000}
         for key in keys: 
             default = defaults.get(key)
             if kwargs.get(key):
@@ -91,7 +91,7 @@ class ModelData():
                     kwarg[key] = config.get('MODEL_PARAM',{}).get('num_output' , default)
                 elif key == 'weight_scheme':
                     kwarg[key] = config.get('train_params',{}).get('criterion',{}).get('weight' , default)
-                elif key in ['train_ratio','random_split','sample_method']:
+                elif key in ['train_ratio','sample_method']:
                     kwarg[key] = config.get('train_params',{}).get('dataloader',{}).get(key , default)
                 else:
                     kwarg[key] = config.get(key , default)
@@ -191,11 +191,8 @@ class ModelData():
         self.buffer.update(self.buffer_proc(self))
         self.buffer = self.device(self.buffer) # type: ignore
 
-        #index = self.sample_index(self.nonnan_sample)
-        #self.static_dataloader(x , y_step , w_step , index , self.nonnan_sample)
-
-        index = self.sample_index2(self.nonnan_sample)
-        self.static_dataloader2(x , y_step , w_step , index , self.nonnan_sample)
+        index = self.data_sampling(self.nonnan_sample)
+        self.static_dataloader(x , y_step , w_step , index , self.nonnan_sample)
 
         gc.collect() 
         torch.cuda.empty_cache()
@@ -245,76 +242,8 @@ class ModelData():
             y_new[nonnan_sample == 0] = torch.nan
         y_new , w_new = tensor_standardize_and_weight(y_new , 0 , weight_scheme)
         return y_new , w_new
-    
-    def sample_index(self , nonnan_sample):
-        """
-        update index of train/valid sub-samples of flattened all-samples(with in 0:len(index[0]) * step_len - 1)
-        sample_tensor should be boolean tensor , True indicates non
-        """
-        shp = nonnan_sample.shape
-        if self.loader_type.lower() == 'train':
-            ii_stock_wise = np.arange(shp[0] * shp[1])[nonnan_sample.flatten()]
-            ii_time_wise  = np.arange(shp[0] * shp[1]).reshape(shp[1] , shp[0]).transpose().flatten()[ii_stock_wise]
-            train_samples = int(len(ii_stock_wise) * self.kwarg.train_ratio)
-            if self.kwarg.random_split:
-                random.shuffle(ii_stock_wise)
-                ii_train , ii_valid = ii_stock_wise[:train_samples] , ii_stock_wise[train_samples:]
-            else:
-                early_samples = ii_time_wise < sorted(ii_time_wise)[train_samples]
-                ii_train , ii_valid = ii_stock_wise[early_samples] , ii_stock_wise[early_samples == 0]
-            random.shuffle(ii_train) 
-            random.shuffle(ii_valid)
-
-        ipos = torch.zeros(shp[0] , shp[1] , 2 , dtype = torch.int) # i_row (sec) , i_col_x (end)
-        ipos[:,:,0] = torch.arange(shp[0] , dtype = torch.int).reshape(-1,1) 
-        ipos[:,:,1] = torch.tensor(self.step_idx)
-        ipos = ipos.reshape(-1 , ipos.shape[-1])
-
-        if self.loader_type == 'train':
-            i_train , i_valid = (ipos[ii_train] , ipos[ii_valid])
-            return {'train': i_train, 'valid': i_valid} 
-        else:
-            return {'test': ipos} 
         
-    def static_dataloader(self , x , y , w , index , nonnan_sample):
-        """
-        1. update dataloaders dict(set_name = ['train' , 'valid']), save batch_data to './model/{model_name}/{set_name}_batch_data' and later load them
-        """
-        # init i (row , col position) and y (labels) matrix
-        set_iter = ['train' , 'valid'] if self.loader_type == 'train' else ['test']
-        self.loader_storage.del_group(self.loader_type)
-        loaders = dict()
-        # mapping = lambda d:{k:(d[k] if k == 'i' else self.device(d[k])) for k in d.keys()}
-
-        for set_name in set_iter:
-            if self.loader_type == 'train':
-                set_i = index[set_name]
-                batch_sampler = torch.utils.data.BatchSampler(range(len(set_i)) , self.kwarg.batch_size , drop_last = False)
-            else:
-                set_i = [index[set_name][index[set_name][:,1] == i1] for i1 in index[set_name][:,1].unique()]
-                batch_sampler = range(len(set_i))
-
-            batch_file_list = []
-            for batch_num , pos in enumerate(batch_sampler):
-                batch_file_list.append(f'./data/minibatch/{set_name}/{set_name}.{batch_num}.pt')
-                batch_i = set_i[pos]
-                assert torch.isin(batch_i[:,1] , torch.tensor(self.step_idx)).all()
-                i0 , i1 , yi1 = batch_i[:,0] , batch_i[:,1] , match_values(self.step_idx , batch_i[:,1])
-                batch_x = []
-                batch_y = y[i0,yi1]
-                batch_w = None if w is None else w[i0,yi1]
-                for mdt in x.keys():
-                    data = torch.cat([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1)
-                    data = self.prenorm(data,mdt)
-                    batch_x.append(data)
-                batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
-                batch_nonnan = nonnan_sample[i0,yi1]
-                batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
-                self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.loader_type)
-            loaders[set_name] = dataloader_saved(self.loader_storage , batch_file_list , self.device , self.kwarg.verbosity >= 10)
-        self.dataloaders.update(loaders)
-        
-    def sample_index2(self , nonnan_sample):
+    def data_sampling(self , nonnan_sample):
         """
         update index of train/valid sub-samples of flattened all-samples(with in 0:len(index[0]) * step_len - 1)
         sample_tensor should be boolean tensor , True indicates non
@@ -324,66 +253,43 @@ class ModelData():
         """
         assert self.kwarg.sample_method in ['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] , self.kwarg.sample_method
 
+        def _shuffle_sampling(ii , batch_size = self.kwarg.batch_size):
+            pool = np.random.permutation(np.arange(len(ii)))
+            return [ii[pos] for pos in BatchSampler(pool , batch_size , drop_last=False)]
+
         shp = nonnan_sample.shape
         ipos = torch.zeros(shp[0] , shp[1] , 2 , dtype = torch.int)
         ipos[:,:,0] = torch.arange(shp[0] , dtype = torch.int).reshape(-1,1) 
         ipos[:,:,1] = torch.tensor(self.step_idx)
 
+        sample_index = {}
         if self.loader_type == 'train':
-            sample_index = {'train': [] , 'valid': []} 
             train_dates = int(shp[1] * self.kwarg.train_ratio)
-
             if self.kwarg.sample_method == 'total_shuffle':
-                iipos = ipos[nonnan_sample]
-                train_samples = int(len(iipos) * self.kwarg.train_ratio)
-                pool = np.arange(len(iipos))
-                random.shuffle(pool) # type: ignore
-                ii_train , ii_valid = iipos[:train_samples] , iipos[train_samples:]
-
-                pool = np.arange(len(ii_train))
-                random.shuffle(pool) # type: ignore
-                batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
-                for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
-
-                pool = np.arange(len(ii_valid))
-                random.shuffle(pool) # type: ignore
-                batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
-                for pos in batch_sampler: sample_index['valid'].append(ii_valid[pos])
-
+                pool = np.random.permutation(np.arange(nonnan_sample.sum()))
+                train_samples = int(len(pool) * self.kwarg.train_ratio)
+                ii_train = ipos[nonnan_sample][pool[:train_samples]]
+                ii_valid = ipos[nonnan_sample][pool[train_samples:]]
+                sample_index['train'] = _shuffle_sampling(ii_train)
+                sample_index['valid'] = _shuffle_sampling(ii_valid)
             elif self.kwarg.sample_method == 'both_shuffle':
                 ii_train = ipos[:,:train_dates][nonnan_sample[:,:train_dates]]
-                pool = np.arange(len(ii_train))
-                random.shuffle(pool) # type: ignore
-                batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
-                for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
-
                 ii_valid = ipos[:,train_dates:][nonnan_sample[:,train_dates:]]
-                pool = np.arange(len(ii_valid))
-                random.shuffle(pool) # type: ignore
-                batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
-                for pos in batch_sampler: sample_index['valid'].append(ii_valid[pos])
-
+                sample_index['train'] = _shuffle_sampling(ii_train)
+                sample_index['valid'] = _shuffle_sampling(ii_valid)
             elif self.kwarg.sample_method == 'train_shuffle':
                 ii_train = ipos[:,:train_dates][nonnan_sample[:,:train_dates]]
-                pool = np.arange(len(ii_train))
-                random.shuffle(pool) # type: ignore
-                batch_sampler = torch.utils.data.BatchSampler(pool , self.kwarg.batch_size , drop_last=False)
-                for pos in batch_sampler: sample_index['train'].append(ii_train[pos])
-
-                for pos in range(train_dates , shp[1]): sample_index['valid'].append(ipos[:,pos][nonnan_sample[:,pos]])
-
+                sample_index['train'] = _shuffle_sampling(ii_train)
+                sample_index['valid'] = [ipos[:,pos][nonnan_sample[:,pos]] for pos in range(train_dates , shp[1])]
             else:
-                for pos in range(0 , train_dates): sample_index['train'].append(ipos[:,pos][nonnan_sample[:,pos]])
-
-                for pos in range(train_dates , shp[1]): sample_index['valid'].append(ipos[:,pos][nonnan_sample[:,pos]])
+                sample_index['train'] = [ipos[:,pos][nonnan_sample[:,pos]] for pos in range(0 , train_dates)]
+                sample_index['valid'] = [ipos[:,pos][nonnan_sample[:,pos]] for pos in range(train_dates , shp[1])]
         else:
-            sample_index = {'test': []} 
-            test_dates = shp[1]
-            for pos in range(test_dates): sample_index['test'].append(ipos[:,pos][nonnan_sample[:,pos]])
+            sample_index['test'] = [ipos[:,pos][nonnan_sample[:,pos]] for pos in range(0 , shp[1])]
 
         return sample_index
         
-    def static_dataloader2(self , x , y , w , sample_index , nonnan_sample):
+    def static_dataloader(self , x , y , w , sample_index , nonnan_sample):
         """
         1. update dataloaders dict(set_name = ['train' , 'valid']), save batch_data to './model/{model_name}/{set_name}_batch_data' and later load them
         """
