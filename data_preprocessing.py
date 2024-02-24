@@ -36,37 +36,10 @@ process_param = {
             }
         } ,
     } , 
-    # 'gp' : {}
-}
-"""
-process_param = {
-    'y' : {
-        'DB_source'  : {'labels': {'inner_path' : ['10days/lag1' , '20days/lag1']}} , 
-    },
-    'trade_day' : {
-        'DB_source'  : {
-            'trade_day': {            
-                'db' : None ,  'inner_path':'day/trade' ,
-                'feature' : ['adjfactor', 'close', 'high', 'low', 'open', 'vwap' , 'turn_fl'],
-            }
-        } , 
-    },
-    'trade_30m' : {
-        'DB_source'  : {
-            'trade_30m': {
-                'db' : 'trade_Xmin' ,  'inner_path':'30min/trade' , 
-                'feature' : ['minute' , 'close', 'high', 'low', 'open', 'volume', 'vwap'] ,
-            },
-            'trade_day': {
-                'db' : None ,  'inner_path':'day/trade' ,
-                'feature' : ['volume' , 'turn_fl' , 'preclose'] ,
-            }
-        } ,
-    } , 
-        'trade_15m' : {
+    'trade_15m' : {
         'DB_source'  : {
             'trade_15m': {
-                'db' : 'trade_Xmin' ,  'inner_path':'30min/trade' , 
+                'db' : 'trade_Xmin' ,  'inner_path':'15min/trade' , 
                 'feature' : ['minute' , 'close', 'high', 'low', 'open', 'volume', 'vwap'] ,
             },
             'trade_day': {
@@ -85,6 +58,9 @@ process_param = {
     } , 
     # 'gp' : {}
 }
+
+"""
+
 """
 
 def main(confirm = -1 , parser = None):
@@ -97,7 +73,7 @@ def main(confirm = -1 , parser = None):
     except:
         parser = parser.parse_args(args=[])
 
-    if not parser.confirm or not input('You want to update data? print "yes" to confirm!').lower() == 'yes' : exit()
+    if not parser.confirm or not input('Confirm update data? print "yes" to confirm!').lower()[0] == 'y' : exit()
 
     t1 = time.time()
     logger.critical('Data Processing start!')

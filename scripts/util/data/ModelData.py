@@ -563,6 +563,12 @@ class DataBlock():
             else:
                 self.values = self.values.to(dtype)
         return self
+    
+    def align(self , secid = None , date = None , feature = None):
+        self = self.align_secid(secid)
+        self = self.align_date(date)
+        self = self.align_feature(feature)
+        return self    
 
     def align_secid(self , secid):
         if secid is None or len(secid) == 0: return self
@@ -580,7 +586,7 @@ class DataBlock():
         _ , p0d , p1d = np.intersect1d(date , self.date , return_indices=True)
         values[:,p0d] = self.values[:,p1d]
         self.values  = values
-        self.secid   = date
+        self.date    = date
         self.shape   = self.values.shape
         return self
     
@@ -862,7 +868,9 @@ def block_process(BlockDict , key):
     elif key_abbr in ['15m','30m','60m']:
         final_feat = ['open','close','high','low','vwap','turn_fl']
         data_block = BlockDict[key]
-        db_day = BlockDict['trade_day'].align_secid(data_block.secid)
+        db_day = BlockDict['trade_day'].align(secid = data_block.secid , date = data_block.date)
+        del BlockDict['trade_day']
+        gc.collect()
         
         data_block = block_price_adjust(data_block,divide=db_day.get(feature='preclose'))
         data_block = block_vol_adjust(data_block,divide=db_day.get(feature='volume')/db_day.get(feature='turn_fl'),vol_feat='volume')
@@ -874,7 +882,7 @@ def block_process(BlockDict , key):
         num_days = 5
         data_block = BlockDict['trade_day']
 
-        data_block=block_price_adjust(data_block)
+        data_block = block_price_adjust(data_block)
         new_values = np.full(np.multiply(data_block.shape,(1,1,num_days,1)),np.nan)
         for i in range(num_days): new_values[:,num_days-1-i:,i] = data_block.values[:,:len(data_block.date)-num_days+1+i,0]
         data_block.update(values = new_values)
