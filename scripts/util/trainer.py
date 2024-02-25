@@ -6,6 +6,9 @@ from copy import deepcopy
 from .logger import *
 
 use_device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+if torch.cuda.is_available():
+    print(f'Use device name: ' + torch.cuda.get_device_name(0))
+
 class Device:
     def __init__(self , device = None) -> None:
         if device is None: device = use_device

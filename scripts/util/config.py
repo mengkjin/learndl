@@ -48,11 +48,12 @@ class TrainConfig(argparse.Namespace):
         if keys is None: keys = self.items()
         return {k:self.get(k) for k in keys}
 
-def config_parser(input = {} , description='manual to this script'):
+def config_parser_args(input = {} , description='manual to this script'):
     parser = argparse.ArgumentParser(description=description)
     for arg in ['process' , 'rawname' , 'resume' , 'anchoring']:
         parser.add_argument(f'--{arg}', type=int, default = input.get(arg , -1))
-    return parser
+    args , _ = parser.parse_known_args()
+    return args
 
 def set_config_environment(config , manual_random_seed = None):
     _set_random_seed(manual_random_seed if manual_random_seed is not None else config.TRAIN_PARAM['dataloader']['random_seed'])
@@ -67,6 +68,7 @@ def _set_random_seed(seed = None):
     np.random.seed(seed)
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
+    os.environ['KMP_DUPLICATE_LIB_OK'] = 'True' # 重复加载libiomp5md.dll https://zhuanlan.zhihu.com/p/655915099
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -86,7 +88,7 @@ def _load_raw_config(config_files = None):
         del config['special_config']['transformer']
     return config
 
-def train_config(config = None , parser = argparse.Namespace() , do_process = False , 
+def train_config(config = None , parser_args = argparse.Namespace() , do_process = False , 
                  reload_name = None , reload_base_path = None , config_files = None , override_config = {}):
     """
     1. namespace type of config
@@ -110,13 +112,14 @@ def train_config(config = None , parser = argparse.Namespace() , do_process = Fa
     config.model_name = '_'.join([x for x in name_element if x is not None])
     config.model_base_path = f'./model/{config.model_name}'
     config.instance_path   = f'./instance/{config.model_name}'
-        
-    # parser
-    for k , v in parser.__dict__.items(): setattr(config , k , v)
-    
+
+    for k , v in parser_args.__dict__.items(): 
+        assert k not in config.keys() , k
+        setattr(config , k , v)
+
     if do_process:
         # process_confirmation
-        process = getattr(parser , 'process' , -1)
+        process = getattr(config , 'process' , -1)
         if process < 0:
             print(f'--What process would you want to run? 0: all, 1: train only (default), 2: test only , 3: copy to instance')
             process = int(input(f'[0,all] , [1,train] , [2,test] , [3,instance]: '))
@@ -131,7 +134,7 @@ def train_config(config = None , parser = argparse.Namespace() , do_process = Fa
 
         # resume training
         # ask if resume training, since unexpected end of training may happen
-        resume = getattr(parser , 'resume' , -1)
+        resume = getattr(config , 'resume' , -1)
         candidate_name = [x for x in [config.model_name] if os.path.exists(f'./model/{x}')] + \
             [x for x in os.listdir(f'./model') if x.startswith(config.model_name + '.')]   
         if 'train' in config.process_queue and resume < 0 and len(candidate_name) > 0:
@@ -144,7 +147,7 @@ def train_config(config = None , parser = argparse.Namespace() , do_process = Fa
         # Confirm the model_name and model_base_path if multifple model_name dirs exists.
         # If include train: check if dir of model_name exists, if so ask to remove the old ones or continue with a sequential one
         # If test only :    check if model_name exists multiple dirs, if so ask to use the raw one or a select one
-        rawname = getattr(parser , 'rawname' , -1)
+        rawname = getattr(config , 'rawname' , -1)
         if 'train' in config.process_queue:
             if rawname < 0 and config.resume_training and len(candidate_name) > 0:
                 if len(candidate_name) > 1:

@@ -914,12 +914,12 @@ sd_step = deepcopy(net.state_dict())
 
 """
 
-def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser = None):
-    if parser is None:
+def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser_args = None):
+    if parser_args is None:
         input = {'process':process,'rawname':rawname,'resume':resume,'anchoring':anchoring}
-        parser = U.config.config_parser(input).parse_args(args=[])
+        parser_args = U.config.config_parser_args(input)
 
-    config.replace(U.config.train_config(parser = parser , do_process = True))
+    config.replace(U.config.train_config(parser_args = parser_args , do_process = True))
     U.config.set_config_environment(config)
 
     if not config.short_test:
@@ -935,6 +935,5 @@ def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser = N
     app.summary()
 
 if __name__ == '__main__':
-    parser = U.config.config_parser().parse_args()
-    main(parser = parser)
+    main(parser_args = U.config.config_parser_args())
  

@@ -67,13 +67,9 @@ def main(confirm = -1 , parser = None):
     if parser is None:
         parser = argparse.ArgumentParser(description='manual to this script')
         parser.add_argument("--confirm", type=str, default = confirm)
+        args , _ = parser.parse_known_args()
 
-    try:
-        parser = parser.parse_args()
-    except:
-        parser = parser.parse_args(args=[])
-
-    if not parser.confirm or not input('Confirm update data? print "yes" to confirm!').lower()[0] == 'y' : exit()
+    if not args.confirm or not input('Confirm update data? print "yes" to confirm!').lower()[0] == 'y' : exit()
 
     t1 = time.time()
     logger.critical('Data Processing start!')

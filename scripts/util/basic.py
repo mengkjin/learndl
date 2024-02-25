@@ -43,6 +43,7 @@ class ProcessTimer:
             tb = pd.DataFrame({'keys':keys , 'num_calls': num_calls, 'total_time': total_time})
             tb['avg_time'] = tb['total_time'] / tb['num_calls']
             print(tb.sort_values(by=['total_time'],ascending=False))
+            
 class MemoryPrinter:
     def __init__(self) -> None:
         pass
