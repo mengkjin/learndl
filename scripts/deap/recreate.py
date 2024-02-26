@@ -1,20 +1,18 @@
 # %%
 import pandas as pd
 import numpy as np
-import os , sys , copy
+import os , sys , copy , tqdm
 import torch
 import argparse
 import array , random , json , operator , time, platform , joblib
+from tqdm import tqdm
 
-from copy import deepcopy
-from deap import base , creator , tools , gp , algorithms
+from deap import base , creator , tools , gp
 from deap.algorithms import varAnd
 from torch.multiprocessing import Pool
 
-from tqdm import tqdm
-# from math_func_gpu import *
-
 import math_func_gpu as F
+from gp_types import gpTypes
 
 _plat      = platform.system().lower()
 _test_code = True or _plat == 'windows'
@@ -148,9 +146,9 @@ def gp_dictionary(gp_params , gp_timer):
         gp_dict = copy.deepcopy(gp_params)
         slice_date = gp_dict['slice_date']
 
-        df_list = ['close', 'turn', 'volume', 'amt', 'open', 'high', 'low', 'vwap', 'bp', 'ep', 'ocfp', 'dp', 'adv20', 'adv60']
-        df_ori_list = [f'{_d}_ori' for _d in df_list] + ['return1_ori']
-        gp_args = df_list + df_ori_list # gp args sequence
+        df_fac_list = ['close', 'turn', 'volume', 'amt', 'open', 'high', 'low', 'vwap', 'bp', 'ep', 'ocfp', 'dp', 'adv20', 'adv60']
+        df_raw_list = [f'{_d}_raw' for _d in df_fac_list] + ['return1_raw']
+        gp_args = df_fac_list + df_raw_list # gp args sequence
 
         gp_values = []
         nrowchar = 0
@@ -166,11 +164,12 @@ def gp_dictionary(gp_params , gp_timer):
 
         gp_dict['gp_args']   = gp_args
         gp_dict['gp_values'] = gp_values
+        gp_dict['n_args']    = (len(df_fac_list) , len(df_raw_list))
         for key in ['size' , 'cs_indus_code']: gp_dict[key] = read_gp_data(key,slice_date,gp_dict.get('stockcol'),device=gp_dict.get('device'))[0]
 
-        cp_ori = gp_values[gp_args.index('close_ori')]
-        labels = F.ts_delaypct_torch(cp_ori, 10)  # t-10至t的收益率
-        labels = F.ts_delay_torch(labels, -11)  # t+1至t+11的收益率
+        cp_raw = gp_values[gp_args.index('close_raw')]
+        labels = F.ts_delaypct(cp_raw, 10)  # t-10至t的收益率
+        labels = F.ts_delay(labels, -11)  # t+1至t+11的收益率
         labels_resid = F.neutralize_numpy(labels, gp_dict['size'], gp_dict['cs_indus_code'])  # 市值行业中性化
 
         gp_dict['labels'] = gp_dict['labels_resid'] = labels_resid
@@ -179,8 +178,8 @@ def gp_dictionary(gp_params , gp_timer):
     return gp_dict
 
 def gp_data_filename(gp_key : str):
-    ori = gp_key.endswith('_ori')
-    k   = gp_key[:-4] if ori else gp_key
+    raw = gp_key.endswith('_raw')
+    k   = gp_key[:-4] if raw else gp_key
     if k == 'open1':
         v = f'open'
     elif k == 'bp':
@@ -193,7 +192,7 @@ def gp_data_filename(gp_key : str):
         v = f'{k}_adj'
     else:
         v = k
-    return f'{v}_day' if ori or v in ['cs_indus_code' , 'size'] else f'{v}_zscore_day'
+    return f'{v}_day' if raw or v in ['cs_indus_code' , 'size'] else f'{v}_zscore_day'
 
 def read_gp_data(gp_key,slice_date,stockcol=None,first_data=False,device=None,input_freq='D'):
     file = f'{_DIR_data}/{gp_data_filename(gp_key)}.parquet'
@@ -218,111 +217,11 @@ def read_gp_data(gp_key,slice_date,stockcol=None,first_data=False,device=None,in
     df.share_memory_() # 执行多进程时使用：将张量移入共享内存
     return (df , first_data_return)
 
-
-# %%
-class gpTypes:
-    # types:
-    class POSINT0(): pass
-    class POSINT1(): pass
-    class POSINT2(): pass
-    class POSINT3(): pass
-    class POSINT4(): pass
-    class POSINT5(): pass
-    class DF_ori(): pass
-    class DF(): pass
-
-    @staticmethod
-    def _returnself(input): return input
-
-    # methods (or Primatives):
-    @classmethod
-    def primatives_self(cls):
-        return [
-            (cls._returnself, [cls.DF], cls.DF , '_df') ,
-            (cls._returnself, [cls.DF_ori], cls.DF_ori , '_dfo') ,
-            #(cls._returnself, [cls.POSINT0], cls.POSINT0, '_int0') ,
-            (cls._returnself, [cls.POSINT1], cls.POSINT1, '_int1') ,
-            (cls._returnself, [cls.POSINT2], cls.POSINT2, '_int2') ,
-            (cls._returnself, [cls.POSINT3], cls.POSINT3, '_int3') ,
-            #(cls._returnself, [cls.POSINT4], cls.POSINT4, '_int4') ,
-            #(cls._returnself, [cls.POSINT5], cls.POSINT5, '_int5') ,
-        ]
-    @classmethod
-    def primatives_1d(cls):
-        # (primative , in_types , out_type , name)
-        return [
-            (F.log_torch, [cls.DF], cls.DF) ,
-            (F.sqrt_torch, [cls.DF], cls.DF) ,
-            (F.neg, [cls.DF], cls.DF) ,
-            (F.rank_pct_torch, [cls.DF], cls.DF) ,
-            (F.sign_torch, [cls.DF_ori], cls.DF) ,
-            (F.scale_torch, [cls.DF], cls.DF) ,
-            (F.sigmoid_torch, [cls.DF], cls.DF) ,
-            # (F.signedpower, [pd.DataFrame,int], pd.DataFrame) ,
-            # (F.neg_int, [int], int) ,
-        ]
-    @classmethod
-    def primatives_2d(cls):
-        # (primative , in_types , out_type , name)
-        return [
-            (F.add, [cls.DF, cls.DF], cls.DF) ,
-            (F.sub, [cls.DF, cls.DF], cls.DF) ,
-            (F.mul, [cls.DF, cls.DF], cls.DF) ,
-            (F.div, [cls.DF, cls.DF], cls.DF) ,
-            (F.ts_delaypct_torch, [cls.DF, cls.POSINT1], cls.DF) ,
-            (F.ts_stddev_torch, [cls.DF, cls.POSINT2], pd.DataFrame) ,
-            (F.ts_sum_torch, [cls.DF, cls.POSINT2], cls.DF) ,
-            # (F.ts_product_torch, [cls.DF, cls.POSINT2], cls.DF) ,
-            (F.ts_delay_torch, [cls.DF, cls.POSINT1], cls.DF) ,
-            (F.ts_delta_torch, [cls.DF, cls.POSINT1], cls.DF) ,
-            (F.ts_decay_linear_igrnan_torch, [cls.DF, cls.POSINT2], cls.DF) ,
-            (F.ts_min_torch, [cls.DF, cls.POSINT2], cls.DF) ,
-            (F.ts_max_torch, [cls.DF, cls.POSINT2], cls.DF) ,
-            (F.ts_argmin_torch, [cls.DF_ori, cls.POSINT2], cls.DF) ,
-            (F.ts_argmax_torch, [cls.DF_ori, cls.POSINT2], cls.DF) ,
-            (F.ts_rank_torch, [cls.DF_ori, cls.POSINT2], cls.DF) ,
-            # (F.ts_zscore, [pd.DataFrame,cls.POSINT2], pd.DataFrame) ,
-            (F.rank_sub_torch, [cls.DF, cls.DF], cls.DF) ,
-            (F.rank_div_torch, [cls.DF, cls.DF], cls.DF) ,
-            (F.rank_add_torch, [cls.DF, cls.DF], cls.DF) ,
-            # (F.add_int, [pd.DataFrame, int], pd.DataFrame) ,
-            # (F.sub_int1, [pd.DataFrame, int], pd.DataFrame) ,
-            # (F.sub_int2, [int, pd.DataFrame], pd.DataFrame) ,
-            # (F.mul_int, [pd.DataFrame, int], pd.DataFrame) ,
-            # (F.div_int1, [pd.DataFrame, int], pd.DataFrame) ,
-            # (F.div_int2, [int, pd.DataFrame], pd.DataFrame) ,
-        ]
-    @classmethod
-    def primatives_3d(cls):
-        # (primative , in_types , out_type , name)
-        return [
-            (F.ts_rankcorr_torch, [cls.DF, cls.DF, cls.POSINT2], cls.DF) ,
-            (F.ts_SubPosDecayLinear_torch, [cls.DF, cls.DF, cls.POSINT3], cls.DF) ,
-            (F.ts_correlation_torch, [cls.DF_ori, cls.DF_ori, cls.POSINT2], cls.DF) ,
-            (F.ts_covariance_torch, [cls.DF, cls.DF, cls.POSINT2], cls.DF) ,
-        ]
-    @classmethod
-    def primatives_4d(cls):
-        # (primative , in_types , out_type , name)
-        return [
-            (F.ts_grouping_ascsortavg_torch, [cls.DF, cls.DF_ori, cls.POSINT3, cls.POSINT1], cls.DF) ,
-            (F.ts_grouping_decsortavg_torch, [cls.DF, cls.DF_ori, cls.POSINT3, cls.POSINT1], cls.DF) ,
-            (F.ts_grouping_decsortavg_torch, [cls.DF, cls.DF_ori, cls.POSINT3, cls.POSINT1], cls.DF) ,
-            #(F.rolling_selmean_btm, [cls.DF, cls.DF_ori, cls.POSINT5, cls.POSINT4], cls.DF,name='rolling_selmean_btm_long') ,
-            #(F.rolling_selmean_top, [cls.DF, cls.DF_ori, cls.POSINT5, cls.POSINT4], cls.DF,name='rolling_selmean_top_long') ,
-            #(F.rolling_selmean_diff, [cls.DF, cls.DF_ori, cls.POSINT5, cls.POSINT4], cls.DF,name='rolling_selmean_diff_long') ,
-        ]
-    @classmethod
-    def primatives_all(cls):
-        return [prima for plist in [getattr(cls , f'primatives_{m}')() for m in ['self','1d','2d','3d','4d']] for prima in plist]
-
-
-
 # %%
 def evaluate(individual, pool_skuname, labels , labels_resid, slice_indexnum , size ,
              gp_values , compile_func , **kwargs):
     '''定义遗传算法中的适应度函数，即信息比率的绝对值abs(rankIR)'''
-    # individual: 如sigmoid_torch(rank_sub_torch(ts_grouping_decsortavg_torch(turn, dp_ori, 15, 4), high)) 
+    # individual: 如sigmoid(rank_sub(ts_grouping_decsortavg(turn, dp_raw , 15, 4), high)) 
     # pool_skuname: 如z_iter0_gen0_0
     '记录开始时间并输出txt'
     # print(str(individual))
@@ -355,7 +254,7 @@ def evaluate(individual, pool_skuname, labels , labels_resid, slice_indexnum , s
 
     ir_list = []
     for resid in [True , False]:
-        ic = F.corrwith_torch_matrix(F.rank_pct_torch(func_value_gp), F.rank_pct_torch(labels_resid if resid else labels),dim=1)
+        ic = F.corrwith(F.rank_pct(func_value_gp), F.rank_pct(labels_resid if resid else labels),dim=1)
         for in_sample in [True , False]:
             ic_samp = ic[slice_indexnum[0]:slice_indexnum[1]+1] if in_sample else ic[slice_indexnum[2]:slice_indexnum[3]+1]
             ic_std = (((ic_samp - ic_samp.nanmean()) ** 2).nanmean()) ** 0.5 + 1e-6
@@ -369,35 +268,16 @@ def evaluate(individual, pool_skuname, labels , labels_resid, slice_indexnum , s
     #     print(str(individual), '\n',ir,'\n', 'start_time', time.ctime(start_time_sku),file=file1)
     #     print(' end_time', time.ctime(end_time_sku), '\n time_cost',
     #           time.strftime("%H:%M:%S", time.gmtime(end_time_sku - start_time_sku)),file=file1)
-    return abs(ir_list[0]) , ir_list
+    return (abs(ir_list[0]),) , ir_list
 
 
 # %%
-def gp_toolbox(gp_args , i_iter , max_depth = 5 , **kwargs):
-    def _delnames(obj , names):
-        [(delattr(obj , n) if hasattr(obj , n) else None) for n in names]
-            
-    pset = gp.PrimitiveSetTyped("main", [gpTypes.DF] * 14 + [gpTypes.DF_ori] * 15, gpTypes.DF)
-    
-    # ------------定义遗传算法中的初始因子（初始输入变量）--------------
-    for i , v in enumerate(gp_args): pset.renameArguments(**{f'ARG{i}':v})
-    
-    #--------添加遗传算法中的随机正整数----------
-    _delnames(gp , [f'POSINT{i}_{i_iter}' for i in range(6)])
-    # pset.addEphemeralConstant('gpTypes.POSINT0',lambda: np.random.randint(0,10+1),gpTypes.POSINT0)
-    # pset.addPrimitive(_returnself, [gpTypes.POSINT0], gpTypes.POSINT0,name='int_')
-    pset.addEphemeralConstant(f'POSINT1_{i_iter}', lambda: np.random.randint(1,10+1), gpTypes.POSINT1)
-    pset.addEphemeralConstant(f'POSINT2_{i_iter}', lambda: np.random.randint(2,10+1), gpTypes.POSINT2)
-    for v in [10 , 15 , 20 , 40]:  pset.addTerminal(v, gpTypes.POSINT3)
-    #for v in [1 , 5 , 10 , 20 , 40 , 60]:  pset.addTerminal(v, gpTypes.POSINT4)
-    #for v in [60 , 120 , 180 , 200 , 240]: pset.addTerminal(v, gpTypes.POSINT5)
-
-    # add primatives
-    for prima in gpTypes.primatives_all(): pset.addPrimitive(*prima)
+def gp_toolbox(gp_args , i_iter , max_depth = 5 , n_args = (1,1) , **kwargs):
+    pset = gpTypes.new_pset(*n_args , arg_names=gp_args , i_iter=i_iter)
 
     '''创建遗传算法基础模块，以下参数不建议更改，如需更改，可参考deap官方文档'''
     # https://zhuanlan.zhihu.com/p/72130823
-    _delnames(creator , ['FitnessMin' , 'Individual'])
+    [(delattr(creator , n) if hasattr(creator , n) else None) for n in ['FitnessMin' , 'Individual']]
     creator.create("FitnessMin", base.Fitness, weights=(+1.0,))   # 优化问题：单目标优化，weights为单元素；+1表明适应度越大，越容易存活
     creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMin, pset=pset) # type:ignore 个体编码：pset，预设的
 
@@ -414,9 +294,7 @@ def gp_toolbox(gp_args , i_iter , max_depth = 5 , **kwargs):
     toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=3))  # max=3
     toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=3))  # max=3
 
-    '创建遗传算法种群，定义初始人口数及选取的最优个体数'
     return toolbox
-
 
 
 # %%
@@ -434,50 +312,6 @@ def gp_eaSimple(toolbox , population , i_iter, pool_num=1,
             population = offspring    # 更新种群
     """
 
-    """
-    if start_gen is None:
-        i_gen = 0
-        logbook = tools.Logbook()
-        logbook.header = ['i_gen', 'nevals'] + (stats.fields if stats else []) # type: ignore
-        # Evaluate the individuals with an invalid fitness
-        invalid_ind = [ind for ind in population if not ind.fitness.valid]
-
-        '评估个体abs(IR)值'
-        pool_list = [f'iter{i_iter}_gen{i_gen}_{i}' for i in range(len(invalid_ind))]
-
-        if pool_num > 1:
-            if verbose and i_gen == 0: print('muti'+str(pool_num))
-            pool = Pool(pool_num)
-            # fitnesses = list(tqdm(pool.map(toolbox.evaluate, invalid_ind, pool_list), total=len(invalid_ind), desc="gen"+str(0)))
-            fitnesses = pool.starmap(toolbox.evaluate, zip(invalid_ind, pool_list), chunksize=1)
-            # fitnesses = pool.map(myfunc,range(10))
-            pool.close()
-            pool.join()
-            # pool.clear()
-        else:
-            # 调用evaluate
-            fitnesses = toolbox.map(toolbox.evaluate, invalid_ind, pool_list)
-
-        for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = tuple([fit[0]])
-            ind.ir_list = fit[1]
-
-        if halloffame is not None:
-            halloffame.update(population)
-
-        record = stats.compile(population) if stats else {}
-        logbook.record(i_gen=i_gen, nevals=len(invalid_ind), **record)
-        if verbose: print(logbook.stream)
-        joblib.dump(population, f'{_DIR_job}/pop_iter{i_iter}_' + str(0) + '.pkl')
-        joblib.dump(halloffame, f'{_DIR_job}/hof_iter{i_iter}_' + str(0) + '.pkl')
-        joblib.dump(logbook   , f'{_DIR_job}/log_iter{i_iter}_' + str(0) + '.pkl')
-        start_gen = i_gen + 1
-    else:
-        population = joblib.load(f'{_DIR_job}/pop_iter{i_iter}_' + str(start_gen-1) + '.pkl')
-        halloffame = joblib.load(f'{_DIR_job}/hof_iter{i_iter}_' + str(start_gen-1) + '.pkl')
-        logbook    = joblib.load(f'{_DIR_job}/log_iter{i_iter}_' + str(start_gen-1) + '.pkl')
-    """
-
     if start_gen is not None and start_gen > 0:
         population = joblib.load(f'{_DIR_job}/pop_iter{i_iter}_{start_gen-1}.pkl')
         halloffame = joblib.load(f'{_DIR_job}/hof_iter{i_iter}_{start_gen-1}.pkl')
@@ -493,20 +327,20 @@ def gp_eaSimple(toolbox , population , i_iter, pool_num=1,
         if i_gen == 0:
             offspring = population
         else:
-            # Select the next generation individuals，abs(IR)越大，则被选中的概率越大
+            # Select the next generation individuals，based on abs(IR)
             offspring = toolbox.select(population, len(population))
             # Vary the pool of individuals: varAnd means variation part (crossover and mutation)
             varAnd_timer  = gpAccTimer()
             with varAnd_timer:
                 offspring = varAnd(offspring, toolbox, cxpb , mutpb)
 
-        # Evaluate the individuals with an invalid fitness（对于发生改变的个体，重新评估abs(IR)值）
-        invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-        pool_list = [f'iter{i_iter}_gen{i_gen}_{i}' for i in range(len(invalid_ind))]
+        # Re-Evaluate the individuals with an invalid fitness（对于发生改变的个体，重新评估abs(IR)值）
+        invalid_ind = [ind for ind in offspring if not ind.fitness.valid] # 'individual' arg for evaluate
+        pool_list = [f'iter{i_iter}_gen{i_gen}_{i}' for i in range(len(invalid_ind))] # 'pool_skuname' arg for evaluate
         if pool_num > 1:
             pool = Pool(pool_num)
-            # fitnesses = list(tqdm(pool.imap(toolbox.evaluate, invalid_ind, pool_list), total=len(invalid_ind), desc="gen"+str(i_gen)))
-            fitnesses = pool.starmap(toolbox.evaluate, zip(invalid_ind, pool_list), chunksize=1)
+            fitnesses = list(tqdm(pool.imap(toolbox.evaluate, invalid_ind, pool_list), total=len(invalid_ind), desc="gen"+str(i_gen))) #type:ignore
+            #fitnesses = pool.starmap(toolbox.evaluate, zip(invalid_ind, pool_list), chunksize=1)
             pool.close()
             pool.join()
             # pool.clear()
@@ -514,8 +348,8 @@ def gp_eaSimple(toolbox , population , i_iter, pool_num=1,
             fitnesses = toolbox.map(toolbox.evaluate, invalid_ind, pool_list)
         
         for ind, fit in zip(invalid_ind, fitnesses):
-            ind.fitness.values = tuple([fit[0]])
-            ind.ir_list = fit[1]
+            #ind.fitness.values , ind.ir_list = tuple([fit[0]]) , fit[1] #type:ignore
+            ind.fitness.values , ind.ir_list = fit #type:ignore
 
         # Update the hall of fame with the generated individuals
         halloffame.update(offspring)
@@ -533,7 +367,6 @@ def gp_eaSimple(toolbox , population , i_iter, pool_num=1,
         
     if gp_timer: gp_timer.append_time('avg_varAnd' , varAnd_timer.avgtime())
     return population, halloffame , logbook
-
 
 # %%
 def gp_hof_eval(toolbox , halloffame, i_iter , gp_values ,
@@ -560,7 +393,7 @@ def gp_hof_eval(toolbox , halloffame, i_iter , gp_values ,
             # 与已有的因子库做相关性检验，如果相关性大于预设值，则不加入因子库
             good_tag = True
             for hof_good in hof_good_list:
-                corr_value = F.corrwith_torch_matrix(hof_value, hof_good, dim=1).nanmean().abs()
+                corr_value = F.corrwith(hof_value, hof_good, dim=1).nanmean().abs()
                 # print(corr_value)
                 if corr_value > corr_cap: 
                     good_tag = False
