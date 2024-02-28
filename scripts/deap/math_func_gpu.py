@@ -1,9 +1,10 @@
 import pandas as pd
 import numpy as np
 from numba import jit , cuda
-import statsmodels.api as sm
+
 import torch
 from torch import nn
+from sklearn.linear_model import LinearRegression
 
 #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 #import os
@@ -11,211 +12,100 @@ from torch import nn
 #print(__name__)
 
 #%% 中性化函数
-def neutralize(alphan_value_gp,size_gp):
-    name2num = {}
-    for i, col in enumerate(alphan_value_gp.columns):
-        name2num[col] = i + 1  # 将索引从 1 开始，方便后续的处理
-    num2name = {value: key for key, value in name2num.items()}
-    alphan_value_gp_1col = pd.melt(alphan_value_gp.rename(columns=name2num).reset_index(), id_vars=['index'],
-                                   var_name='stock', value_name='alphan')
-    alphan_value_gp_1col = alphan_value_gp_1col.set_index(['index', 'stock'])
-    size_gp_1col = pd.melt(size_gp.rename(columns=name2num).reset_index(), id_vars=['index'], var_name='stock',
-                             value_name='size')
-    size_gp_1col = size_gp_1col.set_index(['index', 'stock'])
-    resids_all = None
-    for dd in alphan_value_gp.index.unique():
-        y = alphan_value_gp_1col.loc[(dd, slice(None)), :]
-        x = size_gp_1col.loc[(dd, slice(None)), :]
 
-        concat_xy = pd.concat([y, x], axis=1).dropna(how='any')
-        if concat_xy.shape[0] < 10:
-            resids = pd.DataFrame(np.nan, index=[dd], columns=alphan_value_gp.columns)
+def one_hot(x):
+    if not isinstance(x , torch.Tensor): x = torch.Tensor(x)
+    nan_index = x.isnan()
+    has_nan = nan_index.any()
+    x_ = torch.where(nan_index , x[~nan_index].max() + 1 , x) if has_nan else x
+    dummy = torch.nn.functional.one_hot(x_.to(torch.int64)).to(torch.float)
+    return dummy[...,:-1] if has_nan else dummy
+
+def _neutralize_yx(y , x_list = [] , x_group = None , no_intercept = True , index = None):
+    if isinstance(x_list , torch.Tensor): x_list = [x_list]
+    if len(x_list) == 0 and x_group is None: return y , None
+    elif x_group is None:
+        x = torch.stack(x_list,dim = -1)
+    elif len(x_list) == 0:
+        x = one_hot(x_group)[...,:-1]
+    else:
+        x = torch.stack(x_list,dim = -1)
+        x = torch.cat([x,one_hot(x_group)[...,:-1]],dim=-1)
+    if no_intercept: x = torch.nn.functional.pad(x , (1,0) , value = 1.)
+    y = y.unsqueeze(-1)
+    if index: y , x = y[index] , x[index]
+    return y , x
+
+def neutralize_np(y , x):
+    if len(y.shape) == len(x.shape)-1: y = y.unsqueeze(-1)
+    
+    try:
+        model = np.linalg.lstsq(x , y , rcond=None)
+        resids = (y - x @ model[0]).T  # [1, C]
+    except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
+        try:    
+            beta = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
+            resids = (y - x @ beta).T
+        except:
+            print('neutralization error!')
+            resids = y.copy()
+    if not isinstance(resids , torch.Tensor): resids = torch.Tensor(resids)
+    return resids.flatten()
+
+def neutralize_sk(y , x):
+    if len(y.shape) == len(x.shape)-1: y = y.unsqueeze(-1)
+
+    model = LinearRegression(fit_intercept=False).fit(x, y)
+    resids = y.reshape(1,-1) - np.matmul(model.coef_.reshape(1,-1) , x.transpose(1,0)) - model.intercept_
+
+    return resids.flatten()
+
+def neutralize_torch(y , x):
+    if len(y.shape) == len(x.shape)-1: y = y.unsqueeze(-1)
+    
+    try:
+        model = torch.linalg.lstsq(x , y , rcond=None)
+        resids = (y - x @ model[0]).T  # [1, C]
+    except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
+        try:    
+            beta = torch.linalg.inv(x.T.matmul(x)).matmul(x.T).matmul(y)
+            resids = (y - x @ beta).T
+        except:
+            print('neutralization error!')
+            resids = y.copy()
+
+    return resids.flatten()
+
+def neutralize_2d(y , x_list = [] , x_group = None, method = 'torch' , no_intercept = True , silent= True):  # [tensor (TS*C), tensor (TS*C)]
+    assert method in ['sk' , 'np' , 'torch']
+    y , x = _neutralize_yx(y , x_list , x_group , no_intercept)
+    if x is None: return y
+
+    nan_index = y.isnan().any(dim=-1) + y.isnan().any(dim=-1)
+    if method == 'torch' and not nan_index.any():
+        # fastest, but cannot deal nan's
+        model = torch.linalg.lstsq(x , y , rcond=None)
+        resids_all = (y - x @ model[0])
+    else:
+        if method in ['sk' , 'np']:
+            dev = y.device
+            y , x = y.cpu().numpy() , x.cpu().numpy()
+            nan_index = nan_index.cpu().numpy()
+            resids_all = np.full_like(y.squeeze(-1) , np.nan)
+            neutralize = neutralize_sk if method == 'sk' else neutralize_np
         else:
-            x = concat_xy.iloc[:, 1]
-            y = concat_xy.iloc[:, 0]
-            x = sm.add_constant(x)
-            resids = pd.DataFrame(y - x @ np.linalg.lstsq(x, y, rcond=None)[0]).unstack()
-
-            # resids.index = [i for i in resids.index] #type: ignore
-            resids.columns = [num2name[i[1]] for i in resids.columns]
-            resids = resids.reindex(columns=alphan_value_gp.columns) #type: ignore
-
-        if resids_all is None:
-            resids_all = resids.to_numpy()
-        else:
-            resids_all = np.append(resids_all, resids.to_numpy(), axis=0)
-
-    resids_all_df = pd.DataFrame(resids_all, index=alphan_value_gp.index.unique(), columns=alphan_value_gp.columns)
-    return resids_all_df
-
-def neutralize_torch(alphan_value_gp,size_gp,cs_indus_code,other_factor_list=[]):  #[tensor (TS*C), tensor (TS*C)]
-    assert (alphan_value_gp.shape == size_gp.shape)
-    resids_all = torch.zeros_like(alphan_value_gp) * np.nan
-    for dd in range(alphan_value_gp.shape[0]):
-        y = alphan_value_gp[[dd], :].T  # [C, 1]
-        x = size_gp[[dd], :].T  # [C, 1]
-        concat_xy = torch.cat((y, x), 1)  # [C, 2]
-        cs = cs_indus_code[[dd], :].T  # [C, 1]
-        for cs_index in range(1,29+1-1):  #29个一级行业代码，去掉最后一列避免线性相关
-            cs_dummy = torch.zeros_like(cs)  # [C, 1]
-            cs_dummy[cs == cs_index] = 1
-            if cs_dummy.sum() == 0:
-                continue
-            concat_xy = torch.cat((concat_xy, cs_dummy), 1)  # [C, 2+28+n]
-        for factor_num,other_factor in enumerate(other_factor_list):
-            other_factor_dd = other_factor[[dd], :].T
-            concat_xy = torch.cat((concat_xy, other_factor_dd), 1)
-
-        nan_bool_index = torch.isnan(concat_xy).any(1)  # [C, 1]
-        concat_xy = concat_xy[~nan_bool_index, :]  # [C, 2+28+n]
-        if concat_xy.shape[0] >= 10:
-            x = concat_xy[:, 1:]  # [C, 1+29]
-            y = concat_xy[:, 0]  # [C, 1]
-            x = torch.cat((x, torch.ones(x.shape[0], 1).to(alphan_value_gp.device)), 1)  # [C, 1+28+n+1]
-            resids = (y - torch.matmul(x, torch.matmul(torch.matmul(torch.inverse(torch.matmul(x.T, x)), x.T), y))).T  # [1, C]
-            resids_all[[dd], ~nan_bool_index] = resids
+            resids_all = torch.full_like(y.squeeze(-1) , torch.nan)
+            neutralize = neutralize_torch
+        
+        # if you can make sure there is no nan in the data, torch.linalg.lstsq(x, y) is much faster in 3d
+        for dd in range(len(y)):
+            if dd % 500 == 0 and not silent: print('neutralize by tradedate',dd)
+            y_ , x_ = y[dd , ~nan_index[dd]] , x[dd , ~nan_index[dd]]
+            if len(y_) < 10: continue
+            resids_all[dd,~nan_index[dd]] = neutralize(y_ , x_)
+        
+        if method in ['sk' , 'np']: resids_all = torch.Tensor(resids_all).to(dev)
     return resids_all
-
-
-def neutralize_numpy_(alphan_value_gp, size_gp, cs_indus_code, other_factor_list=[], silent=True):  # [tensor (TS*C), tensor (TS*C)]
-    assert (alphan_value_gp.shape == size_gp.shape)
-    alphan_value_gp = alphan_value_gp.values
-    size_gp = size_gp.values
-    cs_indus_code = cs_indus_code.values
-    resids_all = np.zeros_like(alphan_value_gp) * np.nan
-    for dd in range(alphan_value_gp.shape[0]):
-        if dd%500 == 0 and not silent: print('neutralize by tradedate',dd)
-        y = alphan_value_gp[[dd], :].T  # [C, 1]
-        concat_xy = y
-
-        if len(other_factor_list) == 0:
-            size_dd = size_gp[[dd], :].T  # [C, 1]
-            concat_xy = np.concatenate((concat_xy, size_dd), axis=1)  # [C, 2]
-            cs = cs_indus_code[[dd], :].T  # [C, 1]
-            for cs_index in range(1, 29 + 1 - 1):  # 29个一级行业代码，去掉最后一列避免线性相关
-                cs_dummy = np.zeros_like(cs)  # [C, 1]
-                cs_dummy[cs == cs_index] = 1
-                if cs_dummy.sum() == 0:
-                    continue
-                concat_xy = np.concatenate((concat_xy, cs_dummy), axis=1)  # [C, 2+28+n]
-        else:
-            for factor_num, other_factor in enumerate(other_factor_list):
-                other_factor_dd = other_factor[[dd], :].T
-                #对缺失值用每个时间截面的均值填充
-                other_factor_dd = np.where(np.isnan(other_factor_dd), np.nanmean(other_factor_dd), other_factor_dd)
-                concat_xy = np.concatenate((concat_xy, other_factor_dd), axis=1)
-
-        nan_bool_index = np.isnan(concat_xy).any(1)  # [C, 1]
-        concat_xy = concat_xy[~nan_bool_index, :]  # [C, 2+28+n]
-        concat_xy = np.concatenate((concat_xy, np.ones((concat_xy.shape[0],1))),
-                              axis=1)  # [C, 1+28+n+1]
-        #concat_xy = concat_xy.cpu().numpy()
-
-        if concat_xy.shape[0] >= 10:
-            x = concat_xy[:, 1:]  # [C, 1+29]
-            y = concat_xy[:, 0]  # [C, 1]
-            try:
-                resids = (y - x @ np.linalg.lstsq(x, y, rcond=None)[0]).T  # [1, C]
-            except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
-                beta = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
-                resids = (y - x @ beta).T
-                
-            resids_all[[dd], ~nan_bool_index] = resids
-
-    return resids_all
-
-def neutralize_numpy(alphan_value_gp, size_gp, cs_indus_code, other_factor_list=[], silent= True):  # [tensor (TS*C), tensor (TS*C)]
-    assert (alphan_value_gp.shape == size_gp.shape)
-    resids_all = torch.zeros_like(alphan_value_gp) * np.nan
-    for dd in range(alphan_value_gp.shape[0]):
-        if dd%500 == 0 and not silent: print('neutralize by tradedate',dd)
-        y = alphan_value_gp[[dd], :].T  # [C, 1]
-        concat_xy = y
-
-        if len(other_factor_list) == 0:
-            size_dd = size_gp[[dd], :].T  # [C, 1]
-            concat_xy = torch.cat((concat_xy, size_dd), 1)  # [C, 2]
-            cs = cs_indus_code[[dd], :].T  # [C, 1]
-            for cs_index in range(1, 29 + 1 - 1):  # 29个一级行业代码，去掉最后一列避免线性相关
-                cs_dummy = torch.zeros_like(cs)  # [C, 1]
-                cs_dummy[cs == cs_index] = 1
-                if cs_dummy.sum() == 0:
-                    continue
-                concat_xy = torch.cat((concat_xy, cs_dummy), 1)  # [C, 2+28+n]
-        else:
-            for factor_num, other_factor in enumerate(other_factor_list):
-                other_factor_dd = other_factor[[dd], :].T
-                #对缺失值用每个时间截面的均值填充
-                other_factor_dd = torch.where(torch.isnan(other_factor_dd), torch.nanmean(other_factor_dd), other_factor_dd)
-                concat_xy = torch.cat((concat_xy, other_factor_dd), 1)
-
-        nan_bool_index = torch.isnan(concat_xy).any(1)  # [C, 1]
-        concat_xy = concat_xy[~nan_bool_index, :]  # [C, 2+28+n]
-        concat_xy = torch.cat((concat_xy, torch.ones(concat_xy.shape[0], 1).to(alphan_value_gp.device)),
-                              1)  # [C, 1+28+n+1]
-        concat_xy = concat_xy.cpu().numpy()
-
-        if concat_xy.shape[0] >= 10:
-            x = concat_xy[:, 1:]  # [C, 1+29]
-            y = concat_xy[:, 0]  # [C, 1]
-            try:
-                resids = (y - x @ np.linalg.lstsq(x, y, rcond=None)[0]).T  # [1, C]
-            except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
-                try:    
-                    beta = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
-                    resids = (y - x @ beta).T
-                except:
-                    print('neutralization error!')
-                    resids = alphan_value_gp.copy()
-                    
-            resids_all[[dd], ~nan_bool_index] = torch.Tensor(resids).to(alphan_value_gp.device)
-
-    return resids_all
-
-# 用梯度下降做市值中性化
-
-def neutralize_torch_nn(alphan_value_gp, size_gp, cs_indus_code, other_factor_list=[]):  # [tensor (TS*C), tensor (TS*C)]
-    assert (alphan_value_gp.shape == size_gp.shape)
-    resids_all = torch.zeros_like(alphan_value_gp) * np.nan
-    for dd in range(alphan_value_gp.shape[0]):
-        y = alphan_value_gp[[dd], :].T  # [C, 1]
-        x = size_gp[[dd], :].T  # [C, 1]
-        concat_xy = torch.cat((y, x), 1)  # [C, 2]
-        cs = cs_indus_code[[dd], :].T  # [C, 1]
-        for cs_index in range(1, 29 + 1 - 1):  # 29个一级行业代码，去掉最后一列避免线性相关
-            cs_dummy = torch.zeros_like(cs)  # [C, 1]
-            cs_dummy[cs == cs_index] = 1
-            if cs_dummy.sum() == 0:
-                continue
-            concat_xy = torch.cat((concat_xy, cs_dummy), 1)  # [C, 2+28+n]
-        for factor_num, other_factor in enumerate(other_factor_list):
-            other_factor_dd = other_factor[[dd], :].T
-            concat_xy = torch.cat((concat_xy, other_factor_dd), 1)
-
-        nan_bool_index = torch.isnan(concat_xy).any(1)  # [C, 1]
-        concat_xy = concat_xy[~nan_bool_index, :]  # [C, 2+28+n]
-        if concat_xy.shape[0] >= 10:
-            x = concat_xy[:, 1:]  # [C, 1+28+n]
-            y = concat_xy[:, 0]  # [C, 1]
-            x = torch.cat((x, torch.ones(x.shape[0], 1).to(alphan_value_gp.device)), 1)  # [C, 1+28+n+1]
-
-            model = nn.Linear(in_features=1, out_features=1)
-            criterion = nn.MSELoss()
-            optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
-            # 训练模型
-            num_epochs = 1000
-            for epoch in range(num_epochs):
-                optimizer.zero_grad()  # 清空之前计算得到的梯度信息
-                outputs = model(x)  # 通过模型预测结果
-                loss = criterion(outputs, y)  # 计算损失
-                loss.backward()  # 反向传播更新参数
-                optimizer.step()  # 应用梯度更新
-
-            resids = (y - model(x)).T  # [1, C]
-
-            resids_all[[dd], ~nan_bool_index] = resids
-    return resids_all
-
 
 #%% 相关系数函数
 def corrwith_slow(x,y):
@@ -305,19 +195,17 @@ def neg_int(x):
 
 def rank_pct(x,dim=1):
     assert (len(x.shape) <= 3)
-    x_rank = x.argsort(dim=dim).argsort(dim=dim).to(torch.float32)
-    x_rank[x.isnan()] = np.nan
-    # 做percentile处理
-    x_rank = (x_rank+1) / ((~x_rank.isnan()).sum(dim=dim, keepdim=True))
+    x_rank = x.argsort(dim=dim).argsort(dim=dim).to(torch.float32) + 1 # .where(~x.isnan() , torch.nan)
+    x_rank[x.isnan()] = torch.nan
+    x_rank = x_rank / ((~x_rank.isnan()).sum(dim=dim, keepdim=True))
     return x_rank
 
 def lin_decay(x , dim = 0):   #only for rolling
     'd日衰减加权平均，加权系数为 d, d-1,...,1'
-    # z = torch.zeros_like(x) * np.nan   # [d,C]  np.nan
-    shape_ = [1 for _ in x.shape]
+    shape_ = [1] * len(x.shape)
     shape_[dim] = x.shape[dim]
-    z_arrange = torch.arange(1, x.shape[dim]+1, 1).reshape(shape_).to(x)
-    return (x * z_arrange).nansum(dim=dim) / ((z_arrange * (~x.isnan())).sum(dim=dim))
+    coef = torch.arange(1, x.shape[dim] + 1, 1).reshape(shape_).to(x)
+    return (x * coef).nansum(dim=dim) / ((coef * (~x.isnan())).sum(dim=dim))
 
 def ts_lin_decay_pos(x, y, d):
     value = x - y
@@ -358,23 +246,22 @@ def signedpower(x, a):
 
     return (x ** a)
 
-def ts_rolling_dec(nan_as = torch.nan):
+def ts_roller(nan_as = torch.nan):
     def decorator(func):
         def wrapper(x , d , *args, **kwargs):
-            x = x.nan_to_num(nan_as).unfold(0,d,1)
-            x = func(x , d , *args, **kwargs)
+            if nan_as is not None: x = x.nan_to_num(nan_as)
+            x = func(x.unfold(0,d,1) , d , *args, **kwargs)
             x = nn.functional.pad(x , [0,0,d-1,0] , value = torch.nan)
             return x
         wrapper.__name__ = func.__name__
         return wrapper
     return decorator
 
-def ts_corolling_dec(nan_as = torch.nan):
+def ts_coroller(nan_as = None):
     def decorator(func):
         def wrapper(x , y , d , *args, **kwargs):
-            x = x.nan_to_num(nan_as).unfold(0,d,1)
-            y = y.nan_to_num(nan_as).unfold(0,d,1)
-            z = func(x , y , d , *args, **kwargs)
+            if nan_as is not None: x , y = x.nan_to_num(nan_as) , y.nan_to_num(nan_as)
+            z = func(x.unfold(0,d,1) , y.unfold(0,d,1) , d , *args, **kwargs)
             z = nn.functional.pad(z , [0,0,d-1,0] , value = torch.nan)
             return z
         wrapper.__name__ = func.__name__
@@ -383,60 +270,60 @@ def ts_corolling_dec(nan_as = torch.nan):
 
 def zscore(x , dim = 0 , index = None):
     if index is None:
-        x = (x - x.mean(dim=dim,keepdim=True)) / (x.std(dim=dim,keepdim=True) + 1e-6)
+        x = (x - x.nanmean(dim=dim,keepdim=True)) / (x.nan_to_num(0).std(dim=dim,keepdim=True) + 1e-6)
     else:
         x = (x.select(dim,index) - x.mean(dim=dim)) / (x.std(dim=dim) + 1e-6)
     return x
 
-@ts_rolling_dec(0)
+@ts_roller()
 def ts_zscore(x, d):
     return zscore(x , dim = -1 , index = -1)
 
-@ts_rolling_dec(np.inf)
+@ts_roller(np.inf)
 def ts_min(x, d):
     return torch.min(x , dim=-1)[0]
 
-@ts_rolling_dec(-np.inf)
+@ts_roller(-np.inf)
 def ts_max(x, d):
     return torch.max(x , dim=-1)[0]
 
-@ts_rolling_dec(np.inf)
+@ts_roller(np.inf)
 def ts_argmin(x, d):
     return torch.argmin(x , dim=-1).to(torch.float)
 
-@ts_rolling_dec(-np.inf)
+@ts_roller(-np.inf)
 def ts_argmax(x, d):
     return torch.argmax(x , dim=-1).to(torch.float)
 
-@ts_rolling_dec()
+@ts_roller()
 def ts_rank(x, d):
     return rank_pct(x,dim=-1)[...,-1]
 
-@ts_rolling_dec(0)
+@ts_roller(0)
 def ts_stddev(x, d):
     return torch.std(x,dim=-1)
 
-@ts_rolling_dec(0)
+@ts_roller()
 def ts_sum(x, d):
     return torch.sum(x,dim=-1)
 
-@ts_rolling_dec(0)
+@ts_roller(1)
 def ts_product(x, d):
     return torch.prod(x,dim=-1)
 
-@ts_rolling_dec()
+@ts_roller()
 def ts_lin_decay(x, d):
     return lin_decay(x , dim=-1)
 
-@ts_corolling_dec(0)
+@ts_coroller(0)
 def ts_correlation(x , y , d):
     return corrwith(x , y , dim=-1)
 
-@ts_corolling_dec(0)
+@ts_coroller(0)
 def ts_covariance(x , y , d):
     return covariance(x , y , dim=-1)
 
-@ts_corolling_dec(0)
+@ts_coroller(0)
 def ts_rankcorr(x , y , d):
     return corrwith(rank_pct(x,dim=-1) , rank_pct(y,dim=-1) , dim=-1)
 
@@ -478,15 +365,15 @@ def rlb(x, y, d, n, btm, sel_posneg=False):
     return z
 
 def ts_grouping_ascsortavg(x, y, d, n):
-    '在过去d日上，根据y的值对x进行排序，取最小n个x的平均值'
+    '在过去d日上，根据x进行排序，取最小n个x的y的平均值'
     return rlb(x, y, d, n, btm='btm')
 
 def ts_grouping_decsortavg(x, y, d, n):
-    '在过去d日上，根据y的值对x进行排序，取最大n个x的平均值'
+    '在过去d日上，根据x进行排序，取最大n个x的y的平均值'
     return rlb(x, y, d, n, btm='top')
 
 def ts_grouping_difsortavg(x, y, d, n):
-    '在过去d日上，根据y的值对x进行排序，取最大n个x的平均值与最小n个x的平均值的差值'
+    '在过去d日上，根据x进行排序，取最大n个x的y的平均值与最小n个x的y的平均值的差值'
     return rlb(x, y, d, n, btm='diff')
 
     #         if i < d - 1:
@@ -906,4 +793,212 @@ def rlb_slower(x, y, d, n, btm, sel_posneg=False):
                     assert (False)
         # z[col] = (tmp.rolling(d, method='table').apply(lambda df: df[df[:,1].argsort()][:n,0].mean(), engine='numba', raw=True))['x']  #argsort是升序排，小的在上，大的在下
     return z
+
+import statsmodels.api as sm
+def neutralize(alphan_value_gp,size_gp):
+    name2num = {}
+    for i, col in enumerate(alphan_value_gp.columns):
+        name2num[col] = i + 1  # 将索引从 1 开始，方便后续的处理
+    num2name = {value: key for key, value in name2num.items()}
+    alphan_value_gp_1col = pd.melt(alphan_value_gp.rename(columns=name2num).reset_index(), id_vars=['index'],
+                                   var_name='stock', value_name='alphan')
+    alphan_value_gp_1col = alphan_value_gp_1col.set_index(['index', 'stock'])
+    size_gp_1col = pd.melt(size_gp.rename(columns=name2num).reset_index(), id_vars=['index'], var_name='stock',
+                             value_name='size')
+    size_gp_1col = size_gp_1col.set_index(['index', 'stock'])
+    resids_all = None
+    for dd in alphan_value_gp.index.unique():
+        y = alphan_value_gp_1col.loc[(dd, slice(None)), :]
+        x = size_gp_1col.loc[(dd, slice(None)), :]
+
+        concat_xy = pd.concat([y, x], axis=1).dropna(how='any')
+        if concat_xy.shape[0] < 10:
+            resids = pd.DataFrame(np.nan, index=[dd], columns=alphan_value_gp.columns)
+        else:
+            x = concat_xy.iloc[:, 1]
+            y = concat_xy.iloc[:, 0]
+            x = sm.add_constant(x)
+            resids = pd.DataFrame(y - x @ np.linalg.lstsq(x, y, rcond=None)[0]).unstack()
+
+            # resids.index = [i for i in resids.index] #type: ignore
+            resids.columns = [num2name[i[1]] for i in resids.columns]
+            resids = resids.reindex(columns=alphan_value_gp.columns) #type: ignore
+
+        if resids_all is None:
+            resids_all = resids.to_numpy()
+        else:
+            resids_all = np.append(resids_all, resids.to_numpy(), axis=0)
+
+    resids_all_df = pd.DataFrame(resids_all, index=alphan_value_gp.index.unique(), columns=alphan_value_gp.columns)
+    return resids_all_df
+
+def neutralize_torch(alphan_value_gp,size_gp,cs_indus_code,other_factor_list=[]):  #[tensor (TS*C), tensor (TS*C)]
+    assert (alphan_value_gp.shape == size_gp.shape)
+    resids_all = torch.zeros_like(alphan_value_gp) * np.nan
+    for dd in range(alphan_value_gp.shape[0]):
+        y = alphan_value_gp[[dd], :].T  # [C, 1]
+        x = size_gp[[dd], :].T  # [C, 1]
+        concat_xy = torch.cat((y, x), 1)  # [C, 2]
+        cs = cs_indus_code[[dd], :].T  # [C, 1]
+        for cs_index in range(1,29+1-1):  #29个一级行业代码，去掉最后一列避免线性相关
+            cs_dummy = torch.zeros_like(cs)  # [C, 1]
+            cs_dummy[cs == cs_index] = 1
+            if cs_dummy.sum() == 0:
+                continue
+            concat_xy = torch.cat((concat_xy, cs_dummy), 1)  # [C, 2+28+n]
+        for factor_num,other_factor in enumerate(other_factor_list):
+            other_factor_dd = other_factor[[dd], :].T
+            concat_xy = torch.cat((concat_xy, other_factor_dd), 1)
+
+        nan_bool_index = torch.isnan(concat_xy).any(1)  # [C, 1]
+        concat_xy = concat_xy[~nan_bool_index, :]  # [C, 2+28+n]
+        if concat_xy.shape[0] >= 10:
+            x = concat_xy[:, 1:]  # [C, 1+29]
+            y = concat_xy[:, 0]  # [C, 1]
+            x = torch.cat((x, torch.ones(x.shape[0], 1).to(alphan_value_gp.device)), 1)  # [C, 1+28+n+1]
+            resids = (y - torch.matmul(x, torch.matmul(torch.matmul(torch.inverse(torch.matmul(x.T, x)), x.T), y))).T  # [1, C]
+            resids_all[[dd], ~nan_bool_index] = resids
+    return resids_all
+
+def neutralize_numpy_(alphan_value_gp, size_gp, cs_indus_code, other_factor_list=[], silent=True):  # [tensor (TS*C), tensor (TS*C)]
+    assert (alphan_value_gp.shape == size_gp.shape)
+    alphan_value_gp = alphan_value_gp.values
+    size_gp = size_gp.values
+    cs_indus_code = cs_indus_code.values
+    resids_all = np.zeros_like(alphan_value_gp) * np.nan
+    for dd in range(alphan_value_gp.shape[0]):
+        if dd%500 == 0 and not silent: print('neutralize by tradedate',dd)
+        y = alphan_value_gp[[dd], :].T  # [C, 1]
+        concat_xy = y
+
+        if len(other_factor_list) == 0:
+            size_dd = size_gp[[dd], :].T  # [C, 1]
+            concat_xy = np.concatenate((concat_xy, size_dd), axis=1)  # [C, 2]
+            cs = cs_indus_code[[dd], :].T  # [C, 1]
+            for cs_index in range(1, 29 + 1 - 1):  # 29个一级行业代码，去掉最后一列避免线性相关
+                cs_dummy = np.zeros_like(cs)  # [C, 1]
+                cs_dummy[cs == cs_index] = 1
+                if cs_dummy.sum() == 0:
+                    continue
+                concat_xy = np.concatenate((concat_xy, cs_dummy), axis=1)  # [C, 2+28+n]
+        else:
+            for factor_num, other_factor in enumerate(other_factor_list):
+                other_factor_dd = other_factor[[dd], :].T
+                #对缺失值用每个时间截面的均值填充
+                other_factor_dd = np.where(np.isnan(other_factor_dd), np.nanmean(other_factor_dd), other_factor_dd)
+                concat_xy = np.concatenate((concat_xy, other_factor_dd), axis=1)
+
+        nan_bool_index = np.isnan(concat_xy).any(1)  # [C, 1]
+        concat_xy = concat_xy[~nan_bool_index, :]  # [C, 2+28+n]
+        concat_xy = np.concatenate((concat_xy, np.ones((concat_xy.shape[0],1))),
+                              axis=1)  # [C, 1+28+n+1]
+        #concat_xy = concat_xy.cpu().numpy()
+
+        if concat_xy.shape[0] >= 10:
+            x = concat_xy[:, 1:]  # [C, 1+29]
+            y = concat_xy[:, 0]  # [C, 1]
+            try:
+                resids = (y - x @ np.linalg.lstsq(x, y, rcond=None)[0]).T  # [1, C]
+            except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
+                beta = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
+                resids = (y - x @ beta).T
+                
+            resids_all[[dd], ~nan_bool_index] = resids
+
+    return resids_all
+
+def neutralize_numpy(alphan_value_gp, size_gp, cs_indus_code, other_factor_list=[], silent= True):  # [tensor (TS*C), tensor (TS*C)]
+    assert (alphan_value_gp.shape == size_gp.shape)
+    resids_all = torch.zeros_like(alphan_value_gp) * np.nan
+    for dd in range(alphan_value_gp.shape[0]):
+        if dd%500 == 0 and not silent: print('neutralize by tradedate',dd)
+        y = alphan_value_gp[[dd], :].T  # [C, 1]
+        concat_xy = y
+
+
+
+        if len(other_factor_list) == 0:
+            size_dd = size_gp[[dd], :].T  # [C, 1]
+            concat_xy = torch.cat((concat_xy, size_dd), 1)  # [C, 2]
+            cs = cs_indus_code[[dd], :].T  # [C, 1]
+            for cs_index in range(1, 29 + 1 - 1):  # 29个一级行业代码，去掉最后一列避免线性相关
+                cs_dummy = torch.zeros_like(cs)  # [C, 1]
+                cs_dummy[cs == cs_index] = 1
+                if cs_dummy.sum() == 0:
+                    continue
+                concat_xy = torch.cat((concat_xy, cs_dummy), 1)  # [C, 2+28+n]
+        else:
+            for factor_num, other_factor in enumerate(other_factor_list):
+                other_factor_dd = other_factor[[dd], :].T
+                #对缺失值用每个时间截面的均值填充
+                other_factor_dd = torch.where(torch.isnan(other_factor_dd), torch.nanmean(other_factor_dd), other_factor_dd)
+                concat_xy = torch.cat((concat_xy, other_factor_dd), 1)
+
+        nan_bool_index = torch.isnan(concat_xy).any(1)  # [C, 1]
+        concat_xy = concat_xy[~nan_bool_index, :]  # [C, 2+28+n]
+        concat_xy = torch.cat((concat_xy, torch.ones(concat_xy.shape[0], 1).to(alphan_value_gp.device)),
+                              1)  # [C, 1+28+n+1]
+        concat_xy = concat_xy.cpu().numpy()
+
+        if concat_xy.shape[0] >= 10:
+            x = concat_xy[:, 1:]  # [C, 1+29]
+            y = concat_xy[:, 0]  # [C, 1]
+            try:
+                resids = (y - x @ np.linalg.lstsq(x, y, rcond=None)[0]).T  # [1, C]
+            except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
+                try:    
+                    beta = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
+                    resids = (y - x @ beta).T
+                except:
+                    print('neutralization error!')
+                    resids = alphan_value_gp.copy()
+                    
+            resids_all[[dd], ~nan_bool_index] = torch.Tensor(resids).to(alphan_value_gp.device)
+
+    return resids_all
+
+# 用梯度下降做市值中性化
+
+def neutralize_torch_nn(alphan_value_gp, size_gp, cs_indus_code, other_factor_list=[]):  # [tensor (TS*C), tensor (TS*C)]
+    assert (alphan_value_gp.shape == size_gp.shape)
+    resids_all = torch.zeros_like(alphan_value_gp) * np.nan
+    for dd in range(alphan_value_gp.shape[0]):
+        y = alphan_value_gp[[dd], :].T  # [C, 1]
+        x = size_gp[[dd], :].T  # [C, 1]
+        concat_xy = torch.cat((y, x), 1)  # [C, 2]
+        cs = cs_indus_code[[dd], :].T  # [C, 1]
+        for cs_index in range(1, 29 + 1 - 1):  # 29个一级行业代码，去掉最后一列避免线性相关
+            cs_dummy = torch.zeros_like(cs)  # [C, 1]
+            cs_dummy[cs == cs_index] = 1
+            if cs_dummy.sum() == 0:
+                continue
+            concat_xy = torch.cat((concat_xy, cs_dummy), 1)  # [C, 2+28+n]
+        for factor_num, other_factor in enumerate(other_factor_list):
+            other_factor_dd = other_factor[[dd], :].T
+            concat_xy = torch.cat((concat_xy, other_factor_dd), 1)
+
+        nan_bool_index = torch.isnan(concat_xy).any(1)  # [C, 1]
+        concat_xy = concat_xy[~nan_bool_index, :]  # [C, 2+28+n]
+        if concat_xy.shape[0] >= 10:
+            x = concat_xy[:, 1:]  # [C, 1+28+n]
+            y = concat_xy[:, 0]  # [C, 1]
+            x = torch.cat((x, torch.ones(x.shape[0], 1).to(alphan_value_gp.device)), 1)  # [C, 1+28+n+1]
+
+            model = nn.Linear(in_features=1, out_features=1)
+            criterion = nn.MSELoss()
+            optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+            # 训练模型
+            num_epochs = 1000
+            for epoch in range(num_epochs):
+                optimizer.zero_grad()  # 清空之前计算得到的梯度信息
+                outputs = model(x)  # 通过模型预测结果
+                loss = criterion(outputs, y)  # 计算损失
+                loss.backward()  # 反向传播更新参数
+                optimizer.step()  # 应用梯度更新
+
+            resids = (y - model(x)).T  # [1, C]
+
+            resids_all[[dd], ~nan_bool_index] = resids
+    return resids_all
+
 """
