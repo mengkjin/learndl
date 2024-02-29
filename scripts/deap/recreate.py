@@ -92,6 +92,7 @@ def gp_parameters(test_code = None , job_id = None):
     df_raw_list = [f'{_d}_raw' for _d in df_fac_list] + ['rtn_raw']
     
     gp_params = {
+        'test_code'   : test_code ,   # just to check code, lighter parameters
         'df_fac_list' : df_fac_list , # gp intial factor list 
         'df_raw_list' : df_raw_list , # gp intial raw data list
         'device' : _device , # training device, cuda or cpu
@@ -130,8 +131,8 @@ def gp_dictionary(gp_params , gp_timer = gpTimer()):
             if gp_params.get('device') is not None: df = df.to(gp_params.get('device'))
             df.share_memory_() # 执行多进程时使用：将张量移入共享内存
         return df
-
-    with gp_timer('load data' , print = True):
+    package_path = f'{_DIR_pack}/gp_data_package{"_test" if gp_params["test_code"] else ""}.pt'
+    with gp_timer('Load data' , df_cols = False):
         gp_dict = {}
         slice_date = gp_params['slice_date']
 
@@ -141,9 +142,9 @@ def gp_dictionary(gp_params , gp_timer = gpTimer()):
         
         gp_dict['gp_args'] = df_fac_list + df_raw_list # gp args sequence
         gp_dict['gp_values'] = []
-        if os.path.exists(f'{_DIR_pack}/gp_data_package.pt'):
-            print(f'Directly load {_DIR_pack}/gp_data_package.pt')
-            package_data = torch.load(f'{_DIR_pack}/gp_data_package.pt')
+        if os.path.exists(package_path):
+            print(f'Directly load {package_path}')
+            package_data = torch.load(package_path)
             assert np.isin(gp_dict['gp_args'] , package_data['gp_args']).all() , np.setdiff1d(gp_dict['gp_args'] , package_data['gp_args'])
             for gp_arg in gp_dict['gp_args']:
                 ts = package_data['gp_values'][package_data['gp_args'].index(gp_arg)]
@@ -172,7 +173,7 @@ def gp_dictionary(gp_params , gp_timer = gpTimer()):
             labels_resid = F.neutralize_2d(labels, gp_dict['size'], gp_dict['cs_indus_code'])  # 市值行业中性化
             gp_dict['labels']  = copy.deepcopy(labels_resid)
             gp_dict['labels_resid'] = labels_resid
-            torch.save(gp_dict , f'{_DIR_pack}/gp_data_package.pt')
+            torch.save(gp_dict , package_path)
 
     print(f'{len(df_fac_list)} factors, {len(df_raw_list)} raw data loaded!')
     gp_dict['n_args']  = (len(df_fac_list) , len(df_raw_list))
@@ -328,17 +329,16 @@ def evaluate(individual, pool_skuname, compiler , gp_values , labels , labels_re
     # 根据迭代出的因子表达式，计算因子值
     factor_value = cal_gp_factor(compiler , individual , gp_values , gp_timer.acc_timer('compile'))
     
-    ir_list = []
+    rankir_list = []
     for resid in [True , False]:
-        ic = F.corrwith(F.rank_pct(factor_value), F.rank_pct(labels_resid if resid else labels),dim=1)
+        rankic = F.corrwith(F.rank_pct(factor_value), F.rank_pct(labels_resid if resid else labels),dim=1)
         for in_sample in [True , False]:
-            ic_samp = ic[insample_dates] if in_sample else ic[outsample_dates]
-            ic_std = (((ic_samp - ic_samp.nanmean()) ** 2).nanmean()) ** 0.5 + 1e-6
-            ir_samp = (ic_samp.nanmean() / ic_std * np.sqrt(const_annual)) # 年化 ir
-            ir_samp[ir_samp.isinf()] = torch.nan
-            ir_list.append(ir_samp.nan_to_num().cpu())
-
-    return (abs(ir_list[0]),) , ir_list
+            rankic_samp = rankic[insample_dates] if in_sample else rankic[outsample_dates]
+            rankic_std = (((rankic_samp - rankic_samp.nanmean()) ** 2).nanmean()) ** 0.5 + 1e-6
+            rankir_samp = (rankic_samp.nanmean() / rankic_std * np.sqrt(const_annual)) # 年化 ir
+            rankir_samp[rankir_samp.isinf()] = torch.nan
+            rankir_list.append(rankir_samp.nan_to_num().cpu())
+    return (abs(rankir_list[0]),) , rankir_list
 
 # %%
 def gp_eaSimple(toolbox , population , i_iter, pool_num=1,
@@ -460,19 +460,21 @@ def gp_hof_eval(toolbox , halloffame, i_iter , gp_values ,
 
             # 与已有的因子库做相关性检验，如果相关性大于预设值corr_cap，则不加入因子库
             high_correlation = False
-            for hof_good in hof_good_list:
-                corr_value = F.corrwith(factor_value, hof_good, dim=1).nanmean().abs()
+            corr_values = torch.zeros(len(hof_good_list)).to(factor_value)
+            for i , hof_good in enumerate(hof_good_list):
+                corr_values[i] = F.corrwith(factor_value, hof_good, dim=1).nanmean().abs()
                 # print(corr_value)
-                if (corr_value > corr_cap): 
-                    high_correlation = True
-                    break
+                if high_correlation := (corr_values[i] > corr_cap): break
 
             # 如果通过相关性检验，则加入因子库
             if not high_correlation:
-                print('good : ' + str(hof_single))
+                max_corr = 0. if len(corr_values) == 0 else corr_values.nan_to_num().max()
+                print(f'Good {len(hof_good_list)} : ' +
+                      f'RankIR {hof_single.fitness.values[0]:.2f} ' + 
+                      f'Corr {max_corr:.2f} : {str(hof_single)}')
 
                 hof_good_list.append(factor_value)
-                df = pd.DataFrame(func_value.cpu(), index=kwargs['df_index'], columns=kwargs['df_columns']) # type: ignore
+                df = pd.DataFrame(factor_value.cpu(), index=kwargs['df_index'], columns=kwargs['df_columns']) # type: ignore
                 df.to_parquet(f'{_DIR_job}/factor/{str(hof_single)}.parquet', engine='fastparquet')
 
                 df = pd.DataFrame([[i_iter,str(hof_single),*hof_single.ir_list]],columns=good_log.columns) # new good_log
@@ -500,20 +502,20 @@ def outer_loop(i_iter , gp_dict):
     gp_dict['i_iter'] = i_iter
     
     '''Setting GP toolbox and pop'''
-    with gp_dict['gp_timer']('setting' , df_cols = True):
+    with gp_dict['gp_timer']('Setting'):
         toolbox = gp_toolbox(**gp_dict)
         population = toolbox.population(n = gp_dict['pop_num']) # type:ignore
     
     '''运行进化主程序'''
-    with gp_dict['gp_timer']('gp' , df_cols = True):
+    with gp_dict['gp_timer']('Evolution'):
         population, halloffame, logbook = gp_eaSimple(toolbox , population , **gp_dict)  #, start_gen=6   #algorithms.eaSimple
 
     '''good_log文件为因子库，存储了因子表达式、rankIR值等信息。在具体因子值存储在factor文件夹的parquet文件中'''
-    with gp_dict['gp_timer']('selection' , df_cols = True):
+    with gp_dict['gp_timer']('Selection'):
         halloffame, hof_good_list = gp_hof_eval(toolbox , halloffame, **gp_dict)
 
     '''更新labels_resid，并保存本轮循环的最终结果'''
-    with gp_dict['gp_timer']('neu_dump' , df_cols = True):
+    with gp_dict['gp_timer']('Neu_dump'):
         # update labels_resid, according to hof_good_list (maybe no need to neutralize according to size and indus)
         gp_dict['labels_resid'] = F.neutralize_2d(gp_dict['labels_resid'], hof_good_list)
         '''保存该轮迭代的最终种群、最优个体、迭代日志'''
@@ -521,9 +523,9 @@ def outer_loop(i_iter , gp_dict):
         joblib.dump(halloffame,f'{_DIR_job}/hof_iter{i_iter}_overall.pkl')
         joblib.dump(logbook   ,f'{_DIR_job}/log_iter{i_iter}_overall.pkl')
 
-    gp_dict['gp_timer'].append_time('avg_varAnd' , gp_dict['gp_timer'].acc_timer('varAnd').avgtime(pop_out = True) , df_cols = True)
-    gp_dict['gp_timer'].append_time('avg_compile', gp_dict['gp_timer'].acc_timer('compile').avgtime(pop_out = True), df_cols = True)
-    gp_dict['gp_timer'].append_time('all' , time.time() - timenow , df_cols = True)
+    gp_dict['gp_timer'].append_time('Avg_varAnd' , gp_dict['gp_timer'].acc_timer('varAnd').avgtime(pop_out = True))
+    gp_dict['gp_timer'].append_time('Avg_compile', gp_dict['gp_timer'].acc_timer('compile').avgtime(pop_out = True))
+    gp_dict['gp_timer'].append_time('All' , time.time() - timenow)
     return 
     
 
@@ -542,6 +544,7 @@ def main(test_code = None , job_id = None):
     """
     gp_dict = gp_dictionary(gp_parameters(test_code , job_id))
     for i_iter in range(gp_dict['n_iter']):
+        print(f' ------------------------------- Outer Loop {i_iter} -------------------------------')
         outer_loop(i_iter , gp_dict)
     print('Total time cost table:')
     gp_dict['gp_timer'].save_to_csv(f'{_DIR_job}/saved_times.csv' , print_out = True)

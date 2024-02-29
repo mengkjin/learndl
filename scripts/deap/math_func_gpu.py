@@ -16,14 +16,17 @@ from sklearn.linear_model import LinearRegression
 def one_hot(x):
     if not isinstance(x , torch.Tensor): x = torch.Tensor(x)
     nan_index = x.isnan()
-    has_nan = nan_index.any()
-    x_ = torch.where(nan_index , x[~nan_index].max() + 1 , x) if has_nan else x
-    dummy = torch.nn.functional.one_hot(x_.to(torch.int64)).to(torch.float)
-    return dummy[...,:-1] if has_nan else dummy
+    m = int(x[~nan_index].max())
+    x_new = torch.where(nan_index , m + 1 , x)
+    if 1:
+        dummy = torch.nn.functional.one_hot(x_new.to(torch.int64)).to(torch.float)[...,:m+1]
+    else:
+        dummy = torch.stack([(x == i) * 1. for i in range(m+1)] , -1)
+    return dummy
 
-def _neutralize_yx(y , x_list = [] , x_group = None , no_intercept = True , index = None):
+def _neutralize_data(y , x_list = [] , x_group = None , auto_intercept = True):
     if isinstance(x_list , torch.Tensor): x_list = [x_list]
-    if len(x_list) == 0 and x_group is None: return y , None
+    if len(x_list) == 0 and x_group is None: return None , y
     elif x_group is None:
         x = torch.stack(x_list,dim = -1)
     elif len(x_list) == 0:
@@ -31,81 +34,80 @@ def _neutralize_yx(y , x_list = [] , x_group = None , no_intercept = True , inde
     else:
         x = torch.stack(x_list,dim = -1)
         x = torch.cat([x,one_hot(x_group)[...,:-1]],dim=-1)
-    if no_intercept: x = torch.nn.functional.pad(x , (1,0) , value = 1.)
-    y = y.unsqueeze(-1)
-    if index: y , x = y[index] , x[index]
-    return y , x
+    if auto_intercept: x = torch.nn.functional.pad(x , (1,0) , value = 1.)
+    y = torch.where(y.isinf() , torch.nan , y).unsqueeze(-1)
+    x = torch.where(x.isinf() , torch.nan , x)
+    return x , y
 
-def neutralize_np(y , x):
-    if len(y.shape) == len(x.shape)-1: y = y.unsqueeze(-1)
-    
+def betas_torch(x , y):
     try:
-        model = np.linalg.lstsq(x , y , rcond=None)
-        resids = (y - x @ model[0]).T  # [1, C]
+        b = torch.linalg.lstsq(x , y , rcond=None)[0]
     except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
         try:    
-            beta = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
-            resids = (y - x @ beta).T
+            b = torch.linalg.inv(x.T.mm(x)).mm(x.T).mm(y)
         except:
             print('neutralization error!')
-            resids = y.copy()
-    if not isinstance(resids , torch.Tensor): resids = torch.Tensor(resids)
-    return resids.flatten()
+            b = torch.zeros(x.shape[-1],1).to(x)
+    return b
 
-def neutralize_sk(y , x):
-    if len(y.shape) == len(x.shape)-1: y = y.unsqueeze(-1)
-
-    model = LinearRegression(fit_intercept=False).fit(x, y)
-    resids = y.reshape(1,-1) - np.matmul(model.coef_.reshape(1,-1) , x.transpose(1,0)) - model.intercept_
-
-    return resids.flatten()
-
-def neutralize_torch(y , x):
-    if len(y.shape) == len(x.shape)-1: y = y.unsqueeze(-1)
-    
+def betas_np(x , y):
     try:
-        model = torch.linalg.lstsq(x , y , rcond=None)
-        resids = (y - x @ model[0]).T  # [1, C]
+        b = np.linalg.lstsq(x , y , rcond=None)[0]
     except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
         try:    
-            beta = torch.linalg.inv(x.T.matmul(x)).matmul(x.T).matmul(y)
-            resids = (y - x @ beta).T
+            b = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
         except:
             print('neutralization error!')
-            resids = y.copy()
+            b = np.zeros((x.shape[-1],1))
+    return b
 
-    return resids.flatten()
+def betas_sk(x , y):
+    try:
+        b = LinearRegression(fit_intercept=False).fit(x, y).coef_.T
+    except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
+        print('neutralization error!')
+        b = np.zeros((x.shape[-1],1))
+    return b
 
-def neutralize_2d(y , x_list = [] , x_group = None, method = 'torch' , no_intercept = True , silent= True):  # [tensor (TS*C), tensor (TS*C)]
+def neutralizer(method = 'torch'):
+    assert method in ['torch' , 'np' , 'sk'] , method
+    if method == 'np':
+        betas_func = betas_np
+    elif method == 'sk':
+        betas_func = betas_sk
+    else:
+        betas_func = betas_torch
+    def neutralize(y , x):
+        if len(y.shape) == len(x.shape)-1: y = y.unsqueeze(-1)
+        return (y - x @ betas_func(x , y)).flatten()
+    return neutralize
+
+def neutralize_2d(y , x_list = [] , x_group = None, method = 'torch' , auto_intercept = True , silent= True):  # [tensor (TS*C), tensor (TS*C)]
     assert method in ['sk' , 'np' , 'torch']
-    y , x = _neutralize_yx(y , x_list , x_group , no_intercept)
+    x , y = _neutralize_data(y , x_list , x_group , auto_intercept)
     if x is None: return y
-
-    nan_index = y.isnan().any(dim=-1) + y.isnan().any(dim=-1)
-    if method == 'torch' and not nan_index.any():
+    nans  = y.isnan().any(dim=-1) + x.isnan().any(dim=-1)
+    zeros = (x.nan_to_num() == 0).all(dim=-2)
+    if method == 'torch' and not nans.any() and not zeros.any():
         # fastest, but cannot deal nan's
         model = torch.linalg.lstsq(x , y , rcond=None)
-        resids_all = (y - x @ model[0])
+        resids = (y - x @ model[0])
     else:
+        neutralize = neutralizer(method)
         if method in ['sk' , 'np']:
             dev = y.device
-            y , x = y.cpu().numpy() , x.cpu().numpy()
-            nan_index = nan_index.cpu().numpy()
-            resids_all = np.full_like(y.squeeze(-1) , np.nan)
-            neutralize = neutralize_sk if method == 'sk' else neutralize_np
+            y , x , nans , zeros = map(lambda a:a.cpu().numpy() , (y , x , nans , zeros))
+            resids = np.full_like(y.squeeze(-1) , np.nan)
         else:
-            resids_all = torch.full_like(y.squeeze(-1) , torch.nan)
-            neutralize = neutralize_torch
+            resids = torch.full_like(y.squeeze(-1) , torch.nan)
         
-        # if you can make sure there is no nan in the data, torch.linalg.lstsq(x, y) is much faster in 3d
-        for dd in range(len(y)):
-            if dd % 500 == 0 and not silent: print('neutralize by tradedate',dd)
-            y_ , x_ = y[dd , ~nan_index[dd]] , x[dd , ~nan_index[dd]]
-            if len(y_) < 10: continue
-            resids_all[dd,~nan_index[dd]] = neutralize(y_ , x_)
+        for i , (y_ , x_ , nan_ , zero_) in enumerate(zip(y , x , nans , zeros)):
+            if not silent and i % 500 == 0: print('neutralize by tradedate',i)
+            if (~nan_).sum() < 10:  continue
+            resids[i ,~nan_] = neutralize(y_[~nan_] , x_[~nan_][: , ~zero_])
         
-        if method in ['sk' , 'np']: resids_all = torch.Tensor(resids_all).to(dev)
-    return resids_all
+        if isinstance(resids , np.ndarray): resids = torch.Tensor(resids).to(dev)
+    return resids
 
 #%% 相关系数函数
 def corrwith_slow(x,y):
@@ -142,6 +144,19 @@ def covariance(x,y,dim):
     y_ymean = y - torch.nanmean(y, dim, keepdim=True)  # [TS, C]
     cov = torch.nanmean(x_xmean * y_ymean, dim)  # [TS, 1]
     return cov
+
+def beta(x,y,dim):
+    return covariance(x,y,dim) / (covariance(x,x,dim) + 1e-6)
+
+def beta_pos(x,y,dim):
+    y[x < 0] = torch.nan
+    x[x < 0] = torch.nan
+    return covariance(x,y,dim) / (covariance(x,x,dim) + 1e-6)
+
+def beta_neg(x,y,dim):
+    y[x > 0] = torch.nan
+    x[x > 0] = torch.nan
+    return covariance(x,y,dim) / (covariance(x,x,dim) + 1e-6)
 
 #%% 其他函数
 
@@ -316,11 +331,23 @@ def ts_lin_decay(x, d):
     return lin_decay(x , dim=-1)
 
 @ts_coroller(0)
-def ts_correlation(x , y , d):
+def ts_corr(x , y , d):
     return corrwith(x , y , dim=-1)
 
 @ts_coroller(0)
-def ts_covariance(x , y , d):
+def ts_beta(x , y , d):
+    return beta(x , y , dim=-1)
+
+@ts_coroller(0)
+def ts_beta_pos(x , y , d):
+    return beta_pos(x , y , dim=-1)
+
+@ts_coroller(0)
+def ts_beta_neg(x , y , d):
+    return beta_neg(x , y , dim=-1)
+
+@ts_coroller(0)
+def ts_cov(x , y , d):
     return covariance(x , y , dim=-1)
 
 @ts_coroller(0)
@@ -1000,5 +1027,36 @@ def neutralize_torch_nn(alphan_value_gp, size_gp, cs_indus_code, other_factor_li
 
             resids_all[[dd], ~nan_bool_index] = resids
     return resids_all
+    
+def neutralize_torch(y , x):
+    if len(y.shape) == len(x.shape)-1: y = y.unsqueeze(-1)
+    try:
+        betas = torch.linalg.lstsq(x , y , rcond=None)[0]
+    except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
+        try:    
+            betas = torch.linalg.inv(x.T.mm(x)).mm(x.T).mm(y)
+        except:
+            print('neutralization error!')
+            betas = torch.zeros(x.shape[-1],1).to(x)
+    resids = (y - x @ betas).flatten()
+    return resids
 
+def neutralize_np(y , x):
+    if len(y.shape) == len(x.shape)-1: y = y.unsqueeze(-1)
+    try:
+        betas = np.linalg.lstsq(x , y , rcond=None)[0]
+    except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
+        try:    
+            betas = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
+        except:
+            print('neutralization error!')
+            betas = np.zeros((x.shape[-1],1)).to(x)
+    resids = (y - x @ betas).flatten()
+    return resids
+
+def neutralize_sk(y , x):
+    if len(y.shape) == len(x.shape)-1: y = y.unsqueeze(-1)
+    betas = LinearRegression(fit_intercept=False).fit(x, y).coef_.T
+    resids = (y - x @ betas).flatten()
+    return resids
 """

@@ -10,6 +10,8 @@ import platform
 from .DataTank import DataTank , Data1D
 from .DataUpdater import get_date_groups,get_db_file,get_date_groups,get_db_path,outer_path_join,get_date_groups
 
+_db_key = 'SellSideFactors'
+
 # %%
 connect_dict = {
     'haitong':{
@@ -56,6 +58,7 @@ data_start_dt = {
                 'order_flow'    : 20130930 ,
                 'gp'            : 20170101 ,
                 'tra'           : 20200101 ,
+                'hist'          : 20200101 ,
                 'scores_v0'     : 20171229} ,
     'kaiyuan':{
         'positive': 20140130,
@@ -70,6 +73,7 @@ query_params = {
                 'order_flow':{'date_col':'trade_date' ,'date_fmt':'%Y%m%d'},
                 'gp'        :{'date_col':'tradingdate','date_fmt':'%Y-%m-%d'},
                 'tra'       :{'date_col':'tradingdate','date_fmt':'%Y-%m-%d'},
+                'hist'      :{'date_col':'tradingdate','date_fmt':'%Y-%m-%d'},
                 'scores_v0' :{'date_col':'tradingdate','date_fmt':'%Y-%m-%d'},
                 } ,
     'kaiyuan':{
@@ -86,6 +90,8 @@ query_params = {
 # class online_sql_connector
 class online_sql_connector():
     def __init__(self):
+        assert _db_key == 'SellSideFactors' , _db_key
+        self.db_path = get_db_path(_db_key)
         self.connect_dict = connect_dict
         self.engines = dict()
         self.connections = dict()
@@ -231,15 +237,15 @@ class online_sql_connector():
         else:
             return type(x)([self._IDconvert(xx) for xx in x])
 
-    def download_since(self , db_path , src , query_type , trace = 1 , ask = True):
+    def download_since(self , src , query_type , trace = 1 , ask = True):
         start_dt = int(self.data_start_dt[src][query_type])
-        old_dates = sorted(np.array(self.old_dtank_dates(db_path , src , query_type)).astype(int))
-        if trace > 0: old_dates = old_dates[:-trace]
+        old_dates = self.old_dtank_dates(src , query_type)
+        if trace > 0 and len(old_dates) > trace: old_dates = old_dates[:-trace]
         if len(old_dates): start_dt = max(start_dt , self.date_offset(old_dates[-1],1,astype=int)) #type: ignore
         end_dt = min(99991231 , int(date.today().strftime('%Y%m%d')))
         if end_dt < start_dt: return []
         
-        freq = 'Q'
+        freq = 'QE'
         date_segs = self.date_seg(start_dt , end_dt , freq = freq)
         prompt = f'{time.ctime()} : {src}/{query_type} since {start_dt} to {end_dt}, total {len(date_segs)} periods({freq})'
         if ask: assert input(prompt + ', print "yes" to confirm!') == 'yes'
@@ -255,7 +261,7 @@ class online_sql_connector():
                 data_at_d = data.loc[d]
                 if len(data_at_d) == 0: continue
                 group = get_date_groups(d)
-                group_file = get_db_file(db_path , group)
+                group_file = get_db_file(self.db_path , group)
                 if dtank.filename != group_file: 
                     dtank.close()
                     dtank = DataTank(group_file , 'r+' , compress=True)
@@ -267,7 +273,7 @@ class online_sql_connector():
         dtank.close()
         return group_file_list
 
-    def download_dates(self , db_path , src , query_type , dates = []):
+    def download_dates(self , src , query_type , dates = []):
         dtank = DataTank()
         group_file_list = []
         for d in dates:
@@ -276,7 +282,7 @@ class online_sql_connector():
             data = data.sort_values(['date' , 'secid']).set_index('date')
 
             group = get_date_groups(d)
-            group_file = get_db_file(db_path , group)
+            group_file = get_db_file(self.db_path , group)
             if dtank.filename != group_file: 
                 dtank.close()
                 dtank = DataTank(group_file , 'r+' , compress=True)
@@ -288,23 +294,23 @@ class online_sql_connector():
         dtank.close()
         return group_file_list
 
-    def old_dtank_dates(self , db_path , src , query_type):
+    def old_dtank_dates(self , src , query_type):
         dates = []
-        for sub_path in os.listdir(db_path):
-            dtank = DataTank(outer_path_join(db_path , sub_path) , 'r')
+        for sub_path in os.listdir(self.db_path):
+            dtank = DataTank(outer_path_join(self.db_path , sub_path) , 'r')
             portal = dtank.get_object([src , query_type])
             if portal is not None and len(portal.keys()) > 0: #type: ignore
                 portal_dt = np.array(list(portal.keys())) #type: ignore
                 portal_dt_valid = np.array([dtank.is_Data1D(portal[pdt]) for pdt in portal_dt]) #type: ignore
                 dates = [*dates , *portal_dt[portal_dt_valid]]
             dtank.close()
-        return dates
+        return sorted(np.array(dates).astype(int))
 
-    def download_allaround(self , db_path , src , query_type , start_dt = 20000101, end_dt = 99991231 , ask = True):
+    def download_allaround(self , src , query_type , start_dt = 20000101, end_dt = 99991231 , ask = True):
         if ask: assert input('print "yes" to confirm!') == 'yes'
         start_dt = max(start_dt , self.data_start_dt[src][query_type])
         end_dt   = min(end_dt , int(date.today().strftime('%Y%m%d')))
-        freq = 'Q'
+        freq = 'QE'
         date_segs = self.date_seg(start_dt , end_dt , freq = freq)
         prompt = f'{time.ctime()} : {src}/{query_type} since {start_dt} to {end_dt}, total {len(date_segs)} periods({freq})'
         if ask: assert input(prompt + ', print "yes" to confirm!') == 'yes'
@@ -319,7 +325,7 @@ class online_sql_connector():
                 data_at_d = data.loc[d]
                 if len(data_at_d) == 0: continue
                 group = get_date_groups(d)
-                group_file = get_db_file(db_path , group)
+                group_file = get_db_file(self.db_path , group)
                 if dtank.filename != group_file: 
                     dtank.close()
                     dtank = DataTank(group_file , 'r+' , compress=True)
@@ -332,14 +338,14 @@ class online_sql_connector():
         return group_file_list
 
     @classmethod
-    def date_seg(cls , start_dt , end_dt , freq='Q' , astype = int):
+    def date_seg(cls , start_dt , end_dt , freq='QE' , astype = int):
         dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
         dt_starts = [cls.date_offset(start_dt) , *cls.date_offset(dt_list[:-1],1)]
         dt_ends = [*dt_list[:-1] , cls.date_offset(end_dt)]
         return [(astype(s),astype(e)) for s,e in zip(dt_starts , dt_ends)]
     
     @staticmethod
-    def date_between(start_dt , end_dt , freq='Q' , astype = int):
+    def date_between(start_dt , end_dt , freq='QE' , astype = int):
         dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
         return dt_list.values
     
@@ -357,19 +363,15 @@ class online_sql_connector():
             new_date = (new_date + pd.DateOffset(offset)).strftime('%Y%m%d') #type: ignore
         new_date = new_date.astype(astype)
         return new_date[0] if is_scalar else new_date.values
-                    
+
 def update_sql_since(trace = 0):
-    db_key = 'SellSideFactors'
     connector = online_sql_connector()
-    
-    assert db_key == 'SellSideFactors' , db_key
-    db_path = get_db_path(db_key)
     group_file_list = []
     dtank = DataTank()
     try:
         for src in connector.query_params.keys():
             for qtype in connector.query_params[src].keys():
-                group_files = connector.download_since(db_path , src , qtype , trace = trace , ask = False)
+                group_files = connector.download_since(src , qtype , trace = trace , ask = False)
                 group_file_list = [*group_file_list , *group_files]
         if group_file_list:
             dtank = DataTank(sorted(group_file_list)[-1] , 'r')
@@ -381,18 +383,16 @@ def update_sql_since(trace = 0):
         connector.close_all()
 
 def update_sql_dates(start_dt , end_dt):
-    db_key = 'SellSideFactors'
     connector = online_sql_connector()
+
     dates = online_sql_connector.date_between(start_dt , end_dt)
     if len(dates) == 0: return NotImplemented
     
-    assert db_key == 'SellSideFactors' , db_key
-    db_path = get_db_path(db_key)
     group_file_list = []
     try:
         for src in connector.query_params.keys():
             for qtype in connector.query_params[src].keys():
-                group_files = connector.download_dates(db_path , src , qtype , dates)
+                group_files = connector.download_dates(src , qtype , dates)
                 group_file_list = [*group_file_list , *group_files]
         if group_file_list:
             dtank = DataTank(sorted(group_file_list)[-1] , 'r')

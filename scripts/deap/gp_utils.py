@@ -89,8 +89,9 @@ class gpPrimatives:
         return [
             (F.ts_rankcorr, [Fac, Fac, POSINT2], Fac) ,
             (F.ts_lin_decay_pos, [Fac, Fac, POSINT3], Fac) ,
-            (F.ts_covariance, [Fac, Fac, POSINT2], Fac) ,
-            (F.ts_correlation, [Raw, Raw, POSINT2], Fac) ,
+            (F.ts_cov, [Fac, Fac, POSINT2], Fac) ,
+            (F.ts_corr, [Raw, Raw, POSINT2], Fac) ,
+            (F.ts_beta, [Raw, Raw, POSINT2], Fac) ,
         ]
     @staticmethod
     def primatives_4d():
@@ -143,18 +144,17 @@ class gpTimer:
         self.df_cols = {}
 
     class PTimer:
-        def __init__(self , key , record = False , target_dict = {} , print = False):
+        def __init__(self , key , record = False , target_dict = {} , print = True):
             self.key = key
             self.record = record
             self.target_dict = target_dict
             self.print = print
         def __enter__(self):
-            if self.print: print(f'{self.key} ... start!')
             self.start_time = time.time()
         def __exit__(self, type, value, trace):
             time_cost = time.time() - self.start_time
             if self.record: self.append_time(self.target_dict , self.key , time_cost)
-            if self.print: print(f'{self.key} ... done, cost {time_cost:.2f} secs')
+            if self.print: print(f'{self.key} Done, cost {time_cost:.2f} secs')
         @staticmethod
         def append_time(target_dict , key , time_cost):
             if key not in target_dict.keys():
@@ -187,7 +187,7 @@ class gpTimer:
         def __exit__(self, type, value, trace):
             pass
         
-    def __call__(self , key , print = False , df_cols = False):
+    def __call__(self , key , print = True , df_cols = True):
         if df_cols: self.df_cols.update({key:True})
         return self.PTimer(key , self.recording , self.recorder , print = print)
     def __repr__(self):
@@ -198,7 +198,7 @@ class gpTimer:
         if key not in self.recorder.keys(): self.recorder[key] = self.AccTimer(key)
         assert isinstance(self.recorder[key] , self.AccTimer) , self.recorder[key]
         return self.recorder[key]
-    def append_time(self , key , time_cost , df_cols = False):
+    def append_time(self , key , time_cost , df_cols = True):
         if df_cols: self.df_cols.update({key:True})
         self.PTimer.append_time(self.recorder , key , time_cost)
     def save_to_csv(self , path , columns = None , print_out = False , dtype = float):
