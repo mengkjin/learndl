@@ -1,56 +1,49 @@
 import time
 import numpy as np
 import pandas as pd
-from deap import gp
-import math_func_gpu as F
+from deap import base , creator , tools , gp
+import operator
+import gp_math_func as F
 
 # ------------------------ gp terminals ------------------------
 class Fac(): pass
 class Raw(): pass
-class POSINT0(): pass
-class POSINT1(): pass
-class POSINT2(): pass
-class POSINT3(): pass
-class POSINT4(): pass
-class POSINT5(): pass
-def _returnself(input): return input
+class int1(int): pass
+class int2(int): pass
+class int3(int): pass
+class int4(int): pass
+class int5(int): pass
+class float1(float): pass
 
-class gpPrimatives:
+class gpHandler:
     '''
-    ------------------------ gp primatives ------------------------
+    ------------------------ gp primatives and terminals ------------------------
     includes:
         primatives_self
         primatives_1d
         primatives_2d
         primatives_3d
         primatives_4d
-        new_pset
     '''
     @staticmethod
-    def primatives_self():
-        return [
-            (_returnself, [Fac], Fac , '_fac') ,
-            (_returnself, [Raw], Raw , '_raw') ,
-            #(_returnself, [POSINT0], POSINT0, '_int0') ,
-            (_returnself, [POSINT1], POSINT1, '_int1') ,
-            (_returnself, [POSINT2], POSINT2, '_int2') ,
-            (_returnself, [POSINT3], POSINT3, '_int3') ,
-            #(_returnself, [POSINT4], POSINT4, '_int4') ,
-            #(_returnself, [POSINT5], POSINT5, '_int5') ,
-        ]
+    def I(x): return x
+    @classmethod
+    def primatives_self(cls , use_class = [Fac,Raw,int1,int2,int3,float1]):
+        return [(cls.I, [c], c) for c in use_class]
+    
     @staticmethod
     def primatives_1d():
         # (primative , in_types , out_type , name)
         return [
             (F.log, [Fac], Fac) ,
             (F.sqrt, [Fac], Fac) ,
+            (F.square , [Fac], Fac) ,
             (F.neg, [Fac], Fac) ,
-            (F.rank_pct, [Fac], Fac) ,
-            (F.sign, [Raw], Fac) ,
+            (F.rank_pct, [Fac], Fac , 'rank') ,
             (F.scale, [Fac], Fac) ,
             (F.sigmoid, [Fac], Fac) ,
-            (F.signedpower, [Fac , POSINT2], Fac) ,
-            # (F.neg_int, [POSINT0], POSINT0) ,
+            (F.signedpower, [Fac , float1], Fac , 'power') ,
+            (F.sign, [Raw], Fac) ,
         ]
     @staticmethod
     def primatives_2d():
@@ -60,83 +53,141 @@ class gpPrimatives:
             (F.sub, [Fac, Fac], Fac) ,
             (F.mul, [Fac, Fac], Fac) ,
             (F.div, [Fac, Fac], Fac) ,
+            (F.rank_add, [Fac, Fac], Fac) ,
             (F.rank_sub, [Fac, Fac], Fac) ,
             (F.rank_div, [Fac, Fac], Fac) ,
-            (F.rank_add, [Fac, Fac], Fac) ,
-            (F.ts_delaypct, [Fac, POSINT1], Fac) ,
-            (F.ts_stddev, [Fac, POSINT2], Fac) ,
-            (F.ts_sum, [Fac, POSINT2], Fac) ,
-            (F.ts_product, [Fac, POSINT2], Fac) ,
-            (F.ts_delay, [Fac, POSINT1], Fac) ,
-            (F.ts_delta, [Fac, POSINT1], Fac) ,
-            (F.ts_lin_decay, [Fac, POSINT2], Fac) ,
-            (F.ts_min, [Fac, POSINT2], Fac) ,
-            (F.ts_max, [Fac, POSINT2], Fac) ,
-            (F.ts_zscore, [Fac , POSINT3], Fac) ,
-            (F.ts_argmin, [Raw, POSINT2], Fac) ,
-            (F.ts_argmax, [Raw, POSINT2], Fac) ,
-            (F.ts_rank, [Raw, POSINT2], Fac) ,
-            # (F.add_int, [Fac, POSINT1], Fac) ,
-            # (F.sub_int1, [Fac, POSINT1], Fac) ,
-            # (F.sub_int2, [POSINT1, Fac], Fac) ,
-            # (F.mul_int, [Fac, POSINT1], Fac) ,
-            # (F.div_int1, [Fac, POSINT1], Fac) ,
-            # (F.div_int2, [POSINT1, Fac], Fac) ,
+            (F.rank_mul, [Fac, Fac], Fac) ,
+            (F.ts_stddev, [Fac, int2], Fac) ,
+            (F.ts_sum, [Fac, int2], Fac) ,
+            (F.ts_product, [Fac, int2], Fac) ,
+            (F.ts_delay, [Fac, int1], Fac) ,
+            (F.ts_delta, [Fac, int1], Fac) ,
+            (F.ts_lin_decay, [Fac, int2], Fac , 'ts_ldecay') ,
+            (F.ma, [Fac, int3], Fac) ,
+            (F.pctchg, [Fac, int3], Fac) ,
+            (F.ma, [Fac, int1], Fac) ,
+            (F.pctchg, [Fac, int1], Fac) ,
+            (F.ts_min, [Fac, int2], Fac) ,
+            (F.ts_max, [Fac, int2], Fac) ,
+            (F.ts_zscore, [Fac , int3], Fac) ,
+            (F.ts_argmin, [Fac, int2], Fac) ,
+            (F.ts_argmax, [Fac, int2], Fac) ,
+            (F.ts_rank, [Fac, int2], Fac) ,
+            (F.ts_argmin, [Raw, int2], Fac) ,
+            (F.ts_argmax, [Raw, int2], Fac) ,
+            (F.ts_rank, [Raw, int2], Fac) ,
+            # (F.add_int, [Fac, int1], Fac) ,
+            # (F.sub_int1, [Fac, int1], Fac) ,
+            # (F.sub_int2, [int1, Fac], Fac) ,
+            # (F.mul_int, [Fac, int1], Fac) ,
+            # (F.div_int1, [Fac, int1], Fac) ,
+            # (F.div_int2, [int1, Fac], Fac) ,
         ]
     @staticmethod
     def primatives_3d():
         # (primative , in_types , out_type , name)
         return [
-            (F.ts_rankcorr, [Fac, Fac, POSINT2], Fac) ,
-            (F.ts_lin_decay_pos, [Fac, Fac, POSINT3], Fac) ,
-            (F.ts_cov, [Fac, Fac, POSINT2], Fac) ,
-            (F.ts_corr, [Raw, Raw, POSINT2], Fac) ,
-            (F.ts_beta, [Raw, Raw, POSINT2], Fac) ,
+            (F.ts_rankcorr, [Fac, Fac, int2], Fac) ,
+            (F.ts_lin_decay_pos, [Fac, Fac, int3], Fac , 'ts_pldecay') ,
+            (F.ts_cov, [Fac, Fac, int2], Fac) ,
+            (F.ts_corr, [Raw, Raw, int2], Fac) ,
+            (F.ts_beta, [Raw, Raw, int2], Fac) ,
         ]
     @staticmethod
     def primatives_4d():
         # (primative , in_types , out_type , name)
         return [
-            (F.ts_grouping_ascsortavg, [Fac, Raw, POSINT3, POSINT1], Fac) ,
-            (F.ts_grouping_decsortavg, [Fac, Raw, POSINT3, POSINT1], Fac) ,
-            (F.ts_grouping_difsortavg, [Fac, Raw, POSINT3, POSINT1], Fac) ,
-            #(F.ts_grouping_ascsortavg, [Fac, Raw, POSINT5, POSINT4], Fac , 'ts_grouping_ascsortavg_long') ,
-            #(F.ts_grouping_decsortavg, [Fac, Raw, POSINT5, POSINT4], Fac , 'ts_grouping_decsortavg_long') ,
-            #(F.ts_grouping_difsortavg, [Fac, Raw, POSINT5, POSINT4], Fac , 'ts_grouping_difsortavg_long') ,
+            (F.ts_grouping_ascsortavg, [Raw, Fac, int3, int1], Fac , 'ts_y_xbtm') ,
+            (F.ts_grouping_decsortavg, [Raw, Fac, int3, int1], Fac , 'ts_y_xtop') ,
+            (F.ts_grouping_difsortavg, [Raw, Fac, int3, int1], Fac , 'ts_y_xdif') ,
+            (F.ts_grouping_ascsortavg, [Fac, Fac, int3, int1], Fac , 'ts_y_xbtm') ,
+            (F.ts_grouping_decsortavg, [Fac, Fac, int3, int1], Fac , 'ts_y_xtop') ,
+            (F.ts_grouping_difsortavg, [Fac, Fac, int3, int1], Fac , 'ts_y_xdif') ,
+            #(F.ts_grouping_ascsortavg, [Fac, Raw, int5, int4], Fac , 'ts_y_xbtm_long') ,
+            #(F.ts_grouping_decsortavg, [Fac, Raw, int5, int4], Fac , 'ts_y_xtop_long') ,
+            #(F.ts_grouping_difsortavg, [Fac, Raw, int5, int4], Fac , 'ts_y_xdif_long') ,
         ]
     @classmethod
-    def primatives_all(cls):
-        return [prima for plist in [getattr(cls , f'primatives_{m}')() for m in ['self','1d','2d','3d','4d']] for prima in plist]
-
+    def primatives_all(cls , use_class = [Fac,Raw,int1,int2,int3,float1]):
+        prims = [prima for plist in [getattr(cls , f'primatives_{m}')() for m in ['1d','2d','3d','4d']] for prima in plist]
+        prims += cls.primatives_self(use_class)
+        return prims
+    
     @classmethod
-    def new_pset(cls , n_fac = 1 , n_raw = 1 , arg_names = None , i_iter = 0):
-        pset = gp.PrimitiveSetTyped("main", [Fac] * n_fac + [Raw] * n_raw, Fac)
-
-        # ------------rename initial input factors--------------
-        if arg_names is not None:
-            assert n_fac + n_raw == len(arg_names)
-            for i , v in enumerate(arg_names): pset.renameArguments(**{f'ARG{i}':v})
+    def prune(cls , population):
+        if isinstance(population , creator.Individual): #type:ignore
+            return creator.Individual([prim for prim in population if prim.name != 'I']) #type:ignore
+        else:
+            return [cls.prune(ind) for ind in population]
+    
+    @classmethod
+    def Compiler(cls , pset):
+        def compiler(individual):
+            return gp.compile(individual , pset)
+        return compiler
+    
+    @classmethod
+    def Toolbox(cls , eval_func , gp_args , i_iter = - 1 , max_depth = 5 , n_args = (1,1) , **kwargs):
+        '''
+        ------------------------ create gp toolbox ------------------------
+        input:
+            gp_args:   initial gp factor names
+            eval_func: evaluate function of individual, to register into toolbox
+            i_iter:    i of outer loop, -1 as default mean no
+            max_depth: [inner loop] max tree depth of gp
+            n_args:    number of gp factors, (n_of_zscore_factors, n_of_raw_indicators)
+            kwargs:    must include all args in eval_func
+        output:
+            toolbox:   toolbox that contains all gp utils
+        '''
+        pset = gp.PrimitiveSetTyped("main", [Fac] * n_args[0] + [Raw] * n_args[1], Fac)
+        str_iter = '_' if i_iter < 0 else f'_{i_iter}'
+        # ------------ rename initial input factors --------------
+        assert sum(n_args) == len(gp_args)
+        for i , v in enumerate(gp_args): pset.renameArguments(**{f'ARG{i}':v})
         
-        #--------set int----------
-        [(delattr(gp , n) if hasattr(gp , n) else None) for n in [f'POSINT{i}_{i_iter}' for i in range(6)]]
-        pset.addEphemeralConstant(f'POSINT1_{i_iter}', lambda: np.random.randint(1,10+1), POSINT1) # random int must > 0
-        pset.addEphemeralConstant(f'POSINT2_{i_iter}', lambda: np.random.randint(2,10+1), POSINT2) # random int must > 1
-        for v in [10 , 15 , 20 , 40]:  pset.addTerminal(v, POSINT3)
+        # ------------ set int and float terminals ------------
+        [(delattr(gp , n) if hasattr(gp , n) else None) for n in [f'int{i}{str_iter}' for i in range(6)]]
+        [(delattr(gp , n) if hasattr(gp , n) else None) for n in [f'float{i}{str_iter}' for i in range(6)]]
+        pset.addEphemeralConstant(f'int1{str_iter}', lambda: np.random.randint(1,10+1), int1) # random int must > 0
+        pset.addEphemeralConstant(f'int2{str_iter}', lambda: np.random.randint(2,10+1), int2) # random int must > 1
+        for v in [10 , 15 , 20 , 40]:  pset.addTerminal(v, int3)
+        #for v in [10 , 20]:  pset.addTerminal(v, int4)
+        #for v in [60 , 120 , 180 , 200 , 240]: pset.addTerminal(v, int5)
+        pset.addEphemeralConstant(f'float1{str_iter}', lambda: np.random.random() * 2 + 1, float1) # random int must > 1
         
-        #pset.addEphemeralConstant(f'POSINT0_{i_iter}', lambda: np.random.randint(0,10+1), POSINT0) # random int can be 0
-        #for v in [10 , 20]:  pset.addTerminal(v, POSINT4)
-        #for v in [60 , 120 , 180 , 200 , 240]: pset.addTerminal(v, POSINT5)
-
         # add primatives
-        for prima in cls.primatives_all(): pset.addPrimitive(*prima)
-        return pset
+        for prims in cls.primatives_all(): pset.addPrimitive(*prims)
+        
+        '''创建遗传算法基础模块，以下参数不建议更改，如需更改，可参考deap官方文档'''
+        # https://zhuanlan.zhihu.com/p/72130823
+        [(delattr(creator , n) if hasattr(creator , n) else None) for n in ['FitnessMin' , 'Individual']]
+        creator.create("FitnessMin", base.Fitness, weights=(+1.0,))   # 优化问题：单目标优化，weights为单元素；+1表明适应度越大，越容易存活
+        creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMin, pset=pset) # type:ignore 个体编码：pset，预设的
+
+        toolbox = base.Toolbox()
+        toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=1, max_= max_depth)
+        toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)# type:ignore
+        toolbox.register("population", tools.initRepeat, list, toolbox.individual)# type:ignore
+        toolbox.register("prune", cls.prune)
+        toolbox.register("compile", cls.Compiler(pset))
+        toolbox.register("evaluate", eval_func , compiler = toolbox.compile , **kwargs) # type: ignore
+        toolbox.register("select", tools.selTournament, tournsize=3) # 锦标赛：第一轮随机选择3个，取最大
+        toolbox.register("mate", gp.cxOnePoint)
+        toolbox.register("expr_mut", gp.genHalfAndHalf, min_=0, max_= max_depth)  # genFull
+        toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset) # type:ignore
+        toolbox.decorate("mate", gp.staticLimit(key=operator.attrgetter("height"), max_value=min(10,max_depth)))  # max=3
+        toolbox.decorate("mutate", gp.staticLimit(key=operator.attrgetter("height"), max_value=min(10,max_depth)))  # max=3
+
+        return toolbox
     
 class gpTimer:
     '''
     ------------------------ gp timers ------------------------
     includes:
-        PTimer
-        AccTimer
+        PTimer     : record a process and its time cost
+        AccTimer   : record a series of time costs, can average later
+        EmptyTimer : do nothing
     '''
     def __init__(self , record = True) -> None:
         self.recording = record
@@ -208,5 +259,5 @@ class gpTimer:
             df = pd.DataFrame(data = {k:self.recorder[k] for k in columns} , dtype=dtype) 
         df.to_csv(path)
         if print_out: 
-            with pd.option_context('display.max_colwidth', 11 , 'display.precision', 4,):
+            with pd.option_context('display.width' , 160 ,  'display.max_colwidth', 10 , 'display.precision', 4,):
                 print(df)
