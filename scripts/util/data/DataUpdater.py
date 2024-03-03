@@ -292,8 +292,8 @@ class DataUpdater():
         old_updaters = self.get_updater_paths()
         if del_after_dumping:
             print(old_updaters)
-            if input(f'''Delete {len(old_updaters)} updaters (press yes/y) : 
-                        {old_updaters}''').lower() not in ['y','yes']: 
+            if input(f'''Delete {len(old_updaters)} updaters after completion? (press yes/y) : 
+                        {old_updaters}''')[0].lower() != 'y': 
                 del_after_dumping = False
 
         for updater_path in old_updaters:

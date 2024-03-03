@@ -245,7 +245,7 @@ class online_sql_connector():
         end_dt = min(99991231 , int(date.today().strftime('%Y%m%d')))
         if end_dt < start_dt: return []
         
-        freq = 'QE'
+        freq = 'QE' if pd.__version__ >= '2.2.0' else 'Q'
         date_segs = self.date_seg(start_dt , end_dt , freq = freq)
         prompt = f'{time.ctime()} : {src}/{query_type} since {start_dt} to {end_dt}, total {len(date_segs)} periods({freq})'
         if ask: assert input(prompt + ', print "yes" to confirm!') == 'yes'
@@ -310,11 +310,13 @@ class online_sql_connector():
         if ask: assert input('print "yes" to confirm!') == 'yes'
         start_dt = max(start_dt , self.data_start_dt[src][query_type])
         end_dt   = min(end_dt , int(date.today().strftime('%Y%m%d')))
-        freq = 'QE'
+
+        freq = 'QE' if pd.__version__ >= '2.2.0' else 'Q'
         date_segs = self.date_seg(start_dt , end_dt , freq = freq)
         prompt = f'{time.ctime()} : {src}/{query_type} since {start_dt} to {end_dt}, total {len(date_segs)} periods({freq})'
         if ask: assert input(prompt + ', print "yes" to confirm!') == 'yes'
         print(prompt)
+        
         dtank = DataTank()
         group_file_list = []
         for (s , e) in date_segs:
@@ -338,14 +340,14 @@ class online_sql_connector():
         return group_file_list
 
     @classmethod
-    def date_seg(cls , start_dt , end_dt , freq='QE' , astype = int):
+    def date_seg(cls , start_dt , end_dt , freq='Q' , astype = int):
         dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
         dt_starts = [cls.date_offset(start_dt) , *cls.date_offset(dt_list[:-1],1)]
         dt_ends = [*dt_list[:-1] , cls.date_offset(end_dt)]
         return [(astype(s),astype(e)) for s,e in zip(dt_starts , dt_ends)]
     
     @staticmethod
-    def date_between(start_dt , end_dt , freq='QE' , astype = int):
+    def date_between(start_dt , end_dt , freq='Q' , astype = int):
         dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
         return dt_list.values
     

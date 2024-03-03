@@ -2,7 +2,6 @@ import math
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-from copy import deepcopy
 from .logger import *
 
 use_device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
