@@ -18,8 +18,10 @@ def is_invalid(x):
     return x is invalid or (isinstance(x , torch.Tensor) and x.numel() == 0)
 
 def allna(x , inf_as_na = False):
-    if inf_as_na: x = x.nan_to_num(nan,nan,nan)
-    return x.isnan().all()
+    if inf_as_na:
+        return not x.isfinite().any()
+    else:
+        return x.isnan().all()
 
 def exact(x , y):
     return x is y
@@ -89,9 +91,9 @@ def rankic_2d(x , y , dim = 1 , universe = None , min_coverage = 0.5):
 def one_hot(x):
     # will take a huge amount of memory, the suggestion is to use torch.cuda.empty_cache() after neutralization
     if not isinstance(x , torch.Tensor): x = torch.Tensor(x)
-    m = int(x[~x.isnan()].max()) # type:ignore
-    dummy = torch.where(x.isnan() , m + 1 , x).to(torch.int64)
-    assert (dummy >= 0).all()
+    m = x.nan_to_num().max().int().item() # type:ignore
+    dummy = x.nan_to_num(m + 1).to(torch.int64)
+    # dummy = torch.where(x.isnan() , m + 1 , x).to(torch.int64)
     dummy = torch.nn.functional.one_hot(dummy).to(torch.float)[...,:m+1] # slightly faster but will take a huge amount of memory
     dummy = dummy[...,dummy.sum(dim = tuple(range(x.dim()))) != 0]
     return dummy
@@ -114,7 +116,7 @@ def concat_factors(*factors , n_dims = 2 , dim = -1):
         factors = torch.cat(factors , dim = dim)
     return factors.nan_to_num_(nan , nan , nan)
 
-def neutralize_data(y , factors = None , groups = None , auto_intercept = True):
+def neutralize_data(y , factors = None , groups = None):
     # not the most time efficient way, since its is very memory consuming
     assert y.dim() <= 2
 
@@ -126,7 +128,6 @@ def neutralize_data(y , factors = None , groups = None , auto_intercept = True):
         x = concat_factors(x , one_hot(g)[...,:-1] , n_dims = y.dim())
     if is_invalid(x): return x , y
     
-    if auto_intercept: x = torch.nn.functional.pad(x , (1,0) , value = 1.)
     y = y.clone().nan_to_num_(nan , nan , nan).unsqueeze_(-1)
     torch.cuda.empty_cache()
     return x , y
@@ -175,35 +176,43 @@ def neutralize_2d(y , factors = None , group = None, dim = 1 , method = 'torch' 
     assert method in ['sk' , 'np' , 'torch']
     assert dim in [-1,0,1] , dim
     original_device = y.device
-    x , y = neutralize_data(y , factors , group , auto_intercept)
-    if is_invalid(x): return y.squeeze(-1)
-
+    x , y = neutralize_data(y , factors , group)
+    if is_invalid(x): return y.squeeze_(-1)
+    finite_ij   = y.isfinite().any(-1) * x.isfinite().any(-1)
+    x = x.nan_to_num_(0,0,0)
+    x = torch.nn.functional.pad(x , (1,0) , value = 1.)
+    nonzero_ik = x.count_nonzero(dim).bool()
     if device is not None:  x , y = x.to(device) , y.to(device)
     if dim == 0: x , y = x.permute(1,0,2) , y.permute(1,0,2)
-    if False and method == 'torch' and ~x.isnan().any() and ~y.isnan().any() and ~(x == 0).all(dim).any():
+    if False and method == 'torch' and finite_ij.all() and nonzero_ik.all():
         # fastest, but cannot deal nan's which is always the case, so will not enter here
         model = torch.linalg.lstsq(x , y , rcond=None)
-        resids = (y - x @ model[0])
+        y = (y - x @ model[0])
     else:
         betas_func = beta_calculator(method)
+        
         if method in ['sk' , 'np']:
             y = y.cpu().numpy()
             x = x.cpu().numpy()
-        resids = y.squeeze(-1) * 0
-        for i , (y_ , x_) in enumerate(zip(y , x)):
+        y = y.squeeze_(-1)
+        for i , (y_ , x_ , j_ , k_) in enumerate(zip(y , x , finite_ij , nonzero_ik)):
             if not silent and i % 500 == 0: print('neutralize by tradedate',i)
-            _nnan  = ~(y_.isnan().any(dim=-1) + x_.isnan().any(dim=-1))
-            if _nnan.sum() < 10:  continue
-            x_.nan_to_num_(0,0,0)
-            x_ = x_[:,(x_ != 0).any(0)]
-            betas = betas_func(x_[_nnan] , y_[_nnan])
-            resids[i] = resids[i] + (y_ - x_ @ betas).flatten()
-        if isinstance(resids , np.ndarray): resids = torch.Tensor(resids)
-    if dim == 0: resids = resids.permute(1,0)
-    resids = zscore(resids , dim = dim)
+            #_nnan  = ~(y_.isnan().any(dim=-1) + x_.isnan().any(dim=-1))
+            #if _nnan.sum() < 10:  continue
+            
+            #x_.nan_to_num_(0,0,0)
+            #x_ = x_[:,(x_ != 0).any(0)]
+            #betas = betas_func(x_[_nnan] , y_[_nnan])
+            if j_.sum() < 10: continue
+            x_ = x_[:,k_]
+            betas = betas_func(x_[j_] , y_[j_])
+            y[i] = (y_ - x_ @ betas).flatten()
+        if isinstance(y , np.ndarray): y = torch.Tensor(y)
+    if dim == 0: y = y.permute(1,0)
+    y = zscore(y , dim = dim)
     torch.cuda.empty_cache()
-    resids = resids.to(original_device)
-    return resids
+    y = y.to(original_device)
+    return y
 
 #%% 相关系数函数
 # 将以上函数以矩阵形式改写

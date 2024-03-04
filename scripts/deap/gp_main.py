@@ -471,8 +471,8 @@ def gp_fitnesses(pool_num , toolbox , eval_func , population , pool_skunames = N
     return fitnesses
 
 # %%
-def gp_hof_eval(toolbox , halloffame, i_iter , gp_values , df_index , df_columns , 
-                ir_floor=2.5,corr_cap=0.7,gp_manager=gpManager(),gp_timer=gpTimer(),memory_manager=None,
+def gp_hof_eval(toolbox , halloffame, i_iter , gp_values , ir_floor=2.5,corr_cap=0.7,
+                gp_manager=gpManager(),gp_timer=gpTimer(),memory_manager=None,
                 test_code=False,verbose=__debug__,**kwargs):
     """
     ------------------------ gp halloffame evaluation ------------------------
@@ -489,16 +489,6 @@ def gp_hof_eval(toolbox , halloffame, i_iter , gp_values , df_index , df_columns
         halloffame:    new container of individuals with best fitness
         hof_good_list: good hof values who pass the criterions
     """
-    hof_valid   = torch.Tensor([hof_single.if_valid          for hof_single in halloffame]) # icir valid
-    hof_rankir  = torch.Tensor([hof_single.fitness.values[0] for hof_single in halloffame]) # icir larger than ir_floor
-    hof_rankir2 = torch.Tensor([hof_single.rankirs[1]        for hof_single in halloffame]) # icir_out_resid not zero (i.e. not nan)
-    good_sign   = hof_valid * (hof_rankir > ir_floor) * ~(hof_rankir2 == 0.)
-    print(f'  --> HallofFame({len(halloffame)}) Contains {good_sign.sum().int()} Promising Candidates with RankIR >= {ir_floor:.2f}')
-    if good_sign.sum() <= 0.1 * len(halloffame):
-        # Failure of finding promising offspring , check if code has bug
-        print(f'  --> Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ')
-        print(f'  --> Valid hof({hof_valid.sum()}), insample max ir({hof_rankir.max():.4f}), outsample nonnan({(~hof_rankir2.isnan()).sum()})')
-
     good_hofs = MF.invalid
     good_log , full_log = gp_manager.load_states(['goodlog' , 'fulllog'] , i_iter = i_iter)
     i_good = len(good_log)
@@ -506,6 +496,14 @@ def gp_hof_eval(toolbox , halloffame, i_iter , gp_values , df_index , df_columns
     new_log  = pd.DataFrame([[i_iter,-1,str(ind).replace(' ',''),ind.if_valid,False,0.,*ind.rankirs] for ind in halloffame] , 
                             columns = ['i_iter','i_good','sytax','valid','good','max_corr','rankir_in_resid','rankir_out_resid','rankir_in','rankir_out'])
     new_log.good = new_log.valid & (new_log.rankir_in_resid.abs() > ir_floor) & (new_log.rankir_out_resid != 0.)
+    
+    print(f'  --> HallofFame({len(halloffame)}) Contains {new_log.good.sum()} Promising Candidates with RankIR >= {ir_floor:.2f}')
+    if new_log.good.sum() <= 0.1 * len(halloffame):
+        # Failure of finding promising offspring , check if code has bug
+        print(f'  --> Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ')
+        print(f'  --> Valid hof({new_log.valid.sum()}), insample max ir({new_log.rankir_in_resid.abs().max():.4f})')
+
+    
     if verbose: print(f'     --> Good sign candidate : {sum(new_log.good)} , valid {sum(new_log.valid)}')
     for i , hof in enumerate(halloffame):
         if not new_log.loc[i,'good']: continue
@@ -519,20 +517,20 @@ def gp_hof_eval(toolbox , halloffame, i_iter , gp_values , df_index , df_columns
             continue
 
         # 与已有的因子库做相关性检验，如果相关性大于预设值corr_cap则进入下一循环
-        corr_values = torch.full(good_hofs.shape[-1:] , corr_cap + 1e-4).to(good_hofs)
+        corr_values = torch.full((good_hofs.shape[-1]+1,) , 0.).to(good_hofs)
         for i_hof in range(good_hofs.shape[-1]):
-            corr = MF.corrwith(factor_value, good_hofs[...,i_hof], dim=1).nanmean().abs()  # MF.corrwith(factor_value, good_hofs[...,i_hof]).abs()
-            if corr > corr_cap: break
+            corr = MF.corrwith(factor_value, good_hofs[...,i_hof], dim=1).nanmean()  # MF.corrwith(factor_value, good_hofs[...,i_hof]).abs()
+            if corr.abs() > corr_cap: break
             corr_values[i_hof] = corr
             if memory_manager: memory_manager.check('corr')
         
-        new_log.loc[i,'max_corr'] = 0. if corr_values.numel() == 0 else round(corr_values.nan_to_num().max().item() , 4)
+        new_log.loc[i,'max_corr'] = round(corr_values[corr_values.abs().argmax()].item() , 4)
         if new_log.max_corr[i] > corr_cap:
             new_log.loc[i,'good'] = False
             continue
 
         # 通过检验，加入因子库
-        print(f'     --> Good {i_good}: RankIR {new_log.rankir_in_resid[i]:.2f} MaxCorr {new_log.max_corr[i]:.2f}: {new_log.sytax[i]}')
+        print(f'     --> Good {i_good:3d}: RankIR {new_log.rankir_in_resid[i]: .2f} MaxCorr {new_log.max_corr[i]: .2f}: {new_log.sytax[i]}')
         if test_code: gp_manager.save_state(factor_value , 'parquet' , i_iter , i_good = i_good)
         good_hofs = MF.concat_factors(good_hofs , factor_value)
         new_log.loc[i,'i_good'] = i_good
@@ -541,9 +539,8 @@ def gp_hof_eval(toolbox , halloffame, i_iter , gp_values , df_index , df_columns
     good_log = pd.concat([good_log , new_log[new_log.good]] , axis=0) if len(good_log) else new_log[new_log.good]
     full_log = pd.concat([full_log , new_log] , axis=0) if len(full_log) else new_log
    
-    del hof_valid , hof_rankir , hof_rankir2
     gp_manager.save_states({'goodlog' : good_log , 'fulllog' : full_log} , i_iter = i_iter)
-    if verbose: print(f'     --> Cuda Memories of good_logs , gp_values and others take {MemoryManager.object_memory([good_log , gp_values , kwargs]):.2f}G')
+    if verbose: print(f'     --> Cuda Memories of gp_values and others take {MemoryManager.object_memory([gp_values , kwargs]):.2f}G')
 
     return halloffame , good_hofs
 
@@ -586,18 +583,12 @@ def outer_loop(i_iter , gp_space , start_gen = 0):
     with gp_space.gp_timer('Neu_dump' , print_str = f'**Update Residual Labels and Dump Results'):
         # update labels_resid, according to hof_good_list (maybe no need to neutralize according to size and indus)
         mem_free = gp_space.memory_manager.check(showoff = True)
-        nan1 = gp_space.labels_res.isnan().sum()
-        nnan1= gp_space.labels_res.numel() - nan1
-        inf1 = gp_space.labels_res.isinf().sum()
-        no01 = (gp_space.labels_res != 0).nansum()
+        nnan1 , no01 = gp_space.labels_res.numel() - gp_space.labels_res.isnan().sum() , (gp_space.labels_res != 0).nansum()
         new_labls_res = MF.neutralize_2d(gp_space.labels_res, good_hofs , device = torch.device('cpu') if mem_free < 10 else None) # out of memory issue
         gp_space.gp_manager.save_state(gp_space.labels_res , 'labels_res' , i_iter) # useful to form multifactor
         gp_space.labels_res = new_labls_res
-        nan2 = gp_space.labels_res.isnan().sum()
-        nnan2= gp_space.labels_res.numel() - nan2
-        inf2 = gp_space.labels_res.isinf().sum()
-        no02 = (gp_space.labels_res != 0).nansum()
-        print(f'     --> Old and New nans: {nan1}/{nan2} , infs: {inf1}/{inf2} , ~0s: {no01}/{no02} , ~nans: {nnan1}/{nnan2}')
+        nnan2 , no02 = gp_space.labels_res.numel() - gp_space.labels_res.isnan().sum() , (gp_space.labels_res != 0).nansum()
+        print(f'     --> Old and New ~0s: {no01}/{no02} , ~nans: {nnan1}/{nnan2}')
         del good_hofs
         '''保存该轮迭代的最终种群、最优个体、迭代日志'''
         gp_space.gp_manager.dump_generation(population, halloffame, valhalla , i_iter = i_iter , i_gen = -1)
