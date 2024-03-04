@@ -78,18 +78,18 @@ def rankic_2d(x , y , dim = 1 , universe = None , min_coverage = 0.5):
     if universe is not None: valid *= universe.nan_to_num(False)
     x = torch.where(valid , x , nan)
 
-    coverage = (~x.isnan()).sum(dim=dim) / valid.sum(dim=dim)
+    coverage = (~x.isnan()).sum(dim=dim)
     ic = corrwith(rank_pct(x), rank_pct(y) , dim=dim)
     if is_invalid(ic):
         return ic
     else:
-        return torch.where(coverage < min_coverage , nan , ic)
+        return torch.where(coverage < min_coverage * valid.sum(dim=dim) , nan , ic)
 
 #%% 中性化函数
 def one_hot(x):
     # will take a huge amount of memory, the suggestion is to use torch.cuda.empty_cache() after neutralization
     if not isinstance(x , torch.Tensor): x = torch.Tensor(x)
-    m = int(x[~x.isnan()].max())
+    m = int(x[~x.isnan()].max()) # type:ignore
     dummy = torch.where(x.isnan() , m + 1 , x).to(torch.int64)
     assert (dummy >= 0).all()
     dummy = torch.nn.functional.one_hot(dummy).to(torch.float)[...,:m+1] # slightly faster but will take a huge amount of memory
@@ -187,9 +187,9 @@ def neutralize_2d(y , factors = None , group = None, dim = 1 , method = 'torch' 
     else:
         betas_func = beta_calculator(method)
         if method in ['sk' , 'np']:
-            y , x = map(lambda a:a.cpu().numpy() , (y , x))
+            y = y.cpu().numpy()
+            x = x.cpu().numpy()
         resids = y.squeeze(-1) * 0
-        
         for i , (y_ , x_) in enumerate(zip(y , x)):
             if not silent and i % 500 == 0: print('neutralize by tradedate',i)
             _nnan  = ~(y_.isnan().any(dim=-1) + x_.isnan().any(dim=-1))
@@ -197,9 +197,8 @@ def neutralize_2d(y , factors = None , group = None, dim = 1 , method = 'torch' 
             x_.nan_to_num_(0,0,0)
             x_ = x_[:,(x_ != 0).any(0)]
             betas = betas_func(x_[_nnan] , y_[_nnan])
-            resids[i] = (y_ - x_ @ betas).flatten()
+            resids[i] = resids[i] + (y_ - x_ @ betas).flatten()
         if isinstance(resids , np.ndarray): resids = torch.Tensor(resids)
-
     if dim == 0: resids = resids.permute(1,0)
     resids = zscore(resids , dim = dim)
     torch.cuda.empty_cache()
@@ -218,7 +217,8 @@ def corrwith(x,y,dim=None):
     cov  = torch.nansum(x_xmean * y_ymean, dim) 
     xsd  = x_xmean.square().nansum(dim).sqrt() 
     ysd  = y_ymean.square().nansum(dim).sqrt()
-    corr = cov / xsd / ysd
+    tol  = cov.nanmean() * 1e-4
+    corr = cov / (xsd + tol) / (ysd + tol)
     return corr
 
 @prima_legitimate(2,False)
@@ -259,7 +259,7 @@ def zscore(x , dim = 0 , index = None):
     x_xmean  = x - torch.nanmean(x , dim, keepdim=True)  # [TS, C]
     x_stddev = torch.nansum(x_xmean ** 2, dim , keepdim=index is None).sqrt()
     if index: x_xmean = x_xmean.select(dim,index)
-    z = x_xmean / x_stddev
+    z = x_xmean / (x_stddev + 1e-4 * x_stddev.nanmean())
     return z
 
 #%% 其他函数
@@ -417,7 +417,7 @@ def ma(x, d):
 
 @prima_legitimate(1)
 def pctchg(x,d):
-    return (x - ts_delay(x,d)) / abs(ts_delay(x,d))
+    return (x - ts_delay(x,d)) / ts_delay(x,d).abs()
 
 @prima_legitimate(1)
 @ts_roller(np.inf)
