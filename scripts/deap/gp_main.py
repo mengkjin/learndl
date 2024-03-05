@@ -489,7 +489,7 @@ def gp_hof_eval(toolbox , halloffame, i_iter , gp_values , ir_floor=2.5,corr_cap
         halloffame:    new container of individuals with best fitness
         hof_good_list: good hof values who pass the criterions
     """
-    good_hofs = MF.invalid
+    good_hofs = [] # MF.invalid
     good_log , full_log = gp_manager.load_states(['goodlog' , 'fulllog'] , i_iter = i_iter)
     i_good = len(good_log)
 
@@ -503,7 +503,6 @@ def gp_hof_eval(toolbox , halloffame, i_iter , gp_values , ir_floor=2.5,corr_cap
         print(f'  --> Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ')
         print(f'  --> Valid hof({new_log.valid.sum()}), insample max ir({new_log.rankir_in_resid.abs().max():.4f})')
 
-    
     if verbose: print(f'     --> Good sign candidate : {sum(new_log.good)} , valid {sum(new_log.valid)}')
     for i , hof in enumerate(halloffame):
         if not new_log.loc[i,'good']: continue
@@ -517,9 +516,12 @@ def gp_hof_eval(toolbox , halloffame, i_iter , gp_values , ir_floor=2.5,corr_cap
             continue
 
         # 与已有的因子库做相关性检验，如果相关性大于预设值corr_cap则进入下一循环
-        corr_values = torch.full((good_hofs.shape[-1]+1,) , 0.).to(good_hofs)
-        for i_hof in range(good_hofs.shape[-1]):
-            corr = MF.corrwith(factor_value, good_hofs[...,i_hof], dim=1).nanmean()  # MF.corrwith(factor_value, good_hofs[...,i_hof]).abs()
+        # corr_values = torch.full((good_hofs.shape[-1]+1,) , 0.).to(good_hofs)
+        corr_values = torch.full((len(good_hofs)+1,) , 0.).to(factor_value)
+        #for i_hof in range(good_hofs.shape[-1]):
+        for i_hof in range(len(good_hofs)):
+            #corr = MF.corrwith(factor_value, good_hofs[...,i_hof], dim=1).nanmean()  # MF.corrwith(factor_value, good_hofs[...,i_hof]).abs()
+            corr = MF.corrwith(factor_value, good_hofs[i_hof], dim=1).nanmean()  # MF.corrwith(factor_value, good_hofs[...,i_hof]).abs()
             if corr.abs() > corr_cap: break
             corr_values[i_hof] = corr
             if memory_manager: memory_manager.check('corr')
@@ -532,7 +534,8 @@ def gp_hof_eval(toolbox , halloffame, i_iter , gp_values , ir_floor=2.5,corr_cap
         # 通过检验，加入因子库
         print(f'     --> Good {i_good:3d}: RankIR {new_log.rankir_in_resid[i]: .2f} MaxCorr {new_log.max_corr[i]: .2f}: {new_log.sytax[i]}')
         if test_code: gp_manager.save_state(factor_value , 'parquet' , i_iter , i_good = i_good)
-        good_hofs = MF.concat_factors(good_hofs , factor_value)
+        # good_hofs = MF.concat_factors(good_hofs , factor_value)
+        good_hofs.append(factor_value)
         new_log.loc[i,'i_good'] = i_good
         i_good += 1
 
@@ -541,7 +544,21 @@ def gp_hof_eval(toolbox , halloffame, i_iter , gp_values , ir_floor=2.5,corr_cap
    
     gp_manager.save_states({'goodlog' : good_log , 'fulllog' : full_log} , i_iter = i_iter)
     if verbose: print(f'     --> Cuda Memories of gp_values and others take {MemoryManager.object_memory([gp_values , kwargs]):.2f}G')
-
+    
+    try:
+        good_hofs = MF.concat_factors(good_hofs)
+    except MemoryError:
+        # do it in cpu
+        if len(good_hofs) == 0:
+            good_hofs = MF.invalid
+        else:
+            dev = good_hofs[0].device
+            for i , hof in enumerate(good_hofs):
+                good_hofs[i] = hof.cpu()
+            good_hofs = MF.concat_factors(good_hofs).to(dev)
+    finally:
+        torch.cuda.empty_cache()
+        
     return halloffame , good_hofs
 
 # %%
