@@ -88,49 +88,27 @@ def rankic_2d(x , y , dim = 1 , universe = None , min_coverage = 0.5):
         return torch.where(coverage < min_coverage * valid.sum(dim=dim) , nan , ic)
 
 #%% 中性化函数
-def one_hot(x):
+def one_hot(x , ex_last = True):
     # will take a huge amount of memory, the suggestion is to use torch.cuda.empty_cache() after neutralization
     if not isinstance(x , torch.Tensor): x = torch.Tensor(x)
-    m = x.nan_to_num().max().int().item() # type:ignore
-    dummy = x.nan_to_num(m + 1).to(torch.int64)
+    xmax = x.nan_to_num().max().int().item() # type:ignore
+    dummy = x.nan_to_num(xmax + 1).to(torch.int64)
     # dummy = torch.where(x.isnan() , m + 1 , x).to(torch.int64)
-    dummy = torch.nn.functional.one_hot(dummy).to(torch.float)[...,:m+1] # slightly faster but will take a huge amount of memory
+    dummy = torch.nn.functional.one_hot(dummy).to(torch.float)[...,:xmax+1-ex_last] # slightly faster but will take a huge amount of memory
     dummy = dummy[...,dummy.sum(dim = tuple(range(x.dim()))) != 0]
     return dummy
 
-def concat_factors(*factors , n_dims = 2 , dim = -1):
+def concat_factors(*factors , n_dims = 2 , dim = -1 , device = None):
     if len(factors) == 0: return invalid
-    if isinstance(factors , tuple): factors = list(factors)
+    factors = list(factors)
     
-    devtypes = [1 if fac.device.type == 'cuda' else 0 for fac in factors]
-    device = factors[devtypes.index(max(devtypes))].device
-
     for i in range(len(factors)):
         if factors[i] is None: factors[i] = invalid
         if factors[i].dim() == n_dims:  factors[i] = factors[i].unsqueeze(dim)
-        factors[i] = factors[i].to(device)
+        if device is not None: factors[i] = factors[i].to(device)
 
-    if len(factors) == 1:
-        factors = factors[0]  
-    else:
-        factors = torch.cat(factors , dim = dim)
-    return factors.nan_to_num_(nan , nan , nan)
-
-def neutralize_data(y , factors = None , groups = None):
-    # not the most time efficient way, since its is very memory consuming
-    assert y.dim() <= 2
-
-    x = concat_factors(factors , n_dims = y.dim())
-
-    if groups is None: groups  = []
-    if not isinstance(groups , (list , tuple)): groups  = [groups]
-    for g in groups:
-        x = concat_factors(x , one_hot(g)[...,:-1] , n_dims = y.dim())
-    if is_invalid(x): return x , y
-    
-    y = y.clone().nan_to_num_(nan , nan , nan).unsqueeze_(-1)
-    torch.cuda.empty_cache()
-    return x , y
+    factors = factors[0] if len(factors) == 1 else torch.cat(factors , dim = dim)
+    return factors
 
 def betas_torch(x , y):
     try:
@@ -172,46 +150,57 @@ def beta_calculator(method = 'torch'):
         betas_func = betas_torch
     return betas_func
 
-def neutralize_2d(y , factors = None , group = None, dim = 1 , method = 'torch' , auto_intercept = True , silent= True , device = None):  # [tensor (TS*C), tensor (TS*C)]
+def neutralize_xdata_2d(factors = None , groups = None):
+    # not the most time efficient way, since its is very memory consuming
+    if groups is None: groups  = []
+    if not isinstance(groups , (list , tuple)): groups  = [groups]
+    x = concat_factors(factors , n_dims = 2)
+    for g in groups: 
+        x = concat_factors(x , one_hot(g , ex_last=True) , n_dims = 2)
+    x.nan_to_num_(nan , nan , nan)
+    x = torch.nn.functional.pad(x , (1,0) , value = 1.)
+    return x
+
+def neutralize_2d(y , x , dim = 1 , method = 'torch' , device = None , inplace = False):  # [tensor (TS*C), tensor (TS*C)]
+    if is_invalid(x): return y
+
     assert method in ['sk' , 'np' , 'torch']
     assert dim in [-1,0,1] , dim
-    original_device = y.device
-    x , y = neutralize_data(y , factors , group)
-    if is_invalid(x): return y.squeeze_(-1)
-    finite_ij   = y.isfinite().any(-1) * x.isfinite().any(-1)
-    x = x.nan_to_num_(0,0,0)
-    x = torch.nn.functional.pad(x , (1,0) , value = 1.)
-    nonzero_ik = x.count_nonzero(dim).bool()
+    assert y.dim() == 2 , y.dim()
+    assert x.dim() in [2,3] , x.dim()
+    
+    old_device = y.device
+    finite_ij = y.isfinite() * x.isfinite().any(-1)
+    if inplace:
+        x.nan_to_num_(0,0,0) 
+        y.nan_to_num_(nan , nan , nan).unsqueeze_(-1)
+    else:
+        x = x.nan_to_num(0,0,0)
+        y = y.nan_to_num(nan , nan , nan).unsqueeze(-1)
+    nonzero_ik = ~(x == 0).all(dim)
     if device is not None:  x , y = x.to(device) , y.to(device)
     if dim == 0: x , y = x.permute(1,0,2) , y.permute(1,0,2)
+    res = None
     if False and method == 'torch' and finite_ij.all() and nonzero_ik.all():
         # fastest, but cannot deal nan's which is always the case, so will not enter here
-        model = torch.linalg.lstsq(x , y , rcond=None)
-        y = (y - x @ model[0])
-    else:
+        try:
+            model = torch.linalg.lstsq(x , y , rcond=None)
+            res = (y - x @ model[0])
+        except:
+            res = None
+    if res is not None:
+        y = res
+    else: 
         betas_func = beta_calculator(method)
-        
-        if method in ['sk' , 'np']:
-            y = y.cpu().numpy()
-            x = x.cpu().numpy()
-        y = y.squeeze_(-1)
+        if method in ['sk' , 'np']: 
+            x , y , finite_ij , nonzero_ik = x.cpu().numpy() , y.cpu().numpy() , finite_ij.cpu().numpy()  , nonzero_ik.cpu().numpy() 
         for i , (y_ , x_ , j_ , k_) in enumerate(zip(y , x , finite_ij , nonzero_ik)):
-            if not silent and i % 500 == 0: print('neutralize by tradedate',i)
-            #_nnan  = ~(y_.isnan().any(dim=-1) + x_.isnan().any(dim=-1))
-            #if _nnan.sum() < 10:  continue
-            
-            #x_.nan_to_num_(0,0,0)
-            #x_ = x_[:,(x_ != 0).any(0)]
-            #betas = betas_func(x_[_nnan] , y_[_nnan])
             if j_.sum() < 10: continue
-            x_ = x_[:,k_]
-            betas = betas_func(x_[j_] , y_[j_])
-            y[i] = (y_ - x_ @ betas).flatten()
+            betas = betas_func(x_[:,k_][j_] , y_[j_])
+            y[i] -= x_[:,k_] @ betas
         if isinstance(y , np.ndarray): y = torch.Tensor(y)
-    if dim == 0: y = y.permute(1,0)
-    y = zscore(y , dim = dim)
-    torch.cuda.empty_cache()
-    y = y.to(original_device)
+    if dim == 0: y = y.permute(1,0,2)
+    y = zscore_inplace(y.squeeze_(-1) , dim = dim).to(old_device)
     return y
 
 #%% 相关系数函数
@@ -270,6 +259,12 @@ def zscore(x , dim = 0 , index = None):
     if index: x_xmean = x_xmean.select(dim,index)
     z = x_xmean / (x_stddev + 1e-4 * x_stddev.nanmean())
     return z
+
+def zscore_inplace(x , dim = 0):
+    x -= torch.nanmean(x , dim, keepdim=True)  # [TS, C]
+    x_stddev = torch.nansum(x ** 2, dim , keepdim=True).sqrt()
+    x /= (x_stddev + 1e-4 * x_stddev.nanmean())
+    return x
 
 #%% 其他函数
 @prima_legitimate(2)

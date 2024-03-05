@@ -6,7 +6,7 @@ from argparse import Namespace
 from deap import base , creator , tools , gp
 from copy import deepcopy
 import gp_math_func as MF
-
+import gp_factor_func as FF
 
 # ------------------------ gp terminals ------------------------
 class Fac(): pass
@@ -81,11 +81,11 @@ class gpManager:
         )
 
         self.path = Namespace(
-            goodlog = f'{self.job_dir}/good_log.csv' ,
-            fulllog = f'{self.job_dir}/full_log.csv' ,
-            runtime = f'{self.job_dir}/saved_times.csv' ,
-            params  = f'{self.job_dir}/gp_params.pt' ,
-            df_axis = f'{self.job_dir}/df_axis.pt'
+            elitelog = f'{self.job_dir}/elite_log.csv' ,
+            hoflog   = f'{self.job_dir}/hof_log.csv' ,
+            runtime  = f'{self.job_dir}/saved_times.csv' ,
+            params   = f'{self.job_dir}/gp_params.pt' ,
+            df_axis  = f'{self.job_dir}/df_axis.pt'
         )
         [os.makedirs(subfoler , exist_ok=True) for subfoler in self.dir.__dict__.values()]
         self.df_axis = {}
@@ -131,42 +131,42 @@ class gpManager:
         gen_str  = 'overall' if i_gen < 0 else f'gen{i_gen}'
         return f'{iter_str}_{gen_str}'
     
-    def load_state(self , key , i_iter , i_gen = 0 , i_good = 0):
+    def load_state(self , key , i_iter , i_gen = 0 , i_elite = 0):
         if key == 'labels_res':
             return torch.load(f'{self.dir.res}/iter{i_iter}.pt')
         elif key == 'parquet':
-            return pd.read_parquet(f'{self.dir.pqt}/good_{i_good}.parquet', engine='fastparquet')
+            return pd.read_parquet(f'{self.dir.pqt}/elite_{i_elite}.parquet', engine='fastparquet')
         else:
             path = getattr(self.path , key)
             if key == 'df_axis':
                 self.df_axis = torch.load(path)
                 return self.df_axis
-            elif key in ['goodlog' , 'fulllog']:
+            elif key in ['elitelog' , 'hoflog']:
                 if os.path.exists(path):
                     df = pd.read_csv(path,index_col=0)
                     return df[df.i_iter < i_iter]
                 return pd.DataFrame()
             elif path.endswith('.csv'):
-                return pd.read_csv(path)
+                return pd.read_csv(path,index_col=0)
             elif path.endswith('.pt'):
                 return torch.load(path)
             else:
                 raise Exception(key)
 
-    def save_state(self , data , key , i_iter , i_gen = 0 , i_good = 0 , **kwargs):
+    def save_state(self , data , key , i_iter , i_gen = 0 , i_elite = 0 , **kwargs):
         if key == 'labels_res':
             torch.save(data , f'{self.dir.res}/iter{i_iter}.pt')
         elif key == 'parquet':
             if isinstance(data , torch.Tensor): data = data.cpu().numpy()
             df = pd.DataFrame(data,index=self.df_axis['df_index'],columns=self.df_axis['df_columns'])
-            df.to_parquet(f'{self.dir.pqt}/good_{i_good}.parquet' , engine='fastparquet')
+            df.to_parquet(f'{self.dir.pqt}/elite_{i_elite}.parquet',engine='fastparquet')
         else:
             path = getattr(self.path , key)
             if key == 'df_axis':
                 torch.save(data , self.path.df_axis)
                 self.df_axis = data
             elif isinstance(data , pd.DataFrame) and path.endswith('.csv'):
-                data.to_csv(path)
+                data.reset_index(drop=True).to_csv(path)
             elif path.endswith('.pt'):
                 torch.save(data , path)
             else:
@@ -440,20 +440,19 @@ class gpTimer:
 class MemoryManager():
     unit = 1024**3
 
-    def __init__(self , device_no = 0) -> None:
-        self.device_no = device_no
+    def __init__(self , device_no = -1) -> None:
         self.cuda_avail = torch.cuda.is_available()
+        self.device_no = -1 if not self.cuda_avail else device_no
         self.unit = type(self).unit
         if self.cuda_avail: self.gmem_total = torch.cuda.mem_get_info()[1] / self.unit
         self.record = {}
         self.check(showoff = True)
 
-    def check(self , key = None, showoff = False , critical_ratio = 0.5):
-        
-        if not self.cuda_avail: return 0.
+    def check(self , key = None, showoff = False , critical_ratio = 0.5 , starter = '**'):
+        if self.device_no < 0: return 0.
 
         gmem_free = torch.cuda.mem_get_info(self.device_no)[0] / self.unit
-        if gmem_free > critical_ratio * self.gmem_total: 
+        if gmem_free > critical_ratio * self.gmem_total and not showoff: 
             # if showoff: print(f'**Cuda Memory: Free {gmem_free:.1f}G') 
             return gmem_free
 
@@ -466,7 +465,7 @@ class MemoryManager():
         if key is not None:
             if key not in self.record.keys(): self.record[key] = []
             self.record[key].append(gmem_freed)
-        if showoff: print(f'**Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
+        if showoff: print(f'{starter}Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
         
         # gc.collect() # collect memory, very slow
         
@@ -496,3 +495,84 @@ class MemoryManager():
             print(f'  --> Avg Freed Cuda Memory: ')
             for key , value in self.record.items():
                 print(f'     --> {key} : {len(value)} counts, on average freed {np.mean(value):.2f}G')
+
+class gpElites:
+    def __init__(self , start_i_elite = 0 , max_len = 50) -> None:
+        self.elite_blocks = []
+        self.start_i_elite = start_i_elite
+        self.max_len = max_len
+        self.n_elites = 0
+
+    def max_corr_with_me(self , value , abs_corr_cap = 1.01 , early_exit = True):
+        corr_values = torch.zeros((self.n_elites+1,)).to(value)
+        exit_state  = False
+        i = 0
+        for block in self.elite_blocks:
+            corrs , exit_state = block.max_corr_with_me(value , abs_corr_cap , early_exit)
+            corr_values[i:i+block.len()] = corrs[:block.len()]
+            if exit_state: break
+            i += block.len()
+        return corr_values , exit_state
+
+    def append(self , value):
+        if len(self.elite_blocks) == 0:
+            self.elite_blocks.append(self.gpEliteBlock(self.max_len).append(value))
+        elif self.elite_blocks[-1].full:
+            self.elite_blocks[-1].cat2cpu()
+            self.elite_blocks.append(self.gpEliteBlock(self.max_len).append(value))
+        else:
+            self.elite_blocks[-1].append(value)
+        self.n_elites += 1
+    
+    def cat_all(self):
+        for block in self.elite_blocks:
+            block.cat2cpu()
+        return self
+    
+    def elite_tensor(self , device = None):
+        return torch.cat([block.block.to(device) for block in self.elite_blocks] , dim = -1).to(device)
+    
+    class gpEliteBlock:
+        def __init__(self , max_len = 50):
+            self.max_len = max_len
+            self.block = []
+            self.full = False
+
+        def len(self):
+            if isinstance(self.block , torch.Tensor):
+                return self.block.shape[-1] 
+            else:
+                return len(self.block)
+            
+        def cat2cpu(self):
+            if isinstance(self.block , list): 
+                try:
+                    self.block = MF.concat_factors(*self.block).cpu()
+                except MemoryError:
+                    print('OutofMemory when concat gpEliteBlock, try use cpu to concat')
+                    gc.collect()
+                    self.block = MF.concat_factors(*self.block , device=torch.device('cpu')) # to cpu first
+            return self
+
+        def append(self , value):
+            if isinstance(self.block , list) and not self.full:
+                self.block.append(value)
+                self.full = self.len() >= self.max_len
+            else:
+                raise Exception('The EliteBlock is Full')   
+            return self
+        
+        def max_corr_with_me(self , value , abs_corr_cap = 1.01 , early_exit = True):
+            corr_values = torch.zeros((self.len()+1,)).to(value)
+            exit_state  = False
+            if isinstance(self.block , torch.Tensor): 
+                block = self.block.to(value)
+            else:
+                block = self.block
+            for i in range(self.len()):
+                corr = MF.corrwith(value, block[...,i] if isinstance(block, torch.Tensor) else block[i] , dim=1).nanmean() 
+                corr_values[i] = corr
+                if corr.abs() > abs_corr_cap and early_exit: 
+                    exit_state = True
+                    break
+            return corr_values , exit_state
