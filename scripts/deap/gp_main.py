@@ -14,7 +14,7 @@ from torch.multiprocessing import Pool
 
 import gp_math_func as MF
 import gp_factor_func as FF
-from gp_utils import gpHandler , gpTimer , gpContainer , gpManager , MemoryManager
+from gp_utils import gpHandler , gpTimer , gpContainer , gpFileManager , MemoryManager , gpElites
 from gp_affiliates import Profiler
 
 # %%
@@ -58,8 +58,8 @@ def gp_job_dir(test_code = None , job_id = None , train = True , continuation = 
             if not test_code and not input(f'Path "{job_dir}" exists , press "yes" to confirm Deletion:')[0].lower() == 'y':
                 raise Exception(f'Deletion Denied!')
             shutil.rmtree(job_dir)
-        elif not test_code and continuation and not input(f'Path "{job_dir}" exists , press "yes" to confirm Continuation:')[0].lower() == 'y':
-            raise Exception(f'Continuation Denied!')
+        #elif os.path.exists(job_dir) and not input(f'Path "{job_dir}" exists , press "yes" to confirm Continuation:')[0].lower() == 'y':
+        #    raise Exception(f'Continuation Denied!')
         elif not os.path.exists(job_dir) and continuation:
             raise Exception(f'No existing "{job_dir}" for Continuation!')
         print(f'  --> Continue Training in "{job_dir}"')
@@ -149,23 +149,26 @@ def gp_namespace(gp_params):
     output:
         gp_space:  gpContainer that includes gp parameters, gp datas and gp arguements, and various other datas
     '''
-    gp_manager = gpManager(gp_params.get('job_dir')) # gpManager managing loading and dumping
-    gp_timer = gpTimer(True)                         # gpTimer to record time cost
+    file_manager = gpFileManager(gp_params.get('job_dir')) # gpFileManager managing loading and dumping
+    gp_timer = gpTimer(True)                             # gpTimer to record time cost
 
-    gp_space = gp_params.copy().update(gp_manager = gp_manager , gp_timer = gp_timer , gp_values = [] , df_columns = None)
+    gp_space = gp_params.copy().update(file_manager = file_manager , gp_timer = gp_timer , gp_values = [] , df_columns = None)
     with gp_space.gp_timer('Data' , df_cols = False , print_str= '**Load Data'):
         gp_space.gp_args = gp_space.gp_fac_list + gp_space.gp_raw_list
         gp_space.n_args  = (len(gp_space.gp_fac_list) , len(gp_space.gp_raw_list))
         
         package_path = f'{_DIR_pack}/gp_data_package' + '_test' * gp_space.test_code + '.pt'
         package_require = ['gp_args' , 'gp_values' , 'size' , 'indus' , 'labels_raw' , 'df_index' , 'df_columns' , 'universe']
-        if os.path.exists(package_path):
-            if gp_space.verbose: print(f'  --> Directly load {package_path}')
-            package_data = torch.load(package_path)
 
-            assert np.isin(gp_space.gp_args , package_data['gp_args']).all() , np.setdiff1d(gp_space.gp_args , package_data['gp_args'])
+        load_finished = False
+        if os.path.exists(package_path): package_data = torch.load(package_path)
+        if not np.isin(package_require , list(package_data.keys())).all() or not np.isin(gp_space.gp_args , package_data['gp_args']).all():
+            if gp_space.verbose: print(f'  --> Exists "{package_path}" but Lack Required Data!')
+        else:
             assert np.isin(package_require , list(package_data.keys())).all() , np.setdiff1d(package_require , list(package_data.keys()))
+            assert np.isin(gp_space.gp_args , package_data['gp_args']).all() , np.setdiff1d(gp_space.gp_args , package_data['gp_args'])
 
+            if gp_space.verbose: print(f'  --> Directly load "{package_path}"')
             for gp_key in gp_space.gp_args:
                 gp_val = package_data['gp_values'][package_data['gp_args'].index(gp_key)]
                 gp_val = df_to_ts(gp_val , gp_key , gp_space.device)
@@ -180,8 +183,10 @@ def gp_namespace(gp_params):
                 gp_val = package_data[gp_key]
                 gp_space.set(gp_key , gp_val)
 
-        else:
-            if gp_space.verbose: print(f'  --> Load from parquet files')
+            load_finished = True
+
+        if not load_finished:
+            if gp_space.verbose: print(f'  --> Load from Parquet Files:')
             gp_filename = gp_filename_converter()
             nrowchar = 0
             for i , gp_key in enumerate(gp_space.gp_args):
@@ -203,7 +208,10 @@ def gp_namespace(gp_params):
                 gp_val = df_to_ts(gp_val , gp_key , gp_space.device)
                 gp_space.set(gp_key , gp_val)
 
-            CP = gp_space.gp_values[gp_space.gp_args.index('CP')]      
+            if 'CP' in gp_space.gp_args:
+                CP = gp_space.gp_values[gp_space.gp_args.index('CP')]      
+            else:
+                df_to_ts(read_gp_data(gp_filename('CP'),gp_space.slice_date,gp_space.df_columns) , 'CP' , gp_space.device)    
             gp_space.universe   = ~CP.isnan() # type:ignore
             gp_space.labels_raw = gp_get_labels(CP , gp_space.size , gp_space.indus)
             os.makedirs(_DIR_pack , exist_ok=True)
@@ -211,11 +219,11 @@ def gp_namespace(gp_params):
 
         gp_space.labels_res = copy.deepcopy(gp_space.labels_raw)
         if gp_space.verbose: print(f'  --> {len(gp_space.gp_fac_list)} factors, {len(gp_space.gp_raw_list)} raw data loaded!')
-        gp_manager.save_states({'params':gp_params.__dict__,'df_axis':gp_space.subset(['df_index' , 'df_columns'])} , i_iter = 0) # useful to assert same index as package data
+        file_manager.save_states({'params':gp_params.__dict__,'df_axis':gp_space.subset(['df_index' , 'df_columns'])} , i_iter = 0) # useful to assert same index as package data
 
     gp_space.insample  = (gp_space.df_index >= gp_space.slice_date[0]) * (gp_space.df_index <= gp_space.slice_date[1])
     gp_space.outsample = (gp_space.df_index >= gp_space.slice_date[2]) * (gp_space.df_index <= gp_space.slice_date[3])
-    gp_space.memory_manager = MemoryManager(0)
+    gp_space.mem_manager = MemoryManager(0)
     return gp_space
 
 def gp_get_labels(CP = None , neutral_factor = None , neutral_group = None , nday = 10 , delay = 1 , 
@@ -346,7 +354,7 @@ def gp_factor(func , gp_values , stream = 'inf' , timer = gpTimer.EmptyTimer() ,
 
 # %%
 def evaluate(individual, pool_skuname, compiler , gp_values , labels_raw , labels_res, universe, insample , outsample , 
-             gp_timer = gpTimer(), gp_manager = gpManager() , 
+             gp_timer = gpTimer(), file_manager = gpFileManager() , 
              const_annual = 24 , min_coverage = 0.5 , i_iter = -1 , **kwargs):
     '''
     ------------------------ evaluate individual syntax fitness ------------------------
@@ -369,12 +377,11 @@ def evaluate(individual, pool_skuname, compiler , gp_values , labels_raw , label
         )
     '''
     ## here need amend
-    gp_manager.update_sku(individual, pool_skuname)
+    file_manager.update_sku(individual, pool_skuname)
 
     # compile syntax and calculate factors
     factor_func  = gp_compile(compiler , individual , gp_timer.acc_timer('compile'))
     factor_value = gp_factor(factor_func , gp_values , 'inf' , gp_timer.acc_timer('eval'))
-    
     # first return must be list or tuple, since fitness can be weighted , # "Assigned values have not the same length than fitness weights"
     rankir_list = torch.zeros(4)
     if is_invalid := MF.is_invalid(factor_value): return not is_invalid , rankir_list # if_valid , ir's
@@ -390,8 +397,27 @@ def evaluate(individual, pool_skuname, compiler , gp_values , labels_raw , label
                 rankir_list[i * 2 + j] = (rankic_avg / (rankic_std + 1e-6) * np.sqrt(const_annual)) #.cpu() # 年化 ir
     return not is_invalid , rankir_list.nan_to_num(0,0,0)
 
+def evaluate_pop(population , toolbox , i_iter = 0, i_gen = 0, pool_num = 1 , desc = 'Evolve Generation' , **kwargs):
+    pool_skunames = [f'iter{i_iter}_gen{i_gen}_{i}' for i in range(len(population))] # 'pool_skuname' arg for evaluate
+    desc = f'  --> {desc} {str(i_gen)}'
+
+    if pool_num > 1:
+        pool = Pool(pool_num)
+        fitnesses = list(tqdm(pool.imap(toolbox.evaluate, zip(population, pool_skunames)), total=len(population), desc=desc)) #type:ignore
+        #fitnesses = pool.starmap(toolbox.evaluate, zip(survivors, pool_list), chunksize=1)
+        pool.close()
+        pool.join()
+        # pool.clear()
+    else:
+        fitnesses = list(tqdm(toolbox.map(toolbox.evaluate, population, pool_skunames), total=len(population), desc=desc))
+
+    for ind, fit in zip(population, fitnesses):
+        ind.if_valid , ind.rankirs = fit[0] , fit[1]
+        ind.fitness.values = (abs(fit[1][0]),)
+
+    return population
 # %%
-def gp_evolution(toolbox , i_iter, pop_num  , gp_manager , pool_num=1,
+def gp_evolution(toolbox , i_iter, pop_num  , file_manager , pool_num=1,
                  n_gen=5,cxpb=0.35,mutpb=0.25,hof_num=10, surv_rate=0.8,
                  start_gen=0,gp_timer=gpTimer(),verbose=__debug__,stats=None,**kwargs):  
     """
@@ -421,24 +447,25 @@ def gp_evolution(toolbox , i_iter, pop_num  , gp_manager , pool_num=1,
         offspring = varAnd(population, toolbox, cxpb, mutpb)   # 交叉、变异
         population = offspring    # 更新种群
     """
-    population , halloffame , valhalla = gp_manager.load_generation(i_iter , start_gen-1 , hof_num = hof_num , log_header = ['i_gen', 'n_evals'] , stats = stats)
+    population , halloffame , valhalla = file_manager.load_generation(i_iter , start_gen-1 , hof_num = hof_num , log_header = ['i_gen', 'n_evals'] , stats = stats)
 
     for i_gen in range(start_gen, n_gen):
+
         if verbose and i_gen > 0: print(f'     --> Survive {len(population)} Offsprings, try Populating to {pop_num} ones')
         population = gp_population(toolbox , pop_num , last_gen = population , valhalla = valhalla)
         if verbose and i_gen == 0: print(f'**A Population({len(population)}) has been Initialized')
         valhalla = list(set(valhalla + [str(ind).replace(' ','') for ind in population]))
-        
         # Evaluate the individuals with an invalid fitness(对于发生改变的个体,重新评估abs(IR)值)
-        population    = [ind for ind in population if not ind.fitness.valid] # 'individual' arg for evaluate
-        pool_skunames = [f'iter{i_iter}_gen{i_gen}_{i}' for i in range(len(population))] # 'pool_skuname' arg for evaluate
-        desc = f'  --> Evolve Generation {str(i_gen)}'
-        fitnesses = gp_fitnesses(pool_num , toolbox , toolbox.evaluate , population , pool_skunames , desc = desc)
+        # population    = [ind for ind in population if not ind.fitness.valid] # 'individual' arg for evaluate
 
-        for ind, fit in zip(population, fitnesses):
-            ind.if_valid , ind.rankirs = fit[0] , fit[1]
-            ind.fitness.values = (abs(fit[1][0]),)
+        population = toolbox.evaluate_pop(population , i_iter = i_iter, i_gen = i_gen)
+        #pool_skunames = [f'iter{i_iter}_gen{i_gen}_{i}' for i in range(len(population))] # 'pool_skuname' arg for evaluate
+        #desc = f'  --> Evolve Generation {str(i_gen)}'
+        #fitnesses = gp_fitnesses(pool_num , toolbox , toolbox.evaluate , population , pool_skunames , desc = desc)
 
+        #for ind, fit in zip(population, fitnesses):
+        #    ind.if_valid , ind.rankirs = fit[0] , fit[1]
+        #    ind.fitness.values = (abs(fit[1][0]),)
         # check survivors
         survivors = [ind for ind in population if ind.if_valid]
 
@@ -446,7 +473,7 @@ def gp_evolution(toolbox , i_iter, pop_num  , gp_manager , pool_num=1,
         halloffame.update(survivors)
 
         # Dump population , halloffame , valhalla , logbooks(record **kwargs) of this generation
-        gp_manager.dump_generation(population, halloffame, valhalla , i_iter , i_gen , n_evals = len(survivors), **(stats.compile(survivors) if stats else {}))
+        file_manager.dump_generation(population, halloffame, valhalla , i_iter , i_gen , n_evals = len(survivors), **(stats.compile(survivors) if stats else {}))
             
         # Selectiion of offsprings,based on abs(IR) , consider surv_rate
         offspring = toolbox.select(survivors, min(int(surv_rate * pop_num) , len(survivors)))
@@ -455,15 +482,15 @@ def gp_evolution(toolbox , i_iter, pop_num  , gp_manager , pool_num=1,
         with gp_timer.acc_timer('varAnd'):
             offspring = varAnd(offspring, toolbox, cxpb , mutpb) # varAnd means variation part (crossover and mutation)
         population = offspring
-    print(f'**A HallofFame({len(halloffame)}) has been Evolutionized')
+
+    print(f'**A HallofFame({len(halloffame)}) has been ' + ('Evolutionized' if start_gen >= n_gen else 'Loaded'))
     return population, halloffame, valhalla
 
 def gp_fitnesses(pool_num , toolbox , eval_func , population , pool_skunames = None , desc = ''):
     if pool_skunames is None: pool_skunames = [f'poolsku_{i}' for i in range(len(population))]
     if pool_num > 1:
         pool = Pool(pool_num)
-        fitnesses = list(tqdm(pool.imap(eval_func, zip(population, pool_skunames)), 
-                              total=len(population), desc=desc)) #type:ignore
+        fitnesses = list(tqdm(pool.imap(eval_func, zip(population, pool_skunames)), total=len(population), desc=desc)) #type:ignore
         #fitnesses = pool.starmap(toolbox.evaluate, zip(survivors, pool_list), chunksize=1)
         pool.close()
         pool.join()
@@ -474,8 +501,8 @@ def gp_fitnesses(pool_num , toolbox , eval_func , population , pool_skunames = N
     return fitnesses
 
 # %%
-def gp_selection(toolbox, halloffame, i_iter , gp_values , ir_floor=2.5,corr_cap=0.7,
-                 gp_manager=gpManager(),gp_timer=gpTimer(),memory_manager=MemoryManager(),device=None,
+def gp_selection(toolbox, halloffame, i_iter , gp_values , ir_floor=2.5,corr_cap=0.7,insample = None,
+                 file_manager=gpFileManager(),gp_timer=gpTimer(),mem_manager=MemoryManager(),device=None,
                  test_code=False,verbose=__debug__,**kwargs):
     """
     ------------------------ gp halloffame evaluation ------------------------
@@ -492,9 +519,11 @@ def gp_selection(toolbox, halloffame, i_iter , gp_values , ir_floor=2.5,corr_cap
         halloffame:    new container of individuals with best fitness
         hof_elites:    elite hof values who pass the criterions
     """
-    hof_elites = [] # MF.invalid
-    elite_log , hof_log = gp_manager.load_states(['elitelog' , 'hoflog'] , i_iter = i_iter)
-    i_elite = len(elite_log)
+    
+    elite_log , hof_log = file_manager.load_states(['elitelog' , 'hoflog'] , i_iter = i_iter)
+    #i_elite = len(elite_log)
+    # hof_elites = [] # MF.invalid
+    hof_elites = gpElites(start_i_elite = len(elite_log) , device=device).assign_logs(hof_log = hof_log , elite_log = elite_log)
 
     new_log  = pd.DataFrame([[i_iter,-1,str(ind).replace(' ',''),ind.if_valid,False,0.,*ind.rankirs.cpu().numpy()] for ind in halloffame] , 
                             columns = ['i_iter','i_elite','sytax','valid','elite','max_corr','rankir_in_res','rankir_out_res','rankir_in','rankir_out'])
@@ -503,47 +532,38 @@ def gp_selection(toolbox, halloffame, i_iter , gp_values , ir_floor=2.5,corr_cap
     print(f'  --> HallofFame({len(halloffame)}) Contains {new_log.elite.sum()} Promising Candidates with RankIR >= {ir_floor:.2f}')
     if new_log.elite.sum() <= 0.1 * len(halloffame):
         # Failure of finding promising offspring , check if code has bug
-        print(f'  --> Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ')
-        print(f'  --> Valid Hof({new_log.valid.sum()}), insample max ir({new_log.rankir_in_res.abs().max():.4f})')
+        print(f'     --> Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ')
+        print(f'     --> Valid Hof({new_log.valid.sum()}), insample max ir({new_log.rankir_in_res.abs().max():.4f})')
 
-    if verbose: print(f'     --> Elite Candidates :  {sum(new_log.elite)} out of {sum(new_log.valid)} valids.')
     for i , hof in enumerate(halloffame):
         if not new_log.loc[i,'elite']: continue
 
         # 根据迭代出的因子表达式,计算因子值, 错误则进入下一循环
         factor_func  = gp_compile(toolbox.compile , hof , gp_timer.acc_timer('compile'))
         factor_value = gp_factor(factor_func , gp_values , 'inf_trim_norm' , gp_timer.acc_timer('eval'))
-        memory_manager.check('factor')
+        mem_manager.check('factor')
         
         new_log.loc[i,'elite'] = not MF.is_invalid(factor_value)
         if not new_log.loc[i,'elite']: continue
 
-        # 与已有的因子库做相关性检验,如果相关性大于预设值corr_cap则进入下一循环
-        corr_values , exit_state = FF.max_corr_with(factor_value , with_whom = hof_elites , abs_corr_cap = corr_cap , early_exit = True)
-        #new_log.loc[i,'max_corr'] = round(corr_values[corr_values.abs().argmax()].item() , 4)
-        #new_log.loc[i,'elite'] = not exit_state
-        new_log.loc[i,['max_corr','elite']] = [round(corr_values[corr_values.abs().argmax()].item() , 4) , not exit_state]
+        # 与已有的因子库"样本内"做相关性检验,如果相关性大于预设值corr_cap则进入下一循环
+        corr_values , exit_state = hof_elites.max_corr_with_me(factor_value, abs_corr_cap=corr_cap, early_exit=True, dim=1,dim_valids=(insample,None))
+        new_log.loc[i,'max_corr'] = round(corr_values[corr_values.abs().argmax()].item() , 4)
+        new_log.loc[i,'elite'] = not exit_state
+        mem_manager.check('corr')
         if not new_log.loc[i,'elite']: continue
-        memory_manager.check('corr')
 
         # 通过检验,加入因子库
-        print(f'     --> Hof{i:_>3d} is Elite{i_elite:_>3d} (IR{new_log.rankir_in_res[i]: .2f}|Corr{new_log.max_corr[i]: .2f}): {new_log.sytax[i]}')
-        if test_code: gp_manager.save_state(factor_value , 'parquet' , i_iter , i_elite = i_elite)
-        hof_elites.append(factor_value)
-        new_log.loc[i,'i_elite'] = i_elite
-        i_elite += 1
-        memory_manager.check(showoff = True , starter = '     --> ')
+        new_log.loc[i,'i_elite'] = hof_elites.i_elite
+        hof_elites.append(new_log.sytax[i] , factor_value , IR = new_log.rankir_in_res[i] , Corr = new_log.max_corr[i] , starter=f'     --> Hof{i:_>3d}/')
+        if test_code: file_manager.save_state(factor_value , 'parquet' , i_iter , i_elite = hof_elites.i_elite)
 
-    elite_log = pd.concat([elite_log , new_log[new_log.elite]] , axis=0) if len(elite_log) else new_log[new_log.elite]
-    hof_log = pd.concat([hof_log , new_log] , axis=0) if len(hof_log) else new_log
-    gp_manager.save_states({'elitelog' : elite_log.round(6) , 'hoflog' : hof_log.round(6)} , i_iter = i_iter)
-    if verbose: print(f'  --> Cuda Memories of gp_values and others take {MemoryManager.object_memory([gp_values , kwargs , hof_elites]):.2f}G')
-    
-    try:
-        hof_elites = MF.concat_factors(*hof_elites)
-    except MemoryError:
-        gc.collect()
-        hof_elites = MF.concat_factors(*hof_elites , device=torch.device('cpu')).to(device)  # do it in cpu
+        mem_manager.check(showoff = True , starter = '     --> ')
+
+    hof_elites.update_logs(new_log)
+    file_manager.save_states({'elitelog' : hof_elites.elite_log.round(6) , 'hoflog' : hof_elites.hof_log.round(6)} , i_iter = i_iter)
+    hof_elites = hof_elites.compile_elite_tensor(device=device).elite_tensor
+    if verbose: print(f'  --> Memories of [gp_values , hof_elites , others] take {MemoryManager.object_memory([gp_values , kwargs , hof_elites]):.2f}G')
     
     return halloffame , hof_elites
 
@@ -560,28 +580,26 @@ def outer_loop(i_iter , gp_space , start_gen = 0):
     gp_space.i_iter = i_iter
 
     '''初始化遗传规划Toolbox'''
-    with gp_space.gp_timer('Setting' , print_str = f'**Initialize GP Toolbox'):
-        toolbox = gpHandler.Toolbox(eval_func = evaluate , **gp_space)
+    #with gp_space.gp_timer('Setting' , print_str = f'**Initialize GP Toolbox') as ptimer:
+    toolbox = gpHandler.Toolbox(eval_func = evaluate , eval_pop = evaluate_pop , **gp_space)
+    gp_space.file_manager.update_toolbox(toolbox)
 
     '''进行进化与变异,生成种群、精英和先祖列表'''
-    with gp_space.gp_timer('Evolution' , print_str = f'**{gp_space.n_gen} Generations of Evolution'):
-        mem_free = gp_space.memory_manager.check(showoff = True)
-        population, halloffame, valhalla = gp_evolution(toolbox , start_gen = start_gen , **gp_space)  #, start_gen=6   #algorithms.eaSimple
+    # with gp_space.gp_timer('Evolution' , print_str = f'**{gp_space.n_gen - start_gen} Generations of Evolution' , memory_check = True) as ptimer:
+    population, halloffame, valhalla = gp_evolution(toolbox , start_gen = start_gen , **gp_space)  #, start_gen=6   #algorithms.eaSimple
 
     '''衡量精英,筛选出符合所有要求的精英中的精英'''
-    with gp_space.gp_timer('Selection' , print_str = f'**Select HallofFamers Save Factor Values'):
-        mem_free = gp_space.memory_manager.check(showoff = True)
+    with gp_space.gp_timer('Selection' , print_str = f'**Selection of HallofFamers({len(halloffame)}) -> ' , memory_check = True) as ptimer:
         halloffame, hof_elites = gp_selection(toolbox , halloffame, **gp_space)
-        
-    print(f'**The HallofFame({len(halloffame)}) has {hof_elites.shape[-1]} Elites')
+        ptimer.add_string(f'Elites{hof_elites.shape[-1]}')
+        # print(f'**The HallofFame({len(halloffame)}) has {hof_elites.shape[-1]} Elites')
 
     '''更新残差标签,保存循环状态'''
-    with gp_space.gp_timer('Neu_dump' , print_str = f'**Update Residual Labels and Dump Results'):
-        mem_free = gp_space.memory_manager.check(showoff = True)
-        gp_space.gp_manager.save_state(gp_space.labels_res , 'labels_res' , i_iter) # useful to form multifactor
+    with gp_space.gp_timer('Neu_dump' , print_str = f'**Update Residual Labels and Dump Results' , memory_check = True) as ptimer:
+        gp_space.file_manager.save_state(gp_space.labels_res , 'labels_res' , i_iter) # useful to form multifactor
         gp_space.labels_res = MF.neutralize_2d(gp_space.labels_res, hof_elites , inplace = True) # out of memory issue
         del hof_elites
-        gp_space.gp_manager.dump_generation(population, halloffame, valhalla , i_iter = i_iter , i_gen = -1)
+        gp_space.file_manager.dump_generation(population, halloffame, valhalla , i_iter = i_iter , i_gen = -1)
         
     gp_space.gp_timer.append_time('AvgVarAnd' , gp_space.gp_timer.acc_timer('varAnd').avgtime(pop_out = True))
     gp_space.gp_timer.append_time('AvgCompile', gp_space.gp_timer.acc_timer('compile').avgtime(pop_out = True))
@@ -690,7 +708,7 @@ def main(test_code = None , job_id = None , start_iter = 0 , start_gen = 0 , **k
         if start_iter == 0:
             gp_space.labels_res = copy.deepcopy(gp_space.labels_raw)
         else:
-            gp_space.labels_res = gp_space.gp_manager.load_state('labels_res' , start_iter - 1).to(gp_space.device)
+            gp_space.labels_res = gp_space.file_manager.load_state('labels_res' , start_iter - 1).to(gp_space.device)
 
         for i_iter in range(start_iter , gp_space.n_iter):
             print('=' * 20 + f' Iteration {i_iter} start from Generation {start_gen * (i_iter == start_iter)} ' + '=' * 20)
@@ -698,8 +716,8 @@ def main(test_code = None , job_id = None , start_iter = 0 , start_gen = 0 , **k
 
         hours, secs = divmod(time.time() - time0, 3600)
         print('=' * 20 + f' Total Time Cost :{hours:.0f} hours {secs/60:.1f} ' + '=' * 20)
-        gp_space.gp_manager.save_state(gp_space.gp_timer.time_table(showoff=True) , 'runtime' , 0)
-        gp_space.memory_manager.print_memeory_record()
+        gp_space.file_manager.save_state(gp_space.gp_timer.time_table(showoff=True) , 'runtime' , 0)
+        gp_space.mem_manager.print_memeory_record()
     pfr.get_df(output = kwargs.get('profiler_out' , 'cprofile.csv'))
     return pfr
 

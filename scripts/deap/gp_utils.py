@@ -67,8 +67,8 @@ class gpContainer:
         for key in keys: self.set(key , func(self.__getitem__(key)))
         return self
 
-class gpManager:
-    def __init__(self , job_dir = None) -> None:
+class gpFileManager:
+    def __init__(self , job_dir = None , toolbox = None) -> None:
         self.job_dir = './pop/bendi' if job_dir is None else job_dir
         self.dir = Namespace(
             pop = f'{self.job_dir}/population' ,
@@ -90,11 +90,18 @@ class gpManager:
         [os.makedirs(subfoler , exist_ok=True) for subfoler in self.dir.__dict__.values()]
         self.df_axis = {}
 
+    def update_toolbox(self , toolbox):
+        self.toolbox = toolbox
+        return self
+
     def dump_generation(self , population , halloffame , valhalla , i_iter = 0 , i_gen = 0 , verbose = False , **kwargs):
         if i_iter < 0: return self
         basename = self.record_basename(i_iter , i_gen)
         self.logbook.record(i_gen = i_gen , **kwargs)
         if verbose: [print('     -->   ' + s) for s in str(self.logbook.stream).split('\n')]
+        population = [str(ind).replace(' ','') for ind in population]
+        halloffame = [str(ind).replace(' ','') for ind in halloffame]
+        valhalla   = [str(ind).replace(' ','') for ind in valhalla]
         joblib.dump(population, f'{self.dir.pop}/{basename}.pkl')
         joblib.dump(halloffame, f'{self.dir.hof}/{basename}.pkl')
         joblib.dump(valhalla  , f'{self.dir.vhl}/{basename}.pkl')
@@ -104,11 +111,16 @@ class gpManager:
     def load_generation(self , i_iter = 0 , i_gen = 0 , hof_num = 500 , **kwargs):
         if i_gen < 0: return self.new_generation(hof_num = hof_num , **kwargs)
         basename = self.record_basename(i_iter , i_gen)
-        population = joblib.load(f'{self.dir.pop}/{basename}.pkl')
-        halloffame = joblib.load(f'{self.dir.hof}/{basename}.pkl')
-        valhalla   = joblib.load(f'{self.dir.vhl}/{basename}.pkl')
+        pop = [self.toolbox.str_to_ind(ind) for ind in joblib.load(f'{self.dir.pop}/{basename}.pkl')] #type:ignore
+        hof = [self.toolbox.str_to_ind(ind) for ind in joblib.load(f'{self.dir.hof}/{basename}.pkl')] #type:ignore
+        val = [self.toolbox.str_to_ind(ind) for ind in joblib.load(f'{self.dir.vhl}/{basename}.pkl')] #type:ignore
+ 
+        hof = self.toolbox.evaluate_pop(hof , i_iter = i_iter, i_gen = i_gen, desc = 'Load HallofFame')
+        halloffame = tools.HallOfFame(hof_num)
+        halloffame.update(hof)
+
         self.logbook = joblib.load(f'{self.dir.log}/{basename}.pkl')
-        return population , halloffame , valhalla
+        return pop , halloffame , val
     
     def new_generation(self , hof_num = 500 , log_header = ['i_gen', 'n_evals'] , stats = None , **kwargs):
         population = []
@@ -182,125 +194,133 @@ class gpHandler:
     '''
     ------------------------ gp primatives and terminals ------------------------
     includes:
-        primatives_self
+        primatives_identity
         primatives_1d
         primatives_2d
         primatives_3d
         primatives_4d
     '''
     @staticmethod
+    def ind_to_str(x): return str(x).replace(' ','')
+
+    @staticmethod
     def I(x): return x
     
     @classmethod
-    def primatives_self(cls , use_class = [Fac,Raw,int1,int2,int3,float1]):
+    def primatives_identity(cls , use_class = [Fac,Raw,int1,int2,int3,float1]):
         return [(cls.I, [c], c) for c in use_class]
     
     @staticmethod
     def primatives_1d():
         # (primative , in_types , out_type , name)
         return [
-            (MF.log, [Fac], Fac) ,
-            (MF.sqrt, [Fac], Fac) ,
-            (MF.square , [Fac], Fac) ,
-            #(MF.neg, [Fac], Fac) ,
-            (MF.rank_pct, [Fac], Fac , 'rank') ,
-            #(MF.scale, [Fac], Fac) ,
-            (MF.sigmoid, [Fac], Fac) ,
-            (MF.signedpower, [Fac , float1], Fac , 'power') ,
-            (MF.sign, [Raw], Fac) ,
+            (MF.log,        [Fac], Fac) ,
+            (MF.sqrt,       [Fac], Fac) ,
+            (MF.square ,    [Fac], Fac) ,
+            #(MF.neg,       [Fac], Fac) ,
+            (MF.rank_pct,   [Fac], Fac , 'rank') ,
+            #(MF.scale,     [Fac], Fac) ,
+            (MF.sigmoid,    [Fac], Fac) ,
+            (MF.signedpower,[Fac , (float,float1)], Fac , 'power') ,
+            (MF.sign,       [Raw], Fac) ,
         ]
     @staticmethod
     def primatives_2d():
         # (primative , in_types , out_type , name)
         return [
-            (MF.add, [Fac, Fac], Fac) ,
-            (MF.sub, [Fac, Fac], Fac) ,
-            (MF.mul, [Fac, Fac], Fac) ,
-            (MF.div, [Fac, Fac], Fac) ,
-            (MF.rank_add, [Fac, Fac], Fac) ,
-            (MF.rank_sub, [Fac, Fac], Fac) ,
-            (MF.rank_div, [Fac, Fac], Fac) ,
-            (MF.rank_mul, [Fac, Fac], Fac) ,
-            (MF.ts_stddev, [Fac, int2], Fac) ,
-            #(MF.ts_sum, [Fac, int2], Fac) ,
-            (MF.ts_product, [Fac, int2], Fac) ,
-            (MF.ts_delay, [Fac, int1], Fac) ,
-            (MF.ts_delta, [Fac, int1], Fac) ,
-            (MF.ts_lin_decay, [Fac, int2], Fac , 'ts_dw') ,
-            (MF.ma, [Fac, int3], Fac) ,
-            (MF.ma, [Fac, int2], Fac) ,
-            (MF.pctchg, [Fac, int3], Fac) ,
-            (MF.pctchg, [Fac, int1], Fac) ,
-            (MF.ts_min, [Fac, int2], Fac) ,
-            (MF.ts_max, [Fac, int2], Fac) ,
-            (MF.ts_zscore, [Fac , int3], Fac) ,
-            (MF.ts_argmin, [Fac, int2], Fac) ,
-            (MF.ts_argmax, [Fac, int2], Fac) ,
-            (MF.ts_rank, [Fac, int2], Fac) ,
-            (MF.ts_argmin, [Raw, int2], Fac) ,
-            (MF.ts_argmax, [Raw, int2], Fac) ,
-            (MF.ts_rank, [Raw, int2], Fac) ,
-            # (MF.add_int, [Fac, int1], Fac) ,
-            # (MF.sub_int1, [Fac, int1], Fac) ,
-            # (MF.sub_int2, [int1, Fac], Fac) ,
-            # (MF.mul_int, [Fac, int1], Fac) ,
-            # (MF.div_int1, [Fac, int1], Fac) ,
-            # (MF.div_int2, [int1, Fac], Fac) ,
+            (MF.add,        [Fac, Fac], Fac) ,
+            (MF.sub,        [Fac, Fac], Fac) ,
+            (MF.mul,        [Fac, Fac], Fac) ,
+            (MF.div,        [Fac, Fac], Fac) ,
+            (MF.rank_add,   [Fac, Fac], Fac) ,
+            (MF.rank_sub,   [Fac, Fac], Fac) ,
+            (MF.rank_div,   [Fac, Fac], Fac) ,
+            (MF.rank_mul,   [Fac, Fac], Fac) ,
+            (MF.ts_stddev,  [Fac, (int,int2)], Fac) ,
+            (MF.ts_product, [Fac, (int,int2)], Fac) ,
+            (MF.ts_delay,   [Fac, (int,int1)], Fac) ,
+            (MF.ts_delta,   [Fac, (int,int1)], Fac) ,
+            (MF.ts_lin_decay, [Fac, (int,int2)], Fac , 'ts_dw') ,
+            (MF.ma,         [Fac, (int,int2,int3)], Fac) ,
+            (MF.pctchg,     [Fac, (int,int1,int3)], Fac) ,
+            (MF.ts_min,     [Fac, (int,int2)], Fac) ,
+            (MF.ts_max,     [Fac, (int,int2)], Fac) ,
+            (MF.ts_zscore,  [Fac , (int,int3)], Fac) ,
+            (MF.ts_argmin,  [(Fac,Raw), (int,int2)], Fac) ,
+            (MF.ts_argmax,  [(Fac,Raw), (int,int2)], Fac) ,
+            (MF.ts_rank,    [(Fac,Raw), (int,int2)], Fac) ,
+            # (MF.add_int,  [Fac, (int,int1)], Fac) ,
+            # (MF.sub_int1, [Fac, (int,int1)], Fac) ,
+            # (MF.sub_int2, [(int,int1), Fac], Fac) ,
+            # (MF.mul_int,  [Fac, (int,int1)], Fac) ,
+            # (MF.div_int1, [Fac, (int,int1)], Fac) ,
+            # (MF.div_int2, [(int,int1), Fac], Fac) ,
         ]
     @staticmethod
     def primatives_3d():
         # (primative , in_types , out_type , name)
         return [
-            (MF.ts_rankcorr, [Fac, Fac, int2], Fac) ,
-            (MF.ts_decay_pos_dif, [Fac, Fac, int3], Fac , 'ts_dwdif') ,
-            (MF.ts_cov, [Fac, Fac, int2], Fac) ,
-            (MF.ts_corr, [Raw, Raw, int2], Fac) ,
-            (MF.ts_beta, [Raw, Raw, int2], Fac) ,
-            (MF.ts_btm_avg, [Raw, int3, int1], Fac) ,
-            (MF.ts_top_avg, [Raw, int3, int1], Fac) ,
-            (MF.ts_rng_dif, [Raw, int3, int1], Fac) ,
+            (MF.ts_rankcorr,        [Fac, Fac, (int,int2)], Fac) ,
+            (MF.ts_decay_pos_dif,   [Fac, Fac, (int,int3)], Fac , 'ts_dwdif') ,
+            (MF.ts_cov,             [Fac, Fac, (int,int2)], Fac) ,
+            (MF.ts_corr,            [Raw, Raw, (int,int2)], Fac) ,
+            (MF.ts_beta,            [Raw, Raw, (int,int2)], Fac) ,
+            (MF.ts_btm_avg,         [(Raw,Fac), (int,int3), (int,int1)], Fac) ,
+            (MF.ts_top_avg,         [(Raw,Fac), (int,int3), (int,int1)], Fac) ,
+            (MF.ts_rng_dif,         [(Raw,Fac), (int,int3), (int,int1)], Fac) ,
         ]
     @staticmethod
     def primatives_4d():
         # (primative , in_types , out_type , name)
         return [
-            (MF.ts_xbtm_yavg, [Raw, Fac, int3, int1], Fac) ,
-            (MF.ts_xtop_yavg, [Raw, Fac, int3, int1], Fac) ,
-            (MF.ts_xrng_ydif, [Raw, Fac, int3, int1], Fac) ,
-            #(MF.ts_grouping_ascsortavg, [Fac, Raw, int5, int4], Fac , 'ts_y_xbtm_long') ,
-            #(MF.ts_grouping_decsortavg, [Fac, Raw, int5, int4], Fac , 'ts_y_xtop_long') ,
-            #(MF.ts_grouping_difsortavg, [Fac, Raw, int5, int4], Fac , 'ts_y_xdif_long') ,
+            (MF.ts_xbtm_yavg, [(Raw,Fac), Fac, (int,int3), (int,int1)], Fac) ,
+            (MF.ts_xtop_yavg, [(Raw,Fac), Fac, (int,int3), (int,int1)], Fac) ,
+            (MF.ts_xrng_ydif, [(Raw,Fac), Fac, (int,int3), (int,int1)], Fac) ,
+            #(MF.ts_xbtm_yavg, [(Raw,Fac), Fac, (int,int5), (int,int5)], Fac , 'ts_y_xbtm_long') ,
+            #(MF.ts_xtop_yavg, [(Raw,Fac), Fac, (int,int5), (int,int5)], Fac , 'ts_y_xtop_long') ,
+            #(MF.ts_xrng_ydif, [(Raw,Fac), Fac, (int,int5), (int,int5)], Fac , 'ts_y_xdif_long') ,
         ]
     @classmethod
     def primatives_all(cls , use_class = [Fac,Raw,int1,int2,int3,float1]):
+        # all primatives
         prims = [prima for plist in [getattr(cls , f'primatives_{m}')() for m in ['1d','2d','3d','4d']] for prima in plist]
-        prims += cls.primatives_self(use_class)
+        prims += cls.primatives_identity(use_class)
         return prims
     
     @classmethod
-    def prune(cls , population):
+    def prune(cls , population , toolbox = None):
+        # remove Identity primatives of an instance of creator.Individual
+        # cannot prune syntax string
         if isinstance(population , creator.Individual): #type:ignore
             return creator.Individual([prim for prim in population if prim.name != 'I']) #type:ignore , remove method of 'I'
-        else:
+        elif isinstance(population , str): 
+            return str(cls.prune(toolbox.str_to_ind(str))) #type:ignore
+        elif isinstance(population , (list,tuple)):
             return [ind for ind in [cls.prune(ind) for ind in population] if ind is not None]
+        else:
+            raise TypeError(type(population))
         
     @classmethod
     def deduplicate(cls , population , exclude = []):
-        original_strs = [str(ind).replace(' ','') for ind in population]
-        exclude_strs  = [str(ind).replace(' ','') for ind in exclude]
-        index_mapping = {value: index for index, value in enumerate(original_strs)} # remove duplicates
-        index_keys    = np.setdiff1d(list(index_mapping.keys()) , exclude_strs) # remove exclude members
+        # return the unique population excuding specific ones (all ancestors , or valhalla)
+        original = [str(ind) for ind in population] #type:ignore
+        excludes = [str(ind) for ind in exclude] #type:ignore
+        index_maps = {value: index for index, value in enumerate(original)} # remove duplicates
+        index_keys = np.setdiff1d(list(index_maps.keys()) , excludes) # remove exclude members
         # return [population[i] for i in index_mapping.values()]
-        return [population[index_mapping[k]] for k in index_keys]
+        return [population[index_maps[k]] for k in index_keys]
     
     @classmethod
     def Compiler(cls , pset):
+        # return the compipler of individual sytax:
+        # compiler can perform this:
+        # factor_value = compiler(sytax) , where syntax is an instance of creator.Individual, or simply a string such as 'add(cp,turn)'
         def compiler(individual):
             return gp.compile(individual , pset)
         return compiler
     
     @classmethod
-    def Toolbox(cls , eval_func , gp_args , i_iter = - 1 , max_depth = 5 , n_args = (1,1) , **kwargs):
+    def Toolbox(cls , eval_func , eval_pop , gp_args , i_iter = - 1 , max_depth = 5 , n_args = (1,1) , **kwargs):
         '''
         ------------------------ create gp toolbox ------------------------
         input:
@@ -337,8 +357,10 @@ class gpHandler:
         [(delattr(creator , n) if hasattr(creator , n) else None) for n in ['FitnessMin' , 'Individual']]
         creator.create("FitnessMin", base.Fitness, weights=(+1.0,))   # 优化问题：单目标优化，weights为单元素；+1表明适应度越大，越容易存活
         creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMin, pset=pset) # type:ignore 个体编码：pset，预设的
-
+        
         toolbox = base.Toolbox()
+        toolbox.register("str_to_ind", creator.Individual.from_string , pset=pset) # type:ignore
+        toolbox.register("ind_to_str", cls.ind_to_str) # type:ignore
         toolbox.register("expr", gp.genHalfAndHalf, pset=pset, min_=1, max_= max_depth)
         toolbox.register("individual", tools.initIterate, creator.Individual, toolbox.expr)# type:ignore
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)# type:ignore
@@ -346,6 +368,7 @@ class gpHandler:
         toolbox.register("deduplicate", cls.deduplicate)
         toolbox.register("compile", cls.Compiler(pset))
         toolbox.register("evaluate", eval_func , compiler = toolbox.compile , **kwargs) # type: ignore
+        toolbox.register("evaluate_pop", eval_pop , toolbox = toolbox) # type: ignore
         toolbox.register("select", tools.selTournament, tournsize=3) # 锦标赛：第一轮随机选择3个，取最大
         toolbox.register("mate", gp.cxOnePoint)
         toolbox.register("expr_mut", gp.genHalfAndHalf, min_=0, max_= max_depth)  # genFull
@@ -369,18 +392,32 @@ class gpTimer:
         self.df_cols = {}
 
     class PTimer:
-        def __init__(self , key , record = False , target_dict = {} , print = True , print_str = None):
+        def __init__(self , key , record = False , target_dict = {} , print = True , print_str = None , memory_check = False):
             self.key = key
             self.record = record
             self.target_dict = target_dict
             self.print = print
-            self.print_str = print_str
+            self.print_str = key if print_str is None else print_str
+            self.memory_check = memory_check and torch.cuda.is_available()
         def __enter__(self):
             self.start_time = time.time()
+            if self.memory_check and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                self.gmem_start = torch.cuda.mem_get_info()[0] / MemoryManager.unit
+            return self
         def __exit__(self, type, value, trace):
             time_cost = time.time() - self.start_time
+            if self.memory_check:
+                torch.cuda.empty_cache()
+                mem_end  = torch.cuda.mem_get_info()[0] / MemoryManager.unit
+                mem_info = f', Freed CudaMemory {self.gmem_start:.2f}G - > {mem_end:.2f}G' 
+            else:
+                mem_info = ''
             if self.record: self.append_time(self.target_dict , self.key , time_cost)
-            if self.print: print(f'{self.print_str if self.print_str else self.key} Done, cost {time_cost:.2f} secs')
+            if self.print: print(f'{self.print_str} Done, Cost {time_cost:.2f} Secs' + mem_info)
+            return self
+        def add_string(self , new_str):
+            self.print_str = self.print_str + new_str
         @staticmethod
         def append_time(target_dict , key , time_cost):
             if key not in target_dict.keys():
@@ -413,9 +450,9 @@ class gpTimer:
         def __exit__(self, type, value, trace):
             pass
         
-    def __call__(self , key , print = True , df_cols = True , print_str = None):
+    def __call__(self , key , print = True , df_cols = True , print_str = None , memory_check = False):
         if df_cols: self.df_cols.update({key:True})
-        return self.PTimer(key , self.recording , self.recorder , print = print , print_str = print_str)
+        return self.PTimer(key , self.recording , self.recorder , print = print , print_str = print_str , memory_check = memory_check)
     def __repr__(self):
         return self.recorder.__repr__()
     def __bool__(self): 
@@ -455,8 +492,7 @@ class MemoryManager():
         if gmem_free > critical_ratio * self.gmem_total and not showoff: 
             # if showoff: print(f'**Cuda Memory: Free {gmem_free:.1f}G') 
             return gmem_free
-
-        torch.cuda.empty_cache() # collect graphic memory 
+        
         gmem_freed = torch.cuda.mem_get_info(self.device_no)[0] / self.unit - gmem_free
         gmem_free += gmem_freed
         gmem_allo  = torch.cuda.memory_allocated(self.device_no) / self.unit
@@ -467,10 +503,14 @@ class MemoryManager():
             self.record[key].append(gmem_freed)
         if showoff: print(f'{starter}Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
         
+        # torch.cuda.empty_cache() # collect graphic memory 
         # gc.collect() # collect memory, very slow
-        
         return gmem_free
-
+    
+    def collect(self):
+        torch.cuda.empty_cache() # collect graphic memory 
+        # gc.collect() # collect memory, very slow
+    
     def __bool__(self):
         return True
     
@@ -497,82 +537,100 @@ class MemoryManager():
                 print(f'     --> {key} : {len(value)} counts, on average freed {np.mean(value):.2f}G')
 
 class gpElites:
-    def __init__(self , start_i_elite = 0 , max_len = 50) -> None:
+    def __init__(self , start_i_elite = 0 , device = None , max_len = 50) -> None:
         self.elite_blocks = []
         self.start_i_elite = start_i_elite
+        self.i_elite = start_i_elite
+        self.device  = device
         self.max_len = max_len
-        self.n_elites = 0
 
-    def max_corr_with_me(self , value , abs_corr_cap = 1.01 , early_exit = True):
-        corr_values = torch.zeros((self.n_elites+1,)).to(value)
+    def assign_logs(self , hof_log , elite_log):
+        self.hof_log = hof_log
+        self.elite_log = elite_log
+        return self
+
+    def update_logs(self , new_log):
+        self.elite_log = pd.concat([self.elite_log , new_log[new_log.elite]] , axis=0) if len(self.elite_log) else new_log[new_log.elite]
+        self.hof_log = pd.concat([self.hof_log , new_log] , axis=0) if len(self.hof_log) else new_log
+        return self
+
+    def max_corr_with_me(self , value , abs_corr_cap = 1.01 , early_exit = True , dim = 1 , dim_valids = (None , None)):
+        corr_values = torch.zeros((self.i_elite - self.start_i_elite + 1 ,)).to(value)
         exit_state  = False
-        i = 0
+        l = 0
         for block in self.elite_blocks:
-            corrs , exit_state = block.max_corr_with_me(value , abs_corr_cap , early_exit)
-            corr_values[i:i+block.len()] = corrs[:block.len()]
+            corrs , exit_state = block.max_corr_with_me(value , abs_corr_cap , early_exit , dim , dim_valids)
+            corr_values[l:l+block.len()] = corrs[:block.len()]
             if exit_state: break
-            i += block.len()
+            l += block.len()
+        print(corr_values , exit_state)
         return corr_values , exit_state
 
-    def append(self , value):
-        if len(self.elite_blocks) == 0:
-            self.elite_blocks.append(self.gpEliteBlock(self.max_len).append(value))
-        elif self.elite_blocks[-1].full:
-            self.elite_blocks[-1].cat2cpu()
-            self.elite_blocks.append(self.gpEliteBlock(self.max_len).append(value))
+    def append(self , syntax , value , starter = None , save_parquet = False , **kwargs):
+        if len(self.elite_blocks) > 0 and not self.elite_blocks[-1].full:
+            self.gpEliteBlock(self.max_len).append(syntax , value , **kwargs)
         else:
-            self.elite_blocks[-1].append(value)
-        self.n_elites += 1
+            if len(self.elite_blocks) > 0: self.elite_blocks[-1].cat2cpu()
+            self.elite_blocks.append(self.gpEliteBlock(self.max_len).append(syntax , value , **kwargs))
+        if isinstance(starter,str): print(f'{starter}Elite{self.i_elite:_>3d} (' + '|'.join([f'{k}{v:+.2f}' for k,v in kwargs.items()]) + f'): {syntax}')
+        self.i_elite += 1
+        return self
     
     def cat_all(self):
         for block in self.elite_blocks:
             block.cat2cpu()
         return self
     
-    def elite_tensor(self , device = None):
-        return torch.cat([block.block.to(device) for block in self.elite_blocks] , dim = -1).to(device)
+    def compile_elite_tensor(self , device = None):
+        self.cat_all()
+        if device is None: device = self.device
+        self.elite_tensor = torch.cat([block.data.to(device) for block in self.elite_blocks] , dim = -1).to(device)
+        del self.elite_blocks
+        self.elite_blocks = []
+        return self
     
     class gpEliteBlock:
         def __init__(self , max_len = 50):
             self.max_len = max_len
-            self.block = []
+            self.names = []
+            self.infos = {}
+            self.data  = []
             self.full = False
 
         def len(self):
-            if isinstance(self.block , torch.Tensor):
-                return self.block.shape[-1] 
-            else:
-                return len(self.block)
+            return len(self.names)
             
         def cat2cpu(self):
-            if isinstance(self.block , list): 
+            if isinstance(self.data , list): 
                 try:
-                    self.block = MF.concat_factors(*self.block).cpu()
+                    self.data = MF.concat_factors(*self.data).cpu()
                 except MemoryError:
                     print('OutofMemory when concat gpEliteBlock, try use cpu to concat')
                     gc.collect()
-                    self.block = MF.concat_factors(*self.block , device=torch.device('cpu')) # to cpu first
+                    self.data = MF.concat_factors(*self.data , device=torch.device('cpu')) # to cpu first
             return self
 
-        def append(self , value):
-            if isinstance(self.block , list) and not self.full:
-                self.block.append(value)
+        def append(self , name , value , **kwargs):
+            if not self.full and isinstance(self.data , list):
+                self.names.append(name)
+                self.infos.update({name:kwargs})
+                self.data.append(value)
                 self.full = self.len() >= self.max_len
             else:
                 raise Exception('The EliteBlock is Full')   
             return self
         
-        def max_corr_with_me(self , value , abs_corr_cap = 1.01 , early_exit = True):
+        def max_corr_with_me(self , value , abs_corr_cap = 1.01 , dim = None , dim_valids = (None , None)):
             corr_values = torch.zeros((self.len()+1,)).to(value)
             exit_state  = False
-            if isinstance(self.block , torch.Tensor): 
-                block = self.block.to(value)
-            else:
-                block = self.block
-            for i in range(self.len()):
-                corr = MF.corrwith(value, block[...,i] if isinstance(block, torch.Tensor) else block[i] , dim=1).nanmean() 
-                corr_values[i] = corr
-                if corr.abs() > abs_corr_cap and early_exit: 
-                    exit_state = True
-                    break
+            block = self.data.to(value) if isinstance(self.data , torch.Tensor) else self.data
+            i = torch.arange(value.shape[0]) if dim_valids[0] is None else dim_valids[0]
+            j = torch.arange(value.shape[1]) if dim_valids[1] is None else dim_valids[1]
+            value = value[i][:,j]
+            for k in range(self.len()):
+                blk = block[i][:,j][...,k] if isinstance(block , torch.Tensor) else block[k][i][:,j]
+                corr = MF.corrwith(value, blk , dim=dim).nanmean() 
+                corr_values[k] = corr
+                if exit_state := corr.abs() > abs_corr_cap: break 
+            print(corr_values , exit_state)
             return corr_values , exit_state

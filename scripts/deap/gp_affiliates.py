@@ -24,8 +24,7 @@ class Profiler(cProfile.Profile):
         df.tottime = df.tottime.round(4)
         df.cumtime = df.cumtime.round(4)
         df.full_name = df.full_name.astype(str)
-        df_func = pd.DataFrame([func_str_decompose(s) for s in df.full_name] , 
-                                columns = ['type' , 'name' , 'where' , 'memory'])
+        df_func = pd.DataFrame([func_str_decompose(s) for s in df.full_name] , columns = ['type' , 'name' , 'where' , 'memory'])
         df = pd.concat([df_func , df],axis=1).sort_values(sort_on,ascending=False)
         df = df.loc[:,['type' , 'name' , 'ncalls', 'ccalls', 'tottime', 'cumtime' , 'where' , 'memory' , 'full_name', 'caller']]
         if isinstance(highlight , str): df = df[df.full_name.str.find(highlight) > 0]

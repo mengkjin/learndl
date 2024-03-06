@@ -51,20 +51,6 @@ def process_factor(value , stream = 'inf_trim_norm' , dim = 1 , trim_ratio = 7. 
             value = value.nan_to_num_()
     return value
 
-def max_corr_with(value , with_whom = [] , abs_corr_cap = 1.01 , early_exit = True):
-    tensor_way  = isinstance(with_whom , torch.Tensor)
-    whom_len    = with_whom.shape[-1] if tensor_way else len(with_whom)
-    corr_values = torch.zeros((whom_len+1,)).to(value)
-    exit_state  = False
-    for i in range(whom_len):
-        corr = MF.corrwith(value, with_whom[...,i] if tensor_way else with_whom[i] , dim=1).nanmean() 
-        corr_values[i] = corr
-        if corr.abs() > abs_corr_cap and early_exit: 
-            exit_state = True
-            break 
-    return corr_values , exit_state
-        
-
 def decay_weight(method , max_len , exp_halflife = -1):
     if method == 'constant':
         w = torch.ones(max_len)
