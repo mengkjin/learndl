@@ -1,6 +1,23 @@
 import re
 import pandas as pd
 import cProfile
+import traceback
+
+class EmptyTM():
+    def __init__(self , obj):
+        methods = [method for method in dir(obj) if callable(getattr(obj, method))]
+        # 动态注册方法到新类中
+        for method_name in methods:
+            if method_name not in dir(self):
+                method = getattr(obj, method_name)
+                setattr(self, method_name, method)
+    def __enter__(self):
+        return self
+    def __exit__(self, type, value, trace):
+        if type is not None:
+            print('Error Type :' , type)
+            print('Error Value :' , value)
+            traceback.print_exc()
 
 class Profiler(cProfile.Profile):
     def __init__(self, doso = False , builtins = True , **kwargs) -> None:
@@ -13,8 +30,13 @@ class Profiler(cProfile.Profile):
         else:
             return self
 
-    def __exit__(self, *exc_info: object) -> None:
-        if self.doso: return super().__exit__(*exc_info)
+    def __exit__(self, type , value , trace):
+        if type is not None:
+            print('Error Type :' , type)
+            print('Error Value :' , value)
+            traceback.print_exc()
+        else:
+            if self.doso: return super().__exit__(type , value , trace)
 
     def get_df(self , sort_on = 'tottime' , highlight = None , output = None):
         if not self.doso: return pd.DataFrame()
