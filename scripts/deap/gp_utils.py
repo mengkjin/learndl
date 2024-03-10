@@ -15,8 +15,26 @@ class int1(int): pass
 class int2(int): pass
 class int3(int): pass
 class int4(int): pass
-class int5(int): pass
 class float1(float): pass
+
+class gpFitness(Namespace):
+    def __init__(self, fitness_weights = {} , **kwargs) -> None:
+        super().__init__(**kwargs)
+        # assert len(weights) > 0, f'weights must have positive length'
+        self.title = list(fitness_weights.keys())
+        self.weights = tuple(fitness_weights.values())
+        # deap.base.Fitness cannot deal 0 weights'
+        self._idx  = [i for i,v in enumerate(self.weights) if v != 0]
+        assert len(self._idx) > 0 , f'all fitness weights are 0!'
+        self._keys = tuple(k for k,v in zip(self.title , self.weights) if v != 0)
+        self._wgts = tuple(v for k,v in zip(self.title , self.weights) if v != 0)
+    def fitness_value(self , metrics , as_abs = True , **kwargs):
+        if as_abs: metrics = abs(metrics)
+        return tuple(metrics[self._idx])
+    def fitness_weight(self):
+        return self._wgts
+    def fitness_namespace(self , values):
+        return Namespace(**{k:v for k,v in zip(self._keys,values)})
 
 class gpHandler:
     '''
@@ -62,11 +80,11 @@ class gpHandler:
             (MF.rank_mul,   [Fac, Fac], Fac) ,
             (MF.ts_stddev,  [Fac, int2], Fac) ,
             (MF.ts_product, [Fac, int2], Fac) ,
-            (MF.ts_delay,   [Fac, int1], Fac) ,
-            (MF.ts_delta,   [Fac, int1], Fac) ,
+            (MF.ts_delay,   [Fac, (int1,int2)], Fac) ,
+            (MF.ts_delta,   [Fac, (int1,int2)], Fac) ,
             (MF.ts_lin_decay, [Fac, int2], Fac , 'ts_dw') ,
             (MF.ma,         [(Fac,Raw), (int2,int3)], Fac) ,
-            (MF.pctchg,     [Raw, (int1,int3)], Fac) ,
+            (MF.pctchg,     [Raw, (int1,int2,int3)], Fac) ,
             (MF.ts_min,     [(Fac,Raw), int2], Fac) ,
             (MF.ts_max,     [(Fac,Raw), int2], Fac) ,
             (MF.ts_zscore,  [(Fac,Raw) , int3], Fac) ,
@@ -83,20 +101,20 @@ class gpHandler:
             (MF.ts_cov,             [Fac, Fac, int2], Fac) ,
             (MF.ts_corr,            [(Fac,Raw), (Fac,Raw), int2], Fac) ,
             (MF.ts_beta,            [(Fac,Raw), (Fac,Raw), int2], Fac) ,
-            (MF.ts_btm_avg,         [(Raw,Fac), int3, int1], Fac) ,
-            (MF.ts_top_avg,         [(Raw,Fac), int3, int1], Fac) ,
-            (MF.ts_rng_dif,         [(Raw,Fac), int3, int1], Fac) ,
+            (MF.ts_btm_avg,         [(Raw,Fac), int3, (int1,int2)], Fac) ,
+            (MF.ts_top_avg,         [(Raw,Fac), int3, (int1,int2)], Fac) ,
+            (MF.ts_rng_dif,         [(Raw,Fac), int3, (int1,int2)], Fac) ,
         ]
     @staticmethod
     def primatives_4d():
         # (primative , in_types , out_type , name)
         return [
-            (MF.ts_xbtm_yavg, [(Raw,Fac), (Fac,Raw), int3, int1], Fac) ,
-            (MF.ts_xtop_yavg, [(Raw,Fac), (Fac,Raw), int3, int1], Fac) ,
-            (MF.ts_xrng_ydif, [(Raw,Fac), (Fac,Raw), int3, int1], Fac) ,
-            #(MF.ts_xbtm_yavg, [(Raw,Fac), Fac, int5, int5], Fac , 'ts_y_xbtm_long') ,
-            #(MF.ts_xtop_yavg, [(Raw,Fac), Fac, int5, int5], Fac , 'ts_y_xtop_long') ,
-            #(MF.ts_xrng_ydif, [(Raw,Fac), Fac, int5, int5], Fac , 'ts_y_xdif_long') ,
+            (MF.ts_xbtm_yavg, [(Raw,Fac), (Fac,Raw), int3, (int1,int2)], Fac) ,
+            (MF.ts_xtop_yavg, [(Raw,Fac), (Fac,Raw), int3, (int1,int2)], Fac) ,
+            (MF.ts_xrng_ydif, [(Raw,Fac), (Fac,Raw), int3, (int1,int2)], Fac) ,
+            #(MF.ts_xbtm_yavg, [(Raw,Fac), Fac, int4, int3], Fac , 'ts_y_xbtm_long') ,
+            #(MF.ts_xtop_yavg, [(Raw,Fac), Fac, int4, int3], Fac , 'ts_y_xtop_long') ,
+            #(MF.ts_xrng_ydif, [(Raw,Fac), Fac, int4, int3], Fac , 'ts_y_xdif_long') ,
         ]
     @classmethod
     def primatives_all(cls):
@@ -150,37 +168,36 @@ class gpHandler:
     
     @staticmethod
     def str2ind(x , pset_ind):
-        return creator.Individual.from_string(x , pset=pset_ind) # type:ignore
+        return getattr(creator , 'Individual').from_string(x , pset=pset_ind) 
         
     @staticmethod
-    def str2syx(x , pset_syx , ind_name):
-        syx = creator.Syntax.from_string(x , pset=pset_syx) # type:ignore
-        syx.ind_name = ind_name
+    def str2syx(x , ind_str , pset_syx):
+        syx = getattr(creator , 'Syntax').from_string(x , pset=pset_syx) 
+        syx.ind_str = ind_str
         return syx
     
     @staticmethod
     def syx2ind(x , toolbox):
-        return toolbox.str2ind(x.ind_name) 
+        return toolbox.str2ind(x.ind_str) 
     
     @classmethod
     def ind2syx(cls , ind , toolbox):
-        ind_name = str(ind)
+        ind_str = str(ind)
         ind = toolbox.ind_prune(ind)
         ind = toolbox.syx2str(ind)
-        return toolbox.str2syx(ind , ind_name = ind_name) #type:ignore , remove method of 'I'
+        return toolbox.str2syx(ind , ind_str = ind_str) 
     
     @classmethod
     def ind_prune(cls , ind):
-        assert isinstance(ind , creator.Individual) , type(ind) #type:ignore 
-        #Ipos = [re.match(prim.name , r'^_I_[0-9]+_$') for prim in ind]
-        Ipos = [False for prim in ind]
+        assert isinstance(ind , getattr(creator , 'Individual')) , type(ind) 
+        Ipos = [re.match(prim.name , r'^_I_[0-9]+_$') for prim in ind]
         new_prims = []
         for i , prim in enumerate(ind):
             if i > 0 and Ipos[i] and (ind[i] == ind[i-1]):
                 pass
             else:
                 new_prims.append(prim)
-        return creator.Individual(new_prims) #type:ignore , remove method of 'I'
+        return getattr(creator , 'Individual')(new_prims) 
     
     @classmethod
     def indpop_prune(cls , pop):
@@ -197,12 +214,12 @@ class gpHandler:
         return [toolbox.syx2ind(ind) for ind in population]
     
     @classmethod
-    def deduplicate(cls , population , exclude = []):
-        # return the unique population excuding specific ones (omitalways)
-        original = [cls.syx2str(ind) for ind in population] #type:ignore
-        excludes = [cls.syx2str(ind) for ind in exclude] #type:ignore
-        index_maps = {value: index for index, value in enumerate(original)} # remove duplicates
-        index_keys = np.setdiff1d(list(index_maps.keys()) , excludes) # remove exclude members
+    def deduplicate(cls , population , forbidden = []):
+        # return the unique population excuding specific ones (forbidden)
+        ori = [cls.syx2str(ind) for ind in population]
+        fbd = [cls.syx2str(ind) for ind in forbidden]
+        index_maps = {value: index for index, value in enumerate(ori)} # remove duplicates
+        index_keys = np.setdiff1d(list(index_maps.keys()) , fbd)       # remove forbidden members
         # return [population[i] for i in index_mapping.values()]
         return [population[index_maps[k]] for k in index_keys]
     
@@ -210,13 +227,14 @@ class gpHandler:
     def Compiler(cls , pset):
         # return the compipler of individual sytax:
         # compiler can perform this:
-        # factor_value = compiler(sytax) , where syntax is an instance of creator.Individual, or simply a string such as 'add(cp,turn)'
+        # factor_value = compiler(sytax) , where syntax is an instance of getattr(creator , 'Individual'), or simply a string such as 'add(cp,turn)'
         def compiler(individual):
             return gp.compile(individual , pset)
         return compiler
     
     @classmethod
-    def Toolbox(cls , eval_func , eval_pop , gp_args , i_iter = -1 , max_depth = 5 , n_args = (1,1) , **kwargs):
+    def Toolbox(cls , eval_func , eval_pop , param , gp_argnames , i_iter = -1 , n_args = (1,1) ,  
+                fitness = None , **kwargs):
         '''
         ------------------------ create gp toolbox ------------------------
         input:
@@ -229,11 +247,11 @@ class gpHandler:
         output:
             toolbox:   toolbox that contains all gp utils
         '''
-        assert sum(n_args) == len(gp_args)
+        assert sum(n_args) == len(gp_argnames)
 
         pset_individual = gp.PrimitiveSetTyped('main', [Fac] * n_args[0] + [Raw] * n_args[1], Fac)
         pset_syntax = gp.PrimitiveSetTyped('main', [torch.Tensor] * sum(n_args), torch.Tensor)
-        for i , v in enumerate(gp_args): 
+        for i , v in enumerate(gp_argnames): 
             pset_individual.renameArguments(**{f'ARG{i}':v})
             pset_syntax.renameArguments(**{f'ARG{i}':v})
 
@@ -241,12 +259,11 @@ class gpHandler:
         str_iter = '_' if i_iter < 0 else f'_{i_iter}'
         [(delattr(gp , n) if hasattr(gp , n) else None) for n in [f'int{i}{str_iter}' for i in range(6)]]
         [(delattr(gp , n) if hasattr(gp , n) else None) for n in [f'float{i}{str_iter}' for i in range(6)]]
-        for v in range(1,5): pset_individual.addTerminal(v, int1)
-        for v in range(2,11): pset_individual.addTerminal(v, int2)
-        for v in [10 , 15 , 20 , 40]:  pset_individual.addTerminal(v, int3)
-        for v in range(0,101):  pset_individual.addTerminal(v/50+1, float1)
-        #for v in [10 , 20]:  pset.addTerminal(v, int4)
-        #for v in [60 , 120 , 180 , 200 , 240]: pset.addTerminal(v, int5)
+        for v in range(1,2): pset_individual.addTerminal(v, int1)
+        for v in range(2,10): pset_individual.addTerminal(v, int2)
+        for v in [10 , 15 , 20 , 30 , 40]:  pset_individual.addTerminal(v, int3)
+        #for v in [60 , 120 , 180 , 200 , 240]: pset.addTerminal(v, int4)
+        for v in range(0,101):  pset_individual.addTerminal(round(v*0.02,2), float1)
         #pset_individual.addEphemeralConstant(f'int1{str_iter}', lambda: np.random.randint(1,10+1), int1) # random int must > 0
         #pset_individual.addEphemeralConstant(f'int2{str_iter}', lambda: np.random.randint(2,10+1), int2) # random int must > 1
         #pset_individual.addEphemeralConstant(f'float1{str_iter}', lambda: round(np.random.random()*2+1,2), float1) # random int must > 1
@@ -260,39 +277,43 @@ class gpHandler:
         '''创建遗传算法基础模块，以下参数不建议更改，如需更改，可参考deap官方文档'''
         # https://zhuanlan.zhihu.com/p/72130823
         [(delattr(creator , n) if hasattr(creator , n) else None) for n in ['FitnessMin' , 'Individual' , 'Syntax']]
-        creator.create('FitnessMin', base.Fitness, weights=(+1.0,))   # 优化问题：单目标优化，weights为单元素；+1表明适应度越大，越容易存活
-        creator.create('Individual', gp.PrimitiveTree, pset=pset_individual)
-        creator.create('Syntax'    , gp.PrimitiveTree, fitness=creator.FitnessMin, ind_name = str , pset=pset_syntax) # type:ignore
+        fit_weights = fitness.fitness_weight() if fitness is not None else (+1.0,)
+        creator.create('FitnessMin', base.Fitness, weights=fit_weights)   # 优化问题：单目标优化，weights为单元素；+1表明适应度越大，越容易存活
+        creator.create('Individual', gp.PrimitiveTree, fitness=getattr(creator , 'FitnessMin'), 
+                       pset=pset_individual , __hash__ = lambda self:hash(id(self))) 
+        creator.create('Syntax'    , gp.PrimitiveTree, fitness=getattr(creator , 'FitnessMin'), ind_str = str , 
+                       pset=pset_syntax , __hash__ = lambda self:hash(id(self)))
         
         toolbox = base.Toolbox()
-        toolbox.register('generate_expr', gp.genHalfAndHalf, pset=pset_individual, min_=1, max_= max_depth)
-        toolbox.register('individual', tools.initIterate, creator.Individual, toolbox.generate_expr)# type:ignore
-        toolbox.register('population', tools.initRepeat, list, toolbox.individual) # type:ignore
-        toolbox.register('ind2str', cls.ind2str) # type:ignore
-        toolbox.register('syx2str', cls.syx2str) # type:ignore
-        toolbox.register('str2ind', cls.str2ind , pset_ind=pset_individual) # type:ignore
-        toolbox.register('str2syx', cls.str2syx , pset_syx=pset_syntax) # type:ignore
-        toolbox.register('ind2syx', cls.ind2syx , toolbox = toolbox) # type:ignore
-        toolbox.register('syx2ind', cls.syx2ind , toolbox = toolbox) # type:ignore
-        toolbox.register('indpop2syxpop', cls.indpop2syxpop, toolbox = toolbox) # type:ignore
+        toolbox.register('generate_expr', gp.genHalfAndHalf, pset=pset_individual, min_=1, max_= param.max_depth)
+        toolbox.register('individual', tools.initIterate, getattr(creator , 'Individual'), getattr(toolbox , 'generate_expr'))
+        toolbox.register('population', tools.initRepeat, list, getattr(toolbox , 'individual')) 
+        toolbox.register('ind2str', cls.ind2str)
+        toolbox.register('syx2str', cls.syx2str)
+        toolbox.register('str2ind', cls.str2ind , pset_ind=pset_individual) 
+        toolbox.register('str2syx', cls.str2syx , pset_syx=pset_syntax) 
+        toolbox.register('ind2syx', cls.ind2syx , toolbox = toolbox) 
+        toolbox.register('syx2ind', cls.syx2ind , toolbox = toolbox) 
+        toolbox.register('indpop2syxpop', cls.indpop2syxpop, toolbox = toolbox) 
         toolbox.register('deduplicate', cls.deduplicate)
         toolbox.register('ind_prune' , cls.ind_prune)
         toolbox.register('indpop_prune' , cls.indpop_prune)
         toolbox.register('compile', cls.Compiler(pset_syntax)) # use pset_syntax to compile
-        toolbox.register('evaluate', eval_func , compiler = toolbox.compile , **kwargs) # type: ignore
-        toolbox.register('evaluate_pop', eval_pop , toolbox = toolbox) # type: ignore
-        toolbox.register('select', tools.selTournament, tournsize=3) # 锦标赛：第一轮随机选择3个，取最大
-        toolbox.register('syxpop2indpop', cls.syxpop2indpop , toolbox = toolbox) # type: ignore
+        toolbox.register('evaluate', eval_func , compiler = getattr(toolbox , 'compile') , fitness = fitness , i_iter = i_iter , param = param , **kwargs) 
+        toolbox.register('evaluate_pop', eval_pop , toolbox = toolbox , param = param) 
+        toolbox.register('select_best', tools.selBest) 
+        toolbox.register('select_Tour', tools.selTournament, tournsize=3) # 锦标赛：随机选择3个，取最大, resulting around 49% of pop
+        toolbox.register('select_2Tour', tools.selDoubleTournament, fitness_size=3 , parsimony_size=1.4 , fitness_first=True) # 锦标赛：第一轮随机选择3个，取最大
+        toolbox.register('syxpop2indpop', cls.syxpop2indpop , toolbox = toolbox) 
         toolbox.register('mate', gp.cxOnePoint)
-        #toolbox.register('expr_mut', gp.genFull, min_=0, max_= max_depth)  # genFull
-        toolbox.register('expr_mut', gp.genHalfAndHalf, pset=pset_individual , min_=0, max_= max_depth)  # genFull
-        toolbox.register('mutate', gp.mutUniform, expr=toolbox.expr_mut, pset=pset_individual) # type:ignore
-        toolbox.decorate('mate', gp.staticLimit(key=operator.attrgetter('height'), max_value=min(10,max_depth)))  # max=3
-        toolbox.decorate('mutate', gp.staticLimit(key=operator.attrgetter('height'), max_value=min(10,max_depth)))  # max=3
+        toolbox.register('expr_mut', gp.genHalfAndHalf, pset=pset_individual , min_=0, max_= param.max_depth)  # genFull
+        toolbox.register('mutate', gp.mutUniform, expr = getattr(toolbox , 'expr_mut') , pset=pset_individual) 
+        toolbox.decorate('mate', gp.staticLimit(key=operator.attrgetter('height'), max_value=min(10,param.max_depth)))  # max=3
+        toolbox.decorate('mutate', gp.staticLimit(key=operator.attrgetter('height'), max_value=min(10,param.max_depth)))  # max=3
 
         return toolbox
     
-class gpContainer:
+class gpContainer(Namespace):
     __reserved_names__ = ['get' , 'set' , 'update' , 'delete' , 'subset' , 'keys' , 'values' , 'items' , 'copy' , 'apply' , 'map']
     def __init__(self , inherit_from = None , **kwargs) -> None:
         if inherit_from is not None: 
@@ -347,11 +368,13 @@ class gpFileManager:
         self.dir = Namespace(
             #pop = f'{self.job_dir}/population' ,
             #hof = f'{self.job_dir}/halloffame' ,
+            #fbd = f'{self.job_dir}/forbidden' ,
             log = f'{self.job_dir}/logbook' ,
             sku = f'{self.job_dir}/skuname' ,
             pqt = f'{self.job_dir}/parquet' ,
             res = f'{self.job_dir}/labels_res' ,
-            #omt = f'{self.job_dir}/omitalways' ,
+            elt = f'{self.job_dir}/elites' ,
+            neu = f'{self.job_dir}/neutra' ,
         )
 
         self.path = Namespace(
@@ -368,61 +391,58 @@ class gpFileManager:
         self.toolbox = toolbox
         return self
 
-    @staticmethod
-    def individual_fitness(ind):
-        if hasattr(ind,'fitness'):
-            fit = ind.fitness.values
+    def single_dumpable(self , ind):
+        syx_str = self.toolbox.syx2str(ind)
+        if isinstance(ind , getattr(creator , 'Individual')):
+            ind_str = self.toolbox.ind2str(ind)
         else:
-            fit = ()
-        return fit
+            ind_str = ind.ind_str
+        fit = ind.fitness.values if hasattr(ind,'fitness') else ()
+        # ind = syx_str, ind_str, fit
+        ind = Namespace(syx_str = syx_str, ind_str = ind_str, fit = fit)
+        return ind
 
-    def dump_generation(self , population , halloffame , omitalways , i_iter = 0 , i_gen = 0 , **kwargs):
+    def dump_generation(self , population , halloffame , forbidden , i_iter = 0 , i_gen = 0 , **kwargs):
         if i_iter < 0: return self
         basename = self.record_basename(i_iter , i_gen)
 
-        pop = [(gpHandler.ind2str(ind) , self.individual_fitness(ind)) for ind in population]
-        hof = [(gpHandler.ind2str(ind) , self.individual_fitness(ind)) for ind in halloffame]
-        omt = omitalways
+        # input type: population as getattr(creator , 'Individual') , halloffame as creator.Syntax , forbidden as creator.Syntax (most likely)
+        # save type: syntax list (syntax_str , ind_str , fitness)
+        pop = [self.single_dumpable(ind) for ind in population]
+        hof = [self.single_dumpable(ind) for ind in halloffame]
+        fbd = [self.single_dumpable(ind) for ind in forbidden]
 
         self.logbook.record(i_gen = i_gen , 
                             population = pop, 
                             halloffame = hof, 
-                            omitalways = omt, 
+                            forbidden = fbd, 
                             **kwargs)
 
-        joblib.dump(self.logbook , f'{self.dir.log}/{basename}.pkl')
-        #joblib.dump([l[0] for l in pop], f'{self.dir.pop}/{basename}.pkl')
-        #joblib.dump([l[0] for l in hof], f'{self.dir.hof}/{basename}.pkl')
-        #joblib.dump([l[0] for l in omt], f'{self.dir.omt}/{basename}.pkl')
+        joblib.dump(self.logbook[-1] , f'{self.dir.log}/{basename}.pkl')
         return self
 
     def load_generation(self , i_iter = 0 , i_gen = 0 , hof_num = 500 , **kwargs):
-        if i_gen < 0: return self.new_generation(hof_num = hof_num , **kwargs)
-        basename = self.record_basename(i_iter , i_gen)
-        self.logbook = joblib.load(f'{self.dir.log}/{basename}.pkl')
+        self.logbook = tools.Logbook()
+        if i_gen < 0: 
+            pop , hof , fbd = self.new_generation(hof_num = hof_num , **kwargs)
+        else:
+            basename = self.record_basename(i_iter , i_gen)
+            self.logbook.record(**joblib.load(f'{self.dir.log}/{basename}.pkl'))
+            pop = [self.toolbox.str2ind(ind.ind_str) for ind in self.logbook[-1]['population']] 
+            hof = [self.toolbox.str2syx(ind.syx_str , ind.ind_str) for ind in self.logbook[-1]['halloffame']] 
+            fbd = [self.toolbox.str2syx(ind.syx_str , ind.ind_str) for ind in self.logbook[-1]['forbidden']] 
 
-        #pop = [self.toolbox.str2ind(ind) for ind in joblib.load(f'{self.dir.pop}/{basename}.pkl')] #type:ignore
-        #hof = [self.toolbox.str2ind(ind) for ind in joblib.load(f'{self.dir.hof}/{basename}.pkl')] #type:ignore
-        #omt = [self.toolbox.str2ind(ind) for ind in joblib.load(f'{self.dir.his}/{basename}.pkl')] #type:ignore
-
-        pop = [self.toolbox.str2ind(ind[0]) for ind in self.logbook[-1]['population']] 
-        hof = [self.toolbox.str2ind(ind[0]) for ind in self.logbook[-1]['halloffame']] 
-        omt = [ind[0] for ind in self.logbook[-1]['omitalways']] # syntax should be fine
-
-        hof_ = self.toolbox.evaluate_pop(hof , i_iter = i_iter, i_gen = i_gen, desc = 'Load HallofFame')
-        hof = tools.HallOfFame(hof_num)
-        hof.update(hof_)
+            hof_ = self.toolbox.evaluate_pop(hof , i_iter = i_iter, i_gen = i_gen, desc = 'Load HallofFame')
+            hof = tools.HallOfFame(hof_num)
+            hof.update(hof_)
         
-        return pop , hof , omt
+        return pop , hof , fbd
     
     def new_generation(self , hof_num = 500 , **kwargs):
-        self.logbook = tools.Logbook()
-
         population = []
         halloffame = tools.HallOfFame(hof_num)
-        omitalways = []
-        
-        return population , halloffame , omitalways
+        forbidden  = []
+        return population , halloffame , forbidden
 
     def update_sku(self , individual , pool_skuname):
         poolid = int(pool_skuname.split('_')[-1])
@@ -437,9 +457,9 @@ class gpFileManager:
         gen_str  = 'overall' if i_gen < 0 else f'gen{i_gen}'
         return f'{iter_str}_{gen_str}'
     
-    def load_state(self , key , i_iter , i_gen = 0 , i_elite = 0):
-        if key == 'labels_res':
-            return torch.load(f'{self.dir.res}/iter{i_iter}.pt')
+    def load_state(self , key , i_iter , i_gen = 0 , i_elite = 0 , device = None):
+        if key in ['res' , 'neu' , 'elt']:
+            return torch.load(getattr(self.dir , key) + f'/iter{i_iter}.pt').to(device)
         elif key == 'parquet':
             return pd.read_parquet(f'{self.dir.pqt}/elite_{i_elite}.parquet', engine='fastparquet')
         else:
@@ -460,8 +480,8 @@ class gpFileManager:
                 raise Exception(key)
 
     def save_state(self , data , key , i_iter , i_gen = 0 , i_elite = 0 , **kwargs):
-        if key == 'labels_res':
-            torch.save(data , f'{self.dir.res}/iter{i_iter}.pt')
+        if key in ['res' , 'neu' , 'elt']:
+            torch.save(data , getattr(self.dir , key) +f'/iter{i_iter}.pt')
         elif key == 'parquet':
             if isinstance(data , torch.Tensor): data = data.cpu().numpy()
             df = pd.DataFrame(data,index=self.df_axis['df_index'],columns=self.df_axis['df_columns'])
@@ -514,15 +534,14 @@ class gpTimer:
             return self
         def __exit__(self, type, value, trace):
             if type is not None:
-                print('Error Type :' , type)
-                print('Error Value :' , value)
+                print(f'Error in PTimer {self.key}' , type , value)
                 traceback.print_exc()
             else:
                 time_cost = time.time() - self.start_time
                 if self.memory_check:
                     torch.cuda.empty_cache()
                     mem_end  = torch.cuda.mem_get_info()[0] / MemoryManager.unit
-                    mem_info = f', Freed CudaMemory {self.gmem_start:.2f}G - > {mem_end:.2f}G' 
+                    mem_info = f', Free CudaMemory {self.gmem_start:.2f}G - > {mem_end:.2f}G' 
                 else:
                     mem_info = ''
                 if self.record: self.append_time(self.target_dict , self.key , time_cost)
@@ -545,8 +564,7 @@ class gpTimer:
             self.start_time = time.time()
         def __exit__(self, type, value, trace):
             if type is not None:
-                print('Error Type :' , type)
-                print('Error Value :' , value)
+                print(f'Error in AccTimer {self.key}' , type , value)
                 traceback.print_exc()
             else:
                 self.time  += time.time() - self.start_time
@@ -566,8 +584,7 @@ class gpTimer:
             pass
         def __exit__(self, type, value, trace):
             if type is not None:
-                print('Error Type :' , type)
-                print('Error Value :' , value)
+                print(f'Error in EmptyTimer ' , type , value)
                 traceback.print_exc()
         
     def __call__(self , key , print = True , df_cols = True , print_str = None , memory_check = False):
@@ -672,6 +689,9 @@ class gpEliteGroup:
         self.i_elite = start_i_elite
         self.device  = device
         self.block_len = block_len
+        self.init_container()
+
+    def init_container(self):
         self.container = [gpEliteBlock(self.block_len)]
 
     def assign_logs(self , hof_log , elite_log):
@@ -680,23 +700,25 @@ class gpEliteGroup:
         return self
 
     def update_logs(self , new_log):
-        self.elite_log = pd.concat([self.elite_log , new_log[new_log.elite]] , axis=0) if len(self.elite_log) else new_log[new_log.elite]
+        if len(self.elite_log):
+            self.elite_log = pd.concat([self.elite_log , new_log[new_log.elite]] , axis=0) 
+        else:
+            self.elite_log = new_log[new_log.elite]
         self.hof_log = pd.concat([self.hof_log , new_log] , axis=0) if len(self.hof_log) else new_log
         return self
 
-    def max_corr_with_me(self , value , abs_corr_cap = 1.01 , dim = 1 , dim_valids = (None , None)):
+    def max_corr_with_me(self , value , abs_corr_cap = 1.01 , dim = 1 , dim_valids = (None , None) , syntax = None):
         corr_values = torch.zeros((self.i_elite - self.start_i_elite + 1 ,)).to(value)
         exit_state  = False
         l = 0
         for block in self.container:
-            corrs , exit_state = block.max_corr(value , abs_corr_cap , dim , dim_valids)
+            corrs , exit_state = block.max_corr(value , abs_corr_cap , dim , dim_valids , syntax = syntax)
             corr_values[l:l+block.len()] = corrs[:block.len()]
-            if exit_state: break
             l += block.len()
-        
+            if exit_state: break
         return corr_values , exit_state
 
-    def append(self , syntax , value , starter = None , save_parquet = False , **kwargs):
+    def append(self , syntax , value , starter = None , **kwargs):
         if not self.container[-1].full:
             self.container[-1].append(syntax , value , **kwargs)
         else:
@@ -714,9 +736,9 @@ class gpEliteGroup:
     def compile_elite_tensor(self , device = None):
         self.cat_all()
         if device is None: device = self.device
-        self.elite_tensor = torch.cat([block.data.to(device) for block in self.container] , dim = -1).to(device) #type:ignore
+        self.elite_tensor = torch.cat([block.data_at_device(device) for block in self.container] , dim = -1)
         # del self.container
-        self.container = [gpEliteBlock(self.block_len)]
+        self.init_container()
         return self
     
 class gpEliteBlock:
@@ -753,7 +775,7 @@ class gpEliteBlock:
             raise Exception('The EliteBlock is Full')   
         return self
     
-    def max_corr(self , value , abs_corr_cap = 1.01 , dim = None , dim_valids = (None , None)):
+    def max_corr(self , value , abs_corr_cap = 1.01 , dim = None , dim_valids = (None , None) , syntax = None):
         corr_values = torch.zeros((self.len()+1,)).to(value)
         exit_state  = False
         block = self.data.to(value) if isinstance(self.data , torch.Tensor) else self.data
@@ -765,4 +787,9 @@ class gpEliteBlock:
             corr = MF.corrwith(value, blk , dim=dim).nanmean() 
             corr_values[k] = corr
             if exit_state := corr.abs() > abs_corr_cap: break 
+
         return corr_values , exit_state
+    
+    def data_at_device(self , device):
+        assert isinstance(self.data , torch.Tensor) , type(self.data)
+        return self.data.to(device)

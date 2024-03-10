@@ -15,14 +15,13 @@ class EmptyTM():
         return self
     def __exit__(self, type, value, trace):
         if type is not None:
-            print('Error Type :' , type)
-            print('Error Value :' , value)
+            print(f'Error in EmptyTM ' , type , value)
             traceback.print_exc()
 
 class Profiler(cProfile.Profile):
     def __init__(self, doso = False , builtins = True , **kwargs) -> None:
         self.doso = doso
-        if self.doso: super().__init__(builtins = builtins) # type:ignore
+        if self.doso: super().__init__(builtins = builtins) 
 
     def __enter__(self):
         if self.doso: 
@@ -32,8 +31,7 @@ class Profiler(cProfile.Profile):
 
     def __exit__(self, type , value , trace):
         if type is not None:
-            print('Error Type :' , type)
-            print('Error Value :' , value)
+            print(f'Error in Profiler ' , type , value)
             traceback.print_exc()
         else:
             if self.doso: return super().__exit__(type , value , trace)
@@ -41,7 +39,7 @@ class Profiler(cProfile.Profile):
     def get_df(self , sort_on = 'tottime' , highlight = None , output = None):
         if not self.doso: return pd.DataFrame()
         # highlight : 'gp_math_func.py'
-        df = pd.DataFrame(self.getstats(), #type:ignore
+        df = pd.DataFrame(getattr(self , 'getstats')(), 
                           columns=['full_name', 'ncalls', 'ccalls', 'tottime', 'cumtime' , 'caller'])
         df.tottime = df.tottime.round(4)
         df.cumtime = df.cumtime.round(4)

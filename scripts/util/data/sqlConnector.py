@@ -39,6 +39,14 @@ connect_dict = {
         'port'     : 5432 ,
         'database' : 'kyfactor' ,
     },
+    'huatai':{
+        'dialect'  : 'mysql+pymysql' ,
+        'username' : 'client_jinm' ,
+        'password' : 'password_JINMENG20240304' ,
+        'host'     : 'sh-cynosdbmysql-grp-jf1wgp6a.sql.tencentcdb.com' ,
+        'port'     : 22087 ,
+        'database' : 'htfe_alpha_factors' ,
+    },
     'guojin':{
         'dialect'  : 'mysql+pymysql' ,
         'username' : 'jsfund' ,
@@ -63,6 +71,8 @@ data_start_dt = {
     'kaiyuan':{
         'positive': 20140130,
         'negative': 20140130},
+    'huatai':{'ms_chars'     : 20100101 ,
+              'dl_factors'   : 20170101} ,
     'guojin':{}
 }
 query_params = {
@@ -83,6 +93,19 @@ query_params = {
         'negative':{'factors' : 
                     ['smart_money','ideal_vol','ideal_reverse','herd_effect','small_trader_ret_error',],},
         # +1 : 'traction_f' , 'traction_ns' , 'traction_si', , 'long_momentum2' , 'merge_sue', 'consensus_adjustment',
+    },
+        'huatai':{
+        'ms_chars':{'factors' : 
+                    ['mink_Amihud','mink_VP','mink_VP_top33_volume','mink_VR_1min_lag',
+                     'mink_VR_lag_last_30min','mink_amount_out_order_avg_ratio',
+                     'mink_cum_return_top30_order','mink_return_downward_var',
+                     'mink_return_downward_volatility_ratio','mink_return_improved',
+                     'mink_return_intraday','mink_return_kurtosis','mink_return_last_30min',
+                     'mink_return_skewness','mink_return_skewness_last_30min','mink_return_upward_var',
+                     'mink_return_upward_var_ratio','mink_return_var','mink_return_var_top33_volume',
+                     'mink_tp_diff','mink_volume_open_30min_ratio','mink_volume_variance_ratio',],},
+        'dl_factors':{'factors' : 
+                    ['price_volume_nn','text_fadt_bert',],},
     },
     'guojin':{},
 }
@@ -155,12 +178,18 @@ class online_sql_connector():
         elif src == 'kaiyuan':
             query = {v:f'select * from public.{v} where date >= \'{start_dt}\' and date <= \'{end_dt}\''
                     for v in self.query_params[src][query_type]['factors']}
+        elif src == 'huatai':
+            query = {v:f'select * from {v} where datetime >= \'' + 
+                     datetime.strptime(str(start_dt) , '%Y%m%d').strftime('%Y-%m-%d') + '\' and datetime <= \'' +
+                     datetime.strptime(str(end_dt) , '%Y%m%d').strftime('%Y-%m-%d') +
+                     '\'' for v in self.query_params[src][query_type]['factors']}
         elif src == 'guojin':
             query = 'select * from gjquant.factordescription'
         return query
     
     def query_start_dt(self , src , query_type):
         assert query_type in self.query_params[src].keys()
+        if src not in self.connections.keys(): self.create_connections(src)
         if src == 'haitong':
             if query_type == 'hf_factors':
                 query = 'select min(trade_dt) from daily_factor_db.dbo.JSJJHFFactors'
@@ -171,6 +200,8 @@ class online_sql_connector():
             query = 'select min({}) from {}'.format(date_col , query_type)
         elif src == 'kaiyuan':
             query = 'select min(date) from public.smart_money'
+        elif src == 'huatai':
+            query = 'select min(datetime) from ' + self.query_params[src][query_type]['factors'][0]
         elif src == 'guojin':
             return 99991231
         return pd.read_sql_query(query , self.connections[src])
@@ -179,7 +210,7 @@ class online_sql_connector():
         query = self._single_default_query(src , query_type , start_dt , end_dt)
         if src not in self.connections.keys(): self.create_connections(src)
         try:
-            if src == 'kaiyuan':
+            if src in ['kaiyuan','huatai']:
                 assert isinstance(query , dict) , query
                 df = {k:pd.read_sql_query(q , self.connections[src]) for k,q in query.items()}
             else:
@@ -188,13 +219,13 @@ class online_sql_connector():
         except exc.ResourceClosedError:
             print(f'{src} Connection is closed, re-connect')
             self.create_connections(src)
-            if src == 'kaiyuan':
+            if src in ['kaiyuan','huatai']:
                 pass
             else:
                 assert isinstance(query , str) , query
                 df = pd.read_sql_query(query , self.connections[src])
-        except:
-            raise Exception
+        except Exception as e:
+            raise Exception(e)
         df = self.df_process(df , src , query_type)
         return df
     
@@ -224,6 +255,15 @@ class online_sql_connector():
             df = df0.rename(columns={'code':'secid'})
             df['secid'] = df['secid'].str.replace('[-.a-zA-Z]','',regex=True).astype(int)
             df['date']  = df['date'].astype(int)
+            df = df.set_index(['date','secid']).reset_index()
+        elif src == 'huatai':
+            df0 = pd.DataFrame(columns = ['date','secid'])
+            for k , subdf in df.items():
+                subdf = subdf.rename(columns = {'datetime':'date','instrument':'secid','value':k})
+                df0 = df0.merge(subdf.rename(columns = {'factor':k}),how='outer',on=['date','secid'])
+            df = df0
+            df['secid'] = df['secid'].str.replace('[-.a-zA-Z]','',regex=True).astype(int)
+            df['date']  = df['date'].astype(str).str.replace('[-.a-zA-Z]','',regex=True).astype(int)
             df = df.set_index(['date','secid']).reset_index()
         elif src == 'guojin':
             pass

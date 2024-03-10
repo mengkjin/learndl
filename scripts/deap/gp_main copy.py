@@ -1,30 +1,33 @@
 # %%
 import pandas as pd
 import numpy as np
-import os , sys , copy , tqdm , shutil
+import os , sys , copy , tqdm , shutil , gc , re , traceback
 import torch
 import array , random , json , operator , time, platform , joblib
-from argparse import ArgumentParser , Namespace
+from argparse import ArgumentParser
 from tqdm import tqdm
 
 from deap import base , creator , tools , gp
 from deap.algorithms import varAnd
 from torch.multiprocessing import Pool
 
-import gp_math_func as F
-from gp_utils import gpHandler , gpTimer , gpContainer
+import gp_math_func as MF
+import gp_factor_func as FF
+from gp_utils import gpHandler , gpTimer , gpContainer , gpFileManager , MemoryManager , gpEliteGroup , gpFitness
+from gp_affiliates import Profiler , EmptyTM
 
 # %%
 # ------------------------ environment setting ------------------------
 
-np.seterr(over='raise')
+# np.seterr(over='raise')
 
 _plat      = platform.system().lower()                                    # Windows or Linux
 _device    = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # cuda or cpu
-_test_code = True or (_device == torch.device('cpu'))                     # True if just to test code is valid
-_DIR_data  = './data/features/parquet'                                    # input路径，即原始因子所在路径。
-_DIR_pack  = './data/package'                                             # input路径2, 加载原始因子后保存pt文件加速存储。
-_DIR_pop   = './pop'                                                      # output路径，即保存因子库、因子值、因子表达式的路径。
+_test_code = True or (_device == torch.device('cpu'))                     # 是否只是测试代码有无bug,默认False
+_noWith    = True                                                        # 是否取消所有计时器,默认False,有计时器时报错会出问题
+_DIR_data  = './data/features/parquet'                                    # input路径1,原始因子所在路径
+_DIR_pack  = './data/package'                                             # input路径2,加载原始因子后保存pt文件加速存储
+_DIR_pop   = './pop'                                                      # output路径,即保存因子库、因子值、因子表达式的路径
 _DIR_job   = f'{_DIR_pop}/bendi'                                          # 测试代码时的job path 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'                               # 重复加载libiomp5md.dll https://zhuanlan.zhihu.com/p/655915099
 
@@ -33,269 +36,358 @@ parser.add_argument("--job_id", type=int, default=-1)
 parser.add_argument("--poolnm", type=int, default=1)
 args, _ = parser.parse_known_args()
 
-assert args.poolnm == 1 , args.poolnm # 若并行，通信成本过高，效率提升不大。
-# multiprocessing method, 单机多进程设置（实际未启用），参考https://zhuanlan.zhihu.com/p/600801803
+assert args.poolnm == 1 , args.poolnm # 若并行,通信成本过高,效率提升不大
+# multiprocessing method, 单机多进程设置(实际未启用),参考https://zhuanlan.zhihu.com/p/600801803
 torch.multiprocessing.set_start_method('spawn' if _plat == 'windows' else 'forkserver', force=True) 
 
-# ------------------------ gp parameters ------------------------
-def gp_parameters(test_code = None , job_id = None , train = True):
+def text_manager(object):
+    if _noWith:
+        return EmptyTM(object)
+    else:
+        return object
+
+def gp_job_dir(job_id = None , train = True , continuation = False , test_code = False):
+    # directory setting and making
+    
+    if job_id is None: job_id = args.job_id
+    if test_code:
+        job_dir = _DIR_job
+    else:
+        if job_id < 0:
+            old_job_df = os.listdir('./pop/') if os.path.exists('./pop/') else []
+            old_job_id = np.array([id for id in old_job_df if id.isdigit()]).astype(int)
+            if train:
+                job_id = np.setdiff1d(np.arange(max(old_job_id) + 2) , old_job_id).min() if len(old_job_id) else 0
+            else:
+                job_id = old_job_id.max()
+        job_dir = f'{_DIR_pop}/{job_id}'
+    print(f'**Job Directory is : "{job_dir}"')
+    if train:
+        if os.path.exists(job_dir) and not continuation: 
+            if not test_code and not input(f'Path "{job_dir}" exists , press "yes" to confirm Deletion:')[0].lower() == 'y':
+                raise Exception(f'Deletion Denied!')
+            shutil.rmtree(job_dir)
+            print(f'  --> Start New Training in "{job_dir}"')
+        #elif os.path.exists(job_dir):
+        #    if not test_code and not input(f'Path "{job_dir}" exists , press "yes" to confirm Continuation:')[0].lower() == 'y':
+        #        raise Exception(f'Continuation Denied!')
+        elif not os.path.exists(job_dir) and continuation:
+            raise Exception(f'No existing "{job_dir}" for Continuation!')
+        else:
+            print(f'  --> Continue Training in "{job_dir}"')
+    return job_dir
+
+def gp_parameters(job_id = None , train = True , continuation = False , test_code = False , **kwargs):
     '''
     ------------------------ gp parameters ------------------------
     主要遗传规划参数初始化
-    注：为方便跑多组实验，需设置job_id参数，设置方式为: python xxx.py --job_id 123456
+    注：为方便跑多组实验,需设置job_id参数,设置方式为: python xxx.py --job_id 123456
     input:
         test_code: if only to test code validity
-        job_id:    when test_code is not True, determines _DIR_job = f'{_DIR_pop}/{job_id}' 
+        job_id:    when test_code is not True, determines f'{_DIR_pop}/{job_id}' 
         train:     if True, will first check dirs and device  
     output:
         gp_params: dict that includes all gp parameters
     '''
+    job_dir = gp_job_dir(job_id , train , continuation , test_code)
+    if train and _device == torch.device('cpu'):
+        print('**Cuda not available')
+    elif train:
+        print('**Device name:', torch.cuda.get_device_name(0), ', Available:' ,torch.cuda.is_available())
         
-    # directory setting and making
-    global _DIR_job
-    if test_code is None: test_code = _test_code
-    if train:
-        if job_id is None: job_id = args.job_id
-        if test_code:
-            assert _DIR_job == f'{_DIR_pop}/bendi'
-            if os.path.exists(_DIR_job): shutil.rmtree(_DIR_job)
-        else:
-            if job_id < 0:
-                old_job_df = os.listdir('./pop/') if os.path.exists('./pop/') else []
-                old_job_id = np.array([id for id in old_job_df if id.isdigit()]).astype(int)
-                job_id = np.setdiff1d(np.arange(max(old_job_id) + 2) , old_job_id).min() if len(old_job_id) else 0
-            _DIR_job = f'{_DIR_pop}/{job_id}'   
-            # if _DIR_job exists, make sure you know it is for continuation computing
-            if os.path.exists(_DIR_job) and not input(f'{_DIR_job} exists , press "yes" to confirm continuation:')[0].lower() == 'y':
-                raise Exception(f'{_DIR_job} exists!')
-        os.makedirs(f'{_DIR_job}/factor' , exist_ok=True)
-        os.makedirs(_DIR_pack , exist_ok=True)
-
-        if (_device == torch.device('cpu')):
-            print(' --> Cuda not available')
-        else:
-            print(' --> Device name:', torch.cuda.get_device_name(0), ', Available:' ,torch.cuda.is_available())
-        print(f' --> Pop directory is : "{_DIR_job}"')
-
     '''
-    test_code     是不是仅仅作为代码测试，若是会有一个小很多的参数组合覆盖本参数
-    gp_fac_list   作为GP输入时，标准化因子的数量
-    gp_raw_list   作为GP输入时，原始指标的数量
-    slice_date:   修改数据切片区间，前两个为样本内的起止点，后两个为样本外的起止点【均需要是交易日】'
+    job_dir       工作目录
+    test_code     是不是仅仅作为代码测试,若是会有一个小很多的参数组合覆盖本参数
+    gp_fac_list   作为GP输入时,标准化因子的数量
+    gp_raw_list   作为GP输入时,原始指标的数量
+    slice_date:   修改数据切片区间,前两个为样本内的起止点,后两个为样本外的起止点均需要是交易日
     device:       用cuda还是cpu计算
     verbose:      训练过程是否输出细节信息
-    pool_num:     并行任务数量，建议设为1，即不并行，使用单显卡单进程运行。
-    pop_num:      种群数量，初始化时生成多少个备选公式
-    hof_num:      精英数量。一般精英数量设为种群数量的1/6左右即可。
-    n_iter:       【大循环】的迭代次数，每次迭代重新开始一次遗传规划、重新创立全新的种群，以上一轮的残差收益率作为优化目标。
-    ir_floor:     【大循环】中因子入库所需的最低rankIR值，低于此值的因子不入库。
-    corr_cap:     【大循环】中新因子与老因子的最高相关系数，相关系数绝对值高于此值的因子不入库。
-    n_gen:        【小循环】的迭代次数，即每次遗传规划进行几轮繁衍进化。
-    max_depth:    【小循环】中个体算子树的最大深度，即因子表达式的最大复杂度。
-    cxpb:         【小循环】中交叉概率，即两个个体之间进行交叉的概率。
-    mutpb:        【小循环】中变异概率，即个体进行突变变异的概率。
+    pool_num:     并行任务数量,建议设为1,即不并行,使用单显卡单进程运行
+    pop_num:      种群数量,初始化时生成多少个备选公式
+    hof_num:      精英数量,一般精英数量设为种群数量的1/6左右即可
+    n_iter:       [大循环]的迭代次数,每次迭代重新开始一次遗传规划、重新创立全新的种群,以上一轮的残差收益率作为优化目标
+    ir_floor:     [大循环]中因子入库所需的最低rankIR值,低于此值的因子不入库
+    corr_cap:     [大循环]中新因子与老因子的最高相关系数,相关系数绝对值高于此值的因子不入库
+    n_gen:        [小循环]的迭代次数,即每次遗传规划进行几轮繁衍进化
+    max_depth:    [小循环]中个体算子树的最大深度,即因子表达式的最大复杂度
+    cxpb:         [小循环]中交叉概率,即两个个体之间进行交叉的概率
+    mutpb:        [小循环]中变异概率,即个体进行突变变异的概率
     '''
 
-    gp_fac_list = ['close', 'turn', 'volume', 'amt', 'open', 'high', 'low', 'vwap', 'bp', 'ep', 'ocfp', 'dp', 'adv20', 'adv60']
-    gp_raw_list = [f'{_d}_raw' for _d in gp_fac_list] + ['rtn_raw']
+    gp_fac_list = ['cp', 'turn', 'vol', 'amt', 'op', 'hp', 'lp', 'vp', 'bp', 'ep', 'ocfp', 'dp', 'adv20', 'adv60']# in lower case
+    gp_raw_list = [v.upper() for v in gp_fac_list] + ['RTN'] # in upper case
     slice_date  = ['2010-01-04', '2021-12-31', '2022-01-04', '2099-12-31']
-    slice_date  = pd.to_datetime(slice_date).values
+    fit_weights = {'rankic_in_res':0.,'rankir_in_res':1.,'rankic_out_res':0.,'rankir_out_res':0.,
+                   'rankic_in_raw':0.,'rankir_in_raw':0.,'rankic_out_raw':0.,'rankir_out_raw':0.}
 
-    gp_params = {
-        'test_code'   : test_code ,     # just to check code, 
-        'gp_fac_list' : gp_fac_list ,   # gp intial factor list 
-        'gp_raw_list' : gp_raw_list ,   # gp intial raw data list
-        'slice_date'  : slice_date ,    # must be trade date
-        'device' : _device ,            # training device, cuda or cpu
-        'verbose' : False ,             # if show some text
-        'pool_num' : args.poolnm ,      # multiprocessing pool number
-        'pop_num': 3000 ,               # [parameter] population number
-        'hof_num': 500 ,                # [parameter] halloffame number
-        'n_iter' :  5 ,                 # [outer loop] loop number
-        'ir_floor' : 2.5 ,              # [outer loop] rankir threshold
-        'corr_cap' : 0.7 ,              # [outer loop] cap of correlation with existing factors
-        'n_gen' : 2  ,                  # [inner loop] generation number
-        'max_depth' : 5 ,               # [inner loop] max tree depth of gp
-        'cxpb' : 0.35 ,                 # [inner loop] crossover probability
-        'mutpb' : 0.25 ,                # [inner loop] mutation probability
-    }
+    gp_params = gpContainer(
+        job_dir = job_dir ,           # the main directory
+        test_code = test_code  ,      # just to check code, will save parquet in this case
+        gp_fac_list = gp_fac_list ,   # gp intial factor list 
+        gp_raw_list = gp_raw_list ,   # gp intial raw data list
+        slice_date  = slice_date ,    # must be trade date
+        fit_weights = fit_weights ,   # fitness weights
+        device = _device ,            # training device, cuda or cpu
+        verbose = False ,             # if show some text
+        pool_num = args.poolnm ,      # multiprocessing pool number
+        pop_num= 3000 ,               # [parameter] population number
+        hof_num= 500 ,                # [parameter] halloffame number
+        n_iter =  2 ,                 # [outer loop] loop number
+        ir_floor = 3.0 ,              # [outer loop] rankir threshold
+        ir_floor_decay = 0.9 ,        # [outer loop] rankir threshold decay factor for iterations
+        corr_cap = 0.7 ,              # [outer loop] cap of correlation with existing factors
+        n_gen = 6  ,                  # [inner loop] generation number
+        max_depth = 5 ,               # [inner loop] max tree depth of gp
+        select_offspring = '2Tour' ,  # [inner loop] can be 'best' , '2Tour' , 'Tour'
+        surv_rate = 0.6 ,             # [inner loop] use survive rate in best selection
+        cxpb = 0.35 ,                 # [inner loop] crossover probability
+        mutpb = 0.25 ,                # [inner loop] mutation probability
+        neut_method = 1 ,             # how to neutralize factor values when i_iter > 0
+    )
     if test_code:
         # when test code, change some parameters
-        gp_params.update({'verbose' : True , 'pop_num': 20 , 'hof_num': 5 , 'n_iter' : 2 , 'max_depth' : 3 ,
-                          'slice_date' : ['2022-01-04', '2022-12-30', '2023-01-04', '2023-12-29']}) 
-        
-    gp_params['slice_date'] = pd.to_datetime(gp_params['slice_date']).values
-    gp_params = gpContainer(gp_params)
+        gp_params.update(gp_fac_list = gp_fac_list[:2] , gp_raw_list= gp_raw_list[:2] ,
+                         verbose = True , pop_num = 6 , hof_num = 2 , n_gen = 2 , n_iter = 2 , 
+                         max_depth = 2 , ir_floor = 3. , corr_cap = 0.7 , ir_floor_decay = 0.9 ,
+                         neut_method = 1,
+                         slice_date = ['2022-01-04', '2022-12-30', '2023-01-04', '2023-12-29'])
+    gp_params.update(**kwargs)
+    gp_params.apply('slice_date' , lambda x:pd.to_datetime(x).values)
+    MF.invalid = MF.invalid.to(gp_params.get('device')) # should test if speed up
     return gp_params
-
+    
 # %%
-def gp_namespace(gp_params , gp_timer = gpTimer()):
+def gp_namespace(gp_params):
     '''
     ------------------------ gp dictionary, record data and params ------------------------
-    基于遗传规划的参数字典，读取各类主要数据，并放在同一字典中传回
+    基于遗传规划的参数字典,读取各类主要数据,并放在同一字典中传回
     input:
         gp_params: gpContainer of all gp_parameters
         gp_timer:  gpTimer to record time cost
     output:
         gp_space:  gpContainer that includes gp parameters, gp datas and gp arguements, and various other datas
     '''
-    def Ts(x , gp_key):
-        # additional treatment based by gp_key
-        if gp_key.startswith('dp'): # dividend factor , nan means 0
-            x = x.nan_to_num()
-        if isinstance(x , torch.Tensor):
-            x = x.to(gp_params.device)
-            x.share_memory_() # 执行多进程时使用：将张量移入共享内存
-        return x
+    gp_fmanager = gpFileManager(gp_params.get('job_dir')) # gpFileManager managing loading and dumping
+    gp_timer = gpTimer(True)                               # gpTimer to record time cost
+    gp_fitness = gpFitness(title=list(gp_params.get('fit_weights').keys()) , weights = list(gp_params.get('fit_weights').values()))
     
-    package_path = f'{_DIR_pack}/gp_data_package' + '_test' * gp_params.test_code + '.pt'
-    with gp_timer('Data' , df_cols = False , print_str= '**Load Data'):
-        gp_space = {'gp_values' :[] ,
-                   'gp_args'   :gp_params.gp_fac_list + gp_params.gp_raw_list ,
-                   'n_args'    : (len(gp_params.gp_fac_list) , len(gp_params.gp_raw_list)) ,
-                   **gp_params}
+    gp_space = gp_params.copy().update(gp_fmanager = gp_fmanager , gp_timer = gp_timer , gp_fitness = gp_fitness , gp_values = [] , df_columns = None)
+    with gp_space.gp_timer('Data' , df_cols = False , print_str= '**Load Data'):
+        gp_space.gp_args = gp_space.gp_fac_list + gp_space.gp_raw_list
+        gp_space.n_args  = (len(gp_space.gp_fac_list) , len(gp_space.gp_raw_list))
         
-        if os.path.exists(package_path):
-            if gp_params.verbose: print(f' --> Directly load {package_path}')
-            package_data = torch.load(package_path)
-            assert np.isin(gp_space['gp_args'] , package_data['gp_args']).all() , np.setdiff1d(gp_space['gp_args'] , package_data['gp_args'])
-            for gp_arg in gp_space['gp_args']:
-                gp_val = package_data['gp_values'][package_data['gp_args'].index(gp_arg)]
-                gp_val = Ts(gp_val , gp_arg)
-                gp_space['gp_values'].append(gp_val)
+        package_path = f'{_DIR_pack}/gp_data_package' + '_test' * gp_space.test_code + '.pt'
+        package_require = ['gp_args' , 'gp_values' , 'size' , 'indus' , 'labels_raw' , 'df_index' , 'df_columns' , 'universe']
 
-            for key in ['size' , 'cs_indus_code' , 'labels_raw' , 'labels_res' , 'df_index' , 'df_columns' , 'universe']: 
-                gp_val = package_data[key]
-                gp_val = Ts(gp_val , key)
-                gp_space[key] = gp_val
-
+        load_finished = False
+        package_data = torch.load(package_path) if os.path.exists(package_path) else {}
+        if not np.isin(package_require , list(package_data.keys())).all() or not np.isin(gp_space.gp_args , package_data['gp_args']).all():
+            if gp_space.verbose: print(f'  --> Exists "{package_path}" but Lack Required Data!')
         else:
-            if gp_params.verbose: print(f' --> Load from parquet files')
+            assert np.isin(package_require , list(package_data.keys())).all() , np.setdiff1d(package_require , list(package_data.keys()))
+            assert np.isin(gp_space.gp_args , package_data['gp_args']).all() , np.setdiff1d(gp_space.gp_args , package_data['gp_args'])
+            assert package_data['df_index'] is not None
+
+            if gp_space.verbose: print(f'  --> Directly load "{package_path}"')
+            for gp_key in gp_space.gp_args:
+                gp_val = package_data['gp_values'][package_data['gp_args'].index(gp_key)]
+                gp_val = df2ts(gp_val , gp_key , gp_space.device)
+                gp_space.gp_values.append(gp_val)
+
+            for gp_key in ['size' , 'indus' , 'labels_raw' , 'universe']: 
+                gp_val = package_data[gp_key]
+                gp_val = df2ts(gp_val , gp_key , gp_space.device)
+                gp_space.set(gp_key , gp_val)
+
+            for gp_key in ['df_index' , 'df_columns']: 
+                gp_val = package_data[gp_key]
+                gp_space.set(gp_key , gp_val)
+
+            load_finished = True
+
+        if not load_finished:
+            if gp_space.verbose: print(f'  --> Load from Parquet Files:')
+            gp_filename = gp_filename_converter()
             nrowchar = 0
-            for i , gp_key in enumerate(gp_space['gp_args']):
-                if gp_params.verbose and nrowchar == 0: print(' --> ' , end='')
-                gp_val , df_indexes = read_gp_data(gp_key,gp_params.slice_date,gp_space.get('df_columns'),first_data=(i==0))
-                gp_val = Ts(gp_val , gp_key)
-                gp_space['gp_values'].append(gp_val)
-                if df_indexes: gp_space.update(df_indexes)
+            for i , gp_key in enumerate(gp_space.gp_args):
+                if gp_space.verbose and nrowchar == 0: print('  --> ' , end='')
+                gp_val = read_gp_data(gp_filename(gp_key),gp_space.slice_date,gp_space.df_columns)
+                if i == 0: gp_space.update(df_columns = gp_val.columns.values , df_index = gp_val.index.values)
+                gp_val = df2ts(gp_val , gp_key , gp_space.device)
+                gp_space.gp_values.append(gp_val)
                 
-                if gp_params.verbose:
+                if gp_space.verbose:
                     print(gp_key , end=',')
                     nrowchar += len(gp_key) + 1
-                    if nrowchar >= 100 or i == len(gp_space['gp_args']):
+                    if nrowchar >= 100 or i == len(gp_space.gp_args):
                         print()
                         nrowchar = 0
 
-            for key in ['size' , 'cs_indus_code']: 
-                gp_val = read_gp_data(key,gp_params.slice_date,gp_space.get('df_columns'))[0]
-                gp_val = Ts(gp_val , key)
-                gp_space[key] = gp_val
+            for gp_key in ['size' , 'indus']: 
+                gp_val = read_gp_data(gp_filename(gp_key),gp_space.slice_date,gp_space.df_columns)
+                gp_val = df2ts(gp_val , gp_key , gp_space.device)
+                gp_space.set(gp_key , gp_val)
 
-            if 'close_raw' in gp_space['gp_args']:
-                cp_raw = gp_space['gp_values'][gp_space['gp_args'].index('close_raw')]
+            if 'CP' in gp_space.gp_args:
+                CP = gp_space.gp_values[gp_space.gp_args.index('CP')]      
             else:
-                cp_raw = Ts(read_gp_data('close_raw',gp_params.slice_date,gp_space.get('df_columns'))[0] , 'close_raw')
-            
-            labels = F.ts_delay(F.pctchg(cp_raw, 10) , -11)  # t+1至t+11的收益率
-            labels = F.neutralize_2d(labels, gp_space['size'], gp_space['cs_indus_code'])  # 市值行业中性化
+                CP = df2ts(read_gp_data(gp_filename('CP'),gp_space.slice_date,gp_space.df_columns) , 'CP' , gp_space.device)    
+            gp_space.universe   = ~CP.isnan() 
+            gp_space.labels_raw = gp_get_labels(CP , gp_space.size , gp_space.indus)
+            os.makedirs(_DIR_pack , exist_ok=True)
+            torch.save(gp_space.subset(package_require , require = True) , package_path)
 
-            gp_space['universe']   = ~cp_raw.isnan()
-            gp_space['labels_raw'] = labels
-            gp_space['labels_res'] = copy.deepcopy(labels)
-            torch.save(gp_space , package_path)
-        if gp_params.verbose: print(f' --> {len(gp_params.gp_fac_list)} factors, {len(gp_params.gp_raw_list)} raw data loaded!')
+    if gp_space.verbose: print(f'  --> {len(gp_space.gp_fac_list)} factors, {len(gp_space.gp_raw_list)} raw data loaded!')
+    gp_fmanager.save_states({'params':gp_params.__dict__,'df_axis':gp_space.subset(['df_index' , 'df_columns'])} , i_iter = 0) # useful to assert same index as package data
 
-    gp_space['insample']  = (gp_space['df_index'] >= gp_params.slice_date[0]) * (gp_space['df_index'] <= gp_params.slice_date[1])
-    gp_space['outsample'] = (gp_space['df_index'] >= gp_params.slice_date[2]) * (gp_space['df_index'] <= gp_params.slice_date[3])
-    gp_space['gp_timer'] = gp_timer
+    gp_space.insample  = torch.Tensor((gp_space.df_index >= gp_space.slice_date[0]) * (gp_space.df_index <= gp_space.slice_date[1])).to(gp_space.device).bool()
+    gp_space.outsample = torch.Tensor((gp_space.df_index >= gp_space.slice_date[2]) * (gp_space.df_index <= gp_space.slice_date[3])).to(gp_space.device).bool()
+    gp_space.insample_2d = gp_space.insample.reshape(-1,1).expand(gp_space.labels_raw.shape)
+    gp_space.mem_manager = MemoryManager(0)
     return gp_space
 
-def gp_data_filename(gp_key : str):
+def gp_get_labels(CP = None , neutral_factor = None , neutral_group = None , nday = 10 , delay = 1 , 
+                  slice_date = None, df_columns = None , device = None):
+    if CP is None:
+        CP = df2ts(read_gp_data(gp_filename_converter()('CP'),slice_date,df_columns) , 'CP' , device)    
+    labels = MF.ts_delay(MF.pctchg(CP, nday) , -nday-delay)  # t+1至t+11的收益率
+    neutral_x = MF.neutralize_xdata_2d(neutral_factor, neutral_group)
+    return MF.neutralize_2d(labels, neutral_x , inplace=True)  # 市值行业中性化
+
+def gp_filename_converter():
     '''
     ------------------------ gp input data filenames ------------------------
     原始因子名与文件名映射
     input:
-        gp_key:      key of gp data
-    output:
-        gp_filename: basename of input data
-    '''
-    raw = gp_key.endswith('_raw')
-    k   = gp_key[:-4] if raw else gp_key
-    if k == 'open1':
-        v = f'open'
-    elif k == 'bp':
-        v = f'{k}_lf'
-    elif k in ['ep' , 'ocfp']:
-        v = f'{k}_ttm'
-    elif k == 'dp':
-        v = 'dividendyield2'
-    elif k == 'rtn':
-        v = 'return1'
-    elif k in ['close']:
-        v = f'{k}_adj'
-    else:
-        v = k
-    return f'{v}_day.parquet' if raw or v in ['cs_indus_code' , 'size'] else f'{v}_zscore_day.parquet'
 
-def read_gp_data(gp_key,slice_date,stockcol=None,first_data=False,input_freq='D'):
+    output:
+        wrapper: function to convert gp_key into parquet filename 
+    '''
+
+    filename_dict = {'op':'open','hp':'high','lp':'low','vp':'vwap','cp':'close_adj',
+                     'vol':'volume','bp':'bp_lf','ep':'ep_ttm','ocfp':'ocfp_ttm',
+                     'dp':'dividendyield2','rtn':'return1','indus':'cs_indus_code'}
+    def wrapper(gp_key):
+        assert gp_key.isupper() or gp_key.islower() , gp_key
+
+        rawkey = gp_key.lower()
+        if rawkey in filename_dict.keys(): rawkey = filename_dict[rawkey]
+
+        zscore = gp_key.islower() and rawkey not in ['cs_indus_code' , 'size']
+
+        return f'{_DIR_data}/{rawkey}' + '_zscore' * zscore + '_day.parquet'
+    return wrapper
+
+def read_gp_data(filename,slice_date=None,df_columns=None,df_index=None,input_freq='D'):
     '''
     ------------------------ read gp data and convert to torch.tensor ------------------------
-    读取单个原始因子文件并转化成tensor，额外返回df表格的行列字典
+    读取单个原始因子文件并转化成tensor,额外返回df表格的行列字典
     input:
-        gp_key:      key of gp data
-        slice_date:  (insample_start, insample_end, outsample_start, outsample_end)
-        stockcol:    if not None, filter columns
-        first_data:  if True, return some gp dictionary members
+        filename:    filename gp data
+        slice_date:  [insample_start, insample_end, outsample_start, outsample_end]
+        df_columns:  if not None, filter columns
+        df_index     if not None, filter rows, cannot be used if slice_date given
         input_freq:  freq faster than day should code later
     output:
         ts:          result tensor
         df_indexes:  index and columns if first_data is True
     '''
-    file = f'{_DIR_data}/{gp_data_filename(gp_key)}'
-    df = pd.read_parquet(file, engine='fastparquet')
+    df = pd.read_parquet(filename, engine='fastparquet')
     df.index = pd.to_datetime(df.index)
     df = df.sort_index()
     if slice_date is not None: 
         df = df[(slice_date[0] <= df.index.values) & (df.index.values <= slice_date[-1])] # 训练集首日至测试集末日
     # if freq!='D': df = df.groupby([pd.Grouper(level=0, freq=freq)]).last()
-    df = df[stockcol] if stockcol is not None else df # 选取指定股票
+    if df_columns is not None: df = df.loc[:,df_columns]# 选取指定股票
+    if slice_date is None and df_index is not None: df = df.loc[df_index]
+    return df
 
-    if first_data:
-        df_indexes = {
-            'df_columns' : df.columns.values ,
-            'df_index': df.index.values , # 日期行
-        }
-    else:
-        df_indexes = None
-
-    ts = torch.FloatTensor(df.values)
-    return (ts , df_indexes)
+def df2ts(x , gp_key = '' , device = None , share_memory = True):
+    # additional treatment based by gp_key
+    if isinstance(x , pd.DataFrame): x = torch.FloatTensor(x.values)
+    if gp_key == 'DP': # raw dividend factor , nan means 0
+        x.nan_to_num_()
+    if isinstance(x , torch.Tensor):
+        if device is not None: x = x.to(device)
+        if share_memory: x.share_memory_() # 执行多进程时使用：将张量移入共享内存
+    return x
 
 # %%
-def gp_population(toolbox , pop_num , **kwargs):
+def gp_syntax2value(compiler , individual , gp_values , process_stream = 'inf_trim_norm' , neut_method = 0 , i_iter = 0 ,
+                    gp_timer = gpTimer() , **kwargs):
     '''
-    ------------------------ create gp toolbox ------------------------
-    初始化种群
+    ------------------------ calculate individual syntax factor value ------------------------
+    根据迭代出的因子表达式,计算因子值
+    计算因子时容易出现OutOfMemoryError,如果出现了异常处理一下,所以代码比较冗杂
     input:
-        gp_args:    initial gp factor names
-        i_iter:     i of outer loop
-        pop_num:    population number
+        compiler:     compiler function to realize syntax computation, i.e. return factor function of given syntax
+        individual:   individual syntax, e.g. sigmoid(rank_sub(ts_y_xbtm(turn, DP , 15, 4), hp)) 
+        gp_values:    initial population factor values
+        timer:        record compile time
     output:
-        toolbox:    toolbox that contains all gp utils
-        population: initial population of syntax
+        factor_value: 2d tensor
     '''
-    population = toolbox.population(n = pop_num) #type:ignore
-    population = toolbox.prune(population) #type:ignore
-    return population
+    #print(individual)
+    with gp_timer.acc_timer('compile'): 
+        try:
+            func = compiler(individual)
+        except Exception as e:
+            print(e)
+            raise Exception(e)
+        finally:
+            pass
+        
+    with gp_timer.acc_timer('eval'):
+        try:
+            factor_value = func(*gp_values)
+            factor_value = FF.process_factor(factor_value , process_stream , dim = 1)
+        except torch.cuda.OutOfMemoryError as e:
+            print(f'OutOfMemoryError when calculating {str(individual)}')
+            torch.cuda.empty_cache()
+            factor_value = MF.invalid
+        except Exception as e:
+            print(e)
+            raise Exception(e)
+        finally:
+            pass
+
+    with gp_timer.acc_timer('neutralize'):
+        neut_method = neut_method * (i_iter > 0)
+        try:
+            if neut_method == 0 or kwargs['labels_neutra'] is None: #or MF.is_invalid(kwargs['labels_neutra'])
+                pass
+            elif neut_method == 1:
+                shape2d = factor_value.shape
+                factor_value = MF.neutralize_1d(y = factor_value.reshape(-1) , 
+                                                x = kwargs['labels_neutra'].reshape(-1,kwargs['labels_neutra'].shape[-1]) , 
+                                                insample = kwargs['insample_2d'].reshape(-1))
+                if not MF.is_invalid(factor_value): factor_value = factor_value.reshape(shape2d)
+            elif neut_method == 2:
+                factor_value = MF.neutralize_2d(factor_value , kwargs['labels_neutra'])
+            else:
+                raise KeyError(neut_method)
+        except torch.cuda.OutOfMemoryError as e:
+            print(f'OutOfMemoryError when neutralizing {str(individual)}')
+            torch.cuda.empty_cache()
+            factor_value = MF.invalid
+        except Exception as e:
+            print(e)
+            raise Exception(e)
+        finally:
+            pass
+
+    return factor_value
 
 # %%
-def evaluate(individual, pool_skuname, compiler , gp_values , labels_raw , labels_res, universe, insample , outsample , size , gp_timer , 
+def evaluate(individual, pool_skuname, compiler , gp_values , labels_raw , labels_res, universe, insample , outsample , gp_fitness , i_iter, 
+             gp_timer = gpTimer(), gp_fmanager = gpFileManager() , mem_manager = MemoryManager() , 
              const_annual = 24 , min_coverage = 0.5 , **kwargs):
     '''
     ------------------------ evaluate individual syntax fitness ------------------------
-    从因子表达式起步，生成因子并计算适应度
+    从因子表达式起步,生成因子并计算适应度
     input:
-        individual:     individual syntax, e.g. sigmoid(rank_sub(ts_grouping_decsortavg(turn, dp_raw , 15, 4), high)) 
+        individual:     individual syntax, e.g. sigmoid(rank_sub(ts_y_xbtm(turn, DP , 15, 4), hp)) 
         pool_skuname:   pool skuname in pool.imap, e.g. iter0_gen0_0
         compiler:       compiler function to realize syntax computation, i.e. return factor function of given syntax
         gp_values:      initial population factor values
@@ -307,339 +399,439 @@ def evaluate(individual, pool_skuname, compiler , gp_values , labels_raw , label
         min_coverage:   minimum daily coverage
     output:
         tuple of (
-            abs_rankir: (abs(insample_resid), ) # !! Fitness definition 
-            rankir:     (insample_resid, outsample_resid, insample_raw, outsample_raw)
+            abs_rankir: (abs(insample_res), ) # !! Fitness definition 
+            rankir:     (insample_res, outsample_res, insample_raw, outsample_raw)
         )
     '''
-    if int(pool_skuname.split('_')[-1])%100 == 0:
-        start_time_sku = time.time()
-        output_path = f'{_DIR_job}/z_{pool_skuname}.txt'
-        with open(output_path, 'w', encoding='utf-8') as file1:
-            print(str(individual),'\n start_time',time.ctime(start_time_sku),file=file1)
-
-    # compile syntax and calculate factors
-    factor_func  = gp_compile(compiler , individual , gp_timer.acc_timer('compile'))
-    factor_value = gp_factor(factor_func , gp_values , gp_timer.acc_timer('eval'))
+    gp_fmanager.update_sku(individual, pool_skuname)
+    factor_value = gp_syntax2value(compiler,individual,gp_values,gp_timer=gp_timer,i_iter=i_iter,**kwargs)
+    # mem_manager.check('factor')
     
-    rankir_list = []
-    for resid in [True , False]:
-        labels = labels_res if resid else labels_raw
-        rankic_full = F.rankic_2d(factor_value , labels , dim = 1 , universe = universe , min_coverage = min_coverage)
-        for is_insample in [True , False]:
-            rankic = rankic_full[insample] if is_insample else rankic_full[outsample]
-            if rankic.isnan().sum() > 0.5 * len(rankic):
-                # if too many nan rank_ic (due to low coverage)
-                rankir_list.append(torch.nan)
-            else:
-                rankic_std = (rankic - rankic.nanmean()).square().nanmean().sqrt() + 1e-6
-                rankir_samp = (rankic.nanmean() / rankic_std * np.sqrt(const_annual)) # 年化 ir
-                rankir_samp[rankir_samp.isinf()] = torch.nan
-                rankir_list.append(rankir_samp.nan_to_num().cpu())
-    return (abs(rankir_list[0]),) , rankir_list
+    metrics = torch.zeros(8).to(factor_value)
+    if not MF.is_invalid(factor_value): 
+        for i , labels in enumerate([labels_res , labels_raw]):
+            rankic_full = MF.rankic_2d(factor_value , labels , dim = 1 , universe = universe , min_coverage = min_coverage)
+            for j , sample in enumerate([insample , outsample]):
+                if MF.is_invalid(rankic_full): continue
+                rankic = rankic_full[sample]
+                if rankic.isnan().sum() < 0.5 * len(rankic): # if too many nan rank_ic (due to low coverage)
+                    rankic_avg  = rankic.nanmean()
+                    rankic_std  = (rankic - rankic_avg).square().nanmean().sqrt() 
+                    metrics[4*i + 2*j + 0] = rankic_avg.item() * const_annual
+                    metrics[4*i + 2*j + 1] = (rankic_avg / (rankic_std + 1e-6) * np.sqrt(const_annual)).item()
+    
+    individual.if_valid = not MF.is_invalid(factor_value)
+    individual.metrics  = metrics.cpu().numpy()
+    individual.fitness.values = gp_fitness.fitness_value(individual.metrics , as_abs=True)      
+    # mem_manager.check('rankic')
+    return individual
 
-def gp_compile(compiler , individual , timer = gpTimer.EmptyTimer() , **kwargs):
-    '''
-    ------------------------ calculate individual syntax factor value ------------------------
-    根据迭代出的因子表达式，计算因子值 , 基于函数表达式构建函数：deap.base.Toolbox().compile
-    input:
-        compiler:     compiler function to realize syntax computation, i.e. return factor function of given syntax
-        individual:   individual syntax, e.g. sigmoid(rank_sub(ts_grouping_decsortavg(turn, dp_raw , 15, 4), high)) 
-        timer:        record compile time
-    output:
-        func:         function of a syntax
-    '''
-    with timer:
-        func = compiler(individual)
-
-    return func
-
-def gp_factor(func , gp_values , timer = gpTimer.EmptyTimer() , **kwargs):
-    '''
-    ------------------------ calculate individual factor value ------------------------
-    根据迭代出的因子表达式，计算因子值 , 基于函数表达式构建函数：deap.base.Toolbox().compile
-    input:
-        func:         function of syntax
-        gp_values:    initial population factor values
-        timer:        record compile time
-    output:
-        factor_value: 2d tensor
-    '''
-    with timer:
-        factor_value = func(*gp_values)
-        factor_value = process_factor(factor_value , 'inf' , dim = 1)
-        
-    return factor_value
-
-def process_factor(value , process_key = 'inf_trim_norm' , dim = 1 , trim_ratio = 7. , 
-                   size = None , cs_indus_code = None , **kwargs):
-    '''
-    ------------------------ process factor value ------------------------
-    处理因子值 , 'inf_trim/winsor_norm_neutral_nan'
-    input:
-        value:         factor value to be processed
-        process_key:   can be any of 'inf_trim/winsor_norm_neutral_nan'
-        dim:           default to 1
-        trim_ratio:    what extend can be identified as outlier? range is determined as med ± trim_ratio * brandwidth
-        size:          market cap (neutralize param)
-        cs_indus_code: industry indicator (neutralize param)
-    output:
-        value:         processed factor value
-    '''
-    assert isinstance(value , torch.Tensor)
-
-    if 'inf' in process_key or ('trim' not in process_key and 'winsor' not in process_key):
-        value[value.isinf()] = torch.nan
-
-    if 'trim' in process_key or 'winsor' in process_key:
-        med       = value.nanmedian(dim , keepdim=True).values
-        bandwidth = value.nanquantile(0.75 , dim , keepdim=True) - value.nanquantile(0.25 , dim , keepdim=True)
-        lbound , ubound = med - trim_ratio * bandwidth , med + trim_ratio * bandwidth
-        if 'trim' in process_key:
-            value[(value > ubound) + (value < lbound)] = torch.nan
-        else:
-            value = torch.where(value > ubound , ubound , value)
-            value = torch.where(value < lbound , lbound , value)
-
-    if 'norm' in process_key: value = F.zscore(value , dim = dim)
-    # '市值中性化（对x做，现已取消，修改为对Y做）'
-    # if 'neutral' in method: value = F.neutralize_2d(value , size , cs_indus_code , dim = dim) 
-    if 'nan' in process_key: value = value.nan_to_num_()
-    return value
+def evaluate_pop(population , toolbox , i_iter = 0, i_gen = 0, pool_num = 1 , desc = 'Evolve Generation' , **kwargs):
+    changed_pop   = [ind for ind in population if not ind.fitness.valid]
+    pool_skunames = [f'iter{i_iter}_gen{i_gen}_{i}' for i in range(len(changed_pop))] # 'pool_skuname' arg for evaluate
+    def desc0(x):
+        return (f'  --> {desc} {str(i_gen)} ' +'MaxIRres{:+.2f}|MaxIRraw{:+.2f}'.format(*x))
+    maxir = [0.,0.]
+    def maxir_(m , ind):
+        if abs(ind.metrics[1]) > abs(m[0]): m[0] = ind.metrics[1] 
+        if abs(ind.metrics[5]) > abs(m[1]): m[1] = ind.metrics[5]
+        return m
+     # record max_fit0 and show
+    if pool_num > 1:
+        pool = Pool(pool_num)
+        #changed_pop = pool.starmap(toolbox.evaluate, zip(changed_pop, pool_list), chunksize=1)
+        iterator = tqdm(pool.imap(toolbox.evaluate, zip(changed_pop, pool_skunames)), total=len(changed_pop))
+        [iterator.set_description(desc0(maxir := maxir_(maxir,ind))) for ind in iterator]
+        pool.close()
+        pool.join()
+        # pool.clear()
+    else:
+        #changed_pop = list(tqdm(toolbox.map(toolbox.evaluate, changed_pop, pool_skunames), total=len(changed_pop), desc=desc))
+        iterator = tqdm(toolbox.map(toolbox.evaluate, changed_pop, pool_skunames), total=len(changed_pop))
+        [iterator.set_description(desc0(maxir := maxir_(maxir,ind))) for ind in iterator]
+        #for ind in iterator:
+            # changed_pop.append(ind)
+            # iterator.set_description(desc0(maxir := maxir_(maxir,ind)))
+    
+    assert all([ind.fitness.valid for ind in population])
+    return population
 
 # %%
-def gp_eaSimple(toolbox , population , i_iter, pool_num=1,
-                n_gen=2,cxpb=0.35,mutpb=0.25,hof_num=10,start_gen=None,gp_timer=gpTimer(),verbose=__debug__,stats=None,**kwargs):  
-    """
-    ------------------------ Evolutionary Algorithm simple ------------------------
-    变异/进化小循环，从初始种群起步计算适应度并变异，重复n_gen次
+def gp_population(toolbox , pop_num , max_round = 100 , last_gen = [], forbidden = [] , **kwargs):
+    '''
+    ------------------------ create gp toolbox ------------------------
+    初始化种群
     input:
+        gp_args:    initial gp factor names
+        i_iter:     i of outer loop
+        max_round:  max iterations to approching 99% of pop_num
+        pop_num:    population number
+        last_gen:   starting population
+        forbidden:  all individuals with invalid return or goes in the the hof once
+    output:
         toolbox:    toolbox that contains all gp utils
         population: initial population of syntax
-        i_iter:     i of outer loop
-        pool_num:   multiprocessing pool number
-        n_gen:      [inner loop] generation number
-        cxpb:       [inner loop] crossover probability
-        mutpb:      [inner loop] mutation probability
-        hof_num:    halloffame number
-        start_gen:  which gen to start, if None start a new
-        gp_timer:   gpTimer to record time cost
+    '''
+    if last_gen: 
+        population = toolbox.indpop_prune(last_gen)
+        population = toolbox.deduplicate(population)
+    else:
+        population = []
+
+    for _ in range(max_round):
+        new_comer  = toolbox.population(n = int(pop_num * 1.2) - len(population))
+        new_comer  = toolbox.indpop_prune(new_comer)
+        new_comer  = toolbox.deduplicate(new_comer , forbidden = population + forbidden) 
+        population = population + new_comer[:pop_num - len(population)]
+        if len(population) >= 0.99 * pop_num: break
+    return population
+
+# %%
+def gp_evolution(toolbox , i_iter, pop_num , gp_fmanager , pool_num=1,
+                 n_gen=5,cxpb=0.35,mutpb=0.25,hof_num=10, surv_rate=0.8,select_offspring = '2Tour' , 
+                 forbid_record=[], forbidden_lambda = None , # forbidden_lambda = lambda x:all(i for i in x)
+                 start_gen=0,gp_timer=gpTimer(),verbose=__debug__,stats=None,**kwargs):  
+    """
+    ------------------------ Evolutionary Algorithm simple ------------------------
+    变异/进化[小循环],从初始种群起步计算适应度并变异,重复n_gen次
+    input:
+        toolbox:            toolbox that contains all gp utils
+        i_iter:             i of outer loop
+        pop_num:            population number
+        pool_num:           multiprocessing pool number
+        n_gen:              [inner loop] generation number
+        cxpb:               [inner loop] crossover probability
+        mutpb:              [inner loop] mutation probability
+        hof_num:            halloffame number
+        surv_rate:          [inner loop] how many last generation survivors can go down to next generation\
+        select_offspring:   [inner loop] can be 'best' , '2Tour' , 'Tour'
+        start_gen:          which gen to start, if None start a new
+        gp_timer:           gpTimer to record time cost
     output:
-        population: updated population of syntax
-        halloffame: container of individuals with best fitness (no more than hof_num)
-        logbook:    gp logbook
+        population:         updated population of syntax
+        halloffame:         container of individuals with best fitness (no more than hof_num)
+        forbidden:          all individuals with invalid return or goes in the the hof once
 
     ------------------------ basic code structure ------------------------
     evaluate(population)     # 对随机生成的初代种群评估IR值
     for g in range(n_gen)):
-        population = select(population, len(population))    # 选取abs(IR)值较高的个体，以产生后代
+        evaluate(population)   # 对新种群评估IR值
+        population = select(population, len(population))    # 选取abs(IR)值较高的个体,以产生后代
         offspring = varAnd(population, toolbox, cxpb, mutpb)   # 交叉、变异
-        evaluate(offspring)   # 对新种群评估IR值
         population = offspring    # 更新种群
     """
+    population , halloffame , forbidden = gp_fmanager.load_generation(i_iter , start_gen-1 , hof_num = hof_num , stats = stats)
+    forbidden += forbid_record
 
-    if start_gen is not None and start_gen > 0:
-        population = joblib.load(f'{_DIR_job}/pop_iter{i_iter}_{start_gen-1}.pkl')
-        halloffame = joblib.load(f'{_DIR_job}/hof_iter{i_iter}_{start_gen-1}.pkl')
-        logbook    = joblib.load(f'{_DIR_job}/log_iter{i_iter}_{start_gen-1}.pkl')
-    else:
-        start_gen = 0
-        logbook = tools.Logbook()
-        logbook.header = ['i_gen', 'n_evals'] + (stats.fields if stats else []) #type:ignore
-        halloffame = tools.HallOfFame(hof_num)
+    for i_gen in range(start_gen, n_gen):
+        if verbose and i_gen > 0: print(f'  --> Survive {len(population)} Offsprings, try Populating to {pop_num} ones')
+        population = gp_population(toolbox , pop_num , last_gen = population , forbidden = forbidden)
+        #print([str(ind) for ind in population[:20]])
+        population = toolbox.indpop2syxpop(population)
+        #print([str(ind) for ind in population[:20]])
+        if verbose and i_gen == 0: print(f'**A Population({len(population)}) has been Initialized')
 
-    # Begin the generational process
-    for i_gen in range(start_gen, n_gen + 1):
-        if i_gen == 0:
-            offspring = population
+        # Evaluate the new population
+        population = toolbox.evaluate_pop(population , i_iter = i_iter, i_gen = i_gen , pool_num = pool_num , **kwargs)
+
+        # check survivors
+        survivors  = [ind for ind in population if ind.if_valid]
+        forbidden += [ind for ind in population if not ind.if_valid or (False if forbidden_lambda is None else forbidden_lambda(ind.fitness.values))]
+        # Update HallofFame with survivors 
+        halloffame.update(survivors)
+        forbidden += halloffame
+
+        # Selection of population to pass to next generation, consider surv_rate
+        if select_offspring == 'best': 
+            offspring = toolbox.select_best(population , min(int(surv_rate * pop_num) , len(population)))
+        elif select_offspring in ['Tour' , '2Tour']: 
+            # '2Tour' will incline to choose shorter ones
+            # around 49% will survive
+            offspring = getattr(toolbox , f'select_{select_offspring}')(population , len(population))
         else:
-            # Select the next generation individuals，based on abs(IR)
-            offspring = toolbox.select(population, len(population))
-            # Vary the pool of individuals: varAnd means variation part (crossover and mutation)
-            with gp_timer.acc_timer('varAnd'):
-                offspring = varAnd(offspring, toolbox, cxpb , mutpb)
-                offspring = toolbox.prune(offspring) #type:ignore
+            raise KeyError(select_offspring)
+        offspring = toolbox.syxpop2indpop(list(set(offspring)))
 
-        # Re-Evaluate the individuals with an invalid fitness（对于发生改变的个体，重新评估abs(IR)值）
-        invalid_ind = [ind for ind in offspring if not ind.fitness.valid] # 'individual' arg for evaluate
-        pool_list = [f'iter{i_iter}_gen{i_gen}_{i}' for i in range(len(invalid_ind))] # 'pool_skuname' arg for evaluate
-        if pool_num > 1:
-            pool = Pool(pool_num)
-            fitnesses = list(tqdm(pool.imap(toolbox.evaluate, invalid_ind, pool_list), total=len(invalid_ind), desc="gen"+str(i_gen))) #type:ignore
-            #fitnesses = pool.starmap(toolbox.evaluate, zip(invalid_ind, pool_list), chunksize=1)
-            pool.close()
-            pool.join()
-            # pool.clear()
-        else:
-            fitnesses = toolbox.map(toolbox.evaluate, invalid_ind, pool_list)
-        
-        for ind, fit in zip(invalid_ind, fitnesses):
-            #ind.fitness.values , ind.ir_list = tuple([fit[0]]) , fit[1] #type:ignore
-            ind.fitness.values , ind.ir_list = fit #type:ignore
+        # Variation offsprings
+        with gp_timer.acc_timer('varAnd'):
+            population = varAnd(offspring, toolbox, cxpb , mutpb) # varAnd means variation part (crossover and mutation)
+        # Dump population , halloffame , forbidden in logbooks of this generation
+        gp_fmanager.dump_generation(population, halloffame, forbidden , i_iter , i_gen , **(stats.compile(survivors) if stats else {}))
 
-        # Update the hall of fame with the generated individuals
-        halloffame.update(offspring)
-
-        # Replace the current population by the offspring
-        population[:] = offspring
-
-        # Append the current generation statistics to the logbook
-        record = stats.compile(population) if stats else {}
-        logbook.record(i_gen=i_gen, n_evals=len(invalid_ind), **record)
-        if verbose: [print(' -->   ' + s) for s in str(logbook.stream).split('\n')]
-        joblib.dump(population, f'{_DIR_job}/pop_iter{i_iter}_{i_gen}.pkl')
-        joblib.dump(halloffame, f'{_DIR_job}/hof_iter{i_iter}_{i_gen}.pkl')
-        joblib.dump(logbook   , f'{_DIR_job}/log_iter{i_iter}_{i_gen}.pkl')
-
-    return population, halloffame , logbook
+    print(f'**A HallofFame({len(halloffame)}) has been ' + ('Loaded' if start_gen >= n_gen else 'Evolutionized'))
+    gp_fmanager.dump_generation(population, halloffame, forbidden , i_iter = i_iter , i_gen = -1)
+    return population, halloffame, forbidden
 
 # %%
-def gp_hof_eval(toolbox , halloffame, i_iter , gp_values ,
-                ir_floor=2.5,corr_cap=0.7,gp_timer=gpTimer(),verbose=__debug__,**kwargs):
+def gp_selection(toolbox,halloffame,i_iter,gp_values,ir_floor=2.5,ir_floor_decay=0.9,corr_cap=0.7,insample = None,
+                 gp_fmanager=gpFileManager(),gp_timer=gpTimer(),mem_manager=MemoryManager(),device=None,
+                 test_code=False,verbose=__debug__,**kwargs):
     """
     ------------------------ gp halloffame evaluation ------------------------
-    筛选因子表达式，并加入名人堂中，标准是高ir、低相关
+    筛选精英群体中的因子表达式,以高ir、低相关为标准筛选精英中的精英
     input:
-        toolbox:       toolbox that contains all gp utils
-        halloffame:    container of individuals with best fitness
-        i_iter:        i of outer loop
-        gp_values:     initial population factor values
-        ir_floor:      [outer loop] rankir threshold
-        corr_cap:      [outer loop] cap of correlation with existing factors
-        gp_timer:      gpTimer to record time cost
+        toolbox:        toolbox that contains all gp utils
+        halloffame:     container of individuals with best fitness
+        i_iter:         i of outer loop
+        gp_values:      initial population factor values
+        ir_floor:       [outer loop] rankir threshold
+        ir_floor_decay: [outer loop] rankir threshold decay factor for iterations
+        corr_cap:       [outer loop] cap of correlation with existing factors
+        gp_timer:       gpTimer to record time cost
     output:
-        halloffame:    new container of individuals with best fitness
-        hof_good_list: good hof values who pass the criterions
+        halloffame:     new container of individuals with best fitness
+        hof_elites:     elite hof values who pass the criterions
     """
     
-    if i_iter > 0 and os.path.exists(f'{_DIR_job}/good_log.csv'): 
-        good_log = pd.read_csv(f'{_DIR_job}/good_log.csv',index_col=0)
+    elite_log , hof_log = gp_fmanager.load_states(['elitelog' , 'hoflog'] , i_iter = i_iter)
+    hof_elites = gpEliteGroup(start_i_elite = len(elite_log) , device=device).assign_logs(hof_log = hof_log , elite_log = elite_log)
+    infos = pd.DataFrame([[i_iter,-1,gpHandler.ind2str(ind),ind.if_valid,False,0.] for ind in halloffame] , 
+                           columns = ['i_iter','i_elite','syntax','valid','elite','max_corr'])
+    metrics = pd.DataFrame([getattr(ind,'metrics') for ind in halloffame] , columns = kwargs['fit_weights'].keys()) #.reset_index(drop=True)
+    new_log = pd.concat([infos , metrics] , axis = 1)
+
+    ir_floor = ir_floor * (ir_floor_decay**i_iter)
+    new_log.elite = new_log.valid & (new_log.rankir_in_res.abs() > ir_floor) & (new_log.rankir_out_res != 0.)
+    print(f'**HallofFame({len(halloffame)}) Contains {new_log.elite.sum()} Promising Candidates with RankIR >= {ir_floor:.2f}')
+    if new_log.elite.sum() <= 0.1 * len(halloffame):
+        # Failure of finding promising offspring , check if code has bug
+        print(f'  --> Failure of Finding Enough Promising Candidates, Check if Code has Bugs ... ')
+        print(f'  --> Valid Hof({new_log.valid.sum()}), insample max ir({new_log.rankir_in_res.abs().max():.4f})')
+
+    for i , hof in enumerate(halloffame):
+        if not new_log.loc[i,'elite']: continue
+
+        # 根据迭代出的因子表达式,计算因子值, 错误则进入下一循环
+        factor_value = gp_syntax2value(toolbox.compile,hof,gp_values,gp_timer=gp_timer,i_iter=i_iter,**kwargs)
+        mem_manager.check('factor')
+        
+        new_log.loc[i,'elite'] = not MF.is_invalid(factor_value)
+        if not new_log.loc[i,'elite']: continue
+
+        # 与已有的因子库"样本内"做相关性检验,如果相关性大于预设值corr_cap则进入下一循环
+        corr_values , exit_state = hof_elites.max_corr_with_me(factor_value, abs_corr_cap=corr_cap, dim=1,dim_valids=(insample,None) , syntax = new_log.syntax[i])
+        new_log.loc[i,'max_corr'] = round(corr_values[corr_values.abs().argmax()].item() , 4)
+        new_log.loc[i,'elite'] = not exit_state
+        mem_manager.check('corr')
+
+        if not new_log.loc[i,'elite']: continue
+
+        # 通过检验,加入因子库
+        new_log.loc[i,'i_elite'] = hof_elites.i_elite
+        hof_elites.append(new_log.syntax[i] , factor_value , IR = new_log.rankir_in_res[i] , Corr = new_log.max_corr[i] , starter=f'  --> Hof{i:_>3d}/')
+        if False and test_code: gp_fmanager.save_state(factor_value , 'parquet' , i_iter , i_elite = hof_elites.i_elite)
+        mem_manager.check(showoff = verbose and test_code, starter = '  --> ')
+
+    hof_elites.update_logs(new_log)
+    gp_fmanager.save_states({'elitelog' : hof_elites.elite_log.round(6) , 'hoflog' : hof_elites.hof_log.round(6)} , i_iter = i_iter)
+    elites = hof_elites.compile_elite_tensor(device=device).elite_tensor
+    
+    print(f'**An EliteGroup({elites.shape[-1]}) has been Selected')
+    if True or verbose: 
+        print(f'  --> Cuda Memories of "gp_values" take {MemoryManager.object_memory(gp_values):.4f}G')
+        print(f'  --> Cuda Memories of "elites"    take {MemoryManager.object_memory(elites):.4f}G')
+        print(f'  --> Cuda Memories of "others"    take {MemoryManager.object_memory(kwargs):.4f}G')
+
+    del hof_elites
+    return elites
+
+def gp_residual(elites, labels_res, insample, i_iter = 0, svd_mat_method = 'coef_with_y' , residual_type = 'svd', 
+                svd_top_ratio = 0.5 , gp_fmanager=gpFileManager(),mem_manager=MemoryManager(), **kwargs):
+    if MF.is_invalid(elites): return labels_res , elites
+    assert residual_type in ['svd'] , residual_type #  'all'
+    assert svd_mat_method in ['coef_with_y' , 'total'] , svd_mat_method
+    #print(labels_res.isnan().sum() , labels_res.numel())
+    #print(MF.nanstd(labels_res , -1))
+    labels_res_new = copy.deepcopy(labels_res)
+    if residual_type == 'svd':
+        if svd_mat_method == 'total':
+            elites_mat = FF.factor_coef_total(elites[insample],dim=-1)
+        else:
+            elites_mat = FF.factor_coef_with_y(elites[insample], labels_res[insample].unsqueeze(-1), corr_dim=1, dim=-1)
+        elites = FF.top_svd_factors(elites_mat, elites, top_ratio=svd_top_ratio, dim=-1 , inplace = True) # use svd factors instead
+        print(f'Elites({elites.shape[-1]}) Shrink to SvdElites({elites.shape[-1]})')
+        labels_res_new = MF.neutralize_2d(labels_res_new, elites , inplace = True) 
     else:
-        good_log = pd.DataFrame(columns=['i_iter','i_good','sytax','max_corr',
-                                         'rankir_in_resid','rankir_out_resid','rankir_in','rankir_out'])
-
-    hof_good_list = []
-    i_good = 0
-    for hof_single in halloffame:
-        if ((hof_single.fitness.values[0] > ir_floor) and  # icir larger than floor
-            (hof_single.ir_list[1] != 0)): # icir_out_resid not zero (i.e. not nan)
-            
-            # 根据迭代出的因子表达式，计算因子值
-            factor_func  = gp_compile(toolbox.compile , hof_single , gp_timer.acc_timer('compile'))
-            factor_value = gp_factor(factor_func , gp_values , gp_timer.acc_timer('eval'))
-
-            # 与已有的因子库做相关性检验，如果相关性大于预设值corr_cap，则不加入因子库
-            high_correlation = False
-            corr_values = torch.zeros(len(hof_good_list)).to(factor_value)
-            for i , hof_good in enumerate(hof_good_list):
-                corr_values[i] = F.corrwith(factor_value, hof_good, dim=1).nanmean().abs() # F.corrwith(factor_value, hof_good).abs()
-                if high_correlation := (corr_values[i] > corr_cap): break
-
-            # 如果通过相关性检验，则加入因子库
-            if not high_correlation:
-                max_corr = 0. if len(corr_values) == 0 else corr_values.nan_to_num().max()
-                print(f' --> Good {i_good}: ' + f'RankIR {hof_single.fitness.values[0]:.2f} ' + 
-                      f'MaxCorr {max_corr:.2f}: {str(hof_single)}')
-
-                hof_good_list.append(factor_value)
-                df = pd.DataFrame(data=factor_value.cpu().numpy() , index=kwargs['df_index'] , columns=kwargs['df_columns'])
-                df.to_parquet(f'{_DIR_job}/factor/iter{i_iter}_good{i_good}.parquet', engine='fastparquet')
-
-                df = pd.DataFrame([[i_iter,i_good,str(hof_single),max_corr,*hof_single.ir_list]],columns=good_log.columns) # new good_log
-                good_log = pd.concat([good_log,df],axis=0) if len(good_log) else df
-
-                i_good += 1
-    good_log.to_csv(f'{_DIR_job}/good_log.csv')
-    return halloffame , hof_good_list
+        labels_res_new = MF.neutralize_2d(labels_res_new, elites , inplace = True) 
+    #print(labels_res_new.isnan().sum() , labels_res.numel())
+    #print(MF.nanstd(labels_res_new , -1))
+    mem_manager.check(showoff = True)
+    gp_fmanager.save_state(labels_res_new, 'labels_res_new', i_iter) # neutralize to all elites
+    gp_fmanager.save_state(elites        , 'labels_neutra' , i_iter) # neutralize to all elites
+    return labels_res_new , elites
 
 # %%
-def outer_loop(i_iter , gp_space):
+def outer_loop(i_iter , gp_space , start_gen = 0):
     """
     ------------------------ gp outer loop ------------------------
-    大循环主程序，初始化种群、变异、筛选、更新残差labels、记录
+    一次[大循环]的主程序,初始化种群、变异、筛选、更新残差labels
     input:
         i_iter:   i of outer loop
         gp_space:  dict that includes gp parameters, gp datas and gp arguements, and various other datas
-    output:
-        None
-    process:
-        gp_population : create initial population
-        gp_eaSimple   : Evolutionary Algorithm simple
-        gp_hof_eval   : gp halloffame evaluation
-        update labels : update labels_res , according to hof_good_list
     """
     timenow = time.time()
-    gp_space['i_iter'] = i_iter
+    gp_space.i_iter = i_iter
+
+    '''初始化遗传规划Toolbox'''
+    with gp_space.gp_timer('Setting' , print_str = f'**Initialize GP Toolbox') as ptimer:
+        toolbox = gpHandler.Toolbox(eval_func = evaluate , eval_pop = evaluate_pop , **gp_space)
+        gp_space.gp_fmanager.update_toolbox(toolbox)
+
+    '''进行进化与变异,生成种群、精英和先祖列表'''
+    with gp_space.gp_timer('Evolution' , print_str = f'**{gp_space.n_gen - start_gen} Generations of Evolution' , memory_check = True) as ptimer:
+        _ , halloffame, forbidden = gp_evolution(toolbox , start_gen = start_gen , **gp_space)  #, start_gen=6   #algorithms.eaSimple
+        gp_space.update(forbid_record = forbidden)
     
-    '''Initialize GP toolbox and Population'''
-    with gp_space['gp_timer']('Population' , print_str = f'**Initialize GP Toolbox and Population of {gp_space["pop_num"]}'):
-        toolbox = gpHandler.Toolbox(eval_func=evaluate , **gp_space)
-        population = gp_population(toolbox , **gp_space)
-    
-    '''运行进化主程序'''
-    with gp_space['gp_timer']('Evolution' , print_str = f'**Apply {gp_space["n_gen"]} Generations of Evolution Algorithm'):
-        population, halloffame, logbook = gp_eaSimple(toolbox , population , **gp_space)  #, start_gen=6   #algorithms.eaSimple
+    '''衡量精英,筛选出符合所有要求的精英中的精英'''
+    with gp_space.gp_timer('Selection' , print_str = f'**Selection of HallofFame' , memory_check = True) as ptimer:
+        elites = gp_selection(toolbox , halloffame, **gp_space)
 
-    '''good_log文件为因子库，存储了因子表达式、rankIR值等信息。在具体因子值存储在factor文件夹的parquet文件中'''
-    with gp_space['gp_timer']('Selection' , print_str = f'**Select {gp_space["hof_num"]} HallofFame Offsprings and Save Factor Values if Meet Requirements'):
-        halloffame, hof_good_list = gp_hof_eval(toolbox , halloffame, **gp_space)
-
-    '''更新labels_res，并保存本轮循环的最终结果'''
-    with gp_space['gp_timer']('Neu_dump' , print_str = f'**Update Residual Labels and Dump Results'):
-        # update labels_resid, according to hof_good_list (maybe no need to neutralize according to size and indus)
-        gp_space['labels_res'] = F.neutralize_2d(gp_space['labels_res'], hof_good_list)
-        '''保存该轮迭代的最终种群、最优个体、迭代日志'''
-        joblib.dump(population,f'{_DIR_job}/pop_iter{i_iter}_overall.pkl')
-        joblib.dump(halloffame,f'{_DIR_job}/hof_iter{i_iter}_overall.pkl')
-        joblib.dump(logbook   ,f'{_DIR_job}/log_iter{i_iter}_overall.pkl')
-
-    gp_space['gp_timer'].append_time('AvgVarAnd' , gp_space['gp_timer'].acc_timer('varAnd').avgtime(pop_out = True))
-    gp_space['gp_timer'].append_time('AvgCompile', gp_space['gp_timer'].acc_timer('compile').avgtime(pop_out = True))
-    gp_space['gp_timer'].append_time('AvgEval',    gp_space['gp_timer'].acc_timer('eval').avgtime(pop_out = True))
-    gp_space['gp_timer'].append_time('All' , time.time() - timenow)
-    return 
+    '''更新残差标签,保存循环状态'''
+    with gp_space.gp_timer('Residual' , print_str = f'**Update Residual Labels' , memory_check = True) as ptimer:
+        labels_res , elites = gp_residual(elites , **gp_space)
+        gp_space.update(labels_res = labels_res , labels_neutra = torch.cat([gp_space.labels_neutra , elites] , dim=-1))
+        """
+        # elites_mat = FF.factor_coef_total(elites,dim=-1)
+        labels_res = gp_space.labels_res
+        elites_mat = FF.factor_coef_with_y(elites[gp_space.insample], labels_res[gp_space.insample].unsqueeze(-1), corr_dim=1, dim=-1)
+        svd_elites = FF.top_svd_factors(elites_mat, elites , top_ratio=0.5, dim=-1).cpu() # use svd factors instead
+        print(f'Elites({elites.shape[-1]}) Shrink to SvdElites({svd_elites.shape[-1]})')
+        labels_res_svd = copy.deepcopy(labels_res).cpu()
+        #gp_space.mem_manager.check(showoff = True)
+        labels_res_all = MF.neutralize_2d(labels_res, elites , inplace = True) 
+        del elites
+        #gp_space.mem_manager.check(showoff = True)
+        labels_res_svd = MF.neutralize_2d(labels_res_svd.to(gp_space.device), svd_elites.to(gp_space.device) , inplace = True) 
+        gp_space.gp_fmanager.save_state(labels_res_all, 'labels_res1', i_iter) # neutralize to all elites
+        gp_space.gp_fmanager.save_state(labels_res_svd, 'labels_res' , i_iter)  # neutralize to all elites svd components
+        gp_space.labels_res = labels_res_svd
+        """
+        
+    gp_space.gp_timer.append_time('AvgVarAnd' , gp_space.gp_timer.acc_timer('varAnd').avgtime(pop_out = True))
+    gp_space.gp_timer.append_time('AvgCompile', gp_space.gp_timer.acc_timer('compile').avgtime(pop_out = True))
+    gp_space.gp_timer.append_time('AvgEval',    gp_space.gp_timer.acc_timer('eval').avgtime(pop_out = True))
+    gp_space.gp_timer.append_time('All' , time.time() - timenow)
+    return
     
 def gp_factor_generator(**kwargs):
     '''
     ------------------------ gp factor generator ------------------------
-    构成因子生成器，返回一个函数，输入因子表达式则输出历史因子值
+    构成因子生成器,返回输入因子表达式则输出历史因子值的函数
     input:
-        kwargs:  specific gp_params members, suggestion is to leave it alone
+        kwargs:  specific gp parameters, suggestion is to leave it alone
     output:
         wrapper: lambda syntax:factor value
     '''
-    gp_space = gp_namespace(gp_parameters(train = False).update(kwargs))
-    toolbox = gpHandler.Toolbox(eval_func=evaluate , **gp_space)
+    gp_params = gp_parameters(train = False , **kwargs)
+    gp_space  = gp_namespace(gp_params)
+    
+    toolbox   = gpHandler.Toolbox(eval_func=evaluate , eval_pop=evaluate_pop , **gp_space)
         
     def wrapper(syntax , process_key = 'inf_trim_norm'):
-        func = toolbox.compile(syntax) #type:ignore
-        value = func(*gp_space['gp_values'])
-        value = process_factor(value , process_key , dim = 1)
+        func  = getattr(toolbox , 'compile')(syntax) 
+        value = func(*gp_space.gp_values)
+        value = FF.process_factor(value , process_key , dim = 1)
         return value
     
     return wrapper
 
+def gp_multifactor(job_id , from_saving = True , weight_scheme = 'ew' , 
+                   window_type = 'rolling' , window_len = 480 , weight_decay = 'constant' , 
+                   exp_halflife = 240 , ir_window = 240):
+    assert weight_scheme in ['ew' , 'ic' , 'ir']
+    assert window_type   in ['rolling' , 'full'] # 'insample' 
+    assert weight_decay  in ['constant' , 'linear' , 'exp']
+    if job_id < 0:
+        old_job_df = os.listdir('./pop/') if os.path.exists('./pop/') else []
+        old_job_id = np.array([id for id in old_job_df if id.isdigit()]).astype(int)
+        job_id = max(old_job_id)
+    DIR_job = f'{_DIR_pop}/{job_id}'
+    elite_path = f'{DIR_job}/elite_log.csv'
+    fac_paths = [f'{DIR_job}/factor/{p}' for p in os.listdir(f'{DIR_job}/factor')]
+    gp_factor = torch.Tensor()
+    if from_saving:
+        gp_filename = gp_filename_converter()
+
+        for path in tqdm(fac_paths , desc='Loading factor parquets'):
+            factor_df = read_gp_data(path)
+            gp_factor = MF.concat_factors(gp_factor , df2ts(factor_df , share_memory=False)) 
+
+        df_columns = factor_df.columns.values
+        df_index   = factor_df.index.values
+
+        
+    else:
+        elite_log  = pd.read_csv(elite_path,index_col=0)
+        gp_space = gp_namespace(gp_parameters(-1 , train = False , test_code= True))
+        toolbox = gpHandler.Toolbox(eval_func = evaluate , **gp_space)
+        population = gp_population(toolbox , **gp_space)
+        'ts_corr(TURN, TURN, 7)'
+
+    size  = df2ts(read_gp_data(gp_filename('size'),df_columns=df_columns,df_index=df_index) , 'size')
+    indus = df2ts(read_gp_data(gp_filename('indus'),df_columns=df_columns,df_index=df_index) , 'indus')
+    CP    = df2ts(read_gp_data(gp_filename('CP'),df_columns=df_columns,df_index=df_index) , 'CP')  
+    univ  = ~CP.isnan()
+    labels = gp_get_labels(CP , size , indus)
+    gp_factor[~univ] = torch.nan
+
+    n_factor = gp_factor.shape[-1]
+    if weight_scheme == 'ew':
+        multifactor = MF.zscore(gp_factor.nanmean(-1),-1)
+    else:
+        # rankic first
+        metric_full = torch.zeros(len(labels),n_factor).to(labels)
+        for i_factor in range(n_factor):
+            rankic = MF.rankic_2d(gp_factor[...,i_factor] , labels , dim = 1 , universe = univ , min_coverage = 0.)
+            metric_full[:,i_factor] = rankic
+        if weight_scheme == 'ir': metric_full = MF.ts_zscore(metric_full , ir_window)
+        
+        multifactor = torch.zeros_like(gp_factor[...,0])
+        ts_weight = FF.decay_weight(weight_decay , len(multifactor) , exp_halflife=exp_halflife)
+        for i in range(len(multifactor)):
+            if i < 10: continue
+            d = min(window_len , i) if window_type == 'rolling' else i
+            f_weight = ts_weight[:d].reshape(1,-1) @ metric_full[i-d:i]
+            factor_of_i = gp_factor[i] @ f_weight.reshape(-1,1)
+            multifactor[i] = factor_of_i.flatten()
+    
+    multifactor = pd.DataFrame(multifactor.cpu().numpy() , columns = df_columns , index = df_index)
+    return multifactor
+
 # %%
-def main(test_code = None , job_id = None):
+def main(job_id = None , start_iter = 0 , start_gen = 0 , test_code = False , noWith = False , **kwargs):
     """
     ------------------------ gp main process ------------------------
+    训练的主程序,[大循环]的过程出发点,从start_iter的start_gen开始训练
     input:
-        test_code: if only to test code validity
-        job_id:    when test_code is not True, determines _DIR_job = f'{_DIR_pop}/{job_id}'   
+        job_id:    when test_code is not True, determines job_dir = f'{_DIR_pop}/{job_id}'   
+        start_iter , start_gen: when to start, any of them has positive value means continue training
+        noWith:    to shutdown all timers (with xxx expression)
     output:
-        None
-    process:
-        for i_iter in n_iter:
-            outer_loop()
+        pfr:       profiler to record time cost of each function (only available in test_code model)
     """
-    time0 = time.time()
-    gp_space = gp_namespace(gp_parameters(test_code , job_id))
-    for i_iter in range(gp_space['n_iter']):
-        print(f' ------------------------------- Outer Loop {i_iter} -------------------------------')
-        outer_loop(i_iter , gp_space)
+    global _noWith
+    _noWith = noWith
+    with Profiler(doso = test_code) as pfr:
+        time0 = time.time()
+        gp_params = gp_parameters(job_id , continuation = start_iter>0 or start_gen>0 , test_code = test_code , **kwargs)
+        gp_space = gp_namespace(gp_params)
+        if start_iter == 0:
+            gp_space.labels_res = copy.deepcopy(gp_space.labels_raw)
+            gp_space.labels_neutra = MF.invalid
+        else:
+            gp_space.labels_res = gp_space.gp_fmanager.load_state('labels_res_new' , start_iter - 1).to(gp_space.device)
+            gp_space.labels_neutra = gp_space.gp_fmanager.load_state('labels_neutra' , start_iter - 1).to(gp_space.device)
+
+        for i_iter in range(start_iter , gp_space.n_iter):
+            print('=' * 20 + f' Iteration {i_iter} start from Generation {start_gen * (i_iter == start_iter)} ' + '=' * 20)
+            outer_loop(i_iter , gp_space , start_gen = start_gen * (i_iter == start_iter))
 
     hours, secs = divmod(time.time() - time0, 3600)
-    print(f'------------------------------- Total Time Cost :{hours:.0f} hours {secs/60:.1f} -------------------------------')
-    gp_space['gp_timer'].save_to_csv(f'{_DIR_job}/saved_times.csv' , print_out = True)
+    print('=' * 20 + f' Total Time Cost :{hours:.0f} hours {secs/60:.1f} ' + '=' * 20)
+    gp_space.gp_fmanager.save_state(gp_space.gp_timer.time_table(showoff=True) , 'runtime' , 0)
+    gp_space.mem_manager.print_memeory_record()
+    pfr.get_df(output = kwargs.get('profiler_out' , 'cprofile.csv')) 
+    return pfr
 
 if __name__ == '__main__':
-    main()
+    main(job_id = None , start_iter = 0 , start_gen = 0 , test_code = False , noWith = False)
