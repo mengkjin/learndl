@@ -71,8 +71,7 @@ data_start_dt = {
     'kaiyuan':{
         'positive': 20140130,
         'negative': 20140130},
-    'huatai':{'ms_chars'     : 20100101 ,
-              'dl_factors'   : 20170101} ,
+    'huatai':{'dl_factors'   : 20170101} ,
     'guojin':{}
 }
 query_params = {
@@ -94,18 +93,8 @@ query_params = {
                     ['smart_money','ideal_vol','ideal_reverse','herd_effect','small_trader_ret_error',],},
         # +1 : 'traction_f' , 'traction_ns' , 'traction_si', , 'long_momentum2' , 'merge_sue', 'consensus_adjustment',
     },
-        'huatai':{
-        'ms_chars':{'factors' : 
-                    ['mink_Amihud','mink_VP','mink_VP_top33_volume','mink_VR_1min_lag',
-                     'mink_VR_lag_last_30min','mink_amount_out_order_avg_ratio',
-                     'mink_cum_return_top30_order','mink_return_downward_var',
-                     'mink_return_downward_volatility_ratio','mink_return_improved',
-                     'mink_return_intraday','mink_return_kurtosis','mink_return_last_30min',
-                     'mink_return_skewness','mink_return_skewness_last_30min','mink_return_upward_var',
-                     'mink_return_upward_var_ratio','mink_return_var','mink_return_var_top33_volume',
-                     'mink_tp_diff','mink_volume_open_30min_ratio','mink_volume_variance_ratio',],},
-        'dl_factors':{'factors' : 
-                    ['price_volume_nn','text_fadt_bert',],},
+    'huatai':{
+        'dl_factors':{'factors' : ['price_volume_nn','text_fadt_bert',],},
     },
     'guojin':{},
 }

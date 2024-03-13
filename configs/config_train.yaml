@@ -1,5 +1,5 @@
 # most frequently changing variables
-short_test:  true
+short_test:  False
 tra_switch: true
 buffer_type: tra
 buffer_param: 
@@ -16,6 +16,7 @@ model_datatype:
   transformer: day
   tra_lstm: day
   resnet_lstm: 30m
+  resnet_gru: 30m
   other: [day , 15m , 30m , gp , 'day+15m']
 labels: 
   - rtn_lag1_10

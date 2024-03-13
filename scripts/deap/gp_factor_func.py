@@ -1,8 +1,7 @@
 import torch
 import gp_math_func as MF
 
-def process_factor(value , stream = 'inf_trim_norm' , dim = 1 , trim_ratio = 7. , 
-                   neutral_factors = None , neutral_groups = None , **kwargs):
+def process_factor(value , stream = 'inf_trim_norm' , dim = 1 , trim_ratio = 7. , **kwargs):
     '''
     ------------------------ process factor value ------------------------
     处理因子值 , 'inf_trim_winsor_norm_neutral_nan'
@@ -12,12 +11,10 @@ def process_factor(value , stream = 'inf_trim_norm' , dim = 1 , trim_ratio = 7. 
         dim:           default to 1
         trim_ratio:    what extend can be identified as outlier? range is determined as med ± trim_ratio * brandwidth
         norm_tol:      if norm required, the tolerance to eliminate factor if standard deviation is too trivial
-        neutral_factors: market cap (neutralize param)
-        neutral_groups:  industry indicator (neutralize param)
     output:
         value:         processed factor value
     '''
-    if MF.is_invalid(value) or MF.allna(value , inf_as_na = True): return MF.invalid
+    if MF.isnull(value) or MF.allna(value , inf_as_na = True): return MF.null
 
     # assert 'inf' in stream or 'trim' in stream or 'winsor' in stream , stream
     if 'trim' in stream or 'winsor' in stream:
@@ -38,9 +35,6 @@ def process_factor(value , stream = 'inf_trim_norm' , dim = 1 , trim_ratio = 7. 
         elif _str == 'norm': 
             value -= torch.nanmean(value , dim, keepdim=True)
             value /= value.square().nansum(dim , keepdim = True).sqrt() + 1e-6 
-        # elif _str == 'neutral': 
-            # '市值中性化（对x做，现已取消，修改为对Y做）'
-            # value = MF.neutralize_2d(value , neutral_factors , neutral_groups , dim = dim) 
         elif _str == 'nan': 
             value = value.nan_to_num_()
     return value
@@ -60,7 +54,7 @@ def decay_weight(method , max_len , exp_halflife = -1):
     return w
 
 def factor_coef_mean(x , mean_dim = 0, dim = -1 , weight = None):
-    if MF.is_invalid(x): return x
+    if MF.isnull(x): return x
     assert x.shape[dim] > 0
     if x.shape[dim] == 1: return torch.ones((1,1)).to(x)
     assert mean_dim >= 0 , f'mean_dim must be non-negative : {mean_dim}'
@@ -83,7 +77,7 @@ def factor_coef_mean(x , mean_dim = 0, dim = -1 , weight = None):
     return x
 
 def factor_coef_total(x , dim = -1):
-    if MF.is_invalid(x): return x
+    if MF.isnull(x): return x
     assert x.shape[dim] > 0
     if x.shape[dim] == 1: return torch.ones((1,1)).to(x)
     ij = torch.arange(x.shape[dim])
@@ -93,7 +87,7 @@ def factor_coef_total(x , dim = -1):
     return x
 
 def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
-    if MF.is_invalid(x): return x
+    if MF.isnull(x): return x
     assert corr_dim >= 0 , f'corr_dim must be non-negative : {corr_dim}'
     assert dim >= -1 , f'dim must >= -1 : {dim}'
     if dim == -1: dim = x.dim() - 1
@@ -121,7 +115,7 @@ def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
     return x
 
 def svd_factors(mat , raw_factor , top_n = -1 , top_ratio = 0. , dim = -1 , inplace = True):
-    if MF.is_invalid(mat) or MF.is_invalid(raw_factor): return raw_factor
+    if MF.isnull(mat) or MF.isnull(raw_factor): return raw_factor
     assert mat.dim() == 2 
     assert mat.shape[0] == mat.shape[1]
     assert mat.shape[0] == raw_factor.shape[dim]
@@ -147,9 +141,149 @@ def top_svd_factors(mat , raw_factor , top_n = 1 , top_ratio = 0. , dim = -1 , i
     mat2 = factor_coef_total(raw_factor, dim = -1)
     mat3 = factor_coef_with_y(raw_factor , y , corr_dim=1 , dim = -1)
     '''
-    if MF.is_invalid(mat) or MF.is_invalid(raw_factor): return raw_factor
+    if MF.isnull(mat) or MF.isnull(raw_factor): return raw_factor
     vector , svd = svd_factors(mat , raw_factor , dim = dim , inplace = inplace)
     where  = svd.S.cumsum(0) / svd.S.sum() <= top_ratio
     where += torch.arange(vector.shape[-1] , device=where.device) < max(top_n , where.sum() + 1)
     print(svd.S.cumsum(0) / svd.S.sum())
     return vector[...,where]
+
+class MultiFactor:
+    def __init__(self , weight_scheme = 'ir', window_type = 'rolling', weight_decay= 'exp' , 
+                 ir_window = 10 , roll_window = 10 , halflife  = 5 , 
+                 insample = None , universe = None , min_coverage = 0.1) -> None:
+        assert weight_scheme in ['ew' , 'ic' , 'ir']
+        assert window_type   in ['rolling' , 'insample']
+        assert weight_decay  in ['constant' , 'linear' , 'exp']
+        self.weight_scheme = weight_scheme
+        self.window_type   = window_type
+        self.weight_decay  = weight_decay
+        self.ir_window     = ir_window
+        self.roll_window   = roll_window
+        self.halflife      = halflife
+        self.insample      = insample
+        self.universe      = universe
+        self.min_coverage  = min_coverage
+
+    class FactorResult:
+        def __init__(self, **kwargs) -> None:
+            for k,v in kwargs.items():
+                setattr(self , k , v)
+        def __getitem__(self , key):
+            return self.__dict__.__getitem__(key)
+        def __repr__(self) -> str:
+            return self.__dict__.__repr__()
+        def items(self):  return self.__dict__.items()
+        def keys(self):   return self.__dict__.keys()
+        def values(self): return self.__dict__.values()
+        def update(self,**kwargs): self.__dict__.update(**kwargs)
+        def get(self , key , default = None): 
+            return self.__dict__.get(key , default)
+
+    def ts_decay(self , max_len , weight_decay = None , halflife = None):
+        weight_decay = weight_decay if weight_decay else self.weight_decay
+        halflife     = halflife     if halflife     else self.halflife
+        return decay_weight(weight_decay , max_len , exp_halflife=halflife)
+
+    @staticmethod
+    def static_decorator(func , relative_weight_cap = 5.):
+        def wrapper(data , time_slice = None):
+            if time_slice is not None:
+                if data is not None: data = data[time_slice]
+            w = func(data).nan_to_num(torch.nan,torch.nan,torch.nan).reshape(1,1,-1)
+            w /= w.abs().sum(-1,keepdim=True)
+            w[w > (relative_weight_cap / w.shape[-1])] = relative_weight_cap / w.shape[-1]
+            w /= w.abs().sum(-1,keepdim=True)
+            return w
+        return wrapper
+    
+    @staticmethod
+    def dynamic_decorator(func , relative_weight_cap = 5. , method = 0):
+        def wrapper(data , roll_window = 10):
+            if method == 1:
+                data = torch.nn.functional.pad(data,[0,0,roll_window-1,0],value=torch.nan).unfold(0,roll_window,1).permute(2,0,1)
+                w = func(data).nan_to_num(torch.nan,torch.nan,torch.nan).permute(1,0,2)
+            else:
+                w = data * 0.
+                for i in range(len(w)):
+                    w[i] = func(data[i-roll_window:i]).nan_to_num(torch.nan,torch.nan,torch.nan)
+                w = w.unsqueeze(1)
+            w /= w.abs().sum(-1,keepdim=True)
+            w[w > (relative_weight_cap / w.shape[-1])] = relative_weight_cap / w.shape[-1]
+            w /= w.abs().sum(-1,keepdim=True)
+            return w
+        return wrapper
+    
+    def multi_factor(self , factor , window_type = None , **kwargs):
+        weight = self.factor_weight(window_type , **kwargs)
+        multi = (factor * weight).nanmean(-1)
+        multi = MF.zscore(multi , -1)
+        return self.FactorResult(multi = multi , weight = weight , inputs = factor)
+    
+    def factor_weight(self , window_type = None , **kwargs):
+        window_type = window_type if window_type is not None else self.window_type
+        if window_type == 'insample':
+            weight_tensor = self.static_factor_weight(**kwargs)
+        else:
+            weight_tensor = self.dynamic_factor_weight(**kwargs)
+        return weight_tensor
+
+    def static_factor_weight(self , weight_scheme = None , weight_decay = None , insample = None , **kwargs):
+        weight_scheme = weight_scheme  if weight_scheme is not None else self.weight_scheme
+        weight_decay  = weight_decay   if weight_decay  is not None else self.weight_decay
+        insample      = insample       if insample      is not None else self.insample
+        assert weight_scheme in ['ew' , 'ic' , 'ir']
+        assert weight_decay  in ['constant' , 'linear' , 'exp']
+
+        if weight_scheme == 'ew': 
+            func = self.weight_ew
+            data = kwargs['ic'] if 'ic' in kwargs.keys() else kwargs['ir']
+        else:
+            func = self.weight_icir
+            data = kwargs[weight_scheme]
+        func = self.static_decorator(func)
+        return func(data , time_slice = insample)
+    
+    def dynamic_factor_weight(self , weight_scheme = None , weight_decay = None , roll_window = None , **kwargs):
+        weight_scheme = weight_scheme  if weight_scheme is not None else self.weight_scheme
+        weight_decay  = weight_decay   if weight_decay  is not None else self.weight_decay
+        roll_window   = roll_window    if roll_window   is not None else self.roll_window
+        assert weight_scheme in ['ew' , 'ic' , 'ir']
+        assert weight_decay  in ['constant' , 'linear' , 'exp']
+
+        if weight_scheme == 'ew': 
+            return self.static_factor_weight(weight_scheme , time_slice = self.insample, **kwargs)
+        else:
+            func = self.dynamic_decorator(self.weight_icir)
+            return func(kwargs[weight_scheme] , roll_window = roll_window)
+
+    def weight_ew(self , data):
+        return data.nanmean(0).sign()
+
+    def weight_icir(self, data):
+        ts_w = self.ts_decay(len(data)).reshape(1,-1)
+        fini = data.isfinite() * 1.
+        data = data.nan_to_num(0,0,0)
+        if data.dim() == 2:
+            return (ts_w @ data) / (ts_w @ fini)
+        elif data.dim() == 3:
+            return torch.einsum('ij,jkl->ikl' , ts_w , data) / torch.einsum('ij,jkl->ikl' , ts_w , fini)
+
+    def weighted_multi(self , singles , weight):
+        assert singles.shape == weight.shapes
+        weight = singles.isfinite() * weight
+        wsum = torch.nansum(singles * weight , dim = -1) 
+        return MF.zscore_inplace(wsum,-1)
+    
+    def calculate_icir(self , factors , labels , ir_window = None , universe = None , min_coverage = None , **kwargs):
+        ir_window    = ir_window    if ir_window    is not None else self.ir_window
+        universe     = universe     if universe     is not None else self.universe
+        min_coverage = min_coverage if min_coverage is not None else self.min_coverage
+        if labels.dim() == factors.dim():
+            labels = labels.squeeze(-1)
+        rankic = torch.full((len(factors) , factors.shape[-1]) , fill_value=torch.nan).to(labels)
+        for i_factor in range(factors.shape[-1]):
+            rankic[:,i_factor] = MF.rankic_2d(factors[...,i_factor] , labels , dim = 1 , 
+                                              universe = universe , min_coverage = min_coverage)
+        rankir = MF.ma(rankic , ir_window) / MF.ts_stddev(rankic , ir_window)
+        return self.FactorResult(ic = rankic , ir = rankir)

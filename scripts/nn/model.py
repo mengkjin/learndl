@@ -46,9 +46,16 @@ class resnet_lstm(lstm):
     def __init__(self, input_dim , hidden_dim , inday_dim , **kwargs) -> None:
         kwargs.update({
             'enc_in' : 'resnet' , 
+            'enc_in_dim' : kwargs.get('enc_in_dim') if kwargs.get('enc_in_dim') else hidden_dim // 4 , 
+        })
+        super().__init__(input_dim , hidden_dim , inday_dim = inday_dim , **kwargs)
+
+class resnet_gru(gru):
+    def __init__(self, input_dim , hidden_dim , inday_dim , **kwargs) -> None:
+        kwargs.update({
+            'enc_in' : 'resnet' , 
             'enc_in_dim' : kwargs.get('enc_in_dim') if kwargs.get('enc_in_dim') else hidden_dim // 4 ,
-            
-                       })
+        })
         super().__init__(input_dim , hidden_dim , inday_dim = inday_dim , **kwargs)
 
 @tra_component('mapping')

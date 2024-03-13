@@ -46,7 +46,8 @@ class Profiler(cProfile.Profile):
         df.full_name = df.full_name.astype(str)
         df_func = pd.DataFrame([func_str_decompose(s) for s in df.full_name] , columns = ['type' , 'name' , 'where' , 'memory'])
         df = pd.concat([df_func , df],axis=1).sort_values(sort_on,ascending=False)
-        df = df.loc[:,['type' , 'name' , 'ncalls', 'ccalls', 'tottime', 'cumtime' , 'where' , 'memory' , 'full_name', 'caller']]
+        column_order = ['type' , 'name' , 'ncalls', 'ccalls', 'tottime', 'cumtime' , 'where' , 'memory' , 'full_name', 'caller']
+        df = df.loc[:,column_order]
         if isinstance(highlight , str): df = df[df.full_name.str.find(highlight) > 0]
         if isinstance(output , str): df.to_csv(output)
         return df

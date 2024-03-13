@@ -424,7 +424,14 @@ class gpFileManager:
     def load_generation(self , i_iter = 0 , i_gen = 0 , hof_num = 500 , **kwargs):
         self.logbook = tools.Logbook()
         if i_gen < 0: 
-            pop , hof , fbd = self.new_generation(hof_num = hof_num , **kwargs)
+            pop = []
+            hof = tools.HallOfFame(hof_num)
+            if i_iter == 0:
+                fbd  = []
+            else:
+                basename = self.record_basename(i_iter-1 , -1)
+                log = joblib.load(f'{self.dir.log}/{basename}.pkl')
+                fbd = [self.toolbox.str2syx(ind.syx_str , ind.ind_str) for ind in log['forbidden']] 
         else:
             basename = self.record_basename(i_iter , i_gen)
             self.logbook.record(**joblib.load(f'{self.dir.log}/{basename}.pkl'))
@@ -437,12 +444,6 @@ class gpFileManager:
             hof.update(hof_)
         
         return pop , hof , fbd
-    
-    def new_generation(self , hof_num = 500 , **kwargs):
-        population = []
-        halloffame = tools.HallOfFame(hof_num)
-        forbidden  = []
-        return population , halloffame , forbidden
 
     def update_sku(self , individual , pool_skuname):
         poolid = int(pool_skuname.split('_')[-1])
@@ -614,32 +615,33 @@ class gpTimer:
 class MemoryManager():
     unit = 1024**3
 
-    def __init__(self , device_no = -1) -> None:
+    def __init__(self , device = 0) -> None:
         self.cuda_avail = torch.cuda.is_available()
-        self.device_no = -1 if not self.cuda_avail else device_no
-        self.unit = type(self).unit
-        if self.cuda_avail: self.gmem_total = torch.cuda.mem_get_info()[1] / self.unit
-        self.record = {}
-        self.check(showoff = True)
-
+        if self.cuda_avail:
+            self.device = torch.device(device)
+            self.unit = type(self).unit
+            if self.cuda_avail: self.gmem_total = torch.cuda.mem_get_info(self.device)[1] / self.unit
+            self.record = {}
+            
     def check(self , key = None, showoff = False , critical_ratio = 0.5 , starter = '**'):
-        if self.device_no < 0: return 0.
+        if not self.cuda_avail: return 0.
 
-        gmem_free = torch.cuda.mem_get_info(self.device_no)[0] / self.unit
+        gmem_free = torch.cuda.mem_get_info(self.device)[0] / self.unit
         torch.cuda.empty_cache()
         if gmem_free > critical_ratio * self.gmem_total and not showoff: 
             # if showoff: print(f'**Cuda Memory: Free {gmem_free:.1f}G') 
             return gmem_free
         
-        gmem_freed = torch.cuda.mem_get_info(self.device_no)[0] / self.unit - gmem_free
+        gmem_freed = torch.cuda.mem_get_info(self.device)[0] / self.unit - gmem_free
         gmem_free += gmem_freed
-        gmem_allo  = torch.cuda.memory_allocated(self.device_no) / self.unit
-        gmem_rsrv  = torch.cuda.memory_reserved(self.device_no) / self.unit
+        gmem_allo  = torch.cuda.memory_allocated(self.device) / self.unit
+        gmem_rsrv  = torch.cuda.memory_reserved(self.device) / self.unit
         
         if key is not None:
             if key not in self.record.keys(): self.record[key] = []
             self.record[key].append(gmem_freed)
-        if showoff: print(f'{starter}Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
+        if showoff: 
+            print(f'{starter}{time.ctime()}Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
         
         return gmem_free
     
@@ -651,9 +653,9 @@ class MemoryManager():
         return True
     
     @classmethod
-    def object_memory(cls , object):
+    def object_memory(cls , object , cuda_only = True):
         if isinstance(object , torch.Tensor):
-            return cls.tensor_memory(object)
+            return cls.tensor_memory(object , cuda_only = cuda_only)
         elif isinstance(object , (list,tuple)):
             return sum([cls.object_memory(obj) for obj in object])
         elif isinstance(object , dict):
@@ -662,7 +664,8 @@ class MemoryManager():
             return 0.
     
     @classmethod
-    def tensor_memory(cls , tensor):
+    def tensor_memory(cls , tensor , cuda_only = True):
+        if cuda_only and not tensor.is_cuda: return 0.
         total_memory = tensor.element_size() * tensor.numel()
         return total_memory / cls.unit
     
@@ -682,6 +685,20 @@ class MemoryManager():
             gmem_allo  = torch.cuda.memory_allocated() / cls.unit
             gmem_rsrv  = torch.cuda.memory_reserved() / cls.unit
             print(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
+
+    @staticmethod
+    def except_MemoryError(func , out = MF.null , print_str = ''):
+        def wrapper(*args , **kwargs):
+            try:
+                value = func(*args , **kwargs)
+            except torch.cuda.OutOfMemoryError as e:
+                print(f'OutOfMemoryError on {print_str}')
+                torch.cuda.empty_cache()
+                value = out
+            except Exception as e:
+                raise Exception(e)
+            return value
+        return wrapper
 
 class gpEliteGroup:
     def __init__(self , start_i_elite = 0 , device = None , block_len = 50) -> None:
@@ -755,7 +772,7 @@ class gpEliteBlock:
     def cat2cpu(self):
         if isinstance(self.data , list): 
             if len(self.data) == 0: 
-                self.data = MF.invalid
+                self.data = MF.null
             else:
                 try:
                     self.data = MF.concat_factors(*self.data).cpu()

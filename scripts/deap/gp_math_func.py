@@ -12,10 +12,13 @@ from sklearn.linear_model import LinearRegression
 #print(__name__)
 
 NaN = torch.nan
-invalid = torch.Tensor()
+if torch.cuda.is_available():
+    null = torch.Tensor().cuda()
+else:
+    null = torch.Tensor()
 
-def is_invalid(x):
-    return x is invalid or (isinstance(x , torch.Tensor) and x.numel() == 0)
+def isnull(x):
+    return x is null or (isinstance(x , torch.Tensor) and x.numel() == 0)
 
 def allna(x , inf_as_na = False):
     if inf_as_na:
@@ -32,17 +35,100 @@ def same(x , y):
     else:
         return x.equal(y)
 
-def prima_legitimate(check_valid = 1 , check_exact = True , check_allna = False , check_same = False):
+class PrimaTool:
+    @classmethod
+    def prima_dec(cls , n_arg = 1, roller = False , **decor_kwargs):
+        def decorator(func):
+            def wrapper(*args , **kwargs):
+                new_func = cls.ts_roller(n_arg,**decor_kwargs)(func) if roller else func
+                new_func = cls.prima_legit(n_arg,**decor_kwargs)(new_func)
+                return new_func(*args , **kwargs)
+            wrapper.__name__ = func.__name__
+            return wrapper
+        return decorator
+    
+    @classmethod
+    def prima_legit(cls,n_arg=1,**decor_kwargs):
+        assert n_arg in [1,2] , n_arg
+        return cls._prima_legit_1(**decor_kwargs) if n_arg == 1 else cls._prima_legit_2(**decor_kwargs) 
+    
+    @classmethod
+    def ts_roller(cls,n_arg=1,**decor_kwargs):
+        assert n_arg in [1,2] , n_arg
+        return cls._roller_1(**decor_kwargs) if n_arg == 1 else cls._roller_2(**decor_kwargs)
+
+    @classmethod
+    def _prima_legit_1(cls,**decor_kwargs):
+        def decorator(func):
+            def wrapper(x , *args, **kwargs):
+                legit = cls.legit_checker((x,),**decor_kwargs)
+                if not legit: return null
+                return func(x , *args , **kwargs)
+            wrapper.__name__ = func.__name__
+            return wrapper
+        return decorator
+    
+    @classmethod
+    def _prima_legit_2(cls,**decor_kwargs):
+        def decorator(func):
+            def wrapper(x , y ,*args, **kwargs):
+                legit = cls.legit_checker((x,y),**decor_kwargs)
+                if not legit: return null
+                return func(x , y , *args , **kwargs)
+            wrapper.__name__ = func.__name__
+            return wrapper
+        return decorator
+    
+    @classmethod
+    def _roller_1(cls , nan = NaN , pinf = torch.inf , ninf = -torch.inf , **decor_kwargs):
+        def decorator(func):
+            def wrapper(x , d , *args, **kwargs):
+                assert d <= len(x) , (d,x)
+                x = x.nan_to_num(nan,pinf,ninf)
+                x = func(x.unfold(0,d,1) , d , *args, **kwargs)
+                return cls.pad(x , d-1)
+            wrapper.__name__ = func.__name__
+            return wrapper
+        return decorator
+    
+    @classmethod
+    def _roller_2(cls , nan = NaN , pinf = torch.inf , ninf = -torch.inf , **decor_kwargs):
+        def decorator(func):
+            def wrapper(x , y , d , *args, **kwargs):
+                assert d <= len(x) , (d,x)
+                x = x.nan_to_num(nan,pinf,ninf)
+                y = y.nan_to_num(nan,pinf,ninf)
+                z = func(x.unfold(0,d,1) , y.unfold(0,d,1) , d , *args, **kwargs)
+                return cls.pad(z , d-1)
+            wrapper.__name__ = func.__name__
+            return wrapper
+        return decorator
+    
+    @staticmethod
+    def pad(x , d):
+        return nn.functional.pad(x , (0,0,d,0) , value = NaN)
+
+    @staticmethod
+    def legit_checker(args,/,check_null=1,check_exact=1,check_allna=0,check_same=0,**decor_kwargs):
+        for arg in args: 
+            if check_null  and isnull(arg): return False
+            if check_allna and allna(arg):  return False
+        if len(args) == 2 and check_exact and exact(args[0],args[1]): return False
+        if len(args) == 2 and check_same  and same(args[0],args[1]):  return False
+        return True
+
+"""
+def prima_legit(check_valid = 1 , check_exact = True , check_allna = False , check_same = False):
     def decorator(func):
         def wrapper(*args , **kwargs):
             if check_valid >= 1:
-                if is_invalid(args[0]): return invalid
-                if check_allna and allna(args[0]): return invalid
+                if isnull(args[0]): return null
+                if check_allna and allna(args[0]): return null
             if check_valid >= 2:
-                if is_invalid(args[1]): return invalid
-                if check_allna and allna(args[1]): return invalid
-                if check_exact and exact(args[0],args[1]): return invalid
-                if check_same  and same(args[0],args[1]): return invalid
+                if isnull(args[1]): return null
+                if check_allna and allna(args[1]): return null
+                if check_exact and exact(args[0],args[1]): return null
+                if check_same  and same(args[0],args[1]): return null
             v = func(*args , **kwargs)
             return v
         wrapper.__name__ = func.__name__
@@ -73,8 +159,10 @@ def ts_coroller(nan = NaN , pinf = torch.inf , ninf = -torch.inf):
         wrapper.__name__ = func.__name__
         return wrapper
     return decorator
+"""
 
-@prima_legitimate(2,False)
+#@PrimaTool.prima_legit(2,check_exact=0)
+@PrimaTool.prima_dec(2,check_exact=0)
 def rankic_2d(x , y , dim = 1 , universe = None , min_coverage = 0.5):
     valid = ~y.isnan()
     if universe is not None: valid *= universe.nan_to_num(False)
@@ -82,7 +170,7 @@ def rankic_2d(x , y , dim = 1 , universe = None , min_coverage = 0.5):
 
     coverage = (~x.isnan()).sum(dim=dim)
     ic = corrwith(rank_pct(x), rank_pct(y) , dim=dim)
-    if is_invalid(ic):
+    if isnull(ic):
         return ic
     else:
         return torch.where(coverage < min_coverage * valid.sum(dim=dim) , NaN , ic)
@@ -99,11 +187,11 @@ def one_hot(x , ex_last = True):
     return dummy
 
 def concat_factors(*factors , n_dims = 2 , dim = -1 , device = None):
-    if len(factors) == 0: return invalid
+    if len(factors) == 0: return null
     factors = list(factors)
     
     for i in range(len(factors)):
-        if factors[i] is None: factors[i] = invalid
+        if factors[i] is None: factors[i] = null
         if factors[i].dim() == n_dims:  factors[i] = factors[i].unsqueeze(dim)
         if device is not None: factors[i] = factors[i].to(device)
 
@@ -162,7 +250,7 @@ def neutralize_xdata_2d(factors = None , groups = None):
     return x
 
 def neutralize_2d(y , x , dim = 1 , method = 'torch' , device = None , inplace = False):  # [tensor (TS*C), tensor (TS*C)]
-    if is_invalid(x) or is_invalid(y): return y
+    if isnull(x) or isnull(y): return y
 
     assert method in ['sk' , 'np' , 'torch']
     assert dim in [-1,0,1] , dim
@@ -205,7 +293,7 @@ def neutralize_2d(y , x , dim = 1 , method = 'torch' , device = None , inplace =
     return y
 
 def neutralize_1d(y , x , insample , method = 'torch' , device = None , inplace = False):  # [tensor (TS*C), tensor (TS*C)]
-    if is_invalid(x) or is_invalid(y): return y
+    if isnull(x) or isnull(y): return y
 
     assert method in ['sk' , 'np' , 'torch']
     assert y.shape == insample.shape , (y.shape , insample.shape)
@@ -239,7 +327,8 @@ def neutralize_1d(y , x , insample , method = 'torch' , device = None , inplace 
 
 #%% 相关系数函数
 # 将以上函数以矩阵形式改写
-@prima_legitimate(2,False)
+#@PrimaTool.prima_legit(2,check_exact=0)
+@PrimaTool.prima_dec(2,check_exact=0)
 def corrwith(x,y,dim=None):
     if same(x , y): return torch.where(x.nansum(dim) > 2 , 1 , NaN)
     x = x + y * 0
@@ -253,7 +342,8 @@ def corrwith(x,y,dim=None):
     corr = cov / (xsd + tol) / (ysd + tol)
     return corr
 
-@prima_legitimate(2,False)
+#@PrimaTool.prima_legit(2,check_exact=0)
+@PrimaTool.prima_dec(2,check_exact=0)
 def covariance(x,y,dim=None):
     x = x + y * 0
     y = y + x * 0
@@ -262,31 +352,36 @@ def covariance(x,y,dim=None):
     cov = torch.nansum(x_xmean * y_ymean, dim)  # [TS, 1]
     return cov
 
-@prima_legitimate(2,False)
+#@PrimaTool.prima_legit(2,check_exact=0)
+@PrimaTool.prima_dec(2,check_exact=0)
 def beta(x,y,dim=None):
     if same(x , y): return torch.where(x.nansum(dim) > 2 , 1 , NaN)
     return covariance(x,y,dim) / covariance(x,x,dim)
 
-@prima_legitimate(2,False)
+#@PrimaTool.prima_legit(2,check_exact=0)
+@PrimaTool.prima_dec(2,check_exact=0)
 def beta_pos(x,y,dim=None):
     if same(x , y): return torch.where(x.nansum(dim) > 2 , 1 , NaN)
     y = torch.where(x < 0 , NaN , y)
     x = torch.where(x < 0 , NaN , x)
     return covariance(x,y,dim) / covariance(x,x,dim)
 
-@prima_legitimate(2,False)
+#@PrimaTool.prima_legit(2,check_exact=0)
+@PrimaTool.prima_dec(2,check_exact=0)
 def beta_neg(x,y,dim=None):
     if same(x , y): return torch.where(x.nansum(dim) > 2 , 1 , NaN)
     y = torch.where(x > 0 , NaN , y)
     x = torch.where(x > 0 , NaN , x)
     return covariance(x,y,dim) / covariance(x,x,dim)
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def stddev(x , dim = 0 , keepdim = True):
     x_xmean  = x - torch.nanmean(x , dim, keepdim=True)  # [TS, C]
     return torch.nansum(x_xmean ** 2, dim , keepdim = keepdim).sqrt()
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def zscore(x , dim = 0 , index = None):
     x_xmean  = x - torch.nanmean(x , dim, keepdim=True)  # [TS, C]
     x_stddev = torch.nansum(x_xmean ** 2, dim , keepdim=index is None).sqrt()
@@ -306,97 +401,116 @@ def zscore_inplace(x , dim = 0):
     return x
 
 #%% 其他函数
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def add(x, y):
     'x+y'
     return x + y
 
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def sub(x, y):
     'x-y'
     return x - y
 
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def mul(x, y):
     'x*y'
     return x * y
 
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def div(x, y):
     'x/y'
     return x / y
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def add_int(x, d):
     'x+d'
     return x + d
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def sub_int1(x, d):
     'x-d'
     return x - d
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def sub_int2(x, d):
     'x-d'
     return x - d
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def mul_int(x, d):
     'x*d'
     return x * d
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def div_int1(x, d):
     'x/d'
     return x / d
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def div_int2(x, d):
     'x/d'
     return x / d
 
 def neg(x):
     '-x'
-    return invalid if is_invalid(x) else -x
+    return null if isnull(x) else -x
 
 def neg_int(x):
     '-x'
     return -x
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def sigmoid(x):
     return 1 / (1 + torch.exp(-x))
 
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def rank_sub(x,y):
     return rank_pct(x,1) - rank_pct(y,1)
 
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def rank_add(x,y):
     return rank_pct(x,1) + rank_pct(y,1)
 
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def rank_div(x,y):
     return rank_pct(x,1) / rank_pct(y,1)
 
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def rank_mul(x,y):
     return rank_pct(x,1) * rank_pct(y,1)
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def log(x):
     return x.log()
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def sqrt(x):
     return x.sqrt()
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def square(x):
     return x.square()
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def rank_pct(x,dim=1):
     assert (len(x.shape) <= 3)
     x_rank = x.argsort(dim=dim).argsort(dim=dim).to(torch.float32) + 1 # .where(~x.isnan() , NaN)
@@ -404,7 +518,8 @@ def rank_pct(x,dim=1):
     x_rank = x_rank / ((~x_rank.isnan()).sum(dim=dim, keepdim=True))
     return x_rank
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def lin_decay(x , dim = 0):   #only for rolling
     'd日衰减加权平均，加权系数为 d, d-1,...,1'
     shape_ = [1] * len(x.shape)
@@ -412,19 +527,22 @@ def lin_decay(x , dim = 0):   #only for rolling
     coef = torch.arange(1, x.shape[dim] + 1, 1).reshape(shape_).to(x)
     return (x * coef).nansum(dim=dim) / ((coef * (~x.isnan())).sum(dim=dim))
 
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def ts_decay_pos_dif(x, y, d):
     value = x - y
     value[value < 0] = 0
     return ts_lin_decay(value, d)
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def sign(x):
     return x.sign()
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def ts_delay(x, d):
-    if d > x.shape[0]: return invalid
+    if d > x.shape[0]: return null
     if d < 0: print('Beware! future information used!')
     z = x.roll(d, dims=0)
     if d >= 0:
@@ -433,107 +551,128 @@ def ts_delay(x, d):
         z[d:,:] = NaN
     return z
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def ts_delta(x, d):
-    if d > x.shape[0]: return invalid
+    if d > x.shape[0]: return null
     if d < 0: print('Beware! future information used!')
     z = x - ts_delay(x, d)
     return z
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def scale(x, c = 1 , dim = 1):
     return c * x / x.abs().nansum(axis=dim, keepdim=True)
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def signedpower(x, a):
     return x.sign() * x.abs().pow(a)
 
-@prima_legitimate(1)
-@ts_roller()
+#@PrimaTool.prima_legit(1)
+#@ts_roller()
+@PrimaTool.prima_dec(1,roller=True)
 def ts_zscore(x, d):
     return zscore(x , dim = -1 , index = -1)
 
-@prima_legitimate(1)
-@ts_roller()
+#@PrimaTool.prima_legit(1)
+#@ts_roller()
+@PrimaTool.prima_dec(1,roller=True)
 def ma(x, d):
     return torch.nanmean(x , dim=-1)
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def pctchg(x,d):
     return (x - ts_delay(x,d)) / ts_delay(x,d).abs()
 
-@prima_legitimate(1)
-@ts_roller(np.inf)
+#@PrimaTool.prima_legit(1)
+#@ts_roller()
+@PrimaTool.prima_dec(1,roller=True,nan=np.inf)
 def ts_min(x, d):
     return torch.min(x , dim=-1)[0]
 
-@prima_legitimate(1)
-@ts_roller(-np.inf)
+#@PrimaTool.prima_legit(1)
+#@ts_roller()
+@PrimaTool.prima_dec(1,roller=True,nan=-np.inf)
 def ts_max(x, d):
     return torch.max(x , dim=-1)[0]
 
-@prima_legitimate(1)
-@ts_roller(np.inf)
+#@PrimaTool.prima_legit(1)
+#@ts_roller()
+@PrimaTool.prima_dec(1,roller=True,nan=np.inf)
 def ts_argmin(x, d):
     return torch.argmin(x , dim=-1).to(torch.float)
 
-@prima_legitimate(1)
-@ts_roller(-np.inf)
+#@PrimaTool.prima_legit(1)
+#@ts_roller()
+@PrimaTool.prima_dec(1,roller=True,nan=-np.inf)
 def ts_argmax(x, d):
     return torch.argmax(x , dim=-1).to(torch.float)
 
-@prima_legitimate(1)
-@ts_roller()
+#@PrimaTool.prima_legit(1)
+#@ts_roller()
+@PrimaTool.prima_dec(1,roller=True)
 def ts_rank(x, d):
     return rank_pct(x,dim=-1)[...,-1]
 
-@prima_legitimate(1)
-@ts_roller(0)
+#@PrimaTool.prima_legit(1)
+#@ts_roller()
+@PrimaTool.prima_dec(1,roller=True,nan=0)
 def ts_stddev(x, d):
     return torch.std(x,dim=-1)
 
-@prima_legitimate(1)
-@ts_roller(0)
+#@PrimaTool.prima_legit(1)
+#@ts_roller()
+@PrimaTool.prima_dec(1,roller=True,nan=0)
 def ts_sum(x, d):
     return torch.sum(x,dim=-1)
 
-@prima_legitimate(1)
-@ts_roller(1)
+#@PrimaTool.prima_legit(1)
+#@ts_roller()
+@PrimaTool.prima_dec(1,roller=True,nan=1)
 def ts_product(x, d):
     return torch.prod(x,dim=-1)
 
-@prima_legitimate(1)
-@ts_roller()
+#@PrimaTool.prima_legit(1)
+#@ts_roller()
+@PrimaTool.prima_dec(1,roller=True)
 def ts_lin_decay(x, d):
     return lin_decay(x , dim=-1)
 
-@prima_legitimate(2)
-@ts_coroller(0)
+#@PrimaTool.prima_legit(2)
+#@ts_coroller(0)
+@PrimaTool.prima_dec(2,roller=True,nan=0)
 def ts_corr(x , y , d):
     return corrwith(x , y , dim=-1)
 
-@prima_legitimate(2)
-@ts_coroller(0)
+#@PrimaTool.prima_legit(2)
+#@ts_coroller(0)
+@PrimaTool.prima_dec(2,roller=True,nan=0)
 def ts_beta(x , y , d):
     return beta(x , y , dim=-1)
 
-@prima_legitimate(2)
-@ts_coroller(0)
+#@PrimaTool.prima_legit(2)
+#@ts_coroller(0)
+@PrimaTool.prima_dec(2,roller=True,nan=0)
 def ts_beta_pos(x , y , d):
     return beta_pos(x , y , dim=-1)
 
-@prima_legitimate(2)
-@ts_coroller(0)
+#@PrimaTool.prima_legit(2)
+#@ts_coroller(0)
+@PrimaTool.prima_dec(2,roller=True,nan=0)
 def ts_beta_neg(x , y , d):
     return beta_neg(x , y , dim=-1)
 
-@prima_legitimate(2)
-@ts_coroller(0)
+#@PrimaTool.prima_legit(2)
+#@ts_coroller(0)
+@PrimaTool.prima_dec(2,roller=True,nan=0)
 def ts_cov(x , y , d):
     return covariance(x , y , dim=-1)
 
-@prima_legitimate(2)
-@ts_coroller(0)
+#@PrimaTool.prima_legit(2)
+#@ts_coroller(0)
+@PrimaTool.prima_dec(2,roller=True,nan=0)
 def ts_rankcorr(x , y , d):
     return corrwith(rank_pct(x,dim=-1) , rank_pct(y,dim=-1) , dim=-1)
 
@@ -553,17 +692,20 @@ def rlbxy(x, y, d, n, btm, sel_posneg=False):
     z = torch.nn.functional.pad(z[0] if len(z) == 1 else (z[1] - z[0]) , [0,0,d-1,0] , value = NaN)
     return z
 
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def ts_xbtm_yavg(x, y, d, n):
     '在过去d日上，根据x进行排序，取最小n个x的y的平均值'
     return rlbxy(x, y, d, n, btm='btm')
 
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def ts_xtop_yavg(x, y, d, n):
     '在过去d日上，根据x进行排序，取最大n个x的y的平均值'
     return rlbxy(x, y, d, n, btm='top')
 
-@prima_legitimate(2)
+#@PrimaTool.prima_legit(2)
+@PrimaTool.prima_dec(2)
 def ts_xrng_ydif(x, y, d, n):
     '在过去d日上，根据x进行排序，取最大n个x的y的平均值与最小n个x的y的平均值的差值'
     return rlbxy(x, y, d, n, btm='diff')
@@ -584,17 +726,20 @@ def rlbx(x, d, n, btm, sel_posneg=False):
     z = torch.nn.functional.pad(z[0] if len(z) == 1 else (z[1] - z[0]) , [0,0,d-1,0] , value = NaN)
     return z
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def ts_btm_avg(x, d, n):
     '在过去d日上，根据x进行排序，取最小n个x的y的平均值'
     return rlbx(x, d, n, btm='btm')
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def ts_top_avg(x, d, n):
     '在过去d日上，根据x进行排序，取最大n个x的y的平均值'
     return rlbx(x, d, n, btm='top')
 
-@prima_legitimate(1)
+#@PrimaTool.prima_legit(1)
+@PrimaTool.prima_dec(1)
 def ts_rng_dif(x, d, n):
     '在过去d日上，根据x进行排序，取最大n个x的y的平均值与最小n个x的y的平均值的差值'
     return rlbx(x, d, n, btm='diff')
