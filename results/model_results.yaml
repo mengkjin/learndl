@@ -1181,3 +1181,59 @@
   - *id001
   - !!binary |
     gETOLt6YY0A=
+0_start: Thu Mar 14 07:45:48 2024
+1_basic: long+mem+float
+2_model: resnet_lstm_30m(x3)
+3_time: 20170103-99991231
+4_train: Finish Process [Train Model]! Cost 6.9 Hours, 9.1 Min/model, 21.0 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 207.8 Secs
+6_result:
+  0.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - &id001 !!python/object/apply:numpy.dtype
+    args:
+    - f8
+    - false
+    - true
+    state: !!python/tuple
+    - 3
+    - <
+    - null
+    - null
+    - null
+    - -1
+    - -1
+    - 0
+  - !!binary |
+    AEFe0aueZEA=
+  0.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    ADSwYY+oZEA=
+  0.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AC6XSJ2iZEA=
+  1.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    wC1WvA25Y0A=
+  1.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    QFECCPEZZEA=
+  1.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    gEWyCTMeZEA=
+  2.best: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    AN+F/E72YkA=
+  2.swabest: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    4LKtEGQLZEA=
+  2.swalast: !!python/object/apply:numpy.core.multiarray.scalar
+  - *id001
+  - !!binary |
+    ANReaX3wY0A=

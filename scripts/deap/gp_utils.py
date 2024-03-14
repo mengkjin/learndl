@@ -366,9 +366,6 @@ class gpFileManager:
     def __init__(self , job_dir = None , toolbox = None) -> None:
         self.job_dir = './pop/bendi' if job_dir is None else job_dir
         self.dir = Namespace(
-            #pop = f'{self.job_dir}/population' ,
-            #hof = f'{self.job_dir}/halloffame' ,
-            #fbd = f'{self.job_dir}/forbidden' ,
             log = f'{self.job_dir}/logbook' ,
             sku = f'{self.job_dir}/skuname' ,
             pqt = f'{self.job_dir}/parquet' ,
@@ -622,7 +619,7 @@ class MemoryManager():
             self.unit = type(self).unit
             if self.cuda_avail: self.gmem_total = torch.cuda.mem_get_info(self.device)[1] / self.unit
             self.record = {}
-            
+
     def check(self , key = None, showoff = False , critical_ratio = 0.5 , starter = '**'):
         if not self.cuda_avail: return 0.
 
@@ -670,7 +667,7 @@ class MemoryManager():
         return total_memory / cls.unit
     
     def print_memeory_record(self):
-        if len(self.record):
+        if self.cuda_avail:
             print(f'  --> Avg Freed Cuda Memory: ')
             for key , value in self.record.items():
                 print(f'  --> {key} : {len(value)} counts, on average freed {np.mean(value):.2f}G')
@@ -775,7 +772,8 @@ class gpEliteBlock:
                 self.data = MF.null
             else:
                 try:
-                    self.data = MF.concat_factors(*self.data).cpu()
+                    self.data = MF.concat_factors(*self.data)
+                    if isinstance(self.data , torch.Tensor): self.data = self.data.cpu()
                 except MemoryError:
                     print('OutofMemory when concat gpEliteBlock, try use cpu to concat')
                     gc.collect()
@@ -793,6 +791,7 @@ class gpEliteBlock:
         return self
     
     def max_corr(self , value , abs_corr_cap = 1.01 , dim = None , dim_valids = (None , None) , syntax = None):
+        assert isinstance(self.data , (torch.Tensor , list))
         corr_values = torch.zeros((self.len()+1,)).to(value)
         exit_state  = False
         block = self.data.to(value) if isinstance(self.data , torch.Tensor) else self.data

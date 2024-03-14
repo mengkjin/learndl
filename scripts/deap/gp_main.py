@@ -38,10 +38,10 @@ defaults = Namespace(
     DIR_pack    = './data/package' ,                                        # input路径2,加载原始因子后保存pt文件加速存储
     DIR_pop     = './pop' ,                                                 # output路径,即保存因子库、因子值、因子表达式的路径
     PATH_param  = f'./gp_params.yaml' ,                                     # 保存测试参数的地址 
+    encoding    = 'utf-8' ,                                                 # 带中文的encoding
     poolnm      = args.poolnm ,                                             # 单机多进程设置
     job_id      = args.job_id ,
 )
-
 
 # multiprocessing method, 单机多进程设置(实际未启用),参考https://zhuanlan.zhihu.com/p/600801803
 torch.multiprocessing.set_start_method('spawn' if defaults.plat == 'windows' else 'forkserver', force=True) 
@@ -107,14 +107,6 @@ def gp_parameters(job_id = None , train = True , continuation = False , test_cod
         test_code:      if only to test code validity
     output:
         gp_params: dict that includes all gp parameters
-    '''
-    job_dir , test_code = gp_job_dir(job_id , train , continuation , test_code)
-    if train and defaults.device.type == 'cpu':
-        print('**Cuda not available')
-    elif train:
-        print('**Device name:', torch.cuda.get_device_name(defaults.device))
-        
-    '''
     参数列表:
     job_dir             工作目录
     test_code           是不是仅仅作为代码测试,若是会有一个小很多的参数组合覆盖本参数
@@ -142,18 +134,27 @@ def gp_parameters(job_id = None , train = True , continuation = False , test_cod
     cxpb:               [小循环]中交叉概率,即两个个体之间进行交叉的概率
     mutpb:              [小循环]中变异概率,即个体进行突变变异的概率
     '''
+
+    job_dir , test_code = gp_job_dir(job_id , train , continuation , test_code)
+    if train and defaults.device.type == 'cpu':
+        print('**Cuda not available')
+    elif train:
+        print('**Device name:', torch.cuda.get_device_name(defaults.device))
+
     gp_params = gpContainer(
         job_dir = job_dir ,           # the main directory
         test_code = test_code  ,      # just to check code, will save parquet in this case
         device = defaults.device ,    # training device, cuda or cpu
-        pool_num = defaults.poolnm,      # multiprocessing pool number
+        pool_num = defaults.poolnm,   # multiprocessing pool number
     )
-    with open(defaults.PATH_param ,'r') as f:
+
+    with open(defaults.PATH_param ,'r',encoding=defaults.encoding) as f: 
         gp_params.update(**yaml.load(f , Loader = yaml.FullLoader))
+
     if test_code: gp_params.update(**gp_params.test_params)
     gp_params.update(**kwargs)
     gp_params.apply('slice_date' , lambda x:pd.to_datetime(x).values)
-    assert MF.null.device == gp_params.get('device') , (MF.null.device , gp_params.get('device'))
+    # assert MF.null.device == gp_params.get('device') , (MF.null.device , gp_params.get('device'))
     return gp_params
 
 # %%
@@ -186,6 +187,7 @@ def gp_namespace(gp_params):
 
         load_finished = False
         package_data = torch.load(package_path) if os.path.exists(package_path) else {}
+
         if not np.isin(package_require , list(package_data.keys())).all() or not np.isin(gp_space.gp_argnames , package_data['gp_argnames']).all():
             if gp_space.param.verbose: print(f'  --> Exists "{package_path}" but Lack Required Data!')
         else:
@@ -369,15 +371,16 @@ def gp_syntax2value(compiler, individual, gp_inputs, param, tensors, i_iter=0,
     with timer.acc_timer('neutralize'):
         factor_neut_type = param.factor_neut_type * (i_iter > 0) * (tensors.get('neutra') is not None)
         assert factor_neut_type in [0,1,2] , factor_neut_type
-        if factor_neut_type == 0:
+        if MF.isnull(factor_value) or factor_neut_type == 0:
             pass
         elif factor_neut_type == 1:
+            assert isinstance(factor_value , torch.Tensor)
             func = mgr_mem.except_MemoryError(MF.neutralize_1d, print_str=f'neutralizing {str(individual)}')
             shape2d = factor_value.shape
             factor_value = func(y = factor_value.reshape(-1) , 
                                 x = tensors.neutra.to(factor_value).reshape(-1,tensors.neutra.shape[-1]) , 
                                 insample = tensors.insample_2d.reshape(-1))
-            if not MF.isnull(factor_value): factor_value = factor_value.reshape(shape2d)
+            if isinstance(factor_value , torch.Tensor): factor_value = factor_value.reshape(shape2d)
         elif factor_neut_type == 2:
             func = mgr_mem.except_MemoryError(MF.neutralize_1d, print_str=f'neutralizing {str(individual)}')
             factor_value = func(factor_value , tensors.neutra.to(factor_value))

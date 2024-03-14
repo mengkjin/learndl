@@ -26,7 +26,7 @@ ir_floor:         3.0     # [outer loop] rankir threshold
 ir_floor_decay:   1.0     # [outer loop] rankir threshold decay factor for iterations
 corr_cap:         0.6     # [outer loop] cap of correlation with existing factors
 
-labels_neut_type: svd     # [outer loop] what factors to neutralize labels: 'svd' , 'all'
+labels_neut_type: all     # [outer loop] what factors to neutralize labels: 'svd' , 'all'
 svd_mat_method:   coef_ts # [outer loop] what matrix to svd in trying to lower the dimensions of factors to neutralize labels: 'total' , 'coef_ts'
 svd_top_ratio:    0.75    # [outer loop] svd factor: least explanatory ratio
 svd_top_n:        1       # [outer loop] svd factor: least factors
