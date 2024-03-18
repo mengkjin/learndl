@@ -257,35 +257,37 @@ class ModelData():
             pool = np.random.permutation(np.arange(len(ii)))
             return [ii[pos] for pos in BatchSampler(pool , batch_size , drop_last=False)]
 
+        pos = nonnan_sample
         shp = nonnan_sample.shape
-        ipos = torch.zeros(shp[0] , shp[1] , 2 , dtype = torch.int)
-        ipos[:,:,0] = torch.arange(shp[0] , dtype = torch.int).reshape(-1,1) 
-        ipos[:,:,1] = torch.tensor(self.step_idx)
+        pij = torch.zeros(shp[0] , shp[1] , 2 , dtype = torch.int)
+        pij[:,:,0] = torch.arange(shp[0] , dtype = torch.int).reshape(-1,1) 
+        pij[:,:,1] = torch.tensor(self.step_idx)
 
         sample_index = {}
         if self.loader_type == 'train':
-            train_dates = int(shp[1] * self.kwarg.train_ratio)
+            dtrain = int(shp[1] * self.kwarg.train_ratio)
             if self.kwarg.sample_method == 'total_shuffle':
-                pool = np.random.permutation(np.arange(nonnan_sample.sum()))
+                pool = np.random.permutation(np.arange(pos.sum()))
                 train_samples = int(len(pool) * self.kwarg.train_ratio)
-                ii_train = ipos[nonnan_sample][pool[:train_samples]]
-                ii_valid = ipos[nonnan_sample][pool[train_samples:]]
+                ii_train = pij[pos][pool[:train_samples]]
+                ii_valid = pij[pos][pool[train_samples:]]
                 sample_index['train'] = _shuffle_sampling(ii_train)
                 sample_index['valid'] = _shuffle_sampling(ii_valid)
             elif self.kwarg.sample_method == 'both_shuffle':
-                ii_train = ipos[:,:train_dates][nonnan_sample[:,:train_dates]]
-                ii_valid = ipos[:,train_dates:][nonnan_sample[:,train_dates:]]
+                ii_train = pij[:,:dtrain][pos[:,:dtrain]]
+                ii_valid = pij[:,dtrain:][pos[:,dtrain:]]
                 sample_index['train'] = _shuffle_sampling(ii_train)
                 sample_index['valid'] = _shuffle_sampling(ii_valid)
             elif self.kwarg.sample_method == 'train_shuffle':
-                ii_train = ipos[:,:train_dates][nonnan_sample[:,:train_dates]]
+                ii_train = pij[:,:dtrain][pos[:,:dtrain]]
                 sample_index['train'] = _shuffle_sampling(ii_train)
-                sample_index['valid'] = [ipos[:,pos][nonnan_sample[:,pos]] for pos in range(train_dates , shp[1])]
+                sample_index['valid'] = [pij[:,j][pos[:,j]] for j in range(dtrain , shp[1]) if pos[:,j].sum() > 0]
             else:
-                sample_index['train'] = [ipos[:,pos][nonnan_sample[:,pos]] for pos in range(0 , train_dates)]
-                sample_index['valid'] = [ipos[:,pos][nonnan_sample[:,pos]] for pos in range(train_dates , shp[1])]
+                sample_index['train'] = [pij[:,j][pos[:,j]] for j in range(0      , dtrain) if pos[:,j].sum() > 0]
+                sample_index['valid'] = [pij[:,j][pos[:,j]] for j in range(dtrain , shp[1]) if pos[:,j].sum() > 0]
         else:
-            sample_index['test'] = [ipos[:,pos][nonnan_sample[:,pos]] for pos in range(0 , shp[1])]
+            # test dataloader should have the same length as dates, so no filtering of pos[:,j].sum() > 0
+            sample_index['test'] = [pij[:,j][pos[:,j]] for j in range(0 , shp[1])]
 
         return sample_index
         

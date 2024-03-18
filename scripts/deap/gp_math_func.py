@@ -12,17 +12,6 @@ from sklearn.linear_model import LinearRegression
 #print(__name__)
 
 NaN = torch.nan
-if torch.cuda.is_available():
-    null = torch.Tensor().cuda()
-else:
-    null = torch.Tensor()
-null = None
-
-#def isnull(x):
-    # return x is null or (isinstance(x , torch.Tensor) and x.numel() == 0)
-    #return x is None or x is null or (isinstance(x , torch.Tensor) and x.numel() == 0)
-def isnull(x): 
-    return x is None
 
 def allna(x , inf_as_na = True):
     if inf_as_na:
@@ -66,7 +55,7 @@ class PrimaTools:
         def decorator(func):
             def wrapper(x , *args, **kwargs):
                 legit = cls.legit_checker((x,),**decor_kwargs)
-                if not legit: return null
+                if not legit: return None
                 return func(x , *args , **kwargs)
             wrapper.__name__ = func.__name__
             return wrapper
@@ -77,7 +66,7 @@ class PrimaTools:
         def decorator(func):
             def wrapper(x , y ,*args, **kwargs):
                 legit = cls.legit_checker((x,y),**decor_kwargs)
-                if not legit: return null
+                if not legit: return None
                 return func(x , y , *args , **kwargs)
             wrapper.__name__ = func.__name__
             return wrapper
@@ -111,7 +100,7 @@ class PrimaTools:
     @staticmethod
     def legit_checker(args,/,check_null=1,check_exact=1,check_allna=0,check_same=0,**decor_kwargs):
         for arg in args: 
-            if check_null  and isnull(arg): return False
+            if check_null  and arg is None: return False
             if check_allna and allna(arg):  return False
         if len(args) == 2 and check_exact and exact(args[0],args[1]): return False
         if len(args) == 2 and check_same  and same(args[0],args[1]):  return False
@@ -122,13 +111,13 @@ def prima_legit(check_valid = 1 , check_exact = True , check_allna = False , che
     def decorator(func):
         def wrapper(*args , **kwargs):
             if check_valid >= 1:
-                if isnull(args[0]): return null
-                if check_allna and allna(args[0]): return null
+                if args[0] is None: return None
+                if check_allna and allna(args[0]): return None
             if check_valid >= 2:
-                if isnull(args[1]): return null
-                if check_allna and allna(args[1]): return null
-                if check_exact and exact(args[0],args[1]): return null
-                if check_same  and same(args[0],args[1]): return null
+                if args[1] is None: return None
+                if check_allna and allna(args[1]): return None
+                if check_exact and exact(args[0],args[1]): return None
+                if check_same  and same(args[0],args[1]): return None
             v = func(*args , **kwargs)
             return v
         wrapper.__name__ = func.__name__
@@ -169,11 +158,10 @@ def rankic_2d(x , y , dim = 1 , universe = None , min_coverage = 0.5):
     x = torch.where(valid , x , NaN)
 
     coverage = (~x.isnan()).sum(dim=dim)
-    ic = corrwith(rank_pct(x), rank_pct(y) , dim=dim)
-    if isnull(ic):
-        return ic
-    else:
-        return torch.where(coverage < min_coverage * valid.sum(dim=dim) , NaN , ic)
+    x = rank_pct(x)
+    y = rank_pct(y)
+    ic = corrwith(x , y , dim=dim)
+    return ic if ic is None else torch.where(coverage < min_coverage * valid.sum(dim=dim) , NaN , ic)
 
 #%% 中性化函数
 def dummy(x , ex_last = True):
@@ -187,16 +175,16 @@ def dummy(x , ex_last = True):
     return dummy
 
 def concat_factors(*factors , n_dims = 2 , dim = -1 , device = None):
-    if len(factors) == 0: return null
+    if len(factors) == 0: return None
     factors = list(factors)
     
     for i in range(len(factors)):
-        #if factors[i] is None: factors[i] = null
+        #if factors[i] is None: factors[i] = None
         if isinstance(factors[i] , torch.Tensor):
             if factors[i].dim() == n_dims:  factors[i] = factors[i].unsqueeze(dim)
             if device is not None: factors[i] = factors[i].to(device)
 
-    factors = [f for f in factors if not isnull(f)]
+    factors = [f for f in factors if f is not None]
     factors = factors[0] if len(factors) == 1 else torch.cat(factors , dim = dim)
     return factors
 
@@ -253,7 +241,7 @@ def neutralize_xdata_2d(factors = None , groups = None):
     return x
 
 def neutralize_2d(y , x , dim = 1 , method = 'torch' , device = None , inplace = False):  # [tensor (TS*C), tensor (TS*C)]
-    if isnull(x) or isnull(y): return y
+    if x  is None or y is None: return y
 
     assert method in ['sk' , 'np' , 'torch']
     assert dim in [-1,0,1] , dim
@@ -296,7 +284,7 @@ def neutralize_2d(y , x , dim = 1 , method = 'torch' , device = None , inplace =
     return y
 
 def neutralize_1d(y , x , insample , method = 'torch' , device = None , inplace = False):  # [tensor (TS*C), tensor (TS*C)]
-    if isnull(x) or isnull(y): return y
+    if x is None or y is None: return y
 
     assert method in ['sk' , 'np' , 'torch']
     assert y.shape == insample.shape , (y.shape , insample.shape)
@@ -339,10 +327,9 @@ def corrwith(x,y,dim=None):
     x_xmean = x - torch.nanmean(x, dim, keepdim=True)  
     y_ymean = y - torch.nanmean(y, dim, keepdim=True) 
     cov  = torch.nansum(x_xmean * y_ymean, dim) 
-    xsd  = x_xmean.square().nansum(dim).sqrt() 
-    ysd  = y_ymean.square().nansum(dim).sqrt()
-    tol  = cov.nanmean() * 1e-4
-    corr = cov / (xsd + tol) / (ysd + tol)
+    ssd  = x_xmean.square().nansum(dim).sqrt() * y_ymean.square().nansum(dim).sqrt()
+    ssd[ssd == 0] = 1e-4
+    corr = cov / ssd
     return corr
 
 #@PrimaTools.prima_legit(2,check_exact=0)
@@ -472,7 +459,7 @@ def div_int2(x, d):
 
 def neg(x):
     '-x'
-    return null if isnull(x) else -x
+    return x if x is None else -x
 
 def neg_int(x):
     '-x'
@@ -551,7 +538,7 @@ def sign(x):
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
 def ts_delay(x, d):
-    if d > x.shape[0]: return null
+    if d > x.shape[0]: return None
     if d < 0: print('Beware! future information used!')
     z = x.roll(d, dims=0)
     if d >= 0:
@@ -563,7 +550,7 @@ def ts_delay(x, d):
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
 def ts_delta(x, d):
-    if d > x.shape[0]: return null
+    if d > x.shape[0]: return None
     if d < 0: print('Beware! future information used!')
     z = x - ts_delay(x, d)
     return z

@@ -1,13 +1,10 @@
 # %%
 import pandas as pd
 import numpy as np
-import os , sys , copy , tqdm , shutil , gc , re , traceback , yaml
 import torch
-import array , random , json , operator , time, platform , joblib
+import copy , os, platform , shutil , time , yaml
 from argparse import ArgumentParser , Namespace
 from tqdm import tqdm
-
-from deap import base , creator , tools , gp
 from deap.algorithms import varAnd
 from torch.multiprocessing import Pool
 
@@ -154,7 +151,6 @@ def gp_parameters(job_id = None , train = True , continuation = False , test_cod
     if test_code: gp_params.update(**gp_params.test_params)
     gp_params.update(**kwargs)
     gp_params.apply('slice_date' , lambda x:pd.to_datetime(x).values)
-    # assert MF.null.device == gp_params.get('device') , (MF.null.device , gp_params.get('device'))
     return gp_params
 
 # %%
@@ -338,7 +334,7 @@ def df2ts(x , gp_key = '' , device = None , share_memory = True):
 
 # %%
 def gp_syntax2value(compiler, individual, gp_inputs, param, tensors, i_iter=0, 
-                    timer=None, mgr_mem = None , process_stream='inf_trim_norm',
+                    timer=None, mgr_mem = None , process_stream='inf_winsor_norm',
                     **kwargs):
     '''
     ------------------------ calculate individual syntax factor value ------------------------
@@ -371,7 +367,7 @@ def gp_syntax2value(compiler, individual, gp_inputs, param, tensors, i_iter=0,
     with timer.acc_timer('neutralize'):
         factor_neut_type = param.factor_neut_type * (i_iter > 0) * (tensors.get('neutra') is not None)
         assert factor_neut_type in [0,1,2] , factor_neut_type
-        if MF.isnull(factor_value) or factor_neut_type == 0:
+        if factor_value is None or factor_neut_type == 0:
             pass
         elif factor_neut_type == 1:
             assert isinstance(factor_value , torch.Tensor)
@@ -385,6 +381,7 @@ def gp_syntax2value(compiler, individual, gp_inputs, param, tensors, i_iter=0,
             func = mgr_mem.except_MemoryError(MF.neutralize_1d, print_str=f'neutralizing {str(individual)}')
             factor_value = func(factor_value , tensors.neutra.to(factor_value))
 
+    factor_value = FF.FactorValue(name=individual , process=process_stream , value=factor_value)
     return factor_value
 
 # %%
@@ -401,6 +398,7 @@ def evaluate(individual, pool_skuname, compiler , gp_inputs , param , tensors , 
         gp_inputs:      initial population factor values
         param:          gp_params
         tensors:        gp_space components of other tensors
+        fitness:        gpFitness object , 
         const_annual:   constant of annualization
         min_coverage:   minimum daily coverage to determine if factor is valid
     output:
@@ -417,22 +415,23 @@ def evaluate(individual, pool_skuname, compiler , gp_inputs , param , tensors , 
     factor_value = gp_syntax2value(compiler,individual,gp_inputs,param,tensors,i_iter,timer,**kwargs)
     # mgr_mem.check('factor')
     
-    metrics = torch.zeros(8).to(factor_value)
-    if not MF.isnull(factor_value): 
+    metrics = torch.zeros(8).to(factor_value.value)
+    if not factor_value.isnull(): 
         for i , labels in enumerate([tensors.labels_res , tensors.labels_raw]):
-            rankic_full = MF.rankic_2d(factor_value , labels , dim = 1 , universe = tensors.universe , min_coverage = min_coverage)
+            rankic_full = MF.rankic_2d(factor_value.value , labels , dim = 1 , universe = tensors.universe , min_coverage = min_coverage)
             for j , sample in enumerate([tensors.insample , tensors.outsample]):
-                if MF.isnull(rankic_full): continue
+                if rankic_full is None: continue
                 rankic = rankic_full[sample]
                 if rankic.isnan().sum() < 0.5 * len(rankic): # if too many nan rank_ic (due to low coverage)
                     rankic_avg  = rankic.nanmean()
                     rankic_std  = (rankic - rankic_avg).square().nanmean().sqrt() 
                     metrics[4*i + 2*j + 0] = rankic_avg.item() * const_annual
                     metrics[4*i + 2*j + 1] = (rankic_avg / (rankic_std + 1e-6) * np.sqrt(const_annual)).item()
-    
-    individual.if_valid = not MF.isnull(factor_value)
-    individual.metrics  = metrics.cpu().numpy()
-    individual.fitness.values = fitness.fitness_value(individual.metrics , as_abs=True)      
+    factor_value.infos['metrics'] = metrics.cpu().numpy()
+
+    individual.if_valid = not factor_value.isnull()
+    individual.metrics  = factor_value.infos['metrics']
+    individual.fitness.values = fitness.fitness_value(factor_value.infos['metrics'] , as_abs=True)      
     # mgr_mem.check('rankic')
     return individual
 
@@ -449,26 +448,27 @@ def evaluate_pop(population , toolbox , param , i_iter = 0, i_gen = 0, desc = 'E
     '''
     changed_pop   = [ind for ind in population if not ind.fitness.valid]
     pool_skunames = [f'iter{i_iter}_gen{i_gen}_{i}' for i in range(len(changed_pop))] # 'pool_skuname' arg for evaluate
-    def desc0(x):
-        return (f'  --> {desc} {str(i_gen)} ' +'MaxIRres{:+.2f}|MaxIRraw{:+.2f}'.format(*x))
-    maxir = [0.,0.]
-    def maxir_(m , ind):
-        if abs(ind.metrics[1]) > abs(m[0]): m[0] = ind.metrics[1] 
-        if abs(ind.metrics[5]) > abs(m[1]): m[1] = ind.metrics[5]
-        return m
      # record max_fit0 and show
+    iterator = tuple(zip(changed_pop, pool_skunames))
     if param.pool_num > 1:
-        pool = Pool(param.pool_num)
-        #changed_pop = pool.starmap(toolbox.evaluate, zip(changed_pop, pool_list), chunksize=1)
-        iterator = tqdm(pool.imap(toolbox.evaluate, zip(changed_pop, pool_skunames)), total=len(changed_pop))
-        [iterator.set_description(desc0(maxir := maxir_(maxir,ind))) for ind in iterator]
-        pool.close()
-        pool.join()
-        # pool.clear()
+        with Pool(processes=param.pool_num) as pool:
+            result = list(tqdm(pool.starmap(toolbox.evaluate, iterator), total=len(iterator) , 
+                               desc=f'Parallel evalute population ({param.pool_num})'))
     else:
-        #changed_pop = list(tqdm(toolbox.map(toolbox.evaluate, changed_pop, pool_skunames), total=len(changed_pop), desc=desc))
-        iterator = tqdm(toolbox.map(toolbox.evaluate, changed_pop, pool_skunames), total=len(changed_pop))
-        [iterator.set_description(desc0(maxir := maxir_(maxir,ind))) for ind in iterator]
+        def desc0(x):
+            return (f'  --> {desc} {str(i_gen)} ' +'MaxIRres{:+.2f}|MaxIRraw{:+.2f}'.format(*x))
+        def maxir(ir , ind):
+            if abs(ind.metrics[1]) > abs(ir[0]): ir[0] = ind.metrics[1] 
+            if abs(ind.metrics[5]) > abs(ir[1]): ir[1] = ind.metrics[5]
+            return ir
+        iterator = tqdm(iterator, total=len(changed_pop))
+        ir = [0.,0.]
+        for ind , sku in iterator:
+            ind = toolbox.evaluate(ind, sku)
+            iterator.set_description(desc0(ir := maxir(ir,ind)))
+
+        #iterator = tqdm(toolbox.map(toolbox.evaluate, changed_pop, pool_skunames), total=len(changed_pop))
+        #[iterator.set_description(desc0(maxir := maxir_(maxir,ind))) for ind in iterator]
 
     assert all([ind.fitness.valid for ind in population])
     return population
@@ -492,47 +492,42 @@ def gp_residual(param , tensors , i_iter = 0, device = None ,
     if mgr_file is None: mgr_file = gpFileManager()
     if mgr_mem  is None: mgr_mem  = MemoryManager()
 
-    tensors.neutra = MF.null
+    tensors.neutra = None
     if i_iter == 0:
         labels_res = copy.deepcopy(tensors.labels_raw)
-        elites     = MF.null
-        #lastneutra = MF.null
+        elites     = None
+        
     else:
         labels_res = mgr_file.load_state('res' , i_iter - 1 , device = device)
         elites     = mgr_file.load_state('elt' , i_iter - 1 , device = device)
-        #lastneutra = mgr_file.load_state('neu' , i_iter - 1 , device = device)
+    neutra = elites
 
-    assert isinstance(elites , torch.Tensor) and isinstance(labels_res , torch.Tensor)
-    if MF.isnull(elites): 
-        neutra = elites
-    else:
-        if param.labels_neut_type == 'svd':
-            if param.svd_mat_method == 'total':
-                elites_mat = FF.factor_coef_total(elites[tensors.insample],dim=-1)
-            else:
-                elites_mat = FF.factor_coef_with_y(elites[tensors.insample], labels_res[tensors.insample].unsqueeze(-1), corr_dim=1, dim=-1)
-            neutra = FF.top_svd_factors(elites_mat, elites, top_n = param.svd_top_n ,top_ratio=param.svd_top_ratio, dim=-1 , inplace = True) # use svd factors instead
-            print(f'  -> Elites({elites.shape[-1]}) Shrink to SvdElites({neutra.shape[-1]})')
+    if isinstance(elites , torch.Tensor) and param.labels_neut_type == 'svd': 
+        if param.svd_mat_method == 'total':
+            elites_mat = FF.factor_coef_total(elites[tensors.insample],dim=-1)
         else:
-            neutra = elites
+            elites_mat = FF.factor_coef_with_y(elites[tensors.insample], labels_res[tensors.insample].unsqueeze(-1), corr_dim=1, dim=-1)
+        neutra = FF.top_svd_factors(elites_mat, elites, top_n = param.svd_top_n ,top_ratio=param.svd_top_ratio, dim=-1 , inplace = True) # use svd factors instead
+        print(f'  -> Elites({elites.shape[-1]}) Shrink to SvdElites({neutra.shape[-1]})')
 
-    tensors.update(neutra = neutra.cpu())
+    if isinstance(neutra , torch.Tensor) and neutra.numel(): 
+        tensors.update(neutra = neutra.cpu())
+        print(f'  -> Neutra has {neutra.shape[-1]} Elements')
+
+    assert isinstance(labels_res , torch.Tensor) , type(labels_res)
     labels_res = MF.neutralize_2d(labels_res, neutra , inplace = True) 
     mgr_file.save_state(labels_res, 'res', i_iter) 
 
     if param.factor_neut_type > 0 and param.labels_neut_type == 'svd':
-        lastneutra = MF.null if i_iter == 0 else mgr_file.load_state('neu' , i_iter - 1 , device = device)
-        assert isinstance(lastneutra , torch.Tensor)
-        lastneutra = lastneutra
-        mgr_file.save_state(torch.cat((lastneutra.cpu() , neutra.cpu()) , dim=-1), 'neu', i_iter) 
+        lastneutra = None if i_iter == 0 else mgr_file.load_state('neu' , i_iter - 1 , device = device)
+        if isinstance(lastneutra , torch.Tensor): lastneutra = lastneutra.cpu()
+        if isinstance(neutra , torch.Tensor): 
+            lastneutra = torch.cat([lastneutra , neutra.cpu()] , dim=-1) if isinstance(lastneutra , torch.Tensor) else neutra.cpu()
+        mgr_file.save_state(lastneutra , 'neu', i_iter) 
         del lastneutra
     
     tensors.update(labels_res = labels_res)
-    if neutra.numel(): print(f'  -> Neutra has {neutra.shape[-1]} Elements')
     mgr_mem.check(showoff = True)
-    #print(labels_res.isnan().sum() , labels_res.numel())
-    #print(MF.nanstd(labels_res , -1))
-
 
 # %%
 def gp_population(toolbox , pop_num , max_round = 100 , last_gen = [], forbidden = [] , **kwargs):
@@ -673,7 +668,7 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
         factor_value = gp_syntax2value(toolbox.compile,hof,gp_inputs,param,tensors,i_iter,timer,**kwargs)
         mgr_mem.check('factor')
         
-        new_log.loc[i,'elite'] = not MF.isnull(factor_value)
+        new_log.loc[i,'elite'] = not factor_value.isnull()
         if not new_log.loc[i,'elite']: continue
 
         # 与已有的因子库"样本内"做相关性检验,如果相关性大于预设值corr_cap则进入下一循环
@@ -687,22 +682,23 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
         # 通过检验,加入因子库
         new_log.loc[i,'i_elite'] = hof_elites.i_elite
         forbidden.append(halloffame[i])
-        hof_elites.append(new_log.syntax[i] , factor_value , IR = new_log.rankir_in_res[i] , Corr = new_log.max_corr[i] , starter=f'  --> Hof{i:_>3d}/')
-        if False and test_code: mgr_file.save_state(factor_value , 'parquet' , i_iter , i_elite = hof_elites.i_elite)
+        hof_elites.append(factor_value , IR = new_log.rankir_in_res[i] , Corr = new_log.max_corr[i] , starter=f'  --> Hof{i:_>3d}/')
+        if False and test_code: 
+            mgr_file.save_state(factor.to_dataframe(index = records.df_index , columns = records.df_columns) , 'parquet' , i_iter , i_elite = hof_elites.i_elite)
         mgr_mem.check(showoff = verbose and test_code, starter = '  --> ')
 
     mgr_file.dump_generation(population, halloffame, forbidden , i_iter = i_iter , i_gen = -1)
     records.update(forbidden = forbidden)
 
-    hof_elites.update_logs(new_log)
-    elites = hof_elites.compile_elite_tensor(device=device).elite_tensor
-    
     # 记录本次运行的名人堂与精英状态
+    hof_elites.update_logs(new_log)
     mgr_file.save_state(hof_elites.elite_log.round(6) , 'elitelog' , i_iter)
     mgr_file.save_state(hof_elites.hof_log.round(6)   , 'hoflog'   , i_iter)
-    mgr_file.save_state(elites , 'elt' , i_iter)
-
-    print(f'**An EliteGroup({elites.shape[-1]}) has been Selected')
+    
+    elites = hof_elites.compile_elite_tensor(device=device)
+    if elites is not None:
+        mgr_file.save_state(elites , 'elt' , i_iter)
+        print(f'**An EliteGroup({elites.shape[-1]}) has been Selected')
     if True: 
         print(f'  --> Cuda Memories of "gp_inputs" take {MemoryManager.object_memory(gp_inputs):.4f}G')
         print(f'  --> Cuda Memories of "elites"    take {MemoryManager.object_memory(elites):.4f}G')
@@ -742,30 +738,77 @@ def outer_loop(i_iter , gp_space , start_gen = 0):
     gp_space.timer.append_time('AvgEval',    gp_space.timer.acc_timer('eval').avgtime(pop_out = True))
     gp_space.timer.append_time('All' , time.time() - timenow)
     return
-    
-def gp_factor_generator(**kwargs):
+
+class gpGenerator:
     '''
     ------------------------ gp factor generator ------------------------
     构成因子生成器,返回输入因子表达式则输出历史因子值的函数
     input:
         kwargs:  specific gp parameters, suggestion is to leave it alone
     output:
-        wrapper: lambda syntax:factor value
+        GP:      gp_generator
     '''
-    gp_params = gp_parameters(train = False , **kwargs)
-    gp_space  = gp_namespace(gp_params)
-    
-    toolbox   = gpHandler.Toolbox(eval_func=evaluate , eval_pop=evaluate_pop , **gp_space)
-        
-    def wrapper(syntax , process_key = 'inf_trim_norm'):
-        func  = getattr(toolbox , 'compile')(syntax) 
-        value = func(*gp_space.gp_inputs)
-        value = FF.process_factor(value , process_key , dim = 1)
-        return value
-    
-    gp_space.update(toolbox = toolbox , compile = wrapper)
-    return gp_space
+    def __init__(self , job_id , process_key = 'inf_winsor_norm' , **kwargs) -> None:
+        gp_params = gp_parameters(job_id = job_id , train = False , **kwargs)
+        self.gp_space  = gp_namespace(gp_params)
+        self.toolbox   = gpHandler.Toolbox(eval_func=evaluate , eval_pop=evaluate_pop , **self.gp_space)
+        #self.gp_space.update(toolbox = self.toolbox)
+        #self.gp_space.mgr_file.update_toolbox(self.toolbox)
+        self.process_key = process_key
+        self.elitelog   = self.gp_space.mgr_file.load_state('elitelog' , i_iter = -1).set_index('i_elite')
+        self.df_axis    = self.gp_space.mgr_file.load_state('df_axis' , -1)
 
+        # weight_scheme = 'ic', window_type = 'rolling', weight_decay= 'exp' ,
+        # ir_window = 40 , roll_window = 40 , halflife = 20
+        self.Ensembler = FF.MultiFactor(
+            universe = self.gp_space.tensors.universe , 
+            insample = self.gp_space.tensors.insample ,
+            **kwargs)
+
+    def __call__(self, syntax : str | FF.FactorValue , process_key : str | None = None , as_df = False , print_info = True) -> FF.FactorValue | pd.DataFrame | None:
+        if isinstance(syntax , FF.FactorValue): return syntax
+        if process_key is None: process_key = self.process_key
+        func  = getattr(self.toolbox , 'compile')(syntax) 
+        #value = func(*self.gp_space.gp_inputs)
+        #value = FF.process_factor(value , process_key , dim = 1)
+        factor = gp_syntax2value(getattr(self.toolbox , 'compile'),syntax,**self.gp_space)
+        if as_df and not factor.isnull():
+            factor = factor.to_dataframe(index = self.df_axis['df_index'] , columns = self.df_axis['df_columns'])
+        if print_info: print(f'gpGenerator -> process_key : {process_key} , syntax : {syntax}')
+        return factor
+
+    def entire_elites(self , block_len = 50):
+        elite_log  = self.gp_space.mgr_file.load_state('elitelog' , i_iter = -1) 
+        hof_log    = self.gp_space.mgr_file.load_state('hoflog'   , i_iter = -1)
+        hof_elites = gpEliteGroup(start_i_elite=0 , device=self.gp_space.device , block_len=block_len).assign_logs(hof_log=hof_log, elite_log=elite_log)
+        for elite in elite_log.syntax: hof_elites.append(self(elite))
+        hof_elites.cat_all()
+        return hof_elites
+
+    def load_elite(self , i_elite : int , factor = False):
+        elite_syntax = self.elitelog.loc[i_elite , 'syntax']
+        return self(elite_syntax) if factor else elite_syntax
+    
+    def multi_factor(self , *factors , labels = None):
+        # 基于多个单因子,计算多因子
+        factor_list = list(factors)
+        if len(factor_list) == 1 and isinstance(factor_list[0] , torch.Tensor) and factor_list[0].dim() == 3:
+            factor = factor_list[0]
+        else:
+            for i , fac in enumerate(factor_list):
+                if isinstance(fac , str): factor_list[i] = self(fac)
+            factor = torch.stack(factor_list , dim = -1)
+        if labels is None:
+            labels = self.gp_space.tensors.labels_raw
+        metrics = self.Ensembler.calculate_icir(factor , labels) # ic,ir
+        multi = self.Ensembler.multi_factor(factor , **metrics)
+        return multi # multi对象拥有multi,weight,inputs三个自变量,用multi.multi也行
+    
+    def multi_elite_factor(self):
+        hof_elites = self.entire_elites()
+        multi = self.multi_factor(hof_elites.compile_elite_tensor())
+        # setattr(multi , 'hof_elites' , hof_elites)
+        return multi
 
 # %%
 def main(job_id = None , start_iter = 0 , start_gen = 0 , test_code = False , noWith = False , **kwargs):
@@ -784,7 +827,6 @@ def main(job_id = None , start_iter = 0 , start_gen = 0 , test_code = False , no
         time0 = time.time()
         
         gp_params = gp_parameters(job_id , continuation = start_iter>0 or start_gen>0 , test_code = test_code , **kwargs)
-        
         gp_space = gp_namespace(gp_params)
 
         for i_iter in range(start_iter , gp_space.param.n_iter):

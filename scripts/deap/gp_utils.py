@@ -1,8 +1,9 @@
-import operator , time , joblib , os , gc , itertools , re , traceback , copy
+import operator , time , joblib , os , gc , itertools , re , traceback
 import numpy as np
 import pandas as pd
 import torch
 from argparse import Namespace
+from dataclasses import dataclass , field
 from deap import base , creator , tools , gp
 from copy import deepcopy
 import gp_math_func as MF
@@ -17,9 +18,8 @@ class int3(int): pass
 class int4(int): pass
 class float1(float): pass
 
-class gpFitness(Namespace):
+class gpFitness:
     def __init__(self, fitness_weights = {} , **kwargs) -> None:
-        super().__init__(**kwargs)
         # assert len(weights) > 0, f'weights must have positive length'
         self.title = list(fitness_weights.keys())
         self.weights = tuple(fitness_weights.values())
@@ -28,13 +28,14 @@ class gpFitness(Namespace):
         assert len(self._idx) > 0 , f'all fitness weights are 0!'
         self._keys = tuple(k for k,v in zip(self.title , self.weights) if v != 0)
         self._wgts = tuple(v for k,v in zip(self.title , self.weights) if v != 0)
-    def fitness_value(self , metrics , as_abs = True , **kwargs):
-        if as_abs: metrics = abs(metrics)
-        return tuple(metrics[self._idx])
+    def fitness_value(self , metrics = None , as_abs = True , **kwargs):
+        if metrics is None:
+            return tuple([0. for i in self._idx])
+        else:
+            if as_abs: metrics = abs(metrics)
+            return tuple(metrics[self._idx])
     def fitness_weight(self):
         return self._wgts
-    def fitness_namespace(self , values):
-        return Namespace(**{k:v for k,v in zip(self._keys,values)})
 
 class gpHandler:
     '''
@@ -167,25 +168,34 @@ class gpHandler:
         return x
     
     @staticmethod
-    def str2ind(x , pset_ind):
-        return getattr(creator , 'Individual').from_string(x , pset=pset_ind) 
+    def str2ind(x , pset_ind , fit_value = None):
+        assert fit_value is None or isinstance(fit_value , tuple) , fit_value
+        ind = getattr(creator , 'Individual').from_string(x , pset=pset_ind) 
+        if fit_value: ind.fitness.values = fit_value
+        return ind
         
     @staticmethod
-    def str2syx(x , ind_str , pset_syx):
+    def str2syx(x , ind_str , pset_syx , fit_value = None):
+        assert fit_value is None or isinstance(fit_value , tuple) , fit_value
         syx = getattr(creator , 'Syntax').from_string(x , pset=pset_syx) 
         syx.ind_str = ind_str
+        if fit_value: syx.fitness.values = fit_value
         return syx
     
     @staticmethod
-    def syx2ind(x , toolbox):
-        return toolbox.str2ind(x.ind_str) 
+    def syx2ind(syx , toolbox):
+        fit_value = syx.fitness.values if hasattr(syx , 'fitness') else None
+        ind = toolbox.str2ind(syx.ind_str , fit_value = fit_value) 
+        return ind
     
     @classmethod
     def ind2syx(cls , ind , toolbox):
         ind_str = str(ind)
         ind = toolbox.ind_prune(ind)
         ind = toolbox.syx2str(ind)
-        return toolbox.str2syx(ind , ind_str = ind_str) 
+        fit_value = ind.fitness.values if hasattr(ind , 'fitness') else None
+        syx = toolbox.str2syx(ind , ind_str = ind_str , fit_value = fit_value) 
+        return syx
     
     @classmethod
     def ind_prune(cls , ind):
@@ -233,17 +243,20 @@ class gpHandler:
         return compiler
     
     @classmethod
-    def Toolbox(cls , eval_func , eval_pop , param , gp_argnames , i_iter = -1 , n_args = (1,1) ,  
-                fitness = None , **kwargs):
+    def Toolbox(cls , eval_func , eval_pop , param , gp_argnames , fitness , i_iter = -1 , n_args = (1,1) ,  
+                **kwargs):
         '''
         ------------------------ create gp toolbox ------------------------
         input:
-            gp_args:   initial gp factor names
-            eval_func: evaluate function of individual, to register into toolbox
-            i_iter:    i of outer loop, -1 as default mean no
-            max_depth: [inner loop] max tree depth of gp
-            n_args:    number of gp factors, (n_of_zscore_factors, n_of_raw_indicators)
-            kwargs:    must include all args in eval_func
+            
+            eval_func:      evaluate function of individual, to register into toolbox
+            eval_pop:       evaluate function of population, to register into toolbox
+            param:          gp parameters
+            gp_argnames:    initial gp factor names
+            fitness:        gpFitness object
+            i_iter:         i of outer loop, -1 as default mean no
+            n_args:         number of gp factors, (n_of_zscore_factors, n_of_raw_indicators)
+            kwargs:         must include all args in eval_func
         output:
             toolbox:   toolbox that contains all gp utils
         '''
@@ -287,6 +300,7 @@ class gpHandler:
         toolbox = base.Toolbox()
         toolbox.register('generate_expr', gp.genHalfAndHalf, pset=pset_individual, min_=1, max_= param.max_depth)
         toolbox.register('individual', tools.initIterate, getattr(creator , 'Individual'), getattr(toolbox , 'generate_expr'))
+        # toolbox.register('fitness_value', fitness.fitness_value)
         toolbox.register('population', tools.initRepeat, list, getattr(toolbox , 'individual')) 
         toolbox.register('ind2str', cls.ind2str)
         toolbox.register('syx2str', cls.syx2str)
@@ -313,6 +327,18 @@ class gpHandler:
 
         return toolbox
     
+@dataclass
+class SyntaxRecord:
+    syx_str : str
+    ind_str : str
+    fit     : tuple | None = None
+
+    def to_syx(self , toolbox):
+        return toolbox.str2syx(self.syx_str , ind_str = self.ind_str , fit_value = self.fit)
+
+    def to_ind(self , toolbox):
+        return toolbox.str2ind(self.ind_str , fit_value = self.fit)
+
 class gpContainer(Namespace):
     __reserved_names__ = ['get' , 'set' , 'update' , 'delete' , 'subset' , 'keys' , 'values' , 'items' , 'copy' , 'apply' , 'map']
     def __init__(self , inherit_from = None , **kwargs) -> None:
@@ -394,9 +420,10 @@ class gpFileManager:
             ind_str = self.toolbox.ind2str(ind)
         else:
             ind_str = ind.ind_str
-        fit = ind.fitness.values if hasattr(ind,'fitness') else ()
+        fit = ind.fitness.values if hasattr(ind,'fitness') else None
         # ind = syx_str, ind_str, fit
-        ind = Namespace(syx_str = syx_str, ind_str = ind_str, fit = fit)
+        # ind = Namespace(syx_str = syx_str, ind_str = ind_str, fit = fit)
+        ind = SyntaxRecord(syx_str , ind_str , fit)
         return ind
 
     def dump_generation(self , population , halloffame , forbidden , i_iter = 0 , i_gen = 0 , **kwargs):
@@ -408,7 +435,6 @@ class gpFileManager:
         pop = [self.single_dumpable(ind) for ind in population]
         hof = [self.single_dumpable(ind) for ind in halloffame]
         fbd = [self.single_dumpable(ind) for ind in forbidden]
-
         self.logbook.record(i_gen = i_gen , 
                             population = pop, 
                             halloffame = hof, 
@@ -420,26 +446,33 @@ class gpFileManager:
 
     def load_generation(self , i_iter = 0 , i_gen = 0 , hof_num = 500 , **kwargs):
         self.logbook = tools.Logbook()
-        if i_gen < 0: 
-            pop = []
-            hof = tools.HallOfFame(hof_num)
-            if i_iter == 0:
-                fbd  = []
-            else:
-                basename = self.record_basename(i_iter-1 , -1)
-                log = joblib.load(f'{self.dir.log}/{basename}.pkl')
-                fbd = [self.toolbox.str2syx(ind.syx_str , ind.ind_str) for ind in log['forbidden']] 
+        if i_iter < 0:
+            pattern = r'iter(\d+)_.*\.pkl'
+            matches = [re.match(pattern, file_name) for file_name in os.listdir('./pop/bendi/logbook/')]
+            i_iter = sorted(list(set([int(match.group(1)) for match in matches if match])))[i_iter]
+            
+        basename = self.record_basename(i_iter-1 , -1) if i_gen < 0 else self.record_basename(i_iter , i_gen)
+            
+        pop = []
+        hof = tools.HallOfFame(hof_num)
+        fbd = [] 
+        if os.path.exists(f'{self.dir.log}/{basename}.pkl'):
+            log = joblib.load(f'{self.dir.log}/{basename}.pkl')
+            self.logbook.record(**log)
+            # fbd = [self.toolbox.str2syx(ind.syx_str , ind.ind_str , fit_value = ind.fit) for ind in log['forbidden']] 
+            fbd = [ind.to_syx(self.toolbox) for ind in log['forbidden']] 
+            if i_gen >= 0:
+                # only update pop and hof when i_gen >= 0
+                # pop = [self.toolbox.str2ind(ind.ind_str , fit_value = ind.fit) for ind in log['population']] 
+                # hof.update([self.toolbox.str2syx(ind.syx_str , ind.ind_str , fit_value = ind.fit) for ind in log['halloffame']])
+                pop = [ind.to_ind(self.toolbox) for ind in log['population']] 
+                hof.update([ind.to_syx(self.toolbox) for ind in log['halloffame']])
+        elif i_gen >= 0:
+            raise Exception(f'{self.dir.log}/{basename}.pkl does not exists!')
         else:
-            basename = self.record_basename(i_iter , i_gen)
-            self.logbook.record(**joblib.load(f'{self.dir.log}/{basename}.pkl'))
-            pop = [self.toolbox.str2ind(ind.ind_str) for ind in self.logbook[-1]['population']] 
-            hof = [self.toolbox.str2syx(ind.syx_str , ind.ind_str) for ind in self.logbook[-1]['halloffame']] 
-            fbd = [self.toolbox.str2syx(ind.syx_str , ind.ind_str) for ind in self.logbook[-1]['forbidden']] 
-
-            hof_ = self.toolbox.evaluate_pop(hof , i_iter = i_iter, i_gen = i_gen, desc = 'Load HallofFame')
-            hof = tools.HallOfFame(hof_num)
-            hof.update(hof_)
-        
+            log = None
+        # re-evaluate hof
+        hof = self.toolbox.evaluate_pop(hof , i_iter = i_iter, i_gen = i_gen, desc = 'Load HallofFame')
         return pop , hof , fbd
 
     def update_sku(self , individual , pool_skuname):
@@ -457,6 +490,10 @@ class gpFileManager:
     
     def load_state(self , key , i_iter , i_gen = 0 , i_elite = 0 , device = None):
         if key in ['res' , 'neu' , 'elt']:
+            if i_iter < 0:
+                pattern = r'iter(\d+).pt'
+                matches = [re.match(pattern, file_name) for file_name in os.listdir(getattr(self.dir , key))]
+                i_iter = sorted(list(set([int(match.group(1)) for match in matches if match])))[i_iter]
             return torch.load(getattr(self.dir , key) + f'/iter{i_iter}.pt').to(device)
         elif key == 'parquet':
             return pd.read_parquet(f'{self.dir.pqt}/elite_{i_elite}.parquet', engine='fastparquet')
@@ -466,10 +503,11 @@ class gpFileManager:
                 self.df_axis = torch.load(path)
                 return self.df_axis
             elif key in ['elitelog' , 'hoflog']:
+                df = pd.DataFrame()
                 if os.path.exists(path):
                     df = pd.read_csv(path,index_col=0)
-                    return df[df.i_iter < i_iter]
-                return pd.DataFrame()
+                    if i_iter >= 0: df = df[df.i_iter < i_iter]
+                return df
             elif path.endswith('.csv'):
                 return pd.read_csv(path,index_col=0)
             elif path.endswith('.pt'):
@@ -481,9 +519,7 @@ class gpFileManager:
         if key in ['res' , 'neu' , 'elt']:
             torch.save(data , getattr(self.dir , key) +f'/iter{i_iter}.pt')
         elif key == 'parquet':
-            if isinstance(data , torch.Tensor): data = data.cpu().numpy()
-            df = pd.DataFrame(data,index=self.df_axis['df_index'],columns=self.df_axis['df_columns'])
-            df.to_parquet(f'{self.dir.pqt}/elite_{i_elite}.parquet',engine='fastparquet')
+            data.to_parquet(f'{self.dir.pqt}/elite_{i_elite}.parquet',engine='fastparquet')
         else:
             path = getattr(self.path , key)
             if key == 'df_axis':
@@ -684,7 +720,7 @@ class MemoryManager():
             print(f'Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
 
     @staticmethod
-    def except_MemoryError(func , out = MF.null , print_str = ''):
+    def except_MemoryError(func , out = None , print_str = ''):
         def wrapper(*args , **kwargs):
             try:
                 value = func(*args , **kwargs)
@@ -703,10 +739,7 @@ class gpEliteGroup:
         self.i_elite = start_i_elite
         self.device  = device
         self.block_len = block_len
-        self.init_container()
-
-    def init_container(self):
-        self.container = [gpEliteBlock(self.block_len)]
+        self.container = []
 
     def assign_logs(self , hof_log , elite_log):
         self.hof_log = hof_log
@@ -721,24 +754,26 @@ class gpEliteGroup:
         self.hof_log = pd.concat([self.hof_log , new_log] , axis=0) if len(self.hof_log) else new_log
         return self
 
-    def max_corr_with_me(self , value , abs_corr_cap = 1.01 , dim = 1 , dim_valids = (None , None) , syntax = None):
-        corr_values = torch.zeros((self.i_elite - self.start_i_elite + 1 ,)).to(value)
+    def max_corr_with_me(self , factor , abs_corr_cap = 1.01 , dim = 1 , dim_valids = (None , None) , syntax = None):
+        assert isinstance(factor , FF.FactorValue) , type(factor)
+        corr_values = torch.zeros((self.i_elite - self.start_i_elite + 1 ,)).to(factor.value)
         exit_state  = False
         l = 0
         for block in self.container:
-            corrs , exit_state = block.max_corr(value , abs_corr_cap , dim , dim_valids , syntax = syntax)
+            corrs , exit_state = block.max_corr(factor , abs_corr_cap , dim , dim_valids , syntax = syntax)
             corr_values[l:l+block.len()] = corrs[:block.len()]
             l += block.len()
             if exit_state: break
         return corr_values , exit_state
 
-    def append(self , syntax , value , starter = None , **kwargs):
-        if not self.container[-1].full:
-            self.container[-1].append(syntax , value , **kwargs)
+    def append(self , factor , starter = None , **kwargs):
+        assert isinstance(factor , FF.FactorValue) , type(factor)
+        if len(self.container) and not self.container[-1].full:
+            self.container[-1].append(factor , **kwargs)
         else:
-            if len(self.container) > 0: self.container[-1].cat2cpu()
-            self.container.append(gpEliteBlock(self.block_len).append(syntax , value , **kwargs))
-        if isinstance(starter,str): print(f'{starter}Elite{self.i_elite:_>3d} (' + '|'.join([f'{k}{v:+.2f}' for k,v in kwargs.items()]) + f'): {syntax}')
+            if len(self.container): self.container[-1].cat2cpu()
+            self.container.append(gpEliteBlock(self.block_len).append(factor , **kwargs))
+        if isinstance(starter,str): print(f'{starter}Elite{self.i_elite:_>3d} (' + '|'.join([f'{k}{v:+.2f}' for k,v in kwargs.items()]) + f'): {factor.name}')
         self.i_elite += 1
         return self
     
@@ -748,12 +783,34 @@ class gpEliteGroup:
         return self
     
     def compile_elite_tensor(self , device = None):
-        self.cat_all()
-        if device is None: device = self.device
-        self.elite_tensor = torch.cat([block.data_at_device(device) for block in self.container] , dim = -1)
-        # del self.container
-        self.init_container()
-        return self
+        if self.container:
+            self.cat_all()
+            if device is None: device = self.device
+            new_tensor = torch.cat([block.data_at_device(device) for block in self.container] , dim = -1)
+        else:
+            new_tensor = None
+        return new_tensor
+    
+    def total_len(self):
+        return sum([blk.len() for blk in self.container])
+    
+    def corrmat_of_all(self):
+        corr_mat = torch.eye(self.total_len()).to(self.device)
+        i_slice = 0
+
+        for ii in range(len(self.container)):
+            i_blk = self.container[ii]
+            j_slice = i_slice
+            for jj in range(ii , len(self.container)):
+                j_blk = self.container[jj]
+                for kk in range(i_blk.len()):
+                    corrs , _ = j_blk.max_corr(i_blk.select(kk))
+                    corr_mat[i_slice+kk,j_slice:j_slice+j_blk.len()] = corrs[:j_blk.len()]
+                j_slice += j_blk.len()
+            i_slice += i_blk.len()
+
+        corr_mat = torch.where(corr_mat == 0 , corr_mat.T , corr_mat)
+        return corr_mat
     
 class gpEliteBlock:
     def __init__(self , max_len = 50):
@@ -768,44 +825,49 @@ class gpEliteBlock:
         
     def cat2cpu(self):
         if isinstance(self.data , list): 
-            if len(self.data) == 0: 
-                self.data = MF.null
-            else:
-                try:
-                    self.data = MF.concat_factors(*self.data)
-                    if isinstance(self.data , torch.Tensor): self.data = self.data.cpu()
-                except MemoryError:
-                    print('OutofMemory when concat gpEliteBlock, try use cpu to concat')
-                    gc.collect()
-                    self.data = MF.concat_factors(*self.data , device=torch.device('cpu')) # to cpu first
+            try:
+                self.data = MF.concat_factors(*self.data)
+                if isinstance(self.data , torch.Tensor): self.data = self.data.cpu()
+            except MemoryError:
+                print('OutofMemory when concat gpEliteBlock, try use cpu to concat')
+                gc.collect()
+                self.data = MF.concat_factors(*self.data , device=torch.device('cpu')) # to cpu first
+        assert self.data is not None
         return self
 
-    def append(self , name , value , **kwargs):
+    def append(self , factor , **kwargs):
+        assert isinstance(factor , FF.FactorValue) , type(factor)
         if not self.full and isinstance(self.data , list):
-            self.names.append(name)
-            self.infos.update({name:kwargs})
-            self.data.append(value)
+            self.names.append(factor.name)
+            self.infos.update({factor.name:kwargs})
+            self.data.append(factor.value)
             self.full = self.len() >= self.max_len
         else:
             raise Exception('The EliteBlock is Full')   
         return self
     
-    def max_corr(self , value , abs_corr_cap = 1.01 , dim = None , dim_valids = (None , None) , syntax = None):
-        assert isinstance(self.data , (torch.Tensor , list))
-        corr_values = torch.zeros((self.len()+1,)).to(value)
+    def max_corr(self , factor , abs_corr_cap = 1.01 , dim = None , dim_valids = (None , None) , syntax = None):
+        assert self.data is not None
+        
+        if isinstance(factor , FF.FactorValue): factor = factor.value
+        assert isinstance(factor , torch.Tensor) , factor
+        corr_values = torch.zeros((self.len()+1,)).to(factor)
         exit_state  = False
-        block = self.data.to(value) if isinstance(self.data , torch.Tensor) else self.data
-        i = torch.arange(value.shape[0]) if dim_valids[0] is None else dim_valids[0]
-        j = torch.arange(value.shape[1]) if dim_valids[1] is None else dim_valids[1]
-        value = value[i][:,j]
+        block = self.data.to(factor) if isinstance(self.data , torch.Tensor) else self.data
+        i = torch.arange(factor.shape[0]) if dim_valids[0] is None else dim_valids[0]
+        j = torch.arange(factor.shape[1]) if dim_valids[1] is None else dim_valids[1]
+        value = factor[i][:,j]
         for k in range(self.len()):
             blk = block[i][:,j][...,k] if isinstance(block , torch.Tensor) else block[k][i][:,j]
             corr = MF.corrwith(value, blk , dim=dim).nanmean() 
             corr_values[k] = corr
             if exit_state := corr.abs() > abs_corr_cap: break 
-
         return corr_values , exit_state
     
     def data_at_device(self , device):
         assert isinstance(self.data , torch.Tensor) , type(self.data)
         return self.data.to(device)
+    
+    def select(self , i):
+        assert self.data is not None
+        return self.data[...,i] if isinstance(self.data , torch.Tensor) else self.data[i]

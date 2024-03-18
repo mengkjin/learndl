@@ -1,7 +1,32 @@
+from dataclasses import dataclass , field
+from typing import Any
+
 import torch
+import pandas as pd
+
 import gp_math_func as MF
 
-def process_factor(value , stream = 'inf_trim_norm' , dim = 1 , trim_ratio = 7. , **kwargs):
+@dataclass
+class FactorValue:
+    name    : str
+    process : str
+    value   : torch.Tensor | None
+    infos   : dict = field(default_factory=dict)
+
+    def __repr__(self):
+        attr_repr = []
+        for k , v in self.__dict__.items():
+            attr_repr.append(f'{k}=torch.Tensor(shape{tuple(v.shape)},{v.device})' if isinstance(v , torch.Tensor) else f'{k}={v}')
+        return f'{self.__class__.__name__}({", ".join(attr_repr)})'
+    
+    def isnull(self):
+        return self.value is None
+    
+    def to_dataframe(self , index = None , columns = None):
+        if self.value is None: return None
+        return pd.DataFrame(data = self.value.cpu().numpy() , index = index , columns = columns)
+
+def process_factor(value , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7. , **kwargs):
     '''
     ------------------------ process factor value ------------------------
     处理因子值 , 'inf_trim_winsor_norm_neutral_nan'
@@ -14,14 +39,13 @@ def process_factor(value , stream = 'inf_trim_norm' , dim = 1 , trim_ratio = 7. 
     output:
         value:         processed factor value
     '''
-    if MF.isnull(value) or MF.allna(value , inf_as_na = True): return MF.null
+    if value is None or MF.allna(value , inf_as_na = True): return None
 
     # assert 'inf' in stream or 'trim' in stream or 'winsor' in stream , stream
     if 'trim' in stream or 'winsor' in stream:
         med       = value.nanmedian(dim , keepdim=True).values
         bandwidth = (value.nanquantile(0.75 , dim , keepdim=True) - value.nanquantile(0.25 , dim , keepdim=True)) / 2
         lbound , ubound = med - trim_ratio * bandwidth , med + trim_ratio * bandwidth
-
     for _str in stream.split('_'):
         if _str == 'mean':
             value -= torch.nanmean(value , dim, keepdim=True)
@@ -54,7 +78,7 @@ def decay_weight(method , max_len , exp_halflife = -1):
     return w
 
 def factor_coef_mean(x , mean_dim = 0, dim = -1 , weight = None):
-    if MF.isnull(x): return x
+    if x is None: return x
     assert x.shape[dim] > 0
     if x.shape[dim] == 1: return torch.ones((1,1)).to(x)
     assert mean_dim >= 0 , f'mean_dim must be non-negative : {mean_dim}'
@@ -77,7 +101,7 @@ def factor_coef_mean(x , mean_dim = 0, dim = -1 , weight = None):
     return x
 
 def factor_coef_total(x , dim = -1):
-    if MF.isnull(x): return x
+    if x is None: return x
     assert x.shape[dim] > 0
     if x.shape[dim] == 1: return torch.ones((1,1)).to(x)
     ij = torch.arange(x.shape[dim])
@@ -87,7 +111,7 @@ def factor_coef_total(x , dim = -1):
     return x
 
 def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
-    if MF.isnull(x): return x
+    if x is None: return x
     assert corr_dim >= 0 , f'corr_dim must be non-negative : {corr_dim}'
     assert dim >= -1 , f'dim must >= -1 : {dim}'
     if dim == -1: dim = x.dim() - 1
@@ -115,7 +139,7 @@ def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
     return x
 
 def svd_factors(mat , raw_factor , top_n = -1 , top_ratio = 0. , dim = -1 , inplace = True):
-    if MF.isnull(mat) or MF.isnull(raw_factor): return raw_factor
+    if mat is None or raw_factor is None: return raw_factor
     assert mat.dim() == 2 
     assert mat.shape[0] == mat.shape[1]
     assert mat.shape[0] == raw_factor.shape[dim]
@@ -141,17 +165,29 @@ def top_svd_factors(mat , raw_factor , top_n = 1 , top_ratio = 0. , dim = -1 , i
     mat2 = factor_coef_total(raw_factor, dim = -1)
     mat3 = factor_coef_with_y(raw_factor , y , corr_dim=1 , dim = -1)
     '''
-    if MF.isnull(mat) or MF.isnull(raw_factor): return raw_factor
+    if mat is None or raw_factor is None: return raw_factor
     vector , svd = svd_factors(mat , raw_factor , dim = dim , inplace = inplace)
     where  = svd.S.cumsum(0) / svd.S.sum() <= top_ratio
     where += torch.arange(vector.shape[-1] , device=where.device) < max(top_n , where.sum() + 1)
     print(svd.S.cumsum(0) / svd.S.sum())
     return vector[...,where]
 
+@dataclass
+class MultiFactorValue:
+    value  : torch.Tensor
+    weight : torch.Tensor
+    inputs : torch.Tensor
+
+    def __repr__(self) -> str:
+        attr_repr = []
+        for k , v in self.__dict__.items():
+            attr_repr.append(f'{k}=torch.Tensor(shape{tuple(v.shape)},{v.device})' if isinstance(v , torch.Tensor) else f'{k}={v}')
+        return f'{self.__class__.__name__}({", ".join(attr_repr)})'
+    
 class MultiFactor:
-    def __init__(self , weight_scheme = 'ir', window_type = 'rolling', weight_decay= 'exp' , 
-                 ir_window = 10 , roll_window = 10 , halflife  = 5 , 
-                 insample = None , universe = None , min_coverage = 0.1) -> None:
+    def __init__(self , weight_scheme = 'ic', window_type = 'rolling', weight_decay= 'exp' , 
+                 ir_window = 40 , roll_window = 40 , halflife  = 20 , 
+                 insample = None , universe = None , min_coverage = 0.1 , **kwargs) -> None:
         assert weight_scheme in ['ew' , 'ic' , 'ir']
         assert window_type   in ['rolling' , 'insample']
         assert weight_decay  in ['constant' , 'linear' , 'exp']
@@ -164,21 +200,6 @@ class MultiFactor:
         self.insample      = insample
         self.universe      = universe
         self.min_coverage  = min_coverage
-
-    class FactorResult:
-        def __init__(self, **kwargs) -> None:
-            for k,v in kwargs.items():
-                setattr(self , k , v)
-        def __getitem__(self , key):
-            return self.__dict__.__getitem__(key)
-        def __repr__(self) -> str:
-            return self.__dict__.__repr__()
-        def items(self):  return self.__dict__.items()
-        def keys(self):   return self.__dict__.keys()
-        def values(self): return self.__dict__.values()
-        def update(self,**kwargs): self.__dict__.update(**kwargs)
-        def get(self , key , default = None): 
-            return self.__dict__.get(key , default)
 
     def ts_decay(self , max_len , weight_decay = None , halflife = None):
         weight_decay = weight_decay if weight_decay else self.weight_decay
@@ -218,7 +239,7 @@ class MultiFactor:
         weight = self.factor_weight(window_type , **kwargs)
         multi = (factor * weight).nanmean(-1)
         multi = MF.zscore(multi , -1)
-        return self.FactorResult(multi = multi , weight = weight , inputs = factor)
+        return MultiFactorValue(value = multi , weight = weight , inputs = factor)
     
     def factor_weight(self , window_type = None , **kwargs):
         window_type = window_type if window_type is not None else self.window_type
@@ -261,7 +282,7 @@ class MultiFactor:
         return data.nanmean(0).sign()
 
     def weight_icir(self, data):
-        ts_w = self.ts_decay(len(data)).reshape(1,-1)
+        ts_w = self.ts_decay(len(data)).to(data).reshape(1,-1)
         fini = data.isfinite() * 1.
         data = data.nan_to_num(0,0,0)
         if data.dim() == 2:
@@ -281,9 +302,10 @@ class MultiFactor:
         min_coverage = min_coverage if min_coverage is not None else self.min_coverage
         if labels.dim() == factors.dim():
             labels = labels.squeeze(-1)
-        rankic = torch.full((len(factors) , factors.shape[-1]) , fill_value=torch.nan).to(labels)
+        # rankic = torch.full((len(factors) , factors.shape[-1]) , fill_value=torch.nan).to(labels)
+        rankic = []
         for i_factor in range(factors.shape[-1]):
-            rankic[:,i_factor] = MF.rankic_2d(factors[...,i_factor] , labels , dim = 1 , 
-                                              universe = universe , min_coverage = min_coverage)
+            rankic.append(MF.rankic_2d(factors[...,i_factor] , labels , dim = 1 , universe = universe , min_coverage = min_coverage))
+        rankic = torch.stack(rankic , dim = -1)
         rankir = MF.ma(rankic , ir_window) / MF.ts_stddev(rankic , ir_window)
-        return self.FactorResult(ic = rankic , ir = rankir)
+        return {'ic' : rankic , 'ir' : rankir}

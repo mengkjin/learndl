@@ -293,6 +293,11 @@ class RunModel():
                 
                 outputs = self.model_forward('train' , batch_data)
                 metrics = self.model_metric('train' , outputs , batch_data , valid_sample = None)
+                if metrics['loss'].isnan():
+                    print(i , batch_data['y'])
+                    print(metrics)
+                    raise Exception('here')
+
                 self.model_backward('train' , metrics)
 
                 _loss[i] , _score[i] = metrics['loss_item'] , metrics['score']
@@ -497,11 +502,11 @@ class RunModel():
         add_row_value = (score_mean , score_sum , score_std , score_tvalue , score_annir)
         df = pd.DataFrame(np.concatenate([self.score_by_model , np.stack(add_row_value)]) , 
                           index   = [str(d) for d in self.data.model_date_list] + add_row_key , 
-                          columns = [f'{mn}.{o}' for mn,o in zip(self.test_model_num , self.test_output_type)])
+                          columns = [f'{mn}_{o}' for mn,o in zip(self.test_model_num , self.test_output_type)])
         df.to_csv(f'{config.model_base_path}/{config.model_name}_score_by_model.csv')
         for i , digits in enumerate([4,2,4,2,4]):
             self._print_rst(add_row_key[i] , add_row_value[i] , digits)
-        self.model_info['test_score_sum'] = {k:v for k,v in zip(df.columns , score_sum)}  # type:ignore
+        self.model_info['test_score_sum'] = {k:round(v,4) for k,v in zip(df.columns , score_sum.tolist())}  # type:ignore
     
     def summary(self):
         out_dict = {
@@ -513,6 +518,7 @@ class RunModel():
             '5_test'  :self.model_info.get('test_process'),
             '6_result':self.model_info.get('test_score_sum'),
         }
+        print(self.model_info.get('test_score_sum'))
         out_path = f'./results/model_results.yaml'
         os.makedirs(os.path.dirname(out_path) , exist_ok=True)
         with open(out_path , 'a' if os.path.exists(out_path) else 'w') as f:
@@ -534,7 +540,7 @@ class RunModel():
             if key == 'train': penalty_kwargs.update({'net' : self.net , 'hidden' : hidden , 'label' : label})
             metrics = self.calculate_metrics(
                 key , self.metric_function , label=label , pred=pred , weight = weight ,
-                multiloss = self.multiloss , net = self.net ,
+                multiloss = getattr(self , 'multiloss' , None) , net = self.net ,
                 valid_sample = valid_sample , penalty_kwargs = penalty_kwargs)
             return metrics
         

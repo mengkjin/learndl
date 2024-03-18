@@ -1,11 +1,11 @@
 # most frequently changing variables
-short_test:  False
+short_test:  True
 tra_switch: true
 buffer_type: tra
 buffer_param: 
   tra_num_states: &tra_num_states 5
 
-model_module: resnet_lstm # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
+model_module: resnet_gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
 model_nickname: null # 'LSTM' # 'TCN_vs_LSTM' any str or None
 model_num: 3
 model_datatype:
@@ -45,7 +45,7 @@ TRAIN_PARAM:
   dataloader:
     random_seed:     null
     random_split:    true
-    sample_method:   train_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
+    sample_method:   total_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
     train_ratio:     0.8
   trainer:
     optimizer: {'name' : 'Adam' , 'param' : {} ,}  #{'name' : 'SGD' , 'param' : {} ,}
