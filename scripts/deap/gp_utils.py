@@ -6,6 +6,7 @@ from argparse import Namespace
 from dataclasses import dataclass , field
 from deap import base , creator , tools , gp
 from copy import deepcopy
+from tqdm import tqdm
 import gp_math_func as MF
 import gp_factor_func as FF
 
@@ -459,20 +460,18 @@ class gpFileManager:
         if os.path.exists(f'{self.dir.log}/{basename}.pkl'):
             log = joblib.load(f'{self.dir.log}/{basename}.pkl')
             self.logbook.record(**log)
-            # fbd = [self.toolbox.str2syx(ind.syx_str , ind.ind_str , fit_value = ind.fit) for ind in log['forbidden']] 
             fbd = [ind.to_syx(self.toolbox) for ind in log['forbidden']] 
             if i_gen >= 0:
                 # only update pop and hof when i_gen >= 0
-                # pop = [self.toolbox.str2ind(ind.ind_str , fit_value = ind.fit) for ind in log['population']] 
-                # hof.update([self.toolbox.str2syx(ind.syx_str , ind.ind_str , fit_value = ind.fit) for ind in log['halloffame']])
                 pop = [ind.to_ind(self.toolbox) for ind in log['population']] 
-                hof.update([ind.to_syx(self.toolbox) for ind in log['halloffame']])
+                hof_eval = [ind.to_syx(self.toolbox) for ind in log['halloffame']]
+                hof_eval = self.toolbox.evaluate_pop(hof_eval, i_iter = i_iter, i_gen = i_gen, desc = 'Load HallofFame') # re-evaluate hof
+                hof.update(hof_eval)
         elif i_gen >= 0:
             raise Exception(f'{self.dir.log}/{basename}.pkl does not exists!')
         else:
             log = None
-        # re-evaluate hof
-        hof = self.toolbox.evaluate_pop(hof , i_iter = i_iter, i_gen = i_gen, desc = 'Load HallofFame')
+
         return pop , hof , fbd
 
     def update_sku(self , individual , pool_skuname):
@@ -686,13 +685,15 @@ class MemoryManager():
         return True
     
     @classmethod
-    def object_memory(cls , object , cuda_only = True):
-        if isinstance(object , torch.Tensor):
-            return cls.tensor_memory(object , cuda_only = cuda_only)
-        elif isinstance(object , (list,tuple)):
-            return sum([cls.object_memory(obj) for obj in object])
-        elif isinstance(object , dict):
-            return sum([cls.object_memory(obj) for obj in object.values()])
+    def object_memory(cls , obj , cuda_only = True):
+        if isinstance(obj , torch.Tensor):
+            return cls.tensor_memory(obj , cuda_only = cuda_only)
+        elif isinstance(obj , (list,tuple)):
+            return sum([cls.object_memory(o , cuda_only = cuda_only) for o in obj])
+        elif isinstance(obj , object):
+            return cls.object_memory(obj.__dict__ , cuda_only = cuda_only)
+        elif isinstance(obj , dict):
+            return sum([cls.object_memory(o , cuda_only = cuda_only) for o in obj.values()])
         else:
             return 0.
     
@@ -728,8 +729,6 @@ class MemoryManager():
                 print(f'OutOfMemoryError on {print_str}')
                 torch.cuda.empty_cache()
                 value = out
-            except Exception as e:
-                raise Exception(e)
             return value
         return wrapper
 
@@ -740,6 +739,7 @@ class gpEliteGroup:
         self.device  = device
         self.block_len = block_len
         self.container = []
+        self.position  = []
 
     def assign_logs(self , hof_log , elite_log):
         self.hof_log = hof_log
@@ -756,7 +756,8 @@ class gpEliteGroup:
 
     def max_corr_with_me(self , factor , abs_corr_cap = 1.01 , dim = 1 , dim_valids = (None , None) , syntax = None):
         assert isinstance(factor , FF.FactorValue) , type(factor)
-        corr_values = torch.zeros((self.i_elite - self.start_i_elite + 1 ,)).to(factor.value)
+        corr_values = torch.zeros((self.i_elite - self.start_i_elite + 1 ,))
+        if isinstance(factor.value , torch.Tensor): corr_values = corr_values.to(factor.value)
         exit_state  = False
         l = 0
         for block in self.container:
@@ -773,6 +774,7 @@ class gpEliteGroup:
         else:
             if len(self.container): self.container[-1].cat2cpu()
             self.container.append(gpEliteBlock(self.block_len).append(factor , **kwargs))
+        self.position.append((len(self.container)-1,self.container[-1].len()-1))
         if isinstance(starter,str): print(f'{starter}Elite{self.i_elite:_>3d} (' + '|'.join([f'{k}{v:+.2f}' for k,v in kwargs.items()]) + f'): {factor.name}')
         self.i_elite += 1
         return self
@@ -786,7 +788,13 @@ class gpEliteGroup:
         if self.container:
             self.cat_all()
             if device is None: device = self.device
-            new_tensor = torch.cat([block.data_at_device(device) for block in self.container] , dim = -1)
+            torch.cuda.empty_cache()
+            try:
+                new_tensor = torch.cat([block.data_to_device(device) for block in self.container] , dim = -1)
+            except torch.cuda.OutOfMemoryError as e:
+                print('OutofMemory when compiling elite tensor, try use cpu to concat')
+                new_tensor = torch.cat([block.data_to_device('cpu') for block in self.container] , dim = -1)
+                new_tensor = new_tensor.to(device)
         else:
             new_tensor = None
         return new_tensor
@@ -794,22 +802,32 @@ class gpEliteGroup:
     def total_len(self):
         return sum([blk.len() for blk in self.container])
     
+    def total_mem(self):
+        return sum([MemoryManager.object_memory(blk) for blk in self.container])
+
+    def select(self , i):
+        return self.container[self.position[i][0]].select(self.position[i][1])
+
     def corrmat_of_all(self):
-        corr_mat = torch.eye(self.total_len()).to(self.device)
-        i_slice = 0
+        '''
+        Calculate correlation matrix of all members
+        The corrmat is average(over dim 0) corr(over dim 1), of shape nfactors * nfactors(dim 2)
+        '''
+        total = self.total_len()
+        corr_mat = torch.eye(total).to(self.device)
+        iterator = [(i,*self.position[i],j,*self.position[j]) for i in range(total) for j in range(i+1,total)]
+        iter_df = pd.DataFrame(iterator , columns = ['ii','ib','ik','jj','jb','jk'])
+        iter_df = iter_df.sort_values(['ib' , 'jb' , 'ik' , 'jk'])
+        print(f'Total Correlation Counts : {len(iter_df)}')
+        for (ib , jb) , sub_df in iter_df.groupby(['ib' , 'jb']):
+            Blk_i = self.container[ib].data_to_device(self.device)
+            Blk_j = self.container[jb].data_to_device(self.device)
+            for _ , (ii,ik,jj,jk) in tqdm(sub_df.loc[:,['ii','ik','jj','jk']].iterrows(),
+                                        desc=f'Block_{ib}/Block_{jb}',total=len(sub_df)):
+                corr = MF.corrwith(Blk_i[...,ik] , Blk_j[...,jk] , dim=-1)
+                corr_mat[ii, jj] = corr.nanmean() if isinstance(corr , torch.Tensor) else torch.nan
 
-        for ii in range(len(self.container)):
-            i_blk = self.container[ii]
-            j_slice = i_slice
-            for jj in range(ii , len(self.container)):
-                j_blk = self.container[jj]
-                for kk in range(i_blk.len()):
-                    corrs , _ = j_blk.max_corr(i_blk.select(kk))
-                    corr_mat[i_slice+kk,j_slice:j_slice+j_blk.len()] = corrs[:j_blk.len()]
-                j_slice += j_blk.len()
-            i_slice += i_blk.len()
-
-        corr_mat = torch.where(corr_mat == 0 , corr_mat.T , corr_mat)
+        corr_mat = torch.where(corr_mat == 0 , corr_mat.T , corr_mat).cpu()
         return corr_mat
     
 class gpEliteBlock:
@@ -864,9 +882,14 @@ class gpEliteBlock:
             if exit_state := corr.abs() > abs_corr_cap: break 
         return corr_values , exit_state
     
-    def data_at_device(self , device):
+    def data_to_device(self , device , inplace = False):
         assert isinstance(self.data , torch.Tensor) , type(self.data)
-        return self.data.to(device)
+        if device == 'cpu':
+            data = self.data.cpu()
+        else:
+            data = self.data.to(device)
+        if inplace: self.data = data
+        return data
     
     def select(self , i):
         assert self.data is not None

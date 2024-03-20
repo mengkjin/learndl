@@ -166,7 +166,7 @@ def rankic_2d(x , y , dim = 1 , universe = None , min_coverage = 0.5):
 #%% 中性化函数
 def dummy(x , ex_last = True):
     # will take a huge amount of memory, the suggestion is to use torch.cuda.empty_cache() after neutralization
-    if not isinstance(x , torch.Tensor): x = torch.Tensor(x)
+    if not isinstance(x , torch.Tensor): x = torch.FloatTensor(x)
     xmax = x.nan_to_num().max().int().item() 
     dummy = x.nan_to_num(xmax + 1).to(torch.int64)
     # dummy = torch.where(x.isnan() , m + 1 , x).to(torch.int64)
@@ -278,7 +278,7 @@ def neutralize_2d(y , x , dim = 1 , method = 'torch' , device = None , inplace =
             if j_.sum() < 10: continue
             betas = betas_func(x_[:,k_][j_] , y_[j_])
             y[i] -= x_[:,k_] @ betas
-        if isinstance(y , np.ndarray): y = torch.Tensor(y)
+        if isinstance(y , np.ndarray): y = torch.FloatTensor(y)
     if dim == 0: y = y.permute(1,0,2)
     y = zscore_inplace(y.squeeze_(-1) , dim = dim).to(old_device)
     return y

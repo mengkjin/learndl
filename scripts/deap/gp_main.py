@@ -4,9 +4,10 @@ import numpy as np
 import torch
 import copy , os, platform , shutil , time , yaml
 from argparse import ArgumentParser , Namespace
-from tqdm import tqdm
 from deap.algorithms import varAnd
 from torch.multiprocessing import Pool
+from tqdm import tqdm
+from typing import Literal , Any , Union
 
 import gp_math_func as MF
 import gp_factor_func as FF
@@ -52,6 +53,7 @@ def text_manager(object):
 def gp_job_dir(job_id = None , train = True , continuation = False , test_code = False):
     '''
     ------------------------ gp job dir ------------------------
+    
     确定目标文件夹
     input:
         job_id:         when test_code is not True, determines f'{_DIR_pop}/{job_id}' 
@@ -95,6 +97,7 @@ def gp_job_dir(job_id = None , train = True , continuation = False , test_code =
 def gp_parameters(job_id = None , train = True , continuation = False , test_code = False , **kwargs):
     '''
     ------------------------ gp parameters ------------------------
+    
     主要遗传规划参数初始化
     注：为方便跑多组实验,需设置job_id参数,设置方式为: python xxx.py --job_id 123456
     input:
@@ -104,32 +107,6 @@ def gp_parameters(job_id = None , train = True , continuation = False , test_cod
         test_code:      if only to test code validity
     output:
         gp_params: dict that includes all gp parameters
-    参数列表:
-    job_dir             工作目录
-    test_code           是不是仅仅作为代码测试,若是会有一个小很多的参数组合覆盖本参数
-    gp_fac_list         作为GP输入时,标准化因子的数量
-    gp_raw_list         作为GP输入时,原始指标的数量
-    slice_date:         修改数据切片区间,前两个为样本内的起止点,后两个为样本外的起止点均需要是交易日
-    device:             用cuda还是cpu计算
-    verbose:            训练过程是否输出细节信息
-    pool_num:           并行任务数量,建议设为1,即不并行,使用单显卡单进程运行
-    pop_num:            种群数量,初始化时生成多少个备选公式
-    hof_num:            精英数量,一般精英数量设为种群数量的1/6左右即可
-    n_iter:             [大循环]的迭代次数,每次迭代重新开始一次遗传规划、重新创立全新的种群,以上一轮的残差收益率作为优化目标
-    ir_floor:           [大循环]中因子入库所需的最低rankIR值,低于此值的因子不入库
-    ir_floor_decay:     [大循环]是否每一轮迭代降低ir的标准,若降低则输入小于1.0的数
-    corr_cap:           [大循环]中新因子与老因子的最高相关系数,相关系数绝对值高于此值的因子不入库
-    factor_neut_type:   [大循环]i_iter>0时如何中性化因子 0:不中性化, 1:根据样本内的相关性一口气中性化, 2:每天单独中性化
-    labels_neut_type:   [大循环]计算残差收益时,怎么使用Elite因子: 'svd' , 'all'
-    svd_mat_method:     [大循环]svd factor的矩阵怎么计算: 'total'代表所有日期所有因子值相关矩阵, 'coef_ts'代表所有因子值时序与labels相关性时序的相关矩阵
-    svd_top_ratio:      [大循环]svd factor最小解释力度
-    svd_top_n:          [大循环]svd factor最少因子数量
-    n_gen:              [小循环]的迭代次数,即每次遗传规划进行几轮繁衍进化
-    max_depth:          [小循环]中个体算子树的最大深度,即因子表达式的最大复杂度
-    select_offspring    [小循环]每次后代如何选择是否进入遗传突变环节,可以是 'best' , '2Tour' , 'Tour'
-    surv_rate:          [小循环]上面选best的话,这里输入具体比例
-    cxpb:               [小循环]中交叉概率,即两个个体之间进行交叉的概率
-    mutpb:              [小循环]中变异概率,即个体进行突变变异的概率
     '''
 
     job_dir , test_code = gp_job_dir(job_id , train , continuation , test_code)
@@ -146,6 +123,34 @@ def gp_parameters(job_id = None , train = True , continuation = False , test_cod
     )
 
     with open(defaults.PATH_param ,'r',encoding=defaults.encoding) as f: 
+        '''
+        参数列表:
+        job_dir             工作目录
+        test_code           是不是仅仅作为代码测试,若是会有一个小很多的参数组合覆盖本参数
+        gp_fac_list         作为GP输入时,标准化因子的数量
+        gp_raw_list         作为GP输入时,原始指标的数量
+        slice_date:         修改数据切片区间,前两个为样本内的起止点,后两个为样本外的起止点均需要是交易日
+        device:             用cuda还是cpu计算
+        verbose:            训练过程是否输出细节信息
+        pool_num:           并行任务数量,建议设为1,即不并行,使用单显卡单进程运行
+        pop_num:            种群数量,初始化时生成多少个备选公式
+        hof_num:            精英数量,一般精英数量设为种群数量的1/6左右即可
+        n_iter:             [大循环]的迭代次数,每次迭代重新开始一次遗传规划、重新创立全新的种群,以上一轮的残差收益率作为优化目标
+        ir_floor:           [大循环]中因子入库所需的最低rankIR值,低于此值的因子不入库
+        ir_floor_decay:     [大循环]是否每一轮迭代降低ir的标准,若降低则输入小于1.0的数
+        corr_cap:           [大循环]中新因子与老因子的最高相关系数,相关系数绝对值高于此值的因子不入库
+        factor_neut_type:   [大循环]i_iter>0时如何中性化因子 0:不中性化, 1:根据样本内的相关性一口气中性化, 2:每天单独中性化
+        labels_neut_type:   [大循环]计算残差收益时,怎么使用Elite因子: 'svd' , 'all'
+        svd_mat_method:     [大循环]svd factor的矩阵怎么计算: 'total'代表所有日期所有因子值相关矩阵, 'coef_ts'代表所有因子值时序与labels相关性时序的相关矩阵
+        svd_top_ratio:      [大循环]svd factor最小解释力度
+        svd_top_n:          [大循环]svd factor最少因子数量
+        n_gen:              [小循环]的迭代次数,即每次遗传规划进行几轮繁衍进化
+        max_depth:          [小循环]中个体算子树的最大深度,即因子表达式的最大复杂度
+        select_offspring    [小循环]每次后代如何选择是否进入遗传突变环节,可以是 'best' , '2Tour' , 'Tour'
+        surv_rate:          [小循环]上面选best的话,这里输入具体比例
+        cxpb:               [小循环]中交叉概率,即两个个体之间进行交叉的概率
+        mutpb:              [小循环]中变异概率,即个体进行突变变异的概率
+        '''
         gp_params.update(**yaml.load(f , Loader = yaml.FullLoader))
 
     if test_code: gp_params.update(**gp_params.test_params)
@@ -157,6 +162,7 @@ def gp_parameters(job_id = None , train = True , continuation = False , test_cod
 def gp_namespace(gp_params):
     '''
     ------------------------ gp dictionary, record data and params ------------------------
+    
     基于遗传规划的参数字典,读取各类主要数据,并放在同一字典中传回
     input:
         gp_params: gpContainer of all gp_parameters
@@ -261,6 +267,7 @@ def gp_labels_raw(CP = None , neutral_factor = None , neutral_group = None , nda
                   slice_date = None, df_columns = None , device = None):
     '''
     ------------------------ gp labels raw ------------------------
+    
     生成原始预测标签,中性化后的10日收益
     input:
         CP:             close price
@@ -301,6 +308,7 @@ def gp_filename_converter():
 def read_gp_data(filename,slice_date=None,df_columns=None,df_index=None,input_freq='D'):
     '''
     ------------------------ read gp data and convert to torch.tensor ------------------------
+    
     读取单个原始因子文件并转化成tensor,额外返回df表格的行列字典
     input:
         filename:    filename gp data
@@ -338,6 +346,7 @@ def gp_syntax2value(compiler, individual, gp_inputs, param, tensors, i_iter=0,
                     **kwargs):
     '''
     ------------------------ calculate individual syntax factor value ------------------------
+    
     根据迭代出的因子表达式,计算因子值
     计算因子时容易出现OutOfMemoryError,如果出现了异常处理一下,所以代码比较冗杂
     input:
@@ -381,8 +390,7 @@ def gp_syntax2value(compiler, individual, gp_inputs, param, tensors, i_iter=0,
             func = mgr_mem.except_MemoryError(MF.neutralize_1d, print_str=f'neutralizing {str(individual)}')
             factor_value = func(factor_value , tensors.neutra.to(factor_value))
 
-    factor_value = FF.FactorValue(name=individual , process=process_stream , value=factor_value)
-    return factor_value
+    return FF.FactorValue(name=individual , process=process_stream , value=factor_value)
 
 # %%
 def evaluate(individual, pool_skuname, compiler , gp_inputs , param , tensors , fitness , i_iter = 0, 
@@ -390,6 +398,7 @@ def evaluate(individual, pool_skuname, compiler , gp_inputs , param , tensors , 
              const_annual = 24 , min_coverage = 0.5 , **kwargs):
     '''
     ------------------------ evaluate individual syntax fitness ------------------------
+    
     从因子表达式起步,生成因子并计算适应度
     input:
         individual:     individual syntax, e.g. sigmoid(rank_sub(ts_y_xbtm(turn, DP , 15, 4), hp)) 
@@ -412,13 +421,14 @@ def evaluate(individual, pool_skuname, compiler , gp_inputs , param , tensors , 
     if timer    is None: timer    = gpTimer()
 
     mgr_file.update_sku(individual, pool_skuname)
-    factor_value = gp_syntax2value(compiler,individual,gp_inputs,param,tensors,i_iter,timer,**kwargs)
+    factor = gp_syntax2value(compiler,individual,gp_inputs,param,tensors,i_iter,timer,**kwargs)
     # mgr_mem.check('factor')
     
-    metrics = torch.zeros(8).to(factor_value.value)
-    if not factor_value.isnull(): 
+    metrics = torch.zeros(8)
+    if isinstance(factor.value , torch.Tensor): metrics = metrics.to(factor.value)
+    if not factor.isnull(): 
         for i , labels in enumerate([tensors.labels_res , tensors.labels_raw]):
-            rankic_full = MF.rankic_2d(factor_value.value , labels , dim = 1 , universe = tensors.universe , min_coverage = min_coverage)
+            rankic_full = MF.rankic_2d(factor.value , labels , dim = 1 , universe = tensors.universe , min_coverage = min_coverage)
             for j , sample in enumerate([tensors.insample , tensors.outsample]):
                 if rankic_full is None: continue
                 rankic = rankic_full[sample]
@@ -427,17 +437,18 @@ def evaluate(individual, pool_skuname, compiler , gp_inputs , param , tensors , 
                     rankic_std  = (rankic - rankic_avg).square().nanmean().sqrt() 
                     metrics[4*i + 2*j + 0] = rankic_avg.item() * const_annual
                     metrics[4*i + 2*j + 1] = (rankic_avg / (rankic_std + 1e-6) * np.sqrt(const_annual)).item()
-    factor_value.infos['metrics'] = metrics.cpu().numpy()
+    factor.infos['metrics'] = metrics.cpu().numpy()
 
-    individual.if_valid = not factor_value.isnull()
-    individual.metrics  = factor_value.infos['metrics']
-    individual.fitness.values = fitness.fitness_value(factor_value.infos['metrics'] , as_abs=True)      
+    individual.if_valid = not factor.isnull()
+    individual.metrics  = factor.infos['metrics']
+    individual.fitness.values = fitness.fitness_value(factor.infos['metrics'] , as_abs=True)      
     # mgr_mem.check('rankic')
     return individual
 
 def evaluate_pop(population , toolbox , param , i_iter = 0, i_gen = 0, desc = 'Evolve Generation' , **kwargs):
     '''
     ------------------------ evaluate entire population ------------------------
+    
     计算整个种群的适应度
     input:
         population:     un-updated population of syntax
@@ -479,6 +490,7 @@ def gp_residual(param , tensors , i_iter = 0, device = None ,
                 mgr_file=None,mgr_mem=None, **kwargs):
     '''
     ------------------------ create gp toolbox ------------------------
+    
     计算本轮需要预测的labels_res,基于上一轮的labels_res和elites,以及是否是完全中性化还是svd因子中性化
     input:
         param:          gp_params
@@ -533,6 +545,7 @@ def gp_residual(param , tensors , i_iter = 0, device = None ,
 def gp_population(toolbox , pop_num , max_round = 100 , last_gen = [], forbidden = [] , **kwargs):
     '''
     ------------------------ create gp toolbox ------------------------
+    
     初始化种群
     input:
         toolbox:        toolbox that contains all gp utils
@@ -563,6 +576,7 @@ def gp_evolution(toolbox , param , records , i_iter = 0, start_gen=0, forbidden_
                  mgr_file=gpFileManager(), timer=gpTimer(),verbose=__debug__,stats=None,**kwargs):  
     """
     ------------------------ Evolutionary Algorithm simple ------------------------
+    
     变异/进化[小循环],从初始种群起步计算适应度并变异,重复n_gen次
     input:
         toolbox:            toolbox that contains all gp utils
@@ -623,6 +637,7 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
                  test_code=False,verbose=__debug__,**kwargs):
     """
     ------------------------ gp halloffame evaluation ------------------------
+    
     筛选精英群体中的因子表达式,以高ir、低相关为标准筛选精英中的精英
     input:
         toolbox:            toolbox that contains all gp utils
@@ -708,6 +723,7 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
 def outer_loop(i_iter , gp_space , start_gen = 0):
     """
     ------------------------ gp outer loop ------------------------
+    
     一次[大循环]的主程序,初始化种群、变异、筛选、更新残差labels
     input:
         i_iter:   i of outer loop
@@ -742,55 +758,78 @@ def outer_loop(i_iter , gp_space , start_gen = 0):
 class gpGenerator:
     '''
     ------------------------ gp factor generator ------------------------
+    
     构成因子生成器,返回输入因子表达式则输出历史因子值的函数
     input:
         kwargs:  specific gp parameters, suggestion is to leave it alone
     output:
         GP:      gp_generator
     '''
-    def __init__(self , job_id , process_key = 'inf_winsor_norm' , **kwargs) -> None:
+    def __init__(self , job_id , 
+                 process_key : str = 'inf_winsor_norm' ,  
+                 weight_scheme : Literal['ic' , 'ir' , 'ew'] = 'ic', 
+                 window_type  : Literal['insample' , 'rolling'] = 'rolling', 
+                 weight_decay : Literal['constant' , 'linear' , 'exp'] = 'exp' , 
+                 ir_window : int = 40 , 
+                 roll_window : int = 40 , 
+                 halflife : int = 20 , 
+                 min_coverage :float = 0.1 , 
+                 **kwargs) -> None:
         gp_params = gp_parameters(job_id = job_id , train = False , **kwargs)
         self.gp_space  = gp_namespace(gp_params)
         self.toolbox   = gpHandler.Toolbox(eval_func=evaluate , eval_pop=evaluate_pop , **self.gp_space)
-        #self.gp_space.update(toolbox = self.toolbox)
-        #self.gp_space.mgr_file.update_toolbox(self.toolbox)
         self.process_key = process_key
         self.elitelog   = self.gp_space.mgr_file.load_state('elitelog' , i_iter = -1).set_index('i_elite')
         self.df_axis    = self.gp_space.mgr_file.load_state('df_axis' , -1)
 
-        # weight_scheme = 'ic', window_type = 'rolling', weight_decay= 'exp' ,
-        # ir_window = 40 , roll_window = 40 , halflife = 20
         self.Ensembler = FF.MultiFactor(
-            universe = self.gp_space.tensors.universe , 
-            insample = self.gp_space.tensors.insample ,
+            universe      = self.gp_space.tensors.universe , 
+            insample      = self.gp_space.tensors.insample ,
+            weight_scheme = weight_scheme ,
+            window_type   = window_type ,
+            weight_decay  = weight_decay ,
+            ir_window     = ir_window ,
+            roll_window   = roll_window ,
+            halflife      = halflife ,
+            min_coverage  = min_coverage ,
             **kwargs)
 
-    def __call__(self, syntax : str | FF.FactorValue , process_key : str | None = None , as_df = False , print_info = True) -> FF.FactorValue | pd.DataFrame | None:
+    def __call__(self, syntax : str | FF.FactorValue , process_key : str | None = None , as_df = False , print_info = True) -> FF.FactorValue:
+        '''
+        Calcuate FactorValue of a syntax
+        '''
         if isinstance(syntax , FF.FactorValue): return syntax
         if process_key is None: process_key = self.process_key
-        func  = getattr(self.toolbox , 'compile')(syntax) 
-        #value = func(*self.gp_space.gp_inputs)
-        #value = FF.process_factor(value , process_key , dim = 1)
         factor = gp_syntax2value(getattr(self.toolbox , 'compile'),syntax,**self.gp_space)
         if as_df and not factor.isnull():
-            factor = factor.to_dataframe(index = self.df_axis['df_index'] , columns = self.df_axis['df_columns'])
+            factor.value = factor.to_dataframe(index = self.df_axis['df_index'] , columns = self.df_axis['df_columns'])
         if print_info: print(f'gpGenerator -> process_key : {process_key} , syntax : {syntax}')
         return factor
 
-    def entire_elites(self , block_len = 50):
+    def entire_elites(self , verbose = True , block_len = 50 , process_key = None):
+        '''
+        Load all elite factors
+        '''
         elite_log  = self.gp_space.mgr_file.load_state('elitelog' , i_iter = -1) 
         hof_log    = self.gp_space.mgr_file.load_state('hoflog'   , i_iter = -1)
         hof_elites = gpEliteGroup(start_i_elite=0 , device=self.gp_space.device , block_len=block_len).assign_logs(hof_log=hof_log, elite_log=elite_log)
-        for elite in elite_log.syntax: hof_elites.append(self(elite))
+        for elite in elite_log.syntax: hof_elites.append(self(elite , process_key = process_key , print_info = verbose))
         hof_elites.cat_all()
+        print(f'Load {hof_elites.total_len()} Elites')
         return hof_elites
 
     def load_elite(self , i_elite : int , factor = False):
+        '''
+        Load a single elite factor
+        '''
         elite_syntax = self.elitelog.loc[i_elite , 'syntax']
         return self(elite_syntax) if factor else elite_syntax
     
-    def multi_factor(self , *factors , labels = None):
-        # 基于多个单因子,计算多因子
+    def multi_factor(self , *factors , labels = None , **kwargs):
+        '''
+        Calculate MultiFactorValue given factors and labels
+        None kwargs will use default values
+        '''
         factor_list = list(factors)
         if len(factor_list) == 1 and isinstance(factor_list[0] , torch.Tensor) and factor_list[0].dim() == 3:
             factor = factor_list[0]
@@ -798,22 +837,42 @@ class gpGenerator:
             for i , fac in enumerate(factor_list):
                 if isinstance(fac , str): factor_list[i] = self(fac)
             factor = torch.stack(factor_list , dim = -1)
-        if labels is None:
-            labels = self.gp_space.tensors.labels_raw
-        metrics = self.Ensembler.calculate_icir(factor , labels) # ic,ir
-        multi = self.Ensembler.multi_factor(factor , **metrics)
-        return multi # multi对象拥有multi,weight,inputs三个自变量,用multi.multi也行
+        if labels is None: labels = self.gp_space.tensors.labels_raw
+        metrics = self.Ensembler.calculate_icir(factor , labels , **kwargs) # ic,ir
+        multi = self.Ensembler.multi_factor(factor , **metrics , **kwargs)
+        return multi # multi对象拥有multi,weight,inputs三个自变量
     
-    def multi_elite_factor(self):
-        hof_elites = self.entire_elites()
-        multi = self.multi_factor(hof_elites.compile_elite_tensor())
-        # setattr(multi , 'hof_elites' , hof_elites)
+    def multi_elite_factor(
+            self , elites = None , verbose = True , 
+            process_key : str | None = None ,  
+            weight_scheme : Literal['ic' , 'ir' , 'ew'] | None = None, 
+            window_type  : Literal['insample' , 'rolling'] | None = None, 
+            weight_decay : Literal['constant' , 'linear' , 'exp'] | None = None , 
+            ir_window : int | None = None , 
+            roll_window : int | None = None , 
+            halflife : int | None = None , 
+            min_coverage :float | None = None , 
+            **kwargs):
+        '''
+        Load all elite factors and calculate MultiFactorValue.
+        None kwargs will use default values
+        '''
+        if elites is None:
+            elites = self.entire_elites(verbose = verbose , process_key = process_key)
+        if isinstance(elites , gpEliteGroup):
+            elites = elites.compile_elite_tensor()
+        assert isinstance(elites , torch.Tensor) , type(elites)
+        multi = self.multi_factor(
+            elites , labels = self.gp_space.tensors.labels_raw , 
+            weight_scheme = weight_scheme , window_type = window_type ,weight_decay = weight_decay ,
+            ir_window = ir_window , roll_window = roll_window , halflife = halflife , min_coverage = min_coverage , **kwargs)
         return multi
 
 # %%
 def main(job_id = None , start_iter = 0 , start_gen = 0 , test_code = False , noWith = False , **kwargs):
     """
     ------------------------ gp main process ------------------------
+    
     训练的主程序,[大循环]的过程出发点,从start_iter的start_gen开始训练
     input:
         job_id:    when test_code is not True, determines job_dir = f'{defaults.DIR_pop}/{job_id}'   

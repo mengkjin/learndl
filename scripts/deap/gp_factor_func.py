@@ -10,7 +10,7 @@ import gp_math_func as MF
 class FactorValue:
     name    : str
     process : str
-    value   : torch.Tensor | None
+    value   : torch.Tensor | pd.DataFrame | None
     infos   : dict = field(default_factory=dict)
 
     def __repr__(self):
@@ -23,8 +23,12 @@ class FactorValue:
         return self.value is None
     
     def to_dataframe(self , index = None , columns = None):
-        if self.value is None: return None
-        return pd.DataFrame(data = self.value.cpu().numpy() , index = index , columns = columns)
+        if self.value is None: 
+            return None
+        elif isinstance(self.value , pd.DataFrame):
+            return self.value
+        else:
+            return pd.DataFrame(data = self.value.cpu().numpy() , index = index , columns = columns)
 
 def process_factor(value , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7. , **kwargs):
     '''
@@ -130,8 +134,6 @@ def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
             # print(x.select(dim , i).shape , y.select(dim , 0).shape)
             tscorr.append(MF.corrwith(x.select(dim , i) , y.select(dim , 0) , dim = corr_dim))
         tscorr = torch.stack(tscorr , dim = new_dim)
-    except Exception as e:
-        raise Exception(e)
     x = tscorr.transpose(-1 , new_dim)
     x = torch.corrcoef(x[~x.isnan().any(-1)].T)
     assert len(x) == len(ij) , print(x)
@@ -237,7 +239,11 @@ class MultiFactor:
     
     def multi_factor(self , factor , window_type = None , **kwargs):
         weight = self.factor_weight(window_type , **kwargs)
-        multi = (factor * weight).nanmean(-1)
+        try:
+            multi = (factor * weight).nanmean(-1)
+        except torch.cuda.OutOfMemoryError as e:
+            print(f'OutOfMemoryError on multi factor calculation')
+            multi = (factor.cpu() * weight.cpu()).nanmean(-1).to(factor)
         multi = MF.zscore(multi , -1)
         return MultiFactorValue(value = multi , weight = weight , inputs = factor)
     
