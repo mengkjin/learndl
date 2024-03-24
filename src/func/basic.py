@@ -265,19 +265,6 @@ def merge_data_2d(data_tuple , row_tuple , col_tuple , row_all = None , col_all 
     for i , data in enumerate(data_tuple):
         data_all[np.repeat(row_index[i],len(col_index[i])),np.tile(col_index[i],len(row_index[i]))] = data[:].flatten()
     return data_all , row_all , col_all
-
-def rmdir(d , remake_dir = False):
-    """
-    Remove list/instance of dirs , and remake the dir if remake_dir = True
-    """
-    if isinstance(d , (list,tuple)):
-        [shutil.rmtree(x) for x in d if os.path.exists(x)]
-        if remake_dir : [os.makedirs(x , exist_ok = True) for x in d]
-    elif isinstance(d , str):
-        if os.path.exists(d): shutil.rmtree(d)
-        if remake_dir : os.mkdir(d)
-    else:
-        raise Exception(f'KeyError : {str(d)}')
         
 def list_converge(l , n = None , eps = 1e-6):
     """

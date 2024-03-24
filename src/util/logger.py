@@ -1,11 +1,42 @@
-import os , shutil
+import os
 import logging
 import colorlog
 import yaml
-from logging import handlers
-from typing import Any
+from logging import handlers , RootLogger
 
 from ..environ import DIR_logs , DIR_conf
+
+class Logger(RootLogger):
+    def __new__(cls):
+        return _init_logger()
+
+def _init_logger(test_output = False):
+    with open(f'{DIR_conf}/config_logger.yaml' ,'r') as f:
+        config_logger = yaml.load(f , Loader = yaml.FullLoader)
+    config_logger['file']['param']['filename'] = '/'.join([DIR_logs,config_logger['file']['param']['filename']])
+    os.makedirs(os.path.dirname(config_logger['file']['param']['filename']), exist_ok = True)
+    log = logging.getLogger(config_logger['name'])
+    exec("log.setLevel(logging."+config_logger['level']+")")
+
+    while log.handlers:
+        log.removeHandler(log.handlers[-1])
+
+    for hdname in config_logger['handlers']:
+        exec(hdname+"_hdargs=config_logger[hdname]['param']")
+        exec(hdname+"_handler="+config_logger[hdname]['class']+"(**"+hdname+"_hdargs)")
+        exec(hdname+"_fmtargs=config_logger['formatters'][config_logger[hdname]['formatter']]")
+        exec(hdname+"_formatter="+config_logger[hdname]['formatter_class']+"(datefmt=config_logger['datefmt'],**"+hdname+"_fmtargs)")
+        exec(hdname+"_handler.setLevel(logging."+config_logger[hdname]['level']+")")
+        exec(hdname+"_handler.setFormatter("+hdname+"_formatter)")
+        exec("log.addHandler("+hdname+"_handler)")
+    
+    if test_output:
+        log.debug('This is the DEBUG    message...')
+        log.info('This is the INFO     message...')
+        log.warning('This is the WARNING  message...')
+        log.error('This is the ERROR    message...')
+        log.critical('This is the CRITICAL message...')
+    return log
 
 class _LevelFormatter(logging.Formatter):
     def __init__(self, fmt=None, datefmt=None, level_fmts={}):
@@ -35,30 +66,3 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
             return self._level_formatters[record.levelno].format(record)
         return super(_LevelColorFormatter, self).format(record)
 
-def get_logger(test_output = False):
-    with open(f'{DIR_conf}/config_logger.yaml' ,'r') as f:
-        config_logger = yaml.load(f , Loader = yaml.FullLoader)
-    config_logger['file']['param']['filename'] = '/'.join([DIR_logs,config_logger['file']['param']['filename']])
-    os.makedirs(os.path.dirname(config_logger['file']['param']['filename']), exist_ok = True)
-    log = logging.getLogger(config_logger['name'])
-    exec("log.setLevel(logging."+config_logger['level']+")")
-
-    while log.handlers:
-        log.removeHandler(log.handlers[-1])
-
-    for hdname in config_logger['handlers']:
-        exec(hdname+"_hdargs=config_logger[hdname]['param']")
-        exec(hdname+"_handler="+config_logger[hdname]['class']+"(**"+hdname+"_hdargs)")
-        exec(hdname+"_fmtargs=config_logger['formatters'][config_logger[hdname]['formatter']]")
-        exec(hdname+"_formatter="+config_logger[hdname]['formatter_class']+"(datefmt=config_logger['datefmt'],**"+hdname+"_fmtargs)")
-        exec(hdname+"_handler.setLevel(logging."+config_logger[hdname]['level']+")")
-        exec(hdname+"_handler.setFormatter("+hdname+"_formatter)")
-        exec("log.addHandler("+hdname+"_handler)")
-    
-    if test_output:
-        log.debug('This is the DEBUG    message...')
-        log.info('This is the INFO     message...')
-        log.warning('This is the WARNING  message...')
-        log.error('This is the ERROR    message...')
-        log.critical('This is the CRITICAL message...')
-    return log

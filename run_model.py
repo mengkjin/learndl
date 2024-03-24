@@ -22,13 +22,14 @@ import itertools , os, shutil , gc , time , yaml
 from copy import deepcopy
 from torch.optim.swa_utils import AveragedModel , update_bn
 
-import scripts.util as U
-import scripts.function as F
-import scripts.nn.model as model
+import src as src
+import src.util as U
+import src.func as F
+import src.model.model as model
 # from audtorch.metrics.functional import *
 
 do_timer = True
-logger   = U.logger.get_logger()
+logger   = U.logger.Logger()
 config   = U.config.TrainConfig()
 
 class RunModel():
@@ -43,7 +44,7 @@ class RunModel():
     def __init__(self , timer = False , storage_type = 'mem' , device = None , **kwargs):
         self.model_info = {'init_time' : time.time()}
         self.ptimer     = U.basic.ProcessTimer(False)
-        self.storage    = U.basic.SwiftStorage(storage_type)
+        self.storage    = U.loader.Storage(storage_type)
         self.device     = U.trainer.Device(device)
         
     def main_process(self):
@@ -72,7 +73,7 @@ class RunModel():
         """
         self.model_info['data_time'] = time.time()
         logger.critical(f'Start Process [Load Data]!')
-        self.data = U.data.ModelData.ModelData(config.model_data_type , config)
+        self.data = src.data.ModelData.ModelData(config.model_data_type , config)
         # retrieve from data object
         filler = self.model_params_filler(self.data.x_data , self.data.data_type_list)
         for smp in config.model_params:  smp.update(filler)
@@ -352,7 +353,7 @@ class RunModel():
                 
                 p_valid = self.path['source']['swalast'][-len(self.score_list['valid']):]
                 arg_max = np.argmax(self.score_list['valid'][-len(p_valid):])
-                arg_swa = (lambda x:x[(x>=0) & (x<len(p_valid))])(min(5,len(p_valid)//3)*np.arange(-5,3)+arg_max)[-5:]
+                arg_swa = (lambda x:x[(x>=0) & (x<len(p_valid))])(min(3,len(p_valid)//3)*np.arange(-5,3)+arg_max)[-5:]
                 self.path['candidate']['swalast'] = [p_valid[i] for i in arg_swa]
                 
             if 'swabest' in config.output_types:
@@ -518,7 +519,6 @@ class RunModel():
             '5_test'  :self.model_info.get('test_process'),
             '6_result':self.model_info.get('test_score_sum'),
         }
-        print(self.model_info.get('test_score_sum'))
         out_path = f'./results/model_results.yaml'
         os.makedirs(os.path.dirname(out_path) , exist_ok=True)
         with open(out_path , 'a' if os.path.exists(out_path) else 'w') as f:
@@ -877,7 +877,7 @@ class RunModel():
         config = U.config.train_config(override_config = {'model_module' : module , 'model_data_type' : model_data_type} , do_process=False)
         data_type_list = config.data_type_list
         for smp in config.model_params: smp.update(cls.model_params_filler(data_type_list = data_type_list))
-        model_data = U.data.ModelData.ModelData(data_type_list , config)
+        model_data = src.data.ModelData.ModelData(data_type_list , config)
         model_data.create_dataloader(*model_data.get_dataloader_param('train','train',20170104,config.model_params[0]))
 
         #inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}

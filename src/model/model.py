@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from ..function.basic import *
+from ..func.basic import *
 from .tra import mod_tra , block_tra , tra_component
 from .rnn import rnn_univariate , rnn_multivariate
 

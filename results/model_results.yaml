@@ -1,0 +1,52 @@
+0_start: Sun Mar 24 18:34:15 2024
+1_basic: long+mem+float
+2_model: gru_day(x2)
+3_time: 20170103-99991231
+4_train: Finish Process [Train Model]! Cost 0.8 Hours, 1.6 Min/model, 1.8 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 46.9 Secs
+6_result:
+  0_best: 132.2066
+  0_swabest: 131.5129
+  0_swalast: 128.7513
+  1_best: 135.618
+  1_swabest: 133.1542
+  1_swalast: 131.5071
+0_start: Sun Mar 24 19:40:02 2024
+1_basic: long+mem+float
+2_model: gru_day(x2)
+3_time: 20170103-99991231
+4_train: Finish Process [Train Model]! Cost 0.9 Hours, 1.7 Min/model, 1.8 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 50.5 Secs
+6_result:
+  0_best: 134.0497
+  0_swabest: 132.9355
+  0_swalast: 132.8621
+  1_best: 135.0673
+  1_swabest: 132.5727
+  1_swalast: 131.4871
+0_start: Sun Mar 24 20:57:03 2024
+1_basic: long+mem+float
+2_model: gru_day(x2)
+3_time: 20170103-99991231
+4_train: Finish Process [Train Model]! Cost 1.1 Hours, 2.1 Min/model, 1.8 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 49.8 Secs
+6_result:
+  0_best: 135.9233
+  0_swabest: 137.1691
+  0_swalast: 135.771
+  1_best: 131.8927
+  1_swabest: 133.4679
+  1_swalast: 131.9888
+0_start: Sun Mar 24 23:36:01 2024
+1_basic: long+mem+float
+2_model: gru_day(x2)
+3_time: 20170103-99991231
+4_train: Finish Process [Train Model]! Cost 0.8 Hours, 1.6 Min/model, 1.8 Sec/Epoch
+5_test: Finish Process [Test Model]! Cost 50.8 Secs
+6_result:
+  0_best: 132.5573
+  0_swabest: 131.6688
+  0_swalast: 130.3038
+  1_best: 133.7052
+  1_swabest: 131.215
+  1_swalast: 131.7444

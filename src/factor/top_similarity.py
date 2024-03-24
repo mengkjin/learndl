@@ -6,15 +6,15 @@ import matplotlib.pyplot as plt
 import h5py , time , traceback
 from datetime import datetime,timedelta
 
-from ..util.data.ModelData import DataBlock
-from ..util.data.DataTank import DataTank
-from ..util.logger import get_logger
+from ..data.ModelData import DataBlock
+from ..data.DataTank import DataTank
+from ..util.logger import Logger
 from ..util.trainer import Device
 #from ..function.basic import *
 
 from ..environ import DIR_data
 
-logger = get_logger()
+logger = Logger()
 path_port  = f'{DIR_data}/fund_stock_port.h5'
 path_trade = f'{DIR_data}/DB_trade_day.h5'
 path_info  = f'{DIR_data}/DB_information.h5'

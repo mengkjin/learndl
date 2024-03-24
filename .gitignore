@@ -15,6 +15,7 @@ __old_version__/
 # Data
 *.h5
 *.pt
+*.pth
 *.npy
 *.npz
 *.csv

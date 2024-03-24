@@ -10,7 +10,7 @@ from .DataTransmitter import (read_risk_model,read_alpha_longcl,
                               get_trade_min,get_trade_Xmin,
                               get_directory_files,get_path_date)
 
-from ...environ import DIR_data
+from ..environ import DIR_data
 
 # %%
 l_do_updater = True

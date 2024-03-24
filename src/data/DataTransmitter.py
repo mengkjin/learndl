@@ -4,7 +4,7 @@ import numpy as np
 import os
 from .DataTank import Data1D , DataTank , DataFailed
 
-from ...environ import DIR_data
+from ..environ import DIR_data
 
 def get_path_date(path , startswith = '' , endswith = ''):
     if isinstance(path , (list,tuple)):
@@ -305,7 +305,7 @@ def get_labels(date , days , lag1 , tol = 1e-8 , **kwargs):
     res_dates = [_dates['res'][res_pos + i] for i in range(days)] #type: ignore
     res = wind_id
     for i , di in enumerate(res_dates): 
-        res = res.merge(pd.concat([f_read('id',di),f_read('res',di,str(i))],axis=1),how='left',on='id')
+        res = res.merge(pd.concat([f_read('id',di),f_read('res',di,str(i))],axis=1),how='left',on='id') # type:ignore
     res = pd.DataFrame({'id':res['id'],'res':res.set_index('id').fillna(np.nan).values.sum(axis=1)})
 
     df = pd.merge(rtn,res,how='left',on='id')

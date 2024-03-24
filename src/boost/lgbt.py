@@ -1,9 +1,11 @@
+import os
+
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import copy
-import os
+
+from copy import deepcopy
 
 # %%
 """
@@ -247,7 +249,7 @@ class lgbm():
         x = self.raw_dataset[group].iloc[:,:-1] 
         y_pred = pd.Series(self.model.predict(x.values), index=x.index)  # type: ignore
         dtrain = lgb.Dataset(x, label=y_pred)
-        _params = copy.deepcopy(self.train_param)
+        _params = deepcopy(self.train_param)
         del _params['early_stopping']
         SDT = lgb.train(_params, dtrain, num_boost_round=1)
         fig, ax = plt.subplots(figsize=(12,12))
@@ -260,7 +262,7 @@ class lgbm():
             os.remove('/'.join([self.plot_path , 'explainer_pdp' , file]))
         for feature , imp in zip(self.model.feature_name() , self.model.feature_importance()):
             if imp == 0: continue
-            x = copy.deepcopy(self.raw_dataset[group].iloc[:,:-1])
+            x = deepcopy(self.raw_dataset[group].iloc[:,:-1])
             # when calculating PDP，factor range is -5:0.2:5
             x_range = np.arange(np.floor(min(x.loc[:,feature])),
                                 np.ceil(max(x.loc[:,feature])),
@@ -286,7 +288,7 @@ class lgbm():
         
         # 定义计算SHAP模型，这里使用TreeExplainer
         explainer = shap.TreeExplainer(self.model)
-        X_df = copy.deepcopy(self.raw_dataset[group].iloc[:,:-1].copy())
+        X_df = deepcopy(self.raw_dataset[group].iloc[:,:-1].copy())
             
         # 计算全部因子SHAP
         shap_values = explainer.shap_values(X_df)

@@ -1,13 +1,13 @@
 # most frequently changing variables
-short_test:  True
+short_test:  False
 tra_switch: true
 buffer_type: tra
 buffer_param: 
   tra_num_states: &tra_num_states 5
 
-model_module: resnet_gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
+model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
 model_nickname: null # 'LSTM' # 'TCN_vs_LSTM' any str or None
-model_num: 3
+model_num: 2
 model_datatype:
   rnn_general: day
   gru: day
@@ -15,15 +15,14 @@ model_datatype:
   tcn: day
   transformer: day
   tra_lstm: day
-  resnet_lstm: 15m
-  resnet_gru: 15m
-  other: [day , 15m , 30m , gp , 'day+15m']
+  resnet_lstm: 30m
+  resnet_gru: 30m
+  other: [day , 30m , gp , 'day+15m']
 labels: 
-  - rtn_lag1_10
-  - res_lag1_10
+  - std_lag1_10
 MODEL_PARAM:
-  hidden_dim:     [32] #  2**5
-  seqlens:        [{'day': 40 , '30m': 30 , '15m': 20 , 'dms': 40}] # although not a param for model, but can be different values(dict of SEQLEN) #
+  hidden_dim:     [32,64] #  2**5
+  seqlens:        [{'day': 30 , '30m': 30 , 'dms': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
   tra_seqlens:    [{'hist_loss': 40}]
   dropout:        [0.1]
   enc_in:         [true]
@@ -31,7 +30,7 @@ MODEL_PARAM:
   rnn_type:       ['lstm'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
   rnn_att:        [false]
   rnn_layers:     [2]
-  dec_mlp_layers: [1] 
+  dec_mlp_layers: [2] 
   num_output:     [1]
   kernel_size:    [3 , 3] # for tcn
   hidden_as_factor:    [false]
@@ -45,7 +44,7 @@ TRAIN_PARAM:
   dataloader:
     random_seed:     null
     random_split:    true
-    sample_method:   total_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
+    sample_method:   train_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
     train_ratio:     0.8
   trainer:
     optimizer: {'name' : 'Adam' , 'param' : {} ,}  #{'name' : 'SGD' , 'param' : {} ,}
@@ -60,9 +59,9 @@ TRAIN_PARAM:
   criterion:
     loss:      pearson # mse , pearson , ccc
     score:     #mse,pearson,ccc,spearman
-      train:   pearson
-      valid:   pearson
-      test:    pearson
+      train:   spearman
+      valid:   spearman
+      test:    spearman
     penalty:   
       hidden_orthogonality : 
         lamb : 0.001
