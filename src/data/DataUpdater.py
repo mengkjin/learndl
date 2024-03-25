@@ -4,13 +4,15 @@ import os , time
 import traceback
 import socket , platform
 from .DataTank import DataTank,copy_tree,DataFailed
-from .DataTransmitter import (read_risk_model,read_alpha_longcl,
-                              get_basic_information,get_labels,
-                              get_trade_day,get_trade_Xday,
-                              get_trade_min,get_trade_Xmin,
-                              get_directory_files,get_path_date)
+from .DataTransmitter import (
+    read_risk_model,read_alpha_longcl,
+    get_basic_information,get_labels,
+    get_trade_day,get_trade_Xday,
+    get_trade_min,get_trade_Xmin,
+    get_directory_files,get_path_date
+)
 
-from ..environ import DIR_data
+from ..environ import DIR
 
 # %%
 l_do_updater = True
@@ -35,7 +37,7 @@ def updater_path_to_key(path):
     return '\\'.join(os.path.relpath(path).replace('\\','/').split('/'))
     
 def get_db_dir(make = True):
-    dir_db = outer_path_join(DIR_data , 'DB_data')
+    dir_db = outer_path_join(DIR.data , 'DB_data')
     if make: os.makedirs(dir_db , exist_ok=True)
     return dir_db
 

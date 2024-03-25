@@ -1,6 +1,7 @@
 # most frequently changing variables
+random_seed: null
 short_test:  False
-tra_switch: true
+tra_switch:  true
 buffer_type: tra
 buffer_param: 
   tra_num_states: &tra_num_states 5
@@ -42,8 +43,6 @@ COMPT_PARAM:
   num_worker: 10
 TRAIN_PARAM:
   dataloader:
-    random_seed:     null
-    random_split:    true
     sample_method:   train_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
     train_ratio:     0.8
   trainer:

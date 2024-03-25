@@ -27,11 +27,17 @@ import src.util as U
 import src.func as F
 import src.model.model as model
 import data_preprocessing as P
+
+from src.data.ModelData import ModelData
+from src.util.logger import Logger
+from src.util.config import TrainConfig
+
+from src.environ import DIR
 # from audtorch.metrics.functional import *
 
 do_timer = True
-logger   = U.logger.Logger()
-config   = U.config.TrainConfig()
+logger   = Logger()
+config   = TrainConfig()
 
 class RunModel():
     """
@@ -74,7 +80,7 @@ class RunModel():
         """
         self.model_info['data_time'] = time.time()
         logger.critical(f'Start Process [Load Data]!')
-        self.data = src.data.ModelData.ModelData(config.model_data_type , config)
+        self.data = ModelData(config.model_data_type , config)
         # retrieve from data object
         filler = self.model_params_filler(self.data.x_data , self.data.data_type_list)
         for smp in config.model_params:  smp.update(filler)
@@ -520,7 +526,7 @@ class RunModel():
             '5_test'  :self.model_info.get('test_process'),
             '6_result':self.model_info.get('test_score_sum'),
         }
-        out_path = f'./results/model_results.yaml'
+        out_path = f'{DIR.result}/model_results.yaml'
         os.makedirs(os.path.dirname(out_path) , exist_ok=True)
         with open(out_path , 'a' if os.path.exists(out_path) else 'w') as f:
             yaml.dump(out_dict , f)
@@ -756,7 +762,7 @@ class RunModel():
             df = pd.concat([pd.DataFrame(op_data) for op_data in self.pred_list] , axis=0)
             df = df.pivot_table('values' , ['secid' , 'date'] , ['model'])
             with open(path , 'a') as f:
-                df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)   
+                df.to_csv(f , mode = 'a', header = f.tell()==0, index = True) 
             del self.pred_list
             self.pred_list = []
             gc.collect()
@@ -828,9 +834,7 @@ class RunModel():
 
     @staticmethod
     def new_scheduler(optimizer, key = 'cycle', **kwargs):
-        if key == 'cos':
-            scheduler = U.trainer.CosineScheduler(optimizer, **kwargs)
-        elif key == 'step':
+        if key == 'step':
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **kwargs)
         elif key == 'cycle':
             scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, max_lr=[pg['lr_param'] for pg in optimizer.param_groups],cycle_momentum=False,mode='triangular2',**kwargs)
@@ -874,11 +878,10 @@ class RunModel():
 
     @classmethod
     def new_random_input(cls , module = 'tra_lstm2' , model_data_type = 'day' , model_data = None):
-
-        config = U.config.train_config(override_config = {'model_module' : module , 'model_data_type' : model_data_type} , do_process=False)
+        config.reload(do_process=False , override = {'model_module' : module , 'model_data_type' : model_data_type} , )
         data_type_list = config.data_type_list
         for smp in config.model_params: smp.update(cls.model_params_filler(data_type_list = data_type_list))
-        model_data = src.data.ModelData.ModelData(data_type_list , config)
+        model_data = ModelData(data_type_list , config)
         model_data.create_dataloader(*model_data.get_dataloader_param('train','train',20170104,config.model_params[0]))
 
         #inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
@@ -892,11 +895,11 @@ class RunModel():
         return config , net , batch_data , model_data , metrics , multiloss
 
 def predict_new(model_path = './model/gru_day' , model_num = 0):
-    P.main(if_train=False)
+    P.latest_block_data()
 
-    model_config = U.config.TrainConfig().reload(f'{model_path}/config_train.yaml')
-    model_data = src.data.ModelData.ModelData(model_config.model_data_type , model_config , if_train = False)
-    model_param = torch.load(f'{model_path}/model_params.pt')[model_num]
+    model_config = TrainConfig.load(f'{model_path}/config_train.yaml')
+    model_data   = ModelData(model_config.model_data_type , model_config , if_train = False)
+    model_param  = torch.load(f'{model_path}/model_params.pt')[model_num]
     model_file = sorted([p for p in os.listdir(f'{model_path}/{model_num}') if p.endswith('swalast.pt')])[-1]
     model_date = int(model_file.split('.')[0])
 
@@ -918,48 +921,18 @@ def predict_new(model_path = './model/gru_day' , model_num = 0):
         model_config.model_name : pred.flatten() ,
     })
     return df
-"""
-from run_model import RunModel
-from copy import deepcopy
-import torch
-import torch.nn as nn
-
-config , net , batch_data , model_data , metrics , multiloss = RunModel.new_random_input('simple_lstm' , 'day')
-optimizer = RunModel.new_optimizer(net)
-
-#pipeline 1
-
-sd = deepcopy(net.state_dict())
-optimizer = RunModel.new_optimizer(net)
-optimizer.zero_grad()
-if hasattr(net , 'dynamic_data_assign'): net.dynamic_data_assign(batch_data , model_data)
-pred , hidden = net(batch_data['x'])
-penalty_kwargs = {'net' : net , 'hidden' : hidden , 'label' : batch_data['y']}
-metric = RunModel.calculate_metrics('train' , metrics, label=batch_data['y'], pred=pred,
-                            weight=batch_data['w'], multiloss=multiloss,net=net,valid_sample=None,
-                            penalty_kwargs=penalty_kwargs)
-print(metric)
-(metric['loss'] + metric['penalty']).backward()
-print(net.get_parameter('fc.weight').grad)
-clip_value = config.train_params['trainer']['gradient'].get('clip_value')
-if clip_value is not None : nn.utils.clip_grad_value_(net.parameters(), clip_value = clip_value)
-optimizer.step()
-sd_step = deepcopy(net.state_dict())
-
-"""
 
 def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser_args = None):
     if parser_args is None:
-        input = {'process':process,'rawname':rawname,'resume':resume,'anchoring':anchoring}
-        parser_args = U.config.config_parser_args(input)
+        parser_args = config.parser_args({'process':process,'rawname':rawname,'resume':resume,'anchoring':anchoring})
 
-    config.replace(U.config.train_config(parser_args = parser_args , do_process = True))
-    U.config.set_config_environment(config)
+    config.reload(par_args=parser_args,do_process=True)
+    config.set_config_environment()
 
     if not config.short_test:
         logger.warning('Model Specifics:')
-        F.basic.pretty_print_dict(config.get_dict([
-            'verbosity' , 'storage_type' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 
+        F.basic.pretty_print_dict(config.subset([
+            'random_seed' , 'verbosity' , 'storage_type' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 
             'model_data_type' , 'model_num' , 'beg_date' , 'end_date' , 'interval' , 
             'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' , 'compt_params'
         ]))
@@ -969,5 +942,5 @@ def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser_arg
     app.summary()
 
 if __name__ == '__main__':
-    main(parser_args = U.config.config_parser_args())
+    main(parser_args = config.parser_args())
  

@@ -4,7 +4,8 @@ import numpy as np
 import os
 from .DataTank import Data1D , DataTank , DataFailed
 
-from ..environ import DIR_data
+from ..environ import DIR
+DIR_db = f'{DIR.data}/DB_data'
 
 def get_path_date(path , startswith = '' , endswith = ''):
     if isinstance(path , (list,tuple)):
@@ -191,7 +192,7 @@ def get_trade_day(date , tol = 1e-8 , **kwargs):
 
 def get_trade_Xday(date , x_day , tol = 1e-8 , **kwargs):
     np.seterr(invalid='ignore' , divide = 'ignore')
-    db_path_info = f'{DIR_data}/DB_data/DB_information/DB_information.h5'
+    db_path_info = f'{DIR_db}/DB_information/DB_information.h5'
     with DataTank(db_path_info , 'r') as info:
         calendar = info.read_dataframe('basic/calendar')
     rolling_dates = calendar.calendar[calendar.trade > 0].to_numpy().astype(int)
@@ -199,7 +200,7 @@ def get_trade_Xday(date , x_day , tol = 1e-8 , **kwargs):
     assert rolling_dates[-1] == date , (rolling_dates[-1] , date)
     groups = np.array(rolling_dates).astype(int) // 10000
     
-    db_path_day = DIR_data + '/DB_data/DB_trade_day/DB_trade_day.{}.h5'
+    db_path_day = DIR_db + '/DB_trade_day/DB_trade_day.{}.h5'
     src_files = [db_path_day.format(group) for group in groups]
     if not all([os.path.exists(file) for file in src_files]): return DataFailed()
 
@@ -415,7 +416,7 @@ def get_trade_Xmin(date , x_minute , src_updater = None , tol = 1e-8 , **kwargs)
                 break
 
     if data is None:
-        src_path  = f'{DIR_data}/DB_data/DB_trade_min/DB_trade_min.{int(date) // 10000}.h5'
+        src_path  = f'{DIR_db}/DB_trade_min/DB_trade_min.{int(date) // 10000}.h5'
         if os.path.exists(src_path):
             dtank = DataTank(src_path , 'r')
             if dtank.get_object(inner_path) is not None: 

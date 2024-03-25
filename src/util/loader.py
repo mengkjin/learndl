@@ -81,7 +81,6 @@ class Storage():
             if paths is not None:
                 self.del_path(paths)
                 del self.file_group[g]
-
 class DataloaderStored:
     """
     class of saved dataloader , retrieve batch_data from './model/{model_name}/{set_name}_batch_data'
@@ -106,7 +105,6 @@ class DataloaderStored:
         return batch_data
     def display(self , text = ''):
         if isinstance(self.iterator, tqdm): self.iterator.set_description(text)
-
 
 class Mydataset(Dataset):
     def __init__(self, data1 , label , weight = None) -> None:

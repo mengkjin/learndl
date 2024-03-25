@@ -6,13 +6,13 @@ from dataclasses import dataclass , field
 
 from src.util.basic import Timer
 from src.util.logger import Logger
-from src.environ import DIR_data
+from src.environ import DIR
 from src.data.BlockData import DataBlock, blocks_process
  
 logger = Logger()
 
-DIR_block     = f'{DIR_data}/block_data'
-DIR_hist_norm = f'{DIR_data}/hist_norm'
+DIR_block     = f'{DIR.data}/block_data'
+DIR_hist_norm = f'{DIR.data}/hist_norm'
 
 
 def today(offset = 0):
@@ -90,6 +90,9 @@ Configs.data['trade_week'] = {
 }
 """
 
+def latest_block_data():
+    main(if_train=False)
+
 def main(if_train = True, confirm = 0 , parser = None):
     if parser is None:
         parser = argparse.ArgumentParser(description='manual to this script')
@@ -142,5 +145,5 @@ def main(if_train = True, confirm = 0 , parser = None):
 
 
 if __name__ == '__main__':
-    main(if_train=False)
-    main(if_train=True)
+    latest_block_data()
+    main()

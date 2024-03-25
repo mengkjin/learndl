@@ -19,10 +19,10 @@ from numpy import load as load_npz
 from torch import save as save_pt
 from torch import load as load_pt
 
-from ..environ import DIR_data
+from ..environ import DIR
 
-DIR_block      = f'{DIR_data}/block_data'
-DIR_hist_norm  = f'{DIR_data}/hist_norm'
+DIR_block      = f'{DIR.data}/block_data'
+DIR_hist_norm  = f'{DIR.data}/hist_norm'
 save_block_method = 'pt'
 _div_tol = 1e-6
 

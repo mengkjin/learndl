@@ -1,11 +1,20 @@
 import os , shutil
 
-_current_dir = os.path.dirname(os.path.abspath(__file__)) 
-DIR_main = f'{_current_dir}/..'
-DIR_data = f'{_current_dir}/../data'
-DIR_conf = f'{_current_dir}/../configs'
-DIR_logs = f'{_current_dir}/../logs'
+from dataclasses import dataclass
 
+_src_dir = os.path.dirname(os.path.abspath(__file__))
+_main_dir = os.path.dirname(_src_dir)
+@dataclass
+class CustomDirSpace:
+    main  : str = _main_dir
+    data  : str = f'{_main_dir}/data'
+    conf  : str = f'{_main_dir}/configs'
+    logs  : str = f'{_main_dir}/logs'
+    model : str = f'{_main_dir}/model'
+    instance : str = f'{_main_dir}/instance'
+    result : str = f'{_main_dir}/result'
+
+DIR = CustomDirSpace()
 
 def rmdir(d , remake_dir = False):
     if isinstance(d , (list,tuple)):

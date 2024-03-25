@@ -1,25 +1,22 @@
-
-import torch
-import os , gc
+import gc,os
 import numpy as np
 import pandas as pd
+import torch
 
 from typing import Literal , Any
 from dataclasses import dataclass , field
 from torch.utils.data import BatchSampler
 
 from .BlockData import (
-    DataBlock , DataBlockNorm , data_type_abbr , 
-    save_dict , load_dict
+    DataBlock , DataBlockNorm , data_type_abbr , save_dict , load_dict
 )
 from ..util.trainer import Device
 from ..util.loader import Storage , DataloaderStored
-from ..func.basic import (
-    tensor_standardize_and_weight , match_values)
+from ..func.basic import tensor_standardize_and_weight , match_values
 
-from ..environ import DIR_data
+from ..environ import DIR
 
-DIR_torchpack  = f'{DIR_data}/torch_pack'
+DIR_torchpack  = f'{DIR.data}/torch_pack'
 _div_tol = 1e-6
 
 class ModelData():
@@ -33,7 +30,7 @@ class ModelData():
         # self.config = train_config() if config is None else config
         self.kwarg = self.ModelDataKwargs()
         self.kwarg.assign(config , **kwargs)
-        self.data_type_list = _type_list(data_type_list)
+        self.data_type_list = self._type_list(data_type_list)
 
         self.if_train = if_train
         self.load_model_data()
@@ -43,8 +40,8 @@ class ModelData():
         else:
             buffer_type = None
         self.buffer: dict = {}
-        self.buffer_init = buffer_init(buffer_type , **self.kwarg.buffer_param) 
-        self.buffer_proc = buffer_proc(buffer_type , **self.kwarg.buffer_param)  
+        self.buffer_init = self.define_buffer_init(buffer_type , **self.kwarg.buffer_param) 
+        self.buffer_proc = self.define_buffer_proc(buffer_type , **self.kwarg.buffer_param)  
 
     @dataclass
     class ModelDataKwargs:
@@ -90,7 +87,7 @@ class ModelData():
     def load_model_data(self):
         self.prenorming_method = {}
         self.x_data , self.y_data , self.norms , self.index = \
-            load_model_data(self.data_type_list , self.kwarg.labels , self.if_train , self.kwarg.precision)
+            self._load_data_pack(self.data_type_list, self.kwarg.labels, self.if_train, self.kwarg.precision)
         # self.x_data , self.y_data , self.norms , self.index = load_old_valid_data()
         # self.date , self.secid = self.index
 
@@ -341,83 +338,89 @@ class ModelData():
 
         return x
 
-def buffer_init(key , **param):
-    # first param of wrapper is container, which represent self in ModelData
-    if key == 'tra':
-        def tra_wrapper(self_container , *args, **kwargs):
-            buffer = dict()
-            if param['tra_num_states'] > 1:
-                hist_loss_shape = list(self_container.y.shape)
-                hist_loss_shape[2] = param['tra_num_states']
-                buffer['hist_labels'] = self_container.y
-                buffer['hist_preds'] = torch.randn(hist_loss_shape)
-                buffer['hist_loss']  = (buffer['hist_preds'] - buffer['hist_labels'].nan_to_num(0)).square()
-            return buffer
-        return tra_wrapper
-    else:
-        def none_wrapper(*args, **kwargs): return {}
-        return none_wrapper
-
-def buffer_proc(key , **param):
-    # first param of wrapper is container, which represent self in ModelData
-    if key == 'tra':
-        def tra_wrapper(self_container , *args, **kwargs):
-            buffer = dict()
-            if param['tra_num_states'] > 1:
-                buffer['hist_loss']  = (self_container.buffer['hist_preds'] - 
-                                        self_container.buffer['hist_labels'].nan_to_num(0)).square()
-            return buffer
-        return tra_wrapper
-    else:
-        def none_wrapper(*args, **kwargs): return {}
-        return none_wrapper
-    
-def load_model_data(data_type_list , y_labels = None , if_train=True,dtype = torch.float):
-    if dtype is None: dtype = torch.float
-    data_type_list = _type_list(data_type_list)
-    data = load_torch_pack(data_type_list , y_labels , if_train)
-    if isinstance(data , str):
-        path_torch_pack = data
-        if isinstance(dtype , str): dtype = getattr(torch , dtype)
-        data_type_list = ['y' , *data_type_list]
+    @staticmethod
+    def define_buffer_init(key , **param):
+        # first param of wrapper is container, which represent self in ModelData
+        if key == 'tra':
+            def tra_wrapper(self_container , *args, **kwargs):
+                buffer = dict()
+                if param['tra_num_states'] > 1:
+                    hist_loss_shape = list(self_container.y.shape)
+                    hist_loss_shape[2] = param['tra_num_states']
+                    buffer['hist_labels'] = self_container.y
+                    buffer['hist_preds'] = torch.randn(hist_loss_shape)
+                    buffer['hist_loss']  = (buffer['hist_preds'] - buffer['hist_labels'].nan_to_num(0)).square()
+                return buffer
+            return tra_wrapper
+        else:
+            def none_wrapper(*args, **kwargs): return {}
+            return none_wrapper
         
-        blocks = DataBlock.load_keys(data_type_list, if_train , alias_search=True,dtype = dtype)
-        norms  = DataBlockNorm.load_keys(data_type_list, if_train , alias_search=True,dtype = dtype)
+    @staticmethod
+    def define_buffer_proc(key , **param):
+        # first param of wrapper is container, which represent self in ModelData
+        if key == 'tra':
+            def tra_wrapper(self_container , *args, **kwargs):
+                buffer = dict()
+                if param['tra_num_states'] > 1:
+                    buffer['hist_loss']  = (self_container.buffer['hist_preds'] - 
+                                            self_container.buffer['hist_labels'].nan_to_num(0)).square()
+                return buffer
+            return tra_wrapper
+        else:
+            def none_wrapper(*args, **kwargs): return {}
+            return none_wrapper
+    
+    @classmethod
+    def _load_data_pack(cls , data_type_list , y_labels = None , if_train=True,dtype = torch.float):
+        if dtype is None: dtype = torch.float
+        data_type_list = cls._type_list(data_type_list)
+        data = cls._load_torch_pack(data_type_list , y_labels , if_train)
+        if isinstance(data , str):
+            path_torch_pack = data
+            if isinstance(dtype , str): dtype = getattr(torch , dtype)
+            data_type_list = ['y' , *data_type_list]
+            
+            blocks = DataBlock.load_keys(data_type_list, if_train , alias_search=True,dtype = dtype)
+            norms  = DataBlockNorm.load_keys(data_type_list, if_train , alias_search=True,dtype = dtype)
 
-        y = blocks[0]
-        if y_labels is not None: 
-            ifeat = np.concatenate([np.where(y.feature == label)[0] for label in y_labels])
-            y.update(values = y.values[...,ifeat] , feature = y.feature[ifeat])
-            assert np.array_equal(y_labels , y.feature) , (y_labels , y.feature)
+            y = blocks[0]
+            if y_labels is not None: 
+                ifeat = np.concatenate([np.where(y.feature == label)[0] for label in y_labels])
+                y.update(values = y.values[...,ifeat] , feature = y.feature[ifeat])
+                assert np.array_equal(y_labels , y.feature) , (y_labels , y.feature)
 
-        x = {data_type_abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
-        norms = {data_type_abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
-        secid , date = blocks[0].secid , blocks[0].date
+            x = {data_type_abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
+            norms = {data_type_abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
+            secid , date = blocks[0].secid , blocks[0].date
 
-        assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
+            assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
 
-        data = {'x':x,'y':y,'norms':norms,'secid':secid,'date':date}
-        if if_train: save_dict(data , path_torch_pack)
+            data = {'x':x,'y':y,'norms':norms,'secid':secid,'date':date}
+            if if_train: save_dict(data , path_torch_pack)
 
-    x, y, norms, secid, date = data['x'], data['y'], data['norms'], data['secid'], data['date']
-    return x , y , norms , (secid , date)
+        x, y, norms, secid, date = data['x'], data['y'], data['norms'], data['secid'], data['date']
+        return x , y , norms , (secid , date)
 
-def load_torch_pack(data_type_list , y_labels , if_train=True):
-    if not if_train: return 'no_torch_pack'
-    last_date = max(load_dict(DataBlock.block_path('y'))['date'])
-    path_torch_pack = f'{DIR_torchpack}/{_modal_data_code(data_type_list , y_labels)}.{last_date}.pt'
+    @classmethod
+    def _load_torch_pack(cls , data_type_list , y_labels , if_train=True):
+        if not if_train: return 'no_torch_pack'
+        last_date = max(load_dict(DataBlock.block_path('y'))['date'])
+        path_torch_pack = f'{DIR_torchpack}/{cls._modal_data_code(data_type_list , y_labels)}.{last_date}.pt'
 
-    if os.path.exists(path_torch_pack):
-        print(f'use {path_torch_pack}')
-        return torch.load(path_torch_pack)
-    else:
-        return path_torch_pack
+        if os.path.exists(path_torch_pack):
+            print(f'use {path_torch_pack}')
+            return torch.load(path_torch_pack)
+        else:
+            return path_torch_pack
 
-def _type_list(model_data_type):
-    if isinstance(model_data_type , str): model_data_type = model_data_type.split('+')
-    return [data_type_abbr(tp) for tp in model_data_type]
+    @staticmethod
+    def _type_list(model_data_type):
+        if isinstance(model_data_type , str): model_data_type = model_data_type.split('+')
+        return [data_type_abbr(tp) for tp in model_data_type]
 
-def _modal_data_code(type_list , y_labels):
-    xtype = '+'.join([data_type_abbr(tp) for tp in type_list])
-    ytype = 'ally' if y_labels is None else '+'.join([data_type_abbr(tp) for tp in y_labels])
-    return '+'.join([xtype , ytype])
+    @staticmethod
+    def _modal_data_code(type_list , y_labels):
+        xtype = '+'.join([data_type_abbr(tp) for tp in type_list])
+        ytype = 'ally' if y_labels is None else '+'.join([data_type_abbr(tp) for tp in y_labels])
+        return '+'.join([xtype , ytype])
