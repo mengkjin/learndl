@@ -26,6 +26,7 @@ import src as src
 import src.util as U
 import src.func as F
 import src.model.model as model
+import data_preprocessing as P
 # from audtorch.metrics.functional import *
 
 do_timer = True
@@ -890,6 +891,33 @@ class RunModel():
 
         return config , net , batch_data , model_data , metrics , multiloss
 
+def predict_new(model_path = './model/gru_day' , model_num = 0):
+    P.main(if_train=False)
+
+    model_config = U.config.TrainConfig().reload(f'{model_path}/config_train.yaml')
+    model_data = src.data.ModelData.ModelData(model_config.model_data_type , model_config , if_train = False)
+    model_param = torch.load(f'{model_path}/model_params.pt')[model_num]
+    model_file = sorted([p for p in os.listdir(f'{model_path}/{model_num}') if p.endswith('swalast.pt')])[-1]
+    model_date = int(model_file.split('.')[0])
+
+    dataloader_param = model_data.get_dataloader_param('test' , 'test' , model_date=model_date , param=model_param)   
+    model_data.create_dataloader(*dataloader_param)
+
+    model_sd = torch.load(f'{model_path}/{model_num}/{model_file}',map_location=model_data.device.device)
+    model = RunModel.new_model(model_config.model_module , model_param , state_dict=model_sd)
+    model.eval()
+
+    assert len(model_data.dataloaders['test']) , len(model_data.dataloaders['test']) 
+    batch_data = model_data.dataloaders['test'][-1]
+    with torch.no_grad():
+        pred , _ = model(batch_data['x'])
+
+    df = pd.DataFrame({
+        'secid' : model_data.index[0][batch_data['i'][:,0].cpu().numpy()] ,
+        'date'  : model_data.model_test_dates[-1] ,
+        model_config.model_name : pred.flatten() ,
+    })
+    return df
 """
 from run_model import RunModel
 from copy import deepcopy

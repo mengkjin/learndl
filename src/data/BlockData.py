@@ -658,7 +658,7 @@ def data_type_alias(path , key):
     for alias in alias_list:
         if os.path.exists(path.format(alias)): 
             return path.format(alias)
-    raise Exception(path.format(key)) 
+    return path.format(key)
     
 def save_dict(data , file_path):
     if file_path is None: return NotImplemented

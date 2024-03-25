@@ -42,6 +42,7 @@ class TrainConfig(argparse.Namespace):
             key_list = list(self.keys())
             for k in key_list: delattr(self,k)
             for k,v in raw_config_dict.items(): setattr(self,k,v)
+        return self
     def get(self , key , default = None):
         return getattr(self,key,default)
     def get_dict(self , keys = None):
