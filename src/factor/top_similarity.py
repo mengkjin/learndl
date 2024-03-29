@@ -12,13 +12,13 @@ from ..util.logger import Logger
 from ..util.trainer import Device
 #from ..function.basic import *
 
-from ..environ import DIR_data
+from ..environ import DIR
 
 logger = Logger()
-path_port  = f'{DIR_data}/fund_stock_port.h5'
-path_trade = f'{DIR_data}/DB_trade_day.h5'
-path_info  = f'{DIR_data}/DB_information.h5'
-save_path = f'{DIR_data}/block_data/X_top_similarity.npz'
+path_port  = f'{DIR.data}/fund_stock_port.h5'
+path_trade = f'{DIR.data}/DB_trade_day.h5'
+path_info  = f'{DIR.data}/DB_information.h5'
+save_path = f'{DIR.data}/block_data/X_top_similarity.npz'
 
 class matrix_factorization():
     def __init__(self , m , learn_rates = [0.1,0.05,0.01,0.005,0.001]):

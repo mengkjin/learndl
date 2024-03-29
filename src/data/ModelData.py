@@ -1,23 +1,18 @@
-import gc,os
+import gc , os
 import numpy as np
 import pandas as pd
+
 import torch
 
-from typing import Literal , Any
 from dataclasses import dataclass , field
-from torch.utils.data import BatchSampler
+from typing import Literal , Any
 
-from .BlockData import (
-    DataBlock , DataBlockNorm , data_type_abbr , save_dict , load_dict
-)
+from .BlockData import DataBlock , DataBlockNorm
 from ..util.trainer import Device
 from ..util.loader import Storage , DataloaderStored
 from ..func.basic import tensor_standardize_and_weight , match_values
 
 from ..environ import DIR
-
-DIR_torchpack  = f'{DIR.data}/torch_pack'
-_div_tol = 1e-6
 
 class ModelData():
     """
@@ -164,20 +159,18 @@ class ModelData():
             self.early_test_dates = test_dates[test_dates <= model_date][-(self.seqy-1) // test_step:] if self.seqy > 1 else test_dates[-1:-1]
             _cal_test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
     
-            d0 = np.where(self.index[1] == _cal_test_dates[0])[0][0] - self.seqx + 1
+            d0 = max(np.where(self.index[1] == _cal_test_dates[0])[0][0] - self.seqx + 1 , 0)
             d1 = np.where(self.index[1] == _cal_test_dates[-1])[0][0] + 1
             self.day_len  = d1 - d0
             self.step_len = (self.day_len - self.seqx + 1) // test_step + (0 if self.day_len % test_step == 0 else 1)
             self.step_idx = np.flip(self.day_len - 1 - np.arange(0 , self.step_len) * test_step).copy() 
             self.date_idx = d0 + self.step_idx
 
-
         x = {k:v.values[:,d0:d1] for k,v in self.x_data.items()}
         self.y , _ = self.process_y_data(self.y_data.values[:,d0:d1].squeeze(2)[...,:self.labels_n] , None , no_weight = True)
         self.y_secid , self.y_date = self.y_data.secid , self.y_data.date[d0:d1]
 
         self.buffer.update(self.buffer_init(self))
-
         self.nonnan_sample = self.cal_nonnan_sample(x, self.y, **{k:v for k,v in self.buffer.items() if k in self.seqs.keys()})
         y_step , w_step = self.process_y_data(self.y , self.nonnan_sample)
         self.y[:,self.step_idx] = y_step[:]
@@ -201,7 +194,7 @@ class ModelData():
         valid_sample = True
         if self.if_train: valid_sample = self._nonnan_sample_sub(y)
         for k , v in x.items():
-            valid_sample *= self._nonnan_sample_sub(v , self.seqs[k] , data_type_abbr(k) in ['day'])
+            valid_sample *= self._nonnan_sample_sub(v , self.seqs[k] , DataBlock.data_type_abbr(k) in ['day'])
         for k , v in kwargs.items():
             valid_sample *= self._nonnan_sample_sub(v , self.seqs[k])
         return valid_sample > 0
@@ -215,7 +208,6 @@ class ModelData():
         if index1 is None: index1 = self.step_idx # np.arange(rolling_window - 1 , data.shape[1])
         data = data.unsqueeze(2)
         index_pad = index1 + rolling_window
-        
         data_pad = torch.cat([torch.zeros_like(data)[:,:rolling_window] , data],dim=1)
         sum_dim = tuple(np.arange(data.dim())[2:])
         
@@ -252,7 +244,7 @@ class ModelData():
 
         def _shuffle_sampling(ii , batch_size = self.kwarg.batch_size):
             pool = np.random.permutation(np.arange(len(ii)))
-            return [ii[pos] for pos in BatchSampler(pool , batch_size , drop_last=False)]
+            return [ii[pos] for pos in torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)]
 
         pos = nonnan_sample
         shp = nonnan_sample.shape
@@ -323,7 +315,7 @@ class ModelData():
         2.for seq-mormalized x , normalized by history avg and std
         """
         if not static or self.prenorming_method.get(key) is None:
-            prenorming_method: list[bool] = [data_type_abbr(key) in ['day'] , self.norms.get(key) is not None]
+            prenorming_method: list[bool] = [DataBlock.data_type_abbr(key) in ['day'] , self.norms.get(key) is not None]
             if static:
                 self.prenorming_method.update({key:prenorming_method})
                 print(f'Pre-Norming method of [{key}] : [endpoint_division({prenorming_method[0]}) , history_standardize({prenorming_method[1]})]')
@@ -331,10 +323,10 @@ class ModelData():
             prenorming_method: list[bool] = self.prenorming_method[key]
         
         if prenorming_method[0]:
-            x /= x.select(-2,-1).unsqueeze(-2) + _div_tol
+            x /= x.select(-2,-1).unsqueeze(-2) + 1e-6
         if prenorming_method[1]:
             x -= self.norms[key].avg[-x.shape[-2]:]
-            x /= self.norms[key].std[-x.shape[-2]:] + _div_tol
+            x /= self.norms[key].std[-x.shape[-2]:] + 1e-6
 
         return x
 
@@ -390,14 +382,14 @@ class ModelData():
                 y.update(values = y.values[...,ifeat] , feature = y.feature[ifeat])
                 assert np.array_equal(y_labels , y.feature) , (y_labels , y.feature)
 
-            x = {data_type_abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
-            norms = {data_type_abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
+            x = {DataBlock.data_type_abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
+            norms = {DataBlock.data_type_abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
             secid , date = blocks[0].secid , blocks[0].date
 
             assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
 
             data = {'x':x,'y':y,'norms':norms,'secid':secid,'date':date}
-            if if_train: save_dict(data , path_torch_pack)
+            if if_train: DataBlock.save_dict(data , path_torch_pack)
 
         x, y, norms, secid, date = data['x'], data['y'], data['norms'], data['secid'], data['date']
         return x , y , norms , (secid , date)
@@ -405,8 +397,8 @@ class ModelData():
     @classmethod
     def _load_torch_pack(cls , data_type_list , y_labels , if_train=True):
         if not if_train: return 'no_torch_pack'
-        last_date = max(load_dict(DataBlock.block_path('y'))['date'])
-        path_torch_pack = f'{DIR_torchpack}/{cls._modal_data_code(data_type_list , y_labels)}.{last_date}.pt'
+        last_date = max(DataBlock.load_dict(DataBlock.block_path('y'))['date'])
+        path_torch_pack = f'{DIR.torch_pack}/{cls._modal_data_code(data_type_list , y_labels)}.{last_date}.pt'
 
         if os.path.exists(path_torch_pack):
             print(f'use {path_torch_pack}')
@@ -417,10 +409,10 @@ class ModelData():
     @staticmethod
     def _type_list(model_data_type):
         if isinstance(model_data_type , str): model_data_type = model_data_type.split('+')
-        return [data_type_abbr(tp) for tp in model_data_type]
+        return [DataBlock.data_type_abbr(tp) for tp in model_data_type]
 
     @staticmethod
     def _modal_data_code(type_list , y_labels):
-        xtype = '+'.join([data_type_abbr(tp) for tp in type_list])
-        ytype = 'ally' if y_labels is None else '+'.join([data_type_abbr(tp) for tp in y_labels])
+        xtype = '+'.join([DataBlock.data_type_abbr(tp) for tp in type_list])
+        ytype = 'ally' if y_labels is None else '+'.join([DataBlock.data_type_abbr(tp) for tp in y_labels])
         return '+'.join([xtype , ytype])

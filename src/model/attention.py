@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 #from ..function.basic import *
-from .basic import *
     
 class mod_transformer(nn.Module):
     def __init__(self , input_dim , output_dim , dropout=0.0 , num_layers = 2):

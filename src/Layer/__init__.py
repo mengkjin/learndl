@@ -1,8 +1,21 @@
 import torch
 import torch.nn as nn
+
 from copy import deepcopy
 
-class mod_ewlinear(nn.Module):
+from . import (
+    Attention , Embed , PE , RevIN , Act
+)
+
+class Transpose(nn.Module):
+    def __init__(self, *dims, contiguous=False): 
+        super().__init__()
+        self.dims, self.contiguous = dims, contiguous
+    def forward(self, x):        
+        if self.contiguous: return x.transpose(*self.dims).contiguous()
+        else: return x.transpose(*self.dims)
+
+class EwLinear(nn.Module):
     def __init__(self, dim = -1 , keepdim = True):
         super().__init__()
         self.dim , self.keepdim = dim , keepdim

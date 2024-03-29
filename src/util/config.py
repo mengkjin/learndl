@@ -1,10 +1,10 @@
-import os , shutil , random
-import yaml
-import argparse
-import torch
+import argparse , os , random , shutil , yaml
+
 import numpy as np
-from copy import deepcopy
+import torch
+
 from argparse import Namespace
+from copy import deepcopy
 
 from ..environ import DIR
 
@@ -35,7 +35,7 @@ class TrainConfig(Namespace):
         return self
 
     def reload(self , config_path = 'default' , par_args = Namespace() , do_process = False , override = None):
-        if config_path is not None and os.path.exists(config_path):
+        if config_path is not None:
             new_config = self.load(config_path,par_args,do_process,override)
             self.replace(new_config)
         return self

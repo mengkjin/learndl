@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 import itertools , os, shutil , gc , time , yaml
 from copy import deepcopy
+from dataclasses import dataclass
 from torch.optim.swa_utils import AveragedModel , update_bn
 
 import src as src
@@ -863,40 +864,61 @@ class RunModel():
 
         filler = {}
         inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
-        input_dim , inday_dim = [] , []
+        seq_len , input_dim , inday_dim = [] , [] , []
         for mdt in data_type_list:
             x = x_data.get(mdt)
+            seq_len.append(x.shape[1] if x else 30)
             input_dim.append(x.shape[-1] if x else 6)
             inday_dim.append(x.shape[-2] if x else inday_dim_dict.get(mdt , 1))
         if len(data_type_list) > 1:
-            filler.update({'input_dim':tuple(input_dim), 'inday_dim':tuple(inday_dim)})
+            filler.update({'seq_len'  :tuple(seq_len),
+                           'input_dim':tuple(input_dim), 
+                           'inday_dim':tuple(inday_dim)})
         elif len(data_type_list) == 1:
-            filler.update({'input_dim':input_dim[0] , 'inday_dim':inday_dim[0]})
+            filler.update({'seq_len'  :seq_len[0],
+                           'input_dim':input_dim[0] , 
+                           'inday_dim':inday_dim[0]})
         else:
-            filler.update({'input_dim':1            , 'inday_dim':1           })
+            filler.update({'seq_len'  :30,
+                           'input_dim':1, 
+                           'inday_dim':1 })
         return filler
 
     @classmethod
-    def new_random_input(cls , module = 'tra_lstm2' , model_data_type = 'day' , model_data = None):
+    def random_module(cls , module = 'tra_lstm2' , model_data_type = 'day' , model_data = None):
         config.reload(do_process=False , override = {'model_module' : module , 'model_data_type' : model_data_type} , )
         data_type_list = config.data_type_list
         for smp in config.model_params: smp.update(cls.model_params_filler(data_type_list = data_type_list))
-        model_data = ModelData(data_type_list , config)
-        model_data.create_dataloader(*model_data.get_dataloader_param('train','train',20170104,config.model_params[0]))
+        model_data = ModelData(data_type_list , config , if_train=False)
+        model_date = model_data.model_date_list[-1]
+        model_param = config.model_params[0]
+        dataloader_param = model_data.get_dataloader_param('test' , 'test' , model_date=model_date , param=model_param)   
+        model_data.create_dataloader(*dataloader_param)
 
-        #inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
-        for i , batch_data in enumerate(model_data.dataloaders['train']):
-            batch_data = batch_data
-            break
+        batch_data = model_data.dataloaders['test'][0]
         net = cls.new_model(module , param = config.model_params[0])
         metrics   = cls.update_metricfunc(cls.new_metricfunc(config.train_params['criterion']) , config.model_params[0] , config)
         multiloss = cls.new_multiloss(config.train_params['multitask'] , config.model_params[0]['num_output'])
 
-        return config , net , batch_data , model_data , metrics , multiloss
+        return cls.RandomModule(config , net , batch_data , model_data , metrics , multiloss)
+    @dataclass
+    class RandomModule:
+        config : TrainConfig
+        net    : nn.Module
+        batch_data : dict
+        model_data : ModelData
+        metrics : dict
+        multiloss : U.trainer.MultiLosses | None
 
-def predict_new(model_path = './model/gru_day' , model_num = 0):
-    P.latest_block_data()
+        def try_forward(self):
+            print(f'x shape is {self.batch_data["x"].shape}')
+            y = self.net(self.batch_data["x"])
+            if isinstance(y , tuple): y = y[0]
+            print(f'y shape is {y.shape}')
+            return y
 
+
+def predict_new(model_path = './model/gru_day' , model_num = 0 , on_date = None):
     model_config = TrainConfig.load(f'{model_path}/config_train.yaml')
     model_data   = ModelData(model_config.model_data_type , model_config , if_train = False)
     model_param  = torch.load(f'{model_path}/model_params.pt')[model_num]
@@ -910,17 +932,40 @@ def predict_new(model_path = './model/gru_day' , model_num = 0):
     model = RunModel.new_model(model_config.model_module , model_param , state_dict=model_sd)
     model.eval()
 
-    assert len(model_data.dataloaders['test']) , len(model_data.dataloaders['test']) 
-    batch_data = model_data.dataloaders['test'][-1]
-    with torch.no_grad():
-        pred , _ = model(batch_data['x'])
+    modelname = model_config.model_name
+    loader = model_data.dataloaders['test']
+    tdates = model_data.model_test_dates
+    secid  = model_data.index[0]
+    assert len(loader) , len(loader) 
 
-    df = pd.DataFrame({
-        'secid' : model_data.index[0][batch_data['i'][:,0].cpu().numpy()] ,
-        'date'  : model_data.model_test_dates[-1] ,
-        model_config.model_name : pred.flatten() ,
-    })
+    if on_date is None:
+        pass
+    elif on_date > 0:
+        try:
+            on_date = list(model_data.model_test_dates).index(on_date)
+        except ValueError as e:
+            print(e)
+            return pd.DataFrame()
+        loader = list(loader[on_date])
+        tdates = list(tdates[on_date])
+        
+    with torch.no_grad():
+        df_list = []
+        for batch_data , tdate in zip(loader , tdates):
+            pred , _ = model(batch_data['x'])
+            df_list.append(
+                pd.DataFrame({
+                'secid' : secid[batch_data['i'][:,0].cpu().numpy()] ,
+                'date'  : tdate , modelname : pred.cpu().numpy().flatten() ,
+            }))
+    df = pd.concat(df_list , axis = 0)
     return df
+
+    '''
+    from run_model import predict_new
+    v = predict_new(model_path = './model/gru_day' , model_num = 0)
+    v.pivot_table(values = 'gru_day' , index = 'secid' , columns = 'date').fillna(0).corr()
+    '''
 
 def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser_args = None):
     if parser_args is None:

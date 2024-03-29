@@ -2,17 +2,26 @@ import os , shutil
 
 from dataclasses import dataclass
 
-_src_dir = os.path.dirname(os.path.abspath(__file__))
-_main_dir = os.path.dirname(_src_dir)
+SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+MAIN_DIR = os.path.dirname(SRC_DIR)
+
 @dataclass
 class CustomDirSpace:
-    main  : str = _main_dir
-    data  : str = f'{_main_dir}/data'
-    conf  : str = f'{_main_dir}/configs'
-    logs  : str = f'{_main_dir}/logs'
-    model : str = f'{_main_dir}/model'
-    instance : str = f'{_main_dir}/instance'
-    result : str = f'{_main_dir}/result'
+    main        : str = MAIN_DIR
+    data        : str = os.path.join(MAIN_DIR , 'data')
+    block       : str = os.path.join(MAIN_DIR , 'data' , 'block_data')
+    hist_norm   : str = os.path.join(MAIN_DIR , 'data' , 'hist_norm')
+    torch_pack  : str = os.path.join(MAIN_DIR , 'data' , 'torch_pack')
+    db          : str = os.path.join(MAIN_DIR , 'data' , 'DataBase')
+    db_updater  : str = os.path.join(MAIN_DIR , 'data' , 'Updater')
+    conf        : str = os.path.join(MAIN_DIR , 'configs')
+    logs        : str = os.path.join(MAIN_DIR , 'logs')
+    model       : str = os.path.join(MAIN_DIR , 'model')
+    instance    : str = os.path.join(MAIN_DIR , 'instance')
+    result      : str = os.path.join(MAIN_DIR , 'result')
+
+    def __post_init__(self):
+        [os.makedirs(v , exist_ok=True) for v in self.__dict__.values()]
 
 DIR = CustomDirSpace()
 

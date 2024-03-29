@@ -1,7 +1,7 @@
-from ftplib import FTP
+import os , tempfile
 import pandas as pd
-import tempfile
-import os
+
+from ftplib import FTP
 
 class ftp_connector(object):
     def __init__(self, host='47.100.224.38', user="factor", password="msjg_factor@1024"):

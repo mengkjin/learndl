@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
+
+from .. import Layer
 #from ..function.basic import *
-from .basic import *
 from .cnn import mod_resnet_1d , mod_tcn
 from .attention import mod_transformer,TimeWiseAttention,ModuleWiseAttention
 
@@ -61,9 +62,9 @@ class rnn_univariate(nn.Module):
             **kwargs,
         }
 
-        self.encoder = mod_parallel(uni_rnn_encoder(**self.kwargs) , num_mod = 1 , feedforward = False , concat_output = True)
-        self.decoder = mod_parallel(uni_rnn_decoder(**self.kwargs) , num_mod = num_output , feedforward = False , concat_output = False)
-        self.mapping = mod_parallel(uni_rnn_mapping(**self.kwargs) , num_mod = num_output , feedforward = True , concat_output = True)
+        self.encoder = Layer.Parallel(uni_rnn_encoder(**self.kwargs) , num_mod = 1 , feedforward = False , concat_output = True)
+        self.decoder = Layer.Parallel(uni_rnn_decoder(**self.kwargs) , num_mod = num_output , feedforward = False , concat_output = False)
+        self.mapping = Layer.Parallel(uni_rnn_mapping(**self.kwargs) , num_mod = num_output , feedforward = True , concat_output = True)
         self.set_multiloss_params()
 
     def forward(self, inputs):
@@ -132,9 +133,9 @@ class rnn_multivariate(nn.Module):
         mod_decoder = multi_rnn_decoder if self.num_rnn > 1 else uni_rnn_decoder
         mod_mapping = multi_rnn_mapping if self.num_rnn > 1 else uni_rnn_mapping
 
-        self.encoder = mod_parallel(mod_encoder(**self.kwargs) , num_mod = 1 , feedforward = False , concat_output = True)
-        self.decoder = mod_parallel(mod_decoder(**self.kwargs) , num_mod = num_output , feedforward = False , concat_output = False)
-        self.mapping = mod_parallel(mod_mapping(**self.kwargs) , num_mod = num_output , feedforward = True , concat_output = True)
+        self.encoder = Layer.Parallel(mod_encoder(**self.kwargs) , num_mod = 1 , feedforward = False , concat_output = True)
+        self.decoder = Layer.Parallel(mod_decoder(**self.kwargs) , num_mod = num_output , feedforward = False , concat_output = False)
+        self.mapping = Layer.Parallel(mod_mapping(**self.kwargs) , num_mod = num_output , feedforward = True , concat_output = True)
 
         self.set_multiloss_params()
         self.set_param_groups()
@@ -225,7 +226,7 @@ class uni_rnn_decoder(nn.Module):
 class uni_rnn_mapping(nn.Module):
     def __init__(self,hidden_dim,hidden_as_factors,output_as_factors,**kwargs):
         super().__init__()
-        self.fc_map_out = nn.Sequential(mod_ewlinear()) if hidden_as_factors else nn.Sequential(nn.Linear(hidden_dim, 1))
+        self.fc_map_out = nn.Sequential(Layer.EwLinear()) if hidden_as_factors else nn.Sequential(nn.Linear(hidden_dim, 1))
         if output_as_factors: self.fc_map_out.append(nn.BatchNorm1d(1))
     def forward(self, inputs):
         # inputs.shape : (bat_size, hidden_dim)
@@ -269,7 +270,7 @@ class multi_rnn_mapping(nn.Module):
     def __init__(self,hidden_dim,ordered_param_group,hidden_as_factors,output_as_factors,**kwargs):
         super().__init__()
         if ordered_param_group or hidden_as_factors: 
-            self.fc_map_out = nn.Sequential(mod_ewlinear())
+            self.fc_map_out = nn.Sequential(Layer.EwLinear())
         else:
             self.fc_map_out = nn.Sequential(nn.Linear(hidden_dim, 1))
         if output_as_factors:  self.fc_map_out.append(nn.BatchNorm1d(1))

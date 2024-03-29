@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 from ..func.basic import *
-from .tra import mod_tra , block_tra , tra_component
+from .tra import block_tra , tra_component
 from .rnn import rnn_univariate , rnn_multivariate
+from . import patchTST
 
 """
 class TRA_LSTM(TRA):
@@ -90,3 +91,9 @@ class rnn_ntask(rnn_univariate):
 class rnn_general(rnn_multivariate):
     def __init__(self , input_dim , **kwargs):
         super().__init__(input_dim , **kwargs)
+
+class patch_tst(patchTST.ModelPredict):
+    def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
+        super().__init__(c_in = input_dim , seq_len = seq_len ,
+                         target_dim = hidden_dim , patch_len = 5 , stride = 2 , 
+                         predict_steps = num_output , head_type = "prediction" , **kwargs)
