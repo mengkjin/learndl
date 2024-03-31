@@ -143,8 +143,8 @@ class mod_tra(nn.Module):
     
     def modifier_inputs(self , inputs , batch_data , model_data):
         if self.num_states > 1:
-            x = batch_data['x']
-            i = batch_data['i']
+            x = batch_data.x
+            i = batch_data.i
             d = model_data.buffer['hist_loss']
             rw = model_data.seqs['hist_loss']
             hist_loss = torch.stack([d[i[:,0],i[:,1]+j+1-rw] for j in range(rw)],dim=-2).nan_to_num(1)
@@ -157,7 +157,7 @@ class mod_tra(nn.Module):
 
     def modifier_update(self , update , batch_data , model_data):
         if self.num_states > 1 and self.preds is not None:
-            i = batch_data['i']
+            i = batch_data.i
             v = self.preds.detach().to(model_data.buffer['hist_preds'])
             model_data.buffer['hist_preds'][i[:,0],i[:,1]] = v[:]
             model_data.buffer['hist_loss'][i[:,0],i[:,1]] = (v - model_data.buffer['hist_labels'][i[:,0],i[:,1]]).square()

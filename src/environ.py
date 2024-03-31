@@ -9,6 +9,7 @@ MAIN_DIR = os.path.dirname(SRC_DIR)
 class CustomDirSpace:
     main        : str = MAIN_DIR
     data        : str = os.path.join(MAIN_DIR , 'data')
+    batch       : str = os.path.join(MAIN_DIR , 'data' , 'minibatch')
     block       : str = os.path.join(MAIN_DIR , 'data' , 'block_data')
     hist_norm   : str = os.path.join(MAIN_DIR , 'data' , 'hist_norm')
     torch_pack  : str = os.path.join(MAIN_DIR , 'data' , 'torch_pack')
@@ -22,6 +23,18 @@ class CustomDirSpace:
 
     def __post_init__(self):
         [os.makedirs(v , exist_ok=True) for v in self.__dict__.values()]
+
+    @staticmethod
+    def copytree(src , dst):
+        shutil.copytree(src , dst)
+
+    @staticmethod
+    def copyfiles(src , dst , bases):
+        [shutil.copyfile(f'{src}/{base}' , f'{dst}/{base}') for base in bases]
+
+    @staticmethod
+    def deltrees(dir , bases):
+        [shutil.rmtree(f'{dir}/{base}') for base in bases]
 
 DIR = CustomDirSpace()
 

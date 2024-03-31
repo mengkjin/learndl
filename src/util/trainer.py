@@ -1,44 +1,99 @@
 import math
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
+
+
+from dataclasses import dataclass
+from typing import Any
 from .logger import *
 
 use_device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 if torch.cuda.is_available():
     print(f'Use device name: ' + torch.cuda.get_device_name(0))
 
+@dataclass
+class BatchData:
+    x       : torch.Tensor | tuple | list
+    y       : torch.Tensor 
+    w       : torch.Tensor | None
+    i       : torch.Tensor 
+    nonnan  : torch.Tensor 
+    
+    def __post_init__(self):
+        if isinstance(self.x , (list , tuple)) and len(self.x) == 1:
+            self.x = self.x[0]
+        
+    def to(self , device = None):
+        return self.__class__(
+            self.x.to(device) if isinstance(self.x , torch.Tensor) else type(self.x)(x.to(device) for x in self.x) , 
+            self.y.to(device) , 
+            None if self.w is None else self.w.to(device) , 
+            self.i.to(device) , 
+            self.nonnan.to(device) 
+        )
+
+    def cpu(self):
+        return self.__class__(
+            self.x.cpu() if isinstance(self.x , torch.Tensor) else type(self.x)(x.cpu() for x in self.x) , 
+            self.y.cpu() , 
+            None if self.w is None else self.w.cpu() , 
+            self.i.cpu() , 
+            self.nonnan.cpu() 
+        )
+
+    def cuda(self):
+        return self.__class__(
+            self.x.cuda() if isinstance(self.x , torch.Tensor) else type(self.x)(x.cuda() for x in self.x) , 
+            self.y.cuda() , 
+            None if self.w is None else self.w.cuda() , 
+            self.i.cuda() , 
+            self.nonnan.cuda() 
+        )
+    
+        
 class Device:
+    torch_obj = (torch.Tensor , torch.nn.Module , torch.nn.ModuleList , torch.nn.ModuleDict , BatchData)
+
     def __init__(self , device = None) -> None:
         if device is None: device = use_device
         self.device = device
-    def __call__(self, *args):
-        if len(args) == 0: 
-            return None
-        elif len(args) == 1:
-            return self._to(args[0])
-        else:
-            return self._to(args)
-    def _to(self , x):
+    def __call__(self, obj) -> Any:
+        return self.send_to(obj , self.device)
+    
+    @classmethod
+    def send_to(cls , x , device = None):
         if isinstance(x , (list,tuple)):
-            return type(x)(self._to(v) for v in x)
+            return type(x)(cls.send_to(v , device) for v in x)
         elif isinstance(x , (dict)):
-            for k in x.keys(): x[k] = self._to(x[k])
-            return x
-        elif isinstance(x , (torch.Tensor , torch.nn.Module , torch.nn.ModuleList , torch.nn.ModuleDict)): # maybe modulelist ... should be included
-            return x.to(self.device)
+            return {k:cls.send_to(v , device) for k,v in x.items()}
+        elif isinstance(x , cls.torch_obj): # maybe modulelist ... should be included
+            return x.to(device)
         else:
             return x
+        
     @classmethod
     def cpu(cls , x):
         if isinstance(x , (list,tuple)):
             return type(x)(cls.cpu(v) for v in x)
         elif isinstance(x , (dict)):
             return {k:cls.cpu(v) for k,v in x.items()}
-        elif isinstance(x , (torch.Tensor , torch.nn.Module , torch.nn.ModuleList , torch.nn.ModuleDict)): # maybe modulelist ... should be included
+        elif isinstance(x , cls.torch_obj): # maybe modulelist ... should be included
             return x.cpu()
         else:
             return x
+    @classmethod
+    def cuda(cls , x):
+        if isinstance(x , (list,tuple)):
+            return type(x)(cls.cuda(v) for v in x)
+        elif isinstance(x , (dict)):
+            return {k:cls.cuda(v) for k,v in x.items()}
+        elif isinstance(x , cls.torch_obj): # maybe modulelist ... should be included
+            return x.cuda()
+        else:
+            return x
+        
+
     def torch_nans(self,*args,**kwargs):
         return torch.ones(*args , device = self.device , **kwargs).fill_(torch.nan)
     def torch_zeros(self,*args , **kwargs):

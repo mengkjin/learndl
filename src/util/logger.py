@@ -12,7 +12,7 @@ class Logger(RootLogger):
 
     @staticmethod
     def _init_logger(test_output = False):
-        with open(f'{DIR.conf}/config_logger.yaml' ,'r') as f:
+        with open(f'{DIR.conf}/logger.yaml' ,'r') as f:
             config_logger = yaml.load(f , Loader = yaml.FullLoader)
         config_logger['file']['param']['filename'] = '/'.join([DIR.logs,config_logger['file']['param']['filename']])
         os.makedirs(os.path.dirname(config_logger['file']['param']['filename']), exist_ok = True)

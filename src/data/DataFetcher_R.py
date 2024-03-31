@@ -4,7 +4,6 @@ import numpy as np
 
 from dataclasses import dataclass
 
-from .DataTank import DataTank
 from ..environ import DIR
 
 class DataFetcher_R:
@@ -56,22 +55,17 @@ class DataFetcher_R:
     
     @classmethod
     def source_dates(cls , source_key):
-        if False and source_key == 'trade/min':
-            calendar = cls.basic_info('calendar')
-            assert isinstance(calendar , pd.DataFrame)
-            source_dates = calendar.calendar[(calendar.trade > 0) & (calendar.calendar >= 20100101) & (calendar.calendar <= 20240101)].to_numpy().astype(int)
-        else:
-            date_source = {
-                'models/risk_exp'   : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model' ,
-                'models/longcl_exp' : 'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/A1_Analyst',
-                'trade/day'         : 'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_vwap' ,
-                'trade/min'         : 'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin' ,
-                'labels/ret'        : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
-                'labels/ret_lag'    : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
-            }[source_key]
+        date_source = {
+            'models/risk_exp'   : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model' ,
+            'models/longcl_exp' : 'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/A1_Analyst',
+            'trade/day'         : 'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_vwap' ,
+            'trade/min'         : 'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin' ,
+            'labels/ret'        : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
+            'labels/ret_lag'    : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
+        }[source_key]
 
-            source_dates = cls.dir_dates(date_source)
-        return np.array(source_dates , dtype=int)
+        source_dates = cls.dir_dates(date_source)
+        return np.array(sorted(source_dates) , dtype=int)
 
     @classmethod
     def adjust_secid(cls , df):
@@ -374,16 +368,7 @@ class DataFetcher_R:
         '''
         get minute trade data from R environment
         trade_min(20240324)
-        if dtank_first:
-            with DataTank(f'{DIR.data}/DB_data/DB_trade_min/DB_trade_min.{str(date)[:4]}.h5','r') as dtank:
-                df = dtank.read_data1D(f'minute/trade/{date}')
-                if df is not None: 
-                    df = df.to_dataframe().reset_index()
-                    df = cls.trade_min_fillna(df)
-                    if with_date: df['date'] = date
-                    return df
         '''
-
 
         data_params = {
             'ticker'    : 'secid'  ,

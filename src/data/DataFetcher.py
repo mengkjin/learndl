@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import os , platform , re , socket , tarfile, time
+import os , re , socket , tarfile, time
 
 from dataclasses import dataclass , field
 from functools import reduce 
@@ -80,11 +80,12 @@ class DataFetcher:
         return new_dates
     
     @classmethod
-    def get_target_path(cls , db_src , db_key , date = None , makedir = False):
-        if db_src in cls.DB_by_name:
+    def get_target_path(cls , db_src , db_key , date = None , makedir = False , 
+                        force_type : Literal['name' , 'date'] | None = None):
+        if db_src in cls.DB_by_name or force_type == 'name':
             db_path = os.path.join(DIR.db , f'DB_{db_src}')
             db_base = f'{db_key}.{cls.save_option}'
-        elif db_src in cls.DB_by_date:
+        elif db_src in cls.DB_by_date or force_type == 'date':
             assert date is not None
             year_group = int(date) // 10000
             db_path = os.path.join(DIR.db , f'DB_{db_src}' , db_key , str(year_group))
@@ -101,11 +102,10 @@ class DataFetcher:
     
     @classmethod
     def get_target_dates(cls , db_src , db_key):
-        assert db_src in cls.DB_by_date , db_src
         db_path = os.path.join(DIR.db , f'DB_{db_src}' , db_key)
         target_files = RFetcher.list_files(db_path , recur=True)
         target_dates = RFetcher.path_date(target_files)
-        return np.array(target_dates , dtype=int)
+        return np.array(sorted(target_dates) , dtype=int)
     
     @classmethod
     def load_target_file(cls , db_src , db_key , date = None):
@@ -150,14 +150,14 @@ class DataUpdater():
     
     @classmethod
     def unpack_exist_updaters(cls , del_after_dumping = True):
-        assert socket.gethostname() != 'mengkjin-server' , socket.gethostname()
+        assert socket.gethostname() == 'mengkjin-server' , socket.gethostname()
         search_dirs = [DIR.db , DIR.db_updater , '/home/mengkjin/Workspace/SharedFolder']
         paths = []
         for sdir in search_dirs:
             path = [os.path.join(sdir , p) for p in os.listdir(sdir) if p.startswith(cls.db_updater_title + '.') and p.endswith('.tar')]
             paths += path
         paths.sort()
-        if del_after_dumping:
+        if del_after_dumping and paths:
             print(paths)
             if input(f'''Delete {len(paths)} updaters after completion? (press yes/y) : {paths}''')[0].lower() != 'y': 
                 del_after_dumping = False
@@ -272,28 +272,30 @@ class DataUpdater():
     def print_unfetch(self):
         for fail in self.Failed: print(fail) 
 
-def update_server_main():
-    assert socket.gethostname() == 'mengkjin-server' , socket.gethostname()
-    start_time = time.time()
+    @classmethod
+    def update_server(cls):
+        assert socket.gethostname() == 'mengkjin-server' , socket.gethostname()
+        start_time = time.time()
 
-    print(f'Unpack Update Files') 
-    DataUpdater.unpack_exist_updaters(del_after_dumping=True)
+        print(f'Unpack Update Files') 
+        cls.unpack_exist_updaters(del_after_dumping=True)
 
-    print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
+        print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
 
-def update_laptop_main():
-    assert socket.gethostname() != 'mengkjin-server' , socket.gethostname()
+    @classmethod
+    def update_laptop(cls):
+        assert socket.gethostname() != 'mengkjin-server' , socket.gethostname()
 
-    start_time = time.time()
-    print(f'Update Files')
-    Updater = DataUpdater()
-    Updater.update_all()
-    Updater.print_unfetch()
+        start_time = time.time()
+        print(f'Update Files')
+        Updater = cls()
+        Updater.update_all()
+        Updater.print_unfetch()
 
-    print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
+        print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
 
 def main():
     if socket.gethostname() == 'mengkjin-server':
-        update_server_main()
+        DataUpdater.update_server()
     else:
-        update_laptop_main()
+        DataUpdater.update_laptop()

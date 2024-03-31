@@ -1,9 +1,10 @@
 from . import (
-    basic , logger , trainer , config , loader ,
+    basic , logger , trainer , config , loader , store
 )
 
-from .trainer import Device , MultiLosses
-from .loader import Storage , DataloaderStored
+from .trainer import Device , MultiLosses , BatchData
+from .loader import DataloaderStored
+from .store import Storage
 from .basic import Timer , ProcessTimer , FilteredIterator
 from .logger import Logger
 from .config import TrainConfig

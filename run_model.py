@@ -18,42 +18,48 @@ import torch
 import torch.nn as nn
 import numpy as np
 import pandas as pd
-import itertools , os, shutil , gc , time , yaml
+import itertools , os , gc , time , yaml
+
 from copy import deepcopy
 from dataclasses import dataclass
 from torch.optim.swa_utils import AveragedModel , update_bn
+from torch.nn.utils.clip_grad import clip_grad_value_
+from typing import Any
 
 import src as src
-import src.util as U
-import src.func as F
-import src.model.model as model
-import data_preprocessing as P
-
-from src.data.ModelData import ModelData
-from src.util.logger import Logger
-from src.util.config import TrainConfig
 
 from src.environ import DIR
+
+from src.data.DataFetcher import DataFetcher
+from src.data.ModelData import ModelData
+from src.util import (
+    BatchData , Device , FilteredIterator , Logger , MultiLosses , ProcessTimer , Storage , TrainConfig
+)
+
+from src.func.date import today , date_offset
+from src.func.basic import ask_for_confirmation , list_converge , pretty_print_dict
+from src.func.metric import Metrics
+from src.model import model
+
 # from audtorch.metrics.functional import *
 
-do_timer = True
 logger   = Logger()
 config   = TrainConfig()
 
 class RunModel():
     """
     A class to control the whole process of training , includes:
-    1. Parameters: train_params , compt_params , model_data_type
+    1. Parameters: train_params , model_data_type
     2. Data : class of train_data
-    3. loop status: model , round , attempt , epoch
-    4. file path: model , lastround , transfer(last model date)
-    5. text: model , round , attempt , epoch , exit , stat , time , trainer
+    3. loop status: model , attempt , epoch
+    4. file path: model , transfer(last model date)
+    5. text: model , attempt , epoch , exit , stat , time , trainer
     """
-    def __init__(self , timer = False , storage_type = 'mem' , device = None , **kwargs):
-        self.model_info = {'init_time' : time.time()}
-        self.ptimer     = U.basic.ProcessTimer(False)
-        self.storage    = U.loader.Storage(storage_type)
-        self.device     = U.trainer.Device(device)
+    def __init__(self , mem_storage = True , timer = True ,  device = None , **kwargs):
+        self.model_info : dict[str,Any]= {'init_time' : time.time()}
+        self.ptimer     = ProcessTimer(timer)
+        self.storage    = Storage(mem_storage)
+        self.device     = Device(device)
         
     def main_process(self):
         """
@@ -91,7 +97,7 @@ class RunModel():
         """
         Main process of training
         1. loop over model(model_date , model_num)
-        2. loop over round(if necessary) , attempt(if converge too soon) , epoch(most prevailing loops)
+        2. loop over attempt(if converge too soon) , epoch
         """
         self.model_info['train_time'] = time.time()
         logger.critical(f'Start Process [Train Model]!')
@@ -103,7 +109,7 @@ class RunModel():
         total_time = time.time() - self.model_info['train_time']
         _str = 'Finish Process [Train Model]! Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
             total_time / 3600 , total_time / 60 / max(self.model_count , 1) , total_time / max(self.epoch_count , 1))
-        self.model_info['train_process'] = _str #type:ignore
+        self.model_info['train_process'] = _str 
         logger.critical(self.model_info['train_process'])
 
     def process_test(self):
@@ -117,12 +123,12 @@ class RunModel():
             self.save_model_preds()
         self.process_test_result()
         _str = 'Finish Process [Test Model]! Cost {:.1f} Secs'.format(time.time()-self.model_info['test_time'])
-        self.model_info['test_process'] = _str # type: ignore
+        self.model_info['test_process'] = _str 
         logger.critical(self.model_info['test_process'])
 
     def process_instance(self):
         if config.anchoring < 0:
-            _text , _cond = F.basic.ask_for_confirmation(f'Do you want to copy the model to instance?[yes/else no]: ' , timeout = -1)
+            _text , _cond = ask_for_confirmation(f'Do you want to copy the model to instance?[yes/else no]: ' , timeout = -1)
             anchoring = all([_t.lower() in ['yes','y'] for _t in _text])
         else:
             anchoring = config.anchoring > 0
@@ -134,13 +140,13 @@ class RunModel():
                 logger.critical(f'The command can be "rm -r {config.instance_path}"')
                 return
             else:
-                shutil.copytree(config.model_base_path , config.instance_path)
+                DIR.copytree(config.model_base_path , config.instance_path)
         else:
             logger.critical(f'Will not copy to instance!')
             return
         logger.warning('Copy from model to instance finished , Start going forward')
         # load the exact config in the instance folder
-        config.reload(config_path = f'{config.instance_path}/config_train.yaml')
+        config.reload(config_path = f'{config.instance_path}')
         self.process_test_start()
         for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
@@ -158,7 +164,7 @@ class RunModel():
                 if not os.path.exists(f'{config.model_base_path}/{model_num}/{model_date}.best.pt'):
                     models_trained[max(i-1,0):] = False
                     break
-            new_iter = U.basic.FilteredIterator(new_iter , models_trained == 0)
+            new_iter = FilteredIterator(new_iter , models_trained == 0)
         return new_iter
     
     def model_preparation(self , process , last_n = 30 , best_n = 5):
@@ -173,7 +179,7 @@ class RunModel():
 
             path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
             path = {'target'      : {op_type:f'{path_prefix}.{op_type}.pt' for op_type in config.output_types} , 
-                    'source'      : {op_type:[] for op_type in (config.output_types + ['rounds'])} , # del at each model train
+                    'source'      : {op_type:[] for op_type in config.output_types} , # del at each model train
                     'candidate'   : {op_type:None for op_type in (config.output_types + ['transfer'])} , # not del at each model train
                     'performance' : {op_type:None for op_type in config.output_types}}
             if 'best'    in config.output_types:
@@ -210,10 +216,10 @@ class RunModel():
         
     def _init_variables(self , key = 'model'):
         """
-        Reset variables of 'model' , 'round' , 'attempt' start
+        Reset variables of 'model' , 'attempt' start
         """
         if key == 'epoch' : return
-        assert key in ['model' , 'round' , 'attempt'] , f'KeyError : {key}'
+        assert key in ['model' , 'attempt'] , f'KeyError : {key}'
 
         self.epoch_i = -1
         self.epoch_attempt_best = -1
@@ -222,16 +228,12 @@ class RunModel():
         self.score_list = {'train' : [] , 'valid' : []}
         self.lr_list    = []
         
-        if key in ['model' , 'round']:
-            self.attempt_i = -1
-            self.score_round_best = -10000.
-        
         if key in ['model']:
-            self.round_i = -1
+            self.attempt_i = -1
             self.epoch_all = -1
-            self.tick = np.ones(10) * time.time()
-            self.text = {k : '' for k in ['model','round','attempt','epoch','exit','stat','time','trainer']}
-            self.cond = {'terminate' : {} , 'nan_loss' : False , 'loop_status' : 'round'}
+            self.tick = np.full((10,) , fill_value=time.time())
+            self.text = {k : '' for k in ['model','attempt','epoch','exit','stat','time','trainer']}
+            self.cond = {'terminate' : {} , 'nan_loss' : False , 'loop_status' : 'attempt'}
 
     def model_train_start(self):
         """
@@ -252,7 +254,7 @@ class RunModel():
         Do necessary things of ending a model(model_data , model_num)
         """
         with self.ptimer('model_train/end'):
-            self.storage.del_path(*[list(v) for v in self.path['source'].values()])
+            self.storage.del_path([p for pl in self.path['source'].values() for p in pl])
             if self.process_name == 'train' : self.model_count += 1
             self.tick[2] = time.time()
             self._prints('model_end')
@@ -266,17 +268,14 @@ class RunModel():
             self.epoch_i += 1
             self.epoch_all += 1
             self.epoch_count += 1
-            if self.cond.get('loop_status') in ['attempt' , 'round']:
+            if self.cond.get('loop_status') in ['attempt']:
                 self.attempt_i += 1
                 self.text['attempt'] = f'FirstBite' if self.attempt_i == 0 else f'Retrain#{self.attempt_i}'
-            if self.cond.get('loop_status') in ['round']:
-                self.round_i += 1
-                self.text['round'] = 'Round{:2d}'.format(self.round_i)
         
     def model_train_init_trainer(self):
         """
-        Initialize net , optimizer , scheduler if loop_status in ['round' , 'attempt']
-        net : 1. Create an instance of f'{config.model_module}' or inherit from 'lastround'/'transfer'
+        Initialize net , optimizer , scheduler if loop_status in ['attempt']
+        net : 1. Create an instance of f'{config.model_module}' or inherit from 'transfer'
               2. In transfer mode , p_late and p_early with be trained with different lr's. If not net.parameters are trained by same lr
         optimizer : Adam or SGD
         scheduler : Cosine or StepLR
@@ -284,7 +283,6 @@ class RunModel():
         with self.ptimer('model_train/init_trainer'):
             if self.cond.get('loop_status') == 'epoch': return
             self.load_model('train')
-            self.max_round: int = getattr(self.net , 'max_round' , lambda x=0:1)()
             self.optimizer = self.load_optimizer()
             self.scheduler = self.load_scheduler() 
             self.multiloss = self.new_multiloss(config.train_params['multitask'] , self.param['num_output'])
@@ -295,7 +293,7 @@ class RunModel():
         If nan loss occurs, turn to _deal_nanloss
         """
         with self.ptimer('model_train/epoch/train'):
-            self.net.train() # type:ignore
+            self.net.train() 
             iterator = self.data.dataloaders['train']
             _loss , _score = torch.ones(len(iterator)).fill_(torch.nan), torch.ones(len(iterator)).fill_(torch.nan)
             for i , batch_data in enumerate(iterator):
@@ -303,20 +301,20 @@ class RunModel():
                 outputs = self.model_forward('train' , batch_data)
                 metrics = self.model_metric('train' , outputs , batch_data , valid_sample = None)
                 if metrics['loss'].isnan():
-                    print(i , batch_data['y'])
+                    print(i , batch_data.y)
                     print(metrics)
                     raise Exception('here')
 
                 self.model_backward('train' , metrics)
 
                 _loss[i] , _score[i] = metrics['loss_item'] , metrics['score']
-                if getattr(iterator , 'progress_bar'): iterator.display(f'Ep#{self.epoch_i:3d} train loss:{_loss[:i+1].mean():.5f}')
+                iterator.display(f'Ep#{self.epoch_i:3d} train loss:{_loss[:i+1].mean():.5f}')
             if _loss.isnan().any(): return self._deal_nanloss()
             self.loss_list['train'].append(_loss.mean()) 
             self.score_list['train'].append(_score.mean())
         
-        with self.ptimer('model_train/epoch/valid'):
-            self.net.eval()  # type:ignore
+        with self.ptimer('model_train/epoch/valid') , torch.no_grad():
+            self.net.eval()  
             iterator = self.data.dataloaders['valid']
             _loss , _score = torch.ones(len(iterator)).fill_(torch.nan), torch.ones(len(iterator)).fill_(torch.nan)
             for i , batch_data in enumerate(iterator):
@@ -325,7 +323,7 @@ class RunModel():
                 metrics = self.model_metric('valid' , outputs , batch_data , valid_sample = None)
 
                 _loss[i] , _score[i] = metrics['loss_item'] , metrics['score']
-                if getattr(iterator , 'progress_bar'): iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{_score[:i+1].mean():.5f}')
+                iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{_score[:i+1].mean():.5f}')
             self.loss_list['valid'].append(_loss.mean()) 
             self.score_list['valid'].append(_score.mean())
 
@@ -335,13 +333,13 @@ class RunModel():
 
     def model_train_assess_status(self):
         """
-        Update condition of continuing training epochs , restart attempt if early exit , proceed to next round if convergence , reset round if nan loss
+        Update condition of continuing training epochs , restart attempt if early exit or nan loss
         """
         with self.ptimer('model_train/assess'):
             if self.cond['nan_loss']:
                 logger.error(f'Initialize a new model to retrain! Lives remaining {self.nanloss_life}')
                 self._init_variables('model')
-                self.cond['loop_status'] = 'round'
+                self.cond['loop_status'] = 'attempt'
                 return
                 
             valid_score = self.score_list['valid'][-1]
@@ -350,9 +348,6 @@ class RunModel():
             if valid_score > self.score_attempt_best: 
                 self.epoch_attempt_best = self.epoch_i 
                 self.score_attempt_best = valid_score
-                
-            if valid_score > self.score_round_best:
-                self.score_round_best = valid_score
                 save_targets.append(self.path['target']['best'])
 
             if 'swalast' in config.output_types:
@@ -371,24 +366,19 @@ class RunModel():
                     save_targets.append(self.path['candidate']['swabest'][arg_min])
                 
             self.save_model(paths = save_targets)
-            # self.storage.save_model_state(self.net , save_targets)
             self._prints('epoch_step')
         
         with self.ptimer('model_train/status'):
-            self.text['exit'] , self.cond['terminate'] = self._terminate_cond() #type: ignore
+            self.text['exit'] , self.cond['terminate'] = self._terminate_cond() 
             if self.text['exit']:
-                if (self.epoch_i < config.train_params['trainer']['retrain'].get('min_epoch' if self.max_round <= 1 else 'min_epoch_round') - 1 and 
+                if (self.epoch_i < config.train_params['trainer']['retrain'].get('min_epoch') - 1 and 
                     self.attempt_i < config.train_params['trainer']['retrain']['attempts'] - 1):
                     self.cond['loop_status'] = 'attempt'
                     self._prints('new_attempt')
-                elif self.round_i < self.max_round - 1:
-                    self.cond['loop_status'] = 'round'
-                    self.save_model(key = 'best')
-                    self._prints('new_round')
                 else:
                     self.cond['loop_status'] = 'model'
                     # print(self.net.get_probs())
-                    self.save_model(key = config.output_types)
+                    self.save_model(disk_key = config.output_types)
             else:
                 self.cond['loop_status'] = 'epoch'
             
@@ -416,31 +406,16 @@ class RunModel():
             assert self.data.dataloaders['test'].__len__() == len(iter_dates)
             for oi , op_type in enumerate(config.output_types):
                 self.load_model('test' , op_type)
-                self.net.eval() # type:ignore
+                self.net.eval() 
                 iterator = self.data.dataloaders['test']
                 test_score = np.full(len(iter_dates),np.nan)
                 for i , batch_data in enumerate(iterator):
-                    valid_sample=torch.where(batch_data['nonnan'])[0]
+                    valid_sample=torch.where(batch_data.nonnan)[0]
                     if len(valid_sample) == 0: continue
-                    #batch_data_nn = subset(batch_data , torch.where(batch_data['nonnan'])[0])
-                    """
-                    pred = torch.full_like(batch_data['y'], fill_value=torch.nan)
-                    for batch_j in torch.utils.data.DataLoader(self.device.torch_arange(len(nonnan)) , batch_size = config.batch_size):
-                        nnj = nonnan[batch_j]
-                        batch_nnj = subset(batch_data , nnj)
-                        if hasattr(self.net , 'dynamic_data_assign'): self.net.dynamic_data_assign(batch_nnj , self.data)
-                        # x = self.modifier['inputs'](batch_nnj['x'] , batch_nnj , self.data)
-                        pred_nnj = self.net(batch_nnj['x'])[0].detach()
-                        pred[nnj,0] = pred_nnj[:,0]
-                        # self.modifier['update'](None , batch_nnj , self.data)
-                    """
-                    #batch_data_nn = subset(batch_data , torch.where(batch_data['nonnan'])[0])
-                    #x , y , w = batch_data_nn['x'] , batch_data_nn['y'] , batch_data_nn['w']
-                    #if hasattr(self.net , 'dynamic_data_assign'): self.net.dynamic_data_assign(batch_data_nn , self.data)
                     outputs = self.model_forward('test' , batch_data)
 
                     assert not outputs[0].isnan().any()
-                    assert iter_dates[i] == self.data.y_date[batch_data['i'][0,1]] , (iter_dates[i] , self.data.y_date[batch_data['i'][0,1]])
+                    assert iter_dates[i] == self.data.y_date[batch_data.i[0,1]] , (iter_dates[i] , self.data.y_date[batch_data.i[0,1]])
                     
                     if i < l0: continue # before this date is warmup stage
                     metrics = self.model_metric('test' , outputs, batch_data , valid_sample = None)
@@ -449,7 +424,7 @@ class RunModel():
                     self.model_preds.append_preds(batch_data , self.data , outputs , f'{self.model_num}/{op_type}')
 
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
-                    if getattr(iterator , 'progress_bar'): iterator.display(f'Date {iter_dates[i]}:{test_score[l0:i+1].mean():.5f}')
+                    iterator.display(f'Date {iter_dates[i]}:{test_score[l0:i+1].mean():.5f}')
                 self.score_by_date[-l1:,self.model_num*len(config.output_types) + oi] = np.nan_to_num(test_score[-l1:])
         
     def model_test_end(self):
@@ -515,12 +490,12 @@ class RunModel():
         df.to_csv(f'{config.model_base_path}/{config.model_name}_score_by_model.csv')
         for i , digits in enumerate([4,2,4,2,4]):
             self._print_rst(add_row_key[i] , add_row_value[i] , digits)
-        self.model_info['test_score_sum'] = {k:round(v,4) for k,v in zip(df.columns , score_sum.tolist())}  # type:ignore
+        self.model_info['test_score_sum'] = {k:round(v,4) for k,v in zip(df.columns , score_sum.tolist())}  
     
     def summary(self):
         out_dict = {
             '0_start' : time.ctime(self.model_info.get('init_time')),
-            '1_basic' :'+'.join(['short' if config.short_test else 'long' , config.storage_type , config.precision]),
+            '1_basic' :'+'.join(['short' if config.short_test else 'long' , config.precision]),
             '2_model' :''.join([config.model_module , '_' , config.model_data_type , '(x' , str(config.model_num) , ')']),
             '3_time'  :'-'.join([str(config.beg_date),str(config.end_date)]),
             '4_train' :self.model_info.get('train_process'),
@@ -533,17 +508,17 @@ class RunModel():
             yaml.dump(out_dict , f)
         self.ptimer.print()
 
-    def model_forward(self , key , batch_data):
+    def model_forward(self , key , batch_data : BatchData):
         with self.ptimer(f'{key}/forward'):
             if hasattr(self.net , 'dynamic_data_assign'): getattr(self.net , 'dynamic_data_assign')(batch_data , self.data)
-            return self.net(batch_data['x']) #type:ignore
+            return self.net(batch_data.x)
 
-    def model_metric(self, key , outputs_of_net, batch_data , valid_sample = None, **kwargs):
-        # outputs_of_net = self.net(batch_data['x'])
-        # valid_sample = torch.where(batch_data['nonnan'])[0]
+    def model_metric(self, key , outputs_of_net, batch_data : BatchData , valid_sample = None, **kwargs):
+        # outputs_of_net = self.net(batch_data.x)
+        # valid_sample = torch.where(batch_data.nonnan)[0]
         with self.ptimer(f'{key}/loss'):
             pred , hidden  = outputs_of_net
-            label , weight = batch_data['y'] , batch_data['w']
+            label , weight = batch_data.y , batch_data.w
             penalty_kwargs = {}
             if key == 'train': penalty_kwargs.update({'net' : self.net , 'hidden' : hidden , 'label' : label})
             metrics = self.calculate_metrics(
@@ -558,7 +533,7 @@ class RunModel():
         with self.ptimer(f'{key}/backward'):
             self.optimizer.zero_grad()
             (metrics['loss'] + metrics['penalty']).backward()
-            if clip_value is not None : nn.utils.clip_grad_value_(self.net.parameters(), clip_value = clip_value) #type:ignore
+            if clip_value is not None : clip_grad_value_(self.net.parameters(), clip_value = clip_value) 
             self.optimizer.step()
     
     def _prints(self , key):
@@ -569,15 +544,17 @@ class RunModel():
         sdout   = None
         if key == 'model_end':
             self.text['epoch'] = 'Ep#{:3d}'.format(self.epoch_all)
-            self.text['stat']  = 'Train{: .4f} Valid{: .4f} BestVal{: .4f}'.format(self.score_list['train'][-1],self.score_list['valid'][-1],self.score_round_best)
-            self.text['time']  = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format((self.tick[2]-self.tick[0])/60 , (self.tick[2]-self.tick[1])/(self.epoch_all+1))
-            sdout = self.text['model'] + '|' + self.text['round'] + ' ' + self.text['attempt'] + ' ' + \
+            self.text['stat']  = 'Train{: .4f} Valid{: .4f} BestVal{: .4f}'.format(
+                self.score_list['train'][-1],self.score_list['valid'][-1],self.score_attempt_best)
+            self.text['time']  = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
+                (self.tick[2]-self.tick[0])/60 , (self.tick[2]-self.tick[1])/(self.epoch_all+1))
+            sdout = self.text['model'] + '|' + self.text['attempt'] + ' ' + \
                     self.text['epoch'] + ' ' + self.text['exit'] + '|' + self.text['stat'] + '|' + self.text['time']
             printer = [logger.warning]
         elif key == 'epoch_step':
             self.text['trainer'] = 'loss {: .5f}, train{: .5f}, valid{: .5f}, max{: .4f}, best{: .4f}, lr{:.1e}'.format(
                 self.loss_list['train'][-1] , self.score_list['train'][-1] , self.score_list['valid'][-1] , 
-                self.score_attempt_best , self.score_round_best , self.lr_list[-1])
+                self.score_attempt_best , self.score_attempt_best , self.lr_list[-1])
             if self.epoch_i % [10,5,5,3,3,1][min(config.verbosity // 2 , 5)] == 0:
                 sdout = ' '.join([self.text['attempt'],'Ep#{:3d}'.format(self.epoch_i),':', self.text['trainer']])
         elif key == 'reset_learn_rate':
@@ -585,8 +562,6 @@ class RunModel():
                 self.epoch_i , self.epoch_i+1 , ', and will speedup2x' * config.train_params['trainer']['learn_rate']['reset']['speedup2x'])
         elif key == 'new_attempt':
             sdout = ' '.join([self.text['attempt'],'Epoch #{:3d}'.format(self.epoch_i),':',self.text['trainer'],', Next attempt goes!'])
-        elif key == 'new_round':
-            sdout = self.text['round'] + ' ' + self.text['exit'] + ': ' + self.text['trainer'] + ', Next round goes!'
         elif key == 'train_dataloader':
             sdout = ' '.join([self.text['model'],'LoadData Cost {:>6.1f}Secs'.format(self.tick[1]-self.tick[0])])  
         else:
@@ -614,64 +589,59 @@ class RunModel():
         """
         Whether terminate condition meets
         """
-        term_dict = config.train_params['terminate'].get('overall')
-        if self.max_round > 1 and config.train_params['terminate'].get('round') is not None:
-            term_dict = config.train_params['terminate'].get('round')
+        term_dict = config.train_params['terminate']
         term_cond = {}
-        exit_text = None
+        exit_text = ''
         for key , arg in term_dict.items():
             if key == 'max_epoch':
                 term_cond[key] = self.epoch_i >= min(arg , config.max_epoch) - 1
-                if term_cond[key] and exit_text is None: exit_text = 'Max Epoch'
+                if term_cond[key] and exit_text == '': exit_text = 'Max Epoch'
             elif key == 'early_stop':
                 term_cond[key] = self.epoch_i - self.epoch_attempt_best >= arg
-                if term_cond[key] and exit_text is None: exit_text = 'EarlyStop'
+                if term_cond[key] and exit_text == '': exit_text = 'EarlyStop'
             elif key == 'tv_converge':
-                term_cond[key] = (F.basic.list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps')) and
-                             F.basic.list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps')))
-                if term_cond[key] and exit_text is None: exit_text = 'T & V Cvg'
+                term_cond[key] = (list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps')) and
+                                  list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps')))
+                if term_cond[key] and exit_text == '': exit_text = 'T & V Cvg'
             elif key == 'train_converge':
-                term_cond[key] = F.basic.list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps'))
-                if term_cond[key] and exit_text is None: exit_text = 'Train Cvg'
+                term_cond[key] = list_converge(self.loss_list['train']  , arg.get('min_epoch') , arg.get('eps'))
+                if term_cond[key] and exit_text == '': exit_text = 'Train Cvg'
             elif key == 'valid_converge':
-                term_cond[key] = F.basic.list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps'))
-                if term_cond[key] and exit_text is None: exit_text = 'Valid Cvg'
+                term_cond[key] = list_converge(self.score_list['valid'] , arg.get('min_epoch') , arg.get('eps'))
+                if term_cond[key] and exit_text == '': exit_text = 'Valid Cvg'
             else:
                 raise Exception(f'KeyError : {key}')
+
         return exit_text , term_cond
     
-    def save_model(self , key = None , paths = None , savable_net = None):
-        if key is None and paths is None: return NotImplemented # nothing to save
-        if savable_net is None: 
-            savable_net = self.net
-            if hasattr(savable_net,'dynamic_data_unlink'):  savable_net = getattr(savable_net , 'dynamic_data_unlink')()
+    def save_model(self , paths = None , disk_key = None , savable_net = None):
+        if paths is None and disk_key is None: return NotImplemented # nothing to save
 
         with self.ptimer('save_model'):
-            if isinstance(paths , (str,list,tuple)):
-                self.storage.save_model_state(savable_net , paths , to_disk=False)
-            if isinstance(key , (list,tuple)):
-                [self.save_model(k , savable_net = savable_net) for k in key]
-            elif isinstance(key , str):
-                assert key in ['best' , 'swalast' , 'swabest']
-                p_exists = self.storage.valid_paths(self.path['candidate'][key])
-                if len(p_exists) == 0: print(key , self.path['candidate'][key] , self.path['performance'][key])
-                if key == 'best':
-                    savable_net = self.storage.load(p_exists[0])
-                    if self.round_i < self.max_round - 1:
-                        if not self.path['source']['rounds']:
-                            self.path['source']['rounds'] = ['{}/{}.round.{}.pt'.format(self.param.get('path'),self.model_date,r) for r in range(self.max_round-1)]
-                        self.storage.save_model_state(savable_net , self.path['source']['rounds'][self.round_i])
-                else:
-                    savable_net = self.load_swa_model(p_exists)
-                self.storage.save_model_state(savable_net , self.path['target'][key] , to_disk = True) 
+            if paths is not None:
+                savable_net = self.net
+                if hasattr(savable_net,'dynamic_data_unlink'):
+                    # remove unsavable part
+                    savable_net = getattr(savable_net , 'dynamic_data_unlink')()
+                self.storage.save_model_state(savable_net , paths)
+
+            if disk_key is not None:
+                if isinstance(disk_key , str): disk_key = [disk_key]
+                for key in disk_key:
+                    assert key in ['best' , 'swalast' , 'swabest']
+                    p_exists = self.storage.valid_paths(self.path['candidate'][key])
+                    if len(p_exists) == 0: print(key , self.path['candidate'][key] , self.path['performance'][key])
+                    if key == 'best':
+                        savable_net = self.storage.load(p_exists[0])
+                    else:
+                        savable_net = self.load_swa_model(p_exists)
+                    self.storage.save_model_state(savable_net , self.path['target'][key] , to_disk = True) 
     
     def load_model(self , process , key = 'best'):
         assert process in ['train' , 'test' , 'instance']
         with self.ptimer('load_model'):
             if process == 'train':           
-                if self.round_i > 0:
-                    model_path = self.path['source']['rounds'][self.round_i-1]
-                elif self.path['candidate'].get('transfer'):
+                if self.path['candidate'].get('transfer'):
                     if not config.train_params['transfer']: raise Exception('get transfer')
                     model_path = self.path['candidate']['transfer']
                 else:
@@ -679,20 +649,20 @@ class RunModel():
             else:
                 model_path = self.path['target'][key]
 
-            self.net = self.device(self.new_model(config.model_module , self.param , self.storage.load(model_path , from_disk = True))) # type:ignore
-            if hasattr(self.net , ''): getattr(self.net, 'training_round')(self.round_i)
+            net = self.new_model(config.model_module , self.param , self.storage.load(model_path , from_disk = True))
+            self.net = self.device(net)
             
     def load_swa_model(self , model_path_list = []):
         if len(model_path_list) == 0: raise Exception('empty swa input')
         net = self.new_model(config.model_module , self.param)
         swa_net = self.device(AveragedModel(net))
         for p in model_path_list:
-            swa_net.update_parameters(self.storage.load_model_state(net , p)) # type: ignore
-        update_bn(self._swa_update_bn_loader(self.data.dataloaders['train']) , swa_net) # type: ignore
-        return swa_net.module # type: ignore
+            swa_net.update_parameters(self.storage.load_model_state(net , p)) 
+        update_bn(self._swa_update_bn_loader(self.data.dataloaders['train']) , swa_net) 
+        return swa_net.module 
     
     def _swa_update_bn_loader(self , loader):
-        for data in loader: yield [data['x'] , data['y'] , data['w']]
+        for batch_data in loader: yield (batch_data.x , batch_data.y , batch_data.w)
     
     def load_optimizer(self , new_opt_kwargs = None , new_lr_kwargs = None):
         if new_opt_kwargs is None:
@@ -706,7 +676,7 @@ class RunModel():
         else:
             lr_kwargs = deepcopy(config.train_params['trainer']['learn_rate'])
             lr_kwargs.update(new_lr_kwargs)
-        base_lr = lr_kwargs['base'] * lr_kwargs['ratio']['attempt'][:self.attempt_i+1][-1] * lr_kwargs['ratio']['round'][:self.round_i+1][-1]
+        base_lr = lr_kwargs['base'] * lr_kwargs['ratio']['attempt'][:self.attempt_i+1][-1]
         
         return self.new_optimizer(self.net , opt_kwargs['name'] , base_lr , transfer = self.path['candidate'].get('transfer') , 
                                   encoder_lr_ratio = lr_kwargs['ratio']['transfer'], **opt_kwargs['param'])
@@ -747,9 +717,9 @@ class RunModel():
         def __init__(self , turn_on = False) -> None:
             self.turn_on = turn_on
             self.pred_list = []
-        def append_preds(self , batch_data , model_data , outputs , model_name):
+        def append_preds(self , batch_data : BatchData , model_data , outputs , model_name):
             if not self.turn_on: return NotImplemented
-            batch_index = batch_data['i'].cpu()
+            batch_index = batch_data.i.cpu()
             batch_pred = outputs[0].detach().cpu()
             assert len(batch_index) == len(batch_pred) , (len(batch_index) , len(batch_pred))
             self.pred_list.append({
@@ -777,20 +747,20 @@ class RunModel():
     @staticmethod
     def new_metricfunc(params , **kwargs):
         return {
-            'loss'    : F.metric.loss_function(params['loss']) , 
-            'penalty' : {k:F.metric.penalty_function(k,v) for k,v  in params['penalty'].items()} ,
-            'score'   : {k:F.metric.score_function(v)     for k,v in params['score'].items()} ,
+            'loss'    : Metrics.loss(params['loss']) , 
+            'penalty' : {k:Metrics.penalty(k,v) for k,v in params['penalty'].items()} ,
+            'score'   : {k:Metrics.score(v)     for k,v in params['score'].items()} ,
         }
 
     @staticmethod
     def new_multiloss(params , num_output = 1 , **kwargs):
         if num_output <= 1: return None
-        return U.trainer.MultiLosses(params['type'],num_output,**params['param_dict'][params['type']])
+        return MultiLosses(params['type'],num_output,**params['param_dict'][params['type']])
 
     @staticmethod
     def update_metricfunc(mf : dict , model_param , config , **kwargs):
-        mf['penalty'].get('hidden_orthogonality',{})['cond'] = config.tra_model or model_param.get('hidden_as_factors',False)
-        mf['penalty'].get('tra_ot_penalty',{})['cond']       = config.tra_model
+        mf['penalty'].get('hidden_corr',{})['cond'] = config.tra_model or model_param.get('hidden_as_factors',False)
+        mf['penalty'].get('tra_opt_transport',{})['cond']       = config.tra_model
         return mf
 
     @staticmethod
@@ -818,8 +788,8 @@ class RunModel():
             # loss
             if multiloss is not None:
                 losses = metrics['loss'](label , pred , weight , dim = 0)[:multiloss.num_task]
-                if hasattr(net , 'get_multiloss_params'):
-                    loss = multiloss.calculate_multi_loss(losses , net.get_multiloss_params())  # type:ignore
+                if net is not None and hasattr(net , 'get_multiloss_params'):
+                    loss = multiloss.calculate_multi_loss(losses , net.get_multiloss_params())  
                 else:
                     raise Exception('net has no attr: get_multiloss_params')
             else:
@@ -905,67 +875,92 @@ class RunModel():
     class RandomModule:
         config : TrainConfig
         net    : nn.Module
-        batch_data : dict
+        batch_data : BatchData
         model_data : ModelData
         metrics : dict
-        multiloss : U.trainer.MultiLosses | None
+        multiloss : MultiLosses | None
 
         def try_forward(self):
-            print(f'x shape is {self.batch_data["x"].shape}')
-            y = self.net(self.batch_data["x"])
+            if isinstance(self.batch_data.x , torch.Tensor):
+                print(f'x shape is {self.batch_data.x.shape}')
+            else:
+                print(f'multiple x of {len(self.batch_data.x)}')
+            y = self.net(self.batch_data.x)
             if isinstance(y , tuple): y = y[0]
             print(f'y shape is {y.shape}')
             return y
 
 
-def predict_new(model_path = './model/gru_day' , model_num = 0 , on_date = None):
-    model_config = TrainConfig.load(f'{model_path}/config_train.yaml')
-    model_data   = ModelData(model_config.model_data_type , model_config , if_train = False)
-    model_param  = torch.load(f'{model_path}/model_params.pt')[model_num]
-    model_file = sorted([p for p in os.listdir(f'{model_path}/{model_num}') if p.endswith('swalast.pt')])[-1]
-    model_date = int(model_file.split('.')[0])
+def predict(model_name = 'gru_day' , model_type = 'swalast' , model_num = 0 , start_dt = -10 , end_dt = 99991231 , save = True):
+    if start_dt <= 0: start_dt = today(start_dt)
 
-    dataloader_param = model_data.get_dataloader_param('test' , 'test' , model_date=model_date , param=model_param)   
-    model_data.create_dataloader(*dataloader_param)
+    #model_name = 'gru_day' 
+    #model_type = 'swalast' 
+    #model_num  = 0 
+    #start_dt = 20170101
+    #end_dt = 99991231
 
-    model_sd = torch.load(f'{model_path}/{model_num}/{model_file}',map_location=model_data.device.device)
-    model = RunModel.new_model(model_config.model_module , model_param , state_dict=model_sd)
-    model.eval()
+    model_path = f'{DIR.model}/{model_name}'
+    device       = Device()
+    model_config = TrainConfig.load(model_path)
 
-    modelname = model_config.model_name
-    loader = model_data.dataloaders['test']
-    tdates = model_data.model_test_dates
-    secid  = model_data.index[0]
-    assert len(loader) , len(loader) 
+    model_param = torch.load(f'{model_path}/model_params.pt')[model_num]
+    model_files = sorted([p for p in os.listdir(f'{model_path}/{model_num}') if p.endswith(f'{model_type}.pt')])
+    model_dates = np.array([int(mf.split('.')[0]) for mf in model_files])
 
-    if on_date is None:
-        pass
-    elif on_date > 0:
-        try:
-            on_date = list(model_data.model_test_dates).index(on_date)
-        except ValueError as e:
-            print(e)
-            return pd.DataFrame()
-        loader = list(loader[on_date])
-        tdates = list(tdates[on_date])
-        
+    data_type = model_config.model_data_type
+
+    start_dt = max(start_dt , int(date_offset(min(model_dates) ,1)))
+    calendar = DataFetcher.load_target_file('information' , 'calendar')
+    assert calendar is not None
+
+    require_model_data_old = (start_dt <= today(-100))
+
+    model_data_old = ModelData(data_type , model_config , if_train = True) if require_model_data_old else None
+    model_data_new = ModelData(data_type , model_config , if_train = False)
+
+    end_dt = min(end_dt , max(model_data_new.test_full_dates))
+    pred_dates = calendar[(calendar['calendar'] >= start_dt) & (calendar['calendar'] <= end_dt) & (calendar['trade'])]['calendar'].values
+
+    df_task = pd.DataFrame({
+        'pred_dates' : pred_dates ,
+        'model_date' : [max(model_dates[model_dates < d_pred]) for d_pred in pred_dates] ,
+        'model_data' : 'new'
+    })
+    if model_data_old is not None:
+        df_task.loc[df_task['pred_dates'] <= max(model_data_old.test_full_dates) , 'model_data'] = 'old'
+
+    df_list = []
     with torch.no_grad():
-        df_list = []
-        for batch_data , tdate in zip(loader , tdates):
-            pred , _ = model(batch_data['x'])
-            df_list.append(
-                pd.DataFrame({
-                'secid' : secid[batch_data['i'][:,0].cpu().numpy()] ,
-                'date'  : tdate , modelname : pred.cpu().numpy().flatten() ,
-            }))
-    df = pd.concat(df_list , axis = 0)
+        for (model_date , model_data_sign) , df_sub in df_task.groupby(['model_date' , 'model_data']):
+            print((model_date , model_data_sign))
+            model_data = model_data_old if model_data_sign == 'old' else model_data_new
+            assert model_data is not None
+            dataloader_param = model_data.get_dataloader_param('test' , 'test' , model_date = model_date , param=model_param)   
+            model_data.create_dataloader(*dataloader_param)
+
+            model_sd = torch.load(f'{model_path}/{model_num}/{model_date}.{model_type}.pt',map_location = model_data.device.device)
+            model = device(RunModel.new_model(model_config.model_module , model_param , state_dict=model_sd))
+            model.eval()
+
+            loader = model_data.dataloaders['test']
+            secid  = model_data.index[0]
+            tdates = model_data.model_test_dates
+            assert df_sub['pred_dates'].isin(tdates).all()
+            
+            for tdate in df_sub['pred_dates']:
+                batch_data = loader[np.where(tdates == tdate)[0][0]]
+                pred , _ = model(batch_data.x)
+                df_list.append(
+                    pd.DataFrame({
+                    'secid' : secid[batch_data.i[:,0].cpu().numpy()] , 'date' : tdate , 
+                    model_name : pred.cpu().numpy().flatten() ,
+                }))
+        df = pd.concat(df_list , axis = 0)
+    df.to_feather('preds.feather')
+    # df[df['pred_date'] >= today(-10)].pivot_table(values = 'gru_day' , index = 'secid' , columns = 'date').fillna(0).corr()
     return df
 
-    '''
-    from run_model import predict_new
-    v = predict_new(model_path = './model/gru_day' , model_num = 0)
-    v.pivot_table(values = 'gru_day' , index = 'secid' , columns = 'date').fillna(0).corr()
-    '''
 
 def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser_args = None):
     if parser_args is None:
@@ -976,13 +971,13 @@ def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser_arg
 
     if not config.short_test:
         logger.warning('Model Specifics:')
-        F.basic.pretty_print_dict(config.subset([
-            'random_seed' , 'verbosity' , 'storage_type' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 
+        pretty_print_dict(config.subset([
+            'random_seed' , 'verbosity' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 
             'model_data_type' , 'model_num' , 'beg_date' , 'end_date' , 'interval' , 
-            'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' , 'compt_params'
+            'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' ,
         ]))
 
-    app = RunModel(timer = do_timer , storage_type = config.storage_type)
+    app = RunModel(mem_storage = config.mem_storage)
     app.main_process()
     app.summary()
 

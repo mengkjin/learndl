@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .. import Layer
+from .. import layer as Layer
 
 __all__ = ['PatchTST' , 'PatchTSTEmbed' , 'PatchTSTEncoder' , 'PatchTSTPredictionHead' , 'PatchTSTPretrainHead']
 

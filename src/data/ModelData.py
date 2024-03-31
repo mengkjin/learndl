@@ -8,8 +8,7 @@ from dataclasses import dataclass , field
 from typing import Literal , Any
 
 from .BlockData import DataBlock , DataBlockNorm
-from ..util.trainer import Device
-from ..util.loader import Storage , DataloaderStored
+from ..util import Device , Storage , DataloaderStored , BatchData
 from ..func.basic import tensor_standardize_and_weight , match_values
 
 from ..environ import DIR
@@ -43,24 +42,24 @@ class ModelData():
         device : Any = None
         labels : Any = None
         precision : Any = torch.float32
-        storage_type : Literal['mem' , 'disk'] = 'mem'
+        mem_storage : bool = True
         beg_date : int = 20170101
         end_date : int = 20991231
         interval : int = 120
-        tra_model : bool = False
         skip_horizon : int = 20
-        input_span : int = 2400
+        input_span   : int = 2400
         buffer_param : dict = field(default_factory=dict)
         weight_scheme: dict = field(default_factory=dict)
-        num_output : int = 1
-        train_ratio : float = 0.8
-        sample_method : Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] = 'sequential'
-        batch_size : int = 10000
+        num_output   : int = 1
+        train_ratio  : float = 0.8
+        sample_method  : Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] = 'sequential'
+        shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static'
+        batch_size     : int = 10000
         input_step_day : int = 5
-        test_step_day : int = 1
+        test_step_day  : int = 1
         verbosity : int = 5
         tra_model : bool = False
-        buffer_type : str = 'tra'
+        buffer_type  : str = 'tra'
         buffer_param : dict = field(default_factory=dict)
 
         def assign(self , config = {} , **kwargs):
@@ -96,8 +95,8 @@ class ModelData():
         """
         self.dataloaders = {}
         self.dataloader_param = ()
-        self.device         = Device(self.kwarg.device)
-        self.loader_storage = Storage(self.kwarg.storage_type)
+        self.device  = Device(self.kwarg.device)
+        self.storage = Storage(self.kwarg.mem_storage)
 
         gc.collect() 
         torch.cuda.empty_cache()   
@@ -282,31 +281,39 @@ class ModelData():
         
     def static_dataloader(self , x , y , w , sample_index , nonnan_sample):
         """
-        1. update dataloaders dict(set_name = ['train' , 'valid']), save batch_data to './model/{model_name}/{set_name}_batch_data' and later load them
+        update dataloaders dict(set_name = ['train' , 'valid']), 
+        save batch_data to f'{DIR.model}/{model_name}/{set_name}_batch_data' and later load them
         """
-        # init i (row , col position) and y (labels) matrix
-        self.loader_storage.del_group(self.loader_type)
-        loaders = dict()
-        for set_name in sample_index.keys():
-            batch_file_list = []
-            for batch_num , batch_i in enumerate(sample_index[set_name]):
-                batch_file_list.append(f'./data/minibatch/{set_name}/{set_name}.{batch_num}.pt')
+        self.storage.del_group(self.loader_type)
+        for set_key , set_samples in sample_index.items():
+            assert set_key in ['train' , 'valid' , 'test'] , set_key
+            shuf_opt = self.kwarg.shuffle_option if set_key == 'train' else 'static'
+            pbar_opt = self.kwarg.verbosity >= 10
+            batch_files = [f'{DIR.batch}/{set_key}.{bnum}.pt' for bnum in range(len(set_samples))]
+            for bnum , batch_i in enumerate(set_samples):
                 assert torch.isin(batch_i[:,1] , torch.tensor(self.step_idx)).all()
                 i0 , i1 , yi1 = batch_i[:,0] , batch_i[:,1] , match_values(self.step_idx , batch_i[:,1])
                 batch_x = []
-                batch_y = y[i0,yi1]
-                batch_w = None if w is None else w[i0,yi1]
                 for mdt in x.keys():
-                    data = torch.stack([x[mdt][i0,i1+i+1-self.seqs[mdt]] for i in range(self.seqs[mdt])],dim=1)
-                    data = data.squeeze(-2)
-                    data = self.prenorm(data,mdt)
-                    batch_x.append(data)
-                batch_x = batch_x[0] if len(batch_x) == 1 else tuple(batch_x)
-                batch_nonnan = nonnan_sample[i0,yi1]
-                batch_data = {'x':batch_x,'y':batch_y,'w':batch_w,'nonnan':batch_nonnan,'i':batch_i}
-                self.loader_storage.save(batch_data, batch_file_list[-1] , group = self.loader_type)
-            loaders[set_name] = DataloaderStored(self.loader_storage , batch_file_list , self.device , self.kwarg.verbosity >= 10)
-        self.dataloaders.update(loaders)
+                    data = self.selected_rolling_window(x[mdt] , self.seqs[mdt] , i0 , i1 , dim = 1 , squeeze_out = True)
+                    batch_x.append(self.prenorm(data , mdt))
+
+                batch_data = BatchData(x = batch_x , y = y[i0,yi1] , w = None if w is None else w[i0,yi1] ,
+                                       i = batch_i , nonnan = nonnan_sample[i0,yi1])
+                self.storage.save(batch_data, batch_files[bnum] , group = self.loader_type)
+
+            self.dataloaders[set_key] = DataloaderStored(self.storage , batch_files , self.device , shuf_opt , pbar_opt)
+
+    @staticmethod
+    def selected_rolling_window(x , rw , index0 , index1 , dim = 1 , squeeze_out = True):
+        assert x.ndim == 4 , x.ndim
+        assert len(index0) == len(index1) , (len(index0) , len(index1))
+        try:
+            x_rw = x.unfold(dim , rw , 1)[index0 , index1 + 1 - rw].permute(0,3,1,2)
+        except MemoryError:
+            x_rw = torch.stack([x[index0 , index1+i+1-rw] for i in range(rw)],dim=dim)
+        if squeeze_out: x_rw = x_rw.squeeze(-2)
+        return x_rw
         
     def prenorm(self , x , key , static = True):
         """
@@ -376,13 +383,13 @@ class ModelData():
             blocks = DataBlock.load_keys(data_type_list, if_train , alias_search=True,dtype = dtype)
             norms  = DataBlockNorm.load_keys(data_type_list, if_train , alias_search=True,dtype = dtype)
 
-            y = blocks[0]
+            y : DataBlock = blocks[0]
             if y_labels is not None: 
                 ifeat = np.concatenate([np.where(y.feature == label)[0] for label in y_labels])
                 y.update(values = y.values[...,ifeat] , feature = y.feature[ifeat])
                 assert np.array_equal(y_labels , y.feature) , (y_labels , y.feature)
 
-            x = {DataBlock.data_type_abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
+            x : dict[str,DataBlock] = {DataBlock.data_type_abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
             norms = {DataBlock.data_type_abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
             secid , date = blocks[0].secid , blocks[0].date
 

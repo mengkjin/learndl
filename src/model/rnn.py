@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from .. import Layer
+from .. import layer as Layer
 #from ..function.basic import *
 from .cnn import mod_resnet_1d , mod_tcn
 from .attention import mod_transformer,TimeWiseAttention,ModuleWiseAttention

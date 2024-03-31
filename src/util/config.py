@@ -1,4 +1,4 @@
-import argparse , os , random , shutil , yaml
+import argparse , os , random , yaml
 
 import numpy as np
 import torch
@@ -9,6 +9,10 @@ from copy import deepcopy
 from ..environ import DIR
 
 class TrainConfig(Namespace):
+    config_train  = 'train_param.yaml'
+    config_model  = 'model_{}.yaml'
+    default_model = 'model_default.yaml'
+
     def __init__(self, **kwargs) -> None:
         super().__init__()
         self.update(kwargs)
@@ -54,12 +58,24 @@ class TrainConfig(Namespace):
         torch.autograd.set_detect_anomaly(self.detect_anomaly) # type:ignore
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
+    @staticmethod
+    def read_yaml(yaml_file):
+        with open(yaml_file ,'r') as f:
+            d = yaml.load(f , Loader = yaml.FullLoader)
+        return d
+
     @classmethod
     def load_config_path(cls , config_path = 'default' , adjust = False):
-        if config_path == 'default': config_path = f'{DIR.conf}/config_train.yaml'
-        with open(config_path ,'r') as f:
-            config = yaml.load(f , Loader = yaml.FullLoader)
+        if config_path == 'default': config_path = DIR.conf
+        config = cls.read_yaml(f'{config_path}/{cls.config_train}')
 
+        module = config['model_module'].lower()
+        model_param_path = f'{config_path}/{cls.config_model.format(module)}'
+        if not os.path.exists(model_param_path):
+            print(model_param_path)
+            model_param_path = f'{config_path}/{cls.default_model}'
+        config['MODEL_PARAM'] = cls.read_yaml(model_param_path)
+        
         if adjust:
             if 'special_config' in config.keys() and 'short_test' in config['special_config'].keys(): 
                 if config['short_test']: config.update(config['special_config']['short_test'])
@@ -70,7 +86,10 @@ class TrainConfig(Namespace):
                     'transformer' in config['MODEL_PARAM']['type_rnn'])):
                     config['TRAIN_PARAM']['trainer'].update(config['special_config']['transformer']['trainer'])
                 del config['special_config']['transformer']
-        
+
+        if config.get('model_data_type') is None:
+            config['model_data_type'] = config['model_datatype'].get(config['model_module'] , 'day')
+
         return cls(**config)
 
     @staticmethod
@@ -95,9 +114,6 @@ class TrainConfig(Namespace):
         config = cls.load_config_path(config_path)
         if override is not None: config = config.update(override)
 
-        if config.get('model_data_type') is None:
-            config.model_data_type = config.model_datatype.get(config.model_module , 'day')
-
         config.data_type_list  = config.model_data_type.split('+')
         config.model_num_list  = list(range(config.model_num))
         
@@ -110,15 +126,13 @@ class TrainConfig(Namespace):
         cls.process_parser(config , par_args , do_process)
 
         if config_path != 'default':
-            config.model_base_path = os.path.dirname(config_path)
+            config.model_base_path = config_path
             config.model_name      = os.path.basename(config.model_base_path)
             
         config.train_params = deepcopy(config.TRAIN_PARAM)
         if 'best' not in config.train_params['output_types']:
             config.train_params['output_types'] = ['best'] + config.train_params['output_types']
         config.output_types = config.train_params['output_types']
-        
-        config.compt_params = deepcopy(config.COMPT_PARAM)
 
         if config.resume_training and os.path.exists(f'{config.model_base_path}/model_params.pt'):
             config.model_params = torch.load(f'{config.model_base_path}/model_params.pt')
@@ -168,8 +182,8 @@ class TrainConfig(Namespace):
             # resume training
             # ask if resume training, since unexpected end of training may happen
             resume = getattr(config , 'resume' , -1)
-            candidate_name = [x for x in [config.model_name] if os.path.exists(f'./model/{x}')] + \
-                [x for x in os.listdir(f'./model') if x.startswith(config.model_name + '.')]   
+            candidate_name = [model for model in [config.model_name] if os.path.exists(f'{DIR.model}/{model}')] + \
+                [model for model in os.listdir(DIR.model) if model.startswith(config.model_name + '.')]   
             if 'train' in config.process_queue and resume < 0 and len(candidate_name) > 0:
                 print(f'--Multiple model path of {config.model_name} exists, input [yes] to resume training, or start a new one!')
                 resume = 1 if input(f'Confirm resume training [{config.model_name}]? [yes/no] : ').lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
@@ -185,40 +199,41 @@ class TrainConfig(Namespace):
                 if rawname < 0 and config.resume_training and len(candidate_name) > 0:
                     if len(candidate_name) > 1:
                         print(f'--Attempting to resume but multiple models exists, input number to choose')
-                        [print(str(i) + ' : ' + f'./model/{fn}') for i , fn in enumerate(candidate_name)]
+                        [print(str(i) + ' : ' + f'{DIR.model}/{model}') for i , model in enumerate(candidate_name)]
                         config.model_name = candidate_name[int(input('which one to use? '))]
                     else:
                         config.model_name = candidate_name[0]
                 elif rawname < 0 and len(candidate_name) > 0:
                     print(f'--Multiple model path of {config.model_name} exists, input [yes] to confirm deletion, or a new directory will be made!')
                     if input(f'Delete all old dirs of [{config.model_name}]? [yes/no] : ').lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1']: 
-                        [shutil.rmtree(f'./model/{d}') for d in candidate_name]
+                        DIR.deltrees(DIR.model , candidate_name)
                         print(f'--Directories of [{config.model_name}] deletion Confirmed!')
                     else:
                         if os.path.exists(config.model_base_path):
-                            config.model_name += '.'+str(max([1]+[int(d.split('.')[-1])+1 for d in candidate_name[1:]]))
+                            config.model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
                             print(f'--A new directory [{config.model_name}] will be made!')
-                config.model_base_path = f'./model/{config.model_name}'
+                config.model_base_path = f'{DIR.model}/{config.model_name}'
                 os.makedirs(config.model_base_path, exist_ok = True)
                 [os.makedirs(f'{config.model_base_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
-                if config.resume_training and os.path.exists(f'{config.model_base_path}/config_train.yaml'):
-                    config_resume = cls.load_config_path(f'{config.model_base_path}/config_train.yaml')
+                if config.resume_training and os.path.exists(f'{config.model_base_path}/{cls.config_train}'):
+                    config_resume = cls.load_config_path(config.model_base_path)
                     config.update(config_resume)
                     if config.get('model_data_type') is None:
                         config.model_data_type = config.model_datatype.get(config.model_module , 'day')
                     config.data_type_list  = config.model_data_type.split('+')
                     config.model_num_list  = list(range(config.model_num))
                 else:
-                    shutil.copyfile(f'./configs/config_train.yaml', f'{config.model_base_path}/config_train.yaml')
+                    DIR.copyfiles(DIR.conf , config.model_base_path , 
+                                  [cls.config_train , cls.default_model , cls.config_model.format(config.model_module.lower())])
             elif 'test' in config.process_queue:
                 if rawname < 0 and config.resume_training and len(candidate_name) > 0:
                     if len(candidate_name) > 1:
                         print(f'--Attempting to resume but multiple models exists, input number to choose')
-                        [print(str(i) + ' : ' + f'./model/{fn}') for i , fn in enumerate(candidate_name)]
+                        [print(str(i) + ' : ' + f'{DIR.model}/{model}') for i , model in enumerate(candidate_name)]
                         config.model_name = candidate_name[int(input('which one to use? '))]
                     else:
                         config.model_name = candidate_name[0]
-                config.model_base_path = f'./model/{config.model_name}'
+                config.model_base_path = f'{DIR.model}/{config.model_name}'
 
             print(f'--Model_name is set to {config.model_name}!')  
         else:

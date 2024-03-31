@@ -61,7 +61,10 @@ class DataBlock():
             self._clear_attr()
             return NotImplemented
         self.initiate = True
-        if isinstance(feature , str): feature = np.array([feature])
+        if isinstance(feature , str): 
+            feature = np.array([feature])
+        elif isinstance(feature , list):
+            feature = np.array(feature)
         if values.ndim == 3: values = values[:,:,None]
         assert values.shape == (len(secid),len(date),values.shape[2],len(feature))
         self.values  = values
@@ -328,21 +331,28 @@ class DataBlock():
         target_dates = DataFetcher.get_target_dates(db_src , db_key)
         if start_dt is not None: target_dates = target_dates[target_dates >= start_dt]
         if end_dt   is not None: target_dates = target_dates[target_dates <= end_dt]
-        if len(target_dates) == 0: return cls()
-        df_all = []
-        for date in target_dates:
-            df = DataFetcher.load_target_file(db_src , db_key , date)
-            if isinstance(df , pd.DataFrame): 
-                if  'date' not in df.columns.values: df['date'] = date
-                if feature is not None: 
-                    remain_cols = ['secid' , 'date'] + ['minute'] * ('minute' in df.columns.values) + feature
-                    df = df.loc[:,remain_cols]
-                df_all.append(df)
-        df_all = pd.concat(df_all , axis = 0)
-        df_all = df_all.set_index(['secid' , 'date'] + ['minute'] * ('minute' in df_all.columns.values))
-        df_all = BasicBlock.from_xarray(xr.Dataset.from_dataframe(df_all))
-        return cls(df_all.values , df_all.index[0] , df_all.index[1] , df_all.index[-1])
+        if len(target_dates) == 0: 
+            return cls()
+        if feature is not None:
+            assert isinstance(feature , list) , feature
+            feature = [f for f in feature if f not in ['secid' , 'date' , 'minute']]
+        dfs = [cls.df_preprocess(DataFetcher.load_target_file(db_src,db_key,date),date,feature) for date in target_dates]
+        dfs = pd.concat([df for df in dfs if isinstance(df,pd.DataFrame)] , axis = 0)
+        dfs = dfs.set_index(['secid' , 'date'] + ['minute'] * ('minute' in dfs.columns.values))
+        xarr = BasicBlock.from_xarray(xr.Dataset.from_dataframe(dfs))
+        return cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
     
+    @classmethod
+    def df_preprocess(cls , df , date , feature = None):
+        if isinstance(df , pd.DataFrame): 
+            if 'date' not in df.columns.values: df['date'] = date
+            if feature is not None: 
+                remain_cols = ['secid','date']+['minute']*('minute' in df.columns.values)+feature
+                df = df.loc[:,remain_cols]
+        else:
+            df = None
+        return df
+
     @staticmethod
     def data_type_abbr(key : str):
         key = key.lower()
@@ -624,12 +634,12 @@ class DataProcessConfig:
             }
         elif blk in ['30m' , 'trade_30m']:
             return {
-                'trade_30m' : DataProcessParam('trade' , '30min' , ['minute' , 'close', 'high', 'low', 'open', 'volume', 'vwap']) ,
+                'trade_30m' : DataProcessParam('trade' , '30min' , ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
                 'trade_day' : DataProcessParam('trade' , 'day' , ['volume' , 'turn_fl' , 'preclose']) ,
             }
         elif blk in ['15m' , 'trade_15m']:
             return {
-                'trade_15m' : DataProcessParam('trade' , '15min' , ['minute' , 'close', 'high', 'low', 'open', 'volume', 'vwap']) ,
+                'trade_15m' : DataProcessParam('trade' , '15min' , ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
                 'trade_day' : DataProcessParam('trade' , 'day' , ['volume' , 'turn_fl' , 'preclose']) ,
             }
         elif blk in ['week' , 'trade_week']:
