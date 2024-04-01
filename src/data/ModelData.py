@@ -57,8 +57,8 @@ class ModelData():
         batch_size     : int = 10000
         input_step_day : int = 5
         test_step_day  : int = 1
-        verbosity : int = 5
-        tra_model : bool = False
+        verbosity    : int = 5
+        tra_model    : bool = False
         buffer_type  : str = 'tra'
         buffer_param : dict = field(default_factory=dict)
 
@@ -150,7 +150,7 @@ class ModelData():
                     next_model_date = self.model_date_list[self.model_date_list > model_date][0]
             else:
                 self.model_date_list = [model_date]
-                next_model_date = self.test_full_dates + 1
+                next_model_date = max(self.test_full_dates) + 1
             test_step  = (1 if self.process_name == 'instance' else self.kwarg.test_step_day)
             before_test_dates = self.index[1][self.index[1] < min(self.test_full_dates)][-self.seqy:]
             test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::test_step]

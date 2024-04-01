@@ -925,39 +925,42 @@ def predict(model_name = 'gru_day' , model_type = 'swalast' , model_num = 0 , st
     df_task = pd.DataFrame({
         'pred_dates' : pred_dates ,
         'model_date' : [max(model_dates[model_dates < d_pred]) for d_pred in pred_dates] ,
-        'model_data' : 'new'
+        'calculated' : 0 ,
     })
-    if model_data_old is not None:
-        df_task.loc[df_task['pred_dates'] <= max(model_data_old.test_full_dates) , 'model_data'] = 'old'
 
-    df_list = []
     with torch.no_grad():
-        for (model_date , model_data_sign) , df_sub in df_task.groupby(['model_date' , 'model_data']):
-            print((model_date , model_data_sign))
-            model_data = model_data_old if model_data_sign == 'old' else model_data_new
-            assert model_data is not None
-            dataloader_param = model_data.get_dataloader_param('test' , 'test' , model_date = model_date , param=model_param)   
-            model_data.create_dataloader(*dataloader_param)
+        df_list = []
 
-            model_sd = torch.load(f'{model_path}/{model_num}/{model_date}.{model_type}.pt',map_location = model_data.device.device)
-            model = device(RunModel.new_model(model_config.model_module , model_param , state_dict=model_sd))
-            model.eval()
+        for model_data in [model_data_old , model_data_new]:
+            if model_data is None: continue
 
-            loader = model_data.dataloaders['test']
-            secid  = model_data.index[0]
-            tdates = model_data.model_test_dates
-            assert df_sub['pred_dates'].isin(tdates).all()
-            
-            for tdate in df_sub['pred_dates']:
-                batch_data = loader[np.where(tdates == tdate)[0][0]]
-                pred , _ = model(batch_data.x)
-                df_list.append(
-                    pd.DataFrame({
-                    'secid' : secid[batch_data.i[:,0].cpu().numpy()] , 'date' : tdate , 
-                    model_name : pred.cpu().numpy().flatten() ,
-                }))
+            for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
+                print(model_date , 'old' if (model_data is model_data_old) else 'new')
+                dataloader_param = model_data.get_dataloader_param('test' , 'test' , model_date = model_date , param=model_param)   
+                model_data.create_dataloader(*dataloader_param)
+
+                model_sd = torch.load(f'{model_path}/{model_num}/{model_date}.{model_type}.pt') #,map_location = model_data.device.device)
+                model = device(RunModel.new_model(model_config.model_module , model_param , state_dict=model_sd))
+                model.eval()
+
+                loader = model_data.dataloaders['test']
+                secid  = model_data.index[0]
+                tdates = model_data.model_test_dates
+                assert df_sub[df_sub['calculated'] == 0 , 'pred_dates'].isin(tdates).all()
+                
+                for tdate in df_sub[df_sub['calculated'] == 0 , 'pred_dates']:
+                    batch_data = loader[np.where(tdates == tdate)[0][0]]
+                    pred , _ = model(batch_data.x)
+                    if len(pred):
+                        df_list.append(
+                            pd.DataFrame({
+                            'secid' : secid[batch_data.i[:,0].cpu().numpy()] , 'date' : tdate , 
+                            model_name : pred.cpu().numpy().flatten() ,
+                        }))
+                        df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
+
         df = pd.concat(df_list , axis = 0)
-    df.to_feather('preds.feather')
+    # df.to_feather('preds.feather')
     # df[df['pred_date'] >= today(-10)].pivot_table(values = 'gru_day' , index = 'secid' , columns = 'date').fillna(0).corr()
     return df
 

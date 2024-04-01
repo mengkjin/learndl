@@ -20,7 +20,7 @@ class PatchTST(nn.Module):
         patch_len:int, 
         stride:int|None = None, 
         d_model:int=32, 
-        shared_embedding=True, shared_head = False, 
+        shared_embedding=True, shared_head = False,
         revin:bool=True,n_layers:int=3, n_heads=16, d_ff:int=256, 
         norm:str='BatchNorm', attn_dropout:float=0., dropout:float=0., act:str='gelu', 
         res_attention:bool=True, pre_norm:bool=False, store_attn:bool=False,
@@ -33,6 +33,7 @@ class PatchTST(nn.Module):
         assert head_type in ['pretrain', 'prediction'], 'head type should be either pretrain, prediction, or regression'
         self.nvars = nvars
         self.head_type = head_type
+        self.mask_fwd = head_type == 'pretrain'
         if stride is None: stride = patch_len // 2
         num_patch = (max(seq_len, patch_len)-patch_len) // stride + 1
 
@@ -53,13 +54,9 @@ class PatchTST(nn.Module):
         
         # Head
         if head_type == 'pretrain':
-            self.mask_fwd = True
-            self.head = PatchTSTPretrainHead(d_model, patch_len, head_dropout) # custom head passed as a partial func with all its kwargs
-            self.fc_out = nn.Linear(patch_len*num_patch,seq_len)
+            self.head = PatchTSTPretrainHead(d_model, num_patch ,seq_len, head_dropout)
         elif head_type == 'prediction':
-            self.mask_fwd = False
-            self.head = PatchTSTPredictionHead(self.nvars, d_model, num_patch, d_model, head_dropout , shared = shared_head)
-            self.fc_out = nn.Linear(d_model*nvars,predict_steps)
+            self.head = PatchTSTPredictionHead(nvars, d_model, num_patch, predict_steps, head_dropout , shared = shared_head)
 
     def forward(self, x):                             
         """
@@ -67,19 +64,19 @@ class PatchTST(nn.Module):
         out: [bs x seq_len x nvars] for pretrain
              [bs x predict_steps] for prediction
         """   
-        if self.revin: x = self.revin(x , 'norm')   # [bs x seq_len x nvars]
+        if self.revin is not None: 
+            x = self.revin(x , 'norm')              # [bs x seq_len x nvars]
+
         x = self.embed(x , self.mask_fwd)           # [bs x nvars x num_patch x d_model]
+
         x = self.backbone(x)                        # [bs x nvars x d_model x num_patch]
-        x = self.head(x)                            # [bs x (d_model | num_patch x patch_len) x nvars]
-        if self.revin: x = self.revin(x , 'denorm') # [bs x (d_model | num_patch x patch_len) x nvars]
-        if self.head_type == 'prediction':
-            x = x.flatten(start_dim=1)              # [bs x d_model * nvars]
-            x = self.fc_out(x)                      # [bs x predict_steps]  
-        else:
-            x = x.permute(0,3,1,2)                  # [bs x nvars x num_patch x d_model]
-            x = x.flatten(start_dim=2)              # [bs x nvars x num_patch * d_model]
-            x = self.fc_out(x)                      # [bs x nvars x seq_len]
-            x = x.permute(0,2,1)                    # [bs x seq_len x nvars]                               
+        
+        if self.revin is not None: 
+            x = x.permute(0,2,3,1)                  # [bs x d_model x num_patch x nvars]
+            x = self.revin(x , 'denorm')            # [bs x d_model x num_patch x nvars]
+            x = x.permute(0,3,1,2)                  # [bs x nvars x d_model x num_patch]
+
+        x = self.head(x)                            # [bs x seq_len x nvars] | [bs x predict_steps]
         return x
 
 class PatchTSTEmbed(nn.Module):
@@ -101,10 +98,10 @@ class PatchTSTEmbed(nn.Module):
         ])
 
     def forward(self, x , mask = False):
-        """
+        '''
         in : [bs x seq_len x nvars]
         out: [bs x nvars x num_patch x d_model] 
-        """
+        '''
         if mask:
             x = self.patch_masking(x)[0]
         else:
@@ -120,18 +117,12 @@ class PatchTSTEmbed(nn.Module):
     
     @staticmethod
     def create_patch(x , patch_len, stride):
-        """
-        xb: [bs x seq_len x nvars]
-        """
         num_patch = (max(x.shape[1], patch_len)-patch_len) // stride + 1
         s_begin = x.shape[1] - patch_len - stride*(num_patch-1)
         x_patch = x[:, s_begin:, :].unfold(dimension=1, size=patch_len, step=stride)                 
         return x_patch, x_patch.shape[1] # x_patch: [bs x num_patch x nvars x patch_len]
     
     def patch_masking(self , x):
-        """
-        xb: [bs x seq_len x nvars] -> [bs x num_patch x nvars x patch_len]
-        """
         x_patch, _ = self.create_patch(x , self.patch_len, self.stride)    # xb_patch: [bs x num_patch x nvars x patch_len]
         x_patch_mask , _ , mask , _ = self.random_masking(x_patch, self.mask_ratio)   # xb_mask: [bs x num_patch x nvars x patch_len]
         mask = mask.bool()    # mask: [bs x num_patch x nvars]
@@ -166,55 +157,74 @@ class PatchTSTEmbed(nn.Module):
         mask = torch.ones([bs, L, nvars], device=x.device)                                  # mask: [bs x num_patch x nvars]
         mask[:, :len_keep, :] = 0
         # unshuffle to get the binary mask
-        mask = torch.gather(mask, dim=1, index=ids_restore)                                  # [bs x num_patch x nvars]
+        mask = torch.gather(mask, dim=1, index=ids_restore)                                 # [bs x num_patch x nvars]
         return x_masked, x_kept, mask, ids_restore
     
 class PatchTSTPredictionHead(nn.Module):
-    def __init__(self, nvars, d_model, num_patch, forecast_len = 1 , head_dropout=0, flatten=False , shared = False):
+    '''
+    in : [bs x nvars x d_model x num_patch]
+    out: [bs x predict_steps]
+    '''
+    def __init__(self, nvars, d_model, num_patch, predict_steps = 1 , head_dropout=0, flatten=False , shared = False):
         super().__init__()
 
         self.shared = shared
         self.nvars = nvars
         self.flatten = flatten
-        head_dim = d_model*num_patch
+        head_dim = d_model * num_patch
         self.layers = nn.ModuleList([
             nn.Sequential(
                 nn.Flatten(start_dim=-2),
-                nn.Linear(head_dim, forecast_len),
+                nn.Linear(head_dim, d_model),
                 nn.Dropout(head_dropout)
             ) for _ in range(1 if shared else nvars)
         ])
+        self.linear = nn.Sequential(
+            nn.Flatten(start_dim=-2),
+            nn.Linear(d_model * nvars , predict_steps),
+        )
     
     def forward(self, x):                     
-        """
-        x: [bs x nvars x d_model x num_patch]
-        output: [bs x forecast_len x nvars]
-        """
+        '''
+        in : [bs x nvars x d_model x num_patch]
+        out: [bs x predict_steps]
+        '''
         if self.shared:
-            x = self.layers[0](x)          # z: [bs x forecast_len]
+            x = self.layers[0](x)          # [bs x nvars x d_model]
         else:
-            x_i = [layer(x[:,i,:,:]) for i,layer in enumerate(self.layers)] # x_out[i]: [bs x forecast_len]
-            x = torch.stack(x_i, dim=1)                                        # x: [bs x nvars x forecast_len]
-        x = x.transpose(2,1)               # [bs x forecast_len x nvars]
+            x_i = [layer(x[:,i,:,:]) for i,layer in enumerate(self.layers)] 
+            x = torch.stack(x_i, dim=1)    # [bs x nvars x d_model]
+        x = x.transpose(2,1)               # [bs x d_model x nvars]
+        x = self.linear(x)                 # [bs x predict_steps]  
         return x
 
 class PatchTSTPretrainHead(nn.Module):
-    def __init__(self, d_model, patch_len, dropout):
+    '''
+    in : [bs x nvars x d_model x num_patch]
+    out: [bs x seq_len x nvars]
+    '''
+    def __init__(self, d_model , num_patch , seq_len , dropout):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
-        self.linear = nn.Linear(d_model, patch_len)
+        self.linear = nn.Linear(d_model * num_patch , seq_len)
 
     def forward(self, x):
-        """
-        x: tensor [bs x nvars x d_model x num_patch]
-        output: tensor [bs x nvars x num_patch x patch_len]
-        """
-        x = x.permute(0,1,3,2)                  # [bs x nvars x num_patch x d_model]
-        x = self.linear(self.dropout(x))        # [bs x nvars x num_patch x patch_len]
-        x = x.permute(0,2,3,1)                  # [bs x num_patch x patch_len x nvars]
+        '''
+        in : [bs x nvars x d_model x num_patch]
+        out: [bs x seq_len x nvars]
+        '''
+        x = self.dropout(x)                     # [bs x nvars x d_model x num_patch]
+        x = x.flatten(start_dim=2)              # [bs x nvars x d_model (x) num_patch]
+        x = self.linear(x)                      # [bs x nvars x seq_len]
+        x = x.permute(0,2,1)                    # [bs x seq_len x nvars]                     
+        
         return x
 
 class PatchTSTEncoder(nn.Module):
+    '''
+    in : [bs x nvars x num_patch x d_model]   
+    out: [bs x nvars x d_model x num_patch]
+    '''
     def __init__(self, nvars, num_patch, n_layers=3, d_model=128, n_heads=16, 
                  d_ff=256, norm='BatchNorm', attn_dropout=0., dropout=0., act='gelu', store_attn=False,
                  res_attention=True, pre_norm=False,
@@ -236,32 +246,39 @@ class PatchTSTEncoder(nn.Module):
             store_attn=store_attn)
 
     def forward(self, x):          
-        """
-        x: tensor [bs x nvars x num_patch x d_model]    
-        """
-        u = x.reshape(-1,*x.shape[-2:])             # u: [bs * nvars x num_patch x d_model]
-        u = self.dropout(u + self.W_pos)            # u: [bs * nvars x num_patch x d_model]
+        '''
+        in : [bs x nvars x num_patch x d_model]   
+        out: [bs x nvars x d_model x num_patch]
+        '''
+        u = x.reshape(-1,*x.shape[-2:])             # [bs * nvars x num_patch x d_model]
+        u = self.dropout(u + self.W_pos)            # [bs * nvars x num_patch x d_model]
         # Encoder
-        z = self.encoder(u)                         # z: [bs * nvars x num_patch x d_model]
-        z = z.reshape(-1,self.nvars,*z.shape[-2:]) # z: [bs x nvars x num_patch x d_model]
-        z = z.permute(0,1,3,2)                      # z: [bs x nvars x d_model x num_patch]
+        z = self.encoder(u)                         # [bs * nvars x num_patch x d_model]
+        z = z.reshape(-1,self.nvars,*z.shape[-2:])  # [bs x nvars x num_patch x d_model]
+        z = z.permute(0,1,3,2)                      # [bs x nvars x d_model x num_patch]
         return z
     
 class TSTEncoder(nn.Module):
+    """
+    in : [bs x num_patch x d_model]
+    out: [bs x num_patch x d_model]
+    """
     def __init__(self, d_model, n_heads, d_ff=256, 
                  norm='BatchNorm', attn_dropout=0., dropout=0., activation='gelu',
                  res_attention=False, n_layers=1, pre_norm=False, store_attn=False):
         super().__init__()
 
         self.layers = nn.ModuleList([TSTEncoderLayer(d_model, n_heads=n_heads, d_ff=d_ff, norm=norm,
-                                                      attn_dropout=attn_dropout, dropout=dropout,
-                                                      activation=activation, res_attention=res_attention,
-                                                      pre_norm=pre_norm, store_attn=store_attn) for _ in range(n_layers)])
+                                                     attn_dropout=attn_dropout, dropout=dropout,
+                                                     activation=activation, res_attention=res_attention,
+                                                     pre_norm=pre_norm, store_attn=store_attn) 
+                                                     for _ in range(n_layers)])
         self.res_attention = res_attention
 
     def forward(self, src):
         """
-        src: tensor [bs x q_len x d_model]
+        in : [bs x num_patch x d_model]
+        out: [bs x num_patch x d_model]
         """
         output = src
         scores = None
