@@ -21,7 +21,7 @@ import pandas as pd
 import itertools , os , gc , time , yaml
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass , field
 from torch.optim.swa_utils import AveragedModel , update_bn
 from torch.nn.utils.clip_grad import clip_grad_value_
 from typing import Any , ClassVar , Literal
@@ -37,37 +37,179 @@ from src.util import (
 )
 
 from src.func.date import today , date_offset
-from src.func.basic import ask_for_confirmation , list_converge , pretty_print_dict
+from src.func.basic import list_converge
 from src.func.metric import Metrics
 from src.model import model
 
 # from audtorch.metrics.functional import *
 
-logger   = Logger()
-config   = TrainConfig()
+logger = Logger()
+config = TrainConfig()
+
+@dataclass
+class ModelPred:
+    model_name : str
+    model_type : Literal['best' , 'swalast' , 'swabest'] = 'swalast'
+    model_num  : int = 0
+    alias : str | None = None
+    df    : pd.DataFrame | None = None
+
+    destination : ClassVar[str] = '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha'
+    secid_col : ClassVar[str] = 'secid'
+    date_col  : ClassVar[str] = 'date'
+
+    def __post_init__(self):
+        if self.alias is None: self.alias = self.model_name
+
+    def deploy(self , df : pd.DataFrame | None = None , overwrite = False , secid_col = secid_col , date_col = date_col):
+        if df is None: df = self.df
+        if df is None: return NotImplemented
+        os.makedirs(f'{self.destination}/{self.alias}' , exist_ok=True)
+        for date , subdf in df.groupby(date_col):
+            des_path = f'{self.destination}/{self.alias}/{self.alias}_{date}.txt'
+            if overwrite or not os.path.exists(des_path):
+                subdf.drop(columns='date').set_index(secid_col).to_csv(des_path, sep='\t', index=True, header=False)
+
+    def get_df(self , start_dt = -10 , end_dt = 20991231 , old_model_data = False):
+        self.df = self.predict(start_dt= start_dt , end_dt = end_dt, old_model_data = old_model_data)
+        return self
+
+    def df_corr(self , df = None , window = 30 , secid_col = secid_col , date_col = date_col):
+        if df is None: df = self.df
+        if df is None: return NotImplemented
+        return df[df[date_col] >= today(-window)].pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()
+
+    def write_df(self , path):
+        assert isinstance(self.df , pd.DataFrame)
+        self.df.to_feather(path)
+
+    def predict(self , start_dt = -10 , end_dt = 20991231 , old_model_data = False):
+        if start_dt <= 0: start_dt = today(start_dt)
+
+        model_path = f'{DIR.model}/{self.model_name}'
+        device       = Device()
+        model_config = TrainConfig.load(model_path)
+
+        model_param = torch.load(f'{model_path}/model_params.pt')[self.model_num]
+        model_files = sorted([p for p in os.listdir(f'{model_path}/{self.model_num}') if p.endswith(f'{self.model_type}.pt')])
+        model_dates = np.array([int(mf.split('.')[0]) for mf in model_files])
+
+        data_type = model_config.model_data_type
+
+        start_dt = max(start_dt , int(date_offset(min(model_dates) ,1)))
+        calendar = DataFetcher.load_target_file('information' , 'calendar')
+        assert calendar is not None
+
+        require_model_data_old = (start_dt <= today(-100))
+
+        model_data_old = ModelData(data_type , model_config , if_train = True) if require_model_data_old else None
+        model_data_new = ModelData(data_type , model_config , if_train = True if old_model_data else False) 
+
+        end_dt = min(end_dt , max(model_data_new.test_full_dates))
+        pred_dates = calendar[(calendar['calendar'] >= start_dt) & (calendar['calendar'] <= end_dt) & (calendar['trade'])]['calendar'].values
+
+        df_task = pd.DataFrame({
+            'pred_dates' : pred_dates ,
+            'model_date' : [max(model_dates[model_dates < d_pred]) for d_pred in pred_dates] ,
+            'calculated' : 0 ,
+        })
+
+        with torch.no_grad():
+            df_list = []
+
+            for model_data in [model_data_old , model_data_new]:
+                if model_data is None: continue
+
+                for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
+                    print(model_date , 'old' if (model_data is model_data_old) else 'new')
+                    dataloader_param = model_data.get_dataloader_param('test' , model_date = model_date , param=model_param)   
+                    model_data.create_dataloader(*dataloader_param)
+
+                    sd_path = f'{model_path}/{self.model_num}/{model_date}.{self.model_type}.pt'
+                    model_sd = torch.load(sd_path , map_location = model_data.device.device)
+                    model = device(RunModel.new_model(model_config.model_module , model_param , state_dict=model_sd))
+                    model.eval()
+
+                    loader = model_data.dataloaders['test']
+                    secid  = model_data.index[0]
+                    tdates = model_data.model_test_dates
+                    #print(df_sub.loc[df_sub['calculated'] == 0 , 'pred_dates'])
+                    #print(tdates)
+                    iter_tdates = np.intersect1d(df_sub.loc[df_sub['calculated'] == 0 , 'pred_dates'] , tdates)
+
+                    for tdate in iter_tdates:
+                        batch_data = loader[np.where(tdates == tdate)[0][0]]
+                        pred , _ = model(batch_data.x)
+                        if len(pred):
+                            df_list.append(
+                                pd.DataFrame({
+                                'secid' : secid[batch_data.i[:,0].cpu().numpy()] , 'date' : tdate , 
+                                self.model_name : pred.cpu().numpy().flatten() ,
+                            }))
+                            df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
+            df = pd.concat(df_list , axis = 0)
+        del model_data_new , model_data_old
+        return df
 
 class RunModel():
-    """
-    A class to control the whole process of training , includes:
+    '''
+    Control the whole process of training , includes:
     1. Parameters: train_params , model_data_type
-    2. Data : class of train_data
+    2. Data : load train/vald/test_data
     3. loop status: model , attempt , epoch
     4. file path: model , transfer(last model date)
     5. text: model , attempt , epoch , exit , stat , time , trainer
-    """
+    '''
     def __init__(self , mem_storage = True , timer = True ,  device = None , **kwargs):
-        self.model_info : dict[str,Any]= {'init_time' : time.time()}
+        self.model_info = self.ModelInfo(config)
         self.ptimer     = ProcessTimer(timer)
         self.storage    = Storage(mem_storage)
         self.device     = Device(device)
-        
+
+    @dataclass
+    class ModelInfo:
+        config    : TrainConfig
+        init_time : float = 0
+        contents  : dict[str,Any] = field(default_factory=dict)
+
+        result_path : ClassVar[str] = f'{DIR.result}/model_results.yaml'
+
+        def __post_init__(self):
+            os.makedirs(os.path.dirname(self.result_path) , exist_ok=True)
+            self.init_time = time.time()
+
+        def __setitem__(self , key , value):
+            self.contents[key] = value
+
+        def __getitem__(self , key):
+            return self.contents[key]
+
+        def dump_result(self):
+            result = {
+                '0_model' : f'{self.config.model_name}(x{self.config.model_num})',
+                '1_start' : time.ctime(self.init_time) ,
+                '2_basic' : 'short' if self.config.short_test else 'full' , 
+                '3_datas' : self.config.model_data_type ,
+                '4_label' : ','.join(self.config.labels),
+                '5_dates' : '-'.join([str(self.config.beg_date),str(self.config.end_date)]),
+                '6_train' : self['train_process'],
+                '7_test'  : self['test_process'],
+                '8_result': self['test_score_sum'],
+            }
+            
+            with open(self.result_path , 'a' if os.path.exists(self.result_path) else 'w') as f:
+                yaml.dump(result , f)
+
     def main_process(self):
-        """
+        '''
         Main process of load_data + train + test
-        """
+        '''
         for process_name in config.process_queue:
             self.process_setname(process_name)
             self.__getattribute__(f'process_{process_name.lower()}')()
+
+        self.model_info.dump_result()
+        self.ptimer.print()
     
     def process_setname(self , key = 'data'):
         self.process_name = key.lower()
@@ -82,9 +224,9 @@ class RunModel():
             raise Exception(f'KeyError : {key}')
         
     def process_data(self):
-        """
+        '''
         Main process of loading basic data
-        """
+        '''
         self.model_info['data_time'] = time.time()
         logger.critical(f'Start Process [Load Data]!')
         self.data = ModelData(config.model_data_type , config)
@@ -94,11 +236,11 @@ class RunModel():
         logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.model_info['data_time']))
         
     def process_train(self):
-        """
+        '''
         Main process of training
         1. loop over model(model_date , model_num)
         2. loop over attempt(if converge too soon) , epoch
-        """
+        '''
         self.model_info['train_time'] = time.time()
         logger.critical(f'Start Process [Train Model]!')
         torch.save(config.model_params , f'{config.model_base_path}/model_params.pt')    
@@ -107,9 +249,9 @@ class RunModel():
             self.model_preparation('train')
             self.model_train()
         total_time = time.time() - self.model_info['train_time']
-        _str = 'Finish Process [Train Model]! Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
-            total_time / 3600 , total_time / 60 / max(self.model_count , 1) , total_time / max(self.epoch_count , 1))
-        self.model_info['train_process'] = _str 
+        self.model_info['train_process'] = \
+            'Finish Process [Train Model]! Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
+                total_time / 3600 , total_time / 60 / max(self.model_count , 1) , total_time / max(self.epoch_count , 1))
         logger.critical(self.model_info['train_process'])
 
     def process_test(self):
@@ -121,8 +263,8 @@ class RunModel():
             self.model_test()
 
         self.process_test_result()
-        _str = 'Finish Process [Test Model]! Cost {:.1f} Secs'.format(time.time()-self.model_info['test_time'])
-        self.model_info['test_process'] = _str 
+        self.model_info['test_process'] = \
+        'Finish Process [Test Model]! Cost {:.1f} Secs'.format(time.time()-self.model_info['test_time'])
         logger.critical(self.model_info['test_process'])
 
     def model_iter(self):
@@ -182,9 +324,9 @@ class RunModel():
         torch.cuda.empty_cache()
         
     def _init_variables(self , key = 'model'):
-        """
+        '''
         Reset variables of 'model' , 'attempt' start
-        """
+        '''
         if key == 'epoch' : return
         assert key in ['model' , 'attempt'] , f'KeyError : {key}'
 
@@ -203,9 +345,9 @@ class RunModel():
             self.cond = {'terminate' : {} , 'nan_loss' : False , 'loop_status' : 'attempt'}
 
     def model_train_start(self):
-        """
+        '''
         Reset model specific variables
-        """
+        '''
         with self.ptimer('model_train/start'):
             self._init_variables('model')
             self.nanloss_life = config.train_params['trainer']['nanloss']['retry']
@@ -217,9 +359,9 @@ class RunModel():
                 self._prints('train_dataloader')
             
     def model_train_end(self):
-        """
+        '''
         Do necessary things of ending a model(model_data , model_num)
-        """
+        '''
         with self.ptimer('model_train/end'):
             self.storage.del_path([p for pl in self.path['source'].values() for p in pl])
             if self.process_name == 'train' : self.model_count += 1
@@ -227,9 +369,9 @@ class RunModel():
             self._prints('model_end')
 
     def model_train_init_loop(self):
-        """
+        '''
         Reset and loop variables giving loop_status
-        """
+        '''
         with self.ptimer('model_train/init_loop'):
             self._init_variables(self.cond.get('loop_status' , ''))
             self.epoch_i += 1
@@ -240,13 +382,13 @@ class RunModel():
                 self.text['attempt'] = f'FirstBite' if self.attempt_i == 0 else f'Retrain#{self.attempt_i}'
         
     def model_train_init_trainer(self):
-        """
+        '''
         Initialize net , optimizer , scheduler if loop_status in ['attempt']
         net : 1. Create an model of f'{config.model_module}' or inherit from 'transfer'
               2. In transfer mode , p_late and p_early with be trained with different lr's. If not net.parameters are trained by same lr
         optimizer : Adam or SGD
         scheduler : Cosine or StepLR
-        """
+        '''
         with self.ptimer('model_train/init_trainer'):
             if self.cond.get('loop_status') == 'epoch': return
             self.load_model('train')
@@ -255,14 +397,15 @@ class RunModel():
             self.multiloss = self.new_multiloss(config.train_params['multitask'] , self.param['num_output'])
 
     def model_train_epoch(self):
-        """
+        '''
         Iterate train and valid dataset, calculate loss/score , update values
         If nan loss occurs, turn to _deal_nanloss
-        """
+        '''
         with self.ptimer('model_train/epoch/train'):
             self.net.train() 
             iterator = self.data.dataloaders['train']
-            _loss , _score = torch.ones(len(iterator)).fill_(torch.nan), torch.ones(len(iterator)).fill_(torch.nan)
+            list_loss  = torch.full([len(iterator)] , fill_value=torch.nan)
+            list_score = torch.full([len(iterator)] , fill_value=torch.nan)
             for i , batch_data in enumerate(iterator):
                 
                 outputs = self.model_forward('train' , batch_data)
@@ -274,34 +417,35 @@ class RunModel():
 
                 self.model_backward('train' , metrics)
 
-                _loss[i] , _score[i] = metrics['loss_item'] , metrics['score']
-                iterator.display(f'Ep#{self.epoch_i:3d} train loss:{_loss[:i+1].mean():.5f}')
-            if _loss.isnan().any(): return self._deal_nanloss()
-            self.loss_list['train'].append(_loss.mean()) 
-            self.score_list['train'].append(_score.mean())
+                list_loss[i] , list_score[i] = metrics['loss_item'] , metrics['score']
+                iterator.display(f'Ep#{self.epoch_i:3d} train loss:{list_loss[:i+1].mean():.5f}')
+            if list_loss.isnan().any(): return self._deal_nanloss()
+            self.loss_list['train'].append(list_loss.mean()) 
+            self.score_list['train'].append(list_score.mean())
         
         with self.ptimer('model_train/epoch/valid') , torch.no_grad():
             self.net.eval()  
             iterator = self.data.dataloaders['valid']
-            _loss , _score = torch.ones(len(iterator)).fill_(torch.nan), torch.ones(len(iterator)).fill_(torch.nan)
+            list_loss  = torch.full([len(iterator)] , fill_value=torch.nan)
+            list_score = torch.full([len(iterator)] , fill_value=torch.nan)
             for i , batch_data in enumerate(iterator):
                 # self.device.print_cuda_memory()
                 outputs = self.model_forward('valid' , batch_data)
                 metrics = self.model_metric('valid' , outputs , batch_data , valid_sample = None)
 
-                _loss[i] , _score[i] = metrics['loss_item'] , metrics['score']
-                iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{_score[:i+1].mean():.5f}')
-            self.loss_list['valid'].append(_loss.mean()) 
-            self.score_list['valid'].append(_score.mean())
+                list_loss[i] , list_score[i] = metrics['loss_item'] , metrics['score']
+                iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{list_score[:i+1].mean():.5f}')
+            self.loss_list['valid'].append(list_loss.mean()) 
+            self.score_list['valid'].append(list_score.mean())
 
         self.lr_list.append(self.scheduler.get_last_lr()[0])
         self.scheduler.step()
         self.reset_scheduler()
 
     def model_train_assess_status(self):
-        """
+        '''
         Update condition of continuing training epochs , restart attempt if early exit or nan loss
-        """
+        '''
         with self.ptimer('model_train/assess'):
             if self.cond['nan_loss']:
                 logger.error(f'Initialize a new model to retrain! Lives remaining {self.nanloss_life}')
@@ -350,9 +494,9 @@ class RunModel():
                 self.cond['loop_status'] = 'epoch'
             
     def model_test_start(self):
-        """
+        '''
         Reset model specific variables
-        """
+        '''
         with self.ptimer('model_test/start'):
             self._init_variables('model')
             dataloader_param = self.data.get_dataloader_param('test' , namespace=self)   
@@ -393,9 +537,9 @@ class RunModel():
                 self.score_by_date[-l1:,self.model_num*len(config.output_types) + oi] = np.nan_to_num(test_score[-l1:])
         
     def model_test_end(self):
-        """
+        '''
         Do necessary things of ending a model(model_data , model_num)
-        """
+        '''
         with self.ptimer('model_test/end'):
             if self.model_num == config.model_num_list[-1]:
                 self.score_by_model[-1,:] = np.nanmean(self.score_by_date[-len(self.data.model_test_dates):,],axis = 0)
@@ -442,22 +586,6 @@ class RunModel():
         for i , digits in enumerate([4,2,4,2,4]):
             self._print_rst(add_row_key[i] , add_row_value[i] , digits)
         self.model_info['test_score_sum'] = {k:round(v,4) for k,v in zip(df.columns , score_sum.tolist())}  
-    
-    def summary(self):
-        out_dict = {
-            '0_start' : time.ctime(self.model_info.get('init_time')),
-            '1_basic' :'+'.join(['short' if config.short_test else 'long' , config.precision]),
-            '2_model' :''.join([config.model_module , '_' , config.model_data_type , '(x' , str(config.model_num) , ')']),
-            '3_time'  :'-'.join([str(config.beg_date),str(config.end_date)]),
-            '4_train' :self.model_info.get('train_process'),
-            '5_test'  :self.model_info.get('test_process'),
-            '6_result':self.model_info.get('test_score_sum'),
-        }
-        out_path = f'{DIR.result}/model_results.yaml'
-        os.makedirs(os.path.dirname(out_path) , exist_ok=True)
-        with open(out_path , 'a' if os.path.exists(out_path) else 'w') as f:
-            yaml.dump(out_dict , f)
-        self.ptimer.print()
 
     def model_forward(self , key , batch_data : BatchData):
         with self.ptimer(f'{key}/forward'):
@@ -488,9 +616,9 @@ class RunModel():
             self.optimizer.step()
     
     def _prints(self , key):
-        """
+        '''
         Print out status giving display conditions and looping conditions
-        """
+        '''
         printer = [logger.info] if (config.verbosity > 2 or self.model_count < config.model_num) else [logger.debug]
         sdout   = None
         if key == 'model_end':
@@ -526,9 +654,9 @@ class RunModel():
         logger.info(('{: <11s}'+('{: >8'+fmt+'}')*len(values)).format(str(rowname) , *values))
 
     def _deal_nanloss(self):
-        """
+        '''
         Deal with nan loss, life -1 and change nan_loss condition to True
-        """
+        '''
         logger.error(f'{self.text["model"]} Attempt{self.attempt_i}, epoch{self.epoch_i} got nan loss!')
         if self.nanloss_life > 0:
             self.nanloss_life -= 1
@@ -537,9 +665,9 @@ class RunModel():
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
 
     def _terminate_cond(self):
-        """
+        '''
         Whether terminate condition meets
-        """
+        '''
         term_dict = config.train_params['terminate']
         term_cond = {}
         exit_text = ''
@@ -691,10 +819,10 @@ class RunModel():
 
     @staticmethod
     def calculate_metrics(key , metrics , label , pred , weight = None , multiloss = None , net = None ,
-                        valid_sample = None , penalty_kwargs = {} , **kwargs):
-        """
+                          valid_sample = None , penalty_kwargs = {} , **kwargs):
+        '''
         Calculate loss(with gradient), penalty , score
-        """
+        '''
         if label.shape != pred.shape: # if more label than output
             label = label[...,:pred.shape[-1]]
             assert label.shape == pred.shape , (label.shape , pred.shape)
@@ -816,114 +944,6 @@ class RunModel():
             print(f'y shape is {y.shape}')
             return y
 
-def predict(model_name = 'gru_day' , model_type = 'swalast' , model_num = 0 , start_dt = -10 , end_dt = 20991231 , old_model_data = False):
-    if start_dt <= 0: start_dt = today(start_dt)
-
-    #model_name = 'gru_day' 
-    #model_type = 'swalast' 
-    #model_num  = 0 
-    #start_dt = 20170101
-    #end_dt = 99991231
-
-    model_path = f'{DIR.model}/{model_name}'
-    device       = Device()
-    model_config = TrainConfig.load(model_path)
-
-    model_param = torch.load(f'{model_path}/model_params.pt')[model_num]
-    model_files = sorted([p for p in os.listdir(f'{model_path}/{model_num}') if p.endswith(f'{model_type}.pt')])
-    model_dates = np.array([int(mf.split('.')[0]) for mf in model_files])
-
-    data_type = model_config.model_data_type
-
-    start_dt = max(start_dt , int(date_offset(min(model_dates) ,1)))
-    calendar = DataFetcher.load_target_file('information' , 'calendar')
-    assert calendar is not None
-
-    require_model_data_old = (start_dt <= today(-100))
-
-    model_data_old = ModelData(data_type , model_config , if_train = True) if require_model_data_old else None
-    model_data_new = ModelData(data_type , model_config , if_train = True if old_model_data else False) 
-
-    end_dt = min(end_dt , max(model_data_new.test_full_dates))
-    pred_dates = calendar[(calendar['calendar'] >= start_dt) & (calendar['calendar'] <= end_dt) & (calendar['trade'])]['calendar'].values
-
-    df_task = pd.DataFrame({
-        'pred_dates' : pred_dates ,
-        'model_date' : [max(model_dates[model_dates < d_pred]) for d_pred in pred_dates] ,
-        'calculated' : 0 ,
-    })
-
-    with torch.no_grad():
-        df_list = []
-
-        for model_data in [model_data_old , model_data_new]:
-            if model_data is None: continue
-
-            for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
-                print(model_date , 'old' if (model_data is model_data_old) else 'new')
-                dataloader_param = model_data.get_dataloader_param('test' , model_date = model_date , param=model_param)   
-                model_data.create_dataloader(*dataloader_param)
-
-                model_sd = torch.load(f'{model_path}/{model_num}/{model_date}.{model_type}.pt',map_location = model_data.device.device)
-                model = device(RunModel.new_model(model_config.model_module , model_param , state_dict=model_sd))
-                model.eval()
-
-                loader = model_data.dataloaders['test']
-                secid  = model_data.index[0]
-                tdates = model_data.model_test_dates
-                #print(df_sub.loc[df_sub['calculated'] == 0 , 'pred_dates'])
-                #print(tdates)
-                assert df_sub.loc[df_sub['calculated'] == 0 , 'pred_dates'].isin(tdates).all()
-                
-                for tdate in df_sub.loc[df_sub['calculated'] == 0 , 'pred_dates']:
-                    batch_data = loader[np.where(tdates == tdate)[0][0]]
-                    pred , _ = model(batch_data.x)
-                    if len(pred):
-                        df_list.append(
-                            pd.DataFrame({
-                            'secid' : secid[batch_data.i[:,0].cpu().numpy()] , 'date' : tdate , 
-                            model_name : pred.cpu().numpy().flatten() ,
-                        }))
-                        df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
-
-    df = pd.concat(df_list , axis = 0)
-    return df
-
-@dataclass
-class ModelPred:
-    model_name : str
-    model_type : Literal['best' , 'swalast' , 'swabest'] = 'swalast'
-    model_num  : int = 0
-    alias : str | None = None
-    df    : pd.DataFrame | None = None
-
-    destination : ClassVar[str] = '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha'
-    secid_col : ClassVar[str] = 'secid'
-    date_col  : ClassVar[str] = 'date'
-
-    def __post_init__(self):
-        if self.alias is None: self.alias = self.model_name
-
-    def deploy(self , df : pd.DataFrame | None = None , overwrite = False , secid_col = secid_col , date_col = date_col):
-        if df is None: df = self.df
-        if df is None: return NotImplemented
-        os.makedirs(f'{self.destination}/{self.alias}' , exist_ok=True)
-        for date , subdf in df.groupby(date_col):
-            des_path = f'{self.destination}/{self.alias}/{self.alias}_{date}.txt'
-            if overwrite or not os.path.exists(des_path):
-                subdf.drop(columns='date').set_index(secid_col).to_csv(des_path, sep='\t', index=True, header=False)
-
-    def get_df(self , start_dt = -10 , end_dt = 20991231 , old_model_data = False):
-        df = predict(self.model_name , self.model_type , self.model_num , start_dt= start_dt , end_dt = end_dt, old_model_data = old_model_data)
-        self.df = df
-        return self
-
-    def df_corr(self , df = None , window = 30 , secid_col = secid_col , date_col = date_col):
-        if df is None: df = self.df
-        if df is None: return NotImplemented
-        return df[df[date_col] >= today(-window)].pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()
-
-
 def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser_args = None):
     if parser_args is None:
         parser_args = config.parser_args({'process':process,'rawname':rawname,'resume':resume,'anchoring':anchoring})
@@ -933,15 +953,10 @@ def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser_arg
 
     if not config.short_test:
         logger.warning('Model Specifics:')
-        pretty_print_dict(config.subset([
-            'random_seed' , 'verbosity' , 'precision' , 'batch_size' , 'model_name' , 'model_module' , 
-            'model_data_type' , 'model_num' , 'beg_date' , 'end_date' , 'interval' , 
-            'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' ,
-        ]))
+        config.print_subset()
 
     app = RunModel(mem_storage = config.mem_storage)
     app.main_process()
-    app.summary()
 
 if __name__ == '__main__':
     main(parser_args = config.parser_args())

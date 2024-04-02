@@ -358,7 +358,7 @@ class DataBlock():
         key = key.lower()
         if (key.startswith('trade_') and len(key)>6):
             return key[6:]
-        elif key.startswith(('rtn_lag','res_lag')):
+        elif key.startswith(('rtn_lag','res_lag','std_lag')):
             return f'{key[:3]}{sum([int(s) for s in key[7:].split("_")])}'
         elif key in ['y' , 'labels']:
             return 'y'
@@ -427,7 +427,7 @@ class DataBlock():
             delist_dt = np.array(desc.loc[secid , 'delist_dt'])
             delist_dt[delist_dt < 0] = 21991231
 
-            mask = np.stack([(date <= l) + (date >= d) for l,d in zip(list_dt,delist_dt)],axis = 0) 
+            mask = np.stack([(date <= l) + (date >= d) for l,d in zip(list_dt , delist_dt)],axis = 0) 
             self.values[mask] = np.nan
 
         return self

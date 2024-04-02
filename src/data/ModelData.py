@@ -372,7 +372,7 @@ class ModelData():
     def _load_data_pack(cls , data_type_list , y_labels = None , if_train=True,dtype = torch.float):
         if dtype is None: dtype = torch.float
         data_type_list = cls._type_list(data_type_list)
-        data = cls._load_torch_pack(data_type_list , y_labels , if_train)
+        data = cls._load_torch_pack(data_type_list , if_train)
         if isinstance(data , str):
             path_torch_pack = data
             if isinstance(dtype , str): dtype = getattr(torch , dtype)
@@ -382,11 +382,6 @@ class ModelData():
             norms  = DataBlockNorm.load_keys(data_type_list, if_train , alias_search=True,dtype = dtype)
 
             y : DataBlock = blocks[0]
-            if y_labels is not None: 
-                ifeat = np.concatenate([np.where(y.feature == label)[0] for label in y_labels])
-                y.update(values = y.values[...,ifeat] , feature = y.feature[ifeat])
-                assert np.array_equal(y_labels , y.feature) , (y_labels , y.feature)
-
             x : dict[str,DataBlock] = {DataBlock.data_type_abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
             norms = {DataBlock.data_type_abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
             secid , date = blocks[0].secid , blocks[0].date
@@ -397,13 +392,18 @@ class ModelData():
             if if_train: DataBlock.save_dict(data , path_torch_pack)
 
         x, y, norms, secid, date = data['x'], data['y'], data['norms'], data['secid'], data['date']
+        if y_labels is not None: 
+            ifeat = np.concatenate([np.where(y.feature == label)[0] for label in y_labels])
+            y.update(values = y.values[...,ifeat] , feature = y.feature[ifeat])
+            assert np.array_equal(y_labels , y.feature) , (y_labels , y.feature)
+        
         return x , y , norms , (secid , date)
 
     @classmethod
-    def _load_torch_pack(cls , data_type_list , y_labels , if_train=True):
+    def _load_torch_pack(cls , data_type_list , if_train=True):
         if not if_train: return 'no_torch_pack'
         last_date = max(DataBlock.load_dict(DataBlock.block_path('y'))['date'])
-        path_torch_pack = f'{DIR.torch_pack}/{cls._modal_data_code(data_type_list , y_labels)}.{last_date}.pt'
+        path_torch_pack = f'{DIR.torch_pack}/{cls._modal_data_code(data_type_list)}.{last_date}.pt'
 
         if os.path.exists(path_torch_pack):
             print(f'use {path_torch_pack}')
@@ -417,7 +417,5 @@ class ModelData():
         return [DataBlock.data_type_abbr(tp) for tp in model_data_type]
 
     @staticmethod
-    def _modal_data_code(type_list , y_labels):
-        xtype = '+'.join([DataBlock.data_type_abbr(tp) for tp in type_list])
-        ytype = 'ally' if y_labels is None else '+'.join([DataBlock.data_type_abbr(tp) for tp in y_labels])
-        return '+'.join([xtype , ytype])
+    def _modal_data_code(type_list):
+        return '+'.join([DataBlock.data_type_abbr(tp) for tp in type_list])

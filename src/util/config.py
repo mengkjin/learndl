@@ -6,6 +6,7 @@ import torch
 from argparse import Namespace
 from copy import deepcopy
 
+from ..func.basic import pretty_print_dict
 from ..environ import DIR
 
 class TrainConfig(Namespace):
@@ -72,16 +73,30 @@ class TrainConfig(Namespace):
         3. Ask if model_name and model_base_path should be changed if old dir exists
         """
         config = cls.load_config_path(config_path)
+        config = cls.process_parser(config_path , config , par_args , do_process)
+
         if override is not None: config = config.update(override)
 
-        cls.process_parser(config , par_args , do_process)
+        if config_path != config.model_base_path and os.path.exists(f'{config.model_base_path}/{cls.config_train}'):
+            config_resume = cls.load_config_path(config.model_base_path)
+            config.update(config_resume)
+        else:
+            os.makedirs(config.model_base_path, exist_ok = True)
+            shutil.copyfile(f'{DIR.conf}/{cls.config_train}' , f'{config.model_base_path}/{cls.config_train}')
+            model_param_path = cls.config_model.format(config.model_module.lower())
+            if os.path.exists(model_param_path):
+                shutil.copyfile(f'{DIR.conf}/{model_param_path}' , f'{config.model_base_path}/{model_param_path}')
+            else:
+                shutil.copyfile(f'{DIR.conf}/{cls.default_model}' , f'{config.model_base_path}/{model_param_path}')
+        [os.makedirs(f'{config.model_base_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
+
         if config.resume_training and os.path.exists(f'{config.model_base_path}/model_params.pt'):
             config.model_params = torch.load(f'{config.model_base_path}/model_params.pt')
         else:
             config.model_params = []
             for mm in config.model_num_list:
-                dict_mm = {k:(v[mm % len(v)] if isinstance(v,(tuple,list)) else v) for 
-                        k,v in config.MODEL_PARAM.items()}
+                dict_mm = {k:(v[mm % len(v)] if isinstance(v,(tuple,list)) else v) 
+                           for k,v in config.MODEL_PARAM.items()}
                 dict_mm.update({'path':f'{config.model_base_path}/{mm}'}) 
                 config.model_params.append(deepcopy(dict_mm))       
         
@@ -99,42 +114,25 @@ class TrainConfig(Namespace):
         else:
             config['MODEL_PARAM'] = cls.read_yaml(f'{config_path}/{cls.default_model}')
         
-        if adjust:
-            if 'special_config' in config.keys() and 'short_test' in config['special_config'].keys(): 
-                if config['short_test']: config.update(config['special_config']['short_test'])
-                del config['special_config']['short_test']
-            if 'special_config' in config.keys() and 'transformer' in config['special_config'].keys():
-                if (config['model_module'].lower() == 'transformer' or
-                    (config['model_module'].lower() in ['generalrnn'] and 
-                    'transformer' in config['MODEL_PARAM']['type_rnn'])):
-                    config['TRAIN_PARAM']['trainer'].update(config['special_config']['transformer']['trainer'])
-                del config['special_config']['transformer']
+        config = cls(**config)
+
+        if adjust and 'special_config' in config.keys():
+            if 'short_test' in config.special_config.keys() and config.short_test: 
+                config.update(config.special_config['short_test'])
+            if 'transformer' in config.special_config.keys() and config.model_module.lower() == 'transformer':
+                config['TRAIN_PARAM']['trainer'].update(config['special_config']['transformer']['trainer'])
+            delattr(config , 'special_config')
 
         config.data_type_list = config.model_data_type.split('+')
         config.model_num_list = list(range(config.model_num))
-        
-        # model_name
-        if config.model_name is None:
-            config.model_name = '_'.join([config.model_module , config.model_data_type])
-            config.model_base_path = f'{DIR.model}/{config.model_name}'
-
-        if config_path != 'default':
-            config.model_base_path = config_path
-            config.model_name      = os.path.basename(config.model_base_path)
-        elif config.model_name is None:
-            config.model_name = '_'.join([config.model_module , config.model_data_type])
-            config.model_base_path = f'{DIR.model}/{config.model_name}'
-        else:
-            config.model_base_path = f'{DIR.model}/{config.model_name}'
-            
         config.train_params = deepcopy(config.TRAIN_PARAM)
-
+            
         # check conflicts:
-        config.tra_model = config.tra_switch and config.model_module.lower().startswith('tra')
         assert 'best' in config.output_types
+        config.tra_model = config.tra_switch and config.model_module.lower().startswith('tra')
         assert not (config.tra_model and config.train_params['dataloader']['sample_method'] == 'total_shuffle')
 
-        return cls(**config)
+        return config
 
     @staticmethod
     def set_random_seed(seed = None):
@@ -157,11 +155,21 @@ class TrainConfig(Namespace):
         return args
 
     @classmethod
-    def process_parser(cls , config , par_args , do_process = False):
+    def process_parser(cls , config_path , config , par_args , do_process = False):
         for k , v in par_args.__dict__.items(): 
             assert k not in config.keys() , k
             setattr(config , k , v)
-    
+
+        # model_name
+        if config_path != 'default':
+            config.model_name      = os.path.basename(config_path)
+            config.model_base_path = config_path
+        elif config.model_name is None:
+            config.model_name = '_'.join([config.model_module , config.model_data_type])
+            config.model_base_path = f'{DIR.model}/{config.model_name}'
+        else:
+            config.model_base_path = f'{DIR.model}/{config.model_name}'
+
         if do_process:
             # process_confirmation
             process = getattr(config , 'process' , -1)
@@ -177,66 +185,67 @@ class TrainConfig(Namespace):
                 raise Exception(f'Error input : {process}')
             print('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]),config.process_queue))))
 
-            # resume training
-            # ask if resume training, since unexpected end of training may happen
+            if config_path == 'default':
+                candidate_name = []
+            else:
+                candidate_name = [model for model in [config.model_name] if os.path.exists(f'{DIR.model}/{model}')] + \
+                        [model for model in os.listdir(DIR.model) if model.startswith(config.model_name + '.')]  
+            # ask if resume training
             resume = getattr(config , 'resume' , -1)
-            candidate_name = [model for model in [config.model_name] if os.path.exists(f'{DIR.model}/{model}')] + \
-                [model for model in os.listdir(DIR.model) if model.startswith(config.model_name + '.')]   
-            if 'train' in config.process_queue and resume < 0 and len(candidate_name) > 0:
-                print(f'--Multiple model path of {config.model_name} exists, input [yes] to resume training, or start a new one!')
-                resume = 1 if input(f'Confirm resume training [{config.model_name}]? [yes/no] : ').lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
-            config.resume_training = resume > 0 and len(candidate_name) > 0
-            print(f'--Confirm Resume Training!' if config.resume_training else '--Start Training New!')
+            if len(candidate_name) > 0:
+                if 'train' in config.process_queue and resume < 0:
+                    print(f'--Multiple model path of {config.model_name} exists, input [yes] to resume training, or start a new one!')
+                    user_input = input(f'Confirm resume training [{config.model_name}]? [yes/no] : ')
+                    resume = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
+                config.resume_training = resume > 0 
+                print(f'--Confirm Resume Training!' if config.resume_training else '--Start Training New!')
+            else:
+                config.resume_training = True
 
             # checkname confirmation
-            # Confirm the model_name and model_base_path if multifple model_name dirs exists.
+            # Confirm the model_name if multifple model_name dirs exists.
             # If include train: check if dir of model_name exists, if so ask to continue with a sequential one
             # If test only :    check if model_name exists multiple dirs, if so ask to use the raw one or a select one
             checkname = getattr(config , 'checkname' , -1)
-            if 'train' in config.process_queue:
-                if checkname < 0 and config.resume_training and len(candidate_name) > 0:
-                    if len(candidate_name) > 1:
+            if len(candidate_name) > 0 and checkname == 0:
+                raise Exception(f'--Directories of [{config.model_name}] exists!')
+            elif len(candidate_name) > 0:
+                if 'train' in config.process_queue and config.resume_training:
+                    if checkname < 0:
                         print(f'--Attempting to resume but multiple models exists, input number to choose')
                         [print(str(i) + ' : ' + f'{DIR.model}/{model}') for i , model in enumerate(candidate_name)]
                         config.model_name = candidate_name[int(input('which one to use? '))]
                     else:
                         config.model_name = candidate_name[0]
-                elif checkname < 0 and len(candidate_name) > 0:
-                    print(f'--Multiple model path of {config.model_name} exists, input [yes] to add a new directory will be made!')
-                    user_input = input(f'Add a new folder of [{config.model_name}]? [yes/no] : ').lower()
-                    checkname = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
-
-                if checkname and len(candidate_name) > 0:
-                    config.model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
-                    config.model_base_path = f'{DIR.model}/{config.model_name}'
-                else:
-                    raise Exception(f'--Directories of [{config.model_name}] exists!')
-
-                if config.resume_training and os.path.exists(f'{config.model_base_path}/{cls.config_train}'):
-                    config_resume = cls.load_config_path(config.model_base_path)
-                    config.update(config_resume)
-                else:
-                    os.makedirs(config.model_base_path, exist_ok = True)
-                    shutil.copyfile(f'{DIR.conf}/{cls.config_train}' , f'{config.model_base_path}/{cls.config_train}')
-                    model_param_path = cls.config_model.format(config.model_module.lower())
-                    if os.path.exists(model_param_path):
-                        shutil.copyfile(f'{DIR.conf}/{model_param_path}' , f'{config.model_base_path}/{model_param_path}')
+                elif 'train' in config.process_queue:
+                    if checkname < 0:
+                        print(f'--Multiple model path of {config.model_name} exists, input [yes] to add a new directory!')
+                        user_input = input(f'Add a new folder of [{config.model_name}]? [yes/no] : ').lower()
+                        checkname = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
+                    if checkname:
+                        config.model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
                     else:
-                        shutil.copyfile(f'{DIR.conf}/{cls.default_model}' , f'{config.model_base_path}/{model_param_path}')
-                [os.makedirs(f'{config.model_base_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
-
-            elif 'test' in config.process_queue:
-                if checkname < 0 and config.resume_training and len(candidate_name) > 0:
-                    if len(candidate_name) > 1:
+                        raise Exception(f'--Directories of [{config.model_name}] exists!')
+                elif 'test' in config.process_queue:
+                    if checkname < 0:
                         print(f'--Attempting to resume but multiple models exists, input number to choose')
                         [print(str(i) + ' : ' + f'{DIR.model}/{model}') for i , model in enumerate(candidate_name)]
                         config.model_name = candidate_name[int(input('which one to use? '))]
                     else:
                         config.model_name = candidate_name[0]
-                config.model_base_path = f'{DIR.model}/{config.model_name}'
-
+            config.model_base_path = f'{DIR.model}/{config.model_name}'
             print(f'--Model_name is set to {config.model_name}!')  
         else:
             config.process_queue = ['data' , 'train' , 'test']
             config.resume_training = True
         return config
+    
+    def print_subset(self , subset = None):
+        if subset is None:
+            subset = [
+                'random_seed' , 'verbosity' , 'precision' , 'batch_size' , 
+                'model_name' , 'model_module' , 'model_num' , 'model_data_type' , 'labels' ,
+                'beg_date' , 'end_date' , 'interval' , 
+                'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' ,
+            ]
+        pretty_print_dict(self.subset(subset))

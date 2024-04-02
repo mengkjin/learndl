@@ -6,14 +6,14 @@ buffer_type: tra
 buffer_param: 
   tra_num_states: &tra_num_states 5
 
-model_name: null
+model_name: gruRES_day
 model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
 model_data_type: day # 'day+30m' , 30m
 model_nickname: null # 'LSTM' # 'TCN_vs_LSTM' any str or None
 model_num: 2
 output_types: [best , swalast , swabest]
 labels: 
-  - std_lag1_10
+  - res_lag1_10 # rtn_lag1_10 # std_lag1_10
   
 TRAIN_PARAM:
   dataloader:
