@@ -18,7 +18,8 @@ __old_version__/
 *.pth
 *.npy
 *.npz
-*.csv
+*.feather
+*.parquet
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
