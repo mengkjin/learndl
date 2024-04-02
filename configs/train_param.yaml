@@ -6,19 +6,12 @@ buffer_type: tra
 buffer_param: 
   tra_num_states: &tra_num_states 5
 
+model_name: null
 model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
+model_data_type: day # 'day+30m' , 30m
 model_nickname: null # 'LSTM' # 'TCN_vs_LSTM' any str or None
 model_num: 2
-model_datatype:
-  rnn_general: day
-  gru: day
-  lstm: day
-  tcn: day
-  transformer: day
-  tra_lstm: day
-  resnet_lstm: 30m
-  resnet_gru: 30m
-  other: [day , 30m , gp , 'day+15m']
+output_types: [best , swalast , swabest]
 labels: 
   - std_lag1_10
   
@@ -53,7 +46,6 @@ TRAIN_PARAM:
       train:    'equal' # 'top'
       test:     'equal' # 'top'
   transfer:    false
-  output_types: [best , swalast , swabest]
   multitask:
     type: hybrid
     param_dict:

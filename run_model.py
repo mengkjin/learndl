@@ -24,7 +24,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from torch.optim.swa_utils import AveragedModel , update_bn
 from torch.nn.utils.clip_grad import clip_grad_value_
-from typing import Any
+from typing import Any , ClassVar , Literal
 
 import src as src
 
@@ -63,7 +63,7 @@ class RunModel():
         
     def main_process(self):
         """
-        Main process of load_data + train + test + instance
+        Main process of load_data + train + test
         """
         for process_name in config.process_queue:
             self.process_setname(process_name)
@@ -75,7 +75,7 @@ class RunModel():
         self.epoch_count = 0
         if self.process_name == 'data': 
             pass
-        elif self.process_name in ['train' , 'test' , 'instance']: 
+        elif self.process_name in ['train' , 'test']: 
             self.data.reset_dataloaders()
             self.metric_function = self.new_metricfunc(config.train_params['criterion'])
         else:
@@ -113,48 +113,17 @@ class RunModel():
         logger.critical(self.model_info['train_process'])
 
     def process_test(self):
-
         self.process_test_start()
 
         for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
             self.model_preparation('test')
             self.model_test()
-            self.save_model_preds()
+
         self.process_test_result()
         _str = 'Finish Process [Test Model]! Cost {:.1f} Secs'.format(time.time()-self.model_info['test_time'])
         self.model_info['test_process'] = _str 
         logger.critical(self.model_info['test_process'])
-
-    def process_instance(self):
-        if config.anchoring < 0:
-            _text , _cond = ask_for_confirmation(f'Do you want to copy the model to instance?[yes/else no]: ' , timeout = -1)
-            anchoring = all([_t.lower() in ['yes','y'] for _t in _text])
-        else:
-            anchoring = config.anchoring > 0
-
-        if anchoring:
-            logger.critical(f'Start Process [Copy to Instance]!')        
-            if os.path.exists(config.instance_path): 
-                logger.critical(f'Old instance {config.instance_path} exists , remove manually first to override!')
-                logger.critical(f'The command can be "rm -r {config.instance_path}"')
-                return
-            else:
-                DIR.copytree(config.model_base_path , config.instance_path)
-        else:
-            logger.critical(f'Will not copy to instance!')
-            return
-        logger.warning('Copy from model to instance finished , Start going forward')
-        # load the exact config in the instance folder
-        config.reload(config_path = f'{config.instance_path}')
-        self.process_test_start()
-        for model_date , model_num in self.model_iter():
-            self.model_date , self.model_num = model_date , model_num
-            self.model_preparation('instance')
-            self.model_test()
-            self.save_model_preds()
-        self.process_test_result()
-        logger.critical('Finish Process [Copy to Instance]! Cost {:.1f} Secs'.format(time.time() - self.model_info['instance_time']))  
 
     def model_iter(self):
         new_iter = list(itertools.product(self.data.model_date_list , config.model_num_list))
@@ -168,12 +137,10 @@ class RunModel():
         return new_iter
     
     def model_preparation(self , process , last_n = 30 , best_n = 5):
-        assert process in ['train' , 'test' , 'instance']
+        assert process in ['train' , 'test']
         with self.ptimer('model_preparation' , process):
             param = config.model_params[self.model_num]
 
-            self.model_preds = self.ModelPreds(config.get('output_prediction') or self.process_name == 'instance')
-            # self.prediction = [] if config.get('output_prediction') or self.process_name == 'instance' else None
             # In a new model , alters the penalty function's lamb
             self.metric_function = self.update_metricfunc(self.metric_function , param , config)
 
@@ -275,7 +242,7 @@ class RunModel():
     def model_train_init_trainer(self):
         """
         Initialize net , optimizer , scheduler if loop_status in ['attempt']
-        net : 1. Create an instance of f'{config.model_module}' or inherit from 'transfer'
+        net : 1. Create an model of f'{config.model_module}' or inherit from 'transfer'
               2. In transfer mode , p_late and p_early with be trained with different lr's. If not net.parameters are trained by same lr
         optimizer : Adam or SGD
         scheduler : Cosine or StepLR
@@ -421,8 +388,6 @@ class RunModel():
                     metrics = self.model_metric('test' , outputs, batch_data , valid_sample = None)
                     test_score[i] = metrics['score']
 
-                    self.model_preds.append_preds(batch_data , self.data , outputs , f'{self.model_num}/{op_type}')
-
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
                     iterator.display(f'Date {iter_dates[i]}:{test_score[l0:i+1].mean():.5f}')
                 self.score_by_date[-l1:,self.model_num*len(config.output_types) + oi] = np.nan_to_num(test_score[-l1:])
@@ -435,20 +400,6 @@ class RunModel():
             if self.model_num == config.model_num_list[-1]:
                 self.score_by_model[-1,:] = np.nanmean(self.score_by_date[-len(self.data.model_test_dates):,],axis = 0)
                 self._print_rst(self.model_date , self.score_by_model[-1,:] , 4)
-                
-    def save_model_preds(self):
-        #if self.prediction is None: return NotImplemented
-        with self.ptimer('model_test/save_preds'):
-            self.model_preds.export_preds(f'{config.instance_path}/{config.model_name}_allpreds.csv')
-
-            """
-            df = pd.concat([pd.DataFrame(op_data) for op_data in self.prediction])
-            df = df.pivot_table('values' , ['secid' , 'date'] , ['model'])
-            
-            path_output = f'{config.instance_path}/{config.model_name}_allpreds.csv'
-            with open(path_output , 'a') as f:
-                df.to_csv(f , mode = 'a', header = f.tell()==0, index = True)   
-            """
   
     def process_test_start(self):
         self.model_info[f'{self.process_name}_time'] = time.time()
@@ -465,7 +416,7 @@ class RunModel():
 
     def process_test_result(self):
         # date ic writed down
-        date_step = (1 if self.process_name == 'instance' else self.data.kwarg.test_step_day)
+        date_step = self.data.kwarg.test_step_day
         date_list = self.data.test_full_dates[::date_step]
         for model_num in config.model_num_list:
             date_str = np.array(list(map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , date_list.astype(str))))
@@ -638,7 +589,7 @@ class RunModel():
                     self.storage.save_model_state(savable_net , self.path['target'][key] , to_disk = True) 
     
     def load_model(self , process , key = 'best'):
-        assert process in ['train' , 'test' , 'instance']
+        assert process in ['train' , 'test']
         with self.ptimer('load_model'):
             if process == 'train':           
                 if self.path['candidate'].get('transfer'):
@@ -712,31 +663,6 @@ class RunModel():
             shd_kwargs = None
         self.scheduler = self.load_scheduler(shd_kwargs)
         self._prints('reset_learn_rate')
-
-    class ModelPreds:
-        def __init__(self , turn_on = False) -> None:
-            self.turn_on = turn_on
-            self.pred_list = []
-        def append_preds(self , batch_data : BatchData , model_data , outputs , model_name):
-            if not self.turn_on: return NotImplemented
-            batch_index = batch_data.i.cpu()
-            batch_pred = outputs[0].detach().cpu()
-            assert len(batch_index) == len(batch_pred) , (len(batch_index) , len(batch_pred))
-            self.pred_list.append({
-                'secid' : model_data.y_secid[batch_index[:,0]] , 
-                'date'  : model_data.y_date[batch_index[:,1]] ,
-                'model' : model_name ,
-                'values': batch_pred[:,0] ,
-            })
-        def export_preds(self , path):
-            if not self.turn_on: return NotImplemented
-            df = pd.concat([pd.DataFrame(op_data) for op_data in self.pred_list] , axis=0)
-            df = df.pivot_table('values' , ['secid' , 'date'] , ['model'])
-            with open(path , 'a') as f:
-                df.to_csv(f , mode = 'a', header = f.tell()==0, index = True) 
-            del self.pred_list
-            self.pred_list = []
-            gc.collect()
     
     @staticmethod
     def new_model(module , param = {} , state_dict = None , **kwargs):
@@ -862,7 +788,7 @@ class RunModel():
         model_data = ModelData(data_type_list , config , if_train=False)
         model_date = model_data.model_date_list[-1]
         model_param = config.model_params[0]
-        dataloader_param = model_data.get_dataloader_param('test' , 'test' , model_date=model_date , param=model_param)   
+        dataloader_param = model_data.get_dataloader_param('test' , model_date=model_date , param=model_param)   
         model_data.create_dataloader(*dataloader_param)
 
         batch_data = model_data.dataloaders['test'][0]
@@ -890,8 +816,7 @@ class RunModel():
             print(f'y shape is {y.shape}')
             return y
 
-
-def predict(model_name = 'gru_day' , model_type = 'swalast' , model_num = 0 , start_dt = -10 , end_dt = 99991231 , save = True):
+def predict(model_name = 'gru_day' , model_type = 'swalast' , model_num = 0 , start_dt = -10 , end_dt = 20991231 , old_model_data = False):
     if start_dt <= 0: start_dt = today(start_dt)
 
     #model_name = 'gru_day' 
@@ -917,7 +842,7 @@ def predict(model_name = 'gru_day' , model_type = 'swalast' , model_num = 0 , st
     require_model_data_old = (start_dt <= today(-100))
 
     model_data_old = ModelData(data_type , model_config , if_train = True) if require_model_data_old else None
-    model_data_new = ModelData(data_type , model_config , if_train = False)
+    model_data_new = ModelData(data_type , model_config , if_train = True if old_model_data else False) 
 
     end_dt = min(end_dt , max(model_data_new.test_full_dates))
     pred_dates = calendar[(calendar['calendar'] >= start_dt) & (calendar['calendar'] <= end_dt) & (calendar['trade'])]['calendar'].values
@@ -936,19 +861,21 @@ def predict(model_name = 'gru_day' , model_type = 'swalast' , model_num = 0 , st
 
             for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
                 print(model_date , 'old' if (model_data is model_data_old) else 'new')
-                dataloader_param = model_data.get_dataloader_param('test' , 'test' , model_date = model_date , param=model_param)   
+                dataloader_param = model_data.get_dataloader_param('test' , model_date = model_date , param=model_param)   
                 model_data.create_dataloader(*dataloader_param)
 
-                model_sd = torch.load(f'{model_path}/{model_num}/{model_date}.{model_type}.pt') #,map_location = model_data.device.device)
+                model_sd = torch.load(f'{model_path}/{model_num}/{model_date}.{model_type}.pt',map_location = model_data.device.device)
                 model = device(RunModel.new_model(model_config.model_module , model_param , state_dict=model_sd))
                 model.eval()
 
                 loader = model_data.dataloaders['test']
                 secid  = model_data.index[0]
                 tdates = model_data.model_test_dates
-                assert df_sub[df_sub['calculated'] == 0 , 'pred_dates'].isin(tdates).all()
+                #print(df_sub.loc[df_sub['calculated'] == 0 , 'pred_dates'])
+                #print(tdates)
+                assert df_sub.loc[df_sub['calculated'] == 0 , 'pred_dates'].isin(tdates).all()
                 
-                for tdate in df_sub[df_sub['calculated'] == 0 , 'pred_dates']:
+                for tdate in df_sub.loc[df_sub['calculated'] == 0 , 'pred_dates']:
                     batch_data = loader[np.where(tdates == tdate)[0][0]]
                     pred , _ = model(batch_data.x)
                     if len(pred):
@@ -959,10 +886,42 @@ def predict(model_name = 'gru_day' , model_type = 'swalast' , model_num = 0 , st
                         }))
                         df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
 
-        df = pd.concat(df_list , axis = 0)
-    # df.to_feather('preds.feather')
-    # df[df['pred_date'] >= today(-10)].pivot_table(values = 'gru_day' , index = 'secid' , columns = 'date').fillna(0).corr()
+    df = pd.concat(df_list , axis = 0)
     return df
+
+@dataclass
+class ModelPred:
+    model_name : str
+    model_type : Literal['best' , 'swalast' , 'swabest'] = 'swalast'
+    model_num  : int = 0
+    alias : str | None = None
+    df    : pd.DataFrame | None = None
+
+    destination : ClassVar[str] = '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha'
+    secid_col : ClassVar[str] = 'secid'
+    date_col  : ClassVar[str] = 'date'
+
+    def __post_init__(self):
+        if self.alias is None: self.alias = self.model_name
+
+    def deploy(self , df : pd.DataFrame | None = None , overwrite = False , secid_col = secid_col , date_col = date_col):
+        if df is None: df = self.df
+        if df is None: return NotImplemented
+        os.makedirs(f'{self.destination}/{self.alias}' , exist_ok=True)
+        for date , subdf in df.groupby(date_col):
+            des_path = f'{self.destination}/{self.alias}/{self.alias}_{date}.txt'
+            if overwrite or not os.path.exists(des_path):
+                subdf.drop(columns='date').set_index(secid_col).to_csv(des_path, sep='\t', index=True, header=False)
+
+    def get_df(self , start_dt = -10 , end_dt = 20991231 , old_model_data = False):
+        df = predict(self.model_name , self.model_type , self.model_num , start_dt= start_dt , end_dt = end_dt, old_model_data = old_model_data)
+        self.df = df
+        return self
+
+    def df_corr(self , df = None , window = 30 , secid_col = secid_col , date_col = date_col):
+        if df is None: df = self.df
+        if df is None: return NotImplemented
+        return df[df[date_col] >= today(-window)].pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()
 
 
 def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser_args = None):

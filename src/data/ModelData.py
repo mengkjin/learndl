@@ -101,30 +101,28 @@ class ModelData():
         gc.collect() 
         torch.cuda.empty_cache()   
     
-    def get_dataloader_param(self , loader_type , process_name = '' , model_date = -1 , param = {} , namespace = None):
+    def get_dataloader_param(self , loader_type , model_date = -1 , param = {} , namespace = None):
         if namespace is not None:
-            process_name , model_date , param = namespace.process_name , namespace.model_date , namespace.param
+            model_date , param = namespace.model_date , namespace.param
         seqlens = param['seqlens']
         if self.kwarg.tra_model: seqlens.update(param.get('tra_seqlens',{}))
         
-        return process_name , loader_type , model_date , seqlens
+        return loader_type , model_date , seqlens
 
     def create_dataloader(self , *dataloader_param):
         """
         Create train/valid dataloaders, used recurrently
         """
         if self.dataloader_param == dataloader_param: return NotImplemented
-        self.dataloader_param = process_name , loader_type , model_date , seqlens = dataloader_param
+        self.dataloader_param = loader_type , model_date , seqlens = dataloader_param
 
         assert loader_type in ['train' , 'test'] , loader_type
-        assert process_name in [loader_type , 'instance'] , (process_name,loader_type)
         assert model_date > 0 , model_date
 
         gc.collect() 
         torch.cuda.empty_cache()
 
         self.loader_type = loader_type
-        self.process_name = process_name
         y_keys , x_keys = [k for k in seqlens.keys() if k in ['hist_loss','hist_preds','hist_labels']] , self.data_type_list
         self.seqs = {k:(seqlens[k] if k in seqlens.keys() else 1) for k in y_keys + x_keys}
         assert all([v > 0 for v in self.seqs.values()]) , self.seqs
@@ -151,7 +149,7 @@ class ModelData():
             else:
                 self.model_date_list = [model_date]
                 next_model_date = max(self.test_full_dates) + 1
-            test_step  = (1 if self.process_name == 'instance' else self.kwarg.test_step_day)
+            test_step  = self.kwarg.test_step_day
             before_test_dates = self.index[1][self.index[1] < min(self.test_full_dates)][-self.seqy:]
             test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::test_step]
             self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
