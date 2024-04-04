@@ -168,7 +168,8 @@ class ModelData():
         self.y_secid , self.y_date = self.y_data.secid , self.y_data.date[d0:d1]
 
         self.buffer.update(self.buffer_init(self))
-        self.nonnan_sample = self.cal_nonnan_sample(x, self.y, **{k:v for k,v in self.buffer.items() if k in self.seqs.keys()})
+        self.nonnan_sample = self.cal_nonnan_sample(x, self.y, loader_type = loader_type , 
+                                                    **{k:v for k,v in self.buffer.items() if k in self.seqs.keys()})
         y_step , w_step = self.process_y_data(self.y , self.nonnan_sample)
         self.y[:,self.step_idx] = y_step[:]
         
@@ -181,7 +182,7 @@ class ModelData():
         gc.collect() 
         torch.cuda.empty_cache()
     
-    def cal_nonnan_sample(self , x , y , **kwargs):
+    def cal_nonnan_sample(self , x , y , loader_type , **kwargs):
         """
         return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
         x : rolling window non-nan , end non-zero if in k is 'day'
@@ -189,7 +190,7 @@ class ModelData():
         others : rolling window non-nan , default as self.seqy
         """
         valid_sample = True
-        if self.if_train: valid_sample = self._nonnan_sample_sub(y)
+        if loader_type in ['train' , 'valid']: valid_sample = self._nonnan_sample_sub(y)
         for k , v in x.items():
             valid_sample *= self._nonnan_sample_sub(v , self.seqs[k] , DataBlock.data_type_abbr(k) in ['day'])
         for k , v in kwargs.items():

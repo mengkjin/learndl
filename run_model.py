@@ -409,7 +409,7 @@ class RunModel():
             for i , batch_data in enumerate(iterator):
                 
                 outputs = self.model_forward('train' , batch_data)
-                metrics = self.model_metric('train' , outputs , batch_data , valid_sample = None)
+                metrics = self.model_metric('train' , outputs , batch_data)
                 if metrics['loss'].isnan():
                     print(i , batch_data.y)
                     print(metrics)
@@ -431,7 +431,7 @@ class RunModel():
             for i , batch_data in enumerate(iterator):
                 # self.device.print_cuda_memory()
                 outputs = self.model_forward('valid' , batch_data)
-                metrics = self.model_metric('valid' , outputs , batch_data , valid_sample = None)
+                metrics = self.model_metric('valid' , outputs , batch_data)
 
                 list_loss[i] , list_score[i] = metrics['loss_item'] , metrics['score']
                 iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{list_score[:i+1].mean():.5f}')
@@ -521,15 +521,14 @@ class RunModel():
                 iterator = self.data.dataloaders['test']
                 test_score = np.full(len(iter_dates),np.nan)
                 for i , batch_data in enumerate(iterator):
-                    valid_sample=torch.where(batch_data.nonnan)[0]
-                    if len(valid_sample) == 0: continue
+                    if len(torch.where(batch_data.nonnan)[0]) == 0: continue
                     outputs = self.model_forward('test' , batch_data)
 
                     assert not outputs[0].isnan().any()
                     assert iter_dates[i] == self.data.y_date[batch_data.i[0,1]] , (iter_dates[i] , self.data.y_date[batch_data.i[0,1]])
                     
                     if i < l0: continue # before this date is warmup stage
-                    metrics = self.model_metric('test' , outputs, batch_data , valid_sample = None)
+                    metrics = self.model_metric('test' , outputs, batch_data)
                     test_score[i] = metrics['score']
 
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
@@ -603,7 +602,7 @@ class RunModel():
             metrics = self.calculate_metrics(
                 key , self.metric_function , label=label , pred=pred , weight = weight ,
                 multiloss = getattr(self , 'multiloss' , None) , net = self.net ,
-                valid_sample = valid_sample , penalty_kwargs = penalty_kwargs)
+                penalty_kwargs = penalty_kwargs) # valid_sample = valid_sample , 
             return metrics
         
     def model_backward(self, key , metrics):
@@ -826,34 +825,29 @@ class RunModel():
         if label.shape != pred.shape: # if more label than output
             label = label[...,:pred.shape[-1]]
             assert label.shape == pred.shape , (label.shape , pred.shape)
-        if valid_sample is not None:
-            label , pred = label[valid_sample] , pred[valid_sample]
-            weight = None if weight is None else weight[valid_sample]
+        #if valid_sample is not None:
+        #    label , pred = label[valid_sample] , pred[valid_sample]
+        #    weight = None if weight is None else weight[valid_sample]
 
-        label0 , pred0 = label.select(-1,0) , pred.select(-1,0)
-        weight0 = None if weight is None else weight.select(-1,0)
+        #label0 , pred0 = label.select(-1,0) , pred.select(-1,0)
+        #weight0 = None if weight is None else weight.select(-1,0)
 
         with torch.no_grad():
-            losses = None
-            loss_item = loss = penalty = 0.
-            score = metrics['score'][key](label0 , pred0 , weight0).item()
+            losses , loss_item , loss , penalty = None , 0. , 0. , 0.
+            score = metrics['score'][key](label , pred , weight , nan_check = (key == 'test') ,first_col = True).item()
 
         if key == 'train':
             # loss
             if multiloss is not None:
-                losses = metrics['loss'](label , pred , weight , dim = 0)[:multiloss.num_task]
-                if net is not None and hasattr(net , 'get_multiloss_params'):
-                    loss = multiloss.calculate_multi_loss(losses , net.get_multiloss_params())  
-                else:
-                    raise Exception('net has no attr: get_multiloss_params')
+                losses = metrics['loss'](label , pred , weight)[:multiloss.num_task]
+                loss = multiloss.calculate_multi_loss(losses , getattr(net , 'get_multiloss_params')())
             else:
-                losses = None
-                loss = metrics['loss'](label0 , pred0 , weight0)
+                loss = metrics['loss'](label , pred , weight , first_col = True)
             loss_item = loss.item()
             # penalty
             for _pen_dict in metrics['penalty'].values():
                 if _pen_dict['lamb'] <= 0 or not _pen_dict['cond']: continue
-                penalty = penalty + _pen_dict['lamb'] * _pen_dict['func'](**penalty_kwargs)  
+                penalty = penalty + _pen_dict['lamb'] * _pen_dict['func'](label , pred , weight , **penalty_kwargs)  
             
         return {'loss' : loss , 'loss_item' : loss_item , 'score' : score , 'penalty' : penalty , 'losses': losses}
 
