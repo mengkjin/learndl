@@ -28,7 +28,7 @@ class rnn_univariate(nn.Module):
         input_dim ,
         hidden_dim      = 2**5,
         dropout         = 0.1,
-        act_type        = 'LeakyReLU',
+        act_type        = 'leaky',
         enc_in          = None,
         enc_in_dim      = None ,
         enc_att         = False,
@@ -86,7 +86,7 @@ class rnn_multivariate(nn.Module):
         input_dim ,
         hidden_dim      = 2**5,
         dropout         = 0.1,
-        act_type        = 'LeakyReLU',
+        act_type        = 'leaky',
         enc_in          = None,
         enc_in_dim      = None ,
         enc_att         = False,
@@ -138,7 +138,6 @@ class rnn_multivariate(nn.Module):
         self.mapping = Layer.Parallel(mod_mapping(**self.kwargs) , num_mod = num_output , feedforward = True , concat_output = True)
 
         self.set_multiloss_params()
-        self.set_param_groups()
     
     def forward(self, inputs):
         # inputs.shape : tuple of (bat_size, seq , input_dim[i_rnn]) , len is num_rnn
@@ -146,23 +145,6 @@ class rnn_multivariate(nn.Module):
         hidden = self.decoder(hidden) # hidden.shape : tuple of (bat_size, num_rnn * hidden_dim) , len is num_output
         output = self.mapping(hidden) # output.shape : (bat_size, 1)      
         return output , hidden[0]
-    
-    def max_round(self):
-        return len(self.param_groups)
-    
-    def set_param_groups(self):
-        self.param_groups = []
-        if self.ordered_param_group and self.num_rnn > 1:
-            for i in range(self.num_rnn):
-                _exclude_strings = [f'enc_list.{j}.' for j in range(self.num_rnn) if j!=i] + [f'dec_list.{j}.' for j in range(self.num_rnn) if j!=i]
-                self.param_groups.append([param for k,param in self.named_parameters() if all([k.find(_str) < 0 for _str in _exclude_strings])]) 
-                assert len(self.param_groups[-1]) > 0
-        else:
-            self.param_groups.append(list(self.parameters())) 
-    
-    def training_round(self , round_num):
-        [par.requires_grad_(round_num >= self.max_round()) for par in self.parameters()]
-        [par.requires_grad_(True) for par in self.param_groups[round_num]]
         
     def set_multiloss_params(self):
         self.multiloss_alpha = torch.nn.Parameter((torch.rand(self.num_output) + 1e-4).requires_grad_())
@@ -207,11 +189,13 @@ class uni_rnn_encoder(nn.Module):
 class uni_rnn_decoder(nn.Module):
     def __init__(self,hidden_dim,act_type,dec_mlp_layers,dec_mlp_dim,dropout,hidden_as_factors,map_to_one=False,**kwargs):
         super().__init__()
-        self.mod_act = getattr(nn , act_type)
         self.fc_dec_mlp = nn.Sequential()
         mlp_dim = dec_mlp_dim if dec_mlp_dim else hidden_dim
         for i in range(dec_mlp_layers): 
-            self.fc_dec_mlp.append(nn.Sequential(nn.Linear(hidden_dim if i == 0 else mlp_dim , mlp_dim), self.mod_act(), nn.Dropout(dropout)))
+            self.fc_dec_mlp.append(nn.Sequential(
+                nn.Linear(hidden_dim if i == 0 else mlp_dim , mlp_dim), 
+                Layer.Act.get_activation_fn(act_type), 
+                nn.Dropout(dropout)))
         if hidden_as_factors:
             self.fc_hid_out = nn.Sequential(nn.Linear(mlp_dim , 1 if map_to_one else hidden_dim) , nn.BatchNorm1d(1 if map_to_one else hidden_dim)) 
         else:

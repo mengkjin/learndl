@@ -22,7 +22,7 @@ class PatchTST(nn.Module):
         d_model:int=32, 
         shared_embedding=True, shared_head = False,
         revin:bool=True,n_layers:int=3, n_heads=16, d_ff:int=256, 
-        norm:str='BatchNorm', attn_dropout:float=0., dropout:float=0., act:str='gelu', 
+        norm:str='BatchNorm', attn_dropout:float=0., dropout:float=0., act_type:str='gelu', 
         res_attention:bool=True, pre_norm:bool=False, store_attn:bool=False,
         pe:str='zeros', learn_pe:bool=True, head_dropout = 0, predict_steps:int = 1,
         head_type = 'prediction', verbose:bool=False, **kwargs
@@ -48,7 +48,7 @@ class PatchTST(nn.Module):
             nvars, num_patch=num_patch, patch_len=d_model, 
             n_layers=n_layers, d_model=d_model, n_heads=n_heads, 
             shared_embedding=shared_embedding, d_ff=d_ff,norm=norm,
-            attn_dropout=attn_dropout, dropout=dropout, act=act, 
+            attn_dropout=attn_dropout, dropout=dropout, act_type=act_type, 
             res_attention=res_attention, pre_norm=pre_norm, store_attn=store_attn,
             pe=pe, learn_pe=learn_pe, verbose=verbose, **kwargs)
         
@@ -56,7 +56,8 @@ class PatchTST(nn.Module):
         if head_type == 'pretrain':
             self.head = PatchTSTPretrainHead(d_model, num_patch ,seq_len, head_dropout)
         elif head_type == 'prediction':
-            self.head = PatchTSTPredictionHead(nvars, d_model, num_patch, predict_steps, head_dropout , shared = shared_head)
+            self.head = PatchTSTPredictionHead(nvars, d_model, num_patch, predict_steps, 
+                                               head_dropout , shared = shared_head , act_type = act_type)
 
     def forward(self, x):                             
         """
@@ -177,17 +178,20 @@ class PatchTSTPredictionHead(nn.Module):
     in : [bs x nvars x d_model x num_patch]
     out: [bs x predict_steps]
     '''
-    def __init__(self, nvars, d_model, num_patch, predict_steps = 1 , head_dropout=0, flatten=False , shared = False):
+    def __init__(self, nvars, d_model, num_patch, predict_steps = 1 , head_dropout=0, 
+                 flatten=False , shared = False , act_type = 'gelu'):
         super().__init__()
 
         self.shared = shared
         self.nvars = nvars
         self.flatten = flatten
         head_dim = d_model * num_patch
+
         self.layers = nn.ModuleList([
             nn.Sequential(
                 nn.Flatten(start_dim=-2),
                 nn.Linear(head_dim, d_model),
+                Layer.Act.get_activation_fn(act_type),
                 nn.Dropout(head_dropout)
             ) for _ in range(1 if shared else nvars)
         ])
@@ -238,7 +242,7 @@ class PatchTSTEncoder(nn.Module):
     out: [bs x nvars x d_model x num_patch]
     '''
     def __init__(self, nvars, num_patch, n_layers=3, d_model=128, n_heads=16, 
-                 d_ff=256, norm='BatchNorm', attn_dropout=0., dropout=0., act='gelu', store_attn=False,
+                 d_ff=256, norm='BatchNorm', attn_dropout=0., dropout=0., act_type='gelu', store_attn=False,
                  res_attention=True, pre_norm=False,
                  pe='zeros', learn_pe=True, verbose=False, **kwargs):
 
@@ -254,7 +258,7 @@ class PatchTSTEncoder(nn.Module):
         # Encoder
         self.encoder = TSTEncoder(
             d_model, n_heads, d_ff=d_ff, norm=norm, attn_dropout=attn_dropout, dropout=dropout,
-            pre_norm=pre_norm, activation=act, res_attention=res_attention, n_layers=n_layers, 
+            pre_norm=pre_norm, act_type=act_type, res_attention=res_attention, n_layers=n_layers, 
             store_attn=store_attn)
 
     def forward(self, x):          
@@ -277,12 +281,12 @@ class TSTEncoder(nn.Module):
     out: [bs x num_patch x d_model]
     """
     def __init__(self, d_model, n_heads, d_ff=256, 
-                 norm='BatchNorm', attn_dropout=0., dropout=0., activation='gelu',
+                 norm='BatchNorm', attn_dropout=0., dropout=0., act_type='gelu',
                  res_attention=False, n_layers=1, pre_norm=False, store_attn=False):
         super().__init__()
         self.layers = nn.ModuleList([TSTEncoderLayer(d_model, n_heads=n_heads, d_ff=d_ff, norm=norm,
                                                      attn_dropout=attn_dropout, dropout=dropout,
-                                                     activation=activation, res_attention=res_attention,
+                                                     act_type=act_type, res_attention=res_attention,
                                                      pre_norm=pre_norm, store_attn=store_attn) 
                                                      for _ in range(n_layers)])
         self.res_attention = res_attention
@@ -306,7 +310,7 @@ class TSTEncoder(nn.Module):
 class TSTEncoderLayer(nn.Module):
     def __init__(self, d_model, n_heads, d_ff =256, store_attn=False,
                  norm='BatchNorm', attn_dropout=0., dropout=0., bias=True, 
-                 activation='gelu', res_attention=False, pre_norm=False):
+                 act_type='gelu', res_attention=False, pre_norm=False):
         super().__init__()
         assert not d_model%n_heads, f'd_model ({d_model}) must be divisible by n_heads ({n_heads})'
         d_k = d_model // n_heads
@@ -325,7 +329,7 @@ class TSTEncoderLayer(nn.Module):
 
         # Position-wise Feed-Forward
         self.ff = nn.Sequential(nn.Linear(d_model, d_ff, bias=bias),
-                                Layer.Act.get_activation_fn(activation),
+                                Layer.Act.get_activation_fn(act_type),
                                 nn.Dropout(dropout),
                                 nn.Linear(d_ff, d_model, bias=bias))
 

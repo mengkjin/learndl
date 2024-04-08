@@ -92,7 +92,7 @@ class rnn_general(rnn_multivariate):
     def __init__(self , input_dim , **kwargs):
         super().__init__(input_dim , **kwargs)
 
-class patch_tst(patchTST.ModelPredict):
+class patch_tst(patchTST.PatchTST):
     def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
         super().__init__(nvars = input_dim , seq_len = seq_len ,
                          target_dim = hidden_dim , 

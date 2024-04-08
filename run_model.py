@@ -522,7 +522,8 @@ class RunModel():
             self.data.create_dataloader(*dataloader_param)
                 
             if self.model_num == 0:
-                score_date  = np.zeros((len(self.data.model_test_dates) , len(self.test_model_num)))
+                score_date  = np.zeros((len(self.data.model_test_dates) , 
+                                        len(self.test_model_num)))
                 score_model = np.zeros((1 , len(self.test_model_num)))
                 self.score_by_date  = np.concatenate([getattr(self,'score_by_date' ,np.empty((0,len(self.test_model_num)))) , score_date])
                 self.score_by_model = np.concatenate([getattr(self,'score_by_model',np.empty((0,len(self.test_model_num)))) , score_model])

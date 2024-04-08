@@ -251,3 +251,31 @@ class TrainConfig(Namespace):
                 'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' ,
             ]
         pretty_print_dict(self.subset(subset))
+
+    @staticmethod
+    def model_params_filler(x_data = {} , data_type_list = None):
+        # when x_data is know , use it to fill model_param
+        if data_type_list is None: data_type_list = list(x_data.keys())
+
+        filler = {}
+        inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
+        input_dim , inday_dim = [] , []
+        for mdt in data_type_list:
+            x = x_data.get(mdt)
+            input_dim.append(x.shape[-1] if x else 6)
+            inday_dim.append(x.shape[-2] if x else inday_dim_dict.get(mdt , 1))
+        if len(data_type_list) > 1:
+            filler.update({'input_dim':tuple(input_dim), 
+                           'inday_dim':tuple(inday_dim)})
+        elif len(data_type_list) == 1:
+            filler.update({'input_dim':input_dim[0] , 
+                           'inday_dim':inday_dim[0]})
+        else:
+            filler.update({'input_dim':1, 
+                           'inday_dim':1 })
+
+        return filler
+    
+class ModelParam:
+    def __init__(self) -> None:
+        pass
