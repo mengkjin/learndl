@@ -17,7 +17,7 @@ class PatchTST(nn.Module):
         self, 
         nvars : int , 
         seq_len: int , 
-        patch_len:int, 
+        patch_len:int = 5 , 
         stride:int|None = None, 
         d_model:int=32, 
         shared_embedding=True, shared_head = False,
@@ -64,13 +64,12 @@ class PatchTST(nn.Module):
         out: [bs x seq_len x nvars] for pretrain
              [bs x predict_steps] for prediction
         """   
+
         if self.revin is not None: 
             x = self.revin(x , 'norm')              # [bs x seq_len x nvars]
-
         x = self.embed(x , self.mask_fwd)           # [bs x nvars x num_patch x d_model]
-
         x = self.backbone(x)                        # [bs x nvars x d_model x num_patch]
-        
+
         if self.revin is not None: 
             x = x.permute(0,2,3,1)                  # [bs x d_model x num_patch x nvars]
             x = self.revin(x , 'denorm')            # [bs x d_model x num_patch x nvars]
@@ -78,6 +77,19 @@ class PatchTST(nn.Module):
 
         x = self.head(x)                            # [bs x seq_len x nvars] | [bs x predict_steps]
         return x
+
+class ModelPretrain(PatchTST):
+    def __init__(self, head_type = 'pretrain', **kwargs) -> None:
+        assert head_type == 'pretrain' , head_type
+        super().__init__(head_type = 'pretrain', **kwargs)
+    
+    def pretrain_label(self , x):
+        return x
+
+class ModelPredict(PatchTST):
+    def __init__(self, head_type = 'prediction', **kwargs) -> None:
+        assert head_type == 'prediction' , head_type
+        super().__init__(head_type = 'prediction', **kwargs)
 
 class PatchTSTEmbed(nn.Module):
     '''
@@ -108,11 +120,11 @@ class PatchTSTEmbed(nn.Module):
             x = self.create_patch(x , self.patch_len, self.stride)[0] 
         # [bs x num_patch x nvars x patch_len]
         x = x.permute(0,2,1,3)  # x_p: [bs x nvars x num_patch x patch_len]
-        if not self.shared:
+        if self.shared:
             x = self.layers[0](x)
         else:
-            x_i = [layer(x[:,:,i,:]) for i , layer in enumerate(self.layers)]
-            x = torch.stack(x_i, dim=2)
+            x_i = [layer(x[:,i,:,:]) for i,layer in enumerate(self.layers)]
+            x = torch.stack(x_i, dim=1)
         return x # [bs x nvars x num_patch x d_model]
     
     @staticmethod
@@ -250,13 +262,14 @@ class PatchTSTEncoder(nn.Module):
         in : [bs x nvars x num_patch x d_model]   
         out: [bs x nvars x d_model x num_patch]
         '''
-        u = x.reshape(-1,*x.shape[-2:])             # [bs * nvars x num_patch x d_model]
-        u = self.dropout(u + self.W_pos)            # [bs * nvars x num_patch x d_model]
+        x = x.reshape(-1,*x.shape[-2:])             # [bs * nvars x num_patch x d_model]
+        x = self.dropout(x + self.W_pos)            # [bs * nvars x num_patch x d_model]
         # Encoder
-        z = self.encoder(u)                         # [bs * nvars x num_patch x d_model]
-        z = z.reshape(-1,self.nvars,*z.shape[-2:])  # [bs x nvars x num_patch x d_model]
-        z = z.permute(0,1,3,2)                      # [bs x nvars x d_model x num_patch]
-        return z
+
+        x = self.encoder(x)                         # [bs * nvars x num_patch x d_model]
+        x = x.reshape(-1,self.nvars,*x.shape[-2:])  # [bs x nvars x num_patch x d_model]
+        x = x.permute(0,1,3,2)                      # [bs x nvars x d_model x num_patch]
+        return x
     
 class TSTEncoder(nn.Module):
     """
@@ -267,7 +280,6 @@ class TSTEncoder(nn.Module):
                  norm='BatchNorm', attn_dropout=0., dropout=0., activation='gelu',
                  res_attention=False, n_layers=1, pre_norm=False, store_attn=False):
         super().__init__()
-
         self.layers = nn.ModuleList([TSTEncoderLayer(d_model, n_heads=n_heads, d_ff=d_ff, norm=norm,
                                                      attn_dropout=attn_dropout, dropout=dropout,
                                                      activation=activation, res_attention=res_attention,
@@ -282,8 +294,10 @@ class TSTEncoder(nn.Module):
         """
         output = src
         scores = None
+
         if self.res_attention:
-            for mod in self.layers: output, scores = mod(output, prev=scores)
+            for i , mod in enumerate(self.layers): 
+                output, scores = mod(output, prev=scores)
             return output
         else:
             for mod in self.layers: output = mod(output)
@@ -358,21 +372,6 @@ class TSTEncoderLayer(nn.Module):
             return src, scores
         else:
             return src
-
-# %%
-class ModelPretrain(PatchTST):
-    def __init__(self, head_type = 'pretrain', **kwargs) -> None:
-        assert head_type == 'pretrain' , head_type
-        super().__init__(head_type = 'pretrain', **kwargs)
-    
-    def pretrain_label(self , x):
-        return x
-
-# %%
-class ModelPredict(PatchTST):
-    def __init__(self, head_type = 'prediction', **kwargs) -> None:
-        assert head_type == 'prediction' , head_type
-        super().__init__(head_type = 'prediction', **kwargs)
 
 if __name__ == '__main__' :
     pass

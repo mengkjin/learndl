@@ -27,11 +27,11 @@ class Metrics:
     
     @classmethod
     def nonnan(cls , *args):
-        nanpos = True
+        nanpos = False
         for arg in args:
             if arg is not None: nanpos = arg.isnan() + nanpos
-        if isinstance(nanpos , torch.Tensor) and arg.any():
-            nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
+        if isinstance(nanpos , torch.Tensor) and nanpos.any():
+            if nanpos.ndim > 1: nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
             new_args = [None if arg is None else arg[~nanpos] for arg in args]
         else:
             new_args = args

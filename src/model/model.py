@@ -94,6 +94,6 @@ class rnn_general(rnn_multivariate):
 
 class patch_tst(patchTST.ModelPredict):
     def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
-        super().__init__(c_in = input_dim , seq_len = seq_len ,
-                         target_dim = hidden_dim , patch_len = 5 , stride = 2 , 
+        super().__init__(nvars = input_dim , seq_len = seq_len ,
+                         target_dim = hidden_dim , 
                          predict_steps = num_output , head_type = "prediction" , **kwargs)

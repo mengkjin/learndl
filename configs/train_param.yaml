@@ -6,18 +6,18 @@ buffer_type: tra
 buffer_param: 
   tra_num_states: &tra_num_states 5
 
-model_name: gruRES_day
-model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' 
+model_name: null # null
+model_module: patch_tst # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
 model_data_type: day # 'day+30m' , 30m
 model_nickname: null # 'LSTM' # 'TCN_vs_LSTM' any str or None
 model_num: 2
 output_types: [best , swalast , swabest]
 labels: 
-  - res_lag1_10 # rtn_lag1_10 # std_lag1_10
+  - std_lag1_10 # rtn_lag1_10 # std_lag1_10
   
 TRAIN_PARAM:
   dataloader:
-    sample_method:   train_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
+    sample_method:   sequential # total_shuffle , sequential , both_shuffle , train_shuffle
     shuffle_option:  epoch
     train_ratio:     0.8
   trainer:

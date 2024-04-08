@@ -47,6 +47,24 @@ logger = Logger()
 config = TrainConfig()
 
 @dataclass
+class ModelOutputs:
+    outputs : torch.Tensor | tuple | list
+
+    def pred(self):
+        if isinstance(self.outputs , (list , tuple)):
+            return self.outputs[0]
+        else:
+            return self.outputs
+    
+    def hidden(self):
+        if isinstance(self.outputs , (list , tuple)):
+            assert len(self.outputs) == 2 , self.outputs
+            return self.outputs[1]
+        else:
+            return None
+
+
+@dataclass
 class ModelPred:
     model_name : str
     model_type : Literal['best' , 'swalast' , 'swabest'] = 'swalast'
@@ -139,7 +157,8 @@ class ModelPred:
 
                     for tdate in iter_tdates:
                         batch_data = loader[np.where(tdates == tdate)[0][0]]
-                        pred , _ = model(batch_data.x)
+
+                        pred = ModelOutputs(model(batch_data.x)).pred()
                         if len(pred):
                             df_list.append(
                                 pd.DataFrame({
@@ -181,8 +200,8 @@ class RunModel():
         def __setitem__(self , key , value):
             self.contents[key] = value
 
-        def __getitem__(self , key):
-            return self.contents[key]
+        def __getitem__(self , key , default = None):
+            return self.contents.get(key , default)
 
         def dump_result(self):
             result = {
@@ -524,7 +543,7 @@ class RunModel():
                     if len(torch.where(batch_data.nonnan)[0]) == 0: continue
                     outputs = self.model_forward('test' , batch_data)
 
-                    assert not outputs[0].isnan().any()
+                    assert not outputs.pred().isnan().any()
                     assert iter_dates[i] == self.data.y_date[batch_data.i[0,1]] , (iter_dates[i] , self.data.y_date[batch_data.i[0,1]])
                     
                     if i < l0: continue # before this date is warmup stage
@@ -589,18 +608,18 @@ class RunModel():
     def model_forward(self , key , batch_data : BatchData):
         with self.ptimer(f'{key}/forward'):
             if hasattr(self.net , 'dynamic_data_assign'): getattr(self.net , 'dynamic_data_assign')(batch_data , self.data)
-            return self.net(batch_data.x)
+            outputs = self.net(batch_data.x)
+            return ModelOutputs(outputs)
 
-    def model_metric(self, key , outputs_of_net, batch_data : BatchData , valid_sample = None, **kwargs):
+    def model_metric(self, key , outputs_of_net : ModelOutputs, batch_data : BatchData , valid_sample = None, **kwargs):
         # outputs_of_net = self.net(batch_data.x)
         # valid_sample = torch.where(batch_data.nonnan)[0]
         with self.ptimer(f'{key}/loss'):
-            pred , hidden  = outputs_of_net
             label , weight = batch_data.y , batch_data.w
             penalty_kwargs = {}
-            if key == 'train': penalty_kwargs.update({'net' : self.net , 'hidden' : hidden , 'label' : label})
+            if key == 'train': penalty_kwargs.update({'net' : self.net , 'hidden' : outputs_of_net.hidden() , 'label' : label})
             metrics = self.calculate_metrics(
-                key , self.metric_function , label=label , pred=pred , weight = weight ,
+                key , self.metric_function , label=label , pred = outputs_of_net.pred() , weight = weight ,
                 multiloss = getattr(self , 'multiloss' , None) , net = self.net ,
                 penalty_kwargs = penalty_kwargs) # valid_sample = valid_sample , 
             return metrics
@@ -882,24 +901,21 @@ class RunModel():
 
         filler = {}
         inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
-        seq_len , input_dim , inday_dim = [] , [] , []
+        input_dim , inday_dim = [] , []
         for mdt in data_type_list:
             x = x_data.get(mdt)
-            seq_len.append(x.shape[1] if x else 30)
             input_dim.append(x.shape[-1] if x else 6)
             inday_dim.append(x.shape[-2] if x else inday_dim_dict.get(mdt , 1))
         if len(data_type_list) > 1:
-            filler.update({'seq_len'  :tuple(seq_len),
-                           'input_dim':tuple(input_dim), 
+            filler.update({'input_dim':tuple(input_dim), 
                            'inday_dim':tuple(inday_dim)})
         elif len(data_type_list) == 1:
-            filler.update({'seq_len'  :seq_len[0],
-                           'input_dim':input_dim[0] , 
+            filler.update({'input_dim':input_dim[0] , 
                            'inday_dim':inday_dim[0]})
         else:
-            filler.update({'seq_len'  :30,
-                           'input_dim':1, 
+            filler.update({'input_dim':1, 
                            'inday_dim':1 })
+
         return filler
 
     @classmethod

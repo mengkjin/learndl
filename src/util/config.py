@@ -99,11 +99,11 @@ class TrainConfig(Namespace):
                            for k,v in config.MODEL_PARAM.items()}
                 dict_mm.update({'path':f'{config.model_base_path}/{mm}'}) 
                 config.model_params.append(deepcopy(dict_mm))       
-        
+
         return config
     
     @classmethod
-    def load_config_path(cls , config_path = 'default' , adjust = False):
+    def load_config_path(cls , config_path = 'default' , adjust = True):
         if config_path == 'default': config_path = DIR.conf
         config = cls.read_yaml(f'{config_path}/{cls.config_train}')
 
@@ -115,6 +115,18 @@ class TrainConfig(Namespace):
             config['MODEL_PARAM'] = cls.read_yaml(f'{config_path}/{cls.default_model}')
         
         config = cls(**config)
+
+        # model_name
+        if config_path != DIR.conf:
+            config.model_name      = os.path.basename(config_path)
+            if config.short_test: config.model_name += '_ShortTest'
+            config.model_base_path = config_path
+        elif config.model_name is None:
+            config.model_name = '_'.join([config.model_module , config.model_data_type])
+            if config.short_test: config.model_name += '_ShortTest'
+            config.model_base_path = f'{DIR.model}/{config.model_name}'
+        else:
+            config.model_base_path = f'{DIR.model}/{config.model_name}'
 
         if adjust and 'special_config' in config.keys():
             if 'short_test' in config.special_config.keys() and config.short_test: 
@@ -159,16 +171,6 @@ class TrainConfig(Namespace):
         for k , v in par_args.__dict__.items(): 
             assert k not in config.keys() , k
             setattr(config , k , v)
-
-        # model_name
-        if config_path != 'default':
-            config.model_name      = os.path.basename(config_path)
-            config.model_base_path = config_path
-        elif config.model_name is None:
-            config.model_name = '_'.join([config.model_module , config.model_data_type])
-            config.model_base_path = f'{DIR.model}/{config.model_name}'
-        else:
-            config.model_base_path = f'{DIR.model}/{config.model_name}'
 
         if do_process:
             # process_confirmation

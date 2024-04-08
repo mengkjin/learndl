@@ -30,7 +30,8 @@ class DataloaderStored:
             self.iterator = self.itertype(np.random.permutation(self.filelist))
 
         for batch_file in self.iterator: 
-            batch_data = self.mapping(self.storage.load(batch_file))
+            batch_data = self.storage.load(batch_file)
+            batch_data = self.mapping(batch_data)
             yield batch_data
 
     def __getitem__(self , i):
