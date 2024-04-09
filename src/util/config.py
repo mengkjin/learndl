@@ -5,6 +5,8 @@ import torch
 
 from argparse import Namespace
 from copy import deepcopy
+from dataclasses import dataclass , field
+from typing import ClassVar , Optional
 
 from ..func.basic import pretty_print_dict
 from ..environ import DIR
@@ -26,31 +28,14 @@ class TrainConfig(Namespace):
         for k,v in kwargs.items():  setattr(self , k , v)
         return self
 
-    def keys(self):
-        return self.__dict__.keys()
-    
-    def values(self):
-        return self.__dict__.values()
-    
-    def items(self):
-        return self.__dict__.items()
-    
-    def replace(self , new_config):
-        self.__dict__ = new_config.__dict__
-        return self
-
     def reload(self , config_path = 'default' , par_args = Namespace() , do_process = False , override = None):
         if config_path is not None:
             new_config = self.load(config_path,par_args,do_process,override)
-            self.replace(new_config)
+            self.__dict__ = new_config.__dict__
         return self
     
     def get(self , key , default = None):
         return getattr(self,key , default)
-    
-    def subset(self , keys = None):
-        if keys is None: keys = self.items()
-        return {k:self.get(k) for k in keys}
     
     def set_config_environment(self , manual_seed = None):
         self.set_random_seed(manual_seed if manual_seed else self.get('random_seed'))
@@ -75,6 +60,7 @@ class TrainConfig(Namespace):
         config = cls.load_config_path(config_path)
         config = cls.process_parser(config_path , config , par_args , do_process)
 
+        assert isinstance(config.model_param , ModelParam)
         if override is not None: config = config.update(override)
 
         if config_path != config.model_base_path and os.path.exists(f'{config.model_base_path}/{cls.config_train}'):
@@ -82,39 +68,20 @@ class TrainConfig(Namespace):
             config.update(config_resume)
         else:
             os.makedirs(config.model_base_path, exist_ok = True)
+            
             shutil.copyfile(f'{DIR.conf}/{cls.config_train}' , f'{config.model_base_path}/{cls.config_train}')
-            model_param_path = cls.config_model.format(config.model_module.lower())
-            if os.path.exists(model_param_path):
-                shutil.copyfile(f'{DIR.conf}/{model_param_path}' , f'{config.model_base_path}/{model_param_path}')
-            else:
-                shutil.copyfile(f'{DIR.conf}/{cls.default_model}' , f'{config.model_base_path}/{model_param_path}')
+            config.model_param.copy(config.model_base_path)
         [os.makedirs(f'{config.model_base_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
 
-        if config.resume_training and os.path.exists(f'{config.model_base_path}/model_params.pt'):
-            config.model_params = torch.load(f'{config.model_base_path}/model_params.pt')
-        else:
-            config.model_params = []
-            for mm in config.model_num_list:
-                dict_mm = {k:(v[mm % len(v)] if isinstance(v,(tuple,list)) else v) 
-                           for k,v in config.MODEL_PARAM.items()}
-                dict_mm.update({'path':f'{config.model_base_path}/{mm}'}) 
-                config.model_params.append(deepcopy(dict_mm))       
-
+        
+        config.model_param.expand(config.model_base_path , config.resume_training)
         return config
     
     @classmethod
     def load_config_path(cls , config_path = 'default' , adjust = True):
         if config_path == 'default': config_path = DIR.conf
-        config = cls.read_yaml(f'{config_path}/{cls.config_train}')
-
-        module = config['model_module'].lower()
-        model_param_path = f'{config_path}/{cls.config_model.format(module)}'
-        if os.path.exists(model_param_path):
-            config['MODEL_PARAM'] = cls.read_yaml(model_param_path)
-        else:
-            config['MODEL_PARAM'] = cls.read_yaml(f'{config_path}/{cls.default_model}')
-        
-        config = cls(**config)
+        config_dict = cls.read_yaml(f'{config_path}/{cls.config_train}')
+        config = cls(**config_dict)
 
         # model_name
         if config_path != DIR.conf:
@@ -132,17 +99,17 @@ class TrainConfig(Namespace):
             if 'short_test' in config.special_config.keys() and config.short_test: 
                 config.update(config.special_config['short_test'])
             if 'transformer' in config.special_config.keys() and config.model_module.lower() == 'transformer':
-                config['TRAIN_PARAM']['trainer'].update(config['special_config']['transformer']['trainer'])
+                config.train_param['trainer'].update(config.special_config['transformer']['trainer'])
             delattr(config , 'special_config')
 
+        config.model_param = ModelParam(config_path , config.model_module)
+        config.model_num_list = config.model_param.num_list
         config.data_type_list = config.model_data_type.split('+')
-        config.model_num_list = list(range(config.model_num))
-        config.train_params = deepcopy(config.TRAIN_PARAM)
             
         # check conflicts:
         assert 'best' in config.output_types
         config.tra_model = config.tra_switch and config.model_module.lower().startswith('tra')
-        assert not (config.tra_model and config.train_params['dataloader']['sample_method'] == 'total_shuffle')
+        assert not (config.tra_model and config.train_param['dataloader']['sample_method'] == 'total_shuffle')
 
         return config
 
@@ -242,22 +209,83 @@ class TrainConfig(Namespace):
             config.resume_training = True
         return config
     
-    def print_subset(self , subset = None):
-        if subset is None:
-            subset = [
-                'random_seed' , 'verbosity' , 'precision' , 'batch_size' , 
-                'model_name' , 'model_module' , 'model_num' , 'model_data_type' , 'labels' ,
-                'beg_date' , 'end_date' , 'interval' , 
-                'input_step_day' , 'test_step_day' , 'MODEL_PARAM' , 'train_params' ,
-            ]
-        pretty_print_dict(self.subset(subset))
+    def subset(self , keys = None):
+        if keys is None: keys = self.items()
+        return {k:self.get(k) for k in keys}
 
-    @staticmethod
-    def model_params_filler(x_data = {} , data_type_list = None):
-        # when x_data is know , use it to fill model_param
+    def print_out(self):
+        subset = [
+            'random_seed' , 'verbosity' , 'precision' , 'batch_size' , 
+            'model_name' , 'model_module' , 'model_num' , 'model_data_type' , 'labels' ,
+            'beg_date' , 'end_date' , 'interval' , 'input_step_day' , 'test_step_day' , 
+        ]
+        pretty_print_dict({k:self.get(k) for k in subset})
+        pretty_print_dict(self.train_param)
+        pretty_print_dict(self.model_param.Param)
+
+@dataclass    
+class ModelParam:
+    config_path : str
+    module      : str
+    Param       : dict         = field(default_factory=dict)
+    num_list    : list[int]    = field(default_factory=list)
+    params      : list[dict]   = field(default_factory=list)
+
+    model_yaml  : ClassVar[str] = 'model_{}.yaml'
+    default_yaml: ClassVar[str] = 'model_default.yaml'
+    target_base : ClassVar[str] = 'model_params.pt'
+
+    def __post_init__(self) -> None:
+        path = f'{self.config_path}/{self.model_yaml.format(self.module.lower())}'
+        if not os.path.exists(path):
+            path = f'{self.config_path}/{self.default_yaml}'
+
+        with open(path ,'r') as f:
+            self.Param = yaml.load(f , Loader = yaml.FullLoader)
+
+        n_model = 1
+        for value in self.Param.values():
+            if isinstance(value , (list,tuple)):
+                n_model = max(n_model , len(value))
+        self.num_list = list(range(n_model))
+        assert len(self.num_list) <= 3 , len(self.num_list)
+
+    def __getitem__(self , pos : int):
+        return self.params[pos]
+    
+    def copy(self , target_dir):
+        path = self.model_yaml.format(self.module.lower())
+        if os.path.exists(f'{self.config_path}/{path}'):
+            shutil.copyfile(f'{self.config_path}/{path}' , f'{target_dir}/{path}')
+        else:
+            shutil.copyfile(f'{self.config_path}/{self.default_yaml}' , f'{target_dir}/{path}')
+
+    def expand(self , base_path , resume_training):
+        if resume_training and os.path.exists(f'{base_path}/{self.target_base}'):
+            params = torch.load(f'{base_path}/{self.target_base}')
+        else:
+            params = []
+            for mm in self.num_list:
+                dict_mm = {k:(v[mm % len(v)] if isinstance(v,(tuple,list)) else v) 
+                            for k,v in self.Param.items()}
+                dict_mm.update({'path':f'{base_path}/{mm}'}) 
+                params.append(dict_mm) 
+        self.params = params
+
+    @classmethod
+    def load(cls , base_path , model_num : int | None = None):
+        model_param = torch.load(f'{base_path}/{cls.target_base}')
+        if model_num is not None:
+            model_param = model_param[model_num]
+        return model_param
+
+    def save(self , base_path):
+        torch.save(self.params , f'{base_path}/{self.target_base}')   
+
+    def data_related(self , x_data = {} , data_type_list = None):
+        # when x_data is know , use it to fill some params
         if data_type_list is None: data_type_list = list(x_data.keys())
 
-        filler = {}
         inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
         input_dim , inday_dim = [] , []
         for mdt in data_type_list:
@@ -265,17 +293,15 @@ class TrainConfig(Namespace):
             input_dim.append(x.shape[-1] if x else 6)
             inday_dim.append(x.shape[-2] if x else inday_dim_dict.get(mdt , 1))
         if len(data_type_list) > 1:
-            filler.update({'input_dim':tuple(input_dim), 
-                           'inday_dim':tuple(inday_dim)})
+            filler = {'input_dim':tuple(input_dim), 'inday_dim':tuple(inday_dim)}
         elif len(data_type_list) == 1:
-            filler.update({'input_dim':input_dim[0] , 
-                           'inday_dim':inday_dim[0]})
+            filler = {'input_dim':input_dim[0] , 'inday_dim':inday_dim[0]}
         else:
-            filler.update({'input_dim':1, 
-                           'inday_dim':1 })
+            filler = {'input_dim':1, 'inday_dim':1 }
 
-        return filler
-    
-class ModelParam:
-    def __init__(self) -> None:
-        pass
+        if hasattr(self , 'params'):
+            for param in self.params: param.update(filler)
+
+        return self
+        
+        

@@ -5,15 +5,7 @@
 # @File : ${run_model.py}
 # chmod +x run_model.py
 # python3 scripts/run_model3.py --process=0 --rawname=1 --resume=0 --anchoring=0
-'''
-1.1 HIST
-https://arxiv.org/pdf/2110.13716.pdf
-https://github.com/Wentao-Xu/HIST
-2.Lightgbm
-https://github.com/microsoft/LightGBM/blob/master/examples/python-guide/plot_example.py
-https://lightgbm.readthedocs.io/en/latest/pythonapi/lightgbm.plot_tree.html
-3.other factors
-'''
+
 import torch
 import torch.nn as nn
 import numpy as np
@@ -33,7 +25,8 @@ from src.environ import DIR
 from src.data.DataFetcher import DataFetcher
 from src.data.ModelData import ModelData
 from src.util import (
-    BatchData , Device , FilteredIterator , Logger , MultiLosses , ProcessTimer , Storage , TrainConfig
+    BatchData , Device , FilteredIterator , Logger , MultiLosses , ProcessTimer , Storage , 
+    ModelParam , TrainConfig
 )
 
 from src.func.date import today , date_offset
@@ -108,7 +101,7 @@ class ModelPred:
         device       = Device()
         model_config = TrainConfig.load(model_path)
 
-        model_param = torch.load(f'{model_path}/model_params.pt')[self.model_num]
+        model_param = ModelParam.load(model_path , self.model_num)
         model_files = sorted([p for p in os.listdir(f'{model_path}/{self.model_num}') if p.endswith(f'{self.model_type}.pt')])
         model_dates = np.array([int(mf.split('.')[0]) for mf in model_files])
 
@@ -172,12 +165,7 @@ class ModelPred:
 
 class RunModel():
     '''
-    Control the whole process of training , includes:
-    1. Parameters: train_params , model_data_type
-    2. Data : load train/vald/test_data
-    3. loop status: model , attempt , epoch
-    4. file path: model , transfer(last model date)
-    5. text: model , attempt , epoch , exit , stat , time , trainer
+    Control the whole process of training:
     '''
     def __init__(self , mem_storage = True , timer = True ,  device = None , **kwargs):
         self.model_info = self.ModelInfo(config)
@@ -205,7 +193,7 @@ class RunModel():
 
         def dump_result(self):
             result = {
-                '0_model' : f'{self.config.model_name}(x{self.config.model_num})',
+                '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
                 '1_start' : time.ctime(self.init_time) ,
                 '2_basic' : 'short' if self.config.short_test else 'full' , 
                 '3_datas' : self.config.model_data_type ,
@@ -238,7 +226,7 @@ class RunModel():
             pass
         elif self.process_name in ['train' , 'test']: 
             self.data.reset_dataloaders()
-            self.metric_function = self.new_metricfunc(config.train_params['criterion'])
+            self.metric_function = self.new_metricfunc(config.train_param['criterion'])
         else:
             raise Exception(f'KeyError : {key}')
         
@@ -249,9 +237,9 @@ class RunModel():
         self.model_info['data_time'] = time.time()
         logger.critical(f'Start Process [Load Data]!')
         self.data = ModelData(config.model_data_type , config)
-        # retrieve from data object
-        filler = self.model_params_filler(self.data.x_data , self.data.data_type_list)
-        for smp in config.model_params:  smp.update(filler)
+        assert isinstance(config.model_param , ModelParam)
+        config.model_param.data_related(self.data.x_data , self.data.data_type_list)
+
         logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.model_info['data_time']))
         
     def process_train(self):
@@ -262,7 +250,7 @@ class RunModel():
         '''
         self.model_info['train_time'] = time.time()
         logger.critical(f'Start Process [Train Model]!')
-        torch.save(config.model_params , f'{config.model_base_path}/model_params.pt')    
+        config.model_param.save(config.model_base_path)    
         for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
             self.model_preparation('train')
@@ -300,7 +288,7 @@ class RunModel():
     def model_preparation(self , process , last_n = 30 , best_n = 5):
         assert process in ['train' , 'test']
         with self.ptimer('model_preparation' , process):
-            param = config.model_params[self.model_num]
+            param = config.model_param[self.model_num]
 
             # In a new model , alters the penalty function's lamb
             self.metric_function = self.update_metricfunc(self.metric_function , param , config)
@@ -318,7 +306,7 @@ class RunModel():
                 path['source']['swabest']      = [f'{path_prefix}.bestn.{i}.pt' for i in range(best_n)] 
                 path['candidate']['swabest']   = path['source']['swabest']
                 path['performance']['swabest'] = [-10000. for i in range(best_n)]
-            if config.train_params['transfer'] and self.model_date > self.data.model_date_list[0]:
+            if config.train_param['transfer'] and self.model_date > self.data.model_date_list[0]:
                 last_model_date = max([d for d in self.data.model_date_list if d < self.model_date])
                 path['candidate']['transfer'] = '{}/{}.best.pt'.format(param.get('path') , last_model_date)
                 
@@ -369,7 +357,7 @@ class RunModel():
         '''
         with self.ptimer('model_train/start'):
             self._init_variables('model')
-            self.nanloss_life = config.train_params['trainer']['nanloss']['retry']
+            self.nanloss_life = config.train_param['trainer']['nanloss']['retry']
             self.text['model'] = '{:s} #{:d} @{:4d}'.format(config.model_name , self.model_num , self.model_date)
             dataloader_param = self.data.get_dataloader_param('train' , namespace=self)   
             if (self.data.dataloader_param != dataloader_param):
@@ -413,7 +401,7 @@ class RunModel():
             self.load_model('train')
             self.optimizer = self.load_optimizer()
             self.scheduler = self.load_scheduler() 
-            self.multiloss = self.new_multiloss(config.train_params['multitask'] , self.param['num_output'])
+            self.multiloss = self.new_multiloss(config.train_param['multitask'] , self.param['num_output'])
 
     def model_train_epoch(self):
         '''
@@ -501,8 +489,8 @@ class RunModel():
         with self.ptimer('model_train/status'):
             self.text['exit'] , self.cond['terminate'] = self._terminate_cond() 
             if self.text['exit']:
-                if (self.epoch_i < config.train_params['trainer']['retrain'].get('min_epoch') - 1 and 
-                    self.attempt_i < config.train_params['trainer']['retrain']['attempts'] - 1):
+                if (self.epoch_i < config.train_param['trainer']['retrain'].get('min_epoch') - 1 and 
+                    self.attempt_i < config.train_param['trainer']['retrain']['attempts'] - 1):
                     self.cond['loop_status'] = 'attempt'
                     self._prints('new_attempt')
                 else:
@@ -567,7 +555,7 @@ class RunModel():
     def process_test_start(self):
         self.model_info[f'{self.process_name}_time'] = time.time()
         logger.critical(f'Start Process [{self.process_name.capitalize()} Model]!')        
-        logger.warning(f'Each Model Date Testing Mean Score({config.train_params["criterion"]["score"]}):')
+        logger.warning(f'Each Model Date Testing Mean Score({config.train_param["criterion"]["score"]}):')
 
         self.test_model_num = np.repeat(config.model_num_list,len(config.output_types))
         self.test_output_type = np.tile(config.output_types,len(config.model_num_list))
@@ -588,7 +576,7 @@ class RunModel():
             for oi , op_type in enumerate(config.output_types):
                 df[f'score.{op_type}'] = self.score_by_date[:,model_num*len(config.output_types) + oi]
                 df[f'cum_score.{op_type}'] = np.nancumsum(self.score_by_date[:,model_num*len(config.output_types) + oi])
-            df.to_csv(config.model_params[model_num]['path'] + f'/{config.model_name}_score_by_date_{model_num}.csv')
+            df.to_csv(config.model_param[model_num]['path'] + f'/{config.model_name}_score_by_date_{model_num}.csv')
 
         # model ic presentation
         add_row_key   = ['AllTimeAvg' , 'AllTimeSum' , 'Std'      , 'TValue'   , 'AnnIR']
@@ -627,7 +615,7 @@ class RunModel():
         
     def model_backward(self, key , metrics):
         if key.lower() != 'train': return NotImplemented
-        clip_value = config.train_params['trainer']['gradient'].get('clip_value')
+        clip_value = config.train_param['trainer']['gradient'].get('clip_value')
         with self.ptimer(f'{key}/backward'):
             self.optimizer.zero_grad()
             (metrics['loss'] + metrics['penalty']).backward()
@@ -657,7 +645,7 @@ class RunModel():
                 sdout = ' '.join([self.text['attempt'],'Ep#{:3d}'.format(self.epoch_i),':', self.text['trainer']])
         elif key == 'reset_learn_rate':
             sdout = 'Reset learn rate and scheduler at the end of epoch {} , effective at epoch {}'.format(
-                self.epoch_i , self.epoch_i+1 , ', and will speedup2x' * config.train_params['trainer']['learn_rate']['reset']['speedup2x'])
+                self.epoch_i , self.epoch_i+1 , ', and will speedup2x' * config.train_param['trainer']['learn_rate']['reset']['speedup2x'])
         elif key == 'new_attempt':
             sdout = ' '.join([self.text['attempt'],'Epoch #{:3d}'.format(self.epoch_i),':',self.text['trainer'],', Next attempt goes!'])
         elif key == 'train_dataloader':
@@ -687,7 +675,7 @@ class RunModel():
         '''
         Whether terminate condition meets
         '''
-        term_dict = config.train_params['terminate']
+        term_dict = config.train_param['terminate']
         term_cond = {}
         exit_text = ''
         for key , arg in term_dict.items():
@@ -740,7 +728,7 @@ class RunModel():
         with self.ptimer('load_model'):
             if process == 'train':           
                 if self.path['candidate'].get('transfer'):
-                    if not config.train_params['transfer']: raise Exception('get transfer')
+                    if not config.train_param['transfer']: raise Exception('get transfer')
                     model_path = self.path['candidate']['transfer']
                 else:
                     model_path = -1
@@ -764,15 +752,15 @@ class RunModel():
     
     def load_optimizer(self , new_opt_kwargs = None , new_lr_kwargs = None):
         if new_opt_kwargs is None:
-            opt_kwargs = config.train_params['trainer']['optimizer']
+            opt_kwargs = config.train_param['trainer']['optimizer']
         else:
-            opt_kwargs = deepcopy(config.train_params['trainer']['optimizer'])
+            opt_kwargs = deepcopy(config.train_param['trainer']['optimizer'])
             opt_kwargs.update(new_opt_kwargs)
         
         if new_lr_kwargs is None:
-            lr_kwargs = config.train_params['trainer']['learn_rate']
+            lr_kwargs = config.train_param['trainer']['learn_rate']
         else:
-            lr_kwargs = deepcopy(config.train_params['trainer']['learn_rate'])
+            lr_kwargs = deepcopy(config.train_param['trainer']['learn_rate'])
             lr_kwargs.update(new_lr_kwargs)
         base_lr = lr_kwargs['base'] * lr_kwargs['ratio']['attempt'][:self.attempt_i+1][-1]
         
@@ -781,14 +769,14 @@ class RunModel():
     
     def load_scheduler(self , new_shd_kwargs = None):
         if new_shd_kwargs is None:
-            shd_kwargs = config.train_params['trainer']['scheduler']
+            shd_kwargs = config.train_param['trainer']['scheduler']
         else:
-            shd_kwargs = deepcopy(config.train_params['trainer']['scheduler'])
+            shd_kwargs = deepcopy(config.train_param['trainer']['scheduler'])
             shd_kwargs.update(new_shd_kwargs)
         return self.new_scheduler(self.optimizer, shd_kwargs['name'], **shd_kwargs['param'])
     
     def reset_scheduler(self):
-        rst_kwargs = config.train_params['trainer']['learn_rate']['reset']
+        rst_kwargs = config.train_param['trainer']['learn_rate']['reset']
         if rst_kwargs['num_reset'] <= 0 or (self.epoch_i + 1) < rst_kwargs['trigger']: return
 
         trigger_intvl = rst_kwargs['trigger'] // 2 if rst_kwargs['speedup2x'] else rst_kwargs['trigger']
@@ -803,7 +791,7 @@ class RunModel():
         
         # confirm reset : reassign scheduler
         if rst_kwargs['speedup2x']:
-            shd_kwargs = deepcopy(config.train_params['trainer']['scheduler'])
+            shd_kwargs = deepcopy(config.train_param['trainer']['scheduler'])
             for k in np.intersect1d(list(shd_kwargs['param'].keys()),['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']):
                 shd_kwargs['param'][k] //= 2
         else:
@@ -896,44 +884,21 @@ class RunModel():
         }[key](net_param_groups , **kwargs)
         return optimizer
 
-    @staticmethod
-    def model_params_filler(x_data = {} , data_type_list = None):
-        if data_type_list is None: data_type_list = list(x_data.keys())
-
-        filler = {}
-        inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
-        input_dim , inday_dim = [] , []
-        for mdt in data_type_list:
-            x = x_data.get(mdt)
-            input_dim.append(x.shape[-1] if x else 6)
-            inday_dim.append(x.shape[-2] if x else inday_dim_dict.get(mdt , 1))
-        if len(data_type_list) > 1:
-            filler.update({'input_dim':tuple(input_dim), 
-                           'inday_dim':tuple(inday_dim)})
-        elif len(data_type_list) == 1:
-            filler.update({'input_dim':input_dim[0] , 
-                           'inday_dim':inday_dim[0]})
-        else:
-            filler.update({'input_dim':1, 
-                           'inday_dim':1 })
-
-        return filler
-
     @classmethod
     def random_module(cls , module = 'tra_lstm2' , model_data_type = 'day' , model_data = None):
         config.reload(do_process=False , override = {'model_module' : module , 'model_data_type' : model_data_type} , )
         data_type_list = config.data_type_list
-        for smp in config.model_params: smp.update(cls.model_params_filler(data_type_list = data_type_list))
+        config.model_param.data_related(data_type_list = data_type_list)
         model_data = ModelData(data_type_list , config , if_train=False)
         model_date = model_data.model_date_list[-1]
-        model_param = config.model_params[0]
+        model_param = config.model_param[0]
         dataloader_param = model_data.get_dataloader_param('test' , model_date=model_date , param=model_param)   
         model_data.create_dataloader(*dataloader_param)
 
         batch_data = model_data.dataloaders['test'][0]
-        net = cls.new_model(module , param = config.model_params[0])
-        metrics   = cls.update_metricfunc(cls.new_metricfunc(config.train_params['criterion']) , config.model_params[0] , config)
-        multiloss = cls.new_multiloss(config.train_params['multitask'] , config.model_params[0]['num_output'])
+        net = cls.new_model(module , param = model_param)
+        metrics   = cls.update_metricfunc(cls.new_metricfunc(config.train_param['criterion']) , config.model_param[0] , config)
+        multiloss = cls.new_multiloss(config.train_param['multitask'] , model_param['num_output'])
 
         return cls.RandomModule(config , net , batch_data , model_data , metrics , multiloss)
     @dataclass
@@ -964,7 +929,7 @@ def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser_arg
 
     if not config.short_test:
         logger.warning('Model Specifics:')
-        config.print_subset()
+        config.print_out()
 
     app = RunModel(mem_storage = config.mem_storage)
     app.main_process()
