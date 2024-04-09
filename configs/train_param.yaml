@@ -1,15 +1,11 @@
 # most frequently changing variables
+mem_storage: true 
 random_seed: null
 short_test:  False
-tra_switch:  true
-buffer_type: tra
-buffer_param: 
-  tra_num_states: &tra_num_states 5
 
 model_name: null # null
 model_module: patch_tst # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
 model_data_type: day # 'day+30m' , 30m
-model_nickname: null # 'LSTM' # 'TCN_vs_LSTM' any str or None
 model_num: 2
 output_types: [best , swalast , swabest]
 labels: 
@@ -40,7 +36,7 @@ train_param:
       hidden_corr: 
         lamb : 0.001
       tra_opt_transport: 
-        lamb : &tra_ot_penalty 0.01
+        lamb : 0.01
         rho : 0.999
     weight:
       train:    'equal' # 'top'
@@ -62,27 +58,6 @@ train_param:
     #'train_converge' : {'min_epoch' : 5 , 'eps' : 1.0e-5} 
     #'tv_converge'    : {'min_epoch' : 5 , 'eps' : 1.0e-5}
 
-special_config:
-  short_test:
-    beg_date:   20170103
-    end_date:   20171201
-    input_span: 480
-    max_epoch:  20
-    verbosity:  3
-    model_nickname: ShortTest
-  transformer:
-    trainer:
-      gradient:  {'clip_value' : 10.}
-      learn_rate:
-        base:    0.005
-        ratio:   {'attempt':[1 , 0.1 , 10 , 0.01 , 100] , 'round' : [1.] , 'transfer' : 0.1 , } 
-        reset:   {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }
-      scheduler: {'name' : 'cycle' , 'param' : {'base_lr':1.0e-7,'step_size_up':4} ,}
-
-mem_storage: true 
-output_prediction: False
-precision:  float # double , bfloat16
-
 beg_date:   20170103
 end_date:   99991231
 input_span: 2400
@@ -94,6 +69,11 @@ test_step_day:  1
 input_step_day: 5
 skip_horizon: &skip_horizon 20 
 
+# tra model
+tra_switch:  true
+buffer_type: tra
+buffer_param: 
+  tra_num_states: &tra_num_states 5
 tra_param:
   tra_num_states : *tra_num_states
   tra_horizon : *skip_horizon
@@ -101,3 +81,18 @@ tra_param:
 # torch utility
 allow_tf32: true
 detect_anomaly: false
+precision:  float # double , bfloat16
+
+on_short_test:
+  beg_date:   20170103
+  end_date:   20171201
+  input_span: 480
+  max_epoch:  20
+  verbosity:  3
+on_tf_trainer:
+  gradient:  {'clip_value' : 10.}
+  learn_rate:
+    base:    0.005
+    ratio:   {'attempt':[1 , 0.1 , 10 , 0.01 , 100] , 'round' : [1.] , 'transfer' : 0.1 , } 
+    reset:   {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }
+  scheduler: {'name' : 'cycle' , 'param' : {'base_lr':1.0e-7,'step_size_up':4} ,}

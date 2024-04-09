@@ -12,9 +12,7 @@ from ..func.basic import pretty_print_dict
 from ..environ import DIR
 
 class TrainConfig(Namespace):
-    config_train  = 'train_param.yaml'
-    config_model  = 'model_{}.yaml'
-    default_model = 'model_default.yaml'
+    train_yaml  = 'train_param.yaml'
 
     def __init__(self, **kwargs) -> None:
         super().__init__()
@@ -29,9 +27,8 @@ class TrainConfig(Namespace):
         return self
 
     def reload(self , config_path = 'default' , par_args = Namespace() , do_process = False , override = None):
-        if config_path is not None:
-            new_config = self.load(config_path,par_args,do_process,override)
-            self.__dict__ = new_config.__dict__
+        new_config = self.load(config_path,par_args,do_process,override)
+        self.update(new_config.__dict__)
         return self
     
     def get(self , key , default = None):
@@ -63,13 +60,13 @@ class TrainConfig(Namespace):
         assert isinstance(config.model_param , ModelParam)
         if override is not None: config = config.update(override)
 
-        if config_path != config.model_base_path and os.path.exists(f'{config.model_base_path}/{cls.config_train}'):
+        if config_path != config.model_base_path and os.path.exists(f'{config.model_base_path}/{cls.train_yaml}'):
             config_resume = cls.load_config_path(config.model_base_path)
             config.update(config_resume)
         else:
             os.makedirs(config.model_base_path, exist_ok = True)
             
-            shutil.copyfile(f'{DIR.conf}/{cls.config_train}' , f'{config.model_base_path}/{cls.config_train}')
+            shutil.copyfile(f'{DIR.conf}/{cls.train_yaml}' , f'{config.model_base_path}/{cls.train_yaml}')
             config.model_param.copy(config.model_base_path)
         [os.makedirs(f'{config.model_base_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
 
@@ -80,27 +77,23 @@ class TrainConfig(Namespace):
     @classmethod
     def load_config_path(cls , config_path = 'default' , adjust = True):
         if config_path == 'default': config_path = DIR.conf
-        config_dict = cls.read_yaml(f'{config_path}/{cls.config_train}')
-        config = cls(**config_dict)
+        config = cls(**cls.read_yaml(f'{config_path}/{cls.train_yaml}'))
 
-        # model_name
         if config_path != DIR.conf:
+            # specified folder
             config.model_name      = os.path.basename(config_path)
-            if config.short_test: config.model_name += '_ShortTest'
             config.model_base_path = config_path
-        elif config.model_name is None:
-            config.model_name = '_'.join([config.model_module , config.model_data_type])
-            if config.short_test: config.model_name += '_ShortTest'
-            config.model_base_path = f'{DIR.model}/{config.model_name}'
         else:
+            if config.model_name is None:
+                config.model_name = '_'.join([config.model_module , config.model_data_type])
+                if config.short_test: config.model_name += '_ShortTest'
             config.model_base_path = f'{DIR.model}/{config.model_name}'
 
-        if adjust and 'special_config' in config.keys():
-            if 'short_test' in config.special_config.keys() and config.short_test: 
-                config.update(config.special_config['short_test'])
-            if 'transformer' in config.special_config.keys() and config.model_module.lower() == 'transformer':
-                config.train_param['trainer'].update(config.special_config['transformer']['trainer'])
-            delattr(config , 'special_config')
+        if adjust:
+            if config.short_test: 
+                config.update(config.get('on_short_test' , {}))
+            if config.model_module.lower() == 'transformer':
+                config.train_param['trainer'].update(config.get('on_tf_trainer'))
 
         config.model_param = ModelParam(config_path , config.model_module)
         config.model_num_list = config.model_param.num_list
@@ -208,10 +201,6 @@ class TrainConfig(Namespace):
             config.process_queue = ['data' , 'train' , 'test']
             config.resume_training = True
         return config
-    
-    def subset(self , keys = None):
-        if keys is None: keys = self.items()
-        return {k:self.get(k) for k in keys}
 
     def print_out(self):
         subset = [

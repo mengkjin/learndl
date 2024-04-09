@@ -9,7 +9,6 @@ rnn_att:        [false]
 rnn_layers:     [2]
 dec_mlp_layers: [2] 
 num_output:     [1]
-kernel_size:    [3 , 3] # for tcn
+kernel_size:    [3] # for tcn
 hidden_as_factor:    [false]
 ordered_param_group: [false]  # multiple data input , if train sequentially
-resnet_blocks:  [2,3,4]
