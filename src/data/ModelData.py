@@ -5,98 +5,52 @@ import pandas as pd
 import torch
 
 from dataclasses import dataclass , field
-from typing import Literal , Any
+from typing import Literal , Any , Optional
 
 from .BlockData import DataBlock , DataBlockNorm
-from ..util import Device , Storage , DataloaderStored , BatchData
+from ..util import Device , Storage , DataloaderStored , BatchData , TrainConfig
 from ..func.basic import tensor_standardize_and_weight , match_values
 
 from ..environ import DIR
 
 class ModelData():
     """
-    A class to store relavant training data , includes:
-    1. Parameters: train_params , compt_params , model_data_type
-    2. Datas: x_data , y_data , x_norm , index(secid , date)
-    3. Dataloader : yield x , y of training samples , create new ones if necessary
+    A class to store relavant training data:
     """
-    def __init__(self , data_type_list , config = {} ,  if_train = True , **kwargs):
+    def __init__(self , data_type_list , config : Optional[TrainConfig] = None ,  if_train = True , **kwargs):
         # self.config = train_config() if config is None else config
-        self.kwarg = self.ModelDataKwargs()
-        self.kwarg.assign(config , **kwargs)
+        if config is None: config = TrainConfig.load()
+        self.config : TrainConfig = config
         self.data_type_list = self._type_list(data_type_list)
 
         self.if_train = if_train
+        self.device  = Device()
+        self.storage = Storage(self.config.mem_storage)
+
         self.load_model_data()
         self.reset_dataloaders()
-        if self.kwarg.tra_model and self.kwarg.buffer_type == 'tra':
-            buffer_type = 'tra'
-        else:
-            buffer_type = None
+
         self.buffer: dict = {}
-        self.buffer_init = self.define_buffer_init(buffer_type , **self.kwarg.buffer_param) 
-        self.buffer_proc = self.define_buffer_proc(buffer_type , **self.kwarg.buffer_param)  
-
-    @dataclass
-    class ModelDataKwargs:
-        device : Any = None
-        labels : Any = None
-        precision : Any = torch.float32
-        mem_storage : bool = True
-        beg_date : int = 20170101
-        end_date : int = 20991231
-        interval : int = 120
-        skip_horizon : int = 20
-        input_span   : int = 2400
-        buffer_param : dict = field(default_factory=dict)
-        weight_scheme: dict = field(default_factory=dict)
-        num_output   : int = 1
-        train_ratio  : float = 0.8
-        sample_method  : Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] = 'sequential'
-        shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static'
-        batch_size     : int = 10000
-        input_step_day : int = 5
-        test_step_day  : int = 1
-        verbosity    : int = 5
-        tra_model    : bool = False
-        buffer_type  : str = 'tra'
-        buffer_param : dict = field(default_factory=dict)
-
-        def assign(self , config = {} , **kwargs):
-            for key in self.__dict__.keys(): 
-                value = None
-                if kwargs.get(key):
-                    value = kwargs[key]
-                else:
-                    if key == 'num_output':
-                        value = config.get('MODEL_PARAM',{}).get('num_output')
-                    elif key == 'weight_scheme':
-                        value = config.get('train_params',{}).get('criterion',{}).get('weight')
-                    elif key in ['train_ratio','sample_method']:
-                        value = config.get('train_params',{}).get('dataloader',{}).get(key)
-                    else:
-                        value = config.get(key)
-                if value is not None: setattr(self , key , value)
+        self.buffer_init = self.define_buffer_init(self.config.buffer_type , **self.config.buffer_param) 
+        self.buffer_proc = self.define_buffer_proc(self.config.buffer_type , **self.config.buffer_param)  
 
     def load_model_data(self):
         self.prenorming_method = {}
         self.x_data , self.y_data , self.norms , self.index = \
-            self._load_data_pack(self.data_type_list, self.kwarg.labels, self.if_train, self.kwarg.precision)
+            self._load_data_pack(self.data_type_list, self.config.labels, self.if_train, self.config.precision)
         # self.x_data , self.y_data , self.norms , self.index = load_old_valid_data()
         # self.date , self.secid = self.index
 
-        self.labels_n = min(self.y_data.shape[-1] , max(self.kwarg.num_output) if isinstance(self.kwarg.num_output,(list,tuple)) else self.kwarg.num_output)
-        self.model_date_list = self.index[1][(self.index[1] >= self.kwarg.beg_date) & (self.index[1] <= self.kwarg.end_date)][::self.kwarg.interval]
-        self.test_full_dates = self.index[1][(self.index[1] >  self.kwarg.beg_date) & (self.index[1] <= self.kwarg.end_date)]
+        self.labels_n = min(self.y_data.shape[-1] , self.config.Model.max_num_output)
+        self.model_date_list = self.index[1][(self.index[1] >= self.config.beg_date) & (self.index[1] <= self.config.end_date)][::self.config.interval]
+        self.test_full_dates = self.index[1][(self.index[1] >  self.config.beg_date) & (self.index[1] <= self.config.end_date)]
 
-    def reset_dataloaders(self):        
+    def reset_dataloaders(self): 
         """
         Reset dataloaders and dataloader_param
         """
         self.dataloaders = {}
         self.dataloader_param = ()
-        self.device  = Device(self.kwarg.device)
-        self.storage = Storage(self.kwarg.mem_storage)
 
         gc.collect() 
         torch.cuda.empty_cache()   
@@ -105,7 +59,7 @@ class ModelData():
         if namespace is not None:
             model_date , param = namespace.model_date , namespace.param
         seqlens = param['seqlens']
-        if self.kwarg.tra_model: seqlens.update(param.get('tra_seqlens',{}))
+        if self.config.tra_model: seqlens.update(param.get('tra_seqlens',{}))
         
         return loader_type , model_date , seqlens
 
@@ -132,24 +86,24 @@ class ModelData():
 
         if self.loader_type == 'train':
             model_date_col = (self.index[1] < model_date).sum()    
-            d0 = max(0 , model_date_col - self.kwarg.skip_horizon - self.kwarg.input_span - self.seq0)
-            d1 = max(0 , model_date_col - self.kwarg.skip_horizon)
+            d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.input_span - self.seq0)
+            d1 = max(0 , model_date_col - self.config.skip_horizon)
             self.day_len  = d1 - d0
-            self.step_len = (self.day_len - self.seqx) // self.kwarg.input_step_day
+            self.step_len = (self.day_len - self.seqx) // self.config.input_step_day
             # ValueError: At least one stride in the given numpy array is negative, and tensors with negative strides are not currently supported.
             #  (You can probably work around this by making a copy of your array  with array.copy().) 
-            self.step_idx = np.flip(self.day_len - 1 - np.arange(0 , self.step_len) * self.kwarg.input_step_day).copy() 
+            self.step_idx = np.flip(self.day_len - 1 - np.arange(0 , self.step_len) * self.config.input_step_day).copy() 
             self.date_idx = d0 + self.step_idx
         else:
             if self.if_train:
                 if model_date == self.model_date_list[-1]:
-                    next_model_date = self.kwarg.end_date + 1
+                    next_model_date = self.config.end_date + 1
                 else:
                     next_model_date = self.model_date_list[self.model_date_list > model_date][0]
             else:
                 self.model_date_list = [model_date]
                 next_model_date = max(self.test_full_dates) + 1
-            test_step  = self.kwarg.test_step_day
+            test_step  = self.config.test_step_day
             before_test_dates = self.index[1][self.index[1] < min(self.test_full_dates)][-self.seqy:]
             test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::test_step]
             self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
@@ -220,7 +174,7 @@ class ModelData():
         if no_weight:
             weight_scheme = None 
         else:
-            weight_scheme = self.kwarg.weight_scheme.get(self.loader_type.lower() , 'equal')
+            weight_scheme = self.config.Train.weight_scheme.get(self.loader_type.lower() , 'equal')
         if nonnan_sample is None:
             y_new = y
         else:
@@ -238,9 +192,11 @@ class ModelData():
         train/valid sample method: total_shuffle , sequential , both_shuffle , train_shuffle
         test sample method: sequential
         """
-        assert self.kwarg.sample_method in ['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] , self.kwarg.sample_method
+        sample_method = self.config.Train.sample_method
+        train_ratio   = self.config.Train.train_ratio
+        assert sample_method in ['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] , sample_method
 
-        def _shuffle_sampling(ii , batch_size = self.kwarg.batch_size):
+        def _shuffle_sampling(ii , batch_size = self.config.batch_size):
             pool = np.random.permutation(np.arange(len(ii)))
             return [ii[pos] for pos in torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)]
 
@@ -252,20 +208,20 @@ class ModelData():
 
         sample_index = {}
         if self.loader_type == 'train':
-            dtrain = int(shp[1] * self.kwarg.train_ratio)
-            if self.kwarg.sample_method == 'total_shuffle':
+            dtrain = int(shp[1] * train_ratio)
+            if sample_method == 'total_shuffle':
                 pool = np.random.permutation(np.arange(pos.sum()))
-                train_samples = int(len(pool) * self.kwarg.train_ratio)
+                train_samples = int(len(pool) * train_ratio)
                 ii_train = pij[pos][pool[:train_samples]]
                 ii_valid = pij[pos][pool[train_samples:]]
                 sample_index['train'] = _shuffle_sampling(ii_train)
                 sample_index['valid'] = _shuffle_sampling(ii_valid)
-            elif self.kwarg.sample_method == 'both_shuffle':
+            elif sample_method == 'both_shuffle':
                 ii_train = pij[:,:dtrain][pos[:,:dtrain]]
                 ii_valid = pij[:,dtrain:][pos[:,dtrain:]]
                 sample_index['train'] = _shuffle_sampling(ii_train)
                 sample_index['valid'] = _shuffle_sampling(ii_valid)
-            elif self.kwarg.sample_method == 'train_shuffle':
+            elif sample_method == 'train_shuffle':
                 ii_train = pij[:,:dtrain][pos[:,:dtrain]]
                 sample_index['train'] = _shuffle_sampling(ii_train)
                 sample_index['valid'] = [pij[:,j][pos[:,j]] for j in range(dtrain , shp[1]) if pos[:,j].sum() > 0]
@@ -283,11 +239,13 @@ class ModelData():
         update dataloaders dict(set_name = ['train' , 'valid']), 
         save batch_data to f'{DIR.model}/{model_name}/{set_name}_batch_data' and later load them
         """
+
+        shuffle_option = self.config.Train.shuffle_option
         self.storage.del_group(self.loader_type)
         for set_key , set_samples in sample_index.items():
             assert set_key in ['train' , 'valid' , 'test'] , set_key
-            shuf_opt = self.kwarg.shuffle_option if set_key == 'train' else 'static'
-            pbar_opt = self.kwarg.verbosity >= 10
+            shuf_opt = shuffle_option if set_key == 'train' else 'static'
+            pbar_opt = self.config.verbosity >= 10
             batch_files = [f'{DIR.batch}/{set_key}.{bnum}.pt' for bnum in range(len(set_samples))]
             for bnum , batch_i in enumerate(set_samples):
                 assert torch.isin(batch_i[:,1] , torch.tensor(self.step_idx)).all()

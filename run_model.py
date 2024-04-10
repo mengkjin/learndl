@@ -4,13 +4,13 @@
 # @Author : Mathew Jin
 # @File : ${run_model.py}
 # chmod +x run_model.py
-# python3 scripts/run_model3.py --process=0 --rawname=1 --resume=0 --anchoring=0
+# python3 scripts/run_model3.py --process=0 --resume=0 --checkname=1 
 
 import torch
 import torch.nn as nn
 import numpy as np
 import pandas as pd
-import itertools , os , gc , time , yaml
+import itertools , os , gc , time
 
 from copy import deepcopy
 from dataclasses import dataclass , field
@@ -25,8 +25,7 @@ from src.environ import DIR
 from src.data.DataFetcher import DataFetcher
 from src.data.ModelData import ModelData
 from src.util import (
-    BatchData , Device , FilteredIterator , Logger , MultiLosses , ProcessTimer , Storage , 
-    ModelParam , TrainConfig
+    BatchData , Device , FilteredIterator , Logger , MultiLosses , ProcessTimer , Storage , TrainConfig
 )
 
 from src.func.date import today , date_offset
@@ -55,7 +54,6 @@ class ModelOutputs:
             return self.outputs[1]
         else:
             return None
-
 
 @dataclass
 class ModelPred:
@@ -101,7 +99,7 @@ class ModelPred:
         device       = Device()
         model_config = TrainConfig.load(model_path)
 
-        model_param = ModelParam.load(model_path , self.model_num)
+        model_param = model_config.model_param[self.model_num]
         model_files = sorted([p for p in os.listdir(f'{model_path}/{self.model_num}') if p.endswith(f'{self.model_type}.pt')])
         model_dates = np.array([int(mf.split('.')[0]) for mf in model_files])
 
@@ -203,9 +201,7 @@ class RunModel():
                 '7_test'  : self['test_process'],
                 '8_result': self['test_score_sum'],
             }
-            
-            with open(self.result_path , 'a' if os.path.exists(self.result_path) else 'w') as f:
-                yaml.dump(result , f)
+            DIR.dump_yaml(result , self.result_path)
 
     def main_process(self):
         '''
@@ -237,8 +233,7 @@ class RunModel():
         self.model_info['data_time'] = time.time()
         logger.critical(f'Start Process [Load Data]!')
         self.data = ModelData(config.model_data_type , config)
-        assert isinstance(config.model_param , ModelParam)
-        config.model_param.data_related(self.data.x_data , self.data.data_type_list)
+        config.Model.model_data_param(self.data.x_data , self.data.data_type_list)
 
         logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.model_info['data_time']))
         
@@ -250,7 +245,7 @@ class RunModel():
         '''
         self.model_info['train_time'] = time.time()
         logger.critical(f'Start Process [Train Model]!')
-        config.model_param.save(config.model_base_path)    
+        config.Model.save(config.model_base_path)    
         for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
             self.model_preparation('train')
@@ -489,7 +484,7 @@ class RunModel():
         with self.ptimer('model_train/status'):
             self.text['exit'] , self.cond['terminate'] = self._terminate_cond() 
             if self.text['exit']:
-                if (self.epoch_i < config.train_param['trainer']['retrain'].get('min_epoch') - 1 and 
+                if (self.epoch_i < config.train_param['trainer']['retrain']['min_epoch'] - 1 and 
                     self.attempt_i < config.train_param['trainer']['retrain']['attempts'] - 1):
                     self.cond['loop_status'] = 'attempt'
                     self._prints('new_attempt')
@@ -555,7 +550,7 @@ class RunModel():
     def process_test_start(self):
         self.model_info[f'{self.process_name}_time'] = time.time()
         logger.critical(f'Start Process [{self.process_name.capitalize()} Model]!')        
-        logger.warning(f'Each Model Date Testing Mean Score({config.train_param["criterion"]["score"]}):')
+        logger.warning('Each Model Date Testing Mean Score({}):'.format(config.train_param['criterion']['score']))
 
         self.test_model_num = np.repeat(config.model_num_list,len(config.output_types))
         self.test_output_type = np.tile(config.output_types,len(config.model_num_list))
@@ -567,7 +562,7 @@ class RunModel():
 
     def process_test_result(self):
         # date ic writed down
-        date_step = self.data.kwarg.test_step_day
+        date_step = self.data.config.test_step_day
         date_list = self.data.test_full_dates[::date_step]
         for model_num in config.model_num_list:
             date_str = np.array(list(map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , date_list.astype(str))))
@@ -886,21 +881,21 @@ class RunModel():
 
     @classmethod
     def random_module(cls , module = 'tra_lstm2' , model_data_type = 'day' , model_data = None):
-        config.reload(do_process=False , override = {'model_module' : module , 'model_data_type' : model_data_type} , )
+        config = TrainConfig.load(override = {'model_module' : module , 'model_data_type' : model_data_type})
         data_type_list = config.data_type_list
-        config.model_param.data_related(data_type_list = data_type_list)
+        config.Model.model_data_param(data_type_list = data_type_list)
         model_data = ModelData(data_type_list , config , if_train=False)
         model_date = model_data.model_date_list[-1]
-        model_param = config.model_param[0]
-        dataloader_param = model_data.get_dataloader_param('test' , model_date=model_date , param=model_param)   
+        dataloader_param = model_data.get_dataloader_param('test' , model_date=model_date , param=config.model_param[0])   
         model_data.create_dataloader(*dataloader_param)
 
         batch_data = model_data.dataloaders['test'][0]
-        net = cls.new_model(module , param = model_param)
+        net = cls.new_model(module , param = config.model_param[0])
         metrics   = cls.update_metricfunc(cls.new_metricfunc(config.train_param['criterion']) , config.model_param[0] , config)
-        multiloss = cls.new_multiloss(config.train_param['multitask'] , model_param['num_output'])
+        multiloss = cls.new_multiloss(config.train_param['multitask'] , config.model_param[0]['num_output'])
 
         return cls.RandomModule(config , net , batch_data , model_data , metrics , multiloss)
+    
     @dataclass
     class RandomModule:
         config : TrainConfig
@@ -920,16 +915,14 @@ class RunModel():
             print(f'y shape is {y.shape}')
             return y
 
-def main(process = -1 , rawname = -1 , resume = -1 , anchoring = -1 , parser_args = None):
-    if parser_args is None:
-        parser_args = config.parser_args({'process':process,'rawname':rawname,'resume':resume,'anchoring':anchoring})
+def main(process = -1 , resume = -1 , checkname = -1 , parser_args = None):
+    if parser_args is None: parser_args = config.parser_args({'process':process,'resume':resume,'checkname':checkname})
 
-    config.reload(par_args=parser_args,do_process=True)
+    config.reload(do_process=True,par_args=parser_args)
     config.set_config_environment()
 
-    if not config.short_test:
-        logger.warning('Model Specifics:')
-        config.print_out()
+    logger.warning('Model Specifics:')
+    config.print_out()
 
     app = RunModel(mem_storage = config.mem_storage)
     app.main_process()

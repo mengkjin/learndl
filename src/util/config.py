@@ -1,22 +1,195 @@
-import argparse , os , random , shutil , yaml
+import argparse , os , random , shutil
 
 import numpy as np
 import torch
 
-from argparse import Namespace
-from copy import deepcopy
 from dataclasses import dataclass , field
-from typing import ClassVar , Optional
+from typing import Any , ClassVar , Literal , Optional
 
 from ..func.basic import pretty_print_dict
 from ..environ import DIR
 
-class TrainConfig(Namespace):
-    train_yaml  = 'train_param.yaml'
+@dataclass    
+class ModelParam:
+    config_path : str
+    module      : str
+    Param       : dict         = field(default_factory=dict)
+    n_model     : int          = 0
+    params      : list[dict]   = field(default_factory=list)
 
-    def __init__(self, **kwargs) -> None:
-        super().__init__()
-        self.update(kwargs)
+    model_yaml  : ClassVar[str] = 'model_{}.yaml'
+    default_yaml: ClassVar[str] = 'model_default.yaml'
+    target_base : ClassVar[str] = 'model_params.pt'
+
+    def __post_init__(self) -> None:
+        source_dir = DIR.conf if self.config_path == 'default' else self.config_path
+        source_base = self.model_yaml.format(self.module.lower())
+        if not os.path.exists(f'{source_dir}/{source_base}'): source_base = self.default_yaml
+        self.Param = DIR.read_yaml(f'{source_dir}/{source_base}')
+
+        for value in self.Param.values():
+            if isinstance(value , (list,tuple)): self.n_model = max(self.n_model , len(value))
+        assert self.n_model <= 3 , self.n_model
+
+    def __getitem__(self , key : str):
+        return self.Param[key]
+    
+    def get(self , key : str , default = None):
+        return self.Param.get(key , default)
+    
+    def copy_to(self , target_dir):
+        source_dir = DIR.conf if self.config_path == 'default' else self.config_path
+        target_base = self.model_yaml.format(self.module.lower())
+        source_base = target_base if os.path.exists(f'{source_dir}/{target_base}') else self.default_yaml
+        os.makedirs(target_dir, exist_ok = True)
+        assert not os.path.exists(f'{target_dir}/{target_base}')
+        shutil.copyfile(f'{source_dir}/{source_base}' , f'{target_dir}/{target_base}')
+
+    def expand(self , base_path , resume_training):
+        if resume_training and os.path.exists(f'{base_path}/{self.target_base}'):
+            self.params = torch.load(f'{base_path}/{self.target_base}')
+        else:
+            self.params = []
+            for mm in range(self.n_model):
+                dict_mm = {'path':f'{base_path}/{mm}','input_dim':1 , 'inday_dim':1}
+                dict_mm.update({k:(v[mm % len(v)] if isinstance(v,(tuple,list)) else v) for k,v in self.Param.items()})
+                self.params.append(dict_mm)
+
+    @classmethod
+    def load(cls , base_path , model_num : int | None = None):
+        param = torch.load(f'{base_path}/{cls.target_base}')
+        if model_num is not None: param = param[model_num]
+        return param
+
+    def save(self , base_path):
+        torch.save(self.params , f'{base_path}/{self.target_base}')   
+
+    def model_data_param(self , x_data = {} , data_type_list = None):
+        # when x_data is know , use it to fill some params
+        if data_type_list is None: data_type_list = list(x_data.keys())
+
+        inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
+
+        if data_type_list:
+            mdt_shape = [x_data.get(mdt , [inday_dim_dict.get(mdt , 1) , 6]) for mdt in data_type_list]
+            for param in self.params: 
+                param.update({
+                    'input_dim': tuple(mdts.shape[-1] for mdts in mdt_shape) if len(mdt_shape)>1 else mdt_shape[0].shape[-1], 
+                    'inday_dim': tuple(mdts.shape[-2] for mdts in mdt_shape) if len(mdt_shape)>1 else mdt_shape[0].shape[-2],
+                })
+        return self
+    
+    @property
+    def max_num_output(self):
+        num_output = self.Param.get('num_output' , 1)
+        return max(num_output) if isinstance(num_output,(list,tuple)) else num_output
+@dataclass    
+class TrainParam:
+    config_path : str
+    spec_adjust : bool = True
+    configs     : dict = field(default_factory=dict)
+    train_param : dict = field(default_factory=dict)
+    model_name  : str | None = None
+    override    : dict | None = None
+
+    train_yaml  : ClassVar[str] = 'train_param.yaml'
+
+    def __post_init__(self) -> None:
+        source_dir = DIR.conf if self.config_path == 'default' else self.config_path
+        source_base = self.train_yaml
+        Param = DIR.read_yaml(f'{source_dir}/{source_base}')
+        if self.override: Param.update(self.override)
+
+        if self.spec_adjust:
+            if Param['short_test']: 
+                Param.update(Param.get('on_short_test' , {}))
+            if Param['model_module'].lower() == 'transformer':
+                Param['train_param']['trainer'].update(Param.get('on_tf_trainer' , {}))
+
+        # check conflicts:
+        assert 'best' in Param['output_types']
+        Param['tra_model'] = Param['tra_switch'] and Param['model_module'].lower().startswith('tra')
+        assert not (Param['tra_model'] and Param['train_param']['dataloader']['sample_method'] == 'total_shuffle')
+
+        if self.model_name is None:
+            self.model_name = '_'.join([Param['model_module'].lower() , Param['model_data_type']])
+            if Param['short_test']: self.model_name += '_ShortTest'
+
+        self.train_param = Param['train_param']
+        self.configs = {k:v for k,v in Param.items() if k != 'train_param'}
+
+    def __getitem__(self , key : str):
+        return self.configs[key]
+    
+    def copy_to(self , target_dir):
+        source_dir = DIR.conf if self.config_path == 'default' else self.config_path
+        target_base = source_base = self.train_yaml
+        os.makedirs(target_dir, exist_ok = True)
+        assert not os.path.exists(f'{target_dir}/{target_base}')
+        shutil.copyfile(f'{source_dir}/{source_base}' , f'{target_dir}/{target_base}')
+
+    @property
+    def model_base_path(self) -> str: return f'{DIR.model}/{self.model_name}'
+    @property
+    def resumeable(self) -> bool: return os.path.exists(f'{self.model_base_path}/{self.train_yaml}')
+    @property
+    def model_module(self) -> str: return self.configs['model_module'].lower()
+    @property
+    def sample_method(self) -> Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']: 
+        return self.train_param.get('dataloader',{}).get('sample_method' , 'sequential')
+    @property
+    def train_ratio(self) -> float: return self.train_param.get('dataloader',{}).get('train_ratio',0.8)
+    @property
+    def shuffle_option(self) -> Literal['static' , 'init' , 'epoch']: 
+        return self.train_param.get('dataloader',{}).get('shuffle_option','static')
+    @property
+    def weight_scheme(self) -> dict:
+        return self.train_param.get('criterion',{}).get('weight',{})
+
+@dataclass
+class TrainConfig:
+    short_test:  bool       = False
+    model_name: str | None  = None
+    model_module: str       = ''
+    model_data_type: str    = 'day' 
+    output_types: list      = field(default_factory=list)
+    labels: list            = field(default_factory=list)
+    beg_date: int           = 20170103
+    end_date: int           = 99991231
+    input_span: int         = 2400
+    interval: int           = 120
+    max_epoch: int          = 100
+    verbosity: int          = 2
+    batch_size: int         = 10000
+    test_step_day: int      =  1
+    input_step_day: int     = 5
+    skip_horizon: int       =  20 
+
+    mem_storage: bool       = True
+    random_seed: int | None = None
+    allow_tf32: bool        = True
+    detect_anomaly: bool    = False
+    precision: Any          = torch.float # double , bfloat16
+
+    tra_switch:  bool       = True
+    tra_param: dict         = field(default_factory=dict)
+    tra_model: bool         = False
+    buffer_type: str | None = 'tra'
+    buffer_param: dict      = field(default_factory=dict)
+    
+    on_short_test: dict     = field(default_factory=dict)
+    on_tf_trainer: dict     = field(default_factory=dict)
+
+    resume_training: bool   = True
+    process_queue: list     = field(default_factory=list)
+    
+    _TrainParam: Optional[TrainParam] = None
+    _ModelParam: Optional[ModelParam] = None
+
+    def __post_init__(self):
+        if isinstance(self.precision , str): self.precision = getattr(torch , self.precision)
+        self.process_queue = ['data' , 'train' , 'test']
+        if not self.tra_model or self.buffer_type != 'tra': self.buffer_type = None
 
     def __getitem__(self , k):
         return self.__dict__[k]
@@ -26,8 +199,8 @@ class TrainConfig(Namespace):
         for k,v in kwargs.items():  setattr(self , k , v)
         return self
 
-    def reload(self , config_path = 'default' , par_args = Namespace() , do_process = False , override = None):
-        new_config = self.load(config_path,par_args,do_process,override)
+    def reload(self , config_path = 'default' , do_process = False , par_args = {} , override = None):
+        new_config = self.load(config_path,do_process,par_args,override)
         self.update(new_config.__dict__)
         return self
     
@@ -40,71 +213,56 @@ class TrainConfig(Namespace):
         torch.backends.cuda.matmul.allow_tf32 = self.allow_tf32
         torch.autograd.set_detect_anomaly(self.detect_anomaly) # type:ignore
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-
-    @staticmethod
-    def read_yaml(yaml_file):
-        with open(yaml_file ,'r') as f:
-            d = yaml.load(f , Loader = yaml.FullLoader)
-        return d
     
     @classmethod
-    def load(cls , config_path = 'default' , par_args = Namespace() , do_process = False , override = None):
+    def load(cls , config_path = 'default' , do_process = False , par_args = {} , override = None):
         """
         1. namespace type of config
         2. Ask what process would anyone want to run : 0 : train & test(default) , 1 : train only , 2 : test only
-        3. Ask if model_name and model_base_path should be changed if old dir exists
         """
-        config = cls.load_config_path(config_path)
-        config = cls.process_parser(config_path , config , par_args , do_process)
 
-        assert isinstance(config.model_param , ModelParam)
-        if override is not None: config = config.update(override)
+        model_name = None if config_path == 'default' else os.path.basename(config_path)
+        _TrainParam = TrainParam(config_path , model_name = model_name , override = override)
+        _ModelParam = ModelParam(config_path , _TrainParam.model_module)
 
-        if config_path != config.model_base_path and os.path.exists(f'{config.model_base_path}/{cls.train_yaml}'):
-            config_resume = cls.load_config_path(config.model_base_path)
-            config.update(config_resume)
-        else:
-            os.makedirs(config.model_base_path, exist_ok = True)
-            
-            shutil.copyfile(f'{DIR.conf}/{cls.train_yaml}' , f'{config.model_base_path}/{cls.train_yaml}')
-            config.model_param.copy(config.model_base_path)
-        [os.makedirs(f'{config.model_base_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
+        config = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
+        if do_process: config.process_parser(par_args)
 
+        model_path = config.model_base_path
+        if config_path != model_path:
+            _TrainParam = TrainParam(model_path , model_name = model_name , override = override)
+            _ModelParam = ModelParam(model_path , _TrainParam.model_module)
+            config_resume = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
+            config.update(config_resume.__dict__)
+        elif not config.Train.resumeable:
+            # os.makedirs(config.model_base_path, exist_ok = True)
+            [os.makedirs(f'{model_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
+            config.Train.copy_to(model_path)
+            config.Model.copy_to(model_path)
         
-        config.model_param.expand(config.model_base_path , config.resume_training)
+        config.Model.expand(config.model_base_path , config.resume_training)
         return config
     
-    @classmethod
-    def load_config_path(cls , config_path = 'default' , adjust = True):
-        if config_path == 'default': config_path = DIR.conf
-        config = cls(**cls.read_yaml(f'{config_path}/{cls.train_yaml}'))
-
-        if config_path != DIR.conf:
-            # specified folder
-            config.model_name      = os.path.basename(config_path)
-            config.model_base_path = config_path
-        else:
-            if config.model_name is None:
-                config.model_name = '_'.join([config.model_module , config.model_data_type])
-                if config.short_test: config.model_name += '_ShortTest'
-            config.model_base_path = f'{DIR.model}/{config.model_name}'
-
-        if adjust:
-            if config.short_test: 
-                config.update(config.get('on_short_test' , {}))
-            if config.model_module.lower() == 'transformer':
-                config.train_param['trainer'].update(config.get('on_tf_trainer'))
-
-        config.model_param = ModelParam(config_path , config.model_module)
-        config.model_num_list = config.model_param.num_list
-        config.data_type_list = config.model_data_type.split('+')
-            
-        # check conflicts:
-        assert 'best' in config.output_types
-        config.tra_model = config.tra_switch and config.model_module.lower().startswith('tra')
-        assert not (config.tra_model and config.train_param['dataloader']['sample_method'] == 'total_shuffle')
-
-        return config
+    @property
+    def Model(self) -> ModelParam: 
+        assert self._ModelParam is not None
+        return self._ModelParam
+    @property
+    def Train(self) -> TrainParam: 
+        assert self._TrainParam is not None
+        return self._TrainParam
+    @property
+    def model_base_path(self) -> str: return self.Train.model_base_path
+    @property
+    def model_param(self) -> list: return self.Model.params
+    @property
+    def model_num(self) -> int:    return self.Model.n_model
+    @property
+    def train_param(self) -> dict: return self.Train.train_param
+    @property
+    def model_num_list(self) -> list[int]: return list(range(self.Model.n_model))
+    @property
+    def data_type_list(self) -> list[str]: return self.model_data_type.split('+')
 
     @staticmethod
     def set_random_seed(seed = None):
@@ -121,176 +279,102 @@ class TrainConfig(Namespace):
     @classmethod
     def parser_args(cls , input = {} , description='manual to this script'):
         parser = argparse.ArgumentParser(description=description)
-        for arg in ['process' , 'checkname' , 'resume']:
+        for arg in ['process' , 'resume' , 'checkname']:
             parser.add_argument(f'--{arg}', type=int, default = input.get(arg , -1))
         args , _ = parser.parse_known_args()
         return args
 
-    @classmethod
-    def process_parser(cls , config_path , config , par_args , do_process = False):
-        for k , v in par_args.__dict__.items(): 
-            assert k not in config.keys() , k
-            setattr(config , k , v)
-
-        if do_process:
-            # process_confirmation
-            process = getattr(config , 'process' , -1)
-            if process < 0:
-                print(f'--What process would you want to run? 0: all, 1: train only (default), 2: test only')
-                process = int(input(f'[0,all] , [1,train] , [2,test]'))
-            process_dict = ['data' , 'train' , 'test']
-            if process == 0:
-                config.process_queue = process_dict
-            elif process > 0:
-                config.process_queue = ['data' , process_dict[process]]
-            else:
-                raise Exception(f'Error input : {process}')
-            print('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]),config.process_queue))))
-
-            if config_path == 'default':
-                candidate_name = []
-            else:
-                candidate_name = [model for model in [config.model_name] if os.path.exists(f'{DIR.model}/{model}')] + \
-                        [model for model in os.listdir(DIR.model) if model.startswith(config.model_name + '.')]  
-            # ask if resume training
-            resume = getattr(config , 'resume' , -1)
-            if len(candidate_name) > 0:
-                if 'train' in config.process_queue and resume < 0:
-                    print(f'--Multiple model path of {config.model_name} exists, input [yes] to resume training, or start a new one!')
-                    user_input = input(f'Confirm resume training [{config.model_name}]? [yes/no] : ')
-                    resume = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
-                config.resume_training = resume > 0 
-                print(f'--Confirm Resume Training!' if config.resume_training else '--Start Training New!')
-            else:
-                config.resume_training = True
-
-            # checkname confirmation
-            # Confirm the model_name if multifple model_name dirs exists.
-            # If include train: check if dir of model_name exists, if so ask to continue with a sequential one
-            # If test only :    check if model_name exists multiple dirs, if so ask to use the raw one or a select one
-            checkname = getattr(config , 'checkname' , -1)
-            if len(candidate_name) > 0 and checkname == 0:
-                raise Exception(f'--Directories of [{config.model_name}] exists!')
-            elif len(candidate_name) > 0:
-                if 'train' in config.process_queue and config.resume_training:
-                    if checkname < 0:
-                        print(f'--Attempting to resume but multiple models exists, input number to choose')
-                        [print(str(i) + ' : ' + f'{DIR.model}/{model}') for i , model in enumerate(candidate_name)]
-                        config.model_name = candidate_name[int(input('which one to use? '))]
-                    else:
-                        config.model_name = candidate_name[0]
-                elif 'train' in config.process_queue:
-                    if checkname < 0:
-                        print(f'--Multiple model path of {config.model_name} exists, input [yes] to add a new directory!')
-                        user_input = input(f'Add a new folder of [{config.model_name}]? [yes/no] : ').lower()
-                        checkname = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
-                    if checkname:
-                        config.model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
-                    else:
-                        raise Exception(f'--Directories of [{config.model_name}] exists!')
-                elif 'test' in config.process_queue:
-                    if checkname < 0:
-                        print(f'--Attempting to resume but multiple models exists, input number to choose')
-                        [print(str(i) + ' : ' + f'{DIR.model}/{model}') for i , model in enumerate(candidate_name)]
-                        config.model_name = candidate_name[int(input('which one to use? '))]
-                    else:
-                        config.model_name = candidate_name[0]
-            config.model_base_path = f'{DIR.model}/{config.model_name}'
-            print(f'--Model_name is set to {config.model_name}!')  
+    def parser_process(self , value = -1):
+        if value < 0:
+            print(f'--What process would you want to run? 0: all, 1: train only (default), 2: test only')
+            value = int(input(f'[0,all] , [1,train] , [2,test]'))
+        process_queue = ['data' , 'train' , 'test']
+        if value == 0:
+            pass
+        elif value > 0:
+            process_queue = ['data' , process_queue[value]]
         else:
-            config.process_queue = ['data' , 'train' , 'test']
-            config.resume_training = True
-        return config
+            raise Exception(f'Error input : {value}')
+        print('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), process_queue))))
+        self.process_queue = process_queue
+
+    def parser_resume(self , value = -1):
+        # ask if resume training when candidate names exists
+        model_name = self.Train.model_name
+        assert model_name is not None
+        candidate_name = [model for model in [self.model_name] if os.path.exists(f'{DIR.model}/{model}')] + \
+                [model for model in os.listdir(DIR.model) if model.startswith(model_name + '.')]  
+        # ask if resume training
+        if len(candidate_name) > 0 and 'train' in self.process_queue:
+            if value < 0:
+                print(f'--Multiple model path of {self.model_name} exists, input [yes] to resume training, or start a new one!')
+                user_input = input(f'Confirm resume training [{self.model_name}]? [yes/no] : ')
+                resume = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
+            self.resume_training = resume > 0 
+            print(f'--Confirm Resume Training!' if self.resume_training else '--Start Training New!')
+        else:
+            self.resume_training = False
+
+    def parser_select(self , value = -1):
+        # checkname confirmation
+        # Confirm the model_name if multifple model_name dirs exists.
+        #if train:
+        #    if zero or (resume and single): do it
+        #    elif resume and multiple: ask to choose one
+        #    elif not resume and single/multiple: ask to make new folder
+        #else:
+        #    if multiple: ask to choose one
+        #    elif zero: raise
+        
+        model_name = self.Train.model_name
+        assert model_name is not None
+        candidate_name = [model for model in [model_name] if os.path.exists(f'{DIR.model}/{model}')] + \
+                [model for model in os.listdir(DIR.model) if model.startswith(model_name + '.')] 
+        if 'train' in self.process_queue and candidate_name:
+            if self.resume_training and len(candidate_name) == 1:
+                model_name = candidate_name[0]
+            elif self.resume_training:
+                if value < 0:
+                    print(f'--Attempting to resume but multiple models exist, input number to choose')
+                    [print(str(i) + ' : ' + f'{DIR.model}/{model}') for i , model in enumerate(candidate_name)]
+                    value = int(input('which one to use? '))
+                model_name = candidate_name[value]
+            else:
+                if value < 0:
+                    print(f'--Model dirs of {model_name} exists, input [yes] to add a new directory!')
+                    user_input = input(f'Add a new folder of [{model_name}]? [yes/no] : ').lower()
+                    value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
+                if value == 0: raise Exception(f'--Model dirs of [{model_name}] exists!')
+                model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
+
+        elif 'test' in self.process_queue:
+            assert len(candidate_name) > 0 , f'no models of {model_name} while you want to test'
+            if len(candidate_name) == 1:
+                model_name = candidate_name[0]
+            else:
+                if value < 0:
+                    print(f'--Attempting to test while multiple models exists, input number to choose')
+                    [print(str(i) + ' : ' + f'{DIR.model}/{model}') for i , model in enumerate(candidate_name)]
+                    value = int(input('which one to use? '))
+                model_name = candidate_name[value]
+
+        print(f'--Model_name is set to {model_name}!')  
+        self.model_name = model_name
+        self.Train.model_name = model_name
+
+    def process_parser(self , par_args = {}):
+        self.parser_process(getattr(par_args , 'process' , -1))
+        self.parser_resume(getattr(par_args , 'resume' , -1))
+        self.parser_select(getattr(par_args , 'checkname' , -1)) 
+        return self
 
     def print_out(self):
         subset = [
-            'random_seed' , 'verbosity' , 'precision' , 'batch_size' , 
-            'model_name' , 'model_module' , 'model_num' , 'model_data_type' , 'labels' ,
+            'random_seed' , 'model_name' , 'model_module' , 'model_data_type' , 'labels' ,
             'beg_date' , 'end_date' , 'interval' , 'input_step_day' , 'test_step_day' , 
         ]
         pretty_print_dict({k:self.get(k) for k in subset})
-        pretty_print_dict(self.train_param)
-        pretty_print_dict(self.model_param.Param)
-
-@dataclass    
-class ModelParam:
-    config_path : str
-    module      : str
-    Param       : dict         = field(default_factory=dict)
-    num_list    : list[int]    = field(default_factory=list)
-    params      : list[dict]   = field(default_factory=list)
-
-    model_yaml  : ClassVar[str] = 'model_{}.yaml'
-    default_yaml: ClassVar[str] = 'model_default.yaml'
-    target_base : ClassVar[str] = 'model_params.pt'
-
-    def __post_init__(self) -> None:
-        path = f'{self.config_path}/{self.model_yaml.format(self.module.lower())}'
-        if not os.path.exists(path):
-            path = f'{self.config_path}/{self.default_yaml}'
-
-        with open(path ,'r') as f:
-            self.Param = yaml.load(f , Loader = yaml.FullLoader)
-
-        n_model = 1
-        for value in self.Param.values():
-            if isinstance(value , (list,tuple)):
-                n_model = max(n_model , len(value))
-        self.num_list = list(range(n_model))
-        assert len(self.num_list) <= 3 , len(self.num_list)
-
-    def __getitem__(self , pos : int):
-        return self.params[pos]
-    
-    def copy(self , target_dir):
-        path = self.model_yaml.format(self.module.lower())
-        if os.path.exists(f'{self.config_path}/{path}'):
-            shutil.copyfile(f'{self.config_path}/{path}' , f'{target_dir}/{path}')
-        else:
-            shutil.copyfile(f'{self.config_path}/{self.default_yaml}' , f'{target_dir}/{path}')
-
-    def expand(self , base_path , resume_training):
-        if resume_training and os.path.exists(f'{base_path}/{self.target_base}'):
-            params = torch.load(f'{base_path}/{self.target_base}')
-        else:
-            params = []
-            for mm in self.num_list:
-                dict_mm = {k:(v[mm % len(v)] if isinstance(v,(tuple,list)) else v) 
-                            for k,v in self.Param.items()}
-                dict_mm.update({'path':f'{base_path}/{mm}'}) 
-                params.append(dict_mm) 
-        self.params = params
-
-    @classmethod
-    def load(cls , base_path , model_num : int | None = None):
-        model_param = torch.load(f'{base_path}/{cls.target_base}')
-        if model_num is not None:
-            model_param = model_param[model_num]
-        return model_param
-
-    def save(self , base_path):
-        torch.save(self.params , f'{base_path}/{self.target_base}')   
-
-    def data_related(self , x_data = {} , data_type_list = None):
-        # when x_data is know , use it to fill some params
-        if data_type_list is None: data_type_list = list(x_data.keys())
-
-        inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
-        input_dim , inday_dim = [] , []
-        for mdt in data_type_list:
-            x = x_data.get(mdt)
-            input_dim.append(x.shape[-1] if x else 6)
-            inday_dim.append(x.shape[-2] if x else inday_dim_dict.get(mdt , 1))
-        if len(data_type_list) > 1:
-            filler = {'input_dim':tuple(input_dim), 'inday_dim':tuple(inday_dim)}
-        elif len(data_type_list) == 1:
-            filler = {'input_dim':input_dim[0] , 'inday_dim':inday_dim[0]}
-        else:
-            filler = {'input_dim':1, 'inday_dim':1 }
-
-        if hasattr(self , 'params'):
-            for param in self.params: param.update(filler)
-
-        return self
+        # pretty_print_dict(self.train_param)
+        pretty_print_dict(self.Model.Param)
         
         

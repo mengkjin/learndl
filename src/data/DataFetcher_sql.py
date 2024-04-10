@@ -21,12 +21,12 @@ class Connection:
     database    : str 
     driver      : str | None = None
     stay_connect: bool = True
-    
+
     def __post_init__(self):
-        self.connect_url = self.url()
         self.conn = None
 
-    def url(self):
+    @property
+    def url(self) -> str:
         connect_url = '{dialect}://{username}:{password}@{host}:{port}/{database}'.format(
             dialect  = self.dialect,
             username = self.username,
@@ -39,7 +39,7 @@ class Connection:
         return connect_url
 
     def engine(self):
-        return create_engine(self.connect_url)
+        return create_engine(self.url)
     
     def connect(self , reconnect = False):
         if self.stay_connect and reconnect:
@@ -156,12 +156,11 @@ class DataFetcher_sql:
 
     def query_start_dt(self , connection : Connection):
         conn = connection.connect()
-        df = self.make_query(self.startdt_query , conn)
-        return df
+        return self.make_query(self.startdt_query , conn)
     
     def query_default(self , connection : Connection , start_dt = 20230101 , end_dt = 20230131 , retry = 1):
-        i , df = 0 , None
         conn = connection.connect()
+        i , df = 0 , None
         while i <= retry:
             try:
                 df = self.make_query(self.default_query , conn , start_dt , end_dt)

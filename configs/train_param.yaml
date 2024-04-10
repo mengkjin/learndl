@@ -6,7 +6,6 @@ short_test:  False
 model_name: null # null
 model_module: patch_tst # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
 model_data_type: day # 'day+30m' , 30m
-model_num: 2
 output_types: [best , swalast , swabest]
 labels: 
   - std_lag1_10 # rtn_lag1_10 # std_lag1_10

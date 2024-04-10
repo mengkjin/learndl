@@ -71,7 +71,7 @@ class DataBlock():
         self.secid   = secid
         self.date    = date
         self.feature = feature
-        self.shape   = self.values.shape
+        #self.shape   = self.values.shape
 
     def _clear_attr(self):
         self.initiate = False
@@ -82,15 +82,19 @@ class DataBlock():
         if self.initiate:
             return '\n'.join([
                 'initiated ' + str(self.__class__) ,
-                f'values shape {self.values.shape}'
+                f'values shape {self.shape}'
             ])
         else:
             return 'uninitiate ' + str(self.__class__) 
     
+    @property
+    def shape(self):
+        return self.values.shape
+
     def update(self , **kwargs):
         valid_keys = np.intersect1d(['values','secid','date','feature'],list(kwargs.keys()))
         [setattr(self,k,kwargs[k]) for k in valid_keys]
-        self.shape  = self.values.shape
+        # self.shape  = self.values.shape
         assert self.values.shape[:2] == (len(self.secid) , len(self.date))
         assert self.values.shape[-1] == len(self.feature)
         return self
@@ -180,7 +184,7 @@ class DataBlock():
         values[p0s] = self.values[p1s]
         self.values  = values
         self.secid   = secid
-        self.shape   = self.values.shape
+        # self.shape   = self.values.shape
         return self
     
     def align_date(self , date):
@@ -190,7 +194,7 @@ class DataBlock():
         values[:,p0d] = self.values[:,p1d]
         self.values  = values
         self.date    = date
-        self.shape   = self.values.shape
+        # self.shape   = self.values.shape
         return self
     
     def align_secid_date(self , secid = None , date = None):
@@ -208,7 +212,7 @@ class DataBlock():
             self.values  = values
             self.secid   = secid
             self.date    = date
-            self.shape   = self.values.shape
+            # self.shape   = self.values.shape
             return self
     
     def align_feature(self , feature):
@@ -218,7 +222,7 @@ class DataBlock():
         values[...,p0f] = self.values[...,p1f]
         self.values  = values
         self.feature = feature
-        self.shape   = self.values.shape
+        # self.shape   = self.values.shape
         return self
     
     def add_feature(self , new_feature , new_value):
@@ -226,7 +230,7 @@ class DataBlock():
         new_value = new_value.reshape(*new_value.shape , 1)
         self.values  = np.concatenate([self.values,new_value],axis=-1)
         self.feature = np.concatenate([self.feature,[new_feature]],axis=0)
-        self.shape   = self.values.shape
+        # self.shape   = self.values.shape
         return self
     
     def rename_feature(self , rename_dict):

@@ -1,4 +1,4 @@
-import os , shutil
+import os , shutil , yaml
 
 from dataclasses import dataclass
 
@@ -23,6 +23,17 @@ class CustomDirSpace:
 
     def __post_init__(self):
         [os.makedirs(v , exist_ok=True) for v in self.__dict__.values()]
+
+    @staticmethod
+    def read_yaml(yaml_file):
+        with open(yaml_file ,'r') as f:
+            d = yaml.load(f , Loader = yaml.FullLoader)
+        return d
+    
+    @staticmethod
+    def dump_yaml(data , yaml_file):
+        with open(yaml_file , 'a' if os.path.exists(yaml_file) else 'w') as f:
+            yaml.dump(data , f)
 
     @staticmethod
     def copytree(src , dst):
