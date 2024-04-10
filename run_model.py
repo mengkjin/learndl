@@ -25,7 +25,8 @@ from src.environ import DIR
 from src.data.DataFetcher import DataFetcher
 from src.data.ModelData import ModelData
 from src.util import (
-    BatchData , Device , FilteredIterator , Logger , MultiLosses , ProcessTimer , Storage , TrainConfig
+    BatchData , Device , FilteredIterator , Logger , ModelOutputs , 
+    MultiLosses , ProcessTimer , Storage , TrainConfig
 )
 
 from src.func.date import today , date_offset
@@ -37,23 +38,6 @@ from src.model import model
 
 logger = Logger()
 config = TrainConfig()
-
-@dataclass
-class ModelOutputs:
-    outputs : torch.Tensor | tuple | list
-
-    def pred(self):
-        if isinstance(self.outputs , (list , tuple)):
-            return self.outputs[0]
-        else:
-            return self.outputs
-    
-    def hidden(self):
-        if isinstance(self.outputs , (list , tuple)):
-            assert len(self.outputs) == 2 , self.outputs
-            return self.outputs[1]
-        else:
-            return None
 
 @dataclass
 class ModelPred:
@@ -358,7 +342,7 @@ class RunModel():
             if (self.data.dataloader_param != dataloader_param):
                 self.data.create_dataloader(*dataloader_param) 
                 self.tick[1] = time.time()
-                self._prints('train_dataloader')
+                self.print_progress('train_dataloader')
             
     def model_train_end(self):
         '''
@@ -368,7 +352,7 @@ class RunModel():
             self.storage.del_path([p for pl in self.path['source'].values() for p in pl])
             if self.process_name == 'train' : self.model_count += 1
             self.tick[2] = time.time()
-            self._prints('model_end')
+            self.print_progress('model_end')
 
     def model_train_init_loop(self):
         '''
@@ -401,7 +385,7 @@ class RunModel():
     def model_train_epoch(self):
         '''
         Iterate train and valid dataset, calculate loss/score , update values
-        If nan loss occurs, turn to _deal_nanloss
+        If nan loss occurs, turn to nanloss_reviver
         '''
         with self.ptimer('model_train/epoch/train'):
             self.net.train() 
@@ -421,7 +405,7 @@ class RunModel():
 
                 list_loss[i] , list_score[i] = metrics['loss_item'] , metrics['score']
                 iterator.display(f'Ep#{self.epoch_i:3d} train loss:{list_loss[:i+1].mean():.5f}')
-            if list_loss.isnan().any(): return self._deal_nanloss()
+            if list_loss.isnan().any(): return self.nanloss_reviver()
             self.loss_list['train'].append(list_loss.mean()) 
             self.score_list['train'].append(list_score.mean())
         
@@ -479,15 +463,15 @@ class RunModel():
                     save_targets.append(self.path['candidate']['swabest'][arg_min])
                 
             self.save_model(paths = save_targets)
-            self._prints('epoch_step')
+            self.print_progress('epoch_step')
         
         with self.ptimer('model_train/status'):
-            self.text['exit'] , self.cond['terminate'] = self._terminate_cond() 
+            self.text['exit'] , self.cond['terminate'] = self.check_train_end() 
             if self.text['exit']:
                 if (self.epoch_i < config.train_param['trainer']['retrain']['min_epoch'] - 1 and 
                     self.attempt_i < config.train_param['trainer']['retrain']['attempts'] - 1):
                     self.cond['loop_status'] = 'attempt'
-                    self._prints('new_attempt')
+                    self.print_progress('new_attempt')
                 else:
                     self.cond['loop_status'] = 'model'
                     # print(self.net.get_probs())
@@ -545,7 +529,7 @@ class RunModel():
         with self.ptimer('model_test/end'):
             if self.model_num == config.model_num_list[-1]:
                 self.score_by_model[-1,:] = np.nanmean(self.score_by_date[-len(self.data.model_test_dates):,],axis = 0)
-                self._print_rst(self.model_date , self.score_by_model[-1,:] , 4)
+                self.print_test_table(self.model_date , self.score_by_model[-1,:] , 4)
   
     def process_test_start(self):
         self.model_info[f'{self.process_name}_time'] = time.time()
@@ -557,8 +541,8 @@ class RunModel():
         self.score_by_date  = np.empty((0,len(self.test_model_num)))
         self.score_by_model = np.empty((0,len(self.test_model_num)))
 
-        self._print_rst('Models' , self.test_model_num , 0)
-        self._print_rst('Output' , self.test_output_type)
+        self.print_test_table('Models' , self.test_model_num , 0)
+        self.print_test_table('Output' , self.test_output_type)
 
     def process_test_result(self):
         # date ic writed down
@@ -586,7 +570,7 @@ class RunModel():
                           columns = [f'{mn}_{o}' for mn,o in zip(self.test_model_num , self.test_output_type)])
         df.to_csv(f'{config.model_base_path}/{config.model_name}_score_by_model.csv')
         for i , digits in enumerate([4,2,4,2,4]):
-            self._print_rst(add_row_key[i] , add_row_value[i] , digits)
+            self.print_test_table(add_row_key[i] , add_row_value[i] , digits)
         self.model_info['test_score_sum'] = {k:round(v,4) for k,v in zip(df.columns , score_sum.tolist())}  
 
     def model_forward(self , key , batch_data : BatchData):
@@ -617,11 +601,11 @@ class RunModel():
             if clip_value is not None : clip_grad_value_(self.net.parameters(), clip_value = clip_value) 
             self.optimizer.step()
     
-    def _prints(self , key):
+    def print_progress(self , key):
         '''
         Print out status giving display conditions and looping conditions
         '''
-        printer = [logger.info] if (config.verbosity > 2 or self.model_count < config.model_num) else [logger.debug]
+        printers = [logger.info] if (config.verbosity > 2 or self.model_count < config.model_num) else [logger.debug]
         sdout   = None
         if key == 'model_end':
             self.text['epoch'] = 'Ep#{:3d}'.format(self.epoch_all)
@@ -631,7 +615,7 @@ class RunModel():
                 (self.tick[2]-self.tick[0])/60 , (self.tick[2]-self.tick[1])/(self.epoch_all+1))
             sdout = self.text['model'] + '|' + self.text['attempt'] + ' ' + \
                     self.text['epoch'] + ' ' + self.text['exit'] + '|' + self.text['stat'] + '|' + self.text['time']
-            printer = [logger.warning]
+            printers = [logger.warning]
         elif key == 'epoch_step':
             self.text['trainer'] = 'loss {: .5f}, train{: .5f}, valid{: .5f}, max{: .4f}, best{: .4f}, lr{:.1e}'.format(
                 self.loss_list['train'][-1] , self.score_list['train'][-1] , self.score_list['valid'][-1] , 
@@ -648,14 +632,13 @@ class RunModel():
         else:
             raise Exception(f'KeyError : {key}')
         
-        for prt in printer:
-            if sdout is not None: prt(sdout) 
+        if sdout is not None: [prt(sdout) for prt in printers]
 
-    def _print_rst(self , rowname , values , digits = 2):
+    def print_test_table(self , rowname , values , digits = 2):
         fmt = 's' if isinstance(values[0] , str) else (f'd' if digits == 0 else f'.{digits}f')
         logger.info(('{: <11s}'+('{: >8'+fmt+'}')*len(values)).format(str(rowname) , *values))
 
-    def _deal_nanloss(self):
+    def nanloss_reviver(self):
         '''
         Deal with nan loss, life -1 and change nan_loss condition to True
         '''
@@ -666,7 +649,7 @@ class RunModel():
         else:
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
 
-    def _terminate_cond(self):
+    def check_train_end(self):
         '''
         Whether terminate condition meets
         '''
@@ -743,7 +726,8 @@ class RunModel():
         return swa_net.module 
     
     def _swa_update_bn_loader(self , loader):
-        for batch_data in loader: yield (batch_data.x , batch_data.y , batch_data.w)
+        for batch_data in loader: 
+            yield (batch_data.x , batch_data.y , batch_data.w)
     
     def load_optimizer(self , new_opt_kwargs = None , new_lr_kwargs = None):
         if new_opt_kwargs is None:
@@ -792,7 +776,7 @@ class RunModel():
         else:
             shd_kwargs = None
         self.scheduler = self.load_scheduler(shd_kwargs)
-        self._prints('reset_learn_rate')
+        self.print_progress('reset_learn_rate')
     
     @staticmethod
     def new_model(module , param = {} , state_dict = None , **kwargs):
@@ -821,19 +805,13 @@ class RunModel():
 
     @staticmethod
     def calculate_metrics(key , metrics , label , pred , weight = None , multiloss = None , net = None ,
-                          valid_sample = None , penalty_kwargs = {} , **kwargs):
+                          penalty_kwargs = {} , **kwargs):
         '''
         Calculate loss(with gradient), penalty , score
         '''
         if label.shape != pred.shape: # if more label than output
             label = label[...,:pred.shape[-1]]
             assert label.shape == pred.shape , (label.shape , pred.shape)
-        #if valid_sample is not None:
-        #    label , pred = label[valid_sample] , pred[valid_sample]
-        #    weight = None if weight is None else weight[valid_sample]
-
-        #label0 , pred0 = label.select(-1,0) , pred.select(-1,0)
-        #weight0 = None if weight is None else weight.select(-1,0)
 
         with torch.no_grad():
             losses , loss_item , loss , penalty = None , 0. , 0. , 0.
@@ -915,7 +893,7 @@ class RunModel():
             print(f'y shape is {y.shape}')
             return y
 
-def main(process = -1 , resume = -1 , checkname = -1 , parser_args = None):
+def main(process = -1 , resume = -1 , checkname = -1 , timer = False , parser_args = None):
     if parser_args is None: parser_args = config.parser_args({'process':process,'resume':resume,'checkname':checkname})
 
     config.reload(do_process=True,par_args=parser_args)
@@ -924,7 +902,7 @@ def main(process = -1 , resume = -1 , checkname = -1 , parser_args = None):
     logger.warning('Model Specifics:')
     config.print_out()
 
-    app = RunModel(mem_storage = config.mem_storage)
+    app = RunModel(mem_storage = config.mem_storage , timer = timer)
     app.main_process()
 
 if __name__ == '__main__':

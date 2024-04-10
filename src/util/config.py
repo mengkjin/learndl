@@ -26,9 +26,11 @@ class ModelParam:
         source_base = self.model_yaml.format(self.module.lower())
         if not os.path.exists(f'{source_dir}/{source_base}'): source_base = self.default_yaml
         self.Param = DIR.read_yaml(f'{source_dir}/{source_base}')
-
-        for value in self.Param.values():
-            if isinstance(value , (list,tuple)): self.n_model = max(self.n_model , len(value))
+        assert isinstance(self.Param , dict)
+        for key , value in self.Param.items():
+            if not isinstance(value , (list,tuple)): self.Param[key] = [value]
+            elif isinstance(value , tuple): self.Param[key] = list(value)
+            self.n_model = max(self.n_model , len(value))
         assert self.n_model <= 3 , self.n_model
 
     def __getitem__(self , key : str):
@@ -52,7 +54,7 @@ class ModelParam:
             self.params = []
             for mm in range(self.n_model):
                 dict_mm = {'path':f'{base_path}/{mm}','input_dim':1 , 'inday_dim':1}
-                dict_mm.update({k:(v[mm % len(v)] if isinstance(v,(tuple,list)) else v) for k,v in self.Param.items()})
+                dict_mm.update({k:v[mm % len(v)] for k,v in self.Param.items()})
                 self.params.append(dict_mm)
 
     @classmethod
@@ -81,8 +83,8 @@ class ModelParam:
     
     @property
     def max_num_output(self):
-        num_output = self.Param.get('num_output' , 1)
-        return max(num_output) if isinstance(num_output,(list,tuple)) else num_output
+        return max(self.Param.get('num_output' , [1]))
+    
 @dataclass    
 class TrainParam:
     config_path : str
@@ -201,7 +203,7 @@ class TrainConfig:
 
     def reload(self , config_path = 'default' , do_process = False , par_args = {} , override = None):
         new_config = self.load(config_path,do_process,par_args,override)
-        self.update(new_config.__dict__)
+        self.__dict__ = new_config.__dict__
         return self
     
     def get(self , key , default = None):
@@ -209,7 +211,7 @@ class TrainConfig:
     
     def set_config_environment(self , manual_seed = None):
         self.set_random_seed(manual_seed if manual_seed else self.get('random_seed'))
-        torch.set_default_dtype(getattr(torch , self.precision))
+        torch.set_default_dtype(self.precision)
         torch.backends.cuda.matmul.allow_tf32 = self.allow_tf32
         torch.autograd.set_detect_anomaly(self.detect_anomaly) # type:ignore
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -229,12 +231,15 @@ class TrainConfig:
         if do_process: config.process_parser(par_args)
 
         model_path = config.model_base_path
-        if config_path != model_path:
+        if config_path != 'default':
+            assert config_path == model_path , (config_path , model_path)
             _TrainParam = TrainParam(model_path , model_name = model_name , override = override)
             _ModelParam = ModelParam(model_path , _TrainParam.model_module)
             config_resume = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
             config.update(config_resume.__dict__)
-        elif not config.Train.resumeable:
+        else:
+            if config.Train.resumeable:
+                raise Exception(f'{model_path} has to be delete manually')
             # os.makedirs(config.model_base_path, exist_ok = True)
             [os.makedirs(f'{model_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
             config.Train.copy_to(model_path)
@@ -309,8 +314,8 @@ class TrainConfig:
             if value < 0:
                 print(f'--Multiple model path of {self.model_name} exists, input [yes] to resume training, or start a new one!')
                 user_input = input(f'Confirm resume training [{self.model_name}]? [yes/no] : ')
-                resume = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
-            self.resume_training = resume > 0 
+                value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
+            self.resume_training = value > 0 
             print(f'--Confirm Resume Training!' if self.resume_training else '--Start Training New!')
         else:
             self.resume_training = False
@@ -347,7 +352,7 @@ class TrainConfig:
                 if value == 0: raise Exception(f'--Model dirs of [{model_name}] exists!')
                 model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
 
-        elif 'test' in self.process_queue:
+        elif 'train' not in self.process_queue and 'test' in self.process_queue:
             assert len(candidate_name) > 0 , f'no models of {model_name} while you want to test'
             if len(candidate_name) == 1:
                 model_name = candidate_name[0]

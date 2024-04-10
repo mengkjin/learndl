@@ -4,7 +4,7 @@ random_seed: null
 short_test:  False
 
 model_name: null # null
-model_module: patch_tst # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
+model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
 model_data_type: day # 'day+30m' , 30m
 output_types: [best , swalast , swabest]
 labels: 

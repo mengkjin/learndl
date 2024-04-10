@@ -51,6 +51,23 @@ class BatchData:
             self.nonnan.cuda() 
         )
     
+@dataclass
+class ModelOutputs:
+    outputs : torch.Tensor | tuple | list
+
+    def pred(self):
+        if isinstance(self.outputs , (list , tuple)):
+            return self.outputs[0]
+        else:
+            return self.outputs
+    
+    def hidden(self):
+        if isinstance(self.outputs , (list , tuple)):
+            assert len(self.outputs) == 2 , self.outputs
+            return self.outputs[1]
+        else:
+            return None
+    
         
 class Device:
     torch_obj = (torch.Tensor , torch.nn.Module , torch.nn.ModuleList , torch.nn.ModuleDict , BatchData)

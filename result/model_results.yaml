@@ -106,3 +106,33 @@
   1_best: 123.0925
   1_swabest: 114.6633
   1_swalast: 111.6308
+0_model: gru_day_ShortTest.2(x2)
+1_start: Wed Apr 10 22:43:23 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_train: Finish Process [Train Model]! Cost 0.0 Hours, 0.3 Min/model, 1.0 Sec/Epoch
+7_test: Finish Process [Test Model]! Cost 6.7 Secs
+8_result:
+  0_best: 21.2733
+  0_swabest: 18.9604
+  0_swalast: 15.9695
+  1_best: 20.9729
+  1_swabest: 21.1032
+  1_swalast: 14.4088
+0_model: gru_day.1(x2)
+1_start: Wed Apr 10 22:46:32 2024
+2_basic: full
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-99991231
+6_train: Finish Process [Train Model]! Cost 2.4 Hours, 4.8 Min/model, 5.4 Sec/Epoch
+7_test: Finish Process [Test Model]! Cost 57.2 Secs
+8_result:
+  0_best: 184.2399
+  0_swabest: 186.9946
+  0_swalast: 179.1582
+  1_best: 188.8714
+  1_swabest: 189.1031
+  1_swalast: 187.048
