@@ -20,6 +20,7 @@ class ModelParam:
     model_yaml  : ClassVar[str] = 'model_{}.yaml'
     default_yaml: ClassVar[str] = 'model_default.yaml'
     target_base : ClassVar[str] = 'model_params.pt'
+    inday_dims  : ClassVar[dict] = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
 
     def __post_init__(self) -> None:
         source_dir = DIR.conf if self.config_path == 'default' else self.config_path
@@ -67,19 +68,14 @@ class ModelParam:
     def save(self , base_path):
         torch.save(self.params , f'{base_path}/{self.target_base}')   
 
-    def model_data_param(self , x_data = {} , data_type_list = None):
+    def model_data_param(self , x_data : dict = {} , data_type_list = None):
         # when x_data is know , use it to fill some params
         if data_type_list is None: data_type_list = list(x_data.keys())
-
-        inday_dim_dict = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
-
         if data_type_list:
-            mdt_shape = [x_data.get(mdt , [inday_dim_dict.get(mdt , 1) , 6]) for mdt in data_type_list]
-            for param in self.params: 
-                param.update({
-                    'input_dim': tuple(mdts.shape[-1] for mdts in mdt_shape) if len(mdt_shape)>1 else mdt_shape[0].shape[-1], 
-                    'inday_dim': tuple(mdts.shape[-2] for mdts in mdt_shape) if len(mdt_shape)>1 else mdt_shape[0].shape[-2],
-                })
+            input_dim = tuple([x_data[mdt].shape[-1] if mdt in x_data.keys() else self.inday_dims[mdt] for mdt in data_type_list])
+            inday_dim = tuple([x_data[mdt].shape[-2] if mdt in x_data.keys() else 6                    for mdt in data_type_list])
+            if len(data_type_list) == 1: input_dim , inday_dim = input_dim[0] , inday_dim[0]
+            [param.update({'input_dim': input_dim,  'inday_dim': inday_dim}) for param in self.params]
         return self
     
     @property
@@ -217,6 +213,9 @@ class TrainConfig:
         torch.backends.cuda.matmul.allow_tf32 = self.allow_tf32
         torch.autograd.set_detect_anomaly(self.detect_anomaly) # type:ignore
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+
+    def model_data_param(self , x_data = {}):
+        self.Model.model_data_param(x_data , self.data_type_list)
     
     @classmethod
     def load(cls , config_path = 'default' , do_process = False , par_args = {} , override = None):

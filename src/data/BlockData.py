@@ -6,6 +6,7 @@ import xarray as xr
 import torch
 
 from dataclasses import dataclass , field
+from typing import Any
 
 from .DataFetcher import DataFetcher
 from ..environ import DIR
@@ -161,7 +162,7 @@ class DataBlock():
             raise Exception(file_path)
         
     @staticmethod
-    def load_dict(file_path , keys = None):
+    def load_dict(file_path , keys = None) -> dict[str,Any]:
         if file_path.endswith(('.npz' , '.npy' , '.np')):
             file = np.load(file_path)
         elif file_path.endswith(('.pt' , '.pth')):

@@ -29,11 +29,8 @@ train_param:
     gradient:  {'clip_value' : 10.0}
     retrain:   {'attempts' : 4 , 'min_epoch' : 20 ,} 
   criterion:
-    loss:      pearson # mse , pearson , ccc
-    score:     #mse,pearson,ccc,spearman
-      train:   spearman
-      valid:   spearman
-      test:    spearman
+    loss:      pearson  # mse, pearson, ccc
+    score:     spearman # mse, pearson, ccc, spearman
     penalty:   
       hidden_corr: 
         lamb : 0.001

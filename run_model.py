@@ -26,12 +26,11 @@ from src.data.DataFetcher import DataFetcher
 from src.data.ModelData import ModelData
 from src.util import (
     BatchData , Device , FilteredIterator , Logger , ModelOutputs , 
-    MultiLosses , ProcessTimer , Storage , TrainConfig
+    ProcessTimer , Storage , TrainConfig , Metrics
 )
 
 from src.func.date import today , date_offset
 from src.func.basic import list_converge
-from src.func.metric import Metrics
 from src.model import model
 
 # from audtorch.metrics.functional import *
@@ -124,7 +123,7 @@ class ModelPred:
                     model.eval()
 
                     loader = model_data.dataloaders['test']
-                    secid  = model_data.index[0]
+                    secid  = model_data.datas.secid
                     tdates = model_data.model_test_dates
                     #print(df_sub.loc[df_sub['calculated'] == 0 , 'pred_dates'])
                     #print(tdates)
@@ -206,7 +205,7 @@ class RunModel():
             pass
         elif self.process_name in ['train' , 'test']: 
             self.data.reset_dataloaders()
-            self.metric_function = self.new_metricfunc(config.train_param['criterion'])
+            self.Metrics = Metrics(config.train_param['criterion'])
         else:
             raise Exception(f'KeyError : {key}')
         
@@ -217,7 +216,6 @@ class RunModel():
         self.model_info['data_time'] = time.time()
         logger.critical(f'Start Process [Load Data]!')
         self.data = ModelData(config.model_data_type , config)
-        config.Model.model_data_param(self.data.x_data , self.data.data_type_list)
 
         logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.model_info['data_time']))
         
@@ -270,7 +268,7 @@ class RunModel():
             param = config.model_param[self.model_num]
 
             # In a new model , alters the penalty function's lamb
-            self.metric_function = self.update_metricfunc(self.metric_function , param , config)
+            self.Metrics.model_update(param , config)
 
             path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
             path = {'target'      : {op_type:f'{path_prefix}.{op_type}.pt' for op_type in config.output_types} , 
@@ -380,7 +378,6 @@ class RunModel():
             self.load_model('train')
             self.optimizer = self.load_optimizer()
             self.scheduler = self.load_scheduler() 
-            self.multiloss = self.new_multiloss(config.train_param['multitask'] , self.param['num_output'])
 
     def model_train_epoch(self):
         '''
@@ -396,14 +393,13 @@ class RunModel():
                 
                 outputs = self.model_forward('train' , batch_data)
                 metrics = self.model_metric('train' , outputs , batch_data)
-                if metrics['loss'].isnan():
+                if metrics.loss.isnan():
                     print(i , batch_data.y)
                     print(metrics)
                     raise Exception('here')
+                self.model_backward(metrics.loss)
 
-                self.model_backward('train' , metrics)
-
-                list_loss[i] , list_score[i] = metrics['loss_item'] , metrics['score']
+                list_loss[i] , list_score[i] = metrics.loss_item , metrics.score
                 iterator.display(f'Ep#{self.epoch_i:3d} train loss:{list_loss[:i+1].mean():.5f}')
             if list_loss.isnan().any(): return self.nanloss_reviver()
             self.loss_list['train'].append(list_loss.mean()) 
@@ -419,7 +415,7 @@ class RunModel():
                 outputs = self.model_forward('valid' , batch_data)
                 metrics = self.model_metric('valid' , outputs , batch_data)
 
-                list_loss[i] , list_score[i] = metrics['loss_item'] , metrics['score']
+                list_loss[i] , list_score[i] = metrics.loss_item , metrics.score
                 iterator.display(f'Ep#{self.epoch_i:3d} valid ic:{list_score[:i+1].mean():.5f}')
             self.loss_list['valid'].append(list_loss.mean()) 
             self.score_list['valid'].append(list_score.mean())
@@ -516,7 +512,7 @@ class RunModel():
                     
                     if i < l0: continue # before this date is warmup stage
                     metrics = self.model_metric('test' , outputs, batch_data)
-                    test_score[i] = metrics['score']
+                    test_score[i] = metrics.score
 
                     if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
                     iterator.display(f'Date {iter_dates[i]}:{test_score[l0:i+1].mean():.5f}')
@@ -579,25 +575,20 @@ class RunModel():
             outputs = self.net(batch_data.x)
             return ModelOutputs(outputs)
 
-    def model_metric(self, key , outputs_of_net : ModelOutputs, batch_data : BatchData , valid_sample = None, **kwargs):
+    def model_metric(self, key , outputs_of_net : ModelOutputs, batch_data : BatchData , **kwargs) -> Metrics.MetricOutput:
         # outputs_of_net = self.net(batch_data.x)
         # valid_sample = torch.where(batch_data.nonnan)[0]
         with self.ptimer(f'{key}/loss'):
             label , weight = batch_data.y , batch_data.w
             penalty_kwargs = {}
             if key == 'train': penalty_kwargs.update({'net' : self.net , 'hidden' : outputs_of_net.hidden() , 'label' : label})
-            metrics = self.calculate_metrics(
-                key , self.metric_function , label=label , pred = outputs_of_net.pred() , weight = weight ,
-                multiloss = getattr(self , 'multiloss' , None) , net = self.net ,
-                penalty_kwargs = penalty_kwargs) # valid_sample = valid_sample , 
-            return metrics
+            return self.Metrics.calculate(key , label , outputs_of_net.pred() , weight , self.net , penalty_kwargs , **kwargs)
         
-    def model_backward(self, key , metrics):
-        if key.lower() != 'train': return NotImplemented
+    def model_backward(self, loss : torch.Tensor) -> None:
         clip_value = config.train_param['trainer']['gradient'].get('clip_value')
-        with self.ptimer(f'{key}/backward'):
+        with self.ptimer(f'train/backward'):
             self.optimizer.zero_grad()
-            (metrics['loss'] + metrics['penalty']).backward()
+            loss.backward()
             if clip_value is not None : clip_grad_value_(self.net.parameters(), clip_value = clip_value) 
             self.optimizer.step()
     
@@ -785,54 +776,6 @@ class RunModel():
         return net
 
     @staticmethod
-    def new_metricfunc(params , **kwargs):
-        return {
-            'loss'    : Metrics.loss(params['loss']) , 
-            'penalty' : {k:Metrics.penalty(k,v) for k,v in params['penalty'].items()} ,
-            'score'   : {k:Metrics.score(v)     for k,v in params['score'].items()} ,
-        }
-
-    @staticmethod
-    def new_multiloss(params , num_output = 1 , **kwargs):
-        if num_output <= 1: return None
-        return MultiLosses(params['type'],num_output,**params['param_dict'][params['type']])
-
-    @staticmethod
-    def update_metricfunc(mf : dict , model_param , config , **kwargs):
-        mf['penalty'].get('hidden_corr',{})['cond'] = config.tra_model or model_param.get('hidden_as_factors',False)
-        mf['penalty'].get('tra_opt_transport',{})['cond']       = config.tra_model
-        return mf
-
-    @staticmethod
-    def calculate_metrics(key , metrics , label , pred , weight = None , multiloss = None , net = None ,
-                          penalty_kwargs = {} , **kwargs):
-        '''
-        Calculate loss(with gradient), penalty , score
-        '''
-        if label.shape != pred.shape: # if more label than output
-            label = label[...,:pred.shape[-1]]
-            assert label.shape == pred.shape , (label.shape , pred.shape)
-
-        with torch.no_grad():
-            losses , loss_item , loss , penalty = None , 0. , 0. , 0.
-            score = metrics['score'][key](label , pred , weight , nan_check = (key == 'test') ,first_col = True).item()
-
-        if key == 'train':
-            # loss
-            if multiloss is not None:
-                losses = metrics['loss'](label , pred , weight)[:multiloss.num_task]
-                loss = multiloss.calculate_multi_loss(losses , getattr(net , 'get_multiloss_params')())
-            else:
-                loss = metrics['loss'](label , pred , weight , first_col = True)
-            loss_item = loss.item()
-            # penalty
-            for _pen_dict in metrics['penalty'].values():
-                if _pen_dict['lamb'] <= 0 or not _pen_dict['cond']: continue
-                penalty = penalty + _pen_dict['lamb'] * _pen_dict['func'](label , pred , weight , **penalty_kwargs)  
-            
-        return {'loss' : loss , 'loss_item' : loss_item , 'score' : score , 'penalty' : penalty , 'losses': losses}
-
-    @staticmethod
     def new_scheduler(optimizer, key = 'cycle', **kwargs):
         if key == 'step':
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **kwargs)
@@ -858,30 +801,27 @@ class RunModel():
         return optimizer
 
     @classmethod
-    def random_module(cls , module = 'tra_lstm2' , model_data_type = 'day' , model_data = None):
+    def test_module(cls , module = 'tra_lstm2' , model_data_type = 'day'):
         config = TrainConfig.load(override = {'model_module' : module , 'model_data_type' : model_data_type})
-        data_type_list = config.data_type_list
-        config.Model.model_data_param(data_type_list = data_type_list)
-        model_data = ModelData(data_type_list , config , if_train=False)
+        model_data = ModelData(config.data_type_list , config , if_train=False)
+ 
         model_date = model_data.model_date_list[-1]
         dataloader_param = model_data.get_dataloader_param('test' , model_date=model_date , param=config.model_param[0])   
         model_data.create_dataloader(*dataloader_param)
 
         batch_data = model_data.dataloaders['test'][0]
         net = cls.new_model(module , param = config.model_param[0])
-        metrics   = cls.update_metricfunc(cls.new_metricfunc(config.train_param['criterion']) , config.model_param[0] , config)
-        multiloss = cls.new_multiloss(config.train_param['multitask'] , config.model_param[0]['num_output'])
+        metrics = Metrics(config.train_param['criterion']).model_update(config.model_param[0] , config)
 
-        return cls.RandomModule(config , net , batch_data , model_data , metrics , multiloss)
+        return cls.TestModule(config , net , batch_data , model_data , metrics)
     
     @dataclass
-    class RandomModule:
+    class TestModule:
         config : TrainConfig
         net    : nn.Module
         batch_data : BatchData
         model_data : ModelData
-        metrics : dict
-        multiloss : MultiLosses | None
+        Metrics : Metrics
 
         def try_forward(self):
             if isinstance(self.batch_data.x , torch.Tensor):

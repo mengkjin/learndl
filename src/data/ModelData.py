@@ -21,7 +21,7 @@ class ModelData():
         # self.config = train_config() if config is None else config
         if config is None: config = TrainConfig.load()
         self.config : TrainConfig = config
-        self.data_type_list = self._type_list(data_type_list)
+        self.data_type_list = self.type_list_abbr(data_type_list)
 
         self.if_train = if_train
         self.device  = Device()
@@ -34,22 +34,28 @@ class ModelData():
         self.buffer_init = self.define_buffer_init(self.config.buffer_type , **self.config.buffer_param) 
         self.buffer_proc = self.define_buffer_proc(self.config.buffer_type , **self.config.buffer_param)  
 
+    @staticmethod
+    def type_list_abbr(model_data_type):
+        if isinstance(model_data_type , str): model_data_type = model_data_type.split('+')
+        return [DataBlock.data_type_abbr(tp) for tp in model_data_type]
+
     def load_model_data(self):
-        self.x_data , self.y_data , self.norms , self.index = \
-            self._load_data_pack(self.data_type_list, self.config.labels, self.if_train, self.config.precision)
+        '''
+        load torch pack of BlockDatas of x , y , norms and index 
+        '''
+        self.datas = self.DataPack.load_pack(self.data_type_list, self.config.labels, self.if_train, self.config.precision)
+        self.config.model_data_param(self.datas.x)
+        self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
+        self.model_date_list = self.datas.date_within(self.config.beg_date    , self.config.end_date , self.config.interval)
+        self.test_full_dates = self.datas.date_within(self.config.beg_date + 1, self.config.end_date)
 
         self.static_prenorm_method = {}
         for mdt in self.data_type_list: 
             method = self.config.model_data_prenorm.get(mdt , {})
             method['divlast']  = method.get('divlast' , True) and (DataBlock.data_type_abbr(mdt) in ['day'])
-            method['histnorm'] = method.get('histnorm', True) and (self.norms.get(mdt) is not None)
+            method['histnorm'] = method.get('histnorm', True) and (self.datas.norms.get(mdt) is not None)
             print(f'Pre-Norming method of [{mdt}] : {method}')
             self.static_prenorm_method[mdt] = method
-
-        self.labels_n = min(self.y_data.shape[-1] , self.config.Model.max_num_output)
-        self.model_date_list = self.index[1][(self.index[1] >= self.config.beg_date) & (self.index[1] <= self.config.end_date)][::self.config.interval]
-        self.test_full_dates = self.index[1][(self.index[1] >  self.config.beg_date) & (self.index[1] <= self.config.end_date)]
-
 
     def reset_dataloaders(self): 
         """
@@ -57,7 +63,6 @@ class ModelData():
         """
         self.dataloaders = {}
         self.dataloader_param = ()
-
         gc.collect() 
         torch.cuda.empty_cache()   
     
@@ -91,7 +96,7 @@ class ModelData():
         self.seq0 = self.seqx + self.seqy - 1
 
         if self.loader_type == 'train':
-            model_date_col = (self.index[1] < model_date).sum()    
+            model_date_col = (self.datas.date < model_date).sum()    
             d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.input_span - self.seq0)
             d1 = max(0 , model_date_col - self.config.skip_horizon)
             self.day_len  = d1 - d0
@@ -110,22 +115,22 @@ class ModelData():
                 self.model_date_list = [model_date]
                 next_model_date = max(self.test_full_dates) + 1
             test_step  = self.config.test_step_day
-            before_test_dates = self.index[1][self.index[1] < min(self.test_full_dates)][-self.seqy:]
+            before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-self.seqy:]
             test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::test_step]
             self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
             self.early_test_dates = test_dates[test_dates <= model_date][-(self.seqy-1) // test_step:] if self.seqy > 1 else test_dates[-1:-1]
             _cal_test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
     
-            d0 = max(np.where(self.index[1] == _cal_test_dates[0])[0][0] - self.seqx + 1 , 0)
-            d1 = np.where(self.index[1] == _cal_test_dates[-1])[0][0] + 1
+            d0 = max(np.where(self.datas.date == _cal_test_dates[0])[0][0] - self.seqx + 1 , 0)
+            d1 = np.where(self.datas.date == _cal_test_dates[-1])[0][0] + 1
             self.day_len  = d1 - d0
             self.step_len = (self.day_len - self.seqx + 1) // test_step + (0 if self.day_len % test_step == 0 else 1)
             self.step_idx = np.flip(self.day_len - 1 - np.arange(0 , self.step_len) * test_step).copy() 
             self.date_idx = d0 + self.step_idx
 
-        x = {k:v.values[:,d0:d1] for k,v in self.x_data.items()}
-        self.y , _ = self.process_y_data(self.y_data.values[:,d0:d1].squeeze(2)[...,:self.labels_n] , None , no_weight = True)
-        self.y_secid , self.y_date = self.y_data.secid , self.y_data.date[d0:d1]
+        x = {k:v.values[:,d0:d1] for k,v in self.datas.x.items()}
+        self.y , _ = self.process_y_data(self.datas.y.values[:,d0:d1].squeeze(2)[...,:self.labels_n] , None , no_weight = True)
+        self.y_secid , self.y_date = self.datas.y.secid , self.datas.y.date[d0:d1]
 
         self.buffer.update(self.buffer_init(self))
         self.nonnan_sample = self.cal_nonnan_sample(x, self.y, loader_type = loader_type , 
@@ -150,30 +155,30 @@ class ModelData():
         others : rolling window non-nan , default as self.seqy
         """
         valid_sample = True
-        if loader_type in ['train' , 'valid']: valid_sample = self._nonnan_sample_sub(y)
+        if loader_type in ['train' , 'valid']: 
+            valid_sample  = self._nonnan_sample_sub(y , self.step_idx)
         for k , v in x.items():
-            valid_sample *= self._nonnan_sample_sub(v , self.seqs[k] , DataBlock.data_type_abbr(k) in ['day'])
+            valid_sample *= self._nonnan_sample_sub(v , self.step_idx , self.seqs[k] , DataBlock.data_type_abbr(k) in ['day'])
         for k , v in kwargs.items():
-            valid_sample *= self._nonnan_sample_sub(v , self.seqs[k])
+            valid_sample *= self._nonnan_sample_sub(v , self.step_idx , self.seqs[k])
         return valid_sample > 0
 
-    def _nonnan_sample_sub(self , data , rolling_window = 1 , endpoint_nonzero = False , index1 = None):
+    @staticmethod
+    def _nonnan_sample_sub(data : torch.Tensor , index1 : np.ndarray , rolling_window = 1 , endpoint_nonzero = False):
         """
         return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
         x : rolling window non-nan
         y : exact point non-nan 
         """
-        if index1 is None: index1 = self.step_idx # np.arange(rolling_window - 1 , data.shape[1])
-        data = data.unsqueeze(2)
-        index_pad = index1 + rolling_window
-        data_pad = torch.cat([torch.zeros_like(data)[:,:rolling_window] , data],dim=1)
-        sum_dim = tuple(np.arange(data.dim())[2:])
+        # if index1 is None: index1 = np.arange(rolling_window - 1 , data.shape[1])
+        data = torch.cat([torch.zeros_like(data[:,:rolling_window]) , data],dim=1).unsqueeze(2)
+        sum_dim = tuple(range(2,data.ndim))
         
-        invalid_samp = data_pad[:,index_pad].isnan().sum(sum_dim)
+        invalid_samp = data[:,index1 + rolling_window].isnan().sum(sum_dim)
         if endpoint_nonzero: 
-            invalid_samp += (data_pad[:,index_pad] == 0).sum(sum_dim)
+            invalid_samp += (data[:,index1 + rolling_window] == 0).sum(sum_dim)
         for i in range(rolling_window - 1):
-            invalid_samp += data_pad[:,index_pad - i - 1].isnan().sum(sum_dim)
+            invalid_samp += data[:,index1 + rolling_window - i - 1].isnan().sum(sum_dim)
         return (invalid_samp == 0)
      
     def process_y_data(self , y , nonnan_sample , no_weight = False):
@@ -287,8 +292,8 @@ class ModelData():
         if self.static_prenorm_method[key]['divlast']:
             x /= x.select(-2,-1).unsqueeze(-2) + 1e-6
         if self.static_prenorm_method[key]['histnorm']:
-            x -= self.norms[key].avg[-x.shape[-2]:]
-            x /= self.norms[key].std[-x.shape[-2]:] + 1e-6
+            x -= self.datas.norms[key].avg[-x.shape[-2]:]
+            x /= self.datas.norms[key].std[-x.shape[-2]:] + 1e-6
         return x
 
     @staticmethod
@@ -323,55 +328,55 @@ class ModelData():
         else:
             def none_wrapper(*args, **kwargs): return {}
             return none_wrapper
-    
-    @classmethod
-    def _load_data_pack(cls , data_type_list , y_labels = None , if_train=True,dtype = torch.float):
-        if dtype is None: dtype = torch.float
-        data_type_list = cls._type_list(data_type_list)
-        data = cls._load_torch_pack(data_type_list , if_train)
-        if isinstance(data , str):
-            path_torch_pack = data
-            if isinstance(dtype , str): dtype = getattr(torch , dtype)
-            data_type_list = ['y' , *data_type_list]
-            
-            blocks = DataBlock.load_keys(data_type_list, if_train , alias_search=True,dtype = dtype)
-            norms  = DataBlockNorm.load_keys(data_type_list, if_train , alias_search=True,dtype = dtype)
-
-            y : DataBlock = blocks[0]
-            x : dict[str,DataBlock] = {DataBlock.data_type_abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
-            norms = {DataBlock.data_type_abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
-            secid , date = blocks[0].secid , blocks[0].date
-
-            assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
-
-            data = {'x':x,'y':y,'norms':norms,'secid':secid,'date':date}
-            if if_train: DataBlock.save_dict(data , path_torch_pack)
-
-        x, y, norms, secid, date = data['x'], data['y'], data['norms'], data['secid'], data['date']
-        if y_labels is not None: 
-            ifeat = np.concatenate([np.where(y.feature == label)[0] for label in y_labels])
-            y.update(values = y.values[...,ifeat] , feature = y.feature[ifeat])
-            assert np.array_equal(y_labels , y.feature) , (y_labels , y.feature)
         
-        return x , y , norms , (secid , date)
+    @dataclass
+    class DataPack:
+        x : dict[str,DataBlock]
+        y : DataBlock
+        norms : dict[str,DataBlockNorm]
+        secid : np.ndarray
+        date  : np.ndarray
 
-    @classmethod
-    def _load_torch_pack(cls , data_type_list , if_train=True):
-        if not if_train: return 'no_torch_pack'
-        last_date = max(DataBlock.load_dict(DataBlock.block_path('y'))['date'])
-        path_torch_pack = f'{DIR.torch_pack}/{cls._modal_data_code(data_type_list)}.{last_date}.pt'
+        def __post_init__(self):
+            pass
 
-        if os.path.exists(path_torch_pack):
-            print(f'use {path_torch_pack}')
-            return torch.load(path_torch_pack)
-        else:
-            return path_torch_pack
+        def align_ylabels(self , y_labels = None):
+            if y_labels is not None: self.y.align_feature(y_labels)
 
-    @staticmethod
-    def _type_list(model_data_type):
-        if isinstance(model_data_type , str): model_data_type = model_data_type.split('+')
-        return [DataBlock.data_type_abbr(tp) for tp in model_data_type]
+        def date_within(self , start , end , interval = 1):
+            return self.date[(self.date >= start) & (self.date <= end)][::interval]
+        
+        @classmethod
+        def load_pack(cls , data_type_list , y_labels = None , if_train=True , dtype = torch.float):
+            if dtype is None: dtype = torch.float
+            if isinstance(dtype , str): dtype = getattr(torch , dtype)
+            if if_train: 
+                last_date = max(DataBlock.load_dict(DataBlock.block_path('y'))['date'])
+                torch_pack_code = '+'.join(data_type_list)
+                torch_pack = f'{DIR.torch_pack}/{torch_pack_code}.{last_date}.pt'
+            else:
+                torch_pack = 'no_torch_pack'
 
-    @staticmethod
-    def _modal_data_code(type_list):
-        return '+'.join([DataBlock.data_type_abbr(tp) for tp in type_list])
+            if os.path.exists(torch_pack):
+                print(f'use {torch_pack}')
+                data = cls(**torch.load(torch_pack))
+            else:
+                data_type_list = ['y' , *data_type_list]
+                
+                blocks = DataBlock.load_keys(data_type_list, if_train , alias_search=True,dtype = dtype)
+                norms  = DataBlockNorm.load_keys(data_type_list, if_train , alias_search=True,dtype = dtype)
+
+                y : DataBlock = blocks[0]
+                x : dict[str,DataBlock] = {DataBlock.data_type_abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
+                norms = {DataBlock.data_type_abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
+                secid , date = blocks[0].secid , blocks[0].date
+
+                assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
+
+                data = cls(x , y , norms , secid , date)
+                if if_train: 
+                    os.makedirs(os.path.dirname(torch_pack) , exist_ok=True)
+                    torch.save(data.__dict__ , torch_pack , pickle_protocol = 4)
+
+            if y_labels is not None: data.y.align_feature(y_labels)
+            return data
