@@ -28,9 +28,10 @@ class ModelParam:
         self.Param = DIR.read_yaml(f'{source_dir}/{source_base}')
         assert isinstance(self.Param , dict)
         for key , value in self.Param.items():
-            if not isinstance(value , (list,tuple)): self.Param[key] = [value]
-            elif isinstance(value , tuple): self.Param[key] = list(value)
-            self.n_model = max(self.n_model , len(value))
+            if isinstance(value , (list,tuple)): 
+                self.n_model = max(self.n_model , len(value))
+            else:
+                self.Param[key] = [value]
         assert self.n_model <= 3 , self.n_model
 
     def __getitem__(self , key : str):
@@ -150,10 +151,11 @@ class TrainParam:
 
 @dataclass
 class TrainConfig:
-    short_test:  bool       = False
+    short_test: bool        = False
     model_name: str | None  = None
     model_module: str       = ''
     model_data_type: str    = 'day' 
+    model_data_prenorm: dict= field(default_factory=dict)
     output_types: list      = field(default_factory=list)
     labels: list            = field(default_factory=list)
     beg_date: int           = 20170103
@@ -163,9 +165,9 @@ class TrainConfig:
     max_epoch: int          = 100
     verbosity: int          = 2
     batch_size: int         = 10000
-    test_step_day: int      =  1
+    test_step_day: int      = 1
     input_step_day: int     = 5
-    skip_horizon: int       =  20 
+    skip_horizon: int       = 20 
 
     mem_storage: bool       = True
     random_seed: int | None = None
@@ -375,7 +377,7 @@ class TrainConfig:
 
     def print_out(self):
         subset = [
-            'random_seed' , 'model_name' , 'model_module' , 'model_data_type' , 'labels' ,
+            'random_seed' , 'model_name' , 'model_module' , 'model_data_type' , 'model_data_prenorm' , 'labels' ,
             'beg_date' , 'end_date' , 'interval' , 'input_step_day' , 'test_step_day' , 
         ]
         pretty_print_dict({k:self.get(k) for k in subset})

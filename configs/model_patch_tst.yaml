@@ -5,11 +5,11 @@ dropout:        [0.1]
 attn_dropout:   [0.1]
 num_output:     [1]
 shared_embedding: True
-shared_head:      True
-revin:            False
+shared_head:      [True , True , False]
+revin:          [True,False,False]
 act_type:       gelu
 patch_len :     5
-stride :        [2,3]
+stride :        [2]
 n_layers:       2
 n_heads:        16
 d_ff:           256

@@ -4,15 +4,18 @@ random_seed: null
 short_test:  False
 
 model_name: null # null
-model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
+model_module: patch_tst # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
 model_data_type: day # 'day+30m' , 30m
+model_data_prenorm:
+  day: {'divlast' : True  , 'histnorm' : True}
+  
 output_types: [best , swalast , swabest]
 labels: 
   - std_lag1_10 # rtn_lag1_10 # std_lag1_10
   
 train_param:
   dataloader:
-    sample_method:   sequential # total_shuffle , sequential , both_shuffle , train_shuffle
+    sample_method:   train_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
     shuffle_option:  epoch
     train_ratio:     0.8
   trainer:

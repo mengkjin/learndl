@@ -35,15 +35,21 @@ class ModelData():
         self.buffer_proc = self.define_buffer_proc(self.config.buffer_type , **self.config.buffer_param)  
 
     def load_model_data(self):
-        self.prenorming_method = {}
         self.x_data , self.y_data , self.norms , self.index = \
             self._load_data_pack(self.data_type_list, self.config.labels, self.if_train, self.config.precision)
-        # self.x_data , self.y_data , self.norms , self.index = load_old_valid_data()
-        # self.date , self.secid = self.index
+
+        self.static_prenorm_method = {}
+        for mdt in self.data_type_list: 
+            method = self.config.model_data_prenorm.get(mdt , {})
+            method['divlast']  = method.get('divlast' , True) and (DataBlock.data_type_abbr(mdt) in ['day'])
+            method['histnorm'] = method.get('histnorm', True) and (self.norms.get(mdt) is not None)
+            print(f'Pre-Norming method of [{mdt}] : {method}')
+            self.static_prenorm_method[mdt] = method
 
         self.labels_n = min(self.y_data.shape[-1] , self.config.Model.max_num_output)
         self.model_date_list = self.index[1][(self.index[1] >= self.config.beg_date) & (self.index[1] <= self.config.end_date)][::self.config.interval]
         self.test_full_dates = self.index[1][(self.index[1] >  self.config.beg_date) & (self.index[1] <= self.config.end_date)]
+
 
     def reset_dataloaders(self): 
         """
@@ -272,26 +278,17 @@ class ModelData():
         if squeeze_out: x_rw = x_rw.squeeze(-2)
         return x_rw
         
-    def prenorm(self , x , key , static = True):
+    def prenorm(self , x , key):
         """
         return panel_normalized x
-        1.for ts-cols , divide by the last value, get seq-mormalized x
-        2.for seq-mormalized x , normalized by history avg and std
+        1.divlast: divide by the last value, get seq-mormalized x
+        2.histnorm: normalized by history avg and std
         """
-        if not static or self.prenorming_method.get(key) is None:
-            prenorming_method: list[bool] = [DataBlock.data_type_abbr(key) in ['day'] , self.norms.get(key) is not None]
-            if static:
-                self.prenorming_method.update({key:prenorming_method})
-                print(f'Pre-Norming method of [{key}] : [endpoint_division({prenorming_method[0]}) , history_standardize({prenorming_method[1]})]')
-        else:
-            prenorming_method: list[bool] = self.prenorming_method[key]
-        
-        if prenorming_method[0]:
+        if self.static_prenorm_method[key]['divlast']:
             x /= x.select(-2,-1).unsqueeze(-2) + 1e-6
-        if prenorming_method[1]:
+        if self.static_prenorm_method[key]['histnorm']:
             x -= self.norms[key].avg[-x.shape[-2]:]
             x /= self.norms[key].std[-x.shape[-2]:] + 1e-6
-
         return x
 
     @staticmethod
