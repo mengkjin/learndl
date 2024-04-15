@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .. import layer as Layer
+
+__all__ = ['ModernTCN']
 class ModernTCN(nn.Module):
     '''
     in:  [bs x seq_len x nvars]
@@ -13,14 +15,14 @@ class ModernTCN(nn.Module):
         self, 
         nvars : int , 
         seq_len: int , 
-        patch_len:int, 
+        d_model:int, 
+        patch_len:int = 5, 
         stride:int|None = None, 
-        d_model:int=32, 
         kernel_size:int=3,expansion_factor:int=1,
         shared_embedding=True, shared_head = False, channel_mixer=True,
         revin:bool=True,n_layers:int=3, dropout:float=0., act:str='gelu', 
         pe:str='zeros', learn_pe:bool=True, head_dropout = 0, predict_steps:int = 1,
-        head_type = 'prediction', ):
+        head_type = 'prediction', **kwargs):
 
         super().__init__()
 
@@ -343,5 +345,5 @@ if __name__ == '__main__':
     print(x.shape , y.shape)
     embed = ModernTCNEmbed(nvars , d_model , patch_len=patch_len , stride=stride, shared=True)
     print(embed(x).shape)
-    mtcn = ModernTCN(nvars ,seq_len , patch_len, stride , d_model , predict_steps=predict_steps , head_type='pretrain')
+    mtcn = ModernTCN(nvars ,seq_len , d_model , patch_len, stride , predict_steps=predict_steps , head_type='pretrain')
     print(x.shape , mtcn(x).shape)

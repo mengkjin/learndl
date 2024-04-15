@@ -3,7 +3,7 @@ import torch.nn as nn
 from ..func.basic import *
 from .tra import block_tra , tra_component
 from .rnn import rnn_univariate , rnn_multivariate
-from . import patchTST
+from . import patchTST , modernTCN , TSMixer
 
 """
 class TRA_LSTM(TRA):
@@ -94,6 +94,15 @@ class rnn_general(rnn_multivariate):
 
 class patch_tst(patchTST.PatchTST):
     def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
-        super().__init__(nvars = input_dim , seq_len = seq_len ,
-                         target_dim = hidden_dim , 
+        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim , 
+                         predict_steps = num_output , head_type = "prediction" , **kwargs)
+        
+class modern_tcn(modernTCN.ModernTCN):
+    def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
+        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim , 
+                         predict_steps = num_output , head_type = "prediction" , **kwargs)
+        
+class ts_mixer(TSMixer.TSMixer):
+    def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
+        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim , 
                          predict_steps = num_output , head_type = "prediction" , **kwargs)

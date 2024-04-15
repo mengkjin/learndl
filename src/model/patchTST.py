@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from .. import layer as Layer
 
-__all__ = ['PatchTST' , 'PatchTSTEmbed' , 'PatchTSTEncoder' , 'PatchTSTPredictionHead' , 'PatchTSTPretrainHead']
+__all__ = ['PatchTST']
 
 class PatchTST(nn.Module):
     """
@@ -17,11 +17,11 @@ class PatchTST(nn.Module):
         self, 
         nvars : int , 
         seq_len: int , 
+        d_model: int , 
         patch_len:int = 5 , 
         stride:int|None = None, 
-        d_model:int=32, 
         shared_embedding=True, shared_head = False,
-        revin:bool=True,n_layers:int=3, n_heads=16, d_ff:int=256, 
+        revin:bool=True,n_layers:int=3, n_heads=8, d_ff:int=64, 
         norm:str='BatchNorm', attn_dropout:float=0., dropout:float=0., act_type:str='gelu', 
         res_attention:bool=True, pre_norm:bool=False, store_attn:bool=False,
         pe:str='zeros', learn_pe:bool=True, head_dropout = 0, predict_steps:int = 1,
@@ -241,8 +241,8 @@ class PatchTSTEncoder(nn.Module):
     in : [bs x nvars x num_patch x d_model]   
     out: [bs x nvars x d_model x num_patch]
     '''
-    def __init__(self, nvars, num_patch, n_layers=3, d_model=128, n_heads=16, 
-                 d_ff=256, norm='BatchNorm', attn_dropout=0., dropout=0., act_type='gelu', store_attn=False,
+    def __init__(self, nvars, num_patch, d_model, n_layers=3, n_heads=8, 
+                 d_ff=64, norm='BatchNorm', attn_dropout=0., dropout=0., act_type='gelu', store_attn=False,
                  res_attention=True, pre_norm=False,
                  pe='zeros', learn_pe=True, verbose=False, **kwargs):
 
@@ -280,7 +280,7 @@ class TSTEncoder(nn.Module):
     in : [bs x num_patch x d_model]
     out: [bs x num_patch x d_model]
     """
-    def __init__(self, d_model, n_heads, d_ff=256, 
+    def __init__(self, d_model, n_heads, d_ff = 64, 
                  norm='BatchNorm', attn_dropout=0., dropout=0., act_type='gelu',
                  res_attention=False, n_layers=1, pre_norm=False, store_attn=False):
         super().__init__()
@@ -308,7 +308,7 @@ class TSTEncoder(nn.Module):
             return output
 
 class TSTEncoderLayer(nn.Module):
-    def __init__(self, d_model, n_heads, d_ff =256, store_attn=False,
+    def __init__(self, d_model, n_heads, d_ff = 64, store_attn=False,
                  norm='BatchNorm', attn_dropout=0., dropout=0., bias=True, 
                  act_type='gelu', res_attention=False, pre_norm=False):
         super().__init__()
@@ -378,8 +378,7 @@ class TSTEncoderLayer(nn.Module):
             return src
 
 if __name__ == '__main__' :
-    pass
-    """
+
     import torch
     from src.model.patchTST import ModelPretrain,  ModelPredict
     batch_size = 2 
@@ -388,21 +387,20 @@ if __name__ == '__main__' :
     stride = 2
     n_inputs = 6
     mask_ratio = 0.4
-    target_dim = 16
+    d_model = 16
     predict_steps = 5
 
     x = torch.rand(batch_size , seq_len , n_inputs)
     y = torch.rand(batch_size , predict_steps)
 
-    model_pretrain = ModelPretrain(nvars = n_inputs, seq_len = seq_len , target_dim = target_dim, patch_len = patch_len, 
-                                stride = stride, 
-                                res_attention=True, pre_norm=False, store_attn=False, pe='zeros', learn_pe=True, 
-                                head_dropout = 0, head_type = 'pretrain', individual = False, verbose=True)
+    model_pretrain = ModelPretrain(nvars = n_inputs, seq_len = seq_len , d_model = d_model, 
+                                   patch_len = patch_len, stride = stride, 
+                                   res_attention=True, pre_norm=False, store_attn=False, pe='zeros', learn_pe=True, 
+                                   head_dropout = 0, head_type = 'pretrain', individual = False, verbose=True)
     print(model_pretrain(x).shape , model_pretrain.pretrain_label(x).shape)
     
-    model_predict = ModelPredict(nvars = n_inputs, seq_len = seq_len , target_dim = target_dim, patch_len = patch_len, 
-                                stride = stride, predict_steps = predict_steps ,
-                                res_attention=True, pre_norm=False, store_attn=False, pe='zeros', learn_pe=True, 
-                                head_dropout = 0, head_type = 'prediction', individual = False, verbose=True)
+    model_predict = ModelPredict(nvars = n_inputs, seq_len = seq_len , d_model = d_model, 
+                                 patch_len = patch_len,  stride = stride, predict_steps = predict_steps ,
+                                 res_attention=True, pre_norm=False, store_attn=False, pe='zeros', learn_pe=True, 
+                                 head_dropout = 0, head_type = 'prediction', individual = False, verbose=True)
     print(model_predict(x).shape , y.shape)
-    """
