@@ -66,7 +66,7 @@ class Metrics:
         loss      : torch.Tensor = torch.Tensor([0.])
         score     : float = 0.
         loss_item : float = 0.
-        penalty   : torch.Tensor = torch.Tensor([0.])
+        penalty   : torch.Tensor | float = 0.
         losses    : torch.Tensor = torch.Tensor([0.])
 
         def __post_init__(self):
