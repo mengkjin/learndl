@@ -180,23 +180,23 @@ class DataBlock():
 
     def align_secid(self , secid):
         if secid is None or len(secid) == 0: return self
+        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.values.dtype
         values = np.full((len(secid) , *self.shape[1:]) , np.nan)
         _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
         values[p0s] = self.values[p1s]
-        self.values  = values
-        self.secid   = secid
-        # self.shape   = self.values.shape
-        return self
+        self.values = values
+        self.secid  = secid
+        return self.to(asTensor,dtype)
     
     def align_date(self , date):
         if date is None or len(date) == 0: return self
+        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.values.dtype
         values = np.full((self.shape[0] , len(date) , *self.shape[2:]) , np.nan)
         _ , p0d , p1d = np.intersect1d(date , self.date , return_indices=True)
         values[:,p0d] = self.values[:,p1d]
         self.values  = values
         self.date    = date
-        # self.shape   = self.values.shape
-        return self
+        return self.to(asTensor,dtype)
     
     def align_secid_date(self , secid = None , date = None):
         if (secid is None or len(secid) == 0) and (date is None or len(date) == 0): 
@@ -206,25 +206,25 @@ class DataBlock():
         elif date is None or len(date) == 0:
             return self.align_secid(secid = secid)
         else:
+            asTensor , dtype = isinstance(self.values , torch.Tensor) , self.values.dtype
             values = np.full((len(secid),len(date),*self.shape[2:]) , np.nan)
             _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
             _ , p0d , p1d = np.intersect1d(date  , self.date  , return_indices=True)
             values[np.ix_(p0s,p0d)] = self.values[np.ix_(p1s,p1d)] 
-            self.values  = values
+            self.values  = torch.Tensor(values).to(self.values) if isinstance(self.values , torch.Tensor) else values
             self.secid   = secid
             self.date    = date
-            # self.shape   = self.values.shape
-            return self
+            return self.to(asTensor,dtype)
     
     def align_feature(self , feature):
         if feature is None or len(feature) == 0: return self
+        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.values.dtype
         values = np.full((*self.shape[:-1],len(feature)) , np.nan)
         _ , p0f , p1f = np.intersect1d(feature , self.feature , return_indices=True)
         values[...,p0f] = self.values[...,p1f]
-        self.values  = values
+        self.values  = torch.Tensor(values).to(self.values) if isinstance(self.values , torch.Tensor) else values
         self.feature = feature
-        # self.shape   = self.values.shape
-        return self
+        return self.to(asTensor,dtype)
     
     def add_feature(self , new_feature , new_value):
         assert new_value.shape == self.shape[:-1]

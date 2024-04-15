@@ -117,10 +117,12 @@ class ModelData():
             test_step  = self.config.test_step_day
             before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-self.seqy:]
             test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::test_step]
-            self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
+            
             self.early_test_dates = test_dates[test_dates <= model_date][-(self.seqy-1) // test_step:] if self.seqy > 1 else test_dates[-1:-1]
+            self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
+            
             _cal_test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
-    
+
             d0 = max(np.where(self.datas.date == _cal_test_dates[0])[0][0] - self.seqx + 1 , 0)
             d1 = np.where(self.datas.date == _cal_test_dates[-1])[0][0] + 1
             self.day_len  = d1 - d0
@@ -378,5 +380,5 @@ class ModelData():
                     os.makedirs(os.path.dirname(torch_pack) , exist_ok=True)
                     torch.save(data.__dict__ , torch_pack , pickle_protocol = 4)
 
-            if y_labels is not None: data.y.align_feature(y_labels)
+            if y_labels is not None:  data.y.align_feature(y_labels)
             return data

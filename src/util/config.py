@@ -218,7 +218,7 @@ class TrainConfig:
         self.Model.model_data_param(x_data , self.data_type_list)
     
     @classmethod
-    def load(cls , config_path = 'default' , do_process = False , par_args = {} , override = None):
+    def load(cls , config_path = 'default' , do_process = False , par_args = {} , override = None , makedir = True):
         """
         1. namespace type of config
         2. Ask what process would anyone want to run : 0 : train & test(default) , 1 : train only , 2 : test only
@@ -238,7 +238,7 @@ class TrainConfig:
             _ModelParam = ModelParam(model_path , _TrainParam.model_module)
             config_resume = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
             config.update(config_resume.__dict__)
-        else:
+        elif makedir:
             if config.Train.resumeable:
                 raise Exception(f'{model_path} has to be delete manually')
             # os.makedirs(config.model_base_path, exist_ok = True)

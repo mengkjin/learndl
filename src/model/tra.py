@@ -191,7 +191,7 @@ class block_tra(nn.Module):
 
     def forward(self, inputs):
         if self.num_states > 1:
-            i0 , i1 = self.dynamic_data['batch_data']['i'][:,0] , self.dynamic_data['batch_data']['i'][:,1]
+            i0 , i1 = self.dynamic_data['batch_data'].i[:,0] , self.dynamic_data['batch_data'].i[:,1]
             d = self.dynamic_data['model_data'].buffer['hist_loss']
             rw = self.dynamic_data['model_data'].seqs['hist_loss']
             hist_loss = torch.stack([d[i0 , i1+j+1-rw] for j in range(rw)],dim=-2).nan_to_num(1)

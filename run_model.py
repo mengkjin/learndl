@@ -144,6 +144,40 @@ class ModelPred:
         del model_data_new , model_data_old
         return df
 
+@dataclass
+class ModelTest:
+    config : TrainConfig
+    net    : nn.Module
+    batch_data : BatchData
+    model_data : ModelData
+    Metrics : Metrics
+
+    @classmethod
+    def new(cls , module = 'tra_lstm' , model_data_type = 'day'):
+        config = TrainConfig.load(override = {'model_module' : module , 'model_data_type' : model_data_type} , makedir = False)
+        model_data = ModelData(config.data_type_list , config , if_train=False)
+
+        print(model_data.model_date_list)
+        model_date = model_data.model_date_list[0]
+        dataloader_param = model_data.get_dataloader_param('test' , model_date=model_date , param=config.model_param[0])   
+        model_data.create_dataloader(*dataloader_param)
+
+        batch_data = model_data.dataloaders['test'][0]
+        net = getattr(model , f'{module}')(**config.model_param[0])
+        metrics = Metrics(config.train_param['criterion']).model_update(config.model_param[0] , config)
+        return cls(config , net , batch_data , model_data , metrics)
+
+    def try_forward(self):
+        if isinstance(self.batch_data.x , torch.Tensor):
+            print(f'x shape is {self.batch_data.x.shape}')
+        else:
+            print(f'multiple x of {len(self.batch_data.x)}')
+
+        if hasattr(self.net , 'dynamic_data_assign'): getattr(self.net , 'dynamic_data_assign')(self.batch_data , self.model_data)
+        outputs = ModelOutputs(self.net(self.batch_data.x))
+        print(f'y shape is {outputs.pred().shape}')
+        return outputs
+
 class RunModel():
     '''
     Control the whole process of training:
@@ -572,8 +606,7 @@ class RunModel():
     def model_forward(self , key , batch_data : BatchData):
         with self.ptimer(f'{key}/forward'):
             if hasattr(self.net , 'dynamic_data_assign'): getattr(self.net , 'dynamic_data_assign')(batch_data , self.data)
-            outputs = self.net(batch_data.x)
-            return ModelOutputs(outputs)
+            return ModelOutputs(self.net(batch_data.x))
 
     def model_metric(self, key , outputs_of_net : ModelOutputs, batch_data : BatchData , **kwargs) -> Metrics.MetricOutput:
         # outputs_of_net = self.net(batch_data.x)
@@ -800,38 +833,6 @@ class RunModel():
         }[key](net_param_groups , **kwargs)
         return optimizer
 
-    @classmethod
-    def test_module(cls , module = 'tra_lstm2' , model_data_type = 'day'):
-        config = TrainConfig.load(override = {'model_module' : module , 'model_data_type' : model_data_type})
-        model_data = ModelData(config.data_type_list , config , if_train=False)
- 
-        model_date = model_data.model_date_list[-1]
-        dataloader_param = model_data.get_dataloader_param('test' , model_date=model_date , param=config.model_param[0])   
-        model_data.create_dataloader(*dataloader_param)
-
-        batch_data = model_data.dataloaders['test'][0]
-        net = cls.new_model(module , param = config.model_param[0])
-        metrics = Metrics(config.train_param['criterion']).model_update(config.model_param[0] , config)
-
-        return cls.TestModule(config , net , batch_data , model_data , metrics)
-    
-    @dataclass
-    class TestModule:
-        config : TrainConfig
-        net    : nn.Module
-        batch_data : BatchData
-        model_data : ModelData
-        Metrics : Metrics
-
-        def try_forward(self):
-            if isinstance(self.batch_data.x , torch.Tensor):
-                print(f'x shape is {self.batch_data.x.shape}')
-            else:
-                print(f'multiple x of {len(self.batch_data.x)}')
-            y = self.net(self.batch_data.x)
-            if isinstance(y , tuple): y = y[0]
-            print(f'y shape is {y.shape}')
-            return y
 
 def main(process = -1 , resume = -1 , checkname = -1 , timer = False , parser_args = None):
     if parser_args is None: parser_args = config.parser_args({'process':process,'resume':resume,'checkname':checkname})
