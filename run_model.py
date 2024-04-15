@@ -289,11 +289,11 @@ class RunModel():
         new_iter = list(itertools.product(self.data.model_date_list , config.model_num_list))
         if config.resume_training and self.process_name == 'train':
             models_trained = np.full(len(new_iter) , True)
-            for i,(model_date,model_num) in enumerate(new_iter):
+            for i , (model_date , model_num) in enumerate(new_iter):
                 if not os.path.exists(f'{config.model_base_path}/{model_num}/{model_date}.best.pt'):
                     models_trained[max(i-1,0):] = False
                     break
-            new_iter = FilteredIterator(new_iter , models_trained == 0)
+            new_iter = FilteredIterator(new_iter , ~models_trained)
         return new_iter
     
     def model_preparation(self , process , last_n = 30 , best_n = 5):

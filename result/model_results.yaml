@@ -151,3 +151,36 @@
   1_best: 146.797
   1_swabest: 110.9119
   1_swalast: 111.225
+0_model: patch_tst_day.1(x3)
+1_start: Sun Apr 14 11:02:49 2024
+2_basic: full
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-99991231
+6_train: Finish Process [Train Model]! Cost 7.3 Hours, 9.7 Min/model, 19.3 Sec/Epoch
+7_test: Finish Process [Test Model]! Cost 371.8 Secs
+8_result:
+  0_best: 168.3923
+  0_swabest: 170.0424
+  0_swalast: 167.0552
+  1_best: 149.2142
+  1_swabest: 109.4558
+  1_swalast: 116.8319
+  2_best: 146.8237
+  2_swabest: 121.7522
+  2_swalast: 118.0673
+0_model: patch_tst_day.2(x2)
+1_start: Sun Apr 14 18:33:45 2024
+2_basic: full
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-99991231
+6_train: Finish Process [Train Model]! Cost 2.6 Hours, 5.3 Min/model, 9.4 Sec/Epoch
+7_test: Finish Process [Test Model]! Cost 143.3 Secs
+8_result:
+  0_best: 164.3095
+  0_swabest: 169.1972
+  0_swalast: 165.4055
+  1_best: 164.8618
+  1_swabest: 168.408
+  1_swalast: 170.1557

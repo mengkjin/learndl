@@ -44,13 +44,15 @@ class Metrics:
         if key == 'train':
             if self.multiloss is not None:
                 losses = self.loss(label , pred , weight)[:self.multiloss.num_task]
-                mt_param = {} if net is None or not hasattr(net , 'get_multiloss_params') else getattr(net , 'get_multiloss_params')()
+                mt_param = {}
+                if net and hasattr(net , 'get_multiloss_params'):
+                    mt_param = getattr(net , 'get_multiloss_params')()
                 loss = self.multiloss.calculate_multi_loss(losses , mt_param)    
             else:
                 losses = self.loss(label , pred , weight , first_col = True)
                 loss = losses
 
-            penalty = torch.Tensor([0.])
+            penalty = 0.
             for pen in self.penalty.values():
                 if pen['lamb'] <= 0 or not pen['cond']: continue
                 penalty = penalty + pen['lamb'] * pen['func'](label , pred , weight , **penalty_kwargs)  
