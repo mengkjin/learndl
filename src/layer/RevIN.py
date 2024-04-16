@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn
+from torch import nn , Tensor
 
 class RevIN(nn.Module):
     def __init__(self, num_features: int, eps=1e-5, affine=True, subtract_last=False):
@@ -16,7 +16,7 @@ class RevIN(nn.Module):
         if self.affine:
             self._init_params()
 
-    def forward(self, x, mode:str):
+    def forward(self, x : Tensor, mode:str) -> Tensor:
         if mode == 'norm':
             self._get_statistics(x)
             x = self._normalize(x)

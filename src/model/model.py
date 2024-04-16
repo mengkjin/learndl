@@ -1,5 +1,6 @@
 import torch
-import torch.nn as nn
+
+from torch import nn , Tensor
 from ..func.basic import *
 from .tra import block_tra , tra_component
 from .rnn import rnn_univariate , rnn_multivariate
@@ -30,9 +31,10 @@ class simple_lstm(nn.Module):
         super().__init__()
         self.lstm = nn.LSTM(input_dim , hidden_dim , num_layers = 1 , dropout = 0 , batch_first = True)
         self.fc = nn.Linear(hidden_dim , 1)
-    def forward(self, inputs):
-        o = self.lstm(inputs)[0][:,-1]
+    def forward(self, x : Tensor) -> tuple[Tensor , Tensor]:
+        o = self.lstm(x)[0][:,-1]
         return self.fc(o) , o
+    
 class gru(rnn_univariate):
     def __init__(self , input_dim , hidden_dim , **kwargs):
         kwargs.update({'rnn_type' : 'gru' , 'num_output' : 1})

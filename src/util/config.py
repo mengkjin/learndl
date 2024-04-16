@@ -53,11 +53,7 @@ class ModelParam:
         if resume_training and os.path.exists(f'{base_path}/{self.target_base}'):
             self.params = torch.load(f'{base_path}/{self.target_base}')
         else:
-            self.params = []
-            for mm in range(self.n_model):
-                dict_mm = {'path':f'{base_path}/{mm}','input_dim':1 , 'inday_dim':1}
-                dict_mm.update({k:v[mm % len(v)] for k,v in self.Param.items()})
-                self.params.append(dict_mm)
+            self.params = [{'path':f'{base_path}/{mm}' , **{k:v[mm % len(v)] for k,v in self.Param.items()}} for mm in range(self.n_model)]
 
     @classmethod
     def load(cls , base_path , model_num : int | None = None):
@@ -68,15 +64,23 @@ class ModelParam:
     def save(self , base_path):
         torch.save(self.params , f'{base_path}/{self.target_base}')   
 
-    def model_data_param(self , x_data : dict = {} , data_type_list = None):
+    def update_data_param(self , x_data : dict):
         # when x_data is know , use it to fill some params
-        if data_type_list is None: data_type_list = list(x_data.keys())
-        if data_type_list:
-            input_dim = tuple([x_data[mdt].shape[-1] if mdt in x_data.keys() else self.inday_dims[mdt] for mdt in data_type_list])
-            inday_dim = tuple([x_data[mdt].shape[-2] if mdt in x_data.keys() else 6                    for mdt in data_type_list])
-            if len(data_type_list) == 1: input_dim , inday_dim = input_dim[0] , inday_dim[0]
-            [param.update({'input_dim': input_dim,  'inday_dim': inday_dim}) for param in self.params]
+        if not x_data: return self
+        keys = list(x_data.keys())
+        input_dim = [x_data[mdt].shape[-1] for mdt in keys]
+        inday_dim = [x_data[mdt].shape[-2] for mdt in keys]
+        for param in self.params:
+            self.update_param_dict(param , 'input_dim' , input_dim)
+            self.update_param_dict(param , 'inday_dim' , inday_dim)
+            if len(keys) == 1: self.update_param_dict(param , 'seq_len'   , param.get('seqlens',{}).get(keys[0]))
         return self
+    
+    @staticmethod
+    def update_param_dict(param , key : str , value , delist = True , overwrite = False):
+        if key in param.keys() and not overwrite: return
+        if delist and isinstance(value , (list , tuple)) and len(value) == 1: value = value[0]
+        if value is not None: param.update({key : value})
     
     @property
     def max_num_output(self):
@@ -214,8 +218,8 @@ class TrainConfig:
         torch.autograd.set_detect_anomaly(self.detect_anomaly) # type:ignore
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
-    def model_data_param(self , x_data = {}):
-        self.Model.model_data_param(x_data , self.data_type_list)
+    def update_data_param(self , x_data : dict):
+        self.Model.update_data_param(x_data)
     
     @classmethod
     def load(cls , config_path = 'default' , do_process = False , par_args = {} , override = None , makedir = True):

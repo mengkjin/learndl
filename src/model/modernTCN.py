@@ -1,6 +1,7 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+
+from torch import nn , Tensor
 
 from .. import layer as Layer
 
@@ -30,7 +31,7 @@ class ModernTCN(nn.Module):
         self.nvars = nvars
         self.head_type = head_type
         if stride is None: stride = patch_len // 2
-        num_patch = max(seq_len - patch_len, 0) // stride + 2
+        num_patch = max(seq_len + patch_len - stride, 0) // stride - 1
 
         # RevIN
         self.revin = Layer.RevIN.RevIN(num_features = nvars) if revin else None
@@ -48,7 +49,7 @@ class ModernTCN(nn.Module):
         elif head_type == 'prediction':
             self.head = ModernTCNPredictionHead(self.nvars, d_model, num_patch, predict_steps, head_dropout , shared = shared_head)
 
-    def forward(self, x):                             
+    def forward(self, x : Tensor) -> Tensor:  
         '''
         in:  [bs x seq_len x nvars]
         out: [bs x seq_len x nvars] for pretrain
@@ -57,10 +58,8 @@ class ModernTCN(nn.Module):
         '''
         if self.revin is not None: 
             x = self.revin(x , 'norm')              # [bs x seq_len x nvars]
-
         x = self.embed(x)                           # [bs x nvars x num_patch x d_model]
         x = self.backbone(x)                        # [bs x nvars x num_patch x d_model]
-
         if self.revin is not None: 
             x = x.permute(0,2,3,1)                  # [bs x d_model x num_patch x nvars]
             x = self.revin(x , 'denorm')            # [bs x d_model x num_patch x nvars]
@@ -87,20 +86,18 @@ class ModernTCNEmbed(nn.Module):
             for _ in range(1 if shared else nvars)
         ])
         
-    def forward(self, x):
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x seq_len x nvars]
         out: [bs x nvars x num_patch x d_model] 
         '''
         bs , seq_len , nvars = x.shape
-        # num_patch = (max(seq_len, self.kernel_size)-self.kernel_size) // self.stride + 2
         x = x.permute(0,2,1)                        # [bs x nvars x seq_len]
         x = x.unsqueeze(2)                          # [bs x nvars x 1 x seq_len]
         x = x.reshape(-1,1,seq_len)
-        x = F.pad(x,pad=self.pad,mode='replicate')  # [bs * nvars x 1 x (seq_len + kernel_size - stride)] 
-
+        x = F.pad(x,pad=self.pad,mode='replicate')  # [bs * nvars x 1 x (seq_len + patch_len - stride)] 
         if self.shared:
-            x = self.layers[0](x)                     # [bs * nvars x d_model x num_patch] 
+            x = self.layers[0](x)                   # [bs * nvars x d_model x num_patch] 
             x = x.reshape(bs,nvars,*x.shape[1:])    # [bs x nvars x d_model x num_patch] 
         else:
             x = x.reshape(bs,nvars,1,-1)            # [bs x nvars x 1 x (seq_len + kernel_size - stride)] 
@@ -128,7 +125,7 @@ class MtcnTSMixer(nn.Module):
         )
         self.bn = nn.BatchNorm1d(nvars * d_model)
         
-    def forward(self , x):
+    def forward(self , x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x d_model x num_patch]
         out: [bs x nvars * d_model x num_patch]
@@ -163,7 +160,7 @@ class MtcnFeatureMixer(nn.Module):
             groups          = nvars
         )
         
-    def forward(self,x):
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x nvars * d_model x num_patch]
         out: [bs x nvars x d_model x num_patch]
@@ -199,7 +196,7 @@ class MtcnChannelMixer(nn.Module):
             groups          = d_model
         )
         
-    def forward(self,x):
+    def forward(self , x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x d_model x num_patch]
         out: [bs x nvars x d_model x num_patch]
@@ -225,7 +222,7 @@ class ModernTCNBlock(nn.Module):
         self.feature_mixer = MtcnFeatureMixer(nvars, d_model, expansion_factor,activation)
         self.channel_mixer = MtcnChannelMixer(nvars, d_model, expansion_factor,activation) if channel_mixer else nn.Sequential()
     
-    def forward(self, x):
+    def forward(self , x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x num_patch x d_model]
         out: [bs x nvars x num_patch x d_model]
@@ -254,7 +251,7 @@ class ModernTCNEncoder(nn.Module):
                            channel_mixer=channel_mixer,activation=activation) 
                            for _ in range(n_layers)])
         
-    def forward(self , x):
+    def forward(self , x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x num_patch x d_model]   
         out: [bs x nvars x d_model x num_patch]
@@ -288,7 +285,7 @@ class ModernTCNPredictionHead(nn.Module):
             nn.Linear(d_model * nvars , predict_steps),
         )
     
-    def forward(self, x):                     
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x d_model x num_patch]
         out: [bs x predict_steps]
@@ -312,7 +309,7 @@ class ModernTCNPretrainHead(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(d_model * num_patch , seq_len)
 
-    def forward(self, x):
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x d_model x num_patch]
         out: [bs x seq_len x nvars]
@@ -338,7 +335,7 @@ if __name__ == '__main__':
     d_model = 16
     predict_steps = 1
 
-    num_patch = max(seq_len - patch_len, 0) // stride + 2 # 15
+    num_patch = max(seq_len + patch_len - stride, 0) // stride - 1
 
     x = torch.rand(batch_size , seq_len , nvars)
     y = torch.rand(batch_size , predict_steps)

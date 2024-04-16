@@ -1,8 +1,9 @@
 import math
 import torch
-import torch.nn as nn
 
-def positional_encoding(pe, learn_pe, q_len, d_model):
+from torch import nn , Tensor
+
+def positional_encoding(pe, learn_pe, q_len, d_model) -> Tensor:
     # Positional encoding
     if pe == None:
         W_pos = torch.empty((q_len, d_model)) # pe = None and learn_pe = False can be used to measure impact of pe
@@ -25,7 +26,7 @@ def positional_encoding(pe, learn_pe, q_len, d_model):
         'zeros', 'zero', uniform', 'sincos', None.)")
     return nn.Parameter(W_pos, requires_grad=learn_pe)
 
-def PositionalEncoding(q_len, d_model, normalize=True):
+def PositionalEncoding(q_len, d_model, normalize=True) -> Tensor:
     pe = torch.zeros(q_len, d_model)
     position = torch.arange(0, q_len).unsqueeze(1)
     div_term = torch.exp(torch.arange(0, d_model, 2) * -(math.log(10000.0) / d_model))

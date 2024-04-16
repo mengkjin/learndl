@@ -86,16 +86,14 @@ class ModelPred:
         model_files = sorted([p for p in os.listdir(f'{model_path}/{self.model_num}') if p.endswith(f'{self.model_type}.pt')])
         model_dates = np.array([int(mf.split('.')[0]) for mf in model_files])
 
-        data_type = model_config.model_data_type
-
         start_dt = max(start_dt , int(date_offset(min(model_dates) ,1)))
         calendar = DataFetcher.load_target_file('information' , 'calendar')
         assert calendar is not None
 
         require_model_data_old = (start_dt <= today(-100))
 
-        model_data_old = ModelData(data_type , model_config , if_train = True) if require_model_data_old else None
-        model_data_new = ModelData(data_type , model_config , if_train = True if old_model_data else False) 
+        model_data_old = ModelData(model_config , if_train = True) if require_model_data_old else None
+        model_data_new = ModelData(model_config , if_train = True if old_model_data else False) 
 
         end_dt = min(end_dt , max(model_data_new.test_full_dates))
         pred_dates = calendar[(calendar['calendar'] >= start_dt) & (calendar['calendar'] <= end_dt) & (calendar['trade'])]['calendar'].values
@@ -155,9 +153,8 @@ class ModelTest:
     @classmethod
     def new(cls , module = 'tra_lstm' , model_data_type = 'day'):
         config = TrainConfig.load(override = {'model_module' : module , 'model_data_type' : model_data_type} , makedir = False)
-        model_data = ModelData(config.data_type_list , config , if_train=False)
+        model_data = ModelData(config , if_train=False)
 
-        print(model_data.model_date_list)
         model_date = model_data.model_date_list[0]
         dataloader_param = model_data.get_dataloader_param('test' , model_date=model_date , param=config.model_param[0])   
         model_data.create_dataloader(*dataloader_param)
@@ -167,7 +164,7 @@ class ModelTest:
         metrics = Metrics(config.train_param['criterion']).model_update(config.model_param[0] , config)
         return cls(config , net , batch_data , model_data , metrics)
 
-    def try_forward(self):
+    def try_forward(self) -> None:
         if isinstance(self.batch_data.x , torch.Tensor):
             print(f'x shape is {self.batch_data.x.shape}')
         else:
@@ -176,7 +173,17 @@ class ModelTest:
         if hasattr(self.net , 'dynamic_data_assign'): getattr(self.net , 'dynamic_data_assign')(self.batch_data , self.model_data)
         outputs = ModelOutputs(self.net(self.batch_data.x))
         print(f'y shape is {outputs.pred().shape}')
-        return outputs
+        self.outputs = outputs
+        print(f'Test Forward Success')
+
+    def try_metrics(self) -> None:
+        if not hasattr(self , 'outputs'): self.try_forward()
+        label , weight = self.batch_data.y , self.batch_data.w
+        penalty_kwargs = {}
+        penalty_kwargs.update({'net' : self.net , 'hidden' : self.outputs.hidden() , 'label' : label})
+        metrics = self.Metrics.calculate('train' , label , self.outputs.pred() , weight , self.net , penalty_kwargs)
+        print('metrics : ' , metrics)
+        print(f'Test Metrics Success')
 
 class RunModel():
     '''
@@ -249,7 +256,7 @@ class RunModel():
         '''
         self.model_info['data_time'] = time.time()
         logger.critical(f'Start Process [Load Data]!')
-        self.data = ModelData(config.model_data_type , config)
+        self.data = ModelData(config)
 
         logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.model_info['data_time']))
         

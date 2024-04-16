@@ -2,10 +2,14 @@ import torch
 import torch.nn as nn
 
 from copy import deepcopy
+from typing import Any
 
 from . import (
     Attention , Embed , PE , RevIN , Act
 )
+
+class Pass(nn.Module):
+    def forward(self , x): return x
 
 class Transpose(nn.Module):
     def __init__(self, *dims, contiguous=False): 

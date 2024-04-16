@@ -1,6 +1,6 @@
 import torch
-import torch.nn as nn
 
+from torch import nn , Tensor
 from typing import Optional
 # import torch.nn.functional as F
 
@@ -29,9 +29,8 @@ class MultiheadAttention(nn.Module):
         # Poject output
         self.to_out = nn.Sequential(nn.Linear(n_heads * d_v, d_model), nn.Dropout(proj_dropout))
 
-
-    def forward(self, Q:torch.Tensor, K:Optional[torch.Tensor]=None, V:Optional[torch.Tensor]=None, prev:Optional[torch.Tensor]=None,
-                key_padding_mask:Optional[torch.Tensor]=None, attn_mask:Optional[torch.Tensor]=None):
+    def forward(self, Q:Tensor, K:Optional[Tensor]=None, V:Optional[Tensor]=None, prev:Optional[Tensor]=None,
+                key_padding_mask:Optional[Tensor]=None, attn_mask:Optional[Tensor]=None):
 
         bs = Q.size(0)
         if K is None: K = Q
@@ -52,8 +51,10 @@ class MultiheadAttention(nn.Module):
         output = output.transpose(1, 2).contiguous().view(bs, -1, self.n_heads * self.d_v) # output: [bs x q_len x n_heads * d_v]
         output = self.to_out(output)
 
-        if self.res_attention: return output, attn_weights, attn_scores
-        else: return output, attn_weights
+        if self.res_attention: 
+            return output, attn_weights, attn_scores
+        else: 
+            return output, attn_weights
 
 class ScaledDotProductAttention(nn.Module):
     r"""Scaled Dot-Product Attention module (Attention is all you need by Vaswani et al., 2017) with optional residual attention from previous layer
@@ -65,13 +66,13 @@ class ScaledDotProductAttention(nn.Module):
         self.attn_dropout = nn.Dropout(attn_dropout)
         self.res_attention = res_attention
         head_dim = d_model // n_heads
-        self.scale = nn.Parameter(torch.tensor(head_dim ** -0.5), requires_grad=lsa)
+        self.scale = nn.Parameter(Tensor(head_dim ** -0.5), requires_grad=lsa)
         self.lsa = lsa
 
-    def forward(self, q:torch.Tensor, k:torch.Tensor, v:torch.Tensor, 
-                prev:Optional[torch.Tensor]=None, 
-                key_padding_mask:Optional[torch.Tensor]=None, 
-                attn_mask:Optional[torch.Tensor]=None):
+    def forward(self, q:Tensor, k:Tensor, v:Tensor, 
+                prev:Optional[Tensor]=None, 
+                key_padding_mask:Optional[Tensor]=None, 
+                attn_mask:Optional[Tensor]=None):
         '''
         Input shape:
             q               : [bs x n_heads x max_q_len x d_k]

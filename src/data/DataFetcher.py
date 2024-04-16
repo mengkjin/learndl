@@ -8,6 +8,7 @@ from typing import Callable , ClassVar , List , Literal , Any
 
 from ..environ import DIR
 from .DataFetcher_R import DataFetcher_R as RFetcher
+from .DataFetcher_sql import DataFetcher_sql
 
 # %%
 # def stime(compact = False): return time.strftime('%y%m%d%H%M%S' if compact else '%Y-%m-%d %H:%M:%S',time.localtime())
@@ -299,3 +300,4 @@ def main():
         DataUpdater.update_server()
     else:
         DataUpdater.update_laptop()
+    DataFetcher_sql.update_since()

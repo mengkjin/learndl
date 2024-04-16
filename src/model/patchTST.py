@@ -1,18 +1,18 @@
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 
+from torch import nn , Tensor
 from .. import layer as Layer
 
 __all__ = ['PatchTST']
 
 class PatchTST(nn.Module):
-    """
+    '''
     in:  [bs x seq_len x nvars]
     out: [bs x seq_len x nvars] for pretrain
          [bs x predict_steps] for prediction
-    """
+    '''
     def __init__(
         self, 
         nvars : int , 
@@ -59,12 +59,12 @@ class PatchTST(nn.Module):
             self.head = PatchTSTPredictionHead(nvars, d_model, num_patch, predict_steps, 
                                                head_dropout , shared = shared_head , act_type = act_type)
 
-    def forward(self, x):                             
-        """
+    def forward(self, x : Tensor) -> Tensor:
+        '''
         in:  [bs x seq_len x nvars]
         out: [bs x seq_len x nvars] for pretrain
              [bs x predict_steps] for prediction
-        """   
+        '''   
 
         if self.revin is not None: 
             x = self.revin(x , 'norm')              # [bs x seq_len x nvars]
@@ -84,7 +84,7 @@ class ModelPretrain(PatchTST):
         assert head_type == 'pretrain' , head_type
         super().__init__(head_type = 'pretrain', **kwargs)
     
-    def pretrain_label(self , x):
+    def pretrain_label(self , x : Tensor) -> Tensor:
         return x
 
 class ModelPredict(PatchTST):
@@ -110,7 +110,7 @@ class PatchTSTEmbed(nn.Module):
             for _ in range(1 if shared else nvars)
         ])
 
-    def forward(self, x , mask = False):
+    def forward(self, x : Tensor, mask = False) -> Tensor:
         '''
         in : [bs x seq_len x nvars]
         out: [bs x nvars x num_patch x d_model] 
@@ -200,7 +200,7 @@ class PatchTSTPredictionHead(nn.Module):
             nn.Linear(d_model * nvars , predict_steps),
         )
     
-    def forward(self, x):                     
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x d_model x num_patch]
         out: [bs x predict_steps]
@@ -224,7 +224,7 @@ class PatchTSTPretrainHead(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(d_model * num_patch , seq_len)
 
-    def forward(self, x):
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x d_model x num_patch]
         out: [bs x seq_len x nvars]
@@ -261,25 +261,23 @@ class PatchTSTEncoder(nn.Module):
             pre_norm=pre_norm, act_type=act_type, res_attention=res_attention, n_layers=n_layers, 
             store_attn=store_attn)
 
-    def forward(self, x):          
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x num_patch x d_model]   
         out: [bs x nvars x d_model x num_patch]
         '''
         x = x.reshape(-1,*x.shape[-2:])             # [bs * nvars x num_patch x d_model]
         x = self.dropout(x + self.W_pos)            # [bs * nvars x num_patch x d_model]
-        # Encoder
-
         x = self.encoder(x)                         # [bs * nvars x num_patch x d_model]
         x = x.reshape(-1,self.nvars,*x.shape[-2:])  # [bs x nvars x num_patch x d_model]
         x = x.permute(0,1,3,2)                      # [bs x nvars x d_model x num_patch]
         return x
     
 class TSTEncoder(nn.Module):
-    """
+    '''
     in : [bs x num_patch x d_model]
     out: [bs x num_patch x d_model]
-    """
+    '''
     def __init__(self, d_model, n_heads, d_ff = 64, 
                  norm='BatchNorm', attn_dropout=0., dropout=0., act_type='gelu',
                  res_attention=False, n_layers=1, pre_norm=False, store_attn=False):
@@ -291,21 +289,14 @@ class TSTEncoder(nn.Module):
                                                      for _ in range(n_layers)])
         self.res_attention = res_attention
 
-    def forward(self, src):
-        """
+    def forward(self, x : Tensor) -> Tensor:
+        '''
         in : [bs x num_patch x d_model]
         out: [bs x num_patch x d_model]
-        """
-        output = src
+        '''
         scores = None
-
-        if self.res_attention:
-            for i , mod in enumerate(self.layers): 
-                output, scores = mod(output, prev=scores)
-            return output
-        else:
-            for mod in self.layers: output = mod(output)
-            return output
+        for mod in self.layers: x, scores = mod(x, prev = scores)
+        return x
 
 class TSTEncoderLayer(nn.Module):
     def __init__(self, d_model, n_heads, d_ff = 64, store_attn=False,
@@ -343,39 +334,34 @@ class TSTEncoderLayer(nn.Module):
         self.pre_norm = pre_norm
         self.store_attn = store_attn
 
-    def forward(self, src , prev = None):
-        """
-        src: tensor [bs x q_len x d_model]
-        """
+    def forward(self, x : Tensor , prev : Tensor | None = None) -> tuple[Tensor,Tensor | None]:
+        '''
+        x: tensor [bs x q_len x d_model]
+        '''
         # Multi-Head attention sublayer
         if self.pre_norm:
-            src = self.norm_attn(src)
+            x = self.norm_attn(x)
         ## Multi-Head attention
         if self.res_attention:
-            src2, attn, scores = self.self_attn(src, src, src, prev)
+            x2, attn, scores = self.self_attn(x, x, x, prev)
         else:
-            src2, attn = self.self_attn(src, src, src)
-        if self.store_attn:
-            self.attn = attn
-        ## Add & Norm
-        src = src + self.dropout_attn(src2) # Add: residual connection with residual dropout
-        if not self.pre_norm:
-            src = self.norm_attn(src)
+            x2, attn = self.self_attn(x, x, x)
+        if self.store_attn: self.attn = attn
 
-        # Feed-forward sublayer
-        if self.pre_norm:
-            src = self.norm_ffn(src)
-        ## Position-wise Feed-Forward
-        src2 = self.ff(src)
         ## Add & Norm
-        src = src + self.dropout_ffn(src2) # Add: residual connection with residual dropout
-        if not self.pre_norm:
-            src = self.norm_ffn(src)
-
-        if self.res_attention:
-            return src, scores
+        x = x + self.dropout_attn(x2) # Add: residual connection with residual dropout
+        if self.pre_norm: 
+            x = self.norm_ffn(x)
         else:
-            return src
+            x = self.norm_attn(x)
+        x2 = self.ff(x)
+
+        ## Add & Norm
+        x = x + self.dropout_ffn(x2) # Add: residual connection with residual dropout
+        if not self.pre_norm: x = self.norm_ffn(x)
+        if not self.res_attention: scores = None
+        
+        return x, scores
 
 if __name__ == '__main__' :
 

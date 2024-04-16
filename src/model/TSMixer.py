@@ -1,7 +1,7 @@
-# %%
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+
+from torch import nn , Tensor
 
 from src import layer as Layer
 
@@ -27,10 +27,9 @@ class TSMixer(nn.Module):
         pe:str='zeros', learn_pe:bool=True, head_dropout = 0, predict_steps:int = 1,
         head_type = 'prediction', verbose:bool=False, **kwargs
     ):
-
         super().__init__()
-
         assert head_type in ['pretrain', 'prediction'], 'head type should be either pretrain, prediction, or regression'
+
         self.nvars = nvars
         self.head_type = head_type
         self.mask_fwd = head_type == 'pretrain'
@@ -56,7 +55,7 @@ class TSMixer(nn.Module):
             self.head = TSMixerPredictionHead(nvars, d_model, num_patch, predict_steps, 
                                               head_dropout , shared = shared_head , act_type = act_type)
 
-    def forward(self, x):                             
+    def forward(self, x : Tensor) -> Tensor:                             
         """
         in:  [bs x seq_len x nvars]
         out: [bs x seq_len x nvars] for pretrain
@@ -103,7 +102,7 @@ class TSMixerPredictionHead(nn.Module):
             nn.Linear(d_model * nvars , predict_steps),
         )
     
-    def forward(self, x):                     
+    def forward(self, x : Tensor) -> Tensor:                     
         '''
         in : [bs x nvars x d_model x num_patch]
         out: [bs x predict_steps]
@@ -127,7 +126,7 @@ class TSMixerPretrainHead(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.linear = nn.Linear(d_model * num_patch , seq_len)
 
-    def forward(self, x):
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x d_model x num_patch]
         out: [bs x seq_len x nvars]
@@ -159,7 +158,7 @@ class TSMixerEmbed(nn.Module):
             for _ in range(1 if shared else nvars)
         ])
 
-    def forward(self, x , mask = False):
+    def forward(self, x : Tensor , mask = False) -> Tensor:
         '''
         in : [bs x seq_len x nvars]
         out: [bs x nvars x num_patch x d_model] 
@@ -223,9 +222,6 @@ class TSMixerEmbed(nn.Module):
         return x_masked, x_kept, mask, ids_restore
 
 
-# %%
-
-
 class MixerNormLayer(nn.Module):
     '''
     Batch / Layer Norm
@@ -241,21 +237,21 @@ class MixerNormLayer(nn.Module):
         else:
             self.norm = nn.LayerNorm(d_model)  # 默认对最后一个维度进行LayerNorm
             
-    def forward(self, inputs : torch.Tensor) -> torch.Tensor:
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x num_patch x d_model] 
         out: [bs x nvars x num_patch x d_model] 
         '''
         if self.batch_norm:
-            bs = inputs.shape[0]
-            inputs = inputs.permute(0,1,3,2)                    # [bs x nvars x d_model x num_patch] 
-            inputs = inputs.reshape(-1,*inputs.shape[-2:])      # [bs * nvars x d_model x num_patch] 
-            inputs = self.norm(inputs)
-            inputs = inputs.reshape(bs,-1,*inputs.shape[-2:])   # [bs x nvars x d_model x num_patch] 
-            inputs = inputs.permute(0,1,3,2)                    # [bs x nvars x num_patch x d_model] 
+            bs = x.shape[0]
+            x = x.permute(0,1,3,2)                  # [bs x nvars x d_model x num_patch] 
+            x = x.reshape(-1,*x.shape[-2:])         # [bs * nvars x d_model x num_patch] 
+            x = self.norm(x)
+            x = x.reshape(bs,-1,*x.shape[-2:])      # [bs x nvars x d_model x num_patch] 
+            x = x.permute(0,1,3,2)                  # [bs x nvars x num_patch x d_model] 
         else:
-            inputs = self.norm(inputs)
-        return inputs
+            x = self.norm(x)
+        return x
 
 class GatedAttention(nn.Module):
     '''
@@ -267,10 +263,9 @@ class GatedAttention(nn.Module):
         self.attn_layer = nn.Linear(in_size, out_size)
         self.attn_softmax = nn.Softmax(dim=-1)
 
-    def forward(self, inputs : torch.Tensor) -> torch.Tensor:
-        attn_weight = self.attn_softmax(self.attn_layer(inputs))
-        inputs = inputs * attn_weight
-        return inputs
+    def forward(self, x : Tensor) -> Tensor:
+        attn_weight = self.attn_softmax(self.attn_layer(x))
+        return x * attn_weight
  
 class MixerMLP(nn.Module):
     '''
@@ -289,8 +284,8 @@ class MixerMLP(nn.Module):
             nn.Dropout(dropout)
         )
 
-    def forward(self, inputs : torch.Tensor) -> torch.Tensor:
-        return self.layers(inputs)
+    def forward(self, x : Tensor) -> Tensor:
+        return self.layers(x)
 
 class PatchMixerBlock(nn.Module):
     '''
@@ -313,18 +308,18 @@ class PatchMixerBlock(nn.Module):
         self.mlp = MixerMLP(num_patch,num_patch,expansion_factor,dropout,act_type)
         self.gating = GatedAttention(num_patch, num_patch) if gated_attn else nn.Sequential()
 
-    def forward(self, inputs : torch.Tensor) -> torch.Tensor:
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x num_patch x d_model] 
         out: [bs x nvars x num_patch x d_model] 
         '''
-        residual = inputs
-        inputs = self.norm(inputs)          # [bs x nvars x num_patch x d_model] 
-        inputs = inputs.permute(0,1,3,2)    # [bs x nvars x d_model x num_patch] 
-        inputs = self.mlp(inputs)           # [bs x nvars x d_model x num_patch] 
-        inputs = self.gating(inputs)        # [bs x nvars x d_model x num_patch] 
-        inputs = inputs.permute(0,1,3,2)    # [bs x nvars x num_patch x d_model] 
-        return residual + inputs            # [bs x nvars x num_patch x d_model] 
+        residual = x
+        x = self.norm(x)          # [bs x nvars x num_patch x d_model] 
+        x = x.permute(0,1,3,2)    # [bs x nvars x d_model x num_patch] 
+        x = self.mlp(x)           # [bs x nvars x d_model x num_patch] 
+        x = self.gating(x)        # [bs x nvars x d_model x num_patch] 
+        x = x.permute(0,1,3,2)    # [bs x nvars x num_patch x d_model] 
+        return residual + x       # [bs x nvars x num_patch x d_model] 
     
 class FeatureMixerBlock(nn.Module):
     '''
@@ -346,16 +341,16 @@ class FeatureMixerBlock(nn.Module):
         self.mlp = MixerMLP(d_model,d_model,expansion_factor,dropout,act_type)
         self.gating = GatedAttention(d_model, d_model) if gated_attn else nn.Sequential()
 
-    def forward(self, inputs : torch.Tensor) -> torch.Tensor:
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x num_patch x d_model] 
         out: [bs x nvars x num_patch x d_model] 
         '''
-        residual = inputs
-        inputs = self.norm(inputs)          # [bs x nvars x num_patch x d_model] 
-        inputs = self.mlp(inputs)           # [bs x nvars x d_model x num_patch] 
-        inputs = self.gating(inputs)        # [bs x nvars x d_model x num_patch] 
-        return residual + inputs            # [bs x nvars x num_patch x d_model] 
+        residual = x
+        x = self.norm(x)          # [bs x nvars x num_patch x d_model] 
+        x = self.mlp(x)           # [bs x nvars x d_model x num_patch] 
+        x = self.gating(x)        # [bs x nvars x d_model x num_patch] 
+        return residual + x       # [bs x nvars x num_patch x d_model] 
 
 class ChannelMixerBlock(nn.Module):
     '''
@@ -380,18 +375,18 @@ class ChannelMixerBlock(nn.Module):
         self.mlp = MixerMLP(in_channel,in_channel,expansion_factor,dropout,act_type)
         self.gating = GatedAttention(in_channel, in_channel) if gated_attn else nn.Sequential()
 
-    def forward(self, inputs : torch.Tensor) -> torch.Tensor:
+    def forward(self, x : Tensor) -> Tensor:
         '''
         in : [bs x nvars x num_patch x d_model] 
         out: [bs x nvars x num_patch x d_model] 
         '''
-        residual = inputs
-        inputs = self.norm(inputs)          # [bs x nvars x num_patch x d_model]
-        inputs = inputs.permute(0,3,2,1)    # [bs x d_model x num_patch x nvars]
-        inputs = self.gating(inputs)        # [bs x d_model x num_patch x nvars]
-        inputs = self.mlp(inputs)           # [bs x d_model x num_patch x nvars]
-        inputs = inputs.permute(0,3,2,1)    # [bs x nvars x num_patch x d_model]
-        return inputs + residual            # [bs x nvars x num_patch x d_model]
+        residual = x
+        x = self.norm(x)          # [bs x nvars x num_patch x d_model]
+        x = x.permute(0,3,2,1)    # [bs x d_model x num_patch x nvars]
+        x = self.gating(x)        # [bs x d_model x num_patch x nvars]
+        x = self.mlp(x)           # [bs x d_model x num_patch x nvars]
+        x = x.permute(0,3,2,1)    # [bs x nvars x num_patch x d_model]
+        return x + residual       # [bs x nvars x num_patch x d_model]
     
 class TSMixerEncoder(nn.Module):
     '''
@@ -411,19 +406,19 @@ class TSMixerEncoder(nn.Module):
         # Residual dropout
         self.dropout = nn.Dropout(dropout)
 
-        mixer_list = [PatchMixerBlock(num_patch , d_model , dropout , expansion_factor , gated_attn , norm_type , act_type),
-                      FeatureMixerBlock(d_model , dropout , expansion_factor , gated_attn , norm_type , act_type)]
-        if channel_mixer:
-            mixer_list.append(ChannelMixerBlock(d_model,nvars,dropout , expansion_factor , gated_attn , norm_type , act_type))
-        self.mixers = nn.ModuleList(mixer_list)
+        self.mixer_p = PatchMixerBlock(num_patch , d_model , dropout , expansion_factor , gated_attn , norm_type , act_type)
+        self.mixer_f = FeatureMixerBlock(d_model , dropout , expansion_factor , gated_attn , norm_type , act_type)
+        self.mixer_c = ChannelMixerBlock(d_model, nvars , dropout , expansion_factor , gated_attn , norm_type , act_type) if channel_mixer else nn.Sequential()
         
-    def forward(self, x : torch.Tensor) -> torch.Tensor:          
+    def forward(self, x : Tensor) -> Tensor:          
         '''
         in : [bs x nvars x num_patch x d_model]   
         out: [bs x nvars x d_model x num_patch]
         '''
         x = self.dropout(x + self.W_pos)            # [bs x nvars x num_patch x d_model]
-        for mixer in self.mixers: x = mixer(x)      # [bs x nvars x num_patch x d_model]
+        x = self.mixer_p(x)                         # [bs x nvars x num_patch x d_model]
+        x = self.mixer_f(x)                         # [bs x nvars x num_patch x d_model]
+        x = self.mixer_c(x)                         # [bs x nvars x num_patch x d_model]
         x = x.permute(0,1,3,2)                      # [bs x nvars x d_model x num_patch]
         return x
 

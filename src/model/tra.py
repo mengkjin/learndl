@@ -1,5 +1,6 @@
 import torch
-import torch.nn as nn
+
+from torch import nn , Tensor
 
 class tra_module:
     '''
@@ -29,7 +30,7 @@ class tra_module:
                 if hasattr(self, 'dynamic_data'): del self.dynamic_data
                 return self
             def get_probs(self):
-                if self.probs_record is not None: return self.probs_record/self.probs_record.sum(dim=1,keepdim=True)   
+                if self.probs_record is not None: return self.probs_record / self.probs_record.sum(dim=1,keepdim=True)   
         return new_tra_class
 
 class tra_component:
@@ -58,7 +59,8 @@ class tra_component:
         return new_tra_class
     
 class mod_tra(nn.Module):
-    """Temporal Routing Adaptor (TRA)
+    '''
+    Temporal Routing Adaptor (TRA)
 
     TRA takes historical prediction errors & latent representation as inputs,
     then routes the input sample to a specific predictor for training & inference.
@@ -70,7 +72,7 @@ class mod_tra(nn.Module):
         hidden_size (int): hidden size of the router
         tau (float): gumbel softmax temperature
         rho (float): calculate Optimal Transport penalty
-    """
+    '''
 
     def __init__(self, base_model , base_dim , num_states=1, horizon = 20 , 
                  hidden_size = 8, tau=1.0, src_info = 'LR_TPE'):
@@ -93,7 +95,7 @@ class mod_tra(nn.Module):
         self.predictors = nn.Linear(base_dim, num_states)
         self.global_steps = 0
 
-    def forward(self, inputs):
+    def forward(self , inputs : Tensor | tuple[Tensor , Tensor]) -> tuple[Tensor , Tensor]:
         if self.num_states == 1:
             x , hist_loss = inputs , None
         else:
@@ -141,7 +143,7 @@ class mod_tra(nn.Module):
         if self.probs_record is not None:
             return self.probs_record / self.probs_record.sum(dim=1 , keepdim = True)
     
-    def modifier_inputs(self , inputs , batch_data , model_data):
+    def modifier_inputs(self , x : Tensor , batch_data , model_data) -> Tensor | tuple[Tensor , Tensor]:
         if self.num_states > 1:
             x = batch_data.x
             i = batch_data.i
@@ -150,12 +152,12 @@ class mod_tra(nn.Module):
             hist_loss = torch.stack([d[i[:,0],i[:,1]+j+1-rw] for j in range(rw)],dim=-2).nan_to_num(1)
             return x , hist_loss
         else:
-            return inputs
+            return x
     
     def modifier_metric(self , metric , batch_data , model_data):
         return metric
 
-    def modifier_update(self , update , batch_data , model_data):
+    def modifier_update(self , update , batch_data , model_data) -> None:
         if self.num_states > 1 and self.preds is not None:
             i = batch_data.i
             v = self.preds.detach().to(model_data.buffer['hist_preds'])
@@ -189,26 +191,27 @@ class block_tra(nn.Module):
             self.fc = nn.Linear(hidden_dim + tra_dim, num_states)
         self.predictors = nn.Linear(hidden_dim, num_states)
 
-    def forward(self, inputs):
+    def forward(self , x : Tensor) -> tuple[Tensor , Tensor]:
         if self.num_states > 1:
-            i0 , i1 = self.dynamic_data['batch_data'].i[:,0] , self.dynamic_data['batch_data'].i[:,1]
-            d = self.dynamic_data['model_data'].buffer['hist_loss']
-            rw = self.dynamic_data['model_data'].seqs['hist_loss']
+            dynamic_data : dict = getattr(self , 'dynamic_data')
+            i0 , i1 = dynamic_data['batch_data'].i[:,0] , dynamic_data['batch_data'].i[:,1]
+            d = dynamic_data['model_data'].buffer['hist_loss']
+            rw = dynamic_data['model_data'].seqs['hist_loss']
             hist_loss = torch.stack([d[i0 , i1+j+1-rw] for j in range(rw)],dim=-2).nan_to_num(1)
-            preds = self.predictors(inputs)
+            preds = self.predictors(x)
 
             # information type
             router_out, _ = self.router(hist_loss[:,:-self.horizon])
             if "LR" in self.src_info:
-                latent_representation = inputs
+                latent_representation = x
             else:
-                latent_representation = torch.randn(inputs.shape).to(inputs)
+                latent_representation = torch.randn(x.shape).to(x)
             if "TPE" in self.src_info:
                 temporal_pred_error = router_out[:, -1]
             else:
-                temporal_pred_error = torch.randn(router_out[:, -1].shape).to(inputs)
+                temporal_pred_error = torch.randn(router_out[:, -1].shape).to(x)
 
-            # print(inputs.shape , preds.shape , latent_representation.shape) , temporal_pred_error.shape
+            # print(x.shape , preds.shape , latent_representation.shape) , temporal_pred_error.shape
             probs = self.fc(torch.cat([latent_representation , temporal_pred_error], dim=-1))
             probs = nn.functional.gumbel_softmax(probs, dim=-1, tau=self.tau, hard=False)
 
@@ -225,12 +228,12 @@ class block_tra(nn.Module):
             self.probs_record = probs_agg if self.probs_record is None else torch.concat([self.probs_record , probs_agg])
 
             # update dynamic buffer
-            vp = preds.detach().to(self.dynamic_data['model_data'].buffer['hist_preds'])
-            v0 = self.dynamic_data['model_data'].buffer['hist_labels'][i0,i1].nan_to_num(0)
-            self.dynamic_data['model_data'].buffer['hist_preds'][i0,i1] = vp
-            self.dynamic_data['model_data'].buffer['hist_loss'][i0,i1] = (vp - v0).square()
+            vp = preds.detach().to(dynamic_data['model_data'].buffer['hist_preds'])
+            v0 = dynamic_data['model_data'].buffer['hist_labels'][i0,i1].nan_to_num(0)
+            dynamic_data['model_data'].buffer['hist_preds'][i0,i1] = vp
+            dynamic_data['model_data'].buffer['hist_loss'][i0,i1] = (vp - v0).square()
         else: 
-            final_pred = preds = self.predictors(inputs)
+            final_pred = preds = self.predictors(x)
             
         return final_pred , preds
 
