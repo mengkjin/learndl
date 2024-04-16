@@ -259,31 +259,20 @@ class RunModel():
         1. loop over model(model_date , model_num)
         2. loop over attempt(if converge too soon) , epoch
         '''
-        self.model_info['train_time'] = time.time()
-        logger.critical(f'Start Process [Train Model]!')
-        config.Model.save(config.model_base_path)    
+        self.process_train_start()
         for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
             self.model_preparation('train')
             self.model_train()
-        total_time = time.time() - self.model_info['train_time']
-        self.model_info['train_process'] = \
-            'Finish Process [Train Model]! Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
-                total_time / 3600 , total_time / 60 / max(self.model_count , 1) , total_time / max(self.epoch_count , 1))
-        logger.critical(self.model_info['train_process'])
+        self.process_train_end()
 
     def process_test(self):
         self.process_test_start()
-
         for model_date , model_num in self.model_iter():
             self.model_date , self.model_num = model_date , model_num
             self.model_preparation('test')
             self.model_test()
-
-        self.process_test_result()
-        self.model_info['test_process'] = \
-        'Finish Process [Test Model]! Cost {:.1f} Secs'.format(time.time()-self.model_info['test_time'])
-        logger.critical(self.model_info['test_process'])
+        self.process_test_end()
 
     def model_iter(self):
         new_iter = list(itertools.product(self.data.model_date_list , config.model_num_list))
@@ -295,6 +284,18 @@ class RunModel():
                     break
             new_iter = FilteredIterator(new_iter , ~models_trained)
         return new_iter
+    
+    def process_train_start(self):
+        self.model_info[f'{self.process_name}_time'] = time.time()
+        logger.critical(f'Start Process [{self.process_name.capitalize()} Model]!')        
+        config.Model.save(config.model_base_path)    
+
+    def process_train_end(self):
+        total_time = time.time() - self.model_info['train_time']
+        self.model_info['train_process'] = \
+            'Finish Process [Train Model]! Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
+                total_time / 3600 , total_time / 60 / max(self.model_count , 1) , total_time / max(self.epoch_count , 1))
+        logger.critical(self.model_info['train_process'])
     
     def model_preparation(self , process , last_n = 30 , best_n = 5):
         assert process in ['train' , 'test']
@@ -331,15 +332,11 @@ class RunModel():
             self.model_train_epoch()
             self.model_train_assess_status()
         self.model_train_end()
-        gc.collect() 
-        torch.cuda.empty_cache()
     
     def model_test(self):
         self.model_test_start()
         self.model_forecast()
         self.model_test_end()
-        gc.collect() 
-        torch.cuda.empty_cache()
         
     def _init_variables(self , key = 'model'):
         '''
@@ -385,6 +382,8 @@ class RunModel():
             if self.process_name == 'train' : self.model_count += 1
             self.tick[2] = time.time()
             self.print_progress('model_end')
+            gc.collect() 
+            torch.cuda.empty_cache()
 
     def model_train_init_loop(self):
         '''
@@ -508,7 +507,7 @@ class RunModel():
                     self.save_model(disk_key = config.output_types)
             else:
                 self.cond['loop_status'] = 'epoch'
-            
+
     def model_test_start(self):
         '''
         Reset model specific variables
@@ -560,6 +559,8 @@ class RunModel():
             if self.model_num == config.model_num_list[-1]:
                 self.score_by_model[-1,:] = np.nanmean(self.score_by_date[-len(self.data.model_test_dates):,],axis = 0)
                 self.print_test_table(self.model_date , self.score_by_model[-1,:] , 4)
+            gc.collect() 
+            torch.cuda.empty_cache()
   
     def process_test_start(self):
         self.model_info[f'{self.process_name}_time'] = time.time()
@@ -574,7 +575,7 @@ class RunModel():
         self.print_test_table('Models' , self.test_model_num , 0)
         self.print_test_table('Output' , self.test_output_type)
 
-    def process_test_result(self):
+    def process_test_end(self):
         # date ic writed down
         date_step = self.data.config.test_step_day
         date_list = self.data.test_full_dates[::date_step]
@@ -602,6 +603,10 @@ class RunModel():
         for i , digits in enumerate([4,2,4,2,4]):
             self.print_test_table(add_row_key[i] , add_row_value[i] , digits)
         self.model_info['test_score_sum'] = {k:round(v,4) for k,v in zip(df.columns , score_sum.tolist())}  
+
+        total_time = time.time() - self.model_info['train_time']
+        self.model_info['test_process'] = 'Finish Process [Test Model]! Cost {:.1f} Secs'.format(total_time)
+        logger.critical(self.model_info['test_process'])
 
     def model_forward(self , key , batch_data : BatchData):
         with self.ptimer(f'{key}/forward'):
