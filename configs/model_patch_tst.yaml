@@ -1,4 +1,4 @@
-hidden_dim:     [16,64,128] #  2**5
+hidden_dim:     [32] #  2**5
 seqlens:        [{'day': 30 , '30m': 30 , 'dms': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
 seq_len:        [30]
 dropout:        [0.1]
@@ -8,8 +8,8 @@ shared_embedding: True
 shared_head:      [True]
 revin:          [True]
 act_type:       gelu
-patch_len :     [5]
-stride :        [2]
+patch_len :     [3,4,5,6]
+stride :        [2,2,3,3]
 n_layers:       2
-n_heads:        [8]
+n_heads:        [16]
 d_ff:           [64]

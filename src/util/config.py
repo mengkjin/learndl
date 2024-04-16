@@ -33,7 +33,7 @@ class ModelParam:
                 self.n_model = max(self.n_model , len(value))
             else:
                 self.Param[key] = [value]
-        assert self.n_model <= 3 , self.n_model
+        assert self.n_model <= 4 , self.n_model
 
     def __getitem__(self , key : str):
         return self.Param[key]

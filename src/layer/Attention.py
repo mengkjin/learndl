@@ -66,7 +66,7 @@ class ScaledDotProductAttention(nn.Module):
         self.attn_dropout = nn.Dropout(attn_dropout)
         self.res_attention = res_attention
         head_dim = d_model // n_heads
-        self.scale = nn.Parameter(Tensor(head_dim ** -0.5), requires_grad=lsa)
+        self.scale = nn.Parameter(torch.tensor(head_dim ** -0.5), requires_grad=lsa)
         self.lsa = lsa
 
     def forward(self, q:Tensor, k:Tensor, v:Tensor, 

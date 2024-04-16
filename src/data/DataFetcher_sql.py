@@ -1,5 +1,5 @@
 # %%
-import platform , time
+import os , platform , time
 import pandas as pd
 import numpy as np
 import multiprocessing as mp  

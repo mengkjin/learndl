@@ -11,22 +11,22 @@ from ..util import Device , Storage , DataloaderStored , BatchData , TrainConfig
 from ..func.basic import tensor_standardize_and_weight , match_values
 
 from ..environ import DIR
-@dataclass
+
 class ModelData:
     '''
     A class to store relavant training data
     '''
-    config   : TrainConfig = TrainConfig.load()
-    if_train : bool   = True
-    device   : Device = Device()
+    def __init__(self , config : Optional[TrainConfig] = None , if_train : bool = True):
+        self.config : TrainConfig = TrainConfig.load() if config is None else config
+        self.if_train : bool = if_train
 
-    def __post_init__(self):
         self.load_model_data()
         self.reset_dataloaders()
         self.reset_buffer()
 
     def load_model_data(self):
         '''load torch pack of BlockDatas of x , y , norms and index'''
+        self.device  = Device()
         self.storage = Storage(self.config.mem_storage)
         self.datas = DataPack.load_pack(self.data_type_list, self.config.labels, self.if_train, self.config.precision)
         self.config.update_data_param(self.datas.x)
