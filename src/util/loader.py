@@ -11,39 +11,23 @@ class DataloaderStored:
     class of saved dataloader , retrieve batch_data from Storage
     """
     def __init__(self, loader_storage : Storage , batch_file_list : list , 
-                 mapping = None , shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static',progress_bar = False):
+                 shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static'):
         self.storage  = loader_storage
-        self.filelist = batch_file_list
-        self.mapping  = self.empty_mapping if mapping is None else mapping
         self.shufopt  = shuffle_option
-        self.itertype  = tqdm if progress_bar else list
-        if shuffle_option == 'init':
-            self.iterator = self.itertype(np.random.permutation(self.filelist))
-        else:
-            self.iterator = self.itertype(self.filelist)
+        self.loader   = self.shuf('init' , batch_file_list)
 
     def __len__(self):
-        return len(self.iterator)
+        return len(self.loader)
     
     def __iter__(self):
-        if self.shufopt == 'epoch':
-            self.iterator = self.itertype(np.random.permutation(self.filelist))
+        for batch_file in self.shuf('epoch' , self.loader): 
+            yield self.storage.load(batch_file)
 
-        for batch_file in self.iterator: 
-            batch_data = self.storage.load(batch_file)
-            batch_data = self.mapping(batch_data)
-            yield batch_data
+    def __getitem__(self , i): return self.storage.load(self.loader[i])
 
-    def __getitem__(self , i):
-        batch_data = self.mapping(self.storage.load(list(self.iterator)[i]))
-        return batch_data
-    
-    def display(self , text = ''):
-        if isinstance(self.iterator, tqdm): self.iterator.set_description(text)
-
-    @staticmethod
-    def empty_mapping(x):
-        return x
+    def shuf(self , stage : Literal['init' , 'epoch'] , loader):
+        if stage == self.shufopt: loader = np.random.permutation(loader)
+        return loader
 
 class Mydataset(Dataset):
     def __init__(self, data1 , label , weight = None) -> None:

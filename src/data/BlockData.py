@@ -128,8 +128,8 @@ class DataBlock():
     def merge_others(self , others : list):
         return self.merge([self , *[others]])
         
-    def save(self , key , if_train=True , start_dt = None , end_dt = None):
-        path = self.block_path(key , if_train) 
+    def save(self , key , predict=False , start_dt = None , end_dt = None):
+        path = self.block_path(key , predict) 
         os.makedirs(os.path.dirname(path),exist_ok=True)
         date_slice = np.repeat(True,len(self.date))
         if start_dt is not None: date_slice[self.date < start_dt] = False
@@ -297,17 +297,17 @@ class DataBlock():
         return blocks
     
     @classmethod
-    def load_key(cls , key , if_train = True , alias_search = True , dtype = None):
-        return cls.load_path(cls.block_path(key , if_train , alias_search))
+    def load_key(cls , key , predict = False , alias_search = True , dtype = None):
+        return cls.load_path(cls.block_path(key , predict , alias_search))
 
     @classmethod
-    def load_keys(cls , keys , if_train = True , alias_search = True , **kwargs):
-        paths = [cls.block_path(key , if_train , alias_search) for key in keys]
+    def load_keys(cls , keys , predict = False , alias_search = True , **kwargs):
+        paths = [cls.block_path(key , predict , alias_search) for key in keys]
         return cls.load_paths(paths , **kwargs)
 
     @classmethod
-    def block_path(cls , key , if_train=True, alias_search = True):
-        train_mark = '' if if_train else '.00'
+    def block_path(cls , key , predict=False, alias_search = True):
+        train_mark = '.00' if predict else ''
         if key.lower() in ['y' , 'labels']: 
             return f'{DIR.block}/Y{train_mark}.{cls.save_option}'
         else:
@@ -437,10 +437,10 @@ class DataBlock():
 
         return self
     
-    def hist_norm(self , key , if_train=True,
+    def hist_norm(self , key , predict = False ,
                   start_dt : int | None = None , end_dt : int | None  = 20161231 , 
                   step_day = 5 , **kwargs):
-        if not if_train: return None
+        if predict: return None
         if not key.startswith(('x_trade','trade','day','15m','min','30m','60m','week')): 
             return None
         key = self.data_type_abbr(key)
@@ -583,16 +583,16 @@ class DataBlockNorm:
         return norms
     
     @classmethod
-    def load_key(cls , key , if_train = True , alias_search = True , dtype = None):
-        return cls.load_path(cls.norm_path(key , if_train , alias_search))
+    def load_key(cls , key , predict = False , alias_search = True , dtype = None):
+        return cls.load_path(cls.norm_path(key , predict , alias_search))
 
     @classmethod
-    def load_keys(cls , keys , if_train = True , alias_search = True , dtype = None):
+    def load_keys(cls , keys , predict = False , alias_search = True , dtype = None):
         if isinstance(keys , str): keys = [keys]
-        return [cls.load_key(key , if_train , alias_search , dtype) for key in keys]
+        return [cls.load_key(key , predict , alias_search , dtype) for key in keys]
     
     @classmethod
-    def norm_path(cls , key , if_train=True, alias_search = True):
+    def norm_path(cls , key , predict = False, alias_search = True):
         if key.lower() == 'y': return f'{DIR.hist_norm}/Y.{cls.save_option}'
         path = (f'{DIR.hist_norm}/X_'+'{}'+f'.{cls.save_option}')
         return DataBlock.data_type_alias(path , key) if alias_search else path.format(key)
@@ -600,7 +600,7 @@ class DataBlockNorm:
 
 @dataclass
 class DataProcessConfig:
-    training        : bool
+    predict         : bool
     blocks          : list = field(default_factory=list)
     load_start_dt   : int | None = None
     load_end_dt     : int | None = None
@@ -612,7 +612,7 @@ class DataProcessConfig:
 
     def __post_init__(self):
         self.blocks = [blk.lower() for blk in self.blocks]
-        if not self.training:
+        if self.predict:
             self.load_start_dt = today(-181)
             self.load_end_dt   = None
             self.save_start_dt = None

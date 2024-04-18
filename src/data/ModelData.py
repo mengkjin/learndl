@@ -4,6 +4,7 @@ import torch
 
 from dataclasses import dataclass , field
 from torch import Tensor
+from torch.utils.data import BatchSampler
 from typing import Any , Callable , Literal , Optional
 
 from .BlockData import DataBlock , DataBlockNorm
@@ -196,7 +197,7 @@ class ModelData:
 
         def _shuffle_sampling(ii , batch_size = self.config.batch_size):
             pool = np.random.permutation(np.arange(len(ii)))
-            return [ii[pos] for pos in torch.utils.data.BatchSampler(pool , batch_size , drop_last=False)]
+            return [ii[pos] for pos in BatchSampler(pool , batch_size , drop_last=False)]
 
         pos = nonnan_sample
         shp = nonnan_sample.shape

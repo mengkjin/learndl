@@ -3,6 +3,8 @@ import numpy as np
 import torch
 
 from dataclasses import dataclass
+from torch import Tensor
+from torch.utils.data import Sampler
 from typing import Any
 from .logger import *
 
@@ -12,46 +14,47 @@ if torch.cuda.is_available():
 
 @dataclass
 class BatchData:
-    x       : torch.Tensor | tuple | list
-    y       : torch.Tensor 
-    w       : torch.Tensor | None
-    i       : torch.Tensor 
-    nonnan  : torch.Tensor 
+    x       : Tensor | tuple[Tensor] | list[Tensor]
+    y       : Tensor 
+    w       : Tensor | None
+    i       : Tensor 
+    valid   : Tensor 
     
     def __post_init__(self):
         if isinstance(self.x , (list , tuple)) and len(self.x) == 1:
             self.x = self.x[0]
         
     def to(self , device = None):
+        if isinstance(device , Device): device = device.device
         return self.__class__(
-            self.x.to(device) if isinstance(self.x , torch.Tensor) else type(self.x)(x.to(device) for x in self.x) , 
+            self.x.to(device) if isinstance(self.x , Tensor) else type(self.x)(x.to(device) for x in self.x) , 
             self.y.to(device) , 
             None if self.w is None else self.w.to(device) , 
             self.i.to(device) , 
-            self.nonnan.to(device) 
+            self.valid.to(device) 
         )
 
     def cpu(self):
         return self.__class__(
-            self.x.cpu() if isinstance(self.x , torch.Tensor) else type(self.x)(x.cpu() for x in self.x) , 
+            self.x.cpu() if isinstance(self.x , Tensor) else type(self.x)(x.cpu() for x in self.x) , 
             self.y.cpu() , 
             None if self.w is None else self.w.cpu() , 
             self.i.cpu() , 
-            self.nonnan.cpu() 
+            self.valid.cpu() 
         )
 
     def cuda(self):
         return self.__class__(
-            self.x.cuda() if isinstance(self.x , torch.Tensor) else type(self.x)(x.cuda() for x in self.x) , 
+            self.x.cuda() if isinstance(self.x , Tensor) else type(self.x)(x.cuda() for x in self.x) , 
             self.y.cuda() , 
             None if self.w is None else self.w.cuda() , 
             self.i.cuda() , 
-            self.nonnan.cuda() 
+            self.valid.cuda() 
         )
     
 @dataclass
 class ModelOutputs:
-    outputs : torch.Tensor | tuple | list
+    outputs : Tensor | tuple | list
 
     def pred(self):
         if isinstance(self.outputs , (list , tuple)):
@@ -67,7 +70,7 @@ class ModelOutputs:
             return None
         
 class Device:
-    torch_obj = (torch.Tensor , torch.nn.Module , torch.nn.ModuleList , torch.nn.ModuleDict , BatchData)
+    torch_obj = (Tensor , torch.nn.Module , torch.nn.ModuleList , torch.nn.ModuleDict , BatchData)
 
     def __init__(self , device = None) -> None:
         if device is None: device = use_device
@@ -120,7 +123,6 @@ class Device:
         print(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
               f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G')
 
-
 class CosineScheduler:
     def __init__(self , optimizer , warmup_stage = 10 , anneal_stage = 40 , initial_lr_div = 10 , final_lr_div = 1e4):
         self.warmup_stage= warmup_stage
@@ -157,7 +159,7 @@ class CosineScheduler:
         self._linear_phase = self._step_count / self.warmup_stage
         self._cos_phase = math.pi / 2 * (self._step_count - self.warmup_stage) / self.anneal_stage
                 
-class CustomBatchSampler(torch.utils.data.Sampler):
+class CustomBatchSampler(Sampler):
     def __init__(self, sampler , batch_size_list , drop_res = True):
         self.sampler = sampler
         self.batch_size_list = np.array(batch_size_list).astype(int)

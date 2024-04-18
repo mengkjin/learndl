@@ -374,7 +374,7 @@ class RunModel():
             self._init_variables('model')
             self.nanloss_life = config.train_param['trainer']['nanloss']['retry']
             self.text['model'] = '{:s} #{:d} @{:4d}'.format(config.model_name , self.model_num , self.model_date)
-            dataloader_param = self.data.get_dataloader_param('train' , namespace=self)   
+            dataloader_param = self.data.get_dataloader_param('train' , model_date = self.model_date , param=self.param)   
             if (self.data.dataloader_param != dataloader_param):
                 self.data.create_dataloader(*dataloader_param) 
                 self.tick[1] = time.time()
@@ -521,7 +521,7 @@ class RunModel():
         '''
         with self.ptimer('model_test/start'):
             self._init_variables('model')
-            dataloader_param = self.data.get_dataloader_param('test' , namespace=self)   
+            dataloader_param = self.data.get_dataloader_param('test' , model_date = self.model_date , param=self.param)   
             self.data.create_dataloader(*dataloader_param)
                 
             if self.model_num == 0:
