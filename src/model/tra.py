@@ -195,7 +195,7 @@ class block_tra(nn.Module):
         if self.num_states > 1:
             dynamic_data : dict = getattr(self , 'dynamic_data')
             i0 , i1 = dynamic_data['batch_data'].i[:,0] , dynamic_data['batch_data'].i[:,1]
-            d = dynamic_data['model_data'].buffer['hist_loss']
+            d  = dynamic_data['model_data'].buffer['hist_loss']
             rw = dynamic_data['model_data'].seqs['hist_loss']
             hist_loss = torch.stack([d[i0 , i1+j+1-rw] for j in range(rw)],dim=-2).nan_to_num(1)
             preds = self.predictors(x)

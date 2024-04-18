@@ -38,8 +38,8 @@ train_param:
         lamb : 0.01
         rho : 0.999
     weight:
-      train:    'equal' # 'top'
-      test:     'equal' # 'top'
+      fit:    'equal' # 'top'
+      test:   'equal' # 'top'
   transfer:    false
   multitask:
     type: hybrid
