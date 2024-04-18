@@ -256,3 +256,24 @@
   3_best: 168.9725
   3_swabest: 171.8261
   3_swalast: 170.4368
+0_model: patch_tst_day.7(x4)
+1_start: Wed Apr 17 07:49:25 2024
+2_basic: full
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-99991231
+6_train: Finish Process [Train Model]! Cost 8.3 Hours, 8.3 Min/model, 15.3 Sec/Epoch
+7_test: Finish Process [Test Model]! Cost 30108.1 Secs
+8_result:
+  0_best: 163.3091
+  0_swabest: 165.4972
+  0_swalast: 165.3644
+  1_best: 169.4109
+  1_swabest: 169.6118
+  1_swalast: 168.6272
+  2_best: 164.2788
+  2_swabest: 166.4094
+  2_swalast: 162.4317
+  3_best: 163.3468
+  3_swabest: 164.6991
+  3_swalast: 159.2087
