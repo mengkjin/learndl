@@ -6,6 +6,7 @@ import xarray as xr
 import torch
 
 from dataclasses import dataclass , field
+from torch import Tensor
 from typing import Any
 
 from .DataFetcher import DataFetcher
@@ -140,9 +141,12 @@ class DataBlock():
                 'feature' : self.feature}
         self.save_dict(data , path)
     
-    def to(self , asTensor = None, dtype = None):
+    def as_tensor(self , asTensor = True):
         if asTensor and isinstance(self.values , np.ndarray): 
-            self.values = torch.Tensor(self.values)
+            self.values = torch.tensor(self.values)
+        return self
+    
+    def as_type(self , dtype = None):
         if dtype: 
             if isinstance(self.values , np.ndarray):
                 self.values = self.values.astype(dtype)
@@ -180,23 +184,23 @@ class DataBlock():
 
     def align_secid(self , secid):
         if secid is None or len(secid) == 0: return self
-        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.values.dtype
+        asTensor , dtype = isinstance(self.values , Tensor) , self.values.dtype
         values = np.full((len(secid) , *self.shape[1:]) , np.nan)
         _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
         values[p0s] = self.values[p1s]
         self.values = values
         self.secid  = secid
-        return self.to(asTensor,dtype)
+        return self.as_tensor(asTensor).as_type(dtype)
     
     def align_date(self , date):
         if date is None or len(date) == 0: return self
-        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.values.dtype
+        asTensor , dtype = isinstance(self.values , Tensor) , self.values.dtype
         values = np.full((self.shape[0] , len(date) , *self.shape[2:]) , np.nan)
         _ , p0d , p1d = np.intersect1d(date , self.date , return_indices=True)
         values[:,p0d] = self.values[:,p1d]
         self.values  = values
         self.date    = date
-        return self.to(asTensor,dtype)
+        return self.as_tensor(asTensor).as_type(dtype)
     
     def align_secid_date(self , secid = None , date = None):
         if (secid is None or len(secid) == 0) and (date is None or len(date) == 0): 
@@ -206,25 +210,25 @@ class DataBlock():
         elif date is None or len(date) == 0:
             return self.align_secid(secid = secid)
         else:
-            asTensor , dtype = isinstance(self.values , torch.Tensor) , self.values.dtype
+            asTensor , dtype = isinstance(self.values , Tensor) , self.values.dtype
             values = np.full((len(secid),len(date),*self.shape[2:]) , np.nan)
             _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
             _ , p0d , p1d = np.intersect1d(date  , self.date  , return_indices=True)
             values[np.ix_(p0s,p0d)] = self.values[np.ix_(p1s,p1d)] 
-            self.values  = torch.Tensor(values).to(self.values) if isinstance(self.values , torch.Tensor) else values
+            self.values  = torch.tensor(values).to(self.values) if isinstance(self.values , Tensor) else values
             self.secid   = secid
             self.date    = date
-            return self.to(asTensor,dtype)
+            return self.as_tensor(asTensor).as_type(dtype)
     
     def align_feature(self , feature):
         if feature is None or len(feature) == 0: return self
-        asTensor , dtype = isinstance(self.values , torch.Tensor) , self.values.dtype
+        asTensor , dtype = isinstance(self.values , Tensor) , self.values.dtype
         values = np.full((*self.shape[:-1],len(feature)) , np.nan)
         _ , p0f , p1f = np.intersect1d(feature , self.feature , return_indices=True)
         values[...,p0f] = self.values[...,p1f]
-        self.values  = torch.Tensor(values).to(self.values) if isinstance(self.values , torch.Tensor) else values
+        self.values  = torch.tensor(values).to(self.values) if isinstance(self.values , Tensor) else values
         self.feature = feature
-        return self.to(asTensor,dtype)
+        return self.as_tensor(asTensor).as_type(dtype)
     
     def add_feature(self , new_feature , new_value):
         assert new_value.shape == self.shape[:-1]
@@ -241,7 +245,7 @@ class DataBlock():
         self.feature = feature.astype(str)
         return self
     
-    def loc(self , **kwargs) -> np.ndarray | torch.Tensor:
+    def loc(self , **kwargs) -> np.ndarray | Tensor:
         values = self.values
         for k,v in kwargs.items():  
             if isinstance(v , (str,int,float)): kwargs[k] = [v]
@@ -264,12 +268,8 @@ class DataBlock():
         return cls(**cls.load_dict(path))
     
     @classmethod
-    def load_paths(cls ,
-                   paths , 
-                   fillna = 'guess' , 
-                   intersect_secid = True ,
-                   start_dt = None , end_dt = None ,
-                   dtype = torch.float):
+    def load_paths(cls , paths , fillna = 'guess' , intersect_secid = True ,
+                   start_dt = None , end_dt = None , dtype = torch.float):
         if isinstance(paths , str): paths = list(paths)
         _guess = lambda ls,excl:[os.path.basename(x).lower().startswith(excl) == 0 for x in ls]
         if fillna == 'guess':
@@ -292,7 +292,7 @@ class DataBlock():
             for i , blk in enumerate(blocks):
                 blk.align_secid_date(newsecid , newdate)
                 if fillna[i]: blk.values = forward_fillna(blk.values , axis = 1)
-                blk.to(asTensor = True , dtype = dtype)
+                blk.as_tensor().as_type(dtype)
 
         return blocks
     
@@ -524,7 +524,7 @@ class DataBlock():
             y_ts = torch.FloatTensor(BlockDict['labels'].values)[:,:,0]
             for i_feat,lb_name in enumerate(BlockDict['labels'].feature):
                 y_pro = process_factor(y_ts[...,i_feat], dim = 0)
-                if not isinstance(y_pro , torch.Tensor): continue
+                if not isinstance(y_pro , Tensor): continue
                 y_pro = y_pro.unsqueeze(-1).numpy()
                 BlockDict['labels'].values[...,i_feat] = y_pro
             
@@ -563,7 +563,7 @@ class DataBlock():
 class DataBlockNorm:
     save_option : str = 'pt'
 
-    def __init__(self , avg : torch.Tensor, std : torch.Tensor , dtype = None) -> None:
+    def __init__(self , avg : Tensor, std : Tensor , dtype = None) -> None:
         self.avg = avg.to(dtype)
         self.std = std.to(dtype)
 

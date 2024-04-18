@@ -4,6 +4,63 @@ import pandas as pd
 import gc , time , os , psutil
 
 from copy import deepcopy
+from torch import Tensor
+from typing import Any , Literal , Optional
+
+use_device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+if torch.cuda.is_available():
+    print(f'Use device name: ' + torch.cuda.get_device_name(0))
+        
+class Device:
+    def __init__(self , device = None) -> None:
+        if device is None: device = use_device
+        self.device = device
+    def __call__(self, obj) -> Any:
+        return self.send_to(obj , self.device)
+    
+    @classmethod
+    def send_to(cls , x , device = None):
+        if isinstance(x , (list,tuple)):
+            return type(x)(cls.send_to(v , device) for v in x)
+        elif isinstance(x , (dict)):
+            return {k:cls.send_to(v , device) for k,v in x.items()}
+        elif hasattr(x , 'to'): # maybe modulelist ... should be included
+            return x.to(device)
+        else:
+            return x
+        
+    @classmethod
+    def cpu(cls , x):
+        if isinstance(x , (list,tuple)):
+            return type(x)(cls.cpu(v) for v in x)
+        elif isinstance(x , (dict)):
+            return {k:cls.cpu(v) for k,v in x.items()}
+        elif hasattr(x , 'cpu'): # maybe modulelist ... should be included
+            return x.cpu()
+        else:
+            return x
+    @classmethod
+    def cuda(cls , x):
+        if isinstance(x , (list,tuple)):
+            return type(x)(cls.cuda(v) for v in x)
+        elif isinstance(x , (dict)):
+            return {k:cls.cuda(v) for k,v in x.items()}
+        elif hasattr(x , 'cuda'): # maybe modulelist ... should be included
+            return x.cuda()
+        else:
+            return x
+
+    def torch_nans(self,*args,**kwargs):
+        return torch.ones(*args , device = self.device , **kwargs).fill_(torch.nan)
+    def torch_zeros(self,*args , **kwargs):
+        return torch.zeros(*args , device = self.device , **kwargs)
+    def torch_ones(self,*args,**kwargs):
+        return torch.ones(*args , device = self.device , **kwargs)
+    def torch_arange(self,*args,**kwargs):
+        return torch.arange(*args , device = self.device , **kwargs)
+    def print_cuda_memory(self):
+        print(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
+              f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G')
 
 class Timer:
     def __init__(self , *args):
@@ -13,38 +70,6 @@ class Timer:
         print(self.key , '...', end='')
     def __exit__(self, type, value, trace):
         print(f'... cost {time.time()-self.start_time:.2f} secs')
-
-class ProcessTimer:
-    def __init__(self , record = True) -> None:
-        self.recording = record
-        self.recorder = {} if record else None
-
-    class ptimer:
-        def __init__(self , target_dict = None , *args):
-            self.target_dict = target_dict
-            if self.target_dict is not None:
-                self.key = '/'.join(args)
-                if self.key not in self.target_dict.keys():
-                    self.target_dict[self.key] = []
-        def __enter__(self):
-            if self.target_dict is not None:
-                self.start_time = time.time()
-        def __exit__(self, type, value, trace):
-            if self.target_dict is not None:
-                time_cost = time.time() - self.start_time
-                self.target_dict[self.key].append(time_cost)
-
-    def __call__(self , *args):
-        return self.ptimer(self.recorder , *args)
-    
-    def print(self):
-        if self.recorder is not None:
-            keys = list(self.recorder.keys())
-            num_calls = [len(self.recorder[k]) for k in keys]
-            total_time = [np.sum(self.recorder[k]) for k in keys]
-            tb = pd.DataFrame({'keys':keys , 'num_calls': num_calls, 'total_time': total_time})
-            tb['avg_time'] = tb['total_time'] / tb['num_calls']
-            print(tb.sort_values(by=['total_time'],ascending=False))
             
 class MemoryPrinter:
     def __init__(self) -> None:
@@ -56,15 +81,4 @@ class MemoryPrinter:
     def print(self):
         print(self.__repr__())
         
-class FilteredIterator:
-    def __init__(self, iterable, condition):
-        self.iterable  = iter(iterable)
-        self.condition = condition if callable(condition) else iter(condition)
-    def __iter__(self):
-        return self
-    def __next__(self):
-        while True:
-            item = next(self.iterable)
-            cond = self.condition(item) if callable(self.condition) else next(self.condition)
-            if cond: return item
         

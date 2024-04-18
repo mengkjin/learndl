@@ -1,7 +1,7 @@
 # most frequently changing variables
 mem_storage: true 
 random_seed: null
-short_test:  False
+short_test:  True
 
 model_name: null # null
 model_module: patch_tst # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
@@ -64,7 +64,6 @@ interval:   120
 max_epoch:  100
 verbosity:  2
 batch_size: 10000
-test_step_day:  1
 input_step_day: 5
 skip_horizon: &skip_horizon 20 
 

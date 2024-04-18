@@ -7,13 +7,13 @@
 # python3 scripts/run_model3.py --process=0 --resume=0 --checkname=1 
 
 import torch
-import torch.nn as nn
 import numpy as np
 import pandas as pd
 import itertools , os , gc , time
 
 from copy import deepcopy
 from dataclasses import dataclass , field
+from torch import nn , Tensor
 from torch.optim.swa_utils import AveragedModel , update_bn
 from torch.nn.utils.clip_grad import clip_grad_value_
 from typing import Any , ClassVar , Literal
@@ -21,15 +21,15 @@ from typing import Any , ClassVar , Literal
 from .environ import DIR
 
 from .data.DataFetcher import DataFetcher
-from .DataModule import DataModule
-from .util import (
-    BatchData , Device , FilteredIterator , Logger , ModelOutputs , 
-    ProcessTimer , Storage , TrainConfig , Metrics
-)
+from .DataModule import BatchData , DataModule
+from .util import Device , Logger , Metrics , Storage , TrainConfig
+from .util import trainer as TRAIN # TrainerUtil
+from .util import optim as OPTIM # TrainerUtil
+from .model import model as MODEL
 
 from .func.date import today , date_offset
 from .func.basic import list_converge
-from .model import model
+
 
 # from audtorch.metrics.functional import *
 
@@ -37,7 +37,7 @@ logger = Logger()
 config = TrainConfig()
 
 @dataclass
-class ModelPred:
+class Predictor:
     model_name : str
     model_type : Literal['best' , 'swalast' , 'swabest'] = 'swalast'
     model_num  : int = 0
@@ -115,8 +115,11 @@ class ModelPred:
 
                     sd_path = f'{model_path}/{self.model_num}/{model_date}.{self.model_type}.pt'
                     model_sd = torch.load(sd_path , map_location = model_data.device.device)
-                    model = device(RunModel.new_model(model_config.model_module , model_param , state_dict=model_sd))
-                    model.eval()
+
+                    net = MODEL.new(model_config.model_module , model_param , model_sd)
+                    net = device(net)
+
+                    net.eval()
 
                     loader = model_data.dataloaders['test']
                     secid  = model_data.datas.secid
@@ -128,7 +131,7 @@ class ModelPred:
                     for tdate in iter_tdates:
                         batch_data = loader[np.where(tdates == tdate)[0][0]]
 
-                        pred = ModelOutputs(model(batch_data.x)).pred()
+                        pred = TRAIN.Output(net(batch_data.x)).pred()
                         if len(pred):
                             df_list.append(
                                 pd.DataFrame({
@@ -141,7 +144,7 @@ class ModelPred:
         return df
 
 @dataclass
-class ModelTest:
+class ModelTestor:
     config : TrainConfig
     net    : nn.Module
     batch_data : BatchData
@@ -158,7 +161,7 @@ class ModelTest:
         
         batch_data = model_data.test_dataloader()[0]
 
-        net = getattr(model , f'{module}')(**config.model_param[0])
+        net = MODEL.new(module , config.model_param[0])
         metrics = Metrics(config.train_param['criterion']).model_update(config.model_param[0] , config)
         return cls(config , net , batch_data , model_data , metrics)
 
@@ -169,7 +172,7 @@ class ModelTest:
             print(f'multiple x of {len(self.batch_data.x)}')
 
         if hasattr(self.net , 'dynamic_data_assign'): getattr(self.net , 'dynamic_data_assign')(self.batch_data , self.model_data)
-        outputs = ModelOutputs(self.net(self.batch_data.x))
+        outputs = TRAIN.Output(self.net(self.batch_data.x))
         print(f'y shape is {outputs.pred().shape}')
         self.outputs = outputs
         print(f'Test Forward Success')
@@ -183,80 +186,36 @@ class ModelTest:
         print('metrics : ' , metrics)
         print(f'Test Metrics Success')
 
-class RunModel():
+class ModelTrainer():
     '''
     Control the whole process of training:
     '''
     def __init__(self , mem_storage = True , timer = True ,  device = None , **kwargs):
-        self.model_info = self.ModelInfo(config)
-        self.ptimer     = ProcessTimer(timer)
-        self.storage    = Storage(mem_storage)
-        self.device     = Device(device)
-
-    @dataclass
-    class ModelInfo:
-        config    : TrainConfig
-        init_time : float = 0
-        contents  : dict[str,Any] = field(default_factory=dict)
-
-        result_path : ClassVar[str] = f'{DIR.result}/model_results.yaml'
-
-        def __post_init__(self):
-            os.makedirs(os.path.dirname(self.result_path) , exist_ok=True)
-            self.init_time = time.time()
-
-        def __setitem__(self , key , value):
-            self.contents[key] = value
-
-        def __getitem__(self , key , default = None):
-            return self.contents.get(key , default)
-
-        def dump_result(self):
-            result = {
-                '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
-                '1_start' : time.ctime(self.init_time) ,
-                '2_basic' : 'short' if self.config.short_test else 'full' , 
-                '3_datas' : self.config.model_data_type ,
-                '4_label' : ','.join(self.config.labels),
-                '5_dates' : '-'.join([str(self.config.beg_date),str(self.config.end_date)]),
-                '6_train' : self['train_process'],
-                '7_test'  : self['test_process'],
-                '8_result': self['test_score_sum'],
-            }
-            DIR.dump_yaml(result , self.result_path)
+        self.info    = TRAIN.Info(config)
+        self.ptimer  = TRAIN.PTimer(timer)
+        self.storage = Storage(mem_storage)
+        self.device  = Device(device)
 
     def main_process(self):
-        '''
-        Main process of load_data + train + test
-        '''
+        '''Main process of load_data + train + test'''
         for process_name in config.process_queue:
             self.process_setname(process_name)
-            self.__getattribute__(f'process_{process_name.lower()}')()
-
-        self.model_info.dump_result()
+            getattr(self , f'process_{process_name.lower()}')()
+        self.info.dump_result()
         self.ptimer.print()
     
-    def process_setname(self , key = 'data'):
-        self.process_name = key.lower()
-        self.model_count = 0
-        self.epoch_count = 0
-        if self.process_name == 'data': 
-            pass
-        elif self.process_name in ['train' , 'test']: 
+    def process_setname(self , key : Literal['data' , 'train' , 'test']):
+        self.process_name = key
+        self.info.new_count()
+        if self.process_name in ['train' , 'test']: 
             self.data.reset_dataloaders()
             self.Metrics = Metrics(config.train_param['criterion'])
-        else:
-            raise Exception(f'KeyError : {key}')
         
     def process_data(self):
-        '''
-        Main process of loading basic data
-        '''
-        self.model_info['data_time'] = time.time()
-        logger.critical(f'Start Process [Load Data]!')
+        '''Main process of loading model data'''
+        logger.critical(self.info.tic('data'))
         self.data = DataModule(config)
-
-        logger.critical('Finish Process [Load Data]! Cost {:.1f}Secs'.format(time.time() - self.model_info['data_time']))
+        logger.critical(self.info.toc('data'))
         
     def process_train(self):
         '''
@@ -287,20 +246,15 @@ class RunModel():
                 if not os.path.exists(f'{config.model_base_path}/{model_num}/{model_date}.best.pt'):
                     models_trained[max(i-1,0):] = False
                     break
-            new_iter = FilteredIterator(new_iter , ~models_trained)
+            new_iter = TRAIN.Filtered(new_iter , ~models_trained)
         return new_iter
     
     def process_train_start(self):
-        self.model_info[f'{self.process_name}_time'] = time.time()
-        logger.critical(f'Start Process [{self.process_name.capitalize()} Model]!')        
+        logger.critical(self.info.tic('train'))
         config.Model.save(config.model_base_path)    
 
     def process_train_end(self):
-        total_time = time.time() - self.model_info['train_time']
-        self.model_info['train_process'] = \
-            'Finish Process [Train Model]! Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
-                total_time / 3600 , total_time / 60 / max(self.model_count , 1) , total_time / max(self.epoch_count , 1))
-        logger.critical(self.model_info['train_process'])
+        logger.critical(self.info.toc('train' , True))
     
     def model_preparation(self , process , last_n = 30 , best_n = 5):
         assert process in ['train' , 'test']
@@ -365,37 +319,29 @@ class RunModel():
             self.cond = {'terminate' : {} , 'nan_loss' : False , 'loop_status' : 'attempt'}
 
     def model_train_start(self):
-        '''
-        Reset model specific variables
-        '''
+        '''Reset model specific variables'''
         with self.ptimer('model_train/start'):
             self._init_variables('model')
             self.nanloss_life = config.train_param['trainer']['nanloss']['retry']
             self.text['model'] = '{:s} #{:d} @{:4d}'.format(config.model_name , self.model_num , self.model_date)
             self.data.setup('fit' , self.model_date , self.param)
-            self.print_progress('train_dataloader')
             
     def model_train_end(self):
-        '''
-        Do necessary things of ending a model(model_data , model_num)
-        '''
         with self.ptimer('model_train/end'):
             self.storage.del_path([p for pl in self.path['source'].values() for p in pl])
-            if self.process_name == 'train' : self.model_count += 1
+            if self.process_name == 'train' : self.info.add_model()
             self.tick[1] = time.time()
             self.print_progress('model_end')
             gc.collect() 
             torch.cuda.empty_cache()
 
     def model_train_init_loop(self):
-        '''
-        Reset and loop variables giving loop_status
-        '''
+        '''Reset and loop variables giving loop_status'''
         with self.ptimer('model_train/init_loop'):
             self._init_variables(self.cond.get('loop_status' , ''))
             self.epoch_i += 1
             self.epoch_all += 1
-            self.epoch_count += 1
+            self.info.add_epoch()
             if self.cond.get('loop_status') in ['attempt']:
                 self.attempt_i += 1
                 self.text['attempt'] = f'FirstBite' if self.attempt_i == 0 else f'Retrain#{self.attempt_i}'
@@ -415,10 +361,7 @@ class RunModel():
             self.scheduler = self.load_scheduler() 
 
     def model_train_epoch(self):
-        '''
-        Iterate train and valid dataset, calculate loss/score , update values
-        If nan loss occurs, turn to nanloss_reviver
-        '''
+        '''Iterate train and valid dataset, calculate loss/score , update values'''
         with self.ptimer('model_train/epoch/train'):
             self.net.train() 
             iterator = self.data.train_dataloader()
@@ -459,9 +402,7 @@ class RunModel():
         self.reset_scheduler()
 
     def model_train_assess_status(self):
-        '''
-        Update condition of continuing training epochs , restart attempt if early exit or nan loss
-        '''
+        '''Update condition of continuing training epochs , restart attempt if early exit or nan loss'''
         with self.ptimer('model_train/assess'):
             if self.cond['nan_loss']:
                 logger.error(f'Initialize a new model to retrain! Lives remaining {self.nanloss_life}')
@@ -510,9 +451,7 @@ class RunModel():
                 self.cond['loop_status'] = 'epoch'
 
     def model_test_start(self):
-        '''
-        Reset model specific variables
-        '''
+        '''Reset model specific variables'''
         with self.ptimer('model_test/start'):
             self._init_variables('model')
             self.data.setup('test' , self.model_date , self.param)   
@@ -530,7 +469,7 @@ class RunModel():
         with self.ptimer('model_test/forecast') , torch.no_grad():
             iter_dates = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
             l0 , l1 = len(self.data.early_test_dates) , len(self.data.model_test_dates)
-            assert self.data.test_dataloader().__len__() == len(iter_dates)
+            assert len(self.data.test_dataloader()) == len(iter_dates) , (len(self.data.test_dataloader()) , len(iter_dates))
             for oi , op_type in enumerate(config.output_types):
                 self.load_model('test' , op_type)
                 self.net.eval() 
@@ -553,9 +492,7 @@ class RunModel():
                 self.score_by_date[-l1:,self.model_num*len(config.output_types) + oi] = np.nan_to_num(test_score[-l1:])
         
     def model_test_end(self):
-        '''
-        Do necessary things of ending a model(model_data , model_num)
-        '''
+        '''Do necessary things of ending a model(model_data , model_num)'''
         with self.ptimer('model_test/end'):
             if self.model_num == config.model_num_list[-1]:
                 self.score_by_model[-1,:] = np.nanmean(self.score_by_date[-len(self.data.model_test_dates):,],axis = 0)
@@ -564,25 +501,22 @@ class RunModel():
             torch.cuda.empty_cache()
   
     def process_test_start(self):
-        self.model_info[f'{self.process_name}_time'] = time.time()
-        logger.critical(f'Start Process [{self.process_name.capitalize()} Model]!')        
-        logger.warning('Each Model Date Testing Mean Score({}):'.format(config.train_param['criterion']['score']))
+        logger.critical(self.info.tic('test'))
 
         self.test_model_num = np.repeat(config.model_num_list,len(config.output_types))
         self.test_output_type = np.tile(config.output_types,len(config.model_num_list))
         self.score_by_date  = np.empty((0,len(self.test_model_num)))
         self.score_by_model = np.empty((0,len(self.test_model_num)))
 
+        logger.warning('Each Model Date Testing Mean Score({}):'.format(config.train_param['criterion']['score']))
         self.print_test_table('Models' , self.test_model_num , 0)
         self.print_test_table('Output' , self.test_output_type)
 
     def process_test_end(self):
         # date ic writed down
-        date_step = self.data.config.test_step_day
-        date_list = self.data.test_full_dates[::date_step]
         for model_num in config.model_num_list:
-            date_str = np.array(list(map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , date_list.astype(str))))
-            df = pd.DataFrame({'dates' : date_list} , index = date_str)
+            date_str = np.array(list(map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , self.data.test_full_dates.astype(str))))
+            df = pd.DataFrame({'dates' : self.data.test_full_dates} , index = date_str)
             # print(self.score_by_date.shape)
             for oi , op_type in enumerate(config.output_types):
                 df[f'score.{op_type}'] = self.score_by_date[:,model_num*len(config.output_types) + oi]
@@ -603,27 +537,21 @@ class RunModel():
         df.to_csv(f'{config.model_base_path}/{config.model_name}_score_by_model.csv')
         for i , digits in enumerate([4,2,4,2,4]):
             self.print_test_table(add_row_key[i] , add_row_value[i] , digits)
-        self.model_info['test_score_sum'] = {k:round(v,4) for k,v in zip(df.columns , score_sum.tolist())}  
-
-        total_time = time.time() - self.model_info['train_time']
-        self.model_info['test_process'] = 'Finish Process [Test Model]! Cost {:.1f} Secs'.format(total_time)
-        logger.critical(self.model_info['test_process'])
+        self.info.add_data('test_score_sum' , {k:round(v,4) for k,v in zip(df.columns , score_sum.tolist())})
+        logger.critical(self.info.toc('test'))
 
     def model_forward(self , key , batch_data : BatchData):
         with self.ptimer(f'{key}/forward'):
             if hasattr(self.net , 'dynamic_data_assign'): getattr(self.net , 'dynamic_data_assign')(batch_data , self.data)
-            return ModelOutputs(self.net(batch_data.x))
+            return TRAIN.Output(self.net(batch_data.x))
 
-    def model_metric(self, key , outputs_of_net : ModelOutputs, batch_data : BatchData , **kwargs) -> Metrics.MetricOutput:
-        # outputs_of_net = self.net(batch_data.x)
-        # valid_sample = torch.where(batch_data.nonnan)[0]
+    def model_metric(self, key , outputs_of_net : TRAIN.Output, batch_data : BatchData , penalty_kwargs = {} , **kwargs) -> Metrics.MetricOutput:
         with self.ptimer(f'{key}/loss'):
             label , weight = batch_data.y , batch_data.w
-            penalty_kwargs = {}
             if key == 'train': penalty_kwargs.update({'net' : self.net , 'hidden' : outputs_of_net.hidden() , 'label' : label})
             return self.Metrics.calculate(key , label , outputs_of_net.pred() , weight , self.net , penalty_kwargs , **kwargs)
         
-    def model_backward(self, loss : torch.Tensor) -> None:
+    def model_backward(self, loss : Tensor) -> None:
         clip_value = config.train_param['trainer']['gradient'].get('clip_value')
         with self.ptimer(f'train/backward'):
             self.optimizer.zero_grad()
@@ -632,10 +560,8 @@ class RunModel():
             self.optimizer.step()
     
     def print_progress(self , key):
-        '''
-        Print out status giving display conditions and looping conditions
-        '''
-        printers = [logger.info] if (config.verbosity > 2 or self.model_count < config.model_num) else [logger.debug]
+        '''Print out status giving display conditions and looping conditions'''
+        printers = [logger.info] if (config.verbosity > 2 or self.info.initial_models) else [logger.debug]
         sdout   = None
         if key == 'model_end':
             self.text['epoch'] = 'Ep#{:3d}'.format(self.epoch_all)
@@ -657,8 +583,6 @@ class RunModel():
                 self.epoch_i , self.epoch_i+1 , ', and will speedup2x' * config.train_param['trainer']['learn_rate']['reset']['speedup2x'])
         elif key == 'new_attempt':
             sdout = ' '.join([self.text['attempt'],'Epoch #{:3d}'.format(self.epoch_i),':',self.text['trainer'],', Next attempt goes!'])
-        elif key == 'train_dataloader':
-            sdout = ' '.join([self.text['model'],'LoadData Finished'])  
         else:
             raise Exception(f'KeyError : {key}')
         
@@ -669,9 +593,7 @@ class RunModel():
         logger.info(('{: <11s}'+('{: >8'+fmt+'}')*len(values)).format(str(rowname) , *values))
 
     def nanloss_reviver(self):
-        '''
-        Deal with nan loss, life -1 and change nan_loss condition to True
-        '''
+        '''Deal with nan loss, life -1 and change nan_loss condition to True'''
         logger.error(f'{self.text["model"]} Attempt{self.attempt_i}, epoch{self.epoch_i} got nan loss!')
         if self.nanloss_life > 0:
             self.nanloss_life -= 1
@@ -680,9 +602,7 @@ class RunModel():
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
 
     def check_train_end(self):
-        '''
-        Whether terminate condition meets
-        '''
+        '''Whether terminate condition meets'''
         term_dict = config.train_param['terminate']
         term_cond = {}
         exit_text = ''
@@ -728,7 +648,12 @@ class RunModel():
                     if key == 'best':
                         savable_net = self.storage.load(p_exists[0])
                     else:
-                        savable_net = self.load_swa_model(p_exists)
+                        if len(p_exists) == 0: raise Exception('empty swa input')
+                        swa_net = TRAIN.SWAModel(config.model_module , self.param , self.device.device)
+                        for p in p_exists: swa_net.update_sd(self.storage.load(p))
+                        swa_net.update_bn(self.data.train_dataloader())
+                        savable_net = swa_net.module 
+
                     self.storage.save_model_state(savable_net , self.path['target'][key] , to_disk = True) 
     
     def load_model(self , process , key = 'best'):
@@ -743,21 +668,8 @@ class RunModel():
             else:
                 model_path = self.path['target'][key]
 
-            net = self.new_model(config.model_module , self.param , self.storage.load(model_path , from_disk = True))
+            net = MODEL.new(config.model_module , self.param , self.storage.load(model_path , from_disk = True))
             self.net = self.device(net)
-            
-    def load_swa_model(self , model_path_list = []):
-        if len(model_path_list) == 0: raise Exception('empty swa input')
-        net = self.new_model(config.model_module , self.param)
-        swa_net = self.device(AveragedModel(net))
-        for p in model_path_list:
-            swa_net.update_parameters(self.storage.load_model_state(net , p)) 
-        update_bn(self._swa_update_bn_loader(self.data.train_dataloader()) , swa_net) 
-        return swa_net.module 
-    
-    def _swa_update_bn_loader(self , loader):
-        for batch_data in loader: 
-            yield (batch_data.x , batch_data.y , batch_data.w)
     
     def load_optimizer(self , new_opt_kwargs = None , new_lr_kwargs = None):
         if new_opt_kwargs is None:
@@ -773,7 +685,7 @@ class RunModel():
             lr_kwargs.update(new_lr_kwargs)
         base_lr = lr_kwargs['base'] * lr_kwargs['ratio']['attempt'][:self.attempt_i+1][-1]
         
-        return self.new_optimizer(self.net , opt_kwargs['name'] , base_lr , transfer = self.path['candidate'].get('transfer') , 
+        return OPTIM.new_optimizer(self.net , opt_kwargs['name'] , base_lr , transfer = self.path['candidate'].get('transfer') , 
                                   encoder_lr_ratio = lr_kwargs['ratio']['transfer'], **opt_kwargs['param'])
     
     def load_scheduler(self , new_shd_kwargs = None):
@@ -782,7 +694,7 @@ class RunModel():
         else:
             shd_kwargs = deepcopy(config.train_param['trainer']['scheduler'])
             shd_kwargs.update(new_shd_kwargs)
-        return self.new_scheduler(self.optimizer, shd_kwargs['name'], **shd_kwargs['param'])
+        return OPTIM.new_scheduler(self.optimizer, shd_kwargs['name'], **shd_kwargs['param'])
     
     def reset_scheduler(self):
         rst_kwargs = config.train_param['trainer']['learn_rate']['reset']
@@ -807,51 +719,20 @@ class RunModel():
             shd_kwargs = None
         self.scheduler = self.load_scheduler(shd_kwargs)
         self.print_progress('reset_learn_rate')
-    
-    @staticmethod
-    def new_model(module , param = {} , state_dict = None , **kwargs):
-        net = getattr(model , f'{module}')(**param)
-        if state_dict: net.load_state_dict(state_dict)
-        return net
 
-    @staticmethod
-    def new_scheduler(optimizer, key = 'cycle', **kwargs):
-        if key == 'step':
-            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **kwargs)
-        elif key == 'cycle':
-            scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, max_lr=[pg['lr_param'] for pg in optimizer.param_groups],cycle_momentum=False,mode='triangular2',**kwargs)
-        return scheduler
+    @classmethod
+    def fit(cls , process = -1 , resume = -1 , checkname = -1 , timer = False , parser_args = None):
+        if parser_args is None: parser_args = config.parser_args({'process':process,'resume':resume,'checkname':checkname})
 
-    @staticmethod
-    def new_optimizer(net , key ='Adam', base_lr = 0.005, transfer = False , encoder_lr_ratio = 1., decoder_lr_ratio = 1., **kwargs):
-        if transfer:
-            # define param list to train with different learn rate
-            p_enc = [(p if p.dim()<=1 else nn.init.xavier_uniform_(p)) for x,p in net.named_parameters() if 'encoder' in x.split('.')[:3]]
-            p_dec = [p for x,p in net.named_parameters() if 'encoder' not in x.split('.')[:3]]
-            net_param_groups = [{'params': p_dec , 'lr': base_lr * decoder_lr_ratio , 'lr_param': base_lr * decoder_lr_ratio},
-                                {'params': p_enc , 'lr': base_lr * encoder_lr_ratio , 'lr_param': base_lr * encoder_lr_ratio}]
-        else:
-            net_param_groups = [{'params': [p for p in net.parameters()] , 'lr' : base_lr , 'lr_param' : base_lr} ]
+        config.reload(do_process=True,par_args=parser_args)
+        config.set_config_environment()
 
-        optimizer = {
-            'Adam': torch.optim.Adam ,
-            'SGD' : torch.optim.SGD ,
-        }[key](net_param_groups , **kwargs)
-        return optimizer
+        logger.warning('Model Specifics:')
+        config.print_out()
 
-
-def main(process = -1 , resume = -1 , checkname = -1 , timer = False , parser_args = None):
-    if parser_args is None: parser_args = config.parser_args({'process':process,'resume':resume,'checkname':checkname})
-
-    config.reload(do_process=True,par_args=parser_args)
-    config.set_config_environment()
-
-    logger.warning('Model Specifics:')
-    config.print_out()
-
-    app = RunModel(mem_storage = config.mem_storage , timer = timer)
-    app.main_process()
+        app = cls(mem_storage = config.mem_storage , timer = timer)
+        app.main_process()
 
 if __name__ == '__main__':
-    main(parser_args = config.parser_args())
+    ModelTrainer.fit(parser_args = config.parser_args())
  

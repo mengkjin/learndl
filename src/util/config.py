@@ -137,17 +137,7 @@ class TrainParam:
     def resumeable(self) -> bool: return os.path.exists(f'{self.model_base_path}/{self.train_yaml}')
     @property
     def model_module(self) -> str: return self.configs['model_module'].lower()
-    @property
-    def sample_method(self) -> Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']: 
-        return self.train_param.get('dataloader',{}).get('sample_method' , 'sequential')
-    @property
-    def train_ratio(self) -> float: return self.train_param.get('dataloader',{}).get('train_ratio',0.8)
-    @property
-    def shuffle_option(self) -> Literal['static' , 'init' , 'epoch']: 
-        return self.train_param.get('dataloader',{}).get('shuffle_option','static')
-    @property
-    def weight_scheme(self) -> dict:
-        return self.train_param.get('criterion',{}).get('weight',{})
+    
 
 @dataclass
 class TrainConfig:
@@ -165,7 +155,6 @@ class TrainConfig:
     max_epoch: int          = 100
     verbosity: int          = 2
     batch_size: int         = 10000
-    test_step_day: int      = 1
     input_step_day: int     = 5
     skip_horizon: int       = 20 
 
@@ -209,7 +198,7 @@ class TrainConfig:
         return self
     
     def get(self , key , default = None):
-        return getattr(self,key , default)
+        return getattr(self , key , default)
     
     def set_config_environment(self , manual_seed = None):
         self.set_random_seed(manual_seed if manual_seed else self.get('random_seed'))
@@ -242,7 +231,7 @@ class TrainConfig:
             _ModelParam = ModelParam(model_path , _TrainParam.model_module)
             config_resume = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
             config.update(config_resume.__dict__)
-        elif makedir:
+        elif 'train' in config.process_queue and makedir:
             if config.Train.resumeable:
                 raise Exception(f'{model_path} has to be delete manually')
             # os.makedirs(config.model_base_path, exist_ok = True)
@@ -262,17 +251,40 @@ class TrainConfig:
         assert self._TrainParam is not None
         return self._TrainParam
     @property
-    def model_base_path(self) -> str: return self.Train.model_base_path
+    def model_base_path(self) -> str:
+        return self.Train.model_base_path
     @property
-    def model_param(self) -> list: return self.Model.params
+    def model_param(self) -> list:
+        return self.Model.params
     @property
-    def model_num(self) -> int:    return self.Model.n_model
+    def model_num(self) -> int:
+        return self.Model.n_model
     @property
-    def train_param(self) -> dict: return self.Train.train_param
+    def train_param(self) -> dict: 
+        return self.Train.train_param
     @property
-    def model_num_list(self) -> list[int]: return list(range(self.Model.n_model))
+    def model_num_list(self) -> list[int]:
+        return list(range(self.Model.n_model))
+    
     @property
-    def data_type_list(self) -> list[str]: return self.model_data_type.split('+')
+    def data_type_list(self) -> list[str]:
+        return self.model_data_type.split('+')
+    
+    @property
+    def sample_method(self) -> Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']: 
+        return self.Train.train_param.get('dataloader',{}).get('sample_method' , 'sequential')
+
+    @property
+    def train_ratio(self) -> float: 
+        return self.Train.train_param.get('dataloader',{}).get('train_ratio',0.8)
+
+    @property
+    def shuffle_option(self) -> Literal['static' , 'init' , 'epoch']: 
+        return self.Train.train_param.get('dataloader',{}).get('shuffle_option','static')
+
+    def weight_scheme(self , stage : str , no_weight = False) -> Optional[str]: 
+        weight_dict = self.Train.train_param.get('criterion',{}).get('weight',{})
+        return None if no_weight else weight_dict.get(stage.lower() , 'equal')
 
     @staticmethod
     def set_random_seed(seed = None):
@@ -381,7 +393,7 @@ class TrainConfig:
     def print_out(self):
         subset = [
             'random_seed' , 'model_name' , 'model_module' , 'model_data_type' , 'model_data_prenorm' , 'labels' ,
-            'beg_date' , 'end_date' , 'interval' , 'input_step_day' , 'test_step_day' , 
+            'beg_date' , 'end_date' , 'interval' , 'input_step_day' , 'sample_method' , 'shuffle_option' ,
         ]
         pretty_print_dict({k:self.get(k) for k in subset})
         # pretty_print_dict(self.train_param)

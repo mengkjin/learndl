@@ -1,59 +1,78 @@
-import math
+import os , time
 import numpy as np
+import pandas as pd
 import torch
 
-from dataclasses import dataclass
+from dataclasses import dataclass , field
 from torch import Tensor
-from torch.utils.data import Sampler
-from typing import Any
-from .logger import *
+from torch.optim.swa_utils import AveragedModel , update_bn
+from typing import Any , ClassVar
 
-use_device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-if torch.cuda.is_available():
-    print(f'Use device name: ' + torch.cuda.get_device_name(0))
+from ..environ import DIR
+from .config import TrainConfig
+from ..model import model
 
 @dataclass
-class BatchData:
-    x       : Tensor | tuple[Tensor] | list[Tensor]
-    y       : Tensor 
-    w       : Tensor | None
-    i       : Tensor 
-    valid   : Tensor 
-    
+class Info:
+    config    : TrainConfig
+    datas     : dict[str,Any] = field(default_factory=dict)
+    count     : dict[str,int] = field(default_factory=dict)
+    times     : dict[str,float] = field(default_factory=dict)
+    texts     : dict[str,str] = field(default_factory=dict)
+
+    result_path : ClassVar[str] = f'{DIR.result}/model_results.yaml'
+
     def __post_init__(self):
-        if isinstance(self.x , (list , tuple)) and len(self.x) == 1:
-            self.x = self.x[0]
-        
-    def to(self , device = None):
-        if isinstance(device , Device): device = device.device
-        return self.__class__(
-            self.x.to(device) if isinstance(self.x , Tensor) else type(self.x)(x.to(device) for x in self.x) , 
-            self.y.to(device) , 
-            None if self.w is None else self.w.to(device) , 
-            self.i.to(device) , 
-            self.valid.to(device) 
-        )
+        os.makedirs(os.path.dirname(self.result_path) , exist_ok=True)
+        self.tic('init')
+        self.new_count()
 
-    def cpu(self):
-        return self.__class__(
-            self.x.cpu() if isinstance(self.x , Tensor) else type(self.x)(x.cpu() for x in self.x) , 
-            self.y.cpu() , 
-            None if self.w is None else self.w.cpu() , 
-            self.i.cpu() , 
-            self.valid.cpu() 
-        )
+    def add_data(self , key : str , value : Any):
+        self.datas[key] = value
 
-    def cuda(self):
-        return self.__class__(
-            self.x.cuda() if isinstance(self.x , Tensor) else type(self.x)(x.cuda() for x in self.x) , 
-            self.y.cuda() , 
-            None if self.w is None else self.w.cuda() , 
-            self.i.cuda() , 
-            self.valid.cuda() 
-        )
-    
+    def new_count(self):
+        self.count['model'] = 0
+        self.count['epoch'] = 0
+
+    def add_text(self , key : str , value : str):
+        self.texts[key] = value
+
+    def add_model(self): self.count['model'] += 1
+    def add_epoch(self): self.count['epoch'] += 1
+
+    def tic(self , key : str): 
+        self.times[key] = time.time()
+        return 'Start Process [{}] at {:s}!'.format(key.capitalize() , time.ctime(self.times[key]))
+
+    def toc(self , key : str , count_avgs = False): 
+        self.times[f'{key}_end'] = time.time()
+        spent = self.times[f'{key}_end'] - self.times[key]
+        if count_avgs:
+            self.texts[f'{key}'] = 'Finish Process [{}], Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
+                key.capitalize() , spent / 3600 , spent / 60 / max(self.count['model'],1) , spent / max(self.count['epoch'],1)
+            )
+        else:
+            self.texts[f'{key}'] = 'Finish Process [{}], Cost {:.1f} Secs'.format(key.capitalize() , spent)
+        return self.texts[f'{key}']
+
+    @property
+    def initial_models(self): return self.count['model'] < self.config.model_num
+
+    def dump_result(self):
+        result = {
+            '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
+            '1_start' : time.ctime(self.times['init']) ,
+            '2_basic' : 'short' if self.config.short_test else 'full' , 
+            '3_datas' : self.config.model_data_type ,
+            '4_label' : ','.join(self.config.labels),
+            '5_dates' : '-'.join([str(self.config.beg_date),str(self.config.end_date)]),
+            '6_train' : self.texts['train'],
+            '7_test'  : self.texts['test'],
+            '8_result': self.datas['test_score_sum'],
+        }
+        DIR.dump_yaml(result , self.result_path)
 @dataclass
-class ModelOutputs:
+class Output:
     outputs : Tensor | tuple | list
 
     def pred(self):
@@ -68,128 +87,69 @@ class ModelOutputs:
             return self.outputs[1]
         else:
             return None
-        
-class Device:
-    torch_obj = (Tensor , torch.nn.Module , torch.nn.ModuleList , torch.nn.ModuleDict , BatchData)
 
-    def __init__(self , device = None) -> None:
-        if device is None: device = use_device
-        self.device = device
-    def __call__(self, obj) -> Any:
-        return self.send_to(obj , self.device)
+class PTimer:
+    def __init__(self , record = True) -> None:
+        self.recording = record
+        self.recorder = {} if record else None
+
+    class ptimer:
+        def __init__(self , target_dict = None , *args):
+            self.target_dict = target_dict
+            if self.target_dict is not None:
+                self.key = '/'.join(args)
+                if self.key not in self.target_dict.keys():
+                    self.target_dict[self.key] = []
+        def __enter__(self):
+            if self.target_dict is not None:
+                self.start_time = time.time()
+        def __exit__(self, type, value, trace):
+            if self.target_dict is not None:
+                time_cost = time.time() - self.start_time
+                self.target_dict[self.key].append(time_cost)
+
+    def __call__(self , *args):
+        return self.ptimer(self.recorder , *args)
     
-    @classmethod
-    def send_to(cls , x , device = None):
-        if isinstance(x , (list,tuple)):
-            return type(x)(cls.send_to(v , device) for v in x)
-        elif isinstance(x , (dict)):
-            return {k:cls.send_to(v , device) for k,v in x.items()}
-        elif isinstance(x , cls.torch_obj): # maybe modulelist ... should be included
-            return x.to(device)
-        else:
-            return x
-        
-    @classmethod
-    def cpu(cls , x):
-        if isinstance(x , (list,tuple)):
-            return type(x)(cls.cpu(v) for v in x)
-        elif isinstance(x , (dict)):
-            return {k:cls.cpu(v) for k,v in x.items()}
-        elif isinstance(x , cls.torch_obj): # maybe modulelist ... should be included
-            return x.cpu()
-        else:
-            return x
-    @classmethod
-    def cuda(cls , x):
-        if isinstance(x , (list,tuple)):
-            return type(x)(cls.cuda(v) for v in x)
-        elif isinstance(x , (dict)):
-            return {k:cls.cuda(v) for k,v in x.items()}
-        elif isinstance(x , cls.torch_obj): # maybe modulelist ... should be included
-            return x.cuda()
-        else:
-            return x
-        
+    def print(self):
+        if self.recorder is not None:
+            keys = list(self.recorder.keys())
+            num_calls = [len(self.recorder[k]) for k in keys]
+            total_time = [np.sum(self.recorder[k]) for k in keys]
+            tb = pd.DataFrame({'keys':keys , 'num_calls': num_calls, 'total_time': total_time})
+            tb['avg_time'] = tb['total_time'] / tb['num_calls']
+            print(tb.sort_values(by=['total_time'],ascending=False))
 
-    def torch_nans(self,*args,**kwargs):
-        return torch.ones(*args , device = self.device , **kwargs).fill_(torch.nan)
-    def torch_zeros(self,*args , **kwargs):
-        return torch.zeros(*args , device = self.device , **kwargs)
-    def torch_ones(self,*args,**kwargs):
-        return torch.ones(*args , device = self.device , **kwargs)
-    def torch_arange(self,*args,**kwargs):
-        return torch.arange(*args , device = self.device , **kwargs)
-    def print_cuda_memory(self):
-        print(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
-              f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G')
-
-class CosineScheduler:
-    def __init__(self , optimizer , warmup_stage = 10 , anneal_stage = 40 , initial_lr_div = 10 , final_lr_div = 1e4):
-        self.warmup_stage= warmup_stage
-        self.anneal_stage= anneal_stage
-        self.optimizer = optimizer
-        self.base_lrs = [x['lr'] for x in optimizer.param_groups]
-        self.initial_lr= [x / initial_lr_div for x in self.base_lrs]
-        self.final_lr= [x / final_lr_div for x in self.base_lrs]
-        self.last_epoch = 0
-        self._step_count= 1
-        self._linear_phase = self._step_count / self.warmup_stage
-        self._cos_phase = math.pi / 2 * (self._step_count - self.warmup_stage) / self.anneal_stage
-        self._last_lr= self.initial_lr
-        
-    def get_last_lr(self):
-        #Return last computed learning rate by current scheduler.
-        return self._last_lr
-
-    def state_dict(self):
-        #Returns the state of the scheduler as a dict.
-        return self.__dict__
-    
-    def step(self):
-        self.last_epoch += 1
-        if self._step_count <= self.warmup_stage:
-            self._last_lr = [y+(x-y)*self._linear_phase for x,y in zip(self.base_lrs,self.initial_lr)]
-        elif self._step_count <= self.warmup_stage + self.anneal_stage:
-            self._last_lr = [y+(x-y)*math.cos(self._cos_phase) for x,y in zip(self.base_lrs,self.final_lr)]
-        else:
-            self._last_lr = self.final_lr
-        for x , param_group in zip(self._last_lr,self.optimizer.param_groups):
-            param_group['lr'] = x
-        self._step_count += 1
-        self._linear_phase = self._step_count / self.warmup_stage
-        self._cos_phase = math.pi / 2 * (self._step_count - self.warmup_stage) / self.anneal_stage
-                
-class CustomBatchSampler(Sampler):
-    def __init__(self, sampler , batch_size_list , drop_res = True):
-        self.sampler = sampler
-        self.batch_size_list = np.array(batch_size_list).astype(int)
-        assert (self.batch_size_list >= 0).all()
-        self.drop_res = drop_res
-        
+class Filtered:
+    def __init__(self, iterable, condition):
+        self.iterable  = iter(iterable)
+        self.condition = condition if callable(condition) else iter(condition)
     def __iter__(self):
-        if (not self.drop_res) and (sum(self.batch_size_list) < len(self.sampler)):
-            new_list = np.append(self.batch_size_list , len(self.sampler) - sum(self.batch_size_list))
-        else:
-            new_list = self.batch_size_list
-        
-        batch_count , sample_idx = 0 , 0
-        while batch_count < len(new_list):
-            if new_list[batch_count] > 0:
-                batch = [0] * new_list[batch_count]
-                idx_in_batch = 0
-                while True:
-                    batch[idx_in_batch] = self.sampler[sample_idx]
-                    idx_in_batch += 1
-                    sample_idx +=1
-                    if idx_in_batch == new_list[batch_count]:
-                        yield batch
-                        break
-            batch_count += 1
-        if idx_in_batch > 0:
-            yield batch[:idx_in_batch]
+        return self
+    def __next__(self):
+        while True:
+            item = next(self.iterable)
+            cond = self.condition(item) if callable(self.condition) else next(self.condition)
+            if cond: return item
+            
+class SWAModel:
+    def __init__(self , module , param , device = None) -> None:
+        self.module   = module
+        self.param    = param
+        self.device   = device
+        self.template = model.new(module , self.param)
+        self.module   = AveragedModel(self.template).to(self.device)
 
-    def __len__(self):
-        if self.batch_size_list.sum() < len(self.sampler):
-            return len(self.batch_size_list) + 1 - self.drop_res
-        else:
-            return np.where(self.batch_size_list.cumsum() >= len(self.sampler))[0][0] + 1
+    def update_sd(self , state_dict):
+        self.template.load_state_dict(state_dict)
+        self.module.update_parameters(self.template) 
+        return self
+    
+    def update_bn(self , data_loader):
+        update_bn(self.bn_loader(data_loader) , self.module) 
+        return self
+    
+    def bn_loader(self , data_loader):
+        for batch_data in data_loader: 
+            yield (batch_data.x , batch_data.y , batch_data.w)
+

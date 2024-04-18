@@ -6,6 +6,12 @@ from .tra import block_tra , tra_component
 from .rnn import rnn_univariate , rnn_multivariate
 from . import patchTST , modernTCN , TSMixer
 
+def new(module , param = {} , state_dict = None , **kwargs):
+    net = getattr(locals() , f'{module}')(**param)
+    assert isinstance(net , nn.Module) , net.__class__
+    if state_dict: net.load_state_dict(state_dict)
+    return net
+
 """
 class TRA_LSTM(TRA):
     def __init__(self , input_dim , hidden_dim , tra_num_states=1, tra_horizon = 20 , 

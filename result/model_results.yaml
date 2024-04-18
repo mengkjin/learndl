@@ -277,3 +277,15 @@
   3_best: 163.3468
   3_swabest: 164.6991
   3_swalast: 159.2087
+0_model: patch_tst_day_ShortTest(x1)
+1_start: Thu Apr 18 23:11:00 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_train: null
+7_test: Finish Process [Test Model]! Cost 11.9 Secs
+8_result:
+  0_best: 19.4336
+  0_swabest: 19.3041
+  0_swalast: 17.1334

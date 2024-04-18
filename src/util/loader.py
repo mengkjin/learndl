@@ -1,7 +1,7 @@
 import numpy as np
 
-from tqdm import tqdm
 from torch.utils.data.dataset import IterableDataset , Dataset
+from torch.utils.data import Sampler
 from typing import Literal
 
 from .store import Storage
@@ -53,3 +53,38 @@ class MyIterdataset(IterableDataset):
     def __iter__(self):
         for ii in range(len(self.data1)):
             yield self.data1[ii], self.label[ii]
+
+class CustomBatchSampler(Sampler):
+    def __init__(self, sampler , batch_size_list , drop_res = True):
+        self.sampler = sampler
+        self.batch_size_list = np.array(batch_size_list).astype(int)
+        assert (self.batch_size_list >= 0).all()
+        self.drop_res = drop_res
+        
+    def __iter__(self):
+        if (not self.drop_res) and (sum(self.batch_size_list) < len(self.sampler)):
+            new_list = np.append(self.batch_size_list , len(self.sampler) - sum(self.batch_size_list))
+        else:
+            new_list = self.batch_size_list
+        
+        batch_count , sample_idx = 0 , 0
+        while batch_count < len(new_list):
+            if new_list[batch_count] > 0:
+                batch = [0] * new_list[batch_count]
+                idx_in_batch = 0
+                while True:
+                    batch[idx_in_batch] = self.sampler[sample_idx]
+                    idx_in_batch += 1
+                    sample_idx +=1
+                    if idx_in_batch == new_list[batch_count]:
+                        yield batch
+                        break
+            batch_count += 1
+        if idx_in_batch > 0:
+            yield batch[:idx_in_batch]
+
+    def __len__(self):
+        if self.batch_size_list.sum() < len(self.sampler):
+            return len(self.batch_size_list) + 1 - self.drop_res
+        else:
+            return np.where(self.batch_size_list.cumsum() >= len(self.sampler))[0][0] + 1

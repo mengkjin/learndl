@@ -12,13 +12,53 @@ from typing import Any , Callable , Literal , Optional , Iterable , Iterator
 
 from .data.PreProcess import pre_process
 from .data.BlockData import DataBlock , DataBlockNorm
-from .util import Device , Storage , DataloaderStored , BatchData , TrainConfig
+from .util import Device , Storage , DataloaderStored , TrainConfig
 from .func.basic import tensor_standardize_and_weight , match_values
 
 from .environ import DIR
 
 def _abbr(data_type : str): return DataBlock.data_type_abbr(data_type)
 
+@dataclass
+class BatchData:
+    x       : Tensor | tuple[Tensor] | list[Tensor]
+    y       : Tensor 
+    w       : Tensor | None
+    i       : Tensor 
+    valid   : Tensor 
+    
+    def __post_init__(self):
+        if isinstance(self.x , (list , tuple)) and len(self.x) == 1:
+            self.x = self.x[0]
+        
+    def to(self , device = None):
+        if isinstance(device , Device): device = device.device
+        return self.__class__(
+            self.x.to(device) if isinstance(self.x , Tensor) else type(self.x)(x.to(device) for x in self.x) , 
+            self.y.to(device) , 
+            None if self.w is None else self.w.to(device) , 
+            self.i.to(device) , 
+            self.valid.to(device) 
+        )
+
+    def cpu(self):
+        return self.__class__(
+            self.x.cpu() if isinstance(self.x , Tensor) else type(self.x)(x.cpu() for x in self.x) , 
+            self.y.cpu() , 
+            None if self.w is None else self.w.cpu() , 
+            self.i.cpu() , 
+            self.valid.cpu() 
+        )
+
+    def cuda(self):
+        return self.__class__(
+            self.x.cuda() if isinstance(self.x , Tensor) else type(self.x)(x.cuda() for x in self.x) , 
+            self.y.cuda() , 
+            None if self.w is None else self.w.cuda() , 
+            self.i.cuda() , 
+            self.valid.cuda() 
+        )
+    
 class DataModule:
     '''
     A class to store relavant training data
@@ -44,7 +84,7 @@ class DataModule:
         self.static_prenorm_method = {}
         for mdt in self.data_type_list: 
             method = self.config.model_data_prenorm.get(mdt , {})
-            method['divlast']  = method.get('divlast' , True) and (_abbr(mdt) in ['day'])
+            method['divlast']  = method.get('divlast' , True) and (mdt in ['day'])
             method['histnorm'] = method.get('histnorm', True) and (self.datas.norms.get(mdt) is not None)
             print(f'Pre-Norming method of [{mdt}] : {method}')
             self.static_prenorm_method[mdt] = method
@@ -113,19 +153,20 @@ class DataModule:
             raise KeyError(stage)
 
         self.day_len  = d1 - d0
-        self.step_len = (self.day_len - self.seqx) // step_interval
+        self.step_len = (self.day_len - self.seqx + 1) // step_interval
+        if stage in ['predict' , 'test']: assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
         self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * step_interval , [0])
         self.date_idx = d0 + self.step_idx
         self.y_secid , self.y_date = self.datas.y.secid , self.datas.y.date[d0:d1]
 
-        x = {k:torch.tensor(v.values[:,d0:d1]) for k,v in self.datas.x.items()}
-        y = torch.tensor(self.datas.y.values[:,d0:d1]).squeeze(2)[...,:self.labels_n]
+        x = {k:Tensor(v.values)[:,d0:d1] for k,v in self.datas.x.items()}
+        y = Tensor(self.datas.y.values)[:,d0:d1].squeeze(2)[...,:self.labels_n]
 
         # record y to self to perform buffer_init
         self.y , _ = self.process_y_data(y , None , None , no_weight = True)
         self.buffer.process('setup' , self)
 
-        valid_sample = self.full_valid_sample(x, self.y, **self.buffer.get(y_keys))
+        valid_sample = self.full_valid_sample(x , self.y , self.step_idx , **self.buffer.get(y_keys))
         y , w = self.process_y_data(self.y , valid_sample , self.step_idx)
 
         self.y[:,self.step_idx] = y[:]
@@ -148,16 +189,23 @@ class DataModule:
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         return batch.to(self.device)
 
-    def full_valid_sample(self , x : dict , y : Tensor , **kwargs) -> Tensor:
+    def full_valid_sample(self , x : dict[str,Tensor] , y : Tensor , index1 : Tensor , **kwargs) -> Tensor:
         '''
         return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
         x : rolling window non-nan , end non-zero if in k is 'day'
         y : exact point non-nan 
         others : rolling window non-nan , default as self.seqy
         '''
-        valid_sample = self.sub_valid_sample(y , self.step_idx) if self.stage == 'train' else torch.full_like(y , True)
-        for k,v in x.items():      valid_sample *= self.sub_valid_sample(v , self.step_idx , self.seqs[k] , _abbr(k) in ['day'])
-        for k,v in kwargs.items(): valid_sample *= self.sub_valid_sample(v , self.step_idx , self.seqs[k])
+
+        if self.stage == 'train':
+            valid_sample = self.sub_valid_sample(y , index1)
+        else:
+            valid_sample = torch.full((len(y) , len(index1)) , True).to(y.device)
+
+        for key , value in x.items(): 
+            valid_sample *= self.sub_valid_sample(value , index1 , self.seqs[key] , key in ['day'])
+        for key , value in kwargs.items(): 
+            valid_sample *= self.sub_valid_sample(value , index1 , self.seqs[key])
         return valid_sample
     
     @staticmethod
@@ -168,15 +216,16 @@ class DataModule:
         sum_dim = tuple(range(2,data.ndim))
         
         invalid_samp = data[:,index1 + rolling_window].isnan().sum(sum_dim)
-        if endpoint_nonzero: invalid_samp += (data[:,index1 + rolling_window] == 0).sum(sum_dim)
         for i in range(rolling_window - 1): invalid_samp += data[:,index1 + rolling_window - i - 1].isnan().sum(sum_dim)
-
+        if endpoint_nonzero: invalid_samp += (data[:,index1 + rolling_window] == 0).sum(sum_dim)
+        
         return (invalid_samp == 0)
      
     def process_y_data(self , y : Tensor , valid_sample : Optional[Tensor] , index1 : Optional[Tensor] , no_weight = False) -> tuple[Tensor , Optional[Tensor]]:
         '''standardize y and weight'''
-        weight_scheme = None if no_weight else self.config.Train.weight_scheme.get(self.stage.lower() , 'equal')
+        weight_scheme = self.config.weight_scheme(self.stage , no_weight)
         if valid_sample is not None:
+            assert index1 is not None , index1
             y = y[:,index1].clone().nan_to_num(0)
             y[valid_sample == 0] = torch.nan
         return tensor_standardize_and_weight(y , 0 , weight_scheme)
@@ -186,11 +235,11 @@ class DataModule:
         update dataloaders dict(set_name = ['train' , 'valid']), 
         save batch_data to f'{DIR.model}/{model_name}/{set_name}_batch_data' and later load them
         '''
-        sample_method  = self.config.Train.sample_method
-        train_ratio    = self.config.Train.train_ratio
+        sample_method  = self.config.sample_method
+        train_ratio    = self.config.train_ratio
         batch_size     = self.config.batch_size
-        shuffle_option = self.config.Train.shuffle_option
-        index0, index1 = torch.arange(len(valid_sample)) , torch.tensor(self.step_idx)
+        shuffle_option = self.config.shuffle_option
+        index0, index1 = torch.arange(len(valid_sample)) , self.step_idx
 
         sample_index = self.data_sampling(self.stage , valid_sample , index0 , index1 , sample_method , train_ratio , batch_size)
 
@@ -406,7 +455,7 @@ class _LoaderDecorator:
         return len(self.loader)
 
     def __iter__(self):
-        for batch_i , batch_data in self.loader:
+        for batch_i , batch_data in enumerate(self.loader):
             yield self.process(batch_data , batch_i)
 
     def __getitem__(self , i : int): 
