@@ -5,14 +5,14 @@ import torch
 from dataclasses import dataclass , field
 
 from numpy.random import permutation
-from torch import Tensor
+from torch import FloatTensor , Tensor
 from torch.utils.data import BatchSampler
 from tqdm import tqdm
 from typing import Any , Callable , Literal , Optional , Iterable , Iterator
 
 from .data.PreProcess import pre_process
 from .data.BlockData import DataBlock , DataBlockNorm
-from .util import Device , Storage , DataloaderStored , TrainConfig
+from .util import AggMetrics , Device , DataloaderStored , Storage , TrainConfig
 from .func.basic import tensor_standardize_and_weight , match_values
 
 from .environ import DIR
@@ -58,6 +58,9 @@ class BatchData:
             self.i.cuda() , 
             self.valid.cuda() 
         )
+    
+    @property
+    def is_empty(self): return len(self.y) == 0
     
 class DataModule:
     '''
@@ -277,8 +280,8 @@ class DataModule:
         
         def shuffle_sampling(i , bs = batch_size):
             return [i[p] for p in BatchSampler(permutation(np.arange(len(i))) , bs , drop_last=False)]
-        def sequential_sampling(beg , end , empty_ok = False , posit = pos , valid = valid_sample):
-            return [posit[:,j][valid[:,j]] for j in range(beg , end) if empty_ok or (valid[:,j].sum() > 0)]
+        def sequential_sampling(beg , end , posit = pos , valid = valid_sample):
+            return [posit[:,j][valid[:,j]] for j in range(beg , end)]
         
         sample_index = {}
         if stage == 'fit':
@@ -299,7 +302,7 @@ class DataModule:
                 sample_index['valid'] = sequential_sampling(sep , l1)
         else:
             # test dataloader should have the same length as dates, so no filtering of val[:,j].sum() > 0
-            sample_index['test'] = sequential_sampling(0 , l1 , empty_ok=True)
+            sample_index['test'] = sequential_sampling(0 , l1)
         return sample_index
 
     @staticmethod
@@ -445,7 +448,7 @@ class DataModule:
             return data
         
 class _LoaderDecorator:
-    def __init__(self , data_module : DataModule , raw_loader , device , progress_bar = False) -> None:
+    def __init__(self , data_module : DataModule , raw_loader , device , progress_bar = False , agg = 'mean') -> None:
         self.data_module = data_module
         self.device = device
         self.itertype  = tqdm if progress_bar else list
@@ -469,6 +472,6 @@ class _LoaderDecorator:
         if hasattr(self.data_module , 'on_after_batch_transfer'):
             batch_data = getattr(self.data_module , 'on_after_batch_transfer')(batch_data , batch_i)
         return batch_data
-    
-    def display(self , text = ''):
-        if isinstance(self.loader , tqdm): self.loader.set_description(text)
+
+    def display(self , text : Optional[str] = None):
+        if text and isinstance(self.loader , tqdm): self.loader.set_description(text)

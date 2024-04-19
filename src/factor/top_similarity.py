@@ -8,8 +8,8 @@ from datetime import datetime,timedelta
 
 from ..data.ModelData import DataBlock
 from ..data.DataTank import DataTank
-from ..util.logger import Logger
-from ..util.trainer import Device
+from ..util import Log
+from ..util import Device
 #from ..function.basic import *
 
 from ..environ import DIR

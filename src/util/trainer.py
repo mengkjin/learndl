@@ -1,20 +1,101 @@
-import os , time
+import logging , os , time
 import numpy as np
 import pandas as pd
 import torch
 
+from copy import deepcopy
 from dataclasses import dataclass , field
-from torch import Tensor
+from torch import nn , Tensor
 from torch.optim.swa_utils import AveragedModel , update_bn
-from typing import Any , ClassVar
+from typing import Any , ClassVar , Literal , Optional
+
+from .logger import Logger
+from .config import TrainConfig
+from .metric import Metrics , MetricList
+from .store  import Storage
 
 from ..environ import DIR
-from .config import TrainConfig
 from ..model import model
+
+@dataclass
+class Pipeline:
+    config : TrainConfig
+    logger : Logger | logging.Logger | logging.RootLogger
+    stage  : str = ''
+
+    nanloss : bool = False
+    loop_status : str = 'model'
+    conds : dict[str,Any] = field(default_factory=dict)
+    texts : dict[str,str] = field(default_factory=dict)
+
+    def __post_init__(self):
+        self.nanloss_life = self.config.train_param['trainer']['nanloss']['retry']
+        self.agg_metric = AggMetrics()
+
+    def new_stage(self , stage : Literal['data' , 'fit' , 'test']):
+        self.stage = stage
+
+    def new_loop(self):
+        if self.loop_status == 'epoch':
+            self.new_epoch()
+        elif self.loop_status == 'attempt':
+            self.new_attempt()
+        elif self.loop_status == 'model':
+            self.new_model()
+        else:
+            raise KeyError(self.loop_status)
+
+    def new_epoch(self):
+        self.epoch_i += 1
+        self.epoch_all += 1
+
+    def new_attempt(self):
+        '''Reset variables at attempt start'''
+        self.epoch_i = -1
+        self.epoch_attempt_best = -1
+        self.score_attempt_best = -10000.
+        self.loss_list  = {'train' : [] , 'valid' : [] , 'test' : []}
+        self.score_list = {'train' : [] , 'valid' : [] , 'test' : []}
+        self.lr_list    = []
+
+        self.attempt_i += 1
+        self.texts['attempt'] = f'FirstBite' if self.attempt_i == 0 else f'Retrain#{self.attempt_i}'
+
+        self.new_epoch()
+
+    def new_model(self):
+        '''Reset variables of model start'''
+        self.attempt_i = -1
+        self.epoch_all = -1
+
+        self.nanloss = False
+        self.loop_status = 'attempt'
+        self.texts = {k : '' for k in ['model','attempt','epoch','exit','stat','time','trainer']}
+        self.conds = {}
+
+        self.agg_metric
+
+        self.new_attempt()
+        
+    def check_nanloss(self , is_nanloss):
+        '''Deal with nanloss, life -1 and change nan_loss condition to True'''
+        if self.stage == 'fit' and is_nanloss: 
+            self.logger.error(f'{self.texts["model"]} Attempt{self.attempt_i}, epoch{self.epoch_i} got nanloss!')
+            if self.nanloss_life > 0:
+                self.logger.error(f'Initialize a new model to retrain! Lives remaining {self.nanloss_life}')
+                self.nanloss_life -= 1
+                self.new_model()
+                self.nan_loss = True
+            else:
+                raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
+        else:
+            self.nan_loss = False
+
 
 @dataclass
 class Info:
     config    : TrainConfig
+
     datas     : dict[str,Any] = field(default_factory=dict)
     count     : dict[str,int] = field(default_factory=dict)
     times     : dict[str,float] = field(default_factory=dict)
@@ -27,12 +108,12 @@ class Info:
         self.tic('init')
         self.new_count()
 
-    def add_data(self , key : str , value : Any):
-        self.datas[key] = value
-
     def new_count(self):
         self.count['model'] = 0
         self.count['epoch'] = 0
+
+    def add_data(self , key : str , value : Any):
+        self.datas[key] = value
 
     def add_text(self , key : str , value : str):
         self.texts[key] = value
@@ -42,17 +123,21 @@ class Info:
 
     def tic(self , key : str): 
         self.times[key] = time.time()
+
+    def tic_str(self , key : str):
+        self.times[key] = time.time()
         return 'Start Process [{}] at {:s}!'.format(key.capitalize() , time.ctime(self.times[key]))
 
-    def toc(self , key : str , count_avgs = False): 
-        self.times[f'{key}_end'] = time.time()
-        spent = self.times[f'{key}_end'] - self.times[key]
+    def toc(self , key : str): 
+        return time.time() - self.times[key]
+    
+    def toc_str(self , key : str , count_avgs = False): 
+        spent = time.time() - self.times[key]
         if count_avgs:
-            self.texts[f'{key}'] = 'Finish Process [{}], Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
-                key.capitalize() , spent / 3600 , spent / 60 / max(self.count['model'],1) , spent / max(self.count['epoch'],1)
-            )
+            self.add_text(key , 'Finish Process [{}], Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
+                key.capitalize() , spent / 3600 , spent / 60 / max(self.count['model'],1) , spent / max(self.count['epoch'],1)))
         else:
-            self.texts[f'{key}'] = 'Finish Process [{}], Cost {:.1f} Secs'.format(key.capitalize() , spent)
+            self.add_text(key , 'Finish Process [{}], Cost {:.1f} Secs'.format(key.capitalize() , spent))
         return self.texts[f'{key}']
 
     @property
@@ -71,6 +156,7 @@ class Info:
             '8_result': self.datas['test_score_sum'],
         }
         DIR.dump_yaml(result , self.result_path)
+
 @dataclass
 class Output:
     outputs : Tensor | tuple | list
@@ -87,6 +173,27 @@ class Output:
             return self.outputs[1]
         else:
             return None
+
+class AggMetrics:
+    def __init__(self) -> None:
+        self.table : Optional[pd.DataFrame] = None
+
+    def new(self , dataset , model_date , model_num , epoch = 0 , model_type = 'best'):
+        self._params = [dataset , model_date , model_num , epoch , model_type]
+        self._losses = MetricList(f'{dataset}.{model_date}.{model_num}.{epoch}.loss'  , 'loss')
+        self._scores = MetricList(f'{dataset}.{model_date}.{model_num}.{epoch}.score' , 'score')
+    def record(self , metrics): 
+        self._losses.record(metrics)
+        self._scores.record(metrics)
+    def collect(self):
+        df = pd.DataFrame([self._params + [self._losses.mean() , self._scores.mean()]] , 
+                          columns = ['dataset','model_date','model_num','epoch','model_type','loss','score'])
+        self.table = df if self.table is None else pd.concat([self.table , df]).reindex()
+    def nanloss(self): return self._losses.any_nan()
+    @property
+    def loss(self):  return self._losses.mean()
+    @property
+    def score(self): return self._scores.mean()
 
 class PTimer:
     def __init__(self , record = True) -> None:
@@ -132,6 +239,22 @@ class Filtered:
             cond = self.condition(item) if callable(self.condition) else next(self.condition)
             if cond: return item
             
+class SDCheckpoints(Storage):
+    def __init__(self, mem_storage: bool = True):
+        super().__init__(mem_storage)
+
+    def join(self , epoch , net , remark = ''):
+        pass
+
+    def disjoin(self , epoch):
+        pass
+
+    def collect(self , *args):
+        pass
+
+    def load_epoch(self , epoch):
+        return 
+
 class SWAModel:
     def __init__(self , module , param , device = None) -> None:
         self.module   = module
@@ -152,4 +275,70 @@ class SWAModel:
     def bn_loader(self , data_loader):
         for batch_data in data_loader: 
             yield (batch_data.x , batch_data.y , batch_data.w)
+
+class SWABest(SWAModel):
+    def __init__(self, module, param, ckpt : SDCheckpoints , device = None, n_best = 5 , 
+                 use : Literal['loss','score'] = 'score') -> None:
+        super().__init__(module, param, device)
+        self.ckpt        = ckpt
+        assert n_best > 0, n_best
+        self.n_best      = n_best
+        self.metric_list = []
+        self.candidates  = []
+        self.use         = use
+
+    def assess(self , net : nn.Module , epoch : int , metrics : Metrics):
+        value = getattr(metrics , self.use)
+
+        if len(self.metric_list) == self.n_best :
+            arg = np.argmin(self.metric_list) if self.use == 'score' else np.argmax(self.metric_list)
+            if (self.metric_list[arg] < value if self.use == 'score' else self.metric_list[arg] > value):
+                self.metric_list.pop(arg)
+                candid = self.candidates.pop(arg)
+                self.ckpt.disjoin(candid)
+
+        if len(self.metric_list) < self.n_best:
+            self.metric_list.append(value)
+            self.candidates.append(epoch)
+            self.ckpt.join(epoch , net , '')
+
+    def get_module(self , data_loader):
+        for epoch in self.candidates: self.update_sd(self.ckpt.load_epoch(epoch))
+        self.update_bn(data_loader)
+        return self.module
+    
+class SWALast(SWAModel):
+    def __init__(self, module, param, ckpt : SDCheckpoints , device = None, n_last = 5 , 
+                 interval = 3 , use : Literal['loss','score'] = 'score') -> None:
+        super().__init__(module, param, device)
+        self.ckpt        = ckpt
+        assert n_last > 0 and interval > 0, (n_last , interval)
+        self.n_last      = n_last
+        self.interval    = interval
+        self.left_epochs = (n_last // 2) * interval
+
+        self.epoch_fix   = -1
+        self.metric_fix  = -10000.
+        
+        self.candidates  = []
+        self.use         = use
+
+    def assess(self , net : nn.Module , epoch : int , metrics : Metrics):
+        old_candidates = self.candidates
+        value = getattr(metrics , self.use)
+        if (self.metric_fix < value if self.use == 'score' else self.metric_fix > value):
+            self.epoch_fix = epoch
+            self.metric_fix = value
+        self.candidates = list(range(self.epoch_fix - self.left_epochs , epoch + 1 , self.interval))[:self.n_last]
+        for candid in old_candidates:
+            if candid >= self.candidates[0]: break
+            self.ckpt.disjoin(candid)
+        self.ckpt.join(epoch , net , '')
+
+    def get_module(self , data_loader):
+        for epoch in self.candidates: self.update_sd(self.ckpt.load_epoch(epoch))
+        self.update_bn(data_loader)
+        return self.module
+
+
 

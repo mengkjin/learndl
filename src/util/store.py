@@ -4,7 +4,7 @@ import pandas as pd
 
 from copy import deepcopy
 
-class Storage():
+class Storage:
     def __init__(self , mem_storage : bool = True):
         self.mem_storage = mem_storage
         self.mem_disk = dict()
@@ -56,6 +56,9 @@ class Storage():
             [os.remove(path) for path in paths if os.path.exists(path)]
         self.file_records = self.file_records[~self.file_records['path'].isin(paths)]
         gc.collect()
+
+    def del_all(self):
+        self.del_path(self.file_records['path'])
         
     def del_group(self , groups):
         if isinstance(groups , str): groups = [groups]
@@ -69,3 +72,4 @@ class Storage():
         elif isinstance(p , str):
             p = [p]
         return p
+    

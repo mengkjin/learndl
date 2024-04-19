@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass , field
+from typing import Any , Literal
 
 from ..func import basic as B
 
@@ -14,23 +14,35 @@ class Metrics:
 
     def __init__(self , criterion , **kwargs) -> None:
         self.criterion = criterion
-        self.loss    = self.loss_function(criterion['loss'])
-        self.score   = self.score_function(criterion['score'])
-        self.penalty = {k:self.penalty_function(k,v) for k,v in criterion['penalty'].items()}
+        self.f_loss    = self.loss_function(criterion['loss'])
+        self.f_score   = self.score_function(criterion['score'])
+        self.f_pen     = {k:self.penalty_function(k,v) for k,v in criterion['penalty'].items()}
         self.multiloss = None
+        self.output  = self.MetricOutput()
+
+    @property
+    def loss(self): return self.output.loss
+    @property
+    def score(self): return self.output.score
+    @property
+    def loss_item(self): return self.output.loss_item
+    @property
+    def penalty(self): return self.output.penalty
+    @property
+    def losses(self): return self.output.losses
     
     def model_update(self , model_param , config , **kwargs):
         if model_param['num_output'] > 1:
             multi_param = config.train_param['multitask']
             self.multiloss = MultiLosses(multi_param['type'], model_param['num_output'] , **multi_param['param_dict'][multi_param['type']])
     
-        self.penalty.get('hidden_corr',{})['cond']       = config.tra_model or model_param.get('hidden_as_factors',False)
-        self.penalty.get('tra_opt_transport',{})['cond'] = config.tra_model
+        self.f_pen.get('hidden_corr',{})['cond']       = config.tra_model or model_param.get('hidden_as_factors',False)
+        self.f_pen.get('tra_opt_transport',{})['cond'] = config.tra_model
         return self
     
-    def calculate(self , key : Literal['train' , 'valid' , 'test'] , 
+    def calculate(self , dataset : Literal['train' , 'valid' , 'test'] , 
                   label , pred , weight = None , net = None , 
-                  penalty_kwargs = {} , **kwargs):
+                  penalty_kwargs = {} , assert_nan = False):
         '''
         Calculate loss(with gradient), penalty , score
         '''
@@ -39,27 +51,31 @@ class Metrics:
             assert label.shape == pred.shape , (label.shape , pred.shape)
 
         with torch.no_grad():
-            score = self.score(label , pred , weight , nan_check = (key == 'test') , first_col = True).item()
+            score = self.f_score(label , pred , weight , nan_check = (dataset == 'test') , first_col = True).item()
 
-        if key == 'train':
+        if dataset == 'train':
             if self.multiloss is not None:
-                losses = self.loss(label , pred , weight)[:self.multiloss.num_task]
+                losses = self.f_loss(label , pred , weight)[:self.multiloss.num_task]
                 mt_param = {}
                 if net and hasattr(net , 'get_multiloss_params'):
                     mt_param = getattr(net , 'get_multiloss_params')()
                 loss = self.multiloss.calculate_multi_loss(losses , mt_param)    
             else:
-                losses = self.loss(label , pred , weight , first_col = True)
+                losses = self.f_loss(label , pred , weight , first_col = True)
                 loss = losses
 
             penalty = 0.
-            for pen in self.penalty.values():
+            for pen in self.f_pen.values():
                 if pen['lamb'] <= 0 or not pen['cond']: continue
                 penalty = penalty + pen['lamb'] * pen['func'](label , pred , weight , **penalty_kwargs)  
             loss = loss + penalty
-            return self.MetricOutput(loss = loss , score = score , penalty = penalty , losses = losses)
+            self.output = self.MetricOutput(loss = loss , score = score , penalty = penalty , losses = losses)
         else:
-            return self.MetricOutput(score = score)
+            self.output = self.MetricOutput(score = score)
+
+        if assert_nan and self.output.loss.isnan():
+            print(self.output)
+            raise Exception('nan loss here')
     
     @dataclass
     class MetricOutput:
@@ -200,6 +216,20 @@ def _sinkhorn(Q, n_iters=3, epsilon=0.01):
             Q /= Q.sum(dim=0, keepdim=True)
             Q /= Q.sum(dim=1, keepdim=True)
     return Q
+
+@dataclass
+class MetricList:
+    name : str
+    type : Literal['loss' , 'score']
+    values : list[Any] = field(default_factory=list) 
+
+    def record(self , metrics):
+        assert isinstance(metrics , Metrics) , self.__class__
+        self.values.append(metrics.loss_item if self.type == 'loss' else metrics.score)
+
+    def last(self): self.values[-1]
+    def mean(self): return np.mean(self.values)
+    def any_nan(self): return np.isnan(self.values).any()
 
 class MultiLosses:
     def __init__(self , multi_type = None , num_task = -1 , **kwargs):

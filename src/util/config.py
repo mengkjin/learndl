@@ -174,14 +174,14 @@ class TrainConfig:
     on_tf_trainer: dict     = field(default_factory=dict)
 
     resume_training: bool   = True
-    process_queue: list     = field(default_factory=list)
+    stage_queue: list       = field(default_factory=list)
     
     _TrainParam: Optional[TrainParam] = None
     _ModelParam: Optional[ModelParam] = None
 
     def __post_init__(self):
         if isinstance(self.precision , str): self.precision = getattr(torch , self.precision)
-        self.process_queue = ['data' , 'train' , 'test']
+        self.stage_queue = ['data' , 'fit' , 'test']
         if not self.tra_model or self.buffer_type != 'tra': self.buffer_type = None
 
     def __getitem__(self , k):
@@ -231,7 +231,7 @@ class TrainConfig:
             _ModelParam = ModelParam(model_path , _TrainParam.model_module)
             config_resume = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
             config.update(config_resume.__dict__)
-        elif 'train' in config.process_queue and makedir:
+        elif 'fit' in config.stage_queue and makedir:
             if config.Train.resumeable:
                 raise Exception(f'{model_path} has to be delete manually')
             # os.makedirs(config.model_base_path, exist_ok = True)
@@ -272,18 +272,22 @@ class TrainConfig:
     
     @property
     def sample_method(self) -> Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']: 
-        return self.Train.train_param.get('dataloader',{}).get('sample_method' , 'sequential')
+        return self.train_param.get('dataloader',{}).get('sample_method' , 'sequential')
 
     @property
     def train_ratio(self) -> float: 
-        return self.Train.train_param.get('dataloader',{}).get('train_ratio',0.8)
+        return self.train_param.get('dataloader',{}).get('train_ratio',0.8)
 
     @property
     def shuffle_option(self) -> Literal['static' , 'init' , 'epoch']: 
-        return self.Train.train_param.get('dataloader',{}).get('shuffle_option','static')
+        return self.train_param.get('dataloader',{}).get('shuffle_option','static')
+    
+    @property
+    def clip_value(self) -> float:
+        return self.train_param['trainer']['gradient'].get('clip_value' , None)
 
     def weight_scheme(self , stage : str , no_weight = False) -> Optional[str]: 
-        weight_dict = self.Train.train_param.get('criterion',{}).get('weight',{})
+        weight_dict = self.train_param.get('criterion',{}).get('weight',{})
         return None if no_weight else weight_dict.get(stage.lower() , 'equal')
 
     @staticmethod
@@ -310,15 +314,15 @@ class TrainConfig:
         if value < 0:
             print(f'--What process would you want to run? 0: all, 1: train only (default), 2: test only')
             value = int(input(f'[0,all] , [1,train] , [2,test]'))
-        process_queue = ['data' , 'train' , 'test']
+        stage_queue = ['data' , 'fit' , 'test']
         if value == 0:
             pass
         elif value > 0:
-            process_queue = ['data' , process_queue[value]]
+            stage_queue = ['data' , stage_queue[value]]
         else:
             raise Exception(f'Error input : {value}')
-        print('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), process_queue))))
-        self.process_queue = process_queue
+        print('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))))
+        self.stage_queue = stage_queue
 
     def parser_resume(self , value = -1):
         # ask if resume training when candidate names exists
@@ -327,7 +331,7 @@ class TrainConfig:
         candidate_name = [model for model in [self.model_name] if os.path.exists(f'{DIR.model}/{model}')] + \
                 [model for model in os.listdir(DIR.model) if model.startswith(model_name + '.')]  
         # ask if resume training
-        if len(candidate_name) > 0 and 'train' in self.process_queue:
+        if len(candidate_name) > 0 and 'fit' in self.stage_queue:
             if value < 0:
                 print(f'--Multiple model path of {self.model_name} exists, input [yes] to resume training, or start a new one!')
                 user_input = input(f'Confirm resume training [{self.model_name}]? [yes/no] : ')
@@ -352,7 +356,7 @@ class TrainConfig:
         assert model_name is not None
         candidate_name = [model for model in [model_name] if os.path.exists(f'{DIR.model}/{model}')] + \
                 [model for model in os.listdir(DIR.model) if model.startswith(model_name + '.')] 
-        if 'train' in self.process_queue and candidate_name:
+        if 'fit' in self.stage_queue and candidate_name:
             if self.resume_training and len(candidate_name) == 1:
                 model_name = candidate_name[0]
             elif self.resume_training:
@@ -369,7 +373,7 @@ class TrainConfig:
                 if value == 0: raise Exception(f'--Model dirs of [{model_name}] exists!')
                 model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
 
-        elif 'train' not in self.process_queue and 'test' in self.process_queue:
+        elif 'fit' not in self.stage_queue and 'test' in self.stage_queue:
             assert len(candidate_name) > 0 , f'no models of {model_name} while you want to test'
             if len(candidate_name) == 1:
                 model_name = candidate_name[0]
