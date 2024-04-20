@@ -1,6 +1,6 @@
 # most frequently changing variables
 mem_storage: true 
-random_seed: 10
+random_seed: null
 short_test:  True
 
 model_name: null # null
