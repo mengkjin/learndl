@@ -1,3 +1,3 @@
 from . import (
-    BlockData,ModelData,ftpConnector,DataUpdater,PreProcess
+    BlockData,ftpConnector,DataUpdater,PreProcess
 )

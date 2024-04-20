@@ -28,6 +28,7 @@ class tra_module:
                 return {'probs':self.probs,'num_states':self.num_states,'global_steps':self.global_steps,}
             def dynamic_data_unlink(self , *args , **kwargs):
                 if hasattr(self, 'dynamic_data'): del self.dynamic_data
+                self.dynamic_data_assigned = False
                 return self
             def get_probs(self):
                 if self.probs_record is not None: return self.probs_record / self.probs_record.sum(dim=1,keepdim=True)   

@@ -169,18 +169,17 @@ class ModelTestor:
         else:
             print(f'multiple x of {len(self.batch_data.x)}')
 
-        if hasattr(self.net , 'dynamic_data_assign'): getattr(self.net , 'dynamic_data_assign')(self.batch_data , self.model_data)
-        outputs = TRAIN.Output(self.net(self.batch_data.x))
-        print(f'y shape is {outputs.pred().shape}')
-        self.outputs = outputs
+        getattr(self.net , 'dynamic_data_assign' , lambda *x:None)(self.batch_data , self.model_data)
+        self.net_outputs = TRAIN.Output(self.net(self.batch_data.x))
+        print(f'y shape is {self.net_outputs.pred().shape}')
         print(f'Test Forward Success')
 
     def try_metrics(self) -> None:
         if not hasattr(self , 'outputs'): self.try_forward()
         label , weight = self.batch_data.y , self.batch_data.w
         penalty_kwargs = {}
-        penalty_kwargs.update({'net' : self.net , 'hidden' : self.outputs.hidden() , 'label' : label})
-        metrics = self.Metrics.calculate('train' , label , self.outputs.pred() , weight , self.net , penalty_kwargs)
+        penalty_kwargs.update({'net' : self.net , 'hidden' : self.net_outputs.hidden() , 'label' : label})
+        metrics = self.Metrics.calculate('train' , label , self.net_outputs.pred() , weight , self.net , penalty_kwargs)
         print('metrics : ' , metrics)
         print(f'Test Metrics Success')
 
@@ -206,11 +205,10 @@ class ModelTrainer():
     
     def set_stage(self , stage : Literal['data' , 'fit' , 'test']):
         self.stage = stage
-        self.info.new_count()
         if stage in ['fit' , 'test']: 
             self.data.reset_dataloaders()
             self.Metrics = Metrics(config.train_param['criterion'])
-        self.pipe.new_stage(stage)
+        self.pipe.set_stage(stage)
         
     def process_data(self):
         '''Main process of loading model data'''
@@ -221,8 +219,7 @@ class ModelTrainer():
     def process_fit(self):
         '''Main process of fitting'''
         self.process_fit_start()
-        for model_date , model_num in self.model_iter():
-            self.model_date , self.model_num = model_date , model_num
+        for self.model_date , self.model_num in self.model_iter():
             self.model_preparation()
             self.model_fit()
         self.process_fit_end()
@@ -230,8 +227,7 @@ class ModelTrainer():
     def process_test(self):
         '''Main process of testing'''
         self.process_test_start()
-        for model_date , model_num in self.model_iter():
-            self.model_date , self.model_num = model_date , model_num
+        for self.model_date , self.model_num in self.model_iter():
             self.model_preparation()
             self.model_test()
         self.process_test_end()
@@ -249,10 +245,11 @@ class ModelTrainer():
     
     def process_fit_start(self):
         logger.critical(self.info.tic_str('fit'))
-        config.Model.save(config.model_base_path)    
+        config.Model.save(config.model_base_path)
+        self.model_type = 'best'
 
     def process_fit_end(self):
-        logger.critical(self.info.toc_str('fit' , True))
+        logger.critical(self.info.toc_str('fit' , self.pipe.model_counts , self.pipe.epoch_counts))
     
     def model_preparation(self , last_n = 30 , best_n = 5):
         with self.ptimer(f'{self.stage}/prepare' , self.stage):
@@ -298,14 +295,12 @@ class ModelTrainer():
         '''Reset model specific variables'''
         with self.ptimer(f'{self.stage}/start'):
             self.info.tic('model')
-            self.pipe.texts['model'] = '{:s} #{:d} @{:4d}'.format(config.model_name , self.model_num , self.model_date)
+            self.pipe.new_model(self.model_num , self.model_date)
             self.data.setup('fit' , self.model_date , self.param)
-            
+
     def model_fit_end(self):
         with self.ptimer(f'{self.stage}/end'):
             self.checkpoints.del_all()
-            # self.storage.del_path([p for pl in self.path['source'].values() for p in pl])
-            if self.stage == 'fit' : self.info.add_model()
             self.print_progress('model_end')
             gc.collect() 
             torch.cuda.empty_cache()
@@ -314,7 +309,6 @@ class ModelTrainer():
         '''Reset and loop variables giving loop_status'''
         with self.ptimer(f'{self.stage}/init_loop'):
             self.pipe.new_loop()
-            self.info.add_epoch()
         
     def model_fit_init_trainer(self):
         '''Initialize net , optimizer(scheduler)'''
@@ -334,7 +328,7 @@ class ModelTrainer():
         if self.optimizer.step(self.pipe.epoch_i): self.print_progress('reset_learn_rate')
 
     def model_fit_assess_status(self):
-        '''Update condition of continuing training epochs , restart attempt if early exit or nan_loss'''
+        '''Update condition of continuing training epochs , restart attempt if early exit or nanloss'''
         if self.pipe.nanloss: return
         with self.ptimer(f'{self.stage}/assess'):                
             valid_score = self.pipe.score_list['valid'][-1]
@@ -380,7 +374,7 @@ class ModelTrainer():
     def model_test_start(self):
         '''Reset model specific variables'''
         with self.ptimer(f'{self.stage}/start'):
-            self.pipe.new_model()
+            self.pipe.new_model(self.model_num , self.model_date)
             self.data.setup('test' , self.model_date , self.param)   
                 
             if self.model_num == 0:
@@ -394,69 +388,39 @@ class ModelTrainer():
         if not os.path.exists(self.path['target']['best']): self.model_fit()
         
         with self.ptimer(f'{self.stage}/forecast') , torch.no_grad():
-            batch_date = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
+            test_dates = np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
             l0 , l1 = len(self.data.early_test_dates) , len(self.data.model_test_dates)
-            assert len(self.data.test_dataloader()) == len(batch_date) , (len(self.data.test_dataloader()) , len(batch_date))
+            self.assert_equity(len(self.data.test_dataloader()) , len(test_dates))
             for i , self.model_type in enumerate(config.output_types):
                 self.net = self.load_model(False , self.model_type)
-                self.loop_dataloader('test' , l0 , batch_date)
-                '''
-                self.net.eval() 
-                self.data_loader = self.data.test_dataloader()
-                for i , self.batch_data in enumerate(self.data_loader):
-                    if self.batch_data.is_empty: continue
-                    assert batch_date[i] == self.data.y_date[self.batch_data.i[0,1]] , (batch_date[i] , self.data.y_date[self.batch_data.i[0,1]])
-                    self.model_forward('test')
-                    if i < l0: continue # before this date is warmup stage
-                    self.model_metric('test')
-                    self.data_loader.record(self.Metrics , f'{batch_date[i]}test/score')
-                    if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
-                '''
- 
-                self.score_by_date[-l1:,self.model_num*len(config.output_types) + i] = np.nan_to_num(self.pipe.agg_metric.score)
+                self.loop_dataloader('test' , warm_up = l0 , dates = test_dates)
+                self.score_by_date[-l1:,self.model_num*len(config.output_types) + i] = np.nan_to_num(self.pipe.scores[-l1:])
 
-    def loop_dataloader(self , dataset : Literal['train' , 'valid' , 'test'] , 
-                        warm_up : int = 0 , batch_date : Optional[np.ndarray] = None):
+    def loop_dataloader(self , dataset , warm_up : int = 0 , dates : Optional[np.ndarray] = None):
+        self.dataset : Literal['train' , 'valid' , 'test'] = dataset
+        self.pipe.set_dataset(dataset)
+        self.pipe.new_metric(self.model_type)
 
         self.net.train() if dataset == 'train' else self.net.eval()
+        if dataset == 'train':   loader = self.data.train_dataloader().add_text('Train Ep#{ep:3d} loss : {ls:.5f}')
+        elif dataset == 'valid': loader = self.data.val_dataloader().add_text('Valid Ep#{ep:3d} score : {sc:.5f}')
+        elif dataset == 'test' : loader = self.data.test_dataloader().add_text('Test {mtype} {i} score : {sc:.5f}')
+        if dates is None: dates = np.zeros(len(loader))
 
-        if dataset == 'train':
-            self.data_loader = self.data.train_dataloader()
-            display = f'Train Ep#{self.pipe.epoch_i:3d} loss'
-        elif dataset == 'valid':
-            self.data_loader = self.data.val_dataloader()
-            display = f'Valid Ep#{self.pipe.epoch_i:3d} score'
-        else:
-            self.data_loader = self.data.test_dataloader()
-            display = 'Test Date {} score'
-
-        self.pipe.agg_metric.new(dataset,self.model_date,self.model_num,getattr(self.pipe,'epoch_i',0),getattr(self,'model_type','best'))
-        for i , self.batch_data in enumerate(self.data_loader):
-            if self.batch_data.is_empty: continue
-            self.model_forward(dataset)
-
-            # before this is warmup stage , only forward
-            if i < warm_up: continue 
-            self.model_metric(dataset)
-
-            if batch_date is not None:
-                assert batch_date[i] == self.data.y_date[self.batch_data.i[0,1]] , \
-                    (batch_date[i] , self.data.y_date[self.batch_data.i[0,1]])
-                
-            self.pipe.agg_metric.record(self.Metrics)
-            
-            text = display.format(batch_date[i]) if batch_date is not None else display
-            value = self.pipe.agg_metric.loss if dataset == 'train' else self.pipe.agg_metric.score
-            self.data_loader.display(f'{text} : {value:.5f}')
-
-            if dataset == 'train': self.model_backward()
+        for i , self.batch_data in enumerate(loader):
+            if dates[i]: self.assert_equity(dates[i] , self.data.y_date[self.batch_data.i[0,1]]) 
+            self.model_forward()
+            if i < warm_up: continue  # before this is warmup stage , only forward
+            self.model_metric()
+            self.model_backward()
+            loader.display(i=dates[i],mtype=self.model_type,ep=self.pipe.epoch_i,ls=self.pipe.metrics.loss,sc=self.pipe.metrics.score)
             if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
 
-        self.pipe.check_nanloss(self.pipe.agg_metric.nanloss)
-        self.pipe.agg_metric.collect()
-        self.pipe.loss_list[dataset].append(self.pipe.agg_metric.loss) 
-        self.pipe.score_list[dataset].append(self.pipe.agg_metric.score)
-        if dataset == 'train': self.pipe.lr_list.append(self.optimizer.last_lr)
+        self.pipe.collect_metric()
+        self.pipe.collect_lr(self.optimizer.last_lr)
+
+    @staticmethod
+    def assert_equity(a , b): assert a == b , (a , b)
 
     def model_test_end(self):
         '''Do necessary things of ending a model(model_data , model_num)'''
@@ -504,35 +468,37 @@ class ModelTrainer():
         df.to_csv(f'{config.model_base_path}/{config.model_name}_score_by_model.csv')
         for i , digits in enumerate([4,2,4,2,4]):
             self.print_test_table(add_row_key[i] , add_row_value[i] , digits)
-        self.info.add_data('test_score_sum' , {k:round(v,4) for k,v in zip(df.columns , score_sum.tolist())})
+        self.info.test_score = {k:round(v,4) for k,v in zip(df.columns , score_sum.tolist())}
         logger.critical(self.info.toc_str('test'))
 
-    def model_forward(self , dataset : Literal['train' , 'valid' , 'test']) -> None:
-        with self.ptimer(f'{self.stage}/{dataset}/forward'):
-            if hasattr(self.net , 'dynamic_data_assign'): getattr(self.net , 'dynamic_data_assign')(self.batch_data , self.data)
-            self.net_output = TRAIN.Output(self.net(self.batch_data.x))
+    def model_forward(self):
+        with self.ptimer(f'{self.stage}/{self.dataset}/forward'):
+            if self.batch_data.is_empty: 
+                self.net_output = TRAIN.Output(torch.Tensor().requires_grad_())
+            else:
+                getattr(self.net , 'dynamic_data_assign' , lambda *x:None)(self.batch_data , self.data)
+                self.net_output = TRAIN.Output(self.net(self.batch_data.x))
 
-    def model_metric(self, dataset : Literal['train' , 'valid' , 'test']) -> None:
-        with self.ptimer(f'{self.stage}/{dataset}/loss'):
-            self.Metrics.calculate(dataset , self.batch_data.y , self.net_output.pred() , self.batch_data.w , self.net , self.penalty_kwargs , assert_nan = True)
-        
+    def model_metric(self):
+        with self.ptimer(f'{self.stage}/{self.dataset}/loss'):
+            self.Metrics.calculate(self.dataset , self.batch_data.y , self.net_output.pred() , self.batch_data.w , self.net , self.penalty_kwargs , assert_nan = True)
+            self.pipe.record_metric(self.Metrics)
+
     @property
     def penalty_kwargs(self) -> dict:
         return {'net' : self.net , 'hidden' : self.net_output.hidden() , 'label' : self.batch_data.y}
 
-    def model_backward(self) -> None:
-        with self.ptimer(f'{self.stage}/train/backward'): 
+    def model_backward(self):
+        if self.dataset != 'train': return
+        with self.ptimer(f'{self.stage}/{self.dataset}/backward'): 
             self.optimizer.backward(self.Metrics.loss)
     
     def print_progress(self , key) -> None:
         '''Print out status giving display conditions and looping conditions'''
-        printers = [logger.info] if (config.verbosity > 2 or self.info.initial_models) else [logger.debug]
+        printers = [logger.info] if (config.verbosity > 2 or self.pipe.initial_models) else [logger.debug]
         sdout   = None
         if key == 'model_end':
-            self.info.add_text('epoch' , 'Ep#{:3d}'.format(self.pipe.epoch_all))
-            self.info.add_text('stat'  , 'Train{: .4f} Valid{: .4f} BestVal{: .4f}'.format(
-                self.pipe.score_list['train'][-1],self.pipe.score_list['valid'][-1],self.pipe.score_attempt_best))
-
+            self.pipe.texts['epoch'] = 'Ep#{:3d}'.format(self.pipe.epoch_all)
             self.pipe.texts['stat']  = 'Train{: .4f} Valid{: .4f} BestVal{: .4f}'.format(
                 self.pipe.score_list['train'][-1],self.pipe.score_list['valid'][-1],self.pipe.score_attempt_best)
             self.pipe.texts['time']  = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
@@ -590,15 +556,11 @@ class ModelTrainer():
         return exit_text , term_cond
     
     def save_model(self , paths = None , disk_key = None , savable_net = None):
-        if paths is None and disk_key is None: return NotImplemented # nothing to save
-
+        if paths is None and disk_key is None: return # nothing to save
+        getattr(self.net , 'dynamic_data_unlink' , lambda *x:None)()
         with self.ptimer(f'save_model'):
             if paths is not None:
-                savable_net = self.net
-                if hasattr(savable_net,'dynamic_data_unlink'):
-                    # remove unsavable part
-                    savable_net = getattr(savable_net , 'dynamic_data_unlink')()
-                self.storage.save_model_state(savable_net , paths)
+                self.storage.save_model_state(self.net , paths)
 
             if disk_key is not None:
                 if isinstance(disk_key , str): disk_key = [disk_key]

@@ -1,10 +1,10 @@
 # most frequently changing variables
 mem_storage: true 
-random_seed: null
+random_seed: 10
 short_test:  True
 
 model_name: null # null
-model_module: patch_tst # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
+model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
 model_data_type: day # 'day+30m' , 30m
 model_data_prenorm:
   day: {'divlast' : True  , 'histnorm' : True}
@@ -86,7 +86,7 @@ on_short_test:
   end_date:   20171201
   input_span: 480
   max_epoch:  20
-  verbosity:  3
+  verbosity:  10
 on_tf_trainer:
   gradient:  {'clip_value' : 10.}
   learn_rate:

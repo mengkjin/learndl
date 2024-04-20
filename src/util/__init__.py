@@ -6,6 +6,6 @@ from .trainer import AggMetrics
 from .loader import DataloaderStored
 from .metric import Metrics , MetricList
 from .store import Storage
-from .basic import Device
+from .basic import Device , Timer
 from .logger import Logger
 from .config import TrainConfig

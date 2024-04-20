@@ -1,13 +1,11 @@
-import torch
-
 from torch import nn , Tensor
-from ..func.basic import *
+from ..func import basic as B
 from .tra import block_tra , tra_component
 from .rnn import rnn_univariate , rnn_multivariate
 from . import patchTST , modernTCN , TSMixer
 
 def new(module , param = {} , state_dict = None , **kwargs):
-    net = getattr(locals() , f'{module}')(**param)
+    net = globals()[module](**param)
     assert isinstance(net , nn.Module) , net.__class__
     if state_dict: net.load_state_dict(state_dict)
     return net
@@ -60,7 +58,7 @@ class resnet_lstm(lstm):
         super().__init__(input_dim , hidden_dim , inday_dim = inday_dim , **kwargs)
 
 class resnet_gru(gru):
-    def __init__(self, input_dim , hidden_dim , inday_dim , **kwargs) -> None:
+    def __init__(self, input_dim , hidden_dim , inday_dim , **kwargs):
         kwargs.update({
             'enc_in' : 'resnet' , 
             'enc_in_dim' : kwargs.get('enc_in_dim') if kwargs.get('enc_in_dim') else hidden_dim // 4 ,

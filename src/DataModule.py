@@ -5,14 +5,14 @@ import torch
 from dataclasses import dataclass , field
 
 from numpy.random import permutation
-from torch import FloatTensor , Tensor
+from torch import Tensor
 from torch.utils.data import BatchSampler
 from tqdm import tqdm
-from typing import Any , Callable , Literal , Optional , Iterable , Iterator
+from typing import Any , Literal , Optional
 
 from .data.PreProcess import pre_process
 from .data.BlockData import DataBlock , DataBlockNorm
-from .util import AggMetrics , Device , DataloaderStored , Storage , TrainConfig
+from .util import Device , DataloaderStored , Storage , TrainConfig
 from .func.basic import tensor_standardize_and_weight , match_values
 
 from .environ import DIR
@@ -451,8 +451,8 @@ class _LoaderDecorator:
     def __init__(self , data_module : DataModule , raw_loader , device , progress_bar = False , agg = 'mean') -> None:
         self.data_module = data_module
         self.device = device
-        self.itertype  = tqdm if progress_bar else list
-        self.loader = self.itertype(raw_loader)
+        self.loader = tqdm(raw_loader , total=len(raw_loader)) if progress_bar else raw_loader
+        self.display_text = None
 
     def __len__(self): 
         return len(self.loader)
@@ -473,5 +473,10 @@ class _LoaderDecorator:
             batch_data = getattr(self.data_module , 'on_after_batch_transfer')(batch_data , batch_i)
         return batch_data
 
-    def display(self , text : Optional[str] = None):
-        if text and isinstance(self.loader , tqdm): self.loader.set_description(text)
+    def add_text(self , display_text):
+        self.display_text = display_text
+        return self
+
+    def display(self , **kwargs):
+        if isinstance(self.display_text , str) and isinstance(self.loader , tqdm): 
+            self.loader.set_description(self.display_text.format(**kwargs))

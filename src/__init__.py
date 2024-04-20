@@ -3,4 +3,4 @@ from . import (
 )
 
 from .DataModule import DataModule
-from .ModelModule import ModelTrainer , ModelTest , ModelPred
+from .ModelModule import ModelTrainer , ModelTestor , Predictor

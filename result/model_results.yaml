@@ -289,3 +289,231 @@
   0_best: 19.4336
   0_swabest: 19.3041
   0_swalast: 17.1334
+0_model: gru_day_ShortTest.6(x1)
+1_start: Sat Apr 20 00:36:51 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.0 Secs
+8_result:
+  0_best: 16.8588
+  0_swabest: 16.4497
+  0_swalast: 15.0909
+0_model: gru_day_ShortTest.7(x1)
+1_start: Sat Apr 20 00:45:52 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.3 Secs
+8_result:
+  0_best: 15.6428
+  0_swabest: 15.3293
+  0_swalast: 14.2906
+0_model: gru_day_ShortTest.8(x1)
+1_start: Sat Apr 20 00:52:36 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 3.8 Secs
+8_result:
+  0_best: 16.309
+  0_swabest: 15.8158
+  0_swalast: 14.4802
+0_model: gru_day_ShortTest(x1)
+1_start: Sat Apr 20 09:38:51 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: null
+7_test: Finish Process [Test], Cost 5.4 Secs
+8_result:
+  0_best: 14.9037
+  0_swabest: 16.0769
+  0_swalast: 13.2359
+0_model: gru_day_ShortTest(x1)
+1_start: Sat Apr 20 09:41:43 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: null
+7_test: Finish Process [Test], Cost 5.0 Secs
+8_result:
+  0_best: 14.9037
+  0_swabest: 16.0769
+  0_swalast: 13.2359
+0_model: gru_day_ShortTest(x1)
+1_start: Sat Apr 20 10:03:09 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: null
+7_test: Finish Process [Test], Cost 5.1 Secs
+8_result:
+  0_best: 14.9037
+  0_swabest: 16.0769
+  0_swalast: 13.2359
+0_model: gru_day_ShortTest(x1)
+1_start: Sat Apr 20 10:05:41 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: null
+7_test: Finish Process [Test], Cost 5.4 Secs
+8_result:
+  0_best: 14.9037
+  0_swabest: 16.0769
+  0_swalast: 13.2359
+0_model: gru_day_ShortTest.1(x1)
+1_start: Sat Apr 20 10:23:04 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.4 Secs
+8_result:
+  0_best: 14.9037
+  0_swabest: 16.0769
+  0_swalast: 13.2359
+0_model: gru_day_ShortTest.2(x1)
+1_start: Sat Apr 20 10:27:25 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.8 Secs
+8_result:
+  0_best: 14.9037
+  0_swabest: 16.0769
+  0_swalast: 13.2359
+0_model: gru_day_ShortTest.3(x1)
+1_start: Sat Apr 20 10:30:13 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.6 Secs
+8_result:
+  0_best: 14.9037
+  0_swabest: 16.0769
+  0_swalast: 13.2359
+0_model: gru_day_ShortTest.4(x1)
+1_start: Sat Apr 20 10:31:27 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.4 Secs
+8_result:
+  0_best: 14.9037
+  0_swabest: 16.0769
+  0_swalast: 13.2359
+0_model: gru_day_ShortTest.5(x1)
+1_start: Sat Apr 20 10:32:26 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.2 Secs
+8_result:
+  0_best: 14.9037
+  0_swabest: 16.0769
+  0_swalast: 13.2359
+0_model: gru_day_ShortTest.6(x1)
+1_start: Sat Apr 20 10:42:40 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.1 Secs
+8_result:
+  0_best: 14.9037
+  0_swabest: 16.0769
+  0_swalast: 13.2359
+0_model: gru_day_ShortTest.8(x1)
+1_start: Sat Apr 20 11:47:43 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.4 Secs
+8_result:
+  0_best: 14.9037
+  0_swabest: 16.0769
+  0_swalast: 13.2359
+0_model: gru_day_ShortTest.9(x1)
+1_start: Sat Apr 20 12:14:46 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.5 Secs
+8_result:
+  0_best: 26.9151
+  0_swabest: 26.8719
+  0_swalast: 25.235
+0_model: gru_day_ShortTest.10(x1)
+1_start: Sat Apr 20 12:15:50 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.0 Min/model, 0.1 Sec/Epoch
+7_test: Finish Process [Test], Cost 1.7 Secs
+8_result:
+  0_best: 10.438
+  0_swabest: -5.0503
+  0_swalast: -18.3594
+0_model: gru_day_ShortTest.11(x1)
+1_start: Sat Apr 20 12:18:06 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 3.8 Secs
+8_result:
+  0_best: 26.9151
+  0_swabest: 26.8719
+  0_swalast: 25.235
+0_model: gru_day_ShortTest.20(x1)
+1_start: Sat Apr 20 12:37:06 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.7 Secs
+8_result:
+  0_best: 26.9151
+  0_swabest: 26.8719
+  0_swalast: 25.235
+0_model: gru_day_ShortTest.21(x1)
+1_start: Sat Apr 20 12:40:43 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.6 Secs
+8_result:
+  0_best: 26.9151
+  0_swabest: 26.8719
+  0_swalast: 25.235

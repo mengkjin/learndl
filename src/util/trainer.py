@@ -23,6 +23,9 @@ class Pipeline:
     logger : Logger | logging.Logger | logging.RootLogger
     stage  : str = ''
 
+    epoch_counts : int = 0
+    model_counts : int = 0
+
     nanloss : bool = False
     loop_status : str = 'model'
     conds : dict[str,Any] = field(default_factory=dict)
@@ -30,10 +33,20 @@ class Pipeline:
 
     def __post_init__(self):
         self.nanloss_life = self.config.train_param['trainer']['nanloss']['retry']
-        self.agg_metric = AggMetrics()
+        self.metrics = AggMetrics()
 
-    def new_stage(self , stage : Literal['data' , 'fit' , 'test']):
+    @property
+    def initial_models(self): return self.model_counts < self.config.model_num
+
+    def get(self , key , default = None): return self.__dict__.get(key , default)
+
+    def set_stage(self , stage : Literal['data' , 'fit' , 'test']):
         self.stage = stage
+        self.epoch_counts = 0
+        self.model_counts = 0
+
+    def set_dataset(self , dataset : Literal['train' , 'valid' , 'test']):
+        self.dataset = dataset
 
     def new_loop(self):
         if self.loop_status == 'epoch':
@@ -41,16 +54,19 @@ class Pipeline:
         elif self.loop_status == 'attempt':
             self.new_attempt()
         elif self.loop_status == 'model':
-            self.new_model()
+            pass
         else:
             raise KeyError(self.loop_status)
 
     def new_epoch(self):
         self.epoch_i += 1
         self.epoch_all += 1
+        self.epoch_counts += 1
 
     def new_attempt(self):
         '''Reset variables at attempt start'''
+        self.nanloss = False
+
         self.epoch_i = -1
         self.epoch_attempt_best = -1
         self.score_attempt_best = -10000.
@@ -63,85 +79,90 @@ class Pipeline:
 
         self.new_epoch()
 
-    def new_model(self):
+    def new_model(self , model_num , model_date):
         '''Reset variables of model start'''
+        self.model_num , self.model_date = model_num , model_date
+
+        self.model_counts += 1
+
         self.attempt_i = -1
         self.epoch_all = -1
 
-        self.nanloss = False
-        self.loop_status = 'attempt'
         self.texts = {k : '' for k in ['model','attempt','epoch','exit','stat','time','trainer']}
         self.conds = {}
 
-        self.agg_metric
+        self.texts['model'] = '{:s} #{:d} @{:4d}'.format(self.config.model_name , self.model_num , self.model_date)
 
-        self.new_attempt()
+        self.loop_status = 'attempt'
         
     def check_nanloss(self , is_nanloss):
-        '''Deal with nanloss, life -1 and change nan_loss condition to True'''
+        '''Deal with nanloss, life -1 and change nanloss condition to True'''
         if self.stage == 'fit' and is_nanloss: 
             self.logger.error(f'{self.texts["model"]} Attempt{self.attempt_i}, epoch{self.epoch_i} got nanloss!')
             if self.nanloss_life > 0:
                 self.logger.error(f'Initialize a new model to retrain! Lives remaining {self.nanloss_life}')
                 self.nanloss_life -= 1
-                self.new_model()
-                self.nan_loss = True
+                self.nanloss   = True
+                self.attempt_i -= 1
+                self.loop_status = 'attempt'
             else:
                 raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
-        else:
-            self.nan_loss = False
+
+    def new_metric(self , model_type='best'):
+        self.model_type = model_type
+        self.metrics.new(self.dataset , self.model_num , self.model_date , self.epoch_i , model_type)
+    
+    def record_metric(self , metrics : Metrics):
+        self.metrics.record(metrics)
+
+    def collect_metric(self):
+        self.check_nanloss(self.metrics.nanloss)
+        self.metrics.collect()
+        self.loss_list[self.dataset].append(self.metrics.loss) 
+        self.score_list[self.dataset].append(self.metrics.score)
+
+    def collect_lr(self , last_lr): 
+        if self.dataset == 'train': self.lr_list.append(last_lr)
+
+    @property
+    def losses(self): return self.metrics.losses
+    @property
+    def scores(self): return self.metrics.scores
+
 
 
 @dataclass
 class Info:
     config    : TrainConfig
 
-    datas     : dict[str,Any] = field(default_factory=dict)
-    count     : dict[str,int] = field(default_factory=dict)
     times     : dict[str,float] = field(default_factory=dict)
     texts     : dict[str,str] = field(default_factory=dict)
+    
+    test_score : Any = None
 
     result_path : ClassVar[str] = f'{DIR.result}/model_results.yaml'
 
     def __post_init__(self):
         os.makedirs(os.path.dirname(self.result_path) , exist_ok=True)
         self.tic('init')
-        self.new_count()
 
-    def new_count(self):
-        self.count['model'] = 0
-        self.count['epoch'] = 0
-
-    def add_data(self , key : str , value : Any):
-        self.datas[key] = value
-
-    def add_text(self , key : str , value : str):
-        self.texts[key] = value
-
-    def add_model(self): self.count['model'] += 1
-    def add_epoch(self): self.count['epoch'] += 1
-
-    def tic(self , key : str): 
-        self.times[key] = time.time()
+    def tic(self , key : str): self.times[key] = time.time()
 
     def tic_str(self , key : str):
-        self.times[key] = time.time()
+        self.tic(key)
         return 'Start Process [{}] at {:s}!'.format(key.capitalize() , time.ctime(self.times[key]))
 
     def toc(self , key : str): 
         return time.time() - self.times[key]
     
-    def toc_str(self , key : str , count_avgs = False): 
-        spent = time.time() - self.times[key]
-        if count_avgs:
-            self.add_text(key , 'Finish Process [{}], Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
-                key.capitalize() , spent / 3600 , spent / 60 / max(self.count['model'],1) , spent / max(self.count['epoch'],1)))
+    def toc_str(self , key : str , model_counts = 0 , epoch_counts = 0): 
+        toc = self.toc(key)
+        if model_counts * epoch_counts:
+            self.texts[key] = 'Finish Process [{}], Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
+                key.capitalize() , toc / 3600 , toc / 60 / model_counts , toc / epoch_counts)
         else:
-            self.add_text(key , 'Finish Process [{}], Cost {:.1f} Secs'.format(key.capitalize() , spent))
+            self.texts[key] = 'Finish Process [{}], Cost {:.1f} Secs'.format(key.capitalize() , toc)
         return self.texts[f'{key}']
-
-    @property
-    def initial_models(self): return self.count['model'] < self.config.model_num
 
     def dump_result(self):
         result = {
@@ -151,9 +172,9 @@ class Info:
             '3_datas' : self.config.model_data_type ,
             '4_label' : ','.join(self.config.labels),
             '5_dates' : '-'.join([str(self.config.beg_date),str(self.config.end_date)]),
-            '6_train' : self.texts['train'],
-            '7_test'  : self.texts['test'],
-            '8_result': self.datas['test_score_sum'],
+            '6_fit'   : self.texts.get('fit'),
+            '7_test'  : self.texts.get('test'),
+            '8_result': self.test_score,
         }
         DIR.dump_yaml(result , self.result_path)
 
@@ -177,23 +198,30 @@ class Output:
 class AggMetrics:
     def __init__(self) -> None:
         self.table : Optional[pd.DataFrame] = None
-
-    def new(self , dataset , model_date , model_num , epoch = 0 , model_type = 'best'):
-        self._params = [dataset , model_date , model_num , epoch , model_type]
-        self._losses = MetricList(f'{dataset}.{model_date}.{model_num}.{epoch}.loss'  , 'loss')
-        self._scores = MetricList(f'{dataset}.{model_date}.{model_num}.{epoch}.score' , 'score')
+        self.new('init',0,0)
+    def __len__(self): 
+        return len(self._losses.values)
+    def new(self , dataset , model_num , model_date , epoch = 0 , model_type = 'best'):
+        self._params = [dataset , model_num , model_date , epoch , model_type]
+        self._losses = MetricList(f'{dataset}.{model_num}.{model_date}.{epoch}.loss'  , 'loss')
+        self._scores = MetricList(f'{dataset}.{model_num}.{model_date}.{epoch}.score' , 'score')
     def record(self , metrics): 
         self._losses.record(metrics)
         self._scores.record(metrics)
     def collect(self):
         df = pd.DataFrame([self._params + [self._losses.mean() , self._scores.mean()]] , 
-                          columns = ['dataset','model_date','model_num','epoch','model_type','loss','score'])
+                          columns = ['dataset','model_num','model_date','epoch','model_type','loss','score'])
         self.table = df if self.table is None else pd.concat([self.table , df]).reindex()
+    @property
     def nanloss(self): return self._losses.any_nan()
     @property
     def loss(self):  return self._losses.mean()
     @property
     def score(self): return self._scores.mean()
+    @property
+    def losses(self): return self._losses.values
+    @property
+    def scores(self): return self._scores.values
 
 class PTimer:
     def __init__(self , record = True) -> None:
@@ -257,24 +285,25 @@ class SDCheckpoints(Storage):
 
 class SWAModel:
     def __init__(self , module , param , device = None) -> None:
-        self.module   = module
-        self.param    = param
         self.device   = device
-        self.template = model.new(module , self.param)
-        self.module   = AveragedModel(self.template).to(self.device)
+        self.template = model.new(module , param)
+        self.avgmodel = AveragedModel(self.template).to(self.device)
 
     def update_sd(self , state_dict):
         self.template.load_state_dict(state_dict)
-        self.module.update_parameters(self.template) 
+        self.avgmodel.update_parameters(self.template) 
         return self
     
     def update_bn(self , data_loader):
-        update_bn(self.bn_loader(data_loader) , self.module) 
+        update_bn(self.bn_loader(data_loader) , self.avgmodel) 
         return self
     
     def bn_loader(self , data_loader):
         for batch_data in data_loader: 
             yield (batch_data.x , batch_data.y , batch_data.w)
+
+    @property
+    def module(self): return self.avgmodel.module
 
 class SWABest(SWAModel):
     def __init__(self, module, param, ckpt : SDCheckpoints , device = None, n_best = 5 , 
