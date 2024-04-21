@@ -1,12 +1,9 @@
 import math
-import numpy as np
 import torch
 
 from copy import deepcopy
-from dataclasses import dataclass , field
 from torch import nn , optim , Tensor
 from torch.nn.utils.clip_grad import clip_grad_value_
-from torch.utils.data import Sampler
 from typing import Any , Optional
 
 from .config import TrainConfig
@@ -48,7 +45,7 @@ class Optimizer:
         if self.clip_value is not None : clip_grad_value_(self.net.parameters(), clip_value = self.clip_value) 
         self.optimizer.step()
 
-    def step(self , epoch : int) -> bool | None:
+    def step(self , epoch : int) -> str | None:
         self.scheduler.step()
         reset_param = self.lr_param.get('reset')
         if not reset_param: return
@@ -71,7 +68,7 @@ class Optimizer:
                 if key in self.reset_speedup_param_list: shd_param['param'][key] //= 2
 
         self.scheduler = self.load_scheduler(self.optimizer , shd_param)
-        return True
+        return 'reset_learn_rate'
 
     @property
     def last_lr(self) -> float: return self.scheduler.get_last_lr()[0]    

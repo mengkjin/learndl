@@ -1,17 +1,18 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import torch
 
 from dataclasses import dataclass , field
 from torch import nn , Tensor
 from typing import Any , Literal , Optional
 
-from ..func import basic as B
+from ..func import mse , pearson , ccc , spearman
 
 class Metrics:
     display_check  = True # will display once if true
     display_record = {'loss' : {} , 'score' : {} , 'penalty' : {}}
-    default_metric = {'mse':B.mse ,'pearson':B.pearson,'ccc':B.ccc,'spearman':B.spearman,}
+    default_metric = {'mse':mse ,'pearson':pearson,'ccc':ccc,'spearman':spearman,}
 
     def __init__(self , criterion , **kwargs) -> None:
         self.criterion = criterion
@@ -232,6 +233,34 @@ class MetricList:
     def mean(self): return np.mean(self.values)
     def any_nan(self): return np.isnan(self.values).any()
 
+class AggMetrics:
+    def __init__(self) -> None:
+        self.table : Optional[pd.DataFrame] = None
+        self.new('init',0,0)
+    def __len__(self): 
+        return len(self._losses.values)
+    def new(self , dataset , model_num , model_date , epoch = 0 , model_type = 'best'):
+        self._params = [dataset , model_num , model_date , epoch , model_type]
+        self._losses = MetricList(f'{dataset}.{model_num}.{model_date}.{epoch}.loss'  , 'loss')
+        self._scores = MetricList(f'{dataset}.{model_num}.{model_date}.{epoch}.score' , 'score')
+    def record(self , metrics): 
+        self._losses.record(metrics)
+        self._scores.record(metrics)
+    def collect(self):
+        df = pd.DataFrame([self._params + [self._losses.mean() , self._scores.mean()]] , 
+                          columns = ['dataset','model_num','model_date','epoch','model_type','loss','score'])
+        self.table = df if self.table is None else pd.concat([self.table , df]).reindex()
+    @property
+    def nanloss(self): return self._losses.any_nan()
+    @property
+    def loss(self):  return self._losses.mean()
+    @property
+    def score(self): return self._scores.mean()
+    @property
+    def losses(self): return self._losses.values
+    @property
+    def scores(self): return self._scores.values
+
 class MultiLosses:
     def __init__(self , multi_type = None , num_task = -1 , **kwargs):
         """
@@ -409,8 +438,8 @@ class MultiLosses:
         elif multi_type == 'dwa':
             nepoch = 100
             s = np.arange(nepoch)
-            l1 = 1 / (4+s) + 0.1 + np.random.rand(nepoch) *0.05
-            l2 = 1 / (4+2*s) + 0.15 + np.random.rand(nepoch) *0.03
+            l1 = 1 / (4 + s) + 0.1 + np.random.rand(nepoch) *0.05
+            l2 = 1 / (4 + 2*s) + 0.15 + np.random.rand(nepoch) *0.03
             tau = 2
             w1 = np.exp(np.concatenate((np.array([1,1]),l1[2:]/l1[1:-1]))/tau)
             w2 = np.exp(np.concatenate((np.array([1,1]),l2[2:]/l1[1:-1]))/tau)

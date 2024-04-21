@@ -1,11 +1,25 @@
 from . import (
-    basic , config , loader , logger , metric, optim , store , trainer
+    config, device , loader , logger , metric, optim , store , time , trainer
 )
 
-from .trainer import AggMetrics
+from .trainer.pipeline import Pipeline
+from .trainer.ckpt import Checkpoints
+from .trainer.model import FittedModel
 from .loader import DataloaderStored
-from .metric import Metrics , MetricList
+from .metric import Metrics , AggMetrics
 from .store import Storage
-from .basic import Device , Timer
+from .device import Device
 from .logger import Logger
 from .config import TrainConfig
+
+class Filtered:
+    def __init__(self, iterable, condition):
+        self.iterable  = iter(iterable)
+        self.condition = condition if callable(condition) else iter(condition)
+    def __iter__(self):
+        return self
+    def __next__(self):
+        while True:
+            item = next(self.iterable)
+            cond = self.condition(item) if callable(self.condition) else next(self.condition)
+            if cond: return item

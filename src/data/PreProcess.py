@@ -1,6 +1,7 @@
 import gc , sys , time , argparse
 
-from ..util import Logger , Timer
+from ..util import Logger
+from ..util.time import Timer
 from .BlockData import DataBlock , DataProcessConfig
  
 logger = Logger()

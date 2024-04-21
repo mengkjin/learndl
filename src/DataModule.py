@@ -13,7 +13,7 @@ from typing import Any , Literal , Optional
 from .data.PreProcess import pre_process
 from .data.BlockData import DataBlock , DataBlockNorm
 from .util import Device , DataloaderStored , Storage , TrainConfig
-from .func.basic import tensor_standardize_and_weight , match_values
+from .func import tensor_standardize_and_weight , match_values
 
 from .environ import DIR
 
@@ -109,9 +109,8 @@ class DataModule:
         pre_process(False)
         pre_process(True)
 
-    def setup(self, stage : Literal['fit' , 'train' , 'valid' , 'test' , 'predict'] , model_date = -1 , param = {}) -> None:
+    def setup(self, stage : Literal['fit' , 'test' , 'predict'] , param = {} , model_date = -1) -> None:
         '''Create train/valid/test dataloaders if necessary'''
-        if stage == 'train': stage = 'fit'
         if self.predict: stage = 'predict'
         
         seqlens : dict = param['seqlens']
@@ -169,13 +168,13 @@ class DataModule:
         self.y , _ = self.process_y_data(y , None , None , no_weight = True)
         self.buffer.process('setup' , self)
 
-        valid_sample = self.full_valid_sample(x , self.y , self.step_idx , **self.buffer.get(y_keys))
-        y , w = self.process_y_data(self.y , valid_sample , self.step_idx)
+        valid = self.full_valid_sample(x , self.y , self.step_idx , **self.buffer.get(y_keys))
+        y , w = self.process_y_data(self.y , valid , self.step_idx)
 
         self.y[:,self.step_idx] = y[:]
         self.buffer.process('update' , self)
 
-        self.static_dataloader(x , y , w , valid_sample)
+        self.static_dataloader(x , y , w , valid)
 
         gc.collect() 
         torch.cuda.empty_cache()
@@ -185,14 +184,13 @@ class DataModule:
         return max(prev_dates) if prev_dates else -1
     
     def train_dataloader(self):
-        return _LoaderDecorator(self , self.loader_dict['train'] , self.device , self.config.verbosity)
+        return self.LoaderWrapper(self , self.loader_dict['train'] , self.device , self.config.verbosity)
     def val_dataloader(self):
-        return _LoaderDecorator(self , self.loader_dict['valid'] , self.device , self.config.verbosity)
+        return self.LoaderWrapper(self , self.loader_dict['valid'] , self.device , self.config.verbosity)
     def test_dataloader(self):
-        return _LoaderDecorator(self , self.loader_dict['test'] , self.device , self.config.verbosity)
+        return self.LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
     def predict_dataloader(self):
-        return _LoaderDecorator(self , self.loader_dict['test'] , self.device , self.config.verbosity)
-
+        return self.LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         return batch.to(self.device)
 
@@ -204,21 +202,16 @@ class DataModule:
         others : rolling window non-nan , default as self.seqy
         '''
 
-        if self.stage == 'train':
-            valid_sample = self.sub_valid_sample(y , index1)
-        else:
-            valid_sample = torch.full((len(y) , len(index1)) , True).to(y.device)
-
+        valid = self.valid_sample(y,index1) if self.stage == 'train' else y[:,index1].clone().fill_(True)
         for key , value in x.items(): 
-            valid_sample *= self.sub_valid_sample(value , index1 , self.seqs[key] , key in ['day'])
+            valid *= self.valid_sample(value , index1 , self.seqs[key] , key in ['day'])
         for key , value in kwargs.items(): 
-            valid_sample *= self.sub_valid_sample(value , index1 , self.seqs[key])
-        return valid_sample
+            valid *= self.valid_sample(value , index1 , self.seqs[key])
+        return valid
     
     @staticmethod
-    def sub_valid_sample(data : Tensor , index1 : Tensor , rolling_window = 1 , endpoint_nonzero = False):
+    def valid_sample(data : Tensor , index1 : Tensor , rolling_window = 1 , endpoint_nonzero = False):
         '''return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims'''
-        # if index1 is None: index1 = np.arange(rolling_window - 1 , data.shape[1])
         data = torch.cat([torch.zeros_like(data[:,:rolling_window]) , data],dim=1).unsqueeze(2)
         sum_dim = tuple(range(2,data.ndim))
         
@@ -228,48 +221,40 @@ class DataModule:
         
         return (invalid_samp == 0)
      
-    def process_y_data(self , y : Tensor , valid_sample : Optional[Tensor] , index1 : Optional[Tensor] , no_weight = False) -> tuple[Tensor , Optional[Tensor]]:
+    def process_y_data(self , y : Tensor , valid : Optional[Tensor] , index1 : Optional[Tensor] , no_weight = False) -> tuple[Tensor , Optional[Tensor]]:
         '''standardize y and weight'''
         weight_scheme = self.config.weight_scheme(self.stage , no_weight)
-        if valid_sample is not None:
+        if valid is not None:
             assert index1 is not None , index1
             y = y[:,index1].clone().nan_to_num(0)
-            y[valid_sample == 0] = torch.nan
+            y[valid == 0] = torch.nan
         return tensor_standardize_and_weight(y , 0 , weight_scheme)
         
-    def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid_sample : Tensor) -> None:
-        '''
-        update dataloaders dict(set_name = ['train' , 'valid']), 
-        save batch_data to f'{DIR.model}/{model_name}/{set_name}_batch_data' and later load them
-        '''
-        sample_method  = self.config.sample_method
-        train_ratio    = self.config.train_ratio
-        batch_size     = self.config.batch_size
-        shuffle_option = self.config.shuffle_option
-        index0, index1 = torch.arange(len(valid_sample)) , self.step_idx
-
-        sample_index = self.data_sampling(self.stage , valid_sample , index0 , index1 , sample_method , train_ratio , batch_size)
+    def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid : Tensor) -> None:
+        '''update loader_dict , save batch_data to f'{DIR.model}/{model_name}/{set_name}_batch_data' and later load them'''
+        index0, index1 = torch.arange(len(valid)) , self.step_idx
+        sample_index = self.split_sample(self.stage , valid , index0 , index1 , self.config.sample_method , 
+                                         self.config.train_ratio , self.config.batch_size)
 
         self.storage.del_group(self.stage)
         for set_key , set_samples in sample_index.items():
             assert set_key in ['train' , 'valid' , 'test'] , set_key
-            shuf_opt = shuffle_option if set_key == 'train' else 'static'
+            shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
             batch_files = [f'{DIR.batch}/{set_key}.{bnum}.pt' for bnum in range(len(set_samples))]
             for bnum , b_i in enumerate(set_samples):
                 assert torch.isin(b_i[:,1] , index1).all()
                 i0 , i1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(index1 , b_i[:,1])
 
-                b_x = [self.prenorm(self.selected_rolling_window(x[mdt],self.seqs[mdt],i0,i1) , mdt) for mdt in x.keys()]
+                b_x = [self.prenorm(self.rolling_rotation(x[mdt],self.seqs[mdt],i0,i1) , mdt) for mdt in x.keys()]
                 b_y = y[i0 , yindex1]
                 b_w = w = None if w is None else w[i0 , yindex1]
-                b_v = valid_sample[i0 , yindex1]
+                b_v = valid[i0 , yindex1]
 
                 self.storage.save(BatchData(b_x , b_y , b_w , b_i , b_v) , batch_files[bnum] , group = self.stage)
-
             self.loader_dict[set_key] = DataloaderStored(self.storage , batch_files , shuf_opt)
 
     @staticmethod
-    def data_sampling(stage , valid_sample : Tensor , index0 : Tensor , index1 : Tensor ,
+    def split_sample(stage , valid : Tensor , index0 : Tensor , index1 : Tensor ,
                       sample_method : Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] = 'sequential' ,
                       train_ratio   : float = 0.8 , batch_size : int = 2000) -> dict[str,list]:
         '''
@@ -279,27 +264,27 @@ class DataModule:
         train/valid sample method: total_shuffle , sequential , both_shuffle , train_shuffle
         test sample method: sequential
         '''
-        l0 , l1 = valid_sample.shape[:2]
+        l0 , l1 = valid.shape[:2]
         pos = torch.stack([index0.repeat_interleave(l1) , index1.repeat(l0)] , -1).reshape(l0,l1,2)
         
         def shuffle_sampling(i , bs = batch_size):
             return [i[p] for p in BatchSampler(permutation(np.arange(len(i))) , bs , drop_last=False)]
-        def sequential_sampling(beg , end , posit = pos , valid = valid_sample):
+        def sequential_sampling(beg , end , posit = pos , valid = valid):
             return [posit[:,j][valid[:,j]] for j in range(beg , end)]
         
         sample_index = {}
         if stage == 'fit':
             sep = int(l1 * train_ratio)
             if sample_method == 'total_shuffle':
-                pool = permutation(np.arange(valid_sample.sum().item()))
+                pool = permutation(np.arange(valid.sum().item()))
                 sep = int(len(pool) * train_ratio)
-                sample_index['train'] = shuffle_sampling(pos[valid_sample][pool[:sep]])
-                sample_index['valid'] = shuffle_sampling(pos[valid_sample][pool[sep:]])
+                sample_index['train'] = shuffle_sampling(pos[valid][pool[:sep]])
+                sample_index['valid'] = shuffle_sampling(pos[valid][pool[sep:]])
             elif sample_method == 'both_shuffle':
-                sample_index['train'] = shuffle_sampling(pos[:,:sep][valid_sample[:,:sep]])
-                sample_index['valid'] = shuffle_sampling(pos[:,sep:][valid_sample[:,sep:]])
+                sample_index['train'] = shuffle_sampling(pos[:,:sep][valid[:,:sep]])
+                sample_index['valid'] = shuffle_sampling(pos[:,sep:][valid[:,sep:]])
             elif sample_method == 'train_shuffle':
-                sample_index['train'] = shuffle_sampling(pos[:,:sep][valid_sample[:,:sep]])
+                sample_index['train'] = shuffle_sampling(pos[:,:sep][valid[:,:sep]])
                 sample_index['valid'] = sequential_sampling(sep , l1)
             else:
                 sample_index['train'] = sequential_sampling(0 , sep)
@@ -310,15 +295,16 @@ class DataModule:
         return sample_index
 
     @staticmethod
-    def selected_rolling_window(x : Tensor , rw , index0 , index1 , dim = 1 , squeeze_out = True) -> Tensor:
+    def rolling_rotation(x : Tensor , rolling : int , index0 , index1 , dim = 1 , squeeze_out = True) -> Tensor:
+        '''rotate [stock , date , inday , feature] to [sample , rolling , inday , feature]'''
         assert x.ndim == 4 , x.ndim
         assert len(index0) == len(index1) , (len(index0) , len(index1))
         try:
-            x_rw = x.unfold(dim , rw , 1)[index0 , index1 + 1 - rw].permute(0,3,1,2)
+            new_x = x.unfold(dim , rolling , 1)[index0 , index1 + 1 - rolling].permute(0,3,1,2) # [stock , rolling , inday , feature]
         except MemoryError:
-            x_rw = torch.stack([x[index0 , index1 + i + 1 - rw] for i in range(rw)],dim=dim)
-        if squeeze_out: x_rw = x_rw.squeeze(-2)
-        return x_rw
+            new_x = torch.stack([x[index0 , index1 + i + 1 - rolling] for i in range(rolling)],dim=dim)
+        if squeeze_out: new_x = new_x.squeeze(-2)
+        return new_x
         
     def prenorm(self , x : Tensor, key : str) -> Tensor:
         '''
@@ -450,37 +436,36 @@ class DataModule:
 
             if y_labels is not None:  data.y.align_feature(y_labels)
             return data
+    class LoaderWrapper:
+        def __init__(self , data_module , raw_loader , device , verbosity = 0) -> None:
+            self.data_module = data_module
+            self.device = device
+            self.loader = tqdm(raw_loader , total=len(raw_loader)) if verbosity >= 10 else raw_loader
+            self.display_text = None
+
+        def __len__(self): 
+            return len(self.loader)
+
+        def __iter__(self):
+            for batch_i , batch_data in enumerate(self.loader):
+                yield self.process(batch_data , batch_i)
+
+        def __getitem__(self , i : int): 
+            return self.process(list(self.loader)[i] , i)
         
-class _LoaderDecorator:
-    def __init__(self , data_module , raw_loader , device , verbosity = 0) -> None:
-        self.data_module = data_module
-        self.device = device
-        self.loader = tqdm(raw_loader , total=len(raw_loader)) if verbosity >= 10 else raw_loader
-        self.display_text = None
+        def process(self , batch_data : BatchData , batch_i : int) -> BatchData:
+            if hasattr(self.data_module , 'on_before_batch_transfer'):
+                batch_data = getattr(self.data_module , 'on_before_batch_transfer')(batch_data , batch_i)
+            if hasattr(self.data_module , 'transfer_batch_to_device'):
+                batch_data = getattr(self.data_module , 'transfer_batch_to_device')(batch_data , self.device , batch_i)
+            if hasattr(self.data_module , 'on_after_batch_transfer'):
+                batch_data = getattr(self.data_module , 'on_after_batch_transfer')(batch_data , batch_i)
+            return batch_data
 
-    def __len__(self): 
-        return len(self.loader)
+        def add_text(self , display_text):
+            self.display_text = display_text
+            return self
 
-    def __iter__(self):
-        for batch_i , batch_data in enumerate(self.loader):
-            yield self.process(batch_data , batch_i)
-
-    def __getitem__(self , i : int): 
-        return self.process(list(self.loader)[i] , i)
-    
-    def process(self , batch_data : BatchData , batch_i : int) -> BatchData:
-        if hasattr(self.data_module , 'on_before_batch_transfer'):
-            batch_data = getattr(self.data_module , 'on_before_batch_transfer')(batch_data , batch_i)
-        if hasattr(self.data_module , 'transfer_batch_to_device'):
-            batch_data = getattr(self.data_module , 'transfer_batch_to_device')(batch_data , self.device , batch_i)
-        if hasattr(self.data_module , 'on_after_batch_transfer'):
-            batch_data = getattr(self.data_module , 'on_after_batch_transfer')(batch_data , batch_i)
-        return batch_data
-
-    def add_text(self , display_text):
-        self.display_text = display_text
-        return self
-
-    def display(self , **kwargs):
-        if isinstance(self.display_text , str) and isinstance(self.loader , tqdm): 
-            self.loader.set_description(self.display_text.format(**kwargs))
+        def display(self , **kwargs):
+            if isinstance(self.display_text , str) and isinstance(self.loader , tqdm): 
+                self.loader.set_description(self.display_text.format(**kwargs))

@@ -1,11 +1,7 @@
 import torch
-import numpy as np
-import pandas as pd
-import gc , time , os , psutil
+import psutil
 
-from copy import deepcopy
-from torch import Tensor
-from typing import Any , Literal , Optional
+from typing import Any
 
 use_device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 if torch.cuda.is_available():
@@ -61,16 +57,7 @@ class Device:
     def print_cuda_memory(self):
         print(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
               f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G')
-
-class Timer:
-    def __init__(self , *args):
-        self.key = '/'.join(args)
-    def __enter__(self):
-        self.start_time = time.time()
-        print(self.key , '...', end='')
-    def __exit__(self, type, value, trace):
-        print(f'... cost {time.time()-self.start_time:.2f} secs')
-            
+        
 class MemoryPrinter:
     def __init__(self) -> None:
         pass
