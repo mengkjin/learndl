@@ -517,3 +517,39 @@
   0_best: 26.9151
   0_swabest: 26.8719
   0_swalast: 25.235
+0_model: gru_day_ShortTest(x1)
+1_start: Sat Apr 20 21:19:08 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.5 Secs
+8_result:
+  0_best: 26.9623
+  0_swabest: 26.1015
+  0_swalast: 25.8703
+0_model: gru_day_ShortTest.14(x1)
+1_start: Sun Apr 21 14:55:27 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.7 Secs
+8_result:
+  0_best: 25.5517
+  0_swabest: 25.736
+  0_swalast: 25.0374
+0_model: gru_day_ShortTest.15(x1)
+1_start: Sun Apr 21 15:04:52 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20171201
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.2 Min/model, 0.6 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.8 Secs
+8_result:
+  0_best: 28.0389
+  0_swabest: 27.7995
+  0_swalast: 26.8829

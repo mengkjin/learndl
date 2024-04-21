@@ -10,26 +10,27 @@ class tra_module:
         class new_tra_class(original_class):
             def __init__(self , *args , **kwargs):
                 super().__init__(*args , **kwargs)
-                self.dynamic_data_assigned = False
             def __call__(self , *args , **kwargs):
                 assert self.dynamic_data_assigned , f'Run dynamic_data_assign first'
-                self.dynamic_data_assigned = False
                 return super().__call__(*args , **kwargs)
-            def dynamic_data_assign(self , batch_data , model_data , **kwargs):
-                if not hasattr(self, 'dynamic_data'): self.dynamic_data = {}
-                self.dynamic_data.update({'model_data':model_data,'batch_data':batch_data,**kwargs})
-                self.dynamic_data_assigned = True
-                return 
-            def dynamic_data_access(self , *args , **kwargs):
-                if not hasattr(self, 'dynamic_data'): self.dynamic_data = {}
+            def dynamic_data_assign(self , obj):
+                if not self.dynamic_data_assigned: self._dynamic = {'data_module':obj.data_module,'batch_data':obj.batch_data}
+                return self
+            def dynamic_data_unlink(self):
+                if self.dynamic_data_assigned: del self._dynamic
+                return self
+            @property
+            def dynamic_data_assigned(self): return hasattr(self , '_dynamic_data')
+            @property
+            def dynamic_data(self):
+                # if not hasattr(self, 'dynamic_data'): self.dynamic_data = {}
+                assert self.dynamic_data_assigned , f'Run dynamic_data_assign first'
                 return self.dynamic_data
-            def penalty_data_access(self , *args , **kwargs):
+            @property
+            def penalty_data(self):
                 self.global_steps += 1
                 return {'probs':self.probs,'num_states':self.num_states,'global_steps':self.global_steps,}
-            def dynamic_data_unlink(self , *args , **kwargs):
-                if hasattr(self, 'dynamic_data'): del self.dynamic_data
-                self.dynamic_data_assigned = False
-                return self
+            @property
             def get_probs(self):
                 if self.probs_record is not None: return self.probs_record / self.probs_record.sum(dim=1,keepdim=True)   
         return new_tra_class
@@ -43,20 +44,23 @@ class tra_component:
     def __call__(self, original_class):
         tra_component_list = self.tra_component_list
         class new_tra_class(original_class):
-            def dynamic_data_assign(self , *args , **kwargs):
-                [getattr(self , comp).dynamic_data_assign(*args , **kwargs) for comp in tra_component_list]
-            def dynamic_data_access(self , *args , **kwargs):
-                dynamic_data = [getattr(self , comp).dynamic_data_access(*args , **kwargs) for comp in tra_component_list]
-                return dynamic_data if len(dynamic_data) > 1 else dynamic_data[0]
-            def dynamic_data_unlink(self , *args , **kwargs):
-                for comp in tra_component_list: getattr(self , comp).dynamic_data_unlink(*args , **kwargs)
+            def dynamic_data_assign(self , obj):
+                [getattr(self , comp).dynamic_data_assign(obj) for comp in tra_component_list]
+            def dynamic_data_unlink(self):
+                [getattr(self , comp).dynamic_data_unlink() for comp in tra_component_list]
                 return self
-            def penalty_data_access(self , *args , **kwargs):
-                penalty_data = [getattr(self , comp).penalty_data_access(*args , **kwargs) for comp in tra_component_list]
-                return penalty_data if len(penalty_data) > 1 else penalty_data[0]
-            def get_probs(self , *args , **kwargs):
-                probs = [getattr(self,comp).get_probs(*args , **kwargs) for comp in tra_component_list]
-                return probs if len(probs) > 1 else probs[0]
+            @property
+            def dynamic_data(self):
+                v = [getattr(self , comp).dynamic_data for comp in tra_component_list]
+                return v if len(v) > 1 else v[0]
+            @property
+            def penalty_data(self):
+                v = [getattr(self , comp).penalty_data for comp in tra_component_list]
+                return v if len(v) > 1 else v[0]
+            @property
+            def get_probs(self):
+                v = [getattr(self,comp).get_probs for comp in tra_component_list]
+                return v if len(v) > 1 else v[0]
         return new_tra_class
     
 class mod_tra(nn.Module):
@@ -140,6 +144,7 @@ class mod_tra(nn.Module):
         
         return final_pred , preds
     
+    @property
     def get_probs(self):
         if self.probs_record is not None:
             return self.probs_record / self.probs_record.sum(dim=1 , keepdim = True)
@@ -195,9 +200,9 @@ class block_tra(nn.Module):
     def forward(self , x : Tensor) -> tuple[Tensor , Tensor]:
         if self.num_states > 1:
             dynamic_data : dict = getattr(self , 'dynamic_data')
-            i0 , i1 = dynamic_data['batch_data'].i[:,0] , dynamic_data['batch_data'].i[:,1]
-            d  = dynamic_data['model_data'].buffer['hist_loss']
-            rw = dynamic_data['model_data'].seqs['hist_loss']
+            i0 , i1 = dynamic_data['data_module'].i[:,0] , dynamic_data['batch_data'].i[:,1]
+            d  = dynamic_data['data_module'].buffer['hist_loss']
+            rw = dynamic_data['data_module'].seqs['hist_loss']
             hist_loss = torch.stack([d[i0 , i1+j+1-rw] for j in range(rw)],dim=-2).nan_to_num(1)
             preds = self.predictors(x)
 
@@ -229,10 +234,10 @@ class block_tra(nn.Module):
             self.probs_record = probs_agg if self.probs_record is None else torch.concat([self.probs_record , probs_agg])
 
             # update dynamic buffer
-            vp = preds.detach().to(dynamic_data['model_data'].buffer['hist_preds'])
-            v0 = dynamic_data['model_data'].buffer['hist_labels'][i0,i1].nan_to_num(0)
-            dynamic_data['model_data'].buffer['hist_preds'][i0,i1] = vp
-            dynamic_data['model_data'].buffer['hist_loss'][i0,i1] = (vp - v0).square()
+            vp = preds.detach().to(dynamic_data['data_module'].buffer['hist_preds'])
+            v0 = dynamic_data['data_module'].buffer['hist_labels'][i0,i1].nan_to_num(0)
+            dynamic_data['data_module'].buffer['hist_preds'][i0,i1] = vp
+            dynamic_data['data_module'].buffer['hist_loss'][i0,i1] = (vp - v0).square()
         else: 
             final_pred = preds = self.predictors(x)
             

@@ -3,7 +3,8 @@ import numpy as np
 import torch
 
 from dataclasses import dataclass , field
-from typing import Any , Literal
+from torch import nn , Tensor
+from typing import Any , Literal , Optional
 
 from ..func import basic as B
 
@@ -31,7 +32,7 @@ class Metrics:
     @property
     def losses(self): return self.output.losses
     
-    def model_update(self , model_param , config , **kwargs):
+    def new_model(self , model_param , config , **kwargs):
         if model_param['num_output'] > 1:
             multi_param = config.train_param['multitask']
             self.multiloss = MultiLosses(multi_param['type'], model_param['num_output'] , **multi_param['param_dict'][multi_param['type']])
@@ -41,8 +42,8 @@ class Metrics:
         return self
     
     def calculate(self , dataset : Literal['train' , 'valid' , 'test'] , 
-                  label , pred , weight = None , net = None , 
-                  penalty_kwargs = {} , assert_nan = False):
+                  label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , net : Optional[nn.Module] = None , 
+                  penalty_kwargs : dict[str,Any] = {} , assert_nan = False):
         '''
         Calculate loss(with gradient), penalty , score
         '''
@@ -178,7 +179,7 @@ class Metrics:
     
     @staticmethod
     def tra_opt_transport(*args , param , **kwargs):
-        tra_pdata = kwargs['net'].penalty_data_access()
+        tra_pdata = kwargs['net'].penalty_data
         pen = 0.
         if kwargs['net'].training and tra_pdata['probs'] is not None and tra_pdata['num_states'] > 1:
             square_error = (kwargs['hidden'] - kwargs['label']).square()

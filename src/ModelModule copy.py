@@ -198,6 +198,7 @@ class ModelTrainer():
     def main_process(self):
         '''Main stage of load_data + fit + test'''
         for self.stage in config.stage_queue:
+            self.data_module.reset_dataloaders()
             self.pipe.set_stage(self.stage)
             getattr(self , f'process_{self.stage}')()
         self.info.dump_result()
@@ -240,7 +241,6 @@ class ModelTrainer():
     def process_fit_start(self):
         '''to do at process fit start'''
         logger.critical(self.info.tic_str('fit'))
-        self.data_module.reset_dataloaders()
         config.Model.save(config.model_base_path)
         self.model_type = 'best'
 
@@ -248,12 +248,40 @@ class ModelTrainer():
         '''to do at process fit end'''
         logger.critical(self.info.toc_str('fit' , self.pipe.model_counts , self.pipe.epoch_counts))
     
+    '''
+    def model_preparation(self , last_n = 30 , best_n = 5):
+        with self.ptimer(f'{self.stage}/prepare' , self.stage):
+
+            param = config.model_param[self.model_num]
+            # In a new model , alters the penalty function's lamb
+            self.metrics.new_model(param , config)
+
+            path_prefix = '{}/{}'.format(param.get('path') , self.model_date)
+            path = {'target'      : {op_type:f'{path_prefix}.{op_type}.pt' for op_type in config.output_types} , 
+                    'source'      : {op_type:[] for op_type in config.output_types} , # del at each model train
+                    'candidate'   : {op_type:None for op_type in (config.output_types + ['transfer'])} , # not del at each model train
+                    'performance' : {op_type:None for op_type in config.output_types}}
+            if 'best'    in config.output_types:
+                path['candidate']['best'] = f'{path_prefix}.best.pt'
+            if 'swalast' in config.output_types: 
+                path['source']['swalast'] = [f'{path_prefix}.lastn.{i}.pt' for i in range(last_n)]
+            if 'swabest' in config.output_types: 
+                path['source']['swabest']      = [f'{path_prefix}.bestn.{i}.pt' for i in range(best_n)] 
+                path['candidate']['swabest']   = path['source']['swabest']
+                path['performance']['swabest'] = [-10000. for i in range(best_n)]
+            if config.train_param['transfer'] and self.model_date > self.data_module.model_date_list[0]:
+                last_model_date = max([d for d in self.data_module.model_date_list if d < self.model_date])
+                path['candidate']['transfer'] = '{}/{}.best.pt'.format(param.get('path') , last_model_date)
+                
+            self.param , self.path = param , path
+    '''
     def model_preparation(self):
         with self.ptimer(f'{self.stage}/prepare' , self.stage):
             self.param = config.model_param[self.model_num]
             self.metrics.new_model(self.param , config)
             self.sdcheckpoint.new_model(self.param , self.model_date)
-            self.model_dict : dict[str,TRAIN.SeletedModel] = {k:TRAIN.choose_model(k)(self.sdcheckpoint) for k in config.output_types}
+            self.last_model_date = max([d for d in self.data_module.model_date_list if d < self.model_date])
+
     
     def model_fit(self):
         self.model_fit_start()
@@ -292,8 +320,10 @@ class ModelTrainer():
         '''Initialize net , optimizer(scheduler)'''
         with self.ptimer(f'{self.stage}/init_trainer'):
             if self.pipe.loop_status == 'epoch': return
-            self.net , transferred = self.load_model(True)
-            self.optimizer = OPTIM.Optimizer(self.net , config , transferred , self.pipe.attempt_i)
+            self.net = self.load_model(True)
+
+            '{}/{}.best.pt'.format(self.param.get('path') , self.last_model_date)
+            self.optimizer = OPTIM.Optimizer(self.net , config , bool(self.path['candidate'].get('transfer')) , self.pipe.attempt_i)
 
     def model_fit_epoch(self):
         '''Iterate train and valid dataset, calculate loss/score , update values'''
@@ -308,16 +338,31 @@ class ModelTrainer():
     def model_fit_assess_status(self):
         '''Update condition of continuing training epochs , restart attempt if early exit or nanloss'''
         if self.pipe.nanloss: return
-        with self.ptimer(f'{self.stage}/assess'):
+        with self.ptimer(f'{self.stage}/assess'):                
             valid_score = self.pipe.score_list['valid'][-1]
             
+            save_targets = [] 
             if valid_score > self.pipe.score_attempt_best: 
                 self.pipe.epoch_attempt_best = self.pipe.epoch_i 
                 self.pipe.score_attempt_best = valid_score
+                save_targets.append(self.path['target']['best'])
 
-            for model in self.model_dict.values():
-                model.assess(self.net , self.pipe.epoch_i , valid_score , self.pipe.loss_list['valid'][-1])
-            
+            if 'swalast' in config.output_types:
+                self.path['source']['swalast'] = self.path['source']['swalast'][1:] + self.path['source']['swalast'][:1]
+                save_targets.append(self.path['source']['swalast'][-1])
+                
+                p_valid = self.path['source']['swalast'][-len(self.pipe.score_list['valid']):]
+                arg_max = np.argmax(self.pipe.score_list['valid'][-len(p_valid):])
+                arg_swa = (lambda x:x[(x>=0) & (x<len(p_valid))])(min(3,len(p_valid)//3)*np.arange(-5,3)+arg_max)[-5:]
+                self.path['candidate']['swalast'] = [p_valid[i] for i in arg_swa]
+                
+            if 'swabest' in config.output_types:
+                arg_min = np.argmin(self.path['performance']['swabest'])
+                if valid_score > self.path['performance']['swabest'][arg_min]:
+                    self.path['performance']['swabest'][arg_min] = valid_score
+                    save_targets.append(self.path['candidate']['swabest'][arg_min])
+                
+            self.save_model(path = save_targets)
             self.print_progress('epoch_step')
         
         with self.ptimer(f'{self.stage}/status'):
@@ -330,7 +375,7 @@ class ModelTrainer():
                 else:
                     self.pipe.loop_status = 'model'
                     # print(self.net.get_probs())
-                    self.save_model()
+                    self.save_model(disk_key = config.output_types)
             else:
                 self.pipe.loop_status = 'epoch'
 
@@ -348,14 +393,14 @@ class ModelTrainer():
                 self.score_by_model = np.concatenate([getattr(self,'score_by_model',np.empty((0,len(self.test_model_num)))) , score_model])
                 
     def model_forecast(self):
-        if not os.path.exists(self.model_path(self.model_date)): self.model_fit()
+        if not os.path.exists(self.path['target']['best']): self.model_fit()
         
         with self.ptimer(f'{self.stage}/forecast') , torch.no_grad():
             test_dates = np.concatenate([self.data_module.early_test_dates , self.data_module.model_test_dates])
             l0 , l1 = len(self.data_module.early_test_dates) , len(self.data_module.model_test_dates)
             self.assert_equity(len(self.data_module.test_dataloader()) , len(test_dates))
             for i , self.model_type in enumerate(config.output_types):
-                self.net , _ = self.load_model(False , self.model_type)
+                self.net = self.load_model(False , self.model_type)
                 self.loop_dataloader('test' , warm_up = l0 , dates = test_dates)
                 self.score_by_date[-l1:,self.model_num*len(config.output_types) + i] = np.nan_to_num(self.pipe.scores[-l1:])
 
@@ -386,7 +431,7 @@ class ModelTrainer():
     def assert_equity(a , b): assert a == b , (a , b)
 
     def model_test_end(self):
-        '''Do necessary things of ending a model(model_date , model_num)'''
+        '''Do necessary things of ending a model(model_data , model_num)'''
         with self.ptimer(f'{self.stage}/end'):
             if self.model_num == config.model_num_list[-1]:
                 self.score_by_model[-1,:] = np.nanmean(self.score_by_date[-len(self.data_module.model_test_dates):,],axis = 0)
@@ -396,7 +441,6 @@ class ModelTrainer():
   
     def process_test_start(self):
         logger.critical(self.info.tic_str('test'))
-        self.data_module.reset_dataloaders()
 
         self.test_model_num = np.repeat(config.model_num_list,len(config.output_types))
         self.test_output_type = np.tile(config.output_types,len(config.model_num_list))
@@ -520,30 +564,44 @@ class ModelTrainer():
 
         return exit_text , term_cond
     
-    def save_model(self):
+    def save_model(self , path : Optional[str | list | tuple] = None , disk_key = None , savable_net = None):
+        if path is None and disk_key is None: return # nothing to save
+        getattr(self.net , 'dynamic_data_unlink' , lambda *x:None)()
         with self.ptimer(f'save_model'):
-            getattr(self.net , 'dynamic_data_unlink' , lambda *x:None)()
-            self.net = self.net.cpu()
-            for model_type , model in self.model_dict.items():
-                sd = model.state_dict(self.net , self.data_module.train_dataloader())
-                self.deposition.save_state_dict(sd , self.model_path(self.model_date , model_type)) 
+            if path is not None: self.checkpoint.save_state_dict(self.net , path)
+
+            if disk_key is not None:
+                if isinstance(disk_key , str): disk_key = [disk_key]
+                for key in disk_key:
+                    assert key in ['best' , 'swalast' , 'swabest']
+                    p_exists = self.checkpoint.valid_path(self.path['candidate'][key])
+                    if len(p_exists) == 0: print(key , self.path['candidate'][key] , self.path['performance'][key])
+                    if key == 'best':
+                        sd = self.checkpoint.load(p_exists[0])
+                    else:
+                        if len(p_exists) == 0: raise Exception('empty swa input')
+                        swa_net = TRAIN.SWAModel(config.model_module , self.param , self.device.device)
+                        for p in p_exists: swa_net.update_sd(self.checkpoint.load(p))
+                        swa_net.update_bn(self.data_module.train_dataloader())
+                        sd = swa_net.module 
+
+                    self.deposition.save_state_dict(sd , self.path['target'][key]) 
     
-    def load_model(self , training : bool , model_type = default_model_type) -> tuple[nn.Module , bool]:
+    def load_model(self , training : bool , model_type = default_model_type) -> nn.Module:
         with self.ptimer(f'load_model'):
-            transfered = False
             if training:         
-                if config.train_param['transfer']:
-                    model_path = self.model_path(self.data_module.prev_model_date(self.model_date))
-                    transfered = self.deposition.exists(model_path)
+                # '{}/{}.best.pt'.format(self.param.get('path') , self.last_model_date)  
+                if self.path['candidate'].get('transfer'):
+                    if not config.train_param['transfer']: raise Exception('get transfer')
+                    model_path = '{}/{}.best.pt'.format(self.param.get('path') , self.last_model_date)  
                 else:
-                    model_path = self.model_path()
+                    model_path = -1
             else:
-                model_path = self.model_path(self.model_date , model_type)
-            net = MODEL.new(config.model_module , self.param , self.deposition.load(model_path) , self.device)
-        return net , transfered
-    
-    def model_path(self , model_date = -1, model_type = 'best'):
-        return '{}/{}.{}.pt'.format(self.param.get('path') , model_date , model_type)
+                model_path = self.path['target'][model_type]
+
+            net = MODEL.new(config.model_module , self.param , self.deposition.load(model_path))
+            net = self.device(net)
+        return net
 
     @classmethod
     def fit(cls , process = -1 , resume = -1 , checkname = -1 , timer = False , parser_args = None):

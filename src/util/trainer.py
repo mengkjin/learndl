@@ -3,11 +3,12 @@ import numpy as np
 import pandas as pd
 import torch
 
+from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass , field
 from torch import nn , Tensor
 from torch.optim.swa_utils import AveragedModel , update_bn
-from typing import Any , ClassVar , Literal , Optional
+from typing import Any , ClassVar , Literal , Optional 
 
 from .logger import Logger
 from .config import TrainConfig
@@ -15,7 +16,6 @@ from .metric import Metrics , MetricList
 from .store  import Storage
 
 from ..environ import DIR
-from ..model import model
 
 @dataclass
 class Pipeline:
@@ -33,7 +33,7 @@ class Pipeline:
 
     def __post_init__(self):
         self.nanloss_life = self.config.train_param['trainer']['nanloss']['retry']
-        self.metrics = AggMetrics()
+        self.aggmetrics = AggMetrics()
 
     @property
     def initial_models(self): return self.model_counts < self.config.model_num
@@ -110,25 +110,28 @@ class Pipeline:
 
     def new_metric(self , model_type='best'):
         self.model_type = model_type
-        self.metrics.new(self.dataset , self.model_num , self.model_date , self.epoch_i , model_type)
+        self.aggmetrics.new(self.dataset , self.model_num , self.model_date , self.epoch_i , model_type)
     
     def record_metric(self , metrics : Metrics):
-        self.metrics.record(metrics)
+        self.aggmetrics.record(metrics)
 
     def collect_metric(self):
-        self.check_nanloss(self.metrics.nanloss)
-        self.metrics.collect()
-        self.loss_list[self.dataset].append(self.metrics.loss) 
-        self.score_list[self.dataset].append(self.metrics.score)
+        self.check_nanloss(self.aggmetrics.nanloss)
+        self.aggmetrics.collect()
+        self.loss_list[self.dataset].append(self.aggmetrics.loss) 
+        self.score_list[self.dataset].append(self.aggmetrics.score)
 
     def collect_lr(self , last_lr): 
         if self.dataset == 'train': self.lr_list.append(last_lr)
 
     @property
-    def losses(self): return self.metrics.losses
+    def losses(self): return self.aggmetrics.losses
     @property
-    def scores(self): return self.metrics.scores
-
+    def scores(self): return self.aggmetrics.scores
+    @property
+    def aggloss(self): return self.aggmetrics.loss
+    @property
+    def aggscore(self): return self.aggmetrics.score
 
 
 @dataclass
@@ -267,107 +270,155 @@ class Filtered:
             cond = self.condition(item) if callable(self.condition) else next(self.condition)
             if cond: return item
             
-class SDCheckpoints(Storage):
-    def __init__(self, mem_storage: bool = True):
+class Checkpoints(Storage):
+    n_epochs = 20
+
+    def __init__(self, mem_storage: bool = True , ):
         super().__init__(mem_storage)
 
-    def join(self , epoch , net , remark = ''):
-        pass
+    def new_model(self , model_param : dict , model_date : int):
+        if self.is_disk:
+            self.dir = '{}/{}'.format(model_param.get('path') , model_date)
+        else:
+            self.dir = '{}/{}'.format(os.path.basename(str(model_param.get('path'))) , model_date)
+        self.sources = [[] for _ in range(self.n_epochs)]
+        self.del_all()
 
-    def disjoin(self , epoch):
-        pass
+    def join(self , src : Any , epoch : int , net : nn.Module):
+        if epoch > len(self.sources):
+            self.sources += [[] for _ in range(self.n_epochs)]
+        if len(self.sources[epoch]) == 0:  
+            self.save_state_dict(net , self.epoch_path(epoch))
+        if src not in self.sources[epoch]: 
+            self.sources[epoch].append(src)
 
-    def collect(self , *args):
-        pass
+    def disjoin(self , src , epoch : int):
+        if epoch is not None:
+            self.sources[epoch] = [s for s in self.sources[epoch] if s is not src]
+            if len(self.sources[epoch]) == 0:  self.del_path(self.epoch_path(epoch))
 
     def load_epoch(self , epoch):
-        return 
-
+        return self.load(self.epoch_path(epoch))
+    
+    def epoch_path(self , epoch):
+        return f'{self.dir}/checkpoint.{epoch}.pt'
+    
 class SWAModel:
-    def __init__(self , module , param , device = None) -> None:
-        self.device   = device
-        self.template = model.new(module , param)
-        self.avgmodel = AveragedModel(self.template).to(self.device)
+    def __init__(self , module : nn.Module) -> None:
+        self.template = deepcopy(module)
+        self.avgmodel = AveragedModel(self.template)
 
     def update_sd(self , state_dict):
         self.template.load_state_dict(state_dict)
         self.avgmodel.update_parameters(self.template) 
         return self
     
-    def update_bn(self , data_loader):
+    def update_bn(self , data_loader , device = None):
+        self.avgmodel = device(self.avgmodel) if callable(device) else self.avgmodel.to(device)
         update_bn(self.bn_loader(data_loader) , self.avgmodel) 
         return self
-    
+     
     def bn_loader(self , data_loader):
         for batch_data in data_loader: 
             yield (batch_data.x , batch_data.y , batch_data.w)
 
     @property
-    def module(self): return self.avgmodel.module
-
-class SWABest(SWAModel):
-    def __init__(self, module, param, ckpt : SDCheckpoints , device = None, n_best = 5 , 
+    def module(self) -> nn.Module: return self.avgmodel.module
+    
+class SeletedModel:
+    def __init__(self, ckpt : Checkpoints , 
                  use : Literal['loss','score'] = 'score') -> None:
-        super().__init__(module, param, device)
-        self.ckpt        = ckpt
+        self.ckpt   = ckpt
+        self.use    = use
+
+    @abstractmethod
+    def assess(self , net : nn.Module , epoch : int , score = 0. , loss = 0.):
+        pass
+
+    @abstractmethod
+    def state_dict(self , *args , device = None) -> nn.Module | dict:
+        pass
+
+def choose_model(model_type : Literal['best' , 'swabest' , 'swalast']):
+    if model_type == 'best': return BestModel
+    elif model_type == 'swabest': return SWABest
+    elif model_type == 'swalast': return SWALast
+    else: raise KeyError(model_type)
+
+class BestModel(SeletedModel):
+    def __init__(self, ckpt : Checkpoints , use : Literal['loss','score'] = 'score') -> None:
+        super().__init__(ckpt , use)
+        self.epoch_fix  = -1
+        self.metric_fix = None
+
+    def assess(self , net : nn.Module , epoch : int , score = 0. , loss = 0.):
+        value = loss if self.use == 'loss' else score
+        if self.metric_fix is None or (self.metric_fix < value if self.use == 'score' else self.metric_fix > value):
+            self.ckpt.disjoin(self , self.epoch_fix)
+            self.epoch_fix = epoch
+            self.metric_fix = value
+            self.ckpt.join(self , epoch , net)
+
+    def state_dict(self , *args , device = None , **kwargs):
+        return self.ckpt.load_epoch(self.epoch_fix)
+
+class SWABest(SeletedModel):
+    def __init__(self, ckpt : Checkpoints , use : Literal['loss','score'] = 'score' , n_best = 5) -> None:
+        super().__init__(ckpt , use)
         assert n_best > 0, n_best
         self.n_best      = n_best
         self.metric_list = []
         self.candidates  = []
-        self.use         = use
-
-    def assess(self , net : nn.Module , epoch : int , metrics : Metrics):
-        value = getattr(metrics , self.use)
-
+        
+    def assess(self , net : nn.Module , epoch : int , score = 0. , loss = 0.):
+        value = loss if self.use == 'loss' else score
         if len(self.metric_list) == self.n_best :
             arg = np.argmin(self.metric_list) if self.use == 'score' else np.argmax(self.metric_list)
             if (self.metric_list[arg] < value if self.use == 'score' else self.metric_list[arg] > value):
                 self.metric_list.pop(arg)
                 candid = self.candidates.pop(arg)
-                self.ckpt.disjoin(candid)
+                self.ckpt.disjoin(self , candid)
 
         if len(self.metric_list) < self.n_best:
             self.metric_list.append(value)
             self.candidates.append(epoch)
-            self.ckpt.join(epoch , net , '')
+            self.ckpt.join(self , epoch , net)
 
-    def get_module(self , data_loader):
-        for epoch in self.candidates: self.update_sd(self.ckpt.load_epoch(epoch))
-        self.update_bn(data_loader)
-        return self.module
+    def state_dict(self , net , data_loader , *args , **kwargs):
+        swa = SWAModel(net)
+        for epoch in self.candidates: swa.update_sd(self.ckpt.load_epoch(epoch))
+        swa.update_bn(data_loader , getattr(data_loader , 'device' , None))
+        return swa.module.cpu().state_dict()
     
-class SWALast(SWAModel):
-    def __init__(self, module, param, ckpt : SDCheckpoints , device = None, n_last = 5 , 
-                 interval = 3 , use : Literal['loss','score'] = 'score') -> None:
-        super().__init__(module, param, device)
-        self.ckpt        = ckpt
+class SWALast(SeletedModel):
+    def __init__(self, ckpt : Checkpoints , use : Literal['loss','score'] = 'score' ,
+                 n_last = 5 , interval = 3) -> None:
+        super().__init__(ckpt , use)
         assert n_last > 0 and interval > 0, (n_last , interval)
         self.n_last      = n_last
         self.interval    = interval
         self.left_epochs = (n_last // 2) * interval
-
         self.epoch_fix   = -1
-        self.metric_fix  = -10000.
-        
+        self.metric_fix  = None
         self.candidates  = []
-        self.use         = use
 
-    def assess(self , net : nn.Module , epoch : int , metrics : Metrics):
+    def assess(self , net : nn.Module , epoch : int , score = 0. , loss = 0.):
+        value = loss if self.use == 'loss' else score
         old_candidates = self.candidates
-        value = getattr(metrics , self.use)
-        if (self.metric_fix < value if self.use == 'score' else self.metric_fix > value):
+        if self.metric_fix is None or (self.metric_fix < value if self.use == 'score' else self.metric_fix > value):
             self.epoch_fix = epoch
             self.metric_fix = value
         self.candidates = list(range(self.epoch_fix - self.left_epochs , epoch + 1 , self.interval))[:self.n_last]
         for candid in old_candidates:
             if candid >= self.candidates[0]: break
-            self.ckpt.disjoin(candid)
-        self.ckpt.join(epoch , net , '')
+            self.ckpt.disjoin(self , candid)
+        self.ckpt.join(self , epoch , net)
 
-    def get_module(self , data_loader):
-        for epoch in self.candidates: self.update_sd(self.ckpt.load_epoch(epoch))
-        self.update_bn(data_loader)
-        return self.module
+    def state_dict(self , net , data_loader , *args , **kwargs):
+        swa = SWAModel(net)
+        for epoch in self.candidates: swa.update_sd(self.ckpt.load_epoch(epoch))
+        swa.update_bn(data_loader , getattr(data_loader , 'device' , None))
+        return swa.module.cpu().state_dict()
 
 
 

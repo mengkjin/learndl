@@ -4,11 +4,11 @@ from .tra import block_tra , tra_component
 from .rnn import rnn_univariate , rnn_multivariate
 from . import patchTST , modernTCN , TSMixer
 
-def new(module , param = {} , state_dict = None , **kwargs):
+def new(module , param = {} , state_dict = None , device = None , **kwargs):
     net = globals()[module](**param)
     assert isinstance(net , nn.Module) , net.__class__
     if state_dict: net.load_state_dict(state_dict)
-    return net
+    return device(net) if callable(device) else net.to(device)
 
 """
 class TRA_LSTM(TRA):

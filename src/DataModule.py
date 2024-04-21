@@ -179,15 +179,19 @@ class DataModule:
 
         gc.collect() 
         torch.cuda.empty_cache()
+
+    def prev_model_date(self , model_date):
+        prev_dates = [d for d in self.model_date_list if d < model_date]
+        return max(prev_dates) if prev_dates else -1
     
     def train_dataloader(self):
-        return _LoaderDecorator(self , self.loader_dict['train'] , self.device , self.config.verbosity >= 10)
+        return _LoaderDecorator(self , self.loader_dict['train'] , self.device , self.config.verbosity)
     def val_dataloader(self):
-        return _LoaderDecorator(self , self.loader_dict['valid'] , self.device , self.config.verbosity >= 10)
+        return _LoaderDecorator(self , self.loader_dict['valid'] , self.device , self.config.verbosity)
     def test_dataloader(self):
-        return _LoaderDecorator(self , self.loader_dict['test'] , self.device , self.config.verbosity >= 10)
+        return _LoaderDecorator(self , self.loader_dict['test'] , self.device , self.config.verbosity)
     def predict_dataloader(self):
-        return _LoaderDecorator(self , self.loader_dict['test'] , self.device , self.config.verbosity >= 10)
+        return _LoaderDecorator(self , self.loader_dict['test'] , self.device , self.config.verbosity)
 
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         return batch.to(self.device)
@@ -448,10 +452,10 @@ class DataModule:
             return data
         
 class _LoaderDecorator:
-    def __init__(self , data_module : DataModule , raw_loader , device , progress_bar = False , agg = 'mean') -> None:
+    def __init__(self , data_module , raw_loader , device , verbosity = 0) -> None:
         self.data_module = data_module
         self.device = device
-        self.loader = tqdm(raw_loader , total=len(raw_loader)) if progress_bar else raw_loader
+        self.loader = tqdm(raw_loader , total=len(raw_loader)) if verbosity >= 10 else raw_loader
         self.display_text = None
 
     def __len__(self): 
