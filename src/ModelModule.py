@@ -58,8 +58,8 @@ class Predictor:
             if overwrite or not os.path.exists(des_path):
                 subdf.drop(columns='date').set_index(secid_col).to_csv(des_path, sep='\t', index=True, header=False)
 
-    def get_df(self , start_dt = -10 , end_dt = 20991231 , old_model_data = False):
-        self.df = self.predict(start_dt= start_dt , end_dt = end_dt, old_model_data = old_model_data)
+    def get_df(self , start_dt = -10 , end_dt = 20991231):
+        self.df = self.predict(start_dt= start_dt , end_dt = end_dt)
         return self
 
     def df_corr(self , df = None , window = 30 , secid_col = secid_col , date_col = date_col):
@@ -89,7 +89,7 @@ class Predictor:
         require_model_data_old = (start_dt <= today(-100))
 
         data_module_old = DataModule(model_config , predict = False) if require_model_data_old else None
-        data_module_new = DataModule(model_config , predict = True if old_model_data else False) 
+        data_module_new = DataModule(model_config , predict = True) 
 
         end_dt = min(end_dt , max(data_module_new.test_full_dates))
         pred_dates = calendar[(calendar['calendar'] >= start_dt) & (calendar['calendar'] <= end_dt) & (calendar['trade'])]['calendar'].values
@@ -136,6 +136,7 @@ class Predictor:
                                 self.model_name : pred.cpu().numpy().flatten() ,
                             }))
                             df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
+            print(df_list)
             df = pd.concat(df_list , axis = 0)
         del data_module_new , data_module_old
         return df
