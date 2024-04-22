@@ -6,10 +6,10 @@ from torch import nn
 from torch.optim.swa_utils import AveragedModel , update_bn
 from typing import Literal 
 
-from .ckpt import Checkpoints
+from .ckpt import Checkpoint
 
 class FittedModel:
-    def __init__(self, ckpt : Checkpoints , 
+    def __init__(self, ckpt : Checkpoint , 
                  use : Literal['loss','score'] = 'score') -> None:
         self.ckpt   = ckpt
         self.use    = use
@@ -18,17 +18,14 @@ class FittedModel:
     def assess(self , net : nn.Module , epoch : int , score = 0. , loss = 0.):
         '''use score or loss to update assessment'''
         pass
-
     @abstractmethod
-    def state_dict(self , *args , device = None) -> nn.Module | dict:
+    def state_dict(self , *args , device = None) -> nn.Module | dict: 
         '''output the final fitted model state dict'''
         pass
-
     @classmethod
     def get_dict(cls , model_types , *args , **kwargs):
         '''get a dict of FittedModels'''
         return {model_type:cls.get(model_type)(*args , **kwargs) for model_type in model_types}
-
     @staticmethod
     def get(model_type):
         '''get a subclass of FittedModel'''
@@ -60,7 +57,7 @@ class SWAModel:
     def module(self) -> nn.Module: return self.avgmodel.module
 
 class BestModel(FittedModel):
-    def __init__(self, ckpt : Checkpoints , use : Literal['loss','score'] = 'score') -> None:
+    def __init__(self, ckpt : Checkpoint , use : Literal['loss','score'] = 'score') -> None:
         super().__init__(ckpt , use)
         self.epoch_fix  = -1
         self.metric_fix = None
@@ -77,7 +74,7 @@ class BestModel(FittedModel):
         return self.ckpt.load_epoch(self.epoch_fix)
 
 class SWABest(FittedModel):
-    def __init__(self, ckpt : Checkpoints , use : Literal['loss','score'] = 'score' , n_best = 5) -> None:
+    def __init__(self, ckpt : Checkpoint , n_best = 5 , use : Literal['loss','score'] = 'score') -> None:
         super().__init__(ckpt , use)
         assert n_best > 0, n_best
         self.n_best      = n_best
@@ -105,8 +102,8 @@ class SWABest(FittedModel):
         return swa.module.cpu().state_dict()
     
 class SWALast(FittedModel):
-    def __init__(self, ckpt : Checkpoints , use : Literal['loss','score'] = 'score' ,
-                 n_last = 5 , interval = 3) -> None:
+    def __init__(self, ckpt : Checkpoint , n_last = 5 , interval = 3 , 
+                 use : Literal['loss','score'] = 'score') -> None:
         super().__init__(ckpt , use)
         assert n_last > 0 and interval > 0, (n_last , interval)
         self.n_last      = n_last
@@ -130,9 +127,7 @@ class SWALast(FittedModel):
 
     def state_dict(self , net , data_loader , *args , **kwargs):
         swa = SWAModel(net)
-        for epoch in self.candidates: swa.update_sd(self.ckpt.load_epoch(epoch))
+        for epoch in self.candidates: 
+            swa.update_sd(self.ckpt.load_epoch(epoch))
         swa.update_bn(data_loader , getattr(data_loader , 'device' , None))
         return swa.module.cpu().state_dict()
-
-
-

@@ -6,8 +6,7 @@ from logging import handlers , RootLogger
 from ..environ import DIR
 
 class Logger(RootLogger):
-    def __new__(cls):
-        return cls._init_logger()
+    def __new__(cls): return cls._init_logger()
 
     @staticmethod
     def _init_logger(test_output = False):

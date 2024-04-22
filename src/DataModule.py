@@ -76,7 +76,7 @@ class DataModule:
         self.predict : bool = predict
 
         self.device  = Device()
-        self.storage = Storage(self.config.mem_storage)
+        self.storage = Storage('mem' if self.config.mem_storage else 'disk')
 
         self.datas = self.DataInterface.load(self.data_type_list, self.config.labels, self.predict, self.config.precision)
         self.config.update_data_param(self.datas.x)
@@ -165,11 +165,11 @@ class DataModule:
         y = Tensor(self.datas.y.values)[:,d0:d1].squeeze(2)[...,:self.labels_n]
 
         # record y to self to perform buffer_init
-        self.y , _ = self.process_y_data(y , None , None , no_weight = True)
+        self.y , _ = self.standardize_y(y , None , None , no_weight = True)
         self.buffer.process('setup' , self)
 
         valid = self.full_valid_sample(x , self.y , self.step_idx , **self.buffer.get(y_keys))
-        y , w = self.process_y_data(self.y , valid , self.step_idx)
+        y , w = self.standardize_y(self.y , valid , self.step_idx)
 
         self.y[:,self.step_idx] = y[:]
         self.buffer.process('update' , self)
@@ -194,19 +194,16 @@ class DataModule:
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         return batch.to(self.device)
 
-    def full_valid_sample(self , x : dict[str,Tensor] , y : Tensor , index1 : Tensor , **kwargs) -> Tensor:
+    def full_valid_sample(self , x_data : dict[str,Tensor] , y : Tensor , index1 : Tensor , **kwargs) -> Tensor:
         '''
         return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
         x : rolling window non-nan , end non-zero if in k is 'day'
         y : exact point non-nan 
         others : rolling window non-nan , default as self.seqy
         '''
-
-        valid = self.valid_sample(y,index1) if self.stage == 'train' else y[:,index1].clone().fill_(True)
-        for key , value in x.items(): 
-            valid *= self.valid_sample(value , index1 , self.seqs[key] , key in ['day'])
-        for key , value in kwargs.items(): 
-            valid *= self.valid_sample(value , index1 , self.seqs[key])
+        valid = self.valid_sample(y , index1) if self.stage == 'train' else torch.ones(len(y),len(index1)).to(torch.bool)
+        for k , x in x_data.items(): valid *= self.valid_sample(x , index1 , self.seqs[k] , k in ['day'])
+        for k , x in kwargs.items(): valid *= self.valid_sample(x , index1 , self.seqs[k])
         return valid
     
     @staticmethod
@@ -221,7 +218,7 @@ class DataModule:
         
         return (invalid_samp == 0)
      
-    def process_y_data(self , y : Tensor , valid : Optional[Tensor] , index1 : Optional[Tensor] , no_weight = False) -> tuple[Tensor , Optional[Tensor]]:
+    def standardize_y(self , y : Tensor , valid : Optional[Tensor] , index1 : Optional[Tensor] , no_weight = False) -> tuple[Tensor , Optional[Tensor]]:
         '''standardize y and weight'''
         weight_scheme = self.config.weight_scheme(self.stage , no_weight)
         if valid is not None:

@@ -19,8 +19,10 @@ class Pipeline:
     nanloss     : bool = False
     loop_status : Literal['epoch' , 'attempt' , 'model'] = 'epoch'
     times       : dict[str,float] = field(default_factory=dict)
-
-    test_score  : Any = None
+    texts       : dict[str,str]   = field(default_factory=dict)
+    epoch_stage : int = 0
+    model_stage : int = 0
+    test_scores : Any = None
 
     result_path : ClassVar[str] = f'{DIR.result}/model_results.yaml'
 
@@ -38,8 +40,11 @@ class Pipeline:
 
     def fit_stage(self):
         self.stage = 'fit'
-        self.epoch_stage = 0
-        self.model_stage = 0
+        self.logger.critical(self.tic_str('fit'))
+
+    def end_fit_stage(self):
+        self.logger.critical(self.toc_str('fit'))
+        self.epoch_stage = self.model_stage = 0
 
     def set_dataset(self , dataset : Literal['train' , 'valid' , 'test']):
         self.dataset = dataset
@@ -79,6 +84,7 @@ class Pipeline:
 
     def new_fit_model(self , model_num , model_date):
         '''Reset variables of model start'''
+        self.tic('model')
         self.model_num , self.model_date = model_num , model_date
         self.model_stage += 1
 
@@ -163,6 +169,37 @@ class Pipeline:
     def collect_lr(self , last_lr): 
         if self.dataset == 'train': self.lr_list.append(last_lr)
 
+    def test_stage(self):
+        self.logger.critical(self.tic_str('test'))
+        self.logger.warning('Each Model Date Testing Mean Score({}):'.format(
+            self.config.train_param['criterion']['score']))
+        self.stage = 'test'
+        self.test_record = self.TestRecord(self.config.model_num_list , self.config.output_types , self.logger.info)
+        self.test_record.print_colnames()
+
+    def new_test_model(self , model_num , model_date , test_dates):
+        self.model_date , self.model_num , self.test_dates = model_date , model_num , test_dates
+        if model_num == 0: self.test_record.add_rows(model_date , test_dates)
+
+    def update_test_score(self , model_type):
+        self.test_record.update_score(self.model_num , model_type , self.scores[-len(self.test_dates):])
+
+    def end_test_model(self):
+        if self.model_num == self.test_record.model_nums[-1]:
+            self.test_record.print_score()
+            gc.collect()
+
+    def end_test_stage(self):
+        # date ic writed down
+        for model_num in self.config.model_num_list:
+            df = self.test_record.score_table(model_num)
+            df.to_csv(self.config.model_param[model_num]['path'] + f'/{self.config.model_name}_score_by_date_{model_num}.csv')
+        df = self.test_record.summarize()
+        df.to_csv(f'{self.config.model_base_path}/{self.config.model_name}_score_by_model.csv')
+        self.test_record.print_summary()
+        self.test_scores = self.test_record.test_scores()
+        self.logger.critical(self.toc_str('test'))
+
     def tic(self , key : str): self.times[key] = time.time()
 
     def tic_str(self , key : str):
@@ -191,7 +228,7 @@ class Pipeline:
             '5_dates' : '-'.join([str(self.config.beg_date),str(self.config.end_date)]),
             '6_fit'   : self.texts.get('fit'),
             '7_test'  : self.texts.get('test'),
-            '8_result': self.test_score,
+            '8_result': self.test_scores,
         }
         DIR.dump_yaml(result , self.result_path)
 
@@ -229,12 +266,16 @@ class Pipeline:
         model_types : list
         printer : Callable = print
 
+        summary_rname : ClassVar[dict[str,str]] = {'Avg':'AllTimeAvg','Sum':'AllTimeSum','Std':'Std','T':'TValue','IR':'AnnIR'}
+        summary_digit : ClassVar[dict[str,int]] = {'Avg':4,'Sum':2,'Std':4,'T':2,'IR':4}
+
         def __post_init__(self):
             self.n_num = len(self.model_nums)
             self.n_type = len(self.model_types)
             self.n_col = self.n_num * self.n_type
             self.col_num  = np.repeat(self.model_nums , self.n_type).astype(str)
             self.col_type = np.tile(self.model_types , self.n_num).astype(str)
+            self.col_summary = [f'{mn}.{mt}' for mn,mt in zip(self.col_num , self.col_type)]
 
             self.n_date  = 0
             self.n_model = 0
@@ -258,17 +299,16 @@ class Pipeline:
             self.score_by_model[-1,col] = np.nanmean(scores)
 
         def summarize(self):
-            self.summary = {
-                'AllTimeAvg' : (score_mean := np.nanmean(self.score_by_date , axis = 0)) , 
-                'AllTimeSum' : np.nansum(self.score_by_date  , axis = 0) , 
-                'Std'        : (score_std  := np.nanstd(self.score_by_date  , axis = 0)), 
-                'TValue'     : score_mean / score_std * (len(self.score_by_date)**0.5), 
-                'AnnIR'      : score_mean / score_std * ((240 / 10)**0.5) ,
+            self.summary : dict[str,np.ndarray] = {
+                'Avg' : (score_mean := np.nanmean(self.score_by_date , axis = 0)) , 
+                'Sum' : np.nansum(self.score_by_date  , axis = 0) , 
+                'Std' : (score_std  := np.nanstd(self.score_by_date  , axis = 0)), 
+                'T'   : score_mean / score_std * (len(self.score_by_date)**0.5), 
+                'IR'  : score_mean / score_std * ((240 / 10)**0.5) ,
             }
-            df = pd.DataFrame(np.concatenate([self.score_by_model , np.stack(list(self.summary.values()))]) , 
-                              index = [str(d) for d in self.row_model] + list(self.summary.keys()) , 
-                              columns = [f'{mn}.{mt}' for mn,mt in zip(self.model_nums , self.model_types)])
-            return df
+            values = np.concatenate([self.score_by_model , np.stack(list(self.summary.values()))])
+            index  = [str(d) for d in self.row_model] + [self.summary_rname[k] for k in self.summary.keys()]
+            return pd.DataFrame(values , index = index , columns = self.col_summary)
 
         def print_colnames(self):
             self.print_row('Models' , self.col_num)
@@ -278,43 +318,20 @@ class Pipeline:
             self.print_row(self.row_model[-1] , self.score_by_model[-1,:] , 4)
 
         def print_summary(self):
-            [self.print_row(key , value , digits) for (key , value) , digits in zip(self.summary , [4,2,4,2,4])]
+            [self.print_row(self.summary_rname[k],v,self.summary_digit[k]) for k,v in self.summary.items()]
 
-        def print_row(self , row , values , digits = 2):
-            fmt = 's' if isinstance(values[0] , str) else (f'd' if digits == 0 else f'.{digits}f')
+        def print_row(self , row , values , digit = 2):
+            fmt = 's' if isinstance(values[0] , str) else (f'd' if digit == 0 else f'.{digit}f')
             self.printer(('{: <11s}'+('{: >8'+fmt+'}')*len(values)).format(str(row) , *values))
 
         def score_table(self , model_num):
-            date_str = np.array(list(map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , self.row_date)))
-            df = pd.DataFrame({'dates' : self.row_date} , index = date_str)
+            df = pd.DataFrame({'dates' : self.row_date} , 
+                              index = list(map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , self.row_date.astype(str))))
             for i , model_type in enumerate(self.model_types):
                 df[f'score.{model_type}'] = self.score_by_date[:,model_num * self.n_type  + i]
                 df[f'cum_score.{model_type}'] = np.nancumsum(self.score_by_date[:,model_num * self.n_type  + i])
             return df
-
-    def test_stage(self):
-        self.stage = 'test'
-        self.test_record = self.TestRecord(self.config.model_num_list , self.config.output_types , self.logger.info)
-        self.test_record.print_colnames()
-
-    def new_test_model(self , model_date , model_num , test_dates):
-        self.model_date , self.model_num , self.test_dates = model_date , model_num , test_dates
-        if model_num == 0: self.test_record.add_rows(self.model_date , self.test_dates)
-
-    def update_test_score(self , model_type):
-        self.test_record.update_score(self.model_num , model_type , self.scores[-len(self.test_dates):])
-
-    def end_test_model(self):
-        if self.model_num == self.test_record.model_nums[-1]:
-            self.test_record.print_score()
-            gc.collect()
-
-    def end_test_stage(self):
-        # date ic writed down
-        for model_num in self.config.model_num_list:
-            df = self.test_record.score_table(model_num)
-            df.to_csv(self.config.model_param[model_num]['path'] + f'/{self.config.model_name}_score_by_date_{model_num}.csv')
-        df = self.test_record.summarize()
-        df.to_csv(f'{self.config.model_base_path}/{self.config.model_name}_score_by_model.csv')
-        self.test_record.print_summary()
-        self.test_score = {k:round(v , 4) for k,v in zip(df.columns , df.loc['AllTimeSum'].values)}
+        
+        def test_scores(self):
+            return {col:'|'.join([f'{k}({round(v[i],self.summary_digit[k])})' for k,v in self.summary.items()]) 
+                    for i , col in enumerate(self.col_summary)}

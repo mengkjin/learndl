@@ -3,12 +3,13 @@ import numpy as np
 import pandas as pd
 
 from copy import deepcopy
+from typing import Literal
 
 from ..environ import DIR
 
 class Storage:
-    def __init__(self , mem_storage : bool = False):
-        self.memdisk = {} if mem_storage else None
+    def __init__(self , store_type : Literal['mem' , 'disk'] = 'disk'):
+        self.memdisk = {} if store_type == 'mem' else None
         self.records = pd.DataFrame(columns = ['path' , 'group'] , dtype = str)
 
     @property

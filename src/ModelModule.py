@@ -4,39 +4,29 @@
 # @Author : Mathew Jin
 # @File : ${run_model.py}
 # chmod +x run_model.py
-# python3 scripts/run_model3.py --process=0 --resume=0 --checkname=1 
-
-import torch
+# python3 scripts/run_model3.py --stage=0 --resume=0 --checkname=1 
+import itertools , os
 import numpy as np
 import pandas as pd
-import itertools , os
+import torch
 
-from copy import deepcopy
-from dataclasses import dataclass , field
-from torch import nn , Tensor
-from typing import Any , ClassVar , Literal , Optional
+from dataclasses import dataclass
+from torch import nn , no_grad , Tensor
+from typing import ClassVar , Literal , Optional
 
-import util as U
 from .environ import DIR
-
+from . import util as U
 from .data.DataFetcher import DataFetcher
 from .DataModule import BatchData , DataModule
-from .util.trainer import pipeline as TRAIN # TrainerUtil
-from .util import optim as OPTIM # TrainerUtil
 from .model import model as MODEL
-
 from .func.date import today , date_offset
-from .func import list_converge
-
-
-# from audtorch.metrics.functional import *
 
 logger = U.Logger()
 config = U.TrainConfig()
 
 @dataclass
 class Predictor:
-    '''for any model to predict recent/history data'''
+    '''for a model to predict recent/history data'''
     model_name : str
     model_type : Literal['best' , 'swalast' , 'swabest'] = 'swalast'
     model_num  : int = 0
@@ -108,7 +98,7 @@ class Predictor:
             'calculated' : 0 ,
         })
 
-        with torch.no_grad():
+        with no_grad():
             df_list = []
             for data_module in [data_module_old , data_module_new]:
                 if data_module is None: continue
@@ -163,7 +153,7 @@ class ModelTestor:
 
     def try_forward(self) -> None:
         '''as name says, try to forward'''
-        if isinstance(self.batch_data.x , torch.Tensor):
+        if isinstance(self.batch_data.x , Tensor):
             print(f'x shape is {self.batch_data.x.shape}')
         else:
             print(f'multiple x of {len(self.batch_data.x)}')
@@ -183,50 +173,50 @@ class ModelTestor:
         print(f'Test Metrics Success')
 
 class ModelTrainer():
-    '''Control the whole process of training'''
+    '''run through the whole process of training'''
     default_model_type = 'best'
 
     def __init__(self , timer = True ,  **kwargs):
         self.pipe           = U.Pipeline(config , logger)
         self.ptimer         = U.time.PTimer(timer)
-        self.checkpoint     = U.Checkpoints(config.mem_storage) # state_dict checkpoint
-        self.deposition     = U.Checkpoints(False)              # state_dict deposition
+        self.checkpoint     = U.Checkpoint('mem' if config.mem_storage else 'disk')
+        self.deposition     = U.Checkpoint('disk')
         self.device         = U.Device()
         self.metrics        = U.Metrics(config.train_param['criterion'])
 
     def main_process(self):
-        '''Main stage of load_data + fit + test'''
-        for self.stage in config.stage_queue:
-            getattr(self , f'process_{self.stage}')()
+        '''Main stage of data & fit & test'''
+        for self.stage in config.stage_queue: 
+            getattr(self , f'stage_{self.stage}')()
         self.pipe.dump_info()
         self.ptimer.print()
     
-    def process_data(self):
-        '''Main process of loading model data'''
+    def stage_data(self):
+        '''stage of loading model data'''
         logger.critical(self.pipe.tic_str('data'))
         self.data_module = DataModule(config)
         logger.critical(self.pipe.toc_str('data'))
         
-    def process_fit(self):
-        '''Main process of fitting'''
-        self.process_fit_start()
+    def stage_fit(self):
+        '''stage of fitting'''
+        self.stage_fit_start()
         for self.model_date , self.model_num in self.model_iter():
             self.model_fit_start()
             self.model_fit_body()
             self.model_fit_end()
-        self.process_fit_end()
+        self.stage_fit_end()
 
-    def process_test(self):
-        '''Main process of testing'''
-        self.process_test_start()
+    def stage_test(self):
+        '''stage of testing'''
+        self.stage_test_start()
         for self.model_date , self.model_num in self.model_iter():
             self.model_test_start()
             self.model_test_body()
             self.model_test_end()
-        self.process_test_end()
+        self.stage_test_end()
 
     def model_iter(self):
-        '''Iteration of model_date and model_num , considering resume_training'''
+        '''iter of model_date and model_num , considering resume_training'''
         new_iter = list(itertools.product(self.data_module.model_date_list , config.model_num_list))
         if config.resume_training and self.stage == 'fit':
             models_trained = np.full(len(new_iter) , True)
@@ -237,30 +227,25 @@ class ModelTrainer():
             new_iter = U.Filtered(new_iter , ~models_trained)
         return new_iter
     
-    def process_fit_start(self):
-        '''to do at process fit start'''
-        logger.critical(self.pipe.tic_str('fit'))
+    def stage_fit_start(self):
+        '''to do at stage fit start'''
+        self.pipe.fit_stage()
         self.data_module.reset_dataloaders()
         config.Model.save(config.model_base_path)
-        self.pipe.fit_stage()
         self.model_type = 'best'
 
-    def process_fit_end(self):
-        '''to do at process fit end'''
-        logger.critical(self.pipe.toc_str('fit'))
+    def stage_fit_end(self):
+        '''to do at stage fit end'''
+        self.pipe.end_fit_stage()
 
     def model_fit_start(self):
         '''to do when starting fit of one model'''
         with self.ptimer(f'{self.stage}/start'):
-            self.pipe.tic('model')
+            self.param = config.model_param[self.model_num]
+            self.data_module.setup('fit' , self.param , self.model_date)
             self.pipe.new_fit_model(self.model_num , self.model_date)
 
-            self.param = config.model_param[self.model_num]
             self.metrics.new_model(self.param , config)
-            self.checkpoint.new_model(self.param , self.model_date)
-
-            self.data_module.setup('fit' , self.param , self.model_date)
-            self.model_dict = U.FittedModel.get_dict(config.output_types , self.checkpoint)
 
     def model_fit_body(self):
         '''main method of fitting one model'''
@@ -268,21 +253,24 @@ class ModelTrainer():
             self.model_fit_loop_start()
             self.model_fit_loop_body()
             self.model_fit_loop_assess()
+            self.model_fit_loop_end()
 
     def model_fit_loop_start(self):
         '''on new attempt, initialize net , optimizer(scheduler)'''
         with self.ptimer(f'{self.stage}/loop_start'):
             self.pipe.new_loop()
             if self.pipe.loop_status == 'attempt':
+                self.checkpoint.new_model(self.param , self.model_date)
+                self.model_dict = U.FittedModel.get_dict(config.output_types , self.checkpoint)
                 self.load_model(True)
-                self.optimizer = OPTIM.Optimizer(self.net , config , self.transferred , self.pipe.attempt)
+                self.optimizer = U.optim.Optimizer(self.net , config , self.transferred , self.pipe.attempt)
 
     def model_fit_loop_body(self):
         '''go through train/val dataset, calculate loss/score , update values'''
         with self.ptimer(f'{self.stage}/train_loader'):
             self.loop_dataloader('train')
         
-        with self.ptimer(f'{self.stage}/valid_loader') , torch.no_grad():
+        with self.ptimer(f'{self.stage}/valid_loader') , no_grad():
             self.loop_dataloader('valid')
 
         self.print_progress(self.optimizer.step(self.pipe.epoch))
@@ -311,37 +299,31 @@ class ModelTrainer():
             self.pipe.end_fit_model()
             self.print_progress('model_end')
 
-    def process_test_start(self):
-        '''to do at process test start'''
-        logger.critical(self.pipe.tic_str('test'))
-        self.data_module.reset_dataloaders()
-        logger.warning('Each Model Date Testing Mean Score({}):'.format(config.train_param['criterion']['score']))
+    def stage_test_start(self):
+        '''to do at stage test start'''
         self.pipe.test_stage()
+        self.data_module.reset_dataloaders()
 
-    def process_test_end(self):
-        '''to do at process test end'''
+    def stage_test_end(self):
+        '''to do at stage test end'''
         self.pipe.end_test_stage()
-        logger.critical(self.pipe.toc_str('test'))
 
     def model_test_start(self):
         '''to do at test start on every model'''
         with self.ptimer(f'{self.stage}/start'):
-            self.pipe.new_test_model(self.model_num , self.model_date , self.data_module.model_test_dates)
-
+            if not self.deposition.exists(self.model_path(self.model_date)): 
+                self.model_fit_start()
+                self.model_fit_body()
+                self.model_fit_end()
+            
             self.param = config.model_param[self.model_num]
+            self.data_module.setup('test' , self.param , self.model_date)
+            self.pipe.new_test_model(self.model_num , self.model_date , self.data_module.model_test_dates)
             self.metrics.new_model(self.param , config)
-            self.checkpoint.new_model(self.param , self.model_date)
 
-            self.data_module.setup('test' , self.param , self.model_date)   
-                            
     def model_test_body(self):
         '''to do at on every model'''
-        if not self.deposition.exists(self.model_path(self.model_date)): 
-            self.model_fit_start()
-            self.model_fit_body()
-            self.model_fit_end()
-        
-        with self.ptimer(f'{self.stage}/forecast') , torch.no_grad():
+        with self.ptimer(f'{self.stage}/forecast') , no_grad():
             test_dates = np.concatenate([self.data_module.early_test_dates , self.data_module.model_test_dates])
             for self.model_type in config.output_types:
                 self.load_model(False , self.model_type)
@@ -380,7 +362,7 @@ class ModelTrainer():
     def forward(self):
         with self.ptimer(f'{self.stage}/{self.dataset}/forward'):
             if self.batch_data.is_empty: 
-                self.net_output = U.trainer.Output(torch.Tensor().requires_grad_())
+                self.net_output = U.trainer.Output(Tensor().requires_grad_())
             else:
                 getattr(self.net , 'dynamic_data_assign' , lambda *x:None)(self)
                 self.net_output = U.trainer.Output(self.net(self.batch_data.x))
@@ -400,22 +382,22 @@ class ModelTrainer():
     def penalty_kwargs(self) -> dict:
         return {'net' : self.net , 'hidden' : self.net_output.hidden() , 'label' : self.batch_data.y}
     
-    def print_progress(self , key , sdout = None) -> None:
+    def print_progress(self , key , sdout = None):
         '''Print out status giving display conditions and looping conditions'''
         if key is None: return
         printers = [logger.info] if (config.verbosity > 2 or self.pipe.initial_models) else [logger.debug]
         if key == 'model_end':
-            sdout = '{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.pipe.texts)
             printers = [logger.warning]
+            sdout = '{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.pipe.texts)
         elif key == 'epoch_step':
-            if self.pipe.epoch_print: sdout = '{attempt} {epoch} : {trainer}'.format(**self.pipe.texts)
-        elif key == 'reset_learn_rate':
-            sdout = f'Reset learn rate and scheduler at the end of epoch {self.pipe.epoch} , effective at epoch {self.pipe.epoch+1}' + \
-                ', and will speedup2x' * config.train_param['trainer']['learn_rate']['reset']['speedup2x']
+            if self.pipe.epoch_print: sdout = '{attempt} {epoch} : {status}'.format(**self.pipe.texts)
         elif key == 'new_attempt':
             sdout = '{attempt} {epoch} : {status}, Next attempt goes!'.format(**self.pipe.texts)
-        else:
-            raise KeyError(key)
+        elif key == 'reset_learn_rate':
+            sdout = f'Reset learn rate and scheduler at the end of epoch {self.pipe.epoch} ,' + \
+                f' effective at epoch {self.pipe.epoch+1}' + \
+                ', and will speedup2x' * config.train_param['trainer']['learn_rate']['reset']['speedup2x']
+        else: raise KeyError(key)
         if sdout is not None: [prt(sdout) for prt in printers]
     
     def load_model(self , training : bool , model_type = default_model_type):
@@ -455,10 +437,10 @@ class ModelTrainer():
     def assert_equity(a , b): assert a == b , (a , b)
 
     @classmethod
-    def fit(cls , process = -1 , resume = -1 , checkname = -1 , timer = False , parser_args = None):
-        if parser_args is None: parser_args = config.parser_args({'process':process,'resume':resume,'checkname':checkname})
+    def fit(cls , stage = -1 , resume = -1 , checkname = -1 , timer = False , parser_args = None):
+        if parser_args is None: parser_args = config.parser_args({'stage':stage,'resume':resume,'checkname':checkname})
 
-        config.reload(do_process=True,par_args=parser_args)
+        config.reload(do_parser = True , par_args = parser_args)
         config.set_config_environment()
 
         logger.warning('Model Specifics:')

@@ -3,7 +3,7 @@ from . import (
 )
 
 from .trainer.pipeline import Pipeline
-from .trainer.ckpt import Checkpoints
+from .trainer.ckpt import Checkpoint
 from .trainer.model import FittedModel
 from .loader import DataloaderStored
 from .metric import Metrics , AggMetrics

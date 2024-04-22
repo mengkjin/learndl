@@ -192,8 +192,8 @@ class TrainConfig:
         for k,v in kwargs.items():  setattr(self , k , v)
         return self
 
-    def reload(self , config_path = 'default' , do_process = False , par_args = {} , override = None):
-        new_config = self.load(config_path,do_process,par_args,override)
+    def reload(self , config_path = 'default' , do_parser = False , par_args = {} , override = None):
+        new_config = self.load(config_path,do_parser,par_args,override)
         self.__dict__ = new_config.__dict__
         return self
     
@@ -211,18 +211,14 @@ class TrainConfig:
         self.Model.update_data_param(x_data)
     
     @classmethod
-    def load(cls , config_path = 'default' , do_process = False , par_args = {} , override = None , makedir = True):
-        """
-        1. namespace type of config
-        2. Ask what process would anyone want to run : 0 : train & test(default) , 1 : train only , 2 : test only
-        """
-
+    def load(cls , config_path = 'default' , do_parser = False , par_args = {} , override = None , makedir = True):
+        '''load config yaml to get default/giving params'''
         model_name = None if config_path == 'default' else os.path.basename(config_path)
         _TrainParam = TrainParam(config_path , model_name = model_name , override = override)
         _ModelParam = ModelParam(config_path , _TrainParam.model_module)
 
         config = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
-        if do_process: config.process_parser(par_args)
+        if do_parser: config.process_parser(par_args)
 
         model_path = config.model_base_path
         if config_path != 'default':
@@ -305,15 +301,15 @@ class TrainConfig:
     @classmethod
     def parser_args(cls , input = {} , description='manual to this script'):
         parser = argparse.ArgumentParser(description=description)
-        for arg in ['process' , 'resume' , 'checkname']:
+        for arg in ['stage' , 'resume' , 'checkname']:
             parser.add_argument(f'--{arg}', type=int, default = input.get(arg , -1))
         args , _ = parser.parse_known_args()
         return args
 
-    def parser_process(self , value = -1):
+    def parser_stage(self , value = -1):
         if value < 0:
-            print(f'--What process would you want to run? 0: all, 1: train only (default), 2: test only')
-            value = int(input(f'[0,all] , [1,train] , [2,test]'))
+            print(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
+            value = int(input(f'[0,fit+test] , [1,fit] , [2,test]'))
         stage_queue = ['data' , 'fit' , 'test']
         if value == 0:
             pass
@@ -389,7 +385,7 @@ class TrainConfig:
         self.Train.model_name = model_name
 
     def process_parser(self , par_args = {}):
-        self.parser_process(getattr(par_args , 'process' , -1))
+        self.parser_stage(getattr(par_args , 'stage' , -1))
         self.parser_resume(getattr(par_args , 'resume' , -1))
         self.parser_select(getattr(par_args , 'checkname' , -1)) 
         return self

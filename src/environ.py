@@ -18,7 +18,6 @@ class CustomDirSpace:
     conf        : str = os.path.join(MAIN_DIR , 'configs')
     logs        : str = os.path.join(MAIN_DIR , 'logs')
     model       : str = os.path.join(MAIN_DIR , 'model')
-    instance    : str = os.path.join(MAIN_DIR , 'instance')
     result      : str = os.path.join(MAIN_DIR , 'result')
 
     def __post_init__(self):
