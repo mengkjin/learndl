@@ -1,4 +1,4 @@
-import logging , os , time
+import gc , logging , os , time
 import numpy as np
 import pandas as pd
 import torch
@@ -36,8 +36,8 @@ class Pipeline:
 
     def get(self , key , default = None): return self.__dict__.get(key , default)
 
-    def set_stage(self , stage : Literal['data' , 'fit' , 'test']):
-        self.stage = stage
+    def fit_stage(self):
+        self.stage = 'fit'
         self.epoch_stage = 0
         self.model_stage = 0
 
@@ -77,7 +77,7 @@ class Pipeline:
 
         self.new_epoch()
 
-    def new_model(self , model_num , model_date):
+    def new_fit_model(self , model_num , model_date):
         '''Reset variables of model start'''
         self.model_num , self.model_date = model_num , model_date
         self.model_stage += 1
@@ -89,7 +89,7 @@ class Pipeline:
         self.texts['model'] = '{:s} #{:d} @{:4d}'.format(self.config.model_name , self.model_num , self.model_date)
         self.loop_status = 'attempt'
 
-    def end_model(self):
+    def end_fit_model(self):
         self.texts['status'] = 'Train{: .4f} Valid{: .4f} BestVal{: .4f}'.format(
             self.train_score , self.valid_score , self.score_attempt_best)
         self.texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
@@ -223,70 +223,98 @@ class Pipeline:
     def epoch_print(self):
         return self.epoch % [10,5,5,3,3,1][min(self.config.verbosity // 2 , 5)] == 0
     
-@dataclass
-class TestResult:
-    config : TrainConfig
-    logger : logging.Logger
+    @dataclass
+    class TestRecord:
+        model_nums : list
+        model_types : list
+        printer : Callable = print
 
-    def __post_init__(self):
-        self.n_nums      = len(self.config.model_num_list)
-        self.n_types     = len(self.config.output_types)
-        self.model_nums  = np.repeat(self.config.model_num_list, self.n_types)
-        self.model_types = np.tile(self.config.output_types, self.n_nums)
-        self.ncols = self.n_nums * self.n_types
+        def __post_init__(self):
+            self.n_num = len(self.model_nums)
+            self.n_type = len(self.model_types)
+            self.n_col = self.n_num * self.n_type
+            self.col_num  = np.repeat(self.model_nums , self.n_type).astype(str)
+            self.col_type = np.tile(self.model_types , self.n_num).astype(str)
 
-        self.score_by_date  = np.empty((0,self.ncols))
-        self.score_by_model = np.empty((0,self.ncols))
-        
-        self.print_table_row('Models' , self.model_nums , 0)
-        self.print_table_row('Output' , self.model_types)
+            self.n_date  = 0
+            self.n_model = 0
+            self.row_date  = np.array([]).astype(int)
+            self.row_model = np.array([]).astype(int)
+            self.score_by_date  = np.empty((self.n_date , self.n_col))
+            self.score_by_model = np.empty((self.n_model, self.n_col))
 
-    def new_model(self , model_date , model_num , test_dates):
+        def add_rows(self , model , dates):
+            if isinstance(model , int): model = [model]
+            self.n_date += len(dates)
+            self.n_model += 1
+            self.row_date  = np.concatenate([self.row_date  , dates])
+            self.row_model = np.concatenate([self.row_model  , [model]])
+            self.score_by_date  = np.concatenate([self.score_by_date  , np.zeros((len(dates) , self.n_col))])
+            self.score_by_model = np.concatenate([self.score_by_model , np.zeros((1 , self.n_col))])
+
+        def update_score(self , model_num , model_type , scores):
+            col = model_num * self.n_type + self.model_types.index(model_type)
+            self.score_by_date[-len(scores):, col] = np.nan_to_num(scores)
+            self.score_by_model[-1,col] = np.nanmean(scores)
+
+        def summarize(self):
+            self.summary = {
+                'AllTimeAvg' : (score_mean := np.nanmean(self.score_by_date , axis = 0)) , 
+                'AllTimeSum' : np.nansum(self.score_by_date  , axis = 0) , 
+                'Std'        : (score_std  := np.nanstd(self.score_by_date  , axis = 0)), 
+                'TValue'     : score_mean / score_std * (len(self.score_by_date)**0.5), 
+                'AnnIR'      : score_mean / score_std * ((240 / 10)**0.5) ,
+            }
+            df = pd.DataFrame(np.concatenate([self.score_by_model , np.stack(list(self.summary.values()))]) , 
+                              index = [str(d) for d in self.row_model] + list(self.summary.keys()) , 
+                              columns = [f'{mn}.{mt}' for mn,mt in zip(self.model_nums , self.model_types)])
+            return df
+
+        def print_colnames(self):
+            self.print_row('Models' , self.col_num)
+            self.print_row('Output' , self.col_type)
+
+        def print_score(self):
+            self.print_row(self.row_model[-1] , self.score_by_model[-1,:] , 4)
+
+        def print_summary(self):
+            [self.print_row(key , value , digits) for (key , value) , digits in zip(self.summary , [4,2,4,2,4])]
+
+        def print_row(self , row , values , digits = 2):
+            fmt = 's' if isinstance(values[0] , str) else (f'd' if digits == 0 else f'.{digits}f')
+            self.printer(('{: <11s}'+('{: >8'+fmt+'}')*len(values)).format(str(row) , *values))
+
+        def score_table(self , model_num):
+            date_str = np.array(list(map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , self.row_date)))
+            df = pd.DataFrame({'dates' : self.row_date} , index = date_str)
+            for i , model_type in enumerate(self.model_types):
+                df[f'score.{model_type}'] = self.score_by_date[:,model_num * self.n_type  + i]
+                df[f'cum_score.{model_type}'] = np.nancumsum(self.score_by_date[:,model_num * self.n_type  + i])
+            return df
+
+    def test_stage(self):
+        self.stage = 'test'
+        self.test_record = self.TestRecord(self.config.model_num_list , self.config.output_types , self.logger.info)
+        self.test_record.print_colnames()
+
+    def new_test_model(self , model_date , model_num , test_dates):
         self.model_date , self.model_num , self.test_dates = model_date , model_num , test_dates
-        if model_num == 0:
-            score_date  = np.zeros((len(test_dates) , self.ncols))
-            score_model = np.zeros((1 , self.ncols))
-            self.score_by_date  = np.concatenate([self.score_by_date  , score_date])
-            self.score_by_model = np.concatenate([self.score_by_model , score_model])
+        if model_num == 0: self.test_record.add_rows(self.model_date , self.test_dates)
 
-    def record_metric(self , model_type , scores):
-        col = self.model_num * self.n_types + self.config.output_types.index(model_type)
-        self.score_by_date[-len(self.test_dates):, col] = np.nan_to_num(scores[-len(self.test_dates):])
+    def update_test_score(self , model_type):
+        self.test_record.update_score(self.model_num , model_type , self.scores[-len(self.test_dates):])
 
-    def end_model(self):
-        if self.model_num == self.config.model_num_list[-1]:
-            self.score_by_model[-1,:] = np.nanmean(self.score_by_date[-len(self.test_dates):,],axis = 0)
-            self.print_table_row(self.model_date , self.score_by_model[-1,:] , 4)
+    def end_test_model(self):
+        if self.model_num == self.test_record.model_nums[-1]:
+            self.test_record.print_score()
+            gc.collect()
 
-    def write_result(self , test_dates):
+    def end_test_stage(self):
         # date ic writed down
         for model_num in self.config.model_num_list:
-            date_str = np.array(list(map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , test_dates)))
-            df = pd.DataFrame({'dates' : test_dates} , index = date_str)
-
-            for i , model_type in enumerate(self.config.output_types):
-                df[f'score.{model_type}'] = self.score_by_date[:,model_num * self.n_types  + i]
-                df[f'cum_score.{model_type}'] = np.nancumsum(self.score_by_date[:,model_num * self.n_types  + i])
+            df = self.test_record.score_table(model_num)
             df.to_csv(self.config.model_param[model_num]['path'] + f'/{self.config.model_name}_score_by_date_{model_num}.csv')
-
-    def end(self , model_dates):
-        # model ic presentation
-        add_row_key   = ['AllTimeAvg' , 'AllTimeSum' , 'Std'      , 'TValue'   , 'AnnIR']
-        score_mean   = np.nanmean(self.score_by_date , axis = 0)
-        score_sum    = np.nansum(self.score_by_date  , axis = 0) 
-        score_std    = np.nanstd(self.score_by_date  , axis = 0)
-        score_tvalue = score_mean / score_std * (len(self.score_by_date)**0.5) # 10 days return predicted
-        score_annir  = score_mean / score_std * ((240 / 10)**0.5) # 10 days return predicted
-        add_row_value = (score_mean , score_sum , score_std , score_tvalue , score_annir)
-        df = pd.DataFrame(np.concatenate([self.score_by_model , np.stack(add_row_value)]) , 
-                          index   = [str(d) for d in model_dates] + add_row_key , 
-                          columns = [f'{mn}.{mt}' for mn,mt in zip(self.model_nums , self.model_types)])
+        df = self.test_record.summarize()
         df.to_csv(f'{self.config.model_base_path}/{self.config.model_name}_score_by_model.csv')
-        for i , digits in enumerate([4,2,4,2,4]):
-            self.print_table_row(add_row_key[i] , add_row_value[i] , digits)
-
-    def print_table_row(self , rowname , values , digits = 2):
-        fmt = 's' if isinstance(values[0] , str) else (f'd' if digits == 0 else f'.{digits}f')
-        self.logger.info(('{: <11s}'+('{: >8'+fmt+'}')*len(values)).format(str(rowname) , *values))
-
-
+        self.test_record.print_summary()
+        self.test_score = {k:round(v , 4) for k,v in zip(df.columns , df.loc['AllTimeSum'].values)}
