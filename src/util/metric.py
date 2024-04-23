@@ -4,7 +4,7 @@ import pandas as pd
 import torch
 
 from dataclasses import dataclass , field
-from torch import nn , Tensor
+from torch import nn , no_grad , Tensor
 from typing import Any , Literal , Optional
 
 from ..func import mse , pearson , ccc , spearman
@@ -43,15 +43,15 @@ class Metrics:
         self.f_pen.get('tra_opt_transport',{})['cond'] = config.tra_model
         return self
     
-    def calculate(self , dataset : Literal['train' , 'valid' , 'test'] , 
-                  label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , net : Optional[nn.Module] = None , 
+    def calculate(self , dataset , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , net : Optional[nn.Module] = None , 
                   penalty_kwargs : dict[str,Any] = {} , assert_nan = False):
         '''Calculate loss(with gradient), penalty , score'''
+        assert dataset in ['train','valid','test']
         if label.shape != pred.shape: # if more label than output
             label = label[...,:pred.shape[-1]]
             assert label.shape == pred.shape , (label.shape , pred.shape)
 
-        with torch.no_grad():
+        with no_grad():
             score = self.f_score(label , pred , weight , nan_check = (dataset == 'test') , first_col = True).item()
 
         if dataset == 'train':
@@ -210,7 +210,7 @@ def _shoot_infs(inp_tensor):
 
 def _sinkhorn(Q, n_iters=3, epsilon=0.01):
     # epsilon should be adjusted according to logits value's scale
-    with torch.no_grad():
+    with no_grad():
         Q = _shoot_infs(Q)
         Q = torch.exp(Q / epsilon)
         for i in range(n_iters):
@@ -230,7 +230,7 @@ class AggMetrics:
     def record(self , metrics): 
         [self._record[m].record(metrics) for m in ['loss','score']]
     def collect(self):
-        df = pd.DataFrame([*self._params , self.loss , self.score] , columns=['dataset','model_num','model_date','model_type','epoch','loss','score'])
+        df = pd.DataFrame([[*self._params , self.loss , self.score]] , columns=['dataset','model_num','model_date','model_type','epoch','loss','score'])
         self.table = df if self.table is None else pd.concat([self.table , df]).reindex()
     @property
     def nanloss(self): return self._record['loss'].any_nan()
@@ -247,7 +247,7 @@ class AggMetrics:
         name : str
         type : str
         values : list[Any] = field(default_factory=list) 
-        def __post_init__(self): assert type in ['loss' , 'score']
+        def __post_init__(self): assert self.type in ['loss' , 'score']
         def record(self , metrics : Metrics): self.values.append(metrics.loss_item if self.type == 'loss' else metrics.score)
         def last(self): self.values[-1]
         def mean(self): return np.mean(self.values)

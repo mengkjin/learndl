@@ -1,26 +1,23 @@
 import os
 
-from torch import nn
 from typing import Any , Literal
 from ..store import Storage
 
 class Checkpoint(Storage):
-    ''''''
+    '''model check point for epochs'''
     def __init__(self, store_type: Literal['mem' , 'disk']):
         super().__init__(store_type)
-        self.epoch_queue : list[list]   = []
-        self.join_record : list[str] = [] 
+        self.epoch_queue : list[list] = []
+        self.join_record : list[str]  = [] 
 
     def new_model(self , model_param : dict , model_date : int):
-        if self.is_disk:
-            self.dir = '{}/{}'.format(model_param.get('path') , model_date)
-        else:
-            self.dir = '{}/{}'.format(os.path.basename(str(model_param.get('path'))) , model_date)
+        path = (os.path.basename if self.is_mem else str)(str(model_param.get('path')))
+        self.dir = '{}/{}'.format(path , model_date)
         self.epoch_queue = []
         self.join_record = [] 
         self.del_all()
     
-    def join(self , src : Any , epoch : int , net : nn.Module):
+    def join(self , src : Any , epoch : int , net):
         if epoch < 0: return
         if epoch >= len(self.epoch_queue): self._extend_reliance()
         record_str = f'JOIN: Epoch {epoch}, from {src.__class__}({id(src)})'
@@ -50,13 +47,12 @@ class Checkpoint(Storage):
     def load_epoch(self , epoch):
         assert epoch > 0 , epoch
         if self.epoch_queue[epoch]:
-            self.load(self.epoch_path(epoch))
+            return self.load(self.epoch_path(epoch))
         else:
             [print(record_str) for record_str in self.join_record]
             raise Exception(f'no checkpoint of epoch {epoch}')
     
-    def epoch_path(self , epoch):
-        return f'{self.dir}/checkpoint.{epoch}.pt'
+    def epoch_path(self , epoch): return f'{self.dir}/checkpoint.{epoch}.pt'
     
     def _extend_reliance(self , n_epochs = 200):
         self.epoch_queue += [[] for _ in range(n_epochs)] # extend epoch list

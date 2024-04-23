@@ -1,10 +1,10 @@
 # most frequently changing variables
 mem_storage: true 
 random_seed: null
-short_test:  False
+short_test:  true
 
 model_name: null # null
-model_module: patch_tst # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
+model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
 model_types: [best , swalast , swabest]
 model_data_type: day # 'day+30m' , 30m
 model_data_prenorm:

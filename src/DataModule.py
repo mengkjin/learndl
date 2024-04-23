@@ -12,7 +12,7 @@ from typing import Any , Literal , Optional
 
 from .data.PreProcess import pre_process
 from .data.BlockData import DataBlock , DataBlockNorm
-from .util import Device , DataloaderStored , Storage , TrainConfig
+from .util import DataHook , Device , DataloaderStored , Storage , TrainConfig
 from .func import tensor_standardize_and_weight , match_values
 
 from .environ import DIR
@@ -48,7 +48,6 @@ class BatchData:
             return type(obj)([cls.send_to(o , des) for o in obj])
         else: raise TypeError(obj)
 
-    
 class DataModule:
     '''A class to store relavant training data'''
     def __init__(self , config : Optional[TrainConfig] = None , predict : bool = False):
@@ -420,7 +419,8 @@ class DataModule:
         def __init__(self , data_module , raw_loader , device , verbosity = 0) -> None:
             self.data_module = data_module
             self.device = device
-            self.loader = tqdm(raw_loader , total=len(raw_loader)) if verbosity >= 10 else raw_loader
+            self.verbosity = verbosity
+            self.loader = raw_loader
             self.display_text = None
 
         def __len__(self):  return len(self.loader)
@@ -431,18 +431,17 @@ class DataModule:
                 yield self.process(batch_data , batch_i)        
         
         def process(self , batch_data : BatchData , batch_i : int) -> BatchData:
-            if hasattr(self.data_module , 'on_before_batch_transfer'):
-                batch_data = getattr(self.data_module , 'on_before_batch_transfer')(batch_data , batch_i)
-            if hasattr(self.data_module , 'transfer_batch_to_device'):
-                batch_data = getattr(self.data_module , 'transfer_batch_to_device')(batch_data , self.device , batch_i)
-            if hasattr(self.data_module , 'on_after_batch_transfer'):
-                batch_data = getattr(self.data_module , 'on_after_batch_transfer')(batch_data , batch_i)
+            batch_data = DataHook.on_before_batch_transfer(self.data_module , batch_data , batch_i)
+            batch_data = DataHook.transfer_batch_to_device(self.data_module , batch_data , self.device , batch_i)
+            batch_data = DataHook.on_after_batch_transfer(self.data_module , batch_data , batch_i)
             return batch_data
 
-        def add_text(self , display_text):
-            self.display_text = display_text
+        def init_tqdm(self , text = ''):
+            if self.verbosity >= 10:
+                self.text = text
+                self.loader = tqdm(self.loader , total=len(self.loader))
             return self
 
         def display(self , **kwargs):
-            if isinstance(self.display_text , str) and isinstance(self.loader , tqdm): 
-                self.loader.set_description(self.display_text.format(**kwargs))
+            if isinstance(self.text , str) and isinstance(self.loader , tqdm): 
+                self.loader.set_description(self.text.format(**kwargs))

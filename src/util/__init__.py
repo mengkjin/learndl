@@ -3,6 +3,7 @@ from . import (
     config, device , loader , logger , metric, store , time , trainer
 )
 
+from .callback import DataHook , ModelHook
 from .trainer.pipeline import Pipeline
 from .trainer.ckpt import Checkpoint
 from .trainer.model import FittestModel

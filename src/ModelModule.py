@@ -11,6 +11,7 @@ import pandas as pd
 import torch
 
 from dataclasses import dataclass
+from inspect import currentframe
 from torch import nn , no_grad , Tensor
 from typing import ClassVar , Literal , Optional
 
@@ -23,6 +24,7 @@ from .func.date import today , date_offset
 
 logger = U.Logger()
 config = U.TrainConfig()
+ptimer = U.time.PTimer(True)
 
 @dataclass
 class Predictor:
@@ -176,21 +178,31 @@ class ModelTrainer():
     '''run through the whole process of training'''
     default_model_type = 'best'
 
-    def __init__(self , timer = True ,  **kwargs):
+    def __init__(self ,  **kwargs):
+        self.parser_args = config.parser_args(**kwargs)
+
+    def main_process(self):
+        '''Main stage of data & fit & test'''
+        self.configure_model()
+        self.pipe.start_process()
+        for self.stage in config.stage_queue: 
+            getattr(self , f'stage_{self.stage}')()
+        self.pipe.end_process()
+        ptimer.summarize()
+
+    @ptimer.func_timer
+    def configure_model(self):
+        config.reload(do_parser = True , par_args = self.parser_args)
+        config.set_config_environment()
+        self.callbacks  = []
+        
         self.pipe       = U.Pipeline(config , logger)
-        self.ptimer     = U.time.PTimer(timer)
         self.checkpoint = U.Checkpoint('mem' if config.mem_storage else 'disk')
         self.deposition = U.Checkpoint('disk')
         self.device     = U.Device()
         self.metrics    = U.Metrics(config.train_param['criterion'])
-
-    def main_process(self):
-        '''Main stage of data & fit & test'''
-        self.pipe.start_process()
-        for self.stage in config.stage_queue: 
-            getattr(self , f'stage_{self.stage}')()
-        self.ptimer.summarize()
-        self.pipe.end_process()
+        print(getattr(currentframe(),'f_code').co_name)
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
     
     def stage_data(self):
         '''stage of loading model data'''
@@ -200,21 +212,27 @@ class ModelTrainer():
         
     def stage_fit(self):
         '''stage of fitting'''
-        self.stage_fit_start()
+        self.on_fit_start()
         for self.model_date , self.model_num in self.model_iter():
-            self.model_fit_start()
-            self.model_fit_body()
-            self.model_fit_end()
-        self.stage_fit_end()
+            self.on_fit_model_start()
+            self.on_fit_model()
+            self.on_fit_model_end()
+        self.on_fit_end()
 
     def stage_test(self):
         '''stage of testing'''
-        self.stage_test_start()
+        self.on_test_start()
         for self.model_date , self.model_num in self.model_iter():
-            self.model_test_start()
-            self.model_test_body()
-            self.model_test_end()
-        self.stage_test_end()
+            self.on_test_model_start()
+            for self.model_type in config.model_types:
+                self.on_test_model_type_start()
+                for self.batch_idx , self.batch_data in enumerate(self.dataloader):
+                    self.on_test_batch_start()
+                    self.on_test_batch()
+                    self.on_test_batch_end()
+                self.on_test_model_type_end()
+            self.on_test_model_end()
+        self.on_test_end()
 
     def model_iter(self):
         '''iter of model_date and model_num , considering resume_training'''
@@ -228,141 +246,110 @@ class ModelTrainer():
             new_iter = U.Filtered(new_iter , ~models_trained)
         return new_iter
     
-    def stage_fit_start(self):
+    @ptimer.func_timer
+    def on_fit_start(self):
         '''to do at stage fit start'''
         self.pipe.start_stage(self.stage)
         self.data_module.reset_dataloaders()
         self.model_type = self.default_model_type
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
 
-    def stage_fit_end(self):
+    @ptimer.func_timer
+    def on_fit_end(self):
         '''to do at stage fit end'''
         self.pipe.end_stage()
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
 
-    def stage_test_start(self):
+    @ptimer.func_timer
+    def on_test_start(self):
         '''to do at stage test start'''
         self.pipe.start_stage('test')
         self.data_module.reset_dataloaders()
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
 
-    def stage_test_end(self):
+    @ptimer.func_timer
+    def on_test_end(self):
         '''to do at stage test end'''
         self.pipe.end_stage()
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
 
-    def model_fit_start(self):
+    @ptimer.func_timer
+    def on_fit_model_start(self):
         '''to do when starting fit of one model'''
-        with self.ptimer(f'{self.stage}/start'):
-            self.param : dict = config.model_param[self.model_num]
-            self.data_module.setup('fit' , self.param , self.model_date)
-            self.pipe.new_fit_model(self.model_num , self.model_date)
-            self.metrics.new_model(self.param , config)
+        self.param : dict = config.model_param[self.model_num]
+        self.data_module.setup('fit' , self.param , self.model_date)
+        self.pipe.new_fit_model(self.model_num , self.model_date)
+        self.metrics.new_model(self.param , config)
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
 
-    def model_fit_body(self):
-        '''main method of fitting one model'''
-        while self.pipe.loop_continue():
-            self.model_fit_loop_start()
-            self.model_fit_loop_body()
-            self.model_fit_loop_end()
+    @ptimer.func_timer
+    def on_fit_model(self):
+        while self.pipe.loop_continue():   
+            self.on_train_epoch_start()
+            for self.batch_idx , self.batch_data in enumerate(self.dataloader):
+                self.on_train_batch_start()
+                self.on_train_batch()
+                self.on_train_batch_end()
+            self.on_train_epoch_end()
+            if self.pipe.nanloss: return
 
-    def model_fit_loop_start(self):
-        '''on new attempt, initialize net , optimizer(scheduler)'''
-        with self.ptimer(f'{self.stage}/loop_start'):
-            if self.pipe.loop_new_attempt():
-                self.checkpoint.new_model(self.param , self.model_date)
-                self.models = U.FittestModel.get_models(config.model_types , self.checkpoint)
-                self.load_model(True)
-                self.optimizer = U.Optimizer(self.net , config , self.transferred , self.pipe.attempt)
-
-    def model_fit_loop_body(self):
-        '''go through train/val dataset, calculate loss/score , update values , check nan , assess models'''
-        with self.ptimer(f'{self.stage}/train_loader'):
-            self.loop_dataloader('train')
-        
-        with self.ptimer(f'{self.stage}/valid_loader') , no_grad():
-            self.loop_dataloader('valid')
-
-        self.print_progress(self.optimizer.step(self.pipe.epoch))
-        if self.pipe.nanloss: return
-
-        with self.ptimer(f'{self.stage}/loop_assess'):
-            self.pipe.assess_terminate()
-            for model in self.models.values():
-                model.assess(self.net , self.pipe.epoch , self.pipe.valid_score , self.pipe.valid_loss)
-        self.print_progress('epoch_step')
-
-    def model_fit_loop_end(self):
-        '''on model fitted save model , print if new_attempt'''
-        with self.ptimer(f'{self.stage}/loop_end'):
+            self.on_validation_epoch_start()
+            for self.batch_idx , self.batch_data in enumerate(self.dataloader):
+                self.on_validation_batch_start()
+                self.on_validation_batch()
+                self.on_validation_batch_end()
+            self.on_validation_epoch_end()
+            
             if self.pipe.loop_new_attempt():  self.print_progress('new_attempt')
             if self.pipe.loop_terminate(): self.save_model()
 
-    def model_fit_end(self):
+    @ptimer.func_timer
+    def on_fit_model_end(self):
         '''to do when ending fit of one model'''
-        with self.ptimer(f'{self.stage}/end'):
-            self.checkpoint.del_all()
-            self.pipe.end_fit_model()
-            self.print_progress('model_end')
+        self.checkpoint.del_all()
+        self.pipe.end_fit_model()
+        self.print_progress('model_end')
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
 
-    def model_test_start(self):
-        '''to do at test start on every model'''
-        with self.ptimer(f'{self.stage}/start'):
-            if not self.deposition.exists(self.model_path(self.model_date)): 
-                self.model_fit_start()
-                self.model_fit_body()
-                self.model_fit_end()
-            
-            self.param = config.model_param[self.model_num]
-            self.data_module.setup('test' , self.param , self.model_date)
-            self.pipe.new_test_model(self.model_num , self.model_date , self.data_module.model_test_dates)
-            self.metrics.new_model(self.param , config)
+    @ptimer.func_timer
+    def on_train_batch(self):
+        self.batch_forward()
+        self.batch_metrics()
+        self.batch_backward()
+        self.dataloader.display(ep=self.pipe.epoch, ls=self.pipe.aggloss)
 
-    def model_test_body(self):
-        '''to do at on every model'''
-        with self.ptimer(f'{self.stage}/forecast') , no_grad():
-            test_dates = np.concatenate([self.data_module.early_test_dates , self.data_module.model_test_dates])
-            for self.model_type in config.model_types:
-                self.load_model(False , self.model_type)
-                self.loop_dataloader('test' , warm_up = len(self.data_module.early_test_dates) , dates = test_dates)
-                self.pipe.update_test_score(self.model_type)
+    @ptimer.func_timer
+    def on_validation_batch(self):
+        self.batch_forward()
+        self.batch_metrics()
+        self.dataloader.display(ep=self.pipe.epoch, sc=self.pipe.aggscore)
 
-    def model_test_end(self):
-        '''to do at test end on every model'''
-        with self.ptimer(f'{self.stage}/end'):
-            self.pipe.end_test_model()
-
-    def loop_dataloader(self , dataset , warm_up : int = 0 , dates : Optional[np.ndarray] = None):
-        '''loop of batch data'''
-        self.dataset = dataset
-        self.pipe.new_metric(dataset , self.model_type)
-
-        self.net.train() if dataset == 'train' else self.net.eval()
-        if dataset == 'train':   loader = self.data_module.train_dataloader().add_text('Train Ep#{ep:3d} loss : {ls:.5f}')
-        elif dataset == 'valid': loader = self.data_module.val_dataloader().add_text('Valid Ep#{ep:3d} score : {sc:.5f}')
-        elif dataset == 'test' : loader = self.data_module.test_dataloader().add_text('Test {mt} {dt} score : {sc:.5f}')
-        if dates is None: dates = np.zeros(len(loader))
-        self.assert_equity(len(loader) , len(dates))
-        for i , self.batch_data in enumerate(loader):
-            if dates[i]: self.assert_equity(dates[i] , self.data_module.y_date[self.batch_data.i[0,1]]) 
-            self.batch_forward()
-            if i < warm_up: continue  # before this is warmup stage , only forward
-            self.batch_metrics()
-            self.batch_backward()
-            loader.display(dt=dates[i], mt=self.model_type, ep=self.pipe.epoch, ls=self.pipe.aggloss, sc=self.pipe.aggscore)
-            if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
-        self.pipe.collect_metric_and_lr(self.optimizer.last_lr)
+    @ptimer.func_timer
+    def on_test_batch(self):
+        self.assert_equity(self.test_dates[self.batch_idx] , self.data_module.y_date[self.batch_data.i[0,1]]) 
+        self.batch_forward()
+        if self.batch_idx < self.test_warm_up: return  # before this is warmup stage , only forward
+        self.batch_metrics()
+        self.dataloader.display(dt=self.test_dates[self.batch_idx] , mt=self.model_type , sc=self.pipe.aggscore)
 
     def batch_forward(self) -> None:
-        with self.ptimer(f'{self.stage}/{self.dataset}/forward'):
+        if self.batch_data.is_empty:
+            self.net_output = U.trainer.Output.empty()
+        else:
             getattr(self.net , 'dynamic_data_assign' , lambda *x:None)(self)
-            self.net_output = U.trainer.Output.empty() if self.batch_data.is_empty else U.trainer.Output(self.net(self.batch_data.x))
+            self.net_output = U.trainer.Output(self.net(self.batch_data.x))
 
     def batch_metrics(self) -> None:
-        with self.ptimer(f'{self.stage}/{self.dataset}/loss'):
-            self.metrics.calculate(self.dataset , self.batch_data.y , self.net_output.pred , 
-                                   self.batch_data.w , self.net , self.penalty_kwargs , assert_nan = True)
-            self.pipe.record_metric(self.metrics)
+        self.metrics.calculate(self.dataset , self.batch_data.y , self.net_output.pred , 
+                               self.batch_data.w , self.net , self.penalty_kwargs , assert_nan = True)
+        self.pipe.record_metric(self.metrics)
 
     def batch_backward(self) -> None:
-        with self.ptimer(f'{self.stage}/{self.dataset}/backward'): 
-            if self.dataset == 'train': self.optimizer.backward(self.metrics.loss)
+        assert self.dataset == 'train' , self.dataset
+        for cb in self.callbacks: getattr(cb , 'on_before_zero_grad' , self.empty)(self.optimizer.optimizer)
+        for cb in self.callbacks: getattr(cb , 'on_before_backward' , self.empty)(self.metrics.loss)
+        self.optimizer.backward(self.metrics.loss)
+        for cb in self.callbacks: getattr(cb , 'on_after_backward' , self.empty)()
 
     @property
     def penalty_kwargs(self): return {'net':self.net,'hidden':self.net_output.hidden,'label':self.batch_data.y}
@@ -385,26 +372,26 @@ class ModelTrainer():
         else: raise KeyError(key)
         if sdout is not None: [prt(sdout) for prt in printers]
     
+    @ptimer.func_timer
     def load_model(self , training : bool , model_type = default_model_type) -> None:
         '''load model state dict, return net and a sign of whether it is transferred'''
-        with self.ptimer(f'load_model'):
-            if training and config.train_param['transfer']:         
-                model_path = self.model_path(self.data_module.prev_model_date(self.model_date))
-            elif training:
-                model_path = self.model_path()
-            else:
-                model_path = self.model_path(self.model_date , model_type)
-            self.transferred = training and config.train_param['transfer'] and self.deposition.exists(model_path)
-            self.net = MODEL.new(config.model_module , self.param , self.deposition.load(model_path) , self.device)
-            
+        if training and config.train_param['transfer']:         
+            model_path = self.model_path(self.data_module.prev_model_date(self.model_date))
+        elif training:
+            model_path = self.model_path()
+        else:
+            model_path = self.model_path(self.model_date , model_type)
+        self.transferred = training and config.train_param['transfer'] and self.deposition.exists(model_path)
+        self.net = MODEL.new(config.model_module , self.param , self.deposition.load(model_path) , self.device)
+
+    @ptimer.func_timer  
     def save_model(self):
         '''save model state dict to deposition'''
-        with self.ptimer(f'save_model'):
-            getattr(self.net , 'dynamic_data_unlink' , lambda *x:None)()
-            self.net = self.net.cpu()
-            for model_type , model in self.models.items():
-                sd = model.state_dict(self.net , self.data_module.train_dataloader())
-                self.deposition.save_state_dict(sd , self.model_path(self.model_date , model_type)) 
+        getattr(self.net , 'dynamic_data_unlink' , lambda *x:None)()
+        self.net = self.net.cpu()
+        for model_type , fittest_model in self.models.items():
+            sd = fittest_model.state_dict(self.net , self.data_module.train_dataloader())
+            self.deposition.save_state_dict(sd , self.model_path(self.model_date , model_type)) 
     
     def model_path(self , model_date = -1, model_type = default_model_type , base_path = None , model_num = None):
         '''get model path of deposition giving model date/type/base_path/num'''
@@ -419,15 +406,118 @@ class ModelTrainer():
     @staticmethod
     def assert_equity(a , b): assert a == b , (a , b)
 
-    @classmethod
-    def fit(cls , stage = -1 , resume = -1 , checkname = -1 , timer = False , parser_args = None):
-        if parser_args is None: parser_args = config.parser_args(stage=stage,resume=resume,checkname=checkname)
-        config.reload(do_parser=True,par_args=parser_args)
-        config.set_config_environment()
+    def on_train_epoch_start(self):
+        self.dataset = 'train'
+        if self.pipe.loop_new_attempt():
+            self.pipe.new_attempt()
+            self.checkpoint.new_model(self.param , self.model_date)
+            self.models = U.FittestModel.get_models(config.model_types , self.checkpoint)
+            self.load_model(True)
+            self.optimizer = U.Optimizer(self.net , config , self.transferred , self.pipe.attempt)
+        else:
+            self.pipe.new_epoch()
 
-        app = cls(timer = timer)
+        self.pipe.new_metric(self.dataset , 'best')
+        self.net.train()
+        torch.set_grad_enabled(True)
+        self.dataloader = self.data_module.train_dataloader().init_tqdm('Train Ep#{ep:3d} loss : {ls:.5f}')
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
+
+    def on_train_epoch_end(self):
+        self.pipe.collect_metric()
+        self.pipe.collect_lr(self.optimizer.last_lr)
+        self.print_progress(self.optimizer.scheduler_step(self.pipe.epoch))
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
+
+    def on_validation_epoch_start(self):
+        self.dataset = 'valid'
+        self.pipe.new_metric(self.dataset , 'best')
+        self.net.eval()
+        torch.set_grad_enabled(False)
+        self.dataloader = self.data_module.val_dataloader().init_tqdm('Valid Ep#{ep:3d} score : {sc:.5f}')
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
+        
+    def on_validation_epoch_end(self):
+        self.pipe.collect_metric()
+        self.pipe.assess_terminate()
+        
+        for fittest_model in self.models.values():
+            fittest_model.assess(self.net , self.pipe.epoch , self.pipe.valid_score , self.pipe.valid_loss)
+        self.print_progress('epoch_step')
+        torch.set_grad_enabled(True)
+
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
+
+    def on_test_model_start(self) -> None:
+        if not self.deposition.exists(self.model_path(self.model_date)): 
+            self.on_fit_model_start()
+            self.on_fit_model()
+            self.on_fit_model_end()
+        
+        self.param = config.model_param[self.model_num]
+        self.data_module.setup('test' , self.param , self.model_date)
+        self.pipe.new_test_model(self.model_num , self.model_date , self.data_module.model_test_dates)
+        self.metrics.new_model(self.param , config)
+
+        self.dataset = 'test'
+        self.test_dates = np.concatenate([self.data_module.early_test_dates , self.data_module.model_test_dates])
+        self.test_warm_up = len(self.data_module.early_test_dates)
+        self.net.eval()
+        torch.set_grad_enabled(False)
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
+
+    def on_test_model_end(self) -> None:
+        torch.set_grad_enabled(True)
+        self.pipe.end_test_model()
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
+
+    def on_test_model_type_start(self) -> None:
+        self.load_model(False , self.model_type)
+        self.pipe.new_metric(self.dataset , self.model_type)
+        self.dataloader = self.data_module.test_dataloader().init_tqdm('Test {mt} {dt} score : {sc:.5f}')
+        self.assert_equity(len(self.dataloader) , len(self.test_dates))
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
+
+    def on_test_model_type_end(self) -> None:
+        self.pipe.collect_metric()
+        self.pipe.update_test_score(self.model_type)
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)()
+
+    def on_train_batch_start(self) -> None:
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)(
+            self.batch_data , self.batch_idx)
+    
+    def on_train_batch_end(self) -> None:
+        #if (self.batch_idx + 1) % 20 == 0 : torch.cuda.empty_cache()
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)(
+            self.net_output, self.batch_data , self.batch_idx)
+    
+    def on_validation_batch_start(self) -> None:
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)(
+            self.batch_data , self.batch_idx)
+    
+    def on_validation_batch_end(self) -> None:
+        #if (self.batch_idx + 1) % 20 == 0 : torch.cuda.empty_cache()
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)(
+            self.net_output, self.batch_data , self.batch_idx)
+    
+    def on_test_batch_start(self) -> None:
+        for cb in self.callbacks: getattr(cb,getattr(currentframe(),'f_code').co_name,self.empty)(
+            self.batch_data , self.batch_idx)
+    
+    def on_test_batch_end(self) -> None:
+        #if (self.batch_idx + 1) % 20 == 0 : torch.cuda.empty_cache()
+        for cb in self.callbacks: getattr(cb , getattr(currentframe(),'f_code').co_name , self.empty)(
+            self.net_output, self.batch_data , self.batch_idx)
+
+    @staticmethod
+    def empty(*args , **kwargs): return
+
+    @classmethod
+    def fit(cls , stage = -1 , resume = -1 , checkname = -1 , **kwargs):
+        app = cls(stage = stage , resume = resume , checkname = checkname , **kwargs)
         app.main_process()
 
 if __name__ == '__main__': 
-    ModelTrainer.fit(parser_args = config.parser_args())
+    ModelTrainer.fit(**config.parser_args().__dict__)
  

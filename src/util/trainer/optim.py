@@ -38,7 +38,7 @@ class Optimizer:
     @classmethod
     def load_scheduler(cls , optimizer , shd_param : dict):
         return cls.base_scheduler(optimizer, shd_param['name'], **shd_param['param'])
-    
+
     def backward(self , loss : Tensor):
         '''BP of optimizer.parameters'''
         self.optimizer.zero_grad()
@@ -46,7 +46,7 @@ class Optimizer:
         if self.clip_value is not None : clip_grad_value_(self.net.parameters(), clip_value = self.clip_value) 
         self.optimizer.step()
 
-    def step(self , epoch : int) -> str | None:
+    def scheduler_step(self , epoch : int) -> str | None:
         '''scheduler step on learn rate , reset learn rate to base_lr on conditions'''
         self.scheduler.step()
         reset_param = self.lr_param.get('reset')

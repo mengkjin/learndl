@@ -14,7 +14,7 @@ class FittestModel:
         self.ckpt , self.use = ckpt , use
 
     @abstractmethod
-    def assess(self , net : nn.Module , epoch : int , score = 0. , loss = 0.):
+    def assess(self , net , epoch : int , score = 0. , loss = 0.):
         '''use score or loss to update assessment'''
         pass
     @abstractmethod
@@ -61,7 +61,7 @@ class BestModel(FittestModel):
         self.epoch_fix  = -1
         self.metric_fix = None
 
-    def assess(self , net : nn.Module , epoch : int , score = 0. , loss = 0.):
+    def assess(self , net , epoch : int , score = 0. , loss = 0.):
         value = loss if self.use == 'loss' else score
         if self.metric_fix is None or (self.metric_fix < value if self.use == 'score' else self.metric_fix > value):
             self.ckpt.disjoin(self , self.epoch_fix)
@@ -80,7 +80,7 @@ class SWABest(FittestModel):
         self.metric_list = []
         self.candidates  = []
         
-    def assess(self , net : nn.Module , epoch : int , score = 0. , loss = 0.):
+    def assess(self , net , epoch : int , score = 0. , loss = 0.):
         value = loss if self.use == 'loss' else score
         if len(self.metric_list) == self.n_best :
             arg = np.argmin(self.metric_list) if self.use == 'score' else np.argmax(self.metric_list)
@@ -112,7 +112,7 @@ class SWALast(FittestModel):
         self.metric_fix  = None
         self.candidates  = []
 
-    def assess(self , net : nn.Module , epoch : int , score = 0. , loss = 0.):
+    def assess(self , net , epoch : int , score = 0. , loss = 0.):
         value = loss if self.use == 'loss' else score
         if self.metric_fix is None or (self.metric_fix < value if self.use == 'score' else self.metric_fix > value):
             self.epoch_fix , self.metric_fix = epoch , value

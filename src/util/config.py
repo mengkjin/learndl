@@ -110,7 +110,7 @@ class TrainParam:
                 Param['train_param']['trainer'].update(Param.get('on_tf_trainer' , {}))
 
         # check conflicts:
-        assert 'best' in Param['output_types']
+        assert 'best' in Param['model_types']
         Param['tra_model'] = Param['tra_switch'] and Param['model_module'].lower().startswith('tra')
         assert not (Param['tra_model'] and Param['train_param']['dataloader']['sample_method'] == 'total_shuffle')
 

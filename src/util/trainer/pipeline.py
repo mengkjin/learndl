@@ -110,16 +110,12 @@ class Pipeline:
             self.toc('model') / 60 , self.toc('model') / (self.epoch_model + 1))
         
     def loop_continue(self): 
-        cond = True
-        if self._loop_status == 'epoch':
-            self.new_epoch()
-        elif self._loop_status == 'attempt':
-            self.new_attempt()
+        if self._loop_status in ['attempt' , 'epoch']:
+            return True
         elif self._loop_status == 'model':
-            cond = False
+            return False
         else:
             raise KeyError(self._loop_status)
-        return cond
     
     def loop_new_attempt(self): return self._loop_status == 'attempt'
     def loop_terminate(self): return self._loop_status == 'model'
@@ -184,12 +180,15 @@ class Pipeline:
     def record_metric(self , metrics : Metrics):
         self.metric_batchs.record(metrics)
 
-    def collect_metric_and_lr(self , last_lr):
+    def collect_metric(self):
         self.check_nanloss(self.metric_batchs.nanloss)
         self.metric_batchs.collect()
         self.metric_epochs[f'{self.dataset}.loss'].append(self.metric_batchs.loss) 
         self.metric_epochs[f'{self.dataset}.score'].append(self.metric_batchs.score)
-        if self.dataset == 'train': self.lr_list.append(last_lr)
+
+    def collect_lr(self , last_lr):
+        assert self.dataset == 'train' , self.dataset
+        self.lr_list.append(last_lr)
 
     def new_test_model(self , model_num , model_date , test_dates):
         self.model_date , self.model_num , self.test_dates = model_date , model_num , test_dates
