@@ -10,6 +10,7 @@ from typing import Any , Literal , Optional
 from ..func import mse , pearson , ccc , spearman
 
 class Metrics:
+    '''calculator of batch output'''
     display_check  = True # will display once if true
     display_record = {'loss' : {} , 'score' : {} , 'penalty' : {}}
     default_metric = {'mse':mse ,'pearson':pearson,'ccc':ccc,'spearman':spearman,}
@@ -20,7 +21,7 @@ class Metrics:
         self.f_score   = self.score_function(criterion['score'])
         self.f_pen     = {k:self.penalty_function(k,v) for k,v in criterion['penalty'].items()}
         self.multiloss = None
-        self.output  = self.MetricOutput()
+        self.output  = self.BatchMetric()
 
     @property
     def loss(self): return self.output.loss
@@ -45,9 +46,7 @@ class Metrics:
     def calculate(self , dataset : Literal['train' , 'valid' , 'test'] , 
                   label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , net : Optional[nn.Module] = None , 
                   penalty_kwargs : dict[str,Any] = {} , assert_nan = False):
-        '''
-        Calculate loss(with gradient), penalty , score
-        '''
+        '''Calculate loss(with gradient), penalty , score'''
         if label.shape != pred.shape: # if more label than output
             label = label[...,:pred.shape[-1]]
             assert label.shape == pred.shape , (label.shape , pred.shape)
@@ -71,16 +70,16 @@ class Metrics:
                 if pen['lamb'] <= 0 or not pen['cond']: continue
                 penalty = penalty + pen['lamb'] * pen['func'](label , pred , weight , **penalty_kwargs)  
             loss = loss + penalty
-            self.output = self.MetricOutput(loss = loss , score = score , penalty = penalty , losses = losses)
+            self.output = self.BatchMetric(loss = loss , score = score , penalty = penalty , losses = losses)
         else:
-            self.output = self.MetricOutput(score = score)
+            self.output = self.BatchMetric(score = score)
 
         if assert_nan and self.output.loss.isnan():
             print(self.output)
             raise Exception('nan loss here')
     
     @dataclass
-    class MetricOutput:
+    class BatchMetric:
         loss      : torch.Tensor = torch.Tensor([0.])
         score     : float = 0.
         loss_item : float = 0.
@@ -121,9 +120,9 @@ class Metrics:
 
     @classmethod
     def loss_function(cls , key):
-        """
+        '''
         loss function , pearson/ccc should * -1.
-        """
+        '''
         assert key in ('mse' , 'pearson' , 'ccc')
         def decorator(func):
             def wrapper(label,pred,weight=None,dim=0,nan_check=False,first_col=False,**kwargs):
@@ -192,7 +191,7 @@ class Metrics:
         return pen
 
 def _shoot_infs(inp_tensor):
-    """Replaces inf by maximum of tensor"""
+    '''Replaces inf by maximum of tensor'''
     mask_inf = torch.isinf(inp_tensor)
     ind_inf = torch.nonzero(mask_inf, as_tuple=False)
     if len(ind_inf) > 0:
@@ -219,51 +218,45 @@ def _sinkhorn(Q, n_iters=3, epsilon=0.01):
             Q /= Q.sum(dim=1, keepdim=True)
     return Q
 
-@dataclass
-class MetricList:
-    name : str
-    type : Literal['loss' , 'score']
-    values : list[Any] = field(default_factory=list) 
-
-    def record(self , metrics):
-        assert isinstance(metrics , Metrics) , self.__class__
-        self.values.append(metrics.loss_item if self.type == 'loss' else metrics.score)
-
-    def last(self): self.values[-1]
-    def mean(self): return np.mean(self.values)
-    def any_nan(self): return np.isnan(self.values).any()
-
 class AggMetrics:
+    '''record a list of batch metric and perform agg operations, usually used in an epoch'''
     def __init__(self) -> None:
         self.table : Optional[pd.DataFrame] = None
         self.new('init',0,0)
-    def __len__(self): 
-        return len(self._losses.values)
+    def __len__(self):  return len(self._record['loss'].values)
     def new(self , dataset , model_num , model_date , epoch = 0 , model_type = 'best'):
-        self._params = [dataset , model_num , model_date , epoch , model_type]
-        self._losses = MetricList(f'{dataset}.{model_num}.{model_date}.{epoch}.loss'  , 'loss')
-        self._scores = MetricList(f'{dataset}.{model_num}.{model_date}.{epoch}.score' , 'score')
+        self._params = [dataset , model_num , model_date , model_type , epoch]
+        self._record = {m:self.MetricList(f'{dataset}.{model_num}.{model_date}.{model_type}.{epoch}.{m}',m) for m in ['loss','score']}
     def record(self , metrics): 
-        self._losses.record(metrics)
-        self._scores.record(metrics)
+        [self._record[m].record(metrics) for m in ['loss','score']]
     def collect(self):
-        df = pd.DataFrame([self._params + [self._losses.mean() , self._scores.mean()]] , 
-                          columns = ['dataset','model_num','model_date','epoch','model_type','loss','score'])
+        df = pd.DataFrame([*self._params , self.loss , self.score] , columns=['dataset','model_num','model_date','model_type','epoch','loss','score'])
         self.table = df if self.table is None else pd.concat([self.table , df]).reindex()
     @property
-    def nanloss(self): return self._losses.any_nan()
+    def nanloss(self): return self._record['loss'].any_nan()
     @property
-    def loss(self):  return self._losses.mean()
+    def loss(self):  return self._record['loss'].mean()
     @property
-    def score(self): return self._scores.mean()
+    def score(self): return self._record['score'].mean()
     @property
-    def losses(self): return self._losses.values
+    def losses(self): return self._record['loss'].values
     @property
-    def scores(self): return self._scores.values
+    def scores(self): return self._record['score'].values
+    @dataclass
+    class MetricList:
+        name : str
+        type : str
+        values : list[Any] = field(default_factory=list) 
+        def __post_init__(self): assert type in ['loss' , 'score']
+        def record(self , metrics : Metrics): self.values.append(metrics.loss_item if self.type == 'loss' else metrics.score)
+        def last(self): self.values[-1]
+        def mean(self): return np.mean(self.values)
+        def any_nan(self): return np.isnan(self.values).any()
 
 class MultiLosses:
+    '''some realization of multi-losses combine method'''
     def __init__(self , multi_type = None , num_task = -1 , **kwargs):
-        """
+        '''
         example:
             import torch
             import numpy as np
@@ -274,7 +267,7 @@ class MultiLosses:
             ml.view_plot(2 , 'ruw')
             ml.view_plot(2 , 'gls')
             ml.view_plot(2 , 'rws')
-        """
+        '''
         self.multi_type = multi_type
         self.reset_multi_type(num_task,**kwargs)
 
@@ -296,9 +289,7 @@ class MultiLosses:
         return self.multi_class(losses , mt_param , **kwargs)
     
     class _BaseMultiLossesClass():
-        """
-        base class of multi_class class
-        """
+        '''base class of multi_class class'''
         def __init__(self , num_task , **kwargs):
             self.num_task = num_task
             self.record_num = 0 
@@ -326,16 +317,12 @@ class MultiLosses:
             return (losses * weight).sum() + penalty
     
     class EWA(_BaseMultiLossesClass):
-        """
-        Equal weight average
-        """
+        '''Equal weight average'''
         def penalty(self , losses , mt_param : dict = {}): 
             return 0.
     
     class Hybrid(_BaseMultiLossesClass):
-        """
-        Hybrid of DWA and RUW
-        """
+        '''Hybrid of DWA and RUW'''
         def reset(self , **kwargs):
             self.tau = kwargs['tau']
             self.phi = kwargs['phi']
@@ -353,11 +340,11 @@ class MultiLosses:
             return penalty
     
     class DWA(_BaseMultiLossesClass):
-        """
+        '''
         dynamic weight average
         https://arxiv.org/pdf/1803.10704.pdf
         https://github.com/lorenmt/mtan/tree/master/im2im_pred
-        """
+        '''
         def reset(self , **kwargs):
             self.tau = kwargs['tau']
         def weight(self , losses , mt_param : dict = {}):
@@ -369,10 +356,7 @@ class MultiLosses:
             return weight
         
     class RUW(_BaseMultiLossesClass):
-        """
-        Revised Uncertainty Weighting (RUW) Loss
-        https://arxiv.org/pdf/2206.11049v2.pdf (RUW + DWA)
-        """
+        '''Revised Uncertainty Weighting (RUW) Loss , https://arxiv.org/pdf/2206.11049v2.pdf (RUW + DWA)'''
         def reset(self , **kwargs):
             self.phi = kwargs['phi']
         def weight(self , losses , mt_param : dict = {}):
@@ -384,16 +368,11 @@ class MultiLosses:
             return penalty
 
     class GLS(_BaseMultiLossesClass):
-        """
-        geometric loss strategy , Chennupati etc.(2019)
-        """
+        '''geometric loss strategy , Chennupati etc.(2019)'''
         def total_loss(self , losses , weight , penalty):
             return losses.pow(weight).prod().pow(1/weight.sum()) + penalty
     class RWS(_BaseMultiLossesClass):
-        """
-        random weight loss, RW , Lin etc.(2021)
-        https://arxiv.org/pdf/2111.10603.pdf
-        """
+        '''random weight loss, RW , Lin etc.(2021) , https://arxiv.org/pdf/2111.10603.pdf'''
         def weight(self , losses , mt_param : dict = {}): 
             return torch.nn.functional.softmax(torch.rand_like(losses),-1)
 

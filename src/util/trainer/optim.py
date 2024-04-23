@@ -1,14 +1,14 @@
-import math
-import torch
+import math , torch
 
 from copy import deepcopy
 from torch import nn , optim , Tensor
 from torch.nn.utils.clip_grad import clip_grad_value_
-from typing import Any , Optional
+from typing import Optional
 
-from .config import TrainConfig
+from ..config import TrainConfig
 
 class Optimizer:
+    '''specify trainer optimizer and scheduler'''
     reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
 
     def __init__(self , net : nn.Module , config : TrainConfig , transfer : bool = False , attempt : int = 0 , 
@@ -40,12 +40,14 @@ class Optimizer:
         return cls.base_scheduler(optimizer, shd_param['name'], **shd_param['param'])
     
     def backward(self , loss : Tensor):
+        '''BP of optimizer.parameters'''
         self.optimizer.zero_grad()
         loss.backward()
         if self.clip_value is not None : clip_grad_value_(self.net.parameters(), clip_value = self.clip_value) 
         self.optimizer.step()
 
     def step(self , epoch : int) -> str | None:
+        '''scheduler step on learn rate , reset learn rate to base_lr on conditions'''
         self.scheduler.step()
         reset_param = self.lr_param.get('reset')
         if not reset_param: return

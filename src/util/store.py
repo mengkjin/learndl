@@ -5,9 +5,15 @@ import pandas as pd
 from copy import deepcopy
 from typing import Literal
 
-from ..environ import DIR
-
 class Storage:
+    '''
+    Interface of mem or disk storage, methods:
+    is_disk / is_mem : check store_type
+    save / load / exists : general utility to interact with storage space
+    is_cuda : check if an object is on cuda
+    save_state_dict / load_state_dict : nn.Module / dict will be saved as dict on cpu
+    del_path / del_group / del_all : delete selected paths
+    '''
     def __init__(self , store_type : Literal['mem' , 'disk'] = 'disk'):
         self.memdisk = {} if store_type == 'mem' else None
         self.records = pd.DataFrame(columns = ['path' , 'group'] , dtype = str)
@@ -36,19 +42,6 @@ class Storage:
             self.records = pd.concat([self.records[self.records['path'] != path] , df] , axis=0)
         else:
             raise TypeError(type(path))
-        
-    def is_cuda(self , obj) -> bool:
-        if isinstance(obj , (torch.Tensor , torch.nn.Module)):
-            return obj.is_cuda
-        elif isinstance(obj , (list , tuple)):
-            for sub in obj:
-                if self.is_cuda(sub): return True
-            else:
-                return False
-        elif isinstance(obj , dict):
-            return self.is_cuda(list(obj.values()))
-        else:
-            return False
 
     def load(self , path):
         if isinstance(path , (list , tuple)):
@@ -61,6 +54,19 @@ class Storage:
         else:
             raise TypeError(type(path))
     
+    def is_cuda(self , obj) -> bool:
+        if isinstance(obj , (torch.Tensor , torch.nn.Module)):
+            return obj.is_cuda
+        elif isinstance(obj , (list , tuple)):
+            for sub in obj:
+                if self.is_cuda(sub): return True
+            else:
+                return False
+        elif isinstance(obj , dict):
+            return self.is_cuda(list(obj.values()))
+        else:
+            return False
+        
     def save_state_dict(self , obj , path , group = 'default'):
         assert isinstance(obj , (torch.nn.Module , dict)) , obj
         if isinstance(obj , torch.nn.Module):
@@ -76,27 +82,24 @@ class Storage:
         assert isinstance(sd , dict) , sd
         obj.load_state_dict(sd)
         return obj
-            
-    def valid_path(self , path):
-        if isinstance(path , str): path = [path]
-        return np.intersect1d(path , self.records['path']).tolist()
     
     def del_path(self , path):
-        path = self.valid_path(path)
+        if isinstance(path , str): path = [path]
+        path = np.intersect1d(path , self.records['path']).tolist()
         if self.memdisk is None:
             [os.remove(p) for p in path]
         else:
             [self.memdisk.__delitem__(p) for p in path]
         self.records = self.records[~self.records['path'].isin(path)]
-
-    def del_all(self):
-        self.del_path(self.records['path'])
-        gc.collect()
         
     def del_group(self , group):
         if isinstance(group , str): group = [group]
         path = self.records['path'][self.records['group'].isin(group)]
         self.del_path(path)
+        gc.collect()
+
+    def del_all(self):
+        self.del_path(self.records['path'])
         gc.collect()
 
     

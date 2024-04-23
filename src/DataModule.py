@@ -21,6 +21,7 @@ def _abbr(data_type : str): return DataBlock.data_type_abbr(data_type)
 
 @dataclass
 class BatchData:
+    '''custom data component of a batch'''
     x       : Tensor | tuple[Tensor] | list[Tensor]
     y       : Tensor 
     w       : Tensor | None
@@ -28,44 +29,28 @@ class BatchData:
     valid   : Tensor 
     
     def __post_init__(self):
-        if isinstance(self.x , (list , tuple)) and len(self.x) == 1:
-            self.x = self.x[0]
+        if isinstance(self.x , (list , tuple)) and len(self.x) == 1: self.x = self.x[0]
         
-    def to(self , device = None):
-        if isinstance(device , Device): device = device.device
-        return self.__class__(
-            self.x.to(device) if isinstance(self.x , Tensor) else type(self.x)(x.to(device) for x in self.x) , 
-            self.y.to(device) , 
-            None if self.w is None else self.w.to(device) , 
-            self.i.to(device) , 
-            self.valid.to(device) 
-        )
-
-    def cpu(self):
-        return self.__class__(
-            self.x.cpu() if isinstance(self.x , Tensor) else type(self.x)(x.cpu() for x in self.x) , 
-            self.y.cpu() , 
-            None if self.w is None else self.w.cpu() , 
-            self.i.cpu() , 
-            self.valid.cpu() 
-        )
-
-    def cuda(self):
-        return self.__class__(
-            self.x.cuda() if isinstance(self.x , Tensor) else type(self.x)(x.cuda() for x in self.x) , 
-            self.y.cuda() , 
-            None if self.w is None else self.w.cuda() , 
-            self.i.cuda() , 
-            self.valid.cuda() 
-        )
-    
+    def to(self , device = None): return self.__class__(**{k:self.send_to(v , device) for k,v in self.__dict__.items()})
+    def cpu(self):  return self.__class__(**{k:self.send_to(v , 'cpu') for k,v in self.__dict__.items()})
+    def cuda(self): return self.__class__(**{k:self.send_to(v , 'cuda') for k,v in self.__dict__.items()})
     @property
     def is_empty(self): return len(self.y) == 0
+    @classmethod
+    def send_to(cls , obj , des : Any | Literal['cpu' , 'cuda']) -> Any:
+        if obj is None: return None
+        elif isinstance(obj , Tensor):
+            if des == 'cpu': return obj.cpu()
+            elif des == 'cuda': return obj.cuda()
+            elif callable(des): return des(obj) 
+            else: return obj.to(des)
+        elif isinstance(obj , (list , tuple)):
+            return type(obj)([cls.send_to(o , des) for o in obj])
+        else: raise TypeError(obj)
+
     
 class DataModule:
-    '''
-    A class to store relavant training data
-    '''
+    '''A class to store relavant training data'''
     def __init__(self , config : Optional[TrainConfig] = None , predict : bool = False):
         '''
         1. load Package of BlockDatas of x , y , norms and index
@@ -96,8 +81,8 @@ class DataModule:
         self.buffer = self.BufferSpace(self.config.buffer_type , self.config.buffer_param , self.device)
 
     def reset_dataloaders(self):
-        self.loader_dict = {}
-        self.loader_param = ()
+        '''reset for every fit / test / predict'''
+        self.loader_dict , self.loader_param = {} , ()
     
     @property
     def data_type_list(self):
@@ -106,6 +91,7 @@ class DataModule:
     
     @staticmethod
     def prepare_data():
+        '''prepare data for fit / test / predict'''
         pre_process(False)
         pre_process(True)
 
@@ -115,10 +101,10 @@ class DataModule:
         
         seqlens : dict = param['seqlens']
         if self.config.tra_model: seqlens.update(param.get('tra_seqlens',{}))
+        if self.loader_param == (stage , model_date , seqlens): return
 
         assert stage in ['fit' , 'test' , 'predict'] and model_date > 0 and seqlens , (stage , model_date , seqlens)
-
-        if self.loader_param == (stage , model_date , seqlens): return
+        
         self.stage = stage
         self.loader_param = stage , model_date , seqlens
 
@@ -141,7 +127,7 @@ class DataModule:
                 self.model_date_list = np.array([model_date])
             elif model_date != self.model_date_list[-1]:
                 next_model_date = self.model_date_list[self.model_date_list > model_date][0]
-            step_interval  = 1 # self.config.test_step_day
+            step_interval  = 1
 
             before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-self.seqy:]
             test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::step_interval]
@@ -192,7 +178,7 @@ class DataModule:
     def predict_dataloader(self):
         return self.LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
-        return batch.to(self.device)
+        return batch.to(self.device if device is None else device)
 
     def full_valid_sample(self , x_data : dict[str,Tensor] , y : Tensor , index1 : Tensor , **kwargs) -> Tensor:
         '''
@@ -220,19 +206,17 @@ class DataModule:
      
     def standardize_y(self , y : Tensor , valid : Optional[Tensor] , index1 : Optional[Tensor] , no_weight = False) -> tuple[Tensor , Optional[Tensor]]:
         '''standardize y and weight'''
-        weight_scheme = self.config.weight_scheme(self.stage , no_weight)
         if valid is not None:
             assert index1 is not None , index1
             y = y[:,index1].clone().nan_to_num(0)
             y[valid == 0] = torch.nan
-        return tensor_standardize_and_weight(y , 0 , weight_scheme)
+        return tensor_standardize_and_weight(y , 0 , self.config.weight_scheme(self.stage , no_weight))
         
     def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid : Tensor) -> None:
         '''update loader_dict , save batch_data to f'{DIR.model}/{model_name}/{set_name}_batch_data' and later load them'''
         index0, index1 = torch.arange(len(valid)) , self.step_idx
         sample_index = self.split_sample(self.stage , valid , index0 , index1 , self.config.sample_method , 
                                          self.config.train_ratio , self.config.batch_size)
-
         self.storage.del_group(self.stage)
         for set_key , set_samples in sample_index.items():
             assert set_key in ['train' , 'valid' , 'test'] , set_key
@@ -244,7 +228,7 @@ class DataModule:
 
                 b_x = [self.prenorm(self.rolling_rotation(x[mdt],self.seqs[mdt],i0,i1) , mdt) for mdt in x.keys()]
                 b_y = y[i0 , yindex1]
-                b_w = w = None if w is None else w[i0 , yindex1]
+                b_w = None if w is None else w[i0 , yindex1]
                 b_v = valid[i0 , yindex1]
 
                 self.storage.save(BatchData(b_x , b_y , b_w , b_i , b_v) , batch_files[bnum] , group = self.stage)
@@ -317,10 +301,10 @@ class DataModule:
         return x
 
     class BufferSpace:
+        '''dynamic buffer space for some module to use (tra), can be updated at each batch / epoch '''
         def __init__(self , buffer_key : str | None , buffer_param : dict = {} , device : Optional[Device] = None , always_on_device = True) -> None:
             self.key = buffer_key
             self.param = buffer_param
-            
             self.device = device
             self.always = always_on_device
             self.contents : dict[str,Any] = {}
@@ -334,11 +318,8 @@ class DataModule:
                 self.contents.update(new)
             return self
         
-        def __getitem__(self , key):
-            return self.contents[key]
-        
-        def __setitem__(self , key , value):
-            self.contents[key] = value
+        def __getitem__(self , key): return self.contents[key]
+        def __setitem__(self , key , value): self.contents[key] = value
 
         def get(self , keys , default = None , keep_none = True):
             if hasattr(keys , '__len__'):
@@ -390,6 +371,7 @@ class DataModule:
 
     @dataclass
     class DataInterface:
+        '''load datas / norms / index'''
         x : dict[str,DataBlock]
         y : DataBlock
         norms : dict[str,DataBlockNorm]
@@ -434,21 +416,19 @@ class DataModule:
             if y_labels is not None:  data.y.align_feature(y_labels)
             return data
     class LoaderWrapper:
+        '''wrap loader to impletement DataModule Callbacks'''
         def __init__(self , data_module , raw_loader , device , verbosity = 0) -> None:
             self.data_module = data_module
             self.device = device
             self.loader = tqdm(raw_loader , total=len(raw_loader)) if verbosity >= 10 else raw_loader
             self.display_text = None
 
-        def __len__(self): 
-            return len(self.loader)
+        def __len__(self):  return len(self.loader)
+        def __getitem__(self , i : int): return self.process(list(self.loader)[i] , i)
 
         def __iter__(self):
             for batch_i , batch_data in enumerate(self.loader):
-                yield self.process(batch_data , batch_i)
-
-        def __getitem__(self , i : int): 
-            return self.process(list(self.loader)[i] , i)
+                yield self.process(batch_data , batch_i)        
         
         def process(self , batch_data : BatchData , batch_i : int) -> BatchData:
             if hasattr(self.data_module , 'on_before_batch_transfer'):

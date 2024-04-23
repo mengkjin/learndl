@@ -8,11 +8,10 @@ from typing import Literal
 
 from .ckpt import Checkpoint
 
-class FittedModel:
-    def __init__(self, ckpt : Checkpoint , 
-                 use : Literal['loss','score'] = 'score') -> None:
-        self.ckpt   = ckpt
-        self.use    = use
+class FittestModel:
+    '''abstract class of fittest model, e.g. model with the best score, swa model of best scores or last ones'''
+    def __init__(self, ckpt : Checkpoint , use : Literal['loss','score'] = 'score') -> None:
+        self.ckpt , self.use = ckpt , use
 
     @abstractmethod
     def assess(self , net : nn.Module , epoch : int , score = 0. , loss = 0.):
@@ -20,15 +19,15 @@ class FittedModel:
         pass
     @abstractmethod
     def state_dict(self , *args , device = None) -> nn.Module | dict: 
-        '''output the final fitted model state dict'''
+        '''output the final fittest model state dict'''
         pass
     @classmethod
-    def get_dict(cls , model_types , *args , **kwargs):
-        '''get a dict of FittedModels'''
-        return {model_type:cls.get(model_type)(*args , **kwargs) for model_type in model_types}
+    def get_models(cls , model_types , *args , **kwargs):
+        '''get a dict of FittestModel'''
+        return {model_type:cls.choose(model_type)(*args , **kwargs) for model_type in model_types}
     @staticmethod
-    def get(model_type):
-        '''get a subclass of FittedModel'''
+    def choose(model_type):
+        '''get a subclass of FittestModel'''
         if model_type == 'best': return BestModel
         elif model_type == 'swabest': return SWABest
         elif model_type == 'swalast': return SWALast
@@ -56,7 +55,7 @@ class SWAModel:
     @property
     def module(self) -> nn.Module: return self.avgmodel.module
 
-class BestModel(FittedModel):
+class BestModel(FittestModel):
     def __init__(self, ckpt : Checkpoint , use : Literal['loss','score'] = 'score') -> None:
         super().__init__(ckpt , use)
         self.epoch_fix  = -1
@@ -73,7 +72,7 @@ class BestModel(FittedModel):
     def state_dict(self , *args , device = None , **kwargs):
         return self.ckpt.load_epoch(self.epoch_fix)
 
-class SWABest(FittedModel):
+class SWABest(FittestModel):
     def __init__(self, ckpt : Checkpoint , n_best = 5 , use : Literal['loss','score'] = 'score') -> None:
         super().__init__(ckpt , use)
         assert n_best > 0, n_best
@@ -101,8 +100,8 @@ class SWABest(FittedModel):
         swa.update_bn(data_loader , getattr(data_loader , 'device' , None))
         return swa.module.cpu().state_dict()
     
-class SWALast(FittedModel):
-    def __init__(self, ckpt : Checkpoint , n_last = 5 , interval = 3 , 
+class SWALast(FittestModel):
+    def __init__(self, ckpt : Checkpoint , n_last = 5 , interval = 3 ,
                  use : Literal['loss','score'] = 'score') -> None:
         super().__init__(ckpt , use)
         assert n_last > 0 and interval > 0, (n_last , interval)
@@ -115,15 +114,18 @@ class SWALast(FittedModel):
 
     def assess(self , net : nn.Module , epoch : int , score = 0. , loss = 0.):
         value = loss if self.use == 'loss' else score
-        old_candidates = self.candidates
         if self.metric_fix is None or (self.metric_fix < value if self.use == 'score' else self.metric_fix > value):
-            self.epoch_fix = epoch
-            self.metric_fix = value
-        self.candidates = list(range(self.epoch_fix - self.left_epochs , epoch + 1 , self.interval))[:self.n_last]
-        for candid in old_candidates:
-            if candid >= self.candidates[0]: break
-            self.ckpt.disjoin(self , candid)
-        self.ckpt.join(self , epoch , net)
+            self.epoch_fix , self.metric_fix = epoch , value
+        candidates = self._new_candidates(epoch)
+        [self.ckpt.disjoin(self , candid) for candid in self.candidates if candid < min(candidates)]
+        if epoch in candidates: self.ckpt.join(self , epoch , net)
+        self.candidates = candidates
+
+    def _new_candidates(self , epoch):
+        epochs  = np.arange(self.interval , epoch + 1 , self.interval)
+        left    = epochs[epochs < self.epoch_fix]
+        right   = epochs[epochs > self.epoch_fix]
+        return [*left[-((self.n_last - 1) // 2):] , self.epoch_fix , *right][:self.n_last]
 
     def state_dict(self , net , data_loader , *args , **kwargs):
         swa = SWAModel(net)

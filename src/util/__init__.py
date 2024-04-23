@@ -1,10 +1,12 @@
+from .trainer import optim
 from . import (
-    config, device , loader , logger , metric, optim , store , time , trainer
+    config, device , loader , logger , metric, store , time , trainer
 )
 
 from .trainer.pipeline import Pipeline
 from .trainer.ckpt import Checkpoint
-from .trainer.model import FittedModel
+from .trainer.model import FittestModel
+from .trainer.optim import Optimizer
 from .loader import DataloaderStored
 from .metric import Metrics , AggMetrics
 from .store import Storage

@@ -120,7 +120,7 @@ class Predictor:
                     for tdate in iter_tdates:
                         batch_data = loader[np.where(tdates == tdate)[0][0]]
 
-                        pred = U.trainer.Output(net(batch_data.x)).pred()
+                        pred = U.trainer.Output(net(batch_data.x)).pred
                         if len(pred) == 0: continue
                         df = pd.DataFrame({'secid' : secid[batch_data.i[:,0].cpu().numpy()] , 'date' : tdate , 
                                            self.model_name : pred.cpu().flatten().numpy()})
@@ -159,7 +159,7 @@ class ModelTestor:
             print(f'multiple x of {len(self.batch_data.x)}')
         getattr(self.net , 'dynamic_data_assign' , lambda *x:None)(self)
         self.net_output = U.trainer.Output(self.net(self.batch_data.x))
-        print(f'y shape is {self.net_output.pred().shape}')
+        print(f'y shape is {self.net_output.pred.shape}')
         print(f'Test Forward Success')
 
     def try_metrics(self) -> None:
@@ -167,8 +167,8 @@ class ModelTestor:
         if not hasattr(self , 'outputs'): self.try_forward()
         label , weight = self.batch_data.y , self.batch_data.w
         penalty_kwargs = {}
-        penalty_kwargs.update({'net' : self.net , 'hidden' : self.net_output.hidden() , 'label' : label})
-        metrics = self.metrics.calculate('train' , label , self.net_output.pred() , weight , self.net , penalty_kwargs)
+        penalty_kwargs.update({'net' : self.net , 'hidden' : self.net_output.hidden , 'label' : label})
+        metrics = self.metrics.calculate('train' , label , self.net_output.pred , weight , self.net , penalty_kwargs)
         print('metrics : ' , metrics)
         print(f'Test Metrics Success')
 
@@ -177,25 +177,26 @@ class ModelTrainer():
     default_model_type = 'best'
 
     def __init__(self , timer = True ,  **kwargs):
-        self.pipe           = U.Pipeline(config , logger)
-        self.ptimer         = U.time.PTimer(timer)
-        self.checkpoint     = U.Checkpoint('mem' if config.mem_storage else 'disk')
-        self.deposition     = U.Checkpoint('disk')
-        self.device         = U.Device()
-        self.metrics        = U.Metrics(config.train_param['criterion'])
+        self.pipe       = U.Pipeline(config , logger)
+        self.ptimer     = U.time.PTimer(timer)
+        self.checkpoint = U.Checkpoint('mem' if config.mem_storage else 'disk')
+        self.deposition = U.Checkpoint('disk')
+        self.device     = U.Device()
+        self.metrics    = U.Metrics(config.train_param['criterion'])
 
     def main_process(self):
         '''Main stage of data & fit & test'''
+        self.pipe.start_process()
         for self.stage in config.stage_queue: 
             getattr(self , f'stage_{self.stage}')()
-        self.pipe.dump_info()
-        self.ptimer.print()
+        self.ptimer.summarize()
+        self.pipe.end_process()
     
     def stage_data(self):
         '''stage of loading model data'''
-        logger.critical(self.pipe.tic_str('data'))
+        self.pipe.start_stage(self.stage)
         self.data_module = DataModule(config)
-        logger.critical(self.pipe.toc_str('data'))
+        self.pipe.end_stage()
         
     def stage_fit(self):
         '''stage of fitting'''
@@ -229,44 +230,49 @@ class ModelTrainer():
     
     def stage_fit_start(self):
         '''to do at stage fit start'''
-        self.pipe.fit_stage()
+        self.pipe.start_stage(self.stage)
         self.data_module.reset_dataloaders()
-        config.Model.save(config.model_base_path)
-        self.model_type = 'best'
+        self.model_type = self.default_model_type
 
     def stage_fit_end(self):
         '''to do at stage fit end'''
-        self.pipe.end_fit_stage()
+        self.pipe.end_stage()
+
+    def stage_test_start(self):
+        '''to do at stage test start'''
+        self.pipe.start_stage('test')
+        self.data_module.reset_dataloaders()
+
+    def stage_test_end(self):
+        '''to do at stage test end'''
+        self.pipe.end_stage()
 
     def model_fit_start(self):
         '''to do when starting fit of one model'''
         with self.ptimer(f'{self.stage}/start'):
-            self.param = config.model_param[self.model_num]
+            self.param : dict = config.model_param[self.model_num]
             self.data_module.setup('fit' , self.param , self.model_date)
             self.pipe.new_fit_model(self.model_num , self.model_date)
-
             self.metrics.new_model(self.param , config)
 
     def model_fit_body(self):
         '''main method of fitting one model'''
-        while self.pipe.loop_status != 'model':
+        while self.pipe.loop_continue():
             self.model_fit_loop_start()
             self.model_fit_loop_body()
-            self.model_fit_loop_assess()
             self.model_fit_loop_end()
 
     def model_fit_loop_start(self):
         '''on new attempt, initialize net , optimizer(scheduler)'''
         with self.ptimer(f'{self.stage}/loop_start'):
-            self.pipe.new_loop()
-            if self.pipe.loop_status == 'attempt':
+            if self.pipe.loop_new_attempt():
                 self.checkpoint.new_model(self.param , self.model_date)
-                self.model_dict = U.FittedModel.get_dict(config.output_types , self.checkpoint)
+                self.models = U.FittestModel.get_models(config.model_types , self.checkpoint)
                 self.load_model(True)
-                self.optimizer = U.optim.Optimizer(self.net , config , self.transferred , self.pipe.attempt)
+                self.optimizer = U.Optimizer(self.net , config , self.transferred , self.pipe.attempt)
 
     def model_fit_loop_body(self):
-        '''go through train/val dataset, calculate loss/score , update values'''
+        '''go through train/val dataset, calculate loss/score , update values , check nan , assess models'''
         with self.ptimer(f'{self.stage}/train_loader'):
             self.loop_dataloader('train')
         
@@ -274,23 +280,19 @@ class ModelTrainer():
             self.loop_dataloader('valid')
 
         self.print_progress(self.optimizer.step(self.pipe.epoch))
-
-    def model_fit_loop_assess(self):
-        '''Update condition of continuing training epochs , restart attempt if early exit or nanloss'''
         if self.pipe.nanloss: return
+
         with self.ptimer(f'{self.stage}/loop_assess'):
             self.pipe.assess_terminate()
-            for model in self.model_dict.values():
+            for model in self.models.values():
                 model.assess(self.net , self.pipe.epoch , self.pipe.valid_score , self.pipe.valid_loss)
-            self.print_progress('epoch_step')
+        self.print_progress('epoch_step')
 
     def model_fit_loop_end(self):
         '''on model fitted save model , print if new_attempt'''
         with self.ptimer(f'{self.stage}/loop_end'):
-            if self.pipe.loop_status == 'model':
-                self.save_model()
-            elif self.pipe.loop_status == 'attempt': 
-                self.print_progress('new_attempt')
+            if self.pipe.loop_new_attempt():  self.print_progress('new_attempt')
+            if self.pipe.loop_terminate(): self.save_model()
 
     def model_fit_end(self):
         '''to do when ending fit of one model'''
@@ -298,15 +300,6 @@ class ModelTrainer():
             self.checkpoint.del_all()
             self.pipe.end_fit_model()
             self.print_progress('model_end')
-
-    def stage_test_start(self):
-        '''to do at stage test start'''
-        self.pipe.test_stage()
-        self.data_module.reset_dataloaders()
-
-    def stage_test_end(self):
-        '''to do at stage test end'''
-        self.pipe.end_test_stage()
 
     def model_test_start(self):
         '''to do at test start on every model'''
@@ -325,7 +318,7 @@ class ModelTrainer():
         '''to do at on every model'''
         with self.ptimer(f'{self.stage}/forecast') , no_grad():
             test_dates = np.concatenate([self.data_module.early_test_dates , self.data_module.model_test_dates])
-            for self.model_type in config.output_types:
+            for self.model_type in config.model_types:
                 self.load_model(False , self.model_type)
                 self.loop_dataloader('test' , warm_up = len(self.data_module.early_test_dates) , dates = test_dates)
                 self.pipe.update_test_score(self.model_type)
@@ -337,52 +330,44 @@ class ModelTrainer():
 
     def loop_dataloader(self , dataset , warm_up : int = 0 , dates : Optional[np.ndarray] = None):
         '''loop of batch data'''
-        self.dataset : Literal['train' , 'valid' , 'test'] = dataset
-        self.pipe.set_dataset(dataset)
-        self.pipe.new_metric(self.model_type)
+        self.dataset = dataset
+        self.pipe.new_metric(dataset , self.model_type)
 
         self.net.train() if dataset == 'train' else self.net.eval()
         if dataset == 'train':   loader = self.data_module.train_dataloader().add_text('Train Ep#{ep:3d} loss : {ls:.5f}')
         elif dataset == 'valid': loader = self.data_module.val_dataloader().add_text('Valid Ep#{ep:3d} score : {sc:.5f}')
-        elif dataset == 'test' : loader = self.data_module.test_dataloader().add_text('Test {mtype} {i} score : {sc:.5f}')
+        elif dataset == 'test' : loader = self.data_module.test_dataloader().add_text('Test {mt} {dt} score : {sc:.5f}')
         if dates is None: dates = np.zeros(len(loader))
         self.assert_equity(len(loader) , len(dates))
         for i , self.batch_data in enumerate(loader):
             if dates[i]: self.assert_equity(dates[i] , self.data_module.y_date[self.batch_data.i[0,1]]) 
-            self.forward()
+            self.batch_forward()
             if i < warm_up: continue  # before this is warmup stage , only forward
-            self.cal_metric()
-            self.backward()
-            loader.display(i=dates[i],mtype=self.model_type,ep=self.pipe.epoch,ls=self.pipe.aggloss,sc=self.pipe.aggscore)
+            self.batch_metrics()
+            self.batch_backward()
+            loader.display(dt=dates[i], mt=self.model_type, ep=self.pipe.epoch, ls=self.pipe.aggloss, sc=self.pipe.aggscore)
             if (i + 1) % 20 == 0 : torch.cuda.empty_cache()
+        self.pipe.collect_metric_and_lr(self.optimizer.last_lr)
 
-        self.pipe.collect_metric()
-        self.pipe.collect_lr(self.optimizer.last_lr)
-
-    def forward(self):
+    def batch_forward(self) -> None:
         with self.ptimer(f'{self.stage}/{self.dataset}/forward'):
-            if self.batch_data.is_empty: 
-                self.net_output = U.trainer.Output(Tensor().requires_grad_())
-            else:
-                getattr(self.net , 'dynamic_data_assign' , lambda *x:None)(self)
-                self.net_output = U.trainer.Output(self.net(self.batch_data.x))
+            getattr(self.net , 'dynamic_data_assign' , lambda *x:None)(self)
+            self.net_output = U.trainer.Output.empty() if self.batch_data.is_empty else U.trainer.Output(self.net(self.batch_data.x))
 
-    def cal_metric(self):
+    def batch_metrics(self) -> None:
         with self.ptimer(f'{self.stage}/{self.dataset}/loss'):
-            self.metrics.calculate(self.dataset , self.batch_data.y , self.net_output.pred() , 
+            self.metrics.calculate(self.dataset , self.batch_data.y , self.net_output.pred , 
                                    self.batch_data.w , self.net , self.penalty_kwargs , assert_nan = True)
             self.pipe.record_metric(self.metrics)
 
-    def backward(self):
-        if self.dataset != 'train': return
+    def batch_backward(self) -> None:
         with self.ptimer(f'{self.stage}/{self.dataset}/backward'): 
-            self.optimizer.backward(self.metrics.loss)
+            if self.dataset == 'train': self.optimizer.backward(self.metrics.loss)
 
     @property
-    def penalty_kwargs(self) -> dict:
-        return {'net' : self.net , 'hidden' : self.net_output.hidden() , 'label' : self.batch_data.y}
+    def penalty_kwargs(self): return {'net':self.net,'hidden':self.net_output.hidden,'label':self.batch_data.y}
     
-    def print_progress(self , key , sdout = None):
+    def print_progress(self , key : Optional[str] = None , sdout = None):
         '''Print out status giving display conditions and looping conditions'''
         if key is None: return
         printers = [logger.info] if (config.verbosity > 2 or self.pipe.initial_models) else [logger.debug]
@@ -400,26 +385,24 @@ class ModelTrainer():
         else: raise KeyError(key)
         if sdout is not None: [prt(sdout) for prt in printers]
     
-    def load_model(self , training : bool , model_type = default_model_type):
+    def load_model(self , training : bool , model_type = default_model_type) -> None:
         '''load model state dict, return net and a sign of whether it is transferred'''
         with self.ptimer(f'load_model'):
-            self.transferred = False
-            if training:         
-                if config.train_param['transfer']:
-                    model_path = self.model_path(self.data_module.prev_model_date(self.model_date))
-                    self.transferred = self.deposition.exists(model_path)
-                else:
-                    model_path = self.model_path()
+            if training and config.train_param['transfer']:         
+                model_path = self.model_path(self.data_module.prev_model_date(self.model_date))
+            elif training:
+                model_path = self.model_path()
             else:
                 model_path = self.model_path(self.model_date , model_type)
+            self.transferred = training and config.train_param['transfer'] and self.deposition.exists(model_path)
             self.net = MODEL.new(config.model_module , self.param , self.deposition.load(model_path) , self.device)
-     
+            
     def save_model(self):
         '''save model state dict to deposition'''
         with self.ptimer(f'save_model'):
             getattr(self.net , 'dynamic_data_unlink' , lambda *x:None)()
             self.net = self.net.cpu()
-            for model_type , model in self.model_dict.items():
+            for model_type , model in self.models.items():
                 sd = model.state_dict(self.net , self.data_module.train_dataloader())
                 self.deposition.save_state_dict(sd , self.model_path(self.model_date , model_type)) 
     
@@ -438,13 +421,9 @@ class ModelTrainer():
 
     @classmethod
     def fit(cls , stage = -1 , resume = -1 , checkname = -1 , timer = False , parser_args = None):
-        if parser_args is None: parser_args = config.parser_args({'stage':stage,'resume':resume,'checkname':checkname})
-
-        config.reload(do_parser = True , par_args = parser_args)
+        if parser_args is None: parser_args = config.parser_args(stage=stage,resume=resume,checkname=checkname)
+        config.reload(do_parser=True,par_args=parser_args)
         config.set_config_environment()
-
-        logger.warning('Model Specifics:')
-        config.print_out()
 
         app = cls(timer = timer)
         app.main_process()

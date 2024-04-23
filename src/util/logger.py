@@ -4,8 +4,8 @@ import colorlog
 from logging import handlers , RootLogger
 
 from ..environ import DIR
-
 class Logger(RootLogger):
+    '''custom colored log , config at {DIR.conf}/logger.yaml '''
     def __new__(cls): return cls._init_logger()
 
     @staticmethod
@@ -36,7 +36,6 @@ class Logger(RootLogger):
             log.error('This is the ERROR    message...')
             log.critical('This is the CRITICAL message...')
         return log
-
 class _LevelFormatter(logging.Formatter):
     def __init__(self, fmt=None, datefmt=None, level_fmts={}):
         self._level_formatters = {}
@@ -50,7 +49,6 @@ class _LevelFormatter(logging.Formatter):
         if record.levelno in self._level_formatters:
             return self._level_formatters[record.levelno].format(record)
         return super(_LevelFormatter, self).format(record)
-    
 class _LevelColorFormatter(colorlog.ColoredFormatter):
     def __init__(self, fmt=None, datefmt=None, log_colors={},level_fmts={},secondary_log_colors={}):
         self._level_formatters = {}

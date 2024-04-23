@@ -1,5 +1,4 @@
 import argparse , os , random , shutil
-
 import numpy as np
 import torch
 
@@ -54,6 +53,7 @@ class ModelParam:
             self.params = torch.load(f'{base_path}/{self.target_base}')
         else:
             self.params = [{'path':f'{base_path}/{mm}' , **{k:v[mm % len(v)] for k,v in self.Param.items()}} for mm in range(self.n_model)]
+            self.save(base_path)
 
     @classmethod
     def load(cls , base_path , model_num : int | None = None):
@@ -137,7 +137,6 @@ class TrainParam:
     def resumeable(self) -> bool: return os.path.exists(f'{self.model_base_path}/{self.train_yaml}')
     @property
     def model_module(self) -> str: return self.configs['model_module'].lower()
-    
 
 @dataclass
 class TrainConfig:
@@ -146,7 +145,7 @@ class TrainConfig:
     model_module: str       = ''
     model_data_type: str    = 'day' 
     model_data_prenorm: dict= field(default_factory=dict)
-    output_types: list      = field(default_factory=list)
+    model_types: list       = field(default_factory=list)
     labels: list            = field(default_factory=list)
     beg_date: int           = 20170103
     end_date: int           = 99991231
@@ -187,9 +186,9 @@ class TrainConfig:
     def __getitem__(self , k):
         return self.__dict__[k]
 
-    def update(self, updater = {} , **kwargs):
-        for k,v in updater.items(): setattr(self , k , v)
-        for k,v in kwargs.items():  setattr(self , k , v)
+    def update(self, update = {} , **kwargs):
+        for k,v in update.items(): setattr(self , k , v)
+        for k,v in kwargs.items(): setattr(self , k , v)
         return self
 
     def reload(self , config_path = 'default' , do_parser = False , par_args = {} , override = None):
@@ -299,10 +298,10 @@ class TrainConfig:
         torch.backends.cudnn.deterministic = True
     
     @classmethod
-    def parser_args(cls , input = {} , description='manual to this script'):
+    def parser_args(cls , description='manual to this script' , **kwargs):
         parser = argparse.ArgumentParser(description=description)
         for arg in ['stage' , 'resume' , 'checkname']:
-            parser.add_argument(f'--{arg}', type=int, default = input.get(arg , -1))
+            parser.add_argument(f'--{arg}', type=int, default = kwargs.get(arg , -1))
         args , _ = parser.parse_known_args()
         return args
 

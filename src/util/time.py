@@ -1,31 +1,25 @@
 import numpy as np
 import pandas as pd
-import time , psutil
+import time
 
 class PTimer:
+    '''process timer , call to record and .summarize() to print out summary'''
     def __init__(self , record = True) -> None:
         self.recording = record
         self.recorder = {} if record else None
-
     class ptimer:
-        def __init__(self , target_dict = None , *args):
-            self.target_dict = target_dict
-            if self.target_dict is not None:
-                self.key = '/'.join(args)
-                if self.key not in self.target_dict.keys():
-                    self.target_dict[self.key] = []
+        def __init__(self , target : dict[str,list[float]] | None , key):
+            self.target , self.key = target , key
+            if self.target is not None and key not in self.target.keys(): self.target[self.key] = []
         def __enter__(self):
-            if self.target_dict is not None:
-                self.start_time = time.time()
+            if self.target is not None: self.start_time = time.time()
         def __exit__(self, type, value, trace):
-            if self.target_dict is not None:
-                time_cost = time.time() - self.start_time
-                self.target_dict[self.key].append(time_cost)
+            if self.target is not None: self.target[self.key].append(time.time() - self.start_time)
 
     def __call__(self , *args):
-        return self.ptimer(self.recorder , *args)
+        return self.ptimer(self.recorder , '/'.join(args))
     
-    def print(self):
+    def summarize(self):
         if self.recorder is not None:
             keys = list(self.recorder.keys())
             num_calls = [len(self.recorder[k]) for k in keys]
@@ -35,22 +29,10 @@ class PTimer:
             print(tb.sort_values(by=['total_time'],ascending=False))
         
 class Timer:
-    def __init__(self , *args):
-        self.key = '/'.join(args)
+    '''simple timer to print out time'''
+    def __init__(self , *args): self.key = '/'.join(args)
     def __enter__(self):
         self.start_time = time.time()
         print(self.key , '...', end='')
-    def __exit__(self, type, value, trace):
-        print(f'... cost {time.time()-self.start_time:.2f} secs')
-            
-class MemoryPrinter:
-    def __init__(self) -> None:
-        pass
-    def __repr__(self) -> str:
-        return 'Used: {:.2f}G; Free {:.2f}G'.format(
-            float(psutil.virtual_memory().used)/1024**3,
-            float(psutil.virtual_memory().free)/1024**3)
-    def print(self):
-        print(self.__repr__())
-        
+    def __exit__(self, type, value, trace): print(f'... cost {time.time()-self.start_time:.2f} secs')
         
