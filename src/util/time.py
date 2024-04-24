@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import time
 
-from inspect import currentframe
+from typing import Callable
 
 class PTimer:
     '''process timer , call to record and .summarize() to print out summary'''
@@ -18,11 +18,11 @@ class PTimer:
         def __exit__(self, type, value, trace):
             if self.target is not None: self.target[self.key].append(time.time() - self.start_time)
 
-    def func_timer(self , func):
+    def func_timer(self , func : Callable):
         def wrapper(*args , **kwargs):
-            with self.ptimer(self.recorder , getattr(currentframe() , 'f_code').co_name):
+            with self.ptimer(self.recorder , func.__name__):
                 return func(*args , **kwargs)
-        return wrapper
+        return wrapper if self.recording else func
 
     def __call__(self , *args):
         return self.ptimer(self.recorder , '/'.join(args))

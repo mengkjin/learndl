@@ -59,6 +59,7 @@ class DataModule:
         self.config : TrainConfig = TrainConfig.load() if config is None else config
         self.predict : bool = predict
 
+    def load_data(self):
         self.device  = Device()
         self.storage = Storage('mem' if self.config.mem_storage else 'disk')
 
@@ -79,9 +80,14 @@ class DataModule:
         self.reset_dataloaders()
         self.buffer = self.BufferSpace(self.config.buffer_type , self.config.buffer_param , self.device)
 
+        return self
+
     def reset_dataloaders(self):
         '''reset for every fit / test / predict'''
         self.loader_dict , self.loader_param = {} , ()
+
+    def on_fit_start(self , *args):  self.reset_dataloaders()
+    def on_test_start(self , *args): self.reset_dataloaders()
     
     @property
     def data_type_list(self):
@@ -97,15 +103,14 @@ class DataModule:
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , param = {} , model_date = -1) -> None:
         '''Create train/valid/test dataloaders if necessary'''
         if self.predict: stage = 'predict'
-        
         seqlens : dict = param['seqlens']
         if self.config.tra_model: seqlens.update(param.get('tra_seqlens',{}))
         if self.loader_param == (stage , model_date , seqlens): return
+        self.loader_param = stage , model_date , seqlens
 
         assert stage in ['fit' , 'test' , 'predict'] and model_date > 0 and seqlens , (stage , model_date , seqlens)
         
         self.stage = stage
-        self.loader_param = stage , model_date , seqlens
 
         x_keys = self.data_type_list
         y_keys = [k for k in seqlens.keys() if k in ['hist_loss','hist_preds','hist_labels']]

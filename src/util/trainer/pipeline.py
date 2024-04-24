@@ -30,17 +30,19 @@ class Pipeline:
         self._nanloss_life = self.config.train_param['trainer']['nanloss']['retry']
         self.metric_batchs = AggMetrics()
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
+        self.test_record = self.TestRecord()
 
     @property
     def initial_models(self): return self._model_stage < self.config.model_num
 
     def get(self , key , default = None): return self.__dict__.get(key , default)
 
-    def start_process(self):
+    def configure_model(self , *args):
+        self.config.set_config_environment()
         self.logger.warning('Model Specifics:')
         self.config.print_out()
 
-    def end_process(self):
+    def summerize_model(self):
         result = {
             '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
             '1_start' : time.ctime(self.times['init']) ,
@@ -54,24 +56,30 @@ class Pipeline:
         }
         DIR.dump_yaml(result , self.result_path)
 
-    def start_stage(self , stage):
-        self.stage = stage
-        self.logger.critical(self.tic_str(self.stage))
-        if self.stage == 'test':
-            self.logger.warning('Each Model Date Testing Mean Score({}):'.format(self.config.train_param['criterion']['score']))
-            self.test_record = self.TestRecord(self.config.model_num_list , self.config.model_types , self.logger.info)
-            self.test_record.print_colnames()
-        else:
-            self.test_record = self.TestRecord()
+    def on_data_start(self , *args): 
+        self.stage = 'data'
+        self.logger.critical(self.tic_str('data'))
+    def on_data_end(self , *args): 
+        self.logger.critical(self.toc_str('data'))
+    def on_fit_start(self , *args): 
+        self.stage = 'fit'
+        self.logger.critical(self.tic_str('fit'))
+    def on_fit_end(self , *args): 
+        self.logger.critical(self.toc_str('fit' , avg=True))
+    def on_test_start(self , *args): 
+        self.stage = 'test'
+        self.logger.critical(self.tic_str('test'))
+        self.logger.warning('Each Model Date Testing Mean Score({}):'.format(self.config.train_param['criterion']['score']))
+        self.test_record = self.TestRecord(self.config.model_num_list , self.config.model_types , self.logger.info)
+        self.test_record.print_colnames()
 
-    def end_stage(self):
-        if self.stage == 'test':
-            for model_num in self.config.model_num_list:
-                path = self.config.model_param[model_num]['path'] + f'/{self.config.model_name}_score_by_date_{model_num}.csv'
-                self.test_record.score_table(model_num , path)
-            self.test_record.summarize().to_csv(f'{self.config.model_base_path}/{self.config.model_name}_score_by_model.csv')
-            self.test_record.print_summary()
-        self.logger.critical(self.toc_str(self.stage , avg=self.stage == 'fit'))
+    def on_test_end(self , *args): 
+        for model_num in self.config.model_num_list:
+            path = self.config.model_param[model_num]['path'] + f'/{self.config.model_name}_score_by_date_{model_num}.csv'
+            self.test_record.score_table(model_num , path)
+        self.test_record.summarize().to_csv(f'{self.config.model_base_path}/{self.config.model_name}_score_by_model.csv')
+        self.test_record.print_summary()
+        self.logger.critical(self.toc_str('test'))
 
     def new_epoch(self):
         self.epoch += 1
@@ -90,12 +98,12 @@ class Pipeline:
         self.lr_list = []
         self.attempt += 1
         self.texts['attempt'] = f'FirstBite' if self.attempt == 0 else f'Retrain#{self.attempt}'
-        self.new_epoch()
+        self._loop_status = 'epoch'
 
-    def new_fit_model(self , model_num , model_date):
+    def on_fit_model_start(self , model_mod , *args):
         '''Reset variables of model start'''
         self.tic('model')
-        self.model_num , self.model_date = model_num , model_date
+        self.model_num , self.model_date = model_mod.model_num , model_mod.model_date
         self._model_stage += 1
         self.attempt = -1
         self.epoch_model = -1
@@ -103,12 +111,19 @@ class Pipeline:
         self.texts['model'] = '{:s} #{:d} @{:4d}'.format(self.config.model_name , self.model_num , self.model_date)
         self._loop_status = 'attempt'
 
-    def end_fit_model(self):
+    def on_fit_model_end(self , model_mod):
         self.texts['status'] = 'Train{: .4f} Valid{: .4f} BestVal{: .4f}'.format(
             self.train_score , self.valid_score , self.score_attempt_best)
         self.texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
             self.toc('model') / 60 , self.toc('model') / (self.epoch_model + 1))
-        
+        self.logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.texts))
+    
+    def on_validation_epoch_end(self , model_mod):
+        if self.loop_new_attempt:
+            printer = self.logger.info if (self.config.verbosity > 2 or self.initial_models) else self.logger.debug
+            printer('{attempt} {epoch} : {status}, Next attempt goes!'.format(**self.texts))
+    
+    @property
     def loop_continue(self): 
         if self._loop_status in ['attempt' , 'epoch']:
             return True
@@ -116,8 +131,9 @@ class Pipeline:
             return False
         else:
             raise KeyError(self._loop_status)
-    
+    @property
     def loop_new_attempt(self): return self._loop_status == 'attempt'
+    @property
     def loop_terminate(self): return self._loop_status == 'model'
         
     def check_nanloss(self , is_nanloss):
@@ -127,7 +143,7 @@ class Pipeline:
             if self._nanloss_life > 0:
                 self.logger.error(f'Initialize a new model to retrain! Lives remaining {self._nanloss_life}')
                 self._nanloss_life -= 1
-                self.nanloss   = True
+                self.nanloss  = True
                 self.attempt -= 1
                 self._loop_status = 'attempt'
             else:
