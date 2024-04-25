@@ -45,9 +45,6 @@ class Metrics:
         self.f_pen.get('tra_opt_transport',{})['cond'] = config.tra_model
         return self
     
-    def on_fit_model_start(self , Mmod):  self.new_model(Mmod.model_param , Mmod.config)
-    def on_test_model_start(self , Mmod): self.new_model(Mmod.model_param , Mmod.config)
-    
     def calculate(self , dataset , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , net : Optional[nn.Module] = None , 
                   penalty_kwargs : dict[str,Any] = {} , assert_nan = False):
         '''Calculate loss(with gradient), penalty , score'''

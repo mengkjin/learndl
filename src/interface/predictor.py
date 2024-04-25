@@ -8,7 +8,7 @@ from typing import ClassVar , Literal
 
 from ..environ import DIR
 from ..util import Device , TrainConfig
-from ..util.trainer import BatchOutput
+from ..util.classes import BatchOutput
 from ..data.DataFetcher import DataFetcher
 from ..module import DataModule
 from ..model import model as MODEL

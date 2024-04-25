@@ -29,10 +29,8 @@ class PTimer:
     
     def summarize(self):
         if self.recorder is not None:
-            keys = list(self.recorder.keys())
-            num_calls = [len(self.recorder[k]) for k in keys]
-            total_time = [np.sum(self.recorder[k]) for k in keys]
-            tb = pd.DataFrame({'keys':keys , 'num_calls': num_calls, 'total_time': total_time})
+            tb = pd.DataFrame([[k , len(self.recorder[k]) , np.sum(self.recorder[k])] for k in self.recorder.keys()] ,
+                                columns = ['keys' , 'num_calls', 'total_time'])
             tb['avg_time'] = tb['total_time'] / tb['num_calls']
             print(tb.sort_values(by=['total_time'],ascending=False))
         

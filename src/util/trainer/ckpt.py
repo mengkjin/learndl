@@ -60,8 +60,6 @@ class Checkpoint(Storage):
     def _extend_reliance(self , n_epochs = 200):
         self.epoch_queue += [[] for _ in range(n_epochs)] # extend epoch list
 
-    def on_fit_model_end(self , *args): self.del_all()
-
 class Deposition(Storage):
     '''model saver'''
     def __init__(self , store_type : Any = None):

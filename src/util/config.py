@@ -298,7 +298,7 @@ class TrainConfig:
         torch.backends.cudnn.deterministic = True
     
     @classmethod
-    def parser_args(cls , description='manual to this script' , **kwargs):
+    def parser_args(cls , kwargs : dict , description='manual to this script'):
         parser = argparse.ArgumentParser(description=description)
         for arg in ['stage' , 'resume' , 'checkname']:
             parser.add_argument(f'--{arg}', type=int, default = kwargs.get(arg , -1))
