@@ -7,174 +7,23 @@
 # python3 scripts/run_model3.py --stage=0 --resume=0 --checkname=1 
 import itertools , os
 import numpy as np
-import pandas as pd
 import torch
 
 from dataclasses import dataclass
 from inspect import currentframe
-from torch import nn , no_grad , Tensor
 from typing import ClassVar , Literal , Optional
 
 from .environ import DIR
 from . import util as U
 from .util import callback as CB
-from .data.DataFetcher import DataFetcher
-from .DataModule import BatchData , DataModule
+from .module.DataModule import DataModule
 from .model import model as MODEL
-from .func.date import today , date_offset
 
 logger = U.Logger()
 config = U.TrainConfig()
 ptimer = U.time.PTimer(True)
 hooker = CB.ModelHook(ptimer)
 
-@dataclass
-class Predictor:
-    '''for a model to predict recent/history data'''
-    model_name : str
-    model_type : Literal['best' , 'swalast' , 'swabest'] = 'swalast'
-    model_num  : int = 0
-    alias : str | None = None
-    df    : pd.DataFrame | None = None
-
-    destination : ClassVar[str] = '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha'
-    secid_col : ClassVar[str] = 'secid'
-    date_col  : ClassVar[str] = 'date'
-
-    def __post_init__(self):
-        if self.alias is None: self.alias = self.model_name
-
-    def deploy(self , df : pd.DataFrame | None = None , overwrite = False , secid_col = secid_col , date_col = date_col):
-        '''deploy df by day to class.destination'''
-        if df is None: df = self.df
-        if df is None: return NotImplemented
-        os.makedirs(f'{self.destination}/{self.alias}' , exist_ok=True)
-        for date , subdf in df.groupby(date_col):
-            des_path = f'{self.destination}/{self.alias}/{self.alias}_{date}.txt'
-            if overwrite or not os.path.exists(des_path):
-                subdf.drop(columns='date').set_index(secid_col).to_csv(des_path, sep='\t', index=True, header=False)
-
-    def get_df(self , start_dt = -10 , end_dt = 20991231):
-        '''save recent prediction to self.df'''
-        self.df = self.predict(start_dt= start_dt , end_dt = end_dt)
-        return self
-
-    def df_corr(self , df = None , window = 30 , secid_col = secid_col , date_col = date_col):
-        '''prediction correlation of ecent days'''
-        if df is None: df = self.df
-        if df is None: return NotImplemented
-        df = df[df[date_col] >= today(-window)]
-        assert isinstance(df , pd.DataFrame)
-        return df.pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()
-
-    def write_df(self , path):
-        '''write down prediction df'''
-        assert isinstance(self.df , pd.DataFrame)
-        self.df.to_feather(path)
-
-    def predict(self , start_dt = -10 , end_dt = 20991231) -> pd.DataFrame:
-        '''predict recent days'''
-        if start_dt <= 0: start_dt = today(start_dt)
-
-        model_path = f'{DIR.model}/{self.model_name}'
-        device       = U.Device()
-        model_config = U.TrainConfig.load(model_path)
-
-        model_param = model_config.model_param[self.model_num]
-        model_files = sorted([p for p in os.listdir(f'{model_path}/{self.model_num}') if p.endswith(f'{self.model_type}.pt')])
-        model_dates = np.array([int(mf.split('.')[0]) for mf in model_files])
-
-        start_dt = max(start_dt , int(date_offset(min(model_dates) ,1)))
-        calendar = DataFetcher.load_target_file('information' , 'calendar')
-        assert calendar is not None
-
-        require_model_data_old = (start_dt <= today(-100))
-
-        data_mod_old = DataModule(model_config , False).load_data() if require_model_data_old else None
-        data_mod_new = DataModule(model_config , True).load_data() 
-
-        end_dt = min(end_dt , max(data_mod_new.test_full_dates))
-        pred_dates = calendar[(calendar['calendar'] >= start_dt) & (calendar['calendar'] <= end_dt) & (calendar['trade'])]['calendar'].values
-
-        df_task = pd.DataFrame({
-            'pred_dates' : pred_dates ,
-            'model_date' : [max(model_dates[model_dates < d_pred]) for d_pred in pred_dates] ,
-            'calculated' : 0 ,
-        })
-
-        with no_grad():
-            df_list = []
-            for data_mod in [data_mod_old , data_mod_new]:
-                if data_mod is None: continue
-                for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
-                    print(model_date , 'old' if (data_mod is data_mod_old) else 'new') 
-                    assert isinstance(model_date , int) , model_date
-                    data_mod.setup('predict' ,  model_param , model_date)
-                    sd_path = f'{model_path}/{self.model_num}/{model_date}.{self.model_type}.pt'
-
-                    net = MODEL.new(model_config.model_module , model_param , torch.load(sd_path) , device)
-                    net.eval()
-
-                    loader = data_mod.predict_dataloader()
-                    secid  = data_mod.datas.secid
-                    tdates = data_mod.model_test_dates
-                    iter_tdates = np.intersect1d(df_sub['pred_dates'][df_sub['calculated'] == 0] , tdates)
-
-                    for tdate in iter_tdates:
-                        batch_data = loader[np.where(tdates == tdate)[0][0]]
-
-                        pred = U.trainer.Output(net(batch_data.x)).pred
-                        if len(pred) == 0: continue
-                        df = pd.DataFrame({'secid' : secid[batch_data.i[:,0].cpu().numpy()] , 'date' : tdate , 
-                                           self.model_name : pred.cpu().flatten().numpy()})
-                        df_list.append(df)
-                        df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
-
-            del data_mod_new , data_mod_old
-        return pd.concat(df_list , axis = 0)
-
-@dataclass
-class ModelTestor:
-    '''Check if a newly defined model can be forward correctly'''
-    config      : U.TrainConfig
-    net         : nn.Module
-    data_mod    : DataModule
-    batch_data  : BatchData
-    metrics     : U.Metrics
-
-    @classmethod
-    def new(cls , module = 'tra_lstm' , model_data_type = 'day'):
-        config = U.TrainConfig.load(override = {'model_module' : module , 'model_data_type' : model_data_type} , makedir = False)
-        data_mod = DataModule(config , True).load_data()
-        data_mod.setup('predict' , config.model_param[0] , data_mod.model_date_list[0])   
-        
-        batch_data = data_mod.predict_dataloader()[0]
-
-        net = MODEL.new(module , config.model_param[0])
-        metrics = U.Metrics(config.train_param['criterion']).new_model(config.model_param[0] , config)
-        return cls(config , net , data_mod , batch_data , metrics)
-
-    def try_forward(self) -> None:
-        '''as name says, try to forward'''
-        if isinstance(self.batch_data.x , Tensor):
-            print(f'x shape is {self.batch_data.x.shape}')
-        else:
-            print(f'multiple x of {len(self.batch_data.x)}')
-        getattr(self.net , 'dynamic_data_assign' , lambda *x:None)(self)
-        self.net_output = U.trainer.Output(self.net(self.batch_data.x))
-        print(f'y shape is {self.net_output.pred.shape}')
-        print(f'Test Forward Success')
-
-    def try_metrics(self) -> None:
-        '''as name says, try to calculate metrics'''
-        if not hasattr(self , 'outputs'): self.try_forward()
-        label , weight = self.batch_data.y , self.batch_data.w
-        penalty_kwargs = {}
-        penalty_kwargs.update({'net' : self.net , 'hidden' : self.net_output.hidden , 'label' : label})
-        metrics = self.metrics.calculate('train' , label , self.net_output.pred , weight , self.net , penalty_kwargs)
-        print('metrics : ' , metrics)
-        print(f'Test Metrics Success')
-    
 class ModelTrainer():
     '''run through the whole process of training'''
     default_model_type = 'best'
@@ -418,9 +267,9 @@ class ModelTrainer():
 
     def batch_forward(self) -> None:
         if self.batch_data.is_empty:
-            self.net_output = U.trainer.Output.empty()
+            self.net_output = U.trainer.BatchOutput.empty()
         else:
-            self.net_output = U.trainer.Output(self.net(self.batch_data.x))
+            self.net_output = U.trainer.BatchOutput(self.net(self.batch_data.x))
     
     def batch_metrics(self) -> None:
         self.metrics.calculate(self.dataset , self.batch_data.y , self.net_output.pred , 

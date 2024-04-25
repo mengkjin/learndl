@@ -1,11 +1,14 @@
 import os
 
 from typing import Any , Literal
+
+from ..config import TrainConfig
 from ..store import Storage
 
 class Checkpoint(Storage):
     '''model check point for epochs'''
-    def __init__(self, store_type: Literal['mem' , 'disk']):
+    def __init__(self, store_type: Literal['mem' , 'disk'] | TrainConfig):
+        if isinstance(store_type , TrainConfig): store_type = 'mem' if store_type.mem_storage else 'disk'
         super().__init__(store_type)
         self.epoch_queue : list[list] = []
         self.join_record : list[str]  = [] 
@@ -61,5 +64,5 @@ class Checkpoint(Storage):
 
 class Deposition(Storage):
     '''model saver'''
-    def __init__(self):
+    def __init__(self , store_type : Any = None):
         super().__init__('disk')

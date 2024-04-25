@@ -217,7 +217,7 @@ class TrainConfig:
         _ModelParam = ModelParam(config_path , _TrainParam.model_module)
 
         config = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
-        if do_parser: config.process_parser(par_args)
+        if do_parser: config.process_parser(cls.parser_args(par_args))
 
         model_path = config.model_base_path
         if config_path != 'default':

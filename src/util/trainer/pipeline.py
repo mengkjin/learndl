@@ -6,24 +6,22 @@ from dataclasses import dataclass , field
 from typing import Any , Callable , ClassVar , Literal , Optional
 
 from ..config import TrainConfig
+from ..trainer.optim import Optimizer
 from ..metric import Metrics , AggMetrics
 from ...func import list_converge
 from ...environ import DIR
 
-@dataclass
 class Pipeline:
-    '''pipeline of a training / testing process'''
-    config      : TrainConfig
-    logger      : logging.Logger
-    nanloss     : bool = False
-    times       : dict[str,float] = field(default_factory=dict)
-    texts       : dict[str,str]   = field(default_factory=dict)
-    
-    result_path : ClassVar[str] = f'{DIR.result}/model_results.yaml'
+    '''pipeline of a training / testing process'''    
+    result_path = f'{DIR.result}/model_results.yaml'
 
-    def __post_init__(self):
+    def __init__(self , Mmod : Any):
+        self.Mmod = Mmod
         os.makedirs(os.path.dirname(self.result_path) , exist_ok=True)
         self.tic('init')
+        self.nanloss      : bool = False
+        self.times        : dict[str,float] = field(default_factory=dict)
+        self.texts        : dict[str,str]   = field(default_factory=dict)
         self._epoch_stage : int = 0
         self._model_stage : int = 0
         self._loop_status : Literal['epoch' , 'attempt' , 'model'] = 'epoch'
@@ -31,16 +29,15 @@ class Pipeline:
         self.metric_batchs = AggMetrics()
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
         self.test_record = self.TestRecord()
-
+    
+    @property
+    def config(self) -> TrainConfig:    return self.Mmod.config
+    @property
+    def logger(self) -> logging.Logger: return self.Mmod.logger
     @property
     def initial_models(self): return self._model_stage < self.config.model_num
 
     def get(self , key , default = None): return self.__dict__.get(key , default)
-
-    def configure_model(self , *args):
-        self.config.set_config_environment()
-        self.logger.warning('Model Specifics:')
-        self.config.print_out()
 
     def summerize_model(self):
         result = {
@@ -55,31 +52,6 @@ class Pipeline:
             '8_result': self.test_record.test_scores,
         }
         DIR.dump_yaml(result , self.result_path)
-
-    def on_data_start(self , *args): 
-        self.stage = 'data'
-        self.logger.critical(self.tic_str('data'))
-    def on_data_end(self , *args): 
-        self.logger.critical(self.toc_str('data'))
-    def on_fit_start(self , *args): 
-        self.stage = 'fit'
-        self.logger.critical(self.tic_str('fit'))
-    def on_fit_end(self , *args): 
-        self.logger.critical(self.toc_str('fit' , avg=True))
-    def on_test_start(self , *args): 
-        self.stage = 'test'
-        self.logger.critical(self.tic_str('test'))
-        self.logger.warning('Each Model Date Testing Mean Score({}):'.format(self.config.train_param['criterion']['score']))
-        self.test_record = self.TestRecord(self.config.model_num_list , self.config.model_types , self.logger.info)
-        self.test_record.print_colnames()
-
-    def on_test_end(self , *args): 
-        for model_num in self.config.model_num_list:
-            path = self.config.model_param[model_num]['path'] + f'/{self.config.model_name}_score_by_date_{model_num}.csv'
-            self.test_record.score_table(model_num , path)
-        self.test_record.summarize().to_csv(f'{self.config.model_base_path}/{self.config.model_name}_score_by_model.csv')
-        self.test_record.print_summary()
-        self.logger.critical(self.toc_str('test'))
 
     def new_epoch(self):
         self.epoch += 1
@@ -100,28 +72,15 @@ class Pipeline:
         self.texts['attempt'] = f'FirstBite' if self.attempt == 0 else f'Retrain#{self.attempt}'
         self._loop_status = 'epoch'
 
-    def on_fit_model_start(self , model_mod , *args):
-        '''Reset variables of model start'''
+    def new_model(self , model_num , model_date):
         self.tic('model')
-        self.model_num , self.model_date = model_mod.model_num , model_mod.model_date
+        self.model_num , self.model_date = model_num , model_date
         self._model_stage += 1
         self.attempt = -1
         self.epoch_model = -1
         self.texts = {k : '' for k in ['model','attempt','epoch','epoch_model','exit','status','time']}
         self.texts['model'] = '{:s} #{:d} @{:4d}'.format(self.config.model_name , self.model_num , self.model_date)
         self._loop_status = 'attempt'
-
-    def on_fit_model_end(self , model_mod):
-        self.texts['status'] = 'Train{: .4f} Valid{: .4f} BestVal{: .4f}'.format(
-            self.train_score , self.valid_score , self.score_attempt_best)
-        self.texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
-            self.toc('model') / 60 , self.toc('model') / (self.epoch_model + 1))
-        self.logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.texts))
-    
-    def on_validation_epoch_end(self , model_mod):
-        if self.loop_new_attempt:
-            printer = self.logger.info if (self.config.verbosity > 2 or self.initial_models) else self.logger.debug
-            printer('{attempt} {epoch} : {status}, Next attempt goes!'.format(**self.texts))
     
     @property
     def loop_continue(self): 
@@ -206,17 +165,8 @@ class Pipeline:
         assert self.dataset == 'train' , self.dataset
         self.lr_list.append(last_lr)
 
-    def new_test_model(self , model_num , model_date , test_dates):
-        self.model_date , self.model_num , self.test_dates = model_date , model_num , test_dates
-        if model_num == 0: self.test_record.add_rows(model_date , test_dates)
-
     def update_test_score(self , model_type):
         self.test_record.update_score(self.model_num , model_type , self.scores[-len(self.test_dates):])
-
-    def end_test_model(self):
-        if self.model_num == self.test_record.model_nums[-1]:
-            self.test_record.print_score()
-            gc.collect()
 
     def tic(self , key : str): self.times[key] = time.time()
 
@@ -261,8 +211,8 @@ class Pipeline:
     @property
     def valid_loss(self):  return self.metric_epochs['valid.loss'][-1]
     @property
-    def epoch_print(self):
-        return self.epoch % [10,5,5,3,3,1][min(self.config.verbosity // 2 , 5)] == 0
+    def progress_log(self):
+        return self.logger.info if (self.config.verbosity > 2 or self.initial_models) else self.logger.debug
     
     @dataclass
     class TestRecord:
@@ -343,3 +293,72 @@ class Pipeline:
             if not hasattr(self , 'summary'): return
             return {col:'|'.join([f'{k}({round(v[i],self.summary_digit[k])})' for k,v in self.summary.items()]) 
                     for i , col in enumerate(self.col_summary)}
+        
+    # callbacks
+    def configure_model(self , Mmod):
+        self.config.set_config_environment()
+        self.logger.warning('Model Specifics:')
+        self.config.print_out()
+    def on_data_start(self , Mmod): 
+        self.stage = 'data'
+        self.logger.critical(self.tic_str('data'))
+    def on_data_end(self , Mmod): 
+        self.logger.critical(self.toc_str('data'))
+    def on_fit_start(self , Mmod): 
+        self.stage = 'fit'
+        self.logger.critical(self.tic_str('fit'))
+    def on_fit_end(self , Mmod): 
+        self.logger.critical(self.toc_str('fit' , avg=True))
+    def on_fit_model_start(self , Mmod):
+        self.new_model(Mmod.model_num , Mmod.model_date)
+    def on_fit_model_end(self , Mmod):
+        self.texts['status'] = 'Train{: .4f} Valid{: .4f} BestVal{: .4f}'.format(
+            self.train_score , self.valid_score , self.score_attempt_best)
+        self.texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
+            self.toc('model') / 60 , self.toc('model') / (self.epoch_model + 1))
+        self.logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.texts))
+    def on_train_epoch_start(self , Mmod):
+        self.new_epoch()
+        self.new_metric(Mmod.dataset , 'best')
+    def on_train_epoch_end(self , Mmod):
+        opt : Optimizer = Mmod.optimizer
+        self.collect_metric()
+        self.collect_lr(opt.last_lr)
+        if opt.scheduler_step(self.epoch) == 'reset_learn_rate':
+            sdout = f'Reset learn rate and scheduler at the end of epoch {self.epoch} , effective at epoch {self.epoch + 1}' + \
+                ', and will speedup2x' * self.config.train_param['trainer']['learn_rate']['reset']['speedup2x']
+            self.progress_log(sdout)
+    def on_validation_epoch_start(self , Mmod):
+        self.new_metric(Mmod.dataset , 'best')
+    def on_validation_epoch_end(self , Mmod):
+        self.collect_metric()
+        self.assess_terminate()
+        if self.epoch % [10,5,5,3,3,1][min(self.config.verbosity // 2 , 5)] == 0: 
+            self.progress_log('{attempt} {epoch} : {status}'.format(**self.texts))
+        if self.loop_new_attempt: self.progress_log('{attempt} {epoch} : {status}, Next attempt goes!'.format(**self.texts))
+    def on_test_start(self , Mmod): 
+        self.stage = 'test'
+        self.logger.critical(self.tic_str('test'))
+        self.logger.warning('Each Model Date Testing Mean Score({}):'.format(self.config.train_param['criterion']['score']))
+        self.test_record = self.TestRecord(self.config.model_num_list , self.config.model_types , self.logger.info)
+        self.test_record.print_colnames()
+    def on_test_end(self , Mmod): 
+        for model_num in self.config.model_num_list:
+            path = self.config.model_param[model_num]['path'] + f'/{self.config.model_name}_score_by_date_{model_num}.csv'
+            self.test_record.score_table(model_num , path)
+        self.test_record.summarize().to_csv(f'{self.config.model_base_path}/{self.config.model_name}_score_by_model.csv')
+        self.test_record.print_summary()
+        self.logger.critical(self.toc_str('test'))
+    def on_test_model_start(self , Mmod):
+        self.model_date , self.model_num , self.test_dates = Mmod.model_num , Mmod.model_date , Mmod.data_mod.model_test_dates
+        if self.model_num == 0: self.test_record.add_rows(self.model_date , self.test_dates)
+    def on_test_model_end(self , Mmod):
+        if self.model_num == self.test_record.model_nums[-1]:
+            self.test_record.print_score()
+            gc.collect()
+    def on_test_model_type_start(self , Mmod):
+        self.new_metric(Mmod.dataset , Mmod.model_type)
+    def on_test_model_type_end(self , Mmod):
+        self.collect_metric()
+        self.update_test_score(Mmod.model_type)
+

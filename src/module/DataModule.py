@@ -10,43 +10,15 @@ from torch.utils.data import BatchSampler
 from tqdm import tqdm
 from typing import Any , Literal , Optional
 
-from .data.PreProcess import pre_process
-from .data.BlockData import DataBlock , DataBlockNorm
-from .util import DataHook , Device , DataloaderStored , Storage , TrainConfig
-from .func import tensor_standardize_and_weight , match_values
+from ..data.PreProcess import pre_process
+from ..data.BlockData import DataBlock , DataBlockNorm
+from ..util import Device , DataloaderStored , LoaderWrapper , Storage , TrainConfig
+from ..util.classes import BatchData
+from ..func import tensor_standardize_and_weight , match_values
 
-from .environ import DIR
+from ..environ import DIR
 
 def _abbr(data_type : str): return DataBlock.data_type_abbr(data_type)
-
-@dataclass
-class BatchData:
-    '''custom data component of a batch'''
-    x       : Tensor | tuple[Tensor] | list[Tensor]
-    y       : Tensor 
-    w       : Tensor | None
-    i       : Tensor 
-    valid   : Tensor 
-    
-    def __post_init__(self):
-        if isinstance(self.x , (list , tuple)) and len(self.x) == 1: self.x = self.x[0]
-        
-    def to(self , device = None): return self.__class__(**{k:self.send_to(v , device) for k,v in self.__dict__.items()})
-    def cpu(self):  return self.__class__(**{k:self.send_to(v , 'cpu') for k,v in self.__dict__.items()})
-    def cuda(self): return self.__class__(**{k:self.send_to(v , 'cuda') for k,v in self.__dict__.items()})
-    @property
-    def is_empty(self): return len(self.y) == 0
-    @classmethod
-    def send_to(cls , obj , des : Any | Literal['cpu' , 'cuda']) -> Any:
-        if obj is None: return None
-        elif isinstance(obj , Tensor):
-            if des == 'cpu': return obj.cpu()
-            elif des == 'cuda': return obj.cuda()
-            elif callable(des): return des(obj) 
-            else: return obj.to(des)
-        elif isinstance(obj , (list , tuple)):
-            return type(obj)([cls.send_to(o , des) for o in obj])
-        else: raise TypeError(obj)
 
 class DataModule:
     '''A class to store relavant training data'''
@@ -174,13 +146,13 @@ class DataModule:
         return max(prev_dates) if prev_dates else -1
     
     def train_dataloader(self):
-        return self.LoaderWrapper(self , self.loader_dict['train'] , self.device , self.config.verbosity)
+        return LoaderWrapper(self , self.loader_dict['train'] , self.device , self.config.verbosity)
     def val_dataloader(self):
-        return self.LoaderWrapper(self , self.loader_dict['valid'] , self.device , self.config.verbosity)
+        return LoaderWrapper(self , self.loader_dict['valid'] , self.device , self.config.verbosity)
     def test_dataloader(self):
-        return self.LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
+        return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
     def predict_dataloader(self):
-        return self.LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
+        return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         return batch.to(self.device if device is None else device)
 
@@ -419,34 +391,3 @@ class DataModule:
 
             if y_labels is not None:  data.y.align_feature(y_labels)
             return data
-    class LoaderWrapper:
-        '''wrap loader to impletement DataModule Callbacks'''
-        def __init__(self , data_module , raw_loader , device , verbosity = 0) -> None:
-            self.data_module = data_module
-            self.device = device
-            self.verbosity = verbosity
-            self.loader = raw_loader
-            self.display_text = None
-
-        def __len__(self):  return len(self.loader)
-        def __getitem__(self , i : int): return self.process(list(self.loader)[i] , i)
-
-        def __iter__(self):
-            for batch_i , batch_data in enumerate(self.loader):
-                yield self.process(batch_data , batch_i)        
-        
-        def process(self , batch_data : BatchData , batch_i : int) -> BatchData:
-            batch_data = DataHook.on_before_batch_transfer(self.data_module , batch_data , batch_i)
-            batch_data = DataHook.transfer_batch_to_device(self.data_module , batch_data , self.device , batch_i)
-            batch_data = DataHook.on_after_batch_transfer(self.data_module , batch_data , batch_i)
-            return batch_data
-
-        def init_tqdm(self , text = ''):
-            if self.verbosity >= 10:
-                self.text = text
-                self.loader = tqdm(self.loader , total=len(self.loader))
-            return self
-
-        def display(self , **kwargs):
-            if isinstance(self.text , str) and isinstance(self.loader , tqdm): 
-                self.loader.set_description(self.text.format(**kwargs))

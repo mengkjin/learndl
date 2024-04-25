@@ -1,9 +1,10 @@
 import numpy as np
 
-from torch.utils.data.dataset import IterableDataset , Dataset
+from tqdm import tqdm
 from torch.utils.data import Sampler
 from typing import Literal
 
+from .classes import BatchData
 from .store import Storage
                 
 class DataloaderStored:
@@ -23,6 +24,41 @@ class DataloaderStored:
         '''shuffle at init or each epoch'''
         if stage == self.shufopt: loader = np.random.permutation(loader)
         return loader
+    
+class LoaderWrapper:
+    '''wrap loader to impletement DataModule Callbacks'''
+    def __init__(self , data_module , raw_loader , device , verbosity = 0) -> None:
+        self.data_module = data_module
+        self.device = device
+        self.verbosity = verbosity
+        self.loader = raw_loader
+        self.display_text = None
+
+    def __len__(self):  return len(self.loader)
+    def __getitem__(self , i : int): return self.process(list(self.loader)[i] , i)
+
+    def __iter__(self):
+        for batch_i , batch_data in enumerate(self.loader):
+            yield self.process(batch_data , batch_i)        
+    
+    def process(self , batch_data : BatchData , batch_i : int) -> BatchData:
+        if hasattr(self.data_module , 'on_before_batch_transfer'):
+            batch_data = self.data_module.on_before_batch_transfer(batch_data , batch_i)
+        if hasattr(self.data_module , 'transfer_batch_to_device'):
+            batch_data = self.data_module.transfer_batch_to_device(batch_data , self.device , batch_i)
+        if hasattr(self.data_module , 'on_after_batch_transfer'):
+            batch_data = self.data_module.on_after_batch_transfer(batch_data , batch_i)
+        return batch_data
+
+    def init_tqdm(self , text = ''):
+        if self.verbosity >= 10:
+            self.text = text
+            self.loader = tqdm(self.loader , total=len(self.loader))
+        return self
+
+    def display(self , **kwargs):
+        if isinstance(self.text , str) and isinstance(self.loader , tqdm): 
+            self.loader.set_description(self.text.format(**kwargs))
 
 class CustomBatchSampler(Sampler):
     def __init__(self, sampler , batch_size_list , drop_res = True):

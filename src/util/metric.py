@@ -7,6 +7,7 @@ from dataclasses import dataclass , field
 from torch import nn , no_grad , Tensor
 from typing import Any , Literal , Optional
 
+from .config import TrainConfig
 from ..func import mse , pearson , ccc , spearman
 
 class Metrics:
@@ -16,6 +17,7 @@ class Metrics:
     default_metric = {'mse':mse ,'pearson':pearson,'ccc':ccc,'spearman':spearman,}
 
     def __init__(self , criterion , **kwargs) -> None:
+        if isinstance(criterion , TrainConfig): criterion = criterion.train_param['criterion']
         self.criterion = criterion
         self.f_loss    = self.loss_function(criterion['loss'])
         self.f_score   = self.score_function(criterion['score'])
@@ -43,8 +45,8 @@ class Metrics:
         self.f_pen.get('tra_opt_transport',{})['cond'] = config.tra_model
         return self
     
-    def on_fit_model_start(self , model_mod , *args):
-        return self.new_model(model_mod.config.model_param[model_mod.model_num] , model_mod.config)
+    def on_fit_model_start(self , Mmod):  self.new_model(Mmod.model_param , Mmod.config)
+    def on_test_model_start(self , Mmod): self.new_model(Mmod.model_param , Mmod.config)
     
     def calculate(self , dataset , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , net : Optional[nn.Module] = None , 
                   penalty_kwargs : dict[str,Any] = {} , assert_nan = False):
