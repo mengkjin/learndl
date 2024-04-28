@@ -1,24 +1,8 @@
-
-from dataclasses import dataclass
+import numpy as np
+from dataclasses import dataclass , field
 from inspect import currentframe
 from torch import Tensor
-from typing import Any , Literal
-
-@dataclass
-class BatchOutput:
-    outputs : Tensor | tuple | list
-    @property
-    def pred(self) -> Tensor:
-        return self.outputs[0] if isinstance(self.outputs , (list , tuple)) else self.outputs
-    @property
-    def hidden(self) -> Tensor | None:
-        if isinstance(self.outputs , (list , tuple)):
-            assert len(self.outputs) == 2 , self.outputs
-            return self.outputs[1]
-        else:
-            return None
-    @classmethod
-    def empty(cls): return cls(Tensor().requires_grad_())
+from typing import Any , ClassVar , Literal
 
 @dataclass
 class BatchData:
@@ -27,7 +11,9 @@ class BatchData:
     y       : Tensor 
     w       : Tensor | None
     i       : Tensor 
-    valid   : Tensor 
+    valid   : Tensor
+
+    __slots__ : ClassVar[list] = ['x' , 'y' , 'w' , 'i' , 'valid']
     
     def __post_init__(self):
         if isinstance(self.x , (list , tuple)) and len(self.x) == 1: self.x = self.x[0]
@@ -47,6 +33,51 @@ class BatchData:
         elif isinstance(obj , (list , tuple)):
             return type(obj)([cls.send_to(o , des) for o in obj])
         else: raise TypeError(obj)
+
+@dataclass
+class BatchMetric:
+    loss      : Tensor = Tensor([0.])
+    score     : float = 0.
+    penalty   : Tensor | float = 0.
+    losses    : Tensor = Tensor([0.])
+
+    __slots__ : ClassVar[list] = ['loss' , 'score' , 'penalty' , 'losses']
+
+    @property
+    def loss_item(self): return self.loss.item()
+
+@dataclass
+class MetricList:
+    name : str
+    type : str
+    values : list[Any] = field(default_factory=list) 
+
+    __slots__ : ClassVar[list] = ['name' , 'type' , 'values']
+
+    def __post_init__(self): assert self.type in ['loss' , 'score']
+    def record(self , metrics): self.values.append(metrics.loss_item if self.type == 'loss' else metrics.score)
+    def last(self): self.values[-1]
+    def mean(self): return np.mean(self.values)
+    def any_nan(self): return np.isnan(self.values).any()
+
+@dataclass
+class BatchOutput:
+    outputs : Tensor | tuple | list
+
+    __slots__ = ['outputs']
+
+    @property
+    def pred(self) -> Tensor:
+        return self.outputs[0] if isinstance(self.outputs , (list , tuple)) else self.outputs
+    @property
+    def hidden(self) -> Tensor | None:
+        if isinstance(self.outputs , (list , tuple)):
+            assert len(self.outputs) == 2 , self.outputs
+            return self.outputs[1]
+        else:
+            return None
+    @classmethod
+    def empty(cls): return cls(Tensor().requires_grad_())
 
 class BaseCallBack:
     def __init__(self , model_module) -> None:

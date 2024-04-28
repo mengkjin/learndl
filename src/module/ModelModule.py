@@ -76,7 +76,6 @@ class ModelTrainer:
         self.on_fit_model_start()
         while self.fit_loop_continue:
             self.on_before_fit_epoch()
-
             self.on_train_epoch_start()
             for self.batch_idx , self.batch_data in enumerate(self.dataloader):
                 self.on_train_batch_start()
@@ -107,13 +106,12 @@ class ModelTrainer:
 
     def batch_forward(self) -> None:
         if self.batch_data.is_empty:
-            self.net_output = BatchOutput.empty()
+            self.batch_output = BatchOutput.empty()
         else:
-            self.net_output = BatchOutput(self.net(self.batch_data.x))
+            self.batch_output = BatchOutput(self.net(self.batch_data.x))
     
     def batch_metrics(self) -> None:
-        self.metrics.calculate(self.dataset, self.batch_data.y, self.net_output.pred, 
-                               self.batch_data.w, self.net, self.penalty_kwargs, assert_nan = True)
+        self.metrics.calculate(self.dataset, self.batch_data, self.batch_output, self.net, assert_nan = True)
         self.pipe.record_metric(self.metrics)
 
     def batch_backward(self) -> None:
@@ -121,15 +119,14 @@ class ModelTrainer:
         self.on_before_backward()
         self.optimizer.backward(self.metrics.loss)
         self.on_after_backward()
-
     
     @property
     def fit_loop_continue(self): 
         return self.pipe.loop_continue
     @property
     def penalty_kwargs(self): 
-        '''self customed penalty kwargs'''
-        return {'net':self.net,'hidden':self.net_output.hidden,'label':self.batch_data.y}
+        '''self customed penalty kwargs , except for net , hidden and label'''
+        return {}
     @property
     def model_param(self) -> dict: 
         '''current model param'''
@@ -173,8 +170,10 @@ class ModelTrainer:
     
     def on_fit_model_start(self):
         with self.cb_manager:
+            self.fit_status : list[Literal['unfit' , 'failed' , 'fitted']] = []
             self.data_mod.setup('fit' , self.model_param , self.model_date)
             self.metrics.new_model(self.model_param , self.config)
+            self.epoch = 0
     
     def on_fit_model_end(self):
         with self.cb_manager:
@@ -207,6 +206,7 @@ class ModelTrainer:
         with self.cb_manager:
             for fittest_model in self.fitmodels.values():
                 fittest_model.assess(self.net , self.pipe.epoch , self.pipe.valid_score , self.pipe.valid_loss)
+            self.epoch += 1
     
     def on_train_epoch_start(self):
         with self.cb_manager:

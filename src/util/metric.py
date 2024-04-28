@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 
+from .classes import BatchData , BatchMetric , BatchOutput , MetricList
 from dataclasses import dataclass , field
 from torch import nn , no_grad , Tensor
 from typing import Any , Literal , Optional
@@ -23,7 +24,7 @@ class Metrics:
         self.f_score   = self.score_function(criterion['score'])
         self.f_pen     = {k:self.penalty_function(k,v) for k,v in criterion['penalty'].items()}
         self.multiloss = None
-        self.output  = self.BatchMetric()
+        self.output  = BatchMetric()
 
     @property
     def loss(self): return self.output.loss
@@ -45,10 +46,16 @@ class Metrics:
         self.f_pen.get('tra_opt_transport',{})['cond'] = config.tra_model
         return self
     
-    def calculate(self , dataset , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , net : Optional[nn.Module] = None , 
-                  penalty_kwargs : dict[str,Any] = {} , assert_nan = False):
+    def calculate(self , dataset , batch_data : BatchData , batch_output : BatchOutput , net : Optional[nn.Module] = None , 
+                  assert_nan = False , **kwargs):
         '''Calculate loss(with gradient), penalty , score'''
         assert dataset in ['train','valid','test']
+
+        label = batch_data.y
+        weight = batch_data.w
+        pred = batch_output.pred
+        penalty_kwargs = {'net':net,'hidden':batch_output.hidden,'label':label , **kwargs}
+
         if label.shape != pred.shape: # if more label than output
             label = label[...,:pred.shape[-1]]
             assert label.shape == pred.shape , (label.shape , pred.shape)
@@ -72,24 +79,14 @@ class Metrics:
                 if pen['lamb'] <= 0 or not pen['cond']: continue
                 penalty = penalty + pen['lamb'] * pen['func'](label , pred , weight , **penalty_kwargs)  
             loss = loss + penalty
-            self.output = self.BatchMetric(loss = loss , score = score , penalty = penalty , losses = losses)
+            self.output = BatchMetric(loss = loss , score = score , penalty = penalty , losses = losses)
         else:
-            self.output = self.BatchMetric(score = score)
+            self.output = BatchMetric(score = score)
 
         if assert_nan and self.output.loss.isnan():
             print(self.output)
             raise Exception('nan loss here')
-    
-    @dataclass
-    class BatchMetric:
-        loss      : torch.Tensor = torch.Tensor([0.])
-        score     : float = 0.
-        loss_item : float = 0.
-        penalty   : torch.Tensor | float = 0.
-        losses    : torch.Tensor = torch.Tensor([0.])
 
-        def __post_init__(self):
-            self.loss_item = self.loss.item()
 
     @classmethod
     def decorator_display(cls , func , mtype , mkey):
@@ -220,7 +217,7 @@ def _sinkhorn(Q, n_iters=3, epsilon=0.01):
             Q /= Q.sum(dim=1, keepdim=True)
     return Q
 
-class AggMetrics:
+class MetricsAggregator:
     '''record a list of batch metric and perform agg operations, usually used in an epoch'''
     def __init__(self) -> None:
         self.table : Optional[pd.DataFrame] = None
@@ -228,7 +225,7 @@ class AggMetrics:
     def __len__(self):  return len(self._record['loss'].values)
     def new(self , dataset , model_num , model_date , epoch = 0 , model_type = 'best'):
         self._params = [dataset , model_num , model_date , model_type , epoch]
-        self._record = {m:self.MetricList(f'{dataset}.{model_num}.{model_date}.{model_type}.{epoch}.{m}',m) for m in ['loss','score']}
+        self._record = {m:MetricList(f'{dataset}.{model_num}.{model_date}.{model_type}.{epoch}.{m}',m) for m in ['loss','score']}
     def record(self , metrics): 
         [self._record[m].record(metrics) for m in ['loss','score']]
     def collect(self):
@@ -244,16 +241,7 @@ class AggMetrics:
     def losses(self): return self._record['loss'].values
     @property
     def scores(self): return self._record['score'].values
-    @dataclass
-    class MetricList:
-        name : str
-        type : str
-        values : list[Any] = field(default_factory=list) 
-        def __post_init__(self): assert self.type in ['loss' , 'score']
-        def record(self , metrics : Metrics): self.values.append(metrics.loss_item if self.type == 'loss' else metrics.score)
-        def last(self): self.values[-1]
-        def mean(self): return np.mean(self.values)
-        def any_nan(self): return np.isnan(self.values).any()
+
 
 class MultiLosses:
     '''some realization of multi-losses combine method'''

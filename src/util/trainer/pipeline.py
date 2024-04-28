@@ -6,7 +6,7 @@ from dataclasses import dataclass , field
 from typing import Any , Callable , ClassVar , Literal , Optional
 
 from ..config import TrainConfig
-from ..metric import Metrics , AggMetrics
+from ..metric import Metrics , MetricsAggregator
 from ..trainer.optim import Optimizer
 from ..classes import BaseCallBack
 from ...func import list_converge
@@ -17,17 +17,17 @@ class Pipeline(BaseCallBack):
     result_path = f'{DIR.result}/model_results.yaml'
 
     def __init__(self , model_module):
+        self.init_time = time.time()
         super().__init__(model_module)
         os.makedirs(os.path.dirname(self.result_path) , exist_ok=True)
         self.times : dict[str,float] = {}
         self.texts : dict[str,str]   = {}
-        self.tic('init')
         self.nanloss     : bool = False
         self.epoch_stage : int = 0
         self.model_stage : int = 0
         self.loop_status : Literal['epoch' , 'attempt' , 'model'] = 'epoch'
         self.nanlife = self.config.train_param['trainer']['nanloss']['retry']
-        self.metric_batchs = AggMetrics()
+        self.metric_batchs = MetricsAggregator()
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
         self.test_record = TestRecord()
     
@@ -206,7 +206,7 @@ class Pipeline(BaseCallBack):
     def on_summarize_model(self):
         result = {
             '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
-            '1_start' : time.ctime(self.times['init']) ,
+            '1_start' : time.ctime(self.init_time) ,
             '2_basic' : 'short' if self.config.short_test else 'full' , 
             '3_datas' : self.config.model_data_type ,
             '4_label' : ','.join(self.config.labels),

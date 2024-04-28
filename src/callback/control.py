@@ -5,6 +5,18 @@ import time
 import torch
 from ..util.classes import BaseCallBack , WithCallBack
 
+class EarlyStoppage(BaseCallBack):
+    def __init__(self , model_module , patience = 20 , earliest = 10) -> None:
+        super().__init__(model_module)
+        self._patience = patience
+        self._earliest = earliest
+        # 2.5s for 86 epochs
+        print(f'{self._infomation()}(patience={patience},earliest={earliest})')
+    def on_train_epoch_end(self):
+        if self.model_module.epoch > self._earliest:
+            if 1: 
+                self.model_module.fit_status = '123'
+
 class CudaEmptyCache(BaseCallBack):
     def __init__(self , model_module , batch_interval = 20) -> None:
         super().__init__(model_module)

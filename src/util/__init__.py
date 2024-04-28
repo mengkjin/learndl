@@ -7,7 +7,7 @@ from .trainer.ckpt import Checkpoint , Deposition
 from .trainer.model import FittestModel
 from .trainer.optim import Optimizer
 from .loader import DataloaderStored , LoaderWrapper
-from .metric import Metrics , AggMetrics
+from .metric import Metrics , MetricsAggregator
 from .store import Storage
 from .device import Device
 from .logger import Logger
