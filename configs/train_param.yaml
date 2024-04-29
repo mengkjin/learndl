@@ -22,8 +22,7 @@ train_param:
     scheduler: {'name' : 'cycle' , 'param' : {'base_lr': 1.0e-7 , 'step_size_up': 4} ,}  #{'name' : 'SGD' , 'param' : {} ,}
     learn_rate:
       base:    0.005
-      ratio:   {'attempt':[1 , 0.1 , 10 , 0.01 , 100] , 'transfer' : 0.1 , } 
-      reset:   {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
+      transfer_multiplier:   {'encoder' : 0.1 , 'decoder' : 1.0, } 
     gradient:  {'clip_value' : 10.0}
   criterion:
     loss:      pearson  # mse, pearson, ccc
@@ -38,7 +37,7 @@ train_param:
       fit:    'equal' # 'top'
       test:   'equal' # 'top'
   transfer:    false
-  multitask:
+  multilosses:
     type: hybrid
     param_dict:
       dwa: {'tau' : 2}
@@ -50,10 +49,11 @@ train_param:
   callbacks:
     EarlyStoppage:      {'patience' : 20}
     ValidationConverge: {'patience' : 5 , 'eps' : 1.0e-5} 
+    EarlyExitRetrain:   {'earliest' : 20 , 'max_attempt' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
+    NanLossRetrain:     {'max_attempt' : 4}
+    ResetOptimizer:     {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
     #TrainConverge:      {'patience' : 5 , 'eps' : 1.0e-5} 
     #FitConverge:        {'patience' : 5 , 'eps' : 1.0e-5}
-    EarlyExitRetrain:   {'earliest' : 20 , 'max_attempt' : 4}
-    NanLossRetrain:     {'max_attempt' : 4}
     #CudaEmptyCache:     {'batch_interval' : 20}
 
 beg_date:   20170103
@@ -82,14 +82,12 @@ precision:  float # double , bfloat16
 
 on_short_test:
   beg_date:   20170103
-  end_date:   20171201
-  input_span: 480
-  max_epoch:  20
+  end_date:   20170228
+  input_span: 240
+  max_epoch:  3
   verbosity:  10
-on_tf_trainer:
-  gradient:  {'clip_value' : 10.}
-  learn_rate:
-    base:    0.005
-    ratio:   {'attempt':[1 , 0.1 , 10 , 0.01 , 100] , 'round' : [1.] , 'transfer' : 0.1 , } 
-    reset:   {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }
-  scheduler: {'name' : 'cycle' , 'param' : {'base_lr':1.0e-7,'step_size_up':4} ,}
+on_transformer:
+  train_param:
+    trainer:
+      callbacks:
+        ResetOptimizer:     {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }

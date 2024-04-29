@@ -8,15 +8,15 @@ from ..util import TrainConfig
 
 class CallBackManager:
     def __init__(self , *callbacks):        
-        self.callbacks = callbacks
+        self.callbacks = []
         self.with_cbs : list[WithCallBack] = []
         self.base_cbs : list[BasicCallBack] = []
-        for cb in self.callbacks:
-            if self.is_withcallback(cb):
-                self.with_cbs.append(cb)
-            else:
-                self.base_cbs.append(cb)
+        [self.add_callback(cb) for cb in callbacks]
 
+    def add_callback(self , cb):
+        self.callbacks.append(cb)
+        self.with_cbs.append(cb) if self.is_withcallback(cb) else self.base_cbs.append(cb)
+    
     @staticmethod
     def is_withcallback(cb): return issubclass(cb.__class__ , WithCallBack)
 
@@ -32,7 +32,7 @@ class CallBackManager:
         for cb in self.with_cbs: cb(self.hook_name)
 
     @classmethod
-    def setup(cls , *cb_names : str , model_module : Any = None):
+    def setup(cls , model_module : Any = None , cb_names : list[str] = []):
         if model_module is None: raise Exception('model_module must be supplied')
         cbs = []
         for cb_name in cb_names:
@@ -44,7 +44,7 @@ class CallBackManager:
     @classmethod
     def __cb_class(cls , cb_name : str):
         if cb_name in ['EarlyStoppage' , 'ValidationConverge' , 'TrainConverge' , 'FitConverge' , 
-                       'EarlyExitRetrain' , 'NanLossRetrain' , 'ProcessTimer']:
+                       'EarlyExitRetrain' , 'NanLossRetrain' , 'ProcessTimer' , 'ResetOptimizer']:
             return getattr(control , cb_name)
         elif cb_name in ['DynamicDataLink']:
             return getattr(model , cb_name)
@@ -56,7 +56,7 @@ class CallBackManager:
     @classmethod
     def __cb_class_kwargs(cls , cb_name : str , config : TrainConfig) -> Optional[dict]:
         if cb_name in ['EarlyStoppage' , 'ValidationConverge' , 'TrainConverge' , 'FitConverge' , 
-                       'EarlyExitRetrain' , 'NanLossRetrain' , 'CudaEmptyCache']:
+                       'EarlyExitRetrain' , 'NanLossRetrain' , 'CudaEmptyCache' , 'ResetOptimizer']:
             cond = config.train_param.get('callbacks')
             kwargs = cond.get(cb_name) if isinstance(cond , dict) else None
         elif cb_name in ['ProcessTimer' , 'DynamicDataLink' , 'LoaderDisplay']:

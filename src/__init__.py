@@ -1,3 +1,3 @@
 from . import (
-    boost , callback , data ,  factor , func , interface , layer , model , module , util
+    boost , callback , classes , data ,  factor , func , interface , layer , model , module , util
 )

@@ -8,7 +8,7 @@ from typing import ClassVar , Literal
 
 from ..environ import DIR
 from ..util import Device , TrainConfig
-from ..util.classes import BatchOutput
+from ..classes import BatchOutput
 from ..data.DataFetcher import DataFetcher
 from ..module import DataModule
 from ..model import model as MODEL
@@ -92,6 +92,7 @@ class Predictor:
         df_list = []
         for data_mod in [data_mod_old , data_mod_new]:
             if data_mod is None: continue
+            assert isinstance(data_mod , DataModule)
             for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
                 print(model_date , 'old' if (data_mod is data_mod_old) else 'new') 
                 assert isinstance(model_date , int) , model_date

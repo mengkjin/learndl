@@ -1,11 +1,11 @@
 import numpy as np
 
-from tqdm import tqdm
 from torch.utils.data import Sampler
+from tqdm import tqdm
 from typing import Literal
 
-from .classes import BatchData
 from .store import Storage
+from ..classes import BatchData
                 
 class DataloaderStored:
     ''''retrieve batch_data from a Storage'''

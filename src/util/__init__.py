@@ -1,8 +1,7 @@
 from . import (
-    classes , config , device , loader , logger , metric, store , time , trainer
+    config , device , loader , logger , metric, store , time , trainer
 )
 
-from .trainer.pipeline import EndofLoop , Pipeline
 from .trainer.ckpt import Checkpoint , Deposition
 from .trainer.model import FittestModel
 from .trainer.optim import Optimizer

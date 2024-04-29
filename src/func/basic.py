@@ -2,7 +2,9 @@ import torch
 import numpy as np
 import pandas as pd
 import collections
-import os , shutil , pprint , psutil
+import os , pprint , psutil
+
+from typing import Optional
 from scipy import stats
 from pytimedinput import timedInput
 _div_tol = 1e-4
@@ -372,3 +374,12 @@ def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_con
         if not userText_cond[-1]: 
             break
     return userText_list , userText_cond
+
+def recur_update(old : dict , update : Optional[dict]) -> dict:
+    if update:
+        for k , v in update.items():
+            if isinstance(v , dict) and isinstance(old.get(k) , dict):
+                old[k] = recur_update(old[k] , v)
+            else:
+                old[k] = v
+    return old

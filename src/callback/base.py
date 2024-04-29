@@ -1,7 +1,7 @@
 import logging
 from inspect import currentframe
 
-from ..util.classes import BaseCB , TrainerStatus 
+from ..classes import BaseCB , TrainerStatus 
 from ..util import Metrics , TrainConfig
 
 class BasicCallBack(BaseCB):

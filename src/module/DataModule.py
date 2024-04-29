@@ -13,7 +13,7 @@ from typing import Any , Literal , Optional
 from ..data.PreProcess import pre_process
 from ..data.BlockData import DataBlock , DataBlockNorm
 from ..util import Device , DataloaderStored , LoaderWrapper , Storage , TrainConfig
-from ..util.classes import BatchData
+from ..classes import BatchData
 from ..func import tensor_standardize_and_weight , match_values
 
 from ..environ import DIR
@@ -345,7 +345,7 @@ class DataModule:
         @staticmethod
         def none_wrapper(*args, **kwargs): return {}
 
-    @dataclass
+    @dataclass(slots=True)
     class DataInterface:
         '''load datas / norms / index'''
         x : dict[str,DataBlock]
@@ -384,10 +384,11 @@ class DataModule:
 
                 assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
 
-                data = cls(x , y , norms , secid , date)
+                data = {'x' : x , 'y' : y , 'norms' : norms , 'secid' : secid , 'date' : date}
                 if not predict and save_upon_loading: 
                     os.makedirs(os.path.dirname(torch_pack) , exist_ok=True)
-                    torch.save(data.__dict__ , torch_pack , pickle_protocol = 4)
+                    torch.save(data , torch_pack , pickle_protocol = 4)
+                data = cls(**data)
 
             if y_labels is not None:  data.y.align_feature(y_labels)
             return data

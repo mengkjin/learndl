@@ -5,24 +5,18 @@
 # @File : ${run_model.py}
 # chmod +x run_model.py
 # python3 scripts/run_model3.py --stage=0 --resume=0 --checkname=1 
-import itertools , os
+import itertools , gc , os
 import numpy as np
-import pandas as pd
 import torch
 
-from typing import Any , ClassVar , Literal , Optional
-
-from ..environ import DIR
-from .. import util as U
-from .. import callback as CB
-from ..util.classes import BatchOutput , TrainerStatus
 from .DataModule import DataModule
+from .. import util as U
+from ..callback import CallBackManager
+from ..classes import BatchOutput , TrainerStatus
 from ..model import model as MODEL
 
 class ModelTrainer:
     '''run through the whole process of training'''
-    default_model_type = 'best'
-
     def __init__(self ,  **kwargs):
         self.config     = U.TrainConfig.load(do_parser = True , par_args = kwargs)
         self.logger     = U.Logger()
@@ -34,9 +28,10 @@ class ModelTrainer:
         self.data_mod   = DataModule(self.config)
         self.status     = TrainerStatus(self.config.max_epoch)
 
-        self.callbacks = CB.CallBackManager.setup(
-            'DynamicDataLink'    , 
-            # 'CudaEmptyCache'   , 
+        self.callbacks = CallBackManager.setup(self , [
+            'DynamicDataLink' , 
+            'ResetOptimizer' ,
+            # 'CudaEmptyCache' , 
             'ProcessTimer' ,
             'EarlyStoppage' ,
             'ValidationConverge' ,
@@ -44,7 +39,7 @@ class ModelTrainer:
             'NanLossRetrain' ,
             'LoaderDisplay'    , 
             'ProgressDisplay' ,
-        )
+        ])
 
     def main_process(self):
         '''Main stage of data & fit & test'''
@@ -132,7 +127,7 @@ class ModelTrainer:
         '''current model param'''
         return self.config.model_param[self.status.model_num]
     @property
-    def model_iter(self) -> Any:
+    def model_iter(self):
         '''iter of model_date and model_num , considering resume_training'''
         new_iter = list(itertools.product(self.data_mod.model_date_list , self.config.model_num_list))
         if self.config.resume_training and self.stage == 'fit':
@@ -144,9 +139,9 @@ class ModelTrainer:
             new_iter = U.Filtered(new_iter , ~models_trained)
         return new_iter
     @property
-    def test_dates(self): return np.concatenate([self.data_mod.early_test_dates , self.data_mod.model_test_dates])
+    def batch_dates(self): return np.concatenate([self.data_mod.early_test_dates , self.data_mod.model_test_dates])
     @property
-    def test_warm_up(self): return len(self.data_mod.early_test_dates)
+    def batch_warm_up(self): return len(self.data_mod.early_test_dates)
 
     def on_configure_model(self): 
         with self.callbacks: 
@@ -178,11 +173,14 @@ class ModelTrainer:
             self.data_mod.setup('fit' , self.model_param , self.status.model_date)
             self.metrics.new_model(self.model_param , self.config)
             self.status.new_model()
+            self.checkpoint.new_model(self.model_param , self.status.model_date)
+            self.load_model(True)
     
     def on_fit_model_end(self):
         with self.callbacks:
             self.save_model()
             self.checkpoint.del_all()
+            gc.collect()
     
     def on_train_batch(self):
         with self.callbacks:
@@ -197,9 +195,9 @@ class ModelTrainer:
 
     def on_test_batch(self):
         with self.callbacks:
-            self.assert_equity(self.test_dates[self.batch_idx] , self.data_mod.y_date[self.batch_data.i[0,1]]) 
+            self.assert_equity(self.batch_dates[self.batch_idx] , self.data_mod.y_date[self.batch_data.i[0,1]]) 
             self.batch_forward()
-            if self.batch_idx < self.test_warm_up: return  # before this is warmup stage , only forward
+            if self.batch_idx < self.batch_warm_up: return  # before this is warmup stage , only forward
             self.batch_metrics()
     
     def on_fit_epoch_start(self):
@@ -223,7 +221,8 @@ class ModelTrainer:
     def on_train_epoch_end(self): 
         with self.callbacks: 
             self.metrics.collect_epoch_metric('train')
-            self.status.add_event(self.optimizer.scheduler_step(self.status.epoch))
+            self.optimizer.scheduler_step(self.status.epoch)
+            # self.status.add_event(self.optimizer.scheduler_step(self.status.epoch))
     
     def on_validation_epoch_start(self):
         with self.callbacks:
@@ -254,7 +253,7 @@ class ModelTrainer:
         with self.callbacks:
             self.load_model(False , self.status.model_type)
             self.dataloader = self.data_mod.test_dataloader()
-            self.assert_equity(len(self.dataloader) , len(self.test_dates))
+            self.assert_equity(len(self.dataloader) , len(self.batch_dates))
             self.metrics.new_epoch_metric('test' , self.status)
     
     def on_test_model_type_end(self): 
@@ -289,7 +288,7 @@ class ModelTrainer:
     def on_before_save_model(self): 
         with self.callbacks: pass
 
-    def load_model(self , training : bool , model_type = default_model_type):
+    def load_model(self , training : bool , model_type = 'best' , lr_multiplier = 1.):
         '''load model state dict, return net and a sign of whether it is transferred'''
         if training and self.config.train_param['transfer']:         
             model_path = self.model_path(self.data_mod.prev_model_date(self.status.model_date))
@@ -301,7 +300,7 @@ class ModelTrainer:
         self.net = MODEL.new(self.config.model_module , self.model_param , self.deposition.load(model_path) , self.device)
         if training: 
             self.fitmodels = U.FittestModel.get_models(self.config.model_types , self.checkpoint)
-            self.optimizer = U.Optimizer(self.net , self.config , self.transferred , self.status.attempt)
+            self.optimizer = U.Optimizer(self.net , self.config , self.transferred , lr_multiplier)
 
     def save_model(self):
         '''save model state dict to deposition'''
@@ -311,7 +310,7 @@ class ModelTrainer:
             sd = fittest_model.state_dict(self.net , self.data_mod.train_dataloader())
             self.deposition.save_state_dict(sd , self.model_path(self.status.model_date , model_type)) 
     
-    def model_path(self , model_date = -1, model_type = default_model_type , base_path = None , model_num = None):
+    def model_path(self , model_date = -1, model_type = 'best' , base_path = None , model_num = None):
         '''get model path of deposition giving model date/type/base_path/num'''
         if model_num is None:
             model_dir = self.model_param.get('path')

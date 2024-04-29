@@ -2,9 +2,9 @@ import numpy as np
 from dataclasses import dataclass , field
 from inspect import currentframe
 from torch import Tensor
-from typing import Any , ClassVar , Literal , Optional
+from typing import Any , Literal , Optional
 
-@dataclass
+@dataclass(slots=True)
 class BatchData:
     '''custom data component of a batch(x,y,w,i,valid)'''
     x       : Tensor | tuple[Tensor] | list[Tensor]
@@ -12,14 +12,18 @@ class BatchData:
     w       : Tensor | None
     i       : Tensor 
     valid   : Tensor
-
-    __slots__ : ClassVar[list] = ['x' , 'y' , 'w' , 'i' , 'valid']
     
     def __post_init__(self):
         if isinstance(self.x , (list , tuple)) and len(self.x) == 1: self.x = self.x[0]
-    def to(self , device = None): return self.__class__(**{k:self.send_to(v , device) for k,v in self.__dict__.items()})
-    def cpu(self):  return self.__class__(**{k:self.send_to(v , 'cpu') for k,v in self.__dict__.items()})
-    def cuda(self): return self.__class__(**{k:self.send_to(v , 'cuda') for k,v in self.__dict__.items()})
+    def to(self , device = None): 
+        return self.__class__(
+            x = self.send_to(self.x , device) , 
+            y = self.send_to(self.y , device) ,
+            w = self.send_to(self.w , device) ,
+            i = self.send_to(self.i , device) ,
+            valid = self.send_to(self.valid , device))
+    def cpu(self):  return self.to('cpu')
+    def cuda(self): return self.to('cuda')
     @property
     def is_empty(self): return len(self.y) == 0
     @classmethod
@@ -34,25 +38,21 @@ class BatchData:
             return type(obj)([cls.send_to(o , des) for o in obj])
         else: raise TypeError(obj)
 
-@dataclass
+@dataclass(slots=True)
 class BatchMetric:
     loss      : Tensor = Tensor([0.])
     score     : float = 0.
     penalty   : Tensor | float = 0.
     losses    : Tensor = Tensor([0.])
 
-    __slots__ : ClassVar[list] = ['loss' , 'score' , 'penalty' , 'losses']
-
     @property
     def loss_item(self): return self.loss.item()
 
-@dataclass
+@dataclass(slots=True)
 class MetricList:
     name : str
     type : str
     values : list[Any] = field(default_factory=list) 
-
-    __slots__ : ClassVar[list] = ['name' , 'type' , 'values']
 
     def __post_init__(self): assert self.type in ['loss' , 'score']
     def record(self , metrics): self.values.append(metrics.loss_item if self.type == 'loss' else metrics.score)
@@ -60,11 +60,9 @@ class MetricList:
     def mean(self): return np.mean(self.values)
     def any_nan(self): return np.isnan(self.values).any()
 
-@dataclass
+@dataclass(slots=True)
 class BatchOutput:
     outputs : Tensor | tuple | list
-
-    __slots__ = ['outputs']
 
     @property
     def pred(self) -> Tensor:
@@ -145,10 +143,11 @@ class BaseCB:
     def __init__(self , model_module) -> None:
         self.__model_module = model_module
         self._assert_validity()
-    def _print_info(self , *add_str):
-        args = {k:v for k,v in getattr(currentframe() , 'f_back').f_locals.items() if k not in ['self' , 'model_module'] and not k.startswith('_')}
-        info = f'Callback of {self.__class__.__name__}' + '({})'.format(','.join([f'{k}={v}' for k,v in args.items()]))
-        print(','.join([info , *add_str]))
+    def _print_info(self):
+        args = {k:v for k,v in getattr(currentframe() , 'f_back').f_locals.items() if k not in ['self','model_module'] and not k.startswith('_')}
+        info = f'Callback : {self.__class__.__name__}' + '({})'.format(','.join([f'{k}={v}' for k,v in args.items()])) 
+        if self.__class__.__doc__: info += f' , {self.__class__.__doc__}'
+        print(info)
     def __call__(self , hook_name): self.__getattribute__(hook_name)()
     @property
     def module(self): return self.__model_module

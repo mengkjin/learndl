@@ -48,7 +48,7 @@ class Checkpoint(Storage):
         self.join_record.append(record_str)
 
     def load_epoch(self , epoch):
-        assert epoch > 0 , epoch
+        assert epoch >= 0 , epoch
         if self.epoch_queue[epoch]:
             return self.load(self.epoch_path(epoch))
         else:

@@ -1,41 +1,42 @@
-import gc , logging , os , time
+import os , time
 import numpy as np
 import pandas as pd
 
-from dataclasses import dataclass , field
+from dataclasses import asdict , dataclass , field
 from typing import Callable , ClassVar , Literal , Optional
 
 from .base import BasicCallBack
-from ..util.classes import TrainerStatus
-from ..util import MetricsAggregator , LoaderWrapper , TrainConfig
+from ..util import LoaderWrapper
 
 from ..environ import DIR
 
 class LoaderDisplay(BasicCallBack):
+    '''display batch progress bar'''
     def __init__(self , model_module , batch_interval = 1) -> None:
         super().__init__(model_module)
         self._print_info()
         self._interval = batch_interval
+    @property
     def _dl(self) -> LoaderWrapper: return self.module.dataloader
-    def _prt(self) -> bool: return self.status.epoch % self._interval == 0
-    def on_train_epoch_start(self):      self._dl().init_tqdm('Train Ep#{ep:3d} loss : {ls:.5f}')
-    def on_validation_epoch_start(self): self._dl().init_tqdm('Valid Ep#{ep:3d} score : {sc:.5f}')
-    def on_test_model_type_start(self):  self._dl().init_tqdm('Test {mt} {dt} score : {sc:.5f}')
+    @property
+    def _display(self) -> bool: return self.status.epoch % self._interval == 0
+    def on_train_epoch_start(self):      self._dl.init_tqdm('Train Ep#{ep:3d} loss : {ls:.5f}')
+    def on_validation_epoch_start(self): self._dl.init_tqdm('Valid Ep#{ep:3d} score : {sc:.5f}')
+    def on_test_model_type_start(self):  self._dl.init_tqdm('Test {mt} {dt} score : {sc:.5f}')
     def on_train_batch_end(self):
-        if self._prt(): self._dl().display(ep=self.status.epoch, ls=self.metrics.aggloss)
+        if self._display: self._dl.display(ep=self.status.epoch, ls=self.metrics.aggloss)
     def on_validation_batch_end(self):
-        if self._prt(): self._dl().display(ep=self.status.epoch, sc=self.metrics.aggscore)
+        if self._display: self._dl.display(ep=self.status.epoch, sc=self.metrics.aggscore)
     def on_test_batch_end(self):
-        if self._prt(): self._dl().display(dt=self.module.test_dates[self.module.batch_idx] , 
+        if self._display: self._dl.display(dt=self.module.batch_dates[self.module.batch_idx] , 
                                            mt=self.status.model_type , sc=self.metrics.aggscore)
             
 class ProgressDisplay(BasicCallBack):
-    '''pipeline of a training / testing process'''    
+    '''display epoch/event information'''
     result_path = f'{DIR.result}/model_results.yaml'
 
     def __init__(self , model_module , verbosity = 2):
         super().__init__(model_module)
-        verbosity = self.config.verbosity if self.config.verbosity is not None else verbosity
         self._print_info()
         self._verbosity = verbosity
         self._init_time = time.time()
@@ -48,25 +49,33 @@ class ProgressDisplay(BasicCallBack):
         self._test_record = self.TestRecord()
     
     @property
-    def initial_models(self): return self._model_stage < self.config.model_num
+    def _initial_models(self): return self._model_stage < self.config.model_num
     @property
-    def test_dates(self): return self.module.data_mod.model_test_dates
+    def _model_test_dates(self): return self.module.data_mod.model_test_dates
     @property
     def progress_log(self) -> Callable:
-        return self.logger.info if (self.config.verbosity > 2 or self.initial_models) else self.logger.debug
+        return self.logger.info if (self._verbosity > 2 or self._initial_models) else self.logger.debug
+    @property
+    def _speedup2x(self) -> bool:
+        try:
+            return self.config.train_param['callbacks']['ResetOptimizer']['speedup2x']
+        except KeyError:
+            return False
+
     def event_sdout(self , event) -> str:
         if event == 'reset_learn_rate':
-            sdout = f'Reset learn rate and scheduler at the end of epoch {self.status.epoch} ,' + \
-                ' effective at epoch {self.epoch + 1}' + \
-                ', and will speedup2x' * self.config.train_param['trainer']['learn_rate']['reset']['speedup2x']
+            sdout = f'Reset learn rate and scheduler at the end of epoch {self.status.epoch} , effective at epoch {self.status.epoch + 1}' + \
+                ', and will speedup2x' * self._speedup2x
         elif event == 'new_attempt':
             sdout = '{attempt} {epoch} : {status}, Next attempt goes!'.format(**self._texts)
+        elif event == 'nanloss':
+            sdout = 'Model {model_date}.{model_num} Attempt{attempt}, epoch{epoch} got nanloss!'.format(**asdict(self.status))
         else:
             raise KeyError(event)
         return sdout
 
     def update_test_score(self):
-        self._test_record.update_score(self.status.model_num , self.status.model_type , self.metrics.scores[-len(self.test_dates):])
+        self._test_record.update_score(self.status.model_num , self.status.model_type , self.metrics.scores[-len(self._model_test_dates):])
 
     def tic(self , key : str): self._times[key] = time.time()
 
@@ -129,15 +138,14 @@ class ProgressDisplay(BasicCallBack):
         self._texts['epoch_model'] = 'Ep#{:3d}'.format(self._epoch_model)
         self._texts['attempt'] = f'FirstBite' if self.status.attempt == 0 else f'Retrain#{self.status.attempt}'
     def on_validation_epoch_end(self):
-        if self.status.epoch % [10,5,5,3,3,1][min(self.config.verbosity // 2 , 5)] == 0: 
-            self.progress_log('{attempt} {epoch} : {status}'.format(**self._texts))
-    def on_fit_epoch_end(self):
-        if self.status.end_of_loop: self._texts['exit'] = self.status.end_of_loop.trigger_reason
         self._texts['status'] = 'loss {: .5f}, train{: .5f}, valid{: .5f}, best{: .4f}, lr{:.1e}'.format(
             self.metrics.train_losses[-1] , self.metrics.train_scores[-1] , self.metrics.valid_scores[-1] , 
             max(self.metrics.valid_scores) , self.module.optimizer.last_lr)
-        for _ in range(4):
-            self.progress_log(self.event_sdout(self.status.epoch_event.pop()))
+        if self.status.epoch % [10,5,5,3,3,1][min(self._verbosity // 2 , 5)] == 0: 
+            self.progress_log('{attempt} {epoch} : {status}'.format(**self._texts))
+    def on_fit_epoch_end(self):
+        if self.status.end_of_loop: self._texts['exit'] = self.status.end_of_loop.trigger_reason
+        while self.status.epoch_event: self.progress_log(self.event_sdout(self.status.epoch_event.pop()))
     def on_fit_model_end(self):
         self._texts['status'] = 'Train{: .4f} Valid{: .4f} BestVal{: .4f}'.format(
             self.metrics.train_scores[-1] , self.metrics.valid_scores[-1] , max(self.metrics.valid_scores))
@@ -151,7 +159,7 @@ class ProgressDisplay(BasicCallBack):
         self._test_record = self.TestRecord(self.config.model_num_list , self.config.model_types , self.logger.info)
         self._test_record.print_colnames()
     def on_test_model_start(self):
-        if self.status.model_num == 0: self._test_record.add_rows(self.status.model_date , self.test_dates)
+        if self.status.model_num == 0: self._test_record.add_rows(self.status.model_date , self._model_test_dates)
     def on_test_model_type_end(self):
         self.update_test_score()
     def on_test_model_end(self):

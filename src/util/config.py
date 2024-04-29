@@ -5,7 +5,7 @@ import torch
 from dataclasses import dataclass , field
 from typing import Any , ClassVar , Literal , Optional
 
-from ..func.basic import pretty_print_dict
+from ..func.basic import pretty_print_dict , recur_update
 from ..environ import DIR
 
 @dataclass    
@@ -104,10 +104,10 @@ class TrainParam:
         if self.override: Param.update(self.override)
 
         if self.spec_adjust:
-            if Param['short_test']: 
-                Param.update(Param.get('on_short_test' , {}))
-            if Param['model_module'].lower() == 'transformer':
-                Param['train_param']['trainer'].update(Param.get('on_tf_trainer' , {}))
+            if Param['short_test'] and Param.get('on_short_test'): 
+                recur_update(Param , Param['on_short_test'])
+            if Param['model_module'].lower() == 'transformer' and Param.get('on_transformer'):
+                recur_update(Param , Param['on_transformer'])
 
         # check conflicts:
         assert 'best' in Param['model_types']
@@ -170,7 +170,7 @@ class TrainConfig:
     buffer_param: dict      = field(default_factory=dict)
     
     on_short_test: dict     = field(default_factory=dict)
-    on_tf_trainer: dict     = field(default_factory=dict)
+    on_transformer: dict     = field(default_factory=dict)
 
     resume_training: bool   = True
     stage_queue: list       = field(default_factory=list)

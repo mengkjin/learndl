@@ -8,9 +8,9 @@ from typing import Optional
 from ..config import TrainConfig
 class Optimizer:
     '''specify trainer optimizer and scheduler'''
-    reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
+    # reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
 
-    def __init__(self , net : nn.Module , config : TrainConfig , transfer : bool = False , attempt : int = 0 , 
+    def __init__(self , net : nn.Module , config : TrainConfig , transfer : bool = False , lr_multiplier : float = 1. , 
                  add_opt_param : Optional[dict] = None , 
                  add_lr_param : Optional[dict] = None , 
                  add_shd_param : Optional[dict] = None) -> None:
@@ -23,16 +23,18 @@ class Optimizer:
         if add_lr_param:  self.lr_param.update(add_lr_param)
         if add_shd_param: self.shd_param.update(add_shd_param)
 
-        self.optimizer = self.load_optimizer(net , self.opt_param , self.lr_param , transfer , attempt)
+        self.optimizer = self.load_optimizer(net , self.opt_param , self.lr_param , transfer , lr_multiplier)
         self.scheduler = self.load_scheduler(self.optimizer , self.shd_param)
         self.clip_value = config.clip_value
 
     @classmethod
     def load_optimizer(cls , net : nn.Module , opt_param : dict , lr_param : dict  , 
-                       transfer : bool = False , attempt : int = 0):
-        base_lr = lr_param['base'] * lr_param['ratio']['attempt'][:attempt+1][-1]
-        return cls.base_optimizer(net , opt_param['name'] , base_lr , transfer = transfer , 
-                                  encoder_lr_ratio = lr_param['ratio']['transfer'], **opt_param['param'])
+                       transfer : bool = False , lr_multiplier : float = 1.):
+        assert lr_multiplier > 0 , f'lr_multiplier must be positive, but got {lr_multiplier}'
+        return cls.base_optimizer(net , opt_param['name'] , lr_param['base'] * lr_multiplier , transfer = transfer , 
+                                  encoder_lr_multiplier = lr_param['transfer_multiplier'].get('encoder',1.) , 
+                                  decoder_lr_multiplier = lr_param['transfer_multiplier'].get('decoder',1.) ,
+                                  **opt_param['param'])
     
     @classmethod
     def load_scheduler(cls , optimizer , shd_param : dict):
@@ -45,14 +47,15 @@ class Optimizer:
         if self.clip_value is not None : clip_grad_value_(self.net.parameters(), clip_value = self.clip_value) 
         self.optimizer.step()
 
-    def scheduler_step(self , epoch : int) -> str | None:
+    def scheduler_step(self , epoch : int = 0) -> str | None:
         '''scheduler step on learn rate , reset learn rate to base_lr on conditions'''
         self.scheduler.step()
+        '''
         reset_param = self.lr_param.get('reset')
         if not reset_param: return
         if reset_param['num_reset'] <= 0 or (epoch + 1) < reset_param['trigger']: return
         
-        trigger_intvl = reset_param['trigger'] // 2 if reset_param['speedup2x'] else reset_param['trigger']
+        trigger_intvl = max(reset_param['trigger'] // 2 , 1) if reset_param['speedup2x'] else reset_param['trigger']
         if (epoch + 1 - reset_param['trigger']) % trigger_intvl != 0: return
         
         trigger_times = ((epoch + 1 - reset_param['trigger']) // trigger_intvl) + 1
@@ -70,19 +73,20 @@ class Optimizer:
 
         self.scheduler = self.load_scheduler(self.optimizer , shd_param)
         return 'reset_learn_rate'
-
+        '''
+        
     @property
     def last_lr(self) -> float: return self.scheduler.get_last_lr()[0]    
 
     @staticmethod
     def base_optimizer(net : nn.Module , key = 'Adam', base_lr = 0.005, transfer = False , 
-                       encoder_lr_ratio = 1., decoder_lr_ratio = 1., **kwargs) -> torch.optim.Optimizer:
+                       encoder_lr_multiplier = 1., decoder_lr_multiplier = 1., **kwargs) -> torch.optim.Optimizer:
         if transfer:
             # define param list to train with different learn rate
             p_enc = [(p if p.dim()<=1 else nn.init.xavier_uniform_(p)) for x,p in net.named_parameters() if 'encoder' in x.split('.')[:3]]
             p_dec = [p for x,p in net.named_parameters() if 'encoder' not in x.split('.')[:3]]
-            param_groups = [{'params': p_dec , 'lr': base_lr * decoder_lr_ratio , 'lr_param': base_lr * decoder_lr_ratio},
-                            {'params': p_enc , 'lr': base_lr * encoder_lr_ratio , 'lr_param': base_lr * encoder_lr_ratio}]
+            param_groups = [{'params': p_dec , 'lr': base_lr * decoder_lr_multiplier , 'lr_param': base_lr * decoder_lr_multiplier},
+                            {'params': p_enc , 'lr': base_lr * encoder_lr_multiplier , 'lr_param': base_lr * encoder_lr_multiplier}]
         else:
             param_groups = [{'params': [p for p in net.parameters()] , 'lr' : base_lr , 'lr_param' : base_lr} ]
 

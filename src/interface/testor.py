@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from torch import nn , Tensor
 
 from ..util import TrainConfig , Metrics
-from ..util.classes import BatchData , BatchOutput
+from ..classes import BatchData , BatchOutput
 from ..module import DataModule
 from ..model import model as MODEL
 
@@ -41,10 +41,7 @@ class ModelTestor:
     def try_metrics(self) -> None:
         '''as name says, try to calculate metrics'''
         if not hasattr(self , 'outputs'): self.try_forward()
-        label , weight = self.batch_data.y , self.batch_data.w
-        penalty_kwargs = {}
-        penalty_kwargs.update({'net' : self.net , 'hidden' : self.net_output.hidden , 'label' : label})
-        metrics = self.metrics.calculate('train' , label , self.net_output.pred , weight , self.net , penalty_kwargs)
+        metrics = self.metrics.calculate('train' , self.batch_data , self.net_output , self.net)
         print('metrics : ' , metrics)
         print(f'Test Metrics Success')
     

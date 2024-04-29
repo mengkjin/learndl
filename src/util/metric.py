@@ -3,8 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from .classes import BatchData , BatchMetric , BatchOutput , MetricList , TrainerStatus
-from dataclasses import dataclass , field
+from ..classes import BatchData , BatchMetric , BatchOutput , MetricList , TrainerStatus
 from torch import nn , no_grad , Tensor
 from typing import Any , Literal , Optional
 
@@ -56,11 +55,12 @@ class Metrics:
     
     def new_model(self , model_param , config , **kwargs):
         if model_param['num_output'] > 1:
-            multi_param = config.train_param['multitask']
+            multi_param = config.train_param['multilosses']
             self.multiloss = MultiLosses(multi_param['type'], model_param['num_output'] , **multi_param['param_dict'][multi_param['type']])
     
         self.f_pen.get('hidden_corr',{})['cond']       = config.tra_model or model_param.get('hidden_as_factors',False)
         self.f_pen.get('tra_opt_transport',{})['cond'] = config.tra_model
+        self.new_attempt()
         return self
     
     def new_attempt(self):
@@ -141,7 +141,7 @@ class Metrics:
         nanpos = False
         for arg in args:
             if arg is not None: nanpos = arg.isnan() + nanpos
-        if isinstance(nanpos , torch.Tensor) and nanpos.any():
+        if isinstance(nanpos , Tensor) and nanpos.any():
             if nanpos.ndim > 1: nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
             new_args = [None if arg is None else arg[~nanpos] for arg in args]
         else:
@@ -201,7 +201,7 @@ class Metrics:
     @staticmethod
     def hidden_corr(*args , param , **kwargs):
         hidden = kwargs.get('hidden')
-        assert isinstance(hidden,torch.Tensor)
+        assert isinstance(hidden,Tensor)
         if hidden.shape[-1] == 1: return 0
         if isinstance(hidden,(tuple,list)): hidden = torch.cat(hidden,dim=-1)
         pen = hidden.T.corrcoef().triu(1).nan_to_num().square().sum()
@@ -327,9 +327,9 @@ class MultiLosses:
             pass
         def record(self , losses , weight , penalty):
             self.record_num += 1
-            self.record_losses.append(losses.detach() if isinstance(losses,torch.Tensor) else losses)
-            self.record_weight.append(weight.detach() if isinstance(weight,torch.Tensor) else weight)
-            self.record_penalty.append(penalty.detach() if isinstance(penalty,torch.Tensor) else penalty)
+            self.record_losses.append(losses.detach() if isinstance(losses,Tensor) else losses)
+            self.record_weight.append(weight.detach() if isinstance(weight,Tensor) else weight)
+            self.record_penalty.append(penalty.detach() if isinstance(penalty,Tensor) else penalty)
         def weight(self , losses , mt_param : dict = {}):
             return torch.ones_like(losses)
         def penalty(self , losses , mt_param : dict = {}): 
@@ -395,7 +395,7 @@ class MultiLosses:
     class RWS(_BaseMultiLossesClass):
         '''random weight loss, RW , Lin etc.(2021) , https://arxiv.org/pdf/2111.10603.pdf'''
         def weight(self , losses , mt_param : dict = {}): 
-            return torch.nn.functional.softmax(torch.rand_like(losses),-1)
+            return nn.functional.softmax(torch.rand_like(losses),-1)
 
     @classmethod
     def view_plot(cls , multi_type = 'ruw'):
@@ -404,18 +404,18 @@ class MultiLosses:
             if num_task > 2 : num_task = 2
             x,y = torch.rand(100,num_task),torch.rand(100,1)
             ls = (x - y).sqrt().sum(dim = 0)
-            alpha = torch.tensor(np.repeat(np.linspace(0.2, 10, 40),num_task).reshape(-1,num_task))
+            alpha = Tensor(np.repeat(np.linspace(0.2, 10, 40),num_task).reshape(-1,num_task))
             fig,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(alpha[:,0].numpy(), alpha[:,1].numpy())
             ruw = cls.RUW(num_task)
-            l = torch.stack([torch.stack([ruw(ls,{'alpha':torch.tensor([s1[i,j],s2[i,j]])})[0] for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
+            l = torch.stack([torch.stack([ruw(ls,{'alpha':Tensor([s1[i,j],s2[i,j]])})[0] for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
             ax.plot_surface(s1, s2, l, cmap='viridis') #type:ignore
             ax.set_xlabel('alpha-1')
             ax.set_ylabel('alpha-2')
             ax.set_zlabel('loss') #type:ignore
             ax.set_title(f'RUW Loss vs alpha ({num_task}-D)')
         elif multi_type == 'gls':
-            ls = torch.tensor(np.repeat(np.linspace(0.2, 10, 40),num_task).reshape(-1,num_task))
+            ls = Tensor(np.repeat(np.linspace(0.2, 10, 40),num_task).reshape(-1,num_task))
             fig,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(ls[:,0].numpy(), ls[:,1].numpy())
             l = torch.stack([torch.stack([torch.tensor([s1[i,j],s2[i,j]]).prod().sqrt() for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
@@ -428,7 +428,7 @@ class MultiLosses:
             ls = torch.tensor(np.repeat(np.linspace(0.2, 10, 40),num_task).reshape(-1,num_task))
             fig,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(ls[:,0].numpy(), ls[:,1].numpy())
-            l = torch.stack([torch.stack([(torch.tensor([s1[i,j],s2[i,j]])*torch.nn.functional.softmax(torch.rand(num_task),-1)).sum() for j in range(s1.shape[1])]) 
+            l = torch.stack([torch.stack([(torch.tensor([s1[i,j],s2[i,j]])*nn.functional.softmax(torch.rand(num_task),-1)).sum() for j in range(s1.shape[1])]) 
                              for i in range(s1.shape[0])]).numpy()
             ax.plot_surface(s1, s2, l, cmap='viridis') #type:ignore
             ax.set_xlabel('loss-1')

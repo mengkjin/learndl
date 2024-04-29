@@ -3,10 +3,15 @@ import pandas as pd
 
 import time
 import torch
+
+from copy import deepcopy
+
 from .base import BasicCallBack , WithCallBack
-from .. import util as U
 from ..func import list_converge
+from ..util import Optimizer
+
 class EarlyStoppage(BasicCallBack):
+    '''stop fitting when validation score cease to improve'''
     def __init__(self , model_module , patience = 20) -> None:
         super().__init__(model_module)
         self._print_info()
@@ -22,6 +27,7 @@ class EarlyStoppage(BasicCallBack):
             self.status.end_of_loop.add_status('EarlyStop' , self._epoch_best)
 
 class ValidationConverge(BasicCallBack):
+    '''stop fitting when valid_score converge'''
     def __init__(self , model_module , patience = 5 , eps = 1.0e-5) -> None:
         super().__init__(model_module)
         self._print_info()
@@ -32,6 +38,7 @@ class ValidationConverge(BasicCallBack):
             self.status.end_of_loop.add_status('Valid Cvg' , self.status.epoch - self._patience + 1)
 
 class TrainConverge(BasicCallBack):
+    '''stop fitting when train_loss converge'''
     def __init__(self , model_module , patience = 5 , eps = 1.0e-5) -> None:
         super().__init__(model_module)
         self._print_info()
@@ -42,6 +49,7 @@ class TrainConverge(BasicCallBack):
             self.status.end_of_loop.add_status('Train Cvg' , self.status.epoch - self._patience + 1)
 
 class FitConverge(BasicCallBack):
+    '''stop fitting when train_loss/valid_score converge'''
     def __init__(self , model_module , patience = 5 , eps = 1.0e-5) -> None:
         super().__init__(model_module)
         self._print_info()
@@ -53,11 +61,13 @@ class FitConverge(BasicCallBack):
             self.status.end_of_loop.add_status('T & V Cvg' , self.status.epoch - self._patience + 1)
 
 class EarlyExitRetrain(BasicCallBack):
-    def __init__(self, model_module , earliest = 20 , max_attempt = 4) -> None:
+    '''retrain with new lr if fitting stopped too early'''
+    def __init__(self, model_module , earliest = 20 , max_attempt = 4 , lr_multiplier = [1 , 0.1 , 10 , 0.01 , 100]) -> None:
         super().__init__(model_module)
+        self._print_info()
         self._earliest = earliest
         self._max_attempt = max_attempt
-        self._print_info()
+        self._lr_multiplier = lr_multiplier
     def on_fit_model_start(self):
         self.status.attempt = 0
     def on_validation_epoch_end(self):
@@ -66,13 +76,13 @@ class EarlyExitRetrain(BasicCallBack):
             and self.status.attempt < self._max_attempt):
             self.metrics.new_attempt()
             self.status.new_attempt()
-            self.module.checkpoint.new_model(self.module.model_param , self.status.model_date)
-            self.module.load_model(True)
             self.status.attempt += 1
             self.status.add_event('new_attempt')
+            self.module.checkpoint.new_model(self.module.model_param , self.status.model_date)
+            self.module.load_model(True , lr_multiplier = self._lr_multiplier[:self.status.attempt+1][-1])
 
 class NanLossRetrain(BasicCallBack):
-    '''Deal with nanloss, life -1 and change nanloss condition to True'''
+    '''retrain if fitting encounters nan loss'''
     def __init__(self, model_module , max_attempt = 4) -> None:
         super().__init__(model_module)
         self._print_info()
@@ -81,27 +91,27 @@ class NanLossRetrain(BasicCallBack):
         self._nanlife = self._max_attempt
     def on_train_epoch_end(self):
         self._nanloss = self.metrics.metric_batchs.nanloss
-    def on_fit_epoch_end(self):
+    def on_validation_epoch_end(self):
         if not self._nanloss:
             pass
         elif self._nanlife > 0:
-            self.logger.error('Model {model_date}.{model_num} Attempt{attempt}, epoch{epoch} got nanloss!'.format(**self.status.__dict__))
-            self.logger.error(f'Initialize a new model to retrain! Lives remaining {self._nanlife}')
             self.metrics.new_attempt()
             self.status.new_attempt()
+            self.status.add_event('nanloss')
             self.module.checkpoint.new_model(self.module.model_param , self.status.model_date)
             self.module.load_model(True)
+            self.logger.error(f'Initialize a new model to retrain! Lives remaining {self._nanlife}')
             self._nanlife -= 1
         else:
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
 
 class CudaEmptyCache(BasicCallBack):
+    '''CudaEmptyCache every few batch (pretty slow)'''
     def __init__(self , model_module , batch_interval = 20) -> None:
         super().__init__(model_module)
-        self._print_info('pretty slow')
+        self._print_info()
         self._interval = batch_interval
         # 2.5s for 86 epochs
-        
     def _empty_cache(self):
         if (self.module.batch_idx + 1) % self._interval == 0 : torch.cuda.empty_cache()
     def on_train_batch_end(self):        self._empty_cache()
@@ -109,6 +119,7 @@ class CudaEmptyCache(BasicCallBack):
     def on_test_batch_end(self):         self._empty_cache()
 
 class ProcessTimer(WithCallBack):
+    '''record time cost of callback hooks'''
     def __init__(self , model_module) -> None:
         super().__init__(model_module)
         self._print_info()
@@ -123,3 +134,36 @@ class ProcessTimer(WithCallBack):
         tb = pd.DataFrame([[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self._pt.items()] ,
                           columns = ['keys' , 'num_calls', 'total_time' , 'avg_time'])
         print(tb.sort_values(by=['total_time'],ascending=False))
+
+class ResetOptimizer(BasicCallBack):
+    '''reset optimizer on some epoch (can speedup scheduler)'''
+    reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
+    def __init__(self, model_module, num_reset = 2 , trigger = 40 , recover_level = 1. , speedup2x = True) -> None:
+        super().__init__(model_module)
+        self._print_info()
+        self._num_reset = num_reset
+        self._trigger = trigger
+        self._recover_level = recover_level 
+        self._speedup2x = speedup2x
+        self._trigger_intvl = max(self._trigger // 2 , 1) if self._speedup2x else self._trigger
+    @property
+    def optim(self) -> Optimizer: return self.module.optimizer
+    @property
+    def _reset_epoch(self) -> bool:
+        i = self.status.epoch + 1 - self._trigger
+        return (0 <= i < self._trigger_intvl * self._num_reset) and (i % self._trigger_intvl == 0)
+    def _halved_param(self , param : dict):
+        return {k:((v // 2) if k in self.reset_speedup_param_list else v) for k,v in param.items()}
+    def on_train_epoch_end(self):
+        if not self._reset_epoch: return
+
+        # confirm reset : change back optimizor learn rate
+        for param_group in self.optim.optimizer.param_groups:
+            param_group['lr'] = param_group['lr_param']  * self._recover_level
+        
+        # confirm reset : reassign scheduler
+        shd_param = deepcopy(self.optim.shd_param)
+        if self._speedup2x: shd_param = self._halved_param(shd_param)
+
+        self.optim.scheduler = self.optim.load_scheduler(self.optim.optimizer , shd_param)
+        self.status.add_event('reset_learn_rate')
