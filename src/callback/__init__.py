@@ -1,28 +1,16 @@
 from inspect import currentframe
-from typing import Any
-from . import control , display , model
-from ..util.classes import BaseCallBack , WithCallBack
-class ModelHook:
-    def __init__(self , ptimer = None) -> None:
-        self._tm = ptimer if ptimer is not None else self.EmptyTM
-    def update_timer(self , ptimer): self.tm = ptimer
-    def hook(self , func):
-        def wrapper(*args , **kwargs):
-            with self._tm(func.__name__):
-                func(*args , **kwargs)
-                [cb(func.__name__ , args[0]) for cb in args[0].callbacks]
-        return wrapper
+from typing import Any , Optional
 
-    class EmptyTM:
-        def __init__(self , *args): pass
-        def __enter__(self): pass
-        def __exit__(self , *args): pass
+from . import base , control , display , model
+from .base import BasicCallBack , WithCallBack
+
+from ..util import TrainConfig
 
 class CallBackManager:
     def __init__(self , *callbacks):        
         self.callbacks = callbacks
         self.with_cbs : list[WithCallBack] = []
-        self.base_cbs : list[BaseCallBack] = []
+        self.base_cbs : list[BasicCallBack] = []
         for cb in self.callbacks:
             if self.is_withcallback(cb):
                 self.with_cbs.append(cb)
@@ -42,3 +30,39 @@ class CallBackManager:
         for cb in self.base_cbs: cb(self.hook_name)
         for cb in self.with_cbs: cb.__exit__()
         for cb in self.with_cbs: cb(self.hook_name)
+
+    @classmethod
+    def setup(cls , *cb_names : str , model_module : Any = None):
+        if model_module is None: raise Exception('model_module must be supplied')
+        cbs = []
+        for cb_name in cb_names:
+            cb_cls = cls.__cb_class(cb_name)
+            kwargs = cls.__cb_class_kwargs(cb_name , model_module.config)
+            if kwargs is not None: cbs.append(cb_cls(model_module , **kwargs))
+        return cls(*cbs)
+    
+    @classmethod
+    def __cb_class(cls , cb_name : str):
+        if cb_name in ['EarlyStoppage' , 'ValidationConverge' , 'TrainConverge' , 'FitConverge' , 
+                       'EarlyExitRetrain' , 'NanLossRetrain' , 'ProcessTimer']:
+            return getattr(control , cb_name)
+        elif cb_name in ['DynamicDataLink']:
+            return getattr(model , cb_name)
+        elif cb_name in ['LoaderDisplay' , 'ProgressDisplay']:
+            return getattr(display , cb_name)
+        else:
+            raise KeyError(cb_name)
+
+    @classmethod
+    def __cb_class_kwargs(cls , cb_name : str , config : TrainConfig) -> Optional[dict]:
+        if cb_name in ['EarlyStoppage' , 'ValidationConverge' , 'TrainConverge' , 'FitConverge' , 
+                       'EarlyExitRetrain' , 'NanLossRetrain' , 'CudaEmptyCache']:
+            cond = config.train_param.get('callbacks')
+            kwargs = cond.get(cb_name) if isinstance(cond , dict) else None
+        elif cb_name in ['ProcessTimer' , 'DynamicDataLink' , 'LoaderDisplay']:
+            kwargs = {}
+        elif cb_name in ['ProgressDisplay']:
+            kwargs = {'verbosity' : config.verbosity}
+        else:
+            raise KeyError(cb_name)
+        return {k:v for k,v in kwargs.items() if v is not None} if isinstance(kwargs , dict) else None

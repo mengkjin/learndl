@@ -8,11 +8,31 @@ from typing import Any , Callable , ClassVar , Literal , Optional
 from ..config import TrainConfig
 from ..metric import Metrics , MetricsAggregator
 from ..trainer.optim import Optimizer
-from ..classes import BaseCallBack
+from ..classes import BaseCB
 from ...func import list_converge
 from ...environ import DIR
 
-class Pipeline(BaseCallBack):
+@dataclass
+class EndStatus:
+    name  : str
+    epoch : int # epoch of trigger
+    
+@dataclass
+class EndofLoop:
+    max_epoch : int = 200
+    status : list[EndStatus] = field(default_factory=list)
+
+    def __post_init__(self) -> None: pass
+    def __bool__(self): return len(self.status) > 0
+    def new_loop(self): self.status = []
+    def loop_end(self , epoch):
+        if epoch >= self.max_epoch: self.add_status('Max Epoch' , epoch)
+    def add_status(self , status : str , epoch : int): 
+        self.status.append(EndStatus(status , epoch))
+    def trigger_epoch(self):
+        return min([sta.epoch for sta in self.status]) if self else self.max_epoch
+
+class Pipeline(BaseCB):
     '''pipeline of a training / testing process'''    
     result_path = f'{DIR.result}/model_results.yaml'
 
@@ -53,7 +73,7 @@ class Pipeline(BaseCallBack):
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
         self.lr_list = []
         self.attempt += 1
-        self.texts['attempt'] = f'FirstBite' if self.attempt == 0 else f'Retrain#{self.attempt}'
+        self.texts['attempt'] = f'FirstBite' if getattr(self , 'attempt' , 0) == 0 else f'Retrain#{self.attempt}'
         self.nanloss = False
         self.loop_status = 'epoch'
 

@@ -151,7 +151,7 @@ class TrainConfig:
     end_date: int           = 99991231
     input_span: int         = 2400
     interval: int           = 120
-    max_epoch: int          = 100
+    max_epoch: int          = 200
     verbosity: int          = 2
     batch_size: int         = 10000
     input_step_day: int     = 5

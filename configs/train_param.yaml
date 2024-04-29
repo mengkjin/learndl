@@ -24,9 +24,7 @@ train_param:
       base:    0.005
       ratio:   {'attempt':[1 , 0.1 , 10 , 0.01 , 100] , 'transfer' : 0.1 , } 
       reset:   {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
-    nanloss:   {'retry' : 5}
     gradient:  {'clip_value' : 10.0}
-    retrain:   {'attempts' : 4 , 'min_epoch' : 20 ,} 
   criterion:
     loss:      pearson  # mse, pearson, ccc
     score:     spearman # mse, pearson, ccc, spearman
@@ -49,18 +47,20 @@ train_param:
       gls: {}
       rws: {}
       hybrid: {'phi' : null , 'tau' : 2}
-  terminate:
-    early_stop: 20
-    max_epoch: 200
-    valid_converge: {'min_epoch' : 5 , 'eps' : 1.0e-5} 
-    #'train_converge' : {'min_epoch' : 5 , 'eps' : 1.0e-5} 
-    #'tv_converge'    : {'min_epoch' : 5 , 'eps' : 1.0e-5}
+  callbacks:
+    EarlyStoppage:      {'patience' : 20}
+    ValidationConverge: {'patience' : 5 , 'eps' : 1.0e-5} 
+    #TrainConverge:      {'patience' : 5 , 'eps' : 1.0e-5} 
+    #FitConverge:        {'patience' : 5 , 'eps' : 1.0e-5}
+    EarlyExitRetrain:   {'earliest' : 20 , 'max_attempt' : 4}
+    NanLossRetrain:     {'max_attempt' : 4}
+    #CudaEmptyCache:     {'batch_interval' : 20}
 
 beg_date:   20170103
 end_date:   99991231
 input_span: 2400
 interval:   120
-max_epoch:  100
+max_epoch:  200
 verbosity:  2
 batch_size: 10000
 input_step_day: 5

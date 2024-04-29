@@ -1,15 +1,13 @@
-from ..util.classes import BaseCallBack
+from .base import BasicCallBack
 
-class DynamicDataLink(BaseCallBack):
+class DynamicDataLink(BasicCallBack):
     def __init__(self , model_module) -> None:
         super().__init__(model_module)
-        print(f'{self._infomation()}() , this is essential for TRA models!')
-    def _assign(self):
-        net = self.model_module.net
-        if hasattr(net , 'dynamic_data_assign'): net.dynamic_data_assign(self.model_module)
-    def _unlink(self):
-        net = self.model_module.net
-        if hasattr(net , 'dynamic_data_unlink'): net.dynamic_data_unlink()
+        self._print_info()
+    def _net_method(self , key , *args , **kwargs): 
+        if (method := getattr(self.module.net,key,None)): method(*args , **kwargs)
+    def _assign(self): self._net_method('dynamic_data_assign' , self.module)
+    def _unlink(self): self._net_method('dynamic_data_unlink')
     def on_train_epoch_start(self):      self._assign()
     def on_validation_epoch_start(self): self._assign()
     def on_test_model_type_start(self):  self._assign()

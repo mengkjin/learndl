@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from .classes import BatchData , BatchMetric , BatchOutput , MetricList
+from .classes import BatchData , BatchMetric , BatchOutput , MetricList , TrainerStatus
 from dataclasses import dataclass , field
 from torch import nn , no_grad , Tensor
 from typing import Any , Literal , Optional
@@ -24,7 +24,9 @@ class Metrics:
         self.f_score   = self.score_function(criterion['score'])
         self.f_pen     = {k:self.penalty_function(k,v) for k,v in criterion['penalty'].items()}
         self.multiloss = None
-        self.output  = BatchMetric()
+        self.output    = BatchMetric()
+        self.metric_batchs = MetricsAggregator()
+        self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
 
     @property
     def loss(self): return self.output.loss
@@ -34,8 +36,23 @@ class Metrics:
     def loss_item(self): return self.output.loss_item
     @property
     def penalty(self): return self.output.penalty
+
     @property
-    def losses(self): return self.output.losses
+    def losses(self): return self.metric_batchs.losses
+    @property
+    def scores(self): return self.metric_batchs.scores
+    @property
+    def aggloss(self): return self.metric_batchs.loss
+    @property
+    def aggscore(self): return self.metric_batchs.score
+    @property
+    def train_scores(self): return self.metric_epochs['train.score']
+    @property
+    def train_losses(self):  return self.metric_epochs['train.loss']
+    @property
+    def valid_scores(self): return self.metric_epochs['valid.score']
+    @property
+    def valid_losses(self):  return self.metric_epochs['valid.loss']
     
     def new_model(self , model_param , config , **kwargs):
         if model_param['num_output'] > 1:
@@ -45,6 +62,20 @@ class Metrics:
         self.f_pen.get('hidden_corr',{})['cond']       = config.tra_model or model_param.get('hidden_as_factors',False)
         self.f_pen.get('tra_opt_transport',{})['cond'] = config.tra_model
         return self
+    
+    def new_attempt(self):
+        self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
+
+    def new_epoch_metric(self , dataset , status : TrainerStatus):
+        self.metric_batchs.new(dataset , status.model_num , status.model_date , status.epoch , status.model_type)
+
+    def collect_batch_metric(self):
+        self.metric_batchs.record(self.output)
+
+    def collect_epoch_metric(self , dataset : Literal['train','valid','test']):
+        self.metric_batchs.collect()
+        self.metric_epochs[f'{dataset}.loss'].append(self.metric_batchs.loss) 
+        self.metric_epochs[f'{dataset}.score'].append(self.metric_batchs.score)
     
     def calculate(self , dataset , batch_data : BatchData , batch_output : BatchOutput , net : Optional[nn.Module] = None , 
                   assert_nan = False , **kwargs):
