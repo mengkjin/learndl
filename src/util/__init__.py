@@ -1,16 +1,16 @@
 from . import (
-    config , device , loader , logger , metric, store , time , trainer
+    callback , config , device , ensemble , loader , logger , metric , optim , store , time
 )
 
-from .trainer.ckpt import Checkpoint , Deposition
-from .trainer.model import FittestModel
-from .trainer.optim import Optimizer
-from .loader import DataloaderStored , LoaderWrapper
-from .metric import Metrics , MetricsAggregator
-from .store import Storage
-from .device import Device
-from .logger import Logger
+from .callback import CallBackManager
 from .config import TrainConfig
+from .device import Device
+from .ensemble import FittestModel
+from .loader import DataloaderStored , LoaderWrapper
+from .logger import Logger
+from .metric import Metrics , MetricsAggregator
+from .optim import Optimizer
+from .store import Checkpoint , Deposition , Storage
 from .time import PTimer
 
 class Filtered:

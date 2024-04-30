@@ -1,8 +1,10 @@
 import logging
+
 from inspect import currentframe
 
-from ..classes import BaseCB , TrainerStatus 
-from ..util import Metrics , TrainConfig
+from ..config import TrainConfig
+from ..metric import Metrics 
+from ...classes import BaseCB , TrainerStatus 
 
 class BasicCallBack(BaseCB):
     def __init__(self , model_module , *args , **kwargs) -> None:
@@ -18,10 +20,6 @@ class BasicCallBack(BaseCB):
             
 class WithCallBack(BasicCallBack):
     def __enter__(self): 
-        env = getattr(currentframe() , 'f_back')
-        while env.f_code.co_name == '__enter__': env = getattr(env , 'f_back')
-        assert env.f_code.co_name.startswith('on_') , env.f_code.co_name
-        self.hook_name = env.f_code.co_name
         pass
     def __exit__(self): 
         pass

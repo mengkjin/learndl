@@ -1,7 +1,7 @@
 from .base import BasicCallBack
 
 class DynamicDataLink(BasicCallBack):
-    '''assign/unlink dynamic data in tra networks'''
+    '''assign / unlink dynamic data in tra networks'''
     def __init__(self , model_module) -> None:
         super().__init__(model_module)
         self._print_info()

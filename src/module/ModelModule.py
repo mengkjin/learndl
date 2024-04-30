@@ -10,35 +10,36 @@ import numpy as np
 import torch
 
 from .DataModule import DataModule
-from .. import util as U
-from ..callback import CallBackManager
 from ..classes import BatchOutput , TrainerStatus
 from ..model import model as MODEL
+from ..util import (
+    CallBackManager , Checkpoint , Deposition , Device , Filtered , FittestModel ,
+    Logger , Metrics , Optimizer , PTimer , TrainConfig)
 
 class ModelTrainer:
     '''run through the whole process of training'''
     def __init__(self ,  **kwargs):
-        self.config     = U.TrainConfig.load(do_parser = True , par_args = kwargs)
-        self.logger     = U.Logger()
-        self.ptimer     = U.PTimer(True)
-        self.device     = U.Device()
-        self.checkpoint = U.Checkpoint(self.config)
-        self.deposition = U.Deposition(self.config)
-        self.metrics    = U.Metrics(self.config)
+        self.config     = TrainConfig.load(do_parser = True , par_args = kwargs)
+        self.logger     = Logger()
+        self.ptimer     = PTimer(True)
+        self.device     = Device()
+        self.checkpoint = Checkpoint(self.config)
+        self.deposition = Deposition(self.config)
+        self.metrics    = Metrics(self.config)
         self.data_mod   = DataModule(self.config)
         self.status     = TrainerStatus(self.config.max_epoch)
 
         self.callbacks = CallBackManager.setup(self , [
             'DynamicDataLink' , 
             'ResetOptimizer' ,
-            # 'CudaEmptyCache' , 
-            'ProcessTimer' ,
+            'CallbackTimer' ,
             'EarlyStoppage' ,
             'ValidationConverge' ,
             'EarlyExitRetrain' ,
             'NanLossRetrain' ,
-            'LoaderDisplay'    , 
-            'ProgressDisplay' ,
+            'BatchDisplay' , 
+            'StatusDisplay' ,
+            # 'CudaEmptyCache' , 
         ])
 
     def main_process(self):
@@ -136,7 +137,7 @@ class ModelTrainer:
                 if not os.path.exists(self.model_path(model_date , model_num = model_num)):
                     models_trained[max(i-1,0):] = False
                     break
-            new_iter = U.Filtered(new_iter , ~models_trained)
+            new_iter = Filtered(new_iter , ~models_trained)
         return new_iter
     @property
     def batch_dates(self): return np.concatenate([self.data_mod.early_test_dates , self.data_mod.model_test_dates])
@@ -247,7 +248,8 @@ class ModelTrainer:
             torch.set_grad_enabled(False)
     
     def on_test_model_end(self):
-        with self.callbacks: torch.set_grad_enabled(True)
+        with self.callbacks: 
+            torch.set_grad_enabled(True)
     
     def on_test_model_type_start(self):
         with self.callbacks:
@@ -259,7 +261,6 @@ class ModelTrainer:
     def on_test_model_type_end(self): 
         with self.callbacks: 
             self.metrics.collect_epoch_metric('test')
-            pass
     
     def on_train_batch_start(self): 
         with self.callbacks: pass
@@ -299,8 +300,8 @@ class ModelTrainer:
         self.transferred = training and self.config.train_param['transfer'] and self.deposition.exists(model_path)
         self.net = MODEL.new(self.config.model_module , self.model_param , self.deposition.load(model_path) , self.device)
         if training: 
-            self.fitmodels = U.FittestModel.get_models(self.config.model_types , self.checkpoint)
-            self.optimizer = U.Optimizer(self.net , self.config , self.transferred , lr_multiplier)
+            self.fitmodels = FittestModel.get_models(self.config.model_types , self.checkpoint)
+            self.optimizer = Optimizer(self.net , self.config , self.transferred , lr_multiplier)
 
     def save_model(self):
         '''save model state dict to deposition'''

@@ -56,9 +56,9 @@ class LoaderWrapper:
             self.loader = tqdm(self.loader , total=len(self.loader))
         return self
 
-    def display(self , **kwargs):
+    def display(self , *args , **kwargs):
         if isinstance(self.text , str) and isinstance(self.loader , tqdm): 
-            self.loader.set_description(self.text.format(**kwargs))
+            self.loader.set_description(self.text.format(*args , **kwargs))
 
 class CustomBatchSampler(Sampler):
     def __init__(self, sampler , batch_size_list , drop_res = True):

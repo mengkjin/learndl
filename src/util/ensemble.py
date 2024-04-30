@@ -6,7 +6,7 @@ from torch import nn
 from torch.optim.swa_utils import AveragedModel , update_bn
 from typing import Literal 
 
-from .ckpt import Checkpoint
+from .store import Checkpoint
 
 class FittestModel:
     '''abstract class of fittest model, e.g. model with the best score, swa model of best scores or last ones'''

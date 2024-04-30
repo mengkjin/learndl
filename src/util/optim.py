@@ -5,7 +5,8 @@ from torch import nn , optim , Tensor
 from torch.nn.utils.clip_grad import clip_grad_value_
 from typing import Optional
 
-from ..config import TrainConfig
+from .config import TrainConfig
+
 class Optimizer:
     '''specify trainer optimizer and scheduler'''
     # reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']

@@ -2,21 +2,19 @@ import gc , os
 import numpy as np
 import torch
 
-from dataclasses import dataclass , field
+from dataclasses import dataclass
 
 from numpy.random import permutation
 from torch import Tensor
 from torch.utils.data import BatchSampler
-from tqdm import tqdm
 from typing import Any , Literal , Optional
 
+from ..classes import BatchData
 from ..data.PreProcess import pre_process
 from ..data.BlockData import DataBlock , DataBlockNorm
-from ..util import Device , DataloaderStored , LoaderWrapper , Storage , TrainConfig
-from ..classes import BatchData
-from ..func import tensor_standardize_and_weight , match_values
-
 from ..environ import DIR
+from ..func import tensor_standardize_and_weight , match_values
+from ..util import DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig
 
 def _abbr(data_type : str): return DataBlock.data_type_abbr(data_type)
 

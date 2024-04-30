@@ -201,3 +201,8 @@ class BaseCB:
                 print(f'Invalid Hooks of {cls.__name__} :' , invalid_hooks)
                 print('Use _ or __ to prefix these class-methods')
                 raise TypeError(cls)
+    @property
+    def trace_hook_name(self):
+        env = getattr(currentframe() , 'f_back')
+        while not env.f_code.co_name.startswith('on_'): env = getattr(env , 'f_back')
+        return env.f_code.co_name

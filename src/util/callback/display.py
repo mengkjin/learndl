@@ -3,36 +3,54 @@ import numpy as np
 import pandas as pd
 
 from dataclasses import asdict , dataclass , field
-from typing import Callable , ClassVar , Literal , Optional
+from typing import Callable , ClassVar , Optional
 
-from .base import BasicCallBack
-from ..util import LoaderWrapper
+from .base import BasicCallBack , WithCallBack
+from ...util.loader import LoaderWrapper
+from ...environ import DIR
 
-from ..environ import DIR
-
-class LoaderDisplay(BasicCallBack):
-    '''display batch progress bar'''
-    def __init__(self , model_module , batch_interval = 1) -> None:
+class CallbackTimer(WithCallBack):
+    '''record time cost of callback hooks'''
+    def __init__(self , model_module) -> None:
         super().__init__(model_module)
         self._print_info()
-        self._interval = batch_interval
+        self._pt : dict[str,list]  = {}
+        self._st : dict[str,float] = {}
+    def __enter__(self):
+        super().__enter__()
+        self._st[self.trace_hook_name] = time.time()
+    def __exit__(self):
+        hook_name = self.trace_hook_name
+        if hook_name not in self._pt.keys(): self._pt[hook_name] = []
+        self._pt[hook_name].append(time.time() - self._st[hook_name])
+    def on_summarize_model(self):
+        tb = pd.DataFrame([[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self._pt.items()] ,
+                          columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time'])
+        print(tb.sort_values(by=['total_time'],ascending=False))
+
+class BatchDisplay(BasicCallBack):
+    '''display batch progress bar'''
+    def __init__(self , model_module , verbosity = 2) -> None:
+        super().__init__(model_module)
+        self._print_info()
+        self._verbosity = verbosity
     @property
     def _dl(self) -> LoaderWrapper: return self.module.dataloader
     @property
-    def _display(self) -> bool: return self.status.epoch % self._interval == 0
-    def on_train_epoch_start(self):      self._dl.init_tqdm('Train Ep#{ep:3d} loss : {ls:.5f}')
-    def on_validation_epoch_start(self): self._dl.init_tqdm('Valid Ep#{ep:3d} score : {sc:.5f}')
-    def on_test_model_type_start(self):  self._dl.init_tqdm('Test {mt} {dt} score : {sc:.5f}')
-    def on_train_batch_end(self):
-        if self._display: self._dl.display(ep=self.status.epoch, ls=self.metrics.aggloss)
-    def on_validation_batch_end(self):
-        if self._display: self._dl.display(ep=self.status.epoch, sc=self.metrics.aggscore)
-    def on_test_batch_end(self):
-        if self._display: self._dl.display(dt=self.module.batch_dates[self.module.batch_idx] , 
-                                           mt=self.status.model_type , sc=self.metrics.aggscore)
+    def _init_tqdm(self) -> Callable: return self._dl.init_tqdm if self._verbosity >= 10 else self._empty
+    @property
+    def _display(self) -> Callable: return self._dl.display if self._verbosity >= 10 else self._empty
+    @staticmethod
+    def _empty(*args , **kwargs): return 
+    def on_train_epoch_start(self):      self._init_tqdm('Train Ep#{:3d} loss : {:.5f}')
+    def on_validation_epoch_start(self): self._init_tqdm('Valid Ep#{:3d} score : {:.5f}')
+    def on_test_model_type_start(self):  self._init_tqdm('Test {} {} score : {:.5f}')
+    def on_train_batch_end(self):        self._display(self.status.epoch, self.metrics.aggloss)
+    def on_validation_batch_end(self):   self._display(self.status.epoch, self.metrics.aggscore)
+    def on_test_batch_end(self):         self._display(self.status.model_type , self.module.batch_dates[self.module.batch_idx] , self.metrics.aggscore)
             
-class ProgressDisplay(BasicCallBack):
-    '''display epoch/event information'''
+class StatusDisplay(BasicCallBack):
+    '''display epoch / event information'''
     result_path = f'{DIR.result}/model_results.yaml'
 
     def __init__(self , model_module , verbosity = 2):

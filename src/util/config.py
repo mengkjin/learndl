@@ -392,7 +392,7 @@ class TrainConfig:
     def print_out(self):
         subset = [
             'random_seed' , 'model_name' , 'model_module' , 'model_data_type' , 'model_data_prenorm' , 'labels' ,
-            'beg_date' , 'end_date' , 'interval' , 'input_step_day' , 'sample_method' , 'shuffle_option' ,
+            'beg_date' , 'end_date' , 'interval' , 'input_step_day' , 'max_epoch'  , 'sample_method' , 'shuffle_option' ,
         ]
         pretty_print_dict({k:self.get(k) for k in subset})
         # pretty_print_dict(self.train_param)

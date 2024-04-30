@@ -3,8 +3,7 @@ from typing import Any , Optional
 
 from . import base , control , display , model
 from .base import BasicCallBack , WithCallBack
-
-from ..util import TrainConfig
+from ..config import TrainConfig
 
 class CallBackManager:
     def __init__(self , *callbacks):        
@@ -21,15 +20,14 @@ class CallBackManager:
     def is_withcallback(cb): return issubclass(cb.__class__ , WithCallBack)
 
     def __enter__(self):
-        hook_name = str(getattr(currentframe() , 'f_back').f_code.co_name)
-        assert hook_name.startswith('on_') , hook_name
-        self.hook_name = hook_name
         for cb in self.with_cbs: cb.__enter__()
 
     def __exit__(self , *args):
-        for cb in self.base_cbs: cb(self.hook_name)
+        hook_name = str(getattr(currentframe() , 'f_back').f_code.co_name)
+        assert hook_name.startswith('on_') , hook_name
+        for cb in self.base_cbs: cb(hook_name)
         for cb in self.with_cbs: cb.__exit__()
-        for cb in self.with_cbs: cb(self.hook_name)
+        for cb in self.with_cbs: cb(hook_name)
 
     @classmethod
     def setup(cls , model_module : Any = None , cb_names : list[str] = []):
@@ -44,11 +42,11 @@ class CallBackManager:
     @classmethod
     def __cb_class(cls , cb_name : str):
         if cb_name in ['EarlyStoppage' , 'ValidationConverge' , 'TrainConverge' , 'FitConverge' , 
-                       'EarlyExitRetrain' , 'NanLossRetrain' , 'ProcessTimer' , 'ResetOptimizer']:
+                       'EarlyExitRetrain' , 'NanLossRetrain' , 'ResetOptimizer']:
             return getattr(control , cb_name)
         elif cb_name in ['DynamicDataLink']:
             return getattr(model , cb_name)
-        elif cb_name in ['LoaderDisplay' , 'ProgressDisplay']:
+        elif cb_name in ['CallbackTimer' , 'BatchDisplay' , 'StatusDisplay']:
             return getattr(display , cb_name)
         else:
             raise KeyError(cb_name)
@@ -59,9 +57,9 @@ class CallBackManager:
                        'EarlyExitRetrain' , 'NanLossRetrain' , 'CudaEmptyCache' , 'ResetOptimizer']:
             cond = config.train_param.get('callbacks')
             kwargs = cond.get(cb_name) if isinstance(cond , dict) else None
-        elif cb_name in ['ProcessTimer' , 'DynamicDataLink' , 'LoaderDisplay']:
+        elif cb_name in ['CallbackTimer' , 'DynamicDataLink']:
             kwargs = {}
-        elif cb_name in ['ProgressDisplay']:
+        elif cb_name in ['BatchDisplay' , 'StatusDisplay']:
             kwargs = {'verbosity' : config.verbosity}
         else:
             raise KeyError(cb_name)

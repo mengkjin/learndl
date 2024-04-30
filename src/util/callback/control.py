@@ -7,8 +7,8 @@ import torch
 from copy import deepcopy
 
 from .base import BasicCallBack , WithCallBack
-from ..func import list_converge
-from ..util import Optimizer
+from ..optim import Optimizer
+from ...func import list_converge
 
 class EarlyStoppage(BasicCallBack):
     '''stop fitting when validation score cease to improve'''
@@ -117,23 +117,6 @@ class CudaEmptyCache(BasicCallBack):
     def on_train_batch_end(self):        self._empty_cache()
     def on_validation_batch_end(self):   self._empty_cache()
     def on_test_batch_end(self):         self._empty_cache()
-
-class ProcessTimer(WithCallBack):
-    '''record time cost of callback hooks'''
-    def __init__(self , model_module) -> None:
-        super().__init__(model_module)
-        self._print_info()
-        self._pt = {}
-    def __enter__(self):
-        super().__enter__()
-        self.start_time = time.time()
-    def __exit__(self): 
-        if self.hook_name not in self._pt.keys(): self._pt[self.hook_name] = []
-        self._pt[self.hook_name].append(time.time() - self.start_time)
-    def on_summarize_model(self):
-        tb = pd.DataFrame([[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self._pt.items()] ,
-                          columns = ['keys' , 'num_calls', 'total_time' , 'avg_time'])
-        print(tb.sort_values(by=['total_time'],ascending=False))
 
 class ResetOptimizer(BasicCallBack):
     '''reset optimizer on some epoch (can speedup scheduler)'''
