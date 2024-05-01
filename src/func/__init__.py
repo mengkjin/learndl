@@ -1,4 +1,4 @@
 from . import (
-    date,primas
+    primas, time
 )
 from .basic import *

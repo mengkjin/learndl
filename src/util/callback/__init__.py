@@ -1,7 +1,7 @@
 from inspect import currentframe
 from typing import Any , Optional
 
-from . import base , control , display , model
+from . import base , control , display
 from .base import BasicCallBack , WithCallBack
 from ..config import TrainConfig
 
@@ -42,10 +42,8 @@ class CallBackManager:
     @classmethod
     def __cb_class(cls , cb_name : str):
         if cb_name in ['EarlyStoppage' , 'ValidationConverge' , 'TrainConverge' , 'FitConverge' , 
-                       'EarlyExitRetrain' , 'NanLossRetrain' , 'ResetOptimizer']:
+                       'EarlyExitRetrain' , 'NanLossRetrain' , 'ResetOptimizer' , 'DynamicDataLink']:
             return getattr(control , cb_name)
-        elif cb_name in ['DynamicDataLink']:
-            return getattr(model , cb_name)
         elif cb_name in ['CallbackTimer' , 'BatchDisplay' , 'StatusDisplay']:
             return getattr(display , cb_name)
         else:

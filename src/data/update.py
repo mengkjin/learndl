@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
-import os , socket , tarfile, time
+import argparse , gc , os , socket , sys , tarfile, time
 
 from functools import reduce 
 
+from .fetcher import DB_by_date , DB_by_name , Fetcher , Fetcher_sql , save_df
+from .BlockData import DataBlock , DataBlockNorm , DataProcessConfig
 from ..environ import DIR
-from .DataFetcher import DataFetcher
-from .DataFetcher_sql import DataFetcher_sql
+from ..func.time import Timer
 
 class DataUpdater():
     db_updater_title = 'DB_updater'
@@ -33,20 +34,17 @@ class DataUpdater():
         search_dirs = [DIR.db , DIR.db_updater , '/home/mengkjin/Workspace/SharedFolder']
         paths = []
         for sdir in search_dirs:
-            path = [os.path.join(sdir , p) for p in os.listdir(sdir) if p.startswith(cls.db_updater_title + '.') and p.endswith('.tar')]
-            paths += path
+            paths += [os.path.join(sdir , p) for p in os.listdir(sdir) if p.startswith(cls.db_updater_title + '.') and p.endswith('.tar')]
         paths.sort()
         if del_after_dumping and paths:
             print(paths)
-            if input(f'''Delete {len(paths)} updaters after completion? (press yes/y) : {paths}''')[0].lower() != 'y': 
-                del_after_dumping = False
+            del_after_dumping = input(f'''Delete {len(paths)} updaters after completion? (press yes/y) : {paths}''')[0].lower() == 'y'
 
         for tar_filename in paths:
             with tarfile.open(tar_filename, 'r') as tar:  
                 tar.extractall(path = DIR.db , filter='data')  
                 
-        if del_after_dumping:
-            for tar_filename in paths: os.remove(tar_filename)
+        if del_after_dumping: [os.remove(tar_filename) for tar_filename in paths]
 
     @classmethod
     def get_new_updater(cls):
@@ -56,47 +54,48 @@ class DataUpdater():
     def get_db_params(self , db_src):
         # db_update_parameters
         if db_src == 'information':
-            params = [
-                DataFetcher(db_src,'calendar') ,    # market trading calendar
-                DataFetcher(db_src,'description') , # stock list_date and delist_date
-                DataFetcher(db_src,'st') ,          # st treatment of stocks
-                DataFetcher(db_src,'industry') ,    # SW 2021 industry criterion
-                DataFetcher(db_src,'concepts') ,    # wind concepts
+            param_args : list[list] = [
+                ['calendar',] ,    # market trading calendar
+                ['description',] , # stock list_date and delist_date
+                ['st',] ,          # st treatment of stocks
+                ['industry',] ,    # SW 2021 industry criterion
+                ['concepts',] ,    # wind concepts
             ]
         elif db_src == 'models':
-            params = [
-                DataFetcher(db_src,'risk_exp') , # market, industry, style exposure of risk model jm2018
-                DataFetcher(db_src,'longcl_exp') , # sub alpha factor exposure of longcl
+            param_args = [
+                ['risk_exp',] , # market, industry, style exposure of risk model jm2018
+                ['longcl_exp',] , # sub alpha factor exposure of longcl
             ]
         elif db_src == 'trade':
-            params = [
-                DataFetcher(db_src,'day') , 
-                DataFetcher(db_src,'5day',[5]) ,
-                DataFetcher(db_src,'10day',[10]) , 
-                DataFetcher(db_src,'20day',[20]) , 
-                DataFetcher(db_src,'min') , 
-                DataFetcher(db_src,'5min',[5]), 
-                DataFetcher(db_src,'10min',[10]) , 
-                DataFetcher(db_src,'15min',[15]) , 
-                DataFetcher(db_src,'30min',[30]) , 
-                DataFetcher(db_src,'60min',[60]) ,
+            param_args = [
+                ['day',] , 
+                ['5day',[5],] ,
+                ['10day',[10],] , 
+                ['20day',[20],] , 
+                ['min',] , 
+                ['5min',[5],], 
+                ['10min',[10],] , 
+                ['15min',[15],] , 
+                ['30min',[30],] , 
+                ['60min',[60],] ,
             ]
         elif db_src == 'labels':
-            params = [
-                DataFetcher(db_src,'ret5',[5 ,False]) , 
-                DataFetcher(db_src,'ret5_lag',[5 ,True]) , 
-                DataFetcher(db_src,'ret10',[10 ,False]) , 
-                DataFetcher(db_src,'ret10_lag',[10 ,True]) , 
-                DataFetcher(db_src,'ret20',[20 ,False]) , 
-                DataFetcher(db_src,'ret20_lag',[20 ,True]) , 
+            param_args = [
+                ['ret5',[5 ,False],] , 
+                ['ret5_lag',[5 ,True],] , 
+                ['ret10',[10 ,False],] , 
+                ['ret10_lag',[10 ,True],] , 
+                ['ret20',[20 ,False],] , 
+                ['ret20_lag',[20 ,True],] , 
             ]
         else:
             raise Exception(db_src)
+        params = [Fetcher(db_src , *args) for args in param_args]
         return params
     
     def handle_df_result(self , df , target_path , result_dict = None):
         if isinstance(df , pd.DataFrame):
-            DataFetcher.save_df(df , target_path)
+            save_df(df , target_path)
             with tarfile.open(self.Updater, 'a') as tar:  
                 tar.add(target_path, arcname=os.path.relpath(target_path,DIR.db))  
             self.Success.append(target_path)
@@ -137,19 +136,19 @@ class DataUpdater():
                 if target_str: print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
         return result
 
-    def update_all(self , db_srcs = DataFetcher.DB_by_name + DataFetcher.DB_by_date , start_dt = None , end_dt = None , force = False):
+    def update_all(self , db_srcs = DB_by_name + DB_by_date , start_dt = None , end_dt = None , force = False):
         # selected DB is totally refreshed , so delete first
         if not isinstance(db_srcs , (list,tuple)): db_srcs = [db_srcs]
         for db_src in db_srcs:
-            if db_src in DataFetcher.DB_by_name:
+            if db_src in DB_by_name:
                 self.update_by_name(db_src)
-            elif db_src in DataFetcher.DB_by_date:
+            elif db_src in DB_by_date:
                 self.update_by_date(db_src , start_dt , end_dt , force = force)
             else:
                 raise Exception(db_src)
 
     def print_unfetch(self):
-        for fail in self.Failed: print(fail) 
+        [print(fail) for fail in self.Failed]
 
     @classmethod
     def update_server(cls):
@@ -158,7 +157,7 @@ class DataUpdater():
 
         print(f'Unpack Update Files') 
         cls.unpack_exist_updaters(del_after_dumping=True)
-
+        Fetcher_sql.update_since()
         print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
 
     @classmethod
@@ -170,12 +169,55 @@ class DataUpdater():
         Updater = cls()
         Updater.update_all()
         Updater.print_unfetch()
-
+        Fetcher_sql.update_since()
         print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
 
-def main():
-    if socket.gethostname() == 'mengkjin-server':
-        DataUpdater.update_server()
-    else:
-        DataUpdater.update_laptop()
-    DataFetcher_sql.update_since()
+    @classmethod
+    def update_data(cls):
+        if socket.gethostname() == 'mengkjin-server':
+            DataUpdater.update_server()
+        else:
+            DataUpdater.update_laptop()
+
+    @staticmethod
+    def preprocess_data(predict = False, confirm = 0 , parser = None):
+        if parser is None:
+            parser = argparse.ArgumentParser(description='manual to this script')
+            parser.add_argument("--confirm", type=str, default = confirm)
+            args , _ = parser.parse_known_args()
+
+        if not predict and not args.confirm and not input('Confirm update data? print "yes" to confirm!').lower()[0] == 'y' : 
+            sys.exit()
+
+        t1 = time.time()
+        print(f'predict is {predict} , Data Processing start!')
+
+        Configs = DataProcessConfig(predict , blocks = ['y' , 'trade_day' , 'trade_30m'])
+        print(f'{len(Configs.blocks)} datas :' + str(list(Configs.blocks)))
+
+        for key , param in Configs.get_block_params():
+            tt1 = time.time()
+            print(f'{time.ctime()} : {key} start ...')
+            
+            BlockDict = DataBlock.load_DB(param , Configs.load_start_dt, Configs.load_end_dt)
+            
+            with Timer(f'{key} blocks process'):
+                ThisBlock = DataBlock.blocks_process(BlockDict , key)
+
+            with Timer(f'{key} blocks masking'):   
+                ThisBlock = ThisBlock.mask_values(mask = Configs.mask)
+
+            with Timer(f'{key} blocks saving '):
+                ThisBlock.save(key , predict , Configs.save_start_dt , Configs.save_end_dt)
+
+            with Timer(f'{key} blocks norming'):
+                ThisBlock.hist_norm(key , predict , Configs.hist_start_dt , Configs.hist_end_dt)
+            
+            tt2 = time.time()
+            print(f'{time.ctime()} : {key} finished! Cost {tt2-tt1:.2f} Seconds')
+        
+            del ThisBlock
+            gc.collect()
+
+        t2 = time.time()
+        print('Data Processing Finished! Cost {:.2f} Seconds'.format(t2-t1))

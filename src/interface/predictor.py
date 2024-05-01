@@ -6,13 +6,13 @@ import torch
 from dataclasses import dataclass
 from typing import ClassVar , Literal
 
+from .data import DataModule
 from ..environ import DIR
 from ..util import Device , TrainConfig
 from ..classes import BatchOutput
-from ..data.DataFetcher import DataFetcher
-from ..module import DataModule
+from ..data.fetcher import load_target_file
 from ..model import model as MODEL
-from ..func.date import today , date_offset
+from ..func.time import today , date_offset
 
 @dataclass
 class Predictor:
@@ -71,7 +71,7 @@ class Predictor:
         model_dates = np.array([int(mf.split('.')[0]) for mf in model_files])
 
         start_dt = max(start_dt , int(date_offset(min(model_dates) ,1)))
-        calendar = DataFetcher.load_target_file('information' , 'calendar')
+        calendar = load_target_file('information' , 'calendar')
         assert calendar is not None
 
         require_model_data_old = (start_dt <= today(-100))

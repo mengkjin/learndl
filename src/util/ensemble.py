@@ -1,6 +1,6 @@
 import numpy as np
 
-from abc import abstractmethod
+from abc import ABC , abstractmethod
 from copy import deepcopy
 from torch import nn
 from torch.optim.swa_utils import AveragedModel , update_bn
@@ -8,7 +8,7 @@ from typing import Literal
 
 from .store import Checkpoint
 
-class FittestModel:
+class FittestModel(ABC):
     '''abstract class of fittest model, e.g. model with the best score, swa model of best scores or last ones'''
     def __init__(self, ckpt : Checkpoint , use : Literal['loss','score'] = 'score') -> None:
         self.ckpt , self.use = ckpt , use

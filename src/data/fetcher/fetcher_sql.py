@@ -1,5 +1,5 @@
 # %%
-import os , platform , time
+import platform , time
 import pandas as pd
 import numpy as np
 import multiprocessing as mp  
@@ -9,7 +9,7 @@ from datetime import date , datetime
 from sqlalchemy import create_engine , exc
 from typing import ClassVar , Literal
 
-from .DataFetcher import DataFetcher
+from .common import get_target_dates , get_target_path , save_df
 
 @dataclass
 class Connection:
@@ -189,7 +189,7 @@ class DataFetcher_sql:
         return df
 
     def get_target_dates(self):
-        return DataFetcher.get_target_dates(self.db_src , self.db_key)
+        return get_target_dates(self.db_src , self.db_key)
 
     def save_data(self , data):
         if len(data) == 0: return
@@ -197,8 +197,8 @@ class DataFetcher_sql:
         for d in data.index.unique():
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: continue
-            target_path = DataFetcher.get_target_path(self.db_src , self.db_key , d , True , force_type='date')
-            DataFetcher.save_df(data_at_d , target_path)
+            target_path = get_target_path(self.db_src , self.db_key , d , True , force_type='date')
+            save_df(data_at_d , target_path)
 
     @classmethod
     def convert_id(cls , x):
@@ -371,7 +371,7 @@ class DataFetcher_sql:
             factor.download('all' , connection)
         
 if __name__ == '__main__':
-    from src.data.DataFetcher_sql import DataFetcher_sql
+    from src.data.fetcher.fetcher_sql import DataFetcher_sql
 
     start_dt = 20100901 
     end_dt   = 20100915

@@ -42,12 +42,9 @@ class LoaderWrapper:
             yield self.process(batch_data , batch_i)        
     
     def process(self , batch_data : BatchData , batch_i : int) -> BatchData:
-        if hasattr(self.data_module , 'on_before_batch_transfer'):
-            batch_data = self.data_module.on_before_batch_transfer(batch_data , batch_i)
-        if hasattr(self.data_module , 'transfer_batch_to_device'):
-            batch_data = self.data_module.transfer_batch_to_device(batch_data , self.device , batch_i)
-        if hasattr(self.data_module , 'on_after_batch_transfer'):
-            batch_data = self.data_module.on_after_batch_transfer(batch_data , batch_i)
+        batch_data = self.data_module.on_before_batch_transfer(batch_data , batch_i)
+        batch_data = self.data_module.transfer_batch_to_device(batch_data , self.device , batch_i)
+        batch_data = self.data_module.on_after_batch_transfer(batch_data , batch_i)
         return batch_data
 
     def init_tqdm(self , text = ''):

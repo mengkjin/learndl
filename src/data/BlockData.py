@@ -7,41 +7,109 @@ import torch
 
 from dataclasses import dataclass , field
 from torch import Tensor
-from typing import Any
+from typing import Any , ClassVar , Optional
 
-from .DataFetcher import DataFetcher
+from .fetcher import get_target_dates , load_target_file
 from ..environ import DIR
-
-from ..util.time import Timer
 from ..func import match_values , index_union , index_intersect , forward_fillna
-from ..func.date import date_offset , today
+from ..func.time import date_offset , today , Timer
 from ..func.primas import neutralize_2d , process_factor
 
-class BasicBlock():
-    def __init__(self , values = None , index = None) -> None:
+@dataclass(slots=True)
+class DataProcessParam:
+    db_src  : str
+    db_key  : str | list
+    feature : list | None = None
+
+    def __post_init__(self):
+        if isinstance(self.db_key , str): self.db_key = [self.db_key]
+
+@dataclass(slots=True)
+class DataProcessConfig:
+    predict         : bool
+    blocks          : list = field(default_factory=list)
+    load_start_dt   : int | None = None
+    load_end_dt     : int | None = None
+    save_start_dt   : int | None = 20070101
+    save_end_dt     : int | None = None
+    hist_start_dt   : int | None = None
+    hist_end_dt     : int | None = 20161231
+    mask            : dict | None = None
+
+    def __post_init__(self):
+        self.blocks = [blk.lower() for blk in self.blocks]
+        if self.predict:
+            self.load_start_dt = today(-181)
+            self.load_end_dt   = None
+            self.save_start_dt = None
+            self.save_end_dt   = None
+            self.hist_start_dt = None
+            self.hist_end_dt   = None
+        if self.mask is None:
+            self.mask = self.default_mask()
+
+    def get_block_params(self):
+        for blk in self.blocks:
+            yield blk , self.default_block_param(blk)
+
+    @staticmethod
+    def default_block_param(blk : str):
+        if blk in ['y' , 'labels']:
+            params : dict[str,list]= {
+                'labels': ['labels' , ['ret10_lag' , 'ret20_lag']] ,
+                'models': ['models' , 'risk_exp'] ,
+            }
+        elif blk in ['day' , 'trade_day']:
+            params = {
+                'trade_day' : ['trade' , 'day' , ['adjfactor', 'close', 'high', 'low', 'open', 'vwap' , 'turn_fl']] ,
+            }
+        elif blk in ['30m' , 'trade_30m']:
+            params = {
+                'trade_30m' : ['trade' , '30min' , ['close', 'high', 'low', 'open', 'volume', 'vwap']] ,
+                'trade_day' : ['trade' , 'day' , ['volume' , 'turn_fl' , 'preclose']] ,
+            }
+        elif blk in ['15m' , 'trade_15m']:
+            params = {
+                'trade_15m' : ['trade' , '15min' , ['close', 'high', 'low', 'open', 'volume', 'vwap']] ,
+                'trade_day' : ['trade' , 'day' , ['volume' , 'turn_fl' , 'preclose']] ,
+            }
+        elif blk in ['week' , 'trade_week']:
+            params = {
+                'trade_day' : ['trade' , 'day' , ['adjfactor', 'preclose' ,'close', 'high', 'low', 'open', 'vwap' , 'turn_fl']] ,
+            }
+        else:
+            raise KeyError(blk)
+        return {k:DataProcessParam(*v) for k,v in params.items()}
+        
+    @staticmethod
+    def default_mask(): return {'list_dt':True}
+
+class BasicBlock:
+    def __init__(self , values : np.ndarray | Tensor , index = None) -> None:
         if values is not None or index is not None:
             self.init_attr(values , index)
 
     def __repr__(self):
-        return '\n'.join([
-            str(self.__class__) ,
-            f'values shape {self.values.shape}'
-        ])
+        return '\n'.join([str(self.__class__) , f'values shape {self.shape}'])
     
-    def init_attr(self , values , index):
+    def init_attr(self , values : np.ndarray | Tensor , index):
         assert values.ndim == len(index)
         self.values = values
         self.index  = index
-        self.shape  = values.shape
+
+    @property
+    def shape(self): return self.values.shape
+    @property
+    def ndim(self): return self.values.ndim
 
     @classmethod
-    def from_xarray(cls , xarr):
+    def from_xarray(cls , xarr : xr.Dataset):
         values = np.stack([arr.to_numpy() for arr in xarr.data_vars.values()] , -1)
         index = [arr.values for arr in xarr.indexes.values()] + [list(xarr.data_vars)]
         return cls(values , index)
 
     @classmethod
-    def from_dataframe(cls , df):
+    def from_dataframe(cls , df : pd.DataFrame):
         index = [l.values for l in df.index.levels] + [df.columns.values] #type:ignore
         if len(df) != len(index[0]) * len(index[1]): 
             return cls.from_xarray(xr.Dataset.from_dataframe(df))
@@ -49,15 +117,15 @@ class BasicBlock():
             values = df.values.reshape(len(index[0]) , len(index[1]) , -1)
             return cls(values , index)
         
-class DataBlock():
+class DataBlock:
     save_option : str = 'pt'
 
-    def __init__(self , values = None , secid = None , date = None , feature = None) -> None:
+    def __init__(self , values : Optional[np.ndarray | Tensor] = None , secid = None , date = None , feature = None) -> None:
         self.initiate = False
         if values is not None:
             self.init_attr(values , secid , date , feature)
 
-    def init_attr(self , values , secid , date , feature):
+    def init_attr(self , values : Optional[np.ndarray | Tensor] , secid , date , feature):
         if values is None: 
             self._clear_attr()
             return NotImplemented
@@ -72,7 +140,6 @@ class DataBlock():
         self.secid   = secid
         self.date    = date
         self.feature = feature
-        #self.shape   = self.values.shape
 
     def _clear_attr(self):
         self.initiate = False
@@ -81,16 +148,14 @@ class DataBlock():
 
     def __repr__(self):
         if self.initiate:
-            return '\n'.join([
-                'initiated ' + str(self.__class__) ,
-                f'values shape {self.shape}'
-            ])
+            return '\n'.join(['initiated ' + str(self.__class__) , f'values shape {self.shape}'])
         else:
             return 'uninitiate ' + str(self.__class__) 
     
     @property
-    def shape(self):
-        return self.values.shape
+    def shape(self): return self.values.shape
+    @property
+    def ndim(self): return self.values.ndim
 
     def update(self , **kwargs):
         valid_keys = np.intersect1d(['values','secid','date','feature'],list(kwargs.keys()))
@@ -102,7 +167,7 @@ class DataBlock():
     
     @classmethod
     def merge(cls , block_list):
-        blocks = [blk for blk in block_list if blk.initiate]
+        blocks = [blk for blk in block_list if isinstance(blk , cls) and blk.initiate]
         if len(blocks) == 0: return cls()
         elif len(blocks) == 1: return blocks[0]
             
@@ -128,7 +193,7 @@ class DataBlock():
     def merge_others(self , others : list):
         return self.merge([self , *[others]])
         
-    def save(self , key , predict=False , start_dt = None , end_dt = None):
+    def save(self , key : str , predict=False , start_dt = None , end_dt = None):
         path = self.block_path(key , predict) 
         os.makedirs(os.path.dirname(path),exist_ok=True)
         date_slice = np.repeat(True,len(self.date))
@@ -154,7 +219,7 @@ class DataBlock():
         return self
     
     @staticmethod
-    def save_dict(data , file_path):
+    def save_dict(data : dict , file_path : str):
         if file_path is None: return NotImplemented
         os.makedirs(os.path.dirname(file_path) , exist_ok=True)
         if file_path.endswith(('.npz' , '.npy' , '.np')):
@@ -165,7 +230,7 @@ class DataBlock():
             raise Exception(file_path)
         
     @staticmethod
-    def load_dict(file_path , keys = None) -> dict[str,Any]:
+    def load_dict(file_path : str , keys = None) -> dict[str,Any]:
         if file_path.endswith(('.npz' , '.npy' , '.np')):
             file = np.load(file_path)
         elif file_path.endswith(('.pt' , '.pth')):
@@ -229,7 +294,7 @@ class DataBlock():
         self.feature = feature
         return self.as_tensor(asTensor).as_type(dtype)
     
-    def add_feature(self , new_feature , new_value):
+    def add_feature(self , new_feature , new_value : np.ndarray | Tensor):
         assert new_value.shape == self.shape[:-1]
         new_value = new_value.reshape(*new_value.shape , 1)
         self.values  = np.concatenate([self.values,new_value],axis=-1)
@@ -237,7 +302,7 @@ class DataBlock():
         # self.shape   = self.values.shape
         return self
     
-    def rename_feature(self , rename_dict):
+    def rename_feature(self , rename_dict : dict):
         if len(rename_dict) == 0: return self
         feature = self.feature.astype(object)
         for k,v in rename_dict.items(): feature[feature == k] = v
@@ -263,11 +328,11 @@ class DataBlock():
         return values
     
     @classmethod
-    def load_path(cls , path):
+    def load_path(cls , path : str):
         return cls(**cls.load_dict(path))
     
     @classmethod
-    def load_paths(cls , paths , fillna = 'guess' , intersect_secid = True ,
+    def load_paths(cls , paths : str | list[str], fillna = 'guess' , intersect_secid = True ,
                    start_dt = None , end_dt = None , dtype = torch.float):
         if isinstance(paths , str): paths = list(paths)
         _guess = lambda ls,excl:[os.path.basename(x).lower().startswith(excl) == 0 for x in ls]
@@ -296,16 +361,16 @@ class DataBlock():
         return blocks
     
     @classmethod
-    def load_key(cls , key , predict = False , alias_search = True , dtype = None):
+    def load_key(cls , key : str , predict = False , alias_search = True , dtype = None):
         return cls.load_path(cls.block_path(key , predict , alias_search))
 
     @classmethod
-    def load_keys(cls , keys , predict = False , alias_search = True , **kwargs):
+    def load_keys(cls , keys : list[str] , predict = False , alias_search = True , **kwargs):
         paths = [cls.block_path(key , predict , alias_search) for key in keys]
         return cls.load_paths(paths , **kwargs)
 
     @classmethod
-    def block_path(cls , key , predict=False, alias_search = True):
+    def block_path(cls , key : str , predict=False, alias_search = True):
         train_mark = '.00' if predict else ''
         if key.lower() in ['y' , 'labels']: 
             return f'{DIR.block}/Y{train_mark}.{cls.save_option}'
@@ -314,7 +379,7 @@ class DataBlock():
             return cls.data_type_alias(path , key) if alias_search else path.format(key)
     
     @classmethod
-    def load_DB(cls , data_process_param , start_dt = None , end_dt = None , **kwargs):
+    def load_DB(cls , data_process_param : dict[str,DataProcessParam] , start_dt = None , end_dt = None , **kwargs):
         BlockDict = {}
         secid_align , date_align = None , None
         for i , (src_key , param) in enumerate(data_process_param.items()):
@@ -331,8 +396,8 @@ class DataBlock():
         return BlockDict
     
     @classmethod
-    def load_db(cls , db_src , db_key , start_dt = None , end_dt = None , feature = None , **kwargs):
-        target_dates = DataFetcher.get_target_dates(db_src , db_key)
+    def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , **kwargs):
+        target_dates = get_target_dates(db_src , db_key)
         if start_dt is not None: target_dates = target_dates[target_dates >= start_dt]
         if end_dt   is not None: target_dates = target_dates[target_dates <= end_dt]
         if len(target_dates) == 0: 
@@ -340,14 +405,14 @@ class DataBlock():
         if feature is not None:
             assert isinstance(feature , list) , feature
             feature = [f for f in feature if f not in ['secid' , 'date' , 'minute']]
-        dfs = [cls.df_preprocess(DataFetcher.load_target_file(db_src,db_key,date),date,feature) for date in target_dates]
+        dfs = [cls.df_preprocess(load_target_file(db_src,db_key,date),date,feature) for date in target_dates]
         dfs = pd.concat([df for df in dfs if isinstance(df,pd.DataFrame)] , axis = 0)
         dfs = dfs.set_index(['secid' , 'date'] + ['minute'] * ('minute' in dfs.columns.values))
         xarr = BasicBlock.from_xarray(xr.Dataset.from_dataframe(dfs))
         return cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
     
     @classmethod
-    def df_preprocess(cls , df , date , feature = None):
+    def df_preprocess(cls , df : Optional[pd.DataFrame] , date : int , feature = None):
         if isinstance(df , pd.DataFrame): 
             if 'date' not in df.columns.values: df['date'] = date
             if feature is not None: 
@@ -370,14 +435,14 @@ class DataBlock():
             return key
         
     @staticmethod
-    def data_type_alias(path , key):
+    def data_type_alias(path : str , key : str):
         alias_list = [key , f'trade_{key}' , key.replace('trade_','')]
         for alias in alias_list:
             if os.path.exists(path.format(alias)): 
                 return path.format(alias)
         return path.format(key)
     
-    def adjust_price(self , adjfactor = True , multiply = 1 , divide = 1 , 
+    def adjust_price(self , adjfactor = True , multiply : Any = 1 , divide : Any = 1 , 
                      price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap']):
     
         adjfactor = adjfactor and ('adjfactor' in self.feature)
@@ -412,7 +477,7 @@ class DataBlock():
         if not mask : return self
 
         if mask.get('list_dt'):
-            desc = DataFetcher.load_target_file('information' , 'description')
+            desc = load_target_file('information' , 'description')
             assert desc is not None
             desc = desc[desc['secid'] > 0].loc[:,['secid','list_dt','delist_dt']]
             if len(np.setdiff1d(self.secid , desc['secid'])) > 0:
@@ -436,7 +501,7 @@ class DataBlock():
 
         return self
     
-    def hist_norm(self , key , predict = False ,
+    def hist_norm(self , key : str , predict = False ,
                   start_dt : int | None = None , end_dt : int | None  = 20161231 , 
                   step_day = 5 , **kwargs):
         if predict: return None
@@ -456,7 +521,7 @@ class DataBlock():
         secid = self.secid
         date  = self.date
         feat  = self.feature
-        inday = self.values.shape[2]
+        inday = self.shape[2]
 
         len_step = len(date[date_slice]) // step_day
         len_bars = maxday * inday
@@ -501,51 +566,50 @@ class DataBlock():
         return data
     
     @classmethod
-    def blocks_process(cls , BlockDict , key):
+    def blocks_process(cls , BlockDict : dict , key):
         np.seterr(invalid='ignore' , divide = 'ignore')
-        assert isinstance(BlockDict , dict) , type(BlockDict)
-        assert all([isinstance(block , cls) for block in BlockDict.values()])
-        
         key_abbr = cls.data_type_abbr(key)
         if key_abbr == 'y':
             final_feat = None
-            data_block = BlockDict['labels']
-
-            indus_size = BlockDict['models'].values[...,:BlockDict['models'].feature.tolist().index('size')+1]
+            data_block : cls = BlockDict['labels']
+            model_exp : cls = BlockDict['models']
+            indus_size = model_exp.values[...,:model_exp.feature.tolist().index('size')+1]
             x = torch.FloatTensor(indus_size).permute(1,0,2,3).squeeze(2)
-            for i_feat,lb_name in enumerate(BlockDict['labels'].feature):
+            for i_feat,lb_name in enumerate(data_block.feature):
                 if lb_name[:3] == 'rtn':
-                    y_raw = torch.FloatTensor(BlockDict['labels'].values[...,i_feat]).permute(1,0,2).squeeze(2)
+                    y_raw = torch.FloatTensor(data_block.values[...,i_feat]).permute(1,0,2).squeeze(2)
                     y_std = neutralize_2d(y_raw , x).permute(1,0).unsqueeze(2).numpy()
-                    BlockDict['labels'].add_feature('std'+lb_name[3:],y_std)
-            del BlockDict['models']
+                    data_block.add_feature('std'+lb_name[3:],y_std)
 
-            y_ts = torch.FloatTensor(BlockDict['labels'].values)[:,:,0]
-            for i_feat,lb_name in enumerate(BlockDict['labels'].feature):
+            y_ts = torch.FloatTensor(data_block.values)[:,:,0]
+            for i_feat,lb_name in enumerate(data_block.feature):
                 y_pro = process_factor(y_ts[...,i_feat], dim = 0)
                 if not isinstance(y_pro , Tensor): continue
                 y_pro = y_pro.unsqueeze(-1).numpy()
-                BlockDict['labels'].values[...,i_feat] = y_pro
-            
+                data_block.values[...,i_feat] = y_pro
+            del BlockDict['models'] , model_exp
         elif key_abbr == 'day':
             final_feat = ['open','close','high','low','vwap','turn_fl']
-            data_block = BlockDict[key].adjust_price()
+            data_block : cls = BlockDict[key]
+            data_block = data_block.adjust_price()
 
         elif key_abbr in ['15m','30m','60m']:
             final_feat = ['open','close','high','low','vwap','turn_fl']
-            data_block = BlockDict[key]
-            db_day = BlockDict['trade_day'].align(secid = data_block.secid , date = data_block.date)
-            del BlockDict['trade_day']
+            data_block : cls = BlockDict[key]
+            db_day : cls = BlockDict['trade_day']
+            db_day = db_day.align(secid = data_block.secid , date = data_block.date)
+            
             gc.collect()
             
             data_block = data_block.adjust_price(divide=db_day.loc(feature='preclose'))
             data_block = data_block.adjust_volume(divide=db_day.loc(feature='volume')/db_day.loc(feature='turn_fl'),vol_feat='volume')
             
             data_block.rename_feature({'volume':'turn_fl'})
+            del BlockDict['trade_day'] , db_day
         elif key_abbr in ['week']:
             final_feat = ['open','close','high','low','vwap','turn_fl']
             num_days = 5
-            data_block = BlockDict['trade_day']
+            data_block : cls = BlockDict['trade_day']
 
             data_block = data_block.adjust_price()
             new_values = np.full(np.multiply(data_block.shape,(1,1,num_days,1)),np.nan)
@@ -557,111 +621,97 @@ class DataBlock():
         
         data_block.align_feature(final_feat)
         np.seterr(invalid='warn' , divide = 'warn')
+        assert isinstance(data_block , DataBlock)
         return data_block
 
+@dataclass(slots=True)
 class DataBlockNorm:
-    save_option : str = 'pt'
+    avg : Tensor
+    std : Tensor
+    dtype : Any = None
+    save_option : ClassVar[str] = 'pt'
 
-    def __init__(self , avg : Tensor, std : Tensor , dtype = None) -> None:
-        self.avg = avg.to(dtype)
-        self.std = std.to(dtype)
+    def __post_init__(self):
+        self.avg = self.avg.to(self.dtype)
+        self.std = self.std.to(self.dtype)
 
     def save(self , key):
         DataBlock.save_dict({'avg' : self.avg , 'std' : self.std} , self.norm_path(key))
 
     @classmethod
-    def load_path(cls , path , dtype = None):
+    def load_path(cls , path : str , dtype = None):
         if not os.path.exists(path): return None
         data = DataBlock.load_dict(path)
         return cls(data['avg'] , data['std'] , dtype)
 
     @classmethod
-    def load_paths(cls , paths , dtype = None):
+    def load_paths(cls , paths : str | list[str] , dtype = None):
         if isinstance(paths , str): paths = [paths]
         norms = [cls.load_path(path , dtype) for path in paths]
         return norms
     
     @classmethod
-    def load_key(cls , key , predict = False , alias_search = True , dtype = None):
+    def load_key(cls , key : str , predict = False , alias_search = True , dtype = None):
         return cls.load_path(cls.norm_path(key , predict , alias_search))
 
     @classmethod
-    def load_keys(cls , keys , predict = False , alias_search = True , dtype = None):
+    def load_keys(cls , keys : str | list[str] , predict = False , alias_search = True , dtype = None):
         if isinstance(keys , str): keys = [keys]
         return [cls.load_key(key , predict , alias_search , dtype) for key in keys]
     
     @classmethod
-    def norm_path(cls , key , predict = False, alias_search = True):
+    def norm_path(cls , key : str , predict = False, alias_search = True):
         if key.lower() == 'y': return f'{DIR.hist_norm}/Y.{cls.save_option}'
         path = (f'{DIR.hist_norm}/X_'+'{}'+f'.{cls.save_option}')
         return DataBlock.data_type_alias(path , key) if alias_search else path.format(key)
+
+@dataclass(slots=True)
+class ModuleData:
+    '''load datas / norms / index'''
+    x : dict[str,DataBlock]
+    y : DataBlock
+    norms : dict[str,DataBlockNorm]
+    secid : np.ndarray
+    date  : np.ndarray
+
+    def date_within(self , start : int , end : int , interval = 1) -> np.ndarray:
+        return self.date[(self.date >= start) & (self.date <= end)][::interval]
     
-
-@dataclass
-class DataProcessConfig:
-    predict         : bool
-    blocks          : list = field(default_factory=list)
-    load_start_dt   : int | None = None
-    load_end_dt     : int | None = None
-    save_start_dt   : int | None = 20070101
-    save_end_dt     : int | None = None
-    hist_start_dt   : int | None = None
-    hist_end_dt     : int | None = 20161231
-    mask            : dict | None = None
-
-    def __post_init__(self):
-        self.blocks = [blk.lower() for blk in self.blocks]
-        if self.predict:
-            self.load_start_dt = today(-181)
-            self.load_end_dt   = None
-            self.save_start_dt = None
-            self.save_end_dt   = None
-            self.hist_start_dt = None
-            self.hist_end_dt   = None
-        if self.mask is None:
-            self.mask = self.default_mask()
-
-    def get_block_params(self):
-        for blk in self.blocks:
-            yield blk , self.default_block_param(blk)
-
-    @staticmethod
-    def default_block_param(blk : str):
-        if blk in ['y' , 'labels']:
-            return {
-                'labels': DataProcessParam('labels' , ['ret10_lag' , 'ret20_lag']) ,
-                'models': DataProcessParam('models' , 'risk_exp') ,
-            }
-        elif blk in ['day' , 'trade_day']:
-            return {
-                'trade_day' : DataProcessParam('trade' , 'day' , ['adjfactor', 'close', 'high', 'low', 'open', 'vwap' , 'turn_fl']) ,
-            }
-        elif blk in ['30m' , 'trade_30m']:
-            return {
-                'trade_30m' : DataProcessParam('trade' , '30min' , ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
-                'trade_day' : DataProcessParam('trade' , 'day' , ['volume' , 'turn_fl' , 'preclose']) ,
-            }
-        elif blk in ['15m' , 'trade_15m']:
-            return {
-                'trade_15m' : DataProcessParam('trade' , '15min' , ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
-                'trade_day' : DataProcessParam('trade' , 'day' , ['volume' , 'turn_fl' , 'preclose']) ,
-            }
-        elif blk in ['week' , 'trade_week']:
-            return {
-                'trade_day' : DataProcessParam('trade' , 'day' , ['adjfactor', 'preclose' ,'close', 'high', 'low', 'open', 'vwap' , 'turn_fl']) ,
-            }
+    @classmethod
+    def load(cls , data_type_list : list[str] , y_labels = None , predict=False , dtype = torch.float , save_upon_loading = True):
+        if dtype is None: dtype = torch.float
+        if isinstance(dtype , str): dtype = getattr(torch , dtype)
+        if predict: 
+            torch_pack = 'no_torch_pack'
         else:
-            raise KeyError(blk)
-        
+            last_date = max(DataBlock.load_dict(DataBlock.block_path('y'))['date'])
+            torch_pack_code = '+'.join(data_type_list)
+            torch_pack = f'{DIR.torch_pack}/{torch_pack_code}.{last_date}.pt'
+
+        if os.path.exists(torch_pack):
+            print(f'use {torch_pack}')
+            data = cls(**torch.load(torch_pack))
+        else:
+            data_type_list = ['y' , *data_type_list]
+            
+            blocks = DataBlock.load_keys(data_type_list, predict , alias_search=True,dtype = dtype)
+            norms  = DataBlockNorm.load_keys(data_type_list, predict , alias_search=True,dtype = dtype)
+
+            y : DataBlock = blocks[0]
+            x : dict[str,DataBlock] = {cls.abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
+            norms = {cls.abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
+            secid , date = blocks[0].secid , blocks[0].date
+
+            assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
+
+            data = {'x' : x , 'y' : y , 'norms' : norms , 'secid' : secid , 'date' : date}
+            if not predict and save_upon_loading: 
+                os.makedirs(os.path.dirname(torch_pack) , exist_ok=True)
+                torch.save(data , torch_pack , pickle_protocol = 4)
+            data = cls(**data)
+
+        if y_labels is not None:  data.y.align_feature(y_labels)
+        return data
+    
     @staticmethod
-    def default_mask():
-        return {'list_dt':True}
-
-@dataclass
-class DataProcessParam:
-    db_src  : str
-    db_key  : str | list
-    feature : list | None = None
-
-    def __post_init__(self):
-        if isinstance(self.db_key , str): self.db_key = [self.db_key]
+    def abbr(data_type : str): return DataBlock.data_type_abbr(data_type)

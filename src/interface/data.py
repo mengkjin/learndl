@@ -1,25 +1,20 @@
-import gc , os
+import gc
 import numpy as np
 import torch
-
-from dataclasses import dataclass
 
 from numpy.random import permutation
 from torch import Tensor
 from torch.utils.data import BatchSampler
 from typing import Any , Literal , Optional
 
-from ..classes import BatchData
-from ..data.PreProcess import pre_process
-from ..data.BlockData import DataBlock , DataBlockNorm
+from ..classes import BaseDataModule , BatchData
+from ..data.BlockData import ModuleData
+from ..data.update import DataUpdater
 from ..environ import DIR
 from ..func import tensor_standardize_and_weight , match_values
-from ..util import DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig
+from ..util import BufferSpace , DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig
 
-def _abbr(data_type : str): return DataBlock.data_type_abbr(data_type)
-
-class DataModule:
-    '''A class to store relavant training data'''
+class DataModule(BaseDataModule):
     def __init__(self , config : Optional[TrainConfig] = None , predict : bool = False):
         '''
         1. load Package of BlockDatas of x , y , norms and index
@@ -28,12 +23,11 @@ class DataModule:
         '''
         self.config : TrainConfig = TrainConfig.load() if config is None else config
         self.predict : bool = predict
-
-    def load_data(self):
         self.device  = Device()
         self.storage = Storage('mem' if self.config.mem_storage else 'disk')
 
-        self.datas = self.DataInterface.load(self.data_type_list, self.config.labels, self.predict, self.config.precision)
+    def load_data(self):
+        self.datas = ModuleData.load(self.data_type_list, self.config.labels, self.predict, self.config.precision)
         self.config.update_data_param(self.datas.x)
         self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
         self.model_date_list = self.datas.date_within(self.config.beg_date    , self.config.end_date , self.config.interval)
@@ -48,30 +42,25 @@ class DataModule:
             self.static_prenorm_method[mdt] = method
 
         self.reset_dataloaders()
-        self.buffer = self.BufferSpace(self.config.buffer_type , self.config.buffer_param , self.device)
+        self.buffer = BufferSpace(self.config.buffer_type , self.config.buffer_param , self.device)
 
         return self
 
     def reset_dataloaders(self):
         '''reset for every fit / test / predict'''
         self.loader_dict , self.loader_param = {} , ()
-
-    def on_fit_start(self , *args):  self.reset_dataloaders()
-    def on_test_start(self , *args): self.reset_dataloaders()
     
     @property
     def data_type_list(self):
         '''get data type list (abbreviation)'''
-        return [_abbr(data_type) for data_type in self.config.data_type_list]
+        return [ModuleData.abbr(data_type) for data_type in self.config.data_type_list]
     
     @staticmethod
     def prepare_data():
-        '''prepare data for fit / test / predict'''
-        pre_process(False)
-        pre_process(True)
+        DataUpdater.preprocess_data(False)
+        DataUpdater.preprocess_data(True)
 
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , param = {} , model_date = -1) -> None:
-        '''Create train/valid/test dataloaders if necessary'''
         if self.predict: stage = 'predict'
         seqlens : dict = param['seqlens']
         if self.config.tra_model: seqlens.update(param.get('tra_seqlens',{}))
@@ -151,8 +140,11 @@ class DataModule:
         return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
     def predict_dataloader(self):
         return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
+    
+    def on_before_batch_transfer(self , batch : BatchData , dataloader_idx = None): return batch
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         return batch.to(self.device if device is None else device)
+    def on_after_batch_transfer(self , batch : BatchData , dataloader_idx = None): return batch
 
     def full_valid_sample(self , x_data : dict[str,Tensor] , y : Tensor , index1 : Tensor , **kwargs) -> Tensor:
         '''
@@ -273,120 +265,3 @@ class DataModule:
             x -= self.datas.norms[key].avg[-x.shape[-2]:]
             x /= self.datas.norms[key].std[-x.shape[-2]:] + 1e-6
         return x
-
-    class BufferSpace:
-        '''dynamic buffer space for some module to use (tra), can be updated at each batch / epoch '''
-        def __init__(self , buffer_key : str | None , buffer_param : dict = {} , device : Optional[Device] = None , always_on_device = True) -> None:
-            self.key = buffer_key
-            self.param = buffer_param
-            self.device = device
-            self.always = always_on_device
-            self.contents : dict[str,Any] = {}
-
-            self.register_setup()
-            self.register_update()
-
-        def update(self , new = None):
-            if new is not None: 
-                if self.always and self.device is not None: new = self.device(new)
-                self.contents.update(new)
-            return self
-        
-        def __getitem__(self , key): return self.contents[key]
-        def __setitem__(self , key , value): self.contents[key] = value
-
-        def get(self , keys , default = None , keep_none = True):
-            if hasattr(keys , '__len__'):
-                result = {k:self.contents.get(k , default) for k in keys}
-                if not keep_none: result = {k:v for k,v in result.items() if v is not None}
-            else:
-                result = self.contents.get(keys , default)
-            if not self.always and self.device is not None: result = self.device(result)
-            return result
-
-        def process(self , stage : Literal['setup' , 'update'] , data_module):
-            new = getattr(self , f'{stage}_wrapper')(data_module)
-            if new is not None: 
-                if self.always and self.device is not None: new = self.device(new)
-                self.contents.update(new)
-            return self
-        
-        def register_setup(self) -> None:
-            # first param of wrapper is container, which represent self in ModelData
-            if self.key == 'tra':
-                def tra_wrapper(self_container , *args, **kwargs):
-                    buffer = dict()
-                    if self.param['tra_num_states'] > 1:
-                        hist_loss_shape = list(self_container.y.shape)
-                        hist_loss_shape[2] = self.param['tra_num_states']
-                        buffer['hist_labels'] = self_container.y
-                        buffer['hist_preds'] = torch.randn(hist_loss_shape)
-                        buffer['hist_loss']  = (buffer['hist_preds'] - buffer['hist_labels'].nan_to_num(0)).square()
-                    return buffer
-                self.setup_wrapper = tra_wrapper
-            else:
-                self.setup_wrapper = self.none_wrapper
-            
-        def register_update(self) -> None:
-            # first param of wrapper is container, which represent self in ModelData
-            if self.key == 'tra':
-                def tra_wrapper(self_container , *args, **kwargs):
-                    buffer = dict()
-                    if self.param['tra_num_states'] > 1:
-                        buffer['hist_loss']  = (self_container.buffer['hist_preds'] - 
-                                                self_container.buffer['hist_labels'].nan_to_num(0)).square()
-                    return buffer
-                self.update_wrapper = tra_wrapper
-            else:
-                self.update_wrapper = self.none_wrapper
-            
-        @staticmethod
-        def none_wrapper(*args, **kwargs): return {}
-
-    @dataclass(slots=True)
-    class DataInterface:
-        '''load datas / norms / index'''
-        x : dict[str,DataBlock]
-        y : DataBlock
-        norms : dict[str,DataBlockNorm]
-        secid : np.ndarray
-        date  : np.ndarray
-
-        def date_within(self , start , end , interval = 1) -> np.ndarray:
-            return self.date[(self.date >= start) & (self.date <= end)][::interval]
-        
-        @classmethod
-        def load(cls , data_type_list , y_labels = None , predict=False , dtype = torch.float , save_upon_loading = True):
-            if dtype is None: dtype = torch.float
-            if isinstance(dtype , str): dtype = getattr(torch , dtype)
-            if predict: 
-                torch_pack = 'no_torch_pack'
-            else:
-                last_date = max(DataBlock.load_dict(DataBlock.block_path('y'))['date'])
-                torch_pack_code = '+'.join(data_type_list)
-                torch_pack = f'{DIR.torch_pack}/{torch_pack_code}.{last_date}.pt'
-
-            if os.path.exists(torch_pack):
-                print(f'use {torch_pack}')
-                data = cls(**torch.load(torch_pack))
-            else:
-                data_type_list = ['y' , *data_type_list]
-                
-                blocks = DataBlock.load_keys(data_type_list, predict , alias_search=True,dtype = dtype)
-                norms  = DataBlockNorm.load_keys(data_type_list, predict , alias_search=True,dtype = dtype)
-
-                y : DataBlock = blocks[0]
-                x : dict[str,DataBlock] = {_abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
-                norms = {_abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
-                secid , date = blocks[0].secid , blocks[0].date
-
-                assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
-
-                data = {'x' : x , 'y' : y , 'norms' : norms , 'secid' : secid , 'date' : date}
-                if not predict and save_upon_loading: 
-                    os.makedirs(os.path.dirname(torch_pack) , exist_ok=True)
-                    torch.save(data , torch_pack , pickle_protocol = 4)
-                data = cls(**data)
-
-            if y_labels is not None:  data.y.align_feature(y_labels)
-            return data
