@@ -5,165 +5,66 @@ import xarray as xr
 
 import torch
 
-from dataclasses import dataclass , field
+from dataclasses import dataclass
 from torch import Tensor
 from typing import Any , ClassVar , Optional
 
 from .fetcher import get_target_dates , load_target_file
+from ..classes import DataProcessCfg , NdData
 from ..environ import DIR
 from ..func import match_values , index_union , index_intersect , forward_fillna
-from ..func.time import date_offset , today , Timer
+from ..func.time import date_offset , Timer
 from ..func.primas import neutralize_2d , process_factor
 
-@dataclass(slots=True)
-class DataProcessParam:
-    db_src  : str
-    db_key  : str | list
-    feature : list | None = None
-
-    def __post_init__(self):
-        if isinstance(self.db_key , str): self.db_key = [self.db_key]
-
-@dataclass(slots=True)
-class DataProcessConfig:
-    predict         : bool
-    blocks          : list = field(default_factory=list)
-    load_start_dt   : int | None = None
-    load_end_dt     : int | None = None
-    save_start_dt   : int | None = 20070101
-    save_end_dt     : int | None = None
-    hist_start_dt   : int | None = None
-    hist_end_dt     : int | None = 20161231
-    mask            : dict | None = None
-
-    def __post_init__(self):
-        self.blocks = [blk.lower() for blk in self.blocks]
-        if self.predict:
-            self.load_start_dt = today(-181)
-            self.load_end_dt   = None
-            self.save_start_dt = None
-            self.save_end_dt   = None
-            self.hist_start_dt = None
-            self.hist_end_dt   = None
-        if self.mask is None:
-            self.mask = self.default_mask()
-
-    def get_block_params(self):
-        for blk in self.blocks:
-            yield blk , self.default_block_param(blk)
-
-    @staticmethod
-    def default_block_param(blk : str):
-        if blk in ['y' , 'labels']:
-            params : dict[str,list]= {
-                'labels': ['labels' , ['ret10_lag' , 'ret20_lag']] ,
-                'models': ['models' , 'risk_exp'] ,
-            }
-        elif blk in ['day' , 'trade_day']:
-            params = {
-                'trade_day' : ['trade' , 'day' , ['adjfactor', 'close', 'high', 'low', 'open', 'vwap' , 'turn_fl']] ,
-            }
-        elif blk in ['30m' , 'trade_30m']:
-            params = {
-                'trade_30m' : ['trade' , '30min' , ['close', 'high', 'low', 'open', 'volume', 'vwap']] ,
-                'trade_day' : ['trade' , 'day' , ['volume' , 'turn_fl' , 'preclose']] ,
-            }
-        elif blk in ['15m' , 'trade_15m']:
-            params = {
-                'trade_15m' : ['trade' , '15min' , ['close', 'high', 'low', 'open', 'volume', 'vwap']] ,
-                'trade_day' : ['trade' , 'day' , ['volume' , 'turn_fl' , 'preclose']] ,
-            }
-        elif blk in ['week' , 'trade_week']:
-            params = {
-                'trade_day' : ['trade' , 'day' , ['adjfactor', 'preclose' ,'close', 'high', 'low', 'open', 'vwap' , 'turn_fl']] ,
-            }
-        else:
-            raise KeyError(blk)
-        return {k:DataProcessParam(*v) for k,v in params.items()}
-        
-    @staticmethod
-    def default_mask(): return {'list_dt':True}
-
-class BasicBlock:
-    def __init__(self , values : np.ndarray | Tensor , index = None) -> None:
-        if values is not None or index is not None:
-            self.init_attr(values , index)
-
-    def __repr__(self):
-        return '\n'.join([str(self.__class__) , f'values shape {self.shape}'])
-    
-    def init_attr(self , values : np.ndarray | Tensor , index):
-        assert values.ndim == len(index)
-        self.values = values
-        self.index  = index
-
-    @property
-    def shape(self): return self.values.shape
-    @property
-    def ndim(self): return self.values.ndim
-
-    @classmethod
-    def from_xarray(cls , xarr : xr.Dataset):
-        values = np.stack([arr.to_numpy() for arr in xarr.data_vars.values()] , -1)
-        index = [arr.values for arr in xarr.indexes.values()] + [list(xarr.data_vars)]
-        return cls(values , index)
-
-    @classmethod
-    def from_dataframe(cls , df : pd.DataFrame):
-        index = [l.values for l in df.index.levels] + [df.columns.values] #type:ignore
-        if len(df) != len(index[0]) * len(index[1]): 
-            return cls.from_xarray(xr.Dataset.from_dataframe(df))
-        else:
-            values = df.values.reshape(len(index[0]) , len(index[1]) , -1)
-            return cls(values , index)
-        
+@dataclass
 class DataBlock:
-    save_option : str = 'pt'
+    values  : Any = None 
+    secid   : Any = None 
+    date    : Any = None 
+    feature : Any = None
+    save_option : ClassVar[str] = 'pt'
 
-    def __init__(self , values : Optional[np.ndarray | Tensor] = None , secid = None , date = None , feature = None) -> None:
-        self.initiate = False
-        if values is not None:
-            self.init_attr(values , secid , date , feature)
+    def __post_init__(self) -> None:
+        self.initiate = self.values is None
+        if self.values is not None: 
+            if isinstance(self.feature , str): 
+                self.feature = np.array([self.feature])
+            elif isinstance(self.feature , list):
+                self.feature = np.array(self.feature)
+            if self.ndim == 3: self.values = self.values[:,:,None]
 
-    def init_attr(self , values : Optional[np.ndarray | Tensor] , secid , date , feature):
-        if values is None: 
-            self._clear_attr()
-            return NotImplemented
-        self.initiate = True
-        if isinstance(feature , str): 
-            feature = np.array([feature])
-        elif isinstance(feature , list):
-            feature = np.array(feature)
-        if values.ndim == 3: values = values[:,:,None]
-        assert values.shape == (len(secid),len(date),values.shape[2],len(feature))
-        self.values  = values
-        self.secid   = secid
-        self.date    = date
-        self.feature = feature
+    def uninitiate(self):
+        self.values  = None
+        self.secid   = None
+        self.date    = None
+        self.feature = None
 
-    def _clear_attr(self):
-        self.initiate = False
-        for attr_name in ['values' , 'secid' , 'date' , 'feature' , 'shape']:
-            if hasattr(self,attr_name): delattr(self,attr_name)
-
+    def asserted(self):
+        if self.shape:
+            assert self.ndim == 4
+            assert isinstance(self.values , (np.ndarray , Tensor))
+            assert self.shape[0] == len(self.secid) 
+            assert self.shape[1] == len(self.date)
+            assert self.shape[2] == len(self.feature)
+        return self
+    
     def __repr__(self):
         if self.initiate:
             return '\n'.join(['initiated ' + str(self.__class__) , f'values shape {self.shape}'])
         else:
             return 'uninitiate ' + str(self.__class__) 
-    
     @property
-    def shape(self): return self.values.shape
+    def initiated(self): return self.values is None
     @property
-    def ndim(self): return self.values.ndim
+    def shape(self): return [] if self.values is None else self.values.shape 
+    @property
+    def dtype(self): return None if self.values is None else self.values.dtype
+    @property
+    def ndim(self): return None if self.values is None else self.values.ndim
 
     def update(self , **kwargs):
-        valid_keys = np.intersect1d(['values','secid','date','feature'],list(kwargs.keys()))
-        [setattr(self,k,kwargs[k]) for k in valid_keys]
-        # self.shape  = self.values.shape
-        assert self.values.shape[:2] == (len(self.secid) , len(self.date))
-        assert self.values.shape[-1] == len(self.feature)
-        return self
+        [setattr(self,k,v) for k,v in kwargs.items() if k in ['values','secid','date','feature']]
+        return self.asserted()
     
     @classmethod
     def merge(cls , block_list):
@@ -206,16 +107,12 @@ class DataBlock:
         self.save_dict(data , path)
     
     def as_tensor(self , asTensor = True):
-        if asTensor and isinstance(self.values , np.ndarray): 
-            self.values = torch.tensor(self.values)
+        if asTensor and isinstance(self.values , np.ndarray): self.values = torch.tensor(self.values)
         return self
     
     def as_type(self , dtype = None):
-        if dtype: 
-            if isinstance(self.values , np.ndarray):
-                self.values = self.values.astype(dtype)
-            else:
-                self.values = self.values.to(dtype)
+        if dtype and isinstance(self.values , np.ndarray): self.values = self.values.astype(dtype)
+        if dtype and isinstance(self.values , Tensor): self.values = self.values.to(dtype)
         return self
     
     @staticmethod
@@ -248,7 +145,7 @@ class DataBlock:
 
     def align_secid(self , secid):
         if secid is None or len(secid) == 0: return self
-        asTensor , dtype = isinstance(self.values , Tensor) , self.values.dtype
+        asTensor , dtype = isinstance(self.values , Tensor) , self.dtype
         values = np.full((len(secid) , *self.shape[1:]) , np.nan)
         _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
         values[p0s] = self.values[p1s]
@@ -258,7 +155,7 @@ class DataBlock:
     
     def align_date(self , date):
         if date is None or len(date) == 0: return self
-        asTensor , dtype = isinstance(self.values , Tensor) , self.values.dtype
+        asTensor , dtype = isinstance(self.values , Tensor) , self.dtype
         values = np.full((self.shape[0] , len(date) , *self.shape[2:]) , np.nan)
         _ , p0d , p1d = np.intersect1d(date , self.date , return_indices=True)
         values[:,p0d] = self.values[:,p1d]
@@ -274,7 +171,7 @@ class DataBlock:
         elif date is None or len(date) == 0:
             return self.align_secid(secid = secid)
         else:
-            asTensor , dtype = isinstance(self.values , Tensor) , self.values.dtype
+            asTensor , dtype = isinstance(self.values , Tensor) , self.dtype
             values = np.full((len(secid),len(date),*self.shape[2:]) , np.nan)
             _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
             _ , p0d , p1d = np.intersect1d(date  , self.date  , return_indices=True)
@@ -286,7 +183,7 @@ class DataBlock:
     
     def align_feature(self , feature):
         if feature is None or len(feature) == 0: return self
-        asTensor , dtype = isinstance(self.values , Tensor) , self.values.dtype
+        asTensor , dtype = isinstance(self.values , Tensor) , self.dtype
         values = np.full((*self.shape[:-1],len(feature)) , np.nan)
         _ , p0f , p1f = np.intersect1d(feature , self.feature , return_indices=True)
         values[...,p0f] = self.values[...,p1f]
@@ -299,7 +196,6 @@ class DataBlock:
         new_value = new_value.reshape(*new_value.shape , 1)
         self.values  = np.concatenate([self.values,new_value],axis=-1)
         self.feature = np.concatenate([self.feature,[new_feature]],axis=0)
-        # self.shape   = self.values.shape
         return self
     
     def rename_feature(self , rename_dict : dict):
@@ -310,7 +206,7 @@ class DataBlock:
         return self
     
     def loc(self , **kwargs) -> np.ndarray | Tensor:
-        values = self.values
+        values : np.ndarray | Tensor = self.values
         for k,v in kwargs.items():  
             if isinstance(v , (str,int,float)): kwargs[k] = [v]
         if 'feature' in kwargs.keys(): 
@@ -328,8 +224,7 @@ class DataBlock:
         return values
     
     @classmethod
-    def load_path(cls , path : str):
-        return cls(**cls.load_dict(path))
+    def load_path(cls , path : str): return cls(**cls.load_dict(path))
     
     @classmethod
     def load_paths(cls , paths : str | list[str], fillna = 'guess' , intersect_secid = True ,
@@ -379,7 +274,7 @@ class DataBlock:
             return cls.data_type_alias(path , key) if alias_search else path.format(key)
     
     @classmethod
-    def load_DB(cls , data_process_param : dict[str,DataProcessParam] , start_dt = None , end_dt = None , **kwargs):
+    def load_DB(cls , data_process_param : dict[str,DataProcessCfg] , start_dt = None , end_dt = None , **kwargs):
         BlockDict = {}
         secid_align , date_align = None , None
         for i , (src_key , param) in enumerate(data_process_param.items()):
@@ -408,7 +303,7 @@ class DataBlock:
         dfs = [cls.df_preprocess(load_target_file(db_src,db_key,date),date,feature) for date in target_dates]
         dfs = pd.concat([df for df in dfs if isinstance(df,pd.DataFrame)] , axis = 0)
         dfs = dfs.set_index(['secid' , 'date'] + ['minute'] * ('minute' in dfs.columns.values))
-        xarr = BasicBlock.from_xarray(xr.Dataset.from_dataframe(dfs))
+        xarr = NdData.from_xarray(xr.Dataset.from_dataframe(dfs))
         return cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
     
     @classmethod
@@ -502,7 +397,7 @@ class DataBlock:
         return self
     
     def hist_norm(self , key : str , predict = False ,
-                  start_dt : int | None = None , end_dt : int | None  = 20161231 , 
+                  start_dt : Optional[int] = None , end_dt : Optional[int]  = 20161231 , 
                   step_day = 5 , **kwargs):
         if predict: return None
         if not key.startswith(('x_trade','trade','day','15m','min','30m','60m','week')): 
@@ -541,7 +436,7 @@ class DataBlock:
             x_div.copy_(x[:,x_endpoint,-1:])
         else:
             # will not do anything, just sample mean and std
-            pass
+            ...
             """
             # Xmin day : price divide by preclose , other divide by day sum
             x_div.copy_(x[:,x_endpoint].sum(dim=2 , keepdim=True))

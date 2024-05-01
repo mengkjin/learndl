@@ -8,14 +8,7 @@ from typing import Any , Literal
 from .config import TrainConfig
 
 class Storage:
-    '''
-    Interface of mem or disk storage, methods:
-    is_disk / is_mem : check store_type
-    save / load / exists : general utility to interact with storage space
-    is_cuda : check if an object is on cuda
-    save_state_dict / load_state_dict : nn.Module / dict will be saved as dict on cpu
-    del_path / del_group / del_all : delete selected paths
-    '''
+    '''Interface of mem or disk storage, methods'''
     def __init__(self , store_type : Literal['mem' , 'disk'] = 'disk'):
         self.memdisk = {} if store_type == 'mem' else None
         self.records = pd.DataFrame(columns = ['path' , 'group'] , dtype = str)

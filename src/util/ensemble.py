@@ -14,13 +14,9 @@ class FittestModel(ABC):
         self.ckpt , self.use = ckpt , use
 
     @abstractmethod
-    def assess(self , net , epoch : int , score = 0. , loss = 0.):
-        '''use score or loss to update assessment'''
-        pass
+    def assess(self , net , epoch : int , score = 0. , loss = 0.): '''use score or loss to update assessment'''
     @abstractmethod
-    def state_dict(self , *args , device = None) -> nn.Module | dict: 
-        '''output the final fittest model state dict'''
-        pass
+    def state_dict(self , *args , device = None) -> nn.Module | dict: '''output the final fittest model state dict'''
     @classmethod
     def get_models(cls , model_types , *args , **kwargs):
         '''get a dict of FittestModel'''

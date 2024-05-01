@@ -310,11 +310,9 @@ class TrainConfig:
             print(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
             value = int(input(f'[0,fit+test] , [1,fit] , [2,test]'))
         stage_queue = ['data' , 'fit' , 'test']
-        if value == 0:
-            pass
-        elif value > 0:
+        if value > 0:
             stage_queue = ['data' , stage_queue[value]]
-        else:
+        elif value < 0:
             raise Exception(f'Error input : {value}')
         print('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))))
         self.stage_queue = stage_queue

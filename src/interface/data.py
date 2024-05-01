@@ -8,8 +8,7 @@ from torch.utils.data import BatchSampler
 from typing import Any , Literal , Optional
 
 from ..classes import BaseDataModule , BatchData
-from ..data.BlockData import ModuleData
-from ..data.update import DataUpdater
+from ..data import DataUpdater , ModuleData
 from ..environ import DIR
 from ..func import tensor_standardize_and_weight , match_values
 from ..util import BufferSpace , DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig

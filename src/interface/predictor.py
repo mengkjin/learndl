@@ -7,12 +7,12 @@ from dataclasses import dataclass
 from typing import ClassVar , Literal
 
 from .data import DataModule
-from ..environ import DIR
-from ..util import Device , TrainConfig
 from ..classes import BatchOutput
-from ..data.fetcher import load_target_file
-from ..model import model as MODEL
+from ..data import load_target_file
+from ..environ import DIR
 from ..func.time import today , date_offset
+from ..util import Device , TrainConfig
+from ..model import model as MODEL
 
 @dataclass
 class Predictor:

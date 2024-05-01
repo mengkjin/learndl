@@ -323,8 +323,7 @@ class MultiLosses:
             weight , penalty = self.weight(losses , mt_param) , self.penalty(losses , mt_param)
             self.record(losses , weight , penalty)
             return self.total_loss(losses , weight , penalty)
-        def reset(self , **kwargs):
-            pass
+        def reset(self , **kwargs): ...
         def record(self , losses , weight , penalty):
             self.record_num += 1
             self.record_losses.append(losses.detach() if isinstance(losses,Tensor) else losses)
@@ -361,11 +360,7 @@ class MultiLosses:
             return penalty
     
     class DWA(_BaseMultiLossesClass):
-        '''
-        dynamic weight average
-        https://arxiv.org/pdf/1803.10704.pdf
-        https://github.com/lorenmt/mtan/tree/master/im2im_pred
-        '''
+        '''dynamic weight average , https://arxiv.org/pdf/1803.10704.pdf'''
         def reset(self , **kwargs):
             self.tau = kwargs['tau']
         def weight(self , losses , mt_param : dict = {}):

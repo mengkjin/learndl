@@ -102,7 +102,7 @@ class Connection:
         return {k:dft[k] for k in keys}
 
 @dataclass
-class DataFetcher_sql:
+class SQLFetcher:
     factor_src      : str
     factor_set      : str
     date_col        : str
@@ -149,9 +149,10 @@ class DataFetcher_sql:
  
     def download_period(self , connection , start , end):
         print(f'Start {self.db_src}/{self.db_key}:{start}-{end} ')
+        t0 = time.time()
         df = self.query_default(connection , start , end)
         self.save_data(df)
-        print(f'Done {self.db_src}/{self.db_key}:{start}-{end} ')
+        print(f'Done {self.db_src}/{self.db_key}:{start}-{end}, cost {time.time()-t0:.1f} Secs')
         return True
 
     def query_start_dt(self , connection : Connection):
@@ -252,7 +253,7 @@ class DataFetcher_sql:
             df['date']  = df['date'].astype(str).str.replace('[-.a-zA-Z]','',regex=True).astype(int)
             df = df.set_index(['date','secid']).reset_index()
         elif factor_src == 'guojin':
-            pass
+            ...
 
         df = cls.df_astype(df).fillna(np.nan)
         return df
@@ -371,12 +372,12 @@ class DataFetcher_sql:
             factor.download('all' , connection)
         
 if __name__ == '__main__':
-    from src.data.fetcher.fetcher_sql import DataFetcher_sql
+    from src.data.fetcher.fetcher_sql import SQLFetcher
 
     start_dt = 20100901 
     end_dt   = 20100915
-    dates = DataFetcher_sql.date_between(start_dt , end_dt)
+    dates = SQLFetcher.date_between(start_dt , end_dt)
 
-    factors_set = DataFetcher_sql.factors_and_conns('dongfang.hfq_chars')
+    factors_set = SQLFetcher.factors_and_conns('dongfang.hfq_chars')
     factor , connection = factors_set[0]
     df = factor.query_default(connection , start_dt , end_dt)

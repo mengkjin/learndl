@@ -4,9 +4,10 @@ import numpy as np
 
 from typing import Any , Optional
 
-from .common import FailedReturn , list_files , R_path_date
+from .common import list_files , R_path_date
+from ...classes import FailedData
 
-class DataFetcher_R:
+class RFetcher:
     '''Fetch data from R environment'''
     @classmethod
     def adjust_secid(cls , df : pd.DataFrame):
@@ -53,7 +54,7 @@ class DataFetcher_R:
         return df
 
     @classmethod
-    def basic_info(cls , key = None , **kwargs) -> Optional[pd.DataFrame | FailedReturn]:
+    def basic_info(cls , key = None , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get basic info data from R environment , basic_info('concepts')'''
         if key is None: raise KeyError(key) 
         key = key.split('/')[-1]
@@ -91,7 +92,7 @@ class DataFetcher_R:
                 cls.col_reform : {**d_entrm , 'wind_sec_name' : {'rename' : 'concept'}} ,
             },
         }
-        if not os.path.exists(params[key]['path']): return FailedReturn(key)
+        if not os.path.exists(params[key]['path']): return FailedData(key)
         df = pd.read_csv(params[key]['path'] , encoding='gbk' , dtype = params[key].get('dtype'))
         if key == 'industry':
             path_dict = f'D:/Coding/ChinaShareModel/ModelParameters/setting/indus_dictionary_sw.csv'
@@ -120,11 +121,11 @@ class DataFetcher_R:
         return df
 
     @classmethod
-    def risk_model(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedReturn]:
+    def risk_model(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get risk model from R environment , risk_model(20240325)'''
         path = f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model/jm2018_model_{date}.csv'
         if not os.path.exists(path): 
-            return FailedReturn('risk_exp' , date)
+            return FailedData('risk_exp' , date)
         df = pd.read_csv(path)
         df = cls.adjust_secid(df)
         df = cls.adjust_precision(df)
@@ -132,7 +133,7 @@ class DataFetcher_R:
         return df
 
     @classmethod
-    def alpha_longcl(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedReturn]:
+    def alpha_longcl(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get alpha longcl model from R environment , alpha_longcl(20240325)'''
         a_names = {
             'value'       : 'A7_Value' ,
@@ -155,7 +156,7 @@ class DataFetcher_R:
             colnames = ['secid',v]
             path = f'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/{v}/{v}_{date}.txt'
             if not os.path.exists(path):
-                return FailedReturn('longcl_exp' , date)
+                return FailedData('longcl_exp' , date)
             else:
                 df_new = pd.read_csv(path, header=None , delimiter='\t',dtype=float)
                 df_new.columns = colnames
@@ -166,7 +167,7 @@ class DataFetcher_R:
         return df
 
     @classmethod
-    def trade_day(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedReturn]:
+    def trade_day(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get basic info data from R environment , trade_day(20240324)'''
         np.seterr(invalid='ignore' , divide = 'ignore')
         data_params = {
@@ -192,7 +193,7 @@ class DataFetcher_R:
         if any(paths_not_exists.values()): 
             # something wrong
             print(f'Something wrong at date {date} on {cls.__name__}.trade_day')
-            return FailedReturn('day' , date)
+            return FailedData('day' , date)
         df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
         df = cls.adjust_secid(df)
         df = cls.adjust_precision(df).reset_index(drop=True)
@@ -201,7 +202,7 @@ class DataFetcher_R:
         return df
 
     @classmethod
-    def trade_Xday(cls , date : int , x : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedReturn]:
+    def trade_Xday(cls , date : int , x : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get consecutive x_day trade data from R environment , trade_Xday(20240324 , 5) '''
         #np.seterr(invalid='ignore' , divide = 'ignore')
         # read calendar
@@ -220,7 +221,7 @@ class DataFetcher_R:
             if isinstance(tmp , pd.DataFrame): 
                 data.append(tmp)
             else:
-                return FailedReturn(f'{x}day' , date)
+                return FailedData(f'{x}day' , date)
         data = pd.concat(data , axis = 0)
 
         data.loc[:,price_feat] = data.loc[:,price_feat] * data.loc[:,'adjfactor'].values[:,None]
@@ -236,7 +237,7 @@ class DataFetcher_R:
         return df
 
     @classmethod
-    def labels(cls , date : int , days : int , lag1 : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedReturn]:
+    def labels(cls , date : int , days : int , lag1 : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get raw and res labels'''
         path_param = {
             'id'  : f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/1_basic_info/wind_id' ,
@@ -279,7 +280,7 @@ class DataFetcher_R:
         return df
 
     @classmethod
-    def trade_min(cls , date : int , with_date = False , dtank_first = True , **kwargs) -> Optional[pd.DataFrame | FailedReturn]:
+    def trade_min(cls , date : int , with_date = False , dtank_first = True , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get minute trade data from R environment , trade_min(20240324)'''
         data_params = {
             'ticker'    : 'secid'  ,
@@ -293,7 +294,7 @@ class DataFetcher_R:
             'vwap'      : 'vwap' , 
         }
         path = f'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin/equity_pricemin_{date}.txt'
-        if not os.path.exists(path): return FailedReturn('min' , date)
+        if not os.path.exists(path): return FailedData('min' , date)
         df = pd.read_csv(path , sep='\t' , low_memory=False)
         if df['ticker'].dtype in (object,str): 
             df = df[df['ticker'].str.isdigit()] 
@@ -350,11 +351,11 @@ class DataFetcher_R:
         return df[(x1*x2)>0].copy()
 
     @classmethod
-    def trade_Xmin(cls , date : int , x : int , df_min : Any = None , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedReturn]:
+    def trade_Xmin(cls , date : int , x : int , df_min : Any = None , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get X minute trade data from R environment , trade_Xmin(20240324 , 5)'''
         df = df_min if df_min is not None else cls.trade_min(date , **kwargs)
-        if df is None or isinstance(df , FailedReturn):
-            return FailedReturn(f'{x}min' , date)
+        if df is None or isinstance(df , FailedData):
+            return FailedData(f'{x}min' , date)
         if x != 1:
             df = cls.trade_min_reform(df , by = x)
         if df is None: return df

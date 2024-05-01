@@ -2,12 +2,75 @@ import numpy as np
 import pandas as pd
 import argparse , gc , os , socket , sys , tarfile, time
 
-from functools import reduce 
+from dataclasses import dataclass , field
+from functools import reduce
+from typing import Optional
 
-from .fetcher import DB_by_date , DB_by_name , Fetcher , Fetcher_sql , save_df
-from .BlockData import DataBlock , DataBlockNorm , DataProcessConfig
+from .fetcher import DB_by_date , DB_by_name , DataFetcher , SQLFetcher , save_df
+from .core import DataBlock
+from ..classes import DataProcessCfg
 from ..environ import DIR
-from ..func.time import Timer
+from ..func.time import Timer , today
+
+@dataclass(slots=True)
+class PreProcessConfig:
+    predict         : bool
+    blocks          : list = field(default_factory=list)
+    load_start_dt   : Optional[int] = None
+    load_end_dt     : Optional[int] = None
+    save_start_dt   : Optional[int] = 20070101
+    save_end_dt     : Optional[int] = None
+    hist_start_dt   : Optional[int] = None
+    hist_end_dt     : Optional[int] = 20161231
+    mask            : Optional[dict] = None
+
+    def __post_init__(self):
+        self.blocks = [blk.lower() for blk in self.blocks]
+        if self.predict:
+            self.load_start_dt = today(-181)
+            self.load_end_dt   = None
+            self.save_start_dt = None
+            self.save_end_dt   = None
+            self.hist_start_dt = None
+            self.hist_end_dt   = None
+        if self.mask is None:
+            self.mask = self.default_mask()
+
+    def get_block_params(self):
+        for blk in self.blocks:
+            yield blk , self.default_block_param(blk)
+
+    @staticmethod
+    def default_block_param(blk : str):
+        if blk in ['y' , 'labels']:
+            params : dict[str,list]= {
+                'labels': ['labels' , ['ret10_lag' , 'ret20_lag']] ,
+                'models': ['models' , 'risk_exp'] ,
+            }
+        elif blk in ['day' , 'trade_day']:
+            params = {
+                'trade_day' : ['trade' , 'day' , ['adjfactor', 'close', 'high', 'low', 'open', 'vwap' , 'turn_fl']] ,
+            }
+        elif blk in ['30m' , 'trade_30m']:
+            params = {
+                'trade_30m' : ['trade' , '30min' , ['close', 'high', 'low', 'open', 'volume', 'vwap']] ,
+                'trade_day' : ['trade' , 'day' , ['volume' , 'turn_fl' , 'preclose']] ,
+            }
+        elif blk in ['15m' , 'trade_15m']:
+            params = {
+                'trade_15m' : ['trade' , '15min' , ['close', 'high', 'low', 'open', 'volume', 'vwap']] ,
+                'trade_day' : ['trade' , 'day' , ['volume' , 'turn_fl' , 'preclose']] ,
+            }
+        elif blk in ['week' , 'trade_week']:
+            params = {
+                'trade_day' : ['trade' , 'day' , ['adjfactor', 'preclose' ,'close', 'high', 'low', 'open', 'vwap' , 'turn_fl']] ,
+            }
+        else:
+            raise KeyError(blk)
+        return {k:DataProcessCfg(*v) for k,v in params.items()}
+        
+    @staticmethod
+    def default_mask(): return {'list_dt':True}
 
 class DataUpdater():
     db_updater_title = 'DB_updater'
@@ -90,7 +153,7 @@ class DataUpdater():
             ]
         else:
             raise Exception(db_src)
-        params = [Fetcher(db_src , *args) for args in param_args]
+        params = [DataFetcher(db_src , *args) for args in param_args]
         return params
     
     def handle_df_result(self , df , target_path , result_dict = None):
@@ -157,7 +220,7 @@ class DataUpdater():
 
         print(f'Unpack Update Files') 
         cls.unpack_exist_updaters(del_after_dumping=True)
-        Fetcher_sql.update_since()
+        SQLFetcher.update_since()
         print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
 
     @classmethod
@@ -169,7 +232,7 @@ class DataUpdater():
         Updater = cls()
         Updater.update_all()
         Updater.print_unfetch()
-        Fetcher_sql.update_since()
+        SQLFetcher.update_since()
         print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
 
     @classmethod
@@ -192,7 +255,7 @@ class DataUpdater():
         t1 = time.time()
         print(f'predict is {predict} , Data Processing start!')
 
-        Configs = DataProcessConfig(predict , blocks = ['y' , 'trade_day' , 'trade_30m'])
+        Configs = PreProcessConfig(predict , blocks = ['y' , 'trade_day' , 'trade_30m'])
         print(f'{len(Configs.blocks)} datas :' + str(list(Configs.blocks)))
 
         for key , param in Configs.get_block_params():

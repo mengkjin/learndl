@@ -1,12 +1,8 @@
-import numpy as np
-import pandas as pd
-
-import time
 import torch
 
 from copy import deepcopy
 
-from .base import BasicCallBack , WithCallBack
+from .base import BasicCallBack
 from ..optim import Optimizer
 from ...func import list_converge
 

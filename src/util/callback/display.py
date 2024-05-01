@@ -2,6 +2,7 @@ import os , time
 import numpy as np
 import pandas as pd
 
+from collections import deque
 from dataclasses import asdict , dataclass , field
 from typing import Callable , ClassVar , Optional
 
@@ -14,17 +15,15 @@ class CallbackTimer(WithCallBack):
     def __init__(self , model_module) -> None:
         super().__init__(model_module)
         self._print_info()
-        self._pt : dict[str,list]  = {}
-        self._st : dict[str,float] = {}
-    def __enter__(self):
-        super().__enter__()
-        self._st[self.trace_hook_name] = time.time()
-    def __exit__(self):
-        hook_name = self.trace_hook_name
-        if hook_name not in self._pt.keys(): self._pt[hook_name] = []
-        self._pt[hook_name].append(time.time() - self._st[hook_name])
+        self._hook_times : dict[str,list]  = {}
+        self._start_time : dict[str,float] = {}
+    def at_enter(self , hook_name): self._start_time[hook_name] = time.time()
+    def at_exit(self, hook_name):
+        if hook_name not in self._hook_times.keys(): self._hook_times[hook_name] = []
+        self._hook_times[hook_name].append(time.time() - self._start_time[hook_name])
+        self.__getattribute__(hook_name)()
     def on_summarize_model(self):
-        tb = pd.DataFrame([[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self._pt.items()] ,
+        tb = pd.DataFrame([[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self._hook_times.items()] ,
                           columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time'])
         print(tb.sort_values(by=['total_time'],ascending=False))
 
@@ -35,11 +34,13 @@ class BatchDisplay(BasicCallBack):
         self._print_info()
         self._verbosity = verbosity
     @property
-    def _dl(self) -> LoaderWrapper: return self.module.dataloader
+    def _dl(self): return self.module.dataloader
     @property
-    def _init_tqdm(self) -> Callable: return self._dl.init_tqdm if self._verbosity >= 10 else self._empty
+    def _init_tqdm(self) -> Callable: 
+        return self._dl.init_tqdm if self._verbosity >= 10 and isinstance(self._dl, LoaderWrapper) else self._empty
     @property
-    def _display(self) -> Callable: return self._dl.display if self._verbosity >= 10 else self._empty
+    def _display(self) -> Callable: 
+        return self._dl.display if self._verbosity >= 10 and isinstance(self._dl, LoaderWrapper) else self._empty
     @staticmethod
     def _empty(*args , **kwargs): return 
     def on_train_epoch_start(self):      self._init_tqdm('Train Ep#{:3d} loss : {:.5f}')
@@ -47,7 +48,7 @@ class BatchDisplay(BasicCallBack):
     def on_test_model_type_start(self):  self._init_tqdm('Test {} {} score : {:.5f}')
     def on_train_batch_end(self):        self._display(self.status.epoch, self.metrics.aggloss)
     def on_validation_batch_end(self):   self._display(self.status.epoch, self.metrics.aggscore)
-    def on_test_batch_end(self):         self._display(self.status.model_type , self.module.batch_dates[self.module.batch_idx] , self.metrics.aggscore)
+    def on_test_batch_end(self):         self._display(self.status.model_type , getattr(self.module , 'batch_dates')[self.module.batch_idx] , self.metrics.aggscore)
             
 class StatusDisplay(BasicCallBack):
     '''display epoch / event information'''

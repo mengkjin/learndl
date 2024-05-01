@@ -2,22 +2,12 @@ import re , os
 import numpy as np
 import pandas as pd
 
-from dataclasses import dataclass
 from typing import Literal
-
 from ...environ import DIR
 
 DB_by_name  : list[str] = ['information']
 DB_by_date  : list[str] = ['models' , 'trade' , 'labels']  
 save_option : Literal['feather' , 'parquet'] = 'feather'
-
-@dataclass
-class FailedReturn:
-    type: str
-    date: int | None = None
-
-    def add_attr(self , key , value):
-        self.__dict__[key] = value
 
 def list_files(directory , fullname = False , recur = False):
     '''list all files in directory'''

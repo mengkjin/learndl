@@ -151,18 +151,17 @@ class mod_resnet_2d(nn.Module):
         return output
 
 if __name__ == '__main__':
-    pass
-    """
+
     import torch
     import torch.nn as nn
     # pip install pytimedinput -i https://pypi.tuna.tsinghua.edu.cn/simple
-    from scripts.nn.My import mod_gru
-    from scripts.nn.ResNet import resnet_1d, resnet_2d
+    from src.model.rnn import mod_gru
+    from src.model.cnn import mod_resnet_1d, mod_resnet_2d
         
     class resnet1d_gru(nn.Module):
         def __init__(self, seq_len , feat_len , dim_res = 16 , dim_rnn = 64 , **kwargs) -> None:
             super().__init__()
-            self.resnet = resnet_1d(seq_len , feat_len , dim_res , 10 , 3) 
+            self.resnet = mod_resnet_1d(seq_len , feat_len , dim_res , 10 , 3) 
             self.gru    = mod_gru(dim_res , dim_rnn , 0.1 , 2)
         def forward(self , x):
             hidden = self.resnet(x)
@@ -174,7 +173,7 @@ if __name__ == '__main__':
     class resnet2d_gru(nn.Module):
         def __init__(self, seq_len , feat_len , dim_res = 16 , dim_rnn = 64 , **kwargs) -> None:
             super().__init__()
-            self.resnet = resnet_2d(seq_len , feat_len , dim_res , 10 , 3) 
+            self.resnet = mod_resnet_2d(seq_len , feat_len , dim_res , 10 , 3) 
             self.gru    = mod_gru(dim_res , dim_rnn , 0.1 , 2)
         def forward(self , x):
             hidden = self.resnet(x)
@@ -195,4 +194,3 @@ if __name__ == '__main__':
     net_2d = resnet2d_gru(seq_inday , feat_len , dim_res = dim_out // 4 , dim_rnn = dim_out)
     y1 = net_1d(x)
     y2 = net_2d(x)
-    """

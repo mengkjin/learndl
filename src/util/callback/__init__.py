@@ -1,3 +1,4 @@
+from collections import deque
 from inspect import currentframe
 from typing import Any , Optional
 
@@ -5,8 +6,9 @@ from . import base , control , display
 from .base import BasicCallBack , WithCallBack
 from ..config import TrainConfig
 
-class CallBackManager:
-    def __init__(self , *callbacks):        
+class CallBackManager(WithCallBack):
+    def __init__(self , model_module , *callbacks):
+        super().__init__(model_module)     
         self.callbacks = []
         self.with_cbs : list[WithCallBack] = []
         self.base_cbs : list[BasicCallBack] = []
@@ -14,20 +16,13 @@ class CallBackManager:
 
     def add_callback(self , cb):
         self.callbacks.append(cb)
-        self.with_cbs.append(cb) if self.is_withcallback(cb) else self.base_cbs.append(cb)
-    
-    @staticmethod
-    def is_withcallback(cb): return issubclass(cb.__class__ , WithCallBack)
+        self.with_cbs.append(cb) if issubclass(cb.__class__ , WithCallBack) else self.base_cbs.append(cb)
 
-    def __enter__(self):
-        for cb in self.with_cbs: cb.__enter__()
-
-    def __exit__(self , *args):
-        hook_name = str(getattr(currentframe() , 'f_back').f_code.co_name)
-        assert hook_name.startswith('on_') , hook_name
+    def at_enter(self , hook_name):
+        for cb in self.with_cbs: cb.at_enter(hook_name)
+    def at_exit(self, hook_name):
         for cb in self.base_cbs: cb(hook_name)
-        for cb in self.with_cbs: cb.__exit__()
-        for cb in self.with_cbs: cb(hook_name)
+        for cb in self.with_cbs: cb.at_exit(hook_name)
 
     @classmethod
     def setup(cls , model_module : Any = None , cb_names : list[str] = []):
@@ -37,7 +32,7 @@ class CallBackManager:
             cb_cls = cls.__cb_class(cb_name)
             kwargs = cls.__cb_class_kwargs(cb_name , model_module.config)
             if kwargs is not None: cbs.append(cb_cls(model_module , **kwargs))
-        return cls(*cbs)
+        return cls(model_module , *cbs)
     
     @classmethod
     def __cb_class(cls , cb_name : str):
