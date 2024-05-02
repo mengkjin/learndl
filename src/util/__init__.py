@@ -11,7 +11,7 @@ from .buffer import BufferSpace
 from .callback import CallBackManager
 from .config import TrainConfig
 from .device import Device
-from .ensemble import FittestModel
+from .ensemble import EnsembleModels
 from .loader import DataloaderStored , LoaderWrapper
 from .logger import Logger
 from .metric import Metrics , MetricsAggregator

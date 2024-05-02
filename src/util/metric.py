@@ -80,12 +80,12 @@ class Metrics:
     def calculate(self , dataset , batch_data : BatchData , batch_output : BatchOutput , net : Optional[nn.Module] = None , 
                   assert_nan = False , **kwargs):
         '''Calculate loss(with gradient), penalty , score'''
-        assert dataset in ['train','valid','test']
+        assert dataset in ['train','validation','test']
 
         label  = batch_data.y
         weight = batch_data.w
         pred   = batch_output.pred
-        penalty_kwargs = {'net':net,'hidden':batch_output.hidden,'label':label , **kwargs}
+        penalty_kwargs = {'net':net,'pre':pred,'hidden':batch_output.hidden,'label':label , **kwargs}
 
         if label.shape != pred.shape: # if more label than output
             label = label[...,:pred.shape[-1]]

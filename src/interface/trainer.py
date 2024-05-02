@@ -13,49 +13,36 @@ from .data import DataModule
 from ..classes import BaseModelModule
 from ..model import model as MODEL
 from ..util import (
-    CallBackManager , Checkpoint , Deposition , Device , Filtered , FittestModel ,
-    Logger , Metrics , Optimizer , PTimer , TrainConfig)
+    CallBackManager , Checkpoint , Deposition , Device , EnsembleModels ,
+    Filtered , Logger , Metrics , Optimizer , PTimer , TrainConfig)
 
 class ModelTrainer(BaseModelModule):
     '''run through the whole process of training'''
     def init_config(self , **kwargs) -> None:
         self.config = TrainConfig.load(do_parser = True , par_args = kwargs)
         self.stage_queue = self.config.stage_queue
-
     def init_utilities(self , **kwargs) -> None: 
         self.logger     = Logger()
         self.device     = Device()
         self.checkpoint = Checkpoint(self.config)
         self.deposition = Deposition(self.config)
         self.metrics    = Metrics(self.config)
-        self.callbacks  = CallBackManager.setup(self , [
-            'DynamicDataLink' , 
-            'ResetOptimizer' ,
-            'CallbackTimer' ,
-            'EarlyStoppage' ,
-            'ValidationConverge' ,
-            'EarlyExitRetrain' ,
-            'NanLossRetrain' ,
-            'BatchDisplay' , 
-            'StatusDisplay' ,
-            # 'CudaEmptyCache' , 
-        ])
-    def init_data(self , **kwargs): self.data_mod = DataModule(self.config)
-
-    def batch_forward(self) -> None: self.batch_output = self(self.batch_data)
-    
+        self.callbacks  = CallBackManager.setup(self.config , self)
+    def init_data(self , **kwargs): 
+        self.data_mod = DataModule(self.config)
+    def batch_forward(self) -> None: 
+        self.batch_output = self(self.batch_data)
     def batch_metrics(self) -> None:
-        self.metrics.calculate(self.dataset, self.batch_data, self.batch_output, self.net, assert_nan = True)
+        self.metrics.calculate(self.status.dataset , self.batch_data, self.batch_output, self.net, assert_nan = True)
         self.metrics.collect_batch_metric()
-
     def batch_backward(self) -> None:
-        assert self.dataset == 'train' , self.dataset
+        assert self.status.dataset == 'train' , self.status.dataset
         self.on_before_backward()
         self.optimizer.backward(self.metrics.loss)
         self.on_after_backward()
     
     @property
-    def model_param(self) -> dict: return self.config.model_param[self.status.model_num]
+    def model_param(self): return self.config.model_param[self.status.model_num]
     @property
     def model_iter(self):
         '''iter of model_date and model_num , considering resume_training'''
@@ -81,7 +68,6 @@ class ModelTrainer(BaseModelModule):
     def on_fit_model_start(self):
         self.data_mod.setup('fit' , self.model_param , self.status.model_date)
         self.metrics.new_model(self.model_param , self.config)
-        self.status.new_model()
         self.checkpoint.new_model(self.model_param , self.status.model_date)
         self.load_model(True)
     
@@ -96,16 +82,10 @@ class ModelTrainer(BaseModelModule):
         if self.batch_idx < self.batch_warm_up: return  # before this is warmup stage , only forward
         self.batch_metrics()
     
-    def on_fit_epoch_start(self):
-        self.status.new_epoch()
-    
     def on_fit_epoch_end(self):
-        for fittest_model in self.fitmodels.values():
-            fittest_model.assess(self.net , self.status.epoch , self.metrics.valid_scores[-1] , self.metrics.valid_losses[-1])
-        self.status.end_epoch()
+        self.ensembles.assess(self.net , self.status.epoch , self.metrics.valid_scores[-1] , self.metrics.valid_losses[-1])
     
     def on_train_epoch_start(self):
-        self.dataset = 'train'
         self.net.train()
         torch.set_grad_enabled(True)
         self.dataloader = self.data_mod.train_dataloader()
@@ -116,7 +96,6 @@ class ModelTrainer(BaseModelModule):
         self.optimizer.scheduler_step(self.status.epoch)
     
     def on_validation_epoch_start(self):
-        self.dataset = 'valid'
         self.net.eval()
         torch.set_grad_enabled(False)
         self.dataloader = self.data_mod.val_dataloader()
@@ -127,7 +106,6 @@ class ModelTrainer(BaseModelModule):
         torch.set_grad_enabled(True)
     
     def on_test_model_start(self):
-        self.dataset = 'test'
         if not self.deposition.exists(self.model_path(self.status.model_date)): self.fit_model()
         self.data_mod.setup('test' , self.model_param , self.status.model_date)
         self.metrics.new_model(self.model_param , self.config)
@@ -154,16 +132,16 @@ class ModelTrainer(BaseModelModule):
         self.transferred = training and self.config.train_param['transfer'] and self.deposition.exists(model_path)
         self.net = MODEL.new(self.config.model_module , self.model_param , self.deposition.load(model_path) , self.device)
         if training: 
-            self.fitmodels = FittestModel.get_models(self.model_types , self.checkpoint)
+            self.ensembles = EnsembleModels.get_models(self.model_types , self.checkpoint , device=self.device)
             self.optimizer = Optimizer(self.net , self.config , self.transferred , lr_multiplier)
 
     def save_model(self):
         '''save model state dict to deposition'''
         self.on_before_save_model()
         self.net = self.net.cpu()
-        for model_type , fittest_model in self.fitmodels.items():
-            sd = fittest_model.state_dict(self.net , self.data_mod.train_dataloader())
-            self.deposition.save_state_dict(sd , self.model_path(self.status.model_date , model_type)) 
+        for model_type in self.model_types:
+            state_dict = self.ensembles.state_dict(model_type , self.net , self.data_mod.train_dataloader())
+            self.deposition.save_state_dict(state_dict , self.model_path(self.status.model_date , model_type)) 
     
     def model_path(self , model_date = -1, model_type = 'best' , base_path = None , model_num = None):
         '''get model path of deposition giving model date/type/base_path/num'''

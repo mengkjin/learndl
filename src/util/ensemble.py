@@ -1,26 +1,36 @@
 import numpy as np
+import torch
 
 from abc import ABC , abstractmethod
 from copy import deepcopy
 from torch import nn
 from torch.optim.swa_utils import AveragedModel , update_bn
-from typing import Literal 
+from typing import Literal , Optional
 
-from .store import Checkpoint
+from .store import Checkpoint , Deposition
 
-class FittestModel(ABC):
+class _BaseEnsembleModel(ABC):
     '''abstract class of fittest model, e.g. model with the best score, swa model of best scores or last ones'''
     def __init__(self, ckpt : Checkpoint , use : Literal['loss','score'] = 'score') -> None:
         self.ckpt , self.use = ckpt , use
-
     @abstractmethod
     def assess(self , net , epoch : int , score = 0. , loss = 0.): '''use score or loss to update assessment'''
     @abstractmethod
     def state_dict(self , *args , device = None) -> nn.Module | dict: '''output the final fittest model state dict'''
+
+class EnsembleModels:
+    '''a group of ensemble models , of same net structure'''
+    def __init__(self, models : dict[str,_BaseEnsembleModel] , device = None) -> None:
+        self.models = models
+        self.device = device
+    def __getitem__(self , key): return self.models[key]
+    def assess(self , net , epoch : int , score = 0. , loss = 0.): 
+        for model in self.models.values(): model.assess(net , epoch , score , loss)
+    def state_dict(self , model_type , *args): return self.models[model_type].state_dict(*args , device = self.device)
     @classmethod
-    def get_models(cls , model_types , *args , **kwargs):
+    def get_models(cls , model_types , *args , device = None , **kwargs):
         '''get a dict of FittestModel'''
-        return {model_type:cls.choose(model_type)(*args , **kwargs) for model_type in model_types}
+        return cls({model_type:cls.choose(model_type)(*args , **kwargs) for model_type in model_types} , device = device)
     @staticmethod
     def choose(model_type):
         '''get a subclass of FittestModel'''
@@ -51,7 +61,7 @@ class SWAModel:
     @property
     def module(self) -> nn.Module: return self.avgmodel.module
 
-class BestModel(FittestModel):
+class BestModel(_BaseEnsembleModel):
     def __init__(self, ckpt : Checkpoint , use : Literal['loss','score'] = 'score') -> None:
         super().__init__(ckpt , use)
         self.epoch_fix  = -1
@@ -68,7 +78,7 @@ class BestModel(FittestModel):
     def state_dict(self , *args , device = None , **kwargs):
         return self.ckpt.load_epoch(self.epoch_fix)
 
-class SWABest(FittestModel):
+class SWABest(_BaseEnsembleModel):
     def __init__(self, ckpt : Checkpoint , n_best = 5 , use : Literal['loss','score'] = 'score') -> None:
         super().__init__(ckpt , use)
         assert n_best > 0, n_best
@@ -96,7 +106,7 @@ class SWABest(FittestModel):
         swa.update_bn(data_loader , getattr(data_loader , 'device' , None))
         return swa.module.cpu().state_dict()
     
-class SWALast(FittestModel):
+class SWALast(_BaseEnsembleModel):
     def __init__(self, ckpt : Checkpoint , n_last = 5 , interval = 3 ,
                  use : Literal['loss','score'] = 'score') -> None:
         super().__init__(ckpt , use)

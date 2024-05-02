@@ -1,5 +1,3 @@
-from collections import deque
-from inspect import currentframe
 from typing import Any , Optional
 
 from . import base , control , display
@@ -25,35 +23,18 @@ class CallBackManager(WithCallBack):
         for cb in self.with_cbs: cb.at_exit(hook_name)
 
     @classmethod
-    def setup(cls , model_module : Any = None , cb_names : list[str] = []):
-        if model_module is None: raise Exception('model_module must be supplied')
-        cbs = []
-        for cb_name in cb_names:
-            cb_cls = cls.__cb_class(cb_name)
-            kwargs = cls.__cb_class_kwargs(cb_name , model_module.config)
-            if kwargs is not None: cbs.append(cb_cls(model_module , **kwargs))
-        return cls(model_module , *cbs)
+    def setup(cls , config : TrainConfig , model_module : Any):
+        callbacks = [cls.__get_cb(k , config , model_module) for k,v in config.callbacks.items() if v > 0]
+        return cls(model_module , *callbacks)
     
-    @classmethod
-    def __cb_class(cls , cb_name : str):
-        if cb_name in ['EarlyStoppage' , 'ValidationConverge' , 'TrainConverge' , 'FitConverge' , 
-                       'EarlyExitRetrain' , 'NanLossRetrain' , 'ResetOptimizer' , 'DynamicDataLink']:
-            return getattr(control , cb_name)
-        elif cb_name in ['CallbackTimer' , 'BatchDisplay' , 'StatusDisplay']:
-            return getattr(display , cb_name)
-        else:
+    @staticmethod
+    def __get_cb(cb_name : str , config : TrainConfig , model_module : Any) -> Optional[dict]:
+        if hasattr(control , cb_name):
+            cls = getattr(control , cb_name)
+            kwg = config.train_param.get('callbacks',{}).get(cb_name , {})
+            return cls(model_module , **kwg)
+        elif hasattr(display , cb_name):
+            cls = getattr(display , cb_name)
+            return cls(model_module , verbosity = config.verbosity)
+        else: 
             raise KeyError(cb_name)
-
-    @classmethod
-    def __cb_class_kwargs(cls , cb_name : str , config : TrainConfig) -> Optional[dict]:
-        if cb_name in ['EarlyStoppage' , 'ValidationConverge' , 'TrainConverge' , 'FitConverge' , 
-                       'EarlyExitRetrain' , 'NanLossRetrain' , 'CudaEmptyCache' , 'ResetOptimizer']:
-            cond = config.train_param.get('callbacks')
-            kwargs = cond.get(cb_name) if isinstance(cond , dict) else None
-        elif cb_name in ['CallbackTimer' , 'DynamicDataLink']:
-            kwargs = {}
-        elif cb_name in ['BatchDisplay' , 'StatusDisplay']:
-            kwargs = {'verbosity' : config.verbosity}
-        else:
-            raise KeyError(cb_name)
-        return {k:v for k,v in kwargs.items() if v is not None} if isinstance(kwargs , dict) else None

@@ -352,7 +352,7 @@ class DataBlock:
         if multiply  is not None: v_price *= multiply
         if divide    is not None: v_price /= divide
 
-        self.values[...,i_price] = v_price #type:ignore
+        self.values[...,i_price] = v_price 
         return self
     
     def adjust_volume(self , multiply = None , divide = None , 
@@ -365,7 +365,7 @@ class DataBlock:
         v_vol = self.values[...,i_vol]
         if multiply is not None: v_vol *= multiply
         if divide   is not None: v_vol /= divide
-        self.values[...,i_vol] = v_vol #type:ignore
+        self.values[...,i_vol] = v_vol
         return self
     
     def mask_values(self , mask = {'list_dt':91} , **kwargs):

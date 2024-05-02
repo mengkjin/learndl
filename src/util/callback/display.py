@@ -12,9 +12,10 @@ from ...environ import DIR
 
 class CallbackTimer(WithCallBack):
     '''record time cost of callback hooks'''
-    def __init__(self , model_module) -> None:
+    def __init__(self , model_module , verbosity = 2) -> None:
         super().__init__(model_module)
         self._print_info()
+        self._verbosity = verbosity
         self._hook_times : dict[str,list]  = {}
         self._start_time : dict[str,float] = {}
     def at_enter(self , hook_name): self._start_time[hook_name] = time.time()
@@ -23,9 +24,10 @@ class CallbackTimer(WithCallBack):
         self._hook_times[hook_name].append(time.time() - self._start_time[hook_name])
         self.__getattribute__(hook_name)()
     def on_summarize_model(self):
-        tb = pd.DataFrame([[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self._hook_times.items()] ,
-                          columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time'])
-        print(tb.sort_values(by=['total_time'],ascending=False))
+        if self._verbosity >= 1:
+            columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']
+            values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self._hook_times.items()]
+            print(pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False))
 
 class BatchDisplay(BasicCallBack):
     '''display batch progress bar'''
@@ -97,14 +99,10 @@ class StatusDisplay(BasicCallBack):
         self._test_record.update_score(self.status.model_num , self.status.model_type , self.metrics.scores[-len(self._model_test_dates):])
 
     def tic(self , key : str): self._times[key] = time.time()
-
+    def toc(self , key : str): return time.time() - self._times[key]
     def tic_str(self , key : str):
         self.tic(key)
         return 'Start Process [{}] at {:s}!'.format(key.capitalize() , time.ctime(self._times[key]))
-
-    def toc(self , key : str): 
-        return time.time() - self._times[key]
-    
     def toc_str(self , key : str , avg = False): 
         toc = self.toc(key)
         if avg and self._model_stage * self._epoch_stage:
@@ -132,17 +130,10 @@ class StatusDisplay(BasicCallBack):
         }
         DIR.dump_yaml(result , self.result_path)
 
-    def on_data_start(self): 
-        self.stage = 'data'
-        self.logger.critical(self.tic_str('data'))
-    def on_data_end(self): 
-        self.logger.critical(self.toc_str('data'))
-
-    def on_fit_start(self): 
-        self.stage = 'fit'
-        self.logger.critical(self.tic_str('fit'))
-    def on_fit_end(self): 
-        self.logger.critical(self.toc_str('fit' , avg=True))
+    def on_data_start(self):    self.logger.critical(self.tic_str('data'))
+    def on_data_end(self):      self.logger.critical(self.toc_str('data'))
+    def on_fit_start(self):     self.logger.critical(self.tic_str('fit'))
+    def on_fit_end(self):       self.logger.critical(self.toc_str('fit' , avg=True))
 
     def on_fit_model_start(self):
         self.tic('model')
@@ -172,7 +163,6 @@ class StatusDisplay(BasicCallBack):
             self.toc('model') / 60 , self.toc('model') / (self._epoch_model + 1))
         self.logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self._texts))
     def on_test_start(self): 
-        self.stage = 'test'
         self.logger.critical(self.tic_str('test'))
         self.logger.warning('Each Model Date Testing Mean Score({}):'.format(self.config.train_param['criterion']['score']))
         self._test_record = self.TestRecord(self.config.model_num_list , self.config.model_types , self.logger.info)

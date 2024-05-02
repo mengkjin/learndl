@@ -41,6 +41,8 @@ class EndofLoop:
 @dataclass
 class TrainerStatus:
     max_epoch : int = 200
+    stage   : Literal['data' , 'fit' , 'test'] = 'data'
+    dataset : Literal['train' , 'validation' , 'test'] = 'train'
     epoch   : int = -1
     attempt : int = 0
     round   : int = 0
@@ -50,9 +52,21 @@ class TrainerStatus:
     end_of_loop  : EndofLoop = field(default_factory=EndofLoop)
     epoch_event  : list[str] = field(default_factory=list)
 
-    def new_model(self):
+    def stage_data(self): self.stage = 'data'
+    def stage_fit(self):  self.stage = 'fit'
+    def stage_test(self): self.stage = 'test'
+    def dataset_train(self): self.dataset = 'train'
+    def dataset_validation(self): self.dataset = 'validation'
+    def dataset_test(self): self.dataset = 'test'
+    def fit_model_start(self):
         self.attempt = 0
         self.new_attempt()
+    def fit_epoch_start(self):
+        self.epoch   += 1
+        self.epoch_event = []
+    def fit_epoch_end(self):
+        self.end_of_loop.loop_end(self.epoch)
+
 
     def new_attempt(self):
         self.epoch   = -1
@@ -60,15 +74,12 @@ class TrainerStatus:
         self.end_of_loop = EndofLoop(self.max_epoch)
         self.epoch_event = []
 
-    def new_epoch(self):
-        self.epoch   += 1
-        self.epoch_event = []
+
 
     def add_event(self , event : Optional[str]):
         if event: self.epoch_event.append(event)
 
-    def end_epoch(self):
-        self.end_of_loop.loop_end(self.epoch)
+
 
 class BaseCB:
     def __init__(self , model_module) -> None:
@@ -218,8 +229,8 @@ class BaseModelModule(ABC):
     def __init__(self , **kwargs):
         self.init_config(**kwargs)
         self.init_utilities(**kwargs)
-        self.init_status(**kwargs)
         self.init_data(**kwargs)
+        self.status = TrainerStatus(getattr(self , 'config').get('max_epoch'))
 
     @abstractmethod
     def batch_forward(self) -> None: '''forward of batch_data'''
@@ -279,12 +290,14 @@ class BaseModelModule(ABC):
 
     def stage_data(self):
         '''stage of loading model data'''
+        self.status.stage_data()
         self.callbacks(self.on_data_start)
         self.data_mod.load_data()
         self.callbacks(self.on_data_end)
         
     def stage_fit(self):
         '''stage of fitting'''
+        self.status.stage_fit()
         self.callbacks(self.on_fit_start)
         for self.status.model_date , self.status.model_num in self.model_iter:
             self.fit_model()
@@ -292,15 +305,20 @@ class BaseModelModule(ABC):
 
     def stage_test(self):
         '''stage of testing'''
+        self.status.stage_test()
         self.callbacks(self.on_test_start)
         for self.status.model_date , self.status.model_num in self.model_iter:
             self.test_model()
         self.callbacks(self.on_test_end)
 
     def fit_model(self):
+        self.status.fit_model_start()
         self.callbacks(self.on_fit_model_start)
         while not self.status.end_of_loop:
+            self.status.fit_epoch_start()
             self.callbacks(self.on_fit_epoch_start)
+
+            self.status.dataset_train()
             self.callbacks(self.on_train_epoch_start)
             for self.batch_idx , self.batch_data in enumerate(self.dataloader):
                 self.callbacks(self.on_train_batch_start)
@@ -308,19 +326,22 @@ class BaseModelModule(ABC):
                 self.callbacks(self.on_train_batch_end)
             self.callbacks(self.on_train_epoch_end)
 
+            self.status.dataset_validation()
             self.callbacks(self.on_validation_epoch_start)
             for self.batch_idx , self.batch_data in enumerate(self.dataloader):
                 self.callbacks(self.on_validation_batch_start)
                 self.callbacks(self.on_validation_batch)
                 self.callbacks(self.on_validation_batch_end)
             self.callbacks(self.on_validation_epoch_end)
-            self.callbacks(self.on_fit_epoch_end)
 
+            self.status.fit_epoch_end()
+            self.callbacks(self.on_fit_epoch_end)
         self.callbacks(self.on_fit_model_end)
 
     def test_model(self):
         self.callbacks(self.on_test_model_start)
         for self.status.model_type in self.model_types:
+            self.status.dataset_test()
             self.callbacks(self.on_test_model_type_start)
             for self.batch_idx , self.batch_data in enumerate(self.dataloader):
                 self.callbacks(self.on_test_batch_start)
@@ -330,13 +351,7 @@ class BaseModelModule(ABC):
         self.callbacks(self.on_test_model_end)
 
     @property
-    def penalty_kwargs(self): 
-        '''self customed penalty kwargs , except for net , hidden and label'''
-        return {}
-    
-    def init_status(self , **kwargs) -> None:
-        '''initialized status , can from config'''
-        self.status = TrainerStatus(self.config.get('max_epoch'))
+    def penalty_kwargs(self): return {}
     def on_configure_model(self): ... 
     def on_summarize_model(self): ...
     def on_data_start(self): ...
