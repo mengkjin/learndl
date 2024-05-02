@@ -45,7 +45,7 @@ class ModelParam:
         target_base = self.model_yaml.format(self.module.lower())
         source_base = target_base if os.path.exists(f'{source_dir}/{target_base}') else self.default_yaml
         os.makedirs(target_dir, exist_ok = True)
-        assert not os.path.exists(f'{target_dir}/{target_base}')
+        # assert not os.path.exists(f'{target_dir}/{target_base}')
         shutil.copyfile(f'{source_dir}/{source_base}' , f'{target_dir}/{target_base}')
 
     def expand(self , base_path , resume_training):
@@ -128,7 +128,7 @@ class TrainParam:
         source_dir = DIR.conf if self.config_path == 'default' else self.config_path
         target_base = source_base = self.train_yaml
         os.makedirs(target_dir, exist_ok = True)
-        assert not os.path.exists(f'{target_dir}/{target_base}')
+        # assert not os.path.exists(f'{target_dir}/{target_base}')
         shutil.copyfile(f'{source_dir}/{source_base}' , f'{target_dir}/{target_base}')
 
     @property
@@ -227,7 +227,7 @@ class TrainConfig:
             config_resume = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
             config.update(config_resume.__dict__)
         elif 'fit' in config.stage_queue and makedir:
-            if config.Train.resumeable:
+            if config.Train.resumeable and not config.short_test:
                 raise Exception(f'{model_path} has to be delete manually')
             # os.makedirs(config.model_base_path, exist_ok = True)
             [os.makedirs(f'{model_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
@@ -349,7 +349,9 @@ class TrainConfig:
         assert model_name is not None
         candidate_name = [model for model in [model_name] if os.path.exists(f'{DIR.model}/{model}')] + \
                 [model for model in os.listdir(DIR.model) if model.startswith(model_name + '.')] 
-        if 'fit' in self.stage_queue and candidate_name:
+        if self.short_test:
+            ...
+        elif 'fit' in self.stage_queue and candidate_name:
             if self.resume_training and len(candidate_name) == 1:
                 model_name = candidate_name[0]
             elif self.resume_training:

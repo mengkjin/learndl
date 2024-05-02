@@ -28,7 +28,7 @@ def emphasize_header(header=''):
     print('{: ^100}'.format(''))
         
 def tensor_nancount(x : Tensor , dim=None, keepdim=False):  
-    return ~x.isnan().sum(dim = dim , keepdim = keepdim)
+    return x.isfinite().sum(dim = dim , keepdim = keepdim)
 
 def tensor_nanmean(x : Tensor , dim=None, keepdim=False):  
     try:
@@ -48,20 +48,18 @@ def tensor_nanmedian(x : Tensor , dim=None, keepdim=False):
         return tensor_nanmedian(x.to(torch.float) , dim , keepdim).to(x.dtype)
         
 def tensor_standardize_and_weight(x : Tensor, dim = None , weight_scheme = None):
-    if x.isnan().all().item(): return (x , None)       
+    if x.isnan().all().item(): return (x , None) 
     x = (x - tensor_nanmean(x,dim=dim,keepdim=True)) / (tensor_nanstd(x,dim=dim,correction=0,keepdim=True) + _div_tol)
-    if weight_scheme:
-        weight_scheme = 'equal' if weight_scheme not in ['top'] else weight_scheme
-        if weight_scheme == 'top':
-            w = torch.ones_like(x)
-            try: 
-                w[x > tensor_nanmedian(x , dim , True)] = 2
-            except:    
-                w[x > tensor_nanmedian(x)] = 2
-        elif weight_scheme == 'equal':
-            w = None
-        else:
-            raise KeyError(weight_scheme)
+    if weight_scheme is None or weight_scheme == 'equal':
+        w = None
+    elif weight_scheme == 'top':
+        w = torch.ones_like(x)
+        try: 
+            w[x > tensor_nanmedian(x , dim , True)] = 2
+        except:    
+            w[x > tensor_nanmedian(x)] = 2
+    else:
+        raise KeyError(weight_scheme)
     return (x, w)
 
 def standardize_x(x : np.ndarray , dim=None):
@@ -156,7 +154,7 @@ def pearson(x : Tensor, y : Tensor , w = None, dim = None , **kwargs):
     w = 1. if w is None else w / w.sum(dim=dim,keepdim=True) * (w.numel() if dim is None else w.size(dim=dim))
     x1 , y1 = nd_minus_mean(x , w , dim) , nd_minus_mean(y , w , dim)
     return (w * x1 * y1).mean(dim = dim) / ((w * x1.square()).mean(dim=dim).sqrt() + _div_tol) / ((w * y1.square()).mean(dim=dim).sqrt() + _div_tol)
-    
+
 def ccc(x : Tensor , y : Tensor , w = None, dim = None , **kwargs):
     w = 1. if w is None else w / w.sum(dim=dim,keepdim=True) * (w.numel() if dim is None else w.size(dim=dim))
     x1 , y1 = nd_minus_mean(x , w , dim) , nd_minus_mean(y , w , dim)

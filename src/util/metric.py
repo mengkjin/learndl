@@ -82,9 +82,9 @@ class Metrics:
         '''Calculate loss(with gradient), penalty , score'''
         assert dataset in ['train','valid','test']
 
-        label = batch_data.y
+        label  = batch_data.y
         weight = batch_data.w
-        pred = batch_output.pred
+        pred   = batch_output.pred
         penalty_kwargs = {'net':net,'hidden':batch_output.hidden,'label':label , **kwargs}
 
         if label.shape != pred.shape: # if more label than output
