@@ -1,7 +1,7 @@
 # most frequently changing variables
 mem_storage: true 
 random_seed: null
-short_test:  true
+short_test:  false
 
 model_name: null # null
 model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst

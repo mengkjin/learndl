@@ -239,10 +239,10 @@ class DataBlock:
         else:
             assert len(paths) == len(fillna) , (len(paths) , len(fillna))
         
-        with Timer(f'Load  {len(paths)} DataBlocks') as t:
+        with Timer(f'Load  {len(paths)} DataBlocks'):
             blocks = [cls.load_path(path) for path in paths]
 
-        with Timer(f'Align {len(paths)} DataBlocks') as t:
+        with Timer(f'Align {len(paths)} DataBlocks'):
             # sligtly faster than .align(secid = secid , date = date)
             newsecid = None
             if intersect_secid:  newsecid = index_intersect([blk.secid for blk in blocks])[0]
@@ -275,20 +275,19 @@ class DataBlock:
     
     @classmethod
     def load_DB(cls , data_process_param : dict[str,DataProcessCfg] , start_dt = None , end_dt = None , **kwargs):
-        BlockDict = {}
+        blocks : dict[str,'DataBlock'] = {}
         secid_align , date_align = None , None
         for i , (src_key , param) in enumerate(data_process_param.items()):
-            blocks = []
+            blks = []
             for db_key in param.db_key:
-                with Timer(f'{param.db_src} blocks reading {db_key} DataBase\'s') as t:
-                    blocks.append(
-                        cls.load_db(param.db_src , db_key , feature = param.feature , 
-                                    start_dt = start_dt , end_dt = end_dt , **kwargs))
-            with Timer(f'{src_key} blocks merging') as t:
-                BlockDict[src_key] = cls.merge(blocks).align(secid = secid_align , date = date_align)
-                secid_align , date_align = BlockDict[src_key].secid , BlockDict[src_key].date
+                with Timer(f'{param.db_src} blocks reading {db_key} DataBase\'s'):
+                    blks.append(cls.load_db(param.db_src , db_key , feature = param.feature , 
+                                            start_dt = start_dt , end_dt = end_dt , **kwargs))
+            with Timer(f'{src_key} blocks merging'):
+                blocks[src_key] = cls.merge(blocks).align(secid = secid_align , date = date_align)
+                secid_align , date_align = blocks[src_key].secid , blocks[src_key].date
 
-        return BlockDict
+        return blocks
     
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , **kwargs):
@@ -323,7 +322,7 @@ class DataBlock:
         if (key.startswith('trade_') and len(key)>6):
             return key[6:]
         elif key.startswith(('rtn_lag','res_lag','std_lag')):
-            return f'{key[:3]}{sum([int(s) for s in key[7:].split("_")])}'
+            return '{:s}{:d}'.format(key[:3] , sum([int(s) for s in key[7:].split('_')]))
         elif key in ['y' , 'labels']:
             return 'y'
         else:
@@ -436,13 +435,12 @@ class DataBlock:
             x_div.copy_(x[:,x_endpoint,-1:])
         else:
             # will not do anything, just sample mean and std
-            ...
-            """
+            '''
             # Xmin day : price divide by preclose , other divide by day sum
             x_div.copy_(x[:,x_endpoint].sum(dim=2 , keepdim=True))
             price_feat = [f for f in ['preclose' , 'close', 'high', 'low', 'open', 'vwap'] if f in feat]
             if len(price_feat) > 0: x_div[...,np.isin(feat , price_feat)] = x[:,x_endpoint-1,-1:][...,feat == price_feat[0]]
-            """
+            '''
             
         nan_sample = (x_div == 0).reshape(*re_shape).any(dim = -1)
         nan_sample += x_div.isnan().reshape(*re_shape).any(dim = -1)
@@ -461,38 +459,37 @@ class DataBlock:
         return data
     
     @classmethod
-    def blocks_process(cls , BlockDict : dict , key):
+    def blocks_process(cls , blocks : dict[str,'DataBlock'] , key):
         np.seterr(invalid='ignore' , divide = 'ignore')
         key_abbr = cls.data_type_abbr(key)
         if key_abbr == 'y':
             final_feat = None
-            data_block : cls = BlockDict['labels']
-            model_exp : cls = BlockDict['models']
+            data_block = blocks['labels']
+            model_exp  = blocks['models']
             indus_size = model_exp.values[...,:model_exp.feature.tolist().index('size')+1]
-            x = torch.FloatTensor(indus_size).permute(1,0,2,3).squeeze(2)
+            x = Tensor(indus_size).permute(1,0,2,3).squeeze(2)
             for i_feat,lb_name in enumerate(data_block.feature):
                 if lb_name[:3] == 'rtn':
-                    y_raw = torch.FloatTensor(data_block.values[...,i_feat]).permute(1,0,2).squeeze(2)
-                    y_std = neutralize_2d(y_raw , x).permute(1,0).unsqueeze(2).numpy()
+                    y_raw = Tensor(data_block.values[...,i_feat]).permute(1,0,2).squeeze(2)
+                    y_std = Tensor(neutralize_2d(y_raw , x)).permute(1,0).unsqueeze(2).numpy()
                     data_block.add_feature('std'+lb_name[3:],y_std)
 
-            y_ts = torch.FloatTensor(data_block.values)[:,:,0]
+            y_ts = Tensor(data_block.values)[:,:,0]
             for i_feat,lb_name in enumerate(data_block.feature):
                 y_pro = process_factor(y_ts[...,i_feat], dim = 0)
                 if not isinstance(y_pro , Tensor): continue
                 y_pro = y_pro.unsqueeze(-1).numpy()
                 data_block.values[...,i_feat] = y_pro
-            del BlockDict['models'] , model_exp
+
         elif key_abbr == 'day':
             final_feat = ['open','close','high','low','vwap','turn_fl']
-            data_block : cls = BlockDict[key]
+            data_block = blocks[key]
             data_block = data_block.adjust_price()
 
         elif key_abbr in ['15m','30m','60m']:
             final_feat = ['open','close','high','low','vwap','turn_fl']
-            data_block : cls = BlockDict[key]
-            db_day : cls = BlockDict['trade_day']
-            db_day = db_day.align(secid = data_block.secid , date = data_block.date)
+            data_block = blocks[key]
+            db_day     = blocks['trade_day'].align(secid = data_block.secid , date = data_block.date)
             
             gc.collect()
             
@@ -500,13 +497,12 @@ class DataBlock:
             data_block = data_block.adjust_volume(divide=db_day.loc(feature='volume')/db_day.loc(feature='turn_fl'),vol_feat='volume')
             
             data_block.rename_feature({'volume':'turn_fl'})
-            del BlockDict['trade_day'] , db_day
+ 
         elif key_abbr in ['week']:
             final_feat = ['open','close','high','low','vwap','turn_fl']
-            num_days = 5
-            data_block : cls = BlockDict['trade_day']
+            num_days   = 5
+            data_block = blocks['trade_day'].adjust_price()
 
-            data_block = data_block.adjust_price()
             new_values = np.full(np.multiply(data_block.shape,(1,1,num_days,1)),np.nan)
             for i in range(num_days): new_values[:,num_days-1-i:,i] = data_block.values[:,:len(data_block.date)-num_days+1+i,0]
             data_block.update(values = new_values)
@@ -516,7 +512,6 @@ class DataBlock:
         
         data_block.align_feature(final_feat)
         np.seterr(invalid='warn' , divide = 'warn')
-        assert isinstance(data_block , DataBlock)
         return data_block
 
 @dataclass(slots=True)

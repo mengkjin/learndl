@@ -1,11 +1,11 @@
-import argparse , os , random , shutil
+import argparse , itertools , os , random , shutil , socket
 import numpy as np
 import torch
 
 from dataclasses import dataclass , field
 from typing import Any , ClassVar , Literal , Optional
 
-from ..func.basic import pretty_print_dict , recur_update
+from ..func.basic import pretty_print_dict , recur_update , Filtered
 from ..environ import DIR
 
 @dataclass    
@@ -100,8 +100,9 @@ class TrainParam:
     def __post_init__(self) -> None:
         source_dir = DIR.conf if self.config_path == 'default' else self.config_path
         source_base = self.train_yaml
-        Param = DIR.read_yaml(f'{source_dir}/{source_base}')
+        Param : dict = DIR.read_yaml(f'{source_dir}/{source_base}')
         if self.override: Param.update(self.override)
+        if socket.gethostname() != 'mengkjin-server': Param['short_test'] = True
 
         if self.spec_adjust:
             if Param['short_test'] and Param.get('on_short_test'): 
@@ -182,6 +183,7 @@ class TrainConfig:
         if isinstance(self.precision , str): self.precision = getattr(torch , self.precision)
         self.stage_queue = ['data' , 'fit' , 'test']
         if not self.tra_model or self.buffer_type != 'tra': self.buffer_type = None
+        assert socket.gethostname() == 'mengkjin-server' or self.short_test
 
     def __getitem__(self , k): return self.__dict__[k]
 
@@ -234,6 +236,26 @@ class TrainConfig:
         
         config.Model.expand(config.model_base_path , config.resume_training)
         return config
+    
+    def model_path(self , model_date , model_num , model_type , base_path = None):
+        '''get model path of deposition giving model date/type/base_path/num'''
+        if base_path is None:
+            model_dir = f'{self.model_base_path}/{model_num}'
+        else:
+            model_dir = f'{base_path}/{model_num}'
+        return '{}/{}.{}.pt'.format(model_dir , model_date , model_type)
+    
+    def model_iter(self , stage , model_date_list):
+        '''iter of model_date and model_num , considering resume_training'''
+        new_iter = list(itertools.product(model_date_list , self.model_num_list))
+        if self.resume_training and stage == 'fit':
+            models_trained = np.full(len(new_iter) , True , dtype = bool)
+            for i , (model_date , model_num) in enumerate(new_iter):
+                if not os.path.exists(self.model_path(model_date = model_date , model_num = model_num , model_type = 'best')):
+                    models_trained[max(i-1,0):] = False
+                    break
+            new_iter = Filtered(new_iter , ~models_trained)
+        return new_iter
     
     @property
     def Model(self) -> ModelParam: 

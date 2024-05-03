@@ -5,7 +5,6 @@
 # @File : ${run_model.py}
 # chmod +x run_model.py
 # python3 scripts/run_model3.py --stage=0 --resume=0 --checkname=1 
-import itertools , gc , os
 import numpy as np
 import torch
 
@@ -13,8 +12,8 @@ from .data import DataModule
 from ..classes import BaseModelModule
 from ..model import model as MODEL
 from ..util import (
-    CallBackManager , Checkpoint , Deposition , Device , EnsembleModels ,
-    Filtered , Logger , Metrics , Optimizer , PTimer , TrainConfig)
+    BigTimer , CallBackManager , Checkpoint , Deposition , Device , EnsembleModels ,
+    Logger , Metrics , Optimizer , TrainConfig)
 
 class ModelTrainer(BaseModelModule):
     '''run through the whole process of training'''
@@ -44,23 +43,17 @@ class ModelTrainer(BaseModelModule):
     @property
     def model_param(self): return self.config.model_param[self.status.model_num]
     @property
-    def model_iter(self):
-        '''iter of model_date and model_num , considering resume_training'''
-        new_iter = list(itertools.product(self.data_mod.model_date_list , self.config.model_num_list))
-        if self.config.resume_training and self.stage == 'fit':
-            models_trained = np.full(len(new_iter) , True , dtype = bool)
-            for i , (model_date , model_num) in enumerate(new_iter):
-                if not os.path.exists(self.model_path(model_date , model_num = model_num)):
-                    models_trained[max(i-1,0):] = False
-                    break
-            new_iter = Filtered(new_iter , ~models_trained)
-        return new_iter
+    def model_iter(self): return self.config.model_iter(self.status.stage , self.data_mod.model_date_list)
     @property
     def model_types(self): return self.config.model_types
     @property
     def batch_dates(self): return np.concatenate([self.data_mod.early_test_dates , self.data_mod.model_test_dates])
     @property
     def batch_warm_up(self): return len(self.data_mod.early_test_dates)
+    @property
+    def if_transfer(self) -> bool: return self.config.train_param['transfer']
+    @property
+    def prev_model_date(self): return self.data_mod.prev_model_date(self.status.model_date)
 
     def on_configure_model(self): 
         self.config.set_config_environment()
@@ -74,7 +67,6 @@ class ModelTrainer(BaseModelModule):
     def on_fit_model_end(self):
         self.save_model()
         self.checkpoint.del_all()
-        gc.collect()
 
     def on_test_batch(self):
         self.assert_equity(self.batch_dates[self.batch_idx] , self.data_mod.y_date[self.batch_data.i[0,1]]) 
@@ -106,7 +98,7 @@ class ModelTrainer(BaseModelModule):
         torch.set_grad_enabled(True)
     
     def on_test_model_start(self):
-        if not self.deposition.exists(self.model_path(self.status.model_date)): self.fit_model()
+        if not self.deposition.exists(self.model_path()): self.fit_model()
         self.data_mod.setup('test' , self.model_param , self.status.model_date)
         self.metrics.new_model(self.model_param , self.config)
         self.net.eval()
@@ -123,13 +115,9 @@ class ModelTrainer(BaseModelModule):
     
     def load_model(self , training : bool , model_type = 'best' , lr_multiplier = 1.):
         '''load model state dict, return net and a sign of whether it is transferred'''
-        if training and self.config.train_param['transfer']:         
-            model_path = self.model_path(self.data_mod.prev_model_date(self.status.model_date))
-        elif training:
-            model_path = self.model_path()
-        else:
-            model_path = self.model_path(self.status.model_date , model_type)
-        self.transferred = training and self.config.train_param['transfer'] and self.deposition.exists(model_path)
+        model_date = (self.prev_model_date if self.if_transfer else 0) if training else None
+        model_path = self.model_path(model_date = model_date , model_type = model_type)
+        self.transferred = training and self.if_transfer and self.deposition.exists(model_path)
         self.net = MODEL.new(self.config.model_module , self.model_param , self.deposition.load(model_path) , self.device)
         if training: 
             self.ensembles = EnsembleModels.get_models(self.model_types , self.checkpoint , device=self.device)
@@ -141,22 +129,17 @@ class ModelTrainer(BaseModelModule):
         self.net = self.net.cpu()
         for model_type in self.model_types:
             state_dict = self.ensembles.state_dict(model_type , self.net , self.data_mod.train_dataloader())
-            self.deposition.save_state_dict(state_dict , self.model_path(self.status.model_date , model_type)) 
+            self.deposition.save_state_dict(state_dict , self.model_path(model_type=model_type)) 
     
-    def model_path(self , model_date = -1, model_type = 'best' , base_path = None , model_num = None):
+    def model_path(self , model_date = None, model_num = None , model_type = None , base_path = None):
         '''get model path of deposition giving model date/type/base_path/num'''
-        if model_num is None:
-            model_dir = self.model_param.get('path')
-        elif base_path is None:
-            model_dir = f'{self.config.model_base_path}/{model_num}'
-        else:
-            model_dir = f'{base_path}/{model_num}'
-        return '{}/{}.{}.pt'.format(model_dir , model_date , model_type)
+        if model_date is None: model_date = self.status.model_date
+        if model_num  is None: model_num  = self.status.model_num
+        if model_type is None: model_type = self.status.model_type
+        return self.config.model_path(model_date,model_num,model_type,base_path)
 
     @classmethod
     def main(cls , stage = -1 , resume = -1 , checkname = -1 , **kwargs):
         app = cls(stage = stage , resume = resume , checkname = checkname , **kwargs)
-        ptimer = PTimer(True)
-        with ptimer('everything'):
+        with BigTimer(app.logger.critical , 'Main Process'):
             app.main_process()
-        ptimer.summarize()

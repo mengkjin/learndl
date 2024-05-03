@@ -363,3 +363,15 @@ def recur_update(old : dict , update : Optional[dict]) -> dict:
             else:
                 old[k] = v
     return old
+
+class Filtered:
+    def __init__(self, iterable, condition):
+        self.iterable  = iter(iterable)
+        self.condition = condition if callable(condition) else iter(condition)
+    def __iter__(self):
+        return self
+    def __next__(self):
+        while True:
+            item = next(self.iterable)
+            cond = self.condition(item) if callable(self.condition) else next(self.condition)
+            if cond: return item

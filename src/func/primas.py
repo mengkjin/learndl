@@ -280,6 +280,7 @@ def neutralize_xdata_2d(factors = None , groups = None):
 def neutralize_2d(y , x , dim = 1 , method = 'torch' , device = None , inplace = False):  # [tensor (TS*C), tensor (TS*C)]
     if x  is None or y is None: return y
 
+    assert isinstance(y , torch.Tensor) and isinstance(x , torch.Tensor)
     assert method in ['sk' , 'np' , 'torch']
     assert dim in [-1,0,1] , dim
     assert y.dim() == 2 , y.dim()

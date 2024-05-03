@@ -18,18 +18,6 @@ from .metric import Metrics , MetricsAggregator
 from .optim import Optimizer
 from .store import Checkpoint , Deposition , Storage
 
-class Filtered:
-    def __init__(self, iterable, condition):
-        self.iterable  = iter(iterable)
-        self.condition = condition if callable(condition) else iter(condition)
-    def __iter__(self):
-        return self
-    def __next__(self):
-        while True:
-            item = next(self.iterable)
-            cond = self.condition(item) if callable(self.condition) else next(self.condition)
-            if cond: return item
-
 class PTimer:
     '''process timer , call to record and .summarize() to print out summary'''
     def __init__(self , record = True) -> None:
@@ -59,3 +47,20 @@ class PTimer:
                                 columns = ['keys' , 'num_calls', 'total_time'])
             tb['avg_time'] = tb['total_time'] / tb['num_calls']
             print(tb.sort_values(by=['total_time'],ascending=False))
+
+class BigTimer:
+    '''big timer to print out time'''
+    def __init__(self , printer = print , name = None):
+        self.printer = printer
+        self.name = name if name else 'Whole Process'
+    def __enter__(self):
+        self.start_time = time.time()
+    def __exit__(self, *args): 
+        self.printer(f'{self.name} Finished! Cost {self.time_str(time.time()-self.start_time)}')
+    @staticmethod
+    def time_str(seconds : float | int):
+        time_str = ''
+        if (hours := seconds // 3600) > 0: time_str += f'{hours:.0f} Hours '
+        if (minutes := (seconds - hours * 3600) // 60) > 0: time_str += f'{minutes:.0f} Minutes '
+        time_str += f'{seconds - hours * 3600 - minutes * 60:.1f} Seconds'
+        return time_str
