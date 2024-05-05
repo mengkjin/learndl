@@ -25,7 +25,6 @@ class DataBlock:
     save_option : ClassVar[str] = 'pt'
 
     def __post_init__(self) -> None:
-        self.initiate = self.values is None
         if self.values is not None: 
             if isinstance(self.feature , str): 
                 self.feature = np.array([self.feature])
@@ -54,7 +53,7 @@ class DataBlock:
         else:
             return 'uninitiate ' + str(self.__class__) 
     @property
-    def initiated(self): return self.values is None
+    def initiate(self): return self.values is not None
     @property
     def shape(self): return [] if self.values is None else self.values.shape 
     @property
@@ -278,13 +277,13 @@ class DataBlock:
         blocks : dict[str,'DataBlock'] = {}
         secid_align , date_align = None , None
         for i , (src_key , param) in enumerate(data_process_param.items()):
-            blks = []
+            sub_blocks = []
             for db_key in param.db_key:
                 with Timer(f'{param.db_src} blocks reading {db_key} DataBase\'s'):
-                    blks.append(cls.load_db(param.db_src , db_key , feature = param.feature , 
-                                            start_dt = start_dt , end_dt = end_dt , **kwargs))
+                    blk = cls.load_db(param.db_src , db_key , start_dt , end_dt , param.feature , **kwargs)
+                    sub_blocks.append(blk)
             with Timer(f'{src_key} blocks merging'):
-                blocks[src_key] = cls.merge(blocks).align(secid = secid_align , date = date_align)
+                blocks[src_key] = cls.merge(sub_blocks).align(secid = secid_align , date = date_align)
                 secid_align , date_align = blocks[src_key].secid , blocks[src_key].date
 
         return blocks

@@ -34,8 +34,11 @@ def date_seg(start_dt , end_dt , freq='Q' , astype : Any = int):
 
 class Timer:
     '''simple timer to print out time'''
-    def __init__(self , *args): self.key = '/'.join(args)
+    def __init__(self , *args , newline = False): 
+        self.key = '/'.join(args)
+        self.newline = newline
     def __enter__(self):
         self.start_time = time.time()
-        print(self.key , '...', end='')
-    def __exit__(self, type, value, trace): print(f'... cost {time.time()-self.start_time:.2f} secs')
+        print(self.key , end=' start!\n' if self.newline else '...')
+    def __exit__(self, type, value, trace): 
+        print(self.key if self.newline else '... ' , f'cost {time.time()-self.start_time:.2f} secs')

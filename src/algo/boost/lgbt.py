@@ -6,7 +6,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from copy import deepcopy
+from typing import Any , Literal , Optional
 
+plt.style.use('seaborn-v0_8') 
 # %%
 """
 file_path = '/root/autodl-tmp/rnn_fac/data/risk_model.h5'
@@ -36,17 +38,18 @@ for set_name in ['test' , 'valid' , 'train']:
 """
 # %%
 class lgbm():
+    var_date=['TradeDate','datetime'] 
     def __init__(self , 
-                 train = '../../data/tree_data/df_train.csv' , 
-                 valid = '../../data/tree_data/df_valid.csv' ,
-                 test  = '../../data/tree_data/df_test.csv' , 
+                 train : Any = '../../data/tree_data/df_train.csv' , 
+                 valid : Any = '../../data/tree_data/df_valid.csv' ,
+                 test  : Any  = '../../data/tree_data/df_test.csv' , 
                  use_features = None , 
                  plot_path = '../../figures' ,
                  cuda = False , **kwargs):   
-        self.var_sec =['SecID','instrument']
-        self.var_date=['TradeDate','datetime'] 
-        self.weight_param = {'tau':0.75*np.log(0.5)/np.log(0.75)} if 'weight_param' not in kwargs.keys() else kwargs['weight_param']
-        # {'tau':0.75*np.log(0.5)/np.log(0.75) , 'time':'exp' , 'rate':0.5}   
+        if 'weight_param' in kwargs.keys():
+            self.weight_param = kwargs['weight_param']
+        else:
+            self.weight_param = {'tau':0.75*np.log(0.5)/np.log(0.75) , 'decay':'exp' , 'rate':0.5}  
         self.train_param = {
             'objective': 'regression', 
             'verbosity': -1 , 
@@ -63,120 +66,66 @@ class lgbm():
             'force_col_wise': True, 
             'monotone_constraints': 1 , 
             'early_stopping' : 50 , 
-            'zero_as_missing' : True ,
+            'zero_as_missing' : False ,
             'device_type': 'gpu' if cuda else 'cpu', # 'cuda' 'cpu'
             'seed': 42,
         }
         self.plot_path = plot_path
         self.train_param.update(kwargs)
-
+        self.train = train
+        self.valid = valid
+        self.test  = test
         self.use_features = use_features
-        self.dataset_import(train , valid , test)
-        self.dataset_prepare()        
-        
-    def pivot_factor(self,factor_1d):
-        var_sec = [v for v in self.var_sec if v in factor_1d.index.names][0]
-        var_date = [v for v in self.var_date if v in factor_1d.index.names][0]
-        factor_1d = factor_1d.reset_index()
-        factor_2d = factor_1d.pivot_table(index=var_sec,columns=var_date,values=factor_1d.columns[-1])
-        return factor_2d
 
-    def melt_factor(self,factor_2d):
-        var_sec = [v for v in self.var_sec if v == factor_2d.index.name][0]
-        var_date = [v for v in self.var_date if v in factor_2d.columns.name][0]
-        factor_2d[var_sec] = factor_2d.index
-        factor_1d = factor_2d.melt(id_vars=var_sec, var_name=var_date)
-        factor_1d = factor_1d.set_index([var_date,var_sec])
-        return factor_1d
-
-    def weight_top_return(self , y , tau=0.75*np.log(0.5)/np.log(0.75) , original_weight = None):
-        weight = pd.DataFrame(1,index=y.index,columns=[y.name]) if original_weight is None else original_weight
-        data = self.pivot_factor(y)
-        for dt in range(data.shape[1]):
-            rank = data.iloc[:,dt].argsort()
-            rank[rank < 0] = np.nan
-            rank = rank.argsort()
-            data.iloc[:,dt] = np.exp((1 - rank / rank.max())*np.log(0.5)/tau)
-            data.iloc[rank < 0 , dt] = 0
-        weight[y.name] = weight[y.name] * self.melt_factor(data)['value']
-        return weight
-
-    def weight_time_decay(self , y , func,rate = 0.5 , original_weight = None,):
-        if rate is None: rate = 0.5
-        weight = pd.DataFrame(1,index=y.index,columns=[y.name]) if original_weight is None else original_weight
-        var_date = [v for v in self.var_date if v in y.index.names][0]
-        dates = y.index.get_level_values(level=var_date).drop_duplicates() 
-        if func == 'linear': # 线性衰减
-            w = np.linspace(rate,1,len(dates))
-        elif func == 'exp': # 指数衰减
-            w = np.linspace(1,len(dates),len(dates))
-            w = np.power(2 , (w-len(w)) / int(rate*len(w)))
-        w = pd.Series(w,index=dates.values) 
-        # w.plot() # 绘图
-        for date in dates: weight.loc[date,:] = weight.loc[date,:].values * w[date]
-        return weight
+        #self.data_import(train , valid , test)
+        #self.data_prepare(use_features)
 
     def calc_ic(self , pred , label , dropna = False):
-        df = pd.DataFrame({"pred": pred, "label": label})
+        df = pd.DataFrame({'pred': pred, 'label': label})
         var_date = [v for v in self.var_date if v in df.index.names][0]
-        ic = df.groupby(var_date).apply(lambda df: df["pred"].corr(df["label"]))
-        ric = df.groupby(var_date).apply(lambda df: df["pred"].corr(df["label"], method="spearman"))
+        ic = df.groupby(var_date).apply(lambda df: df['pred'].corr(df['label']))
+        ric = df.groupby(var_date).apply(lambda df: df['pred'].corr(df['label'], method='spearman'))
         return (ic.dropna(), ric.dropna()) if dropna else (ic, ric)
         
-    def dataset_import(self , train , valid , test):
-        if isinstance(train , str): train = pd.read_csv(train,index_col=[0,1])
-        if isinstance(valid , str): valid = pd.read_csv(valid,index_col=[0,1])
-        if isinstance(test , str): test = pd.read_csv(test,index_col=[0,1])
+    def data_import(self):
+        if isinstance(self.train , str): self.train = pd.read_csv(self.train,index_col=[0,1])
+        if isinstance(self.valid , str): self.valid = pd.read_csv(self.valid,index_col=[0,1])
+        if isinstance(self.test , str):  self.test = pd.read_csv(self.test,index_col=[0,1])
         self.raw_dataset = {
-            'train' : train.fillna(0).copy() ,
-            'valid' : valid.fillna(0).copy() ,
-            'test'  : test.fillna(0).copy()
+            'train' : self.train.copy() ,
+            'valid' : self.valid.copy() ,
+            'test'  : self.test.copy()
         }
         assert len(self.raw_dataset['train'].columns) == len(self.raw_dataset['valid'].columns) == len(self.raw_dataset['test'].columns)
-        if self.use_features is None:
-            self.features = self.raw_dataset['train'].columns[:-1]
+
+    def data_prepare(self , use_features = None , weight_param = None):
+        self.assert_features(use_features)
+        self.create_dataset(weight_param)       
+
+    def assert_features(self , use_features):
+        self.features = self.raw_dataset['train'].columns[:-1].values if use_features is None else use_features
+        mono_constr = self.train_param['monotone_constraints']
+        n_feat = len(self.features)
+        if isinstance(mono_constr , list):
+            if len(mono_constr) == 0: mono_constr = None
+            elif len(mono_constr) != n_feat: mono_constr = (mono_constr*n_feat)[:n_feat]
         else:
-            self.features = self.use_features
-        if isinstance(self.train_param['monotone_constraints'] , list):
-            if len(self.train_param['monotone_constraints']) == 0:
-                self.train_param['monotone_constraints'] = None
-            elif len(self.train_param['monotone_constraints']) != len(self.features):
-                self.train_param['monotone_constraints'] = (self.train_param['monotone_constraints']*len(self.features))[:len(self.features)]
-        else:
-            self.train_param['monotone_constraints'] = [self.train_param['monotone_constraints']]*len(self.features)
-    
-    def dataset_prepare(self , weight_param = None):
+            mono_constr = [mono_constr for _ in range(n_feat)]
+        self.train_param['monotone_constraints'] = mono_constr
+
+    def create_dataset(self , weight_param = None):
         weight_param = self.weight_param if weight_param is None else weight_param
-        x_train, x_valid = self.raw_dataset['train'].loc[:,self.features], self.raw_dataset['valid'].loc[:,self.features] # type: ignore
-        y_train, y_valid = self.raw_dataset['train'].iloc[:,-1], self.raw_dataset['valid'].iloc[:,-1]
-        assert y_train.values.ndim == 1 , "XGBoost doesn't support multi-label training"
-        w_train, w_valid = pd.DataFrame(1,index=y_train.index,columns=[y_train.name]) , pd.DataFrame(1,index=y_valid.index,columns=[y_valid.name])
-        if 'tau' in weight_param.keys():
-            w_train = self.weight_top_return(y_train,weight_param.get('tau'),w_train)
-            w_valid = self.weight_top_return(y_valid,weight_param.get('tau'),w_valid)
-        if 'time' in weight_param.keys():
-            w_train = self.weight_time_decay(y_train,weight_param.get('time'),weight_param.get('rate'),w_train) # type: ignore
-            w_valid = self.weight_time_decay(y_valid,weight_param.get('time'),weight_param.get('rate'),w_valid) # type: ignore
+        self.x_train = self.raw_dataset['train'].loc[:,self.features]
+        self.x_valid = self.raw_dataset['valid'].loc[:,self.features] 
+        self.y_train, self.y_valid = self.raw_dataset['train'].iloc[:,-1], self.raw_dataset['valid'].iloc[:,-1]
+        assert self.y_train.values.ndim == 1 , "XGBoost doesn't support multi-label training"
+        self.w_train = lgbm_weight.calculate_weight(self.y_train , weight_param)
+        self.w_valid = lgbm_weight.calculate_weight(self.y_valid , weight_param)
 
-        self.train_dataset = lgb.Dataset(x_train, y_train, weight=w_train.iloc[:,0])
-        self.valid_dataset = lgb.Dataset(x_valid, y_valid, weight=w_valid.iloc[:,0] , reference=self.train_dataset)
+        self.train_dataset = lgb.Dataset(self.x_train, self.y_train, weight=self.w_train)
+        self.valid_dataset = lgb.Dataset(self.x_valid, self.y_valid, weight=self.w_valid , reference=self.train_dataset)
 
-    def change_features(self , use_features):
-        self.use_features = use_features
-        if self.use_features is None:
-            self.features = self.raw_dataset['train'].columns[:-1]
-        else:
-            self.features = self.use_features
-        if isinstance(self.train_param['monotone_constraints'] , list):
-            if len(self.train_param['monotone_constraints']) == 0:
-                self.train_param['monotone_constraints'] = None
-            elif len(self.train_param['monotone_constraints']) != len(self.features):
-                self.train_param['monotone_constraints'] = (self.train_param['monotone_constraints']*len(self.features))[:len(self.features)]
-        else:
-            self.train_param['monotone_constraints'] = [self.train_param['monotone_constraints']]*len(self.features)
-        self.dataset_prepare()        
-
-    def train_model(self , show_plot = False):
+    def fit(self):
         self.evals_result = dict()
         self.model = lgb.train(
             self.train_param ,
@@ -186,18 +135,107 @@ class lgbm():
             num_boost_round=1000 , 
             callbacks=[lgb.record_evaluation(self.evals_result)],
         )
-        if show_plot: self.plot_training()
         
-    def test_prediction(self , show_plot = True):
-        pred = pd.Series(self.model.predict(self.raw_dataset['test'].loc[:,self.features]),index=self.raw_dataset['test'].index) # type: ignore
-        ic, ric = self.calc_ic(pred, self.raw_dataset['test'].iloc[:,-1], dropna=True)
-        if show_plot: 
-            plt.figure()
-            ric.cumsum().plot(title='average Rank IC = %.4f'%ric.mean())
-            plt.savefig('/'.join([self.plot_path,'test_prediction.png']),dpi=1200)
-        return pred , (ic, ric)
+    def predict(self , inputs : Any = None):
+        if isinstance(inputs , (pd.DataFrame | pd.Series)):
+            return pd.Series(np.array(self.model.predict(inputs)) , index=inputs.index)
+        else:
+            return self.model.predict(inputs)
     
-    def plot_training(self , show_plot = True , xlim = None , ylim = None , yscale = None):
+    def test_result(self):
+        x_test = self.raw_dataset['test'].loc[:,self.features]
+        label  = self.raw_dataset['test'].iloc[:,-1]
+        pred = self.predict(x_test)
+        ic , ric = self.calc_ic(pred, label , dropna=True)
+        plt.figure()
+        ric.cumsum().plot(title='average Rank IC = %.4f'%ric.mean())
+        plt.savefig('/'.join([self.plot_path,'test_prediction.png']),dpi=1200)
+        return {'ic':ic , 'ric':ric}
+    
+    @property
+    def plot(self): return lgbm_plot(self)
+    
+class lgbm_weight:
+    var_sec =['SecID','instrument']
+    var_date=['TradeDate','datetime']
+
+    def __init__(self , y : pd.Series , weight_param = {'tau':0.75*np.log(0.5)/np.log(0.75)}) -> None:
+        self.y = y
+        self.weight_param = weight_param
+
+    @property
+    def weight(self): return self.calculate_weight(self.y , self.weight_param)
+
+    @classmethod
+    def calculate_weight(cls , y : pd.Series , weight_param : Optional[dict] = {'tau':0.75*np.log(0.5)/np.log(0.75)}):
+        weight_param = {} if weight_param is None else weight_param
+        w = cls.raw_weight(y)
+        w = cls.weight_top_return(y,weight_param.get('tau'),w)
+        w = cls.weight_time_decay(y,weight_param.get('rate'),weight_param.get('decay'),w)
+        return w
+
+    @classmethod
+    def pivot_factor(cls , factor_1d : pd.DataFrame | pd.Series):
+        var_sec = [v for v in cls.var_sec if v in factor_1d.index.names][0]
+        var_date = [v for v in cls.var_date if v in factor_1d.index.names][0]
+        factor_1d = factor_1d.reset_index()
+        factor_2d = factor_1d.pivot_table(index=var_sec,columns=var_date,values=factor_1d.columns[-1])
+        return factor_2d
+
+    @classmethod
+    def melt_factor(cls , factor_2d : pd.DataFrame):
+        var_sec = [v for v in cls.var_sec if v == factor_2d.index.name][0]
+        var_date = [v for v in cls.var_date if v in factor_2d.columns.name][0]
+        factor_2d[var_sec] = factor_2d.index
+        factor_1d = factor_2d.melt(id_vars=var_sec, var_name=var_date)
+        factor_1d = factor_1d.set_index([var_date,var_sec])
+        return factor_1d
+    
+    @staticmethod
+    def raw_weight(y : pd.Series): return y * 0 + 1
+
+    @classmethod
+    def weight_top_return(cls , y : pd.Series , tau : Optional[float] = 0.75*np.log(0.5)/np.log(0.75) , original_weight = None):
+        weight = cls.raw_weight(y) if original_weight is None else original_weight
+        if tau is None: return weight
+        data = lgbm_weight.pivot_factor(y)
+        for dt in range(data.shape[1]):
+            v = data.iloc[:,dt].to_numpy()
+            v[~np.isnan(v)] = v[~np.isnan(v)].argsort()
+            data.iloc[:,dt] = np.exp((1 - v / np.nanmax(v))*np.log(0.5) / tau)
+        add_w = lgbm_weight.melt_factor(data).dropna()
+        add_w = add_w['value'] if isinstance(weight , pd.Series) else add_w.rename(columns={'value':weight.columns[0]})
+        return weight * add_w
+
+    @classmethod
+    def weight_time_decay(cls , y : pd.Series , rate : Optional[float] = 0.5 , 
+                          decay : Optional[Literal['lin' , 'exp']] = 'lin' , original_weight = None,):
+        weight = cls.raw_weight(y) if original_weight is None else original_weight
+        if rate is None or decay is None: return weight
+        data = lgbm_weight.pivot_factor(weight)
+        l = data.shape[1]
+        w = np.linspace(rate,1,l) if decay == 'lin' else np.power(2 , -np.arange(l)[::-1] / int(rate * l))
+        data *= w.reshape(1,-1)
+        add_w = lgbm_weight.melt_factor(data).dropna()
+        add_w = add_w['value'] if isinstance(weight , pd.Series) else add_w.rename(columns={'value':weight.columns[0]})
+        return weight * add_w
+
+class lgbm_plot:
+    def __init__(self , lgb : lgbm | Any) -> None:
+        self.__lgbm = lgb
+
+    @property
+    def plot_path(self): return self.__lgbm.plot_path
+    @property
+    def evals_result(self): return self.__lgbm.evals_result
+    @property
+    def model(self): return self.__lgbm.model
+    @property
+    def raw_dataset(self): return self.__lgbm.raw_dataset
+    @property
+    def train_param(self): return self.__lgbm.train_param
+
+    def training(self , show_plot = True , xlim = None , ylim = None , yscale = None):
         os.makedirs(self.plot_path, exist_ok=True)
         plt.figure()
         ax = lgb.plot_metric(self.evals_result, metric='l2')
@@ -210,12 +248,12 @@ class lgbm():
         plt.savefig('/'.join([self.plot_path,'training_process.png']),dpi=1200)
         return ax
     
-    def plot_importance(self):
+    def importance(self):
         os.makedirs(self.plot_path, exist_ok=True)
         lgb.plot_importance(self.model)
         plt.savefig('/'.join([self.plot_path,'feature_importance.png']),dpi=1200)
 
-    def plot_histogram(self , feature_idx='all'):
+    def histogram(self , feature_idx='all'):
         os.makedirs(self.plot_path, exist_ok=True)
         if isinstance(feature_idx,str):
             assert feature_idx=='all'
@@ -238,14 +276,14 @@ class lgbm():
         plt.tight_layout()
         plt.savefig('/'.join([self.plot_path,'feature_histogram.png']),dpi=1200)
 
-    def plot_tree(self , num_trees_list=[0]):   
+    def tree(self , num_trees_list=[0]):   
         os.makedirs(self.plot_path, exist_ok=True)
         for num_trees in num_trees_list:
             fig, ax = plt.subplots(figsize=(12,12))
             ax = lgb.plot_tree(self.model,tree_index=num_trees, ax=ax)
             plt.savefig('/'.join([self.plot_path , f'explainer_tree_{num_trees}.png']),dpi=1200)
     
-    def plot_sdt(self , group='train'):
+    def sdt(self , group='train'):
         x = self.raw_dataset[group].iloc[:,:-1] 
         y_pred = pd.Series(self.model.predict(x.values), index=x.index)  # type: ignore
         dtrain = lgb.Dataset(x, label=y_pred)
@@ -256,7 +294,7 @@ class lgbm():
         ax = lgb.plot_tree(SDT, tree_index=0, ax=ax)
         plt.savefig('/'.join([self.plot_path,'explainer_sdt.png']),dpi=1200)
 
-    def plot_pdp(self , group='train'):
+    def pdp(self , group='train'):
         os.makedirs('/'.join([self.plot_path , 'explainer_pdp']) , exist_ok=True)
         for file in os.listdir('/'.join([self.plot_path , 'explainer_pdp'])):
             os.remove('/'.join([self.plot_path , 'explainer_pdp' , file]))
@@ -283,7 +321,7 @@ class lgbm():
             plt.savefig('/'.join([self.plot_path , 'explainer_pdp' , f'explainer_pdp_{feature}.png']))
             plt.close()
 
-    def plot_shap(self , group='train'):
+    def shap(self , group='train'):
         import shap
         
         # 定义计算SHAP模型，这里使用TreeExplainer
@@ -310,6 +348,7 @@ class lgbm():
             if imp == 0: continue
             shap.dependence_plot(feature,shap_values,X_df,interaction_index=None,title=f'SHAP of {feature}',show=False)
             plt.savefig('/'.join([self.plot_path , 'explainer_shap' , f'explainer_shap_dot_{feature}.png']),dpi=100,bbox_inches='tight')
+    
 
 def main():
     plt.style.use('seaborn-v0_8') 
@@ -321,31 +360,28 @@ def main():
 
     # %%
     a = lgbm(**dict_df) # type: ignore
-    a.train_model()
+    a.fit()
 
     # %%
     seqn = np.arange(dict_df['train'].shape[1])
     use_features = dict_df['train'].iloc[:,[*seqn[-22:-1]]].columns.values
     print(use_features)
-    a.change_features(use_features)
-    a.train_model()
+    a.data_prepare(use_features)
+    a.fit()
 
     # %%
-    a.plot_training()
-    a.plot_training(xlim=[0,a.model.best_iteration+10] , ylim=[0.8,4.])
-    pred = a.test_prediction()
-    a.plot_importance()
-    a.plot_histogram()
+    a.plot.training()
+    a.plot.training(xlim=[0,a.model.best_iteration+10] , ylim=[0.8,4.])
+    a.test_result()
+    a.plot.importance()
+    a.plot.histogram()
 
     # %%
-    a.plot_tree()
-    a.plot_sdt('train')
-    a.plot_pdp('train')
+    a.plot.tree()
+    a.plot.sdt('train')
+    a.plot.pdp('train')
     if a.train_param['linear_tree']==False:
-        a.plot_shap('train') # Error now due to Numpy >= 1.24 and shap from pip not compatible
+        a.plot.shap('train') # Error now due to Numpy >= 1.24 and shap from pip not compatible
 # %%
 if __name__ == '__main__':
-    # %%
-    #from warnings import simplefilter
-    #simplefilter(action="ignore",category=FutureWarning)
     main()

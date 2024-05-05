@@ -243,7 +243,7 @@ class DataUpdater():
             DataUpdater.update_laptop()
 
     @staticmethod
-    def preprocess_data(predict = False, confirm = 0 , parser = None):
+    def preprocess_data(predict = False, confirm = 0 , parser = None , data_key = None):
         if parser is None:
             parser = argparse.ArgumentParser(description='manual to this script')
             parser.add_argument("--confirm", type=str, default = confirm)
@@ -260,10 +260,10 @@ class DataUpdater():
 
         for key , param in Configs.get_block_params():
             tt1 = time.time()
-            print(f'{time.ctime()} : {key} start ...')
-            
-            BlockDict = DataBlock.load_DB(param , Configs.load_start_dt, Configs.load_end_dt)
-            
+            # print(f'{time.ctime()} : {key} start ...')
+            with Timer(f'{key} blocks loading' , newline=True):
+                BlockDict = DataBlock.load_DB(param , Configs.load_start_dt, Configs.load_end_dt)
+
             with Timer(f'{key} blocks process'):
                 ThisBlock = DataBlock.blocks_process(BlockDict , key)
 
