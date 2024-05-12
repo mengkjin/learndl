@@ -74,4 +74,4 @@ class BatchOutput:
         else:
             return None
     @classmethod
-    def empty(cls): return cls(Tensor().requires_grad_())
+    def empty(cls): return cls((Tensor().requires_grad_() , Tensor().requires_grad_()))

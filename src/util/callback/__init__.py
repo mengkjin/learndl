@@ -1,8 +1,10 @@
 from typing import Any , Optional
 
-from . import base , control , display
+from . import base , algo , control , display
 from .base import BasicCallBack , WithCallBack
 from ..config import TrainConfig
+
+_search_cb_mod = [control , display , algo]
 
 class CallBackManager(WithCallBack):
     def __init__(self , model_module , *callbacks):
@@ -24,17 +26,15 @@ class CallBackManager(WithCallBack):
 
     @classmethod
     def setup(cls , config : TrainConfig , model_module : Any):
-        callbacks = [cls.__get_cb(k , config , model_module) for k,v in config.callbacks.items() if v > 0]
+        callbacks = [cls.__get_cb(cb_name , param , config , model_module) for cb_name , param in config.callbacks.items()]
         return cls(model_module , *callbacks)
     
     @staticmethod
-    def __get_cb(cb_name : str , config : TrainConfig , model_module : Any) -> Optional[dict]:
-        if hasattr(control , cb_name):
-            cls = getattr(control , cb_name)
-            kwg = config.train_param.get('callbacks',{}).get(cb_name , {})
-            return cls(model_module , **kwg)
-        elif hasattr(display , cb_name):
-            cls = getattr(display , cb_name)
-            return cls(model_module , verbosity = config.verbosity)
-        else: 
+    def __get_cb(cb_name : str , param : Any , config : TrainConfig , model_module : Any) -> Optional[dict]:
+        assert isinstance(param , dict), (cb_name , param)
+        for cb_mod in _search_cb_mod:
+            if hasattr(cb_mod , cb_name): 
+                if cb_mod == display: param = {'verbosity': config.verbosity , **param}
+                return getattr(cb_mod , cb_name)(model_module , **param)
+        else: # on success
             raise KeyError(cb_name)

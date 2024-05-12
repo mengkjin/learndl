@@ -65,7 +65,7 @@ class Predictor:
         model_path = f'{DIR.model}/{self.model_name}'
         device       = Device()
         model_config = TrainConfig.load(model_path)
-
+        print(model_config.model_param)
         model_param = model_config.model_param[self.model_num]
         model_files = sorted([p for p in os.listdir(f'{model_path}/{self.model_num}') if p.endswith(f'{self.model_type}.pt')])
         model_dates = np.array([int(mf.split('.')[0]) for mf in model_files])
@@ -99,7 +99,7 @@ class Predictor:
                 data_mod.setup('predict' ,  model_param , model_date)
                 sd_path = f'{model_path}/{self.model_num}/{model_date}.{self.model_type}.pt'
 
-                net = MODEL.new(model_config.model_module , model_param , torch.load(sd_path) , device)
+                net = MODEL.new(model_config.model_module , model_param , torch.load(sd_path , map_location='cpu') , device)
                 net.eval()
 
                 loader = data_mod.predict_dataloader()

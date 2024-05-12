@@ -207,26 +207,37 @@ def np_nanrankic(x : np.ndarray , y : np.ndarray):
         return np_rankic(x[pairwise_nonnan],y[pairwise_nonnan])
     except:
         return np.nan
+    
+def np_nanic_2d(x : np.ndarray , y : np.ndarray ,dim=0):
+    x = x + y * 0
+    y = y + x * 0
+    x_xmean = x - np.nanmean(x, dim, keepdims=True)  
+    y_ymean = y - np.nanmean(y, dim, keepdims=True) 
+    cov  = np.nansum(x_xmean * y_ymean, dim) 
+    ssd  = (np.nansum(np.square(x_xmean), dim) ** 0.5) * (np.nansum(np.square(y_ymean), dim) ** 0.5 )
+    ssd[ssd == 0] = 1e-4
+    corr = cov / ssd
+    return corr
 
 def np_nanrankic_2d(x : np.ndarray , y : np.ndarray , dim = 0):
     assert type(x) == type(y)
     assert x.shape == y.shape
     if dim == 0:
-        return [np_nanrankic(x[:,i],y[:,i]) for i in range(x.shape[1])]
+        return np.array([np_nanrankic(x[:,i],y[:,i]) for i in range(x.shape[1])])
     else:
-        return [np_nanrankic(x[i,:],y[i,:]) for i in range(x.shape[0])]
+        return np.array([np_nanrankic(x[i,:],y[i,:]) for i in range(x.shape[0])])
 
 def total_memory(unit = 1e9):
     return psutil.Process(os.getpid()).memory_info().rss / unit
 
-def match_values(arr , values , ambiguous = 0):
+def match_values(values , src_arr , ambiguous = 0):
     if not isinstance(values , np.ndarray): values = np.array(values)
-    sorter = np.argsort(arr)
-    index = np.tile(len(arr) , values.shape)
+    sorter = np.argsort(src_arr)
+    index = np.tile(len(src_arr) , values.shape)
     if ambiguous == 0:
-        index[np.isin(values , arr)] = sorter[np.searchsorted(arr, values[np.isin(values , arr)], sorter=sorter)]
+        index[np.isin(values , src_arr)] = sorter[np.searchsorted(src_arr, values[np.isin(values , src_arr)], sorter=sorter)]
     else:
-        index[values <= max(arr)] = sorter[np.searchsorted(arr, values[values <= max(arr)], sorter=sorter)]
+        index[values <= max(src_arr)] = sorter[np.searchsorted(src_arr, values[values <= max(src_arr)], sorter=sorter)]
     return index
 
 def merge_data_2d(data_tuple , row_tuple , col_tuple , row_all = None , col_all = None):

@@ -20,7 +20,7 @@ class DataModule(BaseDataModule):
         2. Setup model_date dataloaders
         3. Buffer dict for dynamic nn's
         '''
-        self.config : TrainConfig = TrainConfig.load() if config is None else config
+        self.config  : TrainConfig = TrainConfig.load() if config is None else config
         self.predict : bool = predict
         self.device  = Device()
         self.storage = Storage('mem' if self.config.mem_storage else 'disk')
@@ -29,8 +29,12 @@ class DataModule(BaseDataModule):
         self.datas = ModuleData.load(self.data_type_list, self.config.labels, self.predict, self.config.precision)
         self.config.update_data_param(self.datas.x)
         self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
-        self.model_date_list = self.datas.date_within(self.config.beg_date    , self.config.end_date , self.config.interval)
-        self.test_full_dates = self.datas.date_within(self.config.beg_date + 1, self.config.end_date)
+        if self.predict:
+            self.model_date_list = self.datas.date[0]
+            self.test_full_dates = self.datas.date[1:]
+        else:
+            self.model_date_list = self.datas.date_within(self.config.beg_date    , self.config.end_date , self.config.interval)
+            self.test_full_dates = self.datas.date_within(self.config.beg_date + 1, self.config.end_date)
 
         self.static_prenorm_method = {}
         for mdt in self.data_type_list: 
@@ -189,7 +193,7 @@ class DataModule(BaseDataModule):
             batch_files = [f'{DIR.batch}/{set_key}.{bnum}.pt' for bnum in range(len(set_samples))]
             for bnum , b_i in enumerate(set_samples):
                 assert torch.isin(b_i[:,1] , index1).all()
-                i0 , i1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(index1 , b_i[:,1])
+                i0 , i1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1)
 
                 b_x = [self.prenorm(self.rolling_rotation(x[mdt],self.seqs[mdt],i0,i1) , mdt) for mdt in x.keys()]
                 b_y = y[i0 , yindex1]

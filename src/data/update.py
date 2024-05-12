@@ -27,7 +27,7 @@ class PreProcessConfig:
     def __post_init__(self):
         self.blocks = [blk.lower() for blk in self.blocks]
         if self.predict:
-            self.load_start_dt = today(-181)
+            self.load_start_dt = today(-366)
             self.load_end_dt   = None
             self.save_start_dt = None
             self.save_end_dt   = None

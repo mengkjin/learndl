@@ -12,16 +12,21 @@ model_data_prenorm:
 labels: 
   - std_lag1_10 # rtn_lag1_10 # std_lag1_10
 callbacks:
-  DynamicDataLink :   1 
-  ResetOptimizer:     1
-  CallbackTimer:      1
-  EarlyStoppage:      1
-  ValidationConverge: 1
-  EarlyExitRetrain:   1
-  NanLossRetrain:     1
-  BatchDisplay:       1 
-  StatusDisplay:      1
-  CudaEmptyCache:     0 
+  DynamicDataLink :   {}
+  ResetOptimizer:     {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
+  CallbackTimer:      {}
+  EarlyStoppage:      {'patience' : 20}
+  ValidationConverge: {'patience' : 5 , 'eps' : 1.0e-5} 
+  EarlyExitRetrain:   {'earliest' : 20 , 'max_attempt' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
+  NanLossRetrain:     {'max_attempt' : 4}
+  BatchDisplay:       {}
+  StatusDisplay:      {}
+  CollectHidden:      {}
+  #CudaEmptyCache:     {} 
+  #TrainConverge:      {'patience' : 5 , 'eps' : 1.0e-5} 
+  #FitConverge:        {'patience' : 5 , 'eps' : 1.0e-5}
+  #CudaEmptyCache:     {'batch_interval' : 20}
+
 train_param:
   dataloader:
     sample_method:   train_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle

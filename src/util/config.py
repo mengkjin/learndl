@@ -18,7 +18,6 @@ class ModelParam:
 
     model_yaml  : ClassVar[str] = 'model_{}.yaml'
     default_yaml: ClassVar[str] = 'model_default.yaml'
-    target_base : ClassVar[str] = 'model_params.pt'
     inday_dims  : ClassVar[dict] = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
 
     def __post_init__(self) -> None:
@@ -48,21 +47,22 @@ class ModelParam:
         if not exist_ok: assert not os.path.exists(f'{target_dir}/{target_base}')
         shutil.copyfile(f'{source_dir}/{source_base}' , f'{target_dir}/{target_base}')
 
-    def expand(self , base_path , resume_training):
-        if resume_training and os.path.exists(f'{base_path}/{self.target_base}'):
-            self.params = torch.load(f'{base_path}/{self.target_base}')
-        else:
-            self.params = [{'path':f'{base_path}/{mm}' , **{k:v[mm % len(v)] for k,v in self.Param.items()}} for mm in range(self.n_model)]
-            self.save(base_path)
+    def expand(self , base_path):
+        self.params = [{'path':f'{base_path}/{mm}' , **{k:v[mm % len(v)] for k,v in self.Param.items()}} for mm in range(self.n_model)]
 
     @classmethod
     def load(cls , base_path , model_num : int | None = None):
-        param = torch.load(f'{base_path}/{cls.target_base}')
+        Param = DIR.read_yaml(f'{base_path}/{cls.model_yaml}')
+        assert isinstance(Param , dict)
+        n_model = 1
+        for key , value in Param.items():
+            if isinstance(value , (list,tuple)): 
+                n_model = max(n_model , len(value))
+            else:
+                Param[key] = [value]
+        param = [{'path':f'{base_path}/{mm}' , **{k:v[mm % len(v)] for k,v in Param.items()}} for mm in range(n_model)]
         if model_num is not None: param = param[model_num]
         return param
-
-    def save(self , base_path):
-        torch.save(self.params , f'{base_path}/{self.target_base}')   
 
     def update_data_param(self , x_data : dict):
         '''when x_data is know , use it to fill some params(seq_len , input_dim , inday_dim , etc.)'''
@@ -147,7 +147,7 @@ class TrainConfig:
     model_data_prenorm: dict= field(default_factory=dict)
     model_types: list       = field(default_factory=list)
     labels: list            = field(default_factory=list)
-    callbacks: dict[str,int]= field(default_factory=dict)
+    callbacks: dict[str,Any]= field(default_factory=dict)
     beg_date: int           = 20170103
     end_date: int           = 99991231
     input_span: int         = 2400
@@ -234,7 +234,7 @@ class TrainConfig:
             config.Train.copy_to(model_path , exist_ok=config.short_test)
             config.Model.copy_to(model_path , exist_ok=config.short_test)
         
-        config.Model.expand(config.model_base_path , config.resume_training)
+        config.Model.expand(config.model_base_path)
         return config
     
     def model_path(self , model_date , model_num , model_type , base_path = None):

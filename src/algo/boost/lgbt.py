@@ -1,12 +1,18 @@
-import os
-
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
+import xarray as xr
 import matplotlib.pyplot as plt
+import os , torch
 
 from copy import deepcopy
-from typing import Any , Literal , Optional
+from dataclasses import dataclass
+from src.environ import DIR
+# from src.algo.boost.lgbt import LgbtPlot , LgbtWeight
+from typing import Any , ClassVar , Literal , Optional
+
+from ...classes import BoosterData
+from ...func import match_values, np_nanic_2d , np_nanrankic_2d
 
 plt.style.use('seaborn-v0_8') 
 # %%
@@ -37,19 +43,16 @@ for set_name in ['test' , 'valid' , 'train']:
     dict_df[set_name] = df_set
 """
 # %%
-class lgbm():
-    var_date=['TradeDate','datetime'] 
+
+class Lgbt():
+    var_date = ['TradeDate','datetime'] 
     def __init__(self , 
-                 train : Any = '../../data/tree_data/df_train.csv' , 
-                 valid : Any = '../../data/tree_data/df_valid.csv' ,
-                 test  : Any  = '../../data/tree_data/df_test.csv' , 
-                 use_features = None , 
-                 plot_path = '../../figures' ,
+                 train : Any = None , 
+                 valid : Any = None ,
+                 test  : Any = None , 
+                 feature = None , 
+                 plot_path = None, # '../../figures' ,
                  cuda = False , **kwargs):   
-        if 'weight_param' in kwargs.keys():
-            self.weight_param = kwargs['weight_param']
-        else:
-            self.weight_param = {'tau':0.75*np.log(0.5)/np.log(0.75) , 'decay':'exp' , 'rate':0.5}  
         self.train_param = {
             'objective': 'regression', 
             'verbosity': -1 , 
@@ -72,60 +75,46 @@ class lgbm():
         }
         self.plot_path = plot_path
         self.train_param.update(kwargs)
-        self.train = train
-        self.valid = valid
-        self.test  = test
-        self.use_features = use_features
+        self.data_import(train , valid , test , feature)
 
-        #self.data_import(train , valid , test)
-        #self.data_prepare(use_features)
+    def data_import(self , train , valid , test , feature = None):
+        assert type(train) == type(valid) == type(test) , f'type of train/valid/test must be identical'
+        self.data : dict[str , BoosterData] = {}
+        if train is None: return
+        if isinstance(train , str):
+            train = pd.read_csv(train,index_col=[0,1])
+            valid = pd.read_csv(valid,index_col=[0,1])
+            test  = pd.read_csv(test ,index_col=[0,1])
+        assert train.shape[1] == valid.shape[1] == test.shape[1] , (train.shape[1] , valid.shape[1] , test.shape[1])
+        if isinstance(train , pd.DataFrame) and isinstance(valid , pd.DataFrame) and isinstance(test , pd.DataFrame):
+            assert type(train) == type(valid) == type(test) , f'type of train/valid/test must be identical'
+            self.data['train'] = BoosterData(train.iloc[:,:-1] , train.iloc[:,-1] , feature = feature)
+            self.data['valid'] = BoosterData(valid.iloc[:,:-1] , valid.iloc[:,-1] , feature = feature)
+            self.data['test']  = BoosterData(test.iloc[:,:-1]  , test.iloc[:,-1]  , feature = feature)
+        elif not (isinstance(train , pd.DataFrame) or isinstance(valid , pd.DataFrame) or isinstance(test , pd.DataFrame)):
+            self.data['train'] = BoosterData(train[...,:-1] , train[...,-1] , feature = feature)
+            self.data['valid'] = BoosterData(valid[...,:-1] , valid[...,-1] , feature = feature)
+            self.data['test']  = BoosterData(test[...,:-1]  , test[...,-1]  , feature = feature)
 
-    def calc_ic(self , pred , label , dropna = False):
-        df = pd.DataFrame({'pred': pred, 'label': label})
-        var_date = [v for v in self.var_date if v in df.index.names][0]
-        ic = df.groupby(var_date).apply(lambda df: df['pred'].corr(df['label']))
-        ric = df.groupby(var_date).apply(lambda df: df['pred'].corr(df['label'], method='spearman'))
-        return (ic.dropna(), ric.dropna()) if dropna else (ic, ric)
-        
-    def data_import(self):
-        if isinstance(self.train , str): self.train = pd.read_csv(self.train,index_col=[0,1])
-        if isinstance(self.valid , str): self.valid = pd.read_csv(self.valid,index_col=[0,1])
-        if isinstance(self.test , str):  self.test = pd.read_csv(self.test,index_col=[0,1])
-        self.raw_dataset = {
-            'train' : self.train.copy() ,
-            'valid' : self.valid.copy() ,
-            'test'  : self.test.copy()
-        }
-        assert len(self.raw_dataset['train'].columns) == len(self.raw_dataset['valid'].columns) == len(self.raw_dataset['test'].columns)
-
-    def data_prepare(self , use_features = None , weight_param = None):
-        self.assert_features(use_features)
-        self.create_dataset(weight_param)       
-
-    def assert_features(self , use_features):
-        self.features = self.raw_dataset['train'].columns[:-1].values if use_features is None else use_features
+    def setup(self , use_feature = None , weight_param = None):
         mono_constr = self.train_param['monotone_constraints']
-        n_feat = len(self.features)
+        nfeat = len(use_feature) if use_feature else self.data['train'].nfeat
         if isinstance(mono_constr , list):
             if len(mono_constr) == 0: mono_constr = None
-            elif len(mono_constr) != n_feat: mono_constr = (mono_constr*n_feat)[:n_feat]
+            elif len(mono_constr) != nfeat: mono_constr = (mono_constr * nfeat)[:nfeat]
         else:
-            mono_constr = [mono_constr for _ in range(n_feat)]
+            mono_constr = [mono_constr for _ in range(nfeat)]
         self.train_param['monotone_constraints'] = mono_constr
+        
+        [d.update_feature(use_feature) for d in self.data.values()]
+        self.train_dataset = self.lgbt_dataset(self.data['train'] , weight_param)
+        self.valid_dataset = self.lgbt_dataset(self.data['valid'] , weight_param , reference = self.train_dataset)
 
-    def create_dataset(self , weight_param = None):
-        weight_param = self.weight_param if weight_param is None else weight_param
-        self.x_train = self.raw_dataset['train'].loc[:,self.features]
-        self.x_valid = self.raw_dataset['valid'].loc[:,self.features] 
-        self.y_train, self.y_valid = self.raw_dataset['train'].iloc[:,-1], self.raw_dataset['valid'].iloc[:,-1]
-        assert self.y_train.values.ndim == 1 , "XGBoost doesn't support multi-label training"
-        self.w_train = lgbm_weight.calculate_weight(self.y_train , weight_param)
-        self.w_valid = lgbm_weight.calculate_weight(self.y_valid , weight_param)
+    def lgbt_dataset(self , data : BoosterData , weight_param = None , reference = None):
+        return lgb.Dataset(data.X() , data.Y() , weight = data.W(weight_param) , reference = reference)
 
-        self.train_dataset = lgb.Dataset(self.x_train, self.y_train, weight=self.w_train)
-        self.valid_dataset = lgb.Dataset(self.x_valid, self.y_valid, weight=self.w_valid , reference=self.train_dataset)
-
-    def fit(self):
+    def fit(self , use_feature = None , weight_param = None):
+        self.setup(use_feature , weight_param)
         self.evals_result = dict()
         self.model = lgb.train(
             self.train_param ,
@@ -136,107 +125,50 @@ class lgbm():
             callbacks=[lgb.record_evaluation(self.evals_result)],
         )
         
-    def predict(self , inputs : Any = None):
-        if isinstance(inputs , (pd.DataFrame | pd.Series)):
-            return pd.Series(np.array(self.model.predict(inputs)) , index=inputs.index)
-        else:
-            return self.model.predict(inputs)
+    def predict(self , inputs : Optional[BoosterData] = None , reform = True):
+        if inputs is None: inputs = self.data['test']
+        pred = self.model.predict(inputs.X())
+        if reform: pred = inputs.reform_pred(pred)
+        return pred
     
     def test_result(self):
-        x_test = self.raw_dataset['test'].loc[:,self.features]
-        label  = self.raw_dataset['test'].iloc[:,-1]
-        pred = self.predict(x_test)
-        ic , ric = self.calc_ic(pred, label , dropna=True)
+        pred = np.array(self.predict(self.data['test'], reform = False)).reshape(*self.data['test'].y)
+        df = self.calc_ic(pred , self.data['test'].y)
         plt.figure()
-        ric.cumsum().plot(title='average Rank IC = %.4f'%ric.mean())
-        plt.savefig('/'.join([self.plot_path,'test_prediction.png']),dpi=1200)
-        return {'ic':ic , 'ric':ric}
+        df.cumsum().plot(title='average IC/RankIC = {:.4f}/{:.4f}'.format(*df.mean().values))
+        if self.plot_path is not None:
+            os.makedirs(self.plot_path, exist_ok=True)
+            plt.savefig('/'.join([self.plot_path,'test_prediction.png']),dpi=1200)
+        return df
+    
+    def calc_ic(self , pred : np.ndarray , label : np.ndarray):
+        if pred.ndim == 1: pred , label = pred.reshape(-1,1) , label.reshape(-1,1)
+        ic = np_nanic_2d(pred , label , dim = 0)
+        ric = np_nanrankic_2d(pred , label , dim = 0)
+        return pd.DataFrame({'ic' : ic , 'rankic' : ric})
     
     @property
-    def plot(self): return lgbm_plot(self)
-    
-class lgbm_weight:
-    var_sec =['SecID','instrument']
-    var_date=['TradeDate','datetime']
-
-    def __init__(self , y : pd.Series , weight_param = {'tau':0.75*np.log(0.5)/np.log(0.75)}) -> None:
-        self.y = y
-        self.weight_param = weight_param
+    def plot(self): return LgbtPlot(self)
 
     @property
-    def weight(self): return self.calculate_weight(self.y , self.weight_param)
+    def initiated(self): return bool(self.data)
 
-    @classmethod
-    def calculate_weight(cls , y : pd.Series , weight_param : Optional[dict] = {'tau':0.75*np.log(0.5)/np.log(0.75)}):
-        weight_param = {} if weight_param is None else weight_param
-        w = cls.raw_weight(y)
-        w = cls.weight_top_return(y,weight_param.get('tau'),w)
-        w = cls.weight_time_decay(y,weight_param.get('rate'),weight_param.get('decay'),w)
-        return w
-
-    @classmethod
-    def pivot_factor(cls , factor_1d : pd.DataFrame | pd.Series):
-        var_sec = [v for v in cls.var_sec if v in factor_1d.index.names][0]
-        var_date = [v for v in cls.var_date if v in factor_1d.index.names][0]
-        factor_1d = factor_1d.reset_index()
-        factor_2d = factor_1d.pivot_table(index=var_sec,columns=var_date,values=factor_1d.columns[-1])
-        return factor_2d
-
-    @classmethod
-    def melt_factor(cls , factor_2d : pd.DataFrame):
-        var_sec = [v for v in cls.var_sec if v == factor_2d.index.name][0]
-        var_date = [v for v in cls.var_date if v in factor_2d.columns.name][0]
-        factor_2d[var_sec] = factor_2d.index
-        factor_1d = factor_2d.melt(id_vars=var_sec, var_name=var_date)
-        factor_1d = factor_1d.set_index([var_date,var_sec])
-        return factor_1d
-    
-    @staticmethod
-    def raw_weight(y : pd.Series): return y * 0 + 1
-
-    @classmethod
-    def weight_top_return(cls , y : pd.Series , tau : Optional[float] = 0.75*np.log(0.5)/np.log(0.75) , original_weight = None):
-        weight = cls.raw_weight(y) if original_weight is None else original_weight
-        if tau is None: return weight
-        data = lgbm_weight.pivot_factor(y)
-        for dt in range(data.shape[1]):
-            v = data.iloc[:,dt].to_numpy()
-            v[~np.isnan(v)] = v[~np.isnan(v)].argsort()
-            data.iloc[:,dt] = np.exp((1 - v / np.nanmax(v))*np.log(0.5) / tau)
-        add_w = lgbm_weight.melt_factor(data).dropna()
-        add_w = add_w['value'] if isinstance(weight , pd.Series) else add_w.rename(columns={'value':weight.columns[0]})
-        return weight * add_w
-
-    @classmethod
-    def weight_time_decay(cls , y : pd.Series , rate : Optional[float] = 0.5 , 
-                          decay : Optional[Literal['lin' , 'exp']] = 'lin' , original_weight = None,):
-        weight = cls.raw_weight(y) if original_weight is None else original_weight
-        if rate is None or decay is None: return weight
-        data = lgbm_weight.pivot_factor(weight)
-        l = data.shape[1]
-        w = np.linspace(rate,1,l) if decay == 'lin' else np.power(2 , -np.arange(l)[::-1] / int(rate * l))
-        data *= w.reshape(1,-1)
-        add_w = lgbm_weight.melt_factor(data).dropna()
-        add_w = add_w['value'] if isinstance(weight , pd.Series) else add_w.rename(columns={'value':weight.columns[0]})
-        return weight * add_w
-
-class lgbm_plot:
-    def __init__(self , lgb : lgbm | Any) -> None:
+class LgbtPlot:
+    def __init__(self , lgb : Any) -> None:
         self.__lgbm = lgb
 
     @property
-    def plot_path(self): return self.__lgbm.plot_path
+    def plot_path(self) -> str: return self.__lgbm.plot_path
     @property
-    def evals_result(self): return self.__lgbm.evals_result
+    def evals_result(self) -> dict: return self.__lgbm.evals_result
     @property
-    def model(self): return self.__lgbm.model
+    def model(self) -> lgb.Booster: return self.__lgbm.model
     @property
-    def raw_dataset(self): return self.__lgbm.raw_dataset
+    def data(self) -> dict[str,BoosterData]: return self.__lgbm.data
     @property
-    def train_param(self): return self.__lgbm.train_param
+    def train_param(self) -> dict: return self.__lgbm.train_param
 
     def training(self , show_plot = True , xlim = None , ylim = None , yscale = None):
-        os.makedirs(self.plot_path, exist_ok=True)
         plt.figure()
         ax = lgb.plot_metric(self.evals_result, metric='l2')
         plt.scatter(self.model.best_iteration,list(self.evals_result['valid'].values())[0][self.model.best_iteration],label='best iteration')
@@ -245,15 +177,21 @@ class lgbm_plot:
         if ylim is not None: plt.ylim(ylim)
         if yscale is not None: plt.yscale(yscale)
         if show_plot: plt.show()
-        plt.savefig('/'.join([self.plot_path,'training_process.png']),dpi=1200)
+        if self.plot_path is not None:
+            os.makedirs(self.plot_path, exist_ok=True)
+            plt.savefig('/'.join([self.plot_path,'training_process.png']),dpi=1200)
         return ax
     
     def importance(self):
-        os.makedirs(self.plot_path, exist_ok=True)
         lgb.plot_importance(self.model)
-        plt.savefig('/'.join([self.plot_path,'feature_importance.png']),dpi=1200)
+        if self.plot_path is not None:
+            os.makedirs(self.plot_path, exist_ok=True)
+            plt.savefig('/'.join([self.plot_path,'feature_importance.png']),dpi=1200)
 
     def histogram(self , feature_idx='all'):
+        if self.plot_path is None:
+            print(f'plot path not given, will not proceed')
+            return
         os.makedirs(self.plot_path, exist_ok=True)
         if isinstance(feature_idx,str):
             assert feature_idx=='all'
@@ -277,56 +215,25 @@ class lgbm_plot:
         plt.savefig('/'.join([self.plot_path,'feature_histogram.png']),dpi=1200)
 
     def tree(self , num_trees_list=[0]):   
+        if self.plot_path is None:
+            print(f'plot path not given, will not proceed')
+            return
         os.makedirs(self.plot_path, exist_ok=True)
         for num_trees in num_trees_list:
             fig, ax = plt.subplots(figsize=(12,12))
             ax = lgb.plot_tree(self.model,tree_index=num_trees, ax=ax)
-            plt.savefig('/'.join([self.plot_path , f'explainer_tree_{num_trees}.png']),dpi=1200)
-    
-    def sdt(self , group='train'):
-        x = self.raw_dataset[group].iloc[:,:-1] 
-        y_pred = pd.Series(self.model.predict(x.values), index=x.index)  # type: ignore
-        dtrain = lgb.Dataset(x, label=y_pred)
-        _params = deepcopy(self.train_param)
-        del _params['early_stopping']
-        SDT = lgb.train(_params, dtrain, num_boost_round=1)
-        fig, ax = plt.subplots(figsize=(12,12))
-        ax = lgb.plot_tree(SDT, tree_index=0, ax=ax)
-        plt.savefig('/'.join([self.plot_path,'explainer_sdt.png']),dpi=1200)
-
-    def pdp(self , group='train'):
-        os.makedirs('/'.join([self.plot_path , 'explainer_pdp']) , exist_ok=True)
-        for file in os.listdir('/'.join([self.plot_path , 'explainer_pdp'])):
-            os.remove('/'.join([self.plot_path , 'explainer_pdp' , file]))
-        for feature , imp in zip(self.model.feature_name() , self.model.feature_importance()):
-            if imp == 0: continue
-            x = deepcopy(self.raw_dataset[group].iloc[:,:-1])
-            # when calculating PDP，factor range is -5:0.2:5
-            x_range = np.arange(np.floor(min(x.loc[:,feature])),
-                                np.ceil(max(x.loc[:,feature])),
-                                0.2)
-            
-            # initialization and calculation
-            pdp = np.zeros_like(x_range)
-            for i, c in enumerate(x_range):
-                x.loc[:,feature] = c
-                pdp[i] = self.model.predict(x.values).mean() # type: ignore
-
-            # plotPDP
-            plt.figure()
-            plt.plot(x_range,pdp)
-            plt.title(f'PDP of {feature}')
-            plt.xlabel(f'{feature}')
-            plt.ylabel('y')
-            plt.savefig('/'.join([self.plot_path , 'explainer_pdp' , f'explainer_pdp_{feature}.png']))
-            plt.close()
+            if self.plot_path is not None and os.path.exists(self.plot_path):
+                plt.savefig('/'.join([self.plot_path , f'explainer_tree_{num_trees}.png']),dpi=1200)
 
     def shap(self , group='train'):
+        if self.plot_path is None:
+            print(f'plot path not given, will not proceed')
+            return
         import shap
         
         # 定义计算SHAP模型，这里使用TreeExplainer
         explainer = shap.TreeExplainer(self.model)
-        X_df = deepcopy(self.raw_dataset[group].iloc[:,:-1].copy())
+        X_df = deepcopy(self.data[group].X())
             
         # 计算全部因子SHAP
         shap_values = explainer.shap_values(X_df)
@@ -349,28 +256,71 @@ class lgbm_plot:
             shap.dependence_plot(feature,shap_values,X_df,interaction_index=None,title=f'SHAP of {feature}',show=False)
             plt.savefig('/'.join([self.plot_path , 'explainer_shap' , f'explainer_shap_dot_{feature}.png']),dpi=100,bbox_inches='tight')
     
+    def sdt(self , group='train'):
+        if self.plot_path is None:
+            print(f'plot path not given, will not proceed')
+            return
+        x = self.data[group].X()
+        pred = self.model.predict(x)
+        dtrain = lgb.Dataset(x, label=pred)
+        _params = deepcopy(self.train_param)
+        del _params['early_stopping']
+        SDT = lgb.train(_params, dtrain, num_boost_round=1)
+        fig, ax = plt.subplots(figsize=(12,12))
+        ax = lgb.plot_tree(SDT, tree_index=0, ax=ax)
+        plt.savefig('/'.join([self.plot_path,'explainer_sdt.png']),dpi=1200)
 
+    def pdp(self , group='train'):
+        if self.plot_path is None:
+            print(f'plot path not given, will not proceed')
+            return
+        os.makedirs('/'.join([self.plot_path , 'explainer_pdp']) , exist_ok=True)
+        for file in os.listdir('/'.join([self.plot_path , 'explainer_pdp'])):
+            os.remove('/'.join([self.plot_path , 'explainer_pdp' , file]))
+        for feature , imp in zip(self.model.feature_name() , self.model.feature_importance()):
+            if imp == 0: continue
+            x = deepcopy(self.data[group].X())
+            if isinstance(x , pd.DataFrame): x = x.values
+            ifeat = match_values(feature , self.data[group].feature)
+            # when calculating PDP，factor range is -5:0.2:5
+            x_range = np.arange(np.floor(min(x[:,ifeat])), np.ceil(max(x[:,ifeat])), 0.2)
+            
+            # initialization and calculation
+            pdp = np.zeros_like(x_range)
+            for i, c in enumerate(x_range):
+                x[:,ifeat] = c
+                pdp[i] = np.array(self.model.predict(x)).mean()
+
+            # plotPDP
+            plt.figure()
+            plt.plot(x_range,pdp)
+            plt.title(f'PDP of {feature}')
+            plt.xlabel(f'{feature}')
+            plt.ylabel('y')
+            plt.savefig('/'.join([self.plot_path , 'explainer_pdp' , f'explainer_pdp_{feature}.png']))
+            plt.close()
+    
+    
 def main():
     plt.style.use('seaborn-v0_8') 
-    dict_df = {
+    dict_df : dict[str,Any] = {
         'train' : pd.read_csv('../../data/tree_data/df_train.csv' , index_col=[0,1]) , 
         'valid' : pd.read_csv('../../data/tree_data/df_valid.csv' , index_col=[0,1]) , 
         'test'  : pd.read_csv('../../data/tree_data/df_test.csv' , index_col=[0,1]) , 
     }
 
     # %%
-    a = lgbm(**dict_df) # type: ignore
+    a = Lgbt(**dict_df)
     a.fit()
 
     # %%
     seqn = np.arange(dict_df['train'].shape[1])
     use_features = dict_df['train'].iloc[:,[*seqn[-22:-1]]].columns.values
     print(use_features)
-    a.data_prepare(use_features)
     a.fit()
-
-    # %%
     a.plot.training()
+
+
     a.plot.training(xlim=[0,a.model.best_iteration+10] , ylim=[0.8,4.])
     a.test_result()
     a.plot.importance()

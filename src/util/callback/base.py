@@ -2,10 +2,10 @@ import logging
 from typing import Callable
 from ..config import TrainConfig
 from ..metric import Metrics 
-from ...classes import BaseCB , TrainerStatus 
+from ...classes import BaseCB , TrainerStatus , BaseDataModule , BaseModelModule
 
 class BasicCallBack(BaseCB):
-    def __init__(self , model_module , *args , **kwargs) -> None:
+    def __init__(self , model_module : BaseModelModule , *args , **kwargs) -> None:
         super().__init__(model_module)
     @property
     def config(self) -> TrainConfig:    return self.module.config
@@ -15,6 +15,8 @@ class BasicCallBack(BaseCB):
     def status(self) -> TrainerStatus:  return self.module.status
     @property
     def metrics(self) -> Metrics :  return self.module.metrics
+    @property
+    def data_mod(self) -> BaseDataModule: return self.module.data_mod
             
 class WithCallBack(BasicCallBack):
     def __init__(self, model_module, *args, **kwargs) -> None:

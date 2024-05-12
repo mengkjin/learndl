@@ -67,19 +67,14 @@ class TrainerStatus:
     def fit_epoch_end(self):
         self.end_of_loop.loop_end(self.epoch)
 
-
     def new_attempt(self):
         self.epoch   = -1
         self.round   = 0
         self.end_of_loop = EndofLoop(self.max_epoch)
         self.epoch_event = []
 
-
-
     def add_event(self , event : Optional[str]):
         if event: self.epoch_event.append(event)
-
-
 
 class BaseCB:
     def __init__(self , model_module) -> None:
@@ -211,6 +206,8 @@ class BaseDataModule(ABC):
         '''create train / valid / test dataloaders'''
         self.y : Tensor
         self.buffer : BaseBuffer
+        self.y_secid : Any
+        self.y_date : Any
     @abstractmethod
     def train_dataloader(self) -> Iterator[BatchData]: '''return train dataloaders'''
     @abstractmethod
@@ -276,10 +273,12 @@ class BaseModelModule(ABC):
     def model_types(self) -> list[str]: '''iter of model_type'''
     
     def __call__(self , input):
-        if isinstance(input , BatchData):
-            return BatchOutput.empty() if input.is_empty else BatchOutput(self.net(input.x))
-        else:
+        if not isinstance(input , BatchData):
             return BatchOutput(self.net(input))
+        elif input.is_empty:
+            return BatchOutput.empty()
+        else:
+            return BatchOutput(self.net(input.x))
 
     def main_process(self):
         '''Main stage of data & fit & test'''
