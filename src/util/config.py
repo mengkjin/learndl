@@ -145,7 +145,7 @@ class TrainConfig:
     model_module: str       = ''
     model_data_type: str    = 'day' 
     model_data_prenorm: dict= field(default_factory=dict)
-    model_types: list       = field(default_factory=list)
+    model_types: list[str]  = field(default_factory=list)
     labels: list            = field(default_factory=list)
     callbacks: dict[str,Any]= field(default_factory=dict)
     beg_date: int           = 20170103
@@ -164,6 +164,8 @@ class TrainConfig:
     detect_anomaly: bool    = False
     precision: Any          = torch.float # double , bfloat16
 
+    # special model : tra , lgbm
+    lgbm_ensembler: bool    = False
     tra_switch:  bool       = True
     tra_param: dict         = field(default_factory=dict)
     tra_model: bool         = False
@@ -220,42 +222,22 @@ class TrainConfig:
         config = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
         if do_parser: config.process_parser(cls.parser_args(par_args))
 
-        model_path = config.model_base_path
+        base_path = config.model_base_path
         if config_path != 'default':
-            assert config_path == model_path , (config_path , model_path)
-            _TrainParam = TrainParam(model_path , model_name = model_name , override = override)
-            _ModelParam = ModelParam(model_path , _TrainParam.model_module)
+            assert config_path == base_path , (config_path , base_path)
+            _TrainParam = TrainParam(base_path , model_name = model_name , override = override)
+            _ModelParam = ModelParam(base_path , _TrainParam.model_module)
             config_resume = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
             config.update(config_resume.__dict__)
         elif 'fit' in config.stage_queue and makedir:
             if config.Train.resumeable and not config.short_test:
-                raise Exception(f'{model_path} has to be delete manually')
-            [os.makedirs(f'{model_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
-            config.Train.copy_to(model_path , exist_ok=config.short_test)
-            config.Model.copy_to(model_path , exist_ok=config.short_test)
+                raise Exception(f'{base_path} has to be delete manually')
+            [os.makedirs(f'{base_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
+            config.Train.copy_to(base_path , exist_ok=config.short_test)
+            config.Model.copy_to(base_path , exist_ok=config.short_test)
         
         config.Model.expand(config.model_base_path)
         return config
-    
-    def model_path(self , model_date , model_num , model_type , base_path = None):
-        '''get model path of deposition giving model date/type/base_path/num'''
-        if base_path is None:
-            model_dir = f'{self.model_base_path}/{model_num}'
-        else:
-            model_dir = f'{base_path}/{model_num}'
-        return '{}/{}.{}.pt'.format(model_dir , model_date , model_type)
-    
-    def model_iter(self , stage , model_date_list):
-        '''iter of model_date and model_num , considering resume_training'''
-        new_iter = list(itertools.product(model_date_list , self.model_num_list))
-        if self.resume_training and stage == 'fit':
-            models_trained = np.full(len(new_iter) , True , dtype = bool)
-            for i , (model_date , model_num) in enumerate(new_iter):
-                if not os.path.exists(self.model_path(model_date = model_date , model_num = model_num , model_type = 'best')):
-                    models_trained[max(i-1,0):] = False
-                    break
-            new_iter = Filtered(new_iter , ~models_trained)
-        return new_iter
     
     @property
     def Model(self) -> ModelParam: 
@@ -404,4 +386,27 @@ class TrainConfig:
         # pretty_print_dict(self.train_param)
         pretty_print_dict(self.Model.Param)
         
-        
+@dataclass
+class ModelDict:
+    model_path : str = ''
+
+    __members__ : ClassVar[list[str]] = ['state_dict' , 'lgbm_string']
+
+    def __post_init__(self):
+        assert bool(self.model_path)
+        os.makedirs(self.model_path , exist_ok=True)
+
+    def path(self , key): return f'{self.model_path}/{key}.pt'
+    def load(self , key : str) -> Any:
+        path = self.path(key)
+        return torch.load(path , map_location='cpu') if os.path.exists(path) else None
+    
+    def exists(self) -> bool: return os.path.exists(self.path('state_dict'))
+    def state_dict(self) -> Optional[dict[str,torch.Tensor]]: return self.load('state_dict')
+    def lgbm_string(self) -> Optional[str]: return self.load('lgbm_string')
+
+    def save(self , model_dict : dict[str,Any]):
+        assert model_dict['state_dict'] is not None , str(model_dict)
+        for key , value in model_dict.items():
+            assert key in self.__members__ and value is not None , key
+            torch.save(value , self.path(key))

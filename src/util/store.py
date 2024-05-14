@@ -1,11 +1,12 @@
-import gc , os , torch
+import gc , itertools , os , torch
 import numpy as np
 import pandas as pd
 
 from copy import deepcopy
 from typing import Any , Literal
 
-from .config import TrainConfig
+from .config import TrainConfig , ModelDict
+from ..func.basic import Filtered
 
 class Storage:
     '''Interface of mem or disk storage, methods'''
@@ -38,7 +39,7 @@ class Storage:
         else:
             raise TypeError(type(path))
 
-    def load(self , path):
+    def load(self , path) -> Any:
         if isinstance(path , (list , tuple)):
             return [self.load(p) for p in path]
         elif isinstance(path , str):
@@ -68,15 +69,7 @@ class Storage:
             obj = deepcopy(obj).cpu().state_dict()
         else:
             obj = deepcopy(obj)
-            [val.detach().cpu() for val in obj.values() if isinstance(val , torch.Tensor)]
         self.save(obj , path , group)
-        
-    def load_state_dict(self , obj , path):
-        sd = self.load(path)
-        assert isinstance(obj , torch.nn.Module) , obj
-        assert isinstance(sd , dict) , sd
-        obj.load_state_dict(sd)
-        return obj
     
     def del_path(self , path):
         if isinstance(path , str): path = [path]
@@ -152,9 +145,37 @@ class Checkpoint(Storage):
     def _extend_reliance(self , n_epochs = 200):
         self.epoch_queue += [[] for _ in range(n_epochs)] # extend epoch list
 
-class Deposition(Storage):
+class Deposition:
     '''model saver'''
-    def __init__(self , store_type : Any = None):
-        super().__init__('disk')
+    def __init__(self , base_path : str):
+        self.base_path = base_path
 
+    def save_model(self , model_date , model_num , model_type = 'best' , model_dict : dict[str,Any] = {}):
+        ModelDict(self.model_path(model_date , model_num , model_type)).save(model_dict)
+
+    def load_model(self , model_date , model_num , model_type = 'best'):
+        return ModelDict(self.model_path(model_date , model_num , model_type))
     
+    def exists(self , model_date , model_num , model_type = 'best'):
+        return ModelDict(self.model_path(model_date , model_num , model_type)).exists()
+    
+    def model_path(self , model_date , model_num , model_type = 'best'):
+        '''get model path of deposition giving model date / num / type'''
+        return f'{self.base_path}/{model_num}/{model_date}/{model_type}'
+    
+    def model_iter(self , model_date_list , model_num_list , stage , resume = False):
+        '''iter of model_date and model_num , considering resume_training'''
+        new_iter = list(itertools.product(model_date_list , model_num_list))
+        if resume and stage == 'fit':
+            models_trained = np.full(len(new_iter) , True , dtype = bool)
+            for i , (model_date , model_num) in enumerate(new_iter):
+                if not self.exists(model_date , model_num):
+                    models_trained[max(i-1,0):] = False
+                    break
+            new_iter = Filtered(new_iter , ~models_trained)
+        return new_iter
+    
+    def model_dates(self , model_num , model_type = 'best'):
+        '''get existing model dates'''
+        path = f'{self.base_path}/{model_num}'
+        return np.sort([int(p) for p in os.listdir(path) if os.path.exists(f'{path}/{p}/{model_type}/state_dict.pt')])

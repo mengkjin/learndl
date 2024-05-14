@@ -24,7 +24,7 @@ class ModelTrainer(BaseModelModule):
         self.logger     = Logger()
         self.device     = Device()
         self.checkpoint = Checkpoint(self.config)
-        self.deposition = Deposition(self.config)
+        self.deposition = Deposition(self.config.model_base_path)
         self.metrics    = Metrics(self.config)
         self.callbacks  = CallBackManager.setup(self.config , self)
     def init_data(self , **kwargs): 
@@ -41,9 +41,7 @@ class ModelTrainer(BaseModelModule):
         self.on_after_backward()
     
     @property
-    def model_param(self): return self.config.model_param[self.status.model_num]
-    @property
-    def model_iter(self): return self.config.model_iter(self.status.stage , self.data_mod.model_date_list)
+    def model_param(self): return self.config.model_param[self.model_num]
     @property
     def model_types(self): return self.config.model_types
     @property
@@ -53,15 +51,24 @@ class ModelTrainer(BaseModelModule):
     @property
     def if_transfer(self) -> bool: return self.config.train_param['transfer']
     @property
-    def prev_model_date(self): return self.data_mod.prev_model_date(self.status.model_date)
+    def prev_model_date(self): return self.data_mod.prev_model_date(self.model_date)
+    @property
+    def model_date(self): return self.status.model_date
+    @property
+    def model_num(self): return self.status.model_num
+    @property
+    def model_type(self): return self.status.model_type
+    @property
+    def model_iter(self): return self.deposition.model_iter(
+        self.data_mod.model_date_list , self.config.model_num_list , self.status.stage , self.config.resume_training)
 
     def on_configure_model(self): 
         self.config.set_config_environment()
 
     def on_fit_model_start(self):
-        self.data_mod.setup('fit' , self.model_param , self.status.model_date)
+        self.data_mod.setup('fit' , self.model_param , self.model_date)
         self.metrics.new_model(self.model_param , self.config)
-        self.checkpoint.new_model(self.model_param , self.status.model_date)
+        self.checkpoint.new_model(self.model_param , self.model_date)
         self.load_model(True)
     
     def on_fit_model_end(self):
@@ -72,6 +79,7 @@ class ModelTrainer(BaseModelModule):
         self.assert_equity(self.batch_dates[self.batch_idx] , self.data_mod.y_date[self.batch_data.i[0,1]]) 
         self.batch_forward()
         if self.batch_idx < self.batch_warm_up: return  # before this is warmup stage , only forward
+        # if self.status.dataset == 'test' and self.config.lgbm_ensembler:
         self.batch_metrics()
     
     def on_fit_epoch_end(self):
@@ -98,14 +106,15 @@ class ModelTrainer(BaseModelModule):
         torch.set_grad_enabled(True)
     
     def on_test_model_start(self):
-        if not self.deposition.exists(self.model_path()): self.fit_model()
-        self.data_mod.setup('test' , self.model_param , self.status.model_date)
+        if not self.deposition.exists(self.model_date , self.model_num , self.model_type): self.fit_model()
+
+        self.data_mod.setup('test' , self.model_param , self.model_date)
         self.metrics.new_model(self.model_param , self.config)
         self.net.eval()
         torch.set_grad_enabled(False)
     
     def on_test_model_type_start(self):
-        self.load_model(False , self.status.model_type)
+        self.load_model(False , self.model_type)
         self.dataloader = self.data_mod.test_dataloader()
         self.assert_equity(len(self.dataloader) , len(self.batch_dates))
         self.metrics.new_epoch_metric('test' , self.status)
@@ -115,28 +124,24 @@ class ModelTrainer(BaseModelModule):
     
     def load_model(self , training : bool , model_type = 'best' , lr_multiplier = 1.):
         '''load model state dict, return net and a sign of whether it is transferred'''
-        model_date = (self.prev_model_date if self.if_transfer else 0) if training else None
-        model_path = self.model_path(model_date = model_date , model_type = model_type)
-        self.transferred = training and self.if_transfer and self.deposition.exists(model_path)
-        self.net = MODEL.new(self.config.model_module , self.model_param , self.deposition.load(model_path) , self.device)
-        if training: 
-            self.ensembles = EnsembleModels.get_models(self.model_types , self.checkpoint , device=self.device)
+        model_date = (self.prev_model_date if self.if_transfer else 0) if training else self.model_date
+        model_dict = self.deposition.load_model(model_date , self.model_num , model_type)
+
+        self.transferred = training and self.if_transfer and model_dict.exists()
+        self.net = MODEL.new(self.config.model_module , self.model_param , model_dict.state_dict() , self.device)
+        if training:
+            self.ensembles = EnsembleModels(self.net , self.config , self.data_mod , self.checkpoint , device=self.device)
             self.optimizer = Optimizer(self.net , self.config , self.transferred , lr_multiplier)
+        else:
+            assert model_dict.exists() , str(model_dict)
 
     def save_model(self):
         '''save model state dict to deposition'''
         self.on_before_save_model()
         self.net = self.net.cpu()
         for model_type in self.model_types:
-            state_dict = self.ensembles.state_dict(model_type , self.net , self.data_mod.train_dataloader())
-            self.deposition.save_state_dict(state_dict , self.model_path(model_type=model_type)) 
-    
-    def model_path(self , model_date = None, model_num = None , model_type = None , base_path = None):
-        '''get model path of deposition giving model date/type/base_path/num'''
-        if model_date is None: model_date = self.status.model_date
-        if model_num  is None: model_num  = self.status.model_num
-        if model_type is None: model_type = self.status.model_type
-        return self.config.model_path(model_date,model_num,model_type,base_path)
+            model_dict = self.ensembles.collect(model_type)
+            self.deposition.save_model(self.model_date , self.model_num , model_type , model_dict) 
 
     @classmethod
     def main(cls , stage = -1 , resume = -1 , checkname = -1 , **kwargs):

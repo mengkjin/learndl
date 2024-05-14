@@ -82,7 +82,7 @@ input_step_day: 5
 skip_horizon: &skip_horizon 20 
 
 # tra model
-# lgbt_ensembler: true
+lgbm_ensembler: true
 tra_switch:  true
 buffer_type: tra
 buffer_param: 

@@ -9,7 +9,7 @@ from . import (
 )
 from .buffer import BufferSpace
 from .callback import CallBackManager
-from .config import TrainConfig
+from .config import TrainConfig , ModelDict
 from .device import Device
 from .ensemble import EnsembleModels
 from .loader import DataloaderStored , LoaderWrapper

@@ -4,14 +4,14 @@ import pandas as pd
 import torch
 
 from dataclasses import dataclass
-from typing import ClassVar , Literal
+from typing import ClassVar , Literal , Optional
 
 from .data import DataModule
 from ..classes import BatchOutput
-from ..data import load_target_file
+from ..data import load_target_file , GetData
 from ..environ import DIR
 from ..func.time import today , date_offset
-from ..util import Device , TrainConfig
+from ..util import Deposition , Device , TrainConfig
 from ..model import model as MODEL
 
 @dataclass
@@ -20,8 +20,8 @@ class Predictor:
     model_name : str
     model_type : Literal['best' , 'swalast' , 'swabest'] = 'swalast'
     model_num  : int = 0
-    alias : str | None = None
-    df    : pd.DataFrame | None = None
+    alias : Optional[str] = None
+    df    : Optional[pd.DataFrame] = None
 
     destination : ClassVar[str] = '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha'
     secid_col : ClassVar[str] = 'secid'
@@ -30,7 +30,7 @@ class Predictor:
     def __post_init__(self):
         if self.alias is None: self.alias = self.model_name
 
-    def deploy(self , df : pd.DataFrame | None = None , overwrite = False , secid_col = secid_col , date_col = date_col):
+    def deploy(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = secid_col , date_col = date_col):
         '''deploy df by day to class.destination'''
         if df is None: df = self.df
         if df is None: return NotImplemented
@@ -62,31 +62,19 @@ class Predictor:
         '''predict recent days'''
         if start_dt <= 0: start_dt = today(start_dt)
 
-        model_path = f'{DIR.model}/{self.model_name}'
         device       = Device()
-        model_config = TrainConfig.load(model_path)
-        print(model_config.model_param)
-        model_param = model_config.model_param[self.model_num]
-        model_files = sorted([p for p in os.listdir(f'{model_path}/{self.model_num}') if p.endswith(f'{self.model_type}.pt')])
-        model_dates = np.array([int(mf.split('.')[0]) for mf in model_files])
+        model_config = TrainConfig.load(f'{DIR.model}/{self.model_name}')
+        deposition   = Deposition(model_config.model_base_path)
+        model_param  = model_config.model_param[self.model_num]
+        model_dates  = deposition.model_dates(self.model_num , self.model_type)
+        start_dt     = max(start_dt , int(date_offset(min(model_dates) ,1)))
 
-        start_dt = max(start_dt , int(date_offset(min(model_dates) ,1)))
-        calendar = load_target_file('information' , 'calendar')
-        assert calendar is not None
-
-        require_model_data_old = (start_dt <= today(-100))
-
-        data_mod_old = DataModule(model_config , False).load_data() if require_model_data_old else None
+        data_mod_old = DataModule(model_config , False).load_data() if start_dt <= today(-100) else None
         data_mod_new = DataModule(model_config , True).load_data() 
 
         end_dt = min(end_dt , max(data_mod_new.test_full_dates))
-        pred_dates = calendar[(calendar['calendar'] >= start_dt) & (calendar['calendar'] <= end_dt) & (calendar['trade'])]['calendar'].values
-
-        df_task = pd.DataFrame({
-            'pred_dates' : pred_dates ,
-            'model_date' : [max(model_dates[model_dates < d_pred]) for d_pred in pred_dates] ,
-            'calculated' : 0 ,
-        })
+        pred_dates = GetData.trade_dates(start_dt , end_dt)
+        df_task = pd.DataFrame({'pred_dates' : pred_dates , 'model_date' : [max(model_dates[model_dates < d]) for d in pred_dates] , 'calculated' : 0})
 
         torch.set_grad_enabled(False)
         df_list = []
@@ -97,9 +85,9 @@ class Predictor:
                 print(model_date , 'old' if (data_mod is data_mod_old) else 'new') 
                 assert isinstance(model_date , int) , model_date
                 data_mod.setup('predict' ,  model_param , model_date)
-                sd_path = f'{model_path}/{self.model_num}/{model_date}.{self.model_type}.pt'
+                model = deposition.load_model(model_date , self.model_num , self.model_type)
 
-                net = MODEL.new(model_config.model_module , model_param , torch.load(sd_path , map_location='cpu') , device)
+                net = MODEL.new(model_config.model_module , model_param , model.state_dict() , device)
                 net.eval()
 
                 loader = data_mod.predict_dataloader()

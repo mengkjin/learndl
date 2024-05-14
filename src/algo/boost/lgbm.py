@@ -1,15 +1,12 @@
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-import xarray as xr
 import matplotlib.pyplot as plt
 import os , torch
 
 from copy import deepcopy
-from dataclasses import dataclass
 from src.environ import DIR
-# from src.algo.boost.lgbt import LgbtPlot , LgbtWeight
-from typing import Any , ClassVar , Literal , Optional
+from typing import Any , Optional
 
 from ...classes import BoosterData
 from ...func import match_values, np_nanic_2d , np_nanrankic_2d
@@ -44,7 +41,7 @@ for set_name in ['test' , 'valid' , 'train']:
 """
 # %%
 
-class Lgbt():
+class Lgbm():
     var_date = ['TradeDate','datetime'] 
     def __init__(self , 
                  train : Any = None , 
@@ -164,7 +161,7 @@ class Lgbt():
         return obj
     
     @property
-    def plot(self): return LgbtPlot(self)
+    def plot(self): return LgbmPlot(self)
 
     @property
     def initiated(self): return bool(self.data)
@@ -190,7 +187,7 @@ class Lgbt():
 
         return {'train':train , 'valid':valid , 'test':test}
 
-class LgbtPlot:
+class LgbmPlot:
     def __init__(self , lgb : Any) -> None:
         self.__lgbm = lgb
 
@@ -347,7 +344,7 @@ def main():
     }
 
     # %%
-    a = Lgbt(**dict_df)
+    a = Lgbm(**dict_df)
     a.fit()
 
     # %%
