@@ -430,3 +430,15 @@
   0.best: Avg(0.0177)|Sum(0.62)|Std(0.025)|T(4.19)|IR(3.4702)
   0.swabest: Avg(-0.0137)|Sum(-0.48)|Std(0.0201)|T(-4.03)|IR(-3.3351)
   0.swalast: Avg(-0.0132)|Sum(-0.46)|Std(0.0362)|T(-2.15)|IR(-1.7801)
+0_model: gru_day_ShortTest(x1)
+1_start: Tue May 14 22:19:51 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-20170228
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 1.0 Min/model, 14.3 Sec/Epoch
+7_test: Finish Process [Test], Cost 15.4 Secs
+8_result:
+  0.best: Avg(0.0354)|Sum(1.24)|Std(0.048)|T(4.36)|IR(3.6082)
+  0.swabest: Avg(0.0405)|Sum(1.42)|Std(0.0354)|T(6.76)|IR(5.5963)
+  0.swalast: Avg(0.063)|Sum(2.21)|Std(0.0433)|T(8.61)|IR(7.128)
