@@ -17,17 +17,32 @@ class FailedData:
 @dataclass(slots=True)
 class NdData:
     values : np.ndarray | Tensor 
-    index  : list | tuple
+    index  : list[np.ndarray]
     def __post_init__(self):
         assert self.values.ndim == len(self.index) , (self.values.ndim , len(self.index))
+        self.index = [(ii if isinstance(ii , np.ndarray) else np.array(ii)) for ii in self.index]
 
     def __repr__(self):
-        return '\n'.join([str(self.__class__) , f'values shape {self.shape}'])
+        return '\n'.join([str(self.__class__) , 
+                          f'values shape : {self.shape}' , 
+                          f'finite ratio : {self.finite_ratio():.4f}' , 
+                          f'index : {str(self.index)}'])
+
+    def __len__(self): return self.shape[0]
 
     @property
     def shape(self): return self.values.shape
     @property
     def ndim(self): return self.values.ndim
+
+    def finite_ratio(self):
+        if isinstance(self.values , np.ndarray):
+            n_finite = np.isfinite(self.values).sum()
+            n_total = self.values.size
+        else:
+            n_finite = self.values.isfinite().sum()
+            n_total = self.values.numel()
+        return n_finite / n_total
 
     @classmethod
     def from_xarray(cls , xarr : xr.Dataset):
@@ -221,8 +236,8 @@ class StockData4D:
 
 @dataclass
 class BoosterData:
-    raw_x   : pd.DataFrame | np.ndarray | torch.Tensor
-    raw_y   : pd.Series    | np.ndarray | torch.Tensor
+    raw_x   : Optional[pd.DataFrame | np.ndarray | torch.Tensor | NdData]
+    raw_y   : Optional[pd.Series    | np.ndarray | torch.Tensor | NdData]
     secid   : Any = None
     date    : Any = None
     feature : Any = None
@@ -232,40 +247,62 @@ class BoosterData:
     df_var_date : ClassVar[list[str]] = ['TradeDate','datetime']
 
     def __post_init__(self):
-        assert len(self.raw_x) == len(self.raw_y) , f'x and y length must match'
-        if isinstance(self.raw_x , torch.Tensor) and isinstance(self.raw_y , torch.Tensor): 
-            self.x = self.raw_x.detach().cpu().numpy()
-            self.y = self.raw_y.detach().cpu().numpy()
-        elif isinstance(self.raw_x , np.ndarray) and isinstance(self.raw_y , np.ndarray): 
-            self.x = self.raw_x
-            self.y = self.raw_y
-        elif isinstance(self.raw_x , pd.DataFrame) and isinstance(self.raw_y , pd.Series): 
-            self.var_sec  = [v for v in self.df_var_sec  if v in self.raw_x.index.names][0]
-            self.var_date = [v for v in self.df_var_date if v in self.raw_x.index.names][0]
-            x = self.raw_x.reset_index().set_index([self.var_sec,self.var_date])
+        x , y = self.raw_x , self.raw_y
+        assert x is not None and y is not None
+        assert len(x) == len(y) , f'x and y length must match'
+        assert type(x) == type(y) , (f'x and y type must match')
+        self.input_type = type(y)
+        if isinstance(x , pd.DataFrame) and isinstance(y , pd.Series): 
+            self.df_index = y.index
+            self.var_sec  = [v for v in self.df_var_sec  if v in x.index.names][0]
+            self.var_date = [v for v in self.df_var_date if v in x.index.names][0]
+            x = x.reset_index().set_index([self.var_sec,self.var_date])
             xarr = xr.Dataset.from_dataframe(x)
  
             xindex = [arr.values for arr in xarr.indexes.values()] + [list(xarr.data_vars)]
-            self.x = np.stack([arr.to_numpy() for arr in xarr.data_vars.values()] , -1)
-            if self.secid is None : self.secid = xindex[0]
-            if self.date  is None : self.date  = xindex[1]
-            if self.feature is None : self.feature = xindex[-1]
+            x = np.stack([arr.to_numpy() for arr in xarr.data_vars.values()] , -1)
 
-            yarr = xr.Dataset.from_dataframe(pd.DataFrame(self.raw_y.reset_index().set_index([self.var_sec,self.var_date])))
-            self.y = np.stack([arr.to_numpy() for arr in yarr.data_vars.values()] , -1)
+            yarr = xr.Dataset.from_dataframe(pd.DataFrame(y.reset_index().set_index([self.var_sec,self.var_date])))
+            y = np.stack([arr.to_numpy() for arr in yarr.data_vars.values()] , -1)
+        elif isinstance(x , NdData) and isinstance(y , NdData):
+            xindex = x.index
+            x = x.values
+            y = y.values
         else:
-            raise TypeError(f'x and y type must match')
+            xindex = [None , None , None]
+
+        if isinstance(x , torch.Tensor): x = x.detach().cpu().numpy()
+        if isinstance(y , torch.Tensor): y = y.detach().cpu().numpy()
+
+        assert isinstance(x , np.ndarray) and isinstance(y , np.ndarray) , (x,y)
+        self.x , self.y = x , y
+
         if self.y.ndim == 3:
             assert self.y.shape[-1] == 1
             self.y = self.y[...,0]
-        self.finite = np.isfinite(self.y)
-        if self.secid is None : self.secid = np.arange(self.x.shape[0])
-        if self.date  is None : self.date  = np.arange(self.x.shape[1])
-        if self.feature is None : self.feature = np.array([f'feature.{i}' for i in range(self.x.shape[-1])])
+
+        if self.secid is None:  self.secid = xindex[0] if xindex[0] is not None else np.arange(self.x.shape[0])
+        if self.date  is None : self.date  = xindex[1] if xindex[1] is not None else np.arange(self.x.shape[1])
+        if self.feature is None : self.feature = xindex[-1] if xindex[-1] is not None else np.array([f'F.{i}' for i in range(self.x.shape[-1])])
+
         assert self.x.shape == (len(self.secid) , len(self.date) , len(self.feature))
         assert self.y.shape == (len(self.secid) , len(self.date))
+
+        self.finite = np.isfinite(self.y)
+
         self.update_feature()
         if self.weight_param is None: self.weight_param = {'tau':0.75*np.log(0.5)/np.log(0.75) , 'ts_type':'lin' , 'rate':0.5}  
+
+        self.raw_x , self.raw_y = None , None
+
+    def __repr__(self):
+        return '\n'.join(
+            [f'{str(self.__class__)}(x={self.x},' , 
+             f'y={self.y}', 
+             f'secid={self.secid}', 
+             f'date={self.date}', 
+             f'feature={self.feature}', 
+             f'weight_param={self.weight_param})'])
 
     def update_feature(self , use_feature = None):
         if use_feature is not None:
@@ -293,12 +330,12 @@ class BoosterData:
         new_pred[self.finite.flatten()] = pred
         pred = new_pred.reshape(*self.y.shape)
         pred = np.array(pred)
-        if isinstance(self.raw_y , pd.Series):
+        if self.input_type == pd.Series:
             pred = pd.DataFrame(pred , columns = self.date)
             pred[self.var_sec] = self.secid
             pred = pred.reset_index().melt(id_vars=self.var_sec,var_name=self.var_date)
-            pred = pred.set_index([self.var_date,self.var_sec])['value'].loc[self.raw_y.index]
-        elif isinstance(self.raw_y , torch.Tensor):
+            pred = pred.set_index([self.var_date,self.var_sec])['value'].loc[self.df_index]
+        elif self.input_type == torch.Tensor:
             pred = torch.Tensor(pred)
             ...
         else:

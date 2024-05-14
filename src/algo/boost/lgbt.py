@@ -75,28 +75,31 @@ class Lgbt():
         }
         self.plot_path = plot_path
         self.train_param.update(kwargs)
-        self.data_import(train , valid , test , feature)
-
-    def data_import(self , train , valid , test , feature = None):
-        assert type(train) == type(valid) == type(test) , f'type of train/valid/test must be identical'
         self.data : dict[str , BoosterData] = {}
-        if train is None: return
-        if isinstance(train , str):
-            train = pd.read_csv(train,index_col=[0,1])
-            valid = pd.read_csv(valid,index_col=[0,1])
-            test  = pd.read_csv(test ,index_col=[0,1])
-        assert train.shape[1] == valid.shape[1] == test.shape[1] , (train.shape[1] , valid.shape[1] , test.shape[1])
-        if isinstance(train , pd.DataFrame) and isinstance(valid , pd.DataFrame) and isinstance(test , pd.DataFrame):
-            assert type(train) == type(valid) == type(test) , f'type of train/valid/test must be identical'
-            self.data['train'] = BoosterData(train.iloc[:,:-1] , train.iloc[:,-1] , feature = feature)
-            self.data['valid'] = BoosterData(valid.iloc[:,:-1] , valid.iloc[:,-1] , feature = feature)
-            self.data['test']  = BoosterData(test.iloc[:,:-1]  , test.iloc[:,-1]  , feature = feature)
-        elif not (isinstance(train , pd.DataFrame) or isinstance(valid , pd.DataFrame) or isinstance(test , pd.DataFrame)):
-            self.data['train'] = BoosterData(train[...,:-1] , train[...,-1] , feature = feature)
-            self.data['valid'] = BoosterData(valid[...,:-1] , valid[...,-1] , feature = feature)
-            self.data['test']  = BoosterData(test[...,:-1]  , test[...,-1]  , feature = feature)
+        self.feature = feature
+        self.data_import(train = train , valid = valid , test = test)
 
-    def setup(self , use_feature = None , weight_param = None):
+    def data_import(self , train : Any = None , valid : Any = None , test : Any = None):
+        if train is not None: self.data['train'] = self.data_transform(train)
+        if valid is not None: self.data['valid'] = self.data_transform(valid)
+        if test is not None:  self.data['test']  = self.data_transform(test)
+        return self
+
+    def data_transform(self , data : Any) -> BoosterData:
+        if isinstance(data , str): data = pd.read_csv(data,index_col=[0,1])
+        if isinstance(data , pd.DataFrame):
+            data = BoosterData(data.iloc[:,:-1] , data.iloc[:,-1] , feature = self.feature)
+        elif isinstance(data , (np.ndarray , torch.Tensor)):
+            data = BoosterData(data[...,:-1] , data[...,-1] , feature = self.feature)
+        elif isinstance(data , BoosterData):
+            ...
+        else:
+            raise Exception(data)
+        return data
+
+    def setup(self , use_feature = None , weight_param = None , train = None , valid = None):
+        self.data_import(train = train , valid = valid)
+        
         mono_constr = self.train_param['monotone_constraints']
         nfeat = len(use_feature) if use_feature else self.data['train'].nfeat
         if isinstance(mono_constr , list):
@@ -110,11 +113,13 @@ class Lgbt():
         self.train_dataset = self.lgbt_dataset(self.data['train'] , weight_param)
         self.valid_dataset = self.lgbt_dataset(self.data['valid'] , weight_param , reference = self.train_dataset)
 
+        return self
+
     def lgbt_dataset(self , data : BoosterData , weight_param = None , reference = None):
         return lgb.Dataset(data.X() , data.Y() , weight = data.W(weight_param) , reference = reference)
 
-    def fit(self , use_feature = None , weight_param = None):
-        self.setup(use_feature , weight_param)
+    def fit(self , use_feature = None , weight_param = None , train = None , valid = None ):
+        self.setup(use_feature , weight_param , train = train , valid = valid)
         self.evals_result = dict()
         self.model = lgb.train(
             self.train_param ,
@@ -124,6 +129,7 @@ class Lgbt():
             num_boost_round=1000 , 
             callbacks=[lgb.record_evaluation(self.evals_result)],
         )
+        return self
         
     def predict(self , inputs : Optional[BoosterData] = None , reform = True):
         if inputs is None: inputs = self.data['test']
@@ -147,11 +153,42 @@ class Lgbt():
         ric = np_nanrankic_2d(pred , label , dim = 0)
         return pd.DataFrame({'ic' : ic , 'rankic' : ric})
     
+    def model_to_string(self):
+        return self.model.model_to_string()
+    
+    @classmethod
+    def model_from_string(cls , model_str):
+        obj = cls()
+        obj.evals_result = dict()
+        obj.model = lgb.Booster(model_str = model_str)
+        return obj
+    
     @property
     def plot(self): return LgbtPlot(self)
 
     @property
     def initiated(self): return bool(self.data)
+
+    @staticmethod
+    def random_input() -> dict[str,Any]:
+        def rand_nan(x , ratio = 0.1):
+            ii = np.random.choice(np.arange(len(x)) , int(ratio * len(x)))
+            x[ii] = np.nan
+            return x
+
+        train = rand_nan(np.random.rand(1000,40,20))
+        valid = rand_nan(np.random.rand(500,40,20))
+        test  = rand_nan(np.random.rand(100,40,20))
+
+        return {'train':train , 'valid':valid , 'test':test}
+    
+    @staticmethod
+    def df_input() -> dict[str,Any]:
+        train = pd.read_csv(f'{DIR.data}/tree_data/df_train.csv' , index_col=[0,1])
+        valid = pd.read_csv(f'{DIR.data}/tree_data/df_valid.csv' , index_col=[0,1])
+        test  = pd.read_csv(f'{DIR.data}/tree_data/df_test.csv' , index_col=[0,1])
+
+        return {'train':train , 'valid':valid , 'test':test}
 
 class LgbtPlot:
     def __init__(self , lgb : Any) -> None:

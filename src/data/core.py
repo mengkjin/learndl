@@ -16,6 +16,15 @@ from ..func import match_values , index_union , index_intersect , forward_fillna
 from ..func.time import date_offset , Timer
 from ..func.primas import neutralize_2d , process_factor
 
+class GetData:
+    @staticmethod
+    def trade_dates(start_dt : int = -1 , end_dt : int = 99991231):
+        calendar = load_target_file('information' , 'calendar')
+        assert calendar is not None
+        calendar = np.array(calendar[calendar['trade']]['calendar'].values)
+        calendar[(calendar >= start_dt) & (calendar <= end_dt)]
+        return calendar
+    
 class DataBlock(StockData4D):
     save_option : ClassVar[str] = 'pt'
     
