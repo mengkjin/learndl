@@ -21,7 +21,6 @@ callbacks:
   NanLossRetrain:     {'max_attempt' : 4}
   BatchDisplay:       {}
   StatusDisplay:      {}
-  #CollectHidden:      {}
   #CudaEmptyCache:     {} 
   #TrainConverge:      {'patience' : 5 , 'eps' : 1.0e-5} 
   #FitConverge:        {'patience' : 5 , 'eps' : 1.0e-5}

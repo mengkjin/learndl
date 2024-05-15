@@ -27,6 +27,7 @@ class ModelTrainer(BaseModelModule):
         self.deposition = Deposition(self.config.model_base_path)
         self.metrics    = Metrics(self.config)
         self.callbacks  = CallBackManager.setup(self.config , self)
+        self.ensembles  = EnsembleModels(self)
     def init_data(self , **kwargs): 
         self.data_mod = DataModule(self.config)
     def batch_forward(self) -> None: 
@@ -79,7 +80,10 @@ class ModelTrainer(BaseModelModule):
         self.assert_equity(self.batch_dates[self.batch_idx] , self.data_mod.y_date[self.batch_data.i[0,1]]) 
         self.batch_forward()
         if self.batch_idx < self.batch_warm_up: return  # before this is warmup stage , only forward
-        # if self.status.dataset == 'test' and self.config.lgbm_ensembler:
+        if self.config.lgbm_ensembler:
+            pred = self.ensembles.lgbm_ensembler.predict()
+            assert pred is not None
+            self.batch_output.override_pred(pred)
         self.batch_metrics()
     
     def on_fit_epoch_end(self):
@@ -126,14 +130,13 @@ class ModelTrainer(BaseModelModule):
         '''load model state dict, return net and a sign of whether it is transferred'''
         model_date = (self.prev_model_date if self.if_transfer else 0) if training else self.model_date
         model_dict = self.deposition.load_model(model_date , self.model_num , model_type)
-
         self.transferred = training and self.if_transfer and model_dict.exists()
         self.net = MODEL.new(self.config.model_module , self.model_param , model_dict.state_dict() , self.device)
         if training:
-            self.ensembles = EnsembleModels(self.net , self.config , self.data_mod , self.checkpoint , device=self.device)
             self.optimizer = Optimizer(self.net , self.config , self.transferred , lr_multiplier)
         else:
             assert model_dict.exists() , str(model_dict)
+            self.ensembles.load(model_dict)
 
     def save_model(self):
         '''save model state dict to deposition'''

@@ -21,8 +21,8 @@ class GetData:
     def trade_dates(start_dt : int = -1 , end_dt : int = 99991231):
         calendar = load_target_file('information' , 'calendar')
         assert calendar is not None
-        calendar = np.array(calendar[calendar['trade']]['calendar'].values)
-        calendar[(calendar >= start_dt) & (calendar <= end_dt)]
+        calendar = np.array(calendar['calendar'].values[calendar['trade'] == 1])
+        calendar = calendar[(calendar >= start_dt) & (calendar <= end_dt)]
         return calendar
     
 class DataBlock(StockData4D):

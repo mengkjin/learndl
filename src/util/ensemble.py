@@ -5,41 +5,50 @@ from abc import ABC , abstractmethod
 from copy import deepcopy
 from torch import nn
 from torch.optim.swa_utils import AveragedModel , update_bn
-from typing import Iterator , Literal , Optional
+from typing import Any , Iterator , Literal , Optional
 
 from .store import Checkpoint
-from .config import TrainConfig
-from ..classes import BatchData , BatchOutput , BoosterData , BaseDataModule , NdData
+from .config import TrainConfig , ModelDict
+from ..classes import BatchData , BatchOutput , BoosterData , BaseDataModule , NdData , BaseModelModule
 from ..algo.boost.lgbm import Lgbm
 
 class EnsembleModels:
     '''a group of ensemble models , of same net structure'''
-    def __init__(self, net : nn.Module , config : TrainConfig , data_mod : BaseDataModule , 
-                 ckpt : Checkpoint , use_score = True , device = None , **kwargs) -> None:
-        self.net    = net
-        self.config = config
-        self.data_mod = data_mod
-        self.models = {model_type:self.choose(model_type)(ckpt , use_score , **kwargs) for model_type in config.model_types}
-        self.device = device
+    def __init__(self, model_module : BaseModelModule , use_score = True , **kwargs) -> None:
+        self.module = model_module
+        self.use_score = use_score
+        self.models = {model_type:self.choose(model_type)(self.ckpt , use_score , **kwargs) for model_type in self.config.model_types}
         if self.config.lgbm_ensembler:
-            self.lgbm_ensembler = LgbmEnsembler(self.net , self.data_mod , self.device)
-        
-    def __getitem__(self , key): 
-        return self.models[key]
+            self.lgbm_ensembler = LgbmEnsembler(model_module)
+
+    @property
+    def config(self) -> TrainConfig: return self.module.config
+    @property
+    def data_mod(self): return self.module.data_mod
+    @property
+    def ckpt(self) -> Checkpoint: return self.module.checkpoint
+    @property
+    def device(self): return self.module.device
+
+    def __getitem__(self , key): return self.models[key]
+
+    def setup_testing(self , **kwargs):
+        ...
+
     def assess(self , net , epoch : int , score = 0. , loss = 0.): 
         for model in self.models.values(): model.assess(net , epoch , score , loss)
     def collect(self , model_type , *args):
         model_dict = {}
-        self.net = self.models[model_type].collect(self.net , self.data_mod , *args , device = self.device)
-        model_dict['state_dict'] = self.net.state_dict()
-
-        #model_dict['state_dict'] = self.models[model_type].collect(self.net , self.data_mod , *args , device = self.device)
-
+        net = self[model_type].collect(self.module.net , self.data_mod , *args , device=self.device)
+        model_dict['state_dict'] = net.state_dict()
         if self.config.lgbm_ensembler:
-            model_dict['lgbm_string'] = self.lgbm_ensembler.fit().model_string
-            print(model_dict['lgbm_string'])
+            model_dict['lgbm_string'] = self.lgbm_ensembler.fit(net).model_string
+            # print(model_dict['lgbm_string'])
         return model_dict
-    
+    def load(self , model_dict : ModelDict):
+        if self.config.lgbm_ensembler:
+            self.lgbm_ensembler.load(model_dict.lgbm_string())
+
     @staticmethod
     def choose(model_type):
         '''get a subclass of _BaseEnsembleModel'''
@@ -93,7 +102,7 @@ class BestModel(_BaseEnsembleModel):
             self.metric_fix = value
             self.ckpt.join(self , epoch , net)
 
-    def collect(self , net : nn.Module , *args , **kwargs):
+    def collect(self , net : nn.Module , data_mod : BaseDataModule , *args , device = None , **kwargs):
         #return self.ckpt.load_epoch(self.epoch_fix)
         net = deepcopy(net)
         net.load_state_dict(self.ckpt.load_epoch(self.epoch_fix))
@@ -121,7 +130,7 @@ class SWABest(_BaseEnsembleModel):
             self.candidates.append(epoch)
             self.ckpt.join(self , epoch , net)
 
-    def collect(self , net , data_mod : BaseDataModule , *args , device = None , **kwargs):
+    def collect(self , net : nn.Module , data_mod : BaseDataModule , *args , device = None , **kwargs):
         swa = SWAModel(net)
         for epoch in self.candidates: swa.update_sd(self.ckpt.load_epoch(epoch))
         loader = data_mod.train_dataloader()
@@ -154,7 +163,7 @@ class SWALast(_BaseEnsembleModel):
         right   = epochs[epochs > self.epoch_fix]
         return [*left[-((self.n_last - 1) // 2):] , self.epoch_fix , *right][:self.n_last]
 
-    def collect(self , net , data_mod : BaseDataModule , *args , device = None , **kwargs):
+    def collect(self , net : nn.Module , data_mod : BaseDataModule , *args , device = None , **kwargs):
         swa = SWAModel(net)
         for epoch in self.candidates: 
             swa.update_sd(self.ckpt.load_epoch(epoch))
@@ -164,17 +173,17 @@ class SWALast(_BaseEnsembleModel):
     
 class LgbmEnsembler:
     '''load booster data and fit'''
-    def __init__(self , net : nn.Module , data_mod : BaseDataModule , device = None) -> None:
-        self.net = net
-        self.data_mod = data_mod
-        self.device = device
+    def __init__(self , model_module : BaseModelModule) -> None:
+        self.module = model_module
 
     @property
-    def train_dl(self) -> Iterator[BatchData]: return self.data_mod.train_dataloader()
+    def data_mod(self) -> BaseDataModule: return self.module.data_mod
     @property
-    def valid_dl(self) -> Iterator[BatchData]: return self.data_mod.val_dataloader()
+    def train_dl(self): return self.data_mod.train_dataloader()
     @property
-    def test_dl(self) -> Iterator[BatchData]: return self.data_mod.test_dataloader()
+    def valid_dl(self): return self.data_mod.val_dataloader()
+    @property
+    def test_dl(self): return self.data_mod.test_dataloader()
     @property
     def y_secid(self) -> np.ndarray | torch.Tensor: return self.data_mod.y_secid
     @property
@@ -182,49 +191,46 @@ class LgbmEnsembler:
     @property
     def model_string(self): return self.model.model_to_string()
 
-    def booster_data(self , loader : Iterator[BatchData]) -> Optional[BoosterData]:
+    def booster_data(self , net : nn.Module , loader : Iterator[BatchData]) -> BoosterData:
         hh , yy , ii = [] , [] , []
-        device = getattr(loader , 'device' , self.device)
-        self.net = device(self.net) if callable(device) else self.net.to(device)
-        for batch_data in loader:
-            hidden = BatchOutput(self.net(batch_data.x)).hidden
-            if hidden is None: return 
-            hh.append(hidden.detach().cpu().numpy())
-            yy.append(batch_data.y.detach().cpu().numpy())
-            ii.append(batch_data.i)
-    
+        net.eval()
+        with torch.no_grad():
+            for batch_data in loader:
+                hidden = BatchOutput(net(batch_data.x)).hidden
+                assert hidden is not None , f'hidden must not be none when using LgbmEnsembler'
+                hh.append(hidden.detach().cpu().numpy())
+                yy.append(batch_data.y.detach().cpu().numpy())
+                ii.append(batch_data.i)
         hh , yy , ii = np.vstack(hh) , np.vstack(yy) , np.vstack(ii)
         secid_i , secid_j = np.unique(ii[:,0] , return_inverse=True)
         date_i  , date_j  = np.unique(ii[:,1] , return_inverse=True)
-        hh_values = np.full((len(secid_i) , len(date_i) , hh.shape[-1]) , fill_value=np.nan)
-        hh_values[secid_j , date_j] = hh[:]
+        hh_values = np.full((len(secid_i) , len(date_i) , hh.shape[-1]) , fill_value = np.nan)
+        yy_values = np.full((len(secid_i) , len(date_i)) , fill_value = np.nan)
         
-        yy_values = np.full((len(secid_i) , len(date_i) , 1) , fill_value=np.nan)
-        yy_values[secid_j , date_j] = yy[...,:1]
+        hh_values[secid_j , date_j] = hh[:]
+        yy_values[secid_j , date_j] = yy[...,0]
 
         return BoosterData(hh_values , yy_values , self.y_secid[secid_i] , self.y_date[date_i])
 
-    def fit(self):
-        self.net.eval()
-        with torch.no_grad():
-            train_data = self.booster_data(self.train_dl)
-            valid_data = self.booster_data(self.valid_dl)
+    def fit(self , net : nn.Module):
+        train_data = self.booster_data(net , self.train_dl)
+        valid_data = self.booster_data(net , self.valid_dl)
         self.model = Lgbm(train_data , valid_data).fit()
         # self.model.plot.training()
         return self
     
     def load(self , model_str):
         self.model = Lgbm.model_from_string(model_str)
+        self.loaded = True
         return self
     
-    def predict(self , batch_data : BatchData , batch_output : BatchOutput):
-        hidden = batch_output.hidden
+    def predict(self):
+        assert self.loaded
+        hidden = self.module.batch_output.hidden
         if hidden is None: return
         hidden = hidden.detach().cpu().numpy()
-        label = batch_data.y.detach().cpu().numpy()
-        
-        new_pred = self.model.predict(BoosterData(hidden , label) , reform = False)
-        print(new_pred)
-        return new_pred
+        label = self.module.batch_data.y.detach().cpu().numpy()
+        pred  = torch.tensor(self.model.predict(BoosterData(hidden , label) , reform = False))
+        return pred
             
     

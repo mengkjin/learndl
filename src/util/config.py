@@ -380,7 +380,7 @@ class TrainConfig:
     def print_out(self):
         subset = [
             'random_seed' , 'model_name' , 'model_module' , 'model_data_type' , 
-            'beg_date' , 'end_date' , 'sample_method' , 'shuffle_option' ,
+            'beg_date' , 'end_date' , 'sample_method' , 'shuffle_option' , 'lgbm_ensembler'
         ]
         pretty_print_dict({k:self.get(k) for k in subset})
         # pretty_print_dict(self.train_param)
@@ -396,6 +396,8 @@ class ModelDict:
         assert bool(self.model_path)
         os.makedirs(self.model_path , exist_ok=True)
 
+    def __getitem__(self , key):
+        return self.load(key)
     def path(self , key): return f'{self.model_path}/{key}.pt'
     def load(self , key : str) -> Any:
         path = self.path(key)

@@ -275,20 +275,26 @@ class BoosterData:
         if isinstance(y , torch.Tensor): y = y.detach().cpu().numpy()
 
         assert isinstance(x , np.ndarray) and isinstance(y , np.ndarray) , (x,y)
+
+        assert x.ndim in [2,3] , x.ndim
+        assert y.ndim in [x.ndim - 1, x.ndim] , (y.ndim , x.ndim)
+        
+        if y.ndim == x.ndim:
+            assert y.shape[-1] == 1 , y.shape
+            y = y[...,0]
+
+        if x.ndim == 2: 
+            x , y = x[:,None,:] , y[:,None]
+
+        if self.secid is None:  self.secid = xindex[0] if xindex[0] is not None else np.arange(x.shape[0])
+        if self.date  is None : self.date  = xindex[1] if xindex[1] is not None else np.arange(x.shape[1])
+        if self.feature is None : self.feature = xindex[-1] if xindex[-1] is not None else np.array([f'F.{i}' for i in range(x.shape[-1])])
+
+        assert x.shape == (len(self.secid) , len(self.date) , len(self.feature)) , (x.shape , (len(self.secid) , len(self.date) , len(self.feature)))
+        assert y.shape == (len(self.secid) , len(self.date)) , (y.shape , (len(self.secid) , len(self.date)))
+
         self.x , self.y = x , y
-
-        if self.y.ndim == 3:
-            assert self.y.shape[-1] == 1
-            self.y = self.y[...,0]
-
-        if self.secid is None:  self.secid = xindex[0] if xindex[0] is not None else np.arange(self.x.shape[0])
-        if self.date  is None : self.date  = xindex[1] if xindex[1] is not None else np.arange(self.x.shape[1])
-        if self.feature is None : self.feature = xindex[-1] if xindex[-1] is not None else np.array([f'F.{i}' for i in range(self.x.shape[-1])])
-
-        assert self.x.shape == (len(self.secid) , len(self.date) , len(self.feature))
-        assert self.y.shape == (len(self.secid) , len(self.date))
-
-        self.finite = np.isfinite(self.y)
+        self.finite = np.isfinite(y)
 
         self.update_feature()
         if self.weight_param is None: self.weight_param = {'tau':0.75*np.log(0.5)/np.log(0.75) , 'ts_type':'lin' , 'rate':0.5}  
@@ -315,21 +321,20 @@ class BoosterData:
         else:
             return self.X_feat(self.use_feature).reshape(-1,len(self.use_feature))[self.finite.flatten()]
 
-    def Y(self): return self.y.flatten()[self.finite.flatten()]
+    def Y(self): return self.y[self.finite]
 
     def W(self , weight_param : Optional[dict] = None):
         weight_param = self.weight_param if weight_param is None else weight_param
         if weight_param is None: weight_param = {}
         w = self.calculate_weight(self.y , **weight_param)
-        return w.flatten()[self.finite.flatten()]
+        return w[self.finite]
     
     def X_feat(self , feature): return self.x[...,match_values(feature , self.feature)]
 
     def reform_pred(self , pred):
-        new_pred = self.y.flatten()
-        new_pred[self.finite.flatten()] = pred
-        pred = new_pred.reshape(*self.y.shape)
-        pred = np.array(pred)
+        new_pred = self.y * 0
+        new_pred[self.finite] = pred
+        pred = np.array(new_pred)
         if self.input_type == pd.Series:
             pred = pd.DataFrame(pred , columns = self.date)
             pred[self.var_sec] = self.secid

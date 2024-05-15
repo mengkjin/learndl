@@ -5,7 +5,7 @@ from tqdm import tqdm
 from typing import Literal
 
 from .store import Storage
-from ..classes import BatchData
+from ..classes import BatchData , BaseDataModule
                 
 class DataloaderStored:
     ''''retrieve batch_data from a Storage'''
@@ -27,7 +27,7 @@ class DataloaderStored:
     
 class LoaderWrapper:
     '''wrap loader to impletement DataModule Callbacks'''
-    def __init__(self , data_module , raw_loader , device , verbosity = 0) -> None:
+    def __init__(self , data_module : BaseDataModule , raw_loader , device , verbosity = 0) -> None:
         self.data_module = data_module
         self.device = device
         self.verbosity = verbosity

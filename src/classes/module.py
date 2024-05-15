@@ -218,7 +218,7 @@ class BaseDataModule(ABC):
     def predict_dataloader(self) -> Iterator[BatchData]: '''return predict dataloaders'''
     def on_before_batch_transfer(self , batch : BatchData , dataloader_idx = None): return batch
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None): 
-        batch.to(getattr(self , 'device' , None) if device is None else device)
+        return batch.to(getattr(self , 'device' , None) if device is None else device)
     def on_after_batch_transfer(self , batch : BatchData , dataloader_idx = None): return batch
 
 class BaseModelModule(ABC):
@@ -230,11 +230,17 @@ class BaseModelModule(ABC):
         self.status = TrainerStatus(getattr(self , 'config').get('max_epoch'))
 
     @abstractmethod
-    def batch_forward(self) -> None: '''forward of batch_data'''
+    def batch_forward(self) -> None: 
+        '''forward of batch_data'''
+        self.batch_output = self(self.batch_data)
     @abstractmethod
-    def batch_metrics(self) -> None: '''calculate and collect of batch_data'''
+    def batch_metrics(self) -> None: 
+        '''calculate and collect of batch_data'''
+        ...
     @abstractmethod
-    def batch_backward(self) -> None: '''backward of batch loss'''
+    def batch_backward(self) -> None: 
+        '''backward of batch loss'''
+        ...
     @abstractmethod
     def init_config(self , **kwargs) -> None:
         '''initialized configuration'''
@@ -276,7 +282,7 @@ class BaseModelModule(ABC):
         if not isinstance(input , BatchData):
             return BatchOutput(self.net(input))
         elif input.is_empty:
-            return BatchOutput.empty()
+            return BatchOutput()
         else:
             return BatchOutput(self.net(input.x))
 

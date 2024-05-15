@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass , field
 from torch import Tensor
-from typing import Any , Literal
+from typing import Any , Literal , Optional
 
 @dataclass(slots=True)
 class BatchData:
@@ -61,17 +61,30 @@ class MetricList:
 
 @dataclass(slots=True)
 class BatchOutput:
-    outputs : Tensor | tuple | list
+    outputs : Optional[Tensor | tuple | list] = None
 
     @property
     def pred(self) -> Tensor:
-        return self.outputs[0] if isinstance(self.outputs , (list , tuple)) else self.outputs
+        if self.outputs is None:
+            return Tensor().requires_grad_()
+        elif isinstance(self.outputs , (list , tuple)):
+            return self.outputs[0]
+        else:
+            return self.outputs
     @property
-    def hidden(self) -> Tensor | None:
+    def hidden(self) -> Optional[Tensor]:
         if isinstance(self.outputs , (list , tuple)):
             assert len(self.outputs) == 2 , self.outputs
             return self.outputs[1]
         else:
             return None
-    @classmethod
-    def empty(cls): return cls((Tensor().requires_grad_() , Tensor().requires_grad_()))
+    def override_pred(self , pred : Tensor):
+        assert self.outputs is not None
+        assert len(pred) == len(self.pred) , (pred.shape , self.pred.shape)
+        pred = pred.reshape(*self.pred.shape)
+        if isinstance(self.outputs , (list , tuple)):
+            self.outputs = [pred , *self.outputs[1:]]
+        else:
+            self.outputs = pred
+        return self    
+    

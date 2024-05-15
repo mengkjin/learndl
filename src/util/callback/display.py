@@ -18,13 +18,16 @@ class CallbackTimer(WithCallBack):
         self._verbosity = verbosity
         self._hook_times : dict[str,list]  = {}
         self._start_time : dict[str,float] = {}
-    def at_enter(self , hook_name): self._start_time[hook_name] = time.time()
+    def at_enter(self , hook_name):
+        if self._verbosity >= 10:
+            self._start_time[hook_name] = time.time()
     def at_exit(self, hook_name):
-        if hook_name not in self._hook_times.keys(): self._hook_times[hook_name] = []
-        self._hook_times[hook_name].append(time.time() - self._start_time[hook_name])
-        self.__getattribute__(hook_name)()
+        if self._verbosity >= 10:
+            if hook_name not in self._hook_times.keys(): self._hook_times[hook_name] = []
+            self._hook_times[hook_name].append(time.time() - self._start_time[hook_name])
+            self.__getattribute__(hook_name)()
     def on_summarize_model(self):
-        if self._verbosity >= 1:
+        if self._verbosity >= 10:
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self._hook_times.items()]
             print(pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False))
@@ -45,12 +48,24 @@ class BatchDisplay(BasicCallBack):
         return self._dl.display if self._verbosity >= 10 and isinstance(self._dl, LoaderWrapper) else self._empty
     @staticmethod
     def _empty(*args , **kwargs): return 
-    def on_train_epoch_start(self):      self._init_tqdm('Train Ep#{:3d} loss : {:.5f}')
-    def on_validation_epoch_start(self): self._init_tqdm('Valid Ep#{:3d} score : {:.5f}')
-    def on_test_model_type_start(self):  self._init_tqdm('Test {} {} score : {:.5f}')
-    def on_train_batch_end(self):        self._display(self.status.epoch, self.metrics.aggloss)
-    def on_validation_batch_end(self):   self._display(self.status.epoch, self.metrics.aggscore)
-    def on_test_batch_end(self):         self._display(self.status.model_type , getattr(self.module , 'batch_dates')[self.module.batch_idx] , self.metrics.aggscore)
+    def on_train_epoch_start(self):
+        if self._verbosity >= 10:
+            self._init_tqdm('Train Ep#{:3d} loss : {:.5f}')
+    def on_validation_epoch_start(self):
+        if self._verbosity >= 10:
+            self._init_tqdm('Valid Ep#{:3d} score : {:.5f}')
+    def on_test_model_type_start(self):
+        if self._verbosity >= 10:
+            self._init_tqdm('Test {} {} score : {:.5f}')
+    def on_train_batch_end(self):
+        if self._verbosity >= 10:
+            self._display(self.status.epoch, self.metrics.aggloss)
+    def on_validation_batch_end(self):
+        if self._verbosity >= 10:
+            self._display(self.status.epoch, self.metrics.aggscore)
+    def on_test_batch_end(self):
+        if self._verbosity >= 10:
+            self._display(self.status.model_type , getattr(self.module , 'batch_dates')[self.module.batch_idx] , self.metrics.aggscore)
             
 class StatusDisplay(BasicCallBack):
     '''display epoch / event information'''

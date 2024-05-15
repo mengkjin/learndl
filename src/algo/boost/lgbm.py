@@ -130,7 +130,7 @@ class Lgbm():
         
     def predict(self , inputs : Optional[BoosterData] = None , reform = True):
         if inputs is None: inputs = self.data['test']
-        pred = self.model.predict(inputs.X())
+        pred = np.array(self.model.predict(inputs.X()))
         if reform: pred = inputs.reform_pred(pred)
         return pred
     
