@@ -11,8 +11,9 @@ import torch
 from .data import DataModule
 from ..classes import BaseModelModule
 from ..model import model as MODEL
+from ..func import BigTimer
 from ..util import (
-    BigTimer , CallBackManager , Checkpoint , Deposition , Device , EnsembleModels ,
+    CallBackManager , Checkpoint , Deposition , Device , EnsembleModels ,
     Logger , Metrics , Optimizer , TrainConfig)
 
 class ModelTrainer(BaseModelModule):

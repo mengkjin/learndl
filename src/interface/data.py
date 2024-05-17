@@ -8,7 +8,7 @@ from torch.utils.data import BatchSampler
 from typing import Any , Literal , Optional
 
 from ..classes import BaseDataModule , BatchData
-from ..data import DataUpdater , ModuleData
+from ..data import DataProcessor , ModuleData
 from ..environ import DIR
 from ..func import tensor_standardize_and_weight , match_values
 from ..util import BufferSpace , DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig
@@ -60,8 +60,8 @@ class DataModule(BaseDataModule):
     
     @staticmethod
     def prepare_data():
-        DataUpdater.preprocess_data(False)
-        DataUpdater.preprocess_data(True)
+        DataProcessor.main(predict = False)
+        DataProcessor.main(predict = True)
 
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , param = {} , model_date = -1) -> None:
         if self.predict: stage = 'predict'

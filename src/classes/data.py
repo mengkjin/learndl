@@ -8,6 +8,7 @@ from torch import Tensor
 from typing import Any , ClassVar , Literal , Optional
 
 from ..func import match_values , index_union
+
 @dataclass
 class FailedData:
     type: str
@@ -334,17 +335,15 @@ class BoosterData:
     def reform_pred(self , pred):
         new_pred = self.y * 0
         new_pred[self.finite] = pred
-        pred = np.array(new_pred)
         if self.input_type == pd.Series:
-            pred = pd.DataFrame(pred , columns = self.date)
-            pred[self.var_sec] = self.secid
-            pred = pred.reset_index().melt(id_vars=self.var_sec,var_name=self.var_date)
-            pred = pred.set_index([self.var_date,self.var_sec])['value'].loc[self.df_index]
+            new_pred = pd.DataFrame(new_pred , columns = self.date)
+            new_pred[self.var_sec] = self.secid
+            new_pred = new_pred.reset_index().melt(id_vars=self.var_sec,var_name=self.var_date)
+            new_pred = new_pred.set_index([self.var_date,self.var_sec])['value'].loc[self.df_index]
         elif self.input_type == torch.Tensor:
-            pred = torch.Tensor(pred)
-            ...
+            new_pred = torch.Tensor(new_pred)
         else:
-            if not isinstance(pred , np.ndarray): pred = np.array(pred)
+            ...
         return pred
 
     @property

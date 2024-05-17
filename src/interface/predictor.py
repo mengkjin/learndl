@@ -8,7 +8,7 @@ from typing import ClassVar , Literal , Optional
 
 from .data import DataModule
 from ..classes import BatchOutput
-from ..data import load_target_file , GetData
+from ..data import GetData
 from ..environ import DIR
 from ..func.time import today , date_offset
 from ..util import Deposition , Device , TrainConfig
