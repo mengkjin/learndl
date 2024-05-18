@@ -1,12 +1,12 @@
-import argparse , itertools , os , random , shutil , socket
+import argparse , os , random , shutil , socket
 import numpy as np
 import torch
 
 from dataclasses import dataclass , field
 from typing import Any , ClassVar , Literal , Optional
 
-from ..func.basic import pretty_print_dict , recur_update , Filtered
-from ..environ import DIR
+from ..func.basic import pretty_print_dict , recur_update
+from ..environ import PATH , CONF
 
 @dataclass    
 class ModelParam:
@@ -16,15 +16,15 @@ class ModelParam:
     n_model     : int          = 0
     params      : list[dict]   = field(default_factory=list)
 
-    model_yaml  : ClassVar[str] = 'model_{}.yaml'
-    default_yaml: ClassVar[str] = 'model_default.yaml'
-    inday_dims  : ClassVar[dict] = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
+    MODEL_YAML  : ClassVar[str] = 'model_{}.yaml'
+    DEFAULT_YAML: ClassVar[str] = 'model_default.yaml'
+    INDAY_DIMS  : ClassVar[dict] = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
 
     def __post_init__(self) -> None:
-        source_dir = DIR.conf if self.config_path == 'default' else self.config_path
-        source_base = self.model_yaml.format(self.module.lower())
-        if not os.path.exists(f'{source_dir}/{source_base}'): source_base = self.default_yaml
-        self.Param = DIR.read_yaml(f'{source_dir}/{source_base}')
+        source_dir = PATH.conf if self.config_path == 'default' else self.config_path
+        source_base = self.MODEL_YAML.format(self.module.lower())
+        if not os.path.exists(f'{source_dir}/{source_base}'): source_base = self.DEFAULT_YAML
+        self.Param = PATH.read_yaml(f'{source_dir}/{source_base}')
         assert isinstance(self.Param , dict)
         for key , value in self.Param.items():
             if isinstance(value , (list,tuple)): 
@@ -40,9 +40,9 @@ class ModelParam:
         return self.Param.get(key , default)
     
     def copy_to(self , target_dir , exist_ok = False):
-        source_dir = DIR.conf if self.config_path == 'default' else self.config_path
-        target_base = self.model_yaml.format(self.module.lower())
-        source_base = target_base if os.path.exists(f'{source_dir}/{target_base}') else self.default_yaml
+        source_dir = PATH.conf if self.config_path == 'default' else self.config_path
+        target_base = self.MODEL_YAML.format(self.module.lower())
+        source_base = target_base if os.path.exists(f'{source_dir}/{target_base}') else self.DEFAULT_YAML
         os.makedirs(target_dir, exist_ok = True)
         if not exist_ok: assert not os.path.exists(f'{target_dir}/{target_base}')
         shutil.copyfile(f'{source_dir}/{source_base}' , f'{target_dir}/{target_base}')
@@ -52,7 +52,7 @@ class ModelParam:
 
     @classmethod
     def load(cls , base_path , model_num : int | None = None):
-        Param = DIR.read_yaml(f'{base_path}/{cls.model_yaml}')
+        Param = PATH.read_yaml(f'{base_path}/{cls.MODEL_YAML}')
         assert isinstance(Param , dict)
         n_model = 1
         for key , value in Param.items():
@@ -95,12 +95,12 @@ class TrainParam:
     model_name  : str | None = None
     override    : dict | None = None
 
-    train_yaml  : ClassVar[str] = 'train_param.yaml'
+    TRAIN_YAML  : ClassVar[str] = 'train_param.yaml'
 
     def __post_init__(self) -> None:
-        source_dir = DIR.conf if self.config_path == 'default' else self.config_path
-        source_base = self.train_yaml
-        Param : dict = DIR.read_yaml(f'{source_dir}/{source_base}')
+        source_dir = PATH.conf if self.config_path == 'default' else self.config_path
+        source_base = self.TRAIN_YAML
+        Param : dict = PATH.read_yaml(f'{source_dir}/{source_base}')
         if self.override: Param.update(self.override)
         if socket.gethostname() != 'mengkjin-server': Param['short_test'] = True
 
@@ -125,16 +125,16 @@ class TrainParam:
         return self.configs[key]
     
     def copy_to(self , target_dir , exist_ok = False):
-        source_dir = DIR.conf if self.config_path == 'default' else self.config_path
-        target_base = source_base = self.train_yaml
+        source_dir = PATH.conf if self.config_path == 'default' else self.config_path
+        target_base = source_base = self.TRAIN_YAML
         os.makedirs(target_dir, exist_ok = True)
         if not exist_ok: assert not os.path.exists(f'{target_dir}/{target_base}')
         shutil.copyfile(f'{source_dir}/{source_base}' , f'{target_dir}/{target_base}')
 
     @property
-    def model_base_path(self) -> str: return f'{DIR.model}/{self.model_name}'
+    def model_base_path(self) -> str: return f'{PATH.model}/{self.model_name}'
     @property
-    def resumeable(self) -> bool: return os.path.exists(f'{self.model_base_path}/{self.train_yaml}')
+    def resumeable(self) -> bool: return os.path.exists(f'{self.model_base_path}/{self.TRAIN_YAML}')
     @property
     def model_module(self) -> str: return self.configs['model_module'].lower()
 
@@ -309,8 +309,8 @@ class TrainConfig:
         '''ask if resume training when candidate names exists'''
         model_name = self.Train.model_name
         assert model_name is not None
-        candidate_name = [model for model in [self.model_name] if os.path.exists(f'{DIR.model}/{model}')] + \
-                [model for model in os.listdir(DIR.model) if model.startswith(model_name + '.')]  
+        candidate_name = [model for model in [self.model_name] if os.path.exists(f'{PATH.model}/{model}')] + \
+                [model for model in os.listdir(PATH.model) if model.startswith(model_name + '.')]  
         if len(candidate_name) > 0 and 'fit' in self.stage_queue:
             if value < 0:
                 print(f'--Multiple model path of {self.model_name} exists, input [yes] to resume training, or start a new one!')
@@ -335,8 +335,8 @@ class TrainConfig:
         '''        
         model_name = self.Train.model_name
         assert model_name is not None
-        candidate_name = [model for model in [model_name] if os.path.exists(f'{DIR.model}/{model}')] + \
-                [model for model in os.listdir(DIR.model) if model.startswith(model_name + '.')] 
+        candidate_name = [model for model in [model_name] if os.path.exists(f'{PATH.model}/{model}')] + \
+                [model for model in os.listdir(PATH.model) if model.startswith(model_name + '.')] 
         if self.short_test:
             ...
         elif 'fit' in self.stage_queue and candidate_name:
@@ -345,7 +345,7 @@ class TrainConfig:
             elif self.resume_training:
                 if value < 0:
                     print(f'--Attempting to resume but multiple models exist, input number to choose')
-                    [print(str(i) + ' : ' + f'{DIR.model}/{model}') for i , model in enumerate(candidate_name)]
+                    [print(str(i) + ' : ' + f'{PATH.model}/{model}') for i , model in enumerate(candidate_name)]
                     value = int(input('which one to use? '))
                 model_name = candidate_name[value]
             else:
@@ -363,7 +363,7 @@ class TrainConfig:
             else:
                 if value < 0:
                     print(f'--Attempting to test while multiple models exists, input number to choose')
-                    [print(str(i) + ' : ' + f'{DIR.model}/{model}') for i , model in enumerate(candidate_name)]
+                    [print(str(i) + ' : ' + f'{PATH.model}/{model}') for i , model in enumerate(candidate_name)]
                     value = int(input('which one to use? '))
                 model_name = candidate_name[value]
 
@@ -390,7 +390,7 @@ class TrainConfig:
 class ModelDict:
     model_path : str = ''
 
-    __members__ : ClassVar[list[str]] = ['state_dict' , 'lgbm_string']
+    MEMBERS : ClassVar[list[str]] = ['state_dict' , 'lgbm_string']
 
     def __post_init__(self):
         assert bool(self.model_path)
@@ -410,5 +410,5 @@ class ModelDict:
     def save(self , model_dict : dict[str,Any]):
         assert model_dict['state_dict'] is not None , str(model_dict)
         for key , value in model_dict.items():
-            assert key in self.__members__ and value is not None , key
+            assert key in self.MEMBERS and value is not None , key
             torch.save(value , self.path(key))

@@ -2,13 +2,12 @@ import os , time
 import numpy as np
 import pandas as pd
 
-from collections import deque
 from dataclasses import asdict , dataclass , field
 from typing import Callable , ClassVar , Optional
 
 from .base import BasicCallBack , WithCallBack
 from ...util.loader import LoaderWrapper
-from ...environ import DIR
+from ...environ import PATH
 
 class CallbackTimer(WithCallBack):
     '''record time cost of callback hooks'''
@@ -69,7 +68,7 @@ class BatchDisplay(BasicCallBack):
             
 class StatusDisplay(BasicCallBack):
     '''display epoch / event information'''
-    result_path = f'{DIR.result}/model_results.yaml'
+    result_path = f'{PATH.result}/model_results.yaml'
 
     def __init__(self , model_module , verbosity = 2):
         super().__init__(model_module)
@@ -143,7 +142,7 @@ class StatusDisplay(BasicCallBack):
             '7_test'  : self._texts.get('test'),
             '8_result': self._test_record.test_scores,
         }
-        DIR.dump_yaml(result , self.result_path)
+        PATH.dump_yaml(result , self.result_path)
 
     def on_data_start(self):    self.logger.critical(self.tic_str('data'))
     def on_data_end(self):      self.logger.critical(self.toc_str('data'))
@@ -202,8 +201,8 @@ class StatusDisplay(BasicCallBack):
         model_types : list = field(default_factory=list)
         printer : Callable = print
 
-        summary_rname : ClassVar[dict[str,str]] = {'Avg':'AllTimeAvg','Sum':'AllTimeSum','Std':'Std','T':'TValue','IR':'AnnIR'}
-        summary_digit : ClassVar[dict[str,int]] = {'Avg':4,'Sum':2,'Std':4,'T':2,'IR':4}
+        SUMMARY_ADDROWS : ClassVar[dict[str,str]] = {'Avg':'AllTimeAvg','Sum':'AllTimeSum','Std':'Std','T':'TValue','IR':'AnnIR'}
+        SUMMARY_NDIGITS : ClassVar[dict[str,int]] = {'Avg':4,'Sum':2,'Std':4,'T':2,'IR':4}
 
         def __post_init__(self):
             self.n_num = len(self.model_nums)
@@ -243,7 +242,7 @@ class StatusDisplay(BasicCallBack):
                 'IR'  : score_mean / score_std * ((240 / 10)**0.5) ,
             }
             values = np.concatenate([self.score_by_model , np.stack(list(self.summary.values()))])
-            index  = [str(d) for d in self.row_model] + [self.summary_rname[k] for k in self.summary.keys()]
+            index  = [str(d) for d in self.row_model] + [self.SUMMARY_ADDROWS[k] for k in self.summary.keys()]
             return pd.DataFrame(values , index = index , columns = self.col_summary)
 
         def print_colnames(self):
@@ -254,7 +253,7 @@ class StatusDisplay(BasicCallBack):
             self.print_row(self.row_model[-1] , self.score_by_model[-1,:] , 4)
 
         def print_summary(self):
-            [self.print_row(self.summary_rname[k],v,self.summary_digit[k]) for k,v in self.summary.items()]
+            [self.print_row(self.SUMMARY_ADDROWS[k],v,self.SUMMARY_NDIGITS[k]) for k,v in self.summary.items()]
 
         def print_row(self , row , values , digit = 2):
             fmt = 's' if isinstance(values[0] , str) else (f'd' if digit == 0 else f'.{digit}f')
@@ -273,5 +272,5 @@ class StatusDisplay(BasicCallBack):
         @property
         def test_scores(self):
             if not hasattr(self , 'summary'): return
-            return {col:'|'.join([f'{k}({round(v[i],self.summary_digit[k])})' for k,v in self.summary.items()]) 
+            return {col:'|'.join([f'{k}({round(v[i],self.SUMMARY_NDIGITS[k])})' for k,v in self.summary.items()]) 
                     for i , col in enumerate(self.col_summary)}

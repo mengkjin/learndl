@@ -3,11 +3,10 @@ import numpy as np
 import pandas as pd
 
 from typing import Literal
-from ...environ import DIR
+from ...environ import PATH , CONF
 
-DB_by_name  : list[str] = ['information']
-DB_by_date  : list[str] = ['models' , 'trade' , 'labels']  
-save_option : Literal['feather' , 'parquet'] = 'feather'
+DB_BY_NAME  : list[str] = ['information']
+DB_BY_DATE  : list[str] = ['models' , 'trade' , 'labels']  
 
 def list_files(directory , fullname = False , recur = False):
     '''list all files in directory'''
@@ -23,14 +22,14 @@ def list_files(directory , fullname = False , recur = False):
 
 def get_target_path(db_src , db_key , date = None , makedir = False , 
                     force_type : Literal['name' , 'date'] | None = None):
-    if db_src in DB_by_name or force_type == 'name':
-        db_path = os.path.join(DIR.db , f'DB_{db_src}')
-        db_base = f'{db_key}.{save_option}'
-    elif db_src in DB_by_date or force_type == 'date':
+    if db_src in DB_BY_NAME or force_type == 'name':
+        db_path = os.path.join(PATH.database , f'DB_{db_src}')
+        db_base = f'{db_key}.{CONF.SAVE_OPT_DB}'
+    elif db_src in DB_BY_DATE or force_type == 'date':
         assert date is not None
         year_group = int(date) // 10000
-        db_path = os.path.join(DIR.db , f'DB_{db_src}' , db_key , str(year_group))
-        db_base = f'{db_key}.{str(date)}.{save_option}'
+        db_path = os.path.join(PATH.database , f'DB_{db_src}' , db_key , str(year_group))
+        db_base = f'{db_key}.{str(date)}.{CONF.SAVE_OPT_DB}'
     else:
         raise KeyError(db_src)
     if makedir: os.makedirs(db_path , exist_ok=True)
@@ -38,11 +37,11 @@ def get_target_path(db_src , db_key , date = None , makedir = False ,
 
 
 def get_source_dates(db_src , db_key):
-    assert db_src in DB_by_date
+    assert db_src in DB_BY_DATE
     return R_source_dates('/'.join([db_src , re.sub(r'\d+', '', db_key)]))
 
 def get_target_dates(db_src , db_key):
-    db_path = os.path.join(DIR.db , f'DB_{db_src}' , db_key)
+    db_path = os.path.join(PATH.database , f'DB_{db_src}' , db_key)
     target_files = list_files(db_path , recur=True)
     target_dates = R_path_date(target_files)
     return np.array(sorted(target_dates) , dtype=int)
@@ -55,13 +54,13 @@ def load_target_file(db_src , db_key , date = None):
         return None
 
 def save_df(df : pd.DataFrame , target_path):
-    if save_option == 'feather':
+    if CONF.SAVE_OPT_DB == 'feather':
         df.to_feather(target_path)
     else:
         df.to_parquet(target_path , engine='fastparquet')
 
 def load_df(target_path):
-    if save_option == 'feather':
+    if CONF.SAVE_OPT_DB == 'feather':
         return pd.read_feather(target_path)
     else:
         return pd.read_parquet(target_path , engine='fastparquet')

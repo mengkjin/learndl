@@ -1,58 +1,47 @@
-import argparse , gc , time
+import argparse , gc , inspect, time
 import numpy as np
 
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from torch import Tensor
-from typing import Any , ClassVar , Iterator , Optional
+from typing import Any , Iterator , Optional
 
 from .core import DataBlock , data_type_abbr
 from ..func.time import Timer , today
 from ..func.primas import neutralize_2d , process_factor
 
+TRAIN_DATASET = ['y' , 'day' , '30m' , 'risk']
+PREDICT_DATASET = ['y' , 'day' , '30m' , 'risk']
+
 @dataclass(slots=True)
 class DataProcessor:
     predict         : bool 
     blocks          : list[str] = field(default_factory=list)
+    mask            : dict[str,Any] = field(default_factory=dict)
     load_start_dt   : Optional[int] = None
     load_end_dt     : Optional[int] = None
-    save_start_dt   : Optional[int] = 20070101
+    save_start_dt   : Optional[int] = None
     save_end_dt     : Optional[int] = None
     hist_start_dt   : Optional[int] = None
-    hist_end_dt     : Optional[int] = 20161231
-    mask            : dict[str,Any] = field(default_factory=dict)
-
-    default_mask : ClassVar[dict[str,Any]] = {'list_dt': 91}
+    hist_end_dt     : Optional[int] = None    
 
     def __post_init__(self):
         self.blocks = [data_type_abbr(blk) for blk in self.blocks]
         if self.predict:
-            self.load_start_dt = today(-366)
-            self.load_end_dt   = None
-            self.save_start_dt = None
-            self.save_end_dt   = None
-            self.hist_start_dt = None
-            self.hist_end_dt   = None
-        if not self.mask: self.mask = self.default_mask
+            self.load_start_dt = -366
+        else:
+            self.save_start_dt = 20070101
+            self.hist_end_dt   = 20161231
+        if not self.mask: self.mask = {'list_dt': 91}
 
     def processors(self) -> Iterator[tuple[str , '_TypeProcessor']]:
         for blk in self.blocks:
-            yield blk , self.default_type_processor(blk)
-
-    @staticmethod
-    def default_type_processor(blk : str) -> '_TypeProcessor':
-        return {
-            'y' : procLabel ,
-            'day' : procDay ,
-            '30m' : proc30min ,
-            '15m' : proc15min ,
-            'week' : procWeek ,
-        }[blk]()
+            yield blk , select_processor(blk)
     
     @classmethod
     def main(cls , predict = False, confirm = 0 , parser = None , data_key = None):
         if parser is None:
-            parser = argparse.ArgumentParser(description='manual to this script')
+            parser = argparse.ArgumentParser(description = 'manual to this script')
             parser.add_argument("--confirm", type=str, default = confirm)
             args , _ = parser.parse_known_args()
 
@@ -62,7 +51,7 @@ class DataProcessor:
         t1 = time.time()
         print(f'predict is {predict} , Data Processing start!')
 
-        processor = cls(predict , blocks = ['y' , 'trade_day' , 'trade_30m'])
+        processor = cls(predict , blocks = PREDICT_DATASET if predict else TRAIN_DATASET)
         print(f'{len(processor.blocks)} datas :' + str(list(processor.blocks)))
 
         for key , proc in processor.processors():
@@ -84,29 +73,49 @@ class DataProcessor:
 
         print(f'Data Processing Finished! Cost {time.time() - t1:.2f} Seconds')
 
+@dataclass(slots=True)
+class BlockLoader:
+    db_src  : str
+    db_key  : str | list
+    feature : Optional[list] = None
+
+    def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , **kwargs):
+        if end_dt is not None   and end_dt < 0:   end_dt   = today(end_dt)
+        if start_dt is not None and start_dt < 0: start_dt = today(start_dt)
+
+        sub_blocks = []
+        db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
+        for db_key in db_keys:
+            with Timer(f' --> {self.db_src} blocks reading [{db_key}] DataBase'):
+                blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , self.feature , **kwargs)
+                sub_blocks.append(blk)
+        if len(sub_blocks) <= 1:  
+            block = sub_blocks[0]
+        else:
+            with Timer(f' --> {self.db_src} blocks merging ({len(sub_blocks)})'): 
+                block = DataBlock.merge(sub_blocks)
+        return block
+
 class _TypeProcessor(ABC):
+    TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']
+    INDUS_FEAT : list[str] = [
+        'petro', 'coal', 'nonferrous','utility', 'public', 'steel', 
+        'chemical', 'construct', 'cement', 'material', 'light', 'machine', 
+        'power', 'defense', 'auto', 'retail', 'leisure', 'appliance', 
+        'textile', 'health', 'liqor', 'food', 'agro', 'bank', 
+        'financial', 'estate', 'transport', 'marine', 'airline', 
+        'electronic', 'telecom', 'hardware', 'software', 'media', 'complex']
+    STYLE_FEAT : list[str] = [
+        'size', 'beta', 'momentum',
+        'residual_volatility', 'non_linear_size', 'book_to_price',
+        'liquidity', 'earnings_yield', 'growth', 'leverage']
+
     @abstractmethod
     def block_loaders(self) -> dict[str,'BlockLoader']: ... 
     @abstractmethod
     def final_feat(self) -> Optional[list]: ... 
     @abstractmethod
     def process(self, blocks : dict[str,DataBlock]) -> DataBlock: ...
-
-    @dataclass(slots=True)
-    class BlockLoader:
-        db_src  : str
-        db_key  : str | list
-        feature : Optional[list] = None
-        def load_block(self , start_dt = None , end_dt = None , **kwargs):
-            sub_blocks = []
-            db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
-            for db_key in db_keys:
-                with Timer(f' --> {self.db_src} blocks reading [{db_key}] DataBase\'s'):
-                    blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , self.feature , **kwargs)
-                    sub_blocks.append(blk)
-            with Timer(f' --> {self.db_src} blocks merging'):
-                sub_blocks = DataBlock.merge(sub_blocks)
-            return sub_blocks
         
     def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , **kwargs):
         blocks : dict[str,DataBlock] = {}
@@ -115,22 +124,25 @@ class _TypeProcessor(ABC):
             secid_align = blocks[src_key].secid
             date_align  = blocks[src_key].date
         return blocks
+    
     def process_blocks(self, blocks : dict[str,DataBlock]):
-        np.seterr(invalid='ignore' , divide = 'ignore')
+        np.seterr(invalid = 'ignore' , divide = 'ignore')
         data_block = self.process(blocks)
         data_block = data_block.align_feature(self.final_feat())
-        np.seterr(invalid='warn' , divide = 'warn')
+        np.seterr(invalid = 'warn' , divide = 'warn')
         return data_block
+    
+def select_processor(key : str) -> _TypeProcessor:
+    return getattr(inspect.getmodule(select_processor) , f'proc{key.capitalize()}')
 
-class procLabel(_TypeProcessor):
+class procY(_TypeProcessor):
     def block_loaders(self):
-        return {'labels': self.BlockLoader('labels',['ret10_lag','ret20_lag']) ,
-                'models': self.BlockLoader('models','risk_exp')}
+        return {'y' : BlockLoader('labels', ['ret10_lag', 'ret20_lag']) ,
+                'risk' : BlockLoader('models', 'risk_exp', [*self.INDUS_FEAT, 'size'])}
     def final_feat(self): return None
     def process(self , blocks : dict[str,DataBlock]): 
-        data_block = blocks['labels']
-        model_exp  = blocks['models']
-        indus_size = model_exp.values[...,:model_exp.feature.tolist().index('size')+1]
+        data_block , model_exp = blocks['y'] , blocks['risk']
+        indus_size = model_exp.values[...,:]
         x = Tensor(indus_size).permute(1,0,2,3).squeeze(2)
         for i_feat,lb_name in enumerate(data_block.feature):
             if lb_name[:3] == 'rtn':
@@ -146,70 +158,84 @@ class procLabel(_TypeProcessor):
             data_block.values[...,i_feat] = y_pro
 
         return data_block
-    
 class procDay(_TypeProcessor):
     def block_loaders(self): 
-        return {'day' : self.BlockLoader('trade','day',['adjfactor','close','high','low','open','vwap','turn_fl'])}
-    def final_feat(self): return ['open','close','high','low','vwap','turn_fl']
-    def process(self , blocks : dict[str,DataBlock]): 
-        data_block = blocks['day']
-        data_block = data_block.adjust_price()
-        return data_block
+        return {'day' : BlockLoader('trade', 'day', ['adjfactor', *self.TRADE_FEAT])}
+    def final_feat(self): return self.TRADE_FEAT
+    def process(self , blocks): return blocks['day'].adjust_price()
     
-class proc15min(_TypeProcessor):
+class proc15m(_TypeProcessor):
     def block_loaders(self): 
-        return {'15m' : self.BlockLoader('trade','15min',['close','high','low','open','volume','vwap']) ,
-                'day' : self.BlockLoader('trade','day',['volume','turn_fl','preclose'])}
-    def final_feat(self): return ['open','close','high','low','vwap','turn_fl']
-    def process(self , blocks : dict[str,DataBlock]): 
+        return {'15m' : BlockLoader('trade', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
+                'day' : BlockLoader('trade', 'day', ['volume', 'turn_fl', 'preclose'])}
+    def final_feat(self): return self.TRADE_FEAT
+    def process(self , blocks): 
         data_block = blocks['15m']
         db_day     = blocks['day'].align(secid = data_block.secid , date = data_block.date)
         
-        data_block = data_block.adjust_price(divide=db_day.loc(feature='preclose'))
-        data_block = data_block.adjust_volume(divide=db_day.loc(feature='volume')/db_day.loc(feature='turn_fl'),vol_feat='volume')
+        data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
+        data_block = data_block.adjust_volume(divide = db_day.loc(feature = 'volume') / db_day.loc(feature = 'turn_fl') ,
+                                              vol_feat = 'volume')
         data_block = data_block.rename_feature({'volume':'turn_fl'})
         return data_block
     
-class proc30min(_TypeProcessor):
+class proc30m(_TypeProcessor):
     def block_loaders(self): 
-        return {'30m' : self.BlockLoader('trade','30min',['close','high','low','open','volume','vwap']) ,            
-                'day' : self.BlockLoader('trade','day',['volume','turn_fl','preclose'])}
-    def final_feat(self): return ['open','close','high','low','vwap','turn_fl']
+        return {'30m' : BlockLoader('trade', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,            
+                'day' : BlockLoader('trade', 'day', ['volume', 'turn_fl', 'preclose'])}
+    def final_feat(self): return self.TRADE_FEAT
 
-    def process(self , blocks : dict[str,DataBlock]): 
+    def process(self , blocks): 
         data_block = blocks['30m']
         db_day     = blocks['day'].align(secid = data_block.secid , date = data_block.date)
         
-        data_block = data_block.adjust_price(divide=db_day.loc(feature='preclose'))
-        data_block = data_block.adjust_volume(divide=db_day.loc(feature='volume')/db_day.loc(feature='turn_fl'),vol_feat='volume')
+        data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
+        data_block = data_block.adjust_volume(divide = db_day.loc(feature = 'volume') / db_day.loc(feature = 'turn_fl'), 
+                                              vol_feat = 'volume')
         data_block = data_block.rename_feature({'volume':'turn_fl'})
         return data_block
     
-class proc60min(_TypeProcessor):
+class proc60m(_TypeProcessor):
     def block_loaders(self): 
-        return {'60m' : self.BlockLoader('trade','60min',['close','high','low','open','volume','vwap']) ,            
-                'day' : self.BlockLoader('trade','day',['volume','turn_fl','preclose'])}
-    def final_feat(self): return ['open','close','high','low','vwap','turn_fl']
-    def process(self , blocks : dict[str,DataBlock]): 
+        return {'60m' : BlockLoader('trade', '60min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,            
+                'day' : BlockLoader('trade', 'day', ['volume', 'turn_fl', 'preclose'])}
+    def final_feat(self): return self.TRADE_FEAT
+    def process(self , blocks): 
         data_block = blocks['60m']
         db_day     = blocks['day'].align(secid = data_block.secid , date = data_block.date)
         
-        data_block = data_block.adjust_price(divide=db_day.loc(feature='preclose'))
-        data_block = data_block.adjust_volume(divide=db_day.loc(feature='volume')/db_day.loc(feature='turn_fl'),vol_feat='volume')
+        data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
+        data_block = data_block.adjust_volume(divide = db_day.loc(feature = 'volume') / db_day.loc(feature = 'turn_fl') ,
+                                              vol_feat = 'volume')
         data_block = data_block.rename_feature({'volume':'turn_fl'})
         return data_block
     
 class procWeek(_TypeProcessor):
+    WEEKDAYS = 5
     def block_loaders(self): 
-        return {'day':self.BlockLoader('trade','day',['adjfactor','preclose','close','high','low','open','vwap','turn_fl'])}
-    def final_feat(self): return ['open','close','high','low','vwap','turn_fl']
-    def process(self , blocks : dict[str,DataBlock]): 
-        num_days   = 5
+        return {'day':BlockLoader('trade', 'day', ['adjfactor', 'preclose', *self.TRADE_FEAT])}
+    def final_feat(self): return self.TRADE_FEAT
+    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , **kwargs):
+        if start_dt is not None and start_dt < 0: start_dt = 2 * start_dt
+        blocks : dict[str,DataBlock] = {}
+        for src_key , loader in self.block_loaders().items():
+            blocks[src_key] = loader.load_block(start_dt , end_dt , **kwargs).align(secid = secid_align , date = date_align)
+            secid_align = blocks[src_key].secid
+            date_align  = blocks[src_key].date
+        return blocks
+    
+    def process(self , blocks): 
         data_block = blocks['day'].adjust_price()
 
-        new_values = np.full(np.multiply(data_block.shape,(1,1,num_days,1)),np.nan)
-        for i in range(num_days): new_values[:,num_days-1-i:,i] = data_block.values[:,:len(data_block.date)-num_days+1+i,0]
+        new_values = np.full(np.multiply(data_block.shape,(1, 1, self.WEEKDAYS, 1)),np.nan)
+        for i in range(self.WEEKDAYS): 
+            new_values[:,self.WEEKDAYS-1-i:,i] = data_block.values[:,:len(data_block.date)-self.WEEKDAYS+1+i,0]
         data_block.update(values = new_values)
-        data_block = data_block.adjust_price(adjfactor = False , divide=data_block.loc(inday=0,feature='preclose'))
+        data_block = data_block.adjust_price(adjfactor = False , divide=data_block.loc(inday = 0,feature = 'preclose'))
         return data_block
     
+class procRisk(_TypeProcessor):
+    def block_loaders(self): 
+        return {'risk' : BlockLoader('models', 'risk_exp', self.STYLE_FEAT)}
+    def final_feat(self): return None
+    def process(self , blocks): return blocks['risk']

@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass , field
 from typing import Any , Callable
 
-from .common import DB_by_date , DB_by_name , save_option , get_target_path , get_source_dates , get_target_dates
+from .common import DB_BY_DATE , DB_BY_NAME , get_target_path , get_source_dates , get_target_dates
 from .fetcher_R import RFetcher
 
 # %%
@@ -18,9 +18,6 @@ class DataFetcher:
     fetcher     : Callable | str = 'default'
 
     def __post_init__(self):
-        self.DB_by_name  = DB_by_name
-        self.DB_by_date  = DB_by_date
-        self.save_option = save_option
         if self.fetcher == 'default':
             self.fetcher = self.default_fetcher(self.db_src , self.db_key)
 
@@ -43,9 +40,9 @@ class DataFetcher:
 
     def eval(self , date = None , **kwargs) -> Any:
         assert callable(self.fetcher)
-        if self.db_src in self.DB_by_name:
+        if self.db_src in DB_BY_NAME:
             v = self.fetcher(self.db_key , *self.args , **kwargs)
-        elif self.db_src in self.DB_by_date:
+        elif self.db_src in DB_BY_DATE:
             v = self.fetcher(date , *self.args , **kwargs)  
         return v
     

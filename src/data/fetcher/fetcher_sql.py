@@ -112,9 +112,9 @@ class SQLFetcher:
     startdt_query   : str = 'select min({date_col}) from {factor_set}'
     default_query   : str = 'select * from {factor_set} where {date_col} between \'{start_dt}\' and \'{end_dt}\''
 
-    db_src : ClassVar[str] = 'sellside'
-    freq : ClassVar[str] = 'QE' if pd.__version__ >= '2.2.0' else 'Q'
-    max_workers: ClassVar[int] = 1
+    DB_SRC : ClassVar[str] = 'sellside'
+    FREQ   : ClassVar[str] = 'QE' if pd.__version__ >= '2.2.0' else 'Q'
+    MAX_WORKERS: ClassVar[int] = 1
 
     def __post_init__(self):
         self.db_key = self.factor_src + '.' + self.factor_set
@@ -135,24 +135,24 @@ class SQLFetcher:
             end_dt = min(end_dt , int(date.today().strftime('%Y%m%d')))
             date_intervals = self.date_seg(start_dt , end_dt)
 
-        print(f'{time.ctime()} : {self.db_src}/{self.db_key} from ' + 
+        print(f'{time.ctime()} : {self.DB_SRC}/{self.db_key} from ' + 
               f'{date_intervals[0][0]} to {date_intervals[-1][1]}, total {len(date_intervals)} periods')
 
-        if self.max_workers == 1 or self.factor_src == 'dongfang':
+        if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang':
             connection.stay_connect = True
             for inter in date_intervals:
                 self.download_period(connection , *inter)
         else:
             connection.stay_connect = False
-            with mp.Pool(processes=self.max_workers) as pool:  
+            with mp.Pool(processes=self.MAX_WORKERS) as pool:  
                 pool.starmap(self.download_period, [(connection , *inter) for inter in date_intervals])
  
     def download_period(self , connection , start , end):
-        print(f'Start {self.db_src}/{self.db_key}:{start}-{end} ')
+        print(f'Start {self.DB_SRC}/{self.db_key}:{start}-{end} ')
         t0 = time.time()
         df = self.query_default(connection , start , end)
         self.save_data(df)
-        print(f'Done {self.db_src}/{self.db_key}:{start}-{end}, cost {time.time()-t0:.1f} Secs')
+        print(f'Done {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {time.time()-t0:.1f} Secs')
         return True
 
     def query_start_dt(self , connection : Connection):
@@ -190,7 +190,7 @@ class SQLFetcher:
         return df
 
     def get_target_dates(self):
-        return get_target_dates(self.db_src , self.db_key)
+        return get_target_dates(self.DB_SRC , self.db_key)
 
     def save_data(self , data):
         if len(data) == 0: return
@@ -198,7 +198,7 @@ class SQLFetcher:
         for d in data.index.unique():
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: continue
-            target_path = get_target_path(self.db_src , self.db_key , d , True , force_type='date')
+            target_path = get_target_path(self.DB_SRC , self.db_key , d , True , force_type='date')
             save_df(data_at_d , target_path)
 
     @classmethod
@@ -268,14 +268,14 @@ class SQLFetcher:
 
     @classmethod
     def date_seg(cls , start_dt , end_dt , astype = int):
-        dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=cls.freq).strftime('%Y%m%d').astype(int)
+        dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=cls.FREQ).strftime('%Y%m%d').astype(int)
         dt_starts = [cls.date_offset(start_dt) , *cls.date_offset(dt_list[:-1],1)]
         dt_ends = [*dt_list[:-1] , cls.date_offset(end_dt)]
         return [(astype(s),astype(e)) for s,e in zip(dt_starts , dt_ends)]
     
     @classmethod
     def date_between(cls , start_dt , end_dt , astype = int):
-        dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=cls.freq).strftime('%Y%m%d').astype(int)
+        dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=cls.FREQ).strftime('%Y%m%d').astype(int)
         return dt_list.values
     
     @staticmethod

@@ -3,16 +3,16 @@ import logging
 import colorlog
 from logging import handlers , RootLogger
 
-from ..environ import DIR
+from ..environ import PATH
 class Logger(RootLogger):
-    '''custom colored log , config at {DIR.conf}/logger.yaml '''
+    '''custom colored log , config at {PATH.conf}/logger.yaml '''
     def __new__(cls): return cls._init_logger()
 
     @staticmethod
     def _init_logger(test_output = False):
-        config_logger = DIR.read_yaml(f'{DIR.conf}/logger.yaml')
+        config_logger = PATH.read_yaml(f'{PATH.conf}/logger.yaml')
 
-        config_logger['file']['param']['filename'] = '/'.join([DIR.logs,config_logger['file']['param']['filename']])
+        config_logger['file']['param']['filename'] = '/'.join([PATH.logs,config_logger['file']['param']['filename']])
         os.makedirs(os.path.dirname(config_logger['file']['param']['filename']), exist_ok = True)
         log = logging.getLogger(config_logger['name'])
         exec("log.setLevel(logging."+config_logger['level']+")")

@@ -9,7 +9,7 @@ from typing import ClassVar , Literal , Optional
 from .data import DataModule
 from ..classes import BatchOutput
 from ..data import GetData
-from ..environ import DIR
+from ..environ import PATH
 from ..func.time import today , date_offset
 from ..util import Deposition , Device , TrainConfig
 from ..model import model as MODEL
@@ -63,7 +63,7 @@ class Predictor:
         if start_dt <= 0: start_dt = today(start_dt)
 
         device       = Device()
-        model_config = TrainConfig.load(f'{DIR.model}/{self.model_name}')
+        model_config = TrainConfig.load(f'{PATH.model}/{self.model_name}')
         deposition   = Deposition(model_config.model_base_path)
         model_param  = model_config.model_param[self.model_num]
         model_dates  = deposition.model_dates(self.model_num , self.model_type)

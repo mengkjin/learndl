@@ -8,7 +8,7 @@ from typing import Any , ClassVar , Optional
 
 from .fetcher import get_target_dates , load_target_file
 from ..classes import StockData4D
-from ..environ import DIR
+from ..environ import PATH , CONF
 from ..func import index_union , index_intersect , forward_fillna
 from ..func.time import date_offset , Timer
 
@@ -39,9 +39,7 @@ class GetData:
         calendar = calendar[(calendar >= start_dt) & (calendar <= end_dt)]
         return calendar
         
-class DataBlock(StockData4D):
-    save_option : ClassVar[str] = 'pt'
-    
+class DataBlock(StockData4D):   
     def save(self , key : str , predict=False , start_dt = None , end_dt = None):
         path = self.block_path(key , predict) 
         os.makedirs(os.path.dirname(path),exist_ok=True)
@@ -122,9 +120,9 @@ class DataBlock(StockData4D):
     def block_path(cls , key : str , predict=False, alias_search = True):
         train_mark = '.00' if predict else ''
         if key.lower() in ['y' , 'labels']: 
-            return f'{DIR.block}/Y{train_mark}.{cls.save_option}'
+            return f'{PATH.block}/Y{train_mark}.{CONF.SAVE_OPT_BLK}'
         else:
-            path = (f'{DIR.block}/X_'+'{}'+f'{train_mark}.{cls.save_option}')
+            path = (f'{PATH.block}/X_'+'{}'+f'{train_mark}.{CONF.SAVE_OPT_BLK}')
             return data_type_alias(path , key) if alias_search else path.format(key)
     
     @classmethod
@@ -186,7 +184,8 @@ class DataBlock(StockData4D):
     
     def mask_values(self , mask : dict , **kwargs):
         if not mask : return self
-        if mask_list_dt := mask.get('list_dt' , 91):
+        mask_pos = np.full(*self.shape , fill_value=False , dtype=bool)
+        if mask_list_dt := mask.get('list_dt'):
             desc = load_target_file('information' , 'description')
             assert desc is not None
             desc = desc[desc['secid'] > 0].loc[:,['secid','list_dt','delist_dt']]
@@ -206,31 +205,50 @@ class DataBlock(StockData4D):
             delist_dt = np.array(desc.loc[secid , 'delist_dt'])
             delist_dt[delist_dt < 0] = 21991231
 
-            mask_pos = np.stack([(date <= l) + (date >= d) for l,d in zip(list_dt , delist_dt)] , axis = 0) 
-            self.values[mask_pos] = np.nan
-
+            mask_pos += np.stack([(date <= l) + (date >= d) for l,d in zip(list_dt , delist_dt)] , axis = 0)
+        assert (~mask_pos).sum() / mask_pos.sum() > 1 , ((~mask_pos).sum() , mask_pos.sum())
+        self.values[mask_pos] = np.nan
         return self
     
     def hist_norm(self , key : str , predict = False ,
                   start_dt : Optional[int] = None , end_dt : Optional[int]  = 20161231 , 
                   step_day = 5 , **kwargs):
+        return DataBlockNorm.calculate(self , key , predict , start_dt , end_dt , step_day , **kwargs)
+
+@dataclass(slots=True)
+class DataBlockNorm:
+    avg : Tensor
+    std : Tensor
+    dtype : Any = None
+
+    DIVLAST  : ClassVar[list[str]] = ['day']
+    HISTNORM : ClassVar[list[str]] = ['day','15m','min','30m','60m','week']
+
+    def __post_init__(self):
+        self.avg = self.avg.to(self.dtype)
+        self.std = self.std.to(self.dtype)
+
+    @classmethod
+    def calculate(cls , block : DataBlock , key : str , predict = False ,
+                  start_dt : Optional[int] = None , end_dt : Optional[int]  = 20161231 , 
+                  step_day = 5 , **kwargs):
         
         key = data_type_abbr(key)
-        if predict or not (key in DataBlockNorm.valid_abbrs): return None
+        if predict or not (key in cls.HISTNORM): return None
 
-        maxday = {'day' : 60 , 'other' : 1 ,}
-        maxday = maxday[key] if key in maxday.keys() else maxday['other']
+        default_maxday = {'day' : 60}
+        maxday = default_maxday.get(key , 1)
 
-        date_slice = np.repeat(True , len(self.date))
-        if start_dt is not None: date_slice[self.date < start_dt] = False
-        if end_dt   is not None: date_slice[self.date > end_dt]   = False
+        date_slice = np.repeat(True , len(block.date))
+        if start_dt is not None: date_slice[block.date < start_dt] = False
+        if end_dt   is not None: date_slice[block.date > end_dt]   = False
 
-        secid , date , inday , feat = self.secid , self.date , self.shape[2] , self.feature
+        secid , date , inday , feat = block.secid , block.date , block.shape[2] , block.feature
 
         len_step = len(date[date_slice]) // step_day
         len_bars = maxday * inday
 
-        x = torch.tensor(self.values[:,date_slice])
+        x = torch.tensor(block.values[:,date_slice])
         pad_array = (0,0,0,0,maxday,0,0,0)
         x = torch.nn.functional.pad(x , pad_array , value = torch.nan)
         
@@ -239,18 +257,8 @@ class DataBlock(StockData4D):
         x_endpoint = x.shape[1]-1 + step_day * np.arange(-len_step + 1 , 1)
         x_div = torch.ones(len(secid) , len_step , 1 , len(feat)).to(x)
         re_shape = (*x_div.shape[:2] , -1)
-        if key in ['day']:
-            # day : divide by endpoint
+        if key in cls.DIVLAST: # divide by endpoint , day dataset
             x_div.copy_(x[:,x_endpoint,-1:])
-        else:
-            # will not do anything, just sample mean and std
-            ...
-            '''
-            # Xmin day : price divide by preclose , other divide by day sum
-            x_div.copy_(x[:,x_endpoint].sum(dim=2 , keepdim=True))
-            price_feat = [f for f in ['preclose' , 'close', 'high', 'low', 'open', 'vwap'] if f in feat]
-            if len(price_feat) > 0: x_div[...,np.isin(feat , price_feat)] = x[:,x_endpoint-1,-1:][...,feat == price_feat[0]]
-            '''
             
         nan_sample = (x_div == 0).reshape(*re_shape).any(dim = -1)
         nan_sample += x_div.isnan().reshape(*re_shape).any(dim = -1)
@@ -264,22 +272,9 @@ class DataBlock(StockData4D):
 
         assert avg_x.isnan().sum() + std_x.isnan().sum() == 0 , ((nan_sample == 0).sum())
         
-        data = DataBlockNorm(avg_x , std_x)
+        data = cls(avg_x , std_x)
         data.save(key)
         return data
-
-@dataclass(slots=True)
-class DataBlockNorm:
-    avg : Tensor
-    std : Tensor
-    dtype : Any = None
-
-    save_option : ClassVar[str] = 'pt'
-    valid_abbrs : ClassVar[list[str]] = ['day','15m','min','30m','60m','week']
-
-    def __post_init__(self):
-        self.avg = self.avg.to(self.dtype)
-        self.std = self.std.to(self.dtype)
 
     def save(self , key):
         DataBlock.save_dict({'avg' : self.avg , 'std' : self.std} , self.norm_path(key))
@@ -298,7 +293,8 @@ class DataBlockNorm:
     
     @classmethod
     def load_key(cls , key : str , predict = False , alias_search = True , dtype = None):
-        return cls.load_path(cls.norm_path(key , predict , alias_search))
+        path = cls.norm_path(key , predict , alias_search)
+        return cls.load_path(path)
 
     @classmethod
     def load_keys(cls , keys : str | list[str] , predict = False , alias_search = True , dtype = None):
@@ -307,8 +303,8 @@ class DataBlockNorm:
     
     @classmethod
     def norm_path(cls , key : str , predict = False, alias_search = True):
-        if key.lower() == 'y': return f'{DIR.hist_norm}/Y.{cls.save_option}'
-        path = (f'{DIR.hist_norm}/X_'+'{}'+f'.{cls.save_option}')
+        if key.lower() == 'y': return f'{PATH.norm}/Y.{CONF.SAVE_OPT_NORM}'
+        path = (f'{PATH.norm}/X_'+'{}'+f'.{CONF.SAVE_OPT_NORM}')
         return data_type_alias(path , key) if alias_search else path.format(key)
 
 @dataclass(slots=True)
@@ -328,15 +324,15 @@ class ModuleData:
         if dtype is None: dtype = torch.float
         if isinstance(dtype , str): dtype = getattr(torch , dtype)
         if predict: 
-            torch_pack = 'no_torch_pack'
+            dataset_path = 'no_dataset'
         else:
             last_date = max(DataBlock.load_dict(DataBlock.block_path('y'))['date'])
-            torch_pack_code = '+'.join(data_type_list)
-            torch_pack = f'{DIR.torch_pack}/{torch_pack_code}.{last_date}.pt'
+            dataset_code = '+'.join(data_type_list)
+            dataset_path = f'{PATH.dataset}/{dataset_code}.{last_date}.pt'
 
-        if os.path.exists(torch_pack):
-            print(f'use {torch_pack}')
-            data = cls(**torch.load(torch_pack))
+        if os.path.exists(dataset_path):
+            print(f'use {dataset_path}')
+            data = cls(**torch.load(dataset_path))
         else:
             data_type_list = ['y' , *data_type_list]
             
@@ -352,8 +348,8 @@ class ModuleData:
 
             data = {'x' : x , 'y' : y , 'norms' : norms , 'secid' : secid , 'date' : date}
             if not predict and save_upon_loading: 
-                os.makedirs(os.path.dirname(torch_pack) , exist_ok=True)
-                torch.save(data , torch_pack , pickle_protocol = 4)
+                os.makedirs(os.path.dirname(dataset_path) , exist_ok=True)
+                torch.save(data , dataset_path , pickle_protocol = 4)
             data = cls(**data)
 
         if y_labels is not None:  data.y.align_feature(y_labels)

@@ -244,8 +244,8 @@ class BoosterData:
     feature : Any = None
     weight_param : Optional[dict] = None
 
-    df_var_sec  : ClassVar[list[str]] = ['SecID','instrument']
-    df_var_date : ClassVar[list[str]] = ['TradeDate','datetime']
+    VAR_SECID : ClassVar[list[str]] = ['SecID','instrument']
+    VAR_DATE  : ClassVar[list[str]] = ['TradeDate','datetime']
 
     def __post_init__(self):
         x , y = self.raw_x , self.raw_y
@@ -255,8 +255,8 @@ class BoosterData:
         self.input_type = type(y)
         if isinstance(x , pd.DataFrame) and isinstance(y , pd.Series): 
             self.df_index = y.index
-            self.var_sec  = [v for v in self.df_var_sec  if v in x.index.names][0]
-            self.var_date = [v for v in self.df_var_date if v in x.index.names][0]
+            self.var_sec  = [v for v in self.VAR_SECID  if v in x.index.names][0]
+            self.var_date = [v for v in self.VAR_DATE if v in x.index.names][0]
             x = x.reset_index().set_index([self.var_sec,self.var_date])
             xarr = xr.Dataset.from_dataframe(x)
  

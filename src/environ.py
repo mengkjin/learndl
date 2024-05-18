@@ -1,19 +1,21 @@
 import os , shutil , yaml
 from dataclasses import dataclass
+from typing import Literal
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 MAIN_DIR = os.path.dirname(SRC_DIR)
 
 @dataclass
-class CustomDirSpace:
+class _CustomPath:
     main        : str = MAIN_DIR
     data        : str = os.path.join(MAIN_DIR , 'data')
-    batch       : str = os.path.join(MAIN_DIR , 'data' , 'minibatch')
-    block       : str = os.path.join(MAIN_DIR , 'data' , 'block_data')
-    hist_norm   : str = os.path.join(MAIN_DIR , 'data' , 'hist_norm')
-    torch_pack  : str = os.path.join(MAIN_DIR , 'data' , 'torch_pack')
-    db          : str = os.path.join(MAIN_DIR , 'data' , 'DataBase')
-    db_updater  : str = os.path.join(MAIN_DIR , 'data' , 'Updater')
+    batch       : str = os.path.join(MAIN_DIR , 'data' , 'MiniBatch')
+    block       : str = os.path.join(MAIN_DIR , 'data' , 'DataBlock')
+    database    : str = os.path.join(MAIN_DIR , 'data' , 'DataBase')
+    dataset     : str = os.path.join(MAIN_DIR , 'data' , 'DataSet')
+    norm        : str = os.path.join(MAIN_DIR , 'data' , 'HistNorm')
+    tree        : str = os.path.join(MAIN_DIR , 'data' , 'TreeData')
+    updater     : str = os.path.join(MAIN_DIR , 'data' , 'Updater')
     conf        : str = os.path.join(MAIN_DIR , 'configs')
     logs        : str = os.path.join(MAIN_DIR , 'logs')
     model       : str = os.path.join(MAIN_DIR , 'model')
@@ -45,8 +47,16 @@ class CustomDirSpace:
     def deltrees(dir , bases):
         [shutil.rmtree(f'{dir}/{base}') for base in bases]
 
-DIR = CustomDirSpace()
+@dataclass
+class _CustomConf:
+    SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
+    SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
+    SAVE_OPT_NORM : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
 
+PATH = _CustomPath()
+CONF = _CustomConf()
+
+'''
 def rmdir(d , remake_dir = False):
     if isinstance(d , (list,tuple)):
         [shutil.rmtree(x) for x in d if os.path.exists(x)]
@@ -56,3 +66,4 @@ def rmdir(d , remake_dir = False):
         if remake_dir : os.mkdir(d)
     else:
         raise Exception(f'KeyError : {str(d)}')
+'''

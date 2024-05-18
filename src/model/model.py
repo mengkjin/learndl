@@ -1,16 +1,19 @@
+import inspect
 from torch import nn , Tensor
 from ..func import basic as B
 from .tra import block_tra , tra_component
 from .rnn import rnn_univariate , rnn_multivariate
 from . import patchTST , modernTCN , TSMixer
 
-def new(module , param = {} , state_dict = None , device = None , **kwargs):
-    net = globals()[module](**param)
+def new(module : str , param = {} , state_dict = None , device = None , **kwargs):
+    mod = getattr(inspect.getmodule(new) , module)
+    # mod = globals()[module]
+    net = mod(**param)
     assert isinstance(net , nn.Module) , net.__class__
     if state_dict: net.load_state_dict(state_dict)
     return device(net) if callable(device) else net.to(device)
 
-"""
+'''
 class TRA_LSTM(TRA):
     def __init__(self , input_dim , hidden_dim , tra_num_states=1, tra_horizon = 20 , 
                  tra_hidden_size=8, tra_tau=1.0, tra_rho = 0.999 , tra_lamb = 0.0):
@@ -28,7 +31,7 @@ class ResNet_LSTM(nn.Module):
         hidden = self.resnet(x)
         output = self.lstm(hidden)
         return output
-"""     
+'''
 
 class simple_lstm(nn.Module):
     def __init__(self , input_dim , hidden_dim , **kwargs):

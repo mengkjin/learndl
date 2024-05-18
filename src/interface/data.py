@@ -8,8 +8,8 @@ from torch.utils.data import BatchSampler
 from typing import Any , Literal , Optional
 
 from ..classes import BaseDataModule , BatchData
-from ..data import DataProcessor , ModuleData
-from ..environ import DIR
+from ..data import DataBlockNorm , DataProcessor , ModuleData
+from ..environ import PATH , CONF
 from ..func import tensor_standardize_and_weight , match_values
 from ..util import BufferSpace , DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig
 
@@ -38,9 +38,9 @@ class DataModule(BaseDataModule):
 
         self.static_prenorm_method = {}
         for mdt in self.data_type_list: 
-            method = self.config.model_data_prenorm.get(mdt , {})
-            method['divlast']  = method.get('divlast' , True) and (mdt in ['day'])
-            method['histnorm'] = method.get('histnorm', True) and (self.datas.norms.get(mdt) is not None)
+            method : dict[str,bool] = self.config.model_data_prenorm.get(mdt , {})
+            method['divlast']  = method.get('divlast' , True) and (mdt in DataBlockNorm.DIVLAST)
+            method['histnorm'] = method.get('histnorm', True) and (mdt in DataBlockNorm.HISTNORM)
             print(f'Pre-Norming method of [{mdt}] : {method}')
             self.static_prenorm_method[mdt] = method
 
@@ -152,12 +152,12 @@ class DataModule(BaseDataModule):
     def full_valid_sample(self , x_data : dict[str,Tensor] , y : Tensor , index1 : Tensor , **kwargs) -> Tensor:
         '''
         return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
-        x : rolling window non-nan , end non-zero if in k is 'day'
+        x : rolling window non-nan , end non-zero if in k is divlast
         y : exact point non-nan 
         others : rolling window non-nan , default as self.seqy
         '''
         valid = self.valid_sample(y , index1) if self.stage == 'train' else torch.ones(len(y),len(index1)).to(torch.bool)
-        for k , x in x_data.items(): valid *= self.valid_sample(x , index1 , self.seqs[k] , k in ['day'])
+        for k , x in x_data.items(): valid *= self.valid_sample(x , index1 , self.seqs[k] , k in DataBlockNorm.DIVLAST)
         for k , x in kwargs.items(): valid *= self.valid_sample(x , index1 , self.seqs[k])
         return valid
     
@@ -182,7 +182,7 @@ class DataModule(BaseDataModule):
         return tensor_standardize_and_weight(y , 0 , self.config.weight_scheme(self.stage , no_weight))
         
     def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid : Tensor) -> None:
-        '''update loader_dict , save batch_data to f'{DIR.model}/{model_name}/{set_name}_batch_data' and later load them'''
+        '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''
         index0, index1 = torch.arange(len(valid)) , self.step_idx
         sample_index = self.split_sample(self.stage , valid , index0 , index1 , self.config.sample_method , 
                                          self.config.train_ratio , self.config.batch_size)
@@ -190,7 +190,7 @@ class DataModule(BaseDataModule):
         for set_key , set_samples in sample_index.items():
             assert set_key in ['train' , 'valid' , 'test'] , set_key
             shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
-            batch_files = [f'{DIR.batch}/{set_key}.{bnum}.pt' for bnum in range(len(set_samples))]
+            batch_files = [f'{PATH.batch}/{set_key}.{bnum}.pt' for bnum in range(len(set_samples))]
             for bnum , b_i in enumerate(set_samples):
                 assert torch.isin(b_i[:,1] , index1).all()
                 i0 , i1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1)

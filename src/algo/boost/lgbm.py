@@ -5,9 +5,10 @@ import matplotlib.pyplot as plt
 import os , torch
 
 from copy import deepcopy
-from src.environ import DIR
+
 from typing import Any , Optional
 
+from ...environ import PATH
 from ...classes import BoosterData
 from ...func import match_values, np_nanic_2d , np_nanrankic_2d
 
@@ -181,9 +182,9 @@ class Lgbm():
     
     @staticmethod
     def df_input() -> dict[str,Any]:
-        train = pd.read_csv(f'{DIR.data}/tree_data/df_train.csv' , index_col=[0,1])
-        valid = pd.read_csv(f'{DIR.data}/tree_data/df_valid.csv' , index_col=[0,1])
-        test  = pd.read_csv(f'{DIR.data}/tree_data/df_test.csv' , index_col=[0,1])
+        train = pd.read_csv(f'{PATH.data}/tree_data/df_train.csv' , index_col=[0,1])
+        valid = pd.read_csv(f'{PATH.data}/tree_data/df_valid.csv' , index_col=[0,1])
+        test  = pd.read_csv(f'{PATH.data}/tree_data/df_test.csv' , index_col=[0,1])
 
         return {'train':train , 'valid':valid , 'test':test}
 

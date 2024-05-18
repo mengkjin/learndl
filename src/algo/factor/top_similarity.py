@@ -7,13 +7,13 @@ import h5py , time , traceback
 from datetime import datetime,timedelta
 
 from ...util import Device , Logger
-from ...environ import DIR
+from ...environ import PATH
 
 logger = Logger()
-path_port  = f'{DIR.data}/fund_stock_port.h5'
-path_trade = f'{DIR.data}/DB_trade_day.h5'
-path_info  = f'{DIR.data}/DB_information.h5'
-save_path = f'{DIR.data}/block_data/X_top_similarity.npz'
+path_port  = f'{PATH.data}/fund_stock_port.h5'
+path_trade = f'{PATH.data}/DB_trade_day.h5'
+path_info  = f'{PATH.data}/DB_information.h5'
+save_path = f'{PATH.data}/block_data/X_top_similarity.npz'
 
 class matrix_factorization():
     def __init__(self , m , learn_rates = [0.1,0.05,0.01,0.005,0.001]):
