@@ -51,7 +51,7 @@ class ModelParam:
         self.params = [{'path':f'{base_path}/{mm}' , **{k:v[mm % len(v)] for k,v in self.Param.items()}} for mm in range(self.n_model)]
 
     @classmethod
-    def load(cls , base_path , model_num : int | None = None):
+    def load(cls , base_path , model_num : Optional[int] = None):
         Param = PATH.read_yaml(f'{base_path}/{cls.MODEL_YAML}')
         assert isinstance(Param , dict)
         n_model = 1
@@ -92,8 +92,8 @@ class TrainParam:
     spec_adjust : bool = True
     configs     : dict = field(default_factory=dict)
     train_param : dict = field(default_factory=dict)
-    model_name  : str | None = None
-    override    : dict | None = None
+    model_name  : Optional[str]  = None
+    override    : Optional[dict] = None
 
     TRAIN_YAML  : ClassVar[str] = 'train_param.yaml'
 
@@ -115,8 +115,12 @@ class TrainParam:
         assert not (Param['tra_model'] and Param['train_param']['dataloader']['sample_method'] == 'total_shuffle')
 
         if self.model_name is None:
-            self.model_name = '_'.join([Param['model_module'].lower() , Param['model_data_type']])
-            if Param['short_test']: self.model_name += '_ShortTest'
+            if Param['model_name']:
+                self.model_name = str(Param['model_name'])
+            else:
+                self.model_name = '_'.join([Param['model_module'].lower() , Param['model_data_type']])
+            if Param['short_test']: 
+                self.model_name += '_ShortTest'
 
         self.train_param = Param['train_param']
         self.configs = {k:v for k,v in Param.items() if k != 'train_param'}
@@ -140,43 +144,43 @@ class TrainParam:
 
 @dataclass
 class TrainConfig:
-    short_test: bool        = False
-    model_name: str | None  = None
-    model_module: str       = ''
-    model_data_type: str    = 'day' 
-    model_data_prenorm: dict= field(default_factory=dict)
-    model_types: list[str]  = field(default_factory=list)
-    labels: list            = field(default_factory=list)
-    callbacks: dict[str,Any]= field(default_factory=dict)
-    beg_date: int           = 20170103
-    end_date: int           = 99991231
-    input_span: int         = 2400
-    interval: int           = 120
-    max_epoch: int          = 200
-    verbosity: int          = 2
-    batch_size: int         = 10000
-    input_step_day: int     = 5
-    skip_horizon: int       = 20
+    short_test: bool            = False
+    model_name: Optional[str]   = None
+    model_module: str           = ''
+    model_data_type: str        = 'day' 
+    model_data_prenorm: dict    = field(default_factory=dict)
+    model_types: list[str]      = field(default_factory=list)
+    labels: list                = field(default_factory=list)
+    callbacks: dict[str,Any]    = field(default_factory=dict)
+    beg_date: int               = 20170103
+    end_date: int               = 99991231
+    input_span: int             = 2400
+    interval: int               = 120
+    max_epoch: int              = 200
+    verbosity: int              = 2
+    batch_size: int             = 10000
+    input_step_day: int         = 5
+    skip_horizon: int           = 20
 
-    mem_storage: bool       = True
-    random_seed: int | None = None
-    allow_tf32: bool        = True
-    detect_anomaly: bool    = False
-    precision: Any          = torch.float # double , bfloat16
+    mem_storage: bool           = True
+    random_seed: Optional[int]  = None
+    allow_tf32: bool            = True
+    detect_anomaly: bool        = False
+    precision: Any              = torch.float # double , bfloat16
 
     # special model : tra , lgbm
-    lgbm_ensembler: bool    = False
-    tra_switch:  bool       = True
-    tra_param: dict         = field(default_factory=dict)
-    tra_model: bool         = False
-    buffer_type: str | None = 'tra'
-    buffer_param: dict      = field(default_factory=dict)
+    lgbm_ensembler: bool        = False
+    tra_switch:  bool           = True
+    tra_param: dict             = field(default_factory=dict)
+    tra_model: bool             = False
+    buffer_type: Optional[str]  = 'tra'
+    buffer_param: dict          = field(default_factory=dict)
     
-    on_short_test: dict     = field(default_factory=dict)
-    on_transformer: dict     = field(default_factory=dict)
+    on_short_test: dict         = field(default_factory=dict)
+    on_transformer: dict        = field(default_factory=dict)
 
-    resume_training: bool   = True
-    stage_queue: list       = field(default_factory=list)
+    resume_training: bool       = True
+    stage_queue: list           = field(default_factory=list)
     
     _TrainParam: Optional[TrainParam] = None
     _ModelParam: Optional[ModelParam] = None

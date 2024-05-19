@@ -17,7 +17,7 @@ callbacks:
   CallbackTimer:      {}
   EarlyStoppage:      {'patience' : 20}
   ValidationConverge: {'patience' : 5 , 'eps' : 1.0e-5} 
-  EarlyExitRetrain:   {'earliest' : 20 , 'max_attempt' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
+  EarlyExitRetrain:   {'earliest' : 10 , 'max_attempt' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
   NanLossRetrain:     {'max_attempt' : 4}
   BatchDisplay:       {}
   StatusDisplay:      {}
