@@ -75,12 +75,9 @@ class ModelTrainer(BaseModelModule):
     def on_test_batch(self):
         self.assert_equity(self.batch_dates[self.batch_idx] , self.data.y_date[self.batch_data.i[0,1]]) 
         self.batch_forward()
-        if self.batch_idx < self.batch_warm_up: return  # before this is warmup stage , only forward
-        if self.config.lgbm_ensembler:
-            pred = self.model.lgbm_ensembler.predict()
-            assert pred is not None
-            self.batch_output.override_pred(pred)
-        self.batch_metrics()
+        self.model.override()
+        # before this is warmup stage , only forward
+        if self.batch_idx >= self.batch_warm_up: self.batch_metrics()
     
     def on_train_epoch_start(self):
         self.net.train()
@@ -147,6 +144,11 @@ class ModelTrainer(BaseModelModule):
 
     @classmethod
     def main(cls , stage = -1 , resume = -1 , checkname = -1 , **kwargs):
+        '''
+        state:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
+        resume:    [-1,choose] , [0,no] , [1,yes]
+        checkname: [-1,choose] , [0,default] , [1,yes]
+        '''
         app = cls(stage = stage , resume = resume , checkname = checkname , **kwargs)
         with BigTimer(app.logger.critical , 'Main Process'):
             app.main_process()

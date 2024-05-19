@@ -54,6 +54,12 @@ class Model:
     def net(self , use_state_dict = None):
         return self.get_net(self.config.model_module , self.module.model_param , use_state_dict , self.device)
 
+    def override(self):
+        if self.config.lgbm_ensembler:
+            pred = self.lgbm_ensembler.predict()
+            assert pred is not None
+            self.module.batch_output.override_pred(pred)
+
     def assess(self , epoch : int , metrics : Metrics): 
         for model in self.ensembles.values(): 
             model.assess(self.module.net , epoch , metrics) # , metrics.latest['valid.score'] , metrics.latest['valid.loss'])

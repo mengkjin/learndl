@@ -63,7 +63,8 @@ class MetricList:
 @dataclass(slots=True)
 class BatchOutput:
     outputs : Optional[Tensor | tuple | list] = None
-
+    @property
+    def device(self): return self.pred.device
     @property
     def pred(self) -> Tensor:
         if self.outputs is None:
@@ -81,8 +82,9 @@ class BatchOutput:
             return None
     def override_pred(self , pred : Tensor):
         assert self.outputs is not None
-        assert len(pred) == len(self.pred) , (pred.shape , self.pred.shape)
-        pred = pred.reshape(*self.pred.shape)
+        raw_pred = self.pred
+        assert len(pred) == len(raw_pred) , (pred.shape , raw_pred.shape)
+        pred = pred.reshape(*raw_pred.shape).to(raw_pred)
         if isinstance(self.outputs , (list , tuple)):
             self.outputs = [pred , *self.outputs[1:]]
         else:
