@@ -296,7 +296,7 @@ class LgbmPlot:
             print(f'plot path not given, will not proceed')
             return
         x = self.data[group].X()
-        pred = self.model.predict(x)
+        pred = np.array(self.model.predict(x))
         dtrain = lgb.Dataset(x, label=pred)
         _params = deepcopy(self.train_param)
         del _params['early_stopping']

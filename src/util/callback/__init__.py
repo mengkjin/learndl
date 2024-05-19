@@ -1,10 +1,11 @@
 from typing import Any , Optional
 
-from . import base , algo , control , display
+from . import base , control , display
 from .base import BasicCallBack , WithCallBack
 from ..config import TrainConfig
+from ...classes import BaseModelModule
 
-_search_cb_mod = [control , display , algo]
+_search_cb_mod = [control , display]
 
 class CallBackManager(WithCallBack):
     def __init__(self , model_module , *callbacks):
@@ -25,13 +26,15 @@ class CallBackManager(WithCallBack):
         for cb in self.with_cbs: cb.at_exit(hook_name)
 
     @classmethod
-    def setup(cls , config : TrainConfig , model_module : Any):
-        callbacks = [cls.__get_cb(cb_name , param , config , model_module) for cb_name , param in config.callbacks.items()]
+    def setup(cls , model_module : BaseModelModule):
+        config : TrainConfig = model_module.config
+        callbacks = [cls.__get_cb(cb , param , model_module) for cb , param in config.callbacks.items()]
         return cls(model_module , *callbacks)
     
     @staticmethod
-    def __get_cb(cb_name : str , param : Any , config : TrainConfig , model_module : Any) -> Optional[dict]:
+    def __get_cb(cb_name : str , param : Any , model_module : BaseModelModule) -> Optional[dict]:
         assert isinstance(param , dict), (cb_name , param)
+        config : TrainConfig = model_module.config
         for cb_mod in _search_cb_mod:
             if hasattr(cb_mod , cb_name): 
                 if cb_mod == display: param = {'verbosity': config.verbosity , **param}

@@ -133,7 +133,7 @@ class _TypeProcessor(ABC):
         return data_block
     
 def select_processor(key : str) -> _TypeProcessor:
-    return getattr(inspect.getmodule(select_processor) , f'proc{key.capitalize()}')
+    return getattr(inspect.getmodule(select_processor) , f'proc{key.capitalize()}')()
 
 class procY(_TypeProcessor):
     def block_loaders(self):

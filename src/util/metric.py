@@ -12,20 +12,26 @@ from ..func import mse , pearson , ccc , spearman
 
 class Metrics:
     '''calculator of batch output'''
-    display_check  = True # will display once if true
-    display_record = {'loss' : {} , 'score' : {} , 'penalty' : {}}
-    default_metric = {'mse':mse ,'pearson':pearson,'ccc':ccc,'spearman':spearman,}
+    DISPLAY_CHECK  = True # will display once if true
+    DISPLAY_RECORD = {'loss' : {} , 'score' : {} , 'penalty' : {}}
+    METRIC_FUNC = {'mse':mse ,'pearson':pearson,'ccc':ccc,'spearman':spearman,}
 
-    def __init__(self , criterion , **kwargs) -> None:
-        if isinstance(criterion , TrainConfig): criterion = criterion.train_param['criterion']
-        self.criterion = criterion
-        self.f_loss    = self.loss_function(criterion['loss'])
-        self.f_score   = self.score_function(criterion['score'])
-        self.f_pen     = {k:self.penalty_function(k,v) for k,v in criterion['penalty'].items()}
+    def __init__(self , config : TrainConfig , use_dataset  : Literal['train','valid'] = 'valid' , 
+                 use_metric : Literal['loss' , 'score'] = 'score' , **kwargs) -> None:
+        self.config = config
+        self.criterion = config.train_param['criterion']
+        self.use_dataset = use_dataset
+        self.use_metric  = use_metric
+        self.f_loss    = self.loss_function(self.criterion['loss'])
+        self.f_score   = self.score_function(self.criterion['score'])
+        self.f_pen     = {k:self.penalty_function(k,v) for k,v in self.criterion['penalty'].items()}
         self.multiloss = None
         self.output    = BatchMetric()
         self.metric_batchs = MetricsAggregator()
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
+        self.latest : dict[str,Any] = {}
+        self.last_metric : Any = None
+        self.best_metric : Any = None
 
     @property
     def loss(self): return self.output.loss
@@ -40,6 +46,8 @@ class Metrics:
     def losses(self): return self.metric_batchs.losses
     @property
     def scores(self): return self.metric_batchs.scores
+    
+    '''
     @property
     def aggloss(self): return self.metric_batchs.loss
     @property
@@ -52,21 +60,23 @@ class Metrics:
     def valid_scores(self): return self.metric_epochs['valid.score']
     @property
     def valid_losses(self):  return self.metric_epochs['valid.loss']
+    '''
     
-    def new_model(self , model_param , config , **kwargs):
+    def new_model(self , model_param , **kwargs):
         if model_param['num_output'] > 1:
-            multi_param = config.train_param['multilosses']
+            multi_param = self.config.train_param['multilosses']
             self.multiloss = MultiLosses(multi_param['type'], model_param['num_output'] , **multi_param['param_dict'][multi_param['type']])
     
-        self.f_pen.get('hidden_corr',{})['cond']       = config.tra_model or model_param.get('hidden_as_factors',False)
-        self.f_pen.get('tra_opt_transport',{})['cond'] = config.tra_model
+        self.f_pen.get('hidden_corr',{})['cond']       = self.config.tra_model or model_param.get('hidden_as_factors',False)
+        self.f_pen.get('tra_opt_transport',{})['cond'] = self.config.tra_model
         self.new_attempt()
         return self
     
     def new_attempt(self):
+        self.best_metric = None
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
 
-    def new_epoch_metric(self , dataset , status : TrainerStatus):
+    def new_epoch_metric(self , dataset : Literal['train','valid','test'] , status : TrainerStatus):
         self.metric_batchs.new(dataset , status.model_num , status.model_date , status.epoch , status.model_type)
 
     def collect_batch_metric(self):
@@ -74,9 +84,36 @@ class Metrics:
 
     def collect_epoch_metric(self , dataset : Literal['train','valid','test']):
         self.metric_batchs.collect()
-        self.metric_epochs[f'{dataset}.loss'].append(self.metric_batchs.loss) 
-        self.metric_epochs[f'{dataset}.score'].append(self.metric_batchs.score)
+        loss , score = self.metric_batchs.loss , self.metric_batchs.score
+        self.latest[f'{dataset}.loss']  = loss
+        self.latest[f'{dataset}.score'] = score
+        self.metric_epochs[f'{dataset}.loss'].append(loss) 
+        self.metric_epochs[f'{dataset}.score'].append(score)
+
+        if dataset == self.use_dataset:
+            metric = loss if self.use_metric == 'loss' else score
+            self.last_metric = metric
+            if (self.best_metric is None or
+                (self.use_metric == 'score' and self.best_metric < metric) or 
+                (self.use_metric == 'loss' and self.best_metric > metric)): 
+                self.best_metric = metric
     
+    def better_epoch(self , old_best_epoch : Any) -> bool:
+        if old_best_epoch is None:
+            return True
+        elif self.use_metric == 'score':
+            return self.last_metric > old_best_epoch 
+        else:
+            return self.last_metric < old_best_epoch
+        
+    def better_attempt(self , old_best_attempt : Any) -> bool:
+        if old_best_attempt is None:
+            return True
+        elif self.use_metric == 'score':
+            return self.best_metric > old_best_attempt 
+        else:
+            return self.best_metric < old_best_attempt
+
     def calculate(self , dataset , batch_data : BatchData , batch_output : BatchOutput , net : Optional[nn.Module] = None , 
                   assert_nan = False , **kwargs):
         '''Calculate loss(with gradient), penalty , score'''
@@ -122,14 +159,14 @@ class Metrics:
     @classmethod
     def decorator_display(cls , func , mtype , mkey):
         def metric_display(mtype , mkey):
-            if not cls.display_record[mtype].get(mkey , False):
+            if not cls.DISPLAY_RECORD[mtype].get(mkey , False):
                 print(f'{mtype} function of [{mkey}] calculated and success!')
-                cls.display_record[mtype][mkey] = True
+                cls.DISPLAY_RECORD[mtype][mkey] = True
         def wrapper(*args, **kwargs):
             v = func(*args, **kwargs)
             metric_display(mtype , mkey)
             return v
-        return wrapper if cls.display_check else func
+        return wrapper if cls.DISPLAY_CHECK else func
     
     @classmethod
     def firstC(cls , *args):
@@ -150,9 +187,7 @@ class Metrics:
 
     @classmethod
     def loss_function(cls , key):
-        '''
-        loss function , pearson/ccc should * -1.
-        '''
+        '''loss function , pearson/ccc should * -1.'''
         assert key in ('mse' , 'pearson' , 'ccc')
         def decorator(func):
             def wrapper(label,pred,weight=None,dim=0,nan_check=False,first_col=False,**kwargs):
@@ -162,7 +197,7 @@ class Metrics:
                 if key != 'mse': v = torch.exp(-v)
                 return v
             return wrapper
-        new_func = decorator(cls.default_metric[key])
+        new_func = decorator(cls.METRIC_FUNC[key])
         new_func = cls.decorator_display(new_func , 'loss' , key)
         return new_func
 
@@ -177,7 +212,7 @@ class Metrics:
                 if key == 'mse' : v = -v
                 return v
             return wrapper
-        new_func = decorator(cls.default_metric[key])
+        new_func = decorator(cls.METRIC_FUNC[key])
         new_func = cls.decorator_display(new_func , 'score' , key)
         return new_func
     

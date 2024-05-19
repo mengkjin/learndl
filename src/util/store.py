@@ -5,7 +5,8 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal
 
-from .config import TrainConfig , ModelDict
+from ..classes import ModelDict , ModelFile
+from .config import TrainConfig
 from ..func.basic import Filtered
 
 class Storage:
@@ -97,6 +98,7 @@ class Checkpoint(Storage):
         super().__init__(store_type)
         self.epoch_queue : list[list] = []
         self.join_record : list[str]  = [] 
+        # self.model_module = model_module
 
     def new_model(self , model_param : dict , model_date : int):
         path = (os.path.basename if self.is_mem else str)(str(model_param.get('path')))
@@ -124,7 +126,15 @@ class Checkpoint(Storage):
     def disjoin(self , src , epoch : int):
         if epoch < 0: return
         record_str = f'DISJOIN: Epoch {epoch}, from {src.__class__}({id(src)})'
+        
+        if epoch >= len(self.epoch_queue):
+            #print(epoch , len(self.epoch_queue))
+            #print(record_str)
+            #print(self.model_module.status)
+            [print(record_str) for record_str in self.join_record]
+            
         self.epoch_queue[epoch] = [s for s in self.epoch_queue[epoch] if s is not src]
+        
         if self.epoch_queue[epoch]:
             record_str += f', {len(self.epoch_queue[epoch])} reliance left'
         else:
@@ -147,26 +157,36 @@ class Checkpoint(Storage):
 
 class Deposition:
     '''model saver'''
-    def __init__(self , base_path : str):
-        self.base_path = base_path
+    def __init__(self , config : TrainConfig):
+        self.config = config
+        self.base_path = config.model_base_path
 
-    def save_model(self , model_date , model_num , model_type = 'best' , model_dict : dict[str,Any] = {}):
-        ModelDict(self.model_path(model_date , model_num , model_type)).save(model_dict)
+    def stack_model(self , model_dict : ModelDict , model_date , model_num , model_type = 'best'):
+        model_dict.save(self.model_path(model_date , model_num , model_type) + '/{}.stack.pt')
+
+    def dump_model(self , model_date , model_num , model_type = 'best'):
+        dirname = f'{self.base_path}/{model_num}/{model_date}/{model_type}'
+        for path in os.listdir(dirname):
+            if path.endswith('.stack.pt'):
+                old_path = f'{dirname}/{path}'
+                new_path = old_path.replace('.stack.pt','.pt')
+                if os.path.exists(new_path): os.remove(new_path)
+                os.rename(old_path , new_path)
 
     def load_model(self , model_date , model_num , model_type = 'best'):
-        return ModelDict(self.model_path(model_date , model_num , model_type))
+        return ModelFile(self.model_path(model_date , model_num , model_type))
     
     def exists(self , model_date , model_num , model_type = 'best'):
-        return ModelDict(self.model_path(model_date , model_num , model_type)).exists()
+        return ModelFile(self.model_path(model_date , model_num , model_type)).exists()
     
     def model_path(self , model_date , model_num , model_type = 'best'):
         '''get model path of deposition giving model date / num / type'''
         return f'{self.base_path}/{model_num}/{model_date}/{model_type}'
     
-    def model_iter(self , model_date_list , model_num_list , stage , resume = False):
+    def model_iter(self , stage , model_date_list):
         '''iter of model_date and model_num , considering resume_training'''
-        new_iter = list(itertools.product(model_date_list , model_num_list))
-        if resume and stage == 'fit':
+        new_iter = list(itertools.product(model_date_list , self.config.model_num_list))
+        if self.config.resume_training and stage == 'fit':
             models_trained = np.full(len(new_iter) , True , dtype = bool)
             for i , (model_date , model_num) in enumerate(new_iter):
                 if not self.exists(model_date , model_num):

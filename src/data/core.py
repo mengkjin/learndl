@@ -184,7 +184,7 @@ class DataBlock(StockData4D):
     
     def mask_values(self , mask : dict , **kwargs):
         if not mask : return self
-        mask_pos = np.full(*self.shape , fill_value=False , dtype=bool)
+        mask_pos = np.full(self.shape , fill_value=False , dtype=bool)
         if mask_list_dt := mask.get('list_dt'):
             desc = load_target_file('information' , 'description')
             assert desc is not None
@@ -205,8 +205,10 @@ class DataBlock(StockData4D):
             delist_dt = np.array(desc.loc[secid , 'delist_dt'])
             delist_dt[delist_dt < 0] = 21991231
 
-            mask_pos += np.stack([(date <= l) + (date >= d) for l,d in zip(list_dt , delist_dt)] , axis = 0)
-        assert (~mask_pos).sum() / mask_pos.sum() > 1 , ((~mask_pos).sum() , mask_pos.sum())
+            tmp = np.stack([(date <= l) + (date >= d) for l,d in zip(list_dt , delist_dt)] , axis = 0)
+            mask_pos[tmp] = True
+
+        assert (~mask_pos).sum() > 0
         self.values[mask_pos] = np.nan
         return self
     

@@ -13,12 +13,12 @@ class EarlyStoppage(BasicCallBack):
         self._print_info()
         self._patience = patience
     def on_fit_model_start(self):
-        self._epoch_best = -1
-        self._score_best = -10000.
+        self._epoch_best  = -1
+        self._metric_best = None
     def on_validation_epoch_end(self):
-        if self.metrics.valid_scores[-1] > self._score_best: 
-            self._epoch_best = self.status.epoch 
-            self._score_best = self.metrics.valid_scores[-1]
+        if self.metrics.better_epoch(self._metric_best): 
+            self._epoch_best  = self.status.epoch 
+            self._metric_best = self.metrics.last_metric
         if self.status.epoch - self._epoch_best >= self._patience:
             self.status.end_of_loop.add_status('EarlyStop' , self._epoch_best)
 
@@ -45,20 +45,20 @@ class TrainConverge(BasicCallBack):
             self.status.end_of_loop.add_status('Train Cvg' , self.status.epoch - self._patience + 1)
 
 class FitConverge(BasicCallBack):
-    '''stop fitting when train_loss/valid_score converge'''
+    '''stop fitting when train_loss and valid_score converge'''
     def __init__(self , model_module , patience = 5 , eps = 1.0e-5) -> None:
         super().__init__(model_module)
         self._print_info()
         self._patience = patience
         self._eps      = eps
-    def on_fit_epoch_end(self):
+    def on_validation_epoch_end(self):
         if (list_converge(self.metrics.metric_epochs['train.loss'], self._patience , self._eps) and 
             list_converge(self.metrics.metric_epochs['valid.score'], self._patience , self._eps)):
             self.status.end_of_loop.add_status('T & V Cvg' , self.status.epoch - self._patience + 1)
 
 class EarlyExitRetrain(BasicCallBack):
     '''retrain with new lr if fitting stopped too early'''
-    def __init__(self, model_module , earliest = 20 , max_attempt = 4 , lr_multiplier = [1 , 0.1 , 10 , 0.01 , 100]) -> None:
+    def __init__(self, model_module , earliest = 5 , max_attempt = 4 , lr_multiplier = [1 , 0.1 , 10 , 0.01 , 100]) -> None:
         super().__init__(model_module)
         self._print_info()
         self._earliest = earliest
@@ -66,15 +66,13 @@ class EarlyExitRetrain(BasicCallBack):
         self._lr_multiplier = lr_multiplier
     def on_fit_model_start(self):
         self.status.attempt = 0
-    def on_validation_epoch_end(self):
+    def on_before_fit_epoch_end(self):
         if (self.status.end_of_loop and 
             self.status.end_of_loop.trigger_ep <= self._earliest 
             and self.status.attempt < self._max_attempt):
+            self.module.stack_model()
             self.metrics.new_attempt()
             self.status.new_attempt()
-            self.status.attempt += 1
-            self.status.add_event('new_attempt')
-            self.module.checkpoint.new_model(self.module.model_param , self.status.model_date)
             self.module.load_model(True , lr_multiplier = self._lr_multiplier[:self.status.attempt+1][-1])
 
 class NanLossRetrain(BasicCallBack):
@@ -87,17 +85,16 @@ class NanLossRetrain(BasicCallBack):
         self._nanlife = self._max_attempt
     def on_train_epoch_end(self):
         self._nanloss = self.metrics.metric_batchs.nanloss
-    def on_validation_epoch_end(self):
+    def on_before_fit_epoch_end(self):
         if not self._nanloss:
             pass
         elif self._nanlife > 0:
-            self.metrics.new_attempt()
-            self.status.new_attempt()
-            self.status.add_event('nanloss')
-            self.module.checkpoint.new_model(self.module.model_param , self.status.model_date)
-            self.module.load_model(True)
             self.logger.error(f'Initialize a new model to retrain! Lives remaining {self._nanlife}')
             self._nanlife -= 1
+
+            self.metrics.new_attempt()
+            self.status.new_attempt('nanloss')
+            self.module.load_model(True)
         else:
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
 
@@ -148,7 +145,7 @@ class ResetOptimizer(BasicCallBack):
         self.status.add_event('reset_learn_rate')
 
 class DynamicDataLink(BasicCallBack):
-    '''assign / unlink dynamic data in tra networks'''
+    '''assign and unlink dynamic data in tra networks'''
     def __init__(self , model_module) -> None:
         super().__init__(model_module)
         self._print_info()

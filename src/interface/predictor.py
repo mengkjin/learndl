@@ -11,8 +11,7 @@ from ..classes import BatchOutput
 from ..data import GetData
 from ..environ import PATH
 from ..func.time import today , date_offset
-from ..util import Deposition , Device , TrainConfig
-from ..model import model as MODEL
+from ..util import Deposition , Device , Model , TrainConfig
 
 @dataclass
 class Predictor:
@@ -79,21 +78,21 @@ class Predictor:
 
         torch.set_grad_enabled(False)
         df_list = []
-        for data_mod in [data_mod_old , data_mod_new]:
-            if data_mod is None: continue
-            assert isinstance(data_mod , DataModule)
+        for data in [data_mod_old , data_mod_new]:
+            if data is None: continue
+            assert isinstance(data , DataModule)
             for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
-                print(model_date , 'old' if (data_mod is data_mod_old) else 'new') 
+                print(model_date , 'old' if (data is data_mod_old) else 'new') 
                 assert isinstance(model_date , int) , model_date
-                data_mod.setup('predict' ,  model_param , model_date)
+                data.setup('predict' ,  model_param , model_date)
                 model = deposition.load_model(model_date , self.model_num , self.model_type)
 
-                net = MODEL.new(model_config.model_module , model_param , model.state_dict() , device)
+                net = Model.get_net(model_config.model_module , model_param , model['state_dict'] , device)
                 net.eval()
 
-                loader = data_mod.predict_dataloader()
-                secid  = data_mod.datas.secid
-                tdates = data_mod.model_test_dates
+                loader = data.predict_dataloader()
+                secid  = data.datas.secid
+                tdates = data.model_test_dates
                 iter_tdates = np.intersect1d(df_sub['pred_dates'][df_sub['calculated'] == 0] , tdates)
 
                 for tdate in iter_tdates:

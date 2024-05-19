@@ -51,6 +51,7 @@ class TrainerStatus:
     model_type : str = 'best'
     end_of_loop  : EndofLoop = field(default_factory=EndofLoop)
     epoch_event  : list[str] = field(default_factory=list)
+    best_attempt_metric : Any = None
 
     def stage_data(self): self.stage = 'data'
     def stage_fit(self):  self.stage = 'fit'
@@ -59,19 +60,22 @@ class TrainerStatus:
     def dataset_validation(self): self.dataset = 'validation'
     def dataset_test(self): self.dataset = 'test'
     def fit_model_start(self):
-        self.attempt = 0
+        self.attempt = -1
+        self.best_attempt_metric = None
         self.new_attempt()
     def fit_epoch_start(self):
         self.epoch   += 1
         self.epoch_event = []
     def fit_epoch_end(self):
         self.end_of_loop.loop_end(self.epoch)
-
-    def new_attempt(self):
+    def new_attempt(self , event : Literal['new_attempt' , 'nanloss'] = 'new_attempt'):
         self.epoch   = -1
         self.round   = 0
         self.end_of_loop = EndofLoop(self.max_epoch)
         self.epoch_event = []
+
+        self.add_event(event)
+        if event == 'new_attempt': self.attempt += 1
 
     def add_event(self , event : Optional[str]):
         if event: self.epoch_event.append(event)
@@ -103,6 +107,7 @@ class BaseCB:
     def on_after_fit_epoch(self): ... 
     def on_before_backward(self): ... 
     def on_before_save_model(self): ... 
+    def on_before_fit_epoch_end(self): ... 
     def on_fit_end(self): ... 
     def on_fit_epoch_end(self): ... 
     def on_fit_epoch_start(self): ... 
@@ -255,21 +260,26 @@ class BaseModelModule(ABC):
         self.metrics    = kwargs['metrics']
         self.callbacks  = kwargs['callbacks']
         self.device     = kwargs['device']
+        self.model      = kwargs['model']
         self.dataloader : Iterable[BatchData] | Iterator[BatchData] = kwargs['device']
     @abstractmethod
     def init_data(self , **kwargs): 
         '''initialized data_module'''
-        self.data_mod = kwargs['data_module']
+        self.data       = kwargs['data']
     @abstractmethod
     def save_model(self) -> None: 
-        '''save self.net to anywhere'''
+        '''save self.net to somewhere'''
+    @abstractmethod
+    def stack_model(self) -> None: 
+        '''temporaly save self.net to somewhere'''
     @abstractmethod
     def load_model(self , *args , **kwargs) -> None: 
-        '''load self.net to anywhere'''
+        '''load self.net to somewhere'''
         self.net = torch.nn.Module()
         self.optimizer = args[0]
     @property
     @abstractmethod
+    
     def model_param(self) -> dict:  '''current model param'''
     @property
     @abstractmethod
@@ -297,7 +307,7 @@ class BaseModelModule(ABC):
         '''stage of loading model data'''
         self.status.stage_data()
         self.callbacks(self.on_data_start)
-        self.data_mod.load_data()
+        self.data.load_data()
         self.callbacks(self.on_data_end)
         
     def stage_fit(self):
@@ -339,6 +349,7 @@ class BaseModelModule(ABC):
                 self.callbacks(self.on_validation_batch_end)
             self.callbacks(self.on_validation_epoch_end)
 
+            self.callbacks(self.on_before_fit_epoch_end)
             self.status.fit_epoch_end()
             self.callbacks(self.on_fit_epoch_end)
         self.callbacks(self.on_fit_model_end)
@@ -378,6 +389,7 @@ class BaseModelModule(ABC):
         self.batch_forward()
         self.batch_metrics()
     def on_fit_epoch_start(self): ...
+    def on_before_fit_epoch_end(self): ...
     def on_fit_epoch_end(self): ...
     def on_train_epoch_start(self):
         self.net.train()

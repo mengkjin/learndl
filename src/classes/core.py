@@ -1,4 +1,5 @@
 import numpy as np
+import os , torch
 from dataclasses import dataclass , field
 from torch import Tensor
 from typing import Any , Literal , Optional
@@ -86,5 +87,28 @@ class BatchOutput:
             self.outputs = [pred , *self.outputs[1:]]
         else:
             self.outputs = pred
-        return self    
+        return self
+    
+@dataclass(slots=True)
+class ModelDict:
+    state_dict : dict[str,Tensor]
+    lgbm_string : Optional[str] = None
+    
+    def save(self , path : str):
+        for key in self.__slots__:
+            value = getattr(self , key)
+            if value is not None: 
+                os.makedirs(os.path.dirname(path) , exist_ok=True)
+                torch.save(value , path.format(key))
+
+@dataclass
+class ModelFile:
+    model_path : str
+    def __getitem__(self , key): return self.load(key)
+    def path(self , key): return f'{self.model_path}/{key}.pt'
+    def load(self , key : str) -> Any:
+        assert key in ModelDict.__slots__
+        path = self.path(key)
+        return torch.load(path , map_location='cpu') if os.path.exists(path) else None
+    def exists(self) -> bool: return os.path.exists(self.path('state_dict'))
     

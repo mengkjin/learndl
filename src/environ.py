@@ -52,6 +52,7 @@ class _CustomConf:
     SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
     SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
     SAVE_OPT_NORM : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
+    SAVE_OPT_MODEL: Literal['pt'] = 'pt'
 
 PATH = _CustomPath()
 CONF = _CustomConf()

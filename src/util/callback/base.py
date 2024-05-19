@@ -2,6 +2,7 @@ import logging
 from typing import Callable
 from ..config import TrainConfig
 from ..metric import Metrics 
+from ..store import Checkpoint
 from ...classes import BaseCB , TrainerStatus , BaseDataModule , BaseModelModule
 
 class BasicCallBack(BaseCB):
@@ -16,7 +17,9 @@ class BasicCallBack(BaseCB):
     @property
     def metrics(self) -> Metrics :  return self.module.metrics
     @property
-    def data_mod(self) -> BaseDataModule: return self.module.data_mod
+    def ckpt(self) -> Checkpoint: return self.module.checkpoint
+    @property
+    def data(self) -> BaseDataModule: return self.module.data
             
 class WithCallBack(BasicCallBack):
     def __init__(self, model_module, *args, **kwargs) -> None:

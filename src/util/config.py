@@ -386,29 +386,3 @@ class TrainConfig:
         # pretty_print_dict(self.train_param)
         pretty_print_dict(self.Model.Param)
         
-@dataclass
-class ModelDict:
-    model_path : str = ''
-
-    MEMBERS : ClassVar[list[str]] = ['state_dict' , 'lgbm_string']
-
-    def __post_init__(self):
-        assert bool(self.model_path)
-        os.makedirs(self.model_path , exist_ok=True)
-
-    def __getitem__(self , key):
-        return self.load(key)
-    def path(self , key): return f'{self.model_path}/{key}.pt'
-    def load(self , key : str) -> Any:
-        path = self.path(key)
-        return torch.load(path , map_location='cpu') if os.path.exists(path) else None
-    
-    def exists(self) -> bool: return os.path.exists(self.path('state_dict'))
-    def state_dict(self) -> Optional[dict[str,torch.Tensor]]: return self.load('state_dict')
-    def lgbm_string(self) -> Optional[str]: return self.load('lgbm_string')
-
-    def save(self , model_dict : dict[str,Any]):
-        assert model_dict['state_dict'] is not None , str(model_dict)
-        for key , value in model_dict.items():
-            assert key in self.MEMBERS and value is not None , key
-            torch.save(value , self.path(key))

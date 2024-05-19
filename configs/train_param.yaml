@@ -3,7 +3,7 @@ mem_storage: true
 random_seed: null
 short_test:  false
 
-model_name: null # null
+model_name: gru_lgbm # null
 model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
 model_types: [best , swalast , swabest]
 model_data_type: day # 'day+30m' , 30m
@@ -60,15 +60,6 @@ train_param:
       gls: {}
       rws: {}
       hybrid: {'phi' : null , 'tau' : 2}
-  callbacks:
-    EarlyStoppage:      {'patience' : 20}
-    ValidationConverge: {'patience' : 5 , 'eps' : 1.0e-5} 
-    EarlyExitRetrain:   {'earliest' : 20 , 'max_attempt' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
-    NanLossRetrain:     {'max_attempt' : 4}
-    ResetOptimizer:     {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
-    #TrainConverge:      {'patience' : 5 , 'eps' : 1.0e-5} 
-    #FitConverge:        {'patience' : 5 , 'eps' : 1.0e-5}
-    #CudaEmptyCache:     {'batch_interval' : 20}
 
 beg_date:   20170103
 end_date:   99991231
@@ -81,7 +72,7 @@ input_step_day: 5
 skip_horizon: &skip_horizon 20 
 
 # tra model
-lgbm_ensembler: false
+lgbm_ensembler: true
 tra_switch:  true
 buffer_type: tra
 buffer_param: 
