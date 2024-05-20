@@ -63,7 +63,7 @@ class Predictor:
 
         device       = Device()
         model_config = TrainConfig.load(f'{PATH.model}/{self.model_name}')
-        deposition   = Deposition(model_config.model_base_path)
+        deposition   = Deposition(model_config)
         model_param  = model_config.model_param[self.model_num]
         model_dates  = deposition.model_dates(self.model_num , self.model_type)
         start_dt     = max(start_dt , int(date_offset(min(model_dates) ,1)))

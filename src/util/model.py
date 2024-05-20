@@ -7,10 +7,10 @@ from torch import nn
 from torch.optim.swa_utils import AveragedModel , update_bn
 from typing import Any , Iterator , Optional
 
-from .store import Checkpoint
 from .config import TrainConfig
-from ..model import model as Net
 from .metric import Metrics
+from .store import Checkpoint
+from ..model import model as Net
 from ..classes import (
     BaseDataModule , BaseModelModule , BatchData , BatchOutput , 
     BoosterData , ModelDict , ModelFile)
@@ -232,6 +232,8 @@ class LgbmEnsembler:
     def y_date(self) -> np.ndarray | torch.Tensor: return self.data.y_date
     @property
     def model_string(self): return self.model.model_to_string()
+    @property
+    def is_cuda(self) -> bool: return self.module.device.device.type == 'cuda'
 
     def booster_data(self , net : nn.Module , loader : Iterator[BatchData]) -> BoosterData:
         hh , yy , ii = [] , [] , []
@@ -258,12 +260,12 @@ class LgbmEnsembler:
         net = self.module.device(net)
         train_data = self.booster_data(net , self.train_dl)
         valid_data = self.booster_data(net , self.valid_dl)
-        self.model = Lgbm(train_data , valid_data).fit()
+        self.model = Lgbm(train_data , valid_data , cuda=self.is_cuda).fit()
         # self.model.plot.training()
         return self
     
     def load(self , model_str):
-        self.model = Lgbm.model_from_string(model_str)
+        self.model = Lgbm.model_from_string(model_str , cuda=self.is_cuda)
         self.loaded = True
         return self
     
