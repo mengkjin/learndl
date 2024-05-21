@@ -20,6 +20,7 @@ __old_version__/
 *.npz
 *.feather
 *.parquet
+*.tar
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

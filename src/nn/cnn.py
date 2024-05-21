@@ -155,8 +155,8 @@ if __name__ == '__main__':
     import torch
     import torch.nn as nn
     # pip install pytimedinput -i https://pypi.tuna.tsinghua.edu.cn/simple
-    from src.model.rnn import mod_gru
-    from src.model.cnn import mod_resnet_1d, mod_resnet_2d
+    from src.nn.rnn import mod_gru
+    from src.nn.cnn import mod_resnet_1d, mod_resnet_2d
         
     class resnet1d_gru(nn.Module):
         def __init__(self, seq_len , feat_len , dim_res = 16 , dim_rnn = 64 , **kwargs) -> None:

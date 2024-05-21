@@ -4,7 +4,7 @@ from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from inspect import currentframe
 from torch import Tensor
-from typing import Any , Callable , Iterable , Iterator , Literal , Optional
+from typing import Any , Callable , final , Iterable , Iterator , Literal , Optional
 
 from .core import BatchData , BatchOutput
 
@@ -81,8 +81,10 @@ class TrainerStatus:
         if event: self.epoch_event.append(event)
 
 class BaseCB:
-    def __init__(self , model_module) -> None:
-        self.__model_module : BaseModelModule = model_module
+    def __init__(self , model_module , with_cb) -> None:
+        self.model_module : BaseModelModule = model_module
+        self.with_cb = with_cb
+        self.__hook_stack = []
         self._assert_validity()
     def _print_info(self):
         args = {k:v for k,v in getattr(currentframe() , 'f_back').f_locals.items() if k not in ['self','model_module'] and not k.startswith('_')}
@@ -91,14 +93,28 @@ class BaseCB:
         print(info)
     def __call__(self , hook : Any = None): 
         if hook is None : hook = self.trace_hook_name
-        if isinstance(hook , str): self.__getattribute__(hook)()
-        elif callable(hook): self.hook_wrapper(hook)
+        if isinstance(hook , str): return self.hook_proceed(hook)
+        elif callable(hook): return self.hook_wrapper(hook)
         else: raise TypeError(hook)
     def hook_wrapper(self , hook : Callable):
-        hook()
-        self.__getattribute__(hook.__name__)()
+        hook_name = hook.__name__
+        def wrapper_normal():
+            hook()
+            self.hook_proceed(hook_name)
+        def wrapper_with():
+            self.at_enter(hook.__name__)
+            hook()
+            self.at_exit(hook.__name__)
+        return wrapper_with if self.with_cb else wrapper_normal
+    def hook_proceed(self , hook_name): getattr(self , hook_name)()
+    def at_enter(self , hook_name):  ...
+    def at_exit(self , hook_name):  self.hook_proceed(hook_name)
+    def __enter__(self): 
+        self.__hook_stack.append(self.trace_hook_name)
+        self.at_enter(self.__hook_stack[-1])
+    def __exit__(self , *args): self.at_exit(self.__hook_stack.pop())
     @property
-    def module(self): return self.__model_module
+    def module(self): return self.model_module
     def on_configure_model(self): ...
     def on_summarize_model(self): ...
     def on_data_end(self): ... 
@@ -137,7 +153,7 @@ class BaseCB:
     def _possible_hooks(cls):
         return [x for x in dir(cls) if cls._possible_hook(x)]
     @classmethod
-    def _possible_hook(cls , name):
+    def _possible_hook(cls , name : str):
         return name.startswith('on_') and callable(getattr(cls , name))
         # return ['self'] == [v.name for v in signature(getattr(cls , name)).parameters.values()]
     @classmethod
@@ -228,11 +244,13 @@ class BaseDataModule(ABC):
 
 class BaseModelModule(ABC):
     '''run through the whole process of training'''
+    @final
     def __init__(self , **kwargs):
         self.init_config(**kwargs)
         self.init_utilities(**kwargs)
         self.init_data(**kwargs)
-        self.status = TrainerStatus(getattr(self , 'config').get('max_epoch'))
+        self.status = TrainerStatus(getattr(self.config , 'max_epoch'))
+        [setattr(self , x , self.callbacks(getattr(self , x))) for x in dir(self) if BaseCB._possible_hook(x)]
 
     @abstractmethod
     def batch_forward(self) -> None: 
@@ -265,7 +283,7 @@ class BaseModelModule(ABC):
     @abstractmethod
     def init_data(self , **kwargs): 
         '''initialized data_module'''
-        self.data       = kwargs['data']
+        self.data : BaseDataModule = kwargs['data']
     @abstractmethod
     def save_model(self) -> None: 
         '''save self.net to somewhere'''
@@ -298,73 +316,73 @@ class BaseModelModule(ABC):
 
     def main_process(self):
         '''Main stage of data & fit & test'''
-        self.callbacks(self.on_configure_model)
+        self.on_configure_model()
         for self.stage in self.stage_queue: 
             getattr(self , f'stage_{self.stage}')()
-        self.callbacks(self.on_summarize_model)
+        self.on_summarize_model()
 
     def stage_data(self):
         '''stage of loading model data'''
         self.status.stage_data()
-        self.callbacks(self.on_data_start)
+        self.on_data_start()
         self.data.load_data()
-        self.callbacks(self.on_data_end)
+        self.on_data_end()
         
     def stage_fit(self):
         '''stage of fitting'''
         self.status.stage_fit()
-        self.callbacks(self.on_fit_start)
+        self.on_fit_start()
         for self.status.model_date , self.status.model_num in self.model_iter:
             self.fit_model()
-        self.callbacks(self.on_fit_end)
+        self.on_fit_end()
 
     def stage_test(self):
         '''stage of testing'''
         self.status.stage_test()
-        self.callbacks(self.on_test_start)
+        self.on_test_start()
         for self.status.model_date , self.status.model_num in self.model_iter:
             self.test_model()
-        self.callbacks(self.on_test_end)
+        self.on_test_end()
 
     def fit_model(self):
         self.status.fit_model_start()
-        self.callbacks(self.on_fit_model_start)
+        self.on_fit_model_start()
         while not self.status.end_of_loop:
             self.status.fit_epoch_start()
-            self.callbacks(self.on_fit_epoch_start)
+            self.on_fit_epoch_start()
 
             self.status.dataset_train()
-            self.callbacks(self.on_train_epoch_start)
+            self.on_train_epoch_start()
             for self.batch_idx , self.batch_data in enumerate(self.dataloader):
-                self.callbacks(self.on_train_batch_start)
-                self.callbacks(self.on_train_batch)
-                self.callbacks(self.on_train_batch_end)
-            self.callbacks(self.on_train_epoch_end)
+                self.on_train_batch_start()
+                self.on_train_batch()
+                self.on_train_batch_end()
+            self.on_train_epoch_end()
 
             self.status.dataset_validation()
-            self.callbacks(self.on_validation_epoch_start)
+            self.on_validation_epoch_start()
             for self.batch_idx , self.batch_data in enumerate(self.dataloader):
-                self.callbacks(self.on_validation_batch_start)
-                self.callbacks(self.on_validation_batch)
-                self.callbacks(self.on_validation_batch_end)
-            self.callbacks(self.on_validation_epoch_end)
+                self.on_validation_batch_start()
+                self.on_validation_batch()
+                self.on_validation_batch_end()
+            self.on_validation_epoch_end()
 
-            self.callbacks(self.on_before_fit_epoch_end)
+            self.on_before_fit_epoch_end()
             self.status.fit_epoch_end()
-            self.callbacks(self.on_fit_epoch_end)
-        self.callbacks(self.on_fit_model_end)
+            self.on_fit_epoch_end()
+        self.on_fit_model_end()
 
     def test_model(self):
-        self.callbacks(self.on_test_model_start)
+        self.on_test_model_start()
         for self.status.model_type in self.model_types:
             self.status.dataset_test()
-            self.callbacks(self.on_test_model_type_start)
+            self.on_test_model_type_start()
             for self.batch_idx , self.batch_data in enumerate(self.dataloader):
-                self.callbacks(self.on_test_batch_start)
-                self.callbacks(self.on_test_batch)
-                self.callbacks(self.on_test_batch_end)
-            self.callbacks(self.on_test_model_type_end)
-        self.callbacks(self.on_test_model_end)
+                self.on_test_batch_start()
+                self.on_test_batch()
+                self.on_test_batch_end()
+            self.on_test_model_type_end()
+        self.on_test_model_end()
 
     @property
     def penalty_kwargs(self): return {}

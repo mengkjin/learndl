@@ -1,28 +1,28 @@
 from typing import Any , Optional
 
 from . import base , control , display
-from .base import BasicCallBack , WithCallBack
+from .base import CallBack
 from ..config import TrainConfig
 from ...classes import BaseModelModule
 
 _search_cb_mod = [control , display]
 
-class CallBackManager(WithCallBack):
+class CallBackManager(CallBack):
     def __init__(self , model_module , *callbacks):
-        super().__init__(model_module)     
+        super().__init__(model_module , with_cb=True)     
         self.callbacks = []
-        self.with_cbs : list[WithCallBack] = []
-        self.base_cbs : list[BasicCallBack] = []
+        self.with_cbs : list[CallBack] = []
+        self.base_cbs : list[CallBack] = []
         [self.add_callback(cb) for cb in callbacks]
 
-    def add_callback(self , cb):
+    def add_callback(self , cb : CallBack):
         self.callbacks.append(cb)
-        self.with_cbs.append(cb) if issubclass(cb.__class__ , WithCallBack) else self.base_cbs.append(cb)
+        self.with_cbs.append(cb) if cb.with_cb else self.base_cbs.append(cb)
 
     def at_enter(self , hook_name):
         for cb in self.with_cbs: cb.at_enter(hook_name)
     def at_exit(self, hook_name):
-        for cb in self.base_cbs: cb(hook_name)
+        for cb in self.base_cbs: cb.hook_proceed(hook_name)
         for cb in self.with_cbs: cb.at_exit(hook_name)
 
     @classmethod

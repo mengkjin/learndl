@@ -1,3 +1,3 @@
 from . import (
-    algo , classes , data , environ , func , interface , layer , model , util
+    algo , classes , data , environ , func , interface , layer , nn , util
 )

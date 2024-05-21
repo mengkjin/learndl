@@ -7,10 +7,10 @@ from torch import nn
 from torch.optim.swa_utils import AveragedModel , update_bn
 from typing import Any , Iterator , Optional
 
+from .. import nn as NN
 from .config import TrainConfig
 from .metric import Metrics
 from .store import Checkpoint
-from ..model import model as Net
 from ..classes import (
     BaseDataModule , BaseModelModule , BatchData , BatchOutput , 
     BoosterData , ModelDict , ModelFile)
@@ -46,7 +46,7 @@ class Model:
     
     @staticmethod
     def get_net(module_name : str , param = {} , state_dict = None , device = None , **kwargs):
-        net = getattr(Net , module_name)(**param)
+        net = getattr(NN , module_name)(**param)
         assert isinstance(net , nn.Module) , net.__class__
         if state_dict: net.load_state_dict(state_dict)
         return device(net) if callable(device) else net.to(device)

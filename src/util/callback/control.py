@@ -2,14 +2,14 @@ import torch
 
 from copy import deepcopy
 
-from .base import BasicCallBack
+from .base import CallBack
 from ..optim import Optimizer
 from ...func import list_converge
 
-class EarlyStoppage(BasicCallBack):
+class EarlyStoppage(CallBack):
     '''stop fitting when validation score cease to improve'''
     def __init__(self , model_module , patience = 20) -> None:
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=False)
         self._print_info()
         self._patience = patience
     def on_fit_model_start(self):
@@ -22,10 +22,10 @@ class EarlyStoppage(BasicCallBack):
         if self.status.epoch - self._epoch_best >= self._patience:
             self.status.end_of_loop.add_status('EarlyStop' , self._epoch_best)
 
-class ValidationConverge(BasicCallBack):
+class ValidationConverge(CallBack):
     '''stop fitting when valid_score converge'''
     def __init__(self , model_module , patience = 5 , eps = 1.0e-5) -> None:
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=False)
         self._print_info()
         self._patience = patience
         self._eps      = eps
@@ -33,10 +33,10 @@ class ValidationConverge(BasicCallBack):
         if list_converge(self.metrics.metric_epochs['valid.score'], self._patience , self._eps):
             self.status.end_of_loop.add_status('Valid Cvg' , self.status.epoch - self._patience + 1)
 
-class TrainConverge(BasicCallBack):
+class TrainConverge(CallBack):
     '''stop fitting when train_loss converge'''
     def __init__(self , model_module , patience = 5 , eps = 1.0e-5) -> None:
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=False)
         self._print_info()
         self._patience = patience
         self._eps      = eps
@@ -44,10 +44,10 @@ class TrainConverge(BasicCallBack):
         if list_converge(self.metrics.metric_epochs['train.loss'], self._patience , self._eps):
             self.status.end_of_loop.add_status('Train Cvg' , self.status.epoch - self._patience + 1)
 
-class FitConverge(BasicCallBack):
+class FitConverge(CallBack):
     '''stop fitting when train_loss and valid_score converge'''
     def __init__(self , model_module , patience = 5 , eps = 1.0e-5) -> None:
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=False)
         self._print_info()
         self._patience = patience
         self._eps      = eps
@@ -56,10 +56,10 @@ class FitConverge(BasicCallBack):
             list_converge(self.metrics.metric_epochs['valid.score'], self._patience , self._eps)):
             self.status.end_of_loop.add_status('T & V Cvg' , self.status.epoch - self._patience + 1)
 
-class EarlyExitRetrain(BasicCallBack):
+class EarlyExitRetrain(CallBack):
     '''retrain with new lr if fitting stopped too early'''
     def __init__(self, model_module , earliest = 5 , max_attempt = 4 , lr_multiplier = [1 , 0.1 , 10 , 0.01 , 100]) -> None:
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=False)
         self._print_info()
         self._earliest = earliest
         self._max_attempt = max_attempt
@@ -75,10 +75,10 @@ class EarlyExitRetrain(BasicCallBack):
             self.status.new_attempt()
             self.module.load_model(True , lr_multiplier = self._lr_multiplier[:self.status.attempt+1][-1])
 
-class NanLossRetrain(BasicCallBack):
+class NanLossRetrain(CallBack):
     '''retrain if fitting encounters nan loss'''
     def __init__(self, model_module , max_attempt = 4) -> None:
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=False)
         self._print_info()
         self._max_attempt = max_attempt
     def on_fit_model_start(self):
@@ -98,10 +98,10 @@ class NanLossRetrain(BasicCallBack):
         else:
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
 
-class CudaEmptyCache(BasicCallBack):
+class CudaEmptyCache(CallBack):
     '''CudaEmptyCache every few batch (pretty slow)'''
     def __init__(self , model_module , batch_interval = 20) -> None:
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=False)
         self._print_info()
         self._interval = batch_interval
         # 2.5s for 86 epochs
@@ -111,11 +111,11 @@ class CudaEmptyCache(BasicCallBack):
     def on_validation_batch_end(self):   self._empty_cache()
     def on_test_batch_end(self):         self._empty_cache()
 
-class ResetOptimizer(BasicCallBack):
+class ResetOptimizer(CallBack):
     '''reset optimizer on some epoch (can speedup scheduler)'''
     reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
     def __init__(self, model_module, num_reset = 2 , trigger = 40 , recover_level = 1. , speedup2x = True) -> None:
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=False)
         self._print_info()
         self._num_reset = num_reset
         self._trigger = trigger
@@ -144,10 +144,10 @@ class ResetOptimizer(BasicCallBack):
         self.optim.scheduler = self.optim.load_scheduler(self.optim.optimizer , shd_param)
         self.status.add_event('reset_learn_rate')
 
-class DynamicDataLink(BasicCallBack):
+class DynamicDataLink(CallBack):
     '''assign and unlink dynamic data in tra networks'''
     def __init__(self , model_module) -> None:
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=False)
         self._print_info()
     def _net_method(self , key , *args , **kwargs): 
         if (method := getattr(self.module.net,key,None)): method(*args , **kwargs)

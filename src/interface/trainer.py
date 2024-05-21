@@ -29,7 +29,7 @@ class ModelTrainer(BaseModelModule):
         self.callbacks  = CallBackManager.setup(self)
         self.model      = Model.setup(self)
     def init_data(self , **kwargs): 
-        self.data = DataModule(self.config)
+        self.data : DataModule = DataModule(self.config)
     def batch_forward(self) -> None: 
         self.batch_output = self(self.batch_data)
     def batch_metrics(self) -> None:

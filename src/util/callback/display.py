@@ -5,14 +5,14 @@ import pandas as pd
 from dataclasses import asdict , dataclass , field
 from typing import Callable , ClassVar , Optional
 
-from .base import BasicCallBack , WithCallBack
+from .base import CallBack
 from ...util.loader import LoaderWrapper
 from ...environ import PATH
 
-class CallbackTimer(WithCallBack):
+class CallbackTimer(CallBack):
     '''record time cost of callback hooks'''
     def __init__(self , model_module , verbosity = 2) -> None:
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=True)
         self._print_info()
         self._verbosity = verbosity
         self._hook_times : dict[str,list]  = {}
@@ -31,10 +31,10 @@ class CallbackTimer(WithCallBack):
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self._hook_times.items()]
             print(pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False))
 
-class BatchDisplay(BasicCallBack):
+class BatchDisplay(CallBack):
     '''display batch progress bar'''
     def __init__(self , model_module , verbosity = 2) -> None:
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=False)
         self._print_info()
         self._verbosity = verbosity
     @property
@@ -58,26 +58,26 @@ class BatchDisplay(BasicCallBack):
             self._init_tqdm('Test {} {} score : {:.5f}')
     def on_train_batch_end(self):
         if self._verbosity >= 10:
-            self._display(self.status.epoch, self.metrics.latest['train.loss'])
+            self._display(self.status.epoch, self.metrics.output.loss_item)
     def on_validation_batch_end(self):
         if self._verbosity >= 10:
-            self._display(self.status.epoch, self.metrics.latest['valid.score'])
+            self._display(self.status.epoch, self.metrics.output.score)
     def on_test_batch_end(self):
         if self._verbosity >= 10:
             self._display(self.status.model_type , 
                           getattr(self.module , 'batch_dates')[self.module.batch_idx] , 
-                          self.metrics.latest['test.score'])
+                          self.metrics.output.score)
             
-class StatusDisplay(BasicCallBack):
+class StatusDisplay(CallBack):
     '''display epoch and event information'''
-    result_path = f'{PATH.result}/model_results.yaml'
+    RESULT_PATH = f'{PATH.result}/model_results.yaml'
 
     def __init__(self , model_module , verbosity = 2):
-        super().__init__(model_module)
+        super().__init__(model_module , with_cb=False)
         self._print_info()
         self._verbosity = verbosity
         self._init_time = time.time()
-        os.makedirs(os.path.dirname(self.result_path) , exist_ok=True)
+        os.makedirs(os.path.dirname(self.RESULT_PATH) , exist_ok=True)
         self._times : dict[str,float] = {}
         self._texts : dict[str,str]   = {}
         self._epoch_model : int = 0
@@ -88,7 +88,7 @@ class StatusDisplay(BasicCallBack):
     @property
     def _initial_models(self) -> bool: return self._model_stage <= self.config.model_num
     @property
-    def _model_test_dates(self) -> list | np.ndarray: return self.module.data.model_test_dates
+    def _model_test_dates(self) -> list | np.ndarray: return getattr(self.module.data , 'model_test_dates')
     @property
     def progress_log(self) -> Callable:
         return self.logger.info if (self._verbosity > 2 or self._initial_models) else self.logger.debug
@@ -144,7 +144,7 @@ class StatusDisplay(BasicCallBack):
             '7_test'  : self._texts.get('test'),
             '8_result': self._test_record.test_scores,
         }
-        PATH.dump_yaml(result , self.result_path)
+        PATH.dump_yaml(result , self.RESULT_PATH)
 
     def on_data_start(self):    self.logger.critical(self.tic_str('data'))
     def on_data_end(self):      self.logger.critical(self.toc_str('data'))

@@ -324,7 +324,7 @@ class ModernTCNPretrainHead(nn.Module):
 if __name__ == '__main__':
     import torch
     import torch.nn as nn
-    from src.model.modernTCN import ModernTCNEmbed , ModernTCN
+    from src.nn.modernTCN import ModernTCNEmbed , ModernTCN
 
     batch_size = 2 
     seq_len = 30
