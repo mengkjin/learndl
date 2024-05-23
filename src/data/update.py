@@ -7,32 +7,31 @@ from functools import reduce
 from .fetcher import DB_BY_DATE , DB_BY_NAME , DataFetcher , SQLFetcher , save_df
 from ..environ import PATH
 
+UPDATER_TITLE = 'DB_updater'
 class DataUpdater():
-    db_updater_title = 'DB_updater'
-
     def __init__(self) -> None:
         self.Updater = self.get_new_updater()
         self.Success = []
         self.Failed  = []
         
-    @classmethod
-    def get_updater_paths(cls):
+    @staticmethod
+    def get_updater_paths():
         # order matters!
         search_dirs = [PATH.database , PATH.updater] + ['/home/mengkjin/Workspace/SharedFolder'] * (socket.gethostname() == 'mengkjin-server')
 
         paths = []
         for sdir in search_dirs:
-            add_paths = [os.path.join(sdir , p) for p in os.listdir(sdir) if p.startswith(cls.db_updater_title + '.')]
+            add_paths = [os.path.join(sdir , p) for p in os.listdir(sdir) if p.startswith(UPDATER_TITLE + '.')]
             paths = np.concatenate([paths , sorted(add_paths)])
         return list(paths)
     
-    @classmethod
-    def unpack_exist_updaters(cls , del_after_dumping = True):
+    @staticmethod
+    def unpack_exist_updaters(del_after_dumping = True):
         assert socket.gethostname() == 'mengkjin-server' , socket.gethostname()
         search_dirs = [PATH.database , PATH.updater , '/home/mengkjin/Workspace/SharedFolder']
         paths = []
         for sdir in search_dirs:
-            paths += [os.path.join(sdir , p) for p in os.listdir(sdir) if p.startswith(cls.db_updater_title + '.') and p.endswith('.tar')]
+            paths += [os.path.join(sdir , p) for p in os.listdir(sdir) if p.startswith(UPDATER_TITLE + '.') and p.endswith('.tar')]
         paths.sort()
         if del_after_dumping and paths:
             print(paths)
@@ -44,10 +43,10 @@ class DataUpdater():
                 
         if del_after_dumping: [os.remove(tar_filename) for tar_filename in paths]
 
-    @classmethod
-    def get_new_updater(cls):
+    @staticmethod
+    def get_new_updater():
         stime = time.strftime('%y%m%d%H%M%S',time.localtime())
-        return os.path.join(PATH.updater , f'{cls.db_updater_title}.{stime}.tar')
+        return os.path.join(PATH.updater , f'{UPDATER_TITLE}.{stime}.tar')
 
     def get_db_params(self , db_src):
         # db_update_parameters
@@ -173,6 +172,6 @@ class DataUpdater():
     @classmethod
     def main(cls):
         if socket.gethostname() == 'mengkjin-server':
-            DataUpdater.update_server()
+            cls.update_server()
         else:
-            DataUpdater.update_laptop()
+            cls.update_laptop()

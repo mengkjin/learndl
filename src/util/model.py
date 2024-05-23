@@ -16,7 +16,7 @@ from ..classes import (
     BoosterData , ModelDict , ModelFile)
 from ..algo.boost.lgbm import Lgbm
 
-class Model:
+class ModelManager:
     '''a group of ensemble models , of same net structure'''
     def __init__(self, model_module : BaseModelModule , use_score = True , **kwargs) -> None:
         self.module = model_module
@@ -235,7 +235,7 @@ class LgbmEnsembler:
     @property
     def is_cuda(self) -> bool: return self.module.device.device.type == 'cuda'
 
-    def booster_data(self , net : nn.Module , loader : Iterator[BatchData]) -> BoosterData:
+    def booster_data(self , net : nn.Module , loader : Iterator[BatchData | Any]) -> BoosterData:
         hh , yy , ii = [] , [] , []
         net.eval()
         with torch.no_grad():

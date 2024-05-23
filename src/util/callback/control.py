@@ -10,7 +10,7 @@ class EarlyStoppage(CallBack):
     '''stop fitting when validation score cease to improve'''
     def __init__(self , model_module , patience = 20) -> None:
         super().__init__(model_module , with_cb=False)
-        self._print_info()
+        #self._print_info()
         self._patience = patience
     def on_fit_model_start(self):
         self._epoch_best  = -1
@@ -26,7 +26,7 @@ class ValidationConverge(CallBack):
     '''stop fitting when valid_score converge'''
     def __init__(self , model_module , patience = 5 , eps = 1.0e-5) -> None:
         super().__init__(model_module , with_cb=False)
-        self._print_info()
+        #self._print_info()
         self._patience = patience
         self._eps      = eps
     def on_validation_epoch_end(self):
@@ -37,7 +37,7 @@ class TrainConverge(CallBack):
     '''stop fitting when train_loss converge'''
     def __init__(self , model_module , patience = 5 , eps = 1.0e-5) -> None:
         super().__init__(model_module , with_cb=False)
-        self._print_info()
+        #self._print_info()
         self._patience = patience
         self._eps      = eps
     def on_validation_epoch_end(self):
@@ -48,7 +48,7 @@ class FitConverge(CallBack):
     '''stop fitting when train_loss and valid_score converge'''
     def __init__(self , model_module , patience = 5 , eps = 1.0e-5) -> None:
         super().__init__(model_module , with_cb=False)
-        self._print_info()
+        #self._print_info()
         self._patience = patience
         self._eps      = eps
     def on_validation_epoch_end(self):
@@ -60,7 +60,7 @@ class EarlyExitRetrain(CallBack):
     '''retrain with new lr if fitting stopped too early'''
     def __init__(self, model_module , earliest = 5 , max_attempt = 4 , lr_multiplier = [1 , 0.1 , 10 , 0.01 , 100]) -> None:
         super().__init__(model_module , with_cb=False)
-        self._print_info()
+        #self._print_info()
         self._earliest = earliest
         self._max_attempt = max_attempt
         self._lr_multiplier = lr_multiplier
@@ -79,7 +79,7 @@ class NanLossRetrain(CallBack):
     '''retrain if fitting encounters nan loss'''
     def __init__(self, model_module , max_attempt = 4) -> None:
         super().__init__(model_module , with_cb=False)
-        self._print_info()
+        #self._print_info()
         self._max_attempt = max_attempt
     def on_fit_model_start(self):
         self._nanlife = self._max_attempt
@@ -102,7 +102,7 @@ class CudaEmptyCache(CallBack):
     '''CudaEmptyCache every few batch (pretty slow)'''
     def __init__(self , model_module , batch_interval = 20) -> None:
         super().__init__(model_module , with_cb=False)
-        self._print_info()
+        #self._print_info()
         self._interval = batch_interval
         # 2.5s for 86 epochs
     def _empty_cache(self):
@@ -116,7 +116,7 @@ class ResetOptimizer(CallBack):
     reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
     def __init__(self, model_module, num_reset = 2 , trigger = 40 , recover_level = 1. , speedup2x = True) -> None:
         super().__init__(model_module , with_cb=False)
-        self._print_info()
+        #self._print_info()
         self._num_reset = num_reset
         self._trigger = trigger
         self._recover_level = recover_level 
@@ -148,7 +148,7 @@ class DynamicDataLink(CallBack):
     '''assign and unlink dynamic data in tra networks'''
     def __init__(self , model_module) -> None:
         super().__init__(model_module , with_cb=False)
-        self._print_info()
+        #self._print_info()
     def _net_method(self , key , *args , **kwargs): 
         if (method := getattr(self.module.net,key,None)): method(*args , **kwargs)
     def on_train_epoch_start(self):      self._net_method('dynamic_data_assign' , self.module)

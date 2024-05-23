@@ -298,7 +298,8 @@ class BoosterData:
         self.finite = np.isfinite(y)
 
         self.update_feature()
-        if self.weight_param is None: self.weight_param = {'tau':0.75*np.log(0.5)/np.log(0.75) , 'ts_type':'lin' , 'rate':0.5}  
+        if self.weight_param is None: 
+            self.weight_param = {'tau':0.75*np.log(0.5)/np.log(0.75) , 'ts_type':'lin' , 'rate':0.5}  
 
         self.raw_x , self.raw_y = None , None
 

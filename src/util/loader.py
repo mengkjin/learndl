@@ -5,7 +5,7 @@ from tqdm import tqdm
 from typing import Literal
 
 from .store import Storage
-from ..classes import BatchData , BaseDataModule
+from ..classes import BaseDataModule , BatchData
                 
 class DataloaderStored:
     ''''retrieve batch_data from a Storage'''

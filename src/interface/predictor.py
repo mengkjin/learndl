@@ -6,12 +6,12 @@ import torch
 from dataclasses import dataclass
 from typing import ClassVar , Literal , Optional
 
-from .data import DataModule
+from .data import NetDataModule
 from ..classes import BatchOutput
 from ..data import GetData
 from ..environ import PATH
 from ..func.time import today , date_offset
-from ..util import Deposition , Device , Model , TrainConfig
+from ..util import Deposition , Device , ModelManager , TrainConfig
 
 @dataclass
 class Predictor:
@@ -68,8 +68,8 @@ class Predictor:
         model_dates  = deposition.model_dates(self.model_num , self.model_type)
         start_dt     = max(start_dt , int(date_offset(min(model_dates) ,1)))
 
-        data_mod_old = DataModule(model_config , False).load_data() if start_dt <= today(-100) else None
-        data_mod_new = DataModule(model_config , True).load_data() 
+        data_mod_old = NetDataModule(model_config , False).load_data() if start_dt <= today(-100) else None
+        data_mod_new = NetDataModule(model_config , True).load_data() 
 
         end_dt = min(end_dt , max(data_mod_new.test_full_dates))
         pred_dates = GetData.trade_dates(start_dt , end_dt)
@@ -80,14 +80,14 @@ class Predictor:
         df_list = []
         for data in [data_mod_old , data_mod_new]:
             if data is None: continue
-            assert isinstance(data , DataModule)
+            assert isinstance(data , NetDataModule)
             for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
                 print(model_date , 'old' if (data is data_mod_old) else 'new') 
                 assert isinstance(model_date , int) , model_date
                 data.setup('predict' ,  model_param , model_date)
                 model = deposition.load_model(model_date , self.model_num , self.model_type)
 
-                net = Model.get_net(model_config.model_module , model_param , model['state_dict'] , device)
+                net = ModelManager.get_net(model_config.model_module , model_param , model['state_dict'] , device)
                 net.eval()
 
                 loader = data.predict_dataloader()

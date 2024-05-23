@@ -7,6 +7,8 @@ from torch import Tensor
 from typing import Any , Callable , final , Iterable , Iterator , Literal , Optional
 
 from .core import BatchData , BatchOutput
+from .data import BoosterData
+from ..func import tensor_standardize_and_weight , match_values
 
 @dataclass
 class EndStatus:
@@ -79,42 +81,43 @@ class TrainerStatus:
 
     def add_event(self , event : Optional[str]):
         if event: self.epoch_event.append(event)
-
 class BaseCB:
     def __init__(self , model_module , with_cb) -> None:
-        self.model_module : BaseModelModule = model_module
-        self.with_cb = with_cb
+        self.module : BaseModelModule = model_module
+        self.with_cb : bool = with_cb
         self.__hook_stack = []
         self._assert_validity()
-    def _print_info(self):
-        args = {k:v for k,v in getattr(currentframe() , 'f_back').f_locals.items() if k not in ['self','model_module'] and not k.startswith('_')}
+    def _print_info(self , depth = 0):
+        frame = currentframe()
+        for _ in range(depth + 1): frame = getattr(frame , 'f_back')
+        args = {k:v for k,v in getattr(frame , 'f_locals').items() if k not in ['self','model_module'] and not k.startswith('_')}
         info = f'Callback : {self.__class__.__name__}' + '({})'.format(','.join([f'{k}={v}' for k,v in args.items()])) 
         if self.__class__.__doc__: info += f' , {self.__class__.__doc__}'
         print(info)
-    def __call__(self , hook : Any = None): 
+    def __call__(self , hook : Optional[str | Callable] = None) -> Callable: 
         if hook is None : hook = self.trace_hook_name
-        if isinstance(hook , str): return self.hook_proceed(hook)
-        elif callable(hook): return self.hook_wrapper(hook)
-        else: raise TypeError(hook)
-    def hook_wrapper(self , hook : Callable):
-        hook_name = hook.__name__
-        def wrapper_normal():
-            hook()
-            self.hook_proceed(hook_name)
-        def wrapper_with():
-            self.at_enter(hook.__name__)
-            hook()
-            self.at_exit(hook.__name__)
-        return wrapper_with if self.with_cb else wrapper_normal
-    def hook_proceed(self , hook_name): getattr(self , hook_name)()
-    def at_enter(self , hook_name):  ...
-    def at_exit(self , hook_name):  self.hook_proceed(hook_name)
+        return self.hook_wrapper(hook)
     def __enter__(self): 
         self.__hook_stack.append(self.trace_hook_name)
         self.at_enter(self.__hook_stack[-1])
     def __exit__(self , *args): self.at_exit(self.__hook_stack.pop())
-    @property
-    def module(self): return self.model_module
+    def at_enter(self , hook_name):  ...
+    def at_exit(self , hook_name): getattr(self , hook_name)()
+    def hook_wrapper(self , hook : str | Callable) -> Callable:
+        if isinstance(hook , str):
+            return getattr(self , hook)
+        elif callable(hook):
+            hook_name = hook.__name__
+            def wrapper_normal() -> None:
+                hook()
+                self.at_exit(hook_name)
+            def wrapper_with() -> None:
+                self.at_enter(hook_name)
+                hook()
+                self.at_exit(hook_name)
+            return wrapper_with if self.with_cb else wrapper_normal
+        else:
+            raise TypeError(hook)
     def on_configure_model(self): ...
     def on_summarize_model(self): ...
     def on_data_end(self): ... 
@@ -150,7 +153,7 @@ class BaseCB:
     def on_validation_epoch_end(self): ...
     def on_validation_epoch_start(self): ...
     @classmethod
-    def _possible_hooks(cls):
+    def _possible_hooks(cls) -> list[str]:
         return [x for x in dir(cls) if cls._possible_hook(x)]
     @classmethod
     def _possible_hook(cls , name : str):
@@ -158,16 +161,16 @@ class BaseCB:
         # return ['self'] == [v.name for v in signature(getattr(cls , name)).parameters.values()]
     @classmethod
     def _assert_validity(cls):
-        if BaseCB in cls.__bases__:
-            base_hooks = BaseCB._possible_hooks()
-            self_hooks = cls._possible_hooks()
-            invalid_hooks = [x for x in self_hooks if x not in base_hooks]
-            if invalid_hooks:
-                print(f'Invalid Hooks of {cls.__name__} :' , invalid_hooks)
-                print('Use _ or __ to prefix these class-methods')
-                raise TypeError(cls)
+        # if BaseCB in cls.__bases__:
+        assert BaseCB in cls.__mro__ , (cls , cls.__mro__)
+        self_hooks , base_hooks = cls._possible_hooks() , BaseCB._possible_hooks()
+        invalid_hooks = [x for x in self_hooks if x not in base_hooks]
+        if invalid_hooks:
+            print(f'Invalid Hooks of {cls.__name__} :' , invalid_hooks)
+            print('Use _ or __ to prefix these class-methods')
+            raise TypeError(cls)
     @property
-    def trace_hook_name(self):
+    def trace_hook_name(self) -> str:
         env = getattr(currentframe() , 'f_back')
         while not env.f_code.co_name.startswith('on_'): env = getattr(env , 'f_back')
         return env.f_code.co_name
@@ -221,26 +224,41 @@ class BaseDataModule(ABC):
     @abstractmethod
     def prepare_data() -> None: '''prepare all data in advance of training'''
     @abstractmethod
-    def load_data() -> None: '''load prepared data at training begin'''
+    def load_data(self) -> None: 
+        '''load prepared data at training begin'''
+        self.model_date_list : np.ndarray
+        self.test_full_dates : np.ndarray
     @abstractmethod
     def setup(self) -> None: 
         '''create train / valid / test dataloaders'''
+        self.stage : Literal['fit' , 'test' , 'predict']
         self.y : Tensor
         self.buffer : BaseBuffer
         self.y_secid : Any
         self.y_date : Any
     @abstractmethod
-    def train_dataloader(self) -> Iterator[BatchData]: '''return train dataloaders'''
+    def train_dataloader(self) -> Iterator[BatchData | BoosterData]: '''return train dataloaders'''
     @abstractmethod
-    def val_dataloader(self) -> Iterator[BatchData]: '''return valid dataloaders'''
+    def val_dataloader(self) -> Iterator[BatchData | BoosterData]: '''return valid dataloaders'''
     @abstractmethod
-    def test_dataloader(self) -> Iterator[BatchData]: '''return test dataloaders'''
+    def test_dataloader(self) -> Iterator[BatchData | BoosterData]: '''return test dataloaders'''
     @abstractmethod
-    def predict_dataloader(self) -> Iterator[BatchData]: '''return predict dataloaders'''
-    def on_before_batch_transfer(self , batch : BatchData , dataloader_idx = None): return batch
-    def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None): 
-        return batch.to(getattr(self , 'device' , None) if device is None else device)
-    def on_after_batch_transfer(self , batch : BatchData , dataloader_idx = None): return batch
+    def predict_dataloader(self) -> Iterator[BatchData | BoosterData]: '''return predict dataloaders'''
+    def on_before_batch_transfer(self , batch , dataloader_idx = None): return batch
+    def transfer_batch_to_device(self , batch , device = None , dataloader_idx = None): return batch
+    def on_after_batch_transfer(self , batch , dataloader_idx = None): return batch
+    def reset_dataloaders(self):
+        '''reset for every fit / test / predict'''
+        self.loader_dict  = {}
+        self.loader_param = ()
+    def prev_model_date(self , model_date):
+        prev_dates = [d for d in self.model_date_list if d < model_date]
+        return max(prev_dates) if prev_dates else -1
+    def next_model_date(self , model_date):
+        if model_date < max(self.model_date_list):
+            return min(self.model_date_list[self.model_date_list < model_date])
+        else:
+            return max(self.test_full_dates) + 1
 
 class BaseModelModule(ABC):
     '''run through the whole process of training'''

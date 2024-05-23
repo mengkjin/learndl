@@ -314,6 +314,7 @@ class SQLFetcher:
             'dongfang.tra'       :cls('dongfang','tra'       ,'tradingdate',20200101,'%Y-%m-%d') ,
             'dongfang.hist'      :cls('dongfang','hist'      ,'tradingdate',20200101,'%Y-%m-%d') ,
             'dongfang.scores_v0' :cls('dongfang','scores_v0' ,'tradingdate',20171229,'%Y-%m-%d') ,
+            'dongfang.factorvae' :cls('dongfang','factorvae' ,'tradingdate',20200101,'%Y-%m-%d') ,
             'kaiyuan.positive' :cls(
                 'kaiyuan','positive','date',20140130,
                 factors = ['active_trading','apm','opt_synergy_effect','large_trader_ret_error',

@@ -6,8 +6,9 @@ from ..store import Checkpoint
 from ...classes import BaseCB , TrainerStatus , BaseDataModule , BaseModelModule
 
 class CallBack(BaseCB):
-    def __init__(self , model_module : BaseModelModule , with_cb : bool , *args , **kwargs) -> None:
+    def __init__(self , model_module : BaseModelModule , with_cb : bool , print_info = True , *args , **kwargs) -> None:
         super().__init__(model_module , with_cb)
+        if print_info: self._print_info(depth=1)
     @property
     def config(self) -> TrainConfig:    return self.module.config
     @property

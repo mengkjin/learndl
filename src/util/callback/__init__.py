@@ -5,25 +5,17 @@ from .base import CallBack
 from ..config import TrainConfig
 from ...classes import BaseModelModule
 
-_search_cb_mod = [control , display]
+SEARCH_MODS = [control , display]
 
 class CallBackManager(CallBack):
     def __init__(self , model_module , *callbacks):
-        super().__init__(model_module , with_cb=True)     
-        self.callbacks = []
-        self.with_cbs : list[CallBack] = []
-        self.base_cbs : list[CallBack] = []
-        [self.add_callback(cb) for cb in callbacks]
-
-    def add_callback(self , cb : CallBack):
-        self.callbacks.append(cb)
-        self.with_cbs.append(cb) if cb.with_cb else self.base_cbs.append(cb)
+        super().__init__(model_module , with_cb=True , print_info=False)     
+        self.callbacks : list[CallBack] = [cb for cb in callbacks if isinstance(cb , CallBack)]
 
     def at_enter(self , hook_name):
-        for cb in self.with_cbs: cb.at_enter(hook_name)
+        [cb.at_enter(hook_name) for cb in self.callbacks if cb.with_cb]
     def at_exit(self, hook_name):
-        for cb in self.base_cbs: cb.hook_proceed(hook_name)
-        for cb in self.with_cbs: cb.at_exit(hook_name)
+        [cb.at_exit(hook_name) for cb in self.callbacks]
 
     @classmethod
     def setup(cls , model_module : BaseModelModule):
@@ -35,7 +27,7 @@ class CallBackManager(CallBack):
     def __get_cb(cb_name : str , param : Any , model_module : BaseModelModule) -> Optional[dict]:
         assert isinstance(param , dict), (cb_name , param)
         config : TrainConfig = model_module.config
-        for cb_mod in _search_cb_mod:
+        for cb_mod in SEARCH_MODS:
             if hasattr(cb_mod , cb_name): 
                 if cb_mod == display: param = {'verbosity': config.verbosity , **param}
                 return getattr(cb_mod , cb_name)(model_module , **param)

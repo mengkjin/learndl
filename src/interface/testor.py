@@ -1,29 +1,29 @@
 from dataclasses import dataclass
 from torch import nn , Tensor
 
-from ..util import TrainConfig , Metrics , Model
+from ..util import TrainConfig , Metrics , ModelManager
 from ..classes import BatchData , BatchOutput
-from .data import DataModule
+from .data import NetDataModule
 
 @dataclass
 class ModelTestor:
     '''Check if a newly defined model can be forward correctly'''
     config      : TrainConfig
     net         : nn.Module
-    data        : DataModule
+    data        : NetDataModule
     batch_data  : BatchData
     metrics     : Metrics
 
     @classmethod
     def new(cls , module = 'tra_lstm' , model_data_type = 'day'):
         config = TrainConfig.load(override = {'model_module' : module , 'model_data_type' : model_data_type} , makedir = False)
-        data = DataModule(config , True).load_data()
+        data = NetDataModule(config , True).load_data()
         data.setup('predict' , config.model_param[0] , data.model_date_list[0])   
         
         batch_data = data.predict_dataloader()[0]
 
-        net = Model.get_net(module , config.model_param[0])
-        metrics = Metrics(config.train_param['criterion']).new_model(config.model_param[0] , config)
+        net = ModelManager.get_net(module , config.model_param[0])
+        metrics = Metrics(config).new_model(config.model_param[0])
         return cls(config , net , data , batch_data , metrics)
 
     def try_forward(self) -> None:

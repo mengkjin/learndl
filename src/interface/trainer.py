@@ -8,17 +8,17 @@
 import numpy as np
 import torch
 
-from .data import DataModule
+from .data import NetDataModule
 from ..classes import BaseModelModule
 from ..func import BigTimer
 from ..util import (
     CallBackManager , Checkpoint , Deposition , Device , 
-    Logger , Metrics , Model , Optimizer , TrainConfig)
+    Logger , Metrics , ModelManager , Optimizer , TrainConfig)
 
 class ModelTrainer(BaseModelModule):
     '''run through the whole process of training'''
     def init_config(self , **kwargs) -> None:
-        self.config = TrainConfig.load(do_parser = True , par_args = kwargs)
+        self.config      = TrainConfig.load(do_parser = True , par_args = kwargs)
         self.stage_queue = self.config.stage_queue
     def init_utilities(self , **kwargs) -> None: 
         self.logger     = Logger()
@@ -27,9 +27,9 @@ class ModelTrainer(BaseModelModule):
         self.deposition = Deposition(self.config)
         self.metrics    = Metrics(self.config)
         self.callbacks  = CallBackManager.setup(self)
-        self.model      = Model.setup(self)
+        self.model      = ModelManager.setup(self)
     def init_data(self , **kwargs): 
-        self.data : DataModule = DataModule(self.config)
+        self.data : NetDataModule = NetDataModule(self.config)
     def batch_forward(self) -> None: 
         self.batch_output = self(self.batch_data)
     def batch_metrics(self) -> None:
