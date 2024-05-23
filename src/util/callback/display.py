@@ -158,8 +158,8 @@ class StatusDisplay(CallBack):
         if self.status.end_of_loop: self._texts['exit'] = self.status.end_of_loop.trigger_reason
         while self.status.epoch_event: self._display(self.event_sdout(self.status.epoch_event.pop()))
     def on_fit_model_end(self):
-        train_score = getattr(self.metrics.latest , 'train.score' , 0)
-        valid_score = getattr(self.metrics.latest , 'valid.score' , 0)
+        train_score = self.metrics.latest.get('train.score' , 0)
+        valid_score = self.metrics.latest.get('valid.score' , 0)
         best_score = self.status.best_attempt_metric if self.status.best_attempt_metric else 0
         self._texts['status'] = f'Train{train_score: .4f} Valid{valid_score: .4f} BestVal{best_score: .4f}'
         self._texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(

@@ -899,3 +899,25 @@
   0.best: Avg(0.1251)|Sum(4.38)|Std(0.0511)|T(14.49)|IR(11.9976)
   0.swabest: Avg(0.1318)|Sum(4.61)|Std(0.0553)|T(14.1)|IR(11.6721)
   0.swalast: Avg(0.0963)|Sum(3.37)|Std(0.0517)|T(11.03)|IR(9.131)
+0_model: gru.1(x1)
+1_start: Thu May 23 22:44:42 2024
+2_basic: full
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-99991231
+6_fit: Finish Process [Fit], Cost 0.5 Hours, 2.0 Min/model, 2.1 Sec/Epoch
+7_test: Finish Process [Test], Cost 34.8 Secs
+8_result:
+  0.best: Avg(0.1124)|Sum(200.99)|Std(0.0694)|T(68.49)|IR(7.9354)
+  0.swabest: Avg(0.1122)|Sum(200.68)|Std(0.0686)|T(69.13)|IR(8.0096)
+  0.swalast: Avg(0.111)|Sum(198.54)|Std(0.0692)|T(67.84)|IR(7.8602)
+0_model: gru.2(x1)
+1_start: Thu May 23 23:29:25 2024
+2_basic: full
+3_datas: day
+4_label: std_lag1_10
+5_dates: 20170103-99991231
+6_fit: Finish Process [Fit], Cost 199.2 Secs
+7_test: Finish Process [Test], Cost 16.8 Secs
+8_result:
+  0.best: Avg(0.0567)|Sum(101.42)|Std(0.0727)|T(32.98)|IR(3.8205)

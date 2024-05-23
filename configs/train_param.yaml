@@ -3,8 +3,8 @@ mem_storage: true
 random_seed: null
 short_test:  false
 
-model_name: gru # null
-model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
+model_name: null # null
+model_module: lgbm # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
 model_types: [best , swalast , swabest]
 model_data_type: day # 'day+30m' , 30m
 model_data_prenorm:
