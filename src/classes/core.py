@@ -80,8 +80,9 @@ class BatchOutput:
             return self.outputs[1]
         else:
             return None
-    def override_pred(self , pred : Tensor):
+    def override_pred(self , pred : Optional[Tensor]):
         assert self.outputs is not None
+        assert pred is not None
         raw_pred = self.pred
         assert len(pred) == len(raw_pred) , (pred.shape , raw_pred.shape)
         pred = pred.reshape(*raw_pred.shape).to(raw_pred)
@@ -93,7 +94,7 @@ class BatchOutput:
     
 @dataclass(slots=True)
 class ModelDict:
-    state_dict : dict[str,Tensor]
+    state_dict : Optional[dict[str,Tensor]] = None
     lgbm_string : Optional[str] = None
     
     def save(self , path : str):
@@ -112,5 +113,6 @@ class ModelFile:
         assert key in ModelDict.__slots__
         path = self.path(key)
         return torch.load(path , map_location='cpu') if os.path.exists(path) else None
-    def exists(self) -> bool: return os.path.exists(self.path('state_dict'))
+    def exists(self) -> bool: 
+        return any([os.path.exists(self.path(key)) for key in ModelDict.__slots__])
     

@@ -6,7 +6,7 @@ from abc import abstractmethod
 from numpy.random import permutation
 from torch import Tensor
 from torch.utils.data import BatchSampler
-from typing import Any , Literal , Optional
+from typing import Any , Iterator , Literal , Optional
 
 from ..classes import BaseDataModule , BatchData , BoosterData
 from ..data import DataBlockNorm , DataProcessor , ModuleData
@@ -14,7 +14,7 @@ from ..environ import PATH , CONF
 from ..func import tensor_standardize_and_weight , match_values
 from ..util import BufferSpace , DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig
 
-class __AbsDataModule(BaseDataModule):
+class _DataModule(BaseDataModule):
     @abstractmethod
     def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid : Tensor) -> None: ...
 
@@ -158,10 +158,8 @@ class __AbsDataModule(BaseDataModule):
      
     def standardize_y(self , y : Tensor , valid : Optional[Tensor] , index1 : Optional[Tensor] , no_weight = False) -> tuple[Tensor , Optional[Tensor]]:
         '''standardize y and weight'''
-        if valid is not None:
-            assert index1 is not None , index1
-            y = y[:,index1].clone().nan_to_num(0)
-            y[valid == 0] = torch.nan
+        y = y[:,index1].clone() if index1 is not None else y.clone()
+        if valid is not None: y.nan_to_num_(0)[~valid] = torch.nan
         return tensor_standardize_and_weight(y , 0 , self.config.weight_scheme(self.stage , no_weight))
 
     @staticmethod
@@ -189,7 +187,7 @@ class __AbsDataModule(BaseDataModule):
             x /= self.datas.norms[key].std[-x.shape[-2]:] + 1e-6
         return x
     
-class NetDataModule(__AbsDataModule):
+class NetDataModule(_DataModule):
     def train_dataloader(self):
         return LoaderWrapper(self , self.loader_dict['train'] , self.device , self.config.verbosity)
     def val_dataloader(self):
@@ -329,12 +327,12 @@ class NetDataModule(__AbsDataModule):
         return sample_index
 
     
-class BoosterDataModule(__AbsDataModule):
+class BoosterDataModule(_DataModule):
     '''for boosting such as algo.boost.lgbm, create booster'''
-    def train_dataloader(self): return [self.loader_dict['train']]
-    def val_dataloader(self):   return [self.loader_dict['valid']]
-    def test_dataloader(self):  return [self.loader_dict['test']]
-    def predict_dataloader(self): return [self.loader_dict['test']]
+    def train_dataloader(self) -> Iterator[BoosterData]: return self.loader_dict['train']
+    def val_dataloader(self) -> Iterator[BoosterData]:   return self.loader_dict['valid']
+    def test_dataloader(self) -> Iterator[BoosterData]:  return self.loader_dict['test']
+    def predict_dataloader(self) -> Iterator[BoosterData]: return self.loader_dict['test']
         
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , param = {'seqlens' : {'day': 30 , '30m': 30 , 'dms': 30}} , model_date = -1) -> None:
         if self.predict: stage = 'predict'
@@ -419,10 +417,10 @@ class BoosterDataModule(__AbsDataModule):
 
                     bb_x.append(b_x)
                     bb_y.append(b_y)
-                    bb_d.append(self.y_date[yindex1[[0]]])
+                    bb_d.append(self.y_date[index1[yindex1[0]]])
                 bb_x = torch.concat(bb_x , dim = 1)
                 bb_y = torch.concat(bb_y , dim = 1)
-                bb_d = np.concatenate(bb_d)
+                bb_d = np.array(bb_d)
                 bnum = 0
                 batch_files = [f'{PATH.batch}/{set_key}.{bnum}.pt']
                 self.storage.save(BoosterData(bb_x , bb_y , self.y_secid , bb_d) , batch_files[bnum] , group = self.stage)
@@ -438,10 +436,10 @@ class BoosterDataModule(__AbsDataModule):
                     assert b_y.shape == (len(self.y_secid) , 1) , (b_y.shape , (len(self.y_secid) , 1))
                     assert all(yindex1 == yindex1[0]) , yindex1
                     b_x = b_x.reshape(len(self.y_secid),1,-1)
-                    self.storage.save(BoosterData(b_x , b_y , self.y_secid , self.y_date[yindex1[[0]]]) , batch_files[bnum] , group = self.stage)
+                    dates = np.array([self.y_date[index1[yindex1[0]]]])
+                    self.storage.save(BoosterData(b_x , b_y , self.y_secid , dates) , batch_files[bnum] , group = self.stage)
             else:
                 raise KeyError(set_key)
-
             self.loader_dict[set_key] = DataloaderStored(self.storage , batch_files)
 
     @staticmethod

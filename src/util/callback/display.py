@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from dataclasses import asdict , dataclass , field
-from typing import Callable , ClassVar , Optional
+from typing import Any , Callable , ClassVar , Optional
 
 from .base import CallBack
 from ...util.loader import LoaderWrapper
@@ -38,36 +38,22 @@ class BatchDisplay(CallBack):
         #self._print_info()
         self._verbosity = verbosity
     @property
-    def _dl(self): return self.module.dataloader
-    @property
-    def _init_tqdm(self) -> Callable: 
-        return self._dl.init_tqdm if self._verbosity >= 10 and isinstance(self._dl, LoaderWrapper) else self._empty
-    @property
-    def _display(self) -> Callable: 
-        return self._dl.display if self._verbosity >= 10 and isinstance(self._dl, LoaderWrapper) else self._empty
-    @staticmethod
-    def _empty(*args , **kwargs): return 
-    def on_train_epoch_start(self):
-        if self._verbosity >= 10:
-            self._init_tqdm('Train Ep#{:3d} loss : {:.5f}')
-    def on_validation_epoch_start(self):
-        if self._verbosity >= 10:
-            self._init_tqdm('Valid Ep#{:3d} score : {:.5f}')
-    def on_test_model_type_start(self):
-        if self._verbosity >= 10:
-            self._init_tqdm('Test {} {} score : {:.5f}')
-    def on_train_batch_end(self):
-        if self._verbosity >= 10:
-            self._display(self.status.epoch, self.metrics.output.loss_item)
-    def on_validation_batch_end(self):
-        if self._verbosity >= 10:
-            self._display(self.status.epoch, self.metrics.output.score)
-    def on_test_batch_end(self):
-        if self._verbosity >= 10:
-            self._display(self.status.model_type , 
-                          getattr(self.module , 'batch_dates')[self.module.batch_idx] , 
-                          self.metrics.output.score)
-            
+    def _dl(self) -> LoaderWrapper | Any: return self.module.dataloader
+    def _init_tqdm(self , text : str): 
+        if self._verbosity >= 10 and isinstance(self._dl, LoaderWrapper): self._dl.init_tqdm(text)
+    def _display(self , *args , **kwargs): 
+        if self._verbosity >= 10 and isinstance(self._dl, LoaderWrapper): self._dl.display(*args , **kwargs)
+
+    def on_train_epoch_start(self):      self._init_tqdm('Train Ep#{:3d} loss : {:.5f}')
+    def on_train_batch_end(self):        self._display(self.status.epoch, self.metrics.output.loss_item)
+    
+    def on_validation_epoch_start(self): self._init_tqdm('Valid Ep#{:3d} score : {:.5f}')
+    def on_validation_batch_end(self):   self._display(self.status.epoch, self.metrics.output.score)
+    
+    def on_test_model_type_start(self):  self._init_tqdm('Test {} {} score : {:.5f}')
+    def on_test_batch_end(self):         self._display(self.status.model_type , 
+                                                       self.module.batch_dates[self.module.batch_idx] , 
+                                                       self.metrics.output.score)
 class StatusDisplay(CallBack):
     '''display epoch and event information'''
     RESULT_PATH = f'{PATH.result}/model_results.yaml'
@@ -88,21 +74,19 @@ class StatusDisplay(CallBack):
     @property
     def _initial_models(self) -> bool: return self._model_stage <= self.config.model_num
     @property
-    def _model_test_dates(self) -> list | np.ndarray: return getattr(self.module.data , 'model_test_dates')
-    @property
-    def progress_log(self) -> Callable:
-        return self.logger.info if (self._verbosity > 2 or self._initial_models) else self.logger.debug
+    def _model_test_dates(self) -> np.ndarray: return self.module.data.model_test_dates
     @property
     def _speedup2x(self) -> bool:
         try:
             return self.config.train_param['callbacks']['ResetOptimizer']['speedup2x']
         except KeyError:
             return False
-
+    def _display(self , *args , **kwargs):
+        return self.logger.info(*args , **kwargs) if (self._verbosity > 2 or self._initial_models) else self.logger.debug(*args , **kwargs)
     def event_sdout(self , event) -> str:
         if event == 'reset_learn_rate':
-            sdout = f'Reset learn rate and scheduler at the end of epoch {self.status.epoch} , effective at epoch {self.status.epoch + 1}' + \
-                ', and will speedup2x' * self._speedup2x
+            sdout = f'Reset learn rate and scheduler at the end of epoch {self.status.epoch} , effective at epoch {self.status.epoch + 1}'
+            if self._speedup2x: sdout += ', and will speedup2x'
         elif event == 'new_attempt':
             sdout = '{attempt} {epoch} : {status}, Next attempt goes!'.format(**self._texts)
         elif event == 'nanloss':
@@ -110,7 +94,6 @@ class StatusDisplay(CallBack):
         else:
             raise KeyError(event)
         return sdout
-
     def update_test_score(self):
         self._test_record.update_score(self.status.model_num , self.status.model_type , self.metrics.scores[-len(self._model_test_dates):])
 
@@ -155,7 +138,7 @@ class StatusDisplay(CallBack):
         self.tic('model')
         self._model_stage += 1
         self._epoch_model = 0
-        self._texts = {}
+        self._texts = {k:'' for k in ['model','attempt','epoch','epoch_model','status','time','exit']}
         self._texts['model'] = '{:s} #{:d} @{:4d}'.format(self.config.model_name , self.status.model_num , self.status.model_date)
     def on_fit_epoch_start(self):
         self._epoch_model += 1
@@ -170,13 +153,15 @@ class StatusDisplay(CallBack):
             self.metrics.latest['valid.score'] , self.metrics.best_metric , 
             self.module.optimizer.last_lr)
         if self.status.epoch % [10,5,5,3,3,1][min(self._verbosity // 2 , 5)] == 0: 
-            self.progress_log('{attempt} {epoch} : {status}'.format(**self._texts))
+            self._display('{attempt} {epoch} : {status}'.format(**self._texts))
     def on_fit_epoch_end(self):
         if self.status.end_of_loop: self._texts['exit'] = self.status.end_of_loop.trigger_reason
-        while self.status.epoch_event: self.progress_log(self.event_sdout(self.status.epoch_event.pop()))
+        while self.status.epoch_event: self._display(self.event_sdout(self.status.epoch_event.pop()))
     def on_fit_model_end(self):
-        self._texts['status'] = 'Train{: .4f} Valid{: .4f} BestVal{: .4f}'.format(
-            self.metrics.latest['train.score'] , self.metrics.latest['valid.score'] , self.status.best_attempt_metric)
+        train_score = getattr(self.metrics.latest , 'train.score' , 0)
+        valid_score = getattr(self.metrics.latest , 'valid.score' , 0)
+        best_score = self.status.best_attempt_metric if self.status.best_attempt_metric else 0
+        self._texts['status'] = f'Train{train_score: .4f} Valid{valid_score: .4f} BestVal{best_score: .4f}'
         self._texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
             self.toc('model') / 60 , self.toc('model') / (self._epoch_model + 1))
         self.logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self._texts))

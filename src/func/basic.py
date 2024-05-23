@@ -130,22 +130,22 @@ def nd_rank(x : Tensor , dim = None):
     if dim is None:
         w = tensor_rank(x.flatten()).reshape(x.shape)
     else:
-        w = torch.zeros_like(x).copy_(x).transpose(-1 , dim)
+        if x.numel() == 0: return x
+        w = x.clone().transpose(-1 , dim)
         new_shape = w.shape
         w = w.reshape(-1 , new_shape[-1])
-        for i in range(len(w)):
-            w[i] = tensor_rank(w[i])
+        for i in range(len(w)): w[i] = tensor_rank(w[i])
         w = w.reshape(*new_shape).transpose(-1 , dim)   
     return w
 def nd_rank_weight(x : Tensor , dim = None):
     if dim is None:
         w = rank_weight(x.flatten()).reshape(x.shape)
     else:
-        w = torch.zeros_like(x).copy_(x).transpose(-1 , dim)
+        if x.numel() == 0: return x
+        w = x.clone().transpose(-1 , dim)
         new_shape = w.shape
         w = w.reshape(-1 , new_shape[-1])
-        for i in range(len(w)):
-            w[i] = rank_weight(w[i])
+        for i in range(len(w)): w[i] = rank_weight(w[i])
         w = w.reshape(*new_shape).transpose(-1 , dim)   
     return w 
 def nd_minus_mean(x : Tensor, w : Tensor | float, dim = None):

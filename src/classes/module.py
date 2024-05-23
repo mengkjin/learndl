@@ -3,7 +3,7 @@ import torch
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from inspect import currentframe
-from torch import Tensor
+from torch import nn , Tensor
 from typing import Any , Callable , final , Iterable , Iterator , Literal , Optional
 
 from .core import BatchData , BatchOutput
@@ -83,7 +83,7 @@ class TrainerStatus:
         if event: self.epoch_event.append(event)
 class BaseCB:
     def __init__(self , model_module , with_cb) -> None:
-        self.module : BaseModelModule = model_module
+        self.module : BaseTrainerModule = model_module
         self.with_cb : bool = with_cb
         self.__hook_stack = []
         self._assert_validity()
@@ -229,13 +229,15 @@ class BaseDataModule(ABC):
         self.model_date_list : np.ndarray
         self.test_full_dates : np.ndarray
     @abstractmethod
-    def setup(self) -> None: 
+    def setup(self , *args , **kwargs) -> None: 
         '''create train / valid / test dataloaders'''
         self.stage : Literal['fit' , 'test' , 'predict']
         self.y : Tensor
         self.buffer : BaseBuffer
         self.y_secid : Any
         self.y_date : Any
+        self.early_test_dates : np.ndarray
+        self.model_test_dates : np.ndarray
     @abstractmethod
     def train_dataloader(self) -> Iterator[BatchData | BoosterData]: '''return train dataloaders'''
     @abstractmethod
@@ -256,11 +258,11 @@ class BaseDataModule(ABC):
         return max(prev_dates) if prev_dates else -1
     def next_model_date(self , model_date):
         if model_date < max(self.model_date_list):
-            return min(self.model_date_list[self.model_date_list < model_date])
+            return min(self.model_date_list[self.model_date_list > model_date])
         else:
             return max(self.test_full_dates) + 1
 
-class BaseModelModule(ABC):
+class BaseTrainerModule(ABC):
     '''run through the whole process of training'''
     @final
     def __init__(self , **kwargs):
@@ -268,7 +270,8 @@ class BaseModelModule(ABC):
         self.init_utilities(**kwargs)
         self.init_data(**kwargs)
         self.status = TrainerStatus(getattr(self.config , 'max_epoch'))
-        [setattr(self , x , self.callbacks(getattr(self , x))) for x in dir(self) if BaseCB._possible_hook(x)]
+        if hasattr(self , 'callbacks'):
+            [setattr(self , x , self.callbacks(getattr(self , x))) for x in dir(self) if BaseCB._possible_hook(x)]
 
     @abstractmethod
     def batch_forward(self) -> None: 
@@ -297,7 +300,7 @@ class BaseModelModule(ABC):
         self.callbacks  = kwargs['callbacks']
         self.device     = kwargs['device']
         self.model      = kwargs['model']
-        self.dataloader : Iterable[BatchData] | Iterator[BatchData] = kwargs['device']
+        self.dataloader : Iterable[BatchData | Any] | Iterator[BatchData | Any]
     @abstractmethod
     def init_data(self , **kwargs): 
         '''initialized data_module'''
@@ -313,16 +316,30 @@ class BaseModelModule(ABC):
         '''load self.net to somewhere'''
         self.net = torch.nn.Module()
         self.optimizer = args[0]
-    @property
+    @property 
     @abstractmethod
-    
     def model_param(self) -> dict:  '''current model param'''
     @property
     @abstractmethod
     def model_iter(self) -> Iterator[tuple[int,int]]: '''iter of model_date and model_num , considering resume_training'''
     @property
     @abstractmethod
+    def if_transfer(self) -> bool: '''whether use last model to refine model'''
+    @property
+    @abstractmethod
     def model_types(self) -> list[str]: '''iter of model_type'''
+    @property
+    def batch_dates(self): return np.concatenate([self.data.early_test_dates , self.data.model_test_dates])
+    @property
+    def batch_warm_up(self): return len(self.data.early_test_dates)
+    @property
+    def model_date(self): return self.status.model_date
+    @property
+    def model_num(self): return self.status.model_num
+    @property
+    def model_type(self): return self.status.model_type
+    @property
+    def prev_model_date(self): return self.data.prev_model_date(self.model_date)
     
     def __call__(self , input):
         if not isinstance(input , BatchData):
@@ -360,50 +377,16 @@ class BaseModelModule(ABC):
         self.on_test_start()
         for self.status.model_date , self.status.model_num in self.model_iter:
             self.test_model()
-        self.on_test_end()
-
-    def fit_model(self):
-        self.status.fit_model_start()
-        self.on_fit_model_start()
-        while not self.status.end_of_loop:
-            self.status.fit_epoch_start()
-            self.on_fit_epoch_start()
-
-            self.status.dataset_train()
-            self.on_train_epoch_start()
-            for self.batch_idx , self.batch_data in enumerate(self.dataloader):
-                self.on_train_batch_start()
-                self.on_train_batch()
-                self.on_train_batch_end()
-            self.on_train_epoch_end()
-
-            self.status.dataset_validation()
-            self.on_validation_epoch_start()
-            for self.batch_idx , self.batch_data in enumerate(self.dataloader):
-                self.on_validation_batch_start()
-                self.on_validation_batch()
-                self.on_validation_batch_end()
-            self.on_validation_epoch_end()
-
-            self.on_before_fit_epoch_end()
-            self.status.fit_epoch_end()
-            self.on_fit_epoch_end()
-        self.on_fit_model_end()
-
-    def test_model(self):
-        self.on_test_model_start()
-        for self.status.model_type in self.model_types:
-            self.status.dataset_test()
-            self.on_test_model_type_start()
-            for self.batch_idx , self.batch_data in enumerate(self.dataloader):
-                self.on_test_batch_start()
-                self.on_test_batch()
-                self.on_test_batch_end()
-            self.on_test_model_type_end()
-        self.on_test_model_end()
+        self.on_test_end()    
 
     @property
     def penalty_kwargs(self): return {}
+    @abstractmethod
+    def fit_model(self): 
+        self.batch_idx : int
+        self.batch_data : Any
+    @abstractmethod
+    def test_model(self): ...
     def on_configure_model(self): ... 
     def on_summarize_model(self): ...
     def on_data_start(self): ...

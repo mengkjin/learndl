@@ -4,6 +4,7 @@ from typing import Literal
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 MAIN_DIR = os.path.dirname(SRC_DIR)
+BOOSTER_MODULE = ['lgbm']
 
 @dataclass
 class _CustomPath:

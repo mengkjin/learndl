@@ -3,7 +3,8 @@ from typing import Any , Optional
 from . import base , control , display
 from .base import CallBack
 from ..config import TrainConfig
-from ...classes import BaseModelModule
+from ...classes import BaseTrainerModule
+from ...environ import BOOSTER_MODULE
 
 SEARCH_MODS = [control , display]
 
@@ -18,13 +19,15 @@ class CallBackManager(CallBack):
         [cb.at_exit(hook_name) for cb in self.callbacks]
 
     @classmethod
-    def setup(cls , model_module : BaseModelModule):
+    def setup(cls , model_module : BaseTrainerModule):
         config : TrainConfig = model_module.config
-        callbacks = [cls.__get_cb(cb , param , model_module) for cb , param in config.callbacks.items()]
+        cb_configs = config.callbacks
+        if config.model_module in BOOSTER_MODULE: cb_configs = {k:v for k,v in cb_configs.items() if k in ['StatusDisplay']}
+        callbacks = [cls.__get_cb(cb , param , model_module) for cb , param in cb_configs.items()]
         return cls(model_module , *callbacks)
     
     @staticmethod
-    def __get_cb(cb_name : str , param : Any , model_module : BaseModelModule) -> Optional[dict]:
+    def __get_cb(cb_name : str , param : Any , model_module : BaseTrainerModule) -> Optional[dict]:
         assert isinstance(param , dict), (cb_name , param)
         config : TrainConfig = model_module.config
         for cb_mod in SEARCH_MODS:

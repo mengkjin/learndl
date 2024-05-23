@@ -3,10 +3,10 @@ from typing import Callable
 from ..config import TrainConfig
 from ..metric import Metrics 
 from ..store import Checkpoint
-from ...classes import BaseCB , TrainerStatus , BaseDataModule , BaseModelModule
+from ...classes import BaseCB , TrainerStatus , BaseDataModule , BaseTrainerModule
 
 class CallBack(BaseCB):
-    def __init__(self , model_module : BaseModelModule , with_cb : bool , print_info = True , *args , **kwargs) -> None:
+    def __init__(self , model_module : BaseTrainerModule , with_cb : bool , print_info = True , *args , **kwargs) -> None:
         super().__init__(model_module , with_cb)
         if print_info: self._print_info(depth=1)
     @property

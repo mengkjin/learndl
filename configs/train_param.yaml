@@ -3,8 +3,8 @@ mem_storage: true
 random_seed: null
 short_test:  false
 
-model_name: gru_lgbm # null
-model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst
+model_name: gru # null
+model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
 model_types: [best , swalast , swabest]
 model_data_type: day # 'day+30m' , 30m
 model_data_prenorm:
@@ -87,8 +87,8 @@ detect_anomaly: false
 precision:  float # double , bfloat16
 
 on_short_test:
-  beg_date:   20170103
-  end_date:   20170228
+  beg_date:   20170101
+  end_date:   20170228 # 20170228
   input_span: 240
   max_epoch:  3
   verbosity:  10

@@ -116,17 +116,22 @@ class Metrics:
 
     def calculate(self , dataset , batch_data : BatchData , batch_output : BatchOutput , net : Optional[nn.Module] = None , 
                   assert_nan = False , **kwargs):
+        label  = batch_data.y
+        pred   = batch_output.pred
+        weight = batch_data.w
+        penalty_kwargs = {'net':net,'pre':pred,'hidden':batch_output.hidden,'label':label , **kwargs}
+        mt_param = getattr(net , 'get_multiloss_params')() if net and hasattr(net , 'get_multiloss_params') else {}
+        self.calculate_from_tensor(dataset, label, pred, weight, penalty_kwargs, mt_param, assert_nan)
+
+    def calculate_from_tensor(self , dataset , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
+                              penalty_kwargs = {} , multiloss_param = {} , assert_nan = False):
         '''Calculate loss(with gradient), penalty , score'''
         assert dataset in ['train','validation','test']
-
-        label  = batch_data.y
-        weight = batch_data.w
-        pred   = batch_output.pred
-        penalty_kwargs = {'net':net,'pre':pred,'hidden':batch_output.hidden,'label':label , **kwargs}
-
         if label.shape != pred.shape: # if more label than output
             label = label[...,:pred.shape[-1]]
             assert label.shape == pred.shape , (label.shape , pred.shape)
+        elif label.ndim == 1:
+            label , pred = label.reshape(-1, 1) , pred.reshape(-1, 1)
 
         with no_grad():
             score = self.f_score(label , pred , weight , nan_check = (dataset == 'test') , first_col = True).item()
@@ -134,10 +139,7 @@ class Metrics:
         if dataset == 'train':
             if self.multiloss is not None:
                 losses = self.f_loss(label , pred , weight)[:self.multiloss.num_task]
-                mt_param = {}
-                if net and hasattr(net , 'get_multiloss_params'):
-                    mt_param = getattr(net , 'get_multiloss_params')()
-                loss = self.multiloss.calculate_multi_loss(losses , mt_param)    
+                loss = self.multiloss.calculate_multi_loss(losses , multiloss_param)    
             else:
                 losses = self.f_loss(label , pred , weight , first_col = True)
                 loss = losses
@@ -154,8 +156,7 @@ class Metrics:
         if assert_nan and self.output.loss.isnan():
             print(self.output)
             raise Exception('nan loss here')
-
-
+        
     @classmethod
     def decorator_display(cls , func , mtype , mkey):
         def metric_display(mtype , mkey):
@@ -180,6 +181,10 @@ class Metrics:
             if arg is not None: nanpos = arg.isnan() + nanpos
         if isinstance(nanpos , Tensor) and nanpos.any():
             if nanpos.ndim > 1: nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
+            if nanpos.all(): 
+                for arg in args:
+                    print(arg.shape)
+                    print(arg)
             new_args = [None if arg is None else arg[~nanpos] for arg in args]
         else:
             new_args = args
@@ -208,7 +213,7 @@ class Metrics:
             def wrapper(label,pred,weight=None,dim=0,nan_check=False,first_col=False,**kwargs):
                 if first_col: label , pred , weight = cls.firstC(label , pred , weight)
                 if nan_check: label , pred , weight = cls.nonnan(label , pred , weight)
-                v = func(label , pred , weight, dim , **kwargs)
+                v = func(label , pred , weight , dim , **kwargs)
                 if key == 'mse' : v = -v
                 return v
             return wrapper

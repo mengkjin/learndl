@@ -6,7 +6,7 @@ from dataclasses import dataclass , field
 from typing import Any , ClassVar , Literal , Optional
 
 from ..func.basic import pretty_print_dict , recur_update
-from ..environ import PATH , CONF
+from ..environ import PATH , CONF , BOOSTER_MODULE
 
 @dataclass    
 class ModelParam:
@@ -102,6 +102,7 @@ class TrainParam:
         source_base = self.TRAIN_YAML
         Param : dict = PATH.read_yaml(f'{source_dir}/{source_base}')
         if self.override: Param.update(self.override)
+        if Param['model_module'] in BOOSTER_MODULE: Param['model_types'] = ['best']
         if socket.gethostname() != 'mengkjin-server': Param['short_test'] = True
 
         if self.spec_adjust:
@@ -141,6 +142,9 @@ class TrainParam:
     def resumeable(self) -> bool: return os.path.exists(f'{self.model_base_path}/{self.TRAIN_YAML}')
     @property
     def model_module(self) -> str: return self.configs['model_module'].lower()
+    @classmethod
+    def guess_module(cls) -> str:
+        return PATH.read_yaml(f'{PATH.conf}/{cls.TRAIN_YAML}')['model_module'].lower()
 
 @dataclass
 class TrainConfig:
@@ -383,10 +387,13 @@ class TrainConfig:
 
     def print_out(self):
         subset = [
-            'random_seed' , 'model_name' , 'model_module' , 'model_data_type' , 
+            'random_seed' , 'model_name' , 'model_module' , 'model_data_type' , 'model_types' ,
             'beg_date' , 'end_date' , 'sample_method' , 'shuffle_option' , 'lgbm_ensembler'
         ]
         pretty_print_dict({k:self.get(k) for k in subset})
         # pretty_print_dict(self.train_param)
         pretty_print_dict(self.Model.Param)
+
+    @staticmethod
+    def guess_module() -> str: return TrainParam.guess_module()
         
