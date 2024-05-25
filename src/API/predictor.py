@@ -31,6 +31,7 @@ class Predictor:
 
     @classmethod
     def update_factors(cls):
+        '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         model_preds = [
             cls('gru_day'    , 'swalast' , 0 , 'gru_day_V0') ,
             cls('gruRTN_day' , 'swalast' , 0 , 'gruRTN_day_V0') ,

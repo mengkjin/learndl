@@ -220,7 +220,7 @@ class TrainConfig:
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
     def update_data_param(self , x_data : dict):
-        if self.is_booster: self.Model.update_data_param(x_data)
+        if not self.is_booster: self.Model.update_data_param(x_data)
     
     @classmethod
     def load(cls , config_path = 'default' , do_parser = False , par_args = {} , override = None , makedir = True):
