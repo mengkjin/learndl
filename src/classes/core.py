@@ -94,8 +94,8 @@ class BatchOutput:
     
 @dataclass(slots=True)
 class ModelDict:
-    state_dict : Optional[dict[str,Tensor]] = None
-    lgbm_string : Optional[str] = None
+    state_dict  : Optional[dict[str,Tensor]] = None
+    booster_str : Optional[str] = None
     
     def save(self , path : str):
         for key in self.__slots__:

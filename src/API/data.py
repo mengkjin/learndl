@@ -9,10 +9,34 @@ from torch.utils.data import BatchSampler
 from typing import Any , Iterator , Literal , Optional
 
 from ..classes import BaseDataModule , BatchData , BoosterData
-from ..data import DataBlockNorm , DataProcessor , ModuleData
+from ..data import DataBlockNorm , DataProcessor , ModuleData , DataUpdater
 from ..environ import PATH , CONF
 from ..func import tensor_standardize_and_weight , match_values
 from ..util import BufferSpace , DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig
+
+class DataAPI:
+    @staticmethod
+    def update(): 
+        '''
+        Update datas for both laptop and server:
+        a. for laptop, transform data from R dataset and SQL to Database, create Updater's in './data/DataBase'
+        b. for server, move Updater's to Database'
+        '''
+        DataUpdater.main()
+
+    @staticmethod
+    def prepare_train_data(): 
+        '''
+        prepare latest(1 year or so) train data for predict use, do it after 'update'
+        '''
+        DataProcessor.main(True)
+
+    @staticmethod
+    def reconstruct_train_data(): 
+        '''
+        reconstruct historical(since 2007 , use for models starting at 2017) train data
+        '''
+        NetDataModule.prepare_data()
 
 class _DataModule(BaseDataModule):
     @abstractmethod

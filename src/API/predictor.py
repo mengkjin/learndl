@@ -22,20 +22,29 @@ class Predictor:
     alias : Optional[str] = None
     df    : Optional[pd.DataFrame] = None
 
-    destination : ClassVar[str] = '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha'
-    secid_col : ClassVar[str] = 'secid'
-    date_col  : ClassVar[str] = 'date'
+    DESTINATION : ClassVar[str] = '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha'
+    SECID_COLS : ClassVar[str] = 'secid'
+    DATE_COLS  : ClassVar[str] = 'date'
 
     def __post_init__(self):
         if self.alias is None: self.alias = self.model_name
 
-    def deploy(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = secid_col , date_col = date_col):
+    @classmethod
+    def update_factors(cls):
+        model_preds = [
+            cls('gru_day'    , 'swalast' , 0 , 'gru_day_V0') ,
+            cls('gruRTN_day' , 'swalast' , 0 , 'gruRTN_day_V0') ,
+            cls('gruRES_day' , 'swalast' , 0 , 'gruRES_day_V0') ,
+        ]
+        [md.get_df().deploy() for md in model_preds]
+
+    def deploy(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
         '''deploy df by day to class.destination'''
         if df is None: df = self.df
         if df is None: return NotImplemented
-        os.makedirs(f'{self.destination}/{self.alias}' , exist_ok=True)
+        os.makedirs(f'{self.DESTINATION}/{self.alias}' , exist_ok=True)
         for date , subdf in df.groupby(date_col):
-            des_path = f'{self.destination}/{self.alias}/{self.alias}_{date}.txt'
+            des_path = f'{self.DESTINATION}/{self.alias}/{self.alias}_{date}.txt'
             if overwrite or not os.path.exists(des_path):
                 subdf.drop(columns='date').set_index(secid_col).to_csv(des_path, sep='\t', index=True, header=False)
 
@@ -44,7 +53,7 @@ class Predictor:
         self.df = self.predict(start_dt= start_dt , end_dt = end_dt)
         return self
 
-    def df_corr(self , df = None , window = 30 , secid_col = secid_col , date_col = date_col):
+    def df_corr(self , df = None , window = 30 , secid_col = SECID_COLS , date_col = DATE_COLS):
         '''prediction correlation of ecent days'''
         if df is None: df = self.df
         if df is None: return NotImplemented

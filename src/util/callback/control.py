@@ -70,7 +70,9 @@ class EarlyExitRetrain(CallBack):
         if (self.status.end_of_loop and 
             self.status.end_of_loop.trigger_ep <= self._earliest 
             and self.status.attempt < self._max_attempt):
-            self.module.stack_model()
+            if self.metrics.better_attempt(self.status.best_attempt_metric):
+                self.status.best_attempt_metric = self.metrics.best_metric
+                self.module.stack_model()
             self.metrics.new_attempt()
             self.status.new_attempt()
             self.module.load_model(True , lr_multiplier = self._lr_multiplier[:self.status.attempt+1][-1])

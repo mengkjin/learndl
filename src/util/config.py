@@ -94,6 +94,7 @@ class TrainParam:
     train_param : dict = field(default_factory=dict)
     model_name  : Optional[str]  = None
     override    : Optional[dict] = None
+    is_booster  : bool = False
 
     TRAIN_YAML  : ClassVar[str] = 'train_param.yaml'
 
@@ -101,8 +102,9 @@ class TrainParam:
         source_dir = PATH.conf if self.config_path == 'default' else self.config_path
         source_base = self.TRAIN_YAML
         Param : dict = PATH.read_yaml(f'{source_dir}/{source_base}')
+        self.is_booster = Param['model_module'] in BOOSTER_MODULE
         if self.override: Param.update(self.override)
-        if Param['model_module'] in BOOSTER_MODULE: Param['model_types'] = ['best']
+        if self.is_booster: Param['model_types'] = ['best']
         if socket.gethostname() != 'mengkjin-server': Param['short_test'] = True
 
         if self.spec_adjust:
@@ -218,7 +220,7 @@ class TrainConfig:
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
     def update_data_param(self , x_data : dict):
-        self.Model.update_data_param(x_data)
+        if self.is_booster: self.Model.update_data_param(x_data)
     
     @classmethod
     def load(cls , config_path = 'default' , do_parser = False , par_args = {} , override = None , makedir = True):
@@ -277,10 +279,13 @@ class TrainConfig:
         return self.train_param.get('dataloader',{}).get('shuffle_option','static')
     @property
     def clip_value(self) -> float: return self.train_param['trainer']['gradient'].get('clip_value' , None)
+    @property
+    def is_booster(self): return self.Train.is_booster
+    
     def weight_scheme(self , stage : str , no_weight = False) -> Optional[str]: 
         weight_dict = self.train_param.get('criterion',{}).get('weight',{})
         return None if no_weight else weight_dict.get(stage.lower() , 'equal')
-    
+
     @staticmethod
     def set_random_seed(seed = None):
         if seed is None: return NotImplemented

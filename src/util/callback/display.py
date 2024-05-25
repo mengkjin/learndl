@@ -160,7 +160,7 @@ class StatusDisplay(CallBack):
     def on_fit_model_end(self):
         train_score = self.metrics.latest.get('train.score' , 0)
         valid_score = self.metrics.latest.get('valid.score' , 0)
-        best_score = self.status.best_attempt_metric if self.status.best_attempt_metric else 0
+        best_score = self.status.best_attempt_metric if self.status.best_attempt_metric else valid_score
         self._texts['status'] = f'Train{train_score: .4f} Valid{valid_score: .4f} BestVal{best_score: .4f}'
         self._texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
             self.toc('model') / 60 , self.toc('model') / (self._epoch_model + 1))

@@ -1,10 +1,10 @@
 import os
 import logging
 import colorlog
-from logging import handlers , RootLogger
+# from logging import handlers , RootLogger
 
 from ..environ import PATH
-class Logger(RootLogger):
+class Logger(logging.RootLogger):
     '''custom colored log , config at {PATH.conf}/logger.yaml '''
     def __new__(cls): return cls._init_logger()
 
@@ -36,6 +36,7 @@ class Logger(RootLogger):
             log.error('This is the ERROR    message...')
             log.critical('This is the CRITICAL message...')
         return log
+    
 class _LevelFormatter(logging.Formatter):
     def __init__(self, fmt=None, datefmt=None, level_fmts={}):
         self._level_formatters = {}

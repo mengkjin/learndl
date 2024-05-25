@@ -50,7 +50,7 @@ class Lgbm():
                  test  : Any = None , 
                  feature = None , 
                  plot_path = None, # '../../figures' ,
-                 cuda = False , **kwargs):   
+                 cuda = True , **kwargs):   
         self.train_param = {
             'objective': 'regression', 
             'verbosity': -1 , 
@@ -65,14 +65,14 @@ class Lgbm():
             'feature_fraction': 0.6, 
             'bagging_fraction': 0.75, 
             'force_col_wise': True, 
-            'monotone_constraints': 1 , 
+            'monotone_constraints': 0 , 
             'early_stopping' : 50 , 
             'zero_as_missing' : False ,
-            'device_type': 'gpu' if cuda else 'cpu', # 'cuda' 'cpu'
+            'device_type': 'gpu' if cuda and torch.cuda.is_available() else 'cpu', # 'cuda' 'cpu'
             'seed': 42,
         }
         self.plot_path = plot_path
-        self.train_param.update(kwargs)
+        self.train_param.update({k:v for k,v in kwargs.items() if k in self.train_param.keys()})
         self.data : dict[str , BoosterData] = {}
         self.feature = feature
         self.data_import(train = train , valid = valid , test = test)

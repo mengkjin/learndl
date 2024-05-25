@@ -9,6 +9,7 @@ from typing import Any , Literal , Optional
 
 from .config import TrainConfig
 from ..func import mse , pearson , ccc , spearman
+from ..environ import BOOSTER_MODULE
 
 class Metrics:
     '''calculator of batch output'''
@@ -32,6 +33,7 @@ class Metrics:
         self.latest : dict[str,Any] = {}
         self.last_metric : Any = None
         self.best_metric : Any = None
+        self.is_booster = self.config.model_module in BOOSTER_MODULE
 
     @property
     def loss(self): return self.output.loss
@@ -66,7 +68,7 @@ class Metrics:
         if model_param['num_output'] > 1:
             multi_param = self.config.train_param['multilosses']
             self.multiloss = MultiLosses(multi_param['type'], model_param['num_output'] , **multi_param['param_dict'][multi_param['type']])
-    
+
         self.f_pen.get('hidden_corr',{})['cond']       = self.config.tra_model or model_param.get('hidden_as_factors',False)
         self.f_pen.get('tra_opt_transport',{})['cond'] = self.config.tra_model
         self.new_attempt()
@@ -126,7 +128,7 @@ class Metrics:
     def calculate_from_tensor(self , dataset , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
                               penalty_kwargs = {} , multiloss_param = {} , assert_nan = False):
         '''Calculate loss(with gradient), penalty , score'''
-        assert dataset in ['train','validation','test']
+        assert dataset in ['train','valid','test']
         if label.shape != pred.shape: # if more label than output
             label = label[...,:pred.shape[-1]]
             assert label.shape == pred.shape , (label.shape , pred.shape)
@@ -136,7 +138,7 @@ class Metrics:
         with no_grad():
             score = self.f_score(label , pred , weight , nan_check = (dataset == 'test') , first_col = True).item()
 
-        if dataset == 'train':
+        if dataset == 'train' and not self.is_booster:
             if self.multiloss is not None:
                 losses = self.f_loss(label , pred , weight)[:self.multiloss.num_task]
                 loss = self.multiloss.calculate_multi_loss(losses , multiloss_param)    

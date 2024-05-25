@@ -88,7 +88,7 @@ precision:  float # double , bfloat16
 
 on_short_test:
   beg_date:   20170101
-  end_date:   20170228 # 20170228
+  end_date:   99991231 # 20170228
   input_span: 240
   max_epoch:  3
   verbosity:  10

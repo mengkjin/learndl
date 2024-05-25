@@ -2,17 +2,52 @@ import torch
 import numpy as np
 
 from abc import ABC , abstractmethod
-from torch import nn
+from torch import nn , Tensor
 from typing import Any , Iterator , Literal , Optional
 
-from ...classes import BaseDataModule , BaseTrainerModule , BatchData , BatchOutput , BoosterData
+from ...classes import BaseDataModule , BaseTrainer , BatchData , BatchOutput , BoosterData
 from ...algo.boost.lgbm import Lgbm
 
-class _BaseLgbm(ABC):
-    '''load booster data and fit'''
-    def __init__(self , model_module : BaseTrainerModule) -> None:
+def choose_booster(module):
+    if module == 'lgbm': return LgbmBooster
+    else: raise KeyError(module)
+
+class Booster(ABC):
+    @property
+    def train_batch_data(self) -> tuple[BoosterData,BoosterData] | Any: 
+        '''train & valid datas , usually altogether'''
+        return (None , None)
+    @property
+    def test_batch_data(self) -> BoosterData | Any:
+        '''test datas , usually by date'''
+        return None
+    @abstractmethod
+    def reset(self):
+        self.model : Any
+        self.loaded = False
+        '''reset loader boooter'''
+        return self
+    @abstractmethod
+    def load(self ,  *args , **kwarg):
+        '''load booster from anything'''
+        return self
+    @abstractmethod
+    def fit(self , *args , **kwargs): 
+        '''fit self.model'''
+        return self
+    @abstractmethod
+    def predict(self , *args , **kwargs) -> Tensor: 
+        '''predict certain data based on self.model'''
+    @abstractmethod
+    def label(self , *args , **kwargs) -> Tensor: 
+        '''return dataset label based on input'''
+
+class _LgbmBooster(Booster):
+    '''Light GMB'''
+    def __init__(self , model_module : BaseTrainer) -> None:
         self.module = model_module
         self.model : Lgbm
+
     def __bool__(self): return True
     @property
     def data(self) -> BaseDataModule: return self.module.data
@@ -32,6 +67,8 @@ class _BaseLgbm(ABC):
     def model_string(self): return self.model.model_to_string()
     @property
     def is_cuda(self) -> bool: return self.module.device.device.type == 'cuda'
+    @property
+    def lgbm_params(self): return {'seed' : self.module.config.random_seed , **self.module.model_param}
 
     @staticmethod
     def batch_data_to_booster_data(net : nn.Module , loader : Iterator[BatchData | Any] , 
@@ -65,58 +102,70 @@ class _BaseLgbm(ABC):
         self.model = Lgbm.model_from_string(model_str , cuda=self.is_cuda)
         self.loaded = True
         return self
-    @abstractmethod
-    def fit(self , *args , **kwargs): '''fit self.model'''
-    @abstractmethod
-    def predict(self , *args , **kwargs): '''predict certain data'''
 
-class LgbmEnsembler(_BaseLgbm):
+class LgbmEnsembler(_LgbmBooster):
     '''load booster data and fit'''
     def booster_data(self , net : nn.Module , loader : Iterator[BatchData | Any]) -> BoosterData:
         return self.batch_data_to_booster_data(net , loader , self.y_secid , self.y_date)
+    
+    @property
+    def batch_data(self) -> BatchData:
+        assert isinstance(self.module.batch_data , BatchData)
+        return self.module.batch_data
 
     def fit(self , net : nn.Module):
         net = self.module.device(net)
         train_data = self.booster_data(net , self.train_dl)
         valid_data = self.booster_data(net , self.valid_dl)
-        self.model = Lgbm(train_data , valid_data , cuda=self.is_cuda).fit()
+        self.model = Lgbm(train_data , valid_data , cuda=self.is_cuda , **self.lgbm_params).fit()
         # self.model.plot.training()
         return self
     
-    def predict(self):
+    def predict(self , *args):
         assert self.loaded
         hidden = self.module.batch_output.hidden
         if hidden is None: return
-        assert isinstance(self.module.batch_data , BatchData)
-        hidden = hidden.detach().cpu().numpy()
-        label = self.module.batch_data.y.detach().cpu().numpy()
-        pred  = torch.tensor(self.model.predict(BoosterData(hidden , label) , reform = False))
-        return pred
+        hidden = hidden.detach().cpu()
+        return torch.tensor(self.model.predict(BoosterData(hidden , self.label()) , reform = False))
+    
+    def label(self , *args): return self.batch_data.y.detach().cpu()
             
-class LgbmBooster(_BaseLgbm):
+class LgbmBooster(_LgbmBooster):
     '''load booster data and fit'''
     @property
     def train_batch_data(self) -> tuple[BoosterData,BoosterData] | Any:
-        assert self.module.status.dataset == 'train' , self.module.status.dataset
+        assert self.module.status.dataset in ['train','valid'] , self.module.status.dataset
         batch_data = self.module.batch_data
         assert isinstance(batch_data , tuple) and len(batch_data) == 2 , batch_data
         assert isinstance(batch_data[0] , BoosterData) and isinstance(batch_data[1] , BoosterData) , batch_data
-        return self.module.batch_data
+        return batch_data
     
     @property
     def test_batch_data(self) -> BoosterData | Any:
         assert self.module.status.dataset == 'test' , self.module.status.dataset
         batch_data = self.module.batch_data
         assert isinstance(batch_data , BoosterData)
-        return self.module.batch_data
+        return batch_data
 
     def fit(self , *args):
         train_data , valid_data = self.train_batch_data
-        self.model = Lgbm(train_data , valid_data , cuda=self.is_cuda).fit()
+        self.model = Lgbm(train_data , valid_data , cuda=self.is_cuda , **self.lgbm_params).fit()
         # self.model.plot.training()
         return self
     
-    def predict(self):
-        pred = torch.tensor(self.model.predict(self.test_batch_data , reform = False))
-        return pred
-            
+    def predict(self , dataset : Literal['train' , 'valid' , 'test'] = 'test'):
+        if dataset == 'train':
+            x = self.train_batch_data[0]
+        elif dataset == 'valid': 
+            x = self.train_batch_data[1]
+        else: 
+            x = self.test_batch_data
+        return torch.tensor(self.model.predict(x , reform = False))
+    
+    def label(self , dataset : Literal['train' , 'valid' , 'test'] = 'test'):
+        if dataset == 'train': 
+            return torch.tensor(self.train_batch_data[0].Y())
+        elif dataset == 'valid': 
+            return torch.tensor(self.train_batch_data[1].Y())
+        else: 
+            return torch.tensor(self.test_batch_data.Y())

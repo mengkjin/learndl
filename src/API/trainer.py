@@ -5,30 +5,29 @@
 # @File : ${run_model.py}
 # chmod +x run_model.py
 # python3 scripts/run_model3.py --stage=0 --resume=0 --checkname=1 
-import numpy as np
 import torch
 
 from .data import NetDataModule , BoosterDataModule
-from ..classes import BaseTrainerModule , BoosterData
+from ..classes import BaseTrainer , BoosterData
 from ..func import BigTimer
 from ..util import (
-    CallBackManager , Checkpoint , Deposition , Device , 
+    Booster , CallBackManager , Checkpoint , Deposition , Device , 
     Logger , Metrics , ModelManager , Optimizer , TrainConfig)
 from ..environ import BOOSTER_MODULE
 
-class TrainerModule(BaseTrainerModule):
+class Trainer(BaseTrainer):
     '''run through the whole process of training'''
     def init_config(self , **kwargs) -> None:
-        self.config      = TrainConfig.load(do_parser = True , par_args = kwargs)
+        self.config : TrainConfig = TrainConfig.load(do_parser = True , par_args = kwargs)
         self.stage_queue = self.config.stage_queue
     def init_utilities(self , **kwargs) -> None: 
         self.logger     = Logger()
-        self.device     = Device()
-        self.checkpoint = Checkpoint(self.config)
-        self.deposition = Deposition(self.config)
-        self.metrics    = Metrics(self.config)
-        self.callbacks  = CallBackManager.setup(self)
-        self.model      = ModelManager.setup(self)
+        self.device     : Device = Device()
+        self.checkpoint : Checkpoint = Checkpoint(self.config)
+        self.deposition : Deposition = Deposition(self.config)
+        self.metrics    : Metrics = Metrics(self.config)
+        self.callbacks  : CallBackManager= CallBackManager.setup(self)
+        self.model      : ModelManager = ModelManager.setup(self)
     
     @property
     def model_param(self): return self.config.model_param[self.model_num]
@@ -38,12 +37,6 @@ class TrainerModule(BaseTrainerModule):
     def if_transfer(self): return bool(self.config.train_param['transfer'])
     @property
     def model_iter(self): return self.deposition.model_iter(self.status.stage , self.data.model_date_list)
-
-    def on_configure_model(self):  self.config.set_config_environment()
-    def on_fit_model_start(self):
-        self.data.setup('fit' , self.model_param , self.model_date)
-        self.load_model(True)
-    def on_fit_model_end(self): self.save_model()
 
     @classmethod
     def main(cls , stage = -1 , resume = -1 , checkname = -1 , **kwargs):
@@ -58,7 +51,7 @@ class TrainerModule(BaseTrainerModule):
         with BigTimer(app.logger.critical , 'Main Process'):
             app.main_process()
 
-class NetTrainer(TrainerModule):
+class NetTrainer(Trainer):
     '''run through the whole process of training'''
     def init_data(self , **kwargs): 
         self.data : NetDataModule = NetDataModule(self.config)
@@ -113,12 +106,11 @@ class NetTrainer(TrainerModule):
             self.on_test_model_type_end()
         self.on_test_model_end()
 
-    def on_test_batch(self):
-        self.assert_equity(self.batch_dates[self.batch_idx] , self.data.y_date[self.batch_data.i[0,1]]) 
-        self.batch_forward()
-        self.model.override()
-        # before this is warmup stage , only forward
-        if self.batch_idx >= self.batch_warm_up: self.batch_metrics()
+    def on_configure_model(self):  self.config.set_config_environment()
+    def on_fit_model_start(self):
+        self.data.setup('fit' , self.model_param , self.model_date)
+        self.load_model(True)
+    def on_fit_model_end(self): self.save_model()
     
     def on_train_epoch_start(self):
         self.net.train()
@@ -145,6 +137,9 @@ class NetTrainer(TrainerModule):
         if not self.deposition.exists(self.model_date , self.model_num , self.model_type): self.fit_model()
         self.data.setup('test' , self.model_param , self.model_date)
         torch.set_grad_enabled(False)
+
+    def on_test_model_end(self):
+        torch.set_grad_enabled(True)
     
     def on_test_model_type_start(self):
         self.load_model(False , self.model_type)
@@ -154,6 +149,16 @@ class NetTrainer(TrainerModule):
     
     def on_test_model_type_end(self): 
         self.metrics.collect_epoch_metric('test')
+
+    def on_test_batch(self):
+        self.assert_equity(self.batch_dates[self.batch_idx] , self.data.y_date[self.batch_data.i[0,1]]) 
+        self.batch_forward()
+        self.model.override()
+        # before this is warmup stage , only forward
+        if self.batch_idx >= self.batch_warm_up: self.batch_metrics()
+
+    def on_before_save_model(self):
+        self.net = self.net.cpu()
     
     def load_model(self , training : bool , model_type = 'best' , lr_multiplier = 1.):
         '''load model state dict, return net and a sign of whether it is transferred'''
@@ -163,43 +168,57 @@ class NetTrainer(TrainerModule):
         self.net : torch.nn.Module = self.model.new_model(training , model_file).model(model_file['state_dict'])
         self.metrics.new_model(self.model_param)
         if training:
-            self.optimizer = Optimizer(self.net , self.config , self.transferred , lr_multiplier)
+            self.optimizer : Optimizer = Optimizer(self.net , self.config , self.transferred , lr_multiplier)
             self.checkpoint.new_model(self.model_param , self.model_date)
         else:
             assert model_file.exists() , str(model_file)
             self.net.eval()
 
     def stack_model(self):
-        if not self.metrics.better_attempt(self.status.best_attempt_metric): return
-        self.status.best_attempt_metric = self.metrics.best_metric
         self.on_before_save_model()
-        self.net = self.net.cpu()
         for model_type in self.model_types:
             model_dict = self.model.collect(model_type)
             self.deposition.stack_model(model_dict , self.model_date , self.model_num , model_type) 
 
     def save_model(self):
         self.stack_model()
-        for model_type in self.model_types:
-            self.deposition.dump_model(self.model_date , self.model_num , model_type) 
+        [self.deposition.dump_model(self.model_date , self.model_num , model_type) for model_type in self.model_types]
 
-class BoosterTrainer(TrainerModule):
+class BoosterTrainer(Trainer):
     '''run through the whole process of training'''
     def init_data(self , **kwargs): 
         self.data : BoosterDataModule = BoosterDataModule(self.config)
+
+    def batch_forward(self) -> None: 
+        if self.status.dataset == 'train': self.booster.fit()
+        self.pred  = self.booster.predict(self.status.dataset)
+        self.label = self.booster.label(self.status.dataset)
+
+    def batch_metrics(self) -> None:
+        self.metrics.calculate_from_tensor(self.status.dataset , self.label , self.pred, assert_nan = True)
+        self.metrics.collect_batch_metric()
+
+    def batch_backward(self) -> None: ...
+
     def fit_model(self):
         self.on_fit_model_start()
-        self.status.dataset_train()
         for self.batch_idx , self.batch_data in enumerate(zip(self.data.train_dataloader() , self.data.val_dataloader())):
+            self.status.dataset_train()
             self.on_train_batch_start()
             self.on_train_batch()
             self.on_train_batch_end()
+
+            self.status.dataset_validation()
+            self.on_validation_batch_start()
+            self.on_validation_batch()
+            self.on_validation_batch_end()
+
         self.on_fit_model_end()
 
     def test_model(self):
         self.on_test_model_start()
+        self.status.dataset_test()
         for self.status.model_type in self.model_types:
-            self.status.dataset_test()
             self.on_test_model_type_start()
             for self.batch_idx , self.batch_data in enumerate(self.data.test_dataloader()):
                 self.on_test_batch_start()
@@ -208,37 +227,44 @@ class BoosterTrainer(TrainerModule):
             self.on_test_model_type_end()
         self.on_test_model_end()
 
-    def batch_forward(self) -> None: 
-        if self.status.stage == 'fit': 
-            self.lgbm.fit()
-        else:
-            assert isinstance(self.batch_data , BoosterData)
-            self.pred = self.lgbm.predict()
-            self.label = torch.tensor(self.batch_data.Y())
-    def batch_metrics(self) -> None:
-        if self.status.stage == 'test':
-            assert isinstance(self.batch_data , BoosterData)
-            self.metrics.calculate_from_tensor('test' , self.label , self.pred, assert_nan = True)
-            self.metrics.collect_batch_metric()
-    def batch_backward(self) -> None: ...
+    def on_configure_model(self):  self.config.set_config_environment()
+    def on_fit_model_start(self):
+        self.data.setup('fit' , self.model_param , self.model_date)
+        self.load_model(True)
+    def on_fit_model_end(self): self.save_model()
+    
+    def on_train_batch_start(self):
+        self.metrics.new_epoch_metric('train' , self.status)
+
+    def on_train_batch_end(self): 
+        self.metrics.collect_epoch_metric('train')
+
+    def on_validation_batch_start(self):
+        self.metrics.new_epoch_metric('valid' , self.status)
+
+    def on_validation_batch_end(self): 
+        self.metrics.collect_epoch_metric('valid')
+
+    def on_test_model_type_start(self):
+        self.load_model(False , self.model_type)
+        self.metrics.new_epoch_metric('test' , self.status)
+
+    def on_test_model_type_end(self): 
+        self.metrics.collect_epoch_metric('test')
+
+    def on_test_model_start(self):
+        if not self.deposition.exists(self.model_date , self.model_num , self.model_type): self.fit_model()
+        self.data.setup('test' , self.model_param , self.model_date)
 
     def on_test_batch(self):
         if self.batch_idx < self.batch_warm_up: return
         self.batch_forward()
         self.batch_metrics()
     
-    def on_test_model_type_start(self):
-        self.load_model(False , self.model_type)
-        self.metrics.new_epoch_metric('test' , self.status)
-
-    def on_test_model_start(self):
-        if not self.deposition.exists(self.model_date , self.model_num , self.model_type): self.fit_model()
-        self.data.setup('test' , self.model_param , self.model_date)
-    
     def load_model(self , training : bool , *args , **kwargs):
         '''load model state dict, return net and a sign of whether it is transferred'''
         model_file = self.deposition.load_model(self.model_date , self.model_num)
-        self.lgbm = self.model.new_model(training , model_file).model()
+        self.booster : Booster = self.model.new_model(training , model_file).model()
 
     def stack_model(self):
         self.on_before_save_model()

@@ -1,65 +1,36 @@
 import numpy as np
-import torch
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from inspect import currentframe
+from logging import Logger
 from torch import nn , Tensor
 from typing import Any , Callable , final , Iterable , Iterator , Literal , Optional
 
 from .core import BatchData , BatchOutput
 from .data import BoosterData
-from ..func import tensor_standardize_and_weight , match_values
 
-@dataclass
-class EndStatus:
-    name  : str
-    epoch : int # epoch of trigger
-    
-@dataclass
-class EndofLoop:
-    max_epoch : int = 200
-    status : list[EndStatus] = field(default_factory=list)
-
-    def __post_init__(self) -> None: ...
-    def __bool__(self): return len(self.status) > 0
-    def new_loop(self): self.status = []
-    def loop_end(self , epoch):
-        if epoch >= self.max_epoch: self.add_status('Max Epoch' , epoch)
-    def add_status(self , status : str , epoch : int): 
-        self.status.append(EndStatus(status , epoch))
-    @property
-    def end_epochs(self) -> list[int]:
-        return [sta.epoch for sta in self.status]
-    @property
-    def trigger_i(self) -> int:
-        return np.argmin(self.end_epochs).item()
-    @property
-    def trigger_ep(self) -> int:
-        return self.status[self.trigger_i].epoch
-    @property
-    def trigger_reason(self):
-        return self.status[self.trigger_i].name
-    
 @dataclass
 class TrainerStatus:
     max_epoch : int = 200
     stage   : Literal['data' , 'fit' , 'test'] = 'data'
-    dataset : Literal['train' , 'validation' , 'test'] = 'train'
+    dataset : Literal['train' , 'valid' , 'test'] = 'train'
     epoch   : int = -1
     attempt : int = 0
     round   : int = 0
     model_num  : int = -1
     model_date : int = -1
     model_type : str = 'best'
-    end_of_loop  : EndofLoop = field(default_factory=EndofLoop)
     epoch_event  : list[str] = field(default_factory=list)
     best_attempt_metric : Any = None
+
+    def __post_init__(self):
+        self.end_of_loop = self.EndofLoop(self.max_epoch)
 
     def stage_data(self): self.stage = 'data'
     def stage_fit(self):  self.stage = 'fit'
     def stage_test(self): self.stage = 'test'
     def dataset_train(self): self.dataset = 'train'
-    def dataset_validation(self): self.dataset = 'validation'
+    def dataset_validation(self): self.dataset = 'valid'
     def dataset_test(self): self.dataset = 'test'
     def fit_model_start(self):
         self.attempt = -1
@@ -73,7 +44,7 @@ class TrainerStatus:
     def new_attempt(self , event : Literal['new_attempt' , 'nanloss'] = 'new_attempt'):
         self.epoch   = -1
         self.round   = 0
-        self.end_of_loop = EndofLoop(self.max_epoch)
+        self.end_of_loop = self.EndofLoop(self.max_epoch)
         self.epoch_event = []
 
         self.add_event(event)
@@ -81,9 +52,40 @@ class TrainerStatus:
 
     def add_event(self , event : Optional[str]):
         if event: self.epoch_event.append(event)
+
+    @dataclass
+    class EndofLoop:
+        max_epoch : int = 200
+        status : list['EndStatus'] = field(default_factory=list)
+
+        @dataclass
+        class EndStatus:
+            name  : str
+            epoch : int # epoch of trigger
+
+        def __post_init__(self) -> None: ...
+        def __bool__(self): return len(self.status) > 0
+        def new_loop(self): self.status = []
+        def loop_end(self , epoch):
+            if epoch >= self.max_epoch: self.add_status('Max Epoch' , epoch)
+        def add_status(self , status : str , epoch : int): 
+            self.status.append(self.EndStatus(status , epoch))
+        @property
+        def end_epochs(self) -> list[int]:
+            return [sta.epoch for sta in self.status]
+        @property
+        def trigger_i(self) -> int:
+            return np.argmin(self.end_epochs).item()
+        @property
+        def trigger_ep(self) -> int:
+            return self.status[self.trigger_i].epoch
+        @property
+        def trigger_reason(self):
+            return self.status[self.trigger_i].name
+
 class BaseCB:
     def __init__(self , model_module , with_cb) -> None:
-        self.module : BaseTrainerModule = model_module
+        self.module : BaseTrainer = model_module
         self.with_cb : bool = with_cb
         self.__hook_stack = []
         self._assert_validity()
@@ -262,7 +264,7 @@ class BaseDataModule(ABC):
         else:
             return max(self.test_full_dates) + 1
 
-class BaseTrainerModule(ABC):
+class BaseTrainer(ABC):
     '''run through the whole process of training'''
     @final
     def __init__(self , **kwargs):
@@ -288,23 +290,23 @@ class BaseTrainerModule(ABC):
     @abstractmethod
     def init_config(self , **kwargs) -> None:
         '''initialized configuration'''
-        self.config = kwargs['config']
-        self.stage_queue = ['data' , 'fit' , 'test']
+        self.config : Any
+        self.stage_queue : list[Literal['data' , 'fit' , 'test']] = ['data' , 'fit' , 'test']
     @abstractmethod
     def init_utilities(self , **kwargs): 
         '''initialized all relevant utilities'''
-        self.logger     = kwargs['logger']
-        self.checkpoint = kwargs['checkpoint']
-        self.deposition = kwargs['deposition']
-        self.metrics    = kwargs['metrics']
-        self.callbacks  = kwargs['callbacks']
-        self.device     = kwargs['device']
-        self.model      = kwargs['model']
-        self.dataloader : Iterable[BatchData | Any] | Iterator[BatchData | Any]
+        self.logger     : Logger
+        self.checkpoint : Any
+        self.deposition : Any
+        self.metrics    : Any
+        self.callbacks  : Any
+        self.device     : Any
+        self.model      : Any
+        self.dataloader : Iterable[BatchData | BatchData | Any]
     @abstractmethod
     def init_data(self , **kwargs): 
         '''initialized data_module'''
-        self.data : BaseDataModule = kwargs['data']
+        self.data : BaseDataModule
     @abstractmethod
     def save_model(self) -> None: 
         '''save self.net to somewhere'''
@@ -314,8 +316,15 @@ class BaseTrainerModule(ABC):
     @abstractmethod
     def load_model(self , *args , **kwargs) -> None: 
         '''load self.net to somewhere'''
-        self.net = torch.nn.Module()
-        self.optimizer = args[0]
+        self.net : nn.Module
+        self.booster : Any
+        self.optimizer : Any
+    @abstractmethod
+    def fit_model(self): 
+        self.batch_idx : int
+        self.batch_data : Any
+    @abstractmethod
+    def test_model(self): ...
     @property 
     @abstractmethod
     def model_param(self) -> dict:  '''current model param'''
@@ -381,12 +390,6 @@ class BaseTrainerModule(ABC):
 
     @property
     def penalty_kwargs(self): return {}
-    @abstractmethod
-    def fit_model(self): 
-        self.batch_idx : int
-        self.batch_data : Any
-    @abstractmethod
-    def test_model(self): ...
     def on_configure_model(self): ... 
     def on_summarize_model(self): ...
     def on_data_start(self): ...
@@ -410,20 +413,12 @@ class BaseTrainerModule(ABC):
     def on_fit_epoch_start(self): ...
     def on_before_fit_epoch_end(self): ...
     def on_fit_epoch_end(self): ...
-    def on_train_epoch_start(self):
-        self.net.train()
-        torch.set_grad_enabled(True)
+    def on_train_epoch_start(self): ...
     def on_train_epoch_end(self): ...
-    def on_validation_epoch_start(self):
-        self.net.eval()
-        torch.set_grad_enabled(False)
-    def on_validation_epoch_end(self):
-        torch.set_grad_enabled(True)
-    def on_test_model_start(self):
-        self.net.eval()
-        torch.set_grad_enabled(False)
-    def on_test_model_end(self):
-        torch.set_grad_enabled(True)
+    def on_validation_epoch_start(self): ...
+    def on_validation_epoch_end(self): ...
+    def on_test_model_start(self): ...
+    def on_test_model_end(self): ...
     def on_test_model_type_start(self): ...
     def on_test_model_type_end(self): ...
     def on_train_batch_start(self): ...

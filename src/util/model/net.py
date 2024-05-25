@@ -16,7 +16,7 @@ def choose_ensembler(model_type):
     elif model_type == 'swalast': return EnsembleSWALast
     else: raise KeyError(model_type)
 
-class _BaseEnsembler(ABC):
+class Ensembler(ABC):
     '''abstract class of fittest model, e.g. model with the best score, swa model of best scores or last ones'''
     def __init__(self, ckpt : Checkpoint , use_score = True , **kwargs) -> None:
         self.ckpt , self.use_score = ckpt , use_score
@@ -51,7 +51,7 @@ class SWAModel:
     @property
     def module(self) -> nn.Module: return self.avgmodel.module
 
-class EnsembleBest(_BaseEnsembler):
+class EnsembleBest(Ensembler):
     '''state dict of epoch with best score or least loss'''
     def __init__(self, ckpt : Checkpoint , use_score = True , **kwargs) -> None:
         super().__init__(ckpt , use_score)
@@ -75,7 +75,7 @@ class EnsembleBest(_BaseEnsembler):
         net.load_state_dict(self.ckpt.load_epoch(self.epoch_fix))
         return net
 
-class EnsembleSWABest(_BaseEnsembler):
+class EnsembleSWABest(Ensembler):
     '''state dict of n_best epochs with best score or least loss'''
     def __init__(self, ckpt : Checkpoint , use_score = True , n_best = 5 , **kwargs) -> None:
         super().__init__(ckpt , use_score)
@@ -110,7 +110,7 @@ class EnsembleSWABest(_BaseEnsembler):
         swa.update_bn(loader , getattr(loader , 'device' , device))
         return swa.module.cpu()
     
-class EnsembleSWALast(_BaseEnsembler):
+class EnsembleSWALast(Ensembler):
     '''state dict of n_last epochs around best score or least loss'''
     def __init__(self, ckpt : Checkpoint , use_score = True , n_last = 5 , interval = 3 , **kwargs) -> None:
         super().__init__(ckpt , use_score)
