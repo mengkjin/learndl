@@ -14,7 +14,7 @@ class simple_lstm(nn.Module):
     
 class gru(rnn.rnn_univariate):
     def __init__(self , input_dim , hidden_dim , **kwargs):
-        kwargs.update({'rnn_type' : 'gru' , 'num_output' : 1})
+        kwargs.update({'rnn_type' : 'gru'})
         super().__init__(input_dim , hidden_dim , **kwargs)
         
 class lstm(rnn.rnn_univariate):

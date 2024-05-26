@@ -41,9 +41,12 @@ class BatchData:
 @dataclass(slots=True)
 class BatchMetric:
     loss      : Tensor = Tensor([0.])
-    score     : float = 0.
+    score     : Tensor | float = 0.
     penalty   : Tensor | float = 0.
     losses    : Tensor = Tensor([0.])
+
+    def __post_init__(self):
+        if isinstance(self.score , Tensor): self.score = self.score.item()
 
     @property
     def loss_item(self): return self.loss.item()
@@ -110,7 +113,7 @@ class ModelFile:
     def __getitem__(self , key): return self.load(key)
     def path(self , key): return f'{self.model_path}/{key}.pt'
     def load(self , key : str) -> Any:
-        assert key in ModelDict.__slots__
+        assert key in ModelDict.__slots__ , (key , ModelDict.__slots__)
         path = self.path(key)
         return torch.load(path , map_location='cpu') if os.path.exists(path) else None
     def exists(self) -> bool: 

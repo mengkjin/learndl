@@ -281,7 +281,7 @@ class BoosterData:
         assert y.ndim in [x.ndim - 1, x.ndim] , (y.ndim , x.ndim)
         
         if y.ndim == x.ndim:
-            assert y.shape[-1] == 1 , y.shape
+            assert y.shape[-1] == 1 , f'Booster Data cannot deal with multilabels, but got {y.shape}'
             y = y[...,0]
 
         if x.ndim == 2: 

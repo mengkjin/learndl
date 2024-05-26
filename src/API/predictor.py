@@ -1,7 +1,6 @@
-import os
+import os , socket , torch
 import numpy as np
 import pandas as pd
-import torch
 
 from dataclasses import dataclass
 from typing import ClassVar , Literal , Optional
@@ -31,6 +30,7 @@ class Predictor:
 
     @classmethod
     def update_factors(cls):
+        if socket.gethostname() == 'mengkjin-server': return
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         model_preds = [
             cls('gru_day'    , 'swalast' , 0 , 'gru_day_V0') ,

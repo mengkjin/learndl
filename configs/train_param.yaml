@@ -4,13 +4,14 @@ random_seed: null
 short_test:  false
 
 model_name: null # null
-model_module: lgbm # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
+model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
 model_types: [best , swalast , swabest]
 model_data_type: day # 'day+30m' , 30m
 model_data_prenorm:
   day: {'divlast' : True  , 'histnorm' : True}
 labels: 
   - std_lag1_10 # rtn_lag1_10 # std_lag1_10
+  - std_lag1_20
 callbacks:
   DynamicDataLink :   {}
   ResetOptimizer:     {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
@@ -72,7 +73,7 @@ input_step_day: 5
 skip_horizon: &skip_horizon 20 
 
 # tra model
-lgbm_ensembler: true
+lgbm_ensembler: false
 tra_switch:  true
 buffer_type: tra
 buffer_param: 
@@ -88,7 +89,7 @@ precision:  float # double , bfloat16
 
 on_short_test:
   beg_date:   20170101
-  end_date:   99991231 # 20170228
+  end_date:   20170228 # 20170228
   input_span: 240
   max_epoch:  3
   verbosity:  10

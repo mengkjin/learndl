@@ -72,7 +72,7 @@ class NetManager(ModelManager):
 
     def new_model(self , training : bool , model_file : ModelFile):
         for model in self.net_ensemblers.values(): model.reset()
-        if not training and self.net_lgbm_head: self.net_lgbm_head.load(model_file['lgbm_string'])
+        if not training and self.net_lgbm_head: self.net_lgbm_head.load(model_file['booster_str'])
         return self
     
     def model(self , use_state_dict = None , *args , **kwargs): return self.net(use_state_dict)

@@ -3,29 +3,35 @@ import numpy as np
 import pandas as pd
 import torch
 
-from ..classes import BatchData , BatchMetric , BatchOutput , MetricList , TrainerStatus
+from abc import ABC , abstractmethod
 from torch import nn , no_grad , Tensor
-from typing import Any , Literal , Optional
+from typing import Any , Callable , Literal , Optional
 
 from .config import TrainConfig
+from ..classes import BatchData , BatchMetric , BatchOutput , MetricList , TrainerStatus
 from ..func import mse , pearson , ccc , spearman
 from ..environ import BOOSTER_MODULE
 
+DISPLAY_CHECK  = True # will display once if true
+DISPLAY_RECORD = {'loss' : {} , 'score' : {} , 'penalty' : {}}
+METRIC_FUNC    = {'mse':mse ,'pearson':pearson,'ccc':ccc,'spearman':spearman,}
+
 class Metrics:
     '''calculator of batch output'''
-    DISPLAY_CHECK  = True # will display once if true
-    DISPLAY_RECORD = {'loss' : {} , 'score' : {} , 'penalty' : {}}
-    METRIC_FUNC = {'mse':mse ,'pearson':pearson,'ccc':ccc,'spearman':spearman,}
-
     def __init__(self , config : TrainConfig , use_dataset  : Literal['train','valid'] = 'valid' , 
                  use_metric : Literal['loss' , 'score'] = 'score' , **kwargs) -> None:
-        self.config = config
+        self.config    = config
         self.criterion = config.train_param['criterion']
         self.use_dataset = use_dataset
         self.use_metric  = use_metric
-        self.f_loss    = self.loss_function(self.criterion['loss'])
-        self.f_score   = self.score_function(self.criterion['score'])
-        self.f_pen     = {k:self.penalty_function(k,v) for k,v in self.criterion['penalty'].items()}
+        #self.f_loss    = self.loss_function(self.criterion['loss'])
+        #self.f_score   = self.score_function(self.criterion['score'])
+        #self.f_pen     = {k:self.penalty_function(k,v) for k,v in self.criterion['penalty'].items()}
+        
+        self.f_loss    = LossCalculator(self.criterion['loss'])
+        self.f_score   = ScoreCalculator(self.criterion['score'])
+        self.f_pen     = {k:PenaltyCalculator(k,v) for k,v in self.criterion['penalty'].items()}
+        
         self.multiloss = None
         self.output    = BatchMetric()
         self.metric_batchs = MetricsAggregator()
@@ -43,34 +49,27 @@ class Metrics:
     def loss_item(self): return self.output.loss_item
     @property
     def penalty(self): return self.output.penalty
-
     @property
     def losses(self): return self.metric_batchs.losses
     @property
     def scores(self): return self.metric_batchs.scores
+    @property
+    def multi_param(self) -> dict[str,Any]: return self.config.train_param['multilosses']
     
-    '''
-    @property
-    def aggloss(self): return self.metric_batchs.loss
-    @property
-    def aggscore(self): return self.metric_batchs.score
-    @property
-    def train_scores(self): return self.metric_epochs['train.score']
-    @property
-    def train_losses(self):  return self.metric_epochs['train.loss']
-    @property
-    def valid_scores(self): return self.metric_epochs['valid.score']
-    @property
-    def valid_losses(self):  return self.metric_epochs['valid.loss']
-    '''
     
-    def new_model(self , model_param , **kwargs):
-        if model_param['num_output'] > 1:
-            multi_param = self.config.train_param['multilosses']
-            self.multiloss = MultiLosses(multi_param['type'], model_param['num_output'] , **multi_param['param_dict'][multi_param['type']])
+    def new_model(self , model_param : dict[str,Any] , **kwargs):
+        self.num_output   = model_param.get('num_output' , 1)
+        self.which_output = model_param.get('which_output' , 0)
+        if self.num_output > 1:
+            self.multiloss = MultiLosses(self.multi_param['type'], self.num_output ,
+                                         **self.multi_param['param_dict'][self.multi_param['type']])
+        else:
+            self.multiloss = None
+        if self.f_pen.get('hidden_corr'):
+            self.f_pen['hidden_corr'].cond = self.config.tra_model or model_param.get('hidden_as_factors',False)
+        if self.f_pen.get('tra_opt_transport'):
+            self.f_pen['tra_opt_transport'].cond = self.config.tra_model
 
-        self.f_pen.get('hidden_corr',{})['cond']       = self.config.tra_model or model_param.get('hidden_as_factors',False)
-        self.f_pen.get('tra_opt_transport',{})['cond'] = self.config.tra_model
         self.new_attempt()
         return self
     
@@ -134,22 +133,20 @@ class Metrics:
             assert label.shape == pred.shape , (label.shape , pred.shape)
         elif label.ndim == 1:
             label , pred = label.reshape(-1, 1) , pred.reshape(-1, 1)
+        assert label.shape[-1] == self.num_output , (label.shape[-1] , self.num_output)
 
         with no_grad():
-            score = self.f_score(label , pred , weight , nan_check = (dataset == 'test') , first_col = True).item()
+            score = self.f_score(label , pred , weight , nan_check = (dataset == 'test') , which_col = self.which_output).item()
 
         if dataset == 'train' and not self.is_booster:
+            losses = self.f_loss(label , pred , weight)
             if self.multiloss is not None:
-                losses = self.f_loss(label , pred , weight)[:self.multiloss.num_task]
-                loss = self.multiloss.calculate_multi_loss(losses , multiloss_param)    
+                loss = self.multiloss.calculate_multi_loss(losses , multiloss_param) 
             else:
-                losses = self.f_loss(label , pred , weight , first_col = True)
                 loss = losses
-
             penalty = 0.
-            for pen in self.f_pen.values():
-                if pen['lamb'] <= 0 or not pen['cond']: continue
-                penalty = penalty + pen['lamb'] * pen['func'](label , pred , weight , **penalty_kwargs)  
+            for pen_cal in self.f_pen.values():
+                penalty = penalty + pen_cal(**penalty_kwargs)  
             loss = loss + penalty
             self.output = BatchMetric(loss = loss , score = score , penalty = penalty , losses = losses)
         else:
@@ -162,22 +159,24 @@ class Metrics:
     @classmethod
     def decorator_display(cls , func , mtype , mkey):
         def metric_display(mtype , mkey):
-            if not cls.DISPLAY_RECORD[mtype].get(mkey , False):
+            if not DISPLAY_RECORD[mtype].get(mkey , False):
                 print(f'{mtype} function of [{mkey}] calculated and success!')
-                cls.DISPLAY_RECORD[mtype][mkey] = True
+                DISPLAY_RECORD[mtype][mkey] = True
         def wrapper(*args, **kwargs):
             v = func(*args, **kwargs)
             metric_display(mtype , mkey)
             return v
-        return wrapper if cls.DISPLAY_CHECK else func
+        return wrapper if DISPLAY_CHECK else func
     
     @classmethod
-    def firstC(cls , *args):
-        new_args = [None if arg is None else arg[:,0] for arg in args]
+    def whichC(cls , *args , which_col : int = 0):
+        '''each element return ith column, if negative then return raw element'''
+        if which_col > 0: new_args = [None if arg is None else arg[...,which_col] for arg in args]
         return new_args
     
     @classmethod
-    def nonnan(cls , *args):
+    def nonnan(cls , *args , nan_check : bool = True):
+        if not nan_check: return args
         nanpos = False
         for arg in args:
             if arg is not None: nanpos = arg.isnan() + nanpos
@@ -197,14 +196,14 @@ class Metrics:
         '''loss function , pearson/ccc should * -1.'''
         assert key in ('mse' , 'pearson' , 'ccc')
         def decorator(func):
-            def wrapper(label,pred,weight=None,dim=0,nan_check=False,first_col=False,**kwargs):
-                if first_col: label , pred , weight = cls.firstC(label , pred , weight)
-                if nan_check: label , pred , weight = cls.nonnan(label , pred , weight)
+            def wrapper(label,pred,weight=None,dim=0,nan_check=False,which_col=-1,**kwargs):
+                label , pred , weight = cls.whichC(label , pred , weight , which_col = which_col)
+                label , pred , weight = cls.nonnan(label , pred , weight , nan_check = nan_check)
                 v = func(label , pred , weight, dim , **kwargs)
                 if key != 'mse': v = torch.exp(-v)
                 return v
             return wrapper
-        new_func = decorator(cls.METRIC_FUNC[key])
+        new_func = decorator(METRIC_FUNC[key])
         new_func = cls.decorator_display(new_func , 'loss' , key)
         return new_func
 
@@ -212,14 +211,14 @@ class Metrics:
     def score_function(cls , key):
         assert key in ('mse' , 'pearson' , 'ccc' , 'spearman')
         def decorator(func):
-            def wrapper(label,pred,weight=None,dim=0,nan_check=False,first_col=False,**kwargs):
-                if first_col: label , pred , weight = cls.firstC(label , pred , weight)
-                if nan_check: label , pred , weight = cls.nonnan(label , pred , weight)
+            def wrapper(label,pred,weight=None,dim=0,nan_check=False,which_col=-1,**kwargs):
+                label , pred , weight = cls.whichC(label , pred , weight , which_col = which_col)
+                label , pred , weight = cls.nonnan(label , pred , weight , nan_check = nan_check)
                 v = func(label , pred , weight , dim , **kwargs)
                 if key == 'mse' : v = -v
                 return v
             return wrapper
-        new_func = decorator(cls.METRIC_FUNC[key])
+        new_func = decorator(METRIC_FUNC[key])
         new_func = cls.decorator_display(new_func , 'score' , key)
         return new_func
     
@@ -227,9 +226,9 @@ class Metrics:
     def penalty_function(cls , key , param):
         assert key in ('hidden_corr' , 'tra_opt_transport')
         def decorator(func):
-            def wrapper(label,pred,weight=None,dim=0,nan_check=False,first_col=False, **kwargs):
-                if first_col: label , pred , weight = cls.firstC(label , pred , weight)
-                if nan_check: label , pred , weight = cls.nonnan(label , pred , weight)
+            def wrapper(label,pred,weight=None,dim=0,nan_check=False,which_col=-1, **kwargs):
+                label , pred , weight = cls.whichC(label , pred , weight , which_col = which_col)
+                label , pred , weight = cls.nonnan(label , pred , weight , nan_check = nan_check)
                 return func(label , pred , weight, dim , param = param , **kwargs)
             return wrapper
         new_func = decorator(getattr(cls , key , cls.null))
@@ -256,39 +255,162 @@ class Metrics:
         if kwargs['net'].training and tra_pdata['probs'] is not None and tra_pdata['num_states'] > 1:
             square_error = (kwargs['hidden'] - kwargs['label']).square()
             square_error -= square_error.min(dim=-1, keepdim=True).values  # normalize & ensure positive input
-            P = _sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
+            P = PenaltyCalculator._sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
             lamb = (param['rho'] ** tra_pdata['global_steps'])
             reg = (tra_pdata['probs'] + 1e-4).log().mul(P).sum(dim=-1).mean()
             pen = - lamb * reg
         return pen
 
-def _shoot_infs(inp_tensor):
-    '''Replaces inf by maximum of tensor'''
-    mask_inf = torch.isinf(inp_tensor)
-    ind_inf = torch.nonzero(mask_inf, as_tuple=False)
-    if len(ind_inf) > 0:
-        for ind in ind_inf:
-            if len(ind) == 2:
-                inp_tensor[ind[0], ind[1]] = 0
-            elif len(ind) == 1:
-                inp_tensor[ind[0]] = 0
-        m = torch.max(inp_tensor)
-        for ind in ind_inf:
-            if len(ind) == 2:
-                inp_tensor[ind[0], ind[1]] = m
-            elif len(ind) == 1:
-                inp_tensor[ind[0]] = m
-    return inp_tensor
+class _MetricCalculator(ABC):
+    KEY : Literal['loss' , 'score' , 'penalty'] = 'loss'
+    def __init__(self , criterion , collapse = False):
+        '''
+        criterion : metric function
+        collapse  : aggregate last dimension if which_col < -1
+        '''
+        self.criterion = criterion
+        self.collapse = collapse
 
-def _sinkhorn(Q, n_iters=3, epsilon=0.01):
-    # epsilon should be adjusted according to logits value's scale
-    with no_grad():
-        Q = _shoot_infs(Q)
-        Q = torch.exp(Q / epsilon)
-        for i in range(n_iters):
-            Q /= Q.sum(dim=0, keepdim=True)
-            Q /= Q.sum(dim=1, keepdim=True)
-    return Q
+    def __call__(self, label : Tensor ,pred : Tensor , weight : Optional[Tensor] = None , 
+                 dim : int = 0 , nan_check : bool = False , which_col : int = -1, **kwargs) -> Tensor:
+        '''calculate the resulting metric'''
+        label , pred , weight = self.slice_data(label , pred , weight , which_col = which_col , nan_check = nan_check)
+        v = self.forward(label , pred , weight, dim , **kwargs)
+        if which_col < 0 and self.collapse: v = torch.nanmean(v , dim = -1)
+        self.display()
+        return v
+    
+    @abstractmethod
+    def forward(self, label : Tensor ,pred : Tensor , weight : Optional[Tensor] = None , dim : int = 0 , **kwargs) -> Tensor:
+        '''calculate the metric'''
+        return METRIC_FUNC[self.criterion](label , pred , weight, dim , **kwargs)
+
+    def display(self):
+        if DISPLAY_CHECK and not DISPLAY_RECORD[self.KEY].get(self.criterion , False):
+            print(f'{self.KEY} function of [{self.criterion}] calculated and success!')
+            DISPLAY_RECORD[self.KEY][self.criterion] = True
+    
+    @classmethod
+    def slice_data(cls , *args , which_col : int = 0 , nan_check : bool = False) -> list[Any] | tuple:
+        '''each element return ith column, if negative then return raw element'''
+        if which_col >= 0: args = [None if arg is None else arg[...,which_col] for arg in args]
+
+        if not nan_check: return args
+        nanpos = False
+        for arg in args:
+            if arg is not None: nanpos = arg.isnan() + nanpos
+        if isinstance(nanpos , Tensor) and nanpos.any():
+            if nanpos.ndim > 1: nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
+            if nanpos.all(): [print(arg) for arg in args]
+            args = [None if arg is None else arg[~nanpos] for arg in args]
+        return args
+    
+class LossCalculator(_MetricCalculator):
+    KEY = 'loss'
+    def __init__(self , criterion : Literal['mse', 'pearson', 'ccc']):
+        ''' 'mse', 'pearson', 'ccc' , will not collapse columns '''
+        assert criterion in ('mse' , 'pearson' , 'ccc')
+        super().__init__(criterion , False)
+
+    def forward(self, label: Tensor, pred: Tensor, weight: Tensor | None = None, dim: int = 0, **kwargs):
+        v = METRIC_FUNC[self.criterion](label , pred , weight, dim , **kwargs)
+        if self.criterion != 'mse': v = torch.exp(-v)
+        return v
+    
+class ScoreCalculator(_MetricCalculator):
+    KEY = 'score'
+    def __init__(self , criterion : Literal['mse', 'pearson', 'ccc' , 'spearman']):
+        ''' 'mse', 'pearson', 'ccc' , 'spearman', will collapse columns if multi-labels '''
+        assert criterion in ('mse' , 'pearson' , 'ccc' , 'spearman')
+        super().__init__(criterion , True)
+    
+    def forward(self, label: Tensor, pred: Tensor, weight: Tensor | None = None, dim: int = 0, **kwargs):
+        v = METRIC_FUNC[self.criterion](label , pred , weight, dim , **kwargs)
+        if self.criterion == 'mse' : v = -v
+        return v
+    
+class PenaltyCalculator(_MetricCalculator):
+    KEY = 'penalty'
+    def __init__(self , criterion : Literal['hidden_corr' , 'tra_opt_transport'] , param : dict[str,Any]):
+        ''' 'hidden_corr' , 'tra_opt_transport' '''
+        super().__init__(criterion , True)
+        self.param = param
+        if self.criterion == 'hidden_corr':
+            self.penalty = self.hidden_corr
+        elif self.criterion == 'tra_opt_transport':
+            self.penalty = self.tra_opt_transport
+        else: 
+            self.penalty = self.null
+        self.lamb = param['lamb']
+        self.cond = True
+        
+    def __call__(self, **kwargs) -> Tensor | float:
+        if self.lamb <= 0 or not self.cond: return 0.
+        v = self.penalty(**kwargs)
+        self.display()
+        return self.lamb * v
+    
+    def forward(self, *args , **kwargs): return None
+    def null(self , **kwargs) -> Tensor | float: return 0.
+
+    def hidden_corr(self , **kwargs) -> Tensor | float:
+        '''if kwargs containse hidden, calculate 2nd-norm of hTh'''
+        hidden = kwargs.get('hidden')
+        assert isinstance(hidden,Tensor)
+        if hidden.shape[-1] == 1: return 0
+        if isinstance(hidden,(tuple,list)): hidden = torch.cat(hidden,dim=-1)
+        pen = hidden.T.corrcoef().triu(1).nan_to_num().square().sum()
+        return pen
+    
+    def tra_opt_transport(self , **kwargs) -> Tensor | float:
+        '''special penalty for tra'''
+        net : nn.Module = kwargs['net']
+        tra_pdata : dict[str,Any] = net.penalty_data
+        probs : Tensor = tra_pdata['probs']
+        nstates : int  = tra_pdata['num_states']
+        if net.training and probs is not None and nstates > 1:
+            steps : int = tra_pdata['global_steps']
+            rho   : float = self.param['rho']
+            hidden : Tensor = kwargs['hidden'] 
+            label  : Tensor = kwargs['label']
+            square_error = (hidden - label).square()
+            square_error -= square_error.min(dim=-1, keepdim=True).values  # normalize & ensure positive input
+            P = self._sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
+            lamb = (rho ** steps)
+            reg = (probs + 1e-4).log().mul(P).sum(dim=-1).mean()
+            return - lamb * reg
+        else:
+            return 0.
+    
+    @staticmethod
+    def _shoot_infs(inp_tensor):
+        '''Replaces inf by maximum of tensor'''
+        mask_inf = torch.isinf(inp_tensor)
+        ind_inf = torch.nonzero(mask_inf, as_tuple=False)
+        if len(ind_inf) > 0:
+            for ind in ind_inf:
+                if len(ind) == 2:
+                    inp_tensor[ind[0], ind[1]] = 0
+                elif len(ind) == 1:
+                    inp_tensor[ind[0]] = 0
+            m = torch.max(inp_tensor)
+            for ind in ind_inf:
+                if len(ind) == 2:
+                    inp_tensor[ind[0], ind[1]] = m
+                elif len(ind) == 1:
+                    inp_tensor[ind[0]] = m
+        return inp_tensor
+
+    @classmethod
+    def _sinkhorn(cls , Q, n_iters=3, epsilon=0.01):
+        # epsilon should be adjusted according to logits value's scale
+        with no_grad():
+            Q = cls._shoot_infs(Q)
+            Q = torch.exp(Q / epsilon)
+            for i in range(n_iters):
+                Q /= Q.sum(dim=0, keepdim=True)
+                Q /= Q.sum(dim=1, keepdim=True)
+        return Q
 
 class MetricsAggregator:
     '''record a list of batch metric and perform agg operations, usually used in an epoch'''
@@ -332,7 +454,7 @@ class MultiLosses:
             ml.view_plot(2 , 'rws')
         '''
         self.multi_type = multi_type
-        self.reset_multi_type(num_task,**kwargs)
+        self.reset_multi_type(num_task , **kwargs)
 
     def reset_multi_type(self, num_task , **kwargs):
         self.num_task   = num_task

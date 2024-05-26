@@ -332,10 +332,16 @@ class ModuleData:
             dataset_code = '+'.join(data_type_list)
             dataset_path = f'{PATH.dataset}/{dataset_code}.{last_date}.pt'
 
-        if os.path.exists(dataset_path):
-            print(f'use {dataset_path}')
+        if y_labels is not None and os.path.exists(dataset_path):
             data = cls(**torch.load(dataset_path))
-        else:
+            if (np.isin(data_type_list , list(data.x.keys())).all() and
+                np.isin(y_labels , list(data.y.feature)).all()):
+                print(f'try using {dataset_path} , success!')
+            else:
+                print(f'try using {dataset_path} , but incompatible, load raw blocks!')
+                data = None
+
+        if data is None:
             data_type_list = ['y' , *data_type_list]
             
             blocks = DataBlock.load_keys(data_type_list, predict , alias_search=True,dtype = dtype)

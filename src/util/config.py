@@ -392,7 +392,7 @@ class TrainConfig:
 
     def print_out(self):
         subset = [
-            'random_seed' , 'model_name' , 'model_module' , 'model_data_type' , 'model_types' ,
+            'random_seed' , 'model_name' , 'model_module' , 'model_data_type' , 'model_types' , 'labels' ,
             'beg_date' , 'end_date' , 'sample_method' , 'shuffle_option' , 'lgbm_ensembler'
         ]
         pretty_print_dict({k:self.get(k) for k in subset})

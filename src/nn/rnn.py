@@ -79,7 +79,7 @@ class rnn_univariate(nn.Module):
         return o , x[0]
         
     def set_multiloss_params(self):
-        self.multiloss_alpha = torch.nn.Parameter((torch.rand(self.num_output) + 1e-4).requires_grad_())
+        self.multiloss_alpha = torch.nn.Parameter((torch.ones(self.num_output) + 1e-4).requires_grad_())
         
     def get_multiloss_params(self):
         return {'alpha':self.multiloss_alpha}
@@ -151,7 +151,7 @@ class rnn_multivariate(nn.Module):
         return o , x[0]
         
     def set_multiloss_params(self):
-        self.multiloss_alpha = torch.nn.Parameter((torch.rand(self.num_output) + 1e-4).requires_grad_())
+        self.multiloss_alpha = torch.nn.Parameter((torch.ones(self.num_output) + 1e-4).requires_grad_())
         
     def get_multiloss_params(self):
         return {'alpha':self.multiloss_alpha}
