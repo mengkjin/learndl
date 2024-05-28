@@ -120,12 +120,14 @@ class Metrics:
         label  = batch_data.y
         pred   = batch_output.pred
         weight = batch_data.w
-        penalty_kwargs = {'net':net,'pre':pred,'hidden':batch_output.hidden,'label':label , **kwargs}
+        other  = batch_output.other
+        penalty_kwargs = {'net':net,'pre':pred,'label':label,**kwargs}
+        if isinstance(other,dict): penalty_kwargs.update(other)
         mt_param = getattr(net , 'get_multiloss_params')() if net and hasattr(net , 'get_multiloss_params') else {}
         self.calculate_from_tensor(dataset, label, pred, weight, penalty_kwargs, mt_param, assert_nan)
 
     def calculate_from_tensor(self , dataset , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
-                              penalty_kwargs = {} , multiloss_param = {} , assert_nan = False):
+                              penalty_kwargs : dict[str,Any] = {} , multiloss_param = {} , assert_nan = False):
         '''Calculate loss(with gradient), penalty , score'''
         assert dataset in ['train','valid','test']
         if label.shape != pred.shape: # if more label than output
@@ -145,8 +147,12 @@ class Metrics:
             else:
                 loss = losses
             penalty = 0.
+            for pen_key , pen_val in penalty_kwargs.items():
+                if pen_key.startswith('loss_') or pen_key.startswith('penalty_'):
+                    penalty = penalty + pen_val
             for pen_cal in self.f_pen.values():
-                penalty = penalty + pen_cal(**penalty_kwargs)  
+                penalty = penalty + pen_cal(**penalty_kwargs)
+
             loss = loss + penalty
             self.output = BatchMetric(loss = loss , score = score , penalty = penalty , losses = losses)
         else:

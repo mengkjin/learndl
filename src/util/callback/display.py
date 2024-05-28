@@ -13,7 +13,6 @@ class CallbackTimer(CallBack):
     '''record time cost of callback hooks'''
     def __init__(self , model_module , verbosity = 2) -> None:
         super().__init__(model_module , with_cb=True)
-        #self._print_info()
         self._verbosity = verbosity
         self._hook_times : dict[str,list]  = {}
         self._start_time : dict[str,float] = {}
@@ -35,7 +34,6 @@ class BatchDisplay(CallBack):
     '''display batch progress bar'''
     def __init__(self , model_module , verbosity = 2) -> None:
         super().__init__(model_module , with_cb=False)
-        #self._print_info()
         self._verbosity = verbosity
     @property
     def _dl(self) -> LoaderWrapper | Any: return self.module.dataloader
@@ -60,7 +58,6 @@ class StatusDisplay(CallBack):
 
     def __init__(self , model_module , verbosity = 2):
         super().__init__(model_module , with_cb=False)
-        #self._print_info()
         self._verbosity = verbosity
         self._init_time = time.time()
         os.makedirs(os.path.dirname(self.RESULT_PATH) , exist_ok=True)

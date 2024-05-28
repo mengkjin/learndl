@@ -4,7 +4,7 @@ random_seed: null
 short_test:  false
 
 model_name: null # null
-model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
+model_module: factor_vae # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
 model_types: [best , swalast , swabest]
 model_data_type: day # 'day+30m' , 30m
 model_data_prenorm:
@@ -40,7 +40,7 @@ train_param:
       transfer_multiplier:   {'encoder' : 0.1 , 'decoder' : 1.0, } 
     gradient:  {'clip_value' : 10.0}
   criterion:
-    loss:      pearson  # mse, pearson, ccc
+    loss:      mse  # mse, pearson, ccc
     score:     spearman # mse, pearson, ccc, spearman
     penalty:   
       hidden_corr: 

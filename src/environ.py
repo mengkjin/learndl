@@ -1,10 +1,12 @@
-import os , shutil , yaml
+import os , shutil , socket , torch , yaml
 from dataclasses import dataclass
 from typing import Literal
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 MAIN_DIR = os.path.dirname(SRC_DIR)
 BOOSTER_MODULE = ['lgbm']
+THIS_IS_SERVER = socket.gethostname() == 'mengkjin-server'
+assert not THIS_IS_SERVER or torch.cuda.is_available() , f'mengkjin-server must have cuda available'
 
 @dataclass
 class _CustomPath:

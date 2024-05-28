@@ -1,4 +1,4 @@
-import os , socket , torch
+import os , torch
 import numpy as np
 import pandas as pd
 
@@ -8,7 +8,7 @@ from typing import ClassVar , Literal , Optional
 from .data import NetDataModule
 from ..classes import BatchOutput
 from ..data import GetData
-from ..environ import PATH
+from ..environ import PATH , THIS_IS_SERVER
 from ..func.time import today , date_offset
 from ..util import Deposition , Device , ModelManager , TrainConfig
 
@@ -30,8 +30,8 @@ class Predictor:
 
     @classmethod
     def update_factors(cls):
-        if socket.gethostname() == 'mengkjin-server': return
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
+        if THIS_IS_SERVER: return
         model_preds = [
             cls('gru_day'    , 'swalast' , 0 , 'gru_day_V0') ,
             cls('gruRTN_day' , 'swalast' , 0 , 'gruRTN_day_V0') ,

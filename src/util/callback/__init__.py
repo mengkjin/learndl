@@ -1,6 +1,7 @@
 from typing import Any , Optional
 
 from . import base , control , display
+from .nnspecific import get_nn_specific_cb
 from .base import CallBack
 from ..config import TrainConfig
 from ...classes import BaseTrainer
@@ -24,6 +25,7 @@ class CallBackManager(CallBack):
         cb_configs = config.callbacks
         if config.model_module in BOOSTER_MODULE: cb_configs = {k:v for k,v in cb_configs.items() if k in ['StatusDisplay']}
         callbacks = [cls.__get_cb(cb , param , model_module) for cb , param in cb_configs.items()]
+        callbacks.append(get_nn_specific_cb(config.model_module)(model_module))
         return cls(model_module , *callbacks)
     
     @staticmethod

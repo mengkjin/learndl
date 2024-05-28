@@ -1,11 +1,11 @@
+import os ,  tarfile, time
 import numpy as np
 import pandas as pd
-import os , socket , tarfile, time
 
 from functools import reduce
 
 from .fetcher import DB_BY_DATE , DB_BY_NAME , DataFetcher , SQLFetcher , save_df
-from ..environ import PATH
+from ..environ import PATH , THIS_IS_SERVER
 
 UPDATER_TITLE = 'DB_updater'
 class DataUpdater():
@@ -17,7 +17,7 @@ class DataUpdater():
     @staticmethod
     def get_updater_paths():
         # order matters!
-        search_dirs = [PATH.database , PATH.updater] + ['/home/mengkjin/Workspace/SharedFolder'] * (socket.gethostname() == 'mengkjin-server')
+        search_dirs = [PATH.database , PATH.updater] + ['/home/mengkjin/Workspace/SharedFolder'] * THIS_IS_SERVER
 
         paths = []
         for sdir in search_dirs:
@@ -27,7 +27,7 @@ class DataUpdater():
     
     @staticmethod
     def unpack_exist_updaters(del_after_dumping = True):
-        assert socket.gethostname() == 'mengkjin-server' , socket.gethostname()
+        assert THIS_IS_SERVER , f'must on server'
         search_dirs = [PATH.database , PATH.updater , '/home/mengkjin/Workspace/SharedFolder']
         paths = []
         for sdir in search_dirs:
@@ -134,6 +134,7 @@ class DataUpdater():
         return result
 
     def update_all(self , db_srcs = DB_BY_NAME + DB_BY_DATE , start_dt = None , end_dt = None , force = False):
+        assert not THIS_IS_SERVER , f'must on laptop'
         # selected DB is totally refreshed , so delete first
         if not isinstance(db_srcs , (list,tuple)): db_srcs = [db_srcs]
         for db_src in db_srcs:
@@ -149,7 +150,7 @@ class DataUpdater():
 
     @classmethod
     def update_server(cls):
-        assert socket.gethostname() == 'mengkjin-server' , socket.gethostname()
+        assert THIS_IS_SERVER , f'must on server'
         start_time = time.time()
 
         print(f'Unpack Update Files') 
@@ -159,8 +160,7 @@ class DataUpdater():
 
     @classmethod
     def update_laptop(cls):
-        assert socket.gethostname() != 'mengkjin-server' , socket.gethostname()
-
+        assert not THIS_IS_SERVER , f'must on laptop'
         start_time = time.time()
         print(f'Update Files')
         Updater = cls()
@@ -168,10 +168,3 @@ class DataUpdater():
         Updater.print_unfetch()
         SQLFetcher.update_since()
         print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
-
-    @classmethod
-    def main(cls):
-        if socket.gethostname() == 'mengkjin-server':
-            cls.update_server()
-        else:
-            cls.update_laptop()

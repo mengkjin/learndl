@@ -1,3 +1,4 @@
+import inspect
 import numpy as np
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
@@ -320,11 +321,46 @@ class BaseTrainer(ABC):
         self.booster : Any
         self.optimizer : Any
     @abstractmethod
-    def fit_model(self): 
-        self.batch_idx : int
-        self.batch_data : Any
+    def fit_model(self):
+        self.status.fit_model_start()
+        self.on_fit_model_start()
+        while not self.status.end_of_loop:
+            self.status.fit_epoch_start()
+            self.on_fit_epoch_start()
+
+            self.status.dataset_train()
+            self.on_train_epoch_start()
+            for self.batch_idx , self.batch_data in enumerate(self.dataloader):
+                self.on_train_batch_start()
+                self.on_train_batch()
+                self.on_train_batch_end()
+            self.on_train_epoch_end()
+
+            self.status.dataset_validation()
+            self.on_validation_epoch_start()
+            for self.batch_idx , self.batch_data in enumerate(self.dataloader):
+                self.on_validation_batch_start()
+                self.on_validation_batch()
+                self.on_validation_batch_end()
+            self.on_validation_epoch_end()
+
+            self.on_before_fit_epoch_end()
+            self.status.fit_epoch_end()
+            self.on_fit_epoch_end()
+        self.on_fit_model_end()
     @abstractmethod
-    def test_model(self): ...
+    def test_model(self):
+        self.on_test_model_start()
+        for self.status.model_type in self.model_types:
+            self.status.dataset_test()
+            self.on_test_model_type_start()
+            for self.batch_idx , self.batch_data in enumerate(self.dataloader):
+                self.on_test_batch_start()
+                self.on_test_batch()
+                self.on_test_batch_end()
+            self.on_test_model_type_end()
+        self.on_test_model_end()
+
     @property 
     @abstractmethod
     def model_param(self) -> dict:  '''current model param'''
@@ -350,13 +386,15 @@ class BaseTrainer(ABC):
     @property
     def prev_model_date(self): return self.data.prev_model_date(self.model_date)
     
-    def __call__(self , input):
-        if not isinstance(input , BatchData):
-            return BatchOutput(self.net(input))
-        elif input.is_empty:
-            return BatchOutput()
+    def __call__(self , input : BatchData | Any):
+        if isinstance(input , BatchData):
+            if input.is_empty:
+                output = None
+            else:
+                output = self.net(input.x , **input.kwargs)
         else:
-            return BatchOutput(self.net(input.x))
+            output = self.net(input)
+        return BatchOutput(output)
 
     def main_process(self):
         '''Main stage of data & fit & test'''

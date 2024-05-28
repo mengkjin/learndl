@@ -12,6 +12,7 @@ class BatchData:
     w       : Tensor | None
     i       : Tensor 
     valid   : Tensor
+    kwargs  : dict[str,Any] = field(default_factory=dict)
     
     def __post_init__(self):
         if isinstance(self.x , (list , tuple)) and len(self.x) == 1: self.x = self.x[0]
@@ -21,22 +22,26 @@ class BatchData:
             y = self.send_to(self.y , device) ,
             w = self.send_to(self.w , device) ,
             i = self.send_to(self.i , device) ,
-            valid = self.send_to(self.valid , device))
+            valid = self.send_to(self.valid , device) ,
+            kwargs = self.send_to(self.kwargs , device))
     def cpu(self):  return self.to('cpu')
     def cuda(self): return self.to('cuda')
     @property
     def is_empty(self): return len(self.y) == 0
     @classmethod
     def send_to(cls , obj , des : Any | Literal['cpu' , 'cuda']) -> Any:
-        if obj is None: return None
-        elif isinstance(obj , Tensor):
+        if isinstance(obj , Tensor):
             if des == 'cpu': return obj.cpu()
             elif des == 'cuda': return obj.cuda()
             elif callable(des): return des(obj) 
             else: return obj.to(des)
         elif isinstance(obj , (list , tuple)):
             return type(obj)([cls.send_to(o , des) for o in obj])
-        else: raise TypeError(obj)
+        elif isinstance(obj , dict):
+            return {k:cls.send_to(o , des) for k,o in obj.items()}
+        else: return obj
+    @property
+    def device(self): return self.y.device
 
 @dataclass(slots=True)
 class BatchMetric:
@@ -77,9 +82,10 @@ class BatchOutput:
         else:
             return self.outputs
     @property
-    def hidden(self) -> Optional[Tensor]:
+    def other(self) -> Optional[dict[str,Any]]:
         if isinstance(self.outputs , (list , tuple)):
             assert len(self.outputs) == 2 , self.outputs
+            assert isinstance(self.outputs[1] , dict)
             return self.outputs[1]
         else:
             return None

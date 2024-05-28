@@ -10,7 +10,7 @@ from typing import Any , Iterator , Literal , Optional
 
 from ..classes import BaseDataModule , BatchData , BoosterData
 from ..data import DataBlockNorm , DataProcessor , ModuleData , DataUpdater
-from ..environ import PATH , CONF
+from ..environ import PATH , CONF , THIS_IS_SERVER
 from ..func import tensor_standardize_and_weight , match_values
 from ..util import BufferSpace , DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig
 
@@ -22,7 +22,10 @@ class DataAPI:
         a. for laptop, transform data from R dataset and SQL to Database, create Updater's in './data/DataBase'
         b. for server, move Updater's to Database'
         '''
-        DataUpdater.main()
+        if THIS_IS_SERVER:
+            DataUpdater.update_server()
+        else:
+            DataUpdater.update_laptop()
 
     @staticmethod
     def prepare_train_data(): 
@@ -36,6 +39,7 @@ class DataAPI:
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
+        assert THIS_IS_SERVER
         NetDataModule.prepare_data()
 
 class _DataModule(BaseDataModule):

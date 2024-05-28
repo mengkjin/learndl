@@ -68,7 +68,7 @@ class rnn_univariate(nn.Module):
         self.mapping = Layer.Parallel(uni_rnn_mapping(**self.kwargs) , num_mod = num_output , feedforward = True , concat_output = True)
         self.set_multiloss_params()
 
-    def forward(self , x : Tensor) -> tuple[Tensor,Tensor]:
+    def forward(self , x : Tensor) -> tuple[Tensor,dict]:
         '''
         in: [bs x seq_len x input_dim]
         out:[bs x 1] , [bs x hidden_dim]
@@ -76,7 +76,7 @@ class rnn_univariate(nn.Module):
         x = self.encoder(x) # [bs x hidden_dim]
         x = self.decoder(x) # tuple of [bs x hidden_dim] , len is num_output
         o = self.mapping(x) # [bs x num_output]
-        return o , x[0]
+        return o , {'hidden' : x[0]}
         
     def set_multiloss_params(self):
         self.multiloss_alpha = torch.nn.Parameter((torch.ones(self.num_output) + 1e-4).requires_grad_())
@@ -140,7 +140,7 @@ class rnn_multivariate(nn.Module):
 
         self.set_multiloss_params()
     
-    def forward(self, x : Tensor) -> tuple[Tensor,Tensor]:
+    def forward(self, x : Tensor) -> tuple[Tensor,dict]:
         '''
         in: tuple of [bs x seq_len x input_dim[i]] , len is num_rnn
         out:[bs x 1] , [bs x num_rnn * hidden_dim]
@@ -148,7 +148,7 @@ class rnn_multivariate(nn.Module):
         x = self.encoder(x) # tuple of [bs x hidden_dim] , len is num_rnn
         x = self.decoder(x) # tuple of [bs x num_rnn * hidden_dim] , len is num_output
         o = self.mapping(x) # [bs, 1]
-        return o , x[0]
+        return o , {'hidden' : x[0]}
         
     def set_multiloss_params(self):
         self.multiloss_alpha = torch.nn.Parameter((torch.ones(self.num_output) + 1e-4).requires_grad_())

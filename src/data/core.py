@@ -322,7 +322,8 @@ class ModuleData:
         return self.date[(self.date >= start) & (self.date <= end)][::interval]
     
     @classmethod
-    def load(cls , data_type_list : list[str] , y_labels = None , predict=False , dtype = torch.float , save_upon_loading = True):
+    def load(cls , data_type_list : list[str] , y_labels : Optional[list[str]] = None , 
+             predict : bool = False , dtype : Optional[str | Any] = torch.float , save_upon_loading : bool = True):
         if dtype is None: dtype = torch.float
         if isinstance(dtype , str): dtype = getattr(torch , dtype)
         if predict: 
@@ -340,6 +341,8 @@ class ModuleData:
             else:
                 print(f'try using {dataset_path} , but incompatible, load raw blocks!')
                 data = None
+        else:
+            data = None
 
         if data is None:
             data_type_list = ['y' , *data_type_list]
@@ -356,11 +359,10 @@ class ModuleData:
 
             data = {'x' : x , 'y' : y , 'norms' : norms , 'secid' : secid , 'date' : date}
             if not predict and save_upon_loading: 
-                os.makedirs(os.path.dirname(dataset_path) , exist_ok=True)
                 torch.save(data , dataset_path , pickle_protocol = 4)
             data = cls(**data)
 
-        if y_labels is not None:  data.y.align_feature(y_labels)
+        data.y.align_feature(y_labels)
         return data
     
     @staticmethod
