@@ -79,7 +79,7 @@ class _LgbmBooster(Booster):
         net.eval()
         with torch.no_grad():
             for batch_data in loader:
-                hidden = BatchOutput(net(batch_data.x)).hidden
+                hidden : Tensor = BatchOutput(net(batch_data.x)).other['hidden']
                 assert hidden is not None , f'hidden must not be none when using LgbmEnsembler'
                 hh.append(hidden.detach().cpu())
                 yy.append(batch_data.y.detach().cpu())
@@ -123,8 +123,7 @@ class LgbmEnsembler(_LgbmBooster):
     
     def predict(self , *args):
         assert self.loaded
-        hidden = self.module.batch_output.hidden
-        if hidden is None: return
+        hidden : Tensor = self.module.batch_output.other['hidden']
         hidden = hidden.detach().cpu()
         return torch.tensor(self.model.predict(BoosterData(hidden , self.label()) , reform = False))
     

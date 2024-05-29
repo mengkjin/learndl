@@ -180,9 +180,7 @@ class BaseCB:
     
 class BaseBuffer(ABC):
     '''dynamic buffer space for some module to use (tra), can be updated at each batch / epoch '''
-    def __init__(self , key : Optional[str] = None , param : dict = {} , device : Optional[Callable] = None , always_on_device = True) -> None:
-        self.key = key
-        self.param = param
+    def __init__(self , device : Optional[Callable] = None , always_on_device = False) -> None:
         self.device = device
         self.always = always_on_device
         self.contents : dict[str,Any] = {}
@@ -216,6 +214,8 @@ class BaseBuffer(ABC):
             if self.always and self.device is not None: new = self.device(new)
             self.contents.update(new)
         return self
+    
+    def reset(self): self.contents : dict[str,Any] = {}
     
     @abstractmethod
     def register_setup(self) -> None: ...
@@ -256,6 +256,7 @@ class BaseDataModule(ABC):
         '''reset for every fit / test / predict'''
         self.loader_dict  = {}
         self.loader_param = ()
+        self.buffer.reset()
     def prev_model_date(self , model_date):
         prev_dates = [d for d in self.model_date_list if d < model_date]
         return max(prev_dates) if prev_dates else -1

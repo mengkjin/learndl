@@ -114,8 +114,6 @@ class TrainParam:
                 recur_update(Param , Param['on_transformer'])
 
         assert 'best' in Param['model_types']
-        Param['tra_model'] = Param['tra_switch'] and Param['model_module'].lower().startswith('tra')
-        assert not (Param['tra_model'] and Param['train_param']['dataloader']['sample_method'] == 'total_shuffle')
 
         if self.model_name is None:
             if Param['model_name']:
@@ -176,12 +174,7 @@ class TrainConfig:
 
     # special model : tra , lgbm
     lgbm_ensembler: bool        = False
-    tra_switch:  bool           = True
-    tra_param: dict             = field(default_factory=dict)
-    tra_model: bool             = False
-    buffer_type: Optional[str]  = 'tra'
-    buffer_param: dict          = field(default_factory=dict)
-    
+
     on_short_test: dict         = field(default_factory=dict)
     on_transformer: dict        = field(default_factory=dict)
 
@@ -194,7 +187,6 @@ class TrainConfig:
     def __post_init__(self):
         if isinstance(self.precision , str): self.precision = getattr(torch , self.precision)
         self.stage_queue = ['data' , 'fit' , 'test']
-        if not self.tra_model or self.buffer_type != 'tra': self.buffer_type = None
         assert socket.gethostname() == 'mengkjin-server' or self.short_test
 
     def __getitem__(self , k): return self.__dict__[k]

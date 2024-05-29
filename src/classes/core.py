@@ -47,7 +47,6 @@ class BatchData:
 class BatchMetric:
     loss      : Tensor = Tensor([0.])
     score     : Tensor | float = 0.
-    penalty   : Tensor | float = 0.
     losses    : Tensor = Tensor([0.])
 
     def __post_init__(self):
@@ -82,13 +81,13 @@ class BatchOutput:
         else:
             return self.outputs
     @property
-    def other(self) -> Optional[dict[str,Any]]:
+    def other(self) -> dict[str,Any]:
         if isinstance(self.outputs , (list , tuple)):
             assert len(self.outputs) == 2 , self.outputs
             assert isinstance(self.outputs[1] , dict)
             return self.outputs[1]
         else:
-            return None
+            return {}
     def override_pred(self , pred : Optional[Tensor]):
         assert self.outputs is not None
         assert pred is not None

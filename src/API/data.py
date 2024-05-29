@@ -12,6 +12,7 @@ from ..classes import BaseDataModule , BatchData , BoosterData
 from ..data import DataBlockNorm , DataProcessor , ModuleData , DataUpdater
 from ..environ import PATH , CONF , THIS_IS_SERVER
 from ..func import tensor_standardize_and_weight , match_values
+from ..nn import get_nn_category
 from ..util import BufferSpace , DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig
 
 class DataAPI:
@@ -44,7 +45,7 @@ class DataAPI:
 
 class _DataModule(BaseDataModule):
     @abstractmethod
-    def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid : Tensor) -> None: ...
+    def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid : Optional[Tensor]) -> None: ...
 
     @abstractmethod
     def split_sample(self , stage , valid : Tensor , index0 : Tensor , index1 : Tensor ,
@@ -61,6 +62,11 @@ class _DataModule(BaseDataModule):
         self.predict : bool = predict
         self.device  = Device()
         self.storage = Storage('mem' if self.config.mem_storage else 'disk')
+        self.buffer  = BufferSpace(self.device)
+        nn_category  = get_nn_category(self.config.model_module)
+        samp_method  = self.config.sample_method
+        assert not (nn_category == 'tra' and samp_method == 'total_shuffle') , (nn_category , samp_method)
+        assert not (nn_category == 'vae' and samp_method != 'sequential') , (nn_category , samp_method)
 
     def load_data(self):
         self.datas = ModuleData.load(self.data_type_list, self.config.labels, self.predict, self.config.precision)
@@ -82,7 +88,6 @@ class _DataModule(BaseDataModule):
             self.static_prenorm_method[mdt] = method
 
         self.reset_dataloaders()
-        self.buffer = BufferSpace(self.config.buffer_type , self.config.buffer_param , self.device)
         return self
     
     @property
@@ -95,10 +100,12 @@ class _DataModule(BaseDataModule):
         DataProcessor.main(predict = False)
         DataProcessor.main(predict = True)
 
-    def setup(self, stage : Literal['fit' , 'test' , 'predict'] , param = {'seqlens' : {'day': 30 , '30m': 30 , 'dms': 30}} , model_date = -1) -> None:
+    def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
+              param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'dms': 30}} , 
+              model_date = -1 , none_valid = False) -> None:
         if self.predict: stage = 'predict'
         seqlens : dict = param['seqlens']
-        if self.config.tra_model: seqlens.update(param.get('tra_seqlens',{}))
+        seqlens.update({k:v for k,v in param.items() if k.endswith('seq_len')})
         if self.loader_param == (stage , model_date , seqlens): return
         self.loader_param = stage , model_date , seqlens
 
@@ -107,7 +114,7 @@ class _DataModule(BaseDataModule):
         self.stage = stage
 
         x_keys = self.data_type_list
-        y_keys = [k for k in seqlens.keys() if k in ['hist_loss','hist_preds','hist_labels']]
+        y_keys = [k for k in seqlens.keys() if k not in x_keys]
         self.seqs = {k:seqlens.get(k , 1) for k in y_keys + x_keys}
         assert all([v > 0 for v in self.seqs.values()]) , self.seqs
         self.seqy = max([v for k,v in self.seqs.items() if k in y_keys]) if y_keys else 1
@@ -129,7 +136,7 @@ class _DataModule(BaseDataModule):
             self.early_test_dates = test_dates[test_dates <= model_date][-(self.seqy-1) // step_interval:] if self.seqy > 1 else test_dates[-1:-1]
             self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
             test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
-
+            
             d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - self.seqx + 1 , 0)
             d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
         else:
@@ -145,16 +152,16 @@ class _DataModule(BaseDataModule):
         x = {k:Tensor(v.values)[:,d0:d1] for k,v in self.datas.x.items()}
         y = Tensor(self.datas.y.values)[:,d0:d1].squeeze(2)[...,:self.labels_n]
 
-        # record y to self to perform buffer_init
         self.y , _ = self.standardize_y(y , None , None , no_weight = True)
-        self.buffer.process('setup' , self)
 
-        valid = self.full_valid_sample(x , self.y , self.step_idx , **self.buffer.get(y_keys))
-        y , w = self.standardize_y(self.y , valid , self.step_idx)
+        if none_valid:
+            w , valid = None , None
+            y , _ = self.standardize_y(self.y , None , self.step_idx)
+        else:
+            valid = self.full_valid_sample(x , self.y , self.step_idx)
+            y , w = self.standardize_y(self.y , valid , self.step_idx)
 
         self.y[:,self.step_idx] = y[:]
-        self.buffer.process('update' , self)
-
         self.static_dataloader(x , y , w , valid)
 
         gc.collect() 
@@ -227,70 +234,10 @@ class NetDataModule(_DataModule):
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         return batch.to(self.device if device is None else device)
 
-    def setup(self, stage : Literal['fit' , 'test' , 'predict'] , param = {'seqlens' : {'day': 30 , '30m': 30 , 'dms': 30}} , model_date = -1) -> None:
-        if self.predict: stage = 'predict'
-        seqlens : dict = param['seqlens']
-        if self.config.tra_model: seqlens.update(param.get('tra_seqlens',{}))
-        if self.loader_param == (stage , model_date , seqlens): return
-        self.loader_param = stage , model_date , seqlens
-
-        assert stage in ['fit' , 'test' , 'predict'] and model_date > 0 and seqlens , (stage , model_date , seqlens)
-        
-        self.stage = stage
-
-        x_keys = self.data_type_list
-        y_keys = [k for k in seqlens.keys() if k in ['hist_loss','hist_preds','hist_labels']]
-        self.seqs = {k:seqlens.get(k , 1) for k in y_keys + x_keys}
-        assert all([v > 0 for v in self.seqs.values()]) , self.seqs
-        self.seqy = max([v for k,v in self.seqs.items() if k in y_keys]) if y_keys else 1
-        self.seqx = max([v for k,v in self.seqs.items() if k in x_keys]) if x_keys else 1
-        self.seq0 = self.seqx + self.seqy - 1
-
-        if stage == 'fit':
-            model_date_col = (self.datas.date < model_date).sum()
-            step_interval = self.config.input_step_day
-            d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.input_span - self.seq0)
-            d1 = max(0 , model_date_col - self.config.skip_horizon)
-        elif stage in ['predict' , 'test']:
-            if stage == 'predict': self.model_date_list = np.array([model_date])
-            next_model_date = self.next_model_date(model_date)
-            step_interval  = 1
-
-            before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-self.seqy:]
-            test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::step_interval]
-            self.early_test_dates = test_dates[test_dates <= model_date][-(self.seqy-1) // step_interval:] if self.seqy > 1 else test_dates[-1:-1]
-            self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
-            test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
-
-            d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - self.seqx + 1 , 0)
-            d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
-        else:
-            raise KeyError(stage)
-
-        self.day_len  = d1 - d0
-        self.step_len = (self.day_len - self.seqx + 1) // step_interval
-        if stage in ['predict' , 'test']: assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
-        self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * step_interval , [0])
-        self.date_idx = d0 + self.step_idx
-        self.y_secid , self.y_date = self.datas.y.secid , self.datas.y.date[d0:d1]
-
-        x = {k:Tensor(v.values)[:,d0:d1] for k,v in self.datas.x.items()}
-        y = Tensor(self.datas.y.values)[:,d0:d1].squeeze(2)[...,:self.labels_n]
-
-        # record y to self to perform buffer_init
-        self.y , _ = self.standardize_y(y , None , None , no_weight = True)
-        self.buffer.process('setup' , self)
-
-        valid = self.full_valid_sample(x , self.y , self.step_idx , **self.buffer.get(y_keys))
-        y , w = self.standardize_y(self.y , valid , self.step_idx)
-
-        self.y[:,self.step_idx] = y[:]
-        self.buffer.process('update' , self)
-
-        self.static_dataloader(x , y , w , valid)
-
-        gc.collect() 
-        torch.cuda.empty_cache()
+    def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
+              param = {'seqlens' : {'day': 30 , '30m': 30 , 'dms': 30}} , 
+              model_date = -1) -> None:
+        super().setup(stage , param , model_date , False)
         
     def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid : Tensor) -> None:
         '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''
@@ -362,67 +309,12 @@ class BoosterDataModule(_DataModule):
     def test_dataloader(self) -> Iterator[BoosterData]:  return self.loader_dict['test']
     def predict_dataloader(self) -> Iterator[BoosterData]: return self.loader_dict['test']
         
-    def setup(self, stage : Literal['fit' , 'test' , 'predict'] , param = {'seqlens' : {'day': 30 , '30m': 30 , 'dms': 30}} , model_date = -1) -> None:
-        if self.predict: stage = 'predict'
-        seqlens : dict = param['seqlens']
-        if self.config.tra_model: seqlens.update(param.get('tra_seqlens',{}))
-        if self.loader_param == (stage , model_date , seqlens): return
-        self.loader_param = stage , model_date , seqlens
+    def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
+              param = {'seqlens' : {'day': 30 , '30m': 30 , 'dms': 30}} , 
+              model_date = -1) -> None:
+        super().setup(stage , param , model_date , True)
 
-        assert stage in ['fit' , 'test' , 'predict'] and model_date > 0 and seqlens , (stage , model_date , seqlens)
-        
-        self.stage = stage
-
-        x_keys = self.data_type_list
-        y_keys = [k for k in seqlens.keys() if k in ['hist_loss','hist_preds','hist_labels']]
-        self.seqs = {k:seqlens.get(k , 1) for k in y_keys + x_keys}
-        assert all([v > 0 for v in self.seqs.values()]) , self.seqs
-        self.seqy = max([v for k,v in self.seqs.items() if k in y_keys]) if y_keys else 1
-        self.seqx = max([v for k,v in self.seqs.items() if k in x_keys]) if x_keys else 1
-        self.seq0 = self.seqx + self.seqy - 1
-
-        if stage == 'fit':
-            model_date_col = (self.datas.date < model_date).sum()
-            step_interval = self.config.input_step_day
-            d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.input_span - self.seq0)
-            d1 = max(0 , model_date_col - self.config.skip_horizon)
-        elif stage in ['predict' , 'test']:
-            if stage == 'predict': self.model_date_list = np.array([model_date])
-            next_model_date = self.next_model_date(model_date)
-            step_interval  = 1
-
-            before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-self.seqy:]
-            test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::step_interval]
-            self.early_test_dates = test_dates[test_dates <= model_date][-(self.seqy-1) // step_interval:] if self.seqy > 1 else test_dates[-1:-1]
-            self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
-            test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
-
-            d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - self.seqx + 1 , 0)
-            d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
-        else:
-            raise KeyError(stage)
-
-        self.day_len  = d1 - d0
-        self.step_len = (self.day_len - self.seqx + 1) // step_interval
-        if stage in ['predict' , 'test']: assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
-        self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * step_interval , [0])
-        self.date_idx = d0 + self.step_idx
-        self.y_secid , self.y_date = self.datas.y.secid , self.datas.y.date[d0:d1]
-
-        x = {k:Tensor(v.values)[:,d0:d1] for k,v in self.datas.x.items()}
-        y = Tensor(self.datas.y.values)[:,d0:d1].squeeze(2)[...,:self.labels_n]
-
-        # record y to self to perform buffer_init
-        self.y , _ = self.standardize_y(y , None , None , no_weight = True)
-
-        y , _ = self.standardize_y(self.y , None , self.step_idx)
-        self.y[:,self.step_idx] = y[:]
-        self.static_dataloader(x , y)
-
-        gc.collect() 
-        torch.cuda.empty_cache()
-
-    def static_dataloader(self , x : dict[str,Tensor] , y : Tensor) -> None:
+    def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w = None , valid = None) -> None:
         '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''
         index0, index1 = torch.arange(len(y)) , self.step_idx
         sample_index = self.split_sample(self.stage , index0 , index1 , self.config.train_ratio)

@@ -4,7 +4,7 @@ random_seed: null
 short_test:  false
 
 model_name: null # null
-model_module: factor_vae # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
+model_module: tra # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
 model_types: [best , swalast , swabest]
 model_data_type: day # 'day+30m' , 30m
 model_data_prenorm:
@@ -13,7 +13,6 @@ labels:
   - std_lag1_10 # rtn_lag1_10 # std_lag1_10
   - std_lag1_20
 callbacks:
-  DynamicDataLink :   {}
   ResetOptimizer:     {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
   CallbackTimer:      {}
   EarlyStoppage:      {'patience' : 20}
@@ -29,7 +28,7 @@ callbacks:
 
 train_param:
   dataloader:
-    sample_method:   train_shuffle # total_shuffle , sequential , both_shuffle , train_shuffle
+    sample_method:   sequential # total_shuffle , sequential , both_shuffle , train_shuffle
     shuffle_option:  epoch
     train_ratio:     0.8
   trainer:
@@ -45,9 +44,9 @@ train_param:
     penalty:   
       hidden_corr: 
         lamb : 0.001
-      tra_opt_transport: 
-        lamb : 0.01
-        rho : 0.999
+      #tra_opt_transport: 
+      #  lamb : 0.01
+      #  rho : 0.999
     weight:
       fit:    'equal' # 'top'
       test:   'equal' # 'top'
@@ -72,16 +71,8 @@ batch_size: 10000
 input_step_day: 5
 skip_horizon: &skip_horizon 20 
 
-# tra model
 lgbm_ensembler: false
-tra_switch:  true
-buffer_type: tra
-buffer_param: 
-  tra_num_states: &tra_num_states 5
-tra_param:
-  tra_num_states : *tra_num_states
-  tra_horizon : *skip_horizon
-  
+
 # torch utility
 allow_tf32: true
 detect_anomaly: false

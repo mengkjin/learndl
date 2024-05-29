@@ -1,79 +1,22 @@
 import torch
-
 from torch import nn , Tensor
+from typing import Any , Optional
+from .rnn import get_rnn_mod
 
-from .rnn import rnn_univariate
-class tra_module:
-    '''Decorator to grant a module dynamic data assign, and output probs (tra feature)'''
-    def __call__(self, original_class):
-        class new_tra_class(original_class):
-            def __init__(self , *args , **kwargs):
-                super().__init__(*args , **kwargs)
-            def __call__(self , *args , **kwargs):
-                assert self.dynamic_data_assigned , f'Run dynamic_data_assign first'
-                return super().__call__(*args , **kwargs)
-            def dynamic_data_assign(self , obj):
-                if not self.dynamic_data_assigned: self._dynamic = {'data_module':obj.data_module,'batch_data':obj.batch_data}
-                return self
-            def dynamic_data_unlink(self):
-                if self.dynamic_data_assigned: del self._dynamic
-                return self
-            @property
-            def dynamic_data_assigned(self): return hasattr(self , '_dynamic_data')
-            @property
-            def dynamic_data(self):
-                # if not hasattr(self, 'dynamic_data'): self.dynamic_data = {}
-                assert self.dynamic_data_assigned , f'Run dynamic_data_assign first'
-                return self.dynamic_data
-            @property
-            def penalty_data(self):
-                self.global_steps += 1
-                return {'probs':self.probs,'num_states':self.num_states,'global_steps':self.global_steps,}
-            @property
-            def get_probs(self):
-                if self.probs_record is not None: return self.probs_record / self.probs_record.sum(dim=1,keepdim=True)   
-        return new_tra_class
-
-class tra_component:
-    '''
-    Decorator to identify a component of a module as tra components, apply pipeline dynamic data assign, and output probs (tra feature)
-    '''
-    def __init__(self, *args):
-        self.tra_component_list = args
-    def __call__(self, original_class):
-        tra_component_list = self.tra_component_list
-        class new_tra_class(original_class):
-            def dynamic_data_assign(self , obj):
-                [getattr(self , comp).dynamic_data_assign(obj) for comp in tra_component_list]
-            def dynamic_data_unlink(self):
-                [getattr(self , comp).dynamic_data_unlink() for comp in tra_component_list]
-                return self
-            @property
-            def dynamic_data(self):
-                v = [getattr(self , comp).dynamic_data for comp in tra_component_list]
-                return v if len(v) > 1 else v[0]
-            @property
-            def penalty_data(self):
-                v = [getattr(self , comp).penalty_data for comp in tra_component_list]
-                return v if len(v) > 1 else v[0]
-            @property
-            def get_probs(self):
-                v = [getattr(self,comp).get_probs for comp in tra_component_list]
-                return v if len(v) > 1 else v[0]
-        return new_tra_class
-    
-@tra_module()
 class block_tra(nn.Module):
     '''Temporal Routing Adaptor (TRA) mapping segment'''
-    def __init__(self, hidden_dim , tra_dim = 8 , num_states = 1, horizon = 20 , 
-                 tau=1.0, src_info = 'LR_TPE'):
+    def __init__(self, hidden_dim , tra_dim = 8 , num_states = 1, hist_loss_seq_len = 60 , horizon = 20 , 
+                 tau=1.0, src_info = 'LR_TPE' , gamma = 0.01 , rho = 0.999 , **kwargs):
         super().__init__()
         self.num_states = num_states
         self.global_steps = -1
+        self.hist_loss_seq_len = hist_loss_seq_len
         self.horizon = horizon
         self.tau = tau
         self.src_info = src_info
         self.probs_record = None
+        self.gamma = gamma 
+        self.rho = rho
 
         if num_states > 1:
             self.router = nn.LSTM(
@@ -84,14 +27,12 @@ class block_tra(nn.Module):
             )
             self.fc = nn.Linear(hidden_dim + tra_dim, num_states)
         self.predictors = nn.Linear(hidden_dim, num_states)
-
-    def forward(self , x : Tensor) -> tuple[Tensor , Tensor]:
+    
+    def forward(self , x : Tensor , hist_loss : Optional[Tensor] = None , y : Optional[Tensor] = None) -> tuple[Tensor , dict]:
         if self.num_states > 1:
-            dynamic_data : dict = getattr(self , 'dynamic_data')
-            i0 , i1 = dynamic_data['data_module'].i[:,0] , dynamic_data['batch_data'].i[:,1]
-            d  = dynamic_data['data_module'].buffer['hist_loss']
-            rw = dynamic_data['data_module'].seqs['hist_loss']
-            hist_loss = torch.stack([d[i0 , i1+j+1-rw] for j in range(rw)],dim=-2).nan_to_num(1)
+            if hist_loss is None: hist_loss = torch.zeros(len(x) , self.num_states).to(x)
+            if y is None: y = torch.zeros(len(x) , 1).to(x)
+
             preds = self.predictors(x)
 
             # information type
@@ -105,7 +46,7 @@ class block_tra(nn.Module):
             else:
                 temporal_pred_error = torch.randn(router_out[:, -1].shape).to(x)
 
-            # print(x.shape , preds.shape , latent_representation.shape) , temporal_pred_error.shape
+            # print(x.shape , preds.shape , latent_representation.shape, temporal_pred_error.shape)
             probs = self.fc(torch.cat([latent_representation , temporal_pred_error], dim=-1))
             probs = nn.functional.gumbel_softmax(probs, dim=-1, tau=self.tau, hard=False)
 
@@ -120,16 +61,30 @@ class block_tra(nn.Module):
 
             self.probs = probs.detach()
             self.probs_record = probs_agg if self.probs_record is None else torch.concat([self.probs_record , probs_agg])
-
-            # update dynamic buffer
-            vp = preds.detach().to(dynamic_data['data_module'].buffer['hist_preds'])
-            v0 = dynamic_data['data_module'].buffer['hist_labels'][i0,i1].nan_to_num(0)
-            dynamic_data['data_module'].buffer['hist_preds'][i0,i1] = vp
-            dynamic_data['data_module'].buffer['hist_loss'][i0,i1] = (vp - v0).square()
         else: 
+            self.probs = None
             final_pred = preds = self.predictors(x)
+        if self.training and self.probs is not None and self.num_states > 1 and y is not None:
+            penalty_opt_transport = self.penalty_opt_transport(preds , y)
+        else:
+            penalty_opt_transport = 0
             
-        return final_pred , preds
+        return final_pred , {'penalty_opt_transport' : penalty_opt_transport , 'hidden': preds , 'preds': preds}
+    
+    def penalty_opt_transport(self , preds : Tensor , label : Tensor) -> Tensor | float:
+        '''special penalty for tra'''
+        assert self.probs is not None
+        self.global_steps += 1
+        square_error = (preds - label).square()
+        square_error -= square_error.min(dim=-1, keepdim=True).values  # normalize & ensure positive input
+        P = sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
+        lamb = self.gamma * (self.rho ** self.global_steps)
+        reg = (self.probs + 1e-4).log().mul(P).sum(dim=-1).mean()
+        return - lamb * reg
+
+    @property
+    def get_probs(self):
+        if self.probs_record is not None: return self.probs_record / self.probs_record.sum(dim=1,keepdim=True)  
 
 def shoot_infs(inp_tensor):
     """Replaces inf by maximum of tensor"""
@@ -159,17 +114,17 @@ def sinkhorn(Q, n_iters=3, epsilon=0.01):
             Q /= Q.sum(dim=1, keepdim=True)
     return Q
 
-@tra_component('mapping')
-class tra_lstm(rnn_univariate):
-    def __init__(self , input_dim , hidden_dim , tra_num_states=1, tra_horizon = 20 ,rnn_type = 'lstm' , num_output = 1 , **kwargs):
-        super().__init__(input_dim , hidden_dim , rnn_type = 'lstm' , num_output=1 , **kwargs)
-        self.mapping = block_tra(hidden_dim , num_states = tra_num_states, horizon = tra_horizon)
-        self.set_multiloss_params()
+class tra(nn.Module):
+    def __init__(self , input_dim , hidden_dim , rnn_type = 'lstm' , rnn_layers = 2 , 
+                 num_states=1, hist_loss_seq_len = 60 , hist_loss_horizon = 20 , **kwargs):
+        super().__init__()
+        self.num_states = num_states
+        self.hist_loss_seq_len = hist_loss_seq_len
+        self.hist_loss_horizon = hist_loss_horizon
+        self.rnn = get_rnn_mod(rnn_type)(input_dim , hidden_dim , num_layers = rnn_layers , dropout = 0)
+        self.tra_mapping = block_tra(hidden_dim , num_states = num_states, horizon=hist_loss_horizon , **kwargs)
 
-    def forward(self, inputs) -> tuple[Tensor , dict]:
-        # inputs.shape : (bat_size, seq, input_dim)
-        hidden = self.encoder(inputs) # hidden.shape : (bat_size, hidden_dim)
-        hidden = self.decoder(hidden) # hidden.shape : tuple of (bat_size, hidden_dim) , len is num_output
-        if isinstance(hidden , tuple): hidden = hidden[0]
-        output , hidden = self.mapping(hidden) # output.shape : (bat_size, num_output)   
-        return output , {'hidden' : hidden}
+    def forward(self, x : Tensor , **kwargs) -> tuple[Tensor , dict]:
+        x = self.rnn(x)[:,-1] # [bs x hidden_dim]
+        o , h = self.tra_mapping(x , **kwargs) # output.shape : (bat_size, num_output)   
+        return o , h

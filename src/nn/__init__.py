@@ -1,10 +1,19 @@
 from torch import nn , Tensor
+from typing import Literal
 from . import (
     attention , cnn , rnn , modernTCN , patchTST , TSMixer
 )
 
-from .tra import tra_lstm
+from .tra import tra
 from .factorVAE import FactorVAE as factor_vae
+
+def get_nn_category(module_name : str) -> Literal['vae' , 'tra' , '']:
+    if module_name == 'factor_vae':
+        return 'vae'
+    elif module_name == 'tra':
+        return 'tra'
+    else:
+        return ''
 
 class simple_lstm(nn.Module):
     def __init__(self , input_dim , hidden_dim , **kwargs):

@@ -7,6 +7,9 @@ from .. import layer as Layer
 from .cnn import mod_resnet_1d , mod_tcn
 from .attention import mod_transformer,TimeWiseAttention,ModuleWiseAttention
 
+def get_rnn_mod(rnn_type):
+    return {'transformer':mod_transformer,'lstm':mod_lstm,'gru':mod_gru,'tcn':mod_tcn,}[rnn_type]
+
 class mod_lstm(nn.Module):
     def __init__(self , input_dim , output_dim , dropout=0.0 , num_layers = 2):
         super().__init__()

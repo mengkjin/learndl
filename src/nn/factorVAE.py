@@ -29,6 +29,7 @@ class FactorVAE(nn.Module):
         self.factor_encoder = FactorEncoder(hidden_dim , factor_num , portfolio_size , encoder_h_size)
         self.factor_decoder = FactorDecoder(hidden_dim , factor_num , alpha_h_size)
         self.factor_predictor = FactorPredictor(hidden_dim , factor_num , predictor_h_size)
+        self.bn = nn.BatchNorm1d(1)
         self.sampling = VAESampling()
 
     def forward(self, x : Tensor, y : Optional[Tensor] = None , 
@@ -55,7 +56,7 @@ class FactorVAE(nn.Module):
             
             mu_prior, sigma_prior = self.factor_predictor(latent_features)
             loss_KL = kl_divergence(Normal(mu_post, sigma_post) , Normal(mu_prior, sigma_prior)).sum()
-
+            y_hat = self.bn(y_hat)
             #mu_dec, sigma_dec = self.get_decoder_distribution(mu_alpha, sigma_alpha, mu_post, sigma_post, beta)
             #loss_negloglike = Normal(mu_dec, sigma_dec).log_prob(y.unsqueeze(-1)).sum()
             #loss_negloglike = loss_negloglike * (-1 / (self.portfolio_size * latent_features.shape[0]))
@@ -63,7 +64,9 @@ class FactorVAE(nn.Module):
         else:
             latent_features = self.feature_extractor(x)
             mu_prior, sigma_prior = self.factor_predictor(latent_features)
-            y_hats = [self.factor_decoder(latent_features , self.sampling(mu_prior, sigma_prior))[0] for _ in range(self.monte_carlo)]
+            y_hats = [self.sampling(mu_prior, sigma_prior) for _ in range(self.monte_carlo)]
+            y_hats = [self.factor_decoder(latent_features , y_hat)[0] for y_hat in y_hats]
+            y_hats = [self.bn(y_hat) for y_hat in y_hats]
             y_hat = torch.cat(y_hats , dim = -1).mean(dim = -1 , keepdim = True)
             return y_hat   
 
@@ -129,6 +132,8 @@ class DistributionLayer(nn.Module):
         self.mu = MLP(input_dim,output_dim,hidden_size)
         self.sigma = MLP(input_dim,output_dim,hidden_size,out_activation='softplus')
     def forward(self, x : Tensor):
+        mu , sigma = self.mu(x) , self.sigma(x)
+        assert ~torch.isnan(mu).any() and ~torch.isnan(sigma).any() , x
         return self.mu(x) , self.sigma(x)
     
 class FactorEncoder(nn.Module):
@@ -213,7 +218,9 @@ class FactorPredictor1f(nn.Module):
 
     def forward(self, x : Tensor):
         k , q , v = self.k_map(x) , self.q_map(x) , self.v_map(x)
-        a : Tensor = self.relu((q * k).sum(dim = -1)) / torch.norm(q) / torch.norm(k)
+        q_norm = torch.norm(q) + 1e-6
+        k_norm = torch.norm(k) + 1e-6
+        a : Tensor = self.relu((q * k).sum(dim = -1)) / q_norm / k_norm
         a = a / (a.sum() + 1e-6)
         return a.reshape(1,-1).mm(v)
     

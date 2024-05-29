@@ -11,6 +11,7 @@ from .config import TrainConfig
 from ..classes import BatchData , BatchMetric , BatchOutput , MetricList , TrainerStatus
 from ..func import mse , pearson , ccc , spearman
 from ..environ import BOOSTER_MODULE
+from ..nn import get_nn_category
 
 DISPLAY_CHECK  = True # will display once if true
 DISPLAY_RECORD = {'loss' : {} , 'score' : {} , 'penalty' : {}}
@@ -24,9 +25,6 @@ class Metrics:
         self.criterion = config.train_param['criterion']
         self.use_dataset = use_dataset
         self.use_metric  = use_metric
-        #self.f_loss    = self.loss_function(self.criterion['loss'])
-        #self.f_score   = self.score_function(self.criterion['score'])
-        #self.f_pen     = {k:self.penalty_function(k,v) for k,v in self.criterion['penalty'].items()}
         
         self.f_loss    = LossCalculator(self.criterion['loss'])
         self.f_score   = ScoreCalculator(self.criterion['score'])
@@ -48,13 +46,13 @@ class Metrics:
     @property
     def loss_item(self): return self.output.loss_item
     @property
-    def penalty(self): return self.output.penalty
-    @property
     def losses(self): return self.metric_batchs.losses
     @property
     def scores(self): return self.metric_batchs.scores
     @property
     def multi_param(self) -> dict[str,Any]: return self.config.train_param['multilosses']
+    @property
+    def nn_category(self): return get_nn_category(self.config.model_module)
     
     
     def new_model(self , model_param : dict[str,Any] , **kwargs):
@@ -66,9 +64,7 @@ class Metrics:
         else:
             self.multiloss = None
         if self.f_pen.get('hidden_corr'):
-            self.f_pen['hidden_corr'].cond = self.config.tra_model or model_param.get('hidden_as_factors',False)
-        if self.f_pen.get('tra_opt_transport'):
-            self.f_pen['tra_opt_transport'].cond = self.config.tra_model
+            self.f_pen['hidden_corr'].cond = (self.nn_category == 'tra') or model_param.get('hidden_as_factors',False)
 
         self.new_attempt()
         return self
@@ -121,8 +117,7 @@ class Metrics:
         pred   = batch_output.pred
         weight = batch_data.w
         other  = batch_output.other
-        penalty_kwargs = {'net':net,'pre':pred,'label':label,**kwargs}
-        if isinstance(other,dict): penalty_kwargs.update(other)
+        penalty_kwargs = {'net':net,'pre':pred,'label':label,**kwargs,**other}
         mt_param = getattr(net , 'get_multiloss_params')() if net and hasattr(net , 'get_multiloss_params') else {}
         self.calculate_from_tensor(dataset, label, pred, weight, penalty_kwargs, mt_param, assert_nan)
 
@@ -146,15 +141,13 @@ class Metrics:
                 loss = self.multiloss.calculate_multi_loss(losses , multiloss_param) 
             else:
                 loss = losses
-            penalty = 0.
-            for pen_key , pen_val in penalty_kwargs.items():
-                if pen_key.startswith('loss_') or pen_key.startswith('penalty_'):
-                    penalty = penalty + pen_val
+            for key , value in penalty_kwargs.items():
+                if key.startswith('loss_') or key.startswith('penalty_'):
+                    loss = loss + value
             for pen_cal in self.f_pen.values():
-                penalty = penalty + pen_cal(**penalty_kwargs)
-
-            loss = loss + penalty
-            self.output = BatchMetric(loss = loss , score = score , penalty = penalty , losses = losses)
+                loss = loss + pen_cal(**penalty_kwargs)
+            loss = loss
+            self.output = BatchMetric(loss = loss , score = score , losses = losses)
         else:
             self.output = BatchMetric(score = score)
 
@@ -230,7 +223,7 @@ class Metrics:
     
     @classmethod
     def penalty_function(cls , key , param):
-        assert key in ('hidden_corr' , 'tra_opt_transport')
+        assert key in ('hidden_corr',)
         def decorator(func):
             def wrapper(label,pred,weight=None,dim=0,nan_check=False,which_col=-1, **kwargs):
                 label , pred , weight = cls.whichC(label , pred , weight , which_col = which_col)
@@ -252,19 +245,6 @@ class Metrics:
         if hidden.shape[-1] == 1: return 0
         if isinstance(hidden,(tuple,list)): hidden = torch.cat(hidden,dim=-1)
         pen = hidden.T.corrcoef().triu(1).nan_to_num().square().sum()
-        return pen
-    
-    @staticmethod
-    def tra_opt_transport(*args , param , **kwargs):
-        tra_pdata = kwargs['net'].penalty_data
-        pen = 0.
-        if kwargs['net'].training and tra_pdata['probs'] is not None and tra_pdata['num_states'] > 1:
-            square_error = (kwargs['hidden'] - kwargs['label']).square()
-            square_error -= square_error.min(dim=-1, keepdim=True).values  # normalize & ensure positive input
-            P = PenaltyCalculator._sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
-            lamb = (param['rho'] ** tra_pdata['global_steps'])
-            reg = (tra_pdata['probs'] + 1e-4).log().mul(P).sum(dim=-1).mean()
-            pen = - lamb * reg
         return pen
 
 class _MetricCalculator(ABC):
@@ -337,14 +317,12 @@ class ScoreCalculator(_MetricCalculator):
     
 class PenaltyCalculator(_MetricCalculator):
     KEY = 'penalty'
-    def __init__(self , criterion : Literal['hidden_corr' , 'tra_opt_transport'] , param : dict[str,Any]):
-        ''' 'hidden_corr' , 'tra_opt_transport' '''
+    def __init__(self , criterion : Literal['hidden_corr'] , param : dict[str,Any]):
+        ''' 'hidden_corr' '''
         super().__init__(criterion , True)
         self.param = param
         if self.criterion == 'hidden_corr':
             self.penalty = self.hidden_corr
-        elif self.criterion == 'tra_opt_transport':
-            self.penalty = self.tra_opt_transport
         else: 
             self.penalty = self.null
         self.lamb = param['lamb']
@@ -367,56 +345,6 @@ class PenaltyCalculator(_MetricCalculator):
         if isinstance(hidden,(tuple,list)): hidden = torch.cat(hidden,dim=-1)
         pen = hidden.T.corrcoef().triu(1).nan_to_num().square().sum()
         return pen
-    
-    def tra_opt_transport(self , **kwargs) -> Tensor | float:
-        '''special penalty for tra'''
-        net : nn.Module = kwargs['net']
-        tra_pdata : dict[str,Any] = net.penalty_data
-        probs : Tensor = tra_pdata['probs']
-        nstates : int  = tra_pdata['num_states']
-        if net.training and probs is not None and nstates > 1:
-            steps : int = tra_pdata['global_steps']
-            rho   : float = self.param['rho']
-            hidden : Tensor = kwargs['hidden'] 
-            label  : Tensor = kwargs['label']
-            square_error = (hidden - label).square()
-            square_error -= square_error.min(dim=-1, keepdim=True).values  # normalize & ensure positive input
-            P = self._sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
-            lamb = (rho ** steps)
-            reg = (probs + 1e-4).log().mul(P).sum(dim=-1).mean()
-            return - lamb * reg
-        else:
-            return 0.
-    
-    @staticmethod
-    def _shoot_infs(inp_tensor):
-        '''Replaces inf by maximum of tensor'''
-        mask_inf = torch.isinf(inp_tensor)
-        ind_inf = torch.nonzero(mask_inf, as_tuple=False)
-        if len(ind_inf) > 0:
-            for ind in ind_inf:
-                if len(ind) == 2:
-                    inp_tensor[ind[0], ind[1]] = 0
-                elif len(ind) == 1:
-                    inp_tensor[ind[0]] = 0
-            m = torch.max(inp_tensor)
-            for ind in ind_inf:
-                if len(ind) == 2:
-                    inp_tensor[ind[0], ind[1]] = m
-                elif len(ind) == 1:
-                    inp_tensor[ind[0]] = m
-        return inp_tensor
-
-    @classmethod
-    def _sinkhorn(cls , Q, n_iters=3, epsilon=0.01):
-        # epsilon should be adjusted according to logits value's scale
-        with no_grad():
-            Q = cls._shoot_infs(Q)
-            Q = torch.exp(Q / epsilon)
-            for i in range(n_iters):
-                Q /= Q.sum(dim=0, keepdim=True)
-                Q /= Q.sum(dim=1, keepdim=True)
-        return Q
 
 class MetricsAggregator:
     '''record a list of batch metric and perform agg operations, usually used in an epoch'''
