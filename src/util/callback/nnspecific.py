@@ -25,16 +25,15 @@ class SpecCB_TRA(CallBack):
     '''in TRA fill [y] [hist_loss] in batch_data.kwargs , update hist_loss in data.buffer'''
     def __init__(self , model_module) -> None:
         super().__init__(model_module , with_cb=False)
-    @property
-    def i0(self): return self.module.batch_data.i[:,0]
-    @property
-    def i1(self): return self.module.batch_data.i[:,1]
+
     def fill_batch_data(self):
+        self.i0 = self.module.batch_data.i[:,0].cpu()
+        self.i1 = self.module.batch_data.i[:,1].cpu()
+        y = self.module.batch_data.y
         hl = self.data.buffer['hist_loss']
-        rolling_window = self.module.net.hist_loss_seq_len
-        hist_loss = torch.stack([hl[self.i0 , self.i1 + j + 1 - rolling_window] 
-                                 for j in range(rolling_window)],dim=-2)
-        self.module.batch_data.kwargs = {'y': self.module.batch_data.y , 'hist_loss' : hist_loss}
+        rw = self.module.net.hist_loss_seq_len
+        hist_loss = torch.stack([hl[self.i0 , self.i1 + j + 1 - rw] for j in range(rw)],dim=-2)
+        self.module.batch_data.kwargs = {'y': y , 'hist_loss' : hist_loss.to(y.device)}
     def init_buffer(self):
         hist_loss_shape = list(self.data.y.shape)
         hist_loss_shape[2] = self.module.net.num_states

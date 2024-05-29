@@ -49,14 +49,18 @@ class FactorVAE(nn.Module):
             if y is None: y = torch.zeros(x.shape[0],1).to(x)
             assert factor_noise is None or factor_noise.numel() == self.factor_num , factor_noise
             assert alpha_noise is None or alpha_noise.numel() == y.shape[0]
+            assert ~torch.isnan(x).any() , (x)
             latent_features = self.feature_extractor(x)
             mu_post, sigma_post = self.factor_encoder(latent_features, y)
+            assert ~torch.isnan(mu_post).any() , (x , latent_features)
             factors_post = self.sampling(mu_post, sigma_post , factor_noise)
             y_hat, mu_alpha, sigma_alpha, beta = self.factor_decoder(latent_features , factors_post , alpha_noise)
             
             mu_prior, sigma_prior = self.factor_predictor(latent_features)
+            #print(mu_post, sigma_post , mu_prior, sigma_prior)
             loss_KL = kl_divergence(Normal(mu_post, sigma_post) , Normal(mu_prior, sigma_prior)).sum()
             y_hat = self.bn(y_hat)
+            assert ~loss_KL.isnan().any() , loss_KL
             #mu_dec, sigma_dec = self.get_decoder_distribution(mu_alpha, sigma_alpha, mu_post, sigma_post, beta)
             #loss_negloglike = Normal(mu_dec, sigma_dec).log_prob(y.unsqueeze(-1)).sum()
             #loss_negloglike = loss_negloglike * (-1 / (self.portfolio_size * latent_features.shape[0]))
@@ -85,17 +89,19 @@ class FeatureExtractor(nn.Module):
     '''
     def __init__(self , input_dim : int = 6 , hidden_dim : int = 32, gru_input_size : int = 16):
         super().__init__()
-        self.norm = nn.LayerNorm(input_dim)
         # self.proj = MLP(input_dim,gru_input_size)
         self.proj = nn.Sequential(nn.Linear(input_dim,gru_input_size) , nn.LeakyReLU())
         self.gru = nn.GRU(gru_input_size, hidden_dim , num_layers=2 ,  batch_first=True)
-        self.norm_out = nn.BatchNorm1d(hidden_dim)
+        self.bn = nn.BatchNorm1d(hidden_dim)
 
     def forward(self, x : Tensor) -> Tensor:
-        x = self.norm(x)
+        assert ~torch.isnan(x).any() , (x)
         x = self.proj(x)
+        assert ~torch.isnan(x).any() , (x)
         x = self.gru(x)[0][:,-1]
-        x = self.norm_out(x)
+        assert ~torch.isnan(x).any() , (x)
+        x = self.bn(x)
+        assert ~torch.isnan(x).any() , (x)
         return x
     
 class PortfolioLayer(nn.Module):
@@ -110,7 +116,7 @@ class PortfolioLayer(nn.Module):
 
     def forward(self, x : Tensor) -> Tensor:
         p = torch.softmax(self.net(x), dim=0)
-        assert ~p.isnan().any() , x
+        # assert ~p.isnan().any() , x
         return p
     
 class VAESampling(nn.Module):
@@ -131,12 +137,14 @@ class DistributionLayer(nn.Module):
     def __init__(self, input_dim : int , output_dim : int , hidden_size : Optional[int] = None):
         super().__init__()
         if hidden_size is None: hidden_size = output_dim
-        self.mu = MLP(input_dim,output_dim,hidden_size)
+        self.norm  = nn.LayerNorm(input_dim)
+        self.mu    = MLP(input_dim,output_dim,hidden_size)
         self.sigma = MLP(input_dim,output_dim,hidden_size,out_activation='softplus')
     def forward(self, x : Tensor):
+        x = self.norm(x)
         mu , sigma = self.mu(x) , self.sigma(x)
-        assert ~torch.isnan(mu).any() and ~torch.isnan(sigma).any() , x
-        return self.mu(x) , self.sigma(x)
+        # assert ~torch.isnan(mu).any() and ~torch.isnan(sigma).any() , x
+        return mu , sigma
     
 class FactorEncoder(nn.Module):
     '''
@@ -159,7 +167,7 @@ class FactorEncoder(nn.Module):
         y : [bs x 1] , future returns
         '''
         p = self.portfolio_layer(x)         # [bs x portfolio_size]
-        assert ~torch.isnan(p).any() , x
+        # assert ~torch.isnan(p).any() , x
         y = torch.mm(y.T , p)               # [1 x portfolio_size]
         mu_post, sigma_post = self.mapping_layer(y) # ([1 x factor_num] , [1 x factor_num])
         # m = Normal(mu_post, sigma_post)
@@ -211,41 +219,30 @@ class FactorDecoder(nn.Module):
         stock_returns = exposed_factors + alpha
         return stock_returns, mu_alpha, sigma_alpha, beta
     
-class FactorPredictor1f(nn.Module):
-    '''
-    in  : [bs x hidden_dim]
-    out : [1 x predictor_h_size]
-    '''
-    def __init__(self, hidden_dim : int = 32 ,  predictor_h_size : int = 16):
-        super().__init__()
-        self.k_map = nn.Linear(hidden_dim , predictor_h_size)
-        self.v_map = nn.Linear(hidden_dim , predictor_h_size)
-        self.query = torch.nn.Parameter(torch.rand(predictor_h_size))
-
-    def forward(self, x : Tensor):
-        k , v = self.k_map(x) , self.v_map(x)
-        q_norm = self.query.norm() + 1e-6
-        k_norm = k.norm(dim=-1,keepdim=True) + 1e-6
-        a = torch.nn.ReLU()((self.query * k) / q_norm / k_norm) + 1e-6
-        a = a / a.sum(-1 , keepdim=True)
-        return (a * v).sum(0).reshape(1,-1)
-    
 class FactorPredictor(nn.Module):
     '''
     in  : [bs x hidden_dim]
     out : ([factor_num x 1] , [factor_num x 1])
     '''
-    def __init__(self, hidden_dim : int = 32, factor_num : int = 64,  predictor_h_size : int = 16):
+    def __init__(self, hidden_dim : int = 32, factor_num : int = 64,  predictor_h_size : int = 32):
         super().__init__()
         self.factor_num = factor_num
-        self.predictors = nn.ModuleList([FactorPredictor1f(hidden_dim , predictor_h_size) for i in range(factor_num)])
-        self.factor_net = DistributionLayer(predictor_h_size , 1)
+        self.k_map = nn.Linear(hidden_dim , predictor_h_size)
+        self.v_map = nn.Linear(hidden_dim , predictor_h_size)
+        self.query = torch.nn.Parameter(torch.rand(predictor_h_size , factor_num))
+        self.factor_net = DistributionLayer(predictor_h_size * factor_num , factor_num)
 
     def forward(self, x : Tensor):
-        f = [pred(x) for pred in self.predictors]
-        f = torch.cat(f , dim = 0).permute(0,1)
-        mu_prior, sigma_prior = self.factor_net(f)
-        return mu_prior.permute(0,1) , sigma_prior.permute(0,1)
+        k , v = self.k_map(x) , self.v_map(x)
+        q_norm = self.query.norm(dim=0,keepdim=True) + 1e-6
+        k_norm = k.norm(dim=-1,keepdim=True) + 1e-6
+        f = []
+        for i in range(self.factor_num):
+            a = torch.nn.ReLU()(self.query[:,i] * k / q_norm[:,i] / k_norm) + 1e-6
+            a = a / a.sum(-1 , keepdim=True)
+            f.append((a * v).sum(0))
+        f = torch.cat(f)
+        return self.factor_net(f)
     
 if __name__ == '__main__':
     from src import API
