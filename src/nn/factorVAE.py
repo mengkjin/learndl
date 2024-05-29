@@ -109,7 +109,9 @@ class PortfolioLayer(nn.Module):
         self.net = nn.Linear(hidden_dim , portfolio_size)
 
     def forward(self, x : Tensor) -> Tensor:
-        return torch.softmax(self.net(x), dim=0)
+        p = torch.softmax(self.net(x), dim=0)
+        assert ~p.isnan().any() , x
+        return p
     
 class VAESampling(nn.Module):
     def forward(self , mu : Tensor , sigma : Tensor , noise : Optional[Tensor] = None):
@@ -123,8 +125,8 @@ class VAESampling(nn.Module):
 class DistributionLayer(nn.Module):
     '''
     Use hidden features to predict mu and sigma
-    in  : [1 x portfolio_size]
-    out : ([1 x factor_num] , [1 x factor_num])
+    in  : [1 x input_dim]
+    out : ([1 x output_dim] , [1 x output_dim])
     '''
     def __init__(self, input_dim : int , output_dim : int , hidden_size : Optional[int] = None):
         super().__init__()
@@ -157,6 +159,7 @@ class FactorEncoder(nn.Module):
         y : [bs x 1] , future returns
         '''
         p = self.portfolio_layer(x)         # [bs x portfolio_size]
+        assert ~torch.isnan(p).any() , x
         y = torch.mm(y.T , p)               # [1 x portfolio_size]
         mu_post, sigma_post = self.mapping_layer(y) # ([1 x factor_num] , [1 x factor_num])
         # m = Normal(mu_post, sigma_post)
@@ -209,22 +212,29 @@ class FactorDecoder(nn.Module):
         return stock_returns, mu_alpha, sigma_alpha, beta
     
 class FactorPredictor1f(nn.Module):
+    '''
+    in  : [bs x hidden_dim]
+    out : [1 x predictor_h_size]
+    '''
     def __init__(self, hidden_dim : int = 32 ,  predictor_h_size : int = 16):
         super().__init__()
-        self.k_map = nn.Linear(hidden_dim , predictor_h_size , bias=False)
-        self.q_map = nn.Linear(hidden_dim , predictor_h_size , bias=False)
-        self.v_map = nn.Linear(hidden_dim , predictor_h_size , bias=False)
-        self.relu = nn.ReLU()
+        self.k_map = nn.Linear(hidden_dim , predictor_h_size)
+        self.v_map = nn.Linear(hidden_dim , predictor_h_size)
+        self.query = torch.nn.Parameter(torch.rand(predictor_h_size))
 
     def forward(self, x : Tensor):
-        k , q , v = self.k_map(x) , self.q_map(x) , self.v_map(x)
-        q_norm = torch.norm(q) + 1e-6
-        k_norm = torch.norm(k) + 1e-6
-        a : Tensor = self.relu((q * k).sum(dim = -1)) / q_norm / k_norm
-        a = a / (a.sum() + 1e-6)
-        return a.reshape(1,-1).mm(v)
+        k , v = self.k_map(x) , self.v_map(x)
+        q_norm = self.query.norm() + 1e-6
+        k_norm = k.norm(dim=-1,keepdim=True) + 1e-6
+        a = torch.nn.ReLU()((self.query * k) / q_norm / k_norm) + 1e-6
+        a = a / a.sum(-1 , keepdim=True)
+        return (a * v).sum(0).reshape(1,-1)
     
 class FactorPredictor(nn.Module):
+    '''
+    in  : [bs x hidden_dim]
+    out : ([factor_num x 1] , [factor_num x 1])
+    '''
     def __init__(self, hidden_dim : int = 32, factor_num : int = 64,  predictor_h_size : int = 16):
         super().__init__()
         self.factor_num = factor_num
@@ -234,7 +244,8 @@ class FactorPredictor(nn.Module):
     def forward(self, x : Tensor):
         f = [pred(x) for pred in self.predictors]
         f = torch.cat(f , dim = 0).permute(0,1)
-        return self.factor_net(f)
+        mu_prior, sigma_prior = self.factor_net(f)
+        return mu_prior.permute(0,1) , sigma_prior.permute(0,1)
     
 if __name__ == '__main__':
     from src import API
