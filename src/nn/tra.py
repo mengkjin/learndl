@@ -47,8 +47,16 @@ class block_tra(nn.Module):
 
             # print(x.shape , preds.shape , latent_representation.shape, temporal_pred_error.shape)
             probs = self.fc(torch.cat([latent_representation , temporal_pred_error], dim=-1))
-            probs = nn.functional.gumbel_softmax(probs, dim=-1, tau=self.tau, hard=False)
+            if probs.isnan().any():
+                print(probs)
+                print(latent_representation , temporal_pred_error)
+                raise ValueError
 
+            probs = nn.functional.gumbel_softmax(probs, dim=-1, tau=self.tau, hard=False)
+            if probs.isnan().any():
+                print(probs)
+                raise ValueError
+            
             # get final prediction in either train (weighted sum) or eval (max probability)
             if self.training:
                 final_pred = (preds * probs).sum(dim=-1 , keepdim = True)
@@ -59,6 +67,7 @@ class block_tra(nn.Module):
             probs_agg  = probs.detach().sum(dim = 0 , keepdim = True)
 
             self.probs = probs.detach()
+            
             self.probs_record = probs_agg if self.probs_record is None else torch.concat([self.probs_record , probs_agg])
         else: 
             self.probs = None
@@ -79,7 +88,14 @@ class block_tra(nn.Module):
         P = sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
         lamb = self.gamma * (self.rho ** self.global_steps)
         reg = (self.probs + 1e-4).log().mul(P).sum(dim=-1).mean()
-        return - lamb * reg
+
+        loss = - lamb * reg
+        if loss.isnan().any():
+            print(label.isnan().any())
+            print(square_error)
+            print(lamb , self.gamma , self.rho , self.global_steps)
+            print(self.probs)
+        return loss
 
     @property
     def get_probs(self):
