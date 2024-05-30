@@ -1147,3 +1147,15 @@
   0.best: Avg(0.0086)|Sum(0.3)|Std(0.0305)|T(1.68)|IR(1.3904)
   0.swabest: Avg(-0.0177)|Sum(-0.62)|Std(0.0363)|T(-2.89)|IR(-2.3905)
   0.swalast: Avg(0.0154)|Sum(0.54)|Std(0.0302)|T(3.02)|IR(2.4977)
+0_model: factor_vae_day.18(x1)
+1_start: Thu May 30 00:34:42 2024
+2_basic: full
+3_datas: day
+4_label: std_lag1_10,std_lag1_20
+5_dates: 20170103-99991231
+6_fit: Finish Process [Fit], Cost 7.1 Hours, 28.5 Min/model, 31.0 Sec/Epoch
+7_test: Finish Process [Test], Cost 383.5 Secs
+8_result:
+  0.best: Avg(0.1102)|Sum(197.56)|Std(0.084)|T(55.55)|IR(6.4272)
+  0.swabest: Avg(0.1066)|Sum(191.18)|Std(0.0864)|T(52.23)|IR(6.0425)
+  0.swalast: Avg(0.1095)|Sum(196.31)|Std(0.0834)|T(55.59)|IR(6.4318)
