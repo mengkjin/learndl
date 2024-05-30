@@ -7,6 +7,16 @@ from typing import Any , ClassVar , Literal , Optional
 
 from ..func.basic import pretty_print_dict , recur_update
 from ..environ import PATH , CONF , BOOSTER_MODULE
+from ..nn import get_nn_category
+
+def check_config_validity(config : 'TrainConfig'):
+    assert 'best' in config.model_types , config.model_types
+    assert socket.gethostname() == 'mengkjin-server' or config.short_test , socket.gethostname()
+
+    nn_category  = get_nn_category(config.model_module)
+    samp_method  = config.sample_method
+    assert not (nn_category == 'tra' and samp_method == 'total_shuffle') , (nn_category , samp_method)
+    assert not (nn_category == 'vae' and samp_method != 'sequential') , (nn_category , samp_method)
 
 @dataclass    
 class ModelParam:
@@ -83,8 +93,7 @@ class ModelParam:
         if value is not None: param.update({key : value})
     
     @property
-    def max_num_output(self):
-        return max(self.Param.get('num_output' , [1]))
+    def max_num_output(self): return max(self.Param.get('num_output' , [1]))
     
 @dataclass    
 class TrainParam:
@@ -112,8 +121,6 @@ class TrainParam:
                 recur_update(Param , Param['on_short_test'])
             if Param['model_module'].lower() == 'transformer' and Param.get('on_transformer'):
                 recur_update(Param , Param['on_transformer'])
-
-        assert 'best' in Param['model_types']
 
         if self.model_name is None:
             if Param['model_name']:
@@ -187,7 +194,7 @@ class TrainConfig:
     def __post_init__(self):
         if isinstance(self.precision , str): self.precision = getattr(torch , self.precision)
         self.stage_queue = ['data' , 'fit' , 'test']
-        assert socket.gethostname() == 'mengkjin-server' or self.short_test
+        check_config_validity(self)
 
     def __getitem__(self , k): return self.__dict__[k]
 

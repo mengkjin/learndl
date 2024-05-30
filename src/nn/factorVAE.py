@@ -3,7 +3,7 @@ from typing import Optional
 from torch import nn,Tensor
 from torch.distributions import Normal , kl_divergence
 
-from src.layer.MLP import MLP
+from ..layer.MLP import MLP
 
 class FactorVAE(nn.Module):
     def __init__(
@@ -46,13 +46,11 @@ class FactorVAE(nn.Module):
             in eval     : y_hat , 
         '''
         if self.training:
-            if y is None: y = torch.zeros(x.shape[0],1).to(x)
+            assert y is not None
             assert factor_noise is None or factor_noise.numel() == self.factor_num , factor_noise
             assert alpha_noise is None or alpha_noise.numel() == y.shape[0]
-            assert ~torch.isnan(x).any() , (x)
             latent_features = self.feature_extractor(x)
             mu_post, sigma_post = self.factor_encoder(latent_features, y)
-            assert ~torch.isnan(mu_post).any() , (x , latent_features)
             factors_post = self.sampling(mu_post, sigma_post , factor_noise)
             y_hat, mu_alpha, sigma_alpha, beta = self.factor_decoder(latent_features , factors_post , alpha_noise)
             
@@ -60,7 +58,7 @@ class FactorVAE(nn.Module):
             #print(mu_post, sigma_post , mu_prior, sigma_prior)
             loss_KL = kl_divergence(Normal(mu_post, sigma_post) , Normal(mu_prior, sigma_prior)).sum()
             y_hat = self.bn(y_hat)
-            assert ~loss_KL.isnan().any() , loss_KL
+            assert ~loss_KL.isnan().any() and abs(loss_KL <= 1.0e20) , loss_KL
             #mu_dec, sigma_dec = self.get_decoder_distribution(mu_alpha, sigma_alpha, mu_post, sigma_post, beta)
             #loss_negloglike = Normal(mu_dec, sigma_dec).log_prob(y.unsqueeze(-1)).sum()
             #loss_negloglike = loss_negloglike * (-1 / (self.portfolio_size * latent_features.shape[0]))
@@ -95,13 +93,9 @@ class FeatureExtractor(nn.Module):
         self.bn = nn.BatchNorm1d(hidden_dim)
 
     def forward(self, x : Tensor) -> Tensor:
-        assert ~torch.isnan(x).any() , (x)
         x = self.proj(x)
-        assert ~torch.isnan(x).any() , (x)
         x = self.gru(x)[0][:,-1]
-        assert ~torch.isnan(x).any() , (x)
         x = self.bn(x)
-        assert ~torch.isnan(x).any() , (x)
         return x
     
 class PortfolioLayer(nn.Module):
@@ -116,7 +110,6 @@ class PortfolioLayer(nn.Module):
 
     def forward(self, x : Tensor) -> Tensor:
         p = torch.softmax(self.net(x), dim=0)
-        # assert ~p.isnan().any() , x
         return p
     
 class VAESampling(nn.Module):
@@ -143,7 +136,6 @@ class DistributionLayer(nn.Module):
     def forward(self, x : Tensor):
         x = self.norm(x)
         mu , sigma = self.mu(x) , self.sigma(x)
-        # assert ~torch.isnan(mu).any() and ~torch.isnan(sigma).any() , x
         return mu , sigma
     
 class FactorEncoder(nn.Module):
@@ -167,7 +159,6 @@ class FactorEncoder(nn.Module):
         y : [bs x 1] , future returns
         '''
         p = self.portfolio_layer(x)         # [bs x portfolio_size]
-        # assert ~torch.isnan(p).any() , x
         y = torch.mm(y.T , p)               # [1 x portfolio_size]
         mu_post, sigma_post = self.mapping_layer(y) # ([1 x factor_num] , [1 x factor_num])
         # m = Normal(mu_post, sigma_post)

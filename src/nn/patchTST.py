@@ -362,6 +362,11 @@ class TSTEncoderLayer(nn.Module):
         if not self.res_attention: scores = None
         
         return x, scores
+    
+class patch_tst(PatchTST):
+    def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
+        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim , 
+                         predict_steps = num_output , head_type = 'prediction' , **kwargs)
 
 if __name__ == '__main__' :
 

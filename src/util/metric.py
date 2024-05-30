@@ -21,16 +21,15 @@ class Metrics:
     '''calculator of batch output'''
     def __init__(self , config : TrainConfig , use_dataset  : Literal['train','valid'] = 'valid' , 
                  use_metric : Literal['loss' , 'score'] = 'score' , **kwargs) -> None:
-        self.config    = config
-        self.criterion = config.train_param['criterion']
+        self.config      = config
+        self.criterion   = config.train_param['criterion']
         self.use_dataset = use_dataset
         self.use_metric  = use_metric
         
-        self.f_loss    = LossCalculator(self.criterion['loss'])
-        self.f_score   = ScoreCalculator(self.criterion['score'])
-        self.f_pen     = {k:PenaltyCalculator(k,v) for k,v in self.criterion['penalty'].items()}
+        self.loss_calc    = LossCalculator(self.criterion['loss'])
+        self.score_calc   = ScoreCalculator(self.criterion['score'])
+        self.penalty_calc = {k:PenaltyCalculator(k,v) for k,v in self.criterion['penalty'].items()}
         
-        self.multiloss = None
         self.output    = BatchMetric()
         self.metric_batchs = MetricsAggregator()
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
@@ -54,21 +53,22 @@ class Metrics:
     @property
     def nn_category(self): return get_nn_category(self.config.model_module)
     
-    
     def new_model(self , model_param : dict[str,Any] , **kwargs):
+        self.model_param  = model_param
         self.num_output   = model_param.get('num_output' , 1)
         self.which_output = model_param.get('which_output' , 0)
-        if self.num_output > 1:
-            self.multiloss = MultiLosses(self.multi_param['type'], self.num_output ,
+        self.multi_losses = MultiHeadLosses(self.num_output , self.multi_param['type'], 
                                          **self.multi_param['param_dict'][self.multi_param['type']])
-        else:
-            self.multiloss = None
-        if self.f_pen.get('hidden_corr'):
-            self.f_pen['hidden_corr'].cond = (self.nn_category == 'tra') or model_param.get('hidden_as_factors',False)
 
+        self.update_penalty_calc()
         self.new_attempt()
         return self
     
+    def update_penalty_calc(self):
+        if self.penalty_calc.get('hidden_corr'): 
+            cond_hidden_corr = (self.nn_category == 'tra') or self.model_param.get('hidden_as_factors',False)
+            self.penalty_calc['hidden_corr'].cond = cond_hidden_corr
+
     def new_attempt(self):
         self.best_metric = None
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
@@ -133,24 +133,22 @@ class Metrics:
         assert label.shape[-1] == self.num_output , (label.shape[-1] , self.num_output)
 
         with no_grad():
-            score = self.f_score(label , pred , weight , nan_check = (dataset == 'test') , which_col = self.which_output).item()
+            score = self.score_calc(label , pred , weight , nan_check = (dataset == 'test') , which_col = self.which_output).item()
 
         if dataset == 'train' and not self.is_booster:
-            losses = self.f_loss(label , pred , weight)
-            if self.multiloss is not None:
-                loss = self.multiloss.calculate_multi_loss(losses , multiloss_param) 
-            else:
-                loss = losses
-            for key , value in penalty_kwargs.items():
-                if key.startswith('loss_') or key.startswith('penalty_'):
-                    loss = loss + value
-            for pen_cal in self.f_pen.values():
-                loss = loss + pen_cal(**penalty_kwargs)
-            loss = loss
-            self.output = BatchMetric(loss = loss , score = score , losses = losses)
-        else:
-            self.output = BatchMetric(score = score)
+            losses = self.loss_calc(label , pred , weight)
+            loss = self.multi_losses(losses , multiloss_param) 
 
+            for key , value in penalty_kwargs.items():
+                assert not key.startswith('penalty_') , key
+                if key.startswith('loss_'): loss = loss + value
+
+            for pen_cal in self.penalty_calc.values():
+                loss = loss + pen_cal(**penalty_kwargs)
+        else:
+            loss = losses = Tensor([0.]) 
+
+        self.output = BatchMetric(loss = loss , score = score , losses = losses)
         if assert_nan and self.output.loss.isnan():
             print(self.output)
             raise Exception('nan loss here')
@@ -372,28 +370,28 @@ class MetricsAggregator:
     def scores(self): return self._record['score'].values
 
 
-class MultiLosses:
+class MultiHeadLosses:
     '''some realization of multi-losses combine method'''
-    def __init__(self , multi_type = None , num_task = -1 , **kwargs):
+    def __init__(self , num_head = -1 , multi_type = None , **kwargs):
         '''
         example:
             import torch
             import numpy as np
             import matplotlib.pyplot as plt
             
-            ml = multiloss(2)
+            ml = MultiHeadLosses(2)
             ml.view_plot(2 , 'dwa')
             ml.view_plot(2 , 'ruw')
             ml.view_plot(2 , 'gls')
             ml.view_plot(2 , 'rws')
         '''
+        self.num_head = num_head
         self.multi_type = multi_type
-        self.reset_multi_type(num_task , **kwargs)
+        self.kwargs = kwargs
+        self.reset_multi_type()
 
-    def reset_multi_type(self, num_task , **kwargs):
-        self.num_task   = num_task
-        self.num_output = num_task
-        if num_task > 0 and self.multi_type is not None: 
+    def reset_multi_type(self):
+        if self.num_head > 1 and self.multi_type is not None: 
             self.multi_class = {
                 'ewa':self.EWA,
                 'hybrid':self.Hybrid,
@@ -401,16 +399,20 @@ class MultiLosses:
                 'ruw':self.RUW,
                 'gls':self.GLS,
                 'rws':self.RWS,
-            }[self.multi_type](num_task , **kwargs)
+            }[self.multi_type](self.num_head , **self.kwargs)
+        else:
+            self.multi_class = self.single_loss
         return self
     
-    def calculate_multi_loss(self , losses , mt_param , **kwargs):
+    def single_loss(self, loss , *args , **kwargs): return loss
+    def __call__(self , losses : Tensor , mt_param : dict[str,Any] , **kwargs): 
+        '''calculate combine loss of multiple output losses'''
         return self.multi_class(losses , mt_param , **kwargs)
     
-    class _BaseMultiLossesClass():
-        '''base class of multi_class class'''
-        def __init__(self , num_task , **kwargs):
-            self.num_task = num_task
+    class _BaseMHL():
+        '''base class of multi_head_losses class'''
+        def __init__(self , num_head , **kwargs):
+            self.num_head = num_head
             self.record_num = 0 
             self.record_losses = []
             self.record_weight = []
@@ -434,12 +436,12 @@ class MultiLosses:
         def total_loss(self , losses , weight , penalty):
             return (losses * weight).sum() + penalty
     
-    class EWA(_BaseMultiLossesClass):
+    class EWA(_BaseMHL):
         '''Equal weight average'''
         def penalty(self , losses , mt_param : dict = {}): 
             return 0.
     
-    class Hybrid(_BaseMultiLossesClass):
+    class Hybrid(_BaseMHL):
         '''Hybrid of DWA and RUW'''
         def reset(self , **kwargs):
             self.tau = kwargs['tau']
@@ -457,7 +459,7 @@ class MultiLosses:
                 penalty = penalty + (self.phi - mt_param['alpha'].log().abs().sum()).abs()
             return penalty
     
-    class DWA(_BaseMultiLossesClass):
+    class DWA(_BaseMHL):
         '''dynamic weight average , https://arxiv.org/pdf/1803.10704.pdf'''
         def reset(self , **kwargs):
             self.tau = kwargs['tau']
@@ -469,7 +471,7 @@ class MultiLosses:
                 weight = weight / weight.sum() * weight.numel()
             return weight
         
-    class RUW(_BaseMultiLossesClass):
+    class RUW(_BaseMHL):
         '''Revised Uncertainty Weighting (RUW) Loss , https://arxiv.org/pdf/2206.11049v2.pdf (RUW + DWA)'''
         def reset(self , **kwargs):
             self.phi = kwargs['phi']
@@ -481,34 +483,33 @@ class MultiLosses:
                 penalty = penalty + (self.phi - mt_param['alpha'].log().abs().sum()).abs()
             return penalty
 
-    class GLS(_BaseMultiLossesClass):
+    class GLS(_BaseMHL):
         '''geometric loss strategy , Chennupati etc.(2019)'''
         def total_loss(self , losses , weight , penalty):
             return losses.pow(weight).prod().pow(1/weight.sum()) + penalty
-    class RWS(_BaseMultiLossesClass):
+    class RWS(_BaseMHL):
         '''random weight loss, RW , Lin etc.(2021) , https://arxiv.org/pdf/2111.10603.pdf'''
         def weight(self , losses , mt_param : dict = {}): 
             return nn.functional.softmax(torch.rand_like(losses),-1)
 
     @classmethod
-    def view_plot(cls , multi_type = 'ruw'):
-        num_task = 2
+    def view_plot(cls , num_head = 2 , multi_type = 'ruw'):
         if multi_type == 'ruw':
-            if num_task > 2 : num_task = 2
-            x,y = torch.rand(100,num_task),torch.rand(100,1)
+            if num_head > 2 : num_head = 2
+            x,y = torch.rand(100,num_head),torch.rand(100,1)
             ls = (x - y).sqrt().sum(dim = 0)
-            alpha = Tensor(np.repeat(np.linspace(0.2, 10, 40),num_task).reshape(-1,num_task))
+            alpha = Tensor(np.repeat(np.linspace(0.2, 10, 40),num_head).reshape(-1,num_head))
             fig,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(alpha[:,0].numpy(), alpha[:,1].numpy())
-            ruw = cls.RUW(num_task)
+            ruw = cls.RUW(num_head)
             l = torch.stack([torch.stack([ruw(ls,{'alpha':Tensor([s1[i,j],s2[i,j]])})[0] for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
             ax.plot_surface(s1, s2, l, cmap='viridis') #type:ignore
             ax.set_xlabel('alpha-1')
             ax.set_ylabel('alpha-2')
             ax.set_zlabel('loss') #type:ignore
-            ax.set_title(f'RUW Loss vs alpha ({num_task}-D)')
+            ax.set_title(f'RUW Loss vs alpha ({num_head}-D)')
         elif multi_type == 'gls':
-            ls = Tensor(np.repeat(np.linspace(0.2, 10, 40),num_task).reshape(-1,num_task))
+            ls = Tensor(np.repeat(np.linspace(0.2, 10, 40),num_head).reshape(-1,num_head))
             fig,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(ls[:,0].numpy(), ls[:,1].numpy())
             l = torch.stack([torch.stack([torch.tensor([s1[i,j],s2[i,j]]).prod().sqrt() for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
@@ -516,18 +517,18 @@ class MultiLosses:
             ax.set_xlabel('loss-1')
             ax.set_ylabel('loss-2')
             ax.set_zlabel('gls_loss') #type:ignore
-            ax.set_title(f'GLS Loss vs sub-Loss ({num_task}-D)')
+            ax.set_title(f'GLS Loss vs sub-Loss ({num_head}-D)')
         elif multi_type == 'rws':
-            ls = torch.tensor(np.repeat(np.linspace(0.2, 10, 40),num_task).reshape(-1,num_task))
+            ls = torch.tensor(np.repeat(np.linspace(0.2, 10, 40),num_head).reshape(-1,num_head))
             fig,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(ls[:,0].numpy(), ls[:,1].numpy())
-            l = torch.stack([torch.stack([(torch.tensor([s1[i,j],s2[i,j]])*nn.functional.softmax(torch.rand(num_task),-1)).sum() for j in range(s1.shape[1])]) 
+            l = torch.stack([torch.stack([(torch.tensor([s1[i,j],s2[i,j]])*nn.functional.softmax(torch.rand(num_head),-1)).sum() for j in range(s1.shape[1])]) 
                              for i in range(s1.shape[0])]).numpy()
             ax.plot_surface(s1, s2, l, cmap='viridis') #type:ignore
             ax.set_xlabel('loss-1')
             ax.set_ylabel('loss-2')
             ax.set_zlabel('rws_loss') #type:ignore
-            ax.set_title(f'RWS Loss vs sub-Loss ({num_task}-D)')
+            ax.set_title(f'RWS Loss vs sub-Loss ({num_head}-D)')
         elif multi_type == 'dwa':
             nepoch = 100
             s = np.arange(nepoch)
@@ -536,7 +537,7 @@ class MultiLosses:
             tau = 2
             w1 = np.exp(np.concatenate((np.array([1,1]),l1[2:]/l1[1:-1]))/tau)
             w2 = np.exp(np.concatenate((np.array([1,1]),l2[2:]/l1[1:-1]))/tau)
-            w1 , w2 = num_task * w1 / (w1+w2) , num_task * w2 / (w1+w2)
+            w1 , w2 = num_head * w1 / (w1+w2) , num_head * w2 / (w1+w2)
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
             ax1.plot(s, l1, color='blue', label='task1')
             ax1.plot(s, l2, color='red', label='task2')

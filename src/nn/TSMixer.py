@@ -422,6 +422,11 @@ class TSMixerEncoder(nn.Module):
         x = x.permute(0,1,3,2)                      # [bs x nvars x d_model x num_patch]
         return x
 
+class ts_mixer(TSMixer):
+    def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
+        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim , 
+                         predict_steps = num_output , head_type = 'prediction' , **kwargs)
+        
 if __name__ == '__main__':
 
     import torch

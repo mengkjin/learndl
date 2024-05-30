@@ -4,7 +4,7 @@ random_seed: null
 short_test:  false
 
 model_name: null # null
-model_module: factor_vae # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
+model_module: tra # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
 model_types: [best , swalast , swabest]
 model_data_type: day # 'day+30m' , 30m
 model_data_prenorm:
@@ -21,7 +21,6 @@ callbacks:
   NanLossRetrain:     {'max_attempt' : 4}
   BatchDisplay:       {}
   StatusDisplay:      {}
-  #CudaEmptyCache:     {} 
   #TrainConverge:      {'patience' : 5 , 'eps' : 1.0e-5} 
   #FitConverge:        {'patience' : 5 , 'eps' : 1.0e-5}
   #CudaEmptyCache:     {'batch_interval' : 20}
@@ -39,7 +38,7 @@ train_param:
       transfer_multiplier:   {'encoder' : 0.1 , 'decoder' : 1.0, } 
     gradient:  {'clip_value' : 10.0}
   criterion:
-    loss:      mse  # mse, pearson, ccc
+    loss:      pearson  # mse, pearson, ccc
     score:     spearman # mse, pearson, ccc, spearman
     penalty:   
       hidden_corr: 

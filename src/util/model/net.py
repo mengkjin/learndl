@@ -1,13 +1,15 @@
 import numpy as np
+import torch
 
 from abc import ABC , abstractmethod
 from copy import deepcopy
 from torch import nn
 from torch.optim.swa_utils import AveragedModel , update_bn
+from typing import Any
 
 from ..metric import Metrics
 from ..store import Checkpoint
-from ...classes import BaseDataModule
+from ...classes import BaseDataModule , BaseTrainer , BatchData
 
 def choose_ensembler(model_type):
     '''get a subclass of _BaseEnsembler'''
@@ -25,9 +27,9 @@ class Ensembler(ABC):
     @abstractmethod
     def reset(self): ...
     @abstractmethod
-    def assess(self , net , epoch : int , score = 0. , loss = 0.): '''score or loss to update assessment'''
+    def assess(self , module , epoch : int , score = 0. , loss = 0.): '''score or loss to update assessment'''
     @abstractmethod
-    def collect(self , net , *args , device = None , **kwargs) -> nn.Module: '''output the final fittest model state dict'''
+    def collect(self , module , *args , **kwargs) -> nn.Module: '''output the final fittest model state dict'''
 
 class SWAModel:
     def __init__(self , module : nn.Module) -> None:
@@ -39,17 +41,36 @@ class SWAModel:
         self.avgmodel.update_parameters(self.template) 
         return self
     
-    def update_bn(self , data_loader , device = None):
+    def update_bn(self , module : BaseTrainer):
+        device = module.device
         self.avgmodel = device(self.avgmodel) if callable(device) else self.avgmodel.to(device)
-        update_bn(self.bn_loader(data_loader) , self.avgmodel) 
+        update_swa_bn(self.bn_loader(module) , self.avgmodel) 
         return self
      
-    def bn_loader(self , data_loader):
-        for batch_data in data_loader: 
-            yield (batch_data.x , batch_data.y , batch_data.w)
+    def bn_loader(self , module : BaseTrainer):
+        for module.batch_data in module.data.train_dataloader(): 
+            assert isinstance(module.batch_data, BatchData)
+            module.on_train_batch_start()
+            yield (module.batch_data.x , module.batch_data.kwargs)
 
     @property
     def module(self) -> nn.Module: return self.avgmodel.module
+
+@torch.no_grad()
+def update_swa_bn(loader , model : AveragedModel):
+    momenta = {}
+    for module in model.modules():
+        if isinstance(module, nn.modules.batchnorm._BatchNorm):
+            module.reset_running_stats()
+            momenta[module] = module.momentum
+    if not momenta: return
+
+    was_training = model.training
+    model.train()
+    for module in momenta.keys():  module.momentum = None
+    for x , kwargs in loader: model(x , **kwargs)
+    for bn_module in momenta.keys(): bn_module.momentum = momenta[bn_module]
+    model.train(was_training)
 
 class EnsembleBest(Ensembler):
     '''state dict of epoch with best score or least loss'''
@@ -69,9 +90,9 @@ class EnsembleBest(Ensembler):
             self.metric_fix = metrics.last_metric # value
             self.ckpt.join(self , epoch , net)
 
-    def collect(self , net : nn.Module , data : BaseDataModule , *args , device = None , **kwargs):
+    def collect(self , module : BaseTrainer , *args , **kwargs):
         #return self.ckpt.load_epoch(self.epoch_fix)
-        net = deepcopy(net)
+        net = deepcopy(module.net)
         net.load_state_dict(self.ckpt.load_epoch(self.epoch_fix))
         return net
 
@@ -103,11 +124,10 @@ class EnsembleSWABest(Ensembler):
             self.candidates.append(epoch)
             self.ckpt.join(self , epoch , net)
 
-    def collect(self , net : nn.Module , data : BaseDataModule , *args , device = None , **kwargs):
-        swa = SWAModel(net)
+    def collect(self , module : BaseTrainer , *args , **kwargs):
+        swa = SWAModel(module.net)
         for epoch in self.candidates: swa.update_sd(self.ckpt.load_epoch(epoch))
-        loader = data.train_dataloader()
-        swa.update_bn(loader , getattr(loader , 'device' , device))
+        swa.update_bn(module)
         return swa.module.cpu()
     
 class EnsembleSWALast(Ensembler):
@@ -142,10 +162,8 @@ class EnsembleSWALast(Ensembler):
         right   = epochs[epochs > self.epoch_fix]
         return [*left[-((self.n_last - 1) // 2):] , self.epoch_fix , *right]
 
-    def collect(self , net : nn.Module , data : BaseDataModule , *args , device = None , **kwargs):
-        swa = SWAModel(net)
-        for epoch in self.candidates: 
-            swa.update_sd(self.ckpt.load_epoch(epoch))
-        loader = data.train_dataloader()
-        swa.update_bn(loader , getattr(loader , 'device' , device))
+    def collect(self , module : BaseTrainer , *args , **kwargs):
+        swa = SWAModel(module.net)
+        for epoch in self.candidates:  swa.update_sd(self.ckpt.load_epoch(epoch))
+        swa.update_bn(module)
         return swa.module.cpu()

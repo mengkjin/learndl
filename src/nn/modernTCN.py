@@ -5,7 +5,6 @@ from torch import nn , Tensor
 
 from .. import layer as Layer
 
-__all__ = ['ModernTCN']
 class ModernTCN(nn.Module):
     '''
     in:  [bs x seq_len x nvars]
@@ -321,6 +320,11 @@ class ModernTCNPretrainHead(nn.Module):
         
         return x
     
+class modern_tcn(ModernTCN):
+    def __init__(self , input_dim , seq_len , hidden_dim , num_output = 1 , **kwargs):
+        super().__init__(nvars = input_dim , seq_len = seq_len , d_model = hidden_dim , 
+                         predict_steps = num_output , head_type = 'prediction' , **kwargs)
+        
 if __name__ == '__main__':
     import torch
     import torch.nn as nn

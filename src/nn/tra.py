@@ -30,8 +30,7 @@ class block_tra(nn.Module):
     
     def forward(self , x : Tensor , hist_loss : Optional[Tensor] = None , y : Optional[Tensor] = None) -> tuple[Tensor , dict]:
         if self.num_states > 1:
-            if hist_loss is None: hist_loss = torch.zeros(len(x) , self.num_states).to(x)
-            if y is None: y = torch.zeros(len(x) , 1).to(x)
+            assert hist_loss is not None and y is not None
 
             preds = self.predictors(x)
 
@@ -65,13 +64,13 @@ class block_tra(nn.Module):
             self.probs = None
             final_pred = preds = self.predictors(x)
         if self.training and self.probs is not None and self.num_states > 1 and y is not None:
-            penalty_opt_transport = self.penalty_opt_transport(preds , y)
+            loss_opt_transport = self.loss_opt_transport(preds , y)
         else:
-            penalty_opt_transport = 0
+            loss_opt_transport = 0
             
-        return final_pred , {'penalty_opt_transport' : penalty_opt_transport , 'hidden': preds , 'preds': preds}
+        return final_pred , {'loss_opt_transport' : loss_opt_transport , 'hidden': preds , 'preds': preds}
     
-    def penalty_opt_transport(self , preds : Tensor , label : Tensor) -> Tensor | float:
+    def loss_opt_transport(self , preds : Tensor , label : Tensor) -> Tensor | float:
         '''special penalty for tra'''
         assert self.probs is not None
         self.global_steps += 1

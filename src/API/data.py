@@ -63,10 +63,6 @@ class _DataModule(BaseDataModule):
         self.device  = Device()
         self.storage = Storage('mem' if self.config.mem_storage else 'disk')
         self.buffer  = BufferSpace(self.device)
-        nn_category  = get_nn_category(self.config.model_module)
-        samp_method  = self.config.sample_method
-        assert not (nn_category == 'tra' and samp_method == 'total_shuffle') , (nn_category , samp_method)
-        assert not (nn_category == 'vae' and samp_method != 'sequential') , (nn_category , samp_method)
 
     def load_data(self):
         self.datas = ModuleData.load(self.data_type_list, self.config.labels, self.predict, self.config.precision)

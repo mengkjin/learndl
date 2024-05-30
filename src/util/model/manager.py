@@ -56,7 +56,6 @@ class ModelManager(ABC):
     @abstractmethod
     def collect(self , model_type = 'best' , *args) -> ModelDict: '''update by assessing batch outout, called before stacking model'''
 
-
 class NetManager(ModelManager):
     '''a group of ensemble models , of same net structure'''
     def __init__(self, model_module : BaseTrainer , use_score = True , **kwargs) -> None:
@@ -87,7 +86,7 @@ class NetManager(ModelManager):
 
     def collect(self , model_type = 'best' , *args):
         model_dict = ModelDict()
-        net = self.net_ensemblers[model_type].collect(self.module.net , self.data , *args , device=self.device)
+        net = self.net_ensemblers[model_type].collect(self.module , *args)
         model_dict.state_dict = net.state_dict()
         if self.net_lgbm_head: model_dict.booster_str = self.net_lgbm_head.fit(net).model_string
         return model_dict

@@ -5,7 +5,7 @@ from copy import deepcopy
 from typing import Any
 
 from . import (
-    Attention , Embed , PE , RevIN , Act
+    Attention , Embed , Lin , MLP , PE , RevIN , Act
 )
 
 class Pass(nn.Module):

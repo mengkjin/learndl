@@ -3,23 +3,16 @@ from typing import Any , Optional
 from .base import CallBack
 from src.nn import get_nn_category
 
+from src.data.process import BlockLoader
+
 def get_nn_specific_cb(module_name : str) -> Optional[Any]:
     nn_category = get_nn_category(module_name)
-    if nn_category == 'vae':
+    if module_name == 'gru_dsize':
+        return SpecCB_DSize
+    elif nn_category == 'vae':
         return SpecCB_VAE
     elif nn_category == 'tra':
         return SpecCB_TRA
-
-class SpecCB_TRA2(CallBack):
-    '''assign and unlink dynamic data in tra networks'''
-    def __init__(self , model_module) -> None:
-        super().__init__(model_module , with_cb=False)
-    def _net_method(self , key , *args , **kwargs): 
-        if (method := getattr(self.module.net,key,None)): method(*args , **kwargs)
-    def on_train_epoch_start(self):      self._net_method('dynamic_data_assign' , self.module)
-    def on_validation_epoch_start(self): self._net_method('dynamic_data_assign' , self.module)
-    def on_test_model_type_start(self):  self._net_method('dynamic_data_assign' , self.module)
-    def on_before_save_model(self):      self._net_method('dynamic_data_unlink')
 
 class SpecCB_TRA(CallBack):
     '''in TRA fill [y] [hist_loss] in batch_data.kwargs , update hist_loss in data.buffer'''
@@ -71,4 +64,25 @@ class SpecCB_VAE(CallBack):
             'y': y , 'alpha_noise' : self._reparameterize(y) ,
             'factor_noise' : self._reparameterize(y , self.module.net.factor_num) ,
         }
+
+class SpecCB_DSize(CallBack):
+    '''in _dsize model fill [size] in batch_data.kwargs'''
+    def __init__(self , model_module) -> None:
+        super().__init__(model_module , with_cb=False)
+        self._size = None
+    def init_buffer(self):
+        if self._size is None: self._size = BlockLoader('models', 'risk_exp', ['size']).load_block().as_tensor()
+        self.data.buffer['size'] = self._size.align(secid = self.data.y_secid , date = self.data.y_date).values.squeeze()
+    def fill_batch_data(self):
+        i0 = self.module.batch_data.i[:,0].cpu()
+        i1 = self.module.batch_data.i[:,1].cpu()
+        size = self.data.buffer['size'][i0 , i1].reshape(-1,1).nan_to_num(0).to(self.module.batch_data.y.device)
+        self.module.batch_data.kwargs = {'size': size}
+
+    def on_fit_model_start(self):           self.init_buffer()
+    def on_test_model_type_start(self):     self.init_buffer()
+    def on_train_batch_start(self):         self.fill_batch_data()
+    def on_validation_batch_start(self):    self.fill_batch_data()
+    def on_test_batch_start(self):          self.fill_batch_data()
+
     
