@@ -407,7 +407,7 @@ def evaluate(individual, pool_skuname, compiler , gp_inputs , param , tensors , 
         gp_inputs:      initial population factor values
         param:          gp_params
         tensors:        gp_space components of other tensors
-        fitness:        gpFitness object , 
+        fitness:        gpFitness object
         const_annual:   constant of annualization
         min_coverage:   minimum daily coverage to determine if factor is valid
     output:
@@ -612,14 +612,15 @@ def gp_evolution(toolbox , param , records , i_iter = 0, start_gen=0, forbidden_
         halloffame.update(survivors)
 
         # Selection of population to pass to next generation, consider surv_rate
-        if param.select_offspring == 'best': 
-            offspring = toolbox.select_best(population , min(int(param.surv_rate * param.pop_num) , len(population)))
-        elif param.select_offspring in ['Tour' , '2Tour']: 
+        select_offspring = getattr(toolbox , f'select_{param.select_offspring}')
+        
+        if param.select_offspring in ['Tour' , '2Tour']: 
             # '2Tour' will incline to choose shorter ones
             # around 49% will survive
-            offspring = getattr(toolbox , f'select_{param.select_offspring}')(population , len(population))
-        else:
-            raise KeyError(param.select_offspring)
+            k = len(population)
+        else: 
+            k = min(int(param.surv_rate * param.pop_num) , len(population))
+        offspring = select_offspring(population , k)
         offspring = toolbox.syxpop2indpop(list(set(offspring)))
 
         # Variation offsprings

@@ -7,7 +7,7 @@ slice_date : # 修改数据切片区间,前两个为样本内的起止点,后两
   - '2022-01-04'
   - '2099-12-31'
 fitness_wgt: 
-  rankic_in_res:  0.
+  rankic_in_res:  1.
   rankir_in_res:  1.
   rankic_out_res: 0.
   rankir_out_res: 0.
@@ -34,7 +34,7 @@ factor_neut_type: 0       # [outer loop] how to neutralize factor values when i_
 
 n_gen:            6       # [inner loop] generation number
 max_depth:        5       # [inner loop] max tree depth of gp
-select_offspring: 2Tour   # [inner loop] can be 'best' , '2Tour' , 'Tour'
+select_offspring: nsga2   # [inner loop] can be 'best' , '2Tour' , 'Tour' , 'nsga2'
 surv_rate:        0.6     # [inner loop] use survive rate in best selection
 cxpb:             0.35    # [inner loop] crossover probability
 mutpb:            0.25    # [inner loop] mutation probability

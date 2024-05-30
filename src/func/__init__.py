@@ -1,5 +1,5 @@
 from . import (
-    primas
+    linalg , primas , 
 )
 from .basic import *
 from .time import *

@@ -249,7 +249,6 @@ class gpHandler:
         '''
         ------------------------ create gp toolbox ------------------------
         input:
-            
             eval_func:      evaluate function of individual, to register into toolbox
             eval_pop:       evaluate function of population, to register into toolbox
             param:          gp parameters
@@ -316,6 +315,7 @@ class gpHandler:
         toolbox.register('compile', cls.Compiler(pset_syntax)) # use pset_syntax to compile
         toolbox.register('evaluate', eval_func , compiler = getattr(toolbox , 'compile') , fitness = fitness , i_iter = i_iter , param = param , **kwargs) 
         toolbox.register('evaluate_pop', eval_pop , toolbox = toolbox , param = param) 
+        toolbox.register('select_nsga2', tools.selNSGA2) 
         toolbox.register('select_best', tools.selBest) 
         toolbox.register('select_Tour', tools.selTournament, tournsize=3) # 锦标赛：随机选择3个，取最大, resulting around 49% of pop
         toolbox.register('select_2Tour', tools.selDoubleTournament, fitness_size=3 , parsimony_size=1.4 , fitness_first=True) # 锦标赛：第一轮随机选择3个，取最大
