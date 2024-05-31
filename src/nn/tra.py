@@ -84,7 +84,8 @@ class block_tra(nn.Module):
         assert self.probs is not None
         self.global_steps += 1
         square_error = (preds - label).square()
-        square_error -= square_error.min(dim=-1, keepdim=True).values  # normalize & ensure positive input
+        min_se = square_error.min(dim=-1, keepdim=True).values
+        square_error = square_error - min_se + 1e-6  # normalize & ensure positive input
         P = sinkhorn(-square_error, epsilon=0.01)  # sample assignment matrix
         lamb = self.gamma * (self.rho ** self.global_steps)
         reg = (self.probs + 1e-4).log().mul(P).sum(dim=-1).mean()
@@ -94,7 +95,11 @@ class block_tra(nn.Module):
             print(label.isnan().any())
             print(square_error)
             print(lamb , self.gamma , self.rho , self.global_steps)
-            print(self.probs)
+            print(self.probs.isnan().any())
+            print((self.probs + 1e-4).log().isnan().any())
+            from src import API
+            setattr(API , 'net' , self)
+            raise ValueError
         return loss
 
     @property
@@ -103,20 +108,12 @@ class block_tra(nn.Module):
 
 def shoot_infs(inp_tensor):
     """Replaces inf by maximum of tensor"""
-    mask_inf = torch.isinf(inp_tensor)
-    ind_inf = torch.nonzero(mask_inf, as_tuple=False)
-    if len(ind_inf) > 0:
-        for ind in ind_inf:
-            if len(ind) == 2:
-                inp_tensor[ind[0], ind[1]] = 0
-            elif len(ind) == 1:
-                inp_tensor[ind[0]] = 0
-        m = torch.max(inp_tensor)
-        for ind in ind_inf:
-            if len(ind) == 2:
-                inp_tensor[ind[0], ind[1]] = m
-            elif len(ind) == 1:
-                inp_tensor[ind[0]] = m
+    valid = torch.isfinite(inp_tensor)
+
+    if ~valid.all():
+        m = torch.max(inp_tensor[valid])
+        inp_tensor = torch.where(valid , inp_tensor , m)
+
     return inp_tensor
 
 def sinkhorn(Q, n_iters=3, epsilon=0.01):
@@ -124,9 +121,9 @@ def sinkhorn(Q, n_iters=3, epsilon=0.01):
     with torch.no_grad():
         Q = shoot_infs(Q)
         Q = torch.exp(Q / epsilon)
-        for i in range(n_iters):
-            Q /= Q.sum(dim=0, keepdim=True)
-            Q /= Q.sum(dim=1, keepdim=True)
+        for _ in range(n_iters):
+            Q = (Q / Q.sum(dim=0, keepdim=True)).nan_to_num_(0)
+            Q = (Q / Q.sum(dim=1, keepdim=True)).nan_to_num_(0)
     return Q
 
 class tra(nn.Module):
