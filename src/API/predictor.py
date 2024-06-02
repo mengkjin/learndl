@@ -8,7 +8,7 @@ from typing import ClassVar , Literal , Optional
 from .data import NetDataModule
 from ..classes import BatchOutput
 from ..data import GetData
-from ..environ import PATH , THIS_IS_SERVER
+from ..environ import PATH , THIS_IS_SERVER , REG_MODELS
 from ..func.time import today , date_offset
 from ..util import Deposition , Device , ModelManager , TrainConfig
 
@@ -32,12 +32,9 @@ class Predictor:
     def update_factors(cls):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         if THIS_IS_SERVER: return
-        model_preds = [
-            cls('gru_day'    , 'swalast' , 0 , 'gru_day_V0') ,
-            cls('gruRTN_day' , 'swalast' , 0 , 'gruRTN_day_V0') ,
-            cls('gruRES_day' , 'swalast' , 0 , 'gruRES_day_V0') ,
-        ]
-        [md.get_df().deploy() for md in model_preds]
+        for model in REG_MODELS:
+            md = cls(model.name, model.type , model.num , model.alias)
+            md.get_df().deploy() 
 
     def deploy(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
         '''deploy df by day to class.destination'''

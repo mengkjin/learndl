@@ -48,13 +48,23 @@ class block_tra(nn.Module):
             # print(x.shape , preds.shape , latent_representation.shape, temporal_pred_error.shape)
             probs = self.fc(torch.cat([latent_representation , temporal_pred_error], dim=-1))
             if probs.isnan().any():
+                print(preds , x)
                 print(probs)
                 print(latent_representation , temporal_pred_error)
+                from src import API
+                setattr(API , 'net' , self)
+                setattr(API , 'x' , x)
+                setattr(API , 'hist_loss' , hist_loss)
+
                 raise ValueError
 
             probs = nn.functional.gumbel_softmax(probs, dim=-1, tau=self.tau, hard=False)
             if probs.isnan().any():
                 print(probs)
+                from src import API
+                setattr(API , 'net' , self)
+                setattr(API , 'x' , x)
+                setattr(API , 'hist_loss' , hist_loss)
                 raise ValueError
             
             # get final prediction in either train (weighted sum) or eval (max probability)
@@ -66,8 +76,7 @@ class block_tra(nn.Module):
             # record training history probs
             probs_agg  = probs.detach().sum(dim = 0 , keepdim = True)
 
-            self.probs = probs.detach()
-            
+            self.probs = probs
             self.probs_record = probs_agg if self.probs_record is None else torch.concat([self.probs_record , probs_agg])
         else: 
             self.probs = None
@@ -75,11 +84,11 @@ class block_tra(nn.Module):
         if self.training and self.probs is not None and self.num_states > 1 and y is not None:
             loss_opt_transport = self.loss_opt_transport(preds , y)
         else:
-            loss_opt_transport = 0
+            loss_opt_transport = torch.Tensor([0])
             
         return final_pred , {'loss_opt_transport' : loss_opt_transport , 'hidden': preds , 'preds': preds}
     
-    def loss_opt_transport(self , preds : Tensor , label : Tensor) -> Tensor | float:
+    def loss_opt_transport(self , preds : Tensor , label : Tensor) -> Tensor:
         '''special penalty for tra'''
         assert self.probs is not None
         self.global_steps += 1
@@ -112,7 +121,7 @@ def shoot_infs(inp_tensor):
 
     if ~valid.all():
         m = torch.max(inp_tensor[valid])
-        inp_tensor = torch.where(valid , inp_tensor , m)
+        inp_tensor[~valid] = m
 
     return inp_tensor
 
@@ -138,5 +147,6 @@ class tra(nn.Module):
 
     def forward(self, x : Tensor , **kwargs) -> tuple[Tensor , dict]:
         x = self.rnn(x)[:,-1] # [bs x hidden_dim]
+
         o , h = self.tra_mapping(x , **kwargs) # output.shape : (bat_size, num_output)   
         return o , h

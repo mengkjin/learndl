@@ -13,7 +13,6 @@ def get_nn_specific_cb(module_name : str) -> Optional[Any]:
         return SpecCB_VAE
     elif nn_category == 'tra':
         return SpecCB_TRA
-
 class SpecCB_TRA(CallBack):
     '''in TRA fill [y] [hist_loss] in batch_data.kwargs , update hist_loss in data.buffer'''
     def __init__(self , model_module) -> None:

@@ -15,8 +15,12 @@ def check_config_validity(config : 'TrainConfig'):
 
     nn_category  = get_nn_category(config.model_module)
     samp_method  = config.sample_method
-    assert not (nn_category == 'tra' and samp_method == 'total_shuffle') , (nn_category , samp_method)
-    assert not (nn_category == 'vae' and samp_method != 'sequential') , (nn_category , samp_method)
+    
+    if nn_category == 'tra':
+        assert samp_method != 'total_shuffle' , samp_method
+    elif nn_category == 'vae':
+        assert samp_method == 'sequential' , samp_method
+    
 
 @dataclass    
 class ModelParam:
@@ -222,8 +226,10 @@ class TrainConfig:
         if not self.is_booster: self.Model.update_data_param(x_data)
     
     @classmethod
-    def load(cls , config_path = 'default' , do_parser = False , par_args = {} , override = None , makedir = True):
+    def load(cls , config_path : Optional[str] = 'default' , 
+             do_parser = False , par_args = {} , override = None , makedir = True):
         '''load config yaml to get default/giving params'''
+        if config_path is None: config_path = 'default'
         model_name = None if config_path == 'default' else os.path.basename(config_path)
         _TrainParam = TrainParam(config_path , model_name = model_name , override = override)
         _ModelParam = ModelParam(config_path , _TrainParam.model_module)
@@ -400,4 +406,7 @@ class TrainConfig:
 
     @staticmethod
     def guess_module() -> str: return TrainParam.guess_module()
-        
+
+    @staticmethod
+    def get_config_path(model_name : str): 
+        return f'{PATH.model}/{model_name}'

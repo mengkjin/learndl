@@ -5,6 +5,7 @@ from torch import nn , optim , Tensor
 from torch.nn.utils.clip_grad import clip_grad_value_
 from typing import Optional
 
+from ..classes import BatchMetric
 from .config import TrainConfig
 
 class Optimizer:
@@ -14,12 +15,14 @@ class Optimizer:
     def __init__(self , net : nn.Module , config : TrainConfig , transfer : bool = False , lr_multiplier : float = 1. , 
                  add_opt_param : Optional[dict] = None , 
                  add_lr_param : Optional[dict] = None , 
-                 add_shd_param : Optional[dict] = None) -> None:
+                 add_shd_param : Optional[dict] = None ,
+                 model_module = None) -> None:
         self.net = net
         self.config = config
         self.opt_param = deepcopy(config.train_param['trainer']['optimizer'])
         self.lr_param  = deepcopy(config.train_param['trainer']['learn_rate'])
         self.shd_param = deepcopy(config.train_param['trainer']['scheduler'])
+        self.model_module = model_module
         if add_opt_param: self.opt_param.update(add_opt_param)
         if add_lr_param:  self.lr_param.update(add_lr_param)
         if add_shd_param: self.shd_param.update(add_shd_param)
@@ -41,40 +44,32 @@ class Optimizer:
     def load_scheduler(cls , optimizer , shd_param : dict):
         return cls.base_scheduler(optimizer, shd_param['name'], **shd_param['param'])
 
-    def backward(self , loss : Tensor):
+    def backward(self , metric : BatchMetric):
         '''BP of optimizer.parameters'''
         self.optimizer.zero_grad()
-        loss.backward()
-        if self.clip_value is not None : clip_grad_value_(self.net.parameters(), clip_value = self.clip_value) 
+        metric.loss.backward(retain_graph = True)
+        if self.check_nan_gradients(self.net): 
+            from src import API
+            setattr(API , 'mod', self.model_module)
+            print('total loss has nan gradients: ' , metric.loss)
+
+            for key , loss in metric.losses.items():
+                print(key , loss)
+                self.optimizer.zero_grad()
+                # if loss.grad_fn is None: continue
+                loss.backward(retain_graph = True)
+                for name , param in self.net.named_parameters():
+                    if param.grad is not None and torch.isnan(param.grad).any():
+                        print(name , param , param.grad)
+
+            raise KeyError
+        self.clip_gradients(self.net , clip_value = self.clip_value , nan_to_num = 0)
+        
         self.optimizer.step()
 
     def scheduler_step(self , epoch : int = 0) -> str | None:
         '''scheduler step on learn rate , reset learn rate to base_lr on conditions'''
         self.scheduler.step()
-        '''
-        reset_param = self.lr_param.get('reset')
-        if not reset_param: return
-        if reset_param['num_reset'] <= 0 or (epoch + 1) < reset_param['trigger']: return
-        
-        trigger_intvl = max(reset_param['trigger'] // 2 , 1) if reset_param['speedup2x'] else reset_param['trigger']
-        if (epoch + 1 - reset_param['trigger']) % trigger_intvl != 0: return
-        
-        trigger_times = ((epoch + 1 - reset_param['trigger']) // trigger_intvl) + 1
-        if trigger_times > reset_param['num_reset']: return
-        
-        # confirm reset : change back optimizor learn rate
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = param_group['lr_param']  * reset_param['recover_level']
-        
-        # confirm reset : reassign scheduler
-        shd_param = deepcopy(self.shd_param)
-        if reset_param['speedup2x']:
-            for key in shd_param['param'].keys():
-                if key in self.reset_speedup_param_list: shd_param['param'][key] //= 2
-
-        self.scheduler = self.load_scheduler(self.optimizer , shd_param)
-        return 'reset_learn_rate'
-        '''
         
     @property
     def last_lr(self) -> float: return self.scheduler.get_last_lr()[0]    
@@ -103,6 +98,21 @@ class Optimizer:
         elif key == 'cycle':
             scheduler = optim.lr_scheduler.CyclicLR(optimizer, max_lr=[pg['lr_param'] for pg in optimizer.param_groups],cycle_momentum=False,mode='triangular2',**kwargs)
         return scheduler
+    
+    @staticmethod
+    def check_nan_gradients(module : nn.Module):
+        for param in module.parameters():
+            if param.grad is not None and torch.isnan(param.grad).any():
+                return True
+        return False
+    
+    @staticmethod
+    def clip_gradients(module : nn.Module , clip_value : Optional[float] = None , nan_to_num : Optional[float] = None):
+        if clip_value is not None:
+            clip_grad_value_(module.parameters(), clip_value = clip_value)
+        if nan_to_num is not None:
+            grads = [p.grad for p in module.parameters() if p.grad is not None]
+            for grad in grads: grad[grad.isnan()] = nan_to_num
 
 class CosineScheduler:
     def __init__(self , optimizer , warmup_stage = 10 , anneal_stage = 40 , initial_lr_div = 10 , final_lr_div = 1e4):

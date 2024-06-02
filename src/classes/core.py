@@ -43,17 +43,24 @@ class BatchData:
     @property
     def device(self): return self.y.device
 
-@dataclass(slots=True)
+@dataclass
 class BatchMetric:
-    loss      : Tensor = Tensor([0.])
-    score     : Tensor | float = 0.
-    losses    : Tensor = Tensor([0.])
+    score   : Tensor | float = 0.
+    losses  : dict[str,Tensor] = field(default_factory=dict)
 
     def __post_init__(self):
         if isinstance(self.score , Tensor): self.score = self.score.item()
+        self.loss = Tensor([0])
+        for value in self.losses.values(): 
+            self.loss = self.loss.to(value) + value
 
     @property
-    def loss_item(self): return self.loss.item()
+    def loss_item(self) -> float: return self.loss.item()
+
+    def add_loss(self , key : str , value : Tensor):
+        assert key not in self.losses.keys() , (key , self.losses.keys())
+        self.loss = self.loss.to(value) + value
+        self.losses[key] = value
 
 @dataclass(slots=True)
 class MetricList:

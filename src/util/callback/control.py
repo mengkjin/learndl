@@ -137,14 +137,3 @@ class ResetOptimizer(CallBack):
 
         self.optim.scheduler = self.optim.load_scheduler(self.optim.optimizer , shd_param)
         self.status.add_event('reset_learn_rate')
-
-class DynamicDataLink(CallBack):
-    '''assign and unlink dynamic data in tra networks'''
-    def __init__(self , model_module) -> None:
-        super().__init__(model_module , with_cb=False)
-    def _net_method(self , key , *args , **kwargs): 
-        if (method := getattr(self.module.net,key,None)): method(*args , **kwargs)
-    def on_train_epoch_start(self):      self._net_method('dynamic_data_assign' , self.module)
-    def on_validation_epoch_start(self): self._net_method('dynamic_data_assign' , self.module)
-    def on_test_model_type_start(self):  self._net_method('dynamic_data_assign' , self.module)
-    def on_before_save_model(self):      self._net_method('dynamic_data_unlink')

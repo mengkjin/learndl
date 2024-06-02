@@ -134,120 +134,29 @@ class Metrics:
 
         with no_grad():
             score = self.score_calc(label , pred , weight , nan_check = (dataset == 'test') , which_col = self.which_output).item()
+            self.output = BatchMetric(score = score)
 
         if dataset == 'train' and not self.is_booster:
-            losses = self.loss_calc(label , pred , weight)
-            loss = self.multi_losses(losses , multiloss_param) 
+            multiheadlosses = self.loss_calc(label , pred , weight)
+            loss = self.multi_losses(multiheadlosses , multiloss_param) 
+            self.output.add_loss(self.loss_calc.criterion , loss)
 
             for key , value in penalty_kwargs.items():
-                assert not key.startswith('penalty_') , key
-                if key.startswith('loss_'): loss = loss + value
+                if key.startswith('loss_') or key.startswith('penalty_'): 
+                    self.output.add_loss(key , value)
 
-            for pen_cal in self.penalty_calc.values():
-                loss = loss + pen_cal(**penalty_kwargs)
-        else:
-            loss = losses = Tensor([0.]) 
+            for key , pen_cal in self.penalty_calc.items():
+                value = pen_cal(**penalty_kwargs)
+                self.output.add_loss(key , value)
 
-        self.output = BatchMetric(loss = loss , score = score , losses = losses)
         if assert_nan and self.output.loss.isnan():
             print(self.output)
             raise Exception('nan loss here')
         
-    @classmethod
-    def decorator_display(cls , func , mtype , mkey):
-        def metric_display(mtype , mkey):
-            if not DISPLAY_RECORD[mtype].get(mkey , False):
-                print(f'{mtype} function of [{mkey}] calculated and success!')
-                DISPLAY_RECORD[mtype][mkey] = True
-        def wrapper(*args, **kwargs):
-            v = func(*args, **kwargs)
-            metric_display(mtype , mkey)
-            return v
-        return wrapper if DISPLAY_CHECK else func
-    
-    @classmethod
-    def whichC(cls , *args , which_col : int = 0):
-        '''each element return ith column, if negative then return raw element'''
-        if which_col > 0: new_args = [None if arg is None else arg[...,which_col] for arg in args]
-        return new_args
-    
-    @classmethod
-    def nonnan(cls , *args , nan_check : bool = True):
-        if not nan_check: return args
-        nanpos = False
-        for arg in args:
-            if arg is not None: nanpos = arg.isnan() + nanpos
-        if isinstance(nanpos , Tensor) and nanpos.any():
-            if nanpos.ndim > 1: nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
-            if nanpos.all(): 
-                for arg in args:
-                    print(arg.shape)
-                    print(arg)
-            new_args = [None if arg is None else arg[~nanpos] for arg in args]
-        else:
-            new_args = args
-        return new_args
-
-    @classmethod
-    def loss_function(cls , key):
-        '''loss function , pearson/ccc should * -1.'''
-        assert key in ('mse' , 'pearson' , 'ccc')
-        def decorator(func):
-            def wrapper(label,pred,weight=None,dim=0,nan_check=False,which_col=-1,**kwargs):
-                label , pred , weight = cls.whichC(label , pred , weight , which_col = which_col)
-                label , pred , weight = cls.nonnan(label , pred , weight , nan_check = nan_check)
-                v = func(label , pred , weight, dim , **kwargs)
-                if key != 'mse': v = torch.exp(-v)
-                return v
-            return wrapper
-        new_func = decorator(METRIC_FUNC[key])
-        new_func = cls.decorator_display(new_func , 'loss' , key)
-        return new_func
-
-    @classmethod
-    def score_function(cls , key):
-        assert key in ('mse' , 'pearson' , 'ccc' , 'spearman')
-        def decorator(func):
-            def wrapper(label,pred,weight=None,dim=0,nan_check=False,which_col=-1,**kwargs):
-                label , pred , weight = cls.whichC(label , pred , weight , which_col = which_col)
-                label , pred , weight = cls.nonnan(label , pred , weight , nan_check = nan_check)
-                v = func(label , pred , weight , dim , **kwargs)
-                if key == 'mse' : v = -v
-                return v
-            return wrapper
-        new_func = decorator(METRIC_FUNC[key])
-        new_func = cls.decorator_display(new_func , 'score' , key)
-        return new_func
-    
-    @classmethod
-    def penalty_function(cls , key , param):
-        assert key in ('hidden_corr',)
-        def decorator(func):
-            def wrapper(label,pred,weight=None,dim=0,nan_check=False,which_col=-1, **kwargs):
-                label , pred , weight = cls.whichC(label , pred , weight , which_col = which_col)
-                label , pred , weight = cls.nonnan(label , pred , weight , nan_check = nan_check)
-                return func(label , pred , weight, dim , param = param , **kwargs)
-            return wrapper
-        new_func = decorator(getattr(cls , key , cls.null))
-        new_func = cls.decorator_display(new_func , 'penalty' , key)
-        return {'lamb': param['lamb'] , 'cond' : True , 'func' : new_func}
-    
-    @staticmethod
-    def null(*args, **kwargs):
-        return 0.
-
-    @staticmethod
-    def hidden_corr(*args , param , **kwargs):
-        hidden = kwargs.get('hidden')
-        assert isinstance(hidden,Tensor)
-        if hidden.shape[-1] == 1: return 0
-        if isinstance(hidden,(tuple,list)): hidden = torch.cat(hidden,dim=-1)
-        pen = hidden.T.corrcoef().triu(1).nan_to_num().square().sum()
-        return pen
 
 class _MetricCalculator(ABC):
     KEY : Literal['loss' , 'score' , 'penalty'] = 'loss'
-    def __init__(self , criterion , collapse = False):
+    def __init__(self , criterion : str , collapse = False):
         '''
         criterion : metric function
         collapse  : aggregate last dimension if which_col < -1
@@ -326,22 +235,19 @@ class PenaltyCalculator(_MetricCalculator):
         self.lamb = param['lamb']
         self.cond = True
         
-    def __call__(self, **kwargs) -> Tensor | float:
-        if self.lamb <= 0 or not self.cond: return 0.
+    def __call__(self, **kwargs) -> Tensor:
+        if self.lamb <= 0 or not self.cond: return torch.Tensor([0.])
         v = self.penalty(**kwargs)
         self.display()
         return self.lamb * v
     
     def forward(self, *args , **kwargs): return None
-    def null(self , **kwargs) -> Tensor | float: return 0.
-
-    def hidden_corr(self , **kwargs) -> Tensor | float:
+    def null(self , **kwargs) -> Tensor: return torch.Tensor([0.])
+    def hidden_corr(self , hidden : Tensor | list | tuple , **kwargs) -> Tensor:
         '''if kwargs containse hidden, calculate 2nd-norm of hTh'''
-        hidden = kwargs.get('hidden')
-        assert isinstance(hidden,Tensor)
-        if hidden.shape[-1] == 1: return 0
         if isinstance(hidden,(tuple,list)): hidden = torch.cat(hidden,dim=-1)
-        pen = hidden.T.corrcoef().triu(1).nan_to_num().square().sum()
+        h = (hidden - hidden.mean(dim=0,keepdim=True)) / (hidden.std(dim=0,keepdim=True) + 1e-6)
+        pen = h.T.cov().triu(1).square().sum()
         return pen
 
 class MetricsAggregator:

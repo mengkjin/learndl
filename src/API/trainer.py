@@ -13,12 +13,12 @@ from ..func import BigTimer
 from ..util import (
     Booster , CallBackManager , Checkpoint , Deposition , Device , 
     Logger , Metrics , ModelManager , Optimizer , TrainConfig)
-from ..environ import BOOSTER_MODULE
+from ..environ import BOOSTER_MODULE , REG_MODELS
 
 class Trainer(BaseTrainer):
     '''run through the whole process of training'''
-    def init_config(self , **kwargs) -> None:
-        self.config : TrainConfig = TrainConfig.load(do_parser = True , par_args = kwargs)
+    def init_config(self , config_path = None , **kwargs) -> None:
+        self.config : TrainConfig = TrainConfig.load(config_path = config_path , do_parser = True , par_args = kwargs)
         self.stage_queue = self.config.stage_queue
     def init_utilities(self , **kwargs) -> None: 
         self.logger     = Logger()
@@ -51,6 +51,12 @@ class Trainer(BaseTrainer):
         with BigTimer(app.logger.critical , 'Main Process'):
             app.main_process()
 
+    @classmethod
+    def update_models(cls):
+        for model in REG_MODELS:
+            config_path = TrainConfig.get_config_path(model.name)
+            cls.main(stage = 0 , resume = 1 , checkname = 0 , config_path = config_path)
+
 class NetTrainer(Trainer):
     '''run through the whole process of training'''
     def init_data(self , **kwargs): 
@@ -63,7 +69,7 @@ class NetTrainer(Trainer):
     def batch_backward(self) -> None:
         assert self.status.dataset == 'train' , self.status.dataset
         self.on_before_backward()
-        self.optimizer.backward(self.metrics.loss)
+        self.optimizer.backward(self.metrics.output)
         self.on_after_backward()
 
     def fit_model(self):
@@ -168,7 +174,8 @@ class NetTrainer(Trainer):
         self.net : torch.nn.Module = self.model.new_model(training , model_file).model(model_file['state_dict'])
         self.metrics.new_model(self.model_param)
         if training:
-            self.optimizer : Optimizer = Optimizer(self.net , self.config , self.transferred , lr_multiplier)
+            self.optimizer : Optimizer = Optimizer(self.net , self.config , self.transferred , lr_multiplier ,
+                                                   model_module = self)
             self.checkpoint.new_model(self.model_param , self.model_date)
         else:
             assert model_file.exists() , str(model_file)

@@ -1,6 +1,6 @@
 import os , shutil , socket , torch , yaml
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal , Optional
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 MAIN_DIR = os.path.dirname(SRC_DIR)
@@ -57,8 +57,20 @@ class _CustomConf:
     SAVE_OPT_NORM : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
     SAVE_OPT_MODEL: Literal['pt'] = 'pt'
 
+@dataclass(slots=True)
+class _RegModel:
+    name : str
+    type : Literal['best' , 'swalast' , 'swabest']
+    num  : int
+    alias : Optional[str] = None
+
 PATH = _CustomPath()
 CONF = _CustomConf()
+REG_MODELS = [
+    _RegModel('gru_day'    , 'swalast' , 0 , 'gru_day_V0') ,
+    _RegModel('gruRTN_day' , 'swalast' , 0 , 'gruRTN_day_V0') , 
+    _RegModel('gruRES_day' , 'swalast' , 0 , 'gruRES_day_V0') ,
+]
 
 '''
 def rmdir(d , remake_dir = False):

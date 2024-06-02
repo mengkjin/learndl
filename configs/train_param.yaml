@@ -28,7 +28,7 @@ callbacks:
 train_param:
   dataloader:
     sample_method:   sequential # total_shuffle , sequential , both_shuffle , train_shuffle
-    shuffle_option:  epoch
+    shuffle_option:  epoch # static , init , epoch
     train_ratio:     0.8
   trainer:
     optimizer: {'name' : 'Adam' , 'param' : {} ,}  #{'name' : 'SGD' , 'param' : {} ,}
@@ -60,7 +60,7 @@ train_param:
       rws: {}
       hybrid: {'phi' : null , 'tau' : 2}
 
-beg_date:   20170103
+beg_date:   20170103 # 20220613 # 20170103
 end_date:   99991231
 input_span: 2400
 interval:   120

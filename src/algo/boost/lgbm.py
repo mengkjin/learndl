@@ -158,6 +158,7 @@ class Lgbm():
     def model_from_string(cls , model_str , cuda = False):
         obj = cls(cuda = cuda)
         obj.evals_result = dict()
+        print(model_str)
         obj.model = lgb.Booster(model_str = model_str)
         return obj
     
