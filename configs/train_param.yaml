@@ -3,15 +3,15 @@ mem_storage: true
 random_seed: null
 short_test:  false
 
-model_name: gru_2head # null
-model_module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
+model_name: null # gru_2head # null
+model_module: gru_dsize # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm
 model_types: [best , swalast , swabest]
 model_data_type: day # 'day+30m' , 30m
 model_data_prenorm:
   day: {'divlast' : True  , 'histnorm' : True}
 labels: 
-  - std_lag1_10 # rtn_lag1_10 # std_lag1_10
-  - std_lag1_20
+  - rtn_lag1_10 # rtn_lag1_10 # std_lag1_10
+  - rtn_lag1_20 # rtn_lag1_20 # std_lag1_20
 callbacks:
   ResetOptimizer:     {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
   CallbackTimer:      {}

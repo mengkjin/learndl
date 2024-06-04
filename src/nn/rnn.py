@@ -336,14 +336,15 @@ class rnn_general(rnn_multivariate):
         super().__init__(input_dim , **kwargs)
 
 class gru_dsize(gru):
-    def __init__(self , input_dim , hidden_dim , **kwargs):
+    def __init__(self , input_dim , hidden_dim , num_output = 1 , **kwargs):
         kwargs.update({'rnn_type' : 'gru'})
-        super().__init__(input_dim , hidden_dim , **kwargs)
+        super().__init__(input_dim , hidden_dim , num_output = num_output , **kwargs)
         self.residual = Layer.Lin.HardLinearRegression()
-        self.residual_bn = nn.BatchNorm1d(1)
+        self.residual_bn = nn.BatchNorm1d(num_output)
     def forward(self, x: Tensor , size : Optional[Tensor]) -> tuple[Tensor, dict]:
         x , o = super().forward(x)
         if self.training: 
             x = self.residual(x , size)
             x = self.residual_bn(x)
         return x , o
+
