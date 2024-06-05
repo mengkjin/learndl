@@ -1,0 +1,4 @@
+trade_share没有严格等于0的原因
+1、weight_utils里WEIGHT_EPSILON、AMOUNT_EPSILON与backtest里SHARE_EPSILON范围太窄（1e-5），若要为0需设置为1e-8。
+2、trading_cost会影响现金流，若要保持0需将其设置为1e-8。
+3、组合优化里target_weight需归一化

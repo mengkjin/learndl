@@ -5,6 +5,8 @@ import numpy as np
 from datetime import date , datetime , timedelta
 from typing import Any , Callable
 
+from src.environ import CONF
+
 def today(offset = 0 , astype : Any = int):
     d = datetime.today() + timedelta(days=offset)
     return astype(d.strftime('%Y%m%d'))
@@ -35,14 +37,13 @@ def date_seg(start_dt , end_dt , freq='Q' , astype : Any = int):
 class Timer:
     '''simple timer to print out time'''
     def __init__(self , *args , newline = False): 
-        self.key = '/'.join(args)
         self.newline = newline
+        self.key = '/'.join(args)
     def __enter__(self):
         self.start_time = time.time()
-        print(self.key , end=' start!\n' if self.newline else '...')
-    def __exit__(self, type, value, trace): 
-        print(self.key if self.newline else '...' , f'finished! Cost {time.time()-self.start_time:.2f} secs')
-
+        if not CONF.SILENT: print(self.key , end=' start!\n' if self.newline else '...')
+    def __exit__(self, type, value, trace):
+        if not CONF.SILENT: print(self.key if self.newline else '...' , f'finished! Cost {time.time()-self.start_time:.2f} secs')
 
 class PTimer:
     '''process timer , call to record and .summarize() to print out summary'''
@@ -82,7 +83,7 @@ class BigTimer:
     def __enter__(self):
         self.start_time = time.time()
     def __exit__(self, *args): 
-        self.printer(f'{self.name} Finished! Cost {self.time_str(time.time()-self.start_time)}')
+        if not CONF.SILENT: self.printer(f'{self.name} Finished! Cost {self.time_str(time.time()-self.start_time)}')
     @staticmethod
     def time_str(seconds : float | int):
         time_str = ''

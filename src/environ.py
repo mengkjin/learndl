@@ -52,6 +52,7 @@ class _CustomPath:
 
 @dataclass
 class _CustomConf:
+    SILENT        : bool = False
     SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
     SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
     SAVE_OPT_NORM : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
@@ -71,15 +72,3 @@ REG_MODELS = [
     _RegModel('gruRTN_day' , 'swalast' , 0 , 'gruRTN_day_V0') , 
     _RegModel('gruRES_day' , 'swalast' , 0 , 'gruRES_day_V0') ,
 ]
-
-'''
-def rmdir(d , remake_dir = False):
-    if isinstance(d , (list,tuple)):
-        [shutil.rmtree(x) for x in d if os.path.exists(x)]
-        if remake_dir : [os.makedirs(x , exist_ok = True) for x in d]
-    elif isinstance(d , str):
-        if os.path.exists(d): shutil.rmtree(d)
-        if remake_dir : os.mkdir(d)
-    else:
-        raise Exception(f'KeyError : {str(d)}')
-'''

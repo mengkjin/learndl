@@ -108,6 +108,9 @@ class StockData4D:
         [setattr(self,k,v) for k,v in kwargs.items() if k in ['values','secid','date','feature']]
         return self.asserted()
     
+    def date_within(self , start : int , end : int , interval = 1) -> np.ndarray:
+        return self.date[(self.date >= start) & (self.date <= end)][::interval]
+    
     @classmethod
     def merge(cls , block_list):
         blocks = [blk for blk in block_list if isinstance(blk , cls) and blk.initiate]
@@ -234,6 +237,16 @@ class StockData4D:
     def from_dataframe(cls , df : pd.DataFrame):
         xarr = NdData.from_xarray(xr.Dataset.from_dataframe(df))
         return cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
+    
+    def to_dataframe(self , drop_inday = True):
+        df_dict = {}
+        df_dict['secid'] = np.repeat(self.secid , self.shape[1] * self.shape[2])
+        df_dict['date']  = np.repeat(np.tile(self.date , self.shape[0]) , self.shape[2])
+        if not drop_inday or self.shape[2] > 1:
+            df_dict['inday']  = np.tile(np.arange(self.shape[2]) , self.shape[0] * self.shape[1])
+        
+        df = pd.DataFrame({**df_dict , **{feat:self.loc(feature=feat).flatten() for feat in self.feature}}).set_index(['secid' , 'date'])
+        return df
 
 @dataclass
 class BoosterData:

@@ -4,13 +4,13 @@ import pandas as pd
 
 from dataclasses import dataclass
 from torch import Tensor
-from typing import Any , ClassVar , Optional
+from typing import Any , ClassVar , Literal , Optional
 
 from .fetcher import get_target_dates , load_target_file
 from ..classes import StockData4D
 from ..environ import PATH , CONF
 from ..func import index_union , index_intersect , forward_fillna
-from ..func.time import date_offset , Timer
+from ..func.time import date_offset , Timer , today
 
 def data_type_abbr(key : str):
     key = key.lower()
@@ -31,15 +31,61 @@ def data_type_alias(path : str , key : str):
     return path.format(key)
 
 class GetData:
-    @staticmethod
-    def trade_dates(start_dt : int = -1 , end_dt : int = 99991231):
-        calendar = load_target_file('information' , 'calendar')
-        assert calendar is not None
-        calendar = np.array(calendar['calendar'].values[calendar['trade'] == 1])
-        calendar = calendar[(calendar >= start_dt) & (calendar <= end_dt)]
+    class Silence:
+        def __enter__(self) -> None: CONF.SILENT = True
+        def __exit__(self , *args) -> None: CONF.SILENT = False
+
+    @classmethod
+    def trade_dates(cls , start_dt : int = -1 , end_dt : int = 99991231):
+        with cls.Silence():
+            calendar = load_target_file('information' , 'calendar')
+            assert calendar is not None
+            calendar = np.array(calendar['calendar'].values[calendar['trade'] == 1])
+            calendar = calendar[(calendar >= start_dt) & (calendar <= end_dt)]
         return calendar
+    
+    @classmethod
+    def daily_returns(cls , start_dt : int , end_dt : int , return_type : Literal['close' , 'vwap'] = 'close'):
+        '''
+        lag == 1 indicates future day return
+        '''
+        with cls.Silence():
+            pre_start_dt = int(date_offset(start_dt , -20))
+            feature = [return_type]
+            block = BlockLoader('trade' , 'day' , [return_type , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
+            block = block.adjust_price().align_feature(feature)
+            values = block.values[:,1:] / block.values[:,:-1] - 1
+            secid  = block.secid
+            date   = block.date[1:]
+            new_date = block.date_within(start_dt , end_dt)
+
+            block = DataBlock(values , secid , date , feature).align_date(new_date)
+        return block
+
+@dataclass(slots=True)
+class BlockLoader:
+    db_src  : str
+    db_key  : str | list
+    feature : Optional[list] = None
+
+    def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , **kwargs):
+        if end_dt is not None   and end_dt < 0:   end_dt   = today(end_dt)
+        if start_dt is not None and start_dt < 0: start_dt = today(start_dt)
+
+        sub_blocks = []
+        db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
+        for db_key in db_keys:
+            with Timer(f' --> {self.db_src} blocks reading [{db_key}] DataBase'):
+                blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , self.feature , **kwargs)
+                sub_blocks.append(blk)
+        if len(sub_blocks) <= 1:  
+            block = sub_blocks[0]
+        else:
+            with Timer(f' --> {self.db_src} blocks merging ({len(sub_blocks)})'): 
+                block = DataBlock.merge(sub_blocks)
+        return block
         
-class DataBlock(StockData4D):   
+class DataBlock(StockData4D):
     def save(self , key : str , predict=False , start_dt = None , end_dt = None):
         path = self.block_path(key , predict) 
         os.makedirs(os.path.dirname(path),exist_ok=True)
@@ -151,9 +197,15 @@ class DataBlock(StockData4D):
             df = None
         return df
     
+    @property
+    def price_adjusted(self): return getattr(self , '_price_adjusted' , False)
+
+    @property
+    def volume_adjusted(self): return getattr(self , '_volume_adjusted' , False)
+
     def adjust_price(self , adjfactor = True , multiply : Any = 1 , divide : Any = 1 , 
                      price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap']):
-    
+        if self.price_adjusted: return self
         adjfactor = adjfactor and ('adjfactor' in self.feature)
         if multiply is None and divide is None and (not adjfactor): return self  
 
@@ -167,10 +219,12 @@ class DataBlock(StockData4D):
         if divide    is not None: v_price /= divide
 
         self.values[...,i_price] = v_price 
+        self._price_adjusted = True
         return self
     
     def adjust_volume(self , multiply = None , divide = None , 
                       vol_feat = ['volume' , 'amount', 'turn_tt', 'turn_fl', 'turn_fr']):
+        if self.volume_adjusted: return self
         if multiply is None and divide is None: return self
 
         if isinstance(vol_feat , (str,)): vol_feat = [vol_feat]
@@ -180,6 +234,7 @@ class DataBlock(StockData4D):
         if multiply is not None: v_vol *= multiply
         if divide   is not None: v_vol /= divide
         self.values[...,i_vol] = v_vol
+        self._volume_adjusted = True
         return self
     
     def mask_values(self , mask : dict , **kwargs):
@@ -323,7 +378,8 @@ class ModuleData:
     
     @classmethod
     def load(cls , data_type_list : list[str] , y_labels : Optional[list[str]] = None , 
-             predict : bool = False , dtype : Optional[str | Any] = torch.float , save_upon_loading : bool = True):
+             predict : bool = False , dtype : Optional[str | Any] = torch.float , 
+             save_upon_loading : bool = True , silent = False):
         if dtype is None: dtype = torch.float
         if isinstance(dtype , str): dtype = getattr(torch , dtype)
         if predict: 
@@ -337,9 +393,9 @@ class ModuleData:
             data = cls(**torch.load(dataset_path))
             if (np.isin(data_type_list , list(data.x.keys())).all() and
                 np.isin(y_labels , list(data.y.feature)).all()):
-                print(f'try using {dataset_path} , success!')
+                if not CONF.SILENT: print(f'try using {dataset_path} , success!')
             else:
-                print(f'try using {dataset_path} , but incompatible, load raw blocks!')
+                if not CONF.SILENT: print(f'try using {dataset_path} , but incompatible, load raw blocks!')
                 data = None
         else:
             data = None

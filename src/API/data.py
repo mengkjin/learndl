@@ -80,7 +80,7 @@ class _DataModule(BaseDataModule):
             method : dict[str,bool] = self.config.model_data_prenorm.get(mdt , {})
             method['divlast']  = method.get('divlast' , True) and (mdt in DataBlockNorm.DIVLAST)
             method['histnorm'] = method.get('histnorm', True) and (mdt in DataBlockNorm.HISTNORM)
-            print(f'Pre-Norming method of [{mdt}] : {method}')
+            if not CONF.SILENT: print(f'Pre-Norming method of [{mdt}] : {method}')
             self.static_prenorm_method[mdt] = method
 
         self.reset_dataloaders()

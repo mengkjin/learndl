@@ -1,0 +1,84 @@
+ENV_CONFIG:
+  bm_index: publish:000906.SH # 组合优化的基准指数
+  stock_universe: universe # 组合优化的股票池
+  risk_model_nm: cne6 # 组合优化的风险模型类型
+
+OPT_CONFIG:
+  RISK:
+      style:  # 风格偏离
+        STYLE.Size: [-0.25, 0.25]
+        STYLE.Bp: [-0.25, 0.25]
+        STYLE.Beta: [-0.25, 0.25]   
+        STYLE.Nonlin_Size: [-0.25, 0.25]
+        STYLE.Momentum: [-0.25, 0.25]
+        STYLE.Resvol: [-0.25, 0.25]
+        STYLE.Liquidity: [-0.25, 0.25]
+        STYLE.Earnyld: [-0.25, 0.25]
+        STYLE.Growth: [-0.25, 0.25]
+        STYLE.Leverage: [-0.25, 0.25]      
+      industry: [-0.01, 0.01]  # 行业偏离
+      bm_weight_bound: 0.8 # 指数成分股占比最小值
+      exc_bounds: [-0.01, 0.01] # 个股相对基准权重偏离
+      abs_bounds: [0.0, 0.07] # 个股权重上下界
+      tracking_error:
+        error_type: relative # absolute/relative
+        bound: 20
+      turnover: 0.15 # 双边换手率上限
+      turnover_gradient: 0.2 # 换手率调整梯度，若优化失败，则提升换手率上限重新优化
+      leverage: 1.0
+      no_sell_codes: []
+      no_buy_codes: []  
+
+  LAMBDA: 0.5
+  RHO: 0.00001
+
+BACKTEST_CONFIG:
+  bm_index: publish:000906.SH # 回测的基准指数
+  stock_universe: universe
+  init_cash: 10000000 # 初始资金
+  trd_mtch_cfg:
+    is_trade_limited: "on" # on / off，是否开启成交限制，若开启，则当日涨停股票无法买入，跌停股票无法卖出；若仅仅盘中到达涨跌停，则成交比例依据limit_trade_ratio
+    limit_trade_ratio: 1.0
+    price_type: close_price # close_price / open_price / vwap，调仓使用的成交价
+  accnt_cfg:
+    stamp_tax: 0.001 # 印花税率
+    trading_fee: 0.003 # 交易费率
+  trd_make_cfg: None # 交易参数，无可选项
+
+
+CALC_CONFIG:
+  ret_analysis_job: "on" # on / off
+  lag_analysis_job: "on" # on / off
+  ret_attribution_job: "on" # on / off
+  risk_analysis_job: "on" # on / off
+  lag_num: 2
+
+SHOW_CONFIG:
+  [
+    plot_test_info,
+    plot_lag_perf_curve,
+    plot_year_perf_rslts,
+    ret_attribution_curve,
+    style_attribution_curve,
+    style_exposure_curve,
+    industry_bias_curve
+  ]
+
+SAVE_CONFIG:
+    result_save_path: D:/QuantData/port_results # 组合收益结果存储路径
+    agg_path: D:/QuantData/port_results
+    save_job_list: [
+        stats_attributes,
+        target_weight,
+        lag_perf_rslts,
+        year_perf_rslts,
+        dcmp_ret,
+        style_attribution,
+        win_rt,
+        cum_perf,
+        up_down_alpha,
+        style_bias,
+        industry_bias,
+        tracking_error
+    ]
+    suffix_param: None

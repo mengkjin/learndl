@@ -8,7 +8,7 @@ from typing import ClassVar , Literal , Optional
 from .data import NetDataModule
 from ..classes import BatchOutput
 from ..data import GetData
-from ..environ import PATH , THIS_IS_SERVER , REG_MODELS
+from ..environ import PATH , CONF , THIS_IS_SERVER , REG_MODELS
 from ..func.time import today , date_offset
 from ..util import Deposition , Device , ModelManager , TrainConfig
 
@@ -29,12 +29,16 @@ class Predictor:
         if self.alias is None: self.alias = self.model_name
 
     @classmethod
-    def update_factors(cls):
+    def update_factors(cls , silent = True):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         if THIS_IS_SERVER: return
         for model in REG_MODELS:
             md = cls(model.name, model.type , model.num , model.alias)
-            md.get_df().deploy() 
+            CONF.SILENT = True
+            md.get_df().deploy()
+            CONF.SILENT = False
+            print(f'Finish model [{model.name}] predicting!')
+
 
     def deploy(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
         '''deploy df by day to class.destination'''
@@ -89,7 +93,7 @@ class Predictor:
             if data is None: continue
             assert isinstance(data , NetDataModule)
             for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
-                print(model_date , 'old' if (data is data_mod_old) else 'new') 
+                # print(model_date , 'old' if (data is data_mod_old) else 'new') 
                 assert isinstance(model_date , int) , model_date
                 data.setup('predict' ,  model_param , model_date)
                 model = deposition.load_model(model_date , self.model_num , self.model_type)

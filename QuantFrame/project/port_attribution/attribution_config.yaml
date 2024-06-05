@@ -1,0 +1,47 @@
+BACKTEST_CONFIG:
+  init_cash: 10000000 # 初始资金
+  trd_mtch_cfg:
+    is_trade_limited: "on" # on / off，是否开启成交限制，若开启，则当日涨停股票无法买入，跌停股票无法卖出；若仅仅盘中到达涨跌停，则成交比例依据limit_trade_ratio
+    limit_trade_ratio: 1.0
+    price_type: close_price # close_price / open_price / vwap，调仓使用的成交价
+  accnt_cfg:
+    stamp_tax: 0.001 # 印花税率
+    trading_fee: 0.003 # 交易费率
+  trd_make_cfg: None # 交易参数，无可选项
+
+
+CALC_CONFIG:
+  ret_analysis_job: "on" # on / off
+  lag_analysis_job: "on" # on / off
+  ret_attribution_job: "on" # on / off
+  risk_analysis_job: "on" # on / off
+  lag_num: 2  # 回测收益的最大滞后期
+
+SHOW_CONFIG:
+  [
+    plot_test_info,
+    plot_lag_perf_curve,
+    plot_year_perf_rslts,
+    ret_attribution_curve,
+    style_attribution_curve,
+    style_exposure_curve,
+    industry_bias_curve
+  ]
+
+SAVE_CONFIG:
+  result_save_path: D:/QuantData/port_results  # 结果存储位置
+  save_job_list: [
+        stats_attributes,
+        target_weight,
+        lag_perf_rslts,
+        year_perf_rslts,
+        dcmp_ret,
+        style_attribution,
+        win_rt,
+        cum_perf,
+        up_down_alpha,
+        style_bias,
+        industry_bias,
+        tracking_error
+    ]
+  suffix_param: None

@@ -1,0 +1,87 @@
+PROC_CONFIG:
+    winsorize: False
+    neutralize: False
+    industry_fld: INDUSTRY.citics_1
+    style_list: [STYLE.Size, STYLE.Beta]
+    normalize: False
+    
+CALC_CONFIG:
+    ret_type: prd_ret
+    price_type: close # close/ vwap
+    max_factor: 3
+    stock_universe_type: universe
+    #
+    industry_type: citics_1
+    #
+    density_job: "on"  # on / off
+    density_stats_list: [factor_distribution, factor_quantile, factor_quantile_without_scaling]
+    hist_bins: 50
+    factor_sampling_num: 6
+    #
+    pnl_job: "on"  # on / off
+    pnl_stats_list: [ic_curve, long_short_curve]
+    pnl_ic_type: pearson # pearson / spearman
+    pnl_bm_index: 000000.SH  # 000300.SH / 000905.SH / 000852.SH / 999999.SH / 999999.SH(市场收益均值) / 000000.SH（收益为0的基准）
+    #
+    decay_pnl_job: "on"  # on / off
+    decay_pnl_stats_list: [ic_decay]
+    decay_ic_type: pearson # pearson / spearman
+    decay_pnl_bm_index: 000000.SH  # 000300.SH / 000905.SH / 000852.SH / 999999.SH / 999999.SH(市场收益均值) / 000000.SH（收益为0的基准）
+    pnl_ret_range_type: period
+    pnl_lag_num: 2
+    #
+    group_job: "on"  # on / off
+    group_stats_list: [group_perf_curve]
+    group_bm_index: 000000.SH  # 000300.SH / 000905.SH / 000852.SH / 999999.SH / 999999.SH(市场收益均值) / 000000.SH（收益为0的基准）
+    group_num: 10
+    #
+    decay_group_job: "on"  # on / off
+    decay_grp_stats_list: [group_ret_decay, group_ret_ir_decay]
+    decay_grp_bm_index: 999999.SH  # 000300.SH / 000905.SH / 000852.SH / 999999.SH / 999999.SH(市场收益均值) / 000000.SH（收益为0的基准）
+    grp_ret_range_type: period
+    grp_lag_num: 2
+    decay_group_num: 10
+    #
+    industry_pnl_job: "on"  # on / off
+    industry_pnl_stats_list: [industry_ic]
+    industry_ic_type: pearson # pearson / spearman
+    pnl_industry_type: citics_1
+    industry_pnl_bm_index: 000000.SH
+    #
+    barra_job: "on"  # on / off
+    barra_stats_list: [barra_corr]
+    barra_type: cne6
+
+
+SHOW_CONFIG: [
+    [plot_ic_curve, pnl_job, ic_curve],
+    [plot_ic_year_rslts, pnl_job, ic_curve],
+    [plot_long_short, pnl_job, long_short_curve],
+    [plot_factor_distribution, density_job, factor_distribution],
+    [plot_factor_quantile, density_job, factor_quantile],
+    [plot_group_perf, group_job, group_perf_curve],
+    [plot_top_perf_year_rslts, group_job, group_perf_curve],
+    [plot_decay_ic, decay_pnl_job, ic_decay],
+    [plot_decay_grp_ret, decay_group_job, group_ret_decay],
+    [plot_decay_grp_ret_ir, decay_group_job, group_ret_ir_decay],
+    [plot_industry_ic, industry_pnl_job, industry_ic],
+    [plot_barra_corr, barra_job, barra_corr]
+]
+
+SAVE_CONFIG:
+    result_save_path: D:/QuantData/factor_results # 因子测试结果存储路径
+    save_job_list: [
+        [ pnl_job, ic_curve ],
+        [ pnl_job, ic_results ],
+        [ pnl_job, ic_yearly_results ],
+        [ pnl_job, long_short_curve ],
+        [ density_job, factor_distribution ],
+        [ density_job, factor_quantile ],
+        [ group_job, group_perf_curve ],
+        [ group_job, top_grp_perf_rslts ],
+        [ decay_pnl_job, ic_decay ],
+        [ decay_group_job, group_ret_decay ],
+        [ decay_group_job, group_ret_ir_decay ],
+        [ industry_pnl_job, industry_ic ],
+        [ barra_job, barra_corr ],
+    ]

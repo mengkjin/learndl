@@ -6,8 +6,8 @@ from dataclasses import dataclass , field
 from torch import Tensor
 from typing import Any , Iterator , Optional
 
-from .core import DataBlock , data_type_abbr
-from ..func.time import Timer , today
+from .core import BlockLoader , DataBlock , data_type_abbr
+from ..func.time import Timer
 from ..func.primas import neutralize_2d , process_factor
 
 TRAIN_DATASET = ['y' , 'day' , '30m' , 'risk']
@@ -72,29 +72,6 @@ class DataProcessor:
             print('-' * 80)
 
         print(f'Data Processing Finished! Cost {time.time() - t1:.2f} Seconds')
-
-@dataclass(slots=True)
-class BlockLoader:
-    db_src  : str
-    db_key  : str | list
-    feature : Optional[list] = None
-
-    def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , **kwargs):
-        if end_dt is not None   and end_dt < 0:   end_dt   = today(end_dt)
-        if start_dt is not None and start_dt < 0: start_dt = today(start_dt)
-
-        sub_blocks = []
-        db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
-        for db_key in db_keys:
-            with Timer(f' --> {self.db_src} blocks reading [{db_key}] DataBase'):
-                blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , self.feature , **kwargs)
-                sub_blocks.append(blk)
-        if len(sub_blocks) <= 1:  
-            block = sub_blocks[0]
-        else:
-            with Timer(f' --> {self.db_src} blocks merging ({len(sub_blocks)})'): 
-                block = DataBlock.merge(sub_blocks)
-        return block
 
 class _TypeProcessor(ABC):
     TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']
