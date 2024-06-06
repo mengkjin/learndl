@@ -30,15 +30,12 @@ class ModelParam:
     n_model     : int          = 0
     params      : list[dict]   = field(default_factory=list)
 
-    MODEL_YAML  : ClassVar[str] = 'model_{}.yaml'
-    DEFAULT_YAML: ClassVar[str] = 'model_default.yaml'
+    MODEL_YAML  : ClassVar[str] = '{}.yaml'
+    DEFAULT_YAML: ClassVar[str] = 'default.yaml'
     INDAY_DIMS  : ClassVar[dict] = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
 
     def __post_init__(self) -> None:
-        source_dir = PATH.conf if self.config_path == 'default' else self.config_path
-        source_base = self.MODEL_YAML.format(self.module.lower())
-        if not os.path.exists(f'{source_dir}/{source_base}'): source_base = self.DEFAULT_YAML
-        self.Param = PATH.read_yaml(f'{source_dir}/{source_base}')
+        self.Param = PATH.read_yaml(self.source_path())
         assert isinstance(self.Param , dict)
         for key , value in self.Param.items():
             if isinstance(value , (list,tuple)): 
@@ -54,29 +51,24 @@ class ModelParam:
         return self.Param.get(key , default)
     
     def copy_to(self , target_dir , exist_ok = False):
-        source_dir = PATH.conf if self.config_path == 'default' else self.config_path
-        target_base = self.MODEL_YAML.format(self.module.lower())
-        source_base = target_base if os.path.exists(f'{source_dir}/{target_base}') else self.DEFAULT_YAML
+        source_path = self.source_path()
+        target_path = self.target_path(target_dir)
         os.makedirs(target_dir, exist_ok = True)
-        if not exist_ok: assert not os.path.exists(f'{target_dir}/{target_base}')
-        shutil.copyfile(f'{source_dir}/{source_base}' , f'{target_dir}/{target_base}')
+        if not exist_ok: assert not os.path.exists(target_path)
+        shutil.copyfile(source_path , target_path)
+
+    def source_path(self):
+        module_base = self.MODEL_YAML.format(self.module.lower())
+        source_dir  = f'{PATH.conf}/model' if self.config_path == 'default' else self.config_path
+        source_base = module_base if os.path.exists(f'{source_dir}/{module_base}') else self.DEFAULT_YAML
+        return f'{source_dir}/{source_base}'
+    
+    def target_path(self , target_dir):
+        module_base = self.MODEL_YAML.format(self.module.lower())
+        return f'{target_dir}/{module_base}'
 
     def expand(self , base_path):
         self.params = [{'path':f'{base_path}/{mm}' , **{k:v[mm % len(v)] for k,v in self.Param.items()}} for mm in range(self.n_model)]
-
-    @classmethod
-    def load(cls , base_path , model_num : Optional[int] = None):
-        Param = PATH.read_yaml(f'{base_path}/{cls.MODEL_YAML}')
-        assert isinstance(Param , dict)
-        n_model = 1
-        for key , value in Param.items():
-            if isinstance(value , (list,tuple)): 
-                n_model = max(n_model , len(value))
-            else:
-                Param[key] = [value]
-        param = [{'path':f'{base_path}/{mm}' , **{k:v[mm % len(v)] for k,v in Param.items()}} for mm in range(n_model)]
-        if model_num is not None: param = param[model_num]
-        return param
 
     def update_data_param(self , x_data : dict):
         '''when x_data is know , use it to fill some params(seq_len , input_dim , inday_dim , etc.)'''

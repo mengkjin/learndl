@@ -36,6 +36,10 @@ class GetData:
         def __exit__(self , *args) -> None: CONF.SILENT = False
 
     @classmethod
+    def data_dates(cls , db_src , db_key):
+        return get_target_dates(db_src , db_key)
+
+    @classmethod
     def trade_dates(cls , start_dt : int = -1 , end_dt : int = 99991231):
         with cls.Silence():
             calendar = load_target_file('information' , 'calendar')
@@ -45,14 +49,20 @@ class GetData:
         return calendar
     
     @classmethod
-    def daily_returns(cls , start_dt : int , end_dt : int , return_type : Literal['close' , 'vwap'] = 'close'):
-        '''
-        lag == 1 indicates future day return
-        '''
+    def stocks(cls , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
+        with cls.Silence():
+            stocks = load_target_file('information' , 'description')
+            assert stocks is not None
+            if listed: stocks = stocks[stocks['list_dt'] > 0]
+            if exchange: stocks = stocks[stocks['exchange_name'].isin(exchange)]
+        return stocks.reset_index()
+    
+    @classmethod
+    def daily_returns(cls , start_dt : int , end_dt : int):
         with cls.Silence():
             pre_start_dt = int(date_offset(start_dt , -20))
-            feature = [return_type]
-            block = BlockLoader('trade' , 'day' , [return_type , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
+            feature = ['close' , 'vwap']
+            block = BlockLoader('trade' , 'day' , ['close' , 'vwap' , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
             block = block.adjust_price().align_feature(feature)
             values = block.values[:,1:] / block.values[:,:-1] - 1
             secid  = block.secid

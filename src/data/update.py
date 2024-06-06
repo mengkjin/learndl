@@ -85,8 +85,14 @@ class DataUpdater():
                 ['ret20',[20 ,False],] , 
                 ['ret20_lag',[20 ,True],] , 
             ]
+        elif db_src == 'benchmark':
+            param_args = [
+                ['csi300',['csi300']] , 
+                ['csi500',['csi500']] , 
+                ['csi1000',['csi1000']] , 
+            ]
         else:
-            raise Exception(db_src)
+            raise KeyError(db_src)
         params = [DataFetcher(db_src , *args) for args in param_args]
         return params
     

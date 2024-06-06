@@ -72,3 +72,6 @@ REG_MODELS = [
     _RegModel('gruRTN_day' , 'swalast' , 0 , 'gruRTN_day_V0') , 
     _RegModel('gruRES_day' , 'swalast' , 0 , 'gruRES_day_V0') ,
 ]
+
+RISK_STYLE = ['size','beta','momentum','residual_volatility','non_linear_size',
+                'book_to_price','liquidity','earnings_yield','growth','leverage']

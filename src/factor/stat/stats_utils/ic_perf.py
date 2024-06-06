@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 from .data_preparation import prepare_ret_data_with_lag
 
-
 def calc_ic(factor_val_df, ret_type, yend_ed, bm_index_nm, ret_range_type, price_type, ic_type, lag):
     assert ic_type in ("pearson", "spearman")
     factor_ret_data = prepare_ret_data_with_lag(factor_val_df, ret_type, yend_ed, bm_index_nm, ret_range_type,

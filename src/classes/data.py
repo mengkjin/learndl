@@ -3,6 +3,7 @@ import pandas as pd
 import xarray as xr  
 import torch
 
+from copy import deepcopy
 from dataclasses import dataclass
 from torch import Tensor
 from typing import Any , ClassVar , Literal , Optional
@@ -148,58 +149,66 @@ class StockData4D:
         if dtype and isinstance(self.values , Tensor): self.values = self.values.to(dtype)
         return self
     
-    def align(self , secid = None , date = None , feature = None):
-        self = self.align_secid_date(secid , date)
-        self = self.align_feature(feature)
-        return self    
+    def copy(self): return deepcopy(self)
 
-    def align_secid(self , secid):
-        if secid is None or len(secid) == 0: return self
-        asTensor , dtype = isinstance(self.values , Tensor) , self.dtype
-        values = np.full((len(secid) , *self.shape[1:]) , np.nan)
-        _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
-        values[p0s] = self.values[p1s]
-        self.values = values
-        self.secid  = secid
-        return self.as_tensor(asTensor).as_type(dtype)
+    def align(self , secid = None , date = None , feature = None , inplace = True):
+        obj = self if inplace else self.copy()
+        obj = obj.align_secid_date(secid , date)
+        obj = obj.align_feature(feature)
+        return obj    
+
+    def align_secid(self , secid , inplace = True):
+        obj = self if inplace else self.copy()
+        if secid is None or len(secid) == 0: return obj
+        asTensor , dtype = isinstance(obj.values , Tensor) , obj.dtype
+        values = np.full((len(secid) , *obj.shape[1:]) , np.nan)
+        _ , p0s , p1s = np.intersect1d(secid , obj.secid , return_indices=True)
+        values[p0s] = obj.values[p1s]
+        obj.values = values
+        obj.secid  = secid
+        return obj.as_tensor(asTensor).as_type(dtype)
     
-    def align_date(self , date):
-        if date is None or len(date) == 0: return self
-        asTensor , dtype = isinstance(self.values , Tensor) , self.dtype
-        values = np.full((self.shape[0] , len(date) , *self.shape[2:]) , np.nan)
-        _ , p0d , p1d = np.intersect1d(date , self.date , return_indices=True)
-        values[:,p0d] = self.values[:,p1d]
-        self.values  = values
-        self.date    = date
-        return self.as_tensor(asTensor).as_type(dtype)
+    def align_date(self , date , inplace = True):
+        obj = self if inplace else self.copy()
+        if date is None or len(date) == 0: return obj
+        asTensor , dtype = isinstance(obj.values , Tensor) , obj.dtype
+        values = np.full((obj.shape[0] , len(date) , *obj.shape[2:]) , np.nan)
+        _ , p0d , p1d = np.intersect1d(date , obj.date , return_indices=True)
+        values[:,p0d] = obj.values[:,p1d]
+        obj.values  = values
+        obj.date    = date
+        return obj.as_tensor(asTensor).as_type(dtype)
     
-    def align_secid_date(self , secid = None , date = None):
+    def align_secid_date(self , secid = None , date = None , inplace = True):
+        obj = self if inplace else self.copy()
         if (secid is None or len(secid) == 0) and (date is None or len(date) == 0): 
-            return self
+            return obj
         elif secid is None or len(secid) == 0:
-            return self.align_date(date = date)
+            return obj.align_date(date = date)
         elif date is None or len(date) == 0:
-            return self.align_secid(secid = secid)
+            return obj.align_secid(secid = secid)
         else:
-            asTensor , dtype = isinstance(self.values , Tensor) , self.dtype
-            values = np.full((len(secid),len(date),*self.shape[2:]) , np.nan)
-            _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
-            _ , p0d , p1d = np.intersect1d(date  , self.date  , return_indices=True)
-            values[np.ix_(p0s,p0d)] = self.values[np.ix_(p1s,p1d)] 
-            self.values  = torch.tensor(values).to(self.values) if isinstance(self.values , Tensor) else values
-            self.secid   = secid
-            self.date    = date
-            return self.as_tensor(asTensor).as_type(dtype)
+            asTensor , dtype = isinstance(obj.values , Tensor) , obj.dtype
+            values = np.full((len(secid),len(date),*obj.shape[2:]) , np.nan)
+            _ , p0s , p1s = np.intersect1d(secid , obj.secid , return_indices=True)
+            _ , p0d , p1d = np.intersect1d(date  , obj.date  , return_indices=True)
+            values[np.ix_(p0s,p0d)] = obj.values[np.ix_(p1s,p1d)] 
+
+            obj.values  = torch.tensor(values).to(obj.values) if isinstance(obj.values , Tensor) else values
+            obj.secid   = secid
+            obj.date    = date
+            return obj.as_tensor(asTensor).as_type(dtype)
     
-    def align_feature(self , feature):
-        if feature is None or len(feature) == 0: return self
-        asTensor , dtype = isinstance(self.values , Tensor) , self.dtype
-        values = np.full((*self.shape[:-1],len(feature)) , np.nan)
-        _ , p0f , p1f = np.intersect1d(feature , self.feature , return_indices=True)
-        values[...,p0f] = self.values[...,p1f]
-        self.values  = torch.tensor(values).to(self.values) if isinstance(self.values , Tensor) else values
-        self.feature = feature
-        return self.as_tensor(asTensor).as_type(dtype)
+    def align_feature(self , feature , inplace = True):
+        obj = self if inplace else self.copy()
+        if feature is None or len(feature) == 0: return obj
+        asTensor , dtype = isinstance(obj.values , Tensor) , obj.dtype
+        values = np.full((*obj.shape[:-1],len(feature)) , np.nan)
+        _ , p0f , p1f = np.intersect1d(feature , obj.feature , return_indices=True)
+        values[...,p0f] = obj.values[...,p1f]
+        obj.values  = torch.tensor(values).to(obj.values) if isinstance(obj.values , Tensor) else values
+        obj.feature = feature
+        return obj.as_tensor(asTensor).as_type(dtype)
     
     def add_feature(self , new_feature , new_value : np.ndarray | Tensor):
         assert new_value.shape == self.shape[:-1]

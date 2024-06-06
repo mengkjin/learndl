@@ -2,7 +2,7 @@ import os , pyreadr
 import pandas as pd
 import numpy as np
 
-from typing import Any , Optional
+from typing import Any , Literal , Optional
 
 from .common import list_files , R_path_date
 from ...classes import FailedData
@@ -360,4 +360,15 @@ class RFetcher:
             df = cls.trade_min_reform(df , by = x)
         if df is None: return df
         if with_date: df['date'] = date
+        return df
+    
+    @classmethod
+    def benchmark(cls , date : int , bm : Literal['csi300' , 'csi500' , 'csi1000'] , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+        '''get risk model from R environment , bm_any('CSI300' , 20240325)'''
+        path = f'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/{bm.upper()}/{bm.upper()}_{date}.csv'
+        if not os.path.exists(path):  return FailedData(f'bm_{bm.lower()}' , date)
+        df = pd.read_csv(path)
+        df = cls.adjust_secid(df)
+        df['weight'] = df['weight'] / df['weight'].sum()
+        df = cls.adjust_precision(df)
         return df

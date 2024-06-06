@@ -36,6 +36,7 @@ class DataFetcher:
             elif re.match(r'^\d+day$' , db_key): return RFetcher.trade_Xday
             elif re.match(r'^\d+min$' , db_key): return RFetcher.trade_Xmin
         elif db_src == 'labels': return RFetcher.labels
+        elif db_src == 'benchmark': return RFetcher.benchmark
         raise Exception('Unknown default_fetcher')
 
     def eval(self , date = None , **kwargs) -> Any:

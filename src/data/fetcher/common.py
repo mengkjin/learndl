@@ -6,7 +6,7 @@ from typing import Literal
 from ...environ import PATH , CONF
 
 DB_BY_NAME  : list[str] = ['information']
-DB_BY_DATE  : list[str] = ['models' , 'trade' , 'labels']  
+DB_BY_DATE  : list[str] = ['models' , 'trade' , 'labels' , 'benchmark']  
 
 def list_files(directory , fullname = False , recur = False):
     '''list all files in directory'''
@@ -35,14 +35,17 @@ def get_target_path(db_src , db_key , date = None , makedir = False ,
     if makedir: os.makedirs(db_path , exist_ok=True)
     return os.path.join(db_path , db_base)
 
-
 def get_source_dates(db_src , db_key):
     assert db_src in DB_BY_DATE
-    return R_source_dates('/'.join([db_src , re.sub(r'\d+', '', db_key)]))
+    return R_source_dates(db_src , db_key)
 
-def get_target_dates(db_src , db_key):
+def get_target_dates(db_src , db_key , year = None):
     db_path = os.path.join(PATH.database , f'DB_{db_src}' , db_key)
-    target_files = list_files(db_path , recur=True)
+    if year is None:
+        target_files = list_files(db_path , recur=True)
+    else:
+        if not isinstance(year , list): year = [year]
+        target_files = [f for y in year for f in list_files(f'{db_path}/{y}')]
     target_dates = R_path_date(target_files)
     return np.array(sorted(target_dates) , dtype=int)
 
@@ -80,7 +83,9 @@ def R_dir_dates(directory):
     '''get all path dates in a dir from R environment'''
     return R_path_date(list_files(directory , recur = True))
     
-def R_source_dates(source_key):
+def R_source_dates(db_src , db_key):
+    if db_src != 'benchmark': db_key = re.sub(r'\d+', '', db_key)
+    source_key = '/'.join([db_src , db_key])
     date_source = {
         'models/risk_exp'   : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model' ,
         'models/longcl_exp' : 'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/A1_Analyst',
@@ -88,6 +93,9 @@ def R_source_dates(source_key):
         'trade/min'         : 'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin' ,
         'labels/ret'        : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
         'labels/ret_lag'    : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
+        'benchmark/csi300'  : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI300' ,
+        'benchmark/csi500'  : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI500' ,
+        'benchmark/csi1000' : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI1000' ,
     }[source_key]
 
     source_dates = R_dir_dates(date_source)

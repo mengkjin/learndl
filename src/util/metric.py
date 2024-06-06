@@ -125,19 +125,20 @@ class Metrics:
                               penalty_kwargs : dict[str,Any] = {} , multiloss_param = {} , assert_nan = False):
         '''Calculate loss(with gradient), penalty , score'''
         assert dataset in ['train','valid','test']
+        
         if label.shape != pred.shape: # if more label than output
             label = label[...,:pred.shape[-1]]
-            assert label.shape == pred.shape , (label.shape , pred.shape)
-        elif label.ndim == 1:
+        if label.ndim == 1:
             label , pred = label.reshape(-1, 1) , pred.reshape(-1, 1)
+        assert label.shape == pred.shape , (label.shape , pred.shape)
         assert label.shape[-1] == self.num_output , (label.shape[-1] , self.num_output)
 
         with no_grad():
-            score = self.score_calc(label , pred , weight , nan_check = (dataset == 'test') , which_col = self.which_output).item()
+            score = self.score_calc(label , pred , weight , nan_check = True , which_head = self.which_output , training = False).item()
             self.output = BatchMetric(score = score)
 
         if dataset == 'train' and not self.is_booster:
-            multiheadlosses = self.loss_calc(label , pred , weight)
+            multiheadlosses = self.loss_calc(label , pred , weight , nan_check = False , training = True)
             loss = self.multi_losses(multiheadlosses , multiloss_param) 
             self.output.add_loss(self.loss_calc.criterion , loss)
 
@@ -156,20 +157,19 @@ class Metrics:
 
 class _MetricCalculator(ABC):
     KEY : Literal['loss' , 'score' , 'penalty'] = 'loss'
-    def __init__(self , criterion : str , collapse = False):
+    def __init__(self , criterion : str):
         '''
         criterion : metric function
         collapse  : aggregate last dimension if which_col < -1
         '''
         self.criterion = criterion
-        self.collapse = collapse
 
     def __call__(self, label : Tensor ,pred : Tensor , weight : Optional[Tensor] = None , 
-                 dim : int = 0 , nan_check : bool = False , which_col : int = -1, **kwargs) -> Tensor:
+                 dim : int = 0 , nan_check : bool = False , which_head : Optional[int] = None, 
+                 training = False , **kwargs) -> Tensor:
         '''calculate the resulting metric'''
-        label , pred , weight = self.slice_data(label , pred , weight , which_col = which_col , nan_check = nan_check)
+        label , pred , weight = self.slice_data(label , pred , weight , nan_check , which_head , training)
         v = self.forward(label , pred , weight, dim , **kwargs)
-        if which_col < 0 and self.collapse: v = torch.nanmean(v , dim = -1)
         self.display()
         return v
     
@@ -184,11 +184,26 @@ class _MetricCalculator(ABC):
             DISPLAY_RECORD[self.KEY][self.criterion] = True
     
     @classmethod
-    def slice_data(cls , *args , which_col : int = 0 , nan_check : bool = False) -> list[Any] | tuple:
+    def slice_data(cls , label , pred , weight = None , nan_check : bool = False , 
+                   which_head : Optional[int] = None , training = False) -> tuple[Tensor , Tensor , Optional[Tensor]]:
         '''each element return ith column, if negative then return raw element'''
-        if which_col >= 0: args = [None if arg is None else arg[...,which_col] for arg in args]
+        if nan_check: label , pred , weight = cls.slice_data_nonnan(label , pred , weight)
+        label  = cls.slice_data_col(label , None if training else 0)
+        pred   = cls.slice_data_col(pred  , None if training else which_head)
+        weight = cls.slice_data_col(weight, None if training else which_head)
 
-        if not nan_check: return args
+        if pred.ndim > label.ndim:
+            pred = pred.nanmean(dim = -1)
+            if weight is not None: weight = weight.nanmean(dim = -1)
+        assert label.shape == pred.shape , (label.shape , pred.shape)
+        return label , pred , weight
+    
+    @staticmethod
+    def slice_data_col(data : Optional[Tensor] , col : Optional[int] = None) -> Any:
+        return data if data is None or col is None else data[...,col]
+        
+    @staticmethod
+    def slice_data_nonnan(*args):
         nanpos = False
         for arg in args:
             if arg is not None: nanpos = arg.isnan() + nanpos
@@ -203,7 +218,7 @@ class LossCalculator(_MetricCalculator):
     def __init__(self , criterion : Literal['mse', 'pearson', 'ccc']):
         ''' 'mse', 'pearson', 'ccc' , will not collapse columns '''
         assert criterion in ('mse' , 'pearson' , 'ccc')
-        super().__init__(criterion , False)
+        super().__init__(criterion)
 
     def forward(self, label: Tensor, pred: Tensor, weight: Tensor | None = None, dim: int = 0, **kwargs):
         v = METRIC_FUNC[self.criterion](label , pred , weight, dim , **kwargs)
@@ -215,7 +230,7 @@ class ScoreCalculator(_MetricCalculator):
     def __init__(self , criterion : Literal['mse', 'pearson', 'ccc' , 'spearman']):
         ''' 'mse', 'pearson', 'ccc' , 'spearman', will collapse columns if multi-labels '''
         assert criterion in ('mse' , 'pearson' , 'ccc' , 'spearman')
-        super().__init__(criterion , True)
+        super().__init__(criterion)
     
     def forward(self, label: Tensor, pred: Tensor, weight: Tensor | None = None, dim: int = 0, **kwargs):
         v = METRIC_FUNC[self.criterion](label , pred , weight, dim , **kwargs)
@@ -226,12 +241,12 @@ class PenaltyCalculator(_MetricCalculator):
     KEY = 'penalty'
     def __init__(self , criterion : Literal['hidden_corr'] , param : dict[str,Any]):
         ''' 'hidden_corr' '''
-        super().__init__(criterion , True)
+        super().__init__(criterion)
         self.param = param
         if self.criterion == 'hidden_corr':
             self.penalty = self.hidden_corr
         else: 
-            self.penalty = self.null
+            raise KeyError(self.criterion)
         self.lamb = param['lamb']
         self.cond = True
         
@@ -242,7 +257,6 @@ class PenaltyCalculator(_MetricCalculator):
         return self.lamb * v
     
     def forward(self, *args , **kwargs): return None
-    def null(self , **kwargs) -> Tensor: return torch.Tensor([0.])
     def hidden_corr(self , hidden : Tensor | list | tuple , **kwargs) -> Tensor:
         '''if kwargs containse hidden, calculate 2nd-norm of hTh'''
         if isinstance(hidden,(tuple,list)): hidden = torch.cat(hidden,dim=-1)
