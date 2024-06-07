@@ -37,7 +37,6 @@ def plot_factor_distribution(density_info):
     fig.suptitle('因子分布抽样图')
     return fig
 
-
 def plot_factor_quantile(factor_qtile_data):
     factor_qtile_data = factor_qtile_data.set_index(['CalcDate', 'factor_name'])
     factor_qtile_data.columns.rename('quantile_name', inplace=True)
