@@ -55,24 +55,6 @@ def plot_factor_quantile(factor_qtile_data):
     ax.legend(handles=handles[0:], labels=labels[0:], loc='upper left')
     return fig
 
-
-def plot_factor_quantile_without_scaling(factor_qtile_data):
-    factor_qtile_data = factor_qtile_data.set_index(['CalcDate', 'factor_name'])
-    factor_qtile_data.columns.rename('quantile_name', inplace=True)
-    factor_qtile_data = factor_qtile_data.stack().rename('quantile_value').reset_index(drop=False)
-    factor_list = factor_qtile_data['factor_name'].unique()
-    factor_name = factor_list[0]
-    factor_qtile_data = factor_qtile_data[factor_qtile_data['factor_name'] == factor_name].drop(columns=['factor_name'])
-    factor_qtile_data = factor_qtile_data.assign(CalcDate=pd.to_datetime(factor_qtile_data['CalcDate'], format='%Y-%m-%d'))
-    fig = plt.figure(figsize=(16, 7))
-    # TODO: add norm distribution tick
-    ax = sns.lineplot(x='CalcDate', y='quantile_value', hue='quantile_name', data=factor_qtile_data)
-    plt.grid()
-    ax.set_title('因子分位点时序变化(无标准化处理)')
-    handles, labels = ax.get_legend_handles_labels()
-    ax.legend(handles=handles[0:], labels=labels[0:], loc='upper left')
-    return fig
-
 def plot_ic_curve(stats_rslts):
     ic_perf = stats_rslts[0]
     ic_cumsum = ic_perf.cumsum()
@@ -174,17 +156,3 @@ def plot_industry_ic(results):
     ax2.legend(['IC均值（右轴）'], loc='upper right')
     return fig
 
-
-def plot_barra_corr(results):
-    factor_list = results['factor_name'].unique()
-    factor_name = factor_list[0]
-    results = results[results['factor_name'] == factor_name].drop(columns=['factor_name'])
-    results = results.set_index(['CalcDate'])
-    results.columns = results.columns.str.replace('STYLE.', '', regex=False)
-    results.columns.rename('style_factor', inplace=True)
-    results = results.stack().rename('factor_corr').reset_index(drop=False)
-    fig = plt.figure(figsize=(16, 7))
-    ax = sns.boxplot(x='style_factor', y='factor_corr', data=results, width=0.3)
-    plt.grid()
-    ax.set_title('因子同barra因子的相关性')
-    return fig

@@ -1,18 +1,18 @@
 import numpy as np
 import pandas as pd
 
-
+from copy import deepcopy
 from typing import Literal , Optional
 
 from src.data import DataBlock
 from .data_util import DATAVENDOR
 from .port_util import Benchmark
 from .perf_util import factor_val_breakdown , factor_mask , calc_ic , calc_grp_perf
-from .plot_util import FactorStatPlot
+from . import plot_util as PlotUtil
 
-def calc_decay_pnl(factor_val : DataBlock | pd.DataFrame, nday : int = 10 , lag_init : int = 2 , lag_num : int = 5 ,
-                   benchmark : Optional[Benchmark] = None , ic_type : Literal['pearson' , 'spearman'] = 'pearson' , 
-                   ret_type : Literal['close' , 'vwap'] = 'close'):
+def calc_decay_ic(factor_val : DataBlock | pd.DataFrame, nday : int = 10 , lag_init : int = 2 , lag_num : int = 5 ,
+                  benchmark : Optional[Benchmark] = None , ic_type : Literal['pearson' , 'spearman'] = 'pearson' , 
+                  ret_type : Literal['close' , 'vwap'] = 'close'):
     '''
     nday : days of future return
     lag_init : starting lag of most recent future return , usually 1 or 2
@@ -59,16 +59,53 @@ def calc_style_corr(factor_val : DataBlock | pd.DataFrame):
     factor_style_corr.reset_index(drop=False, inplace=True)
     return factor_style_corr
 
+def calc_distribution(factor_val : DataBlock | pd.DataFrame , sampling_date_num : int = 20 , hist_bins : int = 50):
+    factor_val , secid , date = factor_val_breakdown(factor_val)
+    date_chosen = date[::int(np.ceil(len(date) / sampling_date_num))]
+    factor_list = factor_val.columns.tolist()
+    factor_val_date = factor_val.reset_index(drop = False).set_index('date')
+    rtn = []
+    for factor_name in factor_list:
+        hist_dict = {}
+        for date in date_chosen:
+            factor_sample = factor_val_date.loc[date, [factor_name]].copy()
+            cnts, bins = np.histogram(factor_sample, bins=hist_bins, density=False)
+            hist_dict[date] = (cnts, bins)
+        hist_df = pd.DataFrame(hist_dict, index=['hist_cnts', 'hist_bins']).T
+        hist_df['factor_name'] = factor_name
+        rtn.append(hist_df)
+    rtn = pd.concat(rtn, axis=0)
+    rtn.index.rename('date', inplace=True)
+    rtn = rtn.reset_index(drop=False).loc[:,['date' , 'factor_name', 'hist_cnts', 'hist_bins']]
+    return rtn
+
+def _calc_factor_qtile_by_day(factor : pd.DataFrame , scaling : bool = True):
+    if scaling: factor = (factor - factor.mean()) / factor.std()
+    rtn = pd.concat([factor.quantile(q / 100).rename(f'{q}%') for q in (5,25,50,75,95)], axis=1, sort=True)
+    return rtn
+
+def calc_factor_qtile(factor_val : pd.DataFrame , scaling : bool = True):
+    factor_val , _ , _ = factor_val_breakdown(factor_val)
+    rtn = factor_val.groupby(['date']).apply(_calc_factor_qtile_by_day , scaling = scaling).\
+        reset_index(drop=False).rename(columns={'level_1':'factor_name'})
+    return rtn
+
 if __name__ == '__main__':
     factor_val = DATAVENDOR.random_factor().to_dataframe()
     benchmark  = Benchmark('csi300')
 
     g = calc_grp_perf(factor_val)
-    fig = FactorStatPlot.plot_group_perf(g)
+    fig = PlotUtil.plot_grp_perf(g)
 
-    a = calc_decay_pnl(factor_val)
-    fig= FactorStatPlot.plot_decay_ic(a)
+    a = calc_decay_ic(factor_val)
+    fig= PlotUtil.plot_decay_ic(a)
 
     a = calc_decay_grp_perf(factor_val)
-    fig = FactorStatPlot.plot_decay_grp_perf(a , 'ret')
-    fig = FactorStatPlot.plot_decay_grp_perf(a , 'ir')
+    fig = PlotUtil.plot_decay_grp_perf(a , 'ret')
+    fig = PlotUtil.plot_decay_grp_perf(a , 'ir')
+
+    a = calc_distribution(factor_val)
+    fig = PlotUtil.plot_distribution(a)
+
+    a = calc_factor_qtile(factor_val)
+    fig = PlotUtil.plot_factor_qtile(a)
