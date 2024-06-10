@@ -74,7 +74,10 @@ class StockData4D:
                 self.feature = np.array([self.feature])
             elif isinstance(self.feature , list):
                 self.feature = np.array(self.feature)
+            if isinstance(self.values , (int , float)):
+                self.values = np.full((len(self.secid),len(self.date),1,len(self.feature)),self.values)
             if self.ndim == 3: self.values = self.values[:,:,None]
+        self.asserted()
 
     def uninitiate(self):
         self.values  = None
@@ -88,7 +91,7 @@ class StockData4D:
             assert isinstance(self.values , (np.ndarray , Tensor))
             assert self.shape[0] == len(self.secid) 
             assert self.shape[1] == len(self.date)
-            assert self.shape[4] == len(self.feature)
+            assert self.shape[3] == len(self.feature)
         return self
     
     def __repr__(self):

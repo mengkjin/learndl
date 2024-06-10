@@ -38,6 +38,7 @@ class Predictor:
             md.get_df().deploy()
             CONF.SILENT = False
             print(f'Finish model [{model.name}] predicting!')
+        print('-' * 80)
 
 
     def deploy(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):

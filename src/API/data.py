@@ -27,6 +27,7 @@ class DataAPI:
             DataUpdater.update_server()
         else:
             DataUpdater.update_laptop()
+        print('-' * 80)
 
     @staticmethod
     def prepare_train_data(): 
@@ -34,6 +35,7 @@ class DataAPI:
         prepare latest(1 year or so) train data for predict use, do it after 'update'
         '''
         DataProcessor.main(True)
+        print('-' * 80)
 
     @staticmethod
     def reconstruct_train_data(): 
@@ -42,6 +44,7 @@ class DataAPI:
         '''
         assert THIS_IS_SERVER
         NetDataModule.prepare_data()
+        print('-' * 80)
 
 class _DataModule(BaseDataModule):
     @abstractmethod

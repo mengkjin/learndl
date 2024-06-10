@@ -2,12 +2,13 @@ import torch
 import numpy as np
 import pandas as pd
 
-from typing import Literal , Optional
+from typing import Any , Literal , Optional
 
 from src.data import DataBlock
 from src.data.fetcher import get_target_dates , load_target_file
 from src.func import match_values
 
+from .data_util import DATAVENDOR
 
 class Portfolio:
     def __init__(self , port : Optional[pd.DataFrame] , date : int = -1 , name : str = 'port') -> None:
@@ -42,43 +43,34 @@ class Portfolio:
     def weight(self): return self.port['weight'].to_numpy()
     
 class PortfolioStream:
-    def __init__(self , portfolios : list[Portfolio] = []) -> None:
-        self.ports = {f'{port.name}.{port.date}':port for port in portfolios}
-        self.create_weight_block()
+    '''Non-Consecutive stream of some portfolio'''
+    def __init__(self , name : Optional[str]) -> None:
+        self.name = name
+        self.ports : dict[int,Portfolio] = {}
+        self.weight_block_completed = False
 
     def __repr__(self): return repr(self.ports)
 
     @classmethod
-    def random(cls):  return cls([Portfolio.random() for _ in range(3)])
+    def random(cls):  
+        rand_ps = cls('rand_port')
+        for _ in range(3): rand_ps.append(Portfolio.random() , override = True)
+        return rand_ps
 
-    def create_weight_block(self):
-        secid = np.unique(np.concatenate([port.secid for port in self.ports.values()])) if self.ports else np.array([]).astype(int)
-        date  = np.array([port.date for port in self.ports.values()]).astype(int)
-        values = np.zeros((len(secid) , len(date) , 1 , 1))
-        for i , port in enumerate(self.ports.values()):
-            values[match_values(port.secid , secid),i,0,0] = port.weight
-        self.weight = DataBlock(values , secid , date , ['weight']).align_date(np.sort(date))
-
-    def stack(self):
-        if self.ports:
-            return pd.concat([pf.port_with_date for pf in self.ports.values()] , axis = 0)
-        else:
-            return pd.DataFrame(columns=['date','secid','weight']).astype({'date':int,'secid':int,'weight':float})
+    def weight_block(self):
+        if not self.weight_block_completed:
+            df = pd.concat([pf.port_with_date for pf in self.ports.values()] , axis = 0)
+            self.weight = DataBlock.from_dataframe(df.set_index(['secid' , 'date']))
+            self.weight_block_completed = True
+        return self.weight
         
-    def append(self , port : Portfolio):
-        key = f'{port.name}.{port.date}'
-        assert key not in self.ports.keys() , key
-        self.ports[key] = port
-        new_secid = np.union1d(self.weight.secid , port.secid)
-        new_date  = np.union1d(self.weight.date  , port.date)
-        self.weight = self.weight.align_secid_date(new_secid , new_date)
-        i = match_values(port.secid , self.weight.secid)
-        j = np.where(new_date == port.date)[0][0]
-        self.weight.values[i,j,0,0] = port.weight[:]
+    def append(self , port : Portfolio , override = False):
+        assert self.name == port.name , (self.name , port.name)
+        assert override or (port.date not in self.ports.keys()) , port.date
+        self.ports[port.date] = port
+        self.weight_block_completed = False
 
-    def get(self , name : str , date : int):
-        key = f'{name}.{date}'
-        return self.ports.get(key , None)
+    def get(self , date : int): return self.ports.get(date , None)
 
 class Benchmark:
     def __init__(self , name : Optional[Literal['csi300' , 'csi500' , 'csi1000']] = None) -> None:
@@ -87,7 +79,15 @@ class Benchmark:
             self.available_dates = None
         else:
             self.available_dates = get_target_dates('benchmark' , self.name)
-        self.ports = PortfolioStream()
+        self.ports = PortfolioStream(self.name)
+
+    def __bool__(self): return self.name is not None
+
+    def __call__(self, input : Any):
+        if isinstance(input , (DataBlock , pd.DataFrame)):
+            return self.factor_mask(input)
+        else:
+            raise TypeError(input)
 
     def latest_avail_date(self , date : int = 99991231):
         if self.available_dates is None: return None
@@ -97,16 +97,32 @@ class Benchmark:
 
     def get(self , date : int , latest = False):
         if self.name is None: return Portfolio(None , date , 'none')
-        if (bm := self.ports.get(self.name , date)) is not None: return bm
-        bm = load_target_file('benchmark' , self.name , date)
-        if bm is None and latest: bm = load_target_file('benchmark' , self.name , self.latest_avail_date(date))
-        port = Portfolio(bm , date , self.name)
-        self.ports.append(port)
+        port = self.ports.get(date)
+        if port is None:
+            use_date = self.latest_avail_date(date) if latest else date
+            bm = load_target_file('benchmark' , self.name , use_date)
+            port = Portfolio(bm , date , self.name)
+            self.ports.append(port)
         return port
 
     def universe(self , secid : np.ndarray , date : np.ndarray):
-        for i , d in enumerate(date): self.get(d , latest = i==0)
-        weight = self.ports.weight.copy().align_secid_date(secid , date).as_tensor()
-        weight.values = weight.values.nan_to_num(0) > 0
-        weight.feature = ['universe']
+        if self.name:
+            for i , d in enumerate(date): self.get(d , latest = i==0)
+            weight = self.ports.weight_block().copy().align_secid_date(secid , date).as_tensor()
+            weight.values = weight.values.nan_to_num(0) > 0
+            weight.feature = ['universe']
+        else:
+            weight = DataBlock(1 , secid , date , ['weight'])
         return weight
+    
+    def factor_mask(self , factor_val : DataBlock | pd.DataFrame):
+        if self.name is None: return factor_val
+        if isinstance(factor_val , DataBlock): factor_val = factor_val.to_dataframe()
+        factor_list = factor_val.columns.to_list()
+        secid = factor_val.index.get_level_values('secid').unique().values
+        date  = factor_val.index.get_level_values('date').unique().values
+        univ  = self.universe(secid , date).to_dataframe()
+        factor_val = factor_val.join(univ)
+        factor_val.loc[~factor_val['universe'] , factor_list] = np.nan
+        del factor_val['universe']
+        return factor_val.dropna(how = 'all')

@@ -18,6 +18,9 @@ class DataVendor:
         self.trade_date = GetData.trade_dates()
         self.all_stocks = GetData.stocks().sort_values('secid')
 
+    @property
+    def secid(self): return self.all_stocks.secid.unique()
+
     def td_within(self , start_dt : int = -1 , end_dt : int = 99991231 , step : int = 1):
         return self.trade_date[(self.trade_date >= start_dt) & (self.trade_date <= end_dt)][::step]
 
@@ -29,9 +32,9 @@ class DataVendor:
         else:
             return np.array([self.td_offset(d , offset) for d in date])
 
-    def random_factor(self):
-        date  = self.td_within(20240101,20240531,5)
-        secid = self.all_stocks.secid
+    def random_factor(self , start_dt = 20240101 , end_dt = 20240531 , step = 5):
+        date  = self.td_within(start_dt , end_dt , step)
+        secid = self.secid
         factor_val = DataBlock(np.random.randn(len(secid),len(date),1,2),secid,date,['factor1','factor2'])
         return factor_val
 
@@ -66,6 +69,12 @@ class DataVendor:
     def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):
         self.get_risk_exp(date.min() , date.max())
         block = self.risk_exp.align(secid , date , RISK_STYLE , inplace=False).as_tensor()
+        return block
+    
+    def risk_industry_exp(self , secid : np.ndarray , date : np.ndarray):
+        self.get_risk_exp(date.min() , date.max())
+        indus_exp = np.array([f for f in self.risk_exp.feature if f not in ['market' , 'estuniv', 'weight' , *RISK_STYLE]])
+        block = self.risk_exp.align(secid , date , indus_exp , inplace=False).as_tensor()
         return block
     
 DATAVENDOR = DataVendor()
