@@ -2,7 +2,7 @@ import re , os
 import numpy as np
 import pandas as pd
 
-from typing import Literal
+from typing import Any , Literal
 from ...environ import PATH , CONF
 
 DB_BY_NAME  : list[str] = ['information']
@@ -49,7 +49,7 @@ def get_target_dates(db_src , db_key , year = None):
     target_dates = R_path_date(target_files)
     return np.array(sorted(target_dates) , dtype=int)
 
-def load_target_file(db_src , db_key , date = None):
+def load_target_file(db_src , db_key , date = None) -> pd.DataFrame | Any:
     target_path = get_target_path(db_src , db_key , date)
     if os.path.exists(target_path):
         return load_df(target_path)
@@ -88,6 +88,8 @@ def R_source_dates(db_src , db_key):
     source_key = '/'.join([db_src , db_key])
     date_source = {
         'models/risk_exp'   : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model' ,
+        'models/risk_cov'   : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/6_factor_return_covariance/jm2018_model' ,
+        'models/risk_spec'  : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/C_specific_risk/jm2018_model' ,
         'models/longcl_exp' : 'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/A1_Analyst',
         'trade/day'         : 'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_vwap' ,
         'trade/min'         : 'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin' ,

@@ -121,24 +121,43 @@ class StockData4D:
         if len(blocks) == 0: return cls()
         elif len(blocks) == 1: return blocks[0]
             
-        values = [blk.values for blk in blocks]
+        """
         secid  = index_union([blk.secid for blk in blocks])[0]
         date   = index_union([blk.date  for blk in blocks])[0]
+        
         l1 = len(np.unique(np.concatenate([blk.feature for blk in blocks])))
         l2 = sum([len(blk.feature) for blk in blocks])
         distinct_feature = (l1 == l2)
 
         for blk in blocks: blk.align_secid_date(secid , date)
+        values = [blk.values for blk in blocks]
 
         if distinct_feature:
             feature = np.concatenate([blk.feature for blk in blocks])
             newdata = np.concatenate([blk.values  for blk in blocks] , axis = -1)
         else:
             feature, p0f , p1f = index_union([blk.feature for blk in blocks])
+            # print(feature, p0f , p1f)
             newdata = np.full((*blocks[0].shape[:-1],len(feature)) , np.nan , dtype = float)
             for i , data in enumerate(values): newdata[...,p0f[i]] = data[...,p1f[i]]
 
         return cls(newdata , secid , date , feature)
+        
+        """
+        secid   , p0s , p1s = index_union([blk.secid   for blk in blocks])
+        date    , p0d , p1d = index_union([blk.date    for blk in blocks])
+        feature , p0f , p1f = index_union([blk.feature for blk in blocks])
+        len_inday = blocks[0].shape[2]
+        assert np.all([blk.shape[2] == len_inday for blk in blocks]) , 'blocks with different inday cannot be merged'
+        p0i = p1i = np.arange(len_inday)
+
+        for i , blk in enumerate(blocks): 
+            if i == 0:
+                new_blk = blocks[0].copy().align(secid , date , feature)
+            else:
+                new_blk.values[np.ix_(p0s[i],p0d[i],p0i,p0f[i])] = blk.values[np.ix_(p1s[i],p1d[i],p1i,p1f[i])]
+
+        return new_blk
 
     def merge_others(self , others : list):
         return self.merge([self , *[others]])

@@ -73,5 +73,13 @@ REG_MODELS = [
     _RegModel('gruRES_day' , 'swalast' , 0 , 'gruRES_day_V0') ,
 ]
 
-RISK_STYLE = ['size','beta','momentum','residual_volatility','non_linear_size',
-                'book_to_price','liquidity','earnings_yield','growth','leverage']
+RISK_STYLE = [
+    'size','beta','momentum','residual_volatility','non_linear_size',
+    'book_to_price','liquidity','earnings_yield','growth','leverage'
+]
+RISK_INDUS = [
+    'petro', 'coal', 'nonferrous', 'utility', 'public', 'steel', 'chemical', 'construct', 
+    'cement', 'material', 'light', 'machine', 'power', 'defense', 'auto', 'retail', 'leisure', 
+    'appliance', 'textile', 'health', 'liqor', 'food', 'agro', 'bank', 'financial', 'estate', 
+    'transport', 'marine', 'airline', 'electronic', 'telecom', 'hardware', 'software', 'media', 'complex'
+]

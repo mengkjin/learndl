@@ -61,6 +61,8 @@ class DataUpdater():
         elif db_src == 'models':
             param_args = [
                 ['risk_exp',] ,   # market, industry, style exposure of risk model jm2018
+                ['risk_cov',] ,   # factor covariance matrix (annualized ocv) of risk model jm2018
+                ['risk_spec',] ,  # specific risk (annualized standard deviation) of risk model jm2018
                 ['longcl_exp',] , # sub alpha factor exposure of longcl
             ]
         elif db_src == 'trade':

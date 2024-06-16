@@ -1,0 +1,40 @@
+Task
+    # Written by MOSEK v10.2.0
+    # problemtype: Conic Problem
+    # number of linear variables: 8
+    # number of linear constraints: 1
+    # number of  old-style cones: 0
+    # number of positive semidefinite variables: 0
+    # number of positive semidefinite matrixes: 0
+    # number of affine conic constraints: 1
+    # number of disjunctive constraints: 0
+    # number scalar affine expressions/nonzeros : 11/24
+    # number of old-style A nonzeros: 8
+Objective
+    Maximize + 0.07197 'x[1]' + 0.15518 'x[2]' + 0.17535 'x[3]' + 0.08981 'x[4]' + 0.42896 'x[5]' + 0.39292 'x[6]' + 0.32171 'x[7]'
+            + 0.18379 'x[8]'
+Constraints
+    budget [1] + 'x[1]' + 'x[2]' + 'x[3]' + 'x[4]' + 'x[5]' + 'x[6]' + 'x[7]' + 'x[8]'
+    risk [QUAD(11)]
+        @ac1: + 0.48
+        @ac2: + 0.1492836536850666 'x[1]' + 0.149924462065665 'x[2]' + 0.14132117983379036 'x[3]' + 0.1442977098618708 'x[4]'
+            + 0.3205752358552966 'x[5]' + 0.25669761228566756 'x[6]' + 0.2277457723802092 'x[7]' + 0.18411521972195705 'x[8]'
+        @ac3: + 0.03600034314332431 'x[1]' + 0.0746780793829151 'x[2]' + 0.07121095163235416 'x[3]' + 0.08883551769770556 'x[4]'
+            - 0.05071637426237179 'x[5]' - 0.050331137845642804 'x[6]' + 0.04568903902405845 'x[7]' + 0.04075801288992736 'x[8]'
+        @ac4: + 0.2683281572999748 'x[1]'
+        @ac5: + 0.2253885533916929 'x[2]'
+        @ac6: + 0.194164878389476 'x[3]'
+        @ac7: + 0.19849433241279207 'x[4]'
+        @ac8: + 0.25748786379167465 'x[5]'
+        @ac9: + 0.14966629547095767 'x[6]'
+        @ac10: + 0.20420577856662137 'x[7]'
+        @ac11: + 0.2142428528562855 'x[8]'
+Variables
+    'x[1]' [0;+inf]
+    'x[2]' [0;+inf]
+    'x[3]' [0;+inf]
+    'x[4]' [0;+inf]
+    'x[5]' [0;+inf]
+    'x[6]' [0;+inf]
+    'x[7]' [0;+inf]
+    'x[8]' [0;+inf]

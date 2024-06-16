@@ -19,7 +19,7 @@ def multi_factor_plot(func : Callable):
     def wrapper(df : pd.DataFrame , *args , factor_name : Optional[str] = None , **kwargs) -> Any | list[Any]:
         if factor_name is None:
             factor_list = df['factor_name'].unique()
-            return [func(df , *args , factor_name = factor_name , **kwargs) for factor_name in factor_list]
+            return {fn:func(df , *args , factor_name = fn , **kwargs) for fn in factor_list}
         else:
             return func(df , *args , factor_name = factor_name , **kwargs)
     return wrapper
@@ -35,7 +35,7 @@ def plot_head(df : pd.DataFrame , factor_name : Optional[str] = None) -> tuple[p
 def pct_fmt(temp : float, position : int = 2): return '%.2f'%(100*temp) + '%'
 
 @multi_factor_plot
-def plot_decay_ic(df : pd.DataFrame , factor_name : Optional[str] = None):
+def plot_decay_ic(df : pd.DataFrame , factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
 
     df = df.set_index('lag_type')
@@ -49,10 +49,11 @@ def plot_decay_ic(df : pd.DataFrame , factor_name : Optional[str] = None):
     plt.title(f'Average IC Decay for [{factor_name}]')
     plt.grid()
     plt.xticks(rotation=45)  
+    if not show: plt.close()
     return fig
 
 @multi_factor_plot
-def plot_decay_grp_perf(df : pd.DataFrame , stat_type : Literal['ret' , 'ir'] = 'ret',  factor_name : Optional[str] = None):
+def plot_decay_grp_perf(df : pd.DataFrame , stat_type : Literal['ret' , 'ir'] = 'ret',  factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
 
     df = df[(df['stats_name'] == f'decay_grp_{stat_type}')]
@@ -69,10 +70,11 @@ def plot_decay_grp_perf(df : pd.DataFrame , stat_type : Literal['ret' , 'ir'] = 
 
     plt.grid()
     plt.xticks(rotation=45)  
+    if not show: plt.close()
     return fig
     
 @multi_factor_plot
-def plot_grp_perf(df : pd.DataFrame , factor_name : Optional[str] = None):
+def plot_grp_perf(df : pd.DataFrame , factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
 
     df = df.set_index(['date', 'group']).groupby('group' , observed=False)['group_ret'].\
@@ -91,10 +93,11 @@ def plot_grp_perf(df : pd.DataFrame , factor_name : Optional[str] = None):
 
     plt.grid()
     plt.xticks(rotation=45)  
+    if not show: plt.close()
     return fig
     
 @multi_factor_plot
-def plot_style_corr(df : pd.DataFrame , factor_name : Optional[str] = None):
+def plot_style_corr_box(df : pd.DataFrame , factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
 
     df = df.set_index(['date'])
@@ -106,10 +109,11 @@ def plot_style_corr(df : pd.DataFrame , factor_name : Optional[str] = None):
 
     plt.grid()
     plt.xticks(rotation=45)  
+    if not show: plt.close()
     return fig
 
 @multi_factor_plot
-def plot_style_corr_curve(df : pd.DataFrame , factor_name : Optional[str] = None):
+def plot_style_corr(df : pd.DataFrame , factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
 
     df = df.set_index(['date'])
@@ -117,10 +121,11 @@ def plot_style_corr_curve(df : pd.DataFrame , factor_name : Optional[str] = None
     plt.title(f'Correlation Curve with Risk Style Factors for [{factor_name}]')
     plt.grid()
     plt.xticks(rotation=45)  
+    if not show: plt.close()
     return fig
 
 @multi_factor_plot
-def plot_distribution(df : pd.DataFrame , factor_name : Optional[str] = None):
+def plot_distribution(df : pd.DataFrame , factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
 
     assert not df['date'].duplicated().any()
@@ -138,10 +143,11 @@ def plot_distribution(df : pd.DataFrame , factor_name : Optional[str] = None):
         ax.bar(x=bins[:-1] + np.diff(bins) / 2, height=cnts, width=np.diff(bins), facecolor='red')
 
     fig.suptitle(f'Factor Distribution for {factor_name}')
+    if not show: plt.close()
     return fig
 
 @multi_factor_plot
-def plot_factor_qtile(df : pd.DataFrame , factor_name : Optional[str] = None):
+def plot_factor_qtile(df : pd.DataFrame , factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
 
     df.columns.rename('quantile_name', inplace=True)
@@ -155,10 +161,11 @@ def plot_factor_qtile(df : pd.DataFrame , factor_name : Optional[str] = None):
     ax.legend(handles=handles[0:], labels=labels[0:], loc='upper left')
     plt.grid()
     plt.xticks(rotation=45)  
+    if not show: plt.close()
     return fig
 
 @multi_factor_plot
-def plot_top_grp_perf_year(df : pd.DataFrame , factor_name : Optional[str] = None):
+def plot_top_grp_perf_year(df : pd.DataFrame , factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
 
     group = df['group'].values[0]
@@ -172,10 +179,11 @@ def plot_top_grp_perf_year(df : pd.DataFrame , factor_name : Optional[str] = Non
     ax.scale(1, 2)
     plt.title(f'Annualized top Group ({group}) Performance for [{factor_name}]')
     plt.axis('off')
+    if not show: plt.close()
     return fig
 
 @multi_factor_plot
-def plot_ic_year(df : pd.DataFrame , factor_name : Optional[str] = None):
+def plot_ic_year(df : pd.DataFrame , factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
 
     direction  = 'negative (-1)' if df['direction'].values[0] < 0 else 'positive (+1)'
@@ -192,10 +200,11 @@ def plot_ic_year(df : pd.DataFrame , factor_name : Optional[str] = None):
     plt.title(f'Year IC for [{factor_name}]')
     plt.axis('off')
     
+    if not show: plt.close()
     return fig
 
 @multi_factor_plot
-def plot_ic_curve(df : pd.DataFrame , factor_name : Optional[str] = None):
+def plot_ic_curve(df : pd.DataFrame , factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
     
     df = df.set_index('date')
@@ -220,10 +229,11 @@ def plot_ic_curve(df : pd.DataFrame , factor_name : Optional[str] = None):
     plt.title(f'IC curve for [{factor_name}]')
     ax1.grid()
     
+    if not show: plt.close()
     return fig
 
 @multi_factor_plot
-def plot_industry_ic(df : pd.DataFrame , factor_name : Optional[str] = None):
+def plot_industry_ic(df : pd.DataFrame , factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
     
     df = df.rename(columns={'avg':'IC_avg','ir':'ICIR'})
@@ -250,10 +260,11 @@ def plot_industry_ic(df : pd.DataFrame , factor_name : Optional[str] = None):
     plt.title(f'Industry IC & ICIR for [{factor_name}]')
     ax1.grid()
     
+    if not show: plt.close()
     return fig
 
 @multi_factor_plot
-def plot_pnl(df : pd.DataFrame , factor_name : Optional[str] = None):
+def plot_pnl(df : pd.DataFrame , factor_name : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name)
 
     df = df.pivot_table(index='date' , columns='weight_type' , values='cum_ret')
@@ -268,4 +279,6 @@ def plot_pnl(df : pd.DataFrame , factor_name : Optional[str] = None):
     plt.title(f'Cummulative Long-Short PnL for [{factor_name}]')
     plt.grid()
     plt.xticks(rotation=45)  
+
+    if not show: plt.close()
     return fig

@@ -1,0 +1,82 @@
+utility:
+  lambda: 100.0
+  trade_cost_rho: 0.001
+
+equity:
+  target_position:  1.0
+  target_value:     null
+  add_position:     null
+  add_value:        null
+
+benchmark:
+  benchmark:
+    csi1000:    0.7
+    csi300:     0.3
+
+pool:
+  allow:        null
+  basic:        null
+  ignore:       [2]
+  no_buy:       null
+  no_ldev:      null
+  no_sell:      null
+  no_udev:      null
+  prohibit:     null
+  warning:      [1]
+  shortable:    null
+
+range:
+  ffmv.pct:     [0.1 , null]
+  cp.abs:       [2   , null]
+  #amt.pct:      [0.1 , null]
+  #bv.pct:       [0.1 , null]
+
+induspool:
+  no_buy:       null
+  no_net_buy:   null
+  no_net_sell:  null
+  no_sell:      null
+
+board:
+  csi:          [null , null]
+  kcb:          [null , null]
+  shse:         [null , null]
+  szse:         [null , null]
+
+limitation:
+  ignore_spec_risk: false
+  kcb_no_buy:       false
+  kcb_no_sell:      false
+  no_st:            true
+  te_constraint:    null
+
+bound:
+  abs:          [-0.03 , 0.1]
+  rel:          [-0.03 , 0.03]
+  por:          [null , null]
+
+industry:
+  abs:          [null , null]
+  rel:          [-0.01, 0.01]
+  por:          [null , 2.0]
+  bank.rel:     [-0.02 , 0.02]
+
+style:
+  abs:          [null , null]
+  rel:          [-0.5 , 0.05]
+  por:          [null , null]
+  size.rel:     [-0.25, 0.25]
+  beta.rel:     [-0.25, 0.25]
+
+component:
+  bsizedev1:    [null , null]
+  bsizedev2:    [null , 0.6]
+  component:    [-0.3 , null]
+
+turnover:
+  double:       null
+  single:       0.1
+
+short:
+  short_cost:     0.2
+  short_position: 0.0

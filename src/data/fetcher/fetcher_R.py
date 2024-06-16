@@ -121,14 +121,42 @@ class RFetcher:
         return df
 
     @classmethod
-    def risk_model(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
-        '''get risk model from R environment , risk_model(20240325)'''
+    def risk_exp(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+        '''get risk model from R environment , risk_exp(20240325)'''
         path = f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model/jm2018_model_{date}.csv'
-        if not os.path.exists(path): 
-            return FailedData('risk_exp' , date)
-        df = pd.read_csv(path)
-        df = cls.adjust_secid(df)
-        df = cls.adjust_precision(df)
+        if not os.path.exists(path): return FailedData('risk_exp' , date)
+        with np.errstate(invalid='ignore' , divide = 'ignore'):
+            df = pd.read_csv(path)
+            df = cls.adjust_secid(df)
+            df = cls.adjust_precision(df)
+        if with_date: df['date'] = date
+        return df
+    
+    @classmethod
+    def risk_cov(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+        '''get risk model from R environment , risk_cov(20240325)'''
+        path = f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/6_factor_return_covariance/jm2018_model/jm2018_model_{date}.Rdata'
+        if not os.path.exists(path): return FailedData('risk_cov' , date)
+        with np.errstate(invalid='ignore' , divide = 'ignore'):
+            df = pyreadr.read_r(path)['data'] * 252
+            df = df.reset_index().rename(columns={'index' :'factor_name'})
+            df = cls.adjust_precision(df)
+        if with_date: df['date'] = date
+        return df
+    
+    @classmethod
+    def risk_spec(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+        '''get risk model from R environment , risk_spec(20240325)'''
+        path = f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model/jm2018_model_{date}.csv'
+        if not os.path.exists(path): return FailedData('risk_spec' , date)
+
+        paths = {'wind_id':f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/1_basic_info/wind_id/wind_id_{date}.Rdata' , 
+                 'spec_risk':f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/C_specific_risk/jm2018_model/jm2018_model_{date}.Rdata'}
+        with np.errstate(invalid='ignore' , divide = 'ignore'):
+            df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
+            df = cls.adjust_secid(df)
+            df = cls.adjust_precision(df)
+            df['spec_risk'] = df['spec_risk'] * np.sqrt(252)
         if with_date: df['date'] = date
         return df
 
@@ -151,25 +179,25 @@ class RFetcher:
             'pred_final'  : 'Final'  ,
             'pred_multi'  : 'MultiFactorAll'
         }
-        df = pd.DataFrame(columns=['secid'] , dtype = int).set_index('secid')
-        for k,v in a_names.items():
-            colnames = ['secid',v]
-            path = f'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/{v}/{v}_{date}.txt'
-            if not os.path.exists(path):
-                return FailedData('longcl_exp' , date)
-            else:
-                df_new = pd.read_csv(path, header=None , delimiter='\t',dtype=float)
-                df_new.columns = colnames
-            df_new['secid'] = df_new['secid'].astype(int)
-            df = pd.merge(df , df_new.set_index('secid') , how='outer' , on='secid')
-        df = cls.adjust_precision(df).reset_index()
+        with np.errstate(invalid='ignore' , divide = 'ignore'):
+            df = pd.DataFrame(columns=['secid'] , dtype = int).set_index('secid')
+            for k,v in a_names.items():
+                colnames = ['secid',v]
+                path = f'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/{v}/{v}_{date}.txt'
+                if not os.path.exists(path):
+                    return FailedData('longcl_exp' , date)
+                else:
+                    df_new = pd.read_csv(path, header=None , delimiter='\t',dtype=float)
+                    df_new.columns = colnames
+                df_new['secid'] = df_new['secid'].astype(int)
+                df = pd.merge(df , df_new.set_index('secid') , how='outer' , on='secid')
+            df = cls.adjust_precision(df).reset_index()
         if with_date: df['date'] = date
         return df
 
     @classmethod
     def trade_day(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
-        '''get basic info data from R environment , trade_day(20240324)'''
-        np.seterr(invalid='ignore' , divide = 'ignore')
+        '''get basic info data from R environment , trade_day(20240324)'''        
         data_params = {
             'wind_id'   : ['1_basic_info'  , 'wind_id'] ,
             'adjfactor' : ['2_market_data' , 'day_adjfactor'] ,
@@ -194,17 +222,16 @@ class RFetcher:
             # something wrong
             print(f'Something wrong at date {date} on {cls.__name__}.trade_day')
             return FailedData('day' , date)
-        df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
-        df = cls.adjust_secid(df)
-        df = cls.adjust_precision(df).reset_index(drop=True)
-        np.seterr(invalid='warn' , divide = 'warn')
+        with np.errstate(invalid='ignore' , divide = 'ignore'):
+            df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
+            df = cls.adjust_secid(df)
+            df = cls.adjust_precision(df).reset_index(drop=True)
         if with_date: df['date'] = date
         return df
 
     @classmethod
     def trade_Xday(cls , date : int , x : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get consecutive x_day trade data from R environment , trade_Xday(20240324 , 5) '''
-        #np.seterr(invalid='ignore' , divide = 'ignore')
         # read calendar
         calendar = cls.basic_info('calendar')
         assert isinstance(calendar , pd.DataFrame)
@@ -222,17 +249,18 @@ class RFetcher:
                 data.append(tmp)
             else:
                 return FailedData(f'{x}day' , date)
-        data = pd.concat(data , axis = 0)
+        
+        with np.errstate(invalid='ignore' , divide = 'ignore'):
+            data = pd.concat(data , axis = 0)
+            data.loc[:,price_feat] = data.loc[:,price_feat] * data.loc[:,'adjfactor'].values[:,None]
+            data['pctchange'] = data['pctchange'] / 100 + 1
+            data['vwap'] = data['vwap'] * data['volume']
+            agg_dict = {'open':'first','high':'max','low':'min','close':'last','pctchange':'prod','vwap':'sum',**{k:'sum' for k in volume_feat},}
+            df = data.groupby('secid').agg(agg_dict)
+            df['pctchange'] = (df['pctchange'] - 1) * 100
+            df['vwap'] /= np.where(df['volume'] == 0 , np.nan , df['volume'])
+            df['vwap'] = df['vwap'].where(~df['vwap'].isna() , df['close'])
 
-        data.loc[:,price_feat] = data.loc[:,price_feat] * data.loc[:,'adjfactor'].values[:,None]
-        data['pctchange'] = data['pctchange'] / 100 + 1
-        data['vwap'] = data['vwap'] * data['volume']
-        agg_dict = {'open':'first','high':'max','low':'min','close':'last','pctchange':'prod','vwap':'sum',**{k:'sum' for k in volume_feat},}
-        df = data.groupby('secid').agg(agg_dict)
-        df['pctchange'] = (df['pctchange'] - 1) * 100
-        df['vwap'] /= np.where(df['volume'] == 0 , np.nan , df['volume'])
-        df['vwap'] = df['vwap'].where(~df['vwap'].isna() , df['close'])
-        #np.seterr(invalid='warn' , divide = 'warn')
         if with_date: df['date'] = date
         return df
 
@@ -271,11 +299,12 @@ class RFetcher:
         for i , di in enumerate(res_dates): 
             res = res.merge(pd.concat([f_read('id',di),f_read('res',di,str(i))],axis=1),how='left',on='id')
         res = pd.DataFrame({'id':res['id'],'res':res.set_index('id').fillna(np.nan).values.sum(axis=1)})
-
-        df = pd.merge(rtn,res,how='left',on='id')
-        df.columns = ['wind_id' , f'rtn_lag{int(lag1)}_{days}' , f'res_lag{int(lag1)}_{days}']
-        df = cls.adjust_secid(df)
-        df = cls.adjust_precision(df).reset_index(drop=True)
+        
+        with np.errstate(invalid='ignore' , divide = 'ignore'):
+            df = pd.merge(rtn,res,how='left',on='id')
+            df.columns = ['wind_id' , f'rtn_lag{int(lag1)}_{days}' , f'res_lag{int(lag1)}_{days}']
+            df = cls.adjust_secid(df)
+            df = cls.adjust_precision(df).reset_index(drop=True)
         if with_date: df['date'] = date
         return df
 
@@ -295,17 +324,17 @@ class RFetcher:
         }
         path = f'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin/equity_pricemin_{date}.txt'
         if not os.path.exists(path): return FailedData('min' , date)
-        df = pd.read_csv(path , sep='\t' , low_memory=False)
-        if df['ticker'].dtype in (object,str): 
-            df = df[df['ticker'].str.isdigit()] 
-        df['ticker'] = df['ticker'].astype(int)
-        cond_stock = lambda x,y:((600000<=x)&(x<=699999)&(y=='XSHG'))|((0<=x)&(x<=398999)&(y=='XSHE'))
-        df = cls.row_filter(df,('ticker','exchangecd'),cond_stock)
-        df = df.loc[:,list(data_params.keys())].rename(columns=data_params)
-        df['minute'] = (df['minute']/60).astype(int)
-        df['minute'] = (df['minute'] - 90) * (df['minute'] <= 240) + (df['minute'] - 180) * (df['minute'] > 240)
-        df = df.sort_values(['secid','minute'])
-        df = cls.trade_min_fillna(df)
+        with np.errstate(invalid='ignore' , divide = 'ignore'):
+            df = pd.read_csv(path , sep='\t' , low_memory=False)
+            if df['ticker'].dtype in (object,str):  df = df[df['ticker'].str.isdigit()] 
+            df['ticker'] = df['ticker'].astype(int)
+            cond_stock = lambda x,y:((600000<=x)&(x<=699999)&(y=='XSHG'))|((0<=x)&(x<=398999)&(y=='XSHE'))
+            df = cls.row_filter(df,('ticker','exchangecd'),cond_stock)
+            df = df.loc[:,list(data_params.keys())].rename(columns=data_params)
+            df['minute'] = (df['minute']/60).astype(int)
+            df['minute'] = (df['minute'] - 90) * (df['minute'] <= 240) + (df['minute'] - 180) * (df['minute'] > 240)
+            df = df.sort_values(['secid','minute'])
+            df = cls.trade_min_fillna(df)
         if with_date: df['date'] = date
         return df
 
@@ -354,11 +383,10 @@ class RFetcher:
     def trade_Xmin(cls , date : int , x : int , df_min : Any = None , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get X minute trade data from R environment , trade_Xmin(20240324 , 5)'''
         df = df_min if df_min is not None else cls.trade_min(date , **kwargs)
-        if df is None or isinstance(df , FailedData):
-            return FailedData(f'{x}min' , date)
-        if x != 1:
-            df = cls.trade_min_reform(df , by = x)
-        if df is None: return df
+        if df is None or isinstance(df , FailedData): return FailedData(f'{x}min' , date)
+        with np.errstate(invalid='ignore' , divide = 'ignore'):
+            if x != 1: df = cls.trade_min_reform(df , by = x)
+            if df is None: return df
         if with_date: df['date'] = date
         return df
     
@@ -367,8 +395,9 @@ class RFetcher:
         '''get risk model from R environment , bm_any('CSI300' , 20240325)'''
         path = f'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/{bm.upper()}/{bm.upper()}_{date}.csv'
         if not os.path.exists(path):  return FailedData(f'bm_{bm.lower()}' , date)
-        df = pd.read_csv(path)
-        df = cls.adjust_secid(df)
-        df['weight'] = df['weight'] / df['weight'].sum()
-        df = cls.adjust_precision(df)
+        with np.errstate(invalid='ignore' , divide = 'ignore'):
+            df = pd.read_csv(path)
+            df = cls.adjust_secid(df)
+            df['weight'] = df['weight'] / df['weight'].sum()
+            df = cls.adjust_precision(df)
         return df

@@ -1,38 +1,11 @@
+
 import numpy as np
 import pandas as pd
 
-import pandas as pd
-import warnings
-from abc import abstractmethod , ABC
-
-from typing import Any , Callable , Literal , Optional
-
-from src.data import DataBlock
-
 from typing import Any , Literal , Optional
+
 from src.data import DataBlock
-from .data_util import DATAVENDOR
-from .port_util import Benchmark
-
-class suppress_warnings:
-    def __enter__(self):
-        warnings.filterwarnings('ignore', message='Degrees of freedom <= 0 for slice', category=RuntimeWarning)
-        warnings.filterwarnings('ignore', message='divide by zero encountered in divide', category=RuntimeWarning)
-        warnings.filterwarnings('ignore', message='invalid value encountered in multiply', category=RuntimeWarning)
-    def __exit__(self , *args):
-        warnings.resetwarnings()
-
-class BasePerfCalc(ABC):
-    def __init__(self , **kwargs) -> None:
-        self.params : dict[str,Any] = kwargs
-    @abstractmethod
-    def calculator(self) -> Callable: '''Define calculator'''
-    @abstractmethod
-    def plotter(self) -> Callable: '''Define plotter'''
-    def calc(self , factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark] = None):
-        with suppress_warnings(): self.calc_rslt = self.calculator()(factor_val , benchmark=benchmark , **self.params)
-        return self
-    def plot(self): return self.plotter()(self.calc_rslt)
+from ..basic import DATAVENDOR , Benchmark
 
 def factor_val_breakdown(factor_val : DataBlock | pd.DataFrame , 
                          benchmark : Optional[Benchmark] = None):
@@ -97,16 +70,17 @@ def pnl_weights(x : pd.DataFrame, weight_type : str, direction : Any = 1 , group
     assert weight_type in ['long_short', 'top100' , 'long', 'short'] , weight_type
     assert np.all(np.sign(direction) != 0) , direction
     x = (x / np.nanstd(x, axis=0)) * np.sign(direction)
-    norm_weight = lambda x : (x / np.sum(x, axis=0))
+    norm_weight = lambda xx : (xx / np.sum(xx, axis=0))
+    eq_wgt = 1 / x.count(numeric_only=True)
     if weight_type == 'top100':
-        rtn = norm_weight(x > x.quantile(1 - 100 / x.shape[0]))
+        wgt = norm_weight(x > x.quantile(1 - 100 / x.shape[0])) - eq_wgt
     elif weight_type == 'long':
-        rtn = norm_weight(x > x.quantile(1 - 1 / group_num))
+        wgt = norm_weight(x > x.quantile(1 - 1 / group_num)) - eq_wgt
     elif weight_type == 'short':
-        rtn = -1 * norm_weight(x < x.quantile(1 / group_num))
+        wgt = -1 * (norm_weight(x < x.quantile(1 / group_num)) - eq_wgt)
     elif weight_type == 'long_short':
-        rtn = norm_weight(x > x.quantile(1 - 1 / group_num)) - norm_weight(x < x.quantile(1 / group_num))
-    return rtn
+        wgt = norm_weight(x > x.quantile(1 - 1 / group_num)) - norm_weight(x < x.quantile(1 / group_num))
+    return wgt
 
 def eval_weighted_pnl(x : pd.DataFrame , weight_type : str , direction : Any , group_num = 10 , y_name = 'ret'):
     vals = x[x.columns.drop([y_name])]

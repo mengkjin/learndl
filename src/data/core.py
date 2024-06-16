@@ -30,18 +30,19 @@ def data_type_alias(path : str , key : str):
             return path.format(alias)
     return path.format(key)
 
-class GetData:
-    class Silence:
-        def __enter__(self) -> None: CONF.SILENT = True
-        def __exit__(self , *args) -> None: CONF.SILENT = False
+class Silence:
+    def __enter__(self) -> None: CONF.SILENT = True
+    def __exit__(self , *args) -> None: CONF.SILENT = False
 
+class GetData:
+    Silence = Silence()
     @classmethod
     def data_dates(cls , db_src , db_key):
         return get_target_dates(db_src , db_key)
 
     @classmethod
     def trade_dates(cls , start_dt : int = -1 , end_dt : int = 99991231):
-        with cls.Silence():
+        with cls.Silence:
             calendar = load_target_file('information' , 'calendar')
             assert calendar is not None
             calendar = np.array(calendar['calendar'].values[calendar['trade'] == 1])
@@ -50,7 +51,7 @@ class GetData:
     
     @classmethod
     def stocks(cls , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
-        with cls.Silence():
+        with cls.Silence:
             stocks = load_target_file('information' , 'description')
             assert stocks is not None
             if listed: stocks = stocks[stocks['list_dt'] > 0]
@@ -58,8 +59,15 @@ class GetData:
         return stocks.reset_index()
     
     @classmethod
+    def st_stocks(cls):
+        with cls.Silence:
+            st = load_target_file('information' , 'st')
+            assert st is not None
+        return st
+    
+    @classmethod
     def daily_returns(cls , start_dt : int , end_dt : int):
-        with cls.Silence():
+        with cls.Silence:
             pre_start_dt = int(date_offset(start_dt , -20))
             feature = ['close' , 'vwap']
             block = BlockLoader('trade' , 'day' , ['close' , 'vwap' , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
@@ -78,6 +86,14 @@ class BlockLoader:
     db_key  : str | list
     feature : Optional[list] = None
 
+    def __post_init__(self):
+        assert f'DB_{self.db_src}' in os.listdir(PATH.database) , f'DB_{self.db_src} not in {PATH.database}'
+        src_path = os.path.join(PATH.database , f'DB_{self.db_src}')
+        assert np.isin(self.db_key , os.listdir(src_path)).all() , f'{self.db_key} not all in {src_path}'
+
+    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , **kwargs):
+        return self.load_block(start_dt , end_dt , **kwargs)
+    
     def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , **kwargs):
         if end_dt is not None   and end_dt < 0:   end_dt   = today(end_dt)
         if start_dt is not None and start_dt < 0: start_dt = today(start_dt)
@@ -94,6 +110,40 @@ class BlockLoader:
             with Timer(f' --> {self.db_src} blocks merging ({len(sub_blocks)})'): 
                 block = DataBlock.merge(sub_blocks)
         return block
+    
+@dataclass(slots=True)
+class FrameLoader:
+    db_src  : str
+    db_key  : str
+    feature : Optional[list] = None
+
+    def __post_init__(self):
+        assert f'DB_{self.db_src}' in os.listdir(PATH.database) , f'DB_{self.db_src} not in {PATH.database}'
+        src_path = os.path.join(PATH.database , f'DB_{self.db_src}')
+        assert np.isin(self.db_key , os.listdir(src_path)).all() , f'{self.db_key} not all in {src_path}'
+    
+    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , **kwargs):
+        return self.load_frame(start_dt , end_dt , **kwargs)
+
+    def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , **kwargs):
+        target_dates = get_target_dates(self.db_src , self.db_key)
+        if end_dt is not None:
+            if end_dt < 0:   end_dt   = today(end_dt)
+            target_dates = target_dates[target_dates <= end_dt]
+        if start_dt is not None:
+            if start_dt < 0: start_dt = today(start_dt)
+            target_dates = target_dates[target_dates >= start_dt]
+
+        if len(target_dates) == 0:  return pd.DataFrame()
+        sub_frames = []
+        for date in target_dates:
+            df = load_target_file(self.db_src,self.db_key,date)
+            if isinstance(df , pd.DataFrame):
+                if self.feature is not None: df = df.loc[:,self.feature]
+                if 'date' not in df.columns: df['date'] = date
+                sub_frames.append(df)
+
+        return pd.concat(sub_frames , axis = 0)
         
 class DataBlock(StockData4D):
     def save(self , key : str , predict=False , start_dt = None , end_dt = None):
@@ -190,21 +240,23 @@ class DataBlock(StockData4D):
             return cls()
         if feature is not None:
             assert isinstance(feature , list) , feature
-            feature = [f for f in feature if f not in ['secid' , 'date' , 'minute']]
-        dfs = [cls.df_preprocess(load_target_file(db_src,db_key,date),date,feature) for date in target_dates]
-        dfs = pd.concat([df for df in dfs if isinstance(df,pd.DataFrame)] , axis = 0)
-        dfs = dfs.set_index(['secid' , 'date'] + ['minute'] * ('minute' in dfs.columns.values))
+            feature = [f for f in feature if f not in ['secid' , 'date' , 'minute' , 'factor_name']]
+        dfs = [cls.file_preprocess(load_target_file(db_src,db_key,date),date,feature) for date in target_dates]
+        dfs = pd.concat([df for df in dfs if df is not None] , axis = 0)
+        use_index = ['secid' , 'date'] + ['minute'] * ('minute' in dfs.columns.values) + ['factor_name'] * ('factor_name' in dfs.columns.values)
+        assert len(use_index) <= 3 , use_index
+        dfs = dfs.set_index(use_index)
         return cls.from_dataframe(dfs)
     
-    @classmethod
-    def df_preprocess(cls , df : Optional[pd.DataFrame] , date : int , feature = None):
+    @staticmethod
+    def file_preprocess(df : Optional[pd.DataFrame] , date : int , feature = None):
         if isinstance(df , pd.DataFrame): 
+            if 'secid' not in df.columns.values: df['secid'] = 0
             if 'date' not in df.columns.values: df['date'] = date
             if feature is not None: 
-                remain_cols = ['secid','date']+['minute']*('minute' in df.columns.values)+feature
+                remain_cols = ['secid','date'] + ['minute']*('minute' in df.columns.values) + \
+                        ['factor_name'] * ('factor_name' in df.columns.values) + feature
                 df = df.loc[:,remain_cols]
-        else:
-            df = None
         return df
     
     @property

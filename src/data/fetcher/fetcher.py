@@ -28,7 +28,9 @@ class DataFetcher:
     def default_fetcher(cls , db_src , db_key):
         if db_src == 'information': return RFetcher.basic_info
         elif db_src == 'models':
-            if db_key == 'risk_exp': return RFetcher.risk_model
+            if db_key == 'risk_exp': return RFetcher.risk_exp
+            elif db_key == 'risk_cov': return RFetcher.risk_cov
+            elif db_key == 'risk_spec': return RFetcher.risk_spec
             elif db_key == 'longcl_exp': return RFetcher.alpha_longcl
         elif db_src == 'trade':
             if db_key == 'day': return RFetcher.trade_day

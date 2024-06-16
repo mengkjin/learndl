@@ -315,19 +315,19 @@ class SQLFetcher:
             'dongfang.hist'      :cls('dongfang','hist'      ,'tradingdate',20200101,'%Y-%m-%d') ,
             'dongfang.scores_v0' :cls('dongfang','scores_v0' ,'tradingdate',20171229,'%Y-%m-%d') ,
             'dongfang.factorvae' :cls('dongfang','factorvae' ,'tradingdate',20200101,'%Y-%m-%d') ,
-            'kaiyuan.positive' :cls(
-                'kaiyuan','positive','date',20140130,
-                factors = ['active_trading','apm','opt_synergy_effect','large_trader_ret_error',
-                        'offense_defense','high_freq_shareholder','pe_change',] ,
-                startdt_query = 'select min({date_col}) from public.smart_money' ,
-                default_query = ('select * from public.{factor} where {date_col} >= ' + 
-                                '\'{start_dt}\' and {date_col} <= \'{end_dt}\'')) ,
-            'kaiyuan.negative' :cls(
-                'kaiyuan','negative','date',20140130,
-                factors = ['smart_money','ideal_vol','ideal_reverse','herd_effect','small_trader_ret_error',] ,
-                startdt_query = 'select min({date_col}) from public.smart_money' ,
-                default_query = ('select * from public.{factor} where {date_col} >= ' + 
-                                '\'{start_dt}\' and {date_col} <= \'{end_dt}\'')) ,
+            #'kaiyuan.positive' :cls(
+            #    'kaiyuan','positive','date',20140130,
+            #    factors = ['active_trading','apm','opt_synergy_effect','large_trader_ret_error',
+            #            'offense_defense','high_freq_shareholder','pe_change',] ,
+            #    startdt_query = 'select min({date_col}) from public.smart_money' ,
+            #    default_query = ('select * from public.{factor} where {date_col} >= ' + 
+            #                    '\'{start_dt}\' and {date_col} <= \'{end_dt}\'')) ,
+            #'kaiyuan.negative' :cls(
+            #    'kaiyuan','negative','date',20140130,
+            #    factors = ['smart_money','ideal_vol','ideal_reverse','herd_effect','small_trader_ret_error',] ,
+            #    startdt_query = 'select min({date_col}) from public.smart_money' ,
+            #    default_query = ('select * from public.{factor} where {date_col} >= ' + 
+            #                    '\'{start_dt}\' and {date_col} <= \'{end_dt}\'')) ,
             'huatai.dl_factors' :cls(
                 'huatai','dl_factors','datetime',20170101,'%Y-%m-%d',
                 factors = ['price_volume_nn','text_fadt_bert',] ,

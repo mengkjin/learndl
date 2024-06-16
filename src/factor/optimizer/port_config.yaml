@@ -1,0 +1,29 @@
+OPT_CONFIG:
+  RISK:
+      style: 
+        STYLE.Size: [-0.25, 0.25]
+        STYLE.Bp: [-0.25, 0.25]
+        STYLE.Beta: [-0.25, 0.25]   
+        STYLE.Nonlin_Size: [-0.25, 0.25]
+        STYLE.Momentum: [-0.25, 0.25]
+        STYLE.Resvol: [-0.25, 0.25]
+        STYLE.Liquidity: [-0.25, 0.25]
+        STYLE.Earnyld: [-0.25, 0.25]
+        STYLE.Growth: [-0.25, 0.25]
+        STYLE.Leverage: [-0.25, 0.25]      
+      industry: [-0.01, 0.01]  
+      bm_weight_bound: 0.8 
+      exc_bounds: [-0.01, 0.01] 
+      abs_bounds: [0.0, 0.07]
+      tracking_error:
+        error_type: relative 
+        bound: 20
+      turnover: 0.15 
+      turnover_gradient: 0.2 
+      leverage: 1.0
+      no_sell_codes: []
+      no_buy_codes: []  
+
+  LAMBDA: 0.5
+  RHO: 0.00001
+
