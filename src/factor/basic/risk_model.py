@@ -26,10 +26,12 @@ class Rmodel:
     def secid(self): return self.F.index.values
     @property
     def universe(self): return self.F[self.F['estuniv'] == 1].index.values
-    @property
-    def ffmv(self): return (self.F['weight'] * 1e8).values 
-    @property
-    def weight(self): return (self.F['weight'] * 1e8).values
+    def ffmv(self , secid : np.ndarray | Any = None): 
+        return self.weight(secid) * 1e8
+    def weight(self , secid : np.ndarray | Any = None): 
+        df = self.F.loc[: , 'weight'] * 1e8
+        if secid is not None: df = df.loc[secid]
+        return df.to_numpy().flatten()
     @property
     def common_factors(self): return COMMON_FACTORS
     def FCS_aligned(self , secid : np.ndarray | Any = None):
@@ -78,6 +80,9 @@ class RiskModel:
         self.C_loader = FrameLoader('models' , 'risk_cov')
         self.S_loader = BlockLoader('models' , 'risk_spec')
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}({len(self.models)} days loaded)'
+
     def append(self , rmodel : Rmodel , override = False):
         assert override or (rmodel.date not in self.models.keys()) , rmodel.date
         self.models[rmodel.date] = rmodel
@@ -95,13 +100,19 @@ class RiskModel:
         rmodel = self.models.get(use_date , None)
 
         if rmodel is None and use_date in self.available_dates():
-            rmodel = self.load_model(date)
+            rmodel = self.load_day_model(date)
             self.append(rmodel)
 
         assert isinstance(rmodel , Rmodel) , f'rmodel does not exists!'
         return rmodel
     
-    def load_model(self , date : int):
+    def load_models(self , dates : np.ndarray | Any = None , start : int = -1 , end : int = -1):
+        if dates is None:
+            dates = self.riskmodel_available_dates
+            dates = [(dates >= start) & (dates <= end)]
+        for date in np.setdiff1d(dates , list(self.models.keys())): self.models[date] = self.load_day_model(date) 
+
+    def load_day_model(self , date : int):
         with GetData.Silence:
             F = self.F_loader.load(date , date)
             C = self.C_loader.load(date , date)
@@ -158,11 +169,10 @@ class Analytic:
 
     def styler(self , which : Literal['industry' , 'style' , 'risk'] = 'style'):
         if which == 'industry':
-            return self.industry.style.format(lambda x:f'{x:.2%}').to_string()
+            return self.industry.style.format(lambda x:f'{x:.2%}')
         elif which == 'style':
-            return self.style.style.format(lambda x:f'{x:.4f}').to_string()
+            return self.style.style.format(lambda x:f'{x:.4f}')
         else:
-            return self.risk.style.format(lambda x:f'{x:.4%}').to_string()
-
+            return self.risk.style.format(lambda x:f'{x:.4%}')
 
 RISK_MODEL = RiskModel()

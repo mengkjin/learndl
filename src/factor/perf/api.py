@@ -87,10 +87,11 @@ class BasePerfCalc(ABC):
     def plotter(self) -> Callable: '''Define plotter'''
     def calc(self , factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark] = None):
         with suppress_warnings(): 
+            self.benchmark_name = benchmark.name if benchmark else None
             self.calc_rslt : pd.DataFrame = self.calculator()(factor_val , benchmark=benchmark , **self.params)
         return self
     def plot(self , show = False): 
-        self.fig : Figure | dict[str,Figure] = self.plotter()(self.calc_rslt , show = show)
+        self.fig : Figure | dict[str,Figure] = self.plotter()(self.calc_rslt , benchmark = self.benchmark_name , show = show)
         return self
     def save(self , path : str , key : Optional[str] = None):
         os.makedirs(path , exist_ok=True)

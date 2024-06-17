@@ -16,18 +16,18 @@ benchmark:
 pool:
   allow:        null
   basic:        null
-  ignore:       [2]
+  ignore:       null
   no_buy:       null
   no_ldev:      null
   no_sell:      null
   no_udev:      null
   prohibit:     null
-  warning:      [1]
+  warning:      null
   shortable:    null
 
 range:
   ffmv.pct:     [0.1 , null]
-  cp.abs:       [2   , null]
+  cp.abs:       [null, null]
   #amt.pct:      [0.1 , null]
   #bv.pct:       [0.1 , null]
 
@@ -58,7 +58,7 @@ bound:
 industry:
   abs:          [null , null]
   rel:          [-0.01, 0.01]
-  por:          [null , 2.0]
+  por:          [null , null]
   bank.rel:     [-0.02 , 0.02]
 
 style:
@@ -79,4 +79,4 @@ turnover:
 
 short:
   short_cost:     0.2
-  short_position: 0.0
+  short_position: null

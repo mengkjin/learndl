@@ -15,54 +15,75 @@ class Port:
     EMPTY_PORT = pd.DataFrame(columns=['secid','weight']).astype({'secid':int,'weight':float})
 
     def __init__(self , port : Optional[pd.DataFrame] , date : int = -1 , 
-                 name : Optional[str] = 'port' , value : float = 1e8) -> None:
+                 name : Optional[str] = 'port' , value : float | Any = None) -> None:
         self.exists = port is not None 
-        self.port = self.EMPTY_PORT if port is None else self.sort(port.groupby('secid')['weight'].sum().reset_index())
+        self.port = self.EMPTY_PORT if port is None else port.groupby('secid')['weight'].sum().reset_index()
         self.date = date
         self.name = name
-        self.value = value
+        self.value = value if value else 1e7
+        self.sort()
 
     def __bool__(self): return self.name is not None
     def __repr__(self): 
-        return '\n'.join([f'Portfolio <date={self.date}> <name={self.name}> <value={self.value}> : ', str(self.port)])
+        return '\n'.join([f'Portfolio <date={self.date}> <name={self.name}> <value={self.value}>: ', str(self.port)])
     def __add__(self , other): return self.merge(other)
     def __mul__(self , other):  return self.rescale(other)
     def __rmul__(self , other):  return self.rescale(other)
     def __truediv__(self , other): return self.rescale(1 / other)
     def __sub__(self , other): return self.merge(other * -1.)
 
-    def sort(self , port : pd.DataFrame ,  by : Literal['secid' , 'weight'] = 'weight' , ascending=False):
-        return port.sort_values(by , ascending=ascending).reset_index(drop=True)
+    def sort(self , by : Literal['secid' , 'weight'] = 'weight' , ascending=False):
+        self.port = self.port.sort_values(by , ascending=ascending).reset_index(drop=True)
+        return self
 
     def is_emtpy(self): return not self.exists or len(self.port) == 0
 
-    def forward(self , to : int):
+    def forward(self , to : int , inplace = False):
         assert self.date >= 0 , f'Must assign date first! (now date={self.date})'
         assert to >= self.date , f'Must to a later day! ({self.date} -> {to})'
+        return self.__evole(to , inplace)
 
-        self.port = self.sort(self.__port_evovle(self.port , self.date , to))
-        self.date = to
-        return self
-
-    def backward(self , to : int):
+    def backward(self , to : int , inplace = False):
         assert self.date >= 0 , f'Must assign date first! (now date={self.date})'
         assert to <= self.date , f'Must to a earlier day! ({self.date} -> {to})'
+        return self.__evole(to , inplace)
+    
+    def __evole(self , to : int , inplace = False):
+        rslt = self if inplace else self.copy()
+        old_date = int(DATAVENDOR.latest_td(self.date))
+        new_date = int(DATAVENDOR.latest_td(to))
+        if old_date == new_date: return rslt
 
-        self.port = self.sort(self.__port_evovle(self.port , self.date , to))
-        self.date = to
+        old_long_pos  = np.round(self.long_position , 4)
+        old_short_pos = np.round(self.short_position , 4)
+
+        q0 = load_target_file('trade' , 'day', old_date)[['secid','adjfactor','close']]
+        q1 = load_target_file('trade' , 'day', new_date)[['secid','adjfactor','close']]
+        
+        port = rslt.port.merge(q0 , on = 'secid').merge(q1 , on = 'secid')
+        port['weight'] = port['weight'] * port['close_y'] * port['adjfactor_y'] / port['close_x'] / port['adjfactor_x']
+
+        rslt.port = port.sort_values('weight' , ascending=False)
+        rslt.date = to
+        rslt.rebalance(old_long_pos , old_short_pos)
+
+        return rslt
+    
+    def rebalance(self , long_position : float = 1., short_position : float = 0.):
+        long_pos = self.port['weight'] >= 0
+        now_pos = self.position
+        if long_pos.any():
+            assert long_position > 0 , 'unable to rebalance to 0 or negative'
+            self.port.loc[long_pos , 'weight'] *= long_position / self.port.loc[long_pos , 'weight'].sum()
+        else:
+            long_position = 0.
+        if not long_pos.all(): 
+            assert short_position > 0 , 'unable to rebalance to 0 or negative'
+            self.port.loc[~long_pos , 'weight'] *= -short_position / self.port.loc[~long_pos , 'weight'].sum()
+        else:
+            short_position = 0.
+        self.value += self.value * (now_pos - self.position)
         return self
-
-    @staticmethod
-    def __port_evovle(port : pd.DataFrame , d0 : int | Any , d1 : int | Any):
-        old_date = int(DATAVENDOR.latest_td(d0))
-        new_date = int(DATAVENDOR.latest_td(d1))
-        if old_date == new_date: return port
-        q0 = load_target_file('trade' , 'day', d0)[['secid','adjfactor','close']]
-        q1 = load_target_file('trade' , 'day', d1)[['secid','adjfactor','close']]
-        q = port.merge(q0 , on = 'secid').merge(q1 , on = 'secid')
-        q['weight'] = q['weight'] * q['close_y'] * q['adjfactor_y'] / q['close_x'] / q['adjfactor_x']
-        q['weight'] = q['weight'] / q['weight'].sum(skipna=True)
-        return q.loc[:,['secid','weight']]
 
     @classmethod
     def create(cls , secid : np.ndarray | Any , weight : np.ndarray | Any , drop0 = True, **kwargs):
@@ -96,6 +117,10 @@ class Port:
     def weight(self): return self.port['weight'].to_numpy()
     @property
     def position(self): return self.port['weight'].sum()
+    @property
+    def long_position(self): return self.port[self.port['weight'] > 0]['weight'].sum()
+    @property
+    def short_position(self): return -self.port[self.port['weight'] < 0]['weight'].sum()
     def copy(self): return deepcopy(self)
     def rescale(self , scale = 1. , inplace = False): 
         new = self if inplace else self.copy()
@@ -107,13 +132,18 @@ class Port:
         assert isinstance(another , Port) , another
         new = self if inplace else self.copy()
         if name is not None: new.name = name
-        combined = pd.concat([new.port, another.port], ignore_index=True)  
-        new.port = combined.groupby('secid', as_index=False)['weight'].sum()
+        if not new.is_emtpy() and not another.is_emtpy():
+            combined = pd.concat([new.port, another.port], ignore_index=True).groupby('secid', as_index=False)['weight'].sum()
+        elif new.is_emtpy():
+            combined = another.port.copy()
+        else:
+            combined = new.port
+        new.port = combined
         return new
     
 class Portfolio:
     '''Non-Consecutive stream of some portfolio'''
-    def __init__(self , name : Optional[str]) -> None:
+    def __init__(self , name : str = 'port') -> None:
         self.name = name
         self.ports : dict[int,Port] = {}
         self.weight_block_completed = False
@@ -159,7 +189,7 @@ class Portfolio:
         return port
     
 class Benchmark(Portfolio):
-    def __init__(self , name : Optional[str] = None) -> None:
+    def __init__(self , name : str) -> None:
         assert name is None or name in AVAIL_BENCHMARK , name
         super().__init__(name)
         self.benchmark_available_dates = get_target_dates('benchmark' , self.name)

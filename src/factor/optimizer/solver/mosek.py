@@ -165,7 +165,7 @@ class Solver:
 
     def task_add_quad_obj(self , task : mosek.Task):
         if not self.conds.qobj or not self.cov_con or not self.cov_con.lmbd: return
-
+        
         if self.cov_con.cov_type == 'normal':
             u       = self.alpha.T + self.cov_con.lmbd * self.wb.dot(self.cov_con.cov)
             idx     = np.tril_indices(self.num_vars.N)

@@ -1,11 +1,12 @@
-
 import numpy as np
 import pandas as pd
 
 from copy import deepcopy
-from typing import Any
-from ...basic import DATAVENDOR , Port , RISK_MODEL , Benchmark
+from typing import Any , Optional
+from ...basic import DATAVENDOR , Port , RISK_MODEL , Benchmark , AlphaModel , Amodel
 from .solver_input import SolverInput
+
+from src.func import Timer
 
 from .parser import (
     parse_config_benchmark , parse_config_board , parse_config_bound ,
@@ -15,7 +16,7 @@ from .parser import (
     parse_config_turnover , parse_config_utility
 )
 from .input_creator import (
-    create_input_eq , create_input_alpha , create_input_benchmark , create_input_initial ,
+    create_input_eq , create_input_benchmark , create_input_initial ,
     create_input_bnd_con , create_input_lin_con , create_input_turn_con ,
     create_input_cov_con ,  create_input_short_con
 )
@@ -24,28 +25,27 @@ from ..basic import DEFAULT_OPT_CONFIG
 class PortfolioOptimizerInput:
     def __init__(
         self , 
+        port_name : str = 'port' ,
         given_config : dict = {} ,
-        port_name  : str = 'port' ,
     ) -> None:
         
         self.portfolio_name  = port_name
-
         self.update_given_config(given_config)
 
-        self.equity     = parse_config_equity(self.config)
-        self.benchmark  = parse_config_benchmark(self.config)
-        self.utility    = parse_config_utility(self.config)
-        self.pool       = parse_config_pool(self.config)
-        self.induspool  = parse_config_induspool(self.config)
-        self.range      = parse_config_range(self.config)
-        self.limitation = parse_config_limitation(self.config)
-        self.bound      = parse_config_bound(self.config)
-        self.board      = parse_config_board(self.config)
-        self.industry   = parse_config_industry(self.config)
-        self.style      = parse_config_style(self.config)
-        self.component  = parse_config_component(self.config)
-        self.turnover   = parse_config_turnover(self.config)
-        self.short      = parse_config_short(self.config)
+        self.cfg_equity     = parse_config_equity(self.config)
+        self.cfg_benchmark  = parse_config_benchmark(self.config)
+        self.cfg_utility    = parse_config_utility(self.config)
+        self.cfg_pool       = parse_config_pool(self.config)
+        self.cfg_induspool  = parse_config_induspool(self.config)
+        self.cfg_range      = parse_config_range(self.config)
+        self.cfg_limitation = parse_config_limitation(self.config)
+        self.cfg_bound      = parse_config_bound(self.config)
+        self.cfg_board      = parse_config_board(self.config)
+        self.cfg_industry   = parse_config_industry(self.config)
+        self.cfg_style      = parse_config_style(self.config)
+        self.cfg_component  = parse_config_component(self.config)
+        self.cfg_turnover   = parse_config_turnover(self.config)
+        self.cfg_short      = parse_config_short(self.config)
 
     def update_given_config(self , given_config : dict):
         self.config = deepcopy(DEFAULT_OPT_CONFIG)
@@ -57,15 +57,25 @@ class PortfolioOptimizerInput:
                 given = {next(iter(self.config[key])):given}
             self.config[key].update(given)
 
-    def to_solver_input(self , model_date : int , initial_port : Port | Any = None , secid : np.ndarray | Any = None):
-        self.model_date = model_date
-        self.initial_port   = initial_port
+    def to_solver_input(self , model_date : int , alpha_model : AlphaModel | Amodel | Any = None , 
+                        benchmark : Optional[Benchmark | Port] = None , init_port : Port | Any = None):
 
+        self.model_date = model_date
         self.risk_model = RISK_MODEL.get(model_date)
-        if secid is None: secid = self.risk_model.universe
-        self.secid = secid
-        
-        self.benchmark_port = Benchmark.day_port(self.benchmark['benchmark'] , model_date)
+
+        if isinstance(alpha_model , AlphaModel):
+            self.alpha_model = alpha_model.get(model_date)
+        elif isinstance(alpha_model , Amodel):
+            assert alpha_model.date == model_date , (alpha_model.date , model_date)
+            self.alpha_model = alpha_model
+        else:
+            self.alpha_model = Amodel.create_random(model_date , self.risk_model.universe)
+
+        self.initial_port = init_port
+        self.secid = self.risk_model.universe
+
+        self.benchmark = benchmark
+        self.benchmark_port : Port | Any = None
         self.w0  : np.ndarray | Any = None
         self.wb  : np.ndarray | Any = None
 
@@ -73,7 +83,7 @@ class PortfolioOptimizerInput:
         self.wb     = create_input_benchmark(self)
         self.w0     = create_input_initial(self)
 
-        alpha       = create_input_alpha(self)
+        alpha       = self.alpha_model.align(self.secid).alpha
         bnd_con     = create_input_bnd_con(self)
         lin_con     = create_input_lin_con(self)
         turn_con    = create_input_turn_con(self)

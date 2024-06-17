@@ -44,7 +44,7 @@ DEFAULT_OPT_CONFIG = {
     'range' : {
         'ffmv.abs' : [None , None] ,   
         'ffmv.pct' : [0.1  , None] ,     
-        'cp.abs'   : [2    , None] ,
+        'cp.abs'   : [None , None] ,
         'cp.pct'   : [None , None] ,
         #'amt.abs'  : [None , None] ,    
         #'amt.pct'  : [0.1  , None] ,    
@@ -89,6 +89,6 @@ DEFAULT_OPT_CONFIG = {
     } , 
     'short' : {
         'short_position' : None ,
-        'short_cost'     : 0.2 ,
+        'short_cost'     : None ,
     } , 
 }

@@ -1,6 +1,8 @@
 
+import time
 import numpy as np
-from dataclasses import dataclass
+
+from dataclasses import dataclass , field
 from typing import Any , Literal , Optional
 
 from src.environ import PATH
@@ -8,76 +10,98 @@ from src.environ import PATH
 from .basic import DEFAULT_SOLVER_PARAM
 from .solver.mosek import Solver as MosekSolver
 from .util import Accuarcy , PortfolioOptimizerInput , SolverInput , Utility
-from ..basic import Analytic , Port
+from ..basic import Analytic , Port , AlphaModel , Amodel , Benchmark
 
 SOLVER_CLASS = {
     'mosek' : MosekSolver
 }
+
+eps = 1e-6
 
 @dataclass
 class PortfolioOptimizer:
     prob_type   : Literal['linprog' , 'quadprog' , 'socp'] = 'socp'
     engine_type : Literal['mosek' , 'cvxopt' , 'cvxpy'] = 'mosek'
     cvxpy_solver : Literal['mosek' , 'ecos' , 'osqp' , 'scs'] = 'mosek'
-    auto_relax   : bool = True
-
-    ignore_turn  : bool = False
-    ignore_qobj  : bool = False
-    ignore_qcon  : bool = False
-    ignore_short : bool = False
+    
+    opt_relax : bool = True
+    opt_turn  : bool = True
+    opt_qobj  : bool = True
+    opt_qcon  : bool = True
+    opt_short : bool = True
 
     def __post_init__(self):
         key = f'{self.engine_type}.{self.cvxpy_solver}' if self.engine_type == 'cvxpy' else self.engine_type
         self.param = DEFAULT_SOLVER_PARAM[key]
         
-    def setup_optimizer(self , config_path : Optional[str] = None):
+    def setup_optimizer(self , portfolio_name : str = 'port' , 
+                        config_path : Optional[str] = None):
         given_config = PATH.read_yaml(config_path) if config_path else {}
-        self.opt_input = PortfolioOptimizerInput(given_config)
+        self.opt_input = PortfolioOptimizerInput(portfolio_name , given_config)
+        return self
 
     def solve(self , solver_input : SolverInput):
         self.solver = SOLVER_CLASS[self.engine_type](solver_input, self.prob_type , self.param)
 
         while True:
             w, is_success, status = self.solver.solve(
-                turn = not self.ignore_turn ,
-                qobj = not self.ignore_qobj ,
-                qcon = not self.ignore_qcon ,
-                short = not self.ignore_short)
-            if is_success or not self.auto_relax or solver_input.relaxable: break
+                turn = self.opt_turn ,
+                qobj = self.opt_qobj ,
+                qcon = self.opt_qcon ,
+                short = self.opt_short)
+            if is_success or not self.opt_relax or solver_input.relaxable: break
 
-        if not is_success and self.auto_relax:
+        if not is_success and self.opt_relax:
             print('Failed optimization, even with relax, use w0 instead.')
             assert solver_input.w0 is not None , 'In this failed-with-relax case, w0 must not be None'
             w = solver_input.w0
 
         return w, is_success, status
         
-    def optimize(self , model_date : int , initial_port : Any = None , secid : Any = None , detail_infos = True):
-        self.solver_input = self.opt_input.to_solver_input(model_date , initial_port , secid).rescale()
+    def optimize(self , model_date : int , alpha_model :AlphaModel|Amodel|Any = None , 
+                 benchmark : Optional[Benchmark | Port] = None , init_port : Port | Any = None , detail_infos = True):
+        t0 = time.time()
+        self.solver_input = self.opt_input.to_solver_input(model_date , alpha_model , benchmark , init_port).rescale()
+        t1 = time.time()
         w , is_success , status = self.solve(self.solver_input)
-        rslt = PortOptimResult(w , self.opt_input.secid , is_success , status)
-        
-        rslt.create_port(model_date , self.opt_input.portfolio_name , self.opt_input.initial_value)
+        t2 = time.time()
+
+        w    = w * ((w >= eps) + (w <= -eps))
+        port = Port.create(self.secid , w , date = model_date , name = self.name , value = self.value)
+        rslt = PortOptimResult(w , self.secid , port , is_success , status)
+
         if detail_infos:
-            rslt.utility  = self.solver_input.utility(w , self.prob_type , not self.ignore_turn , not self.ignore_qobj , not self.ignore_short) 
+            rslt.utility  = self.solver_input.utility(w , self.prob_type , self.opt_turn , self.opt_qobj , self.opt_short) 
             rslt.accuracy = self.solver_input.accuracy(w)
-            rslt.analytic = self.opt_input.analytic(rslt.port , self.opt_input.benchmark_port , self.opt_input.initial_port)
+            rslt.analytic = self.opt_input.analytic(port , self.opt_input.benchmark_port , self.opt_input.initial_port)
+
+        t3 = time.time()
+        rslt.time.update({'parse_input' : t1 - t0 , 'solve' : t2 - t1 , 'output' : t3 - t2})
         return rslt
+    
+    @property
+    def secid(self): return self.opt_input.secid
+    @property
+    def name(self): return self.opt_input.portfolio_name
+    @property
+    def value(self): return self.opt_input.initial_value
 
 @dataclass
 class PortOptimResult:
     w           : np.ndarray
-    secid       : np.ndarray | Any
-    is_success  : bool
+    secid       : np.ndarray | Any = None
+    port        : Port | Any = None
+    is_success  : bool = False
     status      : Literal['optimal', 'max_iteration', 'stall'] | Any = ''
     utility     : Utility | Any = None
     accuracy    : Accuarcy | Any = None
     analytic    : Analytic | Any = None
-    port        : Port | Any = None
+    time        : dict[str,float] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.utility is None: self.utility = Utility()
         if self.accuracy is None: self.accuracy = Accuarcy()
+        if self.analytic is None: self.analytic = Analytic()
 
     def __repr__(self):
         return '\n'.join([
@@ -90,21 +114,10 @@ class PortOptimResult:
             f'    accuracy   = {self.accuracy}',
             str(self.port) ,
             f'Analytic : (Only show style , access industry/risk mannually)' ,
-            self.analytic.styler('style') ,
+            self.analytic.styler('style').to_string() ,
             f'Other components include [\'w\' , \'secid\'])'
         ])
     
-    def create_port(self , date : int = -1 , name : Optional[str] = 'port' , value : float | Any = None , eps = 1e-6):
-        w = np.where((self.w <= eps) * (self.w >= -eps) ,  0. , self.w)
-        self.port = Port.create(self.secid , w , date = date , name = name , value = value)
-        return self
-
-    @staticmethod
-    def trim_w(w : np.ndarray , eps = 1e-6) -> np.ndarray:
-        w1 = w * 1.
-        w1[(w1 <= eps) & (w1 >= -eps)] = 0
-        return w1
-
 '''
 def exec_linprog(engine_type, u, lin_con, bnd_con, turn_con=None, solver_params=None, return_detail_infos=True):
     validate_inputs(u, lin_con, bnd_con, turn_con)

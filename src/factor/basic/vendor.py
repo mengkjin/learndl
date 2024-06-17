@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import torch.nn.functional as F
 
-from typing import Literal
+from typing import Any , Literal
 
 from src.data import DataBlock , GetData , BlockLoader
 from src.environ import RISK_STYLE , RISK_INDUS
@@ -23,12 +23,12 @@ class DataVendor:
     def td_within(self , start_dt : int = -1 , end_dt : int = 99991231 , step : int = 1):
         return self.trade_date[(self.trade_date >= start_dt) & (self.trade_date <= end_dt)][::step]
 
-    def td_offset(self , date , offset : int = 0):
+    def td_offset(self , date , offset : int = 0) -> int | np.ndarray | Any:
         if np.isscalar(date):
-            assert isinstance(date , int) , date
+            # assert isinstance(date , int) , date
             if date not in self.trade_date: date = self.trade_date[self.trade_date <= date][-1]
             if offset: date = self.trade_date[np.where(self.trade_date == date)[0][0] + offset]
-            return int(date)
+            return date
         else:
             return np.array([self.td_offset(d , offset) for d in date])
     
