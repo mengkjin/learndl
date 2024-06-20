@@ -5,10 +5,14 @@ import torch.nn.functional as F
 
 from typing import Any , Literal
 
-from src.data import DataBlock , GetData , BlockLoader
-from src.environ import RISK_STYLE , RISK_INDUS
+from src.data import DataBlock , GetData , BlockLoader , load_target_file , get_target_dates
+
+from .var import RISK_STYLE , RISK_INDUS
 
 class DataVendor:
+    '''
+    Vender for most factor / portfolio analysis related data
+    '''
     def __init__(self):
         self.start_dt = 99991231
         self.end_dt   = -1
@@ -16,6 +20,8 @@ class DataVendor:
         self.trade_date = GetData.trade_dates()
         self.all_stocks = GetData.stocks().sort_values('secid')
         self.st_stocks  = GetData.st_stocks()
+        self.day_quotes : dict[int,pd.DataFrame] = {}
+        self.last_quote_dt = get_target_dates('trade','day').max()
 
     @property
     def secid(self): return self.all_stocks.secid.unique()
@@ -31,6 +37,12 @@ class DataVendor:
             return date
         else:
             return np.array([self.td_offset(d , offset) for d in date])
+        
+    def td_next(self , date) -> int | np.ndarray | Any:
+        return self.td_offset(date , 1)
+    
+    def td_prev(self , date) -> int | np.ndarray | Any:
+        return self.td_offset(date , -1)
     
     def latest_td(self , date : int): return self.td_offset(date)
 
@@ -71,7 +83,7 @@ class DataVendor:
             if hasattr(self , data_key): datas.append(getattr(self , data_key))
         return DataBlock.merge(datas)
 
-    def get_daily_quote(self , start_dt : int , end_dt : int):
+    def get_quote(self , start_dt : int , end_dt : int):
         db_src , db_key = 'trade' , 'day'
         data = self.get_named_data_block(start_dt , end_dt , db_src , db_key , 'daily_quote')
         if isinstance(data , DataBlock):
@@ -84,6 +96,24 @@ class DataVendor:
         if isinstance(data , DataBlock):
             self.risk_exp = data
         return
+    
+    def get_quote_df(self , date : int | Any):
+        d = date[0] if isinstance(date , np.ndarray) else date
+        assert d > 0 , 'Attempt to get unaccessable date'
+        if d not in self.day_quotes: 
+            df = GetData.day_quote(d)
+            if df is not None: self.day_quotes[d] = df
+        return self.day_quotes.get(d , None)
+    
+    def get_quote_ret(self , date0 , date1):
+        q0 = self.get_quote_df(date0)
+        q1 = self.get_quote_df(date1)
+        if q0 is None or q1 is None: return None
+        q = q0.merge(q1 , on = 'secid')
+        q['ret'] = q['close_y'] * q['adjfactor_y'] / q['close_x'] / q['adjfactor_x'] - 1
+        q['ret_vwap'] = q['vwap_y'] * q['adjfactor_y'] / q['vwap_x'] / q['adjfactor_x'] - 1
+        q = q[['secid' , 'ret' , 'ret_vwap']].set_index('secid')
+        return q
 
     def nday_fut_ret(self , secid : np.ndarray , date : np.ndarray , nday : int = 10 , lag : int = 2 , 
                      ret_type : Literal['close' , 'vwap'] = 'close'):
@@ -120,7 +150,7 @@ class DataVendor:
     
     def get_cp(self , secid : np.ndarray , d : int):
         if d not in self.trade_date: return None
-        self.get_daily_quote(d , d)
+        self.get_quote(d , d)
         value = self.daily_quote.loc(secid = secid , date = d , feature = 'close').flatten()
         return value
     

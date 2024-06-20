@@ -66,6 +66,12 @@ class GetData:
         return st
     
     @classmethod
+    def day_quote(cls , date : int) -> pd.DataFrame | None:
+        with cls.Silence:
+            q = load_target_file('trade' , 'day' , date)[['secid','adjfactor','close','vwap']]
+        return q
+    
+    @classmethod
     def daily_returns(cls , start_dt : int , end_dt : int):
         with cls.Silence:
             pre_start_dt = int(date_offset(start_dt , -20))

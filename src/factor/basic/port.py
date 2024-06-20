@@ -2,20 +2,20 @@ import numpy as np
 import pandas as pd
 
 from copy import deepcopy
-from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
-from src.data import DataBlock , GetData, BlockLoader , FrameLoader , get_target_dates , load_target_file
-from src.environ import RISK_INDUS , RISK_STYLE
-from .vendor import DATAVENDOR
-
-AVAIL_BENCHMARK = ['csi300' , 'csi500' , 'csi1000']
+from src.data import DataBlock , get_target_dates , load_target_file
+from .data import DATAVENDOR
+from .var import RISK_INDUS , RISK_STYLE , AVAIL_BENCHMARK , EPS_WEIGHT
 
 class Port:
+    '''
+    portfolio realization of one day
+    '''
     EMPTY_PORT = pd.DataFrame(columns=['secid','weight']).astype({'secid':int,'weight':float})
 
     def __init__(self , port : Optional[pd.DataFrame] , date : int = -1 , 
-                 name : Optional[str] = 'port' , value : float | Any = None) -> None:
+                 name : str = 'default' , value : float | Any = None) -> None:
         self.exists = port is not None 
         self.port = self.EMPTY_PORT if port is None else port.groupby('secid')['weight'].sum().reset_index()
         self.date = date
@@ -23,7 +23,7 @@ class Port:
         self.value = value if value else 1e7
         self.sort()
 
-    def __bool__(self): return self.name is not None
+    def __bool__(self): return self.exists
     def __repr__(self): 
         return '\n'.join([f'Portfolio <date={self.date}> <name={self.name}> <value={self.value}>: ', str(self.port)])
     def __add__(self , other): return self.merge(other)
@@ -38,55 +38,64 @@ class Port:
 
     def is_emtpy(self): return not self.exists or len(self.port) == 0
 
-    def forward(self , to : int , inplace = False):
+    def forward(self , n : int = 1 , inplace = True):
+        if n == 0: return self if inplace else self.copy()
         assert self.date >= 0 , f'Must assign date first! (now date={self.date})'
-        assert to >= self.date , f'Must to a later day! ({self.date} -> {to})'
-        return self.__evole(to , inplace)
+        assert n > 0 , f'n must be non-negative! ({n})'
+        return self.evolve_to_date(DATAVENDOR.td_offset(self.date , n) , inplace)
 
-    def backward(self , to : int , inplace = False):
+    def backward(self , n : int = -1 , inplace = True):
+        if n == 0: return self if inplace else self.copy()
         assert self.date >= 0 , f'Must assign date first! (now date={self.date})'
-        assert to <= self.date , f'Must to a earlier day! ({self.date} -> {to})'
-        return self.__evole(to , inplace)
+        assert n < 0 , f'n must be non-positive! ({n})'
+        return self.evolve_to_date(DATAVENDOR.td_offset(self.date , n) , inplace)
     
-    def __evole(self , to : int , inplace = False):
+    def evolve_to_date(self , date : int | Any , inplace = True , rebalance = False):
         rslt = self if inplace else self.copy()
+        if date == rslt.date: return rslt
+
         old_date = int(DATAVENDOR.latest_td(self.date))
-        new_date = int(DATAVENDOR.latest_td(to))
-        if old_date == new_date: return rslt
+        new_date = int(DATAVENDOR.latest_td(date))
+        if old_date == new_date: 
+            rslt.date = date
+            return rslt
 
-        old_long_pos  = np.round(self.long_position , 4)
-        old_short_pos = np.round(self.short_position , 4)
+        old_pos   = rslt.long_position , rslt.short_position
+        old_value = rslt.value
 
-        q0 = load_target_file('trade' , 'day', old_date)[['secid','adjfactor','close']]
-        q1 = load_target_file('trade' , 'day', new_date)[['secid','adjfactor','close']]
-        
-        port = rslt.port.merge(q0 , on = 'secid').merge(q1 , on = 'secid')
-        port['weight'] = port['weight'] * port['close_y'] * port['adjfactor_y'] / port['close_x'] / port['adjfactor_x']
+        q = DATAVENDOR.get_quote_ret(old_date , new_date)
+        assert q is not None, f'Ret Quote (at {new_date}) is does not exists'
+        port = rslt.port.merge(q , on = 'secid')
+        port['new_weight'] = port['weight'] * (1 + port['ret'])
 
-        rslt.port = port.sort_values('weight' , ascending=False)
-        rslt.date = to
-        rslt.rebalance(old_long_pos , old_short_pos)
-
+        rslt.date = date
+        rslt.value = old_value * (1. + port['new_weight'].sum() - port['weight'].sum())
+        port['weight'] = port['new_weight'] * old_value / rslt.value
+        rslt.port = port.loc[:,['secid' , 'weight']].sort_values('weight' , ascending=False)
+        if rebalance: rslt.rebalance(*old_pos)
         return rslt
     
+    def fut_ret(self , new_date : Optional[int] = None) -> float:
+        if not self: return 0.
+        old_date = int(DATAVENDOR.latest_td(self.date))
+        if new_date is None: new_date = int(DATAVENDOR.td_offset(old_date , 1))
+
+        q = DATAVENDOR.get_quote_ret(old_date , new_date)
+        assert q is not None, f'Ret Quote (at {new_date}) is does not exists'
+        port = self.port.merge(q , on = 'secid').fillna(0)
+        return (port['weight'] * port['ret']).to_numpy().sum()
+    
     def rebalance(self , long_position : float = 1., short_position : float = 0.):
-        long_pos = self.port['weight'] >= 0
-        now_pos = self.position
-        if long_pos.any():
-            assert long_position > 0 , 'unable to rebalance to 0 or negative'
-            self.port.loc[long_pos , 'weight'] *= long_position / self.port.loc[long_pos , 'weight'].sum()
-        else:
-            long_position = 0.
-        if not long_pos.all(): 
-            assert short_position > 0 , 'unable to rebalance to 0 or negative'
-            self.port.loc[~long_pos , 'weight'] *= -short_position / self.port.loc[~long_pos , 'weight'].sum()
-        else:
-            short_position = 0.
-        self.value += self.value * (now_pos - self.position)
+        assert long_position >= 0 and short_position >= 0 , (long_position , short_position)
+        L = self.port['weight'] >= 0
+        S = ~L
+        if L.any(): self.port.loc[L , 'weight'] *=   long_position / self.port.loc[L,'weight'].sum()
+        if S.any(): self.port.loc[S , 'weight'] *= -short_position / self.port.loc[S,'weight'].sum()
         return self
 
     @classmethod
     def create(cls , secid : np.ndarray | Any , weight : np.ndarray | Any , drop0 = True, **kwargs):
+        weight = weight * ((weight >= EPS_WEIGHT) + (weight <= -EPS_WEIGHT))
         df = pd.DataFrame({'secid':secid , 'weight' : weight})
         if drop0: df = df[df['weight'] != 0]
         return cls(df , **kwargs)
@@ -122,6 +131,9 @@ class Port:
     @property
     def short_position(self): return -self.port[self.port['weight'] < 0]['weight'].sum()
     def copy(self): return deepcopy(self)
+    def rename(self , new_name : str):
+        self.name = new_name
+        return self
     def rescale(self , scale = 1. , inplace = False): 
         new = self if inplace else self.copy()
         new.port['weight'] = scale * new.port['weight'] / new.position
@@ -140,15 +152,28 @@ class Port:
             combined = new.port
         new.port = combined
         return new
+    def turnover(self , another):
+        if not self or self is another: return 0.
+        assert isinstance(another , Port) , another
+        return (self - another).port['weight'].abs().sum()
     
 class Portfolio:
-    '''Non-Consecutive stream of some portfolio'''
-    def __init__(self , name : str = 'port') -> None:
+    '''
+    portfolio realization for multiple days
+    '''
+    def __init__(self , name : str = 'default' , is_default = False) -> None:
         self.name = name
         self.ports : dict[int,Port] = {}
+        self.is_default = is_default
         self.weight_block_completed = False
-    def __bool__(self): return self.name is not None
+    def __len__(self): return len(self.available_dates())
+    def __bool__(self): return len(self) > 0
     def __repr__(self): return f'<{self.name}> : {len(self.ports)} ports'
+    def __getitem__(self , date): return self.get(date)
+    def __setitem__(self , date , port): 
+        assert date == port.date , (date , port.date)
+        self.append(port , True)
+    def copy(self): return deepcopy(self)
 
     @property
     def port_date(self): return np.array(list(self.ports.keys()))
@@ -168,8 +193,8 @@ class Portfolio:
             self.weight_block_completed = True
         return self.weight
         
-    def append(self , port : Port , override = False):
-        assert self.name == port.name , (self.name , port.name)
+    def append(self , port : Port , override = False , ignore_name = False):
+        assert ignore_name or self.name == port.name , (self.name , port.name)
         assert override or (port.date not in self.ports.keys()) , port.date
         self.ports[port.date] = port
         self.weight_block_completed = False
@@ -181,14 +206,20 @@ class Portfolio:
         if date in available_dates: return date
         tar_dates = available_dates[available_dates < date]
         return max(tar_dates) if len(tar_dates) else -1
-
+    def has(self , date : int):
+        return date in self.ports.keys()
     def get(self , date : int , latest = False): 
         use_date = self.latest_avail_date(date) if latest else date
         port = self.ports.get(use_date , None)
-        if port is None: port = Port.none_port(date)
-        return port
+        if port is None: 
+            return Port.none_port(date)
+        else:
+            return port.evolve_to_date(date)
     
 class Benchmark(Portfolio):
+    '''
+    orthodox benchmark in AVAIL_BENCHMARK : csi300 , csi500 , csi1000
+    '''
     def __init__(self , name : str) -> None:
         assert name is None or name in AVAIL_BENCHMARK , name
         super().__init__(name)
@@ -214,7 +245,7 @@ class Benchmark(Portfolio):
             else:
                 port = Port.none_port(date)
             self.benchmark_attempted_dates.append(date)
-        return port
+        return port.evolve_to_date(date)
 
     def universe(self , secid : np.ndarray , date : np.ndarray):
         assert self , 'No need of calculating universe for none benchmark'
@@ -238,11 +269,23 @@ class Benchmark(Portfolio):
         return factor_val.dropna(how = 'all')
     
     @classmethod
-    def day_port(cls , bm : Port|Portfolio|str|dict|Any , model_date : int) -> Port:
-        if isinstance(bm , Port):
+    def day_port(cls , bm : Port|Portfolio|str|dict|Any , model_date : int , default_config = None) -> Port:
+        if bm is None:
+            if default_config:
+                return cls.day_port(default_config , model_date)
+            else:
+                return Port.empty_port(model_date)
+        elif isinstance(bm , Port):
             return bm
-        elif isinstance(bm , Portfolio):
+        elif isinstance(bm , Benchmark):
             return bm.get(model_date , latest=True)
+        elif isinstance(bm , Portfolio):
+            if bm.is_default and default_config and not bm.has(model_date):
+                port = cls.day_port(default_config , model_date)
+                bm.append(port , ignore_name = True)
+            else:
+                port = bm.get(model_date , latest=True)
+            return port
         elif isinstance(bm , str):
             return BENCHMARKS[bm].get(model_date , latest=True)
         elif isinstance(bm , dict):
@@ -258,10 +301,13 @@ class Benchmark(Portfolio):
             assert isinstance(port , Port) , port
             port.name = name
             return port
-        elif bm is None:
-            return Port.empty_port(model_date)
         else:
             raise TypeError(bm)
+        
+    @classmethod
+    def get_benchmarks(cls , benchmarks : Optional[str] | list[Optional[str]]):
+        if not isinstance(benchmarks , list): benchmarks = [benchmarks]
+        return [(BENCHMARKS[bm] if bm else None) for bm in benchmarks]
 
 BENCHMARKS = {
     'csi300' : Benchmark('csi300') ,

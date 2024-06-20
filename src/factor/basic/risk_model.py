@@ -1,17 +1,22 @@
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
 from src.data import GetData, BlockLoader , FrameLoader , get_target_dates , load_target_file
-from src.environ import RISK_INDUS , RISK_STYLE
-from .port import Port
 
-COMMON_FACTORS = ['market'] + RISK_INDUS + RISK_STYLE
+from .data import DATAVENDOR
+from .model import GeneralModel
+from .port import Port
+from .var import RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
 
 @dataclass
 class Rmodel:
+    '''
+    risk model instance for one day
+    '''
     date : int
     F : pd.DataFrame
     C : pd.DataFrame
@@ -21,6 +26,8 @@ class Rmodel:
         comfac = self.common_factors
         self.C = self.C.loc[comfac , comfac]
         self.S.fillna(self.S.quantile(0.95) , inplace=True)
+        self.regressed : int | Any = None
+        self.next_date = int(DATAVENDOR.td_next(self.date))
 
     @property
     def secid(self): return self.F.index.values
@@ -33,9 +40,9 @@ class Rmodel:
         if secid is not None: df = df.loc[secid]
         return df.to_numpy().flatten()
     @property
-    def common_factors(self): return COMMON_FACTORS
+    def common_factors(self): return RISK_COMMON
     def FCS_aligned(self , secid : np.ndarray | Any = None):
-        F = self.F.loc[: , COMMON_FACTORS]
+        F = self.F.loc[: , RISK_COMMON]
         C = self.C
         S = self.S
         if secid is not None: 
@@ -60,71 +67,76 @@ class Rmodel:
         rmodel_s = self.S.loc[port.secid].values.flatten()
         return (port.weight * rmodel_s).dot(port.weight)
     def _analysis(self , port : Port | Any = None):
-        if port is None: return RiskProfile()
+        if not port: return RiskProfile()
         common_exp = self._exposure(port)
         variance = common_exp.dot(self.C).dot(common_exp.T) + self._specific_risk(port)
         return RiskProfile(self.common_factors , common_exp , variance)
     def analyze(self , port : Port , bench : Port | Any = None , init : Port | Any = None):
-        rslt = Analytic()
+        '''Analyze day end risk profile'''
+        rslt = Analytic(self.date)
         rslt.append('portfolio' , self._analysis(port))
         rslt.append('initial'   , self._analysis(init))
         rslt.append('benchmark' , self._analysis(bench))
         rslt.append('active'    , self._analysis(None if bench is None else port - bench))
         return rslt
+    def attribute(self , port : Port , bench : Port | Any = None , target_date : Optional[int] = None):
+        '''Attribute the portfolio of the next day (trading day)'''
+        rslt = Attribution.create(self , port , bench , target_date=target_date)
+        return rslt
+    def regress_fut_ret(self , target_date : Optional[int] = None):
+        '''regress future day return , most likely daily , but can given any target date'''
+        if target_date is None: target_date = self.next_date
+        futret = DATAVENDOR.get_quote_ret(self.date , target_date)
+        if futret is None: 
+            self.params : pd.DataFrame | Any = None
+            self.futret : pd.DataFrame | Any = None
+            self.regressed = None
+        else:
+            futret = futret[['ret']].rename(columns={'ret':'tot'}).astype(float)
+            F = self.F.join(futret).fillna(0)
 
-class RiskModel:
+            model = sm.WLS(F['tot'] , F['market'].fillna(0), weights=F['weight']).fit()   # type: ignore
+            market_ret , excess_ret = model.params , model.resid.rename('excess')
+
+            model = sm.WLS(excess_ret , F[RISK_INDUS + RISK_STYLE], weights=F['weight']).fit()   # type: ignore
+            self.params = pd.concat([market_ret , model.params])
+            self.futret = futret.loc[:,['tot']].join(excess_ret).join(model.resid.rename('specific'))
+            self.regressed = target_date
+        return self
+
+class RiskModel(GeneralModel):
+    '''
+    risk model instance for multiple days
+    '''
     def __init__(self) -> None:
         self.models : dict[int,Rmodel] = {}
+        self.name = 'cne5'
         self.riskmodel_available_dates = get_target_dates('models' , 'risk_exp')
         self.F_loader = BlockLoader('models' , 'risk_exp')
         self.C_loader = FrameLoader('models' , 'risk_cov')
         self.S_loader = BlockLoader('models' , 'risk_spec')
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}({len(self.models)} days loaded)'
-
-    def append(self , rmodel : Rmodel , override = False):
-        assert override or (rmodel.date not in self.models.keys()) , rmodel.date
-        self.models[rmodel.date] = rmodel
-
+    def append(self , model : Rmodel , override = False):
+        return super().append(model , override)
     def available_dates(self): return self.riskmodel_available_dates
-
-    def latest_avail_date(self , date : int = 99991231):
-        available_dates = self.available_dates()
-        if date in available_dates: return date
-        tar_dates = available_dates[available_dates < date]
-        return max(tar_dates) if len(tar_dates) else -1
-    
-    def get(self , date : int , latest = True):
-        use_date = self.latest_avail_date(date) if latest else date
-        rmodel = self.models.get(use_date , None)
-
-        if rmodel is None and use_date in self.available_dates():
-            rmodel = self.load_day_model(date)
-            self.append(rmodel)
-
-        assert isinstance(rmodel , Rmodel) , f'rmodel does not exists!'
-        return rmodel
-    
-    def load_models(self , dates : np.ndarray | Any = None , start : int = -1 , end : int = -1):
-        if dates is None:
-            dates = self.riskmodel_available_dates
-            dates = [(dates >= start) & (dates <= end)]
-        for date in np.setdiff1d(dates , list(self.models.keys())): self.models[date] = self.load_day_model(date) 
-
+    def get(self , date : int , latest = True) -> Rmodel:
+        model = super().get(date , latest)
+        assert isinstance(model , Rmodel) , f'rmodel does not exists!'
+        return model
     def load_day_model(self , date : int):
         with GetData.Silence:
             F = self.F_loader.load(date , date)
             C = self.C_loader.load(date , date)
             S = self.S_loader.load(date , date)
-        F = F.to_dataframe().reset_index(['date'],drop=True)
-        C = C.reset_index(drop=True).set_index('factor_name')
-        S = S.to_dataframe().reset_index(['date'],drop=True)
-        return Rmodel(date , F , C , S)
-    
+        F = F.to_dataframe().reset_index(['date'],drop=True).astype(float)
+        C = C.reset_index(drop=True).set_index('factor_name').astype(float)
+        S = S.to_dataframe().reset_index(['date'],drop=True).astype(float)
+        return Rmodel(date , F , C , S)    
 
 @dataclass
 class RiskProfile:
+    '''
+    basic risk profile of a portfolio / benchmark / active , i.e. risk exposure / standard deviation / variance
+    '''
     factors  : Optional[np.ndarray | list] = None
     exposure : Optional[np.ndarray] = None
     variance : Optional[float] = None
@@ -142,14 +154,19 @@ class RiskProfile:
     
 @dataclass
 class Analytic:
+    '''
+    portfolio risk analysis result
+    '''
+    date     : int = 0
     industry : pd.DataFrame | Any = None
     style    : pd.DataFrame | Any = None
     risk     : pd.DataFrame | Any = None
 
     def __post_init__(self):
         ...
-
-    def __bool__(self): return self.industry is not None
+    def __bool__(self): return bool(self.date > 0)
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.date})'
 
     def append(self , port_type : Literal['portfolio' , 'benchmark' , 'initial' , 'active'] , risk_profile : RiskProfile):
         df = risk_profile.to_dataframe()
@@ -167,6 +184,12 @@ class Analytic:
             self.style    = style
             self.risk     = risk
 
+    def rounding(self):
+        if self.industry is not None: self.industry = self.industry.round(ROUNDING_EXPOSURE)
+        if self.style    is not None: self.style    = self.style.round(ROUNDING_EXPOSURE)
+        if self.risk     is not None: self.risk     = self.risk.round(ROUNDING_EXPOSURE)
+        return self
+
     def styler(self , which : Literal['industry' , 'style' , 'risk'] = 'style'):
         if which == 'industry':
             return self.industry.style.format(lambda x:f'{x:.2%}')
@@ -175,4 +198,77 @@ class Analytic:
         else:
             return self.risk.style.format(lambda x:f'{x:.4%}')
 
+@dataclass
+class Attribution:
+    '''
+    portfolio risk attribution result
+    '''
+    start    : int = 0
+    end      : int = 0
+    source   : pd.DataFrame | Any = None
+    industry : pd.DataFrame | Any = None
+    style    : pd.DataFrame | Any = None
+    specific : pd.DataFrame | Any = None
+    aggregated : pd.DataFrame | Any = None
+
+    def __post_init__(self):
+        ...
+    def __bool__(self): return self.start > 0 and self.end > 0
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.start}-{self.end})'
+
+    @classmethod
+    def create(cls , risk_model : Rmodel , port : Port , bench : Optional[Port] = None , target_date : Optional[int] = None):
+        if target_date is None: target_date = risk_model.next_date
+        if risk_model.regressed != target_date: risk_model = risk_model.regress_fut_ret(target_date)
+        if risk_model.futret is None: return cls(risk_model.next_date , risk_model.regressed)
+
+        benchport = bench.port if bench else Port.EMPTY_PORT
+        weight = port.port.merge(benchport , on='secid' , how='outer').set_index('secid').fillna(0)
+        weight.columns = ['portfolio' , 'benchmark']
+        weight['active'] = weight['portfolio'] - weight['benchmark']
+
+        futret = risk_model.futret
+        F = risk_model.F.drop(columns=['estuniv','weight'])
+        coef = risk_model.params
+
+        specific = weight.join(futret).join(F).drop(columns = weight.columns)
+        aggregated = []
+        for col in weight.columns:
+            exp = (specific * weight[col].to_numpy().reshape(-1,1)).sum().rename(col).to_frame()
+            exp.loc[futret.columns.values] = weight[col].sum()
+            aggregated.append(exp)
+
+        specific *= weight['active'].to_numpy().reshape(-1,1)
+        specific.loc[:,coef.index.values] *= coef.to_numpy().reshape(1,-1)
+        aggregated.append(specific.sum().rename('contribution'))
+        aggregated = pd.concat(aggregated , axis = 1)
+
+        industry = aggregated.loc[RISK_INDUS]
+        style    = aggregated.loc[RISK_STYLE]
+
+        source   = pd.concat([aggregated.loc[['tot','market','excess']] ,
+                              industry.sum().rename('industry').to_frame().T ,
+                              style.sum().rename('style').to_frame().T ,
+                              aggregated.loc[['specific']]])
+        source.loc[['industry','style'] , weight.columns] = 0.
+
+        specific['industry'] = specific.loc[:,RISK_INDUS].sum(1)
+        specific['style']    = specific.loc[:,RISK_STYLE].sum(1)
+        specific = specific.drop(columns = RISK_INDUS + RISK_STYLE).loc[:,source.index.values]
+
+        return cls(risk_model.next_date , risk_model.regressed , source , industry , style , specific , aggregated)
+    
+    def rounding(self):
+        decimals = {
+            'portfolio' : ROUNDING_EXPOSURE , 
+            'benchmark' : ROUNDING_EXPOSURE , 
+            'active'    : ROUNDING_EXPOSURE , 
+            'contribution' : ROUNDING_CONTRIBUTION}
+        if self.source is not None:     self.source   = self.source.round(decimals)
+        if self.industry is not None:   self.industry = self.industry.round(decimals)
+        if self.style    is not None:   self.style    = self.style.round(decimals)
+        if self.aggregated is not None: self.aggregated = self.aggregated.round(decimals)
+        return self
+    
 RISK_MODEL = RiskModel()

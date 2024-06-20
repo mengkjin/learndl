@@ -1,6 +1,26 @@
-from src.environ import RISK_INDUS , RISK_STYLE
+'''
+basic variables in factor package
+'''
 
-DEFAULT_SOLVER_PARAM : dict[str,dict] = {
+from src.environ import RISK_INDUS , RISK_STYLE
+RISK_COMMON = ['market'] + RISK_INDUS + RISK_STYLE
+AVAIL_BENCHMARK = ['csi300' , 'csi500' , 'csi1000']
+
+EPS_WEIGHT = 1e-6
+EPS_ACCURACY = 1e-6
+
+TRADE_COST = 0.002
+
+ROUNDING_EXPOSURE = 6
+ROUNDING_CONTRIBUTION = 8
+ROUNDING_RETURN = 8
+ROUNDING_TURNOVER = 8
+
+SYMBOL_INF = 0.0
+SYMBOL_STOCK_LB = -1.
+SYMBOL_STOCK_UB = +1.
+
+DEFAULT_SOLVER_CONFIG : dict[str,dict] = {
     'cvxpy.mosek': {'solver': 'MOSEK','max_iters': 200, 'bnd_inf': 100.0},
     'cvxpy.ecos': {'solver': 'ECOS','max_iters': 200, 'bnd_inf': 100.0},
     'cvxpy.osqp': {'solver': 'OSQP','bnd_inf': 100.0},
@@ -8,8 +28,7 @@ DEFAULT_SOLVER_PARAM : dict[str,dict] = {
     'mosek': {},
     'cvxopt': {'show_progress': False}
 }
-
-DEFAULT_OPT_CONFIG = {
+DEFAULT_OPT_CONFIG : dict[str,dict] = {
     'equity' :  {
         'target_position' : 1. , # only remnant
         'target_value'    : None ,

@@ -3,7 +3,7 @@ import pandas as pd
 
 from copy import deepcopy
 from typing import Any
-from ...basic import DATAVENDOR , BENCHMARKS , RISK_MODEL , Port , Benchmark
+from ...basic import DATAVENDOR , BENCHMARKS , RISK_MODEL , Port , Benchmark , Portfolio
 
 from .bound import StockBound , StockPool , IndustryPool , GeneralBound , ValidRange , STOCK_UB , STOCK_LB
 from .constr import LinearConstraint , TurnConstraint , CovConstraint , BoundConstraint , ShortConstraint
@@ -22,8 +22,7 @@ def create_input_eq(opt_input : Any) -> float | Any:
     return eq
 
 def create_input_benchmark(opt_input : Any) -> np.ndarray | Any:
-    bm = opt_input.cfg_benchmark['benchmark'] if opt_input.benchmark is None else opt_input.benchmark
-    bm_port = Benchmark.day_port(bm , opt_input.model_date)
+    bm_port = Benchmark.day_port(opt_input.benchmark  , opt_input.model_date , opt_input.cfg_benchmark['benchmark'])
     opt_input.benchmark_port = bm_port
     wb = bm_port.weight_align(opt_input.secid) * opt_input.eq if not bm_port.is_emtpy() else None
     return wb

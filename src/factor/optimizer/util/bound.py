@@ -3,8 +3,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
-STOCK_LB = -1.
-STOCK_UB = +1.
+from ...basic.var import SYMBOL_STOCK_LB as STOCK_LB
+from ...basic.var import SYMBOL_STOCK_UB as STOCK_UB
 
 @dataclass
 class StockBound:

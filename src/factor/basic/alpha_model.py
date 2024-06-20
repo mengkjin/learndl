@@ -4,10 +4,13 @@ import pandas as pd
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any , Literal
+from typing import Any , Literal , Optional
+
+from .model import GeneralModel
 
 @dataclass
 class Amodel:
+    '''Alpha model of one day instance'''
     date  : int
     alpha : np.ndarray
     secid : np.ndarray
@@ -29,6 +32,10 @@ class Amodel:
         new_alpha.alpha = value
         new_alpha.secid = secid
         return new_alpha
+    def assign(self , date : Optional[int] = None , name : Optional[str] = None):
+        if date is not None: self.date = date
+        if name is not None: self.name = name
+        return self
 
     @classmethod
     def create_random(cls , date : int , secid : np.ndarray | Any = None):
@@ -75,43 +82,52 @@ class Amodel:
         else:
             return cls.from_dataframe(date , data , secid)
     
-class AlphaModel:
+class AlphaModel(GeneralModel):
+    '''Alpha model instance, contains alpha for multiple days'''
     def __init__(self , name : str = 'Alpha0' , models : Amodel | list[Amodel] | dict[int,Amodel] | Any = None) -> None:
         self.name = name
         self.models : dict[int,Amodel] = {}
         self.append(models)
-
+    def load_day_model(self, date: int) -> Any:
+        # do something here
+        ...
     def __repr__(self):
-        return f'{self.__class__.__name__}({len(self.models)} days loaded)'
-
+        return f'{self.__class__.__name__} (name={self.name})({len(self.models)} days loaded)'
     @classmethod
-    def from_dataframe(cls , data: pd.DataFrame | pd.Series , name = 'Alpha0'):
+    def from_dataframe(cls , data: pd.DataFrame | pd.Series , name : str | Any = None):
         if isinstance(data , pd.Series): data = data.to_frame()
         if not isinstance(data.index , pd.RangeIndex): data = data.reset_index()
         assert 'secid' in data and 'date' in data , data.columns
         models = [Amodel.from_dataframe(date , data) for date in data['date'].unique()]
-        return cls(name , models)
+        assert models , f'no models created'
+        return cls(name if name else models[0].name , models)
 
-    def append(self , amodel : Amodel | list[Amodel] | dict[int,Amodel] , override = True):
-        if isinstance(amodel , Amodel):
-            assert override or (amodel.date not in self.models.keys()) , amodel.date
-            self.models[amodel.date] = amodel
-        elif isinstance(amodel , list):
-            for am in amodel: self.append(am , override=override)
-        elif isinstance(amodel , dict):
-            for am in amodel.values(): self.append(am , override=override)
+    def append(self , model : Amodel | list[Amodel] | dict[int,Amodel] , override = True):
+        if isinstance(model , Amodel):
+            assert override or (model.date not in self.models.keys()) , model.date
+            self.models[model.date] = model
+        elif isinstance(model , list):
+            for am in model: self.append(am , override=override)
+        elif isinstance(model , dict):
+            for am in model.values(): self.append(am , override=override)
 
-    def available_dates(self): return np.array(list(self.models.keys()))
-
-    def latest_avail_date(self , date : int = 99991231):
-        available_dates = self.available_dates()
-        if date in available_dates: return date
-        tar_dates = available_dates[available_dates < date]
-        return max(tar_dates) if len(tar_dates) else -1
+    def get(self , date : int , latest = True , lag : int = 0) -> Amodel | Any:
+        if lag:
+            assert lag > 0 , lag
+            avail_dates = np.sort(self.available_dates())
+            avail_dates = avail_dates[avail_dates < date]
+            if len(avail_dates): date = avail_dates[-min(lag , len(avail_dates))]
+        model = super().get(date , latest)
+        assert model is None or isinstance(model , Amodel)
+        return model
     
-    def get(self , date : int , latest = True) -> Amodel | Any:
-        use_date = self.latest_avail_date(date) if latest else date
-        rmodel = self.models.get(use_date , None)
-
-        return rmodel
+    def lag_all_models(self , lag_period : int = 0 , inplace = False , rename = True):
+        new = self if inplace else self.copy()
+        if rename: new.name = f'{new.name}.lag{lag_period}'
+        if lag_period == 0: return new
+        dates = np.sort(new.available_dates())[::-1]
+        for i , date in enumerate(dates):
+            tar_date = dates[min(i+lag_period,len(dates)-1)]
+            new.models[date] = new.models[tar_date].assign(date = date , name = new.name)
+        return new
     

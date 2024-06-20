@@ -3,10 +3,9 @@ import pandas as pd
 
 from copy import deepcopy
 from typing import Any , Optional
-from ...basic import DATAVENDOR , Port , RISK_MODEL , Benchmark , AlphaModel , Amodel
-from .solver_input import SolverInput
 
-from src.func import Timer
+from .solver_input import SolverInput
+from ...basic import DATAVENDOR , Port , RISK_MODEL , Benchmark , Portfolio , AlphaModel , Amodel
 
 from .parser import (
     parse_config_benchmark , parse_config_board , parse_config_bound ,
@@ -20,8 +19,7 @@ from .input_creator import (
     create_input_bnd_con , create_input_lin_con , create_input_turn_con ,
     create_input_cov_con ,  create_input_short_con
 )
-from ..basic import DEFAULT_OPT_CONFIG
-
+from ...basic.var import DEFAULT_OPT_CONFIG
 class PortfolioOptimizerInput:
     def __init__(
         self , 
@@ -58,7 +56,7 @@ class PortfolioOptimizerInput:
             self.config[key].update(given)
 
     def to_solver_input(self , model_date : int , alpha_model : AlphaModel | Amodel | Any = None , 
-                        benchmark : Optional[Benchmark | Port] = None , init_port : Port | Any = None):
+                        benchmark : Optional[Benchmark | Portfolio | Port] = None , init_port : Port | Any = None):
 
         self.model_date = model_date
         self.risk_model = RISK_MODEL.get(model_date)
@@ -66,7 +64,6 @@ class PortfolioOptimizerInput:
         if isinstance(alpha_model , AlphaModel):
             self.alpha_model = alpha_model.get(model_date)
         elif isinstance(alpha_model , Amodel):
-            assert alpha_model.date == model_date , (alpha_model.date , model_date)
             self.alpha_model = alpha_model
         else:
             self.alpha_model = Amodel.create_random(model_date , self.risk_model.universe)

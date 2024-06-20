@@ -1,9 +1,8 @@
 from copy import deepcopy
 from typing import Any
 
-from src.environ import RISK_INDUS , RISK_STYLE
-from .bound import StockBound , StockPool , IndustryPool , GeneralBound , ValidRange , STOCK_UB , STOCK_LB
-
+from .bound import StockPool , IndustryPool , GeneralBound , ValidRange
+from ...basic.var import RISK_INDUS , RISK_STYLE
 
 def parse_config_equity(config : dict) -> dict[str,float|Any]:
     '''

@@ -28,6 +28,9 @@ def date_offset(date , offset = 0 , astype : Any = int):
     new_date = new_date.astype(astype)
     return new_date[0] if is_scalar else new_date.values
 
+def date_diff(date1 : int | str , date2 : int | str):
+    return (datetime.strptime(str(date1), '%Y%m%d') - datetime.strptime(str(date2), '%Y%m%d')).days
+
 def date_seg(start_dt , end_dt , freq='Q' , astype : Any = int):
     dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
     dt_starts = [date_offset(start_dt) , *date_offset(dt_list[:-1],1)]

@@ -7,16 +7,11 @@ from typing import Any , Literal , Optional
 
 from src.environ import PATH
 
-from .basic import DEFAULT_SOLVER_PARAM
-from .solver.mosek import Solver as MosekSolver
+from .solver import SOLVER_CLASS
 from .util import Accuarcy , PortfolioOptimizerInput , SolverInput , Utility
-from ..basic import Analytic , Port , AlphaModel , Amodel , Benchmark
+from ..basic import Analytic , Port , AlphaModel , Amodel , Portfolio , Benchmark
+from ..basic.var import DEFAULT_SOLVER_CONFIG , EPS_WEIGHT
 
-SOLVER_CLASS = {
-    'mosek' : MosekSolver
-}
-
-eps = 1e-6
 
 @dataclass
 class PortfolioOptimizer:
@@ -32,7 +27,7 @@ class PortfolioOptimizer:
 
     def __post_init__(self):
         key = f'{self.engine_type}.{self.cvxpy_solver}' if self.engine_type == 'cvxpy' else self.engine_type
-        self.param = DEFAULT_SOLVER_PARAM[key]
+        self.param = DEFAULT_SOLVER_CONFIG[key]
         
     def setup_optimizer(self , portfolio_name : str = 'port' , 
                         config_path : Optional[str] = None):
@@ -59,20 +54,23 @@ class PortfolioOptimizer:
         return w, is_success, status
         
     def optimize(self , model_date : int , alpha_model :AlphaModel|Amodel|Any = None , 
-                 benchmark : Optional[Benchmark | Port] = None , init_port : Port | Any = None , detail_infos = True):
+                 benchmark : Optional[Benchmark | Portfolio | Port] = None , init_port : Port | Any = None , 
+                 detail_infos = True):
         t0 = time.time()
         self.solver_input = self.opt_input.to_solver_input(model_date , alpha_model , benchmark , init_port).rescale()
         t1 = time.time()
         w , is_success , status = self.solve(self.solver_input)
         t2 = time.time()
 
-        w    = w * ((w >= eps) + (w <= -eps))
         port = Port.create(self.secid , w , date = model_date , name = self.name , value = self.value)
         rslt = PortOptimResult(w , self.secid , port , is_success , status)
 
         if detail_infos:
             rslt.utility  = self.solver_input.utility(w , self.prob_type , self.opt_turn , self.opt_qobj , self.opt_short) 
             rslt.accuracy = self.solver_input.accuracy(w)
+            if not rslt.accuracy and is_success:
+                print('Not accurate but assessed as success!')
+                print(rslt.accuracy)
             rslt.analytic = self.opt_input.analytic(port , self.opt_input.benchmark_port , self.opt_input.initial_port)
 
         t3 = time.time()
@@ -85,6 +83,8 @@ class PortfolioOptimizer:
     def name(self): return self.opt_input.portfolio_name
     @property
     def value(self): return self.opt_input.initial_value
+    @property
+    def benchport(self): return self.opt_input.benchmark_port
 
 @dataclass
 class PortOptimResult:

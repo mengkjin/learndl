@@ -13,7 +13,7 @@ from src.data import DataBlock
 from typing import Any , Literal , Optional
 from src.data import DataBlock
 
-from ..basic import Benchmark
+from ..basic import Benchmark , BENCHMARKS
 from . import util as PerfUtil
 from . import plot as PlotUtil
 
@@ -37,8 +37,8 @@ class PerfManager:
     def __post_init__(self) -> None:
         self.perf_calc_dict = {k:self.select_perf_calc(k,self.perf_params) for k,v in self.perf_calc_bool.items() if v}
 
-    def calc(self , factor_val: DataBlock | pd.DataFrame, benchmark: Optional[Benchmark] = None):
-        for _ , perf_calc in self.perf_calc_dict.items(): perf_calc.calc(factor_val , benchmark)
+    def calc(self , factor_val: DataBlock | pd.DataFrame, benchmarks: Optional[list[Benchmark|Any]] = None):
+        for _ , perf_calc in self.perf_calc_dict.items(): perf_calc.calc(factor_val , benchmarks)
         return self
 
     def plot(self , show = False):
@@ -81,17 +81,22 @@ class suppress_warnings:
 class BasePerfCalc(ABC):
     def __init__(self , **kwargs) -> None:
         self.params : dict[str,Any] = kwargs
+        self.default_benchmarks : list[Benchmark|Any] = [None]
     @abstractmethod
-    def calculator(self) -> Callable: '''Define calculator'''
+    def calculator(self) -> Callable[...,pd.DataFrame]: '''Define calculator'''
     @abstractmethod
     def plotter(self) -> Callable: '''Define plotter'''
-    def calc(self , factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark] = None):
+    def calc(self , factor_val : DataBlock | pd.DataFrame, benchmarks : Optional[list[Benchmark|Any]] | Any = None):
         with suppress_warnings(): 
-            self.benchmark_name = benchmark.name if benchmark else None
-            self.calc_rslt : pd.DataFrame = self.calculator()(factor_val , benchmark=benchmark , **self.params)
+            benchmarks = benchmarks if benchmarks is not None else self.default_benchmarks
+            if not isinstance(benchmarks , list): benchmarks = [benchmarks]
+            func = self.calculator()
+            #self.benchmark_names = [(bm.name if bm else None) for bm in benchmarks]
+            self.calc_rslt : pd.DataFrame = pd.concat(
+                [func(factor_val,benchmark=bm,**self.params).assign(benchmark=(bm.name if bm else 'default')) for bm in benchmarks])
         return self
     def plot(self , show = False): 
-        self.fig : Figure | dict[str,Figure] = self.plotter()(self.calc_rslt , benchmark = self.benchmark_name , show = show)
+        self.fig : Figure | dict[str,Figure] = self.plotter()(self.calc_rslt , show = show) #  benchmark = self.benchmark_names
         return self
     def save(self , path : str , key : Optional[str] = None):
         os.makedirs(path , exist_ok=True)
@@ -106,12 +111,14 @@ class BasePerfCalc(ABC):
 class DistributionCurve(BasePerfCalc):
     def __init__(self , sampling_date_num : int = 12 , hist_bins : int = 50 , **kwargs) -> None:
         super().__init__(sampling_date_num = sampling_date_num , hist_bins = hist_bins)
+        self.default_benchmarks = [None , *BENCHMARKS.values()]
     def calculator(self): return PerfUtil.calc_distribution
     def plotter(self): return PlotUtil.plot_distribution
 
 class DistributionQuantile(BasePerfCalc):
     def __init__(self , scaling : bool = True , **kwargs) -> None:
         super().__init__(scaling = scaling)
+        self.default_benchmarks = [None , *BENCHMARKS.values()]
     def calculator(self): return PerfUtil.calc_factor_qtile
     def plotter(self): return PlotUtil.plot_factor_qtile
 
@@ -119,6 +126,7 @@ class GroupCurve(BasePerfCalc):
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag = lag , group_num = group_num , ret_type = ret_type)
+        self.default_benchmarks = [None , *BENCHMARKS.values()]
     def calculator(self): return PerfUtil.calc_grp_perf
     def plotter(self): return PlotUtil.plot_grp_perf
 
@@ -127,20 +135,15 @@ class GroupDecayRet(BasePerfCalc):
                  lag_num : int = 5 , ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag_init = lag_init , group_num = group_num , lag_num = lag_num , ret_type = ret_type)
     def calculator(self): return PerfUtil.calc_decay_grp_perf
-    def plotter(self): 
-        def wrapper(*args , **kwargs):
-            return PlotUtil.plot_decay_grp_perf(*args , stat_type = 'ret' , **kwargs)
-        return wrapper
+    def plotter(self): return PlotUtil.plot_decay_grp_perf_ret
 
 class GroupDecayIR(BasePerfCalc):
     def __init__(self , nday : int = 10 , lag_init : int = 2 , group_num : int = 10 ,
                  lag_num : int = 5 , ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag_init = lag_init , group_num = group_num , lag_num = lag_num , ret_type = ret_type)
     def calculator(self): return PerfUtil.calc_decay_grp_perf
-    def plotter(self):
-        def wrapper(*args , **kwargs):
-            return PlotUtil.plot_decay_grp_perf(*args , stat_type = 'ir' , **kwargs)
-        return wrapper
+    def plotter(self): return PlotUtil.plot_decay_grp_perf_ir
+
 class GroupYearlyTop(BasePerfCalc):
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
@@ -186,6 +189,7 @@ class PnLCurve(BasePerfCalc):
                  weight_type_list : list[str] = ['long' , 'long_short' , 'short'] , **kwargs) -> None:
         super().__init__(nday = nday , lag = lag , group_num = group_num , ret_type = ret_type ,
                          given_direction = given_direction , weight_type_list = weight_type_list)
+        self.default_benchmarks = [None , *BENCHMARKS.values()]
     def calculator(self): return PerfUtil.calc_pnl
     def plotter(self): return PlotUtil.plot_pnl
 

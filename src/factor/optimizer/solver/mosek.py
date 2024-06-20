@@ -5,7 +5,7 @@ from typing import Any , Literal
 
 from ..util import SolverInput , SolveCond , SolveVars
 
-inf = 0.0
+from ...basic.var import SYMBOL_INF as INF
 
 def mosek_bnd_key(bnd_key : str | list | np.ndarray):
     if isinstance(bnd_key , (list , np.ndarray)):
@@ -118,7 +118,7 @@ class Solver:
                     status = str(sol_sta)
 
                 self.task = task
-        ww = np.array(xx[:self.num_vars.N])
+        ww = np.array(xx , dtype=float)[:self.num_vars.N]
 
         self.optimal_x = xx
         self.optimal_w = ww
@@ -152,16 +152,16 @@ class Solver:
         self.task_addvars(task , self.num_vars.N , bnd_type , self.input.bnd_con.lb , self.input.bnd_con.ub , -self.alpha)
 
         # num_T absolute turnover
-        self.task_addvars(task , self.num_vars.T , mosek.boundkey.lo , 0.0 , +inf , self.turn_con.rho if self.turn_con else 0)
+        self.task_addvars(task , self.num_vars.T , mosek.boundkey.lo , 0.0 , +INF , self.turn_con.rho if self.turn_con else 0)
 
         # num_S abs short weight
-        self.task_addvars(task , self.num_vars.S , mosek.boundkey.lo , 0.0 , +inf , self.short_con.cost if self.short_con else 0)
+        self.task_addvars(task , self.num_vars.S , mosek.boundkey.lo , 0.0 , +INF , self.short_con.cost if self.short_con else 0)
 
         # num_L factor exposure
-        self.task_addvars(task , self.num_vars.L , mosek.boundkey.fr , -inf , +inf , 0)
+        self.task_addvars(task , self.num_vars.L , mosek.boundkey.fr , -INF , +INF , 0)
 
         # num_Q factor transformation
-        self.task_addvars(task , self.num_vars.Q , mosek.boundkey.lo , 0.0 , +inf , 0)
+        self.task_addvars(task , self.num_vars.Q , mosek.boundkey.lo , 0.0 , +INF , 0)
 
     def task_add_quad_obj(self , task : mosek.Task):
         if not self.conds.qobj or not self.cov_con or not self.cov_con.lmbd: return
@@ -202,28 +202,28 @@ class Solver:
     def task_add_turn_con(self , task : mosek.Task):
         if not self.num_vars.T or not self.turn_con or not self.turn_con.dbl: return
         # 1 : total turnover constraint
-        self.task_addlcons(task , 1 , mosek.boundkey.up , -inf , self.turn_con.dbl , 
+        self.task_addlcons(task , 1 , mosek.boundkey.up , -INF , self.turn_con.dbl , 
                            [self.start_of.T + np.arange(self.num_vars.T)] , [np.ones(self.num_vars.T)])
         
         # lcon_sub = [[i , self.start_of.T + i] for i in range(self.num_vars.T)]
         lcon_sub = np.arange(self.num_vars.T)[:,None] + np.array([0,self.start_of.T])
         lcon_vals = np.ones((self.num_vars.T,2)) * np.array([1,-1]) , -np.ones((self.num_vars.T,2))
         # N : turnover contrains w - delta <= w0
-        self.task_addlcons(task , self.num_vars.T , mosek.boundkey.up , -inf ,  self.w0 , lcon_sub , lcon_vals[0]) # [[ 1.,-1.]] * self.num_vars.T
+        self.task_addlcons(task , self.num_vars.T , mosek.boundkey.up , -INF ,  self.w0 , lcon_sub , lcon_vals[0]) # [[ 1.,-1.]] * self.num_vars.T
         # N : turnover contrains -w - delta <= -w0 
-        self.task_addlcons(task , self.num_vars.T , mosek.boundkey.up , -inf , -self.w0 , lcon_sub , lcon_vals[1]) # [[-1.,-1.]] * self.num_vars.T
+        self.task_addlcons(task , self.num_vars.T , mosek.boundkey.up , -INF , -self.w0 , lcon_sub , lcon_vals[1]) # [[-1.,-1.]] * self.num_vars.T
         
     def task_add_short_con(self , task : mosek.Task):
         if not self.num_vars.S or not self.short_con: return
         # 1 : total short constraint
-        self.task_addlcons(task , 1 , mosek.boundkey.up , -inf , self.short_con.pos , 
+        self.task_addlcons(task , 1 , mosek.boundkey.up , -INF , self.short_con.pos , 
                            [self.start_of.S + np.arange(self.num_vars.S)] , [np.ones(self.num_vars.S)])
         # N : turnover contrains w + short >= 0
         # lcon_sub = [[i , self.start_of.S + i] for i in range(self.num_vars.S)]
         # lcon_val = [[1.,1.]] * self.num_vars.S
         lcon_sub = np.arange(self.num_vars.S)[:,None] + np.array([0,self.start_of.S])
         lcon_val = np.ones((self.num_vars.S , 2))
-        self.task_addlcons(task , self.num_vars.S , mosek.boundkey.lo , 0. , +inf , lcon_sub , lcon_val)
+        self.task_addlcons(task , self.num_vars.S , mosek.boundkey.lo , 0. , +INF , lcon_sub , lcon_val)
         
     def task_add_quad_model_con(self , task : mosek.Task):
         if not self.cov_con or not self.num_vars.L: return
@@ -248,14 +248,14 @@ class Solver:
             qcub = 0.5 * te_sq - 0.5 * self.wb.dot(self.cov_con.cov).dot(self.wb)
 
             task.appendcons(1)
-            task.putconbound(start, mosek.boundkey.up, -inf, qcub)
+            task.putconbound(start, mosek.boundkey.up, -INF, qcub)
             task.putarow(start, np.arange(self.num_vars.N), -self.wb.dot(self.cov_con.cov))
             task.putqconk(start, idx[0], idx[1], self.cov_con.cov[idx])
             
         elif self.cov_con.cov_type == 'model': 
             # total risk  
             task.appendcons(3) 
-            task.putconbound(start, mosek.boundkey.up, -inf, te_sq)
+            task.putconbound(start, mosek.boundkey.up, -INF, te_sq)
             task.putarow(start, self.start_of.Q + np.arange(2), [1.0, 1.0])
 
             # common risk
@@ -264,7 +264,7 @@ class Solver:
             qcsub = np.concatenate([self.start_of.L + np.arange(len(self.cov_con.F)) , [self.start_of.Q]])
             qcval = np.concatenate([-self.cov_con.F.dot(self.wb).T.dot(self.cov_con.C) , [-0.5]])
 
-            task.putconbound(start + 1, mosek.boundkey.up, -inf, qcub)
+            task.putconbound(start + 1, mosek.boundkey.up, -INF, qcub)
             task.putarow(start + 1, qcsub, qcval)
             task.putqconk(start + 1, self.start_of.L + idx[0], self.start_of.L + idx[1] , self.cov_con.C[idx])
             
@@ -273,6 +273,6 @@ class Solver:
             qcsub = np.concatenate([np.arange(self.num_vars.N) , [self.start_of.Q + 1]])
             qcval = np.concatenate([-self.wb * self.cov_con.S , [-0.5]])
 
-            task.putconbound(start + 2, mosek.boundkey.up, -inf, qcub)
+            task.putconbound(start + 2, mosek.boundkey.up, -INF, qcub)
             task.putarow(start + 2, qcsub, qcval)
             task.putqconk(start + 2, np.arange(self.num_vars.N) , np.arange(self.num_vars.N) , self.cov_con.S)
