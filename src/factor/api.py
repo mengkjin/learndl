@@ -1,9 +1,10 @@
-from .basic import DATAVENDOR , Benchmark
 from .perf.api import PerfManager
+from .fmp.api import FmpManager
 
 def perf_test():
-    factor_val = DATAVENDOR.random_factor(20230701 , 20240331 , nfactor=1).to_dataframe()
-    benchmark  = None # Benchmark('csi500')
+    pm = PerfManager.random_test(nfactor=1)
+    return pm
 
-    pm = PerfManager(all=True)
-    pm.calc(factor_val , benchmark).plot(show=True)
+def fmp_test():
+    pm = FmpManager.random_test(nfactor=1 , verbosity=2)
+    return pm

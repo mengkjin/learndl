@@ -5,10 +5,23 @@ import numpy as np
 from dataclasses import dataclass , field
 from typing import Any , Literal
 
-from ..basic import DATAVENDOR , AlphaModel , RISK_MODEL , Portfolio , Benchmark
+from ..basic import DATAVENDOR , AlphaModel , RISK_MODEL , Portfolio , BENCHMARKS , Benchmark , Port
+from ..optimizer.api import PortfolioOptimizer , PortOptimResult
 
-from .util import PortOptimTuple
-from ..optimizer.api import PortfolioOptimizer
+@dataclass
+class PortOptimTuple:
+    name : str
+    alpha : AlphaModel
+    portfolio : Portfolio
+    benchmark : Portfolio
+    optimizer : PortfolioOptimizer
+    lag       : int = 0
+    optimrslt : list[PortOptimResult] = field(default_factory=list)
+    account   : pd.DataFrame | Any = None
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(alpha=\'{self.alpha.name}\',benchmark=\'{self.benchmark.name}\',lag={self.lag},'+\
+            f'{len(self.portfolio)} fmp\'s,'+'not '* (self.account is None) + 'accounted)'
 
 def group_optimize(alpha_models : AlphaModel | list[AlphaModel] , benchmarks : str | None | list = None , 
                    lags : int | list[int] = [0 , 1 , 2] , config_path : str | None = None , 
@@ -23,7 +36,7 @@ def group_optimize(alpha_models : AlphaModel | list[AlphaModel] , benchmarks : s
 
     benches = [(Portfolio(is_default=True) if bm is None else bm)for bm in Benchmark.get_benchmarks(benchmarks)]
     relevant_dates = np.unique(np.concatenate([amodel.available_dates() for amodel in alpha_models]))
-    if verbosity > 1: 
+    if verbosity > 0: 
         print(f'Group optimization of {len(alpha_models)} alphas , {len(benches)} benchmarks , ' + 
               f'{len(lags)} lags , {len(relevant_dates)} dates , ' +
               f'({len(alpha_models) * len(benches) * len(lags) * len(relevant_dates)} opts) start!')
@@ -55,7 +68,7 @@ def group_optimize(alpha_models : AlphaModel | list[AlphaModel] , benchmarks : s
             opt_count += 1
     
     t2 = time.time()
-    if verbosity > 1: 
+    if verbosity > 0: 
         print(f'Group optimization Finished , Total time: {t2-t0:.2f} secs, Setup time: {t1-t0:.2f} secs, ' + 
             f'Calc time: {t2-t1:.2f} secs, Each optim time: {(t2-t1)/max(opt_count,1):.2f}')
     return port_tuples

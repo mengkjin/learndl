@@ -2,21 +2,20 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from plottable import ColumnDefinition, ColDef, Table
-from plottable.formatters import decimal_to_percent
+from plottable import Table , ColumnDefinition
 from matplotlib.figure import Figure
-from matplotlib.ticker import FuncFormatter
 from packaging import version
-from typing import Any , Callable , Literal , Optional
+from typing import Any , Callable , Optional
 
 CURRENT_SEABORN_VERSION = version.Version(getattr(sns , '__version__')) > version.Version('0.9.1')
 
 sns.set_theme(context='notebook', style='ticks', font='SimHei', rc={'axes.unicode_minus': False})
-plt.rcParams['font.sans-serif'] = ['SimHei']
+plt.rcParams['font.family'] = ['monospace'] # ['sans-serif']
+# plt.rcParams['font.sans-serif'] = ['SimHei'] # for chinese
 plt.rcParams['axes.unicode_minus'] = False
 
 def pct_fmt(temp : float, position : int = 2): return f'{temp:.2%}'
-def pct_d2f(temp : Any, position : int = 2): return f'{temp:.2f}'
+def d2f_fmt(temp : Any, position : int = 2): return f'{temp:.2f}'
 def bm_name(bm : Any | str | None = None):
     if bm is None or bm == '': name = 'default'
     elif isinstance(bm ,str) : name = bm
@@ -25,25 +24,29 @@ def bm_name(bm : Any | str | None = None):
     return name
 
 def multi_factor_plot(func : Callable):
-    def wrapper(df : pd.DataFrame , *args , factor_name : Optional[str] = None , benchmark : Optional[str] = None , 
-                **kwargs) -> dict[str,dict[str,Figure]]:
+    def wrapper(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , 
+                **kwargs) -> dict[str,Figure]:
         factor_list = [factor_name] if factor_name else df['factor_name'].unique()
         bench_list = [benchmark] if benchmark else df['benchmark'].unique() if 'benchmark' in df.columns else [None]
-        return {fn:{bm_name(bn):func(df , *args , factor_name = fn , benchmark = bm_name(bn) , **kwargs) for bn in bench_list} for fn in factor_list}
+        return {f'{fn}.{bm_name(bn)}':func(df , factor_name = fn , benchmark = bm_name(bn) , **kwargs) for fn in factor_list for bn in bench_list}
     return wrapper
 
 def plot_df_filter(df : pd.DataFrame , factor_name : str | Any , benchmark : str) -> pd.DataFrame:
-    assert factor_name is not None and (factor_name in df['factor_name'].values) , factor_name
+    #assert factor_name is not None and (factor_name in df['factor_name'].values) , factor_name
     if df.index.name: df = df.reset_index() 
-    df = df[df['factor_name'] == factor_name].drop(columns=['factor_name'])
-    if 'benchmark' in df.columns:
+    if 'factor_name' in df.columns and factor_name is not None:
+        assert isinstance(factor_name , str) and factor_name in df['factor_name'].values , (factor_name , df)
+        df = df[df['factor_name'] == factor_name].drop(columns=['factor_name'])
+    if 'benchmark' in df.columns and benchmark is not None:
         assert isinstance(benchmark , str) and benchmark in df['benchmark'].values , (benchmark , df)
         df = df[df['benchmark'] == benchmark].drop(columns=['benchmark'])
     return df
 
 def plot_head(df : pd.DataFrame , factor_name : str | Any , benchmark : str | Any = None) -> tuple[pd.DataFrame , Figure]:
     df = plot_df_filter(df , factor_name , benchmark)
-    [df.assign(**{col:df[col].astype(str)}) for col in df.columns]
+    for col in df.columns: 
+        if col.endswith('date'):
+            df[col] = df[col].astype(str)
     fig = plt.figure(figsize=(16, 7))
     return df , fig
 
@@ -54,12 +57,31 @@ def plot_tail(title_head : str , factor_name : Optional[str] = None , benchmark 
     plt.xticks(rotation=45)  
     if not show: plt.close()
 
-def plot_table(df , **kwargs):
-    tab = Table(df , textprops = {'ha':'center','fontsize':10,'weight':'bold'} , 
-                odd_row_color='aliceblue' , 
-                cell_kw={'edgecolor':'black','linewidth': 0.2,} , **kwargs)
-    tab.col_label_row.set_fontsize(12)
-    tab.col_label_row.set_facecolor('lightskyblue')
-    tab.columns[tab.column_names[0]].set_fontsize(12)
-    list(tab.rows.values())[-1].set_facecolor('lightskyblue')
+def plot_table(df : pd.DataFrame , pct_cols = [] , flt_cols = [] , capitalize = True , 
+               pct_ndigit = 2 , flt_ndigit = 3 , emph_last_row = True , 
+               stripe_rows : int | list[int] = 1 , column_definitions = []):
+    if pct_cols: df = df.assign(**df.loc[:,pct_cols].map(lambda x:f'{x:.{pct_ndigit}%}'))
+    if flt_cols: df = df.assign(**df.loc[:,flt_cols].map(lambda x:f'{x:.{flt_ndigit}f}'))
+    if capitalize:
+        df.index.names = [col.capitalize() if isinstance(col , str) else col for col in df.index.names]
+        df.columns = [col.capitalize() if isinstance(col , str) else col for col in df.columns]
+    column_definitions += [ColumnDefinition(name = df.index.names[0] , 
+                                            textprops = {'ha':'left','fontsize':10,'weight':'bold','style':'italic'})]
+    tab = Table(df , textprops = {'ha':'center','fontsize':10} ,  
+                cell_kw={'edgecolor':'black','linewidth': 0.2,} , 
+                column_definitions = column_definitions)
+    # tab.col_label_row.set_fontsize(12)
+    tab.col_label_row.set_facecolor('b') #'#82cafc'
+    #tab.columns[tab.column_names[0]].set_fontsize(12)
+    rows = list(tab.rows.values())
+    if stripe_rows: 
+        if isinstance(stripe_rows , int):
+            stripe_rows = [stripe_rows] * (int(len(rows) / stripe_rows) + 1)
+        row_i , row_color = 0 , False
+        while stripe_rows and row_i < len(rows):
+            r = stripe_rows.pop(0)
+            if row_color: [r.set_facecolor('#a2cffe') for r in rows[row_i:row_i + r]] # '#d5ffff'
+            row_color = not row_color
+            row_i += r
+    if emph_last_row: rows[-1].set_facecolor('b') #'#82cafc'
     return tab

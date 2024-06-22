@@ -307,7 +307,13 @@ class Benchmark(Portfolio):
     @classmethod
     def get_benchmarks(cls , benchmarks : Optional[str] | list[Optional[str]]):
         if not isinstance(benchmarks , list): benchmarks = [benchmarks]
-        return [(BENCHMARKS[bm] if bm else None) for bm in benchmarks]
+        benches = []
+        for bm in benchmarks:
+            if bm is None: benches.append(bm)
+            elif isinstance(bm , str): benches.append(BENCHMARKS[bm])
+            elif isinstance(bm , Portfolio): benches.append(bm)
+            else: raise TypeError(bm)
+        return benches
 
 BENCHMARKS = {
     'csi300' : Benchmark('csi300') ,

@@ -79,9 +79,9 @@ class Rmodel:
         rslt.append('benchmark' , self._analysis(bench))
         rslt.append('active'    , self._analysis(None if bench is None else port - bench))
         return rslt
-    def attribute(self , port : Port , bench : Port | Any = None , target_date : Optional[int] = None):
+    def attribute(self , port : Port , bench : Port | Any = None , target_date : Optional[int] = None , other_cost : float = 0.):
         '''Attribute the portfolio of the next day (trading day)'''
-        rslt = Attribution.create(self , port , bench , target_date=target_date)
+        rslt = Attribution.create(self , port , bench , target_date=target_date , other_cost = other_cost)
         return rslt
     def regress_fut_ret(self , target_date : Optional[int] = None):
         '''regress future day return , most likely daily , but can given any target date'''
@@ -218,7 +218,8 @@ class Attribution:
         return f'{self.__class__.__name__}({self.start}-{self.end})'
 
     @classmethod
-    def create(cls , risk_model : Rmodel , port : Port , bench : Optional[Port] = None , target_date : Optional[int] = None):
+    def create(cls , risk_model : Rmodel , port : Port , bench : Optional[Port] = None , 
+               target_date : Optional[int] = None , other_cost : float = 0.):
         if target_date is None: target_date = risk_model.next_date
         if risk_model.regressed != target_date: risk_model = risk_model.regress_fut_ret(target_date)
         if risk_model.futret is None: return cls(risk_model.next_date , risk_model.regressed)
@@ -243,19 +244,25 @@ class Attribution:
         specific.loc[:,coef.index.values] *= coef.to_numpy().reshape(1,-1)
         aggregated.append(specific.sum().rename('contribution'))
         aggregated = pd.concat(aggregated , axis = 1)
-
+    
+        agg_cost = pd.DataFrame([[0,0,0,-other_cost]], columns = aggregated.columns,index=['cost'])
+        aggregated = pd.concat([aggregated , agg_cost]).rename_axis('source' , axis = 'index')
+        aggregated.loc[['tot'],['contribution']] = aggregated.loc[['tot'],['contribution']] - other_cost
+        
         industry = aggregated.loc[RISK_INDUS]
         style    = aggregated.loc[RISK_STYLE]
 
-        source   = pd.concat([aggregated.loc[['tot','market','excess']] ,
+        source   = pd.concat([aggregated.loc[['tot','market','excess','specific','cost']] ,
                               industry.sum().rename('industry').to_frame().T ,
-                              style.sum().rename('style').to_frame().T ,
-                              aggregated.loc[['specific']]])
+                              style.sum().rename('style').to_frame().T])
         source.loc[['industry','style'] , weight.columns] = 0.
+
+        order_list = ['tot','market','industry','style','excess','specific','cost']
+        source = source.loc[order_list].rename_axis('source' , axis = 'index')
 
         specific['industry'] = specific.loc[:,RISK_INDUS].sum(1)
         specific['style']    = specific.loc[:,RISK_STYLE].sum(1)
-        specific = specific.drop(columns = RISK_INDUS + RISK_STYLE).loc[:,source.index.values]
+        specific = specific.drop(columns = RISK_INDUS + RISK_STYLE).loc[:,order_list[:-1]]
 
         return cls(risk_model.next_date , risk_model.regressed , source , industry , style , specific , aggregated)
     

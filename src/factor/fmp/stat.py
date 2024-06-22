@@ -5,7 +5,7 @@ import numpy as np
 
 from typing import Any , Literal
 
-from .util import PortOptimTuple
+from .builder import PortOptimTuple
 from ..basic import DATAVENDOR , RISK_MODEL , Portfolio , Benchmark , Port
 from ..basic.var import ROUNDING_RETURN , ROUNDING_TURNOVER , TRADE_COST
 from ...func import date_diff
@@ -22,13 +22,13 @@ def group_accounting(port_optim_tuples : PortOptimTuple | list[PortOptimTuple] ,
                      analytic = True , attribution = True , trade_cost = TRADE_COST , verbosity : int = 1):
     if not isinstance(port_optim_tuples , list): port_optim_tuples = [port_optim_tuples]
     for pot in port_optim_tuples:
-        pot.account = accounting_single(
+        pot.account = accounting_fmp(
             pot.portfolio , pot.benchmark , start , end , daily , 
             analytic and (not pot.lag) , attribution and (not pot.lag), 
             trade_cost , verbosity = verbosity)
     return port_optim_tuples
 
-def accounting_single(portfolio : Portfolio , benchmark : Portfolio | Benchmark | Any = None ,
+def accounting_fmp(portfolio : Portfolio , benchmark : Portfolio | Benchmark | Any = None ,
                       start : int = -1 , end : int = 99991231 , daily = False , 
                       analytic = True , attribution = True , trade_cost = TRADE_COST , verbosity : int = 1):
     '''
@@ -63,15 +63,15 @@ def accounting_single(portfolio : Portfolio , benchmark : Portfolio | Benchmark 
         port_new = portfolio.get(date) if portfolio.has(date) else port_old
         bench = Port.none_port(date) if benchmark is None else benchmark.get(date , True)
 
+        turn = np.round(port_new.turnover(port_old),ROUNDING_TURNOVER)
         df.loc[date , ['pf' , 'bm' , 'turn']] = \
             [np.round(port_new.fut_ret(ed),ROUNDING_RETURN) , 
-             np.round(bench.fut_ret(ed),ROUNDING_RETURN) , 
-             np.round(port_new.turnover(port_old),ROUNDING_TURNOVER)]
+             np.round(bench.fut_ret(ed),ROUNDING_RETURN) , turn]
         
         if analytic and not_lagged: 
             df.loc[date , 'analytic']    = RISK_MODEL.get(date).analyze(port_new , bench , port_old) #type:ignore
         if attribution and not_lagged: 
-            df.loc[date , 'attribution'] = RISK_MODEL.get(date).attribute(port_new , bench , ed)     #type:ignore
+            df.loc[date , 'attribution'] = RISK_MODEL.get(date).attribute(port_new , bench , ed , turn * trade_cost)  #type:ignore
         port_old = port_new.evolve_to_date(ed , inplace=False)
 
     df['pf']  = df['pf'] - df['turn'] * trade_cost
@@ -113,18 +113,19 @@ def eval_fmp_stats(grp : pd.DataFrame , mdd_period = True , **kwargs):
     period_len = abs(date_diff(grp['trade_date'].min() , grp['period_end'].max()))
     period_n   = len(grp)
 
-    pf_ret = np.prod(grp['pf'] + 1) - 1.
-    bm_ret = np.prod(grp['bm'] + 1) - 1.
-    excess = (pf_ret - bm_ret)
-    ex_ann = np.power(np.prod(1 + grp['excess']) , 365 / period_len) - 1
-    # pf_mdd = eval_max_drawdown(grp['pf'] , 'exp')
-    ex_mdd , ex_mdd_st , ex_mdd_ed = eval_max_drawdown(grp['excess'] , 'lin')
-    te     = np.std(grp['excess']) * np.sqrt(365 * period_n / period_len)
-    ex_ir  = ex_ann / te
-    ex_calmar = ex_ann / ex_mdd
-    turn   = np.sum(grp['turn'])
-    rslt = pd.DataFrame({'pf':pf_ret , 'bm':bm_ret , 'excess' : excess , 'annualized' : ex_ann , 'mdd' : ex_mdd , 
-                         'te' : te , 'ir' : ex_ir , 'calmar' : ex_calmar , 'turnover' : turn} , index = [0])
+    with np.errstate(divide = 'ignore'):
+        pf_ret = np.prod(grp['pf'] + 1) - 1.
+        bm_ret = np.prod(grp['bm'] + 1) - 1.
+        excess = (pf_ret - bm_ret)
+        ex_ann = np.power(np.prod(1 + grp['excess']) , 365 / period_len) - 1
+        # pf_mdd = eval_max_drawdown(grp['pf'] , 'exp')
+        ex_mdd , ex_mdd_st , ex_mdd_ed = eval_max_drawdown(grp['excess'] , 'lin')
+        te     = np.std(grp['excess']) * np.sqrt(365 * period_n / period_len)
+        ex_ir  = ex_ann / te
+        ex_calmar = ex_ann / ex_mdd
+        turn   = np.sum(grp['turn'])
+        rslt = pd.DataFrame({'pf':pf_ret , 'bm':bm_ret , 'excess' : excess , 'annualized' : ex_ann , 'mdd' : ex_mdd , 
+                            'te' : te , 'ir' : ex_ir , 'calmar' : ex_calmar , 'turnover' : turn} , index = [0])
     if mdd_period:
         rslt['mdd_period'] = ['{}-{}'.format(grp['trade_date'].iloc[ex_mdd_st] , grp['trade_date'].iloc[ex_mdd_ed])]
     return rslt.assign(**kwargs)
@@ -143,15 +144,65 @@ def calc_fmp_perf_period(account : pd.DataFrame , period : Literal['year' , 'yea
         reset_index(group_cols).reset_index(drop=True).assign(**{period:'ALL'})
     return pd.concat([prd_stat , all_stat])
 
-def calc_fmp_perf_yearly(account : pd.DataFrame):
+def calc_fmp_perf_year(account : pd.DataFrame):
     return calc_fmp_perf_period(account , 'year')
 
-def calc_fmp_perf_monthly(account : pd.DataFrame):
+def calc_fmp_perf_month(account : pd.DataFrame):
     return calc_fmp_perf_period(account , 'month')
 
-def calc_lag_perf_curve(account : pd.DataFrame , period : Literal['year' , 'yearmonth' , 'month'] = 'year'):
+def calc_fmp_lag_curve(account : pd.DataFrame):
     df = account.loc[:,['factor_name','benchmark','trade_date','excess','lag']].\
         pivot_table(values='excess',index=['factor_name','benchmark','trade_date'],columns=['lag']).\
         sort_index().cumsum()
     df.columns = [f'lag{col}' for col in df.columns]
     return df.reset_index()
+
+def calc_fmp_perf_curve(account : pd.DataFrame):
+    df = account[account['lag']==0].loc[:,['factor_name','benchmark','trade_date','pf','bm','excess']].\
+        set_index(['factor_name','benchmark','trade_date'])
+    df[['bm','pf']] = np.log(df[['bm','pf']] + 1)
+    df = df.groupby(['factor_name','benchmark'])[['bm','pf','excess']].cumsum()
+    df[['bm','pf']] = np.exp(df[['bm','pf']]) - 1
+    return df.reset_index()
+
+def calc_fmp_style_exp(account : pd.DataFrame):
+    index_cols = ['factor_name','benchmark','trade_date']
+    df = account[account['lag']==0].loc[:,index_cols + ['analytic']].\
+        set_index(index_cols).groupby(index_cols)['analytic'].\
+        apply(lambda x:x.iloc[0].style.loc[:,['active']])
+    df = df.pivot_table('active' , index_cols , columns='style').rename_axis(None , axis='columns')
+    return df.reset_index()
+
+def calc_fmp_industry_exp(account : pd.DataFrame):
+    index_cols = ['factor_name','benchmark','trade_date']
+    df = account[account['lag']==0].loc[:,index_cols + ['analytic']].\
+        set_index(index_cols).groupby(index_cols)['analytic'].\
+        apply(lambda x:x.iloc[0].industry.loc[:,['active']])
+    df = df.pivot_table('active' , index_cols , columns='industry').rename_axis(None , axis='columns')
+    return df.reset_index()
+
+def calc_fmp_attrib_curve(account : pd.DataFrame):
+    index_cols = ['factor_name','benchmark','trade_date']
+    df = account[account['lag']==0].loc[:,index_cols + ['attribution']].\
+        set_index(index_cols).groupby(index_cols)['attribution'].\
+        apply(lambda x:x.iloc[0].source.loc[:,['contribution']].rename_axis('source')).\
+        pivot_table('contribution' , index_cols , columns='source').rename_axis(None , axis='columns').\
+        loc[:,['tot' , 'excess' , 'market' , 'industry' , 'style' , 'specific' , 'cost']]
+    df = df.groupby(['factor_name','benchmark']).cumsum()
+    return df.reset_index()
+
+def calc_fmp_style_attrib_curve(account : pd.DataFrame):
+    index_cols = ['factor_name','benchmark','trade_date']
+    df = account[account['lag']==0].loc[:,index_cols + ['attribution']].\
+        set_index(index_cols).groupby(index_cols)['attribution'].\
+        apply(lambda x:x.iloc[0].style.loc[:,['contribution']].rename_axis('source')).\
+        pivot_table('contribution' , index_cols , columns='source').rename_axis(None , axis='columns')
+    df = df.groupby(['factor_name','benchmark']).cumsum()
+    return df.reset_index()
+
+def calc_fmp_prefix(account : pd.DataFrame):
+    group_cols = ['factor_name' , 'benchmark']
+    grouped = account[account['lag']==0].drop(columns=['lag']).groupby(group_cols)
+    basic = pd.concat([grouped['trade_date'].min().rename('start') , grouped['period_end'].max().rename('end')] , axis=1)
+    stats = grouped.apply(eval_fmp_stats , include_groups=False).reset_index(group_cols).reset_index(drop=True).set_index(group_cols)
+    return basic.join(stats).reset_index()

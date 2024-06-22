@@ -47,7 +47,7 @@ class PortfolioOptimizer:
             if is_success or not self.opt_relax or solver_input.relaxable: break
 
         if not is_success and self.opt_relax:
-            print('Failed optimization, even with relax, use w0 instead.')
+            print(f'Failed optimization at {self.model_date}, even with relax, use w0 instead.')
             assert solver_input.w0 is not None , 'In this failed-with-relax case, w0 must not be None'
             w = solver_input.w0
 
@@ -57,6 +57,7 @@ class PortfolioOptimizer:
                  benchmark : Optional[Benchmark | Portfolio | Port] = None , init_port : Port | Any = None , 
                  detail_infos = True):
         t0 = time.time()
+        self.model_date = model_date
         self.solver_input = self.opt_input.to_solver_input(model_date , alpha_model , benchmark , init_port).rescale()
         t1 = time.time()
         w , is_success , status = self.solve(self.solver_input)
