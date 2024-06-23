@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
+from .transform import fill_na_as_const , winsorize_by_dist , zscore
 from .model import GeneralModel
 
 @dataclass
@@ -36,6 +37,11 @@ class Amodel:
         if date is not None: self.date = date
         if name is not None: self.name = name
         return self
+    def preprocess(self , inplace = False):
+        # nan_as_num , winsor , normal
+        new = self if inplace else self.copy()
+        new.alpha = zscore(winsorize_by_dist(fill_na_as_const(new.alpha) , winsor_rng=0.5))
+        return new
 
     @classmethod
     def create_random(cls , date : int , secid : np.ndarray | Any = None):

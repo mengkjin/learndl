@@ -21,6 +21,7 @@ callbacks:
   NanLossRetrain:     {'max_attempt' : 4}
   BatchDisplay:       {}
   StatusDisplay:      {}
+  ExportPredDF:       {}
   #TrainConverge:      {'patience' : 5 , 'eps' : 1.0e-5} 
   #FitConverge:        {'patience' : 5 , 'eps' : 1.0e-5}
   #CudaEmptyCache:     {'batch_interval' : 20}

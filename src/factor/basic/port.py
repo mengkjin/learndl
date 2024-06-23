@@ -195,7 +195,7 @@ class Portfolio:
         
     def append(self , port : Port , override = False , ignore_name = False):
         assert ignore_name or self.name == port.name , (self.name , port.name)
-        assert override or (port.date not in self.ports.keys()) , port.date
+        assert override or (port.date not in self.ports.keys()) , (port.name , port.date)
         self.ports[port.date] = port
         self.weight_block_completed = False
 

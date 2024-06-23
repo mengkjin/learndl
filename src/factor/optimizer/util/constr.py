@@ -150,7 +150,7 @@ class ShortConstraint:
         assert self.pos is None or self.pos >= 0.0 , self.pos
 
     def rescale(self , scaler : float):
-        self.cost = self.cost / scaler
+        if self.cost: self.cost = self.cost / scaler
         return self
 
     @classmethod

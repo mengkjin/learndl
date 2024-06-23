@@ -67,7 +67,8 @@ class PortfolioOptimizerInput:
             self.alpha_model = alpha_model
         else:
             self.alpha_model = Amodel.create_random(model_date , self.risk_model.universe)
-
+        self.alpha_model = self.alpha_model.preprocess()
+        
         self.initial_port = init_port
         self.secid = self.risk_model.universe
 

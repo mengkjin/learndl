@@ -150,7 +150,7 @@ def calc_fmp_perf_year(account : pd.DataFrame):
 def calc_fmp_perf_month(account : pd.DataFrame):
     return calc_fmp_perf_period(account , 'month')
 
-def calc_fmp_lag_curve(account : pd.DataFrame):
+def calc_fmp_perf_lag(account : pd.DataFrame):
     df = account.loc[:,['factor_name','benchmark','trade_date','excess','lag']].\
         pivot_table(values='excess',index=['factor_name','benchmark','trade_date'],columns=['lag']).\
         sort_index().cumsum()
@@ -181,7 +181,7 @@ def calc_fmp_industry_exp(account : pd.DataFrame):
     df = df.pivot_table('active' , index_cols , columns='industry').rename_axis(None , axis='columns')
     return df.reset_index()
 
-def calc_fmp_attrib_curve(account : pd.DataFrame):
+def calc_fmp_attrib_source(account : pd.DataFrame):
     index_cols = ['factor_name','benchmark','trade_date']
     df = account[account['lag']==0].loc[:,index_cols + ['attribution']].\
         set_index(index_cols).groupby(index_cols)['attribution'].\
@@ -191,7 +191,7 @@ def calc_fmp_attrib_curve(account : pd.DataFrame):
     df = df.groupby(['factor_name','benchmark']).cumsum()
     return df.reset_index()
 
-def calc_fmp_style_attrib_curve(account : pd.DataFrame):
+def calc_fmp_attrib_style(account : pd.DataFrame):
     index_cols = ['factor_name','benchmark','trade_date']
     df = account[account['lag']==0].loc[:,index_cols + ['attribution']].\
         set_index(index_cols).groupby(index_cols)['attribution'].\

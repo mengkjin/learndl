@@ -4,6 +4,7 @@ from dataclasses import asdict , dataclass , field
 from typing import Any , Literal , Optional
 
 from src.data import DataBlock
+from src.environ import PATH
 from ..loader import factor
 from ..basic import Benchmark , BENCHMARKS , AlphaModel , AVAIL_BENCHMARK
 
@@ -22,9 +23,9 @@ class FmpManager:
     perf_month   : bool = False
     perf_lag    : bool = False
     exp_style  : bool = False
-    exp_indus  : bool = False
-    attrib_curve   : bool = False
-    attrib_style   : bool = False
+    exp_indus   : bool = False
+    attrib_source : bool = False
+    attrib_style  : bool = False
     
     def __post_init__(self) -> None:
         self.perf_calc_dict = {k:self.select_perf_calc(k,self.perf_params) for k,v in self.perf_calc_boolean.items() if v}
@@ -48,7 +49,7 @@ class FmpManager:
         return self
     
     def save(self , path : str):
-        for perf_name , perf_calc in self.perf_calc_dict.items(): perf_calc.save(path = path , key = perf_name)
+        for perf_name , perf_calc in self.perf_calc_dict.items(): perf_calc.save(path = path)
         return self
 
     def get_rslts(self):
@@ -70,23 +71,28 @@ class FmpManager:
     @staticmethod
     def select_perf_calc(key , param) -> U.BaseFmpCalc:
         return {
-            'prefix' : U.FmpPrefix , 
-            'perf_decay' : U.FmpPerfCurve ,
-            'perf_year' : U.FmpPerfYear ,
-            'perf_month'  : U.FmpPerfMonth ,
-            'perf_lag'    : U.FmpLagCurve ,
-            'exp_style' : U.FmpStyleExp ,
-            'exp_indus' : U.FmpInustryExp ,
-            'attrib_curve' : U.FmpAttributionCurve ,
-            'attrib_style' : U.FmpAttributionStyleCurve ,
+            'prefix' : U.Fmp_Prefix , 
+            'perf_decay' : U.Fmp_Perf_Curve ,
+            'perf_year' : U.Fmp_Year_Stats ,
+            'perf_month'  : U.Fmp_Month_Stats ,
+            'perf_lag'    : U.Fmp_Perf_Lag_Curve ,
+            'exp_style' : U.Fmp_Style_Exposure ,
+            'exp_indus' : U.Fmp_Inustry_Deviation ,
+            'attrib_source' : U.Fmp_Attribution_Source ,
+            'attrib_style' : U.Fmp_Attribution_Style ,
         }[key](**param)
     
     @classmethod
-    def random_test(cls , nfactor = 1 , config_path  = 'custom_opt_config.yaml' , verbosity = 2):
-        factor_val = factor.random(20231201 , 20240228 , nfactor=nfactor)
-        # benchmark  = None # Benchmark('csi500')
-
-        pm = cls(all=True)
-        pm.optim(factor_val , config_path=config_path , verbosity = verbosity)
+    def run_test(cls , factor_val : pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = AVAIL_BENCHMARK ,
+                 all = True , config_path : Optional[str] = None , verbosity = 2 , **kwargs):
+        pm = cls(all=all , **kwargs)
+        pm.optim(factor_val , benchmark , config_path=config_path , verbosity = verbosity)
         pm.calc().plot(show=False)
+        return pm
+    
+    @classmethod
+    def random_test(cls , nfactor = 1 , config_path :str | None = f'{PATH.conf}/opt_conf/custom.yaml' , verbosity = 2):
+        factor_val = factor.random(20231201 , 20240228 , nfactor=nfactor)
+        benchmark  = AVAIL_BENCHMARK
+        pm = cls.run_test(factor_val , benchmark , all = True , config_path = config_path , verbosity = verbosity)
         return pm

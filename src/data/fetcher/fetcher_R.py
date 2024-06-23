@@ -9,8 +9,8 @@ from ...classes import FailedData
 
 class RFetcher:
     '''Fetch data from R environment'''
-    @classmethod
-    def adjust_secid(cls , df : pd.DataFrame):
+    @staticmethod
+    def adjust_secid(df : pd.DataFrame):
         '''switch old wind_id into secid'''
         if 'wind_id' not in df.columns.values: return df
 
@@ -391,7 +391,7 @@ class RFetcher:
         return df
     
     @classmethod
-    def benchmark(cls , date : int , bm : Literal['csi300' , 'csi500' , 'csi1000'] , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def benchmark(cls , date : int , bm : Literal['csi300' , 'csi500' , 'csi800' , 'csi1000'] , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get risk model from R environment , bm_any('CSI300' , 20240325)'''
         path = f'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/{bm.upper()}/{bm.upper()}_{date}.csv'
         if not os.path.exists(path):  return FailedData(f'bm_{bm.lower()}' , date)

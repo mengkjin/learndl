@@ -2,7 +2,7 @@
 basic variables in factor package
 '''
 
-from src.environ import RISK_INDUS , RISK_STYLE
+from src.environ import PATH , RISK_INDUS , RISK_STYLE
 RISK_COMMON = ['market'] + RISK_INDUS + RISK_STYLE
 AVAIL_BENCHMARK = ['csi300' , 'csi500' , 'csi1000']
 
@@ -28,7 +28,9 @@ DEFAULT_SOLVER_CONFIG : dict[str,dict] = {
     'mosek': {},
     'cvxopt': {'show_progress': False}
 }
-DEFAULT_OPT_CONFIG : dict[str,dict] = {
+
+DEFAULT_OPT_CONFIG = PATH.read_yaml(f'{PATH.conf}/fmp/default.yaml')
+DEFAULT_OPT_CONFIG_2 : dict[str,dict] = {
     'equity' :  {
         'target_position' : 1. , # only remnant
         'target_value'    : None ,
@@ -36,7 +38,7 @@ DEFAULT_OPT_CONFIG : dict[str,dict] = {
         'add_value'       : None ,
     }, 
     'benchmark': {
-        'benchmark': 'csi500' ,
+        'benchmark': 'csi800' ,
     } ,
     'utility' : {
         'lambda' : 200. , 
@@ -79,8 +81,8 @@ DEFAULT_OPT_CONFIG : dict[str,dict] = {
         'kcb_no_sell' : False ,
     } , 
     'bound'  : {
-        'abs' : [-0.03 , 0.1] ,
-        'rel' : [-0.03 , 0.03] ,
+        'abs' : [-0.01 , 0.1] ,
+        'rel' : [-0.01 , 0.01] ,
         'por' : [None , None] ,
     } , 
     'board'  : {

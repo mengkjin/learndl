@@ -1,13 +1,13 @@
 from typing import Any , Optional
 
-from . import base , control , display
+from . import base , display, train , test
 from .nnspecific import get_nn_specific_cb
 from .base import CallBack
 from ..config import TrainConfig
 from ...classes import BaseTrainer
 from ...environ import BOOSTER_MODULE
 
-SEARCH_MODS = [control , display]
+SEARCH_MODS = [train , display , test]
 
 class CallBackManager(CallBack):
     def __init__(self , model_module , *callbacks):

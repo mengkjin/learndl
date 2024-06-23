@@ -20,10 +20,10 @@ class PerfManager:
     ic_mono  : bool = False
     pnl_curve : bool = False
     style_corr : bool = False
-    group_curve : bool = False
-    #group_decay_ret : bool = False
-    group_decay_ir : bool = False
-    group_year : bool = False
+    grp_curve : bool = False
+    #grp_decay_ret : bool = False
+    grp_decay_ir : bool = False
+    grp_year : bool = False
     distr_curve : bool = False
     #distr_qtile : bool = False
     
@@ -39,7 +39,7 @@ class PerfManager:
         return self
     
     def save(self , path : str):
-        for perf_name , perf_calc in self.perf_calc_dict.items(): perf_calc.save(path = path , key = perf_name)
+        for perf_name , perf_calc in self.perf_calc_dict.items(): perf_calc.save(path = path)
         return self
     
     def get_rslts(self):
@@ -61,26 +61,30 @@ class PerfManager:
     @staticmethod
     def select_perf_calc(key , param) -> U.BasePerfCalc:
         return {
-            'ic_curve' : U.ICCurve , 
-            'ic_decay' : U.ICDecay ,
-            'ic_indus' : U.ICIndustry ,
-            'ic_year'  : U.ICYear ,
-            'ic_mono'  : U.ICMonotony ,
-            'pnl_curve' : U.PnLCurve ,
-            'style_corr' : U.StyleCorr ,
-            'group_curve' : U.GroupCurve ,
-            # 'group_decay_ret' : U.GroupDecayRet ,
-            'group_decay_ir' :  U.GroupDecayIR ,
-            'group_year' : U.GroupYearTop ,
-            'distr_curve' : U.DistributionCurve ,
-            #'distr_qtile' : U.DistributionQuantile ,
+            'ic_curve' : U.IC_Cum_Curve , 
+            'ic_decay' : U.IC_Decay ,
+            'ic_indus' : U.IC_Industry ,
+            'ic_year'  : U.IC_Year_Stats ,
+            'ic_mono'  : U.IC_Monotony ,
+            'pnl_curve' : U.PnL_Cum_Curve ,
+            'style_corr' : U.Factor_Style_Corr ,
+            'grp_curve' : U.Group_Ret_Cum_Curve ,
+            # 'grp_decay_ret' : U.Group_Ret_Decay ,
+            'grp_decay_ir' :  U.GroupDecayIR ,
+            'grp_year' : U.GroupYearTop ,
+            'distr_curve' : U.Distribution_Curve ,
+            #'distr_qtile' : U.Distribution_Quantile ,
         }[key](**param)
+    
+    @classmethod
+    def run_test(cls , factor_val : pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any = None ,
+                 all = True , **kwargs):
+        pm = cls(all=all , **kwargs)
+        pm.calc(factor_val , benchmark).plot(show=False)
+        return pm
     
     @classmethod
     def random_test(cls , nfactor = 1):
         factor_val = factor.random(20231201 , 20240228 , nfactor=nfactor)
         benchmark  = None # Benchmark('csi500')
-
-        pm = cls(all=True)
-        pm.calc(factor_val , benchmark).plot(show=False)
-        return pm
+        return cls.run_test(factor_val , benchmark)

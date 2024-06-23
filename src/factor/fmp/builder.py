@@ -34,7 +34,7 @@ def group_optimize(alpha_models : AlphaModel | list[AlphaModel] , benchmarks : s
     if not isinstance(alpha_models , list): alpha_models = [alpha_models]
     if not isinstance(lags , list): lags = [lags]
 
-    benches = [(Portfolio(is_default=True) if bm is None else bm)for bm in Benchmark.get_benchmarks(benchmarks)]
+    benches = Benchmark.get_benchmarks(benchmarks)
     relevant_dates = np.unique(np.concatenate([amodel.available_dates() for amodel in alpha_models]))
     if verbosity > 0: 
         print(f'Group optimization of {len(alpha_models)} alphas , {len(benches)} benchmarks , ' + 
@@ -48,7 +48,8 @@ def group_optimize(alpha_models : AlphaModel | list[AlphaModel] , benchmarks : s
 
     for (alpha , lag , bench) in port_iter:
         port_name = f'{alpha.name}.{bench.name}' + f'.{lag}' * (lag > 0) 
-        port_tuple = PortOptimTuple(port_name , alpha , Portfolio(port_name) , bench.copy() , 
+        port_tuple = PortOptimTuple(port_name , alpha , Portfolio(port_name) , 
+                                    Portfolio(is_default=True) if bench is None else bench , 
                                     PortfolioOptimizer(prob_type).setup_optimizer(port_name , config_path) , lag = lag)
         port_tuples.append(port_tuple)
 

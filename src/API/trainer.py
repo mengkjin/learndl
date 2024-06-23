@@ -161,7 +161,8 @@ class NetTrainer(Trainer):
         self.batch_forward()
         self.model.override()
         # before this is warmup stage , only forward
-        if self.batch_idx >= self.batch_warm_up: self.batch_metrics()
+        if self.batch_idx < self.batch_warm_up: return
+        self.batch_metrics()
 
     def on_before_save_model(self):
         self.net = self.net.cpu()

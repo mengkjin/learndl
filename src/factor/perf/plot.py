@@ -4,10 +4,11 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 from matplotlib.ticker import FuncFormatter
 from typing import Any , Callable , Literal , Optional
 
-from ..basic.plot import CURRENT_SEABORN_VERSION , pct_fmt , d2f_fmt , multi_factor_plot , plot_head , plot_tail , plot_table
+from ..basic.plot import CURRENT_SEABORN_VERSION , multi_factor_plot , plot_head , plot_tail , plot_table
 
 @multi_factor_plot
 def plot_decay_ic(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
@@ -110,13 +111,13 @@ def plot_distribution(df : pd.DataFrame , factor_name : Optional[str] = None , b
         bins = day_df['hist_bins']
         cnts = day_df['hist_cnts'] / day_df['hist_cnts'].sum()
         ax.bar(x=bins[:-1] + np.diff(bins) / 2, height=cnts, width=np.diff(bins), color='b' , alpha = 0.5)
-        ax.yaxis.set_major_formatter(FuncFormatter(pct_fmt))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.0%}'))
         ax.yaxis.set_tick_params(labelsize = 8 , length = 0)
         # ax.yaxis.set_ticks_position('left')
-        ax.xaxis.set_major_formatter(FuncFormatter(d2f_fmt))
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.1f}'))
         ax.xaxis.set_tick_params(labelsize = 8 , length = 0)
         ax.set_title(str(day_df['date']))
-
+    fig.subplots_adjust(hspace=0.3)
     plot_tail(f'Factor Distribution' , factor_name , benchmark , show , suptitle = True)
     return fig
 
@@ -181,7 +182,7 @@ def plot_ic_curve(df : pd.DataFrame , factor_name : Optional[str] = None , bench
     ax1.legend(loc='upper left')  
     ax1.xaxis.set_tick_params(rotation=45)  
     
-    ax2 : Any = ax1.twinx()  
+    ax2 : Axes | Any = ax1.twinx()  
     ax2.plot(df.index, df['cum_ic'], 'r-', label='Cum IC (right)')  
     ax2.set_ylabel('Cummulative IC', color='r')  
     ax2.tick_params('y', colors='r')  
@@ -212,7 +213,7 @@ def plot_industry_ic(df : pd.DataFrame , factor_name : Optional[str] = None , be
     ax1.xaxis.set_tick_params(rotation=45)  
     ax1.grid()
 
-    ax2 : Any = ax1.twinx()
+    ax2 : Axes | Any = ax1.twinx()
     ax2.plot(df['industry'], df['ICIR'], 'r-')
     ax2.set_ylabel('Average ICIR', color='r')  
     ax2.tick_params('y', colors='r')  
@@ -243,7 +244,7 @@ def plot_ic_monotony(df : pd.DataFrame , factor_name : Optional[str] = None , be
     ax1.legend(['Avg Ret'], loc='upper left')
     ax1.grid()
 
-    ax2 : Any = ax1.twinx()
+    ax2 : Axes | Any = ax1.twinx()
     ax2.plot(df['group'], df['IR'], 'r-')
     ax2.set_ylabel('Grouped IR', color='r')  
     ax2.tick_params('y', colors='r')  

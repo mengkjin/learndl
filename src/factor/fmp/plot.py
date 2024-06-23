@@ -1,18 +1,16 @@
-import numpy as np
 import pandas as pd
-import seaborn as sns
 import matplotlib.pyplot as plt
 
 from plottable import ColumnDefinition, ColDef
 from plottable.formatters import decimal_to_percent
-from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 from matplotlib.ticker import FuncFormatter
 from typing import Any , Callable , Literal , Optional
 
 from ..basic.plot import pct_fmt , d2f_fmt, multi_factor_plot , plot_head , plot_tail , plot_table
 
 @multi_factor_plot
-def plot_fmp_lag_curve(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
+def plot_fmp_perf_lag(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name , benchmark)
 
     ax = fig.add_subplot(111)
@@ -61,7 +59,7 @@ def plot_fmp_perf_curve(df : pd.DataFrame , factor_name : Optional[str] = None ,
     ax1.yaxis.set_major_formatter(FuncFormatter(pct_fmt))  
     ax1.xaxis.set_tick_params(rotation=45)
 
-    ax2 : Any = ax1.twinx()  
+    ax2 : Axes | Any = ax1.twinx()  
     ax2.plot(df.index, df['excess'], 'r-', )
     ax2.fill_between(df.index, df['excess'] , color='r', alpha=0.5 , label='Cum Excess (right)')
     
@@ -115,7 +113,7 @@ def plot_fmp_industry_exp(df : pd.DataFrame , factor_name : Optional[str] = None
     return fig
 
 @multi_factor_plot
-def plot_fmp_attrib_curve(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
+def plot_fmp_attrib_source(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name , benchmark)
 
     ax = fig.add_subplot(111)
@@ -130,7 +128,7 @@ def plot_fmp_attrib_curve(df : pd.DataFrame , factor_name : Optional[str] = None
     return fig
 
 @multi_factor_plot
-def plot_fmp_style_attrib_curve(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
+def plot_fmp_attrib_style(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name , benchmark)
 
     ax = fig.add_subplot(111)

@@ -8,8 +8,8 @@ rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
 rnn_att:        [false]
 rnn_layers:     [2]
 dec_mlp_layers: [2] 
-num_output:     [2]
-which_output:   [0,1,null]
+num_output:     [1]
+which_output:   [0] #[0,1,null]
 kernel_size:    [3] # for tcn
 hidden_as_factor:    [true]
 ordered_param_group: [false]  # multiple data input , if train sequentially
