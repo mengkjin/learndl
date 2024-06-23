@@ -1,17 +1,14 @@
-
 import time
 import numpy as np
 
 from dataclasses import dataclass , field
 from typing import Any , Literal , Optional
 
-from src.environ import PATH
-
 from .solver import SOLVER_CLASS
 from .util import Accuarcy , PortfolioOptimizerInput , SolverInput , Utility
-from ..basic import Analytic , Port , AlphaModel , Amodel , Portfolio , Benchmark
-from ..basic.var import DEFAULT_SOLVER_CONFIG , EPS_WEIGHT
-
+from ..util import Analytic , Port , AlphaModel , Amodel , Portfolio , Benchmark
+from ..basic.var import DEFAULT_SOLVER_CONFIG
+from ...env import PATH
 
 @dataclass
 class PortfolioOptimizer:

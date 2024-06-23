@@ -1,16 +1,18 @@
 import pandas as pd
 
 from dataclasses import asdict , dataclass , field
-from typing import Any , Literal , Optional
+from IPython.display import display
+from typing import Any , Optional
 
 from src.data import DataBlock
-from src.environ import PATH
+from src.env import PATH
 from ..loader import factor
-from ..basic import Benchmark , BENCHMARKS , AlphaModel , AVAIL_BENCHMARK
+from ..basic import DEFAULT_BENCHMARKS
+from ..util import Benchmark , AlphaModel
 
 from .stat import group_accounting , calc_fmp_account
 from .builder import group_optimize
-from . import util as U
+from . import calculator as U
 
 
 @dataclass
@@ -30,7 +32,7 @@ class FmpManager:
     def __post_init__(self) -> None:
         self.perf_calc_dict = {k:self.select_perf_calc(k,self.perf_params) for k,v in self.perf_calc_boolean.items() if v}
 
-    def optim(self , factor_val: DataBlock | pd.DataFrame, benchmarks: Optional[list[Benchmark|Any]] | Any = AVAIL_BENCHMARK , 
+    def optim(self , factor_val: DataBlock | pd.DataFrame, benchmarks: Optional[list[Benchmark|Any]] | Any = DEFAULT_BENCHMARKS , 
               lags = [0,1,2] , config_path = None , verbosity = 2):
         if isinstance(factor_val , DataBlock): factor_val = factor_val.to_dataframe()
         alpha_models = [AlphaModel.from_dataframe(factor_val[[factor_name]]) for factor_name in factor_val.columns]
@@ -63,6 +65,11 @@ class FmpManager:
         for perf_key , perf_calc in self.perf_calc_dict.items():
             [rslt.update({f'{perf_key}.{fig_name}':fig}) for fig_name , fig in perf_calc.figs.items()]
         return rslt
+    
+    def display_figs(self):
+        figs = self.get_figs()
+        [display(fig) for fig in figs]
+        return figs
 
     @property
     def perf_calc_boolean(self) -> dict[str,bool]:
@@ -83,7 +90,7 @@ class FmpManager:
         }[key](**param)
     
     @classmethod
-    def run_test(cls , factor_val : pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = AVAIL_BENCHMARK ,
+    def run_test(cls , factor_val : pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = DEFAULT_BENCHMARKS ,
                  all = True , config_path : Optional[str] = None , verbosity = 2 , **kwargs):
         pm = cls(all=all , **kwargs)
         pm.optim(factor_val , benchmark , config_path=config_path , verbosity = verbosity)
@@ -93,6 +100,6 @@ class FmpManager:
     @classmethod
     def random_test(cls , nfactor = 1 , config_path :str | None = f'{PATH.conf}/opt_conf/custom.yaml' , verbosity = 2):
         factor_val = factor.random(20231201 , 20240228 , nfactor=nfactor)
-        benchmark  = AVAIL_BENCHMARK
+        benchmark  = DEFAULT_BENCHMARKS
         pm = cls.run_test(factor_val , benchmark , all = True , config_path = config_path , verbosity = verbosity)
         return pm

@@ -1,10 +1,11 @@
 import numpy as np
+
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Literal , Optional
+from typing import Any , Optional
 
 from .constr import LinearConstraint , BoundConstraint , TurnConstraint , CovConstraint , ShortConstraint
-from ...basic.optim import Accuarcy , Utility
+from .optim import Accuarcy , Utility
 
 def rescale_array(v : np.ndarray , scale_value : float = 1):
     return scale_value * v / (v.sum() + 1e-6)

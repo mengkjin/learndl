@@ -1,11 +1,10 @@
 import numpy as np
-import pandas as pd
 
 from copy import deepcopy
 from typing import Any , Optional
 
 from .solver_input import SolverInput
-from ...basic import DATAVENDOR , Port , RISK_MODEL , Benchmark , Portfolio , AlphaModel , Amodel
+from ...util import Port , RISK_MODEL , Benchmark , Portfolio , AlphaModel , Amodel
 
 from .parser import (
     parse_config_benchmark , parse_config_board , parse_config_bound ,

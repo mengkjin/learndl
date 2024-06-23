@@ -1,14 +1,12 @@
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
 
-from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 from matplotlib.ticker import FuncFormatter
-from typing import Any , Callable , Literal , Optional
+from typing import Any , Literal , Optional
 
-from ..basic.plot import CURRENT_SEABORN_VERSION , multi_factor_plot , plot_head , plot_tail , plot_table
+from ..util.plot import CURRENT_SEABORN_VERSION , multi_factor_plot , plot_head , plot_tail , plot_table
 
 @multi_factor_plot
 def plot_decay_ic(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):

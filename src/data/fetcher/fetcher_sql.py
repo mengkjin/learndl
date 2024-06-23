@@ -9,7 +9,7 @@ from datetime import date , datetime
 from sqlalchemy import create_engine , exc
 from typing import ClassVar , Literal
 
-from .common import get_target_dates , get_target_path , save_df
+from ..basic import get_target_dates , get_target_path , save_df
 
 @dataclass
 class Connection:

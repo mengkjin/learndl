@@ -1,13 +1,11 @@
 import pandas as pd
-import matplotlib.pyplot as plt
 
-from plottable import ColumnDefinition, ColDef
-from plottable.formatters import decimal_to_percent
+from plottable import ColumnDefinition
 from matplotlib.axes import Axes
 from matplotlib.ticker import FuncFormatter
-from typing import Any , Callable , Literal , Optional
+from typing import Any , Optional
 
-from ..basic.plot import pct_fmt , d2f_fmt, multi_factor_plot , plot_head , plot_tail , plot_table
+from ..util.plot import multi_factor_plot , plot_head , plot_tail , plot_table
 
 @multi_factor_plot
 def plot_fmp_perf_lag(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
@@ -20,7 +18,7 @@ def plot_fmp_perf_lag(df : pd.DataFrame , factor_name : Optional[str] = None , b
 
     ax.grid()
     ax.legend(loc = 'upper left')
-    ax.yaxis.set_major_formatter(FuncFormatter(pct_fmt))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))
     plot_tail(f'FMP Cumulative Excess Return' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -56,7 +54,7 @@ def plot_fmp_perf_curve(df : pd.DataFrame , factor_name : Optional[str] = None ,
     ax1.set_ylabel('Cummulative Return', color='b')  
     ax1.tick_params('y', colors='b')  
     ax1.legend(loc='upper left')  
-    ax1.yaxis.set_major_formatter(FuncFormatter(pct_fmt))  
+    ax1.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))  
     ax1.xaxis.set_tick_params(rotation=45)
 
     ax2 : Axes | Any = ax1.twinx()  
@@ -66,7 +64,7 @@ def plot_fmp_perf_curve(df : pd.DataFrame , factor_name : Optional[str] = None ,
     ax2.set_ylabel('Cummulative Excess Return', color='r')  
     ax2.tick_params('y', colors='r')  
     ax2.legend(loc='upper right')  
-    ax2.yaxis.set_major_formatter(FuncFormatter(pct_fmt))  
+    ax2.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))  
 
     ax1.grid()
 
@@ -84,7 +82,7 @@ def plot_fmp_style_exp(df : pd.DataFrame , factor_name : Optional[str] = None , 
         ax = fig.add_subplot(*lay_out , i + 1 , frameon = False)
         ax.plot(df.index , df[col], label=col)
         ax.fill_between(df.index, df[col] , color='b', alpha=0.5)
-        ax.yaxis.set_major_formatter(FuncFormatter(d2f_fmt))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2f}'))
         ax.yaxis.set_tick_params(labelsize = 8 , length = 0)
         ax.yaxis.set_ticks_position('left')
         ax.xaxis.set_tick_params(labelsize = 8 , length = 0)
@@ -103,7 +101,7 @@ def plot_fmp_industry_exp(df : pd.DataFrame , factor_name : Optional[str] = None
         ax = fig.add_subplot(*lay_out , i + 1 , frameon = False)
         ax.plot(df.index , df[col], label=col)
         ax.fill_between(df.index, df[col] , color='b', alpha=0.5)
-        ax.yaxis.set_major_formatter(FuncFormatter(pct_fmt))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))
         ax.yaxis.set_tick_params(labelsize = 6 , length = 0)
         ax.yaxis.set_ticks_position('left')
         ax.xaxis.set_tick_params(labelsize = 6 , length = 0)
@@ -123,7 +121,7 @@ def plot_fmp_attrib_source(df : pd.DataFrame , factor_name : Optional[str] = Non
 
     ax.grid()
     ax.legend(loc = 'upper left')
-    ax.yaxis.set_major_formatter(FuncFormatter(pct_fmt))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))
     plot_tail(f'FMP Cumulative Attribution' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -138,7 +136,7 @@ def plot_fmp_attrib_style(df : pd.DataFrame , factor_name : Optional[str] = None
 
     ax.grid()
     ax.legend(loc = 'upper left')
-    ax.yaxis.set_major_formatter(FuncFormatter(pct_fmt))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))
     plot_tail(f'FMP Cumulative Attribution' , factor_name , benchmark , show , suptitle = False)
     return fig
 

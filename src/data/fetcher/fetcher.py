@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass , field
 from typing import Any , Callable
 
-from .common import DB_BY_DATE , DB_BY_NAME , get_target_path , get_source_dates , get_target_dates
+from ..basic import DB_BY_DATE , DB_BY_NAME , get_target_path , get_source_dates , get_target_dates
 from .fetcher_R import RFetcher
 
 # %%

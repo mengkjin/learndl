@@ -4,7 +4,7 @@ from typing import Any
 import torch
 import pandas as pd
 
-import gp_math_func as MF
+from . import gp_math_func as MF
 
 @dataclass
 class FactorValue:

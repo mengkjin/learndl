@@ -4,8 +4,9 @@ import pandas as pd
 
 from functools import reduce
 
-from .fetcher import DB_BY_DATE , DB_BY_NAME , DataFetcher , SQLFetcher , save_df
-from ..environ import PATH , THIS_IS_SERVER
+from .basic import DB_BY_DATE , DB_BY_NAME , save_df
+from .fetcher import DataFetcher , SQLFetcher
+from ..env import PATH , THIS_IS_SERVER
 
 UPDATER_TITLE = 'DB_updater'
 class DataUpdater():

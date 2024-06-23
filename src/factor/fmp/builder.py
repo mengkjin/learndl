@@ -5,7 +5,7 @@ import numpy as np
 from dataclasses import dataclass , field
 from typing import Any , Literal
 
-from ..basic import DATAVENDOR , AlphaModel , RISK_MODEL , Portfolio , BENCHMARKS , Benchmark , Port
+from ..util import AlphaModel , RISK_MODEL , Portfolio , Benchmark
 from ..optimizer.api import PortfolioOptimizer , PortOptimResult
 
 @dataclass

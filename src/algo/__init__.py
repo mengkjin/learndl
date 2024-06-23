@@ -1,1 +1,2 @@
-from . import boost , deap , factor
+from . import boost , deap
+from .basic import *

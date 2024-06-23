@@ -2,10 +2,9 @@
 import numpy as np
 from scipy.stats import norm, rankdata
 
-def fill_na_as_const(x_: np.ndarray, c_=0.0):
+def fill_na_as_const(x_: np.ndarray, c_ : float = 0.0):
     rtn = x_.copy()
     rtn[np.isnan(x_)] = c_
-    assert x_.ndim == rtn.ndim
     return rtn
 
 def norm_to_1(x_: np.ndarray):

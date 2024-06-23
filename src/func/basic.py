@@ -1,9 +1,8 @@
-import torch
+import os , pprint , psutil , torch
 import numpy as np
-import os , pprint , psutil
 
-from scipy import stats
 from pytimedinput import timedInput
+from scipy import stats
 from torch import Tensor
 from typing import Optional
 

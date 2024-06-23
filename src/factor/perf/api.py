@@ -2,12 +2,13 @@ import pandas as pd
 
 from dataclasses import asdict , dataclass , field
 from IPython.display import display 
-from typing import Any , Literal , Optional
+from typing import Any , Optional
 
-from src.data import DataBlock
+from . import calculator as Calc
 from ..loader import factor
-from ..basic import Benchmark
-from . import util as U
+from ..util import Benchmark
+from ...data import DataBlock
+
 
 @dataclass
 class PerfManager:
@@ -53,27 +54,32 @@ class PerfManager:
         for perf_key , perf_calc in self.perf_calc_dict.items():
             [rslt.update({f'{perf_key}.{fig_name}':fig}) for fig_name , fig in perf_calc.figs.items()]
         return rslt
+    
+    def display_figs(self):
+        figs = self.get_figs()
+        [display(fig) for fig in figs]
+        return figs
 
     @property
     def perf_calc_boolean(self) -> dict[str,bool]:
         return {k:bool(v) or self.all for k,v in asdict(self).items() if k not in ['perf_params' , 'all']}
 
     @staticmethod
-    def select_perf_calc(key , param) -> U.BasePerfCalc:
+    def select_perf_calc(key , param) -> Calc.BasePerfCalc:
         return {
-            'ic_curve' : U.IC_Cum_Curve , 
-            'ic_decay' : U.IC_Decay ,
-            'ic_indus' : U.IC_Industry ,
-            'ic_year'  : U.IC_Year_Stats ,
-            'ic_mono'  : U.IC_Monotony ,
-            'pnl_curve' : U.PnL_Cum_Curve ,
-            'style_corr' : U.Factor_Style_Corr ,
-            'grp_curve' : U.Group_Ret_Cum_Curve ,
-            # 'grp_decay_ret' : U.Group_Ret_Decay ,
-            'grp_decay_ir' :  U.GroupDecayIR ,
-            'grp_year' : U.GroupYearTop ,
-            'distr_curve' : U.Distribution_Curve ,
-            #'distr_qtile' : U.Distribution_Quantile ,
+            'ic_curve' : Calc.IC_Cum_Curve , 
+            'ic_decay' : Calc.IC_Decay ,
+            'ic_indus' : Calc.IC_Industry ,
+            'ic_year'  : Calc.IC_Year_Stats ,
+            'ic_mono'  : Calc.IC_Monotony ,
+            'pnl_curve' : Calc.PnL_Cum_Curve ,
+            'style_corr' : Calc.Factor_Style_Corr ,
+            'grp_curve' : Calc.Group_Ret_Cum_Curve ,
+            # 'grp_decay_ret' : Calc.Group_Ret_Decay ,
+            'grp_decay_ir' :  Calc.GroupDecayIR ,
+            'grp_year' : Calc.GroupYearTop ,
+            'distr_curve' : Calc.Distribution_Curve ,
+            #'distr_qtile' : Calc.Distribution_Quantile ,
         }[key](**param)
     
     @classmethod

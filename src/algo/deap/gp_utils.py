@@ -3,12 +3,12 @@ import numpy as np
 import pandas as pd
 import torch
 from argparse import Namespace
-from dataclasses import dataclass , field
+from dataclasses import dataclass
 from deap import base , creator , tools , gp
 from copy import deepcopy
 from tqdm import tqdm
-import gp_math_func as MF
-import gp_factor_func as FF
+from . import gp_math_func as MF
+from . import gp_factor_func as FF
 
 # ------------------------ gp terminals ------------------------
 class Fac(torch.Tensor): pass

@@ -1,7 +1,2 @@
-from . import random
-
-from .data import DataAPI
-from .predictor import Predictor
-from .testor import ModelTestor
-from .trainer import Trainer
-
+from .nn import DataAPI , Predictor , ModelTestor , Trainer
+from .factor import FmpManager , PerfManager , fmp_test , perf_test

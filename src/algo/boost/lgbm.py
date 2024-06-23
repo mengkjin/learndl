@@ -8,8 +8,8 @@ from copy import deepcopy
 
 from typing import Any , Optional
 
-from ...environ import PATH
-from ...classes import BoosterData
+from ...env import PATH
+from ..basic.classes import BoosterData
 from ...func import match_values, np_nanic_2d , np_nanrankic_2d
 
 plt.style.use('seaborn-v0_8') 

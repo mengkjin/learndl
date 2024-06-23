@@ -7,12 +7,12 @@ from argparse import ArgumentParser , Namespace
 from deap.algorithms import varAnd
 from torch.multiprocessing import Pool
 from tqdm import tqdm
-from typing import Literal , Any , Union
+from typing import Literal
 
-import gp_math_func as MF
-import gp_factor_func as FF
-from gp_utils import gpHandler , gpTimer , gpContainer , gpFileManager , MemoryManager , gpEliteGroup , gpFitness
-from gp_affiliates import Profiler , EmptyTM
+from . import gp_math_func as MF
+from . import gp_factor_func as FF
+from .gp_utils import gpHandler , gpTimer , gpContainer , gpFileManager , MemoryManager , gpEliteGroup , gpFitness
+from .gp_affiliates import Profiler , EmptyTM
 
 # %%
 # ------------------------ environment setting ------------------------
