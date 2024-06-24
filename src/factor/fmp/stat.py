@@ -11,7 +11,7 @@ from ...func import date_diff
 
 def calc_fmp_account(port_optim_tuples : PortOptimTuple | list[PortOptimTuple]):
     if not isinstance(port_optim_tuples , list): port_optim_tuples = [port_optim_tuples]
-    renaming = {'st':'trade_date' , 'ed':'period_end'}
+    renaming = {'st':'start' , 'ed':'end'}
     df = pd.concat([pot.account.assign(factor_name = pot.alpha.name , benchmark = pot.benchmark.name , lag = pot.lag) 
                     for pot in port_optim_tuples]).reset_index().rename(columns=renaming)
     return df
@@ -52,7 +52,9 @@ def accounting_fmp(portfolio : Portfolio , benchmark : Portfolio | Benchmark | A
     assert np.all(model_date < period_st) 
     assert np.all(period_st <= period_ed) , (period_st , period_ed)
 
-    df = pd.DataFrame({'model_date':model_date , 'st':period_st, 'ed':period_ed,
+    df = pd.DataFrame({'model_date':np.concatenate([[-1],model_date]) , 
+                       'st':np.concatenate([[model_date[0]],period_st]) , 
+                       'ed':np.concatenate([[model_date[0]],period_ed]) ,
                        'pf':0. , 'bm':0. , 'turn':0. , 'excess':0. ,
                        'analytic':None , 'attribution':None}).set_index('model_date')
     port_old = Port.none_port(model_date[0])
@@ -109,7 +111,7 @@ def eval_max_drawdown(v : pd.Series | np.ndarray | Any , how : Literal['exp' , '
     return mdd , idx_st , idx_ed
 
 def eval_fmp_stats(grp : pd.DataFrame , mdd_period = True , **kwargs):
-    period_len = abs(date_diff(grp['trade_date'].min() , grp['period_end'].max()))
+    period_len = abs(date_diff(grp['start'].min() , grp['end'].max()))
     period_n   = len(grp)
 
     with np.errstate(divide = 'ignore'):
@@ -124,17 +126,17 @@ def eval_fmp_stats(grp : pd.DataFrame , mdd_period = True , **kwargs):
         ex_calmar = ex_ann / ex_mdd
         turn   = np.sum(grp['turn'])
         rslt = pd.DataFrame({'pf':pf_ret , 'bm':bm_ret , 'excess' : excess , 'annualized' : ex_ann , 'mdd' : ex_mdd , 
-                            'te' : te , 'ir' : ex_ir , 'calmar' : ex_calmar , 'turnover' : turn} , index = [0])
+                             'te' : te , 'ir' : ex_ir , 'calmar' : ex_calmar , 'turnover' : turn} , index = [0])
     if mdd_period:
-        rslt['mdd_period'] = ['{}-{}'.format(grp['trade_date'].iloc[ex_mdd_st] , grp['trade_date'].iloc[ex_mdd_ed])]
+        rslt['mdd_period'] = ['{}-{}'.format(grp['end'].iloc[ex_mdd_st] , grp['end'].iloc[ex_mdd_ed])]
     return rslt.assign(**kwargs)
 
 def calc_fmp_perf_period(account : pd.DataFrame , period : Literal['year' , 'yearmonth' , 'month'] = 'year'):
-    if period=='year': account[period] = account['trade_date'].astype(str).str[:4]
-    elif period == 'yearmonth':  account[period] = account['trade_date'].astype(str).str[:6]
-    else: account[period] = account['trade_date'].astype(str).str[4:6]
+    if period=='year': account[period] = account['end'].astype(str).str[:4]
+    elif period == 'yearmonth':  account[period] = account['end'].astype(str).str[:6]
+    else: account[period] = account['end'].astype(str).str[4:6]
     group_cols = ['factor_name' , 'benchmark']
-    account = account[account['lag'] == 0].sort_values('trade_date')
+    account = account[account['lag'] == 0].sort_values('end')
     prd_stat = account.groupby(group_cols + [period]).\
         apply(eval_fmp_stats , mdd_period= (period != 'month') , include_groups = False).\
         reset_index(group_cols + [period]).reset_index(drop=True)
@@ -150,58 +152,79 @@ def calc_fmp_perf_month(account : pd.DataFrame):
     return calc_fmp_perf_period(account , 'month')
 
 def calc_fmp_perf_lag(account : pd.DataFrame):
-    df = account.loc[:,['factor_name','benchmark','trade_date','excess','lag']].\
-        pivot_table(values='excess',index=['factor_name','benchmark','trade_date'],columns=['lag']).\
-        sort_index().cumsum()
+    df = account
+    df = df.loc[:,['factor_name','benchmark','end','excess','lag']].\
+        set_index(['factor_name','benchmark','lag','end']).\
+        groupby(['factor_name','benchmark','lag']).cumsum().\
+        pivot_table(values='excess',index=['factor_name','benchmark','end'],columns=['lag'])
     df.columns = [f'lag{col}' for col in df.columns]
-    return df.reset_index()
+    if len(df.columns) == 2:
+        cols = np.sort(df.columns.values)
+        df['lag_cost'] = df[cols[0]] - df[cols[1]]
+    return df.reset_index().rename(columns={'end':'trade_date'})
 
 def calc_fmp_perf_curve(account : pd.DataFrame):
-    df = account[account['lag']==0].loc[:,['factor_name','benchmark','trade_date','pf','bm','excess']].\
-        set_index(['factor_name','benchmark','trade_date'])
+    df = account[account['lag']==0]
+    df = df.loc[:,['factor_name','benchmark','end','pf','bm','excess']].\
+        set_index(['factor_name','benchmark','end'])
     df[['bm','pf']] = np.log(df[['bm','pf']] + 1)
     df = df.groupby(['factor_name','benchmark'])[['bm','pf','excess']].cumsum()
     df[['bm','pf']] = np.exp(df[['bm','pf']]) - 1
-    return df.reset_index()
+    return df.reset_index().rename(columns={'end':'trade_date'})
 
 def calc_fmp_style_exp(account : pd.DataFrame):
-    index_cols = ['factor_name','benchmark','trade_date']
-    df = account[account['lag']==0].loc[:,index_cols + ['analytic']].\
+    df = account[(account['lag']==0) & (account['model_date']>0)]
+    index_cols = ['factor_name','benchmark','start']
+    df = df.loc[:,index_cols + ['analytic']].\
         set_index(index_cols).groupby(index_cols)['analytic'].\
         apply(lambda x:x.iloc[0].style.loc[:,['active']])
     df = df.pivot_table('active' , index_cols , columns='style').rename_axis(None , axis='columns')
-    return df.reset_index()
+    return df.reset_index().rename(columns={'start':'trade_date'})
 
 def calc_fmp_industry_exp(account : pd.DataFrame):
-    index_cols = ['factor_name','benchmark','trade_date']
-    df = account[account['lag']==0].loc[:,index_cols + ['analytic']].\
+    df = account[(account['lag']==0) & (account['model_date']>0)]
+    index_cols = ['factor_name','benchmark','start']
+    df = df.loc[:,index_cols + ['analytic']].\
         set_index(index_cols).groupby(index_cols)['analytic'].\
         apply(lambda x:x.iloc[0].industry.loc[:,['active']])
     df = df.pivot_table('active' , index_cols , columns='industry').rename_axis(None , axis='columns')
-    return df.reset_index()
+    return df.reset_index().rename(columns={'start':'trade_date'})
 
 def calc_fmp_attrib_source(account : pd.DataFrame):
-    index_cols = ['factor_name','benchmark','trade_date']
-    df = account[account['lag']==0].loc[:,index_cols + ['attribution']].\
+    index_cols = ['factor_name','benchmark','end']
+
+    df0 = account[(account['lag']==0) & (account['model_date']<=0)].\
+        groupby(index_cols)[['pf','bm']].min()
+    df0 = df0.assign(tot = 0.).drop(columns=['pf','bm'])
+    df1 = account[(account['lag']==0) & (account['model_date']>0)]
+    df1 = df1.loc[:,index_cols + ['attribution']].\
         set_index(index_cols).groupby(index_cols)['attribution'].\
         apply(lambda x:x.iloc[0].source.loc[:,['contribution']].rename_axis('source')).\
         pivot_table('contribution' , index_cols , columns='source').rename_axis(None , axis='columns').\
         loc[:,['tot' , 'excess' , 'market' , 'industry' , 'style' , 'specific' , 'cost']]
-    df = df.groupby(['factor_name','benchmark']).cumsum()
-    return df.reset_index()
+    
+    df = pd.concat([df0 , df1]).fillna(0).groupby(['factor_name','benchmark']).cumsum()
+    return df.reset_index().rename(columns={'end':'trade_date'})
 
 def calc_fmp_attrib_style(account : pd.DataFrame):
-    index_cols = ['factor_name','benchmark','trade_date']
-    df = account[account['lag']==0].loc[:,index_cols + ['attribution']].\
+    index_cols = ['factor_name','benchmark','end']
+
+    df0 = account[(account['lag']==0) & (account['model_date']<=0)].\
+        groupby(index_cols)[['pf','bm']].min()
+    df0 = df0.assign(size = 0.).drop(columns=['pf','bm'])
+
+    df1 = account[(account['lag']==0) & (account['model_date']>0)]
+    df1 = df1.loc[:,index_cols + ['attribution']].loc[:,index_cols + ['attribution']].\
         set_index(index_cols).groupby(index_cols)['attribution'].\
         apply(lambda x:x.iloc[0].style.loc[:,['contribution']].rename_axis('source')).\
         pivot_table('contribution' , index_cols , columns='source').rename_axis(None , axis='columns')
-    df = df.groupby(['factor_name','benchmark']).cumsum()
-    return df.reset_index()
+    
+    df = pd.concat([df0 , df1]).fillna(0).groupby(['factor_name','benchmark']).cumsum()
+    return df.reset_index().rename(columns={'end':'trade_date'})
 
 def calc_fmp_prefix(account : pd.DataFrame):
     group_cols = ['factor_name' , 'benchmark']
     grouped = account[account['lag']==0].drop(columns=['lag']).groupby(group_cols)
-    basic = pd.concat([grouped['trade_date'].min().rename('start') , grouped['period_end'].max().rename('end')] , axis=1)
+    basic = pd.concat([grouped['start'].min() , grouped['end'].max()] , axis=1)
     stats = grouped.apply(eval_fmp_stats , include_groups=False).reset_index(group_cols).reset_index(drop=True).set_index(group_cols)
     return basic.join(stats).reset_index()

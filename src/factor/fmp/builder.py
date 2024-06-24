@@ -24,7 +24,7 @@ class PortOptimTuple:
             f'{len(self.portfolio)} fmp\'s,'+'not '* (self.account is None) + 'accounted)'
 
 def group_optimize(alpha_models : AlphaModel | list[AlphaModel] , benchmarks : str | None | list = None , 
-                   lags : int | list[int] = [0 , 1 , 2] , config_path : str | None = None , 
+                   add_lag : int = 1 , config_path : str | None = None , 
                    prob_type : Literal['linprog', 'quadprog', 'socp'] = 'linprog', verbosity : int = 1):
     '''
     Create Factor Model Portfolios for AlphaModels , using given or default benchmarks
@@ -32,7 +32,8 @@ def group_optimize(alpha_models : AlphaModel | list[AlphaModel] , benchmarks : s
     assert alpha_models , f'alpha_models must has elements!'
     t0 = time.time()
     if not isinstance(alpha_models , list): alpha_models = [alpha_models]
-    if not isinstance(lags , list): lags = [lags]
+    assert add_lag > 0 , add_lag
+    lags = [0 , add_lag]
 
     benches = Benchmark.get_benchmarks(benchmarks)
     relevant_dates = np.unique(np.concatenate([amodel.available_dates() for amodel in alpha_models]))

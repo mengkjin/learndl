@@ -7,8 +7,14 @@ def fill_na_as_const(x_: np.ndarray, c_ : float = 0.0):
     rtn[np.isnan(x_)] = c_
     return rtn
 
-def norm_to_1(x_: np.ndarray):
-    return (x_ - np.nanmin(x_)) / (np.nanmax(x_) - np.nanmin(x_))
+def norm_to_1(x_: np.ndarray , value : float = 1.):
+    if len(x_) and value:
+        if np.nanmax(x_) - np.nanmin(x_) == 0:
+            return np.zeros_like(x_)
+        else:
+            return (x_ - np.nanmin(x_)) / (np.nanmax(x_) - np.nanmin(x_)) * value
+    else:
+        return np.zeros_like(x_)
 
 def rank(x_: np.ndarray, is_zscore=True, is_norm_inv=False):
     x = x_.copy()
@@ -79,15 +85,12 @@ def winsorize_by_dist(src_: np.ndarray, m_: float = 3.5, winsor_rng : float = 0.
     else:
         des = src_.copy()
     avg = np.nanmean(des)
-    std = np.nanstd(des) 
+    std = np.nanstd(des)
     ub = avg + m_ * std
     lb = avg - m_ * std
-    if winsor_rng > 0:
-        des[des > ub] = ub + norm_to_1(des[des > ub]) * winsor_rng
-        des[des < lb] = lb + (norm_to_1(des[des > ub]) - 1) * winsor_rng
-    else:
-        des[des > ub] = ub
-        des[des < lb] = lb
+    des[des > ub] = ub + norm_to_1(des[des > ub] , winsor_rng)
+    des[des < lb] = lb + norm_to_1(des[des < lb] , winsor_rng) - winsor_rng
+    
     if dist_type_ == 1:
         des = np.exp(des)
     return des

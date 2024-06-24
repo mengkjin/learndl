@@ -54,9 +54,13 @@ def plot_decay_grp_perf_ret(df : pd.DataFrame , factor_name : Optional[str] = No
 def plot_grp_perf(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name , benchmark)
 
-    df = df.set_index(['date', 'group']).groupby('group' , observed=False)['group_ret'].\
-        cumsum().rename('cum_ret').reset_index(drop=False)
-    # df = df.assign(date=pd.to_datetime(df['date'].astype(str), format='%Y%m%d'))
+    df_0 = df.groupby(['group'] , observed=False)['date'].min().reset_index()
+    df_0 = df_0.assign(date = df_0['date'].astype(str) , group_ret = 0.)
+
+    df = df.assign(date = df['end'].astype(str)).loc[:,['date','group','group_ret']]
+    df = pd.concat([df_0 , df]).set_index(['date', 'group']).\
+        groupby('group' , observed=False)['group_ret'].\
+        cumsum().rename('cum_ret').reset_index()
 
     if CURRENT_SEABORN_VERSION:
         ax = sns.lineplot(x='date', y='cum_ret', hue='group', data=df,

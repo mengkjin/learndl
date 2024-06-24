@@ -110,12 +110,16 @@ def calc_decay_ic(factor_val : DataBlock | pd.DataFrame, nday : int = 10 , lag_i
 
 def calc_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark] = None , 
                   nday : int = 10 , lag : int = 2 , group_num : int = 10 , excess = False , 
-                  ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
+                  ret_type : Literal['close' , 'vwap'] = 'close' , trade_date = True) -> pd.DataFrame:
     factor_val , secid , date = factor_val_breakdown(factor_val , benchmark)
     factor_val = get_fut_ret(factor_val , nday , lag , ret_type = ret_type)
     factor_list = factor_val.columns.values[:-1]
     df = factor_val.groupby('date').apply(eval_grp_avg , x_cols = factor_list , y_name = 'ret' , group_num = group_num , excess = excess) # type: ignore
-    return df.rename_axis('factor_name', axis='columns').stack().rename('group_ret').reset_index().sort_values(['date','group'])
+    df = df.rename_axis('factor_name', axis='columns').stack().rename('group_ret').reset_index().sort_values(['date','group'])
+    if trade_date:
+        df['start'] = DATAVENDOR.td_offset(df['date'] , lag)
+        df['end']   = DATAVENDOR.td_offset(df['date'] , lag + nday - 1)
+    return df
 
 def calc_decay_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark] = None , 
                         nday : int = 10 , lag_init : int = 2 , group_num : int = 10 ,
@@ -123,7 +127,8 @@ def calc_decay_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optio
     decay_grp_perf = []
     factor_val , secid , date = factor_val_breakdown(factor_val , benchmark)
     for lag in range(lag_num):
-        grp_perf = calc_grp_perf(factor_val , nday = nday , lag = lag_init + lag * nday , group_num = group_num , ret_type = ret_type)
+        grp_perf = calc_grp_perf(factor_val , nday = nday , lag = lag_init + lag * nday , 
+                                 group_num = group_num , ret_type = ret_type , trade_date = False)
         decay_grp_perf.append(pd.DataFrame({'lag_type':f'lag{lag}',**grp_perf}))
     
     decay_grp_perf = pd.concat(decay_grp_perf, axis=0).reset_index()
@@ -140,7 +145,8 @@ def calc_decay_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optio
 def calc_ic_monotony(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark] = None , 
                      nday : int = 10 , lag_init : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close'):
     factor_val , secid , date = factor_val_breakdown(factor_val , benchmark)
-    grp_perf = calc_grp_perf(factor_val , nday = nday , lag = lag_init , group_num = 100 , excess=True , ret_type = ret_type)
+    grp_perf = calc_grp_perf(factor_val , nday = nday , lag = lag_init , group_num = 100 , 
+                             excess=True , ret_type = ret_type , trade_date=False)
 
     n_periods  = 243 / nday
     group_cols = ['factor_name', 'group']
@@ -195,7 +201,8 @@ def calc_top_grp_perf_year(factor_val : DataBlock | pd.DataFrame , benchmark : O
                            nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                            ret_type : Literal['close' , 'vwap'] = 'close'):
     factor_val , secid , date = factor_val_breakdown(factor_val , benchmark)
-    grp_perf = calc_grp_perf(factor_val , nday = nday , lag = lag , group_num = group_num , ret_type = ret_type)
+    grp_perf = calc_grp_perf(factor_val , nday = nday , lag = lag , 
+                             group_num = group_num , ret_type = ret_type , trade_date=False)
     top_group = grp_perf.groupby(['group', 'factor_name'] , observed=True)['group_ret'].sum().loc[
         [grp_perf['group'].min(), grp_perf['group'].max()]].reset_index(drop=False).sort_values(
         ['factor_name', 'group_ret']).drop_duplicates(['factor_name'], keep='last')
@@ -309,6 +316,14 @@ def calc_pnl(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchm
         factor_results = factor_results.reset_index().melt(id_vars=['date'],var_name='factor_name',value_name='ret')
         factor_results['weight_type'] = wt
         pnl.append(factor_results)
+
     pnl = pd.concat(pnl, axis=0).set_index(['weight_type' , 'date'])
-    pnl = pnl.join(pnl.groupby(['factor_name' , 'weight_type']).cumsum().rename(columns={'ret':'cum_ret'}))
-    return pnl.reset_index()
+    pnl = pnl.join(pnl.groupby(['factor_name' , 'weight_type']).cumsum().rename(columns={'ret':'cum_ret'})).reset_index()
+
+    pnl_0 = pnl.groupby(['factor_name' , 'weight_type'])['date'].min().reset_index()
+    pnl_0['cum_ret'] = 0.
+
+    pnl['date'] = DATAVENDOR.td_offset(pnl['date'] , lag + nday - 1)
+    pnl = pd.concat([pnl_0 , pnl])
+
+    return pnl

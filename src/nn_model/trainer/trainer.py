@@ -51,6 +51,7 @@ class Trainer(BaseTrainer):
         app = use_trainer(stage = stage , resume = resume , checkname = checkname , **kwargs)
         with BigTimer(app.logger.critical , 'Main Process'):
             app.main_process()
+        return app
 
     @classmethod
     def update_models(cls):

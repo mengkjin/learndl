@@ -14,12 +14,23 @@ def plot_fmp_perf_lag(df : pd.DataFrame , factor_name : Optional[str] = None , b
     ax = fig.add_subplot(111)
     df = df.set_index('trade_date')
     for col in df.columns: 
-        ax.plot(df.index , df[col], label=col)
+        if col != 'lag_cost': ax.plot(df.index , df[col], label=col)
 
     ax.grid()
     ax.legend(loc = 'upper left')
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))
-    plot_tail(f'FMP Cumulative Excess Return' , factor_name , benchmark , show , suptitle = False)
+
+    if 'lag_cost' in df.columns:
+        ax2 : Axes | Any = ax.twinx()  
+        ax2.plot(df.index, df['lag_cost'], 'r-', )
+        ax2.fill_between(df.index, df['lag_cost'] , color='r', alpha=0.5 , label='Lag Cost (right)')
+        
+        ax2.set_ylabel('Cummulative Lag Cost', color='r')  
+        ax2.tick_params('y', colors='r')  
+        ax2.legend(loc='upper right')  
+        ax2.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))  
+
+    plot_tail(f'FMP Cumulative Lag Performance' , factor_name , benchmark , show , suptitle = False)
     return fig
 
 @multi_factor_plot

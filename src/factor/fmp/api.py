@@ -33,11 +33,11 @@ class FmpManager:
         self.perf_calc_dict = {k:self.select_perf_calc(k,self.perf_params) for k,v in self.perf_calc_boolean.items() if v}
 
     def optim(self , factor_val: DataBlock | pd.DataFrame, benchmarks: Optional[list[Benchmark|Any]] | Any = DEFAULT_BENCHMARKS , 
-              lags = [0,1,2] , config_path = None , verbosity = 2):
+              add_lag = 1 , config_path = None , verbosity = 2):
         if isinstance(factor_val , DataBlock): factor_val = factor_val.to_dataframe()
         alpha_models = [AlphaModel.from_dataframe(factor_val[[factor_name]]) for factor_name in factor_val.columns]
 
-        self.optim_tuples = group_optimize(alpha_models , benchmarks , lags , config_path = config_path , verbosity = verbosity)
+        self.optim_tuples = group_optimize(alpha_models , benchmarks , add_lag , config_path = config_path , verbosity = verbosity)
         self.optim_tuples = group_accounting(self.optim_tuples , verbosity=verbosity)
         self.account = calc_fmp_account(self.optim_tuples)
 
@@ -98,7 +98,7 @@ class FmpManager:
         return pm
     
     @classmethod
-    def random_test(cls , nfactor = 1 , config_path :str | None = f'{PATH.conf}/opt_conf/custom.yaml' , verbosity = 2):
+    def random_test(cls , nfactor = 1 , config_path :str | None = f'{PATH.conf}/fmp/custom.yaml' , verbosity = 2):
         factor_val = factor.random(20231201 , 20240228 , nfactor=nfactor)
         benchmark  = DEFAULT_BENCHMARKS
         pm = cls.run_test(factor_val , benchmark , all = True , config_path = config_path , verbosity = verbosity)
