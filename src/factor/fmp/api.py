@@ -2,18 +2,18 @@ import pandas as pd
 
 from dataclasses import asdict , dataclass , field
 from IPython.display import display
+from matplotlib.figure import Figure
 from typing import Any , Optional
 
-from src.data import DataBlock
-from src.env import PATH
-from ..loader import factor
-from ..basic import DEFAULT_BENCHMARKS
-from ..util import Benchmark , AlphaModel
-
-from .stat import group_accounting , calc_fmp_account
+from . import calculator as Calc
 from .builder import group_optimize
-from . import calculator as U
-
+from .stat import group_accounting , calc_fmp_account
+from ..basic import DEFAULT_BENCHMARKS
+from ..loader import factor
+from ..util import Benchmark , AlphaModel
+from ...data import DataBlock
+from ...func import dfs_to_excel , figs_to_pdf
+from ...env import PATH
 
 @dataclass
 class FmpManager:
@@ -50,43 +50,53 @@ class FmpManager:
         for _ , perf_calc in self.perf_calc_dict.items(): perf_calc.plot(show = show)
         return self
     
-    def save(self , path : str):
+    def save_rslts_and_figs(self , path : str):
         for perf_name , perf_calc in self.perf_calc_dict.items(): perf_calc.save(path = path)
         return self
 
     def get_rslts(self):
-        rslt = {}
+        rslt : dict[str,pd.DataFrame] = {}
         for perf_key , perf_calc in self.perf_calc_dict.items():
             rslt[perf_key] = perf_calc.calc_rslt
         return rslt
     
     def get_figs(self):
-        rslt = {}
+        rslt : dict[str,Figure] = {}
         for perf_key , perf_calc in self.perf_calc_dict.items():
             [rslt.update({f'{perf_key}.{fig_name}':fig}) for fig_name , fig in perf_calc.figs.items()]
         return rslt
     
     def display_figs(self):
         figs = self.get_figs()
-        [display(fig) for fig in figs]
+        [display(fig) for key , fig in figs.items()]
         return figs
+    
+    def rslt_to_excel(self , path : str):
+        assert path.endswith('.xlsx') , path
+        rslts = self.get_rslts()
+        dfs_to_excel(rslts , path , 'w' , 'fmp_')
+
+    def figs_to_pdf(self , path : str):
+        assert path.endswith('.pdf') , path
+        figs = self.get_figs()
+        figs_to_pdf(figs , path)
 
     @property
     def perf_calc_boolean(self) -> dict[str,bool]:
         return {k:bool(v) or self.all for k,v in asdict(self).items() if k not in ['perf_params' , 'all']}
 
     @staticmethod
-    def select_perf_calc(key , param) -> U.BaseFmpCalc:
+    def select_perf_calc(key , param) -> Calc.BaseFmpCalc:
         return {
-            'prefix' : U.Fmp_Prefix , 
-            'perf_decay' : U.Fmp_Perf_Curve ,
-            'perf_year' : U.Fmp_Year_Stats ,
-            'perf_month'  : U.Fmp_Month_Stats ,
-            'perf_lag'    : U.Fmp_Perf_Lag_Curve ,
-            'exp_style' : U.Fmp_Style_Exposure ,
-            'exp_indus' : U.Fmp_Inustry_Deviation ,
-            'attrib_source' : U.Fmp_Attribution_Source ,
-            'attrib_style' : U.Fmp_Attribution_Style ,
+            'prefix' : Calc.Fmp_Prefix , 
+            'perf_decay' : Calc.Fmp_Perf_Curve ,
+            'perf_year' : Calc.Fmp_Year_Stats ,
+            'perf_month'  : Calc.Fmp_Month_Stats ,
+            'perf_lag'    : Calc.Fmp_Perf_Lag_Curve ,
+            'exp_style' : Calc.Fmp_Style_Exposure ,
+            'exp_indus' : Calc.Fmp_Inustry_Deviation ,
+            'attrib_source' : Calc.Fmp_Attribution_Source ,
+            'attrib_style' : Calc.Fmp_Attribution_Style ,
         }[key](**param)
     
     @classmethod

@@ -1,11 +1,13 @@
 import os
 import pandas as pd
 
+from matplotlib.figure import Figure
 from typing import Any
 
 from .base import CallBack
 from ...factor.perf.api import PerfManager
 from ...factor.fmp.api import FmpManager
+from ...func import dfs_to_excel , figs_to_pdf
 
 class DetailedAlphaAnalysis(CallBack):
     '''record and concat each model to Alpha model instance'''
@@ -38,16 +40,25 @@ class DetailedAlphaAnalysis(CallBack):
             assert TypeError(self.pred_df)
 
     def export_pred_df(self): 
-        path = f'{self.config.model_base_path}/pred_analysis'
+        path = f'{self.config.model_base_path}/analysis'
         os.makedirs(path , exist_ok=True)
 
         dates = self.pred_df['date'].unique()[::5]
         self.pred_df.set_index(['secid','date']).to_feather(f'{path}/pred_df.feather')
         df = self.pred_df[self.pred_df['date'].isin(dates)].pivot_table('values',['secid','date'],'factor_name')
-        perf_man = PerfManager.run_test(df).save(path)
-        fmp_man = FmpManager.run_test(df , verbosity = 1).save(path)
-        if 'prefix' in fmp_man.perf_calc_dict.keys():
-            print(fmp_man.perf_calc_dict['prefix'].calc_rslt)
+        fac_man = PerfManager.run_test(df)
+        fmp_man = FmpManager.run_test(df , verbosity = 1)
+        
+        rslts : dict[str , pd.DataFrame] = {f'fmp_{k}':v for k,v in fmp_man.get_rslts().items()}
+        rslts.update({f'factor_{k}':v for k,v in fac_man.get_rslts().items()})
+        figs : dict[str , Figure] = {f'fmp_{k}':v for k,v in fmp_man.get_figs().items()}
+        figs.update({f'factor_{k}':v for k,v in fac_man.get_figs().items()})
+
+        if 'fmp_prefix' in rslts.keys(): print(rslts['fmp_prefix'])
+        dfs_to_excel(rslts , f'{path}_data.xlsx')
+        figs_to_pdf(figs , f'{path}_plot.pdf')
+        print(f'Analytic datas are saved to {path}_data.xlsx')
+        print(f'Analytic plots are saved to {path}_plot.pdf')
 
     def on_test_start(self):     self.init_pred_df()
     def on_test_batch_end(self): self.append_preds()

@@ -10,7 +10,6 @@ __old_version__/
 /logs
 /instance
 /model
-/factor_result
 .vs/
 
 # Data
@@ -22,6 +21,11 @@ __old_version__/
 *.feather
 *.parquet
 *.tar
+*.csv
+*.xls
+*.xlsx
+*.pdf
+*.png
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

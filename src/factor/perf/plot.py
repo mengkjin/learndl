@@ -19,7 +19,7 @@ def plot_decay_ic(df : pd.DataFrame , factor_name : Optional[str] = None , bench
         ax.text(bar.get_x() + bar.get_width() / 2 , height ,
                  f'{height:.4f}' , ha = 'center' , va = 'top' if height < 0 else 'bottom')
     ax.grid()
-    plot_tail(f'Average IC Decay' , factor_name , benchmark , show , suptitle = False)
+    plot_tail(f'Factor Average IC Decay' , factor_name , benchmark , show , suptitle = False)
     return fig
 
 @multi_factor_plot
@@ -39,7 +39,7 @@ def plot_decay_grp_perf(df : pd.DataFrame , factor_name : Optional[str] = None ,
     ax.legend(loc='upper left')
     ax.grid()
 
-    plot_tail(f'Groups {stat_type.upper()} Decay' , factor_name , benchmark , show , suptitle = False)
+    plot_tail(f'Factor Groups {stat_type.upper()} Decay' , factor_name , benchmark , show , suptitle = False)
     return fig
 
 def plot_decay_grp_perf_ir(df : pd.DataFrame , factor_name : Optional[str] = None , 
@@ -72,7 +72,7 @@ def plot_grp_perf(df : pd.DataFrame , factor_name : Optional[str] = None , bench
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x,p:f'{x:.2%}'))
     ax.grid()
 
-    plot_tail(f'Group CumReturn' , factor_name , benchmark , show , suptitle = False)
+    plot_tail(f'Factor Group CumReturn' , factor_name , benchmark , show , suptitle = False)
     return fig
     
 @multi_factor_plot
@@ -85,7 +85,7 @@ def plot_style_corr_box(df : pd.DataFrame , factor_name : Optional[str] = None ,
 
     ax = sns.boxplot(x='style_factor', y='factor_corr', data=df, width=0.3)
     ax.grid()
-    plot_tail(f'Correlation with Risk Style Factors' , factor_name , benchmark , show , suptitle = False)
+    plot_tail(f'Factor Corr with Risk Styles' , factor_name , benchmark , show , suptitle = False)
     return fig
 
 @multi_factor_plot
@@ -97,7 +97,7 @@ def plot_style_corr(df : pd.DataFrame , factor_name : Optional[str] = None , ben
     for style in df.columns.tolist(): ax.plot(df.index , df[style], label=style)
     ax.grid()
 
-    plot_tail(f'Correlation Curve with Risk Style Factors' , factor_name , benchmark , show , suptitle = False)
+    plot_tail(f'Factor Corr Curve with Risk Styles' , factor_name , benchmark , show , suptitle = False)
     return fig
 
 @multi_factor_plot
@@ -120,7 +120,7 @@ def plot_distribution(df : pd.DataFrame , factor_name : Optional[str] = None , b
         ax.xaxis.set_tick_params(labelsize = 8 , length = 0)
         ax.set_title(str(day_df['date']))
     fig.subplots_adjust(hspace=0.3)
-    plot_tail(f'Factor Distribution' , factor_name , benchmark , show , suptitle = True)
+    plot_tail(f'Factor Cross-Sectional Distribution' , factor_name , benchmark , show , suptitle = True)
     return fig
 
 @multi_factor_plot
@@ -135,7 +135,7 @@ def plot_factor_qtile(df : pd.DataFrame , factor_name : Optional[str] = None , b
     handles, labels = ax.get_legend_handles_labels()
     ax.legend(handles=handles[0:], labels=labels[0:], loc='upper left')
     ax.grid()
-    plot_tail(f'Factor Quantile' , factor_name , benchmark , show , suptitle = False)
+    plot_tail(f'Factor Cross-Sectional Quantile' , factor_name , benchmark , show , suptitle = False)
     return fig
 
 @multi_factor_plot
@@ -149,7 +149,7 @@ def plot_top_grp_perf_year(df : pd.DataFrame , factor_name : Optional[str] = Non
                pct_cols = ['sum' , 'avg' , 'year_ret', 'std', 'cum_mdd'] , 
                flt_cols = ['ir'] , pct_ndigit = 3)
 
-    plot_tail(f'Annualized top Group ({group}) Performance' , factor_name , benchmark , show , suptitle = False)
+    plot_tail(f'Factor Annualized Top Group ({group}) Performance' , factor_name , benchmark , show , suptitle = False)
     return fig
 
 @multi_factor_plot
@@ -165,7 +165,7 @@ def plot_ic_year(df : pd.DataFrame , factor_name : Optional[str] = None , benchm
     plot_table(df.set_index('Year') , flt_cols = ['IC_avg' , 'IC_std' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] ,
                capitalize=False)
     
-    plot_tail('Year IC' , factor_name , benchmark , show , suptitle = False)
+    plot_tail('Factor Year IC' , factor_name , benchmark , show , suptitle = False)
     return fig
 
 @multi_factor_plot
@@ -192,7 +192,7 @@ def plot_ic_curve(df : pd.DataFrame , factor_name : Optional[str] = None , bench
 
     ax1.grid()
     
-    plot_tail('IC Curve' , factor_name , benchmark , show , suptitle = False)
+    plot_tail('Factor IC Curve' , factor_name , benchmark , show , suptitle = False)
     return fig
 
 @multi_factor_plot
@@ -226,7 +226,7 @@ def plot_industry_ic(df : pd.DataFrame , factor_name : Optional[str] = None , be
     
     fig.subplots_adjust(bottom=0.3)
 
-    plot_tail('Industry IC & ICIR' , factor_name , benchmark , show , suptitle = False)
+    plot_tail('Factor Industry IC & IR' , factor_name , benchmark , show , suptitle = False)
     return fig
 
 @multi_factor_plot
@@ -259,7 +259,7 @@ def plot_ic_monotony(df : pd.DataFrame , factor_name : Optional[str] = None , be
     ax2.set_xticks([])
     fig.subplots_adjust(bottom=0.3)
 
-    plot_tail('Percentile Ret & IR' , factor_name , benchmark , show , suptitle = False)
+    plot_tail('Factor Percentile Ret & IR' , factor_name , benchmark , show , suptitle = False)
     return fig
 
 @multi_factor_plot
@@ -276,5 +276,5 @@ def plot_pnl(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark 
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x,p:f'{x:.2%}'))
     ax.grid()
 
-    plot_tail('Cummulative Long-Short PnL' , factor_name , benchmark , show , suptitle = False)
+    plot_tail('Factor Cummulative Long-Short PnL' , factor_name , benchmark , show , suptitle = False)
     return fig

@@ -2,13 +2,14 @@ import pandas as pd
 
 from dataclasses import asdict , dataclass , field
 from IPython.display import display 
+from matplotlib.figure import Figure
 from typing import Any , Optional
 
 from . import calculator as Calc
 from ..loader import factor
 from ..util import Benchmark
 from ...data import DataBlock
-
+from ...func import dfs_to_excel , figs_to_pdf
 
 @dataclass
 class PerfManager:
@@ -39,26 +40,36 @@ class PerfManager:
         for _ , perf_calc in self.perf_calc_dict.items(): perf_calc.plot(show = show)
         return self
     
-    def save(self , path : str):
+    def save_rslts_and_figs(self , path : str):
         for perf_name , perf_calc in self.perf_calc_dict.items(): perf_calc.save(path = path)
         return self
     
     def get_rslts(self):
-        rslt = {}
+        rslt : dict[str,pd.DataFrame] = {}
         for perf_key , perf_calc in self.perf_calc_dict.items():
             rslt[perf_key] = perf_calc.calc_rslt
         return rslt
     
     def get_figs(self):
-        rslt = {}
+        rslt : dict[str,Figure] = {}
         for perf_key , perf_calc in self.perf_calc_dict.items():
             [rslt.update({f'{perf_key}.{fig_name}':fig}) for fig_name , fig in perf_calc.figs.items()]
         return rslt
     
     def display_figs(self):
         figs = self.get_figs()
-        [display(fig) for fig in figs]
+        [display(fig) for key , fig in figs.items()]
         return figs
+    
+    def rslt_to_excel(self , path : str):
+        assert path.endswith('.xlsx') , path
+        rslts = self.get_rslts()
+        dfs_to_excel(rslts , path , 'w' , 'factor_')
+
+    def figs_to_pdf(self , path : str):
+        assert path.endswith('.pdf') , path
+        figs = self.get_figs()
+        figs_to_pdf(figs , path)
 
     @property
     def perf_calc_boolean(self) -> dict[str,bool]:
