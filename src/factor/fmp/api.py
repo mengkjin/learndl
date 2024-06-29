@@ -20,7 +20,8 @@ class FmpManager:
     perf_params : dict[str,Any] = field(default_factory=dict)
     all : bool = False
     prefix : bool = True 
-    perf_decay  : bool = False
+    perf_curve  : bool = False
+    perf_drawdown  : bool = False
     perf_year  : bool = False
     perf_month   : bool = False
     perf_lag    : bool = False
@@ -89,8 +90,9 @@ class FmpManager:
     def select_perf_calc(key , param) -> Calc.BaseFmpCalc:
         return {
             'prefix' : Calc.Fmp_Prefix , 
-            'perf_decay' : Calc.Fmp_Perf_Curve ,
-            'perf_year' : Calc.Fmp_Year_Stats ,
+            'perf_curve' : Calc.Fmp_Perf_Curve ,
+            'perf_drawdown' : Calc.Fmp_Perf_Drawdown , 
+            'perf_year'  : Calc.Fmp_Year_Stats ,
             'perf_month'  : Calc.Fmp_Month_Stats ,
             'perf_lag'    : Calc.Fmp_Perf_Lag_Curve ,
             'exp_style' : Calc.Fmp_Style_Exposure ,

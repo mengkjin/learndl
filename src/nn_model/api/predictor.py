@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from typing import ClassVar , Literal , Optional
 
 from ..basic import BatchOutput
-from ..data_module import NetDataModule
+from ..trainer import NetDataModule
 from ..ensemble import ModelEnsembler
 from ..util import Deposition , Device , TrainConfig
 from ...data import GetData
-from ...env import PATH , CONF , THIS_IS_SERVER , REG_MODELS
+from ...env import PATH , CONF , THIS_IS_SERVER , REG_MODELS , FACTOR_DESTINATION
 from ...func import today , date_offset
 
 
@@ -23,7 +23,6 @@ class Predictor:
     alias : Optional[str] = None
     df    : Optional[pd.DataFrame] = None
 
-    DESTINATION : ClassVar[str] = '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha'
     SECID_COLS : ClassVar[str] = 'secid'
     DATE_COLS  : ClassVar[str] = 'date'
 
@@ -47,9 +46,9 @@ class Predictor:
         '''deploy df by day to class.destination'''
         if df is None: df = self.df
         if df is None: return NotImplemented
-        os.makedirs(f'{self.DESTINATION}/{self.alias}' , exist_ok=True)
+        os.makedirs(f'{FACTOR_DESTINATION}/{self.alias}' , exist_ok=True)
         for date , subdf in df.groupby(date_col):
-            des_path = f'{self.DESTINATION}/{self.alias}/{self.alias}_{date}.txt'
+            des_path = f'{FACTOR_DESTINATION}/{self.alias}/{self.alias}_{date}.txt'
             if overwrite or not os.path.exists(des_path):
                 subdf.drop(columns='date').set_index(secid_col).to_csv(des_path, sep='\t', index=True, header=False)
 

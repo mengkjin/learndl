@@ -45,7 +45,8 @@ def eval_grp_avg(x : pd.DataFrame , x_cols : list, y_name : str = 'ret', group_n
     y = pd.DataFrame(x[y_name], index=x.index, columns=[y_name])
     rtn = list()
     for col in x_cols:
-        y['group'] = pd.qcut(x[col], group_num, labels=[f'group{i}' for i in range(1, group_num + 1)])
+        bins = x[col].drop_duplicates().quantile(np.linspace(0,1,group_num + 1))
+        y['group'] = pd.cut(x[col], bins=bins, labels=[f'group{i}' for i in range(1, group_num + 1)])
         if excess: y[y_name] -= y[y_name].mean()
         grp_avg_ret = y.groupby('group' , observed = True)[y_name].mean().rename(col)
         rtn.append(grp_avg_ret)

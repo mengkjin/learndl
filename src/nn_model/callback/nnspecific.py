@@ -18,13 +18,13 @@ class SpecCB_TRA(CallBack):
         super().__init__(model_module , with_cb=False)
 
     def fill_batch_data(self):
-        self.i0 = self.module.batch_data.i[:,0].cpu()
-        self.i1 = self.module.batch_data.i[:,1].cpu()
-        y = self.module.batch_data.y
+        self.i0 = self.batch_data.i[:,0].cpu()
+        self.i1 = self.batch_data.i[:,1].cpu()
+        y = self.batch_data.y
         hl = self.data.buffer['hist_loss']
         rw = self.module.net.hist_loss_seq_len
         hist_loss = torch.stack([hl[self.i0 , self.i1 + j + 1 - rw] for j in range(rw)],dim=-2)
-        self.module.batch_data.kwargs = {'y': y , 'hist_loss' : hist_loss.to(y.device)}
+        self.batch_data.kwargs = {'y': y , 'hist_loss' : hist_loss.to(y.device)}
     def init_buffer(self):
         hist_loss_shape = list(self.data.y.shape)
         hist_loss_shape[2] = self.module.net.num_states
@@ -32,7 +32,7 @@ class SpecCB_TRA(CallBack):
         self.data.buffer['hist_loss']  = (self.data.buffer['hist_preds'] - self.data.y.nan_to_num(0)).square()
     def update_buffer(self):
         v0 : torch.Tensor = self.data.buffer['hist_preds'][self.i0 , self.i1]
-        vp : torch.Tensor = self.module.batch_output.other['preds']
+        vp : torch.Tensor = self.batch_output.other['preds']
         vp = vp.detach().to(v0)
         self.data.buffer['hist_preds'][self.i0 , self.i1] = vp
         self.data.buffer['hist_loss'][self.i0 , self.i1] = (vp - v0).square()
@@ -57,8 +57,8 @@ class SpecCB_VAE(CallBack):
         else:
             return torch.randn((numel,)).to(object_tensor)
     def on_train_batch_start(self):
-        y = self.module.batch_data.y
-        self.module.batch_data.kwargs = {
+        y = self.batch_data.y
+        self.batch_data.kwargs = {
             'y': y , 'alpha_noise' : self._reparameterize(y) ,
             'factor_noise' : self._reparameterize(y , self.module.net.factor_num) ,
         }
@@ -72,10 +72,10 @@ class SpecCB_DSize(CallBack):
         if self._size is None: self._size = BlockLoader('models', 'risk_exp', ['size']).load_block().as_tensor()
         self.data.buffer['size'] = self._size.align(secid = self.data.y_secid , date = self.data.y_date).values.squeeze()
     def fill_batch_data(self):
-        i0 = self.module.batch_data.i[:,0].cpu()
-        i1 = self.module.batch_data.i[:,1].cpu()
-        size = self.data.buffer['size'][i0 , i1].reshape(-1,1).nan_to_num(0).to(self.module.batch_data.y.device)
-        self.module.batch_data.kwargs = {'size': size}
+        i0 = self.batch_data.i[:,0].cpu()
+        i1 = self.batch_data.i[:,1].cpu()
+        size = self.data.buffer['size'][i0 , i1].reshape(-1,1).nan_to_num(0).to(self.batch_data.y.device)
+        self.batch_data.kwargs = {'size': size}
 
     def on_fit_model_start(self):           self.init_buffer()
     def on_test_model_type_start(self):     self.init_buffer()

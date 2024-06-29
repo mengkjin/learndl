@@ -1,5 +1,5 @@
 hidden_dim:     [32 , 16] #  2**5
-seqlens:        [{'day': 30 , '30m': 30 , 'dms': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
+seqlens:        [{'day': 30 , '30m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
 hist_loss_seq_len:  [60]
 hist_loss_horizon:  [22]
 num_states:     [5]

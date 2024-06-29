@@ -2,7 +2,7 @@ import torch
 from torch import nn , Tensor
 from typing import Optional
 
-from .rnn import get_rnn_mod
+from .Recurrent import get_rnn_mod
 
 class block_tra(nn.Module):
     '''Temporal Routing Adaptor (TRA) mapping segment'''

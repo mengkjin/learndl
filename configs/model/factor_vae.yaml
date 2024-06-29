@@ -1,5 +1,5 @@
 hidden_dim:     [32] #  2**5
-seqlens:        [{'day': 30 , '30m': 30 , 'dms': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
+seqlens:        [{'day': 30 , '30m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
 factor_num:     [64]
 gru_input_size: [16]
 portfolio_size: [100] 

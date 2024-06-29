@@ -172,6 +172,14 @@ def calc_fmp_perf_curve(account : pd.DataFrame):
     df[['bm','pf']] = np.exp(df[['bm','pf']]) - 1
     return df.reset_index().rename(columns={'end':'trade_date'})
 
+def calc_fmp_perf_drawdown(account : pd.DataFrame):
+    df = account[account['lag']==0]
+    df = df.loc[:,['factor_name','benchmark','end','excess']].set_index(['factor_name','benchmark','end'])
+    df = df.groupby(['factor_name','benchmark'])[['excess']].cumsum()
+    peak = df.groupby(['factor_name','benchmark'])[['excess']].cummax()
+    df['drawdown'] = df['excess'] - peak['excess']
+    return df.reset_index().rename(columns={'end':'trade_date'})
+
 def calc_fmp_style_exp(account : pd.DataFrame):
     df = account[(account['lag']==0) & (account['model_date']>0)]
     index_cols = ['factor_name','benchmark','start']

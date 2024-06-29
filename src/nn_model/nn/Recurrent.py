@@ -4,8 +4,9 @@ from torch import nn , Tensor
 from typing import Optional
 
 from . import layer as Layer
-from .cnn import mod_resnet_1d , mod_tcn
-from .attention import mod_transformer,TimeWiseAttention,ModuleWiseAttention
+from .Attention import mod_transformer,TimeWiseAttention,ModuleWiseAttention
+from .CNN import mod_resnet_1d , mod_tcn
+from .util import add_multiloss_params
 
 def get_rnn_mod(rnn_type):
     return {'transformer':mod_transformer,'lstm':mod_lstm,'gru':mod_gru,'tcn':mod_tcn,}[rnn_type]
@@ -79,7 +80,8 @@ class rnn_univariate(nn.Module):
         self.encoder = Layer.Parallel(uni_rnn_encoder(**self.kwargs) , num_mod = 1 , feedforward = False , concat_output = True)
         self.decoder = Layer.Parallel(uni_rnn_decoder(**self.kwargs) , num_mod = num_output , feedforward = False , concat_output = False)
         self.mapping = Layer.Parallel(uni_rnn_mapping(**self.kwargs) , num_mod = num_output , feedforward = True , concat_output = True)
-        self.set_multiloss_params()
+
+        add_multiloss_params(self , num_output)
 
     def forward(self , x : Tensor) -> tuple[Tensor,dict]:
         '''
@@ -91,12 +93,7 @@ class rnn_univariate(nn.Module):
         o = self.mapping(x) # [bs x num_output]
         return o , {'hidden' : x[0]}
         
-    def set_multiloss_params(self):
-        self.multiloss_alpha = torch.nn.Parameter((torch.ones(self.num_output) + 1e-4).requires_grad_())
         
-    def get_multiloss_params(self):
-        return {'alpha':self.multiloss_alpha}
-    
 class rnn_multivariate(nn.Module):
     def __init__(
         self,
@@ -151,7 +148,7 @@ class rnn_multivariate(nn.Module):
         self.decoder = Layer.Parallel(mod_decoder(**self.kwargs) , num_mod = num_output , feedforward = False , concat_output = False)
         self.mapping = Layer.Parallel(mod_mapping(**self.kwargs) , num_mod = num_output , feedforward = True , concat_output = True)
 
-        self.set_multiloss_params()
+        add_multiloss_params(self , num_output)
     
     def forward(self, x : Tensor) -> tuple[Tensor,dict]:
         '''
@@ -162,12 +159,6 @@ class rnn_multivariate(nn.Module):
         x = self.decoder(x) # tuple of [bs x num_rnn * hidden_dim] , len is num_output
         o = self.mapping(x) # [bs, 1]
         return o , {'hidden' : x[0]}
-        
-    def set_multiloss_params(self):
-        self.multiloss_alpha = torch.nn.Parameter((torch.ones(self.num_output) + 1e-4).requires_grad_())
-        
-    def get_multiloss_params(self):
-        return {'alpha':self.multiloss_alpha}
 
 class uni_rnn_encoder(nn.Module):
     def __init__(self,input_dim,hidden_dim,dropout,rnn_type,rnn_layers,enc_in=None,enc_in_dim=None,enc_att=False,**kwargs):
@@ -181,7 +172,8 @@ class uni_rnn_encoder(nn.Module):
         if enc_in == 'linear' or enc_in == True:
             self.fc_enc_in = nn.Sequential(nn.Linear(input_dim, enc_in_dim),nn.Tanh())
         elif enc_in == 'resnet':
-            self.fc_enc_in = mod_resnet_1d(kwargs['inday_dim'] , input_dim , enc_in_dim , **kwargs) 
+            res_kwargs = {k:v for k,v in kwargs.items() if k != 'seq_len'}
+            self.fc_enc_in = mod_resnet_1d(kwargs['inday_dim'] , input_dim , enc_in_dim , **res_kwargs) 
         else:
             enc_in_dim = input_dim
             self.fc_enc_in = nn.Sequential()

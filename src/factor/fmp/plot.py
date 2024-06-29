@@ -5,6 +5,7 @@ from matplotlib.axes import Axes
 from matplotlib.ticker import FuncFormatter
 from typing import Any , Optional
 
+from ..basic import AVAIL_BENCHMARKS
 from ..util.plot import multi_factor_plot , plot_head , plot_tail , plot_table
 
 @multi_factor_plot
@@ -82,6 +83,34 @@ def plot_fmp_perf_curve(df : pd.DataFrame , factor_name : Optional[str] = None ,
     plot_tail(f'FMP Accumulative Performance' , factor_name , benchmark , show , suptitle = False)
     return fig
 
+@multi_factor_plot
+def plot_fmp_perf_drawdown(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
+    df , fig = plot_head(df , factor_name , benchmark)
+
+    df = df.set_index('trade_date')
+    ax1 = fig.add_subplot(111)
+
+    ax1.plot(df.index, df['excess'], label='excess')  
+    ax1.set_ylabel('Cummulative Excess', color='b')  
+    ax1.tick_params('y', colors='b')  
+    ax1.legend(loc='upper left')  
+    ax1.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))  
+    ax1.xaxis.set_tick_params(rotation=45)
+
+    ax2 : Axes | Any = ax1.twinx()  
+    ax2.plot(df.index, df['drawdown'], 'g', )
+    ax2.fill_between(df.index, df['drawdown'] , color='g', alpha=0.5 , label='Drawdown (right)')
+    
+    ax2.set_ylabel('Drawdown', color='r')  
+    ax2.tick_params('y', colors='r')  
+    ax2.legend(loc='upper right')  
+    ax2.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))  
+
+    ax1.grid()
+
+    plot_tail(f'FMP Excess Drawdown' , factor_name , benchmark , show , suptitle = False)
+    return fig
+
 
 @multi_factor_plot
 def plot_fmp_style_exp(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
@@ -155,10 +184,13 @@ def plot_fmp_prefix(df : pd.DataFrame , factor_name : Optional[str] = None , ben
     df , fig = plot_head(df , None , None)
 
     df = df.rename(columns={'factor_name':'factor'}).set_index('factor')
+    df['benchmark'] = pd.Categorical(df['benchmark'], categories = ['default'] + AVAIL_BENCHMARKS, ordered=True)  
+    df = df.sort_values(['factor','benchmark'])  
+
     plot_table(df , 
                pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                flt_cols = ['ir','calmar'] ,
                column_definitions = [ColumnDefinition(name='Mdd_period', width=2)] , 
                emph_last_row=False , stripe_rows=df.groupby('factor')['benchmark'].count().to_list())
-    plot_tail('Prefix Information' , 'All Factors' , show = show , suptitle=False)
+    plot_tail('FMP Prefix Information' , 'All Factors' , show = show , suptitle=False)
     return fig

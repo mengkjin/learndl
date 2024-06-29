@@ -9,7 +9,7 @@ from typing import Any , Literal , Optional
 
 from .config import TrainConfig
 from ..basic import BatchData , BatchMetric , BatchOutput , MetricList , TrainerStatus
-from ..nn import get_nn_category
+from ..nn import get_nn_category , get_multiloss_params
 from ...env import BOOSTER_MODULE
 from ...func import mse , pearson , ccc , spearman
 
@@ -118,7 +118,7 @@ class Metrics:
         weight = batch_data.w
         other  = batch_output.other
         penalty_kwargs = {'net':net,'pre':pred,'label':label,**kwargs,**other}
-        mt_param = getattr(net , 'get_multiloss_params')() if net and hasattr(net , 'get_multiloss_params') else {}
+        mt_param = get_multiloss_params(net)
         self.calculate_from_tensor(dataset, label, pred, weight, penalty_kwargs, mt_param, assert_nan)
 
     def calculate_from_tensor(self , dataset , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 

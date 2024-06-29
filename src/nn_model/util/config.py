@@ -4,22 +4,29 @@ import numpy as np
 from dataclasses import dataclass , field
 from typing import Any , ClassVar , Literal , Optional
 
-from ..nn import get_nn_category
+from ..nn import get_nn_category , get_nn_datatype
 from ...func import pretty_print_dict , recur_update
 from ...env import PATH , BOOSTER_MODULE
 
-
 def check_config_validity(config : 'TrainConfig'):
-    assert 'best' in config.model_types , config.model_types
     assert socket.gethostname() == 'mengkjin-server' or config.short_test , socket.gethostname()
 
-    nn_category  = get_nn_category(config.model_module)
-    samp_method  = config.sample_method
+    if 'best' not in config.model_types:
+        config.model_types.insert(0 , 'best')
+
+    nn_category = get_nn_category(config.model_module)
+    samp_method = config.sample_method
+
+    nn_datatype = get_nn_datatype(config.model_module)
     
     if nn_category == 'tra':
         assert samp_method != 'total_shuffle' , samp_method
     elif nn_category == 'vae':
         assert samp_method == 'sequential' , samp_method
+
+    if nn_datatype:
+        config.model_data_type = nn_datatype
+        config.Train.configs['model_data_type'] = nn_datatype
 
 @dataclass    
 class ModelParam:

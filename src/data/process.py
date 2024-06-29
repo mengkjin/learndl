@@ -7,11 +7,12 @@ from torch import Tensor
 from typing import Any , Iterator , Optional
 
 from .core import BlockLoader , DataBlock , data_type_abbr
+from ..env import RISK_STYLE , RISK_INDUS
 from ..func.time import Timer
 from ..func.primas import neutralize_2d , process_factor
 
-TRAIN_DATASET = ['y' , 'day' , '30m' , 'risk']
-PREDICT_DATASET = ['y' , 'day' , '30m' , 'risk']
+TRAIN_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus']
+PREDICT_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus']
 
 @dataclass(slots=True)
 class DataProcessor:
@@ -39,7 +40,7 @@ class DataProcessor:
             yield blk , select_processor(blk)
     
     @classmethod
-    def main(cls , predict = False, confirm = 0 , parser = None , data_key = None):
+    def main(cls , predict = False, confirm = 0 , parser = None , data_types : Optional[list[str]] = None):
         if parser is None:
             parser = argparse.ArgumentParser(description = 'manual to this script')
             parser.add_argument("--confirm", type=str, default = confirm)
@@ -50,8 +51,12 @@ class DataProcessor:
 
         t1 = time.time()
         print(f'predict is {predict} , Data Processing start!')
-
-        processor = cls(predict , blocks = PREDICT_DATASET if predict else TRAIN_DATASET)
+        
+        if data_types is None:
+            blocks = PREDICT_DATASET if predict else TRAIN_DATASET
+        else:
+            blocks = data_types
+        processor = cls(predict , blocks = blocks)
         print(f'{len(processor.blocks)} datas :' + str(list(processor.blocks)))
 
         for key , proc in processor.processors():
@@ -75,17 +80,6 @@ class DataProcessor:
 
 class _TypeProcessor(ABC):
     TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']
-    INDUS_FEAT : list[str] = [
-        'petro', 'coal', 'nonferrous','utility', 'public', 'steel', 
-        'chemical', 'construct', 'cement', 'material', 'light', 'machine', 
-        'power', 'defense', 'auto', 'retail', 'leisure', 'appliance', 
-        'textile', 'health', 'liqor', 'food', 'agro', 'bank', 
-        'financial', 'estate', 'transport', 'marine', 'airline', 
-        'electronic', 'telecom', 'hardware', 'software', 'media', 'complex']
-    STYLE_FEAT : list[str] = [
-        'size', 'beta', 'momentum',
-        'residual_volatility', 'non_linear_size', 'book_to_price',
-        'liquidity', 'earnings_yield', 'growth', 'leverage']
 
     @abstractmethod
     def block_loaders(self) -> dict[str,'BlockLoader']: ... 
@@ -115,7 +109,7 @@ def select_processor(key : str) -> _TypeProcessor:
 class procY(_TypeProcessor):
     def block_loaders(self):
         return {'y' : BlockLoader('labels', ['ret10_lag', 'ret20_lag']) ,
-                'risk' : BlockLoader('models', 'risk_exp', [*self.INDUS_FEAT, 'size'])}
+                'risk' : BlockLoader('models', 'risk_exp', [*RISK_INDUS, 'size'])}
     def final_feat(self): return None
     def process(self , blocks : dict[str,DataBlock]): 
         data_block , model_exp = blocks['y'] , blocks['risk']
@@ -151,7 +145,8 @@ class proc15m(_TypeProcessor):
         db_day     = blocks['day'].align(secid = data_block.secid , date = data_block.date)
         
         data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
-        data_block = data_block.adjust_volume(divide = db_day.loc(feature = 'volume') / db_day.loc(feature = 'turn_fl') ,
+        data_block = data_block.adjust_volume(multiply = db_day.loc(feature = 'turn_fl') , 
+                                              divide = db_day.loc(feature = 'volume') + 1e-6, 
                                               vol_feat = 'volume')
         data_block = data_block.rename_feature({'volume':'turn_fl'})
         return data_block
@@ -167,7 +162,8 @@ class proc30m(_TypeProcessor):
         db_day     = blocks['day'].align(secid = data_block.secid , date = data_block.date)
         
         data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
-        data_block = data_block.adjust_volume(divide = db_day.loc(feature = 'volume') / db_day.loc(feature = 'turn_fl'), 
+        data_block = data_block.adjust_volume(multiply = db_day.loc(feature = 'turn_fl') , 
+                                              divide = db_day.loc(feature = 'volume') + 1e-6, 
                                               vol_feat = 'volume')
         data_block = data_block.rename_feature({'volume':'turn_fl'})
         return data_block
@@ -182,7 +178,8 @@ class proc60m(_TypeProcessor):
         db_day     = blocks['day'].align(secid = data_block.secid , date = data_block.date)
         
         data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
-        data_block = data_block.adjust_volume(divide = db_day.loc(feature = 'volume') / db_day.loc(feature = 'turn_fl') ,
+        data_block = data_block.adjust_volume(multiply = db_day.loc(feature = 'turn_fl') , 
+                                              divide = db_day.loc(feature = 'volume') + 1e-6, 
                                               vol_feat = 'volume')
         data_block = data_block.rename_feature({'volume':'turn_fl'})
         return data_block
@@ -211,8 +208,14 @@ class procWeek(_TypeProcessor):
         data_block = data_block.adjust_price(adjfactor = False , divide=data_block.loc(inday = 0,feature = 'preclose'))
         return data_block
     
-class procRisk(_TypeProcessor):
+class procStyle(_TypeProcessor):
     def block_loaders(self): 
-        return {'risk' : BlockLoader('models', 'risk_exp', self.STYLE_FEAT)}
+        return {'style' : BlockLoader('models', 'risk_exp', RISK_STYLE)}
     def final_feat(self): return None
-    def process(self , blocks): return blocks['risk']
+    def process(self , blocks): return blocks['style']
+
+class procIndus(_TypeProcessor):
+    def block_loaders(self): 
+        return {'indus' : BlockLoader('models', 'risk_exp', RISK_INDUS)}
+    def final_feat(self): return None
+    def process(self , blocks): return blocks['indus']

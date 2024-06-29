@@ -1,4 +1,4 @@
-from .predictor import Predictor
-from .testor import ModelTestor
-from .trainer import Trainer
+from .data_module import NetDataModule , BaseDataModule
+from .trainer import Trainer , NetTrainer , BoosterTrainer
+
 

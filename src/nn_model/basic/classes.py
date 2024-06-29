@@ -7,7 +7,7 @@ from typing import Any , Literal , Optional
 @dataclass(slots=True)
 class BatchData:
     '''custom data component of a batch(x,y,w,i,valid)'''
-    x       : Tensor | tuple[Tensor] | list[Tensor]
+    x       : Tensor | tuple[Tensor,...] | list[Tensor]
     y       : Tensor 
     w       : Tensor | None
     i       : Tensor 

@@ -7,12 +7,19 @@ from packaging import version
 from plottable import Table , ColumnDefinition
 from typing import Any , Callable , Optional
 
+from ..basic import AVAIL_BENCHMARKS
+
 CURRENT_SEABORN_VERSION = version.Version(getattr(sns , '__version__')) > version.Version('0.9.1')
 
 sns.set_theme(context='notebook', style='ticks', font='SimHei', rc={'axes.unicode_minus': False})
 plt.rcParams['font.family'] = ['monospace'] # ['sans-serif']
 # plt.rcParams['font.sans-serif'] = ['SimHei'] # for chinese
 plt.rcParams['axes.unicode_minus'] = False
+
+def bm_order(bm_list):
+    order = [None] + AVAIL_BENCHMARKS
+    new_bm_list = [bm for bm in order if bm in bm_list]
+    return new_bm_list
 
 def bm_name(bm : Any | str | None = None):
     if bm is None or bm == '': name = 'default'
@@ -25,7 +32,10 @@ def multi_factor_plot(func : Callable):
     def wrapper(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , 
                 **kwargs) -> dict[str,Figure]:
         factor_list = [factor_name] if factor_name else df['factor_name'].unique()
-        bench_list = [benchmark] if benchmark else df['benchmark'].unique() if 'benchmark' in df.columns else [None]
+        if benchmark or ('benchmark' not in df.columns):
+            bench_list = [benchmark] 
+        elif 'benchmark' in df.columns:
+            bench_list = bm_order(df['benchmark'].unique())
         return {f'{fn}.{bm_name(bn)}':func(df , factor_name = fn , benchmark = bm_name(bn) , **kwargs) for fn in factor_list for bn in bench_list}
     return wrapper
 

@@ -28,7 +28,7 @@ class CallbackTimer(CallBack):
         if self._verbosity >= 10:
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self._hook_times.items()]
-            print(pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False))
+            print(pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(5))
 
 class BatchDisplay(CallBack):
     '''display batch progress bar'''

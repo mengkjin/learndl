@@ -19,3 +19,9 @@ class CallBack(BaseCB):
     def ckpt(self) -> Checkpoint: return self.module.checkpoint
     @property
     def data(self) -> BaseDataModule: return self.module.data
+    @property
+    def batch_data(self): return self.module.batch_data
+    @property
+    def batch_idx(self): return self.module.batch_idx
+    @property
+    def batch_output(self): return self.module.batch_output

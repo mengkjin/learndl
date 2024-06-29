@@ -13,7 +13,7 @@ from ...data import DataBlockNorm , DataProcessor , ModuleData
 from ...env import PATH , CONF
 from ...func import tensor_standardize_and_weight , match_values
 
-class _DataModule(BaseDataModule):
+class DataModule(BaseDataModule):
     @abstractmethod
     def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid : Optional[Tensor]) -> None: ...
 
@@ -62,12 +62,12 @@ class _DataModule(BaseDataModule):
         return [ModuleData.abbr(data_type) for data_type in self.config.data_type_list]
     
     @staticmethod
-    def prepare_data():
-        DataProcessor.main(predict = False)
-        DataProcessor.main(predict = True)
+    def prepare_data(data_types : Optional[list[str]] = None):
+        DataProcessor.main(predict = False , data_types = data_types)
+        DataProcessor.main(predict = True , data_types = data_types)
 
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
-              param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'dms': 30}} , 
+              param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'risk': 30}} , 
               model_date = -1 , none_valid = False) -> None:
         if self.predict: stage = 'predict'
         seqlens : dict = param['seqlens']
@@ -141,19 +141,26 @@ class _DataModule(BaseDataModule):
         others : rolling window non-nan , default as self.seqy
         '''
         valid = self.valid_sample(y , index1) if self.stage == 'train' else torch.ones(len(y),len(index1)).to(torch.bool)
-        for k , x in x_data.items(): valid *= self.valid_sample(x , index1 , self.seqs[k] , k in DataBlockNorm.DIVLAST)
-        for k , x in kwargs.items(): valid *= self.valid_sample(x , index1 , self.seqs[k])
+        for k , x in x_data.items(): 
+            valid = valid * self.valid_sample(x , index1 , self.seqs[k] , k in DataBlockNorm.DIVLAST)
+        for k , x in kwargs.items(): 
+            valid = valid * self.valid_sample(x , index1 , self.seqs[k])
         return valid
     
     @staticmethod
     def valid_sample(data : Tensor , index1 : Tensor , rolling_window = 1 , endpoint_nonzero = False):
         '''return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims'''
-        data = torch.cat([torch.zeros_like(data[:,:rolling_window]) , data],dim=1).unsqueeze(2)
+        start_idx = rolling_window
+        assert start_idx > 0 , start_idx
+        data = torch.cat([torch.zeros_like(data[:,:start_idx]) , data],dim=1).unsqueeze(2)
         sum_dim = tuple(range(2,data.ndim))
         
-        invalid_samp = data[:,index1 + rolling_window].isnan().sum(sum_dim)
-        for i in range(rolling_window - 1): invalid_samp += data[:,index1 + rolling_window - i - 1].isnan().sum(sum_dim)
-        if endpoint_nonzero: invalid_samp += (data[:,index1 + rolling_window] == 0).sum(sum_dim)
+        invalid_samp = data[:,index1 + start_idx].isnan().sum(sum_dim)
+        for i in range(1 , start_idx): 
+            invalid_samp += data[:,index1 - i + start_idx].isnan().sum(sum_dim)
+
+        if endpoint_nonzero: 
+            invalid_samp += (data[:,index1 + start_idx] == 0).sum(sum_dim)
         
         return (invalid_samp == 0)
      
@@ -182,13 +189,13 @@ class _DataModule(BaseDataModule):
         2.histnorm: normalized by history avg and std
         '''
         if self.static_prenorm_method[key]['divlast']:
-            x /= x.select(-2,-1).unsqueeze(-2) + 1e-6
+            x = x / (x.select(-2,-1).unsqueeze(-2) + 1e-6)
         if self.static_prenorm_method[key]['histnorm']:
-            x -= self.datas.norms[key].avg[-x.shape[-2]:]
-            x /= self.datas.norms[key].std[-x.shape[-2]:] + 1e-6
+            x = x - self.datas.norms[key].avg[-x.shape[-2]:]
+            x = x / (self.datas.norms[key].std[-x.shape[-2]:] + 1e-6)
         return x
     
-class NetDataModule(_DataModule):
+class NetDataModule(DataModule):
     def train_dataloader(self):
         return LoaderWrapper(self , self.loader_dict['train'] , self.device , self.config.verbosity)
     def val_dataloader(self):
@@ -201,7 +208,7 @@ class NetDataModule(_DataModule):
         return batch.to(self.device if device is None else device)
 
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
-              param = {'seqlens' : {'day': 30 , '30m': 30 , 'dms': 30}} , 
+              param = {'seqlens' : {'day': 30 , '30m': 30 , 'risk': 30}} , 
               model_date = -1) -> None:
         super().setup(stage , param , model_date , False)
         
@@ -223,6 +230,10 @@ class NetDataModule(_DataModule):
                 b_y = y[i0 , yindex1]
                 b_w = None if w is None else w[i0 , yindex1]
                 b_v = valid[i0 , yindex1]
+
+                for b_xx in b_x: pass
+                    #print(b_xx[b_v].isnan())
+                    #print(b_xx[b_v].isnan().sum())
 
                 self.storage.save(BatchData(b_x , b_y , b_w , b_i , b_v) , batch_files[bnum] , group = self.stage)
             self.loader_dict[set_key] = DataloaderStored(self.storage , batch_files , shuf_opt)
@@ -267,7 +278,7 @@ class NetDataModule(_DataModule):
             sample_index['test'] = sequential_sampling(0 , l1)
         return sample_index
     
-class BoosterDataModule(_DataModule):
+class BoosterDataModule(DataModule):
     '''for boosting such as algo.boost.lgbm, create booster'''
     def train_dataloader(self) -> Iterator[BoosterData]: return self.loader_dict['train']
     def val_dataloader(self) -> Iterator[BoosterData]:   return self.loader_dict['valid']
@@ -275,7 +286,7 @@ class BoosterDataModule(_DataModule):
     def predict_dataloader(self) -> Iterator[BoosterData]: return self.loader_dict['test']
         
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
-              param = {'seqlens' : {'day': 30 , '30m': 30 , 'dms': 30}} , 
+              param = {'seqlens' : {'day': 30 , '30m': 30 , 'risk': 30}} , 
               model_date = -1) -> None:
         super().setup(stage , param , model_date , True)
 

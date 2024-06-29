@@ -5,7 +5,7 @@ from typing import Any , Optional
 
 from .boost import choose_booster , LgbmEnsembler
 from .net import choose_ensembler
-from .. import nn as NN
+from ..nn import GetNN
 from ..basic import BaseDataModule , BaseTrainer , ModelDict , ModelFile
 from ..util import Checkpoint , Metrics , TrainConfig
 from ...env import BOOSTER_MODULE
@@ -36,7 +36,8 @@ class ModelEnsembler(ABC):
         
     @classmethod
     def get_net(cls , model_module : str , model_param = {} , state_dict : Optional[dict[str,Tensor]] = {} , device : Any = None):
-        net = getattr(NN , model_module)(**model_param)
+        NN = GetNN(model_module)
+        net = NN.nn_module(**model_param)
         assert isinstance(net , nn.Module) , net.__class__
         if state_dict: net.load_state_dict(state_dict)
         return device(net) if callable(device) else net.to(device)

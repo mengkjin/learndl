@@ -18,11 +18,11 @@ class DetailedAlphaAnalysis(CallBack):
         self.pred_df : pd.DataFrame | Any = None
 
     def append_preds(self):
-        if self.module.batch_idx < self.module.batch_warm_up: return
+        if self.batch_idx < self.module.batch_warm_up: return
         which_output = self.module.model_param.get('which_output' , 0)
-        full_pred = self.module.batch_output.pred.cpu()
-        i0 = self.module.batch_data.i[:,0].cpu()
-        i1 = self.module.batch_data.i[:,1].cpu()
+        full_pred = self.batch_output.pred.cpu()
+        i0 = self.batch_data.i[:,0].cpu()
+        i1 = self.batch_data.i[:,1].cpu()
         secid = self.data.y_secid[i0]
         date  = self.data.y_date[i1]
         assert full_pred.ndim == 2 , full_pred.shape

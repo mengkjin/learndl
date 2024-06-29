@@ -4,13 +4,12 @@ tra_seqlens:    [{'hist_loss': 40}]
 dropout:        [0.1]
 enc_in:         [true]
 enc_att:        [false] 
-rnn_type:       ['lstm'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
+rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
 rnn_att:        [false]
 rnn_layers:     [2]
 dec_mlp_layers: [2] 
-num_output:     [1]
+num_output:     [2]
+which_output:   [null]
 kernel_size:    [3] # for tcn
-hidden_as_factor:    [false]
+hidden_as_factor:    [true]
 ordered_param_group: [false]  # multiple data input , if train sequentially
-tra_num_states: [5]
-resnet_blocks:  [2]

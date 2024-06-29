@@ -284,8 +284,19 @@ class DataBlock(StockData4D):
         if adjfactor : v_price *= self.loc(feature=['adjfactor'])
         if multiply  is not None: v_price *= multiply
         if divide    is not None: v_price /= divide
-
         self.values[...,i_price] = v_price 
+
+        if 'vwap' in self.feature:
+            i_vp = np.where(self.feature == 'vwap')[0].astype(int)
+            nan_idx = self.values[...,i_vp].isnan() if isinstance(self.values , Tensor) else np.isnan(self.values[...,i_vp])
+            nan_idx = nan_idx.squeeze(-1)
+            pcols = [col for col in ['close', 'high', 'low', 'open' , 'preclose'] if col in self.feature]
+            if pcols: 
+                i_cp = np.where(self.feature == pcols[0])[0].astype(int)
+                self.values[nan_idx , i_vp] = self.values[nan_idx , i_cp]
+            else:
+                ...
+        
         self._price_adjusted = True
         return self
     

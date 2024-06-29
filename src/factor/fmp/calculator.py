@@ -57,6 +57,12 @@ class Fmp_Perf_Curve(BaseFmpCalc):
     def calculator(self): return Stat.calc_fmp_perf_curve
     def plotter(self): return Plot.plot_fmp_perf_curve
 
+class Fmp_Perf_Drawdown(BaseFmpCalc):
+    def __init__(self , **kwargs) -> None:
+        super().__init__()
+    def calculator(self): return Stat.calc_fmp_perf_drawdown
+    def plotter(self): return Plot.plot_fmp_perf_drawdown
+
 class Fmp_Perf_Lag_Curve(BaseFmpCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__()
