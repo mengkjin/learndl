@@ -371,7 +371,7 @@ class patch_tst(PatchTST):
 if __name__ == '__main__' :
 
     import torch
-    from src.nn_model.nn.patchTST import ModelPretrain,  ModelPredict
+    from src.nn_model.nn.PatchTST import ModelPretrain,  ModelPredict
     batch_size = 2 
     seq_len = 30
     patch_len = 3

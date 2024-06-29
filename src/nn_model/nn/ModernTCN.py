@@ -328,7 +328,7 @@ class modern_tcn(ModernTCN):
 if __name__ == '__main__':
     import torch
     import torch.nn as nn
-    from src.nn_model.nn.modernTCN import ModernTCNEmbed , ModernTCN
+    from src.nn_model.nn.ModernTCN import ModernTCNEmbed , ModernTCN
 
     batch_size = 2 
     seq_len = 30
