@@ -134,6 +134,7 @@ class TrainParam:
 
         self.train_param = Param['train_param']
         self.configs = {k:v for k,v in Param.items() if k != 'train_param'}
+        if self.model_name: self.configs['model_name'] = self.model_name
 
     def __getitem__(self , key : str):
         return self.configs[key]
@@ -236,9 +237,8 @@ class TrainConfig:
         if do_parser: config.process_parser(cls.parser_args(par_args))
 
         base_path = config.model_base_path
-        if config_path != 'default':
-            assert config_path == base_path , (config_path , base_path)
-            _TrainParam = TrainParam(base_path , model_name = model_name , override = override)
+        if config.resume_training:
+            _TrainParam = TrainParam(base_path , model_name = config.model_name , override = override)
             _ModelParam = ModelParam(base_path , _TrainParam.model_module)
             config_resume = cls(**_TrainParam.configs , _TrainParam = _TrainParam , _ModelParam = _ModelParam)
             config.update(config_resume.__dict__)
@@ -325,8 +325,8 @@ class TrainConfig:
         '''ask if resume training when candidate names exists'''
         model_name = self.Train.model_name
         assert model_name is not None
-        candidate_name = [model for model in [self.model_name] if os.path.exists(f'{PATH.model}/{model}')] + \
-                [model for model in os.listdir(PATH.model) if model.startswith(model_name + '.')]  
+        candidate_name = [model for model in [model_name] if os.path.exists(f'{PATH.model}/{model}')] + \
+                [model for model in os.listdir(PATH.model) if model.startswith(model_name + '.')]
         if len(candidate_name) > 0 and 'fit' in self.stage_queue:
             if value < 0:
                 print(f'--Multiple model path of {self.model_name} exists, input [yes] to resume training, or start a new one!')
@@ -336,6 +336,7 @@ class TrainConfig:
             print(f'--Confirm Resume Training!' if self.resume_training else '--Start Training New!')
         else:
             self.resume_training = False
+        
 
     def parser_select(self , value = -1):
         '''

@@ -197,7 +197,7 @@ class NetTrainer(Trainer):
             self.deposition.stack_model(model_dict , self.model_date , self.model_num , model_type) 
 
     def save_model(self):
-        self.stack_model()
+        if self.metrics.better_attempt(self.status.best_attempt_metric): self.stack_model()
         [self.deposition.dump_model(self.model_date , self.model_num , model_type) for model_type in self.model_types]
 
 class BoosterTrainer(Trainer):

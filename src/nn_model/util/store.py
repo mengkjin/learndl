@@ -190,8 +190,9 @@ class Deposition:
             models_trained = np.full(len(new_iter) , True , dtype = bool)
             for i , (model_date , model_num) in enumerate(new_iter):
                 if not self.exists(model_date , model_num):
-                    models_trained[max(i-1,0):] = False
+                    models_trained[max(i,0):] = False
                     break
+            print('First Iterance:' , new_iter[np.where(~models_trained)[0][0]])
             new_iter = Filtered(new_iter , ~models_trained)
         return new_iter
     
