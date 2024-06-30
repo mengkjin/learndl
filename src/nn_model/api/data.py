@@ -27,11 +27,12 @@ class DataAPI:
         print('-' * 80)
 
     @staticmethod
-    def reconstruct_train_data(data_types : Optional[list[str]] = None): 
+    def reconstruct_train_data(data_types : Optional[list[str] | str] = None): 
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
         # assert THIS_IS_SERVER
+        if isinstance(data_types , str): data_types = data_types.split('+')
         NetDataModule.prepare_data(data_types)
         print('-' * 80)
 

@@ -22,11 +22,6 @@ SYMBOL_STOCK_LB = -1.
 SYMBOL_STOCK_UB = +1.
 
 DEFAULT_SOLVER_CONFIG : dict[str,dict] = {
-    'cvxpy.mosek': {'solver': 'MOSEK','max_iters': 200, 'bnd_inf': 100.0},
-    'cvxpy.ecos': {'solver': 'ECOS','max_iters': 200, 'bnd_inf': 100.0},
-    'cvxpy.osqp': {'solver': 'OSQP','bnd_inf': 100.0},
-    'cvxpy.scs': {'solver': 'SCS','eps': 1e-6, 'bnd_inf': 100.0},
-    'mosek': {},
     'cvxopt': {'show_progress': False}
 }
 

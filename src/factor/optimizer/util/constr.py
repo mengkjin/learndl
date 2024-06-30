@@ -237,4 +237,4 @@ class CovConstraint:
             C = v @ v.T + np.eye(L) * 1e-6
             v = np.random.randn(N , 2 * N)
             S = v.std(axis = 1)
-            return cls(F = F , C = C , S = S , te = 1. , cov_type = cov_type)
+            return cls(lmbd = 1. , F = F , C = C , S = S , te = 1. , cov_type = cov_type)

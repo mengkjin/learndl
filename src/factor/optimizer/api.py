@@ -4,27 +4,22 @@ import numpy as np
 from dataclasses import dataclass , field
 from typing import Any , Literal , Optional
 
-from .solver import SOLVER_CLASS
+from .solver import MosekSolver , CvxpySolver
 from .util import Accuarcy , PortfolioOptimizerInput , SolverInput , Utility
 from ..util import Analytic , Port , AlphaModel , Amodel , Portfolio , Benchmark
-from ..basic.var import DEFAULT_SOLVER_CONFIG
 from ...env import PATH
 
 @dataclass
 class PortfolioOptimizer:
     prob_type   : Literal['linprog' , 'quadprog' , 'socp'] = 'socp'
     engine_type : Literal['mosek' , 'cvxopt' , 'cvxpy'] = 'mosek'
-    cvxpy_solver : Literal['mosek' , 'ecos' , 'osqp' , 'scs'] = 'mosek'
+    cvxpy_solver : Literal['mosek' , 'ecos' , 'osqp' , 'scs' , 'clarabel'] = 'mosek'
     
     opt_relax : bool = True
     opt_turn  : bool = True
     opt_qobj  : bool = True
     opt_qcon  : bool = True
     opt_short : bool = True
-
-    def __post_init__(self):
-        key = f'{self.engine_type}.{self.cvxpy_solver}' if self.engine_type == 'cvxpy' else self.engine_type
-        self.param = DEFAULT_SOLVER_CONFIG[key]
         
     def setup_optimizer(self , portfolio_name : str = 'port' , 
                         config_path : Optional[str] = None):
@@ -32,8 +27,16 @@ class PortfolioOptimizer:
         self.opt_input = PortfolioOptimizerInput(portfolio_name , given_config)
         return self
 
+    def init_solver(self , solver_input : SolverInput):
+        if self.engine_type == 'mosek':
+            self.solver = MosekSolver(solver_input, self.prob_type)
+        elif self.engine_type == 'cvxpy':
+            self.solver = CvxpySolver(solver_input, self.prob_type , cvxpy_solver = self.cvxpy_solver)
+        else:
+            raise KeyError(self.engine_type)
+
     def solve(self , solver_input : SolverInput):
-        self.solver = SOLVER_CLASS[self.engine_type](solver_input, self.prob_type , self.param)
+        self.init_solver(solver_input)
 
         while True:
             w, is_success, status = self.solver.solve(

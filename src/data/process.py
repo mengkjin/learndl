@@ -11,8 +11,8 @@ from ..env import RISK_STYLE , RISK_INDUS
 from ..func.time import Timer
 from ..func.primas import neutralize_2d , process_factor
 
-TRAIN_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus']
-PREDICT_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus']
+TRAIN_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']
+PREDICT_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']
 
 @dataclass(slots=True)
 class DataProcessor:

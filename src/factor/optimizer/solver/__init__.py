@@ -1,5 +1,3 @@
 from .mosek import Solver as MosekSolver
-
-SOLVER_CLASS = {
-    'mosek' : MosekSolver
-}
+from .cvxpy import Solver as CvxpySolver
+from .cvxopt import Solver as CvxoptSolver

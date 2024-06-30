@@ -106,7 +106,7 @@ class SolverInput:
             cov_con = CovConstraint.rand(N) if with_cov else None ,
             w0 = rescale_array(np.random.rand(N)) ,
             wb = rescale_array(np.random.rand(N)) ,
-            short_con = 0.1 ,
+            short_con = ShortConstraint(0.1 , 0.002) ,
         )
     
 class Relaxer:

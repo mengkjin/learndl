@@ -7,6 +7,8 @@ from ..util import SolverInput , SolveCond , SolveVars
 
 from ...basic.var import SYMBOL_INF as INF
 
+_SOLVER_PARAM = {}
+
 def mosek_bnd_key(bnd_key : str | list | np.ndarray):
     if isinstance(bnd_key , (list , np.ndarray)):
         return [mosek_bnd_key(k) for k in bnd_key]
@@ -27,11 +29,10 @@ def enum(num : int , args : list[Any] , start = 0):
 
 class Solver:
     def __init__(self , input : SolverInput , 
-                 prob_type : Literal['linprog' , 'quadprog' , 'socp'] = 'linprog' ,
-                 solver_param : dict = {}):
+                 prob_type : Literal['linprog' , 'quadprog' , 'socp'] = 'socp' ,
+                 **kwargs):
         self.input = input
         self.prob_type : Literal['linprog' , 'quadprog' , 'socp'] = prob_type
-        self.solver_param = solver_param
 
     def parse_input(self):
         self.alpha    = self.input.alpha
@@ -125,8 +126,8 @@ class Solver:
 
         return ww , is_success , status
     
-    def task_init(self , task : mosek.Task):
-        for key, val in self.solver_param.items() : task.putparam(key, val)
+    def task_init(self , task : mosek.Task): 
+        for key, val in _SOLVER_PARAM.items() : task.putparam(key, val)
     
     def task_addvars(self , task : mosek.Task , num : int ,
                      bound_key : np.ndarray | Any , bound_lb : np.ndarray | Any , bound_ub : np.ndarray | Any ,
