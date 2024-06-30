@@ -80,9 +80,9 @@ class RFetcher:
             'industry' : {
                 'path' : f'D:/Coding/ChinaShareModel/ModelData/1_attributes/a_share_industries_class_sw_2021.csv' ,
                 'remain_cols' : ['secid' , 'entry_dt', 'remove_dt', 'ind_code', 
-                                'ind_code_1', 'chn_name_1', 'abbr_1', 'indexcode_1' ,
-                                'ind_code_2', 'chn_name_2', 'abbr_2', 'indexcode_2' ,
-                                'ind_code_3', 'chn_name_3', 'abbr_3', 'indexcode_3'] ,
+                                 'ind_code_1', 'chn_name_1', 'abbr_1', 'indexcode_1' ,
+                                 'ind_code_2', 'chn_name_2', 'abbr_2', 'indexcode_2' ,
+                                 'ind_code_3', 'chn_name_3', 'abbr_3', 'indexcode_3'] ,
                 cls.col_reform : d_entrm ,
             },
             'concepts' : {
