@@ -64,9 +64,9 @@ def group_optimize(alpha_models : AlphaModel | list[AlphaModel] , benchmarks : s
             opt = pt.optimizer.optimize(date , pt.alpha.get(date , lag = pt.lag) , pt.benchmark , init_port)
             pt.optimrslt.append(opt)
             pt.portfolio.append(opt.port)
-            if verbosity > 1: 
+            if verbosity > 2 or (verbosity > 1 and (opt_count % 50 == 0)): 
                 time_cost = {k:np.round(v*1000,2) for k,v in opt.time.items()}
-                print(f'Done Optimize [{pt.portfolio.name:{port_name_len}s}] at {date} , time cost (ms) : {time_cost}')
+                print(f'Done Optimize {opt_count:4d}th [{pt.portfolio.name:{port_name_len}s}] at {date} , time cost (ms) : {time_cost}')
             opt_count += 1
     
     t2 = time.time()

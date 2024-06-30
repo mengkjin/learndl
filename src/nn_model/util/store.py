@@ -192,7 +192,8 @@ class Deposition:
                 if not self.exists(model_date , model_num):
                     models_trained[max(i,0):] = False
                     break
-            print('First Iterance:' , new_iter[np.where(~models_trained)[0][0]])
+            if not models_trained.all():
+                print('First Iterance:' , new_iter[np.where(~models_trained)[0][0]])
             new_iter = Filtered(new_iter , ~models_trained)
         return new_iter
     

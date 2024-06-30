@@ -47,7 +47,7 @@ class DetailedAlphaAnalysis(CallBack):
         self.pred_df.set_index(['secid','date']).to_feather(f'{path}/pred_df.feather')
         df = self.pred_df[self.pred_df['date'].isin(dates)].pivot_table('values',['secid','date'],'factor_name')
         fac_man = PerfManager.run_test(df)
-        fmp_man = FmpManager.run_test(df , verbosity = 1)
+        fmp_man = FmpManager.run_test(df , verbosity = 2)
         
         rslts : dict[str , pd.DataFrame] = {f'fmp_{k}':v for k,v in fmp_man.get_rslts().items()}
         rslts.update({f'factor_{k}':v for k,v in fac_man.get_rslts().items()})
