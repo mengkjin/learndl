@@ -35,7 +35,7 @@ class Rmodel:
         return self.weight(secid) * 1e8
     def weight(self , secid : np.ndarray | Any = None): 
         df = self.F.loc[: , 'weight'] * 1e8
-        if secid is not None: df = df.loc[secid]
+        if secid is not None: df = self.loc_secid(df , secid , 0.)
         return df.to_numpy().flatten()
     @property
     def common_factors(self): return RISK_COMMON
@@ -44,17 +44,17 @@ class Rmodel:
         C = self.C
         S = self.S
         if secid is not None: 
-            F = F.loc[secid]
-            S = S.loc[secid]
+            F = self.loc_secid(F , secid , 0.)
+            S = self.loc_secid(S , secid , 'max')
         return F.values.T , C.values , S.values.flatten()
     def industry(self , secid : np.ndarray | Any = None):
         df = self.F.loc[: , RISK_INDUS].idxmax(axis=1)
-        if secid is not None: df = df.loc[secid]
+        if secid is not None: df = self.loc_secid(df , secid , 0.)
         return df.to_numpy()
     def style(self , secid : np.ndarray | Any = None , style : np.ndarray | Any = None):
         if style is None: style = RISK_STYLE
         df = self.F.loc[: , style]
-        if secid is not None: df = df.loc[secid]
+        if secid is not None: df = self.loc_secid(df , secid , 0.)
         return df
     def is_pos_def(self):
         return np.all(np.linalg.eigvals(self.C.values) > 0)
@@ -101,6 +101,21 @@ class Rmodel:
             self.futret = futret.loc[:,['tot']].join(excess_ret).join(model.resid.rename('specific'))
             self.regressed = target_date
         return self
+    
+    @staticmethod
+    def loc_secid(df : pd.DataFrame | Any , secid : np.ndarray , fillna : Literal['max','min'] | float | None = None):    
+        try:  
+            new_df = df.loc[secid]
+        except KeyError as e:  
+            new_df = df.reindex(secid).loc[secid]
+        if fillna is not None:
+            if fillna == 'max':
+                new_df = new_df.fillna(new_df.max())
+            elif fillna == 'min':
+                new_df = new_df.fillna(new_df.min())
+            else:
+                new_df = new_df.fillna(new_df)
+        return new_df
 
 class RiskModel(GeneralModel):
     '''
