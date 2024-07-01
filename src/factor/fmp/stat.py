@@ -34,7 +34,7 @@ def accounting_fmp(portfolio : Portfolio , benchmark : Portfolio | Benchmark | A
     Accounting portfolio through date, require at least portfolio
     '''
     t0 = time.time()
-    if verbosity: 
+    if verbosity > 1: 
         print(f'{portfolio.name} accounting start...' , end='')
     port_min , port_max = portfolio.available_dates().min() , portfolio.available_dates().max()
     start = np.max([port_min , start])
@@ -78,7 +78,7 @@ def accounting_fmp(portfolio : Portfolio , benchmark : Portfolio | Benchmark | A
     df['pf']  = df['pf'] - df['turn'] * trade_cost
     df['excess'] = df['pf'] - df['bm']
     t2 = time.time()
-    if verbosity: 
+    if verbosity > 1: 
         print(f' Total time: {t2-t0:.2f} secs, Each period time: {(t2-t1)/len(model_date):.2f} secs')
     return df # , ana , att
 

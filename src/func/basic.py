@@ -376,9 +376,10 @@ def recur_update(old : dict , update : Optional[dict]) -> dict:
     return old
 
 class Filtered:
-    def __init__(self, iterable, condition):
+    def __init__(self, iterable, condition , **kwargs):
         self.iterable  = iter(iterable)
         self.condition = condition if callable(condition) else iter(condition)
+        self.kwargs = kwargs
     def __iter__(self):
         return self
     def __next__(self):

@@ -28,6 +28,11 @@ def check_config_validity(config : 'TrainConfig'):
         config.model_data_type = nn_datatype
         config.Train.configs['model_data_type'] = nn_datatype
 
+def check_model_param_validity(model_param : 'ModelParam'):
+    if model_param.module == 'tra':
+        assert 'hist_loss_seq_len' in model_param.Param
+        assert 'hist_loss_horizon' in model_param.Param
+
 @dataclass    
 class ModelParam:
     config_path : str
@@ -49,6 +54,7 @@ class ModelParam:
             else:
                 self.Param[key] = [value]
         assert self.n_model <= 4 , self.n_model
+        check_model_param_validity(self)
 
     def __getitem__(self , key : str):
         return self.Param[key]

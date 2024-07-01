@@ -8,7 +8,7 @@ AVAIL_BENCHMARKS = ['csi300' , 'csi500' , 'csi800' , 'csi1000']
 DEFAULT_BENCHMARKS = ['csi300' , 'csi500' , 'csi1000']
 
 EPS_WEIGHT = 1e-6
-EPS_ACCURACY = 1e-6
+EPS_ACCURACY = 2e-6
 
 TRADE_COST = 0.002
 

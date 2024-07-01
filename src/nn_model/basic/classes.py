@@ -153,14 +153,16 @@ class TrainerStatus:
     epoch   : int = -1
     attempt : int = 0
     round   : int = 0
+    
     model_num  : int = -1
     model_date : int = -1
     model_type : str = 'best'
-    epoch_event  : list[str] = field(default_factory=list)
+    epoch_event : list[str] = field(default_factory=list)
     best_attempt_metric : Any = None
 
     def __post_init__(self):
         self.end_of_loop = self.EndofLoop(self.max_epoch)
+        self.fit_iter_num :int = 0
 
     def stage_data(self): self.stage = 'data'
     def stage_fit(self):  self.stage = 'fit'
@@ -169,6 +171,7 @@ class TrainerStatus:
     def dataset_validation(self): self.dataset = 'valid'
     def dataset_test(self): self.dataset = 'test'
     def fit_model_start(self):
+        self.fit_iter_num += 1
         self.attempt = -1
         self.best_attempt_metric = None
         self.new_attempt()

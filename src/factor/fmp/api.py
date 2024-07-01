@@ -42,13 +42,19 @@ class FmpManager:
         self.optim_tuples = group_accounting(self.optim_tuples , verbosity=verbosity)
         self.account = calc_fmp_account(self.optim_tuples)
 
-    def calc(self):
+    def calc(self , verbosity = 1):
         assert hasattr(self , 'account') , 'Must run FmpManager.optim first'
-        for _ , perf_calc in self.perf_calc_dict.items(): perf_calc.calc(self.account)
+        for perf_name , perf_calc in self.perf_calc_dict.items(): 
+            perf_calc.calc(self.account)
+            if verbosity > 1: print(f'{self.__class__.__name__} calc of {perf_name} Finished!')
+        if verbosity > 0: print(f'{self.__class__.__name__} calc Finished!')
         return self
 
-    def plot(self , show = False):
-        for _ , perf_calc in self.perf_calc_dict.items(): perf_calc.plot(show = show)
+    def plot(self , show = False , verbosity = 1):
+        for perf_name , perf_calc in self.perf_calc_dict.items(): 
+            perf_calc.plot(show = show)
+            if verbosity > 1: print(f'{self.__class__.__name__} plot of {perf_name} Finished!')
+        if verbosity > 0: print(f'{self.__class__.__name__} plot Finished!')
         return self
     
     def save_rslts_and_figs(self , path : str):
@@ -106,7 +112,7 @@ class FmpManager:
                  all = True , config_path : Optional[str] = None , verbosity = 2 , **kwargs):
         pm = cls(all=all , **kwargs)
         pm.optim(factor_val , benchmark , config_path=config_path , verbosity = verbosity)
-        pm.calc().plot(show=False)
+        pm.calc(verbosity = verbosity).plot(show=False , verbosity = verbosity)
         return pm
     
     @classmethod

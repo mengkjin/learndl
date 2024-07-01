@@ -32,12 +32,18 @@ class PerfManager:
     def __post_init__(self) -> None:
         self.perf_calc_dict = {k:self.select_perf_calc(k,self.perf_params) for k,v in self.perf_calc_boolean.items() if v}
 
-    def calc(self , factor_val: DataBlock | pd.DataFrame, benchmarks: Optional[list[Benchmark|Any]] | Any = None):
-        for _ , perf_calc in self.perf_calc_dict.items(): perf_calc.calc(factor_val , benchmarks)
+    def calc(self , factor_val: DataBlock | pd.DataFrame, benchmarks: Optional[list[Benchmark|Any]] | Any = None , verbosity = 1):
+        for perf_name , perf_calc in self.perf_calc_dict.items(): 
+            perf_calc.calc(factor_val , benchmarks)
+            if verbosity > 1: print(f'{self.__class__.__name__} calc of {perf_name} Finished!')
+        if verbosity > 0: print(f'{self.__class__.__name__} calc Finished!')
         return self
 
-    def plot(self , show = False):
-        for _ , perf_calc in self.perf_calc_dict.items(): perf_calc.plot(show = show)
+    def plot(self , show = False , verbosity = 1):
+        for perf_name , perf_calc in self.perf_calc_dict.items(): 
+            perf_calc.plot(show = show)
+            if verbosity > 1: print(f'{self.__class__.__name__} plot of {perf_name} Finished!')
+        if verbosity > 0: print(f'{self.__class__.__name__} plot Finished!')
         return self
     
     def save_rslts_and_figs(self , path : str):
@@ -95,9 +101,9 @@ class PerfManager:
     
     @classmethod
     def run_test(cls , factor_val : pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any = None ,
-                 all = True , **kwargs):
+                 all = True , verbosity = 2 , **kwargs):
         pm = cls(all=all , **kwargs)
-        pm.calc(factor_val , benchmark).plot(show=False)
+        pm.calc(factor_val , benchmark , verbosity = verbosity).plot(show=False , verbosity = verbosity)
         return pm
     
     @classmethod

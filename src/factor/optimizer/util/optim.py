@@ -77,7 +77,7 @@ class Accuarcy:
     def __call__(self, **kwargs): return self.add(**kwargs)
     def __repr__(self): 
         return (',\n' + ' ' * 10).join([
-            f'{self.__class__.__name__}(Is Accurate=[{bool(self)}] ,' ,
+            f'{self.__class__.__name__}(Is Accurate={bool(self)}' ,
             *[f'{k}={self.cond_expr(v)}' for k,v in self.component.items()]
         ])
     def __mul__(self , other):

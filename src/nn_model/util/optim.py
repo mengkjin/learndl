@@ -8,6 +8,9 @@ from typing import Optional
 from .config import TrainConfig
 from ..basic import BatchMetric
 
+NAN_GRADS_HALT = False
+NAN_GRADS_IGNORE = False
+
 class Optimizer:
     '''specify trainer optimizer and scheduler'''
     # reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
@@ -47,24 +50,9 @@ class Optimizer:
     def backward(self , metric : BatchMetric):
         '''BP of optimizer.parameters'''
         self.optimizer.zero_grad()
-        metric.loss.backward(retain_graph = True)
-        if self.check_nan_gradients(self.net): 
-            from src import api
-            setattr(api , 'mod', self.model_module)
-            print('total loss has nan gradients: ' , metric.loss)
-
-            for key , loss in metric.losses.items():
-                print(key , loss)
-                self.optimizer.zero_grad()
-                # if loss.grad_fn is None: continue
-                loss.backward(retain_graph = True)
-                for name , param in self.net.named_parameters():
-                    if param.grad is not None and torch.isnan(param.grad).any():
-                        print(name , param , param.grad)
-
-            raise KeyError
-        self.clip_gradients(self.net , clip_value = self.clip_value , nan_to_num = 0)
-        
+        metric.loss.backward(retain_graph = NAN_GRADS_HALT)
+        self.check_nan_gradients(metric)
+        self.clip_gradients()
         self.optimizer.step()
 
     def scheduler_step(self , epoch : int = 0) -> str | None:
@@ -99,20 +87,33 @@ class Optimizer:
             scheduler = optim.lr_scheduler.CyclicLR(optimizer, max_lr=[pg['lr_param'] for pg in optimizer.param_groups],cycle_momentum=False,mode='triangular2',**kwargs)
         return scheduler
     
-    @staticmethod
-    def check_nan_gradients(module : nn.Module):
-        for param in module.parameters():
+    def check_nan_gradients(self , metric : BatchMetric):
+        if not NAN_GRADS_HALT: return
+        for param in self.net.parameters():
             if param.grad is not None and torch.isnan(param.grad).any():
                 return True
-        return False
-    
-    @staticmethod
-    def clip_gradients(module : nn.Module , clip_value : Optional[float] = None , nan_to_num : Optional[float] = None):
-        if clip_value is not None:
-            clip_grad_value_(module.parameters(), clip_value = clip_value)
-        if nan_to_num is not None:
-            grads = [p.grad for p in module.parameters() if p.grad is not None]
-            for grad in grads: grad[grad.isnan()] = nan_to_num
+            
+        from src import api
+        setattr(api , 'mod', self.model_module)
+        print('total loss has nan gradients: ' , metric.loss)
+
+        for key , loss in metric.losses.items():
+            print(key , loss)
+            self.optimizer.zero_grad()
+            # if loss.grad_fn is None: continue
+            loss.backward(retain_graph = True)
+            for name , param in self.net.named_parameters():
+                if param.grad is not None and torch.isnan(param.grad).any():
+                    print(name , param , param.grad)
+
+        raise KeyError
+
+    def clip_gradients(self):
+        if self.clip_value is not None:
+            clip_grad_value_(self.net.parameters(), clip_value = self.clip_value)
+        if NAN_GRADS_IGNORE:
+            grads = [p.grad for p in self.net.parameters() if p.grad is not None]
+            for grad in grads: grad[grad.isnan()] = 0.
 
 class CosineScheduler:
     def __init__(self , optimizer , warmup_stage = 10 , anneal_stage = 40 , initial_lr_div = 10 , final_lr_div = 1e4):

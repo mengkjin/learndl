@@ -70,7 +70,7 @@ class PortfolioOptimizer:
             rslt.utility  = self.solver_input.utility(w , self.prob_type , self.opt_turn , self.opt_qobj , self.opt_short) 
             rslt.accuracy = self.solver_input.accuracy(w)
             if not rslt.accuracy and is_success:
-                print('Not accurate but assessed as success!')
+                print(f'Not accurate but assessed as success at {model_date} for [{alpha_model.name}]!')
                 print(rslt.accuracy)
             rslt.analytic = self.opt_input.analytic(port , self.opt_input.benchmark_port , self.opt_input.initial_port)
 

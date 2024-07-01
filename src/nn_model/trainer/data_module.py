@@ -42,8 +42,8 @@ class DataModule(BaseDataModule):
             self.model_date_list = self.datas.date[0]
             self.test_full_dates = self.datas.date[1:]
         else:
-            self.model_date_list = self.datas.date_within(self.config.beg_date    , self.config.end_date , self.config.interval)
-            self.test_full_dates = self.datas.date_within(self.config.beg_date + 1, self.config.end_date)
+            self.model_date_list = self.datas.date_within(self.config.beg_date , self.config.end_date , self.config.interval)
+            self.test_full_dates = self.datas.date_within(self.config.beg_date , self.config.end_date)[1:]
 
         self.static_prenorm_method = {}
         for mdt in self.data_type_list: 
@@ -67,18 +67,17 @@ class DataModule(BaseDataModule):
         DataProcessor.main(predict = True , data_types = data_types)
 
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
-              param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'risk': 30}} , 
+              param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1 , none_valid = False) -> None:
         if self.predict: stage = 'predict'
-        seqlens : dict = param['seqlens']
-        seqlens.update({k:v for k,v in param.items() if k.endswith('seq_len')})
+        seqlens : dict = {key:param['seqlens'][key] for key in self.data_type_list}
+        seqlens.update({k:v for k,v in param.items() if k.endswith('_seq_len')})
         if self.loader_param == (stage , model_date , seqlens): return
         self.loader_param = stage , model_date , seqlens
 
         assert stage in ['fit' , 'test' , 'predict'] and model_date > 0 and seqlens , (stage , model_date , seqlens)
         
         self.stage = stage
-
         x_keys = self.data_type_list
         y_keys = [k for k in seqlens.keys() if k not in x_keys]
         self.seqs = {k:seqlens.get(k , 1) for k in y_keys + x_keys}
@@ -208,7 +207,7 @@ class NetDataModule(DataModule):
         return batch.to(self.device if device is None else device)
 
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
-              param = {'seqlens' : {'day': 30 , '30m': 30 , 'risk': 30}} , 
+              param = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1) -> None:
         super().setup(stage , param , model_date , False)
         
@@ -286,7 +285,7 @@ class BoosterDataModule(DataModule):
     def predict_dataloader(self) -> Iterator[BoosterData]: return self.loader_dict['test']
         
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
-              param = {'seqlens' : {'day': 30 , '30m': 30 , 'risk': 30}} , 
+              param = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1) -> None:
         super().setup(stage , param , model_date , True)
 
