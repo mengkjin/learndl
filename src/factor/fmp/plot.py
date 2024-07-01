@@ -16,6 +16,9 @@ def plot_fmp_perf_lag(df : pd.DataFrame , factor_name : Optional[str] = None , b
     df = df.set_index('trade_date')
     for col in df.columns: 
         if col != 'lag_cost': ax.plot(df.index , df[col], label=col)
+    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
+    ax.xaxis.set_tick_params(rotation=45)
+    ax.grid()
 
     ax.grid()
     ax.legend(loc = 'upper left')
@@ -67,7 +70,9 @@ def plot_fmp_perf_curve(df : pd.DataFrame , factor_name : Optional[str] = None ,
     ax1.tick_params('y', colors='b')  
     ax1.legend(loc='upper left')  
     ax1.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))  
+    ax1.set_xticks(df.index[::max(1,len(df.index)//10)])
     ax1.xaxis.set_tick_params(rotation=45)
+    ax1.grid()
 
     ax2 : Axes | Any = ax1.twinx()  
     ax2.plot(df.index, df['excess'], 'r-', )
@@ -77,8 +82,6 @@ def plot_fmp_perf_curve(df : pd.DataFrame , factor_name : Optional[str] = None ,
     ax2.tick_params('y', colors='r')  
     ax2.legend(loc='upper right')  
     ax2.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))  
-
-    ax1.grid()
 
     plot_tail(f'FMP Accumulative Performance' , factor_name , benchmark , show , suptitle = False)
     return fig
@@ -95,7 +98,9 @@ def plot_fmp_perf_drawdown(df : pd.DataFrame , factor_name : Optional[str] = Non
     ax1.tick_params('y', colors='b')  
     ax1.legend(loc='upper left')  
     ax1.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))  
+    ax1.set_xticks(df.index[::max(1,len(df.index)//10)])
     ax1.xaxis.set_tick_params(rotation=45)
+    ax1.grid()
 
     ax2 : Axes | Any = ax1.twinx()  
     ax2.plot(df.index, df['drawdown'], 'g', )
@@ -105,8 +110,6 @@ def plot_fmp_perf_drawdown(df : pd.DataFrame , factor_name : Optional[str] = Non
     ax2.tick_params('y', colors='r')  
     ax2.legend(loc='upper right')  
     ax2.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))  
-
-    ax1.grid()
 
     plot_tail(f'FMP Excess Drawdown' , factor_name , benchmark , show , suptitle = False)
     return fig
@@ -127,6 +130,8 @@ def plot_fmp_style_exp(df : pd.DataFrame , factor_name : Optional[str] = None , 
         ax.yaxis.set_ticks_position('left')
         ax.xaxis.set_tick_params(labelsize = 8 , length = 0)
         ax.set_title(col.capitalize())
+        ax.set_xticks(df.index[::max(1,len(df.index)//10)])
+
     fig.autofmt_xdate(rotation = 45)
     plot_tail(f'FMP Style Exposure' , factor_name , benchmark , show , suptitle = True)
     return fig
@@ -146,6 +151,7 @@ def plot_fmp_industry_exp(df : pd.DataFrame , factor_name : Optional[str] = None
         ax.yaxis.set_ticks_position('left')
         ax.xaxis.set_tick_params(labelsize = 6 , length = 0)
         ax.set_title(col.capitalize() , fontsize = 8)
+        ax.set_xticks(df.index[::max(1,len(df.index)//10)])
     fig.autofmt_xdate(rotation = 45)
     plot_tail(f'FMP Industry Deviation' , factor_name , benchmark , show , suptitle = True)
     return fig
@@ -158,7 +164,8 @@ def plot_fmp_attrib_source(df : pd.DataFrame , factor_name : Optional[str] = Non
     df = df.set_index('trade_date').round(6)
     for col in ['tot' , 'market' , 'industry' , 'style' , 'specific' , 'cost']: 
         ax.plot(df.index , df[col], label=col)
-
+    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
+    ax.xaxis.set_tick_params(rotation=45)
     ax.grid()
     ax.legend(loc = 'upper left')
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))
@@ -173,7 +180,8 @@ def plot_fmp_attrib_style(df : pd.DataFrame , factor_name : Optional[str] = None
     df = df.set_index('trade_date').round(6)
     for col in df.columns: 
         ax.plot(df.index , df[col], label=col)
-
+    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
+    ax.xaxis.set_tick_params(rotation=45)
     ax.grid()
     ax.legend(loc = 'upper left')
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))
@@ -190,7 +198,8 @@ def plot_fmp_prefix(df : pd.DataFrame , factor_name : Optional[str] = None , ben
     plot_table(df , 
                pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                flt_cols = ['ir','calmar'] ,
-               column_definitions = [ColumnDefinition(name='Mdd_period', width=2)] , 
+               column_definitions = [ColumnDefinition(name='Factor'    , width=2) ,
+                                     ColumnDefinition(name='Mdd_period', width=2)] , 
                emph_last_row=False , stripe_rows=df.groupby('factor')['benchmark'].count().to_list())
     plot_tail('FMP Prefix Information' , 'All Factors' , show = show , suptitle=False)
     return fig

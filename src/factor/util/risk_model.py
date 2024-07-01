@@ -59,10 +59,10 @@ class Rmodel:
     def is_pos_def(self):
         return np.all(np.linalg.eigvals(self.C.values) > 0)
     def _exposure(self , port : Port):
-        rmodel_f = self.F.loc[port.secid , self.common_factors]
+        rmodel_f = self.loc_secid(self.F.loc[: , self.common_factors] , port.secid)
         return port.weight.dot(rmodel_f)
     def _specific_risk(self , port : Port):
-        rmodel_s = self.S.loc[port.secid].values.flatten()
+        rmodel_s = self.loc_secid(self.S , port.secid).values.flatten()
         return (port.weight * rmodel_s).dot(port.weight)
     def _analysis(self , port : Port | Any = None):
         if not port: return RiskProfile()

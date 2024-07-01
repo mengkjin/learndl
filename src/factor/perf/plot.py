@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 import seaborn as sns
-
 from matplotlib.axes import Axes
 from matplotlib.ticker import FuncFormatter
 from typing import Any , Literal , Optional
@@ -18,6 +17,8 @@ def plot_decay_ic(df : pd.DataFrame , factor_name : Optional[str] = None , bench
         height = bar.get_height()
         ax.text(bar.get_x() + bar.get_width() / 2 , height ,
                  f'{height:.4f}' , ha = 'center' , va = 'top' if height < 0 else 'bottom')
+    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
+    ax.xaxis.set_tick_params(rotation=45)
     ax.grid()
     plot_tail(f'Factor Average IC Decay' , factor_name , benchmark , show , suptitle = False)
     return fig
@@ -38,7 +39,7 @@ def plot_decay_grp_perf(df : pd.DataFrame , factor_name : Optional[str] = None ,
     #ax.set_title(f'Groups {stat_type.upper()} Decay for [{factor_name}]') 
     ax.legend(loc='upper left')
     ax.grid()
-
+    ax.xaxis.set_tick_params(rotation=45)
     plot_tail(f'Factor Groups {stat_type.upper()} Decay' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -71,7 +72,7 @@ def plot_grp_perf(df : pd.DataFrame , factor_name : Optional[str] = None , bench
     ax.legend(handles=handles[0:], labels=labels[0:], loc='upper left')
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x,p:f'{x:.2%}'))
     ax.grid()
-
+    ax.xaxis.set_tick_params(rotation=45)
     plot_tail(f'Factor Group CumReturn' , factor_name , benchmark , show , suptitle = False)
     return fig
     
@@ -85,6 +86,7 @@ def plot_style_corr_box(df : pd.DataFrame , factor_name : Optional[str] = None ,
 
     ax = sns.boxplot(x='style_factor', y='factor_corr', data=df, width=0.3)
     ax.grid()
+    ax.xaxis.set_tick_params(rotation=45)
     plot_tail(f'Factor Corr with Risk Styles' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -96,7 +98,8 @@ def plot_style_corr(df : pd.DataFrame , factor_name : Optional[str] = None , ben
     ax = fig.add_subplot(111)
     for style in df.columns.tolist(): ax.plot(df.index , df[style], label=style)
     ax.grid()
-
+    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
+    ax.xaxis.set_tick_params(rotation=45)
     plot_tail(f'Factor Corr Curve with Risk Styles' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -182,15 +185,15 @@ def plot_ic_curve(df : pd.DataFrame , factor_name : Optional[str] = None , bench
     for col in df.columns.tolist():
         if col.startswith('ma_'): ax1.plot(df.index, df[col], color=colors.pop(0) , label=col)  
     ax1.legend(loc='upper left')  
-    ax1.xaxis.set_tick_params(rotation=45)  
-    
+    ax1.set_xticks(df.index[::max(1,len(df.index)//10)])
+    ax1.xaxis.set_tick_params(rotation=45)
+    ax1.grid()
+
     ax2 : Axes | Any = ax1.twinx()  
     ax2.plot(df.index, df['cum_ic'], 'r-', label='Cum IC (right)')  
     ax2.set_ylabel('Cummulative IC', color='r')  
     ax2.tick_params('y', colors='r')  
     ax2.legend(loc='upper right')  
-
-    ax1.grid()
     
     plot_tail('Factor IC Curve' , factor_name , benchmark , show , suptitle = False)
     return fig
@@ -223,8 +226,6 @@ def plot_industry_ic(df : pd.DataFrame , factor_name : Optional[str] = None , be
     ax2.spines['top'].set_visible(False)
     ax2.spines['bottom'].set_visible(False)
     ax2.legend(['Avg ICIR'], loc='upper right')
-    
-    fig.subplots_adjust(bottom=0.3)
 
     plot_tail('Factor Industry IC & IR' , factor_name , benchmark , show , suptitle = False)
     return fig
@@ -257,7 +258,6 @@ def plot_ic_monotony(df : pd.DataFrame , factor_name : Optional[str] = None , be
     
     ax1.set_xticks([])
     ax2.set_xticks([])
-    fig.subplots_adjust(bottom=0.3)
 
     plot_tail('Factor Percentile Ret & IR' , factor_name , benchmark , show , suptitle = False)
     return fig
@@ -274,6 +274,8 @@ def plot_pnl(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark 
 
     ax.legend()
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x,p:f'{x:.2%}'))
+    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
+    ax.xaxis.set_tick_params(rotation=45)
     ax.grid()
 
     plot_tail('Factor Cummulative Long-Short PnL' , factor_name , benchmark , show , suptitle = False)

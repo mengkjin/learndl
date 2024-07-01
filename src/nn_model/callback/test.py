@@ -21,6 +21,7 @@ class DetailedAlphaAnalysis(CallBack):
         self.pred_dates = self.data.test_full_dates[::5]
 
     def append_preds(self):
+        if self.module.model_num != 0 or self.module.model_type != 'best': return # will only analyze the first best model 
         if self.batch_idx < self.module.batch_warm_up: return
         
         ij = self.batch_data.i.cpu()
@@ -36,25 +37,25 @@ class DetailedAlphaAnalysis(CallBack):
             pred = full_pred.mean(axis=-1)
         else:
             pred = full_pred[...,which_output]
-        factor_name = f'{self.module.model_num}@{self.module.model_type}'
+        factor_name = f'{self.config.model_module}'
         df = pd.DataFrame({'factor_name':factor_name,'secid':secid,'date':date,'values':pred})
         self.pred_dfs.append(df)
 
     def export_pred_df(self): 
-        path = f'{self.config.model_base_path}/analysis'
+        path = f'{self.config.model_base_path}/analysis_of_0_best'
         os.makedirs(path , exist_ok=True)
 
         df = pd.concat(self.pred_dfs)
         df.set_index(['secid','date']).to_feather(f'{path}/pred_df.feather')
         df = df.pivot_table('values',['secid','date'],'factor_name')
         self.logger.warning(f'Performing Factor and FMP test!')
-        fac_man = PerfManager.run_test(df , verbosity = 1)
-        fmp_man = FmpManager.run_test(df , verbosity = 1)
+        self.fac_man = PerfManager.run_test(df , verbosity = 1)
+        self.fmp_man = FmpManager.run_test(df , verbosity = 1)
         
-        rslts : dict[str , pd.DataFrame] = {f'fmp_{k}':v for k,v in fmp_man.get_rslts().items()}
-        rslts.update({f'factor_{k}':v for k,v in fac_man.get_rslts().items()})
-        figs : dict[str , Figure] = {f'fmp_{k}':v for k,v in fmp_man.get_figs().items()}
-        figs.update({f'factor_{k}':v for k,v in fac_man.get_figs().items()})
+        rslts : dict[str , pd.DataFrame] = {f'fmp_{k}':v for k,v in self.fmp_man.get_rslts().items()}
+        rslts.update({f'factor_{k}':v for k,v in self.fac_man.get_rslts().items()})
+        figs : dict[str , Figure] = {f'fmp_{k}':v for k,v in self.fmp_man.get_figs().items()}
+        figs.update({f'factor_{k}':v for k,v in self.fac_man.get_figs().items()})
 
         print(f'FMP test Result:')
         if 'fmp_prefix' in rslts.keys(): 
@@ -69,10 +70,10 @@ class DetailedAlphaAnalysis(CallBack):
                 for col in ['ir','calmar','turnover']:  df[col] = df[col].map(lambda x:f'{x:.3f}')
                 display(df)
 
-        dfs_to_excel(rslts , f'{path}_data.xlsx')
-        figs_to_pdf(figs , f'{path}_plot.pdf')
-        print(f'Analytic datas are saved to {path}_data.xlsx')
-        print(f'Analytic plots are saved to {path}_plot.pdf')
+        dfs_to_excel(rslts , f'{path}/data.xlsx')
+        figs_to_pdf(figs , f'{path}/plot.pdf')
+        print(f'Analytic datas are saved to {path}/data.xlsx')
+        print(f'Analytic plots are saved to {path}/plot.pdf')
 
     def on_test_start(self):     self.init_pred_df()
     def on_test_batch_end(self): self.append_preds()

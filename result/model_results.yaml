@@ -1627,3 +1627,27 @@
   0.best: Avg(0.0888)|Sum(3.11)|Std(0.147)|T(3.57)|IR(2.9595)
   0.swabest: Avg(0.0848)|Sum(2.97)|Std(0.1495)|T(3.36)|IR(2.7788)
   0.swalast: Avg(0.0888)|Sum(3.11)|Std(0.147)|T(3.57)|IR(2.9589)
+0_model: ple_gru_day_ShortTest(x1)
+1_start: Mon Jul  1 23:33:11 2024
+2_basic: short
+3_datas: day
+4_label: rtn_lag1_10,rtn_lag1_20
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 0.0 Secs
+7_test: Finish Process [Test], Cost 98.7 Secs
+8_result:
+  0.best: Avg(0.0888)|Sum(3.11)|Std(0.147)|T(3.57)|IR(2.9595)
+  0.swabest: Avg(0.0848)|Sum(2.97)|Std(0.1495)|T(3.36)|IR(2.7788)
+  0.swalast: Avg(0.0888)|Sum(3.11)|Std(0.147)|T(3.57)|IR(2.9589)
+0_model: ple_gru_day_ShortTest(x1)
+1_start: Mon Jul  1 23:47:05 2024
+2_basic: short
+3_datas: day
+4_label: rtn_lag1_10,rtn_lag1_20
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 0.0 Secs
+7_test: Finish Process [Test], Cost 99.6 Secs
+8_result:
+  0.best: Avg(0.0888)|Sum(3.11)|Std(0.147)|T(3.57)|IR(2.9595)
+  0.swabest: Avg(0.0848)|Sum(2.97)|Std(0.1495)|T(3.36)|IR(2.7788)
+  0.swalast: Avg(0.0888)|Sum(3.11)|Std(0.147)|T(3.57)|IR(2.9589)

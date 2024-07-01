@@ -17,7 +17,7 @@ plt.rcParams['font.family'] = ['monospace'] # ['sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
 
 def bm_order(bm_list):
-    order = [None] + AVAIL_BENCHMARKS
+    order = [None , 'default'] + AVAIL_BENCHMARKS
     new_bm_list = [bm for bm in order if bm in bm_list]
     return new_bm_list
 
@@ -62,7 +62,6 @@ def plot_tail(title_head : str , factor_name : Optional[str] = None , benchmark 
     title = f'{title_head} for [{factor_name}]'
     if benchmark: title += f' in {benchmark}'
     plt.suptitle(title , fontsize = 14) if suptitle else plt.title(title , fontsize = 14)
-    plt.xticks(rotation=45)  
     if not show: plt.close()
 
 def plot_table(df : pd.DataFrame , pct_cols = [] , flt_cols = [] , capitalize = True , 

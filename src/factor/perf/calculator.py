@@ -37,7 +37,7 @@ class BasePerfCalc(ABC):
         return self
     def plot(self , show = False): 
         figs = self.plotter()(self.calc_rslt , show = show) #  benchmark = self.benchmark_names
-        if isinstance(figs , Figure): figs = {'all':figs}
+        if isinstance(figs , Figure): figs = {f'{self.__class__.__name__}_all':figs}
         self.figs : dict[str,Figure] = figs #  benchmark = self.benchmark_names
         return self
     def save(self , path : str):
