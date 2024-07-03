@@ -1,4 +1,4 @@
-hidden_dim:     [32] #  2**5
+hidden_dim:     [32 , 32 , 32 , 32 , 32] #  2**5
 seqlens:        [{'day': 30 , '30m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
 dropout:        [0.1]
 enc_in:         [true]

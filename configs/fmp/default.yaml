@@ -1,5 +1,5 @@
 utility:
-  lambda: 200.0
+  lambda: 100.0
   trade_cost_rho: 0.001
 
 equity:
@@ -52,7 +52,7 @@ limitation:
   
 bound:
   abs:          [-0.01 , 0.1]
-  rel:          [-0.005 , 0.005]
+  rel:          [-0.01 , 0.01]
   por:          [null , null]
 
 industry:
@@ -70,7 +70,7 @@ style:
 component:
   bsizedev1:    [null , null]
   bsizedev2:    [null , null]
-  component:    [-0.4 , null]
+  component:    [-0.2 , null]
 
 turnover:
   double:       null
