@@ -4,8 +4,9 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal , Optional
 
-from ..basic import AVAIL_BENCHMARKS , EPS_WEIGHT , DATAVENDOR
+from ...basic.factor import AVAIL_BENCHMARKS , EPS_WEIGHT
 from ...data import DataBlock , get_target_dates , load_target_file
+from ...data.vendor import DATAVENDOR
 
 class Port:
     '''portfolio realization of one day'''

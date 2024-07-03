@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 from plottable import ColumnDefinition
@@ -182,7 +183,8 @@ def plot_fmp_prefix(df : pd.DataFrame , factor_name : Optional[str] = None , ben
     df , fig = plot_head(df , None , None)
 
     df = df.rename(columns={'factor_name':'factor'}).set_index('factor')
-    # df['benchmark'] = pd.Categorical(df['benchmark'], categories = ['default'] + AVAIL_BENCHMARKS, ordered=True)  
+    categories = np.array(['default'] + AVAIL_BENCHMARKS)
+    df['benchmark'] = pd.Categorical(df['benchmark'] , categories = categories[np.isin(categories , df['benchmark'])] , ordered=True) 
     df = df.sort_values(['factor','benchmark'])  
 
     plot_table(df , 

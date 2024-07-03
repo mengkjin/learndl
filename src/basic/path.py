@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Literal , Optional
 
 _SRC_DIR = os.path.dirname(os.path.abspath(__file__))
-_MAIN_DIR = os.path.dirname(_SRC_DIR)
+_MAIN_DIR = os.path.dirname(os.path.dirname(_SRC_DIR))
 
 @dataclass
 class CustomPath:

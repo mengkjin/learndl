@@ -30,8 +30,8 @@ def group_accounting(port_optim_tuples : PortOptimTuple | list[PortOptimTuple] ,
     return port_optim_tuples
 
 def accounting_fmp(portfolio : Portfolio , benchmark : Portfolio | Benchmark | Any = None ,
-                      start : int = -1 , end : int = 99991231 , daily = False , 
-                      analytic = True , attribution = True , trade_cost = TRADE_COST , verbosity : int = 1):
+                   start : int = -1 , end : int = 99991231 , daily = False , 
+                   analytic = True , attribution = True , trade_cost = TRADE_COST , verbosity : int = 1):
     '''
     Accounting portfolio through date, require at least portfolio
     '''
@@ -233,11 +233,13 @@ def calc_fmp_attrib_style(account : pd.DataFrame):
     return df.reset_index().rename(columns={'end':'trade_date'})
 
 def calc_fmp_prefix(account : pd.DataFrame):
-    group_cols = ['factor_name' , 'benchmark']
-    account['benchmark'] = pd.Categorical(account['benchmark'] , categories = ['default'] + AVAIL_BENCHMARKS, ordered=True) 
+    group_cols = ['factor_name' , 'benchmark'] 
     grouped = account[account['lag']==0].drop(columns=['lag']).groupby(group_cols)
     basic = pd.concat([grouped['start'].min() , grouped['end'].max()] , axis=1)
     stats = grouped.apply(eval_fmp_stats , include_groups=False).reset_index(group_cols).\
         reset_index(drop=True).set_index(group_cols)
     df = basic.join(stats).reset_index()
+    categories = np.array(['default'] + AVAIL_BENCHMARKS)
+    df['benchmark'] = pd.Categorical(df['benchmark'] , categories = categories[np.isin(categories , df['benchmark'])] , ordered=True) 
+    df = df.sort_values(group_cols)
     return df
