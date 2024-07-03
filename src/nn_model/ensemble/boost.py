@@ -5,7 +5,7 @@ from abc import ABC , abstractmethod
 from torch import nn , Tensor
 from typing import Any , Iterator , Literal , Optional
 
-from ..basic import BaseDataModule , BaseTrainer , BatchData , BatchOutput
+from ..classes import BaseDataModule , BaseTrainer , BatchData , BatchOutput
 from ...algo import BoosterData
 from ...algo.boost.lgbm import Lgbm
 

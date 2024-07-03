@@ -2,7 +2,19 @@
 basic variables in factor package
 '''
 
-from ...env import PATH , RISK_INDUS , RISK_STYLE
+from .path import PATH
+
+RISK_STYLE = [
+    'size','beta','momentum','residual_volatility','non_linear_size',
+    'book_to_price','liquidity','earnings_yield','growth','leverage'
+]
+RISK_INDUS = [
+    'petro', 'coal', 'nonferrous', 'utility', 'public', 'steel', 'chemical', 'construct', 
+    'cement', 'material', 'light', 'machine', 'power', 'defense', 'auto', 'retail', 'leisure', 
+    'appliance', 'textile', 'health', 'liqor', 'food', 'agro', 'bank', 'financial', 'estate', 
+    'transport', 'marine', 'airline', 'electronic', 'telecom', 'hardware', 'software', 'media', 'complex'
+]
+
 RISK_COMMON = ['market'] + RISK_INDUS + RISK_STYLE
 AVAIL_BENCHMARKS = ['csi300' , 'csi500' , 'csi800' , 'csi1000'] 
 DEFAULT_BENCHMARKS = ['csi300' , 'csi500' , 'csi1000']

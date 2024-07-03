@@ -8,12 +8,12 @@
 import torch
 
 from .data_module import NetDataModule , BoosterDataModule
-from ..basic import BaseTrainer , BoosterData
+from ..classes import BaseTrainer , BoosterData
 from ..callback import CallBackManager
 from ..ensemble import Booster , ModelEnsembler
 from ..util import (Checkpoint , Deposition , Device , Logger , Metrics , Optimizer , TrainConfig)
 
-from ...env import BOOSTER_MODULE , REG_MODELS , THIS_IS_SERVER
+from ...basic import BOOSTER_MODULE , REG_MODELS , THIS_IS_SERVER
 from ...func import BigTimer
 
 class Trainer(BaseTrainer):

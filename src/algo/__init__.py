@@ -1,2 +1,2 @@
 from . import boost , deap
-from .basic import *
+from .classes import BoosterData

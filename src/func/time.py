@@ -5,7 +5,7 @@ import numpy as np
 from datetime import date , datetime , timedelta
 from typing import Any , Callable
 
-from ..env import CONF
+from ..basic import CONF
 
 def today(offset = 0 , astype : Any = int):
     d = datetime.today() + timedelta(days=offset)

@@ -2,7 +2,7 @@ from typing import Optional
 from ..trainer import NetDataModule
 from ..util import TrainConfig
 from ...data import DataProcessor , DataUpdater
-from ...env import THIS_IS_SERVER
+from ...basic import THIS_IS_SERVER
 
 class DataAPI:
     @staticmethod

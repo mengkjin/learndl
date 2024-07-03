@@ -5,8 +5,8 @@ from matplotlib.axes import Axes
 from matplotlib.ticker import FuncFormatter
 from typing import Any , Optional
 
-from ..basic import AVAIL_BENCHMARKS
 from ..util.plot import multi_factor_plot , plot_head , plot_tail , plot_table , plot_xaxis
+from ...basic import AVAIL_BENCHMARKS
 
 @multi_factor_plot
 def plot_fmp_perf_lag(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):

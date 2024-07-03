@@ -7,7 +7,7 @@ from typing import Any , Literal , Optional
 from .solver import MosekSolver , CvxpySolver
 from .util import Accuarcy , PortfolioOptimizerInput , SolverInput , Utility
 from ..util import Analytic , Port , AlphaModel , Amodel , Portfolio , Benchmark
-from ...env import PATH
+from ...basic import PATH
 
 @dataclass
 class PortfolioOptimizer:

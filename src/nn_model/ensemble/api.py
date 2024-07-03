@@ -6,9 +6,9 @@ from typing import Any , Optional
 from .boost import choose_booster , LgbmEnsembler
 from .net import choose_ensembler
 from ..nn import GetNN
-from ..basic import BaseDataModule , BaseTrainer , ModelDict , ModelFile
+from ..classes import BaseDataModule , BaseTrainer , ModelDict , ModelFile
 from ..util import Checkpoint , Metrics , TrainConfig
-from ...env import BOOSTER_MODULE
+from ...basic import BOOSTER_MODULE
 
 class ModelEnsembler(ABC):
     '''a group of ensemble models , of same net structure'''

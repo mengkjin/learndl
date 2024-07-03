@@ -7,7 +7,7 @@ from typing import Any , ClassVar , Literal , Optional
 from dataclasses import dataclass
 
 from ...func import match_values
-from ...data.basic import NdData
+from ...data.classes import NdData
 
 @dataclass
 class BoosterData:

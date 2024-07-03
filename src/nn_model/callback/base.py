@@ -1,7 +1,7 @@
 import logging
 
+from ..classes import BaseCB , TrainerStatus , BaseDataModule , BaseTrainer
 from ..util import Checkpoint , Metrics , TrainConfig
-from ..basic import BaseCB , TrainerStatus , BaseDataModule , BaseTrainer
 
 class CallBack(BaseCB):
     def __init__(self , model_module : BaseTrainer , with_cb : bool , print_info = True , *args , **kwargs) -> None:

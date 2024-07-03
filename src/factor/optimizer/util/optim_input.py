@@ -18,7 +18,7 @@ from .input_creator import (
     create_input_bnd_con , create_input_lin_con , create_input_turn_con ,
     create_input_cov_con ,  create_input_short_con
 )
-from ...basic.var import DEFAULT_OPT_CONFIG
+from ....basic.factor import DEFAULT_OPT_CONFIG
 class PortfolioOptimizerInput:
     def __init__(
         self , 

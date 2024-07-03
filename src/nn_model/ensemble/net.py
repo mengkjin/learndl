@@ -6,8 +6,8 @@ from copy import deepcopy
 from torch import nn
 from torch.optim.swa_utils import AveragedModel , update_bn
 
+from ..classes import BaseTrainer , BatchData
 from ..util import Metrics , Checkpoint
-from ..basic import BaseTrainer , BatchData
 
 def choose_ensembler(model_type):
     '''get a subclass of _BaseEnsembler'''

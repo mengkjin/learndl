@@ -5,8 +5,8 @@ from dataclasses import dataclass , field
 from typing import Any , ClassVar , Literal , Optional
 
 from ..nn import get_nn_category , get_nn_datatype
+from ...basic import PATH , BOOSTER_MODULE
 from ...func import pretty_print_dict , recur_update
-from ...env import PATH , BOOSTER_MODULE
 
 def check_config_validity(config : 'TrainConfig'):
     assert socket.gethostname() == 'mengkjin-server' or config.short_test , socket.gethostname()

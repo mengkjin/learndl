@@ -1,4 +1,4 @@
-from ..basic import BaseBuffer
+from ..classes import BaseBuffer
 
 class BufferSpace(BaseBuffer):
     '''dynamic buffer space for some module to use (tra), can be updated at each batch / epoch '''

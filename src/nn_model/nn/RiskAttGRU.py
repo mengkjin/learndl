@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from src.env import RISK_INDUS , RISK_STYLE
-from src.nn_model.nn import layer as Layer
+from . import layer as Layer
+from ...basic import RISK_INDUS , RISK_STYLE
 
 __all__ = ['risk_att_gru']
 

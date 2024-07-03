@@ -7,7 +7,7 @@ from torch import Tensor
 from typing import Any , Iterator , Optional
 
 from .core import BlockLoader , DataBlock , data_type_abbr
-from ..env import RISK_STYLE , RISK_INDUS
+from ..basic import RISK_STYLE , RISK_INDUS
 from ..func.time import Timer
 from ..func.primas import neutralize_2d , process_factor
 

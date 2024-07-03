@@ -4,8 +4,8 @@ import re
 from dataclasses import dataclass , field
 from typing import Any , Callable
 
-from ..basic import DB_BY_DATE , DB_BY_NAME , get_target_path , get_source_dates , get_target_dates
 from .fetcher_R import RFetcher
+from ...basic.db import DB_BY_DATE , DB_BY_NAME , get_target_path , get_source_dates , get_target_dates
 
 # %%
 # def stime(compact = False): return time.strftime('%y%m%d%H%M%S' if compact else '%Y-%m-%d %H:%M:%S',time.localtime())

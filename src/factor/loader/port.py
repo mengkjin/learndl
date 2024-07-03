@@ -1,1 +1,1 @@
-from ..basic import DATAVENDOR
+from ...data.vendor import DATAVENDOR

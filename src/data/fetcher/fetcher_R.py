@@ -4,7 +4,8 @@ import numpy as np
 
 from typing import Any , Literal , Optional
 
-from ..basic import FailedData , list_files , R_path_date
+from ..classes import FailedData 
+from ...basic.db import list_files , R_path_date
 
 class RFetcher:
     '''Fetch data from R environment'''

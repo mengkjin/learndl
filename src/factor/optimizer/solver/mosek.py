@@ -5,7 +5,7 @@ from typing import Any , Literal
 
 from ..util import SolverInput , SolveCond , SolveVars
 
-from ...basic.var import SYMBOL_INF as INF
+from ....basic.factor import SYMBOL_INF as INF
 
 _SOLVER_PARAM = {}
 

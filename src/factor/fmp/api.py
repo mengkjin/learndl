@@ -8,12 +8,11 @@ from typing import Any , Optional
 from . import calculator as Calc
 from .builder import group_optimize
 from .stat import group_accounting , calc_fmp_account
-from ..basic import DEFAULT_BENCHMARKS
 from ..loader import factor
 from ..util import Benchmark , AlphaModel
+from ...basic import PATH , DEFAULT_BENCHMARKS
 from ...data import DataBlock
 from ...func import dfs_to_excel , figs_to_pdf
-from ...env import PATH
 
 @dataclass
 class FmpManager:

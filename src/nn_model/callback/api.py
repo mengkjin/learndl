@@ -1,9 +1,9 @@
 from typing import Any , Optional
 
 from . import base , display, train , test , nnspecific
-from ..basic import BaseTrainer
+from ..classes import BaseTrainer
 from ..util import TrainConfig
-from ...env import BOOSTER_MODULE
+from ...basic import BOOSTER_MODULE
 
 SEARCH_MODS = [train , display , test]
 BOOSTER_AVAILABLE_CALLBACKS = ['StatusDisplay' , 'DetailedAlphaAnalysis']

@@ -3,7 +3,7 @@ import logging
 import colorlog
 # from logging import handlers , RootLogger
 
-from ...env import PATH
+from ...basic import PATH
 
 class Logger(logging.RootLogger):
     '''custom colored log , config at {PATH.conf}/logger.yaml '''

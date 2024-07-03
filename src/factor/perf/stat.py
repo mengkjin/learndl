@@ -4,9 +4,9 @@ import pandas as pd
 
 from typing import Any , Literal , Optional
 
-from ..basic import DATAVENDOR 
 from ..util import Benchmark
 from ...data import DataBlock
+from ...data.vendor import DATAVENDOR 
 
 def factor_val_breakdown(factor_val : DataBlock | pd.DataFrame , 
                          benchmark : Optional[Benchmark] = None):

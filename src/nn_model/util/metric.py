@@ -8,9 +8,9 @@ from torch import nn , no_grad , Tensor
 from typing import Any , Literal , Optional
 
 from .config import TrainConfig
-from ..basic import BatchData , BatchMetric , BatchOutput , MetricList , TrainerStatus
+from ..classes import BatchData , BatchMetric , BatchOutput , MetricList , TrainerStatus
 from ..nn import get_nn_category , get_multiloss_params
-from ...env import BOOSTER_MODULE
+from ...basic import BOOSTER_MODULE
 from ...func import mse , pearson , ccc , spearman
 
 DISPLAY_CHECK  = True # will display once if true

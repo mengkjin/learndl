@@ -7,10 +7,10 @@ from torch import Tensor
 from torch.utils.data import BatchSampler
 from typing import Any , Iterator , Literal , Optional
 
-from ..basic import BaseDataModule , BatchData , BoosterData
+from ..classes import BaseDataModule , BatchData , BoosterData
 from ..util import BufferSpace , DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig
 from ...data import DataBlockNorm , DataProcessor , ModuleData
-from ...env import PATH , CONF
+from ...basic import PATH , CONF
 from ...func import tensor_standardize_and_weight , match_values
 
 class DataModule(BaseDataModule):

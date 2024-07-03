@@ -5,10 +5,10 @@ import statsmodels.api as sm
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
-from .model import GeneralModel
-from .port import Port
-from ..basic import DATAVENDOR , RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
+from ..classes import GeneralModel , Port
+from ...basic.factor import RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
 from ...data import GetData, BlockLoader , FrameLoader , get_target_dates , load_target_file
+from ...data.vendor import DATAVENDOR
 
 @dataclass
 class Rmodel:

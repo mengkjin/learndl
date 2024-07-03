@@ -5,8 +5,8 @@ import numpy as np
 from dataclasses import dataclass , field
 from typing import Any , Literal
 
-from ..util import AlphaModel , RISK_MODEL , Portfolio , Benchmark
 from ..optimizer.api import PortfolioOptimizer , PortOptimResult
+from ..util import AlphaModel , RISK_MODEL , Portfolio , Benchmark
 
 @dataclass
 class PortOptimTuple:

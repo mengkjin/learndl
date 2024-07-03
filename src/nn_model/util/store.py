@@ -5,8 +5,8 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal
 
-from ..basic import ModelDict , ModelFile
 from .config import TrainConfig
+from ..classes import ModelDict , ModelFile
 from ...func.basic import Filtered
 
 class Storage:

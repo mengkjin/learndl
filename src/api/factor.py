@@ -1,6 +1,6 @@
 from ..factor.perf.api import PerfManager
 from ..factor.fmp.api import FmpManager
-from ..env import PATH
+from ..basic import PATH
 
 def perf_test():
     pm = PerfManager.random_test(nfactor=1)

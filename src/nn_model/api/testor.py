@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from torch import nn , Tensor
 
-from ..basic import BatchData , BatchOutput
+from ..classes import BatchData , BatchOutput
 from ..trainer import NetDataModule
 from ..ensemble import ModelEnsembler
 from ..util import TrainConfig , Metrics

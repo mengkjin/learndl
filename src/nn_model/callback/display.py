@@ -8,7 +8,7 @@ from typing import Any , Callable , ClassVar , Optional
 
 from .base import CallBack
 from ..util.loader import LoaderWrapper
-from ...env import PATH
+from ...basic import PATH
 
 class CallbackTimer(CallBack):
     '''record time cost of callback hooks'''

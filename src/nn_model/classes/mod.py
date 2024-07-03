@@ -5,7 +5,7 @@ from logging import Logger
 from torch import nn , Tensor
 from typing import Any , Callable , final , Iterable , Iterator , Literal , Optional
 
-from .classes import BatchData , BatchOutput , TrainerStatus
+from .util import BatchData , BatchOutput , TrainerStatus
 from ...algo import BoosterData
 
 class BaseCB:
