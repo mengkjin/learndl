@@ -3,38 +3,44 @@ import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
-from typing import ClassVar , Literal , Optional
+from typing import Any , ClassVar , Literal , Optional
 
 from ..basic import BatchOutput
 from ..trainer import NetDataModule
 from ..ensemble import ModelEnsembler
 from ..util import Deposition , Device , TrainConfig
 from ...data import GetData
-from ...env import PATH , CONF , THIS_IS_SERVER , REG_MODELS , FACTOR_DESTINATION
+from ...env import RegModel , PATH , CONF , THIS_IS_SERVER , REG_MODELS , FACTOR_DESTINATION
 from ...func import today , date_offset
-
 
 @dataclass
 class Predictor:
     '''for a model to predict recent/history data'''
-    model_name : str
-    model_type : Literal['best' , 'swalast' , 'swabest'] = 'swalast'
-    model_num  : int = 0
-    alias : Optional[str] = None
-    df    : Optional[pd.DataFrame] = None
+    reg_model : RegModel
 
     SECID_COLS : ClassVar[str] = 'secid'
     DATE_COLS  : ClassVar[str] = 'date'
 
     def __post_init__(self):
-        if self.alias is None: self.alias = self.model_name
+        self.model_name = self.reg_model.name
+        self.model_type = self.reg_model.type
+        self.alias = self.reg_model.alias if self.reg_model.alias else self.model_name
+
+        if self.reg_model.num == 'all': 
+            self.model_nums = self.reg_model.model_nums
+        elif isinstance(self.reg_model.num , int): 
+            self.model_nums = [self.reg_model.num]
+        else:
+            self.model_nums = list(self.reg_model.num)
+
+        self.df = pd.DataFrame()
 
     @classmethod
     def update_factors(cls , silent = True):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         if THIS_IS_SERVER: return
         for model in REG_MODELS:
-            md = cls(model.name, model.type , model.num , model.alias)
+            md = cls(model)
             CONF.SILENT = True
             md.get_df().deploy()
             CONF.SILENT = False
@@ -77,8 +83,7 @@ class Predictor:
         device       = Device()
         model_config = TrainConfig.load(f'{PATH.model}/{self.model_name}')
         deposition   = Deposition(model_config)
-        model_param  = model_config.model_param[self.model_num]
-        model_dates  = deposition.model_dates(self.model_num , self.model_type)
+        model_dates  = self.reg_model.model_dates 
         start_dt     = max(start_dt , int(date_offset(min(model_dates) ,1)))
 
         data_mod_old = NetDataModule(model_config , False).load_data() if start_dt <= today(-100) else None
@@ -94,29 +99,34 @@ class Predictor:
         for data in [data_mod_old , data_mod_new]:
             if data is None: continue
             assert isinstance(data , NetDataModule)
+            
             for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
-                # print(model_date , 'old' if (data is data_mod_old) else 'new') 
-                assert isinstance(model_date , int) , model_date
-                data.setup('predict' ,  model_param , model_date)
-                model = deposition.load_model(model_date , self.model_num , self.model_type)
+                for model_num in self.model_nums:
+                    model_param = model_config.model_param[model_num]
+                    # print(model_date , 'old' if (data is data_mod_old) else 'new') 
+                    assert isinstance(model_date , int) , model_date
+                    data.setup('predict' ,  model_param , model_date)
+                    model = deposition.load_model(model_date , model_num , self.model_type)
 
-                net = ModelEnsembler.get_net(model_config.model_module , model_param , model['state_dict'] , device)
-                net.eval()
+                    net = ModelEnsembler.get_net(model_config.model_module , model_param , model['state_dict'] , device)
+                    net.eval()
 
-                loader = data.predict_dataloader()
-                secid  = data.datas.secid
-                tdates = data.model_test_dates
-                iter_tdates = np.intersect1d(df_sub['pred_dates'][df_sub['calculated'] == 0] , tdates)
+                    loader = data.predict_dataloader()
+                    secid  = data.datas.secid
+                    tdates = data.model_test_dates
+                    iter_tdates = np.intersect1d(df_sub['pred_dates'][df_sub['calculated'] == 0] , tdates)
 
-                for tdate in iter_tdates:
-                    batch_data = loader[np.where(tdates == tdate)[0][0]]
+                    for tdate in iter_tdates:
+                        batch_data = loader[np.where(tdates == tdate)[0][0]]
 
-                    pred = BatchOutput(net(batch_data.x)).pred
-                    if len(pred) == 0: continue
-                    df = pd.DataFrame({'secid' : secid[batch_data.i[:,0].cpu().numpy()] , 'date' : tdate , 
-                                        self.model_name : pred.cpu().flatten().numpy()})
-                    df_list.append(df)
-                    df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
+                        pred = BatchOutput(net(batch_data.x)).pred
+                        if len(pred) == 0: continue
+                        df = pd.DataFrame({'model_num':model_num , 'date' : tdate , 
+                                           'secid' : secid[batch_data.i[:,0].cpu().numpy()] , 
+                                            self.model_name : pred.cpu().flatten().numpy()})
+                        df_list.append(df)
+                        df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
         torch.set_grad_enabled(True)
         del data_mod_new , data_mod_old
-        return pd.concat(df_list , axis = 0)
+        df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
+        return df

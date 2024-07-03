@@ -73,8 +73,8 @@ class PortfolioOptimizerInput:
 
         self.benchmark = benchmark
         self.benchmark_port : Port | Any = None
-        self.w0  : np.ndarray | Any = None
-        self.wb  : np.ndarray | Any = None
+        self.w0 : np.ndarray | Any = None
+        self.wb : np.ndarray | Any = None
 
         self.eq     = create_input_eq(self)
         self.wb     = create_input_benchmark(self)

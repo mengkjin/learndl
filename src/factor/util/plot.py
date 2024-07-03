@@ -2,6 +2,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from packaging import version
 from plottable import Table , ColumnDefinition
@@ -92,3 +93,8 @@ def plot_table(df : pd.DataFrame , pct_cols = [] , flt_cols = [] , capitalize = 
             row_i += r
     if emph_last_row: rows[-1].set_facecolor('b') #'#82cafc'
     return tab
+
+def plot_xaxis(ax : Axes , index : Any = None , num_ticks : int = 10):
+    if index is not None:  ax.set_xticks(index[::max(1,len(index)//num_ticks)])
+    ax.grid()
+    ax.xaxis.set_tick_params(rotation=45)

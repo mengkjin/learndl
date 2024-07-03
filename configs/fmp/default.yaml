@@ -47,11 +47,12 @@ limitation:
   kcb_no_buy:       false
   kcb_no_sell:      false
   no_st:            true
+  list_days:        63
   te_constraint:    null
-
+  
 bound:
   abs:          [-0.01 , 0.1]
-  rel:          [-0.01 , 0.01]
+  rel:          [-0.005 , 0.005]
   por:          [null , null]
 
 industry:

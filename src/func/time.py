@@ -37,6 +37,7 @@ def date_seg(start_dt , end_dt , freq='Q' , astype : Any = int):
     dt_ends = [*dt_list[:-1] , date_offset(end_dt)]
     return [(astype(s),astype(e)) for s,e in zip(dt_starts , dt_ends)]
 
+
 class Timer:
     '''simple timer to print out time'''
     def __init__(self , *args , newline = False): 

@@ -4,7 +4,7 @@ import pandas as pd
 
 from IPython.display import display
 from matplotlib.figure import Figure
-from typing import Any
+from typing import Any , Literal
 
 from .base import CallBack
 from ...factor.perf.api import PerfManager
@@ -13,15 +13,17 @@ from ...func import dfs_to_excel , figs_to_pdf
 
 class DetailedAlphaAnalysis(CallBack):
     '''record and concat each model to Alpha model instance'''
-    def __init__(self , model_module) -> None:
+    def __init__(self , model_module , which_alpha : Literal['first' , 'avg'] = 'avg') -> None:
         super().__init__(model_module , with_cb=False)
+        assert which_alpha in ['first' , 'avg'] , which_alpha
+        self._which_alpha = which_alpha
 
     def init_pred_df(self):
         self.pred_dfs : list[pd.DataFrame] = []
         self.pred_dates = self.data.test_full_dates[::5]
 
     def append_preds(self):
-        if self.module.model_num != 0 or self.module.model_type != 'best': return # will only analyze the first best model 
+        if self.module.model_num != 0 and self._which_alpha == 'first' : return 
         if self.batch_idx < self.module.batch_warm_up: return
         
         ij = self.batch_data.i.cpu()
@@ -37,17 +39,22 @@ class DetailedAlphaAnalysis(CallBack):
             pred = full_pred.mean(axis=-1)
         else:
             pred = full_pred[...,which_output]
-        factor_name = f'{self.config.model_module}'
-        df = pd.DataFrame({'factor_name':factor_name,'secid':secid,'date':date,'values':pred})
+        df = pd.DataFrame({'model_num':self.module.model_num,
+                           'model_type':self.module.model_type,
+                           'secid':secid,'date':date,'values':pred})
         self.pred_dfs.append(df)
 
     def export_pred_df(self): 
-        path = f'{self.config.model_base_path}/analysis_of_0_best'
+        path = f'{self.config.model_base_path}/detailed_analysis'
         os.makedirs(path , exist_ok=True)
 
         df = pd.concat(self.pred_dfs)
+        if self._which_alpha == 'first':
+            df = df[df['model_num'] == 0]
+        else:
+            df = df.groupby(['date','secid','model_type'])['values'].mean().reset_index()
         df.set_index(['secid','date']).to_feather(f'{path}/pred_df.feather')
-        df = df.pivot_table('values',['secid','date'],'factor_name')
+        df = df.rename(columns={'model_type':'factor_name'}).pivot_table('values',['secid','date'],'factor_name')
         self.logger.warning(f'Performing Factor and FMP test!')
         self.fac_man = PerfManager.run_test(df , verbosity = 1)
         self.fmp_man = FmpManager.run_test(df , verbosity = 1)

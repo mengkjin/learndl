@@ -5,7 +5,7 @@ import numpy as np
 from typing import Any , Literal
 
 from .builder import PortOptimTuple
-from ..basic import DATAVENDOR , ROUNDING_RETURN , ROUNDING_TURNOVER , TRADE_COST
+from ..basic import DATAVENDOR , ROUNDING_RETURN , ROUNDING_TURNOVER , TRADE_COST , AVAIL_BENCHMARKS
 from ..util import RISK_MODEL , Portfolio , Benchmark , Port
 from ...func import date_diff
 
@@ -232,7 +232,10 @@ def calc_fmp_attrib_style(account : pd.DataFrame):
 
 def calc_fmp_prefix(account : pd.DataFrame):
     group_cols = ['factor_name' , 'benchmark']
+    account['benchmark'] = pd.Categorical(account['benchmark'] , categories = ['default'] + AVAIL_BENCHMARKS, ordered=True) 
     grouped = account[account['lag']==0].drop(columns=['lag']).groupby(group_cols)
     basic = pd.concat([grouped['start'].min() , grouped['end'].max()] , axis=1)
-    stats = grouped.apply(eval_fmp_stats , include_groups=False).reset_index(group_cols).reset_index(drop=True).set_index(group_cols)
-    return basic.join(stats).reset_index()
+    stats = grouped.apply(eval_fmp_stats , include_groups=False).reset_index(group_cols).\
+        reset_index(drop=True).set_index(group_cols)
+    df = basic.join(stats).reset_index()
+    return df

@@ -6,7 +6,7 @@ from matplotlib.ticker import FuncFormatter
 from typing import Any , Optional
 
 from ..basic import AVAIL_BENCHMARKS
-from ..util.plot import multi_factor_plot , plot_head , plot_tail , plot_table
+from ..util.plot import multi_factor_plot , plot_head , plot_tail , plot_table , plot_xaxis
 
 @multi_factor_plot
 def plot_fmp_perf_lag(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
@@ -16,13 +16,9 @@ def plot_fmp_perf_lag(df : pd.DataFrame , factor_name : Optional[str] = None , b
     df = df.set_index('trade_date')
     for col in df.columns: 
         if col != 'lag_cost': ax.plot(df.index , df[col], label=col)
-    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
-    ax.xaxis.set_tick_params(rotation=45)
-    ax.grid()
-
-    ax.grid()
     ax.legend(loc = 'upper left')
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))
+    plot_xaxis(ax , df.index)
 
     if 'lag_cost' in df.columns:
         ax2 : Axes | Any = ax.twinx()  
@@ -70,9 +66,7 @@ def plot_fmp_perf_curve(df : pd.DataFrame , factor_name : Optional[str] = None ,
     ax1.tick_params('y', colors='b')  
     ax1.legend(loc='upper left')  
     ax1.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))  
-    ax1.set_xticks(df.index[::max(1,len(df.index)//10)])
-    ax1.xaxis.set_tick_params(rotation=45)
-    ax1.grid()
+    plot_xaxis(ax1 , df.index)
 
     ax2 : Axes | Any = ax1.twinx()  
     ax2.plot(df.index, df['excess'], 'r-', )
@@ -98,9 +92,7 @@ def plot_fmp_perf_drawdown(df : pd.DataFrame , factor_name : Optional[str] = Non
     ax1.tick_params('y', colors='b')  
     ax1.legend(loc='upper left')  
     ax1.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))  
-    ax1.set_xticks(df.index[::max(1,len(df.index)//10)])
-    ax1.xaxis.set_tick_params(rotation=45)
-    ax1.grid()
+    plot_xaxis(ax1 , df.index)
 
     ax2 : Axes | Any = ax1.twinx()  
     ax2.plot(df.index, df['drawdown'], 'g', )
@@ -164,11 +156,9 @@ def plot_fmp_attrib_source(df : pd.DataFrame , factor_name : Optional[str] = Non
     df = df.set_index('trade_date').round(6)
     for col in ['tot' , 'market' , 'industry' , 'style' , 'specific' , 'cost']: 
         ax.plot(df.index , df[col], label=col)
-    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
-    ax.xaxis.set_tick_params(rotation=45)
-    ax.grid()
     ax.legend(loc = 'upper left')
-    ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))
+    ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))   
+    plot_xaxis(ax , df.index)
     plot_tail(f'FMP Cumulative Attribution' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -178,13 +168,13 @@ def plot_fmp_attrib_style(df : pd.DataFrame , factor_name : Optional[str] = None
 
     ax = fig.add_subplot(111)
     df = df.set_index('trade_date').round(6)
-    for col in df.columns: 
-        ax.plot(df.index , df[col], label=col)
-    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
-    ax.xaxis.set_tick_params(rotation=45)
-    ax.grid()
+
+    [ax.plot(df.index , df[col], label=col) for col in df.columns]
+    
     ax.legend(loc = 'upper left')
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.2%}'))
+    plot_xaxis(ax , df.index)
+
     plot_tail(f'FMP Cumulative Attribution' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -192,7 +182,7 @@ def plot_fmp_prefix(df : pd.DataFrame , factor_name : Optional[str] = None , ben
     df , fig = plot_head(df , None , None)
 
     df = df.rename(columns={'factor_name':'factor'}).set_index('factor')
-    df['benchmark'] = pd.Categorical(df['benchmark'], categories = ['default'] + AVAIL_BENCHMARKS, ordered=True)  
+    # df['benchmark'] = pd.Categorical(df['benchmark'], categories = ['default'] + AVAIL_BENCHMARKS, ordered=True)  
     df = df.sort_values(['factor','benchmark'])  
 
     plot_table(df , 

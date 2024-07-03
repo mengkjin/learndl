@@ -5,7 +5,7 @@ from matplotlib.axes import Axes
 from matplotlib.ticker import FuncFormatter
 from typing import Any , Literal , Optional
 
-from ..util.plot import CURRENT_SEABORN_VERSION , multi_factor_plot , plot_head , plot_tail , plot_table
+from ..util.plot import CURRENT_SEABORN_VERSION , multi_factor_plot , plot_head , plot_tail , plot_table , plot_xaxis
 
 @multi_factor_plot
 def plot_decay_ic(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
@@ -17,9 +17,7 @@ def plot_decay_ic(df : pd.DataFrame , factor_name : Optional[str] = None , bench
         height = bar.get_height()
         ax.text(bar.get_x() + bar.get_width() / 2 , height ,
                  f'{height:.4f}' , ha = 'center' , va = 'top' if height < 0 else 'bottom')
-    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
-    ax.xaxis.set_tick_params(rotation=45)
-    ax.grid()
+    plot_xaxis(ax , df.index)
     plot_tail(f'Factor Average IC Decay' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -38,8 +36,7 @@ def plot_decay_grp_perf(df : pd.DataFrame , factor_name : Optional[str] = None ,
         ax.legend(handles=handles[0:], labels=labels[0:])
     #ax.set_title(f'Groups {stat_type.upper()} Decay for [{factor_name}]') 
     ax.legend(loc='upper left')
-    ax.grid()
-    ax.xaxis.set_tick_params(rotation=45)
+    plot_xaxis(ax , None)
     plot_tail(f'Factor Groups {stat_type.upper()} Decay' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -61,7 +58,7 @@ def plot_grp_perf(df : pd.DataFrame , factor_name : Optional[str] = None , bench
     df = df.assign(date = df['end'].astype(str)).loc[:,['date','group','group_ret']]
     df = pd.concat([df_0 , df]).set_index(['date', 'group']).\
         groupby('group' , observed=False)['group_ret'].\
-        cumsum().rename('cum_ret').reset_index()
+        cumsum().rename('cum_ret').reset_index().set_index('date')
 
     if CURRENT_SEABORN_VERSION:
         ax = sns.lineplot(x='date', y='cum_ret', hue='group', data=df,
@@ -71,8 +68,7 @@ def plot_grp_perf(df : pd.DataFrame , factor_name : Optional[str] = None , bench
     handles, labels = ax.get_legend_handles_labels()
     ax.legend(handles=handles[0:], labels=labels[0:], loc='upper left')
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x,p:f'{x:.2%}'))
-    ax.grid()
-    ax.xaxis.set_tick_params(rotation=45)
+    plot_xaxis(ax , df.index)
     plot_tail(f'Factor Group CumReturn' , factor_name , benchmark , show , suptitle = False)
     return fig
     
@@ -85,8 +81,7 @@ def plot_style_corr_box(df : pd.DataFrame , factor_name : Optional[str] = None ,
     df = df.stack().rename('factor_corr').reset_index(drop=False) # type: ignore
 
     ax = sns.boxplot(x='style_factor', y='factor_corr', data=df, width=0.3)
-    ax.grid()
-    ax.xaxis.set_tick_params(rotation=45)
+    plot_xaxis(ax , None)
     plot_tail(f'Factor Corr with Risk Styles' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -97,9 +92,7 @@ def plot_style_corr(df : pd.DataFrame , factor_name : Optional[str] = None , ben
     df = df.set_index(['date'])
     ax = fig.add_subplot(111)
     for style in df.columns.tolist(): ax.plot(df.index , df[style], label=style)
-    ax.grid()
-    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
-    ax.xaxis.set_tick_params(rotation=45)
+    plot_xaxis(ax , df.index)
     plot_tail(f'Factor Corr Curve with Risk Styles' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -118,11 +111,10 @@ def plot_distribution(df : pd.DataFrame , factor_name : Optional[str] = None , b
         ax.bar(x=bins[:-1] + np.diff(bins) / 2, height=cnts, width=np.diff(bins), color='b' , alpha = 0.5)
         ax.yaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.0%}'))
         ax.yaxis.set_tick_params(labelsize = 8 , length = 0)
-        # ax.yaxis.set_ticks_position('left')
         ax.xaxis.set_major_formatter(FuncFormatter(lambda x,y:f'{x:.1f}'))
         ax.xaxis.set_tick_params(labelsize = 8 , length = 0)
         ax.set_title(str(day_df['date']))
-    fig.subplots_adjust(hspace=0.3)
+    # fig.subplots_adjust(hspace=0.3)
     plot_tail(f'Factor Cross-Sectional Distribution' , factor_name , benchmark , show , suptitle = True)
     return fig
 
@@ -131,13 +123,13 @@ def plot_factor_qtile(df : pd.DataFrame , factor_name : Optional[str] = None , b
     df , fig = plot_head(df , factor_name , benchmark)
 
     df.columns.rename('quantile_name', inplace=True)
-    df = df.set_index('date').stack().rename('quantile_value').reset_index(drop=False) # type: ignore
+    df = df.set_index('date').stack().rename('quantile_value').reset_index().set_index('date') # type: ignore
     # df = df.assign(date=pd.to_datetime(df['date'].astype(str)), format='%Y%m%d')
 
     ax = sns.lineplot(x='date', y='quantile_value', hue='quantile_name', data=df)
     handles, labels = ax.get_legend_handles_labels()
     ax.legend(handles=handles[0:], labels=labels[0:], loc='upper left')
-    ax.grid()
+    plot_xaxis(ax , df.index)
     plot_tail(f'Factor Cross-Sectional Quantile' , factor_name , benchmark , show , suptitle = False)
     return fig
 
@@ -185,9 +177,7 @@ def plot_ic_curve(df : pd.DataFrame , factor_name : Optional[str] = None , bench
     for col in df.columns.tolist():
         if col.startswith('ma_'): ax1.plot(df.index, df[col], color=colors.pop(0) , label=col)  
     ax1.legend(loc='upper left')  
-    ax1.set_xticks(df.index[::max(1,len(df.index)//10)])
-    ax1.xaxis.set_tick_params(rotation=45)
-    ax1.grid()
+    plot_xaxis(ax1 , df.index)
 
     ax2 : Axes | Any = ax1.twinx()  
     ax2.plot(df.index, df['cum_ic'], 'r-', label='Cum IC (right)')  
@@ -215,8 +205,7 @@ def plot_industry_ic(df : pd.DataFrame , factor_name : Optional[str] = None , be
     ax1.spines['right'].set_visible(False)
     ax1.spines['top'].set_visible(False)
     ax1.legend(['Avg IC'], loc='upper left')
-    ax1.xaxis.set_tick_params(rotation=45)  
-    ax1.grid()
+    plot_xaxis(ax1 , None)
 
     ax2 : Axes | Any = ax1.twinx()
     ax2.plot(df['industry'], df['ICIR'], 'r-')
@@ -233,8 +222,7 @@ def plot_industry_ic(df : pd.DataFrame , factor_name : Optional[str] = None , be
 @multi_factor_plot
 def plot_ic_monotony(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
     df , fig = plot_head(df , factor_name , benchmark)
-    df['group'] = df['group'].str.replace('group','')
-    df = df.pivot_table('stats_value' , 'group' , 'stats_name').\
+    df = df.pivot_table('stats_value' , 'group' , 'stats_name',observed=False).\
         rename(columns={'grp_ret':'RET','grp_ir':'IR'}).reset_index()
     ax1 = fig.add_subplot(111)
     ax1.bar(df['group'], df['RET'], color='b', alpha=0.5)
@@ -274,9 +262,7 @@ def plot_pnl(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark 
 
     ax.legend()
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x,p:f'{x:.2%}'))
-    ax.set_xticks(df.index[::max(1,len(df.index)//10)])
-    ax.xaxis.set_tick_params(rotation=45)
-    ax.grid()
+    plot_xaxis(ax , df.index)
 
     plot_tail('Factor Cummulative Long-Short PnL' , factor_name , benchmark , show , suptitle = False)
     return fig

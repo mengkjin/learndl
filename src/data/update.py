@@ -94,6 +94,8 @@ class DataUpdater():
                 ['csi500',['csi500']] , 
                 ['csi1000',['csi1000']] , 
             ]
+        elif db_src in ['information_ts' , 'membership_ts']:
+            param_args = []
         else:
             raise KeyError(db_src)
         params = [DataFetcher(db_src , *args) for args in param_args]

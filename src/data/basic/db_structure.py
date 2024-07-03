@@ -3,10 +3,7 @@ import numpy as np
 import pandas as pd
 
 from typing import Any , Literal
-from ...env import PATH , CONF
-
-DB_BY_NAME  : list[str] = ['information']
-DB_BY_DATE  : list[str] = ['models' , 'trade' , 'labels' , 'benchmark']  
+from ...env import PATH , CONF , DB_BY_NAME , DB_BY_DATE
 
 def list_files(directory , fullname = False , recur = False):
     '''list all files in directory'''

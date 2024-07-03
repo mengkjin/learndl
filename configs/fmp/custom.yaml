@@ -47,6 +47,7 @@ limitation:
   kcb_no_buy:       false
   kcb_no_sell:      false
   no_st:            true
+  list_days:        63
   te_constraint:    null
 
 bound:

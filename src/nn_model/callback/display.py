@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 
 from dataclasses import asdict , dataclass , field
+from IPython.display import display
 from typing import Any , Callable , ClassVar , Optional
 
 from .base import CallBack
@@ -55,6 +56,7 @@ class BatchDisplay(CallBack):
 class StatusDisplay(CallBack):
     '''display epoch and event information'''
     RESULT_PATH = f'{PATH.result}/model_results.yaml'
+    SUMMARY_NDIGITS : ClassVar[dict[str,int]] = {'Avg':4,'Sum':2,'Std':4,'T':2,'IR':4}
 
     def __init__(self , model_module , verbosity = 2):
         super().__init__(model_module , with_cb=False)
@@ -66,7 +68,6 @@ class StatusDisplay(CallBack):
         self._epoch_model : int = 0
         self._epoch_stage : int = 0
         self._model_stage : int = 0
-        self._test_record = self.TestRecord()
     
     @property
     def _initial_models(self) -> bool: return self._model_stage <= self.config.model_num
@@ -91,8 +92,6 @@ class StatusDisplay(CallBack):
         else:
             raise KeyError(event)
         return sdout
-    def update_test_score(self):
-        self._test_record.update_score(self.status.model_num , self.status.model_type , self.metrics.scores[-len(self._model_test_dates):])
 
     def tic(self , key : str): self._times[key] = time.time()
     def toc(self , key : str): return time.time() - self._times[key]
@@ -113,6 +112,12 @@ class StatusDisplay(CallBack):
         self.logger.warning('Model Specifics:')
         self.config.print_out()
     def on_summarize_model(self):
+        assert self.test_summarized
+        df = self.test_df_model
+        test_scores = {
+            '{}.{}'.format(*col):'|'.join([f'{k}({round(df[col][k],v)})' for k,v in self.SUMMARY_NDIGITS.items()]) 
+            for col in df.columns}
+    
         result = {
             '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
             '1_start' : time.ctime(self._init_time) ,
@@ -122,7 +127,7 @@ class StatusDisplay(CallBack):
             '5_dates' : '-'.join([str(self.config.beg_date),str(self.config.end_date)]),
             '6_fit'   : self._texts.get('fit'),
             '7_test'  : self._texts.get('test'),
-            '8_result': self._test_record.test_scores,
+            '8_result': test_scores,
         }
         PATH.dump_yaml(result , self.RESULT_PATH)
 
@@ -164,99 +169,71 @@ class StatusDisplay(CallBack):
         self.logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self._texts))
     def on_test_start(self): 
         self.logger.critical(self.tic_str('test'))
-        self.logger.warning('Each Model Date Testing Mean Score({}):'.format(self.config.train_param['criterion']['score']))
-        self._test_record = self.TestRecord(self.config.model_num_list , self.config.model_types , self.logger.info)
-        self._test_record.print_colnames()
-    def on_test_model_start(self):
-        if self.status.model_num == 0: self._test_record.add_rows(self.status.model_date , self._model_test_dates)
+                
+        self.test_df_date = pd.DataFrame()
+        self.test_df_model = pd.DataFrame()
+        self.test_summarized = False
+
     def on_test_model_type_end(self):
         self.update_test_score()
-    def on_test_model_end(self):
-        if self.status.model_num == self._test_record.model_nums[-1]: self._test_record.print_score()
+
     def on_test_end(self): 
-        for model_num in self.config.model_num_list:
-            path = self.config.model_param[model_num]['path'] + f'/{self.config.model_name}_score_by_date_{model_num}.csv'
-            self._test_record.score_table(model_num , path)
-        self._test_record.summarize().to_csv(f'{self.config.model_base_path}/{self.config.model_name}_score_by_model.csv')
-        self._test_record.print_summary()
+        self.logger.warning('Testing Mean Score({}):'.format(self.config.train_param['criterion']['score']))
+
+        self.summarize_test_result()
+
         self.logger.critical(self.toc_str('test'))
 
-    @dataclass
-    class TestRecord:
-        model_nums : list  = field(default_factory=list)
-        model_types : list = field(default_factory=list)
-        printer : Callable = print
+    def update_test_score(self):
+        df_date = pd.DataFrame({
+            'model_num' : self.status.model_num , 
+            'model_type' : self.status.model_type ,
+            'model_date' : self.status.model_date ,
+            'date' : self._model_test_dates ,
+            'value' : self.metrics.scores[-len(self._model_test_dates):]
+        })
+        df_model = df_date.groupby(['model_date' , 'model_num','model_type'])['value'].mean().reset_index()
+        df_model['model_date'] = df_model['model_date'].astype(str)
+        self.test_df_date = pd.concat([self.test_df_date , df_date])
+        self.test_df_model = pd.concat([self.test_df_model , df_model])
 
-        SUMMARY_ADDROWS : ClassVar[dict[str,str]] = {'Avg':'AllTimeAvg','Sum':'AllTimeSum','Std':'Std','T':'TValue','IR':'AnnIR'}
-        SUMMARY_NDIGITS : ClassVar[dict[str,int]] = {'Avg':4,'Sum':2,'Std':4,'T':2,'IR':4}
+    def summarize_test_result(self):
 
-        def __post_init__(self):
-            self.n_num = len(self.model_nums)
-            self.n_type = len(self.model_types)
-            self.n_col = self.n_num * self.n_type
-            self.col_num  = np.repeat(self.model_nums , self.n_type).astype(str)
-            self.col_type = np.tile(self.model_types , self.n_num).astype(str)
-            self.col_summary = [f'{mn}.{mt}' for mn,mt in zip(self.col_num , self.col_type)]
+        cat_date = [md for md in self.test_df_model['model_date'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
+        cat_type = ['best' , 'swalast' , 'swabest']
 
-            self.n_date  = 0
-            self.n_model = 0
-            self.row_date  = np.array([]).astype(int)
-            self.row_model = np.array([]).astype(int)
-            self.score_by_date  = np.empty((self.n_date , self.n_col))
-            self.score_by_model = np.empty((self.n_model, self.n_col))
+        df_avg = self.test_df_date.groupby(['model_num','model_type'])['value'].mean()
+        df_sum = self.test_df_date.groupby(['model_num','model_type'])['value'].sum()
+        df_std = self.test_df_date.groupby(['model_num','model_type'])['value'].std()
 
-        def add_rows(self , model , dates):
-            if isinstance(model , int): model = [model]
-            self.n_date += len(dates)
-            self.n_model += 1
-            self.row_date  = np.concatenate([self.row_date  , dates])
-            self.row_model = np.concatenate([self.row_model  , [model]])
-            self.score_by_date  = np.concatenate([self.score_by_date  , np.zeros((len(dates) , self.n_col))])
-            self.score_by_model = np.concatenate([self.score_by_model , np.zeros((1 , self.n_col))])
+        df_tv = (df_avg / df_std) * (len(self.test_df_date['date'].unique())**0.5)
+        df_ir = (df_avg / df_std) * ((240 / 10)**0.5)
+        self.test_df_model = pd.concat([
+            self.test_df_model , 
+            df_avg.reset_index().assign(model_date = 'Avg') ,
+            df_sum.reset_index().assign(model_date = 'Sum') , 
+            df_std.reset_index().assign(model_date = 'Std') ,
+            df_tv.reset_index().assign(model_date = 'T') , 
+            df_ir.reset_index().assign(model_date = 'IR') ,
+        ])
 
-        def update_score(self , model_num , model_type , scores):
-            col = model_num * self.n_type + self.model_types.index(model_type)
-            self.score_by_date[-len(scores):, col] = np.nan_to_num(scores)
-            self.score_by_model[-1,col] = np.nanmean(scores)
+        self.test_df_model['model_date'] = pd.Categorical(self.test_df_model['model_date'] , categories = cat_date, ordered=True) 
+        self.test_df_model['model_type'] = pd.Categorical(self.test_df_model['model_type'] , categories = cat_type, ordered=True) 
+        self.test_df_model = self.test_df_model.rename(columns={'model_date' : 'stat'}).pivot_table(
+            'value' , 'stat' , ['model_num' , 'model_type'] , observed=False)
 
-        def summarize(self):
-            self.summary : dict[str,np.ndarray] = {
-                'Avg' : (score_mean := np.nanmean(self.score_by_date , axis = 0)) , 
-                'Sum' : np.nansum(self.score_by_date  , axis = 0) , 
-                'Std' : (score_std  := np.nanstd(self.score_by_date  , axis = 0)), 
-                'T'   : score_mean / score_std * (len(self.score_by_date)**0.5), 
-                'IR'  : score_mean / score_std * ((240 / 10)**0.5) ,
-            }
-            values = np.concatenate([self.score_by_model , np.stack(list(self.summary.values()))])
-            index  = [str(d) for d in self.row_model] + [self.SUMMARY_ADDROWS[k] for k in self.summary.keys()]
-            return pd.DataFrame(values , index = index , columns = self.col_summary)
+        self.test_df_model.to_csv(f'{self.config.model_base_path}/{self.config.model_name}_score_by_model.csv')
+        for model_num in self.config.model_num_list:
+            df : pd.DataFrame = self.test_df_date[self.test_df_date['model_num'] == model_num].pivot_table(
+                'value' , 'date' , 'model_type' , observed=False)
+            df_cum = df.cumsum().rename(columns = {model_type:f'{model_type}_cum' for model_type in df.columns})
+            df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
+            path = self.config.model_param[model_num]['path'] + f'/{self.config.model_name}_score_by_date_{model_num}.csv'
+            df.to_csv(path)
 
-        def print_colnames(self):
-            self.print_row('Models' , self.col_num)
-            self.print_row('Output' , self.col_type)
-
-        def print_score(self):
-            self.print_row(self.row_model[-1] , self.score_by_model[-1,:] , 4)
-
-        def print_summary(self):
-            [self.print_row(self.SUMMARY_ADDROWS[k],v,self.SUMMARY_NDIGITS[k]) for k,v in self.summary.items()]
-
-        def print_row(self , row , values , digit = 2):
-            fmt = 's' if isinstance(values[0] , str) else (f'd' if digit == 0 else f'.{digit}f')
-            self.printer(('{: <11s}'+('{: >8'+fmt+'}')*len(values)).format(str(row) , *values))
-
-        def score_table(self , model_num , save_to : Optional[str] = None):
-            df = pd.DataFrame({'dates' : self.row_date} , 
-                                index = list(map(lambda x:f'{x[:4]}-{x[4:6]}-{x[6:]}' , self.row_date.astype(str))))
-            for i , model_type in enumerate(self.model_types):
-                df[f'score.{model_type}'] = self.score_by_date[:,model_num * self.n_type  + i]
-                df[f'cum_score.{model_type}'] = np.nancumsum(self.score_by_date[:,model_num * self.n_type  + i])
-
-            if save_to: df.to_csv(save_to)
-            return df
+        df = self.test_df_model.round(4)
+        df.index = df.index.set_names(None)
+        df.columns = pd.MultiIndex.from_tuples([(f'{self.config.model_module}.{num}' , type) for num,type in df.columns])
+        display(df)
         
-        @property
-        def test_scores(self):
-            if not hasattr(self , 'summary'): return
-            return {col:'|'.join([f'{k}({round(v[i],self.SUMMARY_NDIGITS[k])})' for k,v in self.summary.items()]) 
-                    for i , col in enumerate(self.col_summary)}
+        self.test_summarized = True
