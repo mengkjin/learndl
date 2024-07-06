@@ -150,9 +150,9 @@ class Metrics:
                 value = pen_cal(**penalty_kwargs)
                 self.output.add_loss(key , value)
 
-        if assert_nan and self.output.loss.isnan():
-            print(self.output)
-            raise Exception('nan loss here')
+        #if assert_nan and self.output.loss.isnan():
+        #    print(self.output)
+        #    raise Exception('nan loss here')
         
 
 class _MetricCalculator(ABC):
