@@ -129,6 +129,7 @@ class DataUpdater():
     
     def update_by_date(self , db_src , start_dt = None , end_dt = None , force = False):
         params = self.get_db_params(db_src)
+        if not params: return
         result = None # {}
         update_dates = [par.get_update_dates(start_dt=start_dt,end_dt=end_dt,force=force) for par in params]
         full_dates = reduce(np.union1d, update_dates)

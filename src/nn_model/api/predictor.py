@@ -92,7 +92,9 @@ class Predictor:
         end_dt = min(end_dt , max(data_mod_new.test_full_dates))
         pred_dates = GetData.trade_dates(start_dt , end_dt)
         
-        df_task = pd.DataFrame({'pred_dates' : pred_dates , 'model_date' : [max(model_dates[model_dates < d]) for d in pred_dates] , 'calculated' : 0})
+        df_task = pd.DataFrame({'pred_dates' : pred_dates , 
+                                'model_date' : [max(model_dates[model_dates < d]) for d in pred_dates] , 
+                                'calculated' : 0})
 
         torch.set_grad_enabled(False)
         df_list = []
