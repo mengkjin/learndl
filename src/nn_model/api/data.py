@@ -2,6 +2,7 @@ from typing import Optional
 from ..trainer import NetDataModule
 from ..util import TrainConfig
 from ...data import DataProcessor , DataUpdater
+from ...data.tushare import task
 from ...basic import THIS_IS_SERVER
 
 class DataAPI:
@@ -17,7 +18,9 @@ class DataAPI:
         else:
             DataUpdater.update_laptop()
         print('-' * 80)
-
+        task.main()
+        print('-' * 80)
+        
     @staticmethod
     def prepare_train_data(): 
         '''

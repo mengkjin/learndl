@@ -40,6 +40,22 @@ def dates_to_update(date , last_date , freq : Literal['d' , 'w' , 'm']):
         if last_date in date_list: date_list = date_list[1:]
     return date_list
 
+def complete_calendar():
+    cal = pd.read_feather('./data/DataBase/DB_information_ts/calendar.feather')
+    trd = cal[cal['trade'] == 1].reset_index(drop=True)
+    trd['pre'] = trd['calendar'].shift(1, fill_value=-1)
+    return trd
+
+def adjust_precision(df : pd.DataFrame , tol = 1e-8 , dtype_float = np.float32 , dtype_int = np.int64):
+    '''adjust precision for df columns'''
+    for col in df.columns:
+        if np.issubdtype(df[col].to_numpy().dtype , np.floating): 
+            df[col] = df[col].astype(dtype_float)
+            df[col] *= (df[col].abs() > tol)
+        if np.issubdtype(df[col].to_numpy().dtype , np.integer): 
+            df[col] = df[col].astype(dtype_int)
+    return df
+
 class TushareFetecher(ABC):
     def __init__(self , db_type : Literal['info' , 'flow'] , update_freq : Literal['d' , 'w' , 'm']) -> None:
         self.db_type : Literal['info' , 'flow'] = db_type
@@ -69,16 +85,16 @@ class TushareFetecher(ABC):
         df = self.get_data(date)
         if len(df): save_df(df , self.target_path(date , True))
 
-    def last_date(self):
+    def last_date(self , default = 19970101):
         if self.db_type == 'flow':
             dates = get_target_dates(self.db_src() , self.db_key())
-            return max(dates) if len(dates) else 19900101
+            return max(dates) if len(dates) else default
         else:
             path = self.target_path()
             if os.path.exists(path):
                 return int(time.strftime('%Y%m%d',time.localtime(os.path.getmtime(path))))
             else:
-                return 19900101
+                return default
             
     def update(self):
         if self.db_type == 'info': 
