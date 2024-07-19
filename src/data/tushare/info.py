@@ -19,7 +19,7 @@ class Calendar(InfoFetecher):
 class Description(InfoFetecher):
     def db_src(self): return 'information_ts'
     def db_key(self): return 'description'
-    def get_data(self):
+    def get_data(self , date):
         renamer = {
             'ts_code' : 'ts_code' ,
             'name':'sec_name' ,
@@ -43,7 +43,7 @@ class Description(InfoFetecher):
 class SWIndustry(InfoFetecher):
     def db_src(self): return 'information_ts'
     def db_key(self): return 'industry'    
-    def get_data(self):
+    def get_data(self , date):
         limit = 2000
         args_is_new = ['Y' , 'N']
         dfs = []
@@ -65,7 +65,7 @@ class SWIndustry(InfoFetecher):
 class ChangeName(InfoFetecher):
     def db_src(self): return 'information_ts'
     def db_key(self): return 'industry'    
-    def get_data(self):
+    def get_data(self , date):
         limit = 5000
         dfs = []
         offset = 0
