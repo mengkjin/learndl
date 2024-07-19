@@ -22,8 +22,8 @@ class AggregatorDataModule(DataModule):
     def predict_dataloader(self) -> Iterator[BoosterData]: return self.loader_dict['test']
         
     def load_data(self):
-        with CONF.Silence():
-            self.datas = ModuleData.load([] , self.config['data.labels'], self.predict, self.config.precision)
+        #with CONF.Silence():
+        self.datas = ModuleData.load([] , self.config['data.labels'], self.predict, self.config.precision)
         self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
         if self.predict:
             self.model_date_list = self.datas.date[0]

@@ -94,7 +94,6 @@ class NetDataModule(DataModule):
             # test dataloader should have the same length as dates, so no filtering of val[:,j].sum() > 0
             sample_index['test'] = sequential_sampling(0 , l1)
         return sample_index
-   
 
 class NetTrainer(TrainerModule):
     '''run through the whole process of training'''

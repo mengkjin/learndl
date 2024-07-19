@@ -5,18 +5,16 @@ import torch
 from abc import abstractmethod
 from torch import Tensor
 
-from typing import Any , Iterator , Literal , Optional
+from typing import Any , Literal , Optional
 
 from ..models import ModelEnsembler
 from ...callback import CallBackManager
 from ...classes import BaseDataModule , BaseTrainer
 from ...util import (Checkpoint , Deposition , Device , Logger , Metrics , TrainConfig ,
                      BufferSpace , Device , Storage , TrainConfig)
-from ....data import DataBlockNorm , DataProcessor , ModuleData
 from ....basic import CONF
+from ....data import DataBlockNorm , DataProcessor , ModuleData
 from ....func import tensor_standardize_and_weight , BigTimer
-
-
 
 class DataModule(BaseDataModule):
     @abstractmethod
@@ -198,7 +196,7 @@ class DataModule(BaseDataModule):
             x = x - self.datas.norms[key].avg[-x.shape[-2]:]
             x = x / (self.datas.norms[key].std[-x.shape[-2]:] + 1e-6)
         return x
-    
+
 class TrainerModule(BaseTrainer):
     '''run through the whole process of training'''
     def init_config(self , config_path = None , **kwargs) -> None:

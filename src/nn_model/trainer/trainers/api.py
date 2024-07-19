@@ -6,6 +6,7 @@ from .aggregator import AggregatorTrainer
 from ...util import TrainConfig , get_module_type
 from ....basic import REG_MODELS , THIS_IS_SERVER
 
+
 class Trainer:
     @staticmethod
     def initialize(stage = -1 , resume = -1 , checkname = -1 , **kwargs) -> TrainerModule:

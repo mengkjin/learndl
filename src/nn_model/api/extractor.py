@@ -7,8 +7,7 @@ from tqdm import tqdm
 from typing import Any , Literal , Optional
 
 from ..classes import BatchOutput
-from ..trainer.models import ModelEnsembler
-from ..trainer.trainers import NetDataModule
+from ..trainer import ModelEnsembler , NetDataModule
 from ..util import Deposition , Device , TrainConfig
 from ...basic import RegModel , PATH
 

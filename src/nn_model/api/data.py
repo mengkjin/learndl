@@ -1,5 +1,5 @@
 from typing import Optional
-from ..trainer.trainers import NetDataModule
+from ..trainer import NetDataModule
 from ..util import TrainConfig
 from ...data import DataProcessor , DataUpdater
 from ...data.tushare import task
