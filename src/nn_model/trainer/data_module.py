@@ -126,6 +126,9 @@ class DataModule(BaseDataModule):
             valid = self.full_valid_sample(x , self.y , self.step_idx)
             y , w = self.standardize_y(self.y , valid , self.step_idx)
 
+            self._x = x
+            self._valid = valid
+
         self.y[:,self.step_idx] = y[:]
         self.static_dataloader(x , y , w , valid)
 
@@ -219,9 +222,13 @@ class NetDataModule(DataModule):
         self.storage.del_group(self.stage)
         for set_key , set_samples in sample_index.items():
             assert set_key in ['train' , 'valid' , 'test'] , set_key
+            is_training = set_key in ['train' , 'valid']
             shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
-            batch_files = [f'{PATH.batch}/{set_key}.{bnum}.pt' for bnum in range(len(set_samples))]
-            for bnum , b_i in enumerate(set_samples):
+            batch_files : list[str] = []
+            batch_idx = 0
+            for b_i in set_samples:
+                if is_training and len(b_i) == 0: continue
+
                 assert torch.isin(b_i[:,1] , index1).all()
                 i0 , i1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1)
 
@@ -230,11 +237,9 @@ class NetDataModule(DataModule):
                 b_w = None if w is None else w[i0 , yindex1]
                 b_v = valid[i0 , yindex1]
 
-                for b_xx in b_x: pass
-                    #print(b_xx[b_v].isnan())
-                    #print(b_xx[b_v].isnan().sum())
-
-                self.storage.save(BatchData(b_x , b_y , b_w , b_i , b_v) , batch_files[bnum] , group = self.stage)
+                batch_files.append(f'{PATH.batch}/{set_key}.{batch_idx}.pt')
+                self.storage.save(BatchData(b_x , b_y , b_w , b_i , b_v) , batch_files[batch_idx] , group = self.stage)
+                batch_idx += 1
             self.loader_dict[set_key] = DataloaderStored(self.storage , batch_files , shuf_opt)
 
     def split_sample(self , stage , valid : Tensor , index0 : Tensor , index1 : Tensor ,
