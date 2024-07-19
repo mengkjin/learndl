@@ -281,36 +281,34 @@ def subset(x , i):
 def forward_fillna(arr , axis = 0):
     shape = arr.shape
     if axis < 0: axis = len(shape) + axis
-    if axis > 0:
-        new_axes  = [axis , *[i for i in range(len(shape)) if i != axis]]
-        new_shape = [shape[i] for i in new_axes]
-        old_axes  = list(range(len(shape)))[1:]
-        old_axes.insert(axis,0)
-        arr = arr.transpose(*new_axes)
+    new_axes  = list(range(len(arr.shape)))
+    new_axes[0] , new_axes[axis] = axis , 0
+    
+    arr = np.transpose(arr , new_axes)
+    new_shape = arr.shape
+
     arr = arr.reshape(shape[axis],-1).transpose(1,0)
-    mask = np.isnan(arr)
-    idx = np.where(~mask, np.arange(mask.shape[1]), 0)
-    idx = np.maximum.accumulate(idx, axis=1, out=idx)
+    idx = np.where(np.isnan(arr) == 0 , np.arange(arr.shape[1]), 0)
+    idx = np.maximum.accumulate(idx, axis=1)
     out = arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
-    if axis > 0:
-        out = out.reshape(new_shape).transpose(*old_axes)
+    out = np.transpose(out.reshape(new_shape) , new_axes)
     return out
 
 def backward_fillna(arr, axis = 0):
     shape = arr.shape
     if axis < 0: axis = len(shape) + axis
-    new_axes  = [axis , *[i for i in range(len(shape)) if i != axis]]
-    new_shape = [shape[i] for i in new_axes]
-    old_axes  = list(range(len(shape)))[1:]
-    old_axes.insert(axis,0)
+    new_axes  = list(range(len(arr.shape)))
+    new_axes[0] , new_axes[axis] = axis , 0
 
-    new_arr   = arr.transpose(*new_axes).reshape(shape[axis],-1).transpose(1,0)
-    mask = np.isnan(new_arr)
-    idx = np.where(~mask, np.arange(mask.shape[1]), mask.shape[1] - 1)
-    idx = np.minimum.accumulate(idx[:, ::-1], axis=1)[:, ::-1]
-    out = new_arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
-    out = out.reshape(new_shape).transpose(*old_axes)
+    arr = np.transpose(arr , new_axes)
+    new_shape = arr.shape
 
+    arr = arr.reshape(shape[axis],-1).transpose(1,0)
+    idx = np.where(np.isnan(arr) == 0 , np.arange(arr.shape[1]), arr.shape[1] - 1)
+    idx = np.minimum.accumulate(idx[:, ::-1], axis=1)[:, ::-1].copy()
+
+    out = arr[np.arange(idx.shape[0])[:,None], idx].transpose(1,0)
+    out = np.transpose(out.reshape(new_shape) , new_axes)
     return out
 
 def index_intersect(idxs , min_value = None , max_value = None):

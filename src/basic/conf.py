@@ -1,12 +1,15 @@
-from dataclasses import dataclass
-from typing import Literal , Optional
+from typing import Literal
 
-@dataclass
-class CustomConf:
-    SILENT        : bool = False
-    SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
-    SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
-    SAVE_OPT_NORM : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
-    SAVE_OPT_MODEL: Literal['pt'] = 'pt'
+SILENT        : bool = False
+SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
+SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
+SAVE_OPT_NORM : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
+SAVE_OPT_MODEL: Literal['pt'] = 'pt'
 
-CONF = CustomConf()
+class Silence:
+    def __enter__(self) -> None: 
+        global SILENT
+        SILENT = True
+    def __exit__(self , *args) -> None: 
+        global SILENT
+        SILENT = False

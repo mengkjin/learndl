@@ -6,12 +6,13 @@ from torch import nn , Tensor
 from typing import Any , Callable , final , Iterable , Iterator , Literal , Optional
 
 from .util import BatchData , BatchOutput , TrainerStatus
-from ...algo import BoosterData
+from ...data import BoosterData
 
 class BaseCB:
-    def __init__(self , model_module , with_cb) -> None:
+    def __init__(self , model_module , with_cb , turn_off = False) -> None:
         self.module : BaseTrainer = model_module
         self.with_cb : bool = with_cb
+        self.turn_off : bool = turn_off
         self.__hook_stack = []
         self._assert_validity()
     def _print_info(self , depth = 0):
@@ -197,7 +198,7 @@ class BaseTrainer(ABC):
         self.init_config(**kwargs)
         self.init_utilities(**kwargs)
         self.init_data(**kwargs)
-        self.status = TrainerStatus(getattr(self.config , 'max_epoch'))
+        self.status = TrainerStatus(self.config['max_epoch'])
         if hasattr(self , 'callbacks'):
             [setattr(self , x , self.callbacks(getattr(self , x))) for x in dir(self) if BaseCB._possible_hook(x)]
 

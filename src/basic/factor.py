@@ -2,7 +2,7 @@
 basic variables in factor package
 '''
 
-from .path import PATH
+from . import path as PATH
 
 RISK_STYLE = [
     'size','beta','momentum','residual_volatility','non_linear_size',

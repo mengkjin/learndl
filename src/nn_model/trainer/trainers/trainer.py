@@ -7,14 +7,15 @@
 # python3 scripts/run_model3.py --stage=0 --resume=0 --checkname=1 
 import torch
 
-from .data_module import NetDataModule , BoosterDataModule
-from ..classes import BaseTrainer , BoosterData
-from ..callback import CallBackManager
-from ..ensemble import Booster , ModelEnsembler
-from ..util import (Checkpoint , Deposition , Device , Logger , Metrics , Optimizer , TrainConfig)
+from .data_module import NetDataModule , BoosterDataModule , AggregatorDataModule
+from ...callback import CallBackManager
+from ...classes import BaseTrainer
+from ..models import Booster , ModelEnsembler
+from ...util import (Checkpoint , Deposition , Device , Logger , Metrics , Optimizer , TrainConfig , get_module_type)
 
-from ...basic import BOOSTER_MODULE , REG_MODELS , THIS_IS_SERVER
-from ...func import BigTimer
+from ....basic import REG_MODELS , THIS_IS_SERVER
+from ....data import BoosterData
+from ....func import BigTimer
 
 class Trainer(BaseTrainer):
     '''run through the whole process of training'''
@@ -31,11 +32,11 @@ class Trainer(BaseTrainer):
         self.model      : ModelEnsembler = ModelEnsembler.setup(self)
     
     @property
-    def model_param(self): return self.config.model_param[self.model_num]
+    def model_param(self): return self.config.Model.params[self.model_num]
     @property
-    def model_types(self): return self.config.model_types
+    def model_types(self): return self.config['model.types']
     @property
-    def if_transfer(self): return bool(self.config.train_param['transfer'])
+    def if_transfer(self): return bool(self.config['train.trainer.transfer'])
     @property
     def model_iter(self): return self.deposition.model_iter(self.status.stage , self.data.model_date_list)
 
@@ -47,7 +48,12 @@ class Trainer(BaseTrainer):
         checkname: [-1,choose] , [0,default] , [1,yes]
         '''
         module_name = TrainConfig.guess_module()
-        use_trainer = BoosterTrainer if module_name in BOOSTER_MODULE else NetTrainer
+        module_type = get_module_type(module_name)
+        use_trainer = {
+            'nn' : NetTrainer ,
+            'booster' : BoosterTrainer ,
+            'hidden_booster' : BoosterTrainer ,
+        }[module_type]
         app = use_trainer(stage = stage , resume = resume , checkname = checkname , **kwargs)
         return app
     
@@ -110,8 +116,8 @@ class NetTrainer(Trainer):
 
     def test_model(self):
         self.on_test_model_start()
+        self.status.dataset_test()
         for self.status.model_type in self.model_types:
-            self.status.dataset_test()
             self.on_test_model_type_start()
             for self.batch_idx , self.batch_data in enumerate(self.dataloader):
                 self.on_test_batch_start()
@@ -204,6 +210,102 @@ class BoosterTrainer(Trainer):
     '''run through the whole process of training'''
     def init_data(self , **kwargs): 
         self.data : BoosterDataModule = BoosterDataModule(self.config)
+
+    def batch_forward(self) -> None: 
+        if self.status.dataset == 'train': self.booster.fit()
+        self.pred  = self.booster.predict(self.status.dataset)
+        self.label = self.booster.label(self.status.dataset)
+
+    def batch_metrics(self) -> None:
+        self.metrics.calculate_from_tensor(self.status.dataset , self.label , self.pred, assert_nan = True)
+        self.metrics.collect_batch_metric()
+
+    def batch_backward(self) -> None: ...
+
+    def fit_model(self):
+        self.on_fit_model_start()
+        for self.batch_idx , self.batch_data in enumerate(zip(self.data.train_dataloader() , self.data.val_dataloader())):
+            self.status.dataset_train()
+            self.on_train_batch_start()
+            self.on_train_batch()
+            self.on_train_batch_end()
+
+            self.status.dataset_validation()
+            self.on_validation_batch_start()
+            self.on_validation_batch()
+            self.on_validation_batch_end()
+
+        self.on_fit_model_end()
+
+    def test_model(self):
+        self.on_test_model_start()
+        self.status.dataset_test()
+        for self.status.model_type in self.model_types:
+            self.on_test_model_type_start()
+            for self.batch_idx , self.batch_data in enumerate(self.data.test_dataloader()):
+                self.on_test_batch_start()
+                self.on_test_batch()
+                self.on_test_batch_end()
+            self.on_test_model_type_end()
+        self.on_test_model_end()
+
+    def on_configure_model(self):  self.config.set_config_environment()
+    def on_fit_model_start(self):
+        self.data.setup('fit' , self.model_param , self.model_date)
+        self.load_model(True)
+    def on_fit_model_end(self): self.save_model()
+    
+    def on_train_batch_start(self):
+        self.metrics.new_epoch_metric('train' , self.status)
+
+    def on_train_batch_end(self): 
+        self.metrics.collect_epoch_metric('train')
+
+    def on_validation_batch_start(self):
+        self.metrics.new_epoch_metric('valid' , self.status)
+
+    def on_validation_batch_end(self): 
+        self.metrics.collect_epoch_metric('valid')
+
+    def on_test_model_type_start(self):
+        self.load_model(False , self.model_type)
+        self.metrics.new_epoch_metric('test' , self.status)
+
+    def on_test_model_type_end(self): 
+        self.metrics.collect_epoch_metric('test')
+
+    def on_test_model_start(self):
+        if not self.deposition.exists(self.model_date , self.model_num , self.model_type): self.fit_model()
+        self.data.setup('test' , self.model_param , self.model_date)
+
+    def on_test_batch(self):
+        if self.batch_idx < self.batch_warm_up: return
+        self.batch_forward()
+        self.batch_metrics()
+    
+    def load_model(self , training : bool , *args , **kwargs):
+        '''load model state dict, return net and a sign of whether it is transferred'''
+        model_file = self.deposition.load_model(self.model_date , self.model_num)
+        self.booster : Booster = self.model.new_model(training , model_file).model()
+
+    def stack_model(self):
+        self.on_before_save_model()
+        for model_type in self.model_types:
+            model_dict = self.model.collect(model_type)
+            self.deposition.stack_model(model_dict , self.model_date , self.model_num , model_type) 
+
+    def save_model(self):
+        self.stack_model()
+        for model_type in self.model_types:
+            self.deposition.dump_model(self.model_date , self.model_num , model_type) 
+    
+    def __call__(self , input : BoosterData): raise Exception('Undefined call')
+
+
+class AggregatorTrainer(Trainer):
+    '''run through the whole process of training'''
+    def init_data(self , **kwargs): 
+        self.data : AggregatorDataModule = AggregatorDataModule(self.config)
 
     def batch_forward(self) -> None: 
         if self.status.dataset == 'train': self.booster.fit()

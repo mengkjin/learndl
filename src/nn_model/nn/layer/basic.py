@@ -1,6 +1,6 @@
 import torch
-import torch.nn as nn
 
+from torch import nn , Tensor
 from copy import deepcopy
 
 class Pass(nn.Module):
@@ -18,8 +18,8 @@ class EwLinear(nn.Module):
     def __init__(self, dim = -1 , keepdim = True):
         super().__init__()
         self.dim , self.keepdim = dim , keepdim
-    def forward(self, inputs):
-        return inputs.mean(dim = self.dim , keepdim = self.keepdim)
+    def forward(self, x : Tensor):
+        return x.mean(dim = self.dim , keepdim = self.keepdim)
     
 class Parallel(nn.Module):
     def __init__(self, sub_mod , num_mod , feedforward = True , concat_output = False):

@@ -163,9 +163,9 @@ class StockData4D:
         values = np.full((len(secid) , *obj.shape[1:]) , np.nan)
         _ , p0s , p1s = np.intersect1d(secid , obj.secid , return_indices=True)
         values[p0s] = obj.values[p1s]
-        obj.values = values
+        obj.values  = torch.tensor(values).to(self.values) if asTensor else values
         obj.secid  = secid
-        return obj.as_tensor(asTensor).as_type(dtype)
+        return obj.as_type(dtype)
     
     def align_date(self , date , inplace = True):
         obj = self if inplace else self.copy()
@@ -174,9 +174,9 @@ class StockData4D:
         values = np.full((obj.shape[0] , len(date) , *obj.shape[2:]) , np.nan)
         _ , p0d , p1d = np.intersect1d(date , obj.date , return_indices=True)
         values[:,p0d] = obj.values[:,p1d]
-        obj.values  = values
+        obj.values  = torch.tensor(values).to(self.values) if asTensor else values
         obj.date    = date
-        return obj.as_tensor(asTensor).as_type(dtype)
+        return obj.as_type(dtype)
     
     def align_secid_date(self , secid = None , date = None , inplace = True):
         obj = self if inplace else self.copy()
@@ -193,10 +193,11 @@ class StockData4D:
             _ , p0d , p1d = np.intersect1d(date  , obj.date  , return_indices=True)
             values[np.ix_(p0s,p0d)] = obj.values[np.ix_(p1s,p1d)] 
 
-            obj.values  = torch.tensor(values).to(obj.values) if isinstance(obj.values , Tensor) else values
+            obj.values  = torch.tensor(values).to(self.values) if asTensor else values
             obj.secid   = secid
             obj.date    = date
-            return obj.as_tensor(asTensor).as_type(dtype)
+
+            return obj.as_type(dtype)
     
     def align_feature(self , feature , inplace = True):
         obj = self if inplace else self.copy()
@@ -205,9 +206,9 @@ class StockData4D:
         values = np.full((*obj.shape[:-1],len(feature)) , np.nan)
         _ , p0f , p1f = np.intersect1d(feature , obj.feature , return_indices=True)
         values[...,p0f] = obj.values[...,p1f]
-        obj.values  = torch.tensor(values).to(obj.values) if isinstance(obj.values , Tensor) else values
+        obj.values  = torch.tensor(values).to(self.values) if asTensor else values
         obj.feature = feature
-        return obj.as_tensor(asTensor).as_type(dtype)
+        return obj.as_type(dtype)
     
     def add_feature(self , new_feature , new_value : np.ndarray | Tensor):
         assert new_value.shape == self.shape[:-1]
@@ -240,6 +241,18 @@ class StockData4D:
             index  = match_values(kwargs['secid'] , self.secid)
             values = values[index]
         return values
+
+    @classmethod
+    def concat_feature(cls , block_list):
+        blocks = [blk for blk in block_list if isinstance(blk , cls) and blk.initiate] 
+        for i , blk in enumerate(blocks): 
+            if i == 0:
+                new_blk = blk.copy()
+            else:
+                assert np.array_equal(new_blk.secid , blk.secid) and np.array_equal(new_blk.date , blk.date)
+                new_blk.feature = np.concatenate([new_blk.feature , blk.feature])
+                new_blk.values  = np.concatenate([new_blk.values  , blk.values ] , axis=-1)
+        return new_blk
     
     @classmethod
     def from_dataframe(cls , df : pd.DataFrame):

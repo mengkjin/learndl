@@ -1,1 +1,1 @@
-from ..nn_model.api import DataAPI , ModelTestor , Predictor , Trainer
+from ..nn_model.api import DataAPI , ModelTestor , Predictor , Trainer , HiddenExtractor

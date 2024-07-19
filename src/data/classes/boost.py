@@ -6,8 +6,8 @@ import xarray as xr
 from typing import Any , ClassVar , Literal , Optional
 from dataclasses import dataclass
 
+from . import NdData
 from ...func import match_values
-from ...data.classes import NdData
 
 @dataclass
 class BoosterData:
@@ -18,8 +18,8 @@ class BoosterData:
     feature : Any = None
     weight_param : Optional[dict] = None
 
-    VAR_SECID : ClassVar[list[str]] = ['SecID','instrument']
-    VAR_DATE  : ClassVar[list[str]] = ['TradeDate','datetime']
+    VAR_SECID : ClassVar[list[str]] = ['SecID','instrument','secid']
+    VAR_DATE  : ClassVar[list[str]] = ['TradeDate','datetime','date']
 
     def __post_init__(self):
         x , y = self.raw_x , self.raw_y
@@ -90,6 +90,12 @@ class BoosterData:
         if use_feature is not None:
             assert all(np.isin(use_feature , self.feature)) , np.setdiff1d(use_feature , self.feature)
         self.use_feature = use_feature
+
+    def SECID(self):
+        return np.repeat(self.secid , len(self.date)).flatten()[self.finite.flatten()]
+
+    def DATE(self):
+        return np.tile(self.date , len(self.secid)).flatten()[self.finite.flatten()]
 
     def X(self): 
         if self.use_feature is None:

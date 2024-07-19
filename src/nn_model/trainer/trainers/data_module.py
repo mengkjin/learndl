@@ -1,5 +1,6 @@
-import gc , torch
+import gc , os , torch
 import numpy as np
+import pandas as pd
 
 from abc import abstractmethod
 from numpy.random import permutation
@@ -7,11 +8,11 @@ from torch import Tensor
 from torch.utils.data import BatchSampler
 from typing import Any , Iterator , Literal , Optional
 
-from ..classes import BaseDataModule , BatchData , BoosterData
+from ..classes import BaseDataModule , BatchData
 from ..util import BufferSpace , DataloaderStored , Device , LoaderWrapper , Storage , TrainConfig
-from ...data import DataBlockNorm , DataProcessor , ModuleData
+from ...data import DataBlockNorm , DataProcessor , ModuleData , BoosterData , DataBlock
 from ...basic import PATH , CONF
-from ...func import tensor_standardize_and_weight , match_values
+from ...func import tensor_standardize_and_weight , match_values , index_intersect
 
 class DataModule(BaseDataModule):
     @abstractmethod
@@ -31,23 +32,23 @@ class DataModule(BaseDataModule):
         self.config  : TrainConfig = TrainConfig.load() if config is None else config
         self.predict : bool = predict
         self.device  = Device()
-        self.storage = Storage('mem' if self.config.mem_storage else 'disk')
+        self.storage = Storage('mem' if self.config['mem_storage'] else 'disk')
         self.buffer  = BufferSpace(self.device)
 
     def load_data(self):
-        self.datas = ModuleData.load(self.data_type_list, self.config.labels, self.predict, self.config.precision)
+        self.datas = ModuleData.load(self.data_type_list, self.config['data.labels'], self.predict, self.config.precision)
         self.config.update_data_param(self.datas.x)
         self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
         if self.predict:
             self.model_date_list = self.datas.date[0]
             self.test_full_dates = self.datas.date[1:]
         else:
-            self.model_date_list = self.datas.date_within(self.config.beg_date , self.config.end_date , self.config.interval)
-            self.test_full_dates = self.datas.date_within(self.config.beg_date , self.config.end_date)[1:]
+            self.model_date_list = self.datas.date_within(self.config['beg_date'] , self.config['end_date'] , self.config['interval'])
+            self.test_full_dates = self.datas.date_within(self.config['beg_date'] , self.config['end_date'])[1:]
 
         self.static_prenorm_method = {}
         for mdt in self.data_type_list: 
-            method : dict[str,bool] = self.config.model_data_prenorm.get(mdt , {})
+            method : dict[str,bool] = self.config['data.prenorm'].get(mdt , {})
             method['divlast']  = method.get('divlast' , True) and (mdt in DataBlockNorm.DIVLAST)
             method['histnorm'] = method.get('histnorm', True) and (mdt in DataBlockNorm.HISTNORM)
             if not CONF.SILENT: print(f'Pre-Norming method of [{mdt}] : {method}')
@@ -88,9 +89,9 @@ class DataModule(BaseDataModule):
 
         if stage == 'fit':
             model_date_col = (self.datas.date < model_date).sum()
-            step_interval = self.config.input_step_day
-            d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.input_span - self.seq0)
-            d1 = max(0 , model_date_col - self.config.skip_horizon)
+            step_interval = self.config['input_step_day']
+            d0 = max(0 , model_date_col - self.config['skip_horizon'] - self.config['input_span'] - self.seq0)
+            d1 = max(0 , model_date_col - self.config['skip_horizon'])
         elif stage in ['predict' , 'test']:
             if stage == 'predict': self.model_date_list = np.array([model_date])
             next_model_date = self.next_model_date(model_date)
@@ -199,13 +200,13 @@ class DataModule(BaseDataModule):
     
 class NetDataModule(DataModule):
     def train_dataloader(self):
-        return LoaderWrapper(self , self.loader_dict['train'] , self.device , self.config.verbosity)
+        return LoaderWrapper(self , self.loader_dict['train'] , self.device , self.config['verbosity'])
     def val_dataloader(self):
-        return LoaderWrapper(self , self.loader_dict['valid'] , self.device , self.config.verbosity)
+        return LoaderWrapper(self , self.loader_dict['valid'] , self.device , self.config['verbosity'])
     def test_dataloader(self):
-        return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
+        return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config['verbosity'])
     def predict_dataloader(self):
-        return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
+        return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config['verbosity'])
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         return batch.to(self.device if device is None else device)
 
@@ -218,7 +219,7 @@ class NetDataModule(DataModule):
         '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''
         index0, index1 = torch.arange(len(valid)) , self.step_idx
         sample_index = self.split_sample(self.stage , valid , index0 , index1 , self.config.sample_method , 
-                                         self.config.train_ratio , self.config.batch_size)
+                                         self.config.train_ratio , self.config['batch_size'])
         self.storage.del_group(self.stage)
         for set_key , set_samples in sample_index.items():
             assert set_key in ['train' , 'valid' , 'test'] , set_key
@@ -338,6 +339,143 @@ class BoosterDataModule(DataModule):
                     b_x = b_x.reshape(len(self.y_secid),1,-1)
                     dates = np.array([self.y_date[index1[yindex1[0]]]])
                     self.storage.save(BoosterData(b_x , b_y , self.y_secid , dates) , batch_files[bnum] , group = self.stage)
+            else:
+                raise KeyError(set_key)
+            self.loader_dict[set_key] = DataloaderStored(self.storage , batch_files)
+
+    @staticmethod
+    def split_sample(stage , index0 : Tensor , index1 : Tensor , train_ratio   : float = 0.8) -> dict[str,list]:
+        l0 , l1 = len(index0) , len(index1)
+        pos = torch.stack([index0.repeat_interleave(l1) , index1.repeat(l0)] , -1).reshape(l0,l1,2)
+
+        def sequential_sampling(beg , end , posit = pos): return [posit[:,j] for j in range(beg , end)]
+        
+        sample_index = {}
+        if stage == 'fit':
+            # must be sequential
+            sep = int(l1 * train_ratio)
+            sample_index['train'] = sequential_sampling(0 , sep)
+            sample_index['valid'] = sequential_sampling(sep , l1)
+        else:
+            # test dataloader should have the same length as dates, so no filtering of val[:,j].sum() > 0
+            sample_index['test'] = sequential_sampling(0 , l1)
+        return sample_index
+
+class AggregatorDataModule(DataModule):
+    '''for boosting such as algo.boost.lgbm, create booster'''
+    def train_dataloader(self) -> Iterator[BoosterData]: return self.loader_dict['train']
+    def val_dataloader(self) -> Iterator[BoosterData]:   return self.loader_dict['valid']
+    def test_dataloader(self) -> Iterator[BoosterData]:  return self.loader_dict['test']
+    def predict_dataloader(self) -> Iterator[BoosterData]: return self.loader_dict['test']
+        
+    def load_data(self):
+        with CONF.Silence():
+            self.datas = ModuleData.load([] , self.config['data.labels'], self.predict, self.config.precision)
+        self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
+        if self.predict:
+            self.model_date_list = self.datas.date[0]
+            self.test_full_dates = self.datas.date[1:]
+        else:
+            self.model_date_list = self.datas.date_within(self.config['beg_date'] , self.config['end_date'] , self.config['interval'])
+            self.test_full_dates = self.datas.date_within(self.config['beg_date'] , self.config['end_date'])[1:]
+
+        self.static_prenorm_method = {}
+        self.reset_dataloaders()
+        return self
+
+    def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
+              param = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
+              model_date = -1) -> None:
+        if self.predict: stage = 'predict'
+
+        if self.loader_param == (stage , model_date): return
+        self.loader_param = stage , model_date
+
+        assert stage in ['fit' , 'test' , 'predict'] and model_date > 0 , (stage , model_date)
+
+        self.stage = stage
+        self.seqs = {'hidden':1}
+        self.seq0 = self.seqx = self.seqy = 1
+
+        hidden_dates : list[np.ndarray] = []
+        hidden_df : pd.DataFrame | Any = None
+        ds_list = ['train' , 'valid'] if stage == 'fit' else ['test' , 'predict']
+        for hidden_key in self.config['data.hidden']:
+            model_name , model_num , model_type = hidden_key.split('.')
+            hidden_path = os.path.join(PATH.hidden , model_name , f'hidden.{model_num}.{model_type}.{model_date}.feather')
+            df = pd.read_feather(hidden_path)
+            df = df[df['dataset'].isin(ds_list)].drop(columns='dataset').set_index(['secid','date'])
+            hidden_dates.append(df.index.get_level_values('date').unique().to_numpy())
+            df.columns = [f'{hidden_key}.{col}' for col in df.columns]
+            hidden_df = df if hidden_df is None else hidden_df.join(df , how='outer')
+
+        stage_date = index_intersect(hidden_dates)[0]
+        if self.stage != 'fit':
+            stage_date = index_intersect([stage_date , self.test_full_dates])[0]
+        self.day_len = len(stage_date)
+        self.step_len = len(stage_date)
+        self.date_idx , self.step_idx = torch.arange(self.day_len) , torch.arange(self.day_len)
+
+        y_aligned = self.datas.y.align_date(stage_date , inplace=False)
+        self.y_secid , self.y_date = y_aligned.secid , y_aligned.date
+
+        if stage == 'fit':
+            ...
+        elif stage in ['predict' , 'test']:
+            self.model_test_dates = stage_date
+            self.early_test_dates = stage_date[:0]
+        else:
+            raise KeyError(stage)
+
+        x = {'hidden':DataBlock.from_dataframe(hidden_df).align_secid_date(self.y_secid , self.y_date).as_tensor().values}
+        y = Tensor(y_aligned.values).squeeze(2)[...,:self.labels_n]
+        self.hidden_cols = hidden_df.columns
+        self.y , _ = self.standardize_y(y , None , None , no_weight = True)
+
+        if stage != 'fit':
+            w , valid = None , None
+            y , _ = self.standardize_y(self.y , None , self.step_idx)
+        else:
+            valid = self.full_valid_sample(x , self.y , self.step_idx)
+            y , w = self.standardize_y(self.y , valid , self.step_idx)
+
+        self.y[:,self.step_idx] = y[:]
+        self.static_dataloader(x , y , w , valid)
+
+        gc.collect() 
+        torch.cuda.empty_cache()
+
+    def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w = None , valid = None) -> None:
+        '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''
+        index0, index1 = torch.arange(len(y)) , self.step_idx
+        sample_index = self.split_sample(self.stage , index0 , index1 , self.config.train_ratio)
+        self.storage.del_group(self.stage)
+        assert len(x) == 1 , len(x)
+        x0 = x['hidden']
+        for set_key , set_samples in sample_index.items():
+            if set_key in ['train' , 'valid']:
+                bb_x , bb_y , bb_d = [] , [] , []
+                for bnum , b_i in enumerate(set_samples):
+                    i0 , i1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1)
+
+                    bb_x.append(x0[i0 , i1].reshape(len(self.y_secid),1,-1))
+                    bb_y.append(y[i0 , yindex1])
+                    bb_d.append(self.y_date[index1[yindex1[0]]])
+                bb_x = torch.concat(bb_x , dim = 1)
+                bb_y = torch.concat(bb_y , dim = 1)
+                bb_d = np.array(bb_d)
+                bnum = 0
+                batch_files = [f'{PATH.batch}/{set_key}.{bnum}.pt']
+                self.storage.save(BoosterData(bb_x , bb_y , self.y_secid , bb_d , self.hidden_cols) , batch_files[bnum] , group = self.stage)
+            elif set_key == 'test':
+                batch_files = [f'{PATH.batch}/{set_key}.{bnum}.pt' for bnum in range(len(set_samples))]
+                for bnum , b_i in enumerate(set_samples):
+                    i0 , i1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1)
+
+                    b_x = x0[i0,i1].reshape(len(self.y_secid),1,-1)
+                    b_y = y[i0 , yindex1] # [n_stock x num_output]
+                    dates = np.array([self.y_date[index1[yindex1[0]]]])
+                    self.storage.save(BoosterData(b_x , b_y , self.y_secid , dates , self.hidden_cols) , batch_files[bnum] , group = self.stage)
             else:
                 raise KeyError(set_key)
             self.loader_dict[set_key] = DataloaderStored(self.storage , batch_files)

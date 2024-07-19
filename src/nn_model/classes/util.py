@@ -1,5 +1,7 @@
-import numpy as np
 import os , torch
+import numpy as np
+import pandas as pd
+
 from dataclasses import dataclass , field
 from torch import Tensor
 from typing import Any , Literal , Optional
@@ -91,6 +93,7 @@ class MetricList:
 @dataclass(slots=True)
 class BatchOutput:
     outputs : Optional[Tensor | tuple | list] = None
+    def __len__(self): return len(self.pred)
     @property
     def device(self): return self.pred.device
     @property
@@ -109,6 +112,7 @@ class BatchOutput:
             return self.outputs[1]
         else:
             return {}
+        
     def override_pred(self , pred : Optional[Tensor]):
         assert self.outputs is not None
         assert pred is not None
@@ -120,6 +124,31 @@ class BatchOutput:
         else:
             self.outputs = pred
         return self
+    
+    def pred_df(self , secid : np.ndarray , date : np.ndarray , narrow_df = False):
+        full_pred = self.pred.cpu().numpy()
+        if full_pred.ndim == 1: full_pred = full_pred[:,None]
+        assert full_pred.ndim == 2 , full_pred.shape
+        df = pd.DataFrame({'secid' : secid , 'date' : date , 
+                           **{f'pred.{i}':full_pred[:,i] for i in range(full_pred.shape[-1])}})
+        if narrow_df:
+            df = df.melt(['secid','date'] , var_name='feature')
+        return df
+        
+    def hidden_df(self , batch_data : BatchData , y_secid : np.ndarray , y_date : np.ndarray , narrow_df = False):
+        full_hidden : Tensor = self.other['hidden']
+        full_hidden = full_hidden.cpu().numpy()
+
+        ij = batch_data.i.cpu()
+        secid = y_secid[ij[:,0]]
+        date  = y_date[ij[:,1]]
+
+        assert full_hidden.ndim == 2 , full_hidden.shape
+
+        df = pd.DataFrame({'secid' : secid , 'date' : date , 
+                           **{f'hidden.{i}':full_hidden[:,i] for i in range(full_hidden.shape[-1])}})
+        if narrow_df: df = df.melt(['secid','date'] , var_name='feature')
+        return df
     
 @dataclass(slots=True)
 class ModelDict:

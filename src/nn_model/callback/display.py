@@ -2,18 +2,17 @@ import os , time
 import numpy as np
 import pandas as pd
 
-from dataclasses import asdict , dataclass , field
-from IPython.display import display
+from dataclasses import asdict
 from typing import Any , Callable , ClassVar , Optional
 
-from .base import CallBack
+from .base import CallBack , df_display
 from ..util.loader import LoaderWrapper
 from ...basic import PATH
 
 class CallbackTimer(CallBack):
     '''record time cost of callback hooks'''
-    def __init__(self , model_module , verbosity = 2) -> None:
-        super().__init__(model_module , with_cb=True)
+    def __init__(self , model_module , verbosity = 2 , **kwargs) -> None:
+        super().__init__(model_module , with_cb=True , **kwargs)
         self._verbosity = verbosity
         self._hook_times : dict[str,list]  = {}
         self._start_time : dict[str,float] = {}
@@ -29,12 +28,13 @@ class CallbackTimer(CallBack):
         if self._verbosity >= 10:
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self._hook_times.items()]
-            print(pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(5))
+            print('Callback Time costs')
+            df_display(pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(5))
 
 class BatchDisplay(CallBack):
     '''display batch progress bar'''
-    def __init__(self , model_module , verbosity = 2) -> None:
-        super().__init__(model_module , with_cb=False)
+    def __init__(self , model_module , verbosity = 2 , **kwargs) -> None:
+        super().__init__(model_module , with_cb=False , **kwargs)
         self._verbosity = verbosity
     @property
     def _dl(self) -> LoaderWrapper | Any: return self.module.dataloader
@@ -58,8 +58,8 @@ class StatusDisplay(CallBack):
     RESULT_PATH = f'{PATH.result}/model_results.yaml'
     SUMMARY_NDIGITS : ClassVar[dict[str,int]] = {'Avg':4,'Sum':2,'Std':4,'T':2,'IR':4}
 
-    def __init__(self , model_module , verbosity = 2):
-        super().__init__(model_module , with_cb=False)
+    def __init__(self , model_module , verbosity = 2 , **kwargs):
+        super().__init__(model_module , with_cb=False , **kwargs)
         self._verbosity = verbosity
         self._init_time = time.time()
         os.makedirs(os.path.dirname(self.RESULT_PATH) , exist_ok=True)
@@ -76,7 +76,7 @@ class StatusDisplay(CallBack):
     @property
     def _speedup2x(self) -> bool:
         try:
-            return self.config.train_param['callbacks']['ResetOptimizer']['speedup2x']
+            return self.config['callbacks.ResetOptimizer']['speedup2x']
         except KeyError:
             return False
     def _display(self , *args , **kwargs):
@@ -122,9 +122,9 @@ class StatusDisplay(CallBack):
             '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
             '1_start' : time.ctime(self._init_time) ,
             '2_basic' : 'short' if self.config.short_test else 'full' , 
-            '3_datas' : self.config.model_data_type ,
-            '4_label' : ','.join(self.config.labels),
-            '5_dates' : '-'.join([str(self.config.beg_date),str(self.config.end_date)]),
+            '3_datas' : self.config['data.type'] ,
+            '4_label' : ','.join(self.config['data.labels']),
+            '5_dates' : '-'.join([str(self.config['beg_date']),str(self.config['end_date'])]),
             '6_fit'   : self._texts.get('fit'),
             '7_test'  : self._texts.get('test'),
             '8_result': test_scores,
@@ -178,7 +178,7 @@ class StatusDisplay(CallBack):
         self.update_test_score()
 
     def on_test_end(self): 
-        self.logger.warning('Testing Mean Score({}):'.format(self.config.train_param['criterion']['score']))
+        self.logger.warning('Testing Mean Score({}):'.format(self.config['train.criterion.score']))
 
         self.summarize_test_result()
 
@@ -234,6 +234,6 @@ class StatusDisplay(CallBack):
         df = self.test_df_model.round(4)
         df.index = df.index.set_names(None)
         df.columns = pd.MultiIndex.from_tuples([(f'{self.config.model_module}.{num}' , type) for num,type in df.columns])
-        display(df)
+        df_display(df)
         
         self.test_summarized = True

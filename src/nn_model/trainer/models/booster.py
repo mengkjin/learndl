@@ -5,12 +5,12 @@ from abc import ABC , abstractmethod
 from torch import nn , Tensor
 from typing import Any , Iterator , Literal , Optional
 
-from ..classes import BaseDataModule , BaseTrainer , BatchData , BatchOutput
-from ...algo import BoosterData
-from ...algo.boost.lgbm import Lgbm
+from ...classes import BaseDataModule , BaseTrainer , BatchData , BatchOutput , BoosterData
+from ....algo.boost.lgbm import Lgbm as algo_lgbm
 
 def choose_booster(module):
     if module == 'lgbm': return LgbmBooster
+    elif module == 'hidden_aggregator': return LgbmBooster
     else: raise KeyError(module)
 
 class Booster(ABC):
@@ -43,11 +43,11 @@ class Booster(ABC):
     def label(self , *args , **kwargs) -> Tensor: 
         '''return dataset label based on input'''
 
-class _LgbmBooster(Booster):
-    '''Light GMB'''
+class LGBM(Booster):
+    '''Light GBM'''
     def __init__(self , model_module : BaseTrainer) -> None:
         self.module = model_module
-        self.model : Lgbm
+        self.model : algo_lgbm
 
     def __bool__(self): return True
     @property
@@ -69,7 +69,7 @@ class _LgbmBooster(Booster):
     @property
     def is_cuda(self) -> bool: return self.module.device.device.type == 'cuda'
     @property
-    def lgbm_params(self): return {'seed' : self.module.config.random_seed , **self.module.model_param}
+    def lgbm_params(self): return {'seed' : self.module.config['random_seed'] , **self.module.model_param}
 
     @staticmethod
     def batch_data_to_booster_data(net : nn.Module , loader : Iterator[BatchData | Any] , 
@@ -100,37 +100,12 @@ class _LgbmBooster(Booster):
     def reset(self): self.loaded = False
     def load(self , model_str: str):
         '''load self.model'''
-        self.model = Lgbm.model_from_string(model_str , cuda=self.is_cuda)
+        self.model = algo_lgbm.model_from_string(model_str , cuda=self.is_cuda)
         self.loaded = True
         return self
 
-class LgbmEnsembler(_LgbmBooster):
-    '''load booster data and fit'''
-    def booster_data(self , net : nn.Module , loader : Iterator[BatchData | Any]) -> BoosterData:
-        return self.batch_data_to_booster_data(net , loader , self.y_secid , self.y_date)
-    
-    @property
-    def batch_data(self) -> BatchData:
-        assert isinstance(self.module.batch_data , BatchData)
-        return self.module.batch_data
-
-    def fit(self , net : nn.Module):
-        net = self.module.device(net)
-        train_data = self.booster_data(net , self.train_dl)
-        valid_data = self.booster_data(net , self.valid_dl)
-        self.model = Lgbm(train_data , valid_data , cuda=self.is_cuda , **self.lgbm_params).fit()
-        # self.model.plot.training()
-        return self
-    
-    def predict(self , *args):
-        assert self.loaded
-        hidden : Tensor = self.module.batch_output.other['hidden']
-        hidden = hidden.detach().cpu()
-        return torch.tensor(self.model.predict(BoosterData(hidden , self.label()) , reform = False))
-    
-    def label(self , *args): return self.batch_data.y.detach().cpu()
             
-class LgbmBooster(_LgbmBooster):
+class LgbmBooster(LGBM):
     '''load booster data and fit'''
     @property
     def train_batch_data(self) -> tuple[BoosterData,BoosterData] | Any:
@@ -149,7 +124,7 @@ class LgbmBooster(_LgbmBooster):
 
     def fit(self , *args):
         train_data , valid_data = self.train_batch_data
-        self.model = Lgbm(train_data , valid_data , cuda=self.is_cuda , **self.lgbm_params).fit()
+        self.model = algo_lgbm(train_data , valid_data , cuda=self.is_cuda , **self.lgbm_params).fit()
         # self.model.plot.training()
         return self
     

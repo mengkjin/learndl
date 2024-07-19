@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 
 from typing import Any , Literal
-from .path import PATH 
-from .conf import CONF
+from . import path as PATH 
+from . import conf as CONF
 
 DB_BY_NAME  : list[str] = ['information' , 'information_ts']
 DB_BY_DATE  : list[str] = ['models' , 'trade' , 'labels' , 'benchmark' , 'membership_ts' , 'trade_ts']  

@@ -94,7 +94,8 @@ class Storage:
 class Checkpoint(Storage):
     '''model check point for epochs'''
     def __init__(self, store_type: Literal['mem' , 'disk'] | TrainConfig):
-        if isinstance(store_type , TrainConfig): store_type = 'mem' if store_type.mem_storage else 'disk'
+        if isinstance(store_type , TrainConfig): 
+            store_type = 'mem' if store_type['mem_storage'] else 'disk'
         super().__init__(store_type)
         self.epoch_queue : list[list] = []
         self.join_record : list[str]  = [] 

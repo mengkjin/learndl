@@ -2,6 +2,7 @@ from . import (
     core , process , update
 )
 
+from .classes import BoosterData
 from .core import DataBlock , DataBlockNorm , ModuleData , GetData , BlockLoader , FrameLoader
 from .process import DataProcessor
 from .update import DataFetcher , DataUpdater

@@ -44,7 +44,7 @@ def complete_calendar():
     cal = pd.read_feather('./data/DataBase/DB_information_ts/calendar.feather')
     trd = cal[cal['trade'] == 1].reset_index(drop=True)
     trd['pre'] = trd['calendar'].shift(1, fill_value=-1)
-    return trd
+    return trd.reset_index()
 
 def adjust_precision(df : pd.DataFrame , tol = 1e-8 , dtype_float = np.float32 , dtype_int = np.int64):
     '''adjust precision for df columns'''

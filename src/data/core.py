@@ -30,12 +30,8 @@ def data_type_alias(path : str , key : str):
             return path.format(alias)
     return path.format(key)
 
-class Silence:
-    def __enter__(self) -> None: CONF.SILENT = True
-    def __exit__(self , *args) -> None: CONF.SILENT = False
-
 class GetData:
-    Silence = Silence()
+    Silence = CONF.Silence()
     @classmethod
     def data_dates(cls , db_src , db_key):
         return get_target_dates(db_src , db_key)
@@ -163,6 +159,10 @@ class DataBlock(StockData4D):
                 'secid'   : self.secid.astype(int) , 
                 'feature' : self.feature}
         self.save_dict(data , path)
+
+    def ffill(self):
+        self.values = forward_fillna(self.values , axis = 1)
+        return self
     
     @staticmethod
     def save_dict(data : dict , file_path : str):
@@ -458,7 +458,26 @@ class ModuleData:
     @classmethod
     def load(cls , data_type_list : list[str] , y_labels : Optional[list[str]] = None , 
              predict : bool = False , dtype : Optional[str | Any] = torch.float , 
-             save_upon_loading : bool = True , silent = False):
+             save_upon_loading : bool = True):
+        
+        if predict: 
+            return cls.load_datas(data_type_list , y_labels , predict , dtype , save_upon_loading)
+        else:
+            hist_data = cls.load_datas(data_type_list , y_labels , False , dtype , save_upon_loading)
+            pred_data = cls.load_datas(data_type_list , y_labels , True  , dtype , save_upon_loading)
+
+            hist_data.y = hist_data.y.merge_others([pred_data.y])
+            hist_data.secid , hist_data.date = hist_data.y.secid , hist_data.y.date
+            for x_key in hist_data.x:
+                hist_data.x[x_key] = hist_data.x[x_key].merge_others([pred_data.x[x_key]]).\
+                    align_secid_date(hist_data.secid , hist_data.date)
+
+            return hist_data
+
+    @classmethod
+    def load_datas(cls , data_type_list : list[str] , y_labels : Optional[list[str]] = None , 
+                   predict : bool = False , dtype : Optional[str | Any] = torch.float , 
+                   save_upon_loading : bool = True):
         if dtype is None: dtype = torch.float
         if isinstance(dtype , str): dtype = getattr(torch , dtype)
         if predict: 

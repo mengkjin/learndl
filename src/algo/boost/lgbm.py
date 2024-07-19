@@ -8,8 +8,8 @@ from copy import deepcopy
 
 from typing import Any , Optional
 
-from ..classes import BoosterData
 from ...basic import PATH
+from ...data import BoosterData
 from ...func import match_values, np_nanic_2d , np_nanrankic_2d
 
 plt.style.use('seaborn-v0_8') 
@@ -158,7 +158,6 @@ class Lgbm():
     def model_from_string(cls , model_str , cuda = False):
         obj = cls(cuda = cuda)
         obj.evals_result = dict()
-        print(model_str)
         obj.model = lgb.Booster(model_str = model_str)
         return obj
     

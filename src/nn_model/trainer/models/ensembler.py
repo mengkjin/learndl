@@ -1,19 +1,26 @@
-import numpy as np
 import torch
+import numpy as np
 
 from abc import ABC , abstractmethod
 from copy import deepcopy
-from torch import nn
+from torch import nn , Tensor
 from torch.optim.swa_utils import AveragedModel , update_bn
+from typing import Any , Iterator , Literal , Optional
 
-from ..classes import BaseTrainer , BatchData
-from ..util import Metrics , Checkpoint
+from .booster import LGBM
+from ...classes import BaseTrainer , BatchData , BaseDataModule , BatchOutput , BoosterData
+from ...util import Metrics , Checkpoint
+from ....algo.boost.lgbm import Lgbm as algo_lgbm
 
-def choose_ensembler(model_type):
+def choose_net_ensembler(model_type):
     '''get a subclass of _BaseEnsembler'''
     if model_type == 'best': return EnsembleBest
     elif model_type == 'swabest': return EnsembleSWABest
     elif model_type == 'swalast': return EnsembleSWALast
+    else: raise KeyError(model_type)
+
+def choose_boost_ensembler(model_type):
+    if model_type == 'lgbm': return LgbmEnsembler
     else: raise KeyError(model_type)
 
 class Ensembler(ABC):
@@ -165,3 +172,29 @@ class EnsembleSWALast(Ensembler):
         for epoch in self.candidates:  swa.update_sd(self.ckpt.load_epoch(epoch))
         swa.update_bn(module)
         return swa.module.cpu()
+
+class LgbmEnsembler(LGBM):
+    '''load booster data and fit'''
+    def booster_data(self , net : nn.Module , loader : Iterator[BatchData | Any]) -> BoosterData:
+        return self.batch_data_to_booster_data(net , loader , self.y_secid , self.y_date)
+    
+    @property
+    def batch_data(self) -> BatchData:
+        assert isinstance(self.module.batch_data , BatchData)
+        return self.module.batch_data
+
+    def fit(self , net : nn.Module):
+        net = self.module.device(net)
+        train_data = self.booster_data(net , self.train_dl)
+        valid_data = self.booster_data(net , self.valid_dl)
+        self.model = algo_lgbm(train_data , valid_data , cuda=self.is_cuda , **self.lgbm_params).fit()
+        # self.model.plot.training()
+        return self
+    
+    def predict(self , *args):
+        assert self.loaded
+        hidden : Tensor = self.module.batch_output.other['hidden']
+        hidden = hidden.detach().cpu()
+        return torch.tensor(self.model.predict(BoosterData(hidden , self.label()) , reform = False))
+    
+    def label(self , *args): return self.batch_data.y.detach().cpu()

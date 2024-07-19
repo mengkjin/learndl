@@ -14,8 +14,8 @@ def get_nn_specific_cb(module_name : str) -> Optional[Any]:
         return SpecCB_TRA
 class SpecCB_TRA(CallBack):
     '''in TRA fill [y] [hist_loss] in batch_data.kwargs , update hist_loss in data.buffer'''
-    def __init__(self , model_module) -> None:
-        super().__init__(model_module , with_cb=False)
+    def __init__(self , model_module , **kwargs) -> None:
+        super().__init__(model_module , with_cb=False , **kwargs)
 
     def fill_batch_data(self):
         self.i0 = self.batch_data.i[:,0].cpu()
@@ -47,9 +47,9 @@ class SpecCB_TRA(CallBack):
 
 class SpecCB_VAE(CallBack):
     '''in VAE fill [y] [alpha_noise] [factor_noise] in batch_data.kwargs'''
-    def __init__(self , model_module) -> None:
+    def __init__(self , model_module , **kwargs) -> None:
         self._manual_seed = 42 if model_module.config.random_seed is None else model_module.config.random_seed
-        super().__init__(model_module , with_cb=False)
+        super().__init__(model_module , with_cb=False , **kwargs)
         torch.manual_seed(self._manual_seed)
     def _reparameterize(self , object_tensor : torch.Tensor , numel : Optional[int] = None):
         if numel is None:
@@ -65,8 +65,8 @@ class SpecCB_VAE(CallBack):
 
 class SpecCB_DSize(CallBack):
     '''in _dsize model fill [size] in batch_data.kwargs'''
-    def __init__(self , model_module) -> None:
-        super().__init__(model_module , with_cb=False)
+    def __init__(self , model_module , **kwargs) -> None:
+        super().__init__(model_module , with_cb=False , **kwargs)
         self._size = None
     def init_buffer(self):
         if self._size is None: self._size = BlockLoader('models', 'risk_exp', ['size']).load_block().as_tensor()

@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
 from ..classes import BatchOutput
-from ..ensemble import ModelEnsembler
-from ..trainer import NetDataModule
+from ..trainer.models import ModelEnsembler
+from ..trainer.trainers import NetDataModule
 from ..util import Deposition , Device , TrainConfig
 from ...basic import RegModel , PATH , CONF , THIS_IS_SERVER , REG_MODELS , FACTOR_DESTINATION
 from ...data import GetData

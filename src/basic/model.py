@@ -3,13 +3,13 @@ import numpy as np
 
 from dataclasses import dataclass
 from typing import Literal , Optional
-from .path import PATH
+from . import path as PATH
 
 @dataclass(slots=True)
 class RegModel:
     name : str
-    type : Literal['best' , 'swalast' , 'swabest']
-    num  : int | list[int] | range | Literal['all']
+    type : Literal['best' , 'swalast' , 'swabest'] = 'best'
+    num  : int | list[int] | range | Literal['all'] = 0
     alias : Optional[str] = None
 
     @property

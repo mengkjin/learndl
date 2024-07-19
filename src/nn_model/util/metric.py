@@ -9,8 +9,7 @@ from typing import Any , Literal , Optional
 
 from .config import TrainConfig
 from ..classes import BatchData , BatchMetric , BatchOutput , MetricList , TrainerStatus
-from ..nn import get_nn_category , get_multiloss_params
-from ...basic import BOOSTER_MODULE
+from ..nn import get_multiloss_params
 from ...func import mse , pearson , ccc , spearman
 
 DISPLAY_CHECK  = True # will display once if true
@@ -22,13 +21,12 @@ class Metrics:
     def __init__(self , config : TrainConfig , use_dataset  : Literal['train','valid'] = 'valid' , 
                  use_metric : Literal['loss' , 'score'] = 'score' , **kwargs) -> None:
         self.config      = config
-        self.criterion   = config.train_param['criterion']
         self.use_dataset = use_dataset
         self.use_metric  = use_metric
         
-        self.loss_calc    = LossCalculator(self.criterion['loss'])
-        self.score_calc   = ScoreCalculator(self.criterion['score'])
-        self.penalty_calc = {k:PenaltyCalculator(k,v) for k,v in self.criterion['penalty'].items()}
+        self.loss_calc    = LossCalculator(self.config['train.criterion.loss'])
+        self.score_calc   = ScoreCalculator(self.config['train.criterion.score'])
+        self.penalty_calc = {k:PenaltyCalculator(k,v) for k,v in self.config['train.criterion.penalty'].items()}
         
         self.output    = BatchMetric()
         self.metric_batchs = MetricsAggregator()
@@ -36,7 +34,6 @@ class Metrics:
         self.latest : dict[str,Any] = {}
         self.last_metric : Any = None
         self.best_metric : Any = None
-        self.is_booster = self.config.model_module in BOOSTER_MODULE
 
     @property
     def loss(self): return self.output.loss
@@ -48,17 +45,14 @@ class Metrics:
     def losses(self): return self.metric_batchs.losses
     @property
     def scores(self): return self.metric_batchs.scores
-    @property
-    def multi_param(self) -> dict[str,Any]: return self.config.train_param['multilosses']
-    @property
-    def nn_category(self): return get_nn_category(self.config.model_module)
     
     def new_model(self , model_param : dict[str,Any] , **kwargs):
         self.model_param  = model_param
         self.num_output   = model_param.get('num_output' , 1)
         self.which_output = model_param.get('which_output' , 0)
-        self.multi_losses = MultiHeadLosses(self.num_output , self.multi_param['type'], 
-                                         **self.multi_param['param_dict'][self.multi_param['type']])
+        self.multi_losses = MultiHeadLosses(
+            self.num_output , self.config['train.multilosses.type'], 
+            **self.config['train.multilosses.param.{}'.format(self.config['train.multilosses.type'])])
 
         self.update_penalty_calc()
         self.new_attempt()
@@ -66,7 +60,7 @@ class Metrics:
     
     def update_penalty_calc(self):
         if self.penalty_calc.get('hidden_corr'): 
-            cond_hidden_corr = (self.nn_category == 'tra') or self.model_param.get('hidden_as_factors',False)
+            cond_hidden_corr = (self.config.nn_category == 'tra') or self.model_param.get('hidden_as_factors',False)
             self.penalty_calc['hidden_corr'].cond = cond_hidden_corr
 
     def new_attempt(self):
@@ -137,7 +131,7 @@ class Metrics:
             score = self.score_calc(label , pred , weight , nan_check = True , which_head = self.which_output , training = False).item()
             self.output = BatchMetric(score = score)
 
-        if dataset == 'train' and not self.is_booster:
+        if dataset == 'train' and self.config.is_nn:
             multiheadlosses = self.loss_calc(label , pred , weight , nan_check = False , training = True)
             loss = self.multi_losses(multiheadlosses , multiloss_param) 
             self.output.add_loss(self.loss_calc.criterion , loss)
@@ -261,7 +255,8 @@ class PenaltyCalculator(_MetricCalculator):
         '''if kwargs containse hidden, calculate 2nd-norm of hTh'''
         if isinstance(hidden,(tuple,list)): hidden = torch.cat(hidden,dim=-1)
         h = (hidden - hidden.mean(dim=0,keepdim=True)) / (hidden.std(dim=0,keepdim=True) + 1e-6)
-        pen = h.T.cov().triu(1).square().sum()
+        # pen = h.T.cov().norm().square() / (h.shape[-1] ** 2)
+        pen = h.T.cov().square().mean()
         return pen
 
 class MetricsAggregator:

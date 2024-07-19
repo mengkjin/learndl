@@ -3,7 +3,7 @@ import math , torch
 from copy import deepcopy
 from torch import nn , optim , Tensor
 from torch.nn.utils.clip_grad import clip_grad_value_
-from typing import Optional
+from typing import Any,Optional
 
 from .config import TrainConfig
 from ..classes import BatchMetric
@@ -15,24 +15,31 @@ class Optimizer:
     '''specify trainer optimizer and scheduler'''
     # reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
 
-    def __init__(self , net : nn.Module , config : TrainConfig , transfer : bool = False , lr_multiplier : float = 1. , 
-                 add_opt_param : Optional[dict] = None , 
-                 add_lr_param : Optional[dict] = None , 
-                 add_shd_param : Optional[dict] = None ,
-                 model_module = None) -> None:
+    def __init__(
+            self , 
+            net : nn.Module , 
+            config : TrainConfig , 
+            transfer : bool = False , 
+            lr_multiplier : float = 1. , 
+            add_opt_param : Optional[dict] = None , 
+            add_lr_param : Optional[dict] = None , 
+            add_shd_param : Optional[dict] = None ,
+            model_module = None) -> None:
         self.net = net
         self.config = config
-        self.opt_param = deepcopy(config.train_param['trainer']['optimizer'])
-        self.lr_param  = deepcopy(config.train_param['trainer']['learn_rate'])
-        self.shd_param = deepcopy(config.train_param['trainer']['scheduler'])
         self.model_module = model_module
-        if add_opt_param: self.opt_param.update(add_opt_param)
-        if add_lr_param:  self.lr_param.update(add_lr_param)
-        if add_shd_param: self.shd_param.update(add_shd_param)
 
+        self.opt_param : dict[str,Any] = deepcopy(self.config['train.trainer.optimizer'])
+        self.shd_param : dict[str,Any] = deepcopy(self.config['train.trainer.scheduler'])
+        self.lr_param  : dict[str,Any] = deepcopy(self.config['train.trainer.learn_rate'])
+        self.clip_value = self.config['train.trainer.gradient.clip_value']
+      
+        if add_opt_param: self.opt_param.update(add_opt_param)
+        if add_shd_param: self.shd_param.update(add_shd_param)
+        if add_lr_param:  self.lr_param.update(add_lr_param)
+        
         self.optimizer = self.load_optimizer(net , self.opt_param , self.lr_param , transfer , lr_multiplier)
         self.scheduler = self.load_scheduler(self.optimizer , self.shd_param)
-        self.clip_value = config.clip_value
 
     @classmethod
     def load_optimizer(cls , net : nn.Module , opt_param : dict , lr_param : dict  , 

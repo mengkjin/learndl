@@ -14,7 +14,16 @@ class Calendar(InfoFetecher):
         fields : str | Any = list(renamer.keys()) if renamer else None
         df = pro.trade_cal(fields = fields , exchange='SSE').rename(columns=renamer)
         df = df.sort_values('calendar').reset_index(drop = True)
-        return df
+
+        # process
+        df['calendar'] = df['calendar']
+        trd = df[df['trade'] == 1].reset_index(drop=True)
+        trd['pre'] = trd['calendar'].shift(1, fill_value=-1)
+        trd = df.merge(trd.drop(columns='trade') , on = 'calendar' , how = 'left').ffill()
+        trd['td_index'] = trd['trade'].cumsum()
+        trd = trd.astype(int)
+
+        return trd
     
 class Description(InfoFetecher):
     def db_src(self): return 'information_ts'
@@ -25,7 +34,8 @@ class Description(InfoFetecher):
             'name':'sec_name' ,
             'exchange':	'exchange_name'	,
             'list_date' : 'list_dt' ,
-            'delist_date' : 'delist_dt'
+            'delist_date' : 'delist_dt' ,
+            'industry' : 'industry' ,
         }
         fields : str | Any = list(renamer.keys())
         df = pd.concat([
@@ -64,7 +74,7 @@ class SWIndustry(InfoFetecher):
     
 class ChangeName(InfoFetecher):
     def db_src(self): return 'information_ts'
-    def db_key(self): return 'industry'    
+    def db_key(self): return 'change_name'    
     def get_data(self , date):
         limit = 5000
         dfs = []
@@ -91,5 +101,4 @@ class ChangeName(InfoFetecher):
 
     @staticmethod
     def _safe_type():
-        return ['撤销ST', '其他', '撤销*ST', '摘星', '改名', '摘星改名',
-                '恢复上市加N', '恢复上市', '更名', '完成股改', '摘G', '未股改加S']
+        return ['撤销ST', '撤销*ST', '摘星', '摘星改名', '恢复上市加N', '恢复上市']
