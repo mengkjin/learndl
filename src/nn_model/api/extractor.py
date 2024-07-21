@@ -82,6 +82,7 @@ class HiddenExtractor:
         else:
             raise KeyError(what)
 
+        os.makedirs(self.target_path , exist_ok=True)
         with torch.no_grad():
             for model_date , model_num , model_type in model_iter:
                 hidden_key = self.hidden_key(model_num , model_type , model_date)

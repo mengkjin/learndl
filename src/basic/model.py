@@ -24,18 +24,18 @@ class RegModel:
     @property
     def model_nums(self):
         path = os.path.join(PATH.main , 'model' , self.name)
-        return np.array([int(sub) for sub in os.listdir(path) if os.path.isdir(os.path.join(path , sub)) and sub.isdigit()])
+        return np.sort(np.array([int(sub) for sub in os.listdir(path) if os.path.isdir(os.path.join(path , sub)) and sub.isdigit()]))
     
     @property
     def model_dates(self):
         path = os.path.join(PATH.main , 'model' , self.name , str(self.num0))
-        return np.array([int(sub) for sub in os.listdir(path) if os.path.isdir(os.path.join(path , sub)) and sub.isdigit()])
+        return np.sort(np.array([int(sub) for sub in os.listdir(path) if os.path.isdir(os.path.join(path , sub)) and sub.isdigit()]))
     
     @property
     def model_types(self):
         model_date = self.model_dates[-1]
         path = os.path.join(PATH.main , 'model' , self.name , str(self.num0) , str(model_date))
-        return np.array([sub for sub in os.listdir(path) if os.path.isdir(os.path.join(path , sub))])
+        return np.sort(np.array([sub for sub in os.listdir(path) if os.path.isdir(os.path.join(path , sub))]))
     
     def full_path(self , model_num , model_date , model_type):
         return os.path.join(PATH.main , 'model' , self.name , str(model_num) , str(model_date) , model_type)
