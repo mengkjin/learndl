@@ -8,6 +8,10 @@ from ..nn import get_nn_category , get_nn_datatype
 from ...basic import PATH
 from ...func import pretty_print_dict , recur_update
 
+TRAIN_YAML = 'train_param.yaml'
+MODEL_YAML   = '{}.yaml'
+DEFAULT_YAML = 'default.yaml'
+
 def get_module_type(module : str):
     if module in ['lgbm']:
         return 'booster'
@@ -47,11 +51,9 @@ class TrainParam:
     model_name  : Optional[str] = None
     override    : Optional[dict] = None
 
-    TRAIN_YAML  : ClassVar[str] = 'train_param.yaml'
-
     def __post_init__(self) -> None:
         source_dir = PATH.conf if self.config_path == 'default' else self.config_path
-        source_base = self.TRAIN_YAML
+        source_base = TRAIN_YAML
         Param : dict = PATH.read_yaml(f'{source_dir}/{source_base}')
         
         if socket.gethostname() != 'mengkjin-server': Param['short_test'] = True
@@ -83,19 +85,21 @@ class TrainParam:
     
     def copy_to(self , target_dir , exist_ok = False):
         source_dir = PATH.conf if self.config_path == 'default' else self.config_path
-        target_base = source_base = self.TRAIN_YAML
+        target_base = source_base = TRAIN_YAML
         os.makedirs(target_dir, exist_ok = True)
         if not exist_ok: assert not os.path.exists(f'{target_dir}/{target_base}')
         if f'{source_dir}/{source_base}' != f'{target_dir}/{target_base}':
             shutil.copyfile(f'{source_dir}/{source_base}' , f'{target_dir}/{target_base}')
 
     @classmethod
-    def guess_module(cls) -> str:
-        return PATH.read_yaml(f'{PATH.conf}/{cls.TRAIN_YAML}')['model.module'].lower()
+    def guess_module(cls , config_path : str) -> str:
+        if not config_path: config_path = f'{PATH.conf}/{TRAIN_YAML}'
+        if not config_path.endswith(TRAIN_YAML): config_path = f'{config_path}/{TRAIN_YAML}'
+        return PATH.read_yaml(config_path)['model.module'].lower()
     @property
     def model_base_path(self) -> str: return f'{PATH.model}/{self.model_name}'
     @property
-    def resumeable(self) -> bool: return os.path.exists(f'{self.model_base_path}/{self.TRAIN_YAML}')
+    def resumeable(self) -> bool: return os.path.exists(f'{self.model_base_path}/{TRAIN_YAML}')
     @property
     def model_module(self) -> str: return self.Param['model.module'].lower()
     @property
@@ -112,9 +116,7 @@ class ModelParam:
     n_model     : int          = 0
     params      : list[dict]   = field(default_factory=list)
 
-    MODEL_YAML  : ClassVar[str] = '{}.yaml'
-    DEFAULT_YAML: ClassVar[str] = 'default.yaml'
-    INDAY_DIMS  : ClassVar[dict] = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
+    INDAY_DIMS : ClassVar[dict[str,int]] = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
 
     def __post_init__(self) -> None:
         self.Param = PATH.read_yaml(self.source_path())
@@ -142,13 +144,13 @@ class ModelParam:
             shutil.copyfile(source_path , target_path)
 
     def source_path(self):
-        module_base = self.MODEL_YAML.format(self.module.lower())
+        module_base = MODEL_YAML.format(self.module.lower())
         source_dir  = f'{PATH.conf}/model' if self.config_path == 'default' else self.config_path
-        source_base = module_base if os.path.exists(f'{source_dir}/{module_base}') else self.DEFAULT_YAML
+        source_base = module_base if os.path.exists(f'{source_dir}/{module_base}') else DEFAULT_YAML
         return f'{source_dir}/{source_base}'
     
     def target_path(self , target_dir):
-        module_base = self.MODEL_YAML.format(self.module.lower())
+        module_base = MODEL_YAML.format(self.module.lower())
         return f'{target_dir}/{module_base}'
 
     def expand(self , base_path):
@@ -412,7 +414,8 @@ class TrainConfig:
         pretty_print_dict(self.Model.Param)
 
     @staticmethod
-    def guess_module() -> str: return TrainParam.guess_module()
+    def guess_module(config_path : str) -> str: 
+        return TrainParam.guess_module(config_path)
 
     @staticmethod
     def get_config_path(model_name : str): 

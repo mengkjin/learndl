@@ -209,11 +209,11 @@ class BaseTrainer(ABC):
     @abstractmethod
     def batch_metrics(self) -> None: 
         '''calculate and collect of batch_data'''
-        ...
+        if isinstance(self.batch_data , BatchData) and self.batch_data.is_empty: return
     @abstractmethod
     def batch_backward(self) -> None: 
         '''backward of batch loss'''
-        ...
+        if isinstance(self.batch_data , BatchData) and self.batch_data.is_empty: return
     @abstractmethod
     def init_config(self , **kwargs) -> None:
         '''initialized configuration'''

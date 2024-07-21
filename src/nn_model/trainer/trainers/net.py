@@ -43,14 +43,11 @@ class NetDataModule(DataModule):
                 assert torch.isin(b_i[:,1] , index1).all()
                 i0 , i1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1)
 
+
                 b_x = [self.prenorm(self.rolling_rotation(x[mdt],self.seqs[mdt],i0,i1) , mdt) for mdt in x.keys()]
                 b_y = y[i0 , yindex1]
                 b_w = None if w is None else w[i0 , yindex1]
                 b_v = valid[i0 , yindex1]
-
-                for b_xx in b_x: pass
-                    #print(b_xx[b_v].isnan())
-                    #print(b_xx[b_v].isnan().sum())
 
                 self.storage.save(BatchData(b_x , b_y , b_w , b_i , b_v) , batch_files[bnum] , group = self.stage)
             self.loader_dict[set_key] = DataloaderStored(self.storage , batch_files , shuf_opt)
@@ -77,7 +74,7 @@ class NetDataModule(DataModule):
         if stage == 'fit':
             sep = int(l1 * train_ratio)
             if sample_method == 'total_shuffle':
-                pool = permutation(np.arange(valid.sum().item()))
+                pool = torch.tensor(permutation(np.arange(valid.sum().item())))
                 sep = int(len(pool) * train_ratio)
                 sample_index['train'] = shuffle_sampling(pos[valid][pool[:sep]])
                 sample_index['valid'] = shuffle_sampling(pos[valid][pool[sep:]])
@@ -102,9 +99,11 @@ class NetTrainer(TrainerModule):
     def batch_forward(self) -> None: 
         self.batch_output = self(self.batch_data)
     def batch_metrics(self) -> None:
+        if isinstance(self.batch_data , BatchData) and self.batch_data.is_empty: return
         self.metrics.calculate(self.status.dataset , self.batch_data, self.batch_output, self.net, assert_nan = True)
         self.metrics.collect_batch_metric()
     def batch_backward(self) -> None:
+        if isinstance(self.batch_data , BatchData) and self.batch_data.is_empty: return
         assert self.status.dataset == 'train' , self.status.dataset
         self.on_before_backward()
         self.optimizer.backward(self.metrics.output)

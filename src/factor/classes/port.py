@@ -207,8 +207,10 @@ class Portfolio:
     def has(self , date : int):
         return date in self.ports.keys()
     def get(self , date : int , latest = False): 
-        use_date = self.latest_avail_date(date) if latest else date
-        port = self.ports.get(use_date , None)
+        port = self.ports.get(date , None)
+        if port is None:
+            use_date = self.latest_avail_date(date) if latest else date
+            port = self.ports.get(use_date , None)
         if port is None: 
             return Port.none_port(date)
         else:
@@ -233,8 +235,12 @@ class Benchmark(Portfolio):
     def available_dates(self): return self.benchmark_available_dates
 
     def get(self , date : int , latest = False):
-        use_date = self.latest_avail_date(date) if latest else date
-        port = self.ports.get(use_date , None)
+
+        port = self.ports.get(date , None)
+
+        if port is None:
+            use_date = self.latest_avail_date(date) if latest else date
+            port = self.ports.get(use_date , None)
 
         if port is None:
             if use_date in self.available_dates():

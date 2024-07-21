@@ -1,7 +1,7 @@
 random_seed: null
 
-model.name: null # gru_2head # null
-model.module: hidden_aggregator # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
+model.name: resnet_gru_30m # gru_2head # null
+model.module: resnet_gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 model.types: [best , swalast , swabest]
 model.lgbm_ensembler: false
 
@@ -9,7 +9,7 @@ data.hidden:
   - gru_day.0.best
   - gru_day.0.swabest
 
-data.type: day # 'day+30m' , 30m , day
+data.type: 30m # 'day+30m' , 30m , day
 data.prenorm:
   day: {'divlast' : True  , 'histnorm' : True}
 data.labels: 

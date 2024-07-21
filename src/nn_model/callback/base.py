@@ -49,7 +49,7 @@ class PredRecorder:
             self.initialized = True
 
     def append_batch_pred(self , module : BaseTrainer):
-        pred_idx = f'{module.model_num}.{module.model_type}.{module.batch_idx}'
+        pred_idx = f'{module.model_num}.{module.model_type}.{module.model_date}.{module.batch_idx}'
         if pred_idx in self.preds.keys(): return
         if module.batch_idx < module.batch_warm_up: return
         

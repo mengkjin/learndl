@@ -211,6 +211,7 @@ class DataBlock(StockData4D):
             newsecid = None
             if intersect_secid:  newsecid = index_intersect([blk.secid for blk in blocks])[0]
             newdate  = index_union([blk.date for blk in blocks] , start_dt , end_dt)[0]
+            for blk in blocks: newdate = newdate[newdate >= min(blk.date)]
             
             for i , blk in enumerate(blocks):
                 blk.align_secid_date(newsecid , newdate)
@@ -507,7 +508,7 @@ class ModuleData:
             y : DataBlock = blocks[0]
             x : dict[str,DataBlock] = {cls.abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
             norms = {cls.abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
-            secid , date = blocks[0].secid , blocks[0].date
+            secid , date = y.secid , y.date
 
             assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
 

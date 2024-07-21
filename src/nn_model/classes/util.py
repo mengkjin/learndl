@@ -99,7 +99,7 @@ class BatchOutput:
     @property
     def pred(self) -> Tensor:
         if self.outputs is None:
-            return Tensor().requires_grad_()
+            return Tensor(size=(0,1)).requires_grad_()
         elif isinstance(self.outputs , (list , tuple)):
             return self.outputs[0]
         else:
