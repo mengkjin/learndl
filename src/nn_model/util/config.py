@@ -194,7 +194,7 @@ class TrainConfig:
         self.Model : ModelParam = model_param
         
         self.resume_training: bool  = False
-        self.stage_queue: list      = ['data' , 'fit' , 'test']
+        self.stage_queue: list      = []
 
         self.Train.update_data_param(self.Model)
         check_config_validity(self)
@@ -282,7 +282,7 @@ class TrainConfig:
         if do_parser: config.process_parser(cls.parser_args(par_args))
 
         base_path = config.model_base_path
-        if config.resume_training:
+        if base_path != config_path and config.resume_training:
             train_param = TrainParam(base_path , model_name = config.model_name , override = override)
             model_param = ModelParam(base_path , train_param.model_module)
             config_resume = cls(train_param , model_param)
@@ -293,7 +293,7 @@ class TrainConfig:
             [os.makedirs(f'{base_path}/{mm}' , exist_ok = True) for mm in config.model_num_list]
             config.Train.copy_to(base_path , exist_ok=config.short_test)
             config.Model.copy_to(base_path , exist_ok=config.short_test)
-        
+            
         config.Model.expand(config.model_base_path)
         return config
     

@@ -20,7 +20,6 @@ class HiddenExtractor:
         self.reg_model = RegModel(model_name)
         self.model_name = self.reg_model.name 
         
-        self.model_types = self.reg_model.model_types
         if model_nums is None:
             self.model_nums = self.reg_model.model_nums
         else:
@@ -29,7 +28,7 @@ class HiddenExtractor:
         if model_types is None:
             self.model_types = self.reg_model.model_types
         else:
-            self.model_nums = [model_types] if isinstance(model_nums , str) else model_types
+            self.model_types = [model_types] if isinstance(model_nums , str) else model_types
 
         self.contents : dict[str,pd.DataFrame] = {}
 
