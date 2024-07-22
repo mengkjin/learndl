@@ -23,9 +23,11 @@ class AggregatorDataModule(DataModule):
         
     def load_data(self):
         #with CONF.Silence():
-        self.datas = ModuleData.load([] , self.config['data.labels'], self.predict, self.config.precision)
+        self.datas = ModuleData.load([] , self.config['data.labels'], 
+                                     fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
+                                     dtype = self.config.precision)
         self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
-        if self.predict:
+        if self.use_data == 'predict':
             self.model_date_list = self.datas.date[0]
             self.test_full_dates = self.datas.date[1:]
         else:
@@ -39,7 +41,7 @@ class AggregatorDataModule(DataModule):
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
               param = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1) -> None:
-        if self.predict: stage = 'predict'
+        if self.use_data == 'predict': stage = 'predict'
 
         if self.loader_param == (stage , model_date): return
         self.loader_param = stage , model_date

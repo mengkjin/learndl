@@ -215,7 +215,8 @@ class TrainConfig:
     def model_num_list(self) -> list[int]: return list(range(self.Model.n_model))
     @property
     def model_module(self) -> str: return self.Train.model_module
-
+    @property
+    def model_rslt_path(self) -> str: return f'{self.model_base_path}/detailed_analysis'
     @property
     def data_type_list(self) -> list[str]: return self['data.type'].split('+')
 
@@ -294,6 +295,7 @@ class TrainConfig:
             config.Train.copy_to(base_path , exist_ok=config.short_test)
             config.Model.copy_to(base_path , exist_ok=config.short_test)
             
+        os.makedirs(config.model_rslt_path , exist_ok=True)
         config.Model.expand(config.model_base_path)
         return config
     

@@ -25,23 +25,25 @@ class DataModule(BaseDataModule):
                      sample_method : Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] = 'sequential' ,
                      train_ratio   : float = 0.8 , batch_size : int = 2000) -> dict[str,list]: ...
     
-    def __init__(self , config : Optional[TrainConfig] = None , predict : bool = False):
+    def __init__(self , config : Optional[TrainConfig] = None , use_data : Literal['fit','predict','both'] = 'fit'):
         '''
         1. load Package of BlockDatas of x , y , norms and index
         2. Setup model_date dataloaders
         3. Buffer dict for dynamic nn's
         '''
         self.config  : TrainConfig = TrainConfig.load() if config is None else config
-        self.predict : bool = predict
+        self.use_data : Literal['fit','predict','both'] = use_data
         self.device  = Device()
         self.storage = Storage('mem' if self.config['mem_storage'] else 'disk')
         self.buffer  = BufferSpace(self.device)
 
     def load_data(self):
-        self.datas = ModuleData.load(self.data_type_list, self.config['data.labels'], self.predict, self.config.precision)
+        self.datas = ModuleData.load(self.data_type_list, self.config['data.labels'], 
+                                     fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
+                                     dtype = self.config.precision)
         self.config.update_data_param(self.datas.x)
         self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
-        if self.predict:
+        if self.use_data == 'predict':
             self.model_date_list = self.datas.date[0]
             self.test_full_dates = self.datas.date[1:]
         else:
@@ -72,7 +74,7 @@ class DataModule(BaseDataModule):
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1 , none_valid = False) -> None:
-        if self.predict: stage = 'predict'
+        if self.use_data == 'predict': stage = 'predict'
         seqlens : dict = {key:param['seqlens'][key] for key in self.data_type_list}
         seqlens.update({k:v for k,v in param.items() if k.endswith('_seq_len')})
         if self.loader_param == (stage , model_date , seqlens): return

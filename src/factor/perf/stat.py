@@ -4,12 +4,17 @@ import pandas as pd
 
 from typing import Any , Literal , Optional
 
-from ..util import Benchmark
+from ..util import Benchmark , BENCHMARKS
 from ...data import DataBlock
 from ...data.vendor import DATAVENDOR 
 
+def get_benchmark(benchmark : Optional[Benchmark | str] = None) -> Optional[Benchmark]:
+    if isinstance(benchmark , str): benchmark = BENCHMARKS[benchmark]
+    return benchmark
+
 def factor_val_breakdown(factor_val : DataBlock | pd.DataFrame , 
-                         benchmark : Optional[Benchmark] = None):
+                         benchmark : Optional[Benchmark | str] = None):
+    benchmark = get_benchmark(benchmark)
     if benchmark: factor_val = benchmark(factor_val)
     if isinstance(factor_val , DataBlock):
         secid , date = factor_val.secid , factor_val.date
@@ -93,7 +98,7 @@ def eval_weighted_pnl(x : pd.DataFrame , weight_type : str , direction : Any , g
     return rtn
 
 def calc_decay_ic(factor_val : DataBlock | pd.DataFrame, nday : int = 10 , lag_init : int = 2 , lag_num : int = 5 ,
-                  benchmark : Optional[Benchmark] = None , ic_type : Literal['pearson' , 'spearman'] = 'pearson' , 
+                  benchmark : Optional[Benchmark | str] = None , ic_type : Literal['pearson' , 'spearman'] = 'pearson' , 
                   ret_type : Literal['close' , 'vwap'] = 'close'):
     '''
     nday : days of future return
@@ -109,7 +114,7 @@ def calc_decay_ic(factor_val : DataBlock | pd.DataFrame, nday : int = 10 , lag_i
     decay_pnl_df = pd.concat(decay_pnl_df, axis=0)
     return decay_pnl_df.reset_index()
 
-def calc_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark] = None , 
+def calc_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark | str] = None , 
                   nday : int = 10 , lag : int = 2 , group_num : int = 10 , excess = False , 
                   ret_type : Literal['close' , 'vwap'] = 'close' , trade_date = True) -> pd.DataFrame:
     factor_val , secid , date = factor_val_breakdown(factor_val , benchmark)
@@ -122,7 +127,7 @@ def calc_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Be
         df['end']   = DATAVENDOR.td_offset(df['date'] , lag + nday - 1)
     return df
 
-def calc_decay_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark] = None , 
+def calc_decay_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark | str] = None , 
                         nday : int = 10 , lag_init : int = 2 , group_num : int = 10 ,
                         lag_num : int = 5 , ret_type : Literal['close' , 'vwap'] = 'close'):
     decay_grp_perf = []
@@ -143,7 +148,7 @@ def calc_decay_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optio
     rtn = pd.DataFrame(rtn.rename_axis('stats_name', axis='columns').stack() , columns=['stats_value'])
     return rtn.reset_index()
 
-def calc_ic_monotony(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark] = None , 
+def calc_ic_monotony(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark | str] = None , 
                      nday : int = 10 , lag_init : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close'):
     factor_val , secid , date = factor_val_breakdown(factor_val , benchmark)
     grp_perf = calc_grp_perf(factor_val , nday = nday , lag = lag_init , group_num = 100 , 
@@ -158,7 +163,7 @@ def calc_ic_monotony(factor_val : DataBlock | pd.DataFrame, benchmark : Optional
     rtn = pd.DataFrame(rtn.rename_axis('stats_name', axis='columns').stack() , columns=['stats_value'])
     return rtn.reset_index()
 
-def calc_style_corr(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark] = None):
+def calc_style_corr(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark | str] = None):
     factor_val , secid , date = factor_val_breakdown(factor_val , benchmark)
     risk_style = DATAVENDOR.risk_style_exp(secid , date).to_dataframe()
 
@@ -171,7 +176,7 @@ def calc_style_corr(factor_val : DataBlock | pd.DataFrame , benchmark : Optional
 
     return factor_style_corr.reset_index()
 
-def calc_distribution(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark] = None , 
+def calc_distribution(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark | str] = None , 
                       sampling_date_num : int = 20 , hist_bins : int = 50):
     factor_val , secid , date = factor_val_breakdown(factor_val , benchmark)
     date_chosen = date[::int(np.ceil(len(date) / sampling_date_num))]
@@ -192,13 +197,13 @@ def calc_distribution(factor_val : DataBlock | pd.DataFrame , benchmark : Option
     rtn = rtn.reset_index(drop=False).loc[:,['date' , 'factor_name', 'hist_cnts', 'hist_bins']]
     return rtn
 
-def calc_factor_qtile(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark] = None , 
+def calc_factor_qtile(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark | str] = None , 
                       scaling : bool = True):
     factor_val , _ , _ = factor_val_breakdown(factor_val , benchmark)
     rtn = factor_val.groupby(['date']).apply(eval_qtile_by_day , scaling = scaling)
     return rtn.reset_index()
 
-def calc_top_grp_perf_year(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark] = None ,
+def calc_top_grp_perf_year(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark | str] = None ,
                            nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                            ret_type : Literal['close' , 'vwap'] = 'close'):
     factor_val , secid , date = factor_val_breakdown(factor_val , benchmark)
@@ -236,7 +241,7 @@ def calc_top_grp_perf_year(factor_val : DataBlock | pd.DataFrame , benchmark : O
     
     return rtn.reset_index()
 
-def calc_ic_year(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark] = None , 
+def calc_ic_year(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark | str] = None , 
                  nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
                  ret_type : Literal['close' , 'vwap'] = 'close'):
     factor_val , secid , date = factor_val_breakdown(factor_val , benchmark)
@@ -269,7 +274,7 @@ def calc_ic_year(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Be
 
     return rtn.reset_index()
 
-def calc_ic_curve(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark] = None , 
+def calc_ic_curve(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark | str] = None , 
                   nday : int = 10 , lag : int = 2 ,  ma_windows : int | list[int] = [10,20] ,
                   ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
                   ret_type : Literal['close' , 'vwap'] = 'close'):
@@ -285,7 +290,7 @@ def calc_ic_curve(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[B
     ic_curve = ic_curve
     return ic_curve.reset_index()
 
-def calc_industry_ic(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark] = None , 
+def calc_industry_ic(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark | str] = None , 
                      nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
                      ret_type : Literal['close' , 'vwap'] = 'close'):
     factor_val , secid , date = factor_val_breakdown(factor_val , benchmark)
@@ -299,7 +304,7 @@ def calc_industry_ic(factor_val : DataBlock | pd.DataFrame , benchmark : Optiona
     ic_stats = pd.concat([ic_mean.rename('avg') , ic_ir.rename('ir')] , axis=1, sort=True)
     return ic_stats.reset_index()
 
-def calc_pnl(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark] = None , 
+def calc_pnl(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark | str] = None , 
              nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
              ret_type : Literal['close' , 'vwap'] = 'close' , given_direction : Literal[1,0,-1] = 0 ,
              weight_type_list : list[str] = ['long' , 'long_short' , 'short']):

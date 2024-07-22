@@ -8,6 +8,7 @@ from typing import Any , Callable , ClassVar , Optional
 from .base import CallBack , df_display
 from ..util.loader import LoaderWrapper
 from ...basic import PATH
+from ...func import dfs_to_excel
 
 class CallbackTimer(CallBack):
     '''record time cost of callback hooks'''
@@ -222,18 +223,21 @@ class StatusDisplay(CallBack):
         self.test_df_model = self.test_df_model.rename(columns={'model_date' : 'stat'}).pivot_table(
             'value' , 'stat' , ['model_num' , 'model_type'] , observed=False)
 
-        self.test_df_model.to_csv(f'{self.config.model_base_path}/{self.config.model_name}_score_by_model.csv')
+        # self.test_df_model.to_csv(f'{self.config.model_base_path}/{self.config.model_name}_score_by_model.csv')
+        rslt = {'by_model' : self.test_df_model}
         for model_num in self.config.model_num_list:
             df : pd.DataFrame = self.test_df_date[self.test_df_date['model_num'] == model_num].pivot_table(
                 'value' , 'date' , 'model_type' , observed=False)
             df_cum = df.cumsum().rename(columns = {model_type:f'{model_type}_cum' for model_type in df.columns})
             df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
-            path = self.config.model_param[model_num]['path'] + f'/{self.config.model_name}_score_by_date_{model_num}.csv'
-            df.to_csv(path)
-
+            rslt[f'{model_num}'] = df
+            #path = self.config.model_param[model_num]['path'] + f'/{self.config.model_name}_score_by_date_{model_num}.csv'
+            #df.to_csv(path)
+        
         df = self.test_df_model.round(4)
         df.index = df.index.set_names(None)
         df.columns = pd.MultiIndex.from_tuples([(f'{self.config.model_module}.{num}' , type) for num,type in df.columns])
         df_display(df)
-        
+        dfs_to_excel(rslt , f'{self.config.model_rslt_path}/test.xlsx')
+        print(f'Test results are saved to {self.config.model_rslt_path}/test.xlsx')
         self.test_summarized = True

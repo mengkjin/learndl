@@ -17,7 +17,7 @@ class ModelTestor:
     @classmethod
     def new(cls , module = 'tra_lstm' , model_data_type = 'day'):
         config = TrainConfig.load(override = {'model_module' : module , 'model_data_type' : model_data_type} , makedir = False)
-        data = NetDataModule(config , True).load_data()
+        data = NetDataModule(config , 'predict').load_data()
         data.setup('predict' , config.model_param[0] , data.model_date_list[0])   
         
         batch_data = data.predict_dataloader()[0]

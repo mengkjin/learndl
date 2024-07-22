@@ -211,3 +211,33 @@
   1.best: Avg(0.1071)|Sum(196.18)|Std(0.0772)|T(59.37)|IR(6.7966)
   1.swabest: Avg(0.0934)|Sum(171.04)|Std(0.0722)|T(55.33)|IR(6.3344)
   1.swalast: Avg(0.0871)|Sum(159.48)|Std(0.0727)|T(51.23)|IR(5.8657)
+0_model: risk_att_gru_30m_ShortTest(x1)
+1_start: Mon Jul 22 11:14:02 2024
+2_basic: short
+3_datas: day+style+indus
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 1.2 Min/model, 17.8 Sec/Epoch
+7_test: Finish Process [Test], Cost 6.9 Secs
+8_result:
+  0.best: Avg(0.1167)|Sum(4.08)|Std(0.087)|T(7.93)|IR(6.569)
+0_model: risk_att_gru_30m_ShortTest(x1)
+1_start: Mon Jul 22 13:12:07 2024
+2_basic: short
+3_datas: day+style+indus
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 1.2 Min/model, 17.8 Sec/Epoch
+7_test: Finish Process [Test], Cost 8.6 Secs
+8_result:
+  0.best: Avg(0.225)|Sum(7.88)|Std(0.1169)|T(11.39)|IR(9.4283)
+0_model: risk_att_gru_30m_ShortTest(x1)
+1_start: Mon Jul 22 14:52:08 2024
+2_basic: short
+3_datas: day+style+indus
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 1.1 Min/model, 15.8 Sec/Epoch
+7_test: Finish Process [Test], Cost 8.5 Secs
+8_result:
+  0.best: Avg(0.0683)|Sum(2.39)|Std(0.0554)|T(7.3)|IR(6.0422)

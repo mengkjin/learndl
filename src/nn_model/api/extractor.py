@@ -36,7 +36,7 @@ class HiddenExtractor:
         self.deposition = Deposition(self.config)
         self.device     = Device()
 
-        self.data = NetDataModule(self.config , False).load_data()
+        self.data = NetDataModule(self.config , 'both').load_data()
         self.target_path = os.path.join(PATH.hidden , self.reg_model.name)
 
         if not np.isin(self.reg_model.model_dates , self.data.model_date_list).all():

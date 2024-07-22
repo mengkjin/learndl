@@ -85,10 +85,11 @@ class Predictor:
         model_dates  = self.reg_model.model_dates 
         start_dt     = max(start_dt , int(date_offset(min(model_dates) ,1)))
 
-        data_mod_old = NetDataModule(model_config , False).load_data() if start_dt <= today(-100) else None
-        data_mod_new = NetDataModule(model_config , True).load_data() 
+        #data_mod_old = NetDataModule(model_config , False).load_data() if start_dt <= today(-100) else None
+        #data_mod_new = NetDataModule(model_config , True).load_data() 
+        data_mod = NetDataModule(model_config , 'both' if start_dt <= today(-100) else 'predict').load_data() 
 
-        end_dt = min(end_dt , max(data_mod_new.test_full_dates))
+        end_dt = min(end_dt , max(data_mod.test_full_dates))
         pred_dates = GetData.trade_dates(start_dt , end_dt)
         
         df_task = pd.DataFrame({'pred_dates' : pred_dates , 
@@ -97,6 +98,38 @@ class Predictor:
 
         torch.set_grad_enabled(False)
         df_list = []
+        
+        for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
+            for model_num in self.model_nums:
+                model_param = model_config.model_param[model_num]
+                # print(model_date , 'old' if (data is data_mod_old) else 'new') 
+                assert isinstance(model_date , int) , model_date
+                data_mod.setup('predict' ,  model_param , model_date)
+                model = deposition.load_model(model_date , model_num , self.model_type)
+
+                net = ModelEnsembler.get_net(model_config.model_module , model_param , model['state_dict'] , device)
+                net.eval()
+
+                loader = data_mod.predict_dataloader()
+                secid  = data_mod.datas.secid
+                tdates = data_mod.model_test_dates
+                iter_tdates = np.intersect1d(df_sub['pred_dates'][df_sub['calculated'] == 0] , tdates)
+
+                for tdate in iter_tdates:
+                    batch_data = loader[np.where(tdates == tdate)[0][0]]
+
+                    pred = BatchOutput(net(batch_data.x)).pred
+                    if len(pred) == 0: continue
+                    df = pd.DataFrame({'model_num':model_num , 'date' : tdate , 
+                                        'secid' : secid[batch_data.i[:,0].cpu().numpy()] , 
+                                        self.model_name : pred.cpu().flatten().numpy()})
+                    df_list.append(df)
+                    df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
+        torch.set_grad_enabled(True)
+        del data_mod
+        df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
+        return df
+        '''
         for data in [data_mod_old , data_mod_new]:
             if data is None: continue
             assert isinstance(data , NetDataModule)
@@ -131,3 +164,4 @@ class Predictor:
         del data_mod_new , data_mod_old
         df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
         return df
+        '''

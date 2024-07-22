@@ -1,7 +1,7 @@
 random_seed: null
 
-model.name: resnet_gru_30m # gru_2head # null
-model.module: resnet_gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
+model.name: null # gru_2head # null
+model.module: risk_att_gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 model.types: [best , swalast , swabest]
 model.lgbm_ensembler: false
 

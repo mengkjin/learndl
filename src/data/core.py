@@ -458,11 +458,15 @@ class ModuleData:
     
     @classmethod
     def load(cls , data_type_list : list[str] , y_labels : Optional[list[str]] = None , 
-             predict : bool = False , dtype : Optional[str | Any] = torch.float , 
+             fit : bool = True , predict : bool = False , 
+             dtype : Optional[str | Any] = torch.float , 
              save_upon_loading : bool = True):
         
-        if predict: 
-            return cls.load_datas(data_type_list , y_labels , predict , dtype , save_upon_loading)
+        assert fit or predict , (fit , predict)
+        if not predict: 
+            return cls.load_datas(data_type_list , y_labels , False , dtype , save_upon_loading)
+        elif not fit:
+            return cls.load_datas(data_type_list , y_labels , True  , dtype , save_upon_loading)
         else:
             hist_data = cls.load_datas(data_type_list , y_labels , False , dtype , save_upon_loading)
             pred_data = cls.load_datas(data_type_list , y_labels , True  , dtype , save_upon_loading)

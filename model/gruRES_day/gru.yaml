@@ -1,0 +1,15 @@
+hidden_dim:     [32,64] #  2**5
+seqlens:        [{'day': 30 , '30m': 30 , 'dms': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
+tra_seqlens:    [{'hist_loss': 40}]
+dropout:        [0.1]
+enc_in:         [true]
+enc_att:        [false] 
+rnn_type:       ['lstm'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
+rnn_att:        [false]
+rnn_layers:     [2]
+dec_mlp_layers: [2] 
+num_output:     [1]
+kernel_size:    [3] # for tcn
+hidden_as_factor:    [false]
+ordered_param_group: [false]  # multiple data input , if train sequentially
+tra_num_states: [5]
