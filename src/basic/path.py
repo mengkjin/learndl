@@ -26,9 +26,9 @@ def read_yaml(yaml_file):
         d = yaml.load(f , Loader = yaml.FullLoader)
     return d
 
-def dump_yaml(data , yaml_file):
+def dump_yaml(data , yaml_file , **kwargs):
     with open(yaml_file , 'a' if os.path.exists(yaml_file) else 'w') as f:
-        yaml.dump(data , f)
+        yaml.dump(data , f , **kwargs)
 
 def copytree(src , dst):
     shutil.copytree(src , dst)
