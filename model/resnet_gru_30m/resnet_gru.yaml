@@ -12,5 +12,3 @@ which_output:   [0]
 resnet_blocks:  [1]
 enc_in_dim   :  [16]
 hidden_as_factor:    [true]
-
-model.types: [best]
