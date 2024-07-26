@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from .basic import pro , code_to_secid , DateFetecher
+from ..basic import pro , code_to_secid , DateFetecher
 
 class DailyQuote(DateFetecher):
     '''Tonghuashun Concept'''

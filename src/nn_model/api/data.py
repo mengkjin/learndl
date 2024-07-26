@@ -50,6 +50,6 @@ class DataAPI:
         ...
         '''
         model_config = TrainConfig.load().update(short_test=True, model_data_type=model_data_type)
-        data = NetDataModule(model_config , True).load_data()
+        data = NetDataModule(model_config , 'predict').load_data()
         data.setup('predict' , model_date = data.datas.y.date[-50])
         return data.predict_dataloader()[0]

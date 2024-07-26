@@ -1,4 +1,8 @@
 import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+
+from typing import Any , Literal , Optional
 from scipy.stats import norm, rankdata
 
 def fill_na_as_const(x_: np.ndarray, c_ : float = 0.0):
@@ -141,3 +145,135 @@ def patched_by_industry(y_: np.ndarray, ind_risk_: np.ndarray, method_: int=0):
     else:
         y = y_.copy()
     return y
+
+def trim(v , v1 , v2):
+    v = v + 0
+    if v1 is not None: v[v < v1] = np.nan
+    if v2 is not None: v[v > v2] = np.nan
+    return v
+
+def winsor(v , v1 , v2):
+    v = v + 0
+    if v1 is not None: v[v < v1] = v1
+    if v2 is not None: v[v > v2] = v2
+    return v
+
+def whiten(v , weight = None):
+    if weight is None:
+        return (v - np.mean(v)) / (np.std(v) + 1e-6)
+    else:
+        return (v - np.sum(v * weight) / np.sum(weight)) / (np.std(v) + 1e-6)
+
+def winsorize(v , 
+              center : Literal['median' , 'mean'] = 'median', 
+              scale : Literal['mad' , 'sd'] = 'mad', 
+              const : Optional[float] = None , 
+              trim_val : tuple[Optional[float],Optional[float]] = (None , None) , 
+              winsor_val : tuple[Optional[float],Optional[float]] = (None , None) , 
+              winsor_pct : tuple[float,float] = (0. , 1.)):
+    assert center in ['median' , 'mean'] , center
+    assert scale in ['mad' , 'sd'] , scale
+    
+    v = trim(v , *trim_val)
+    v = winsor(v , *winsor_val)
+
+    s = np.nanmedian(np.abs(v - np.nanmedian(v))) if scale == 'mad' else np.nanstd(v)
+    c = np.nanmedian(v) if center == 'median' else  np.nanmean(v)
+
+    if const is None:
+        if center == 'median' and scale == 'mad' : const = 5.
+        elif center == 'mean' and scale == 'sd' : const = 3.5
+        else: raise KeyError(center , scale)
+
+    v = winsor(v , c - const * s , c + const * s)
+    v = winsor(v , np.quantile(v , winsor_pct[0]) , np.quantile(v , winsor_pct[1]))
+
+    return v
+
+def time_weight(length : int , halflife : int):
+    wgt = np.exp(np.log(0.5) * np.flip(np.arange(length)) / halflife)
+    wgt /= np.mean(wgt)
+    return wgt
+
+def descriptor(v : pd.Series , whiten_weight , fillna : Literal['min','max','median'] | float , group = None) -> pd.Series:
+    v = whiten(winsorize(v) , whiten_weight)
+    fillv = getattr(np , f'nan{fillna}')(v) if fillna in ['max' , 'min' , 'median'] else fillna
+    if group is not None:
+        fillv = v.to_frame(name='value').join(group).groupby('indus').transform('min').fillna(fillv)['value']
+    return v.where(~v.isna() , fillv)
+
+def apply_ols(mkt , stk , time_weight = None):
+    assert mkt.ndim == 1 , mkt.shape
+    assert stk.ndim == 2 , stk.shape
+    assert len(mkt) == len(stk) , (mkt.shape , stk.shape)
+    wgt = np.ones_like(mkt) if time_weight is None else time_weight / time_weight.mean()
+    assert len(mkt) == len(wgt) , (mkt.shape , wgt.shape)
+
+    stk = stk - np.nanmean(stk , axis=0 , keepdims=True)
+    bm = np.hstack([np.ones_like(mkt)[:,None] , ((mkt - mkt.mean()) * wgt)[:,None]])
+    ts = (stk * wgt[:,None] / np.nanmean(np.isfinite(stk) * wgt[:,None] , axis=0 , keepdims=True))
+    b = np.linalg.inv(bm.T @ bm) @ bm.T @ np.nan_to_num(ts)
+
+    return b
+
+def neutral_resid(x , y , weight : Any = None , whiten = True):
+    if weight is None:
+        model = sm.OLS(y , sm.add_constant(x)).fit()
+    else:
+        model = sm.WLS(y , sm.add_constant(x) , weights = weight).fit()
+    resid = model.resid
+    if whiten:
+        resid = (resid - np.nanmean(resid)) / (np.nanstd(resid) + 1e-6)
+    return resid
+
+def shrink_cov(X : np.ndarray , min_periods : int | None = None , corr = False):
+    n , p = X.shape
+    Q = np.isfinite(X) * 1
+    X = np.nan_to_num(X - np.nanmean(X , axis = 0 , keepdims=True))
+    S = X.T.dot(X) / (Q.T.dot(Q) - 1)
+    m  = S.diagonal().mean()
+    d2 = ((S - m * np.eye(p)) ** 2).sum()
+    b_bar2 = np.sum([np.square(v[:,None].dot(v[None]) - S).sum() for v in X]) / (Q.T.dot(Q) - 1).sum()
+    lamb = (d2 - min(d2, b_bar2)) / d2
+    cov =  (1-lamb) * m * np.eye(p) + lamb * S
+    if min_periods:
+        idx = Q.sum(axis = 0) >= min_periods
+        cov[~idx] = np.nan
+        cov[:,~idx] = np.nan
+    if corr: cov = cov_to_corr(cov)
+    return(cov)
+
+def normal_cov(X : np.ndarray , min_periods : int | None = None , corr = False):
+    cov = pd.DataFrame(X).cov(min_periods=min_periods).values
+    if corr: cov = cov_to_corr(cov)
+    return(cov)
+
+def cov_to_corr(cov : np.ndarray):
+    sd = np.sqrt(cov.diagonal())[None]
+    return cov / sd.T.dot(sd)
+
+def weighted_ts(ts : np.ndarray , nwindow : int = 504 , halflife : Optional[int] = None):
+    
+    n = min(len(ts) , nwindow)
+    if halflife:
+        wgt = np.exp(np.log(0.5) * np.flip(np.arange(n)) / halflife)[:,None]
+        wgt /= np.mean(wgt)
+    else:
+        wgt = 1
+    return ts[-n:] * wgt
+
+def ewma_cov(ts , nwindow : int = 504 , halflife : Optional[int] = None , shrinkage : float = 0.33 , 
+             corr = False):
+    assert 0 <= shrinkage <= 1 , shrinkage
+    min_periods=int(nwindow / 4)
+    ts = weighted_ts(ts , nwindow , halflife)
+    v = normal_cov(ts , min_periods , corr)
+    if shrinkage > 0: v = v * (1 - shrinkage) + shrink_cov(ts , min_periods , corr) * shrinkage
+    return v
+
+def ewma_sd(ts , nwindow : int = 504 , halflife : Optional[int] = None):
+    min_periods=int(nwindow / 4)
+    ts = weighted_ts(ts , nwindow , halflife)
+    v = np.nanstd(ts , axis = 0)
+    v[np.isfinite(ts).sum(axis = 0) < min_periods] = np.nan
+    return v
