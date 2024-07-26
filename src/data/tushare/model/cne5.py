@@ -148,13 +148,12 @@ class TuShareCNE5_Calculator:
         list_days = 252
         redempt_tmv_pct = 0.8
 
+        dates = CALENDAR.trailing(date , 63)
+        TRADE_DATA.load(dates)
+
         new_desc = self.desc[(self.desc['list_dt'] <= date) & (self.desc['delist_dt'] > date)].copy()
         new_desc['list_dt'] = np.maximum(new_desc['list_dt'] , CALENDAR.calendar_start)
         new_desc = new_desc.set_index('secid')
-
-        val = TRADE_DATA.get_val(date)
-        val['weight'] = val['circ_mv'] / 1e8
-        val = val.set_index('secid').reindex(new_desc.index)
 
         cal_after = CALENDAR.offset(new_desc['list_dt'] , list_days , 't')
 
@@ -162,12 +161,18 @@ class TuShareCNE5_Calculator:
         trd = TRADE_DATA.get_trd(date).loc[:,['secid','status']].merge(trd , on = 'secid' , how = 'left').\
             set_index('secid').reindex(new_desc.index).fillna(0)
         
+        val = pd.concat([TRADE_DATA.get_val(d , ['secid','date','circ_mv','total_mv']) for d in dates]).\
+            sort_values(['secid','date']).set_index('secid').groupby('secid').ffill().\
+            groupby('secid').last().reindex(new_desc.index)
+
+        
         new_cname = self.cname[self.cname['secid'] >= 0].sort_values(['secid','ann_date','start_date'])
         new_cname = new_cname[new_cname['start_date'] <= date].drop_duplicates('secid' , keep = 'last')
         new_cname = new_cname[new_cname['change_reason'].isin(['终止上市', '暂停上市' , 'ST', '*ST', ])]
         
         # trade status are 1.0 this day or 1 month ealier
-        rule0 = ((trd['status_x'] == 1) | (trd['status_y'] == 1))
+        rule0 = pd.concat([TRADE_DATA.get_trd(d , ['secid','date','status']) for d in dates]).\
+            groupby('secid')['status'].sum().reindex(new_desc.index) > 0
 
         # list date 1 year eailier and not delisted or total mv in the top 90%
         rule1 = ((new_desc['delist_dt'] > date) & (cal_after <= date)) | (val['total_mv'].rank(pct = True , na_option='bottom') >= redempt_tmv_pct)
@@ -176,10 +181,11 @@ class TuShareCNE5_Calculator:
         rule2 = ~new_desc.index.isin(new_cname['secid'])
 
         # total_mv not nan
-        rule3 = ~val['total_mv'].isna()
+        rule3 = val['total_mv'] > 0
+        print(sum(rule3))
 
         new_desc['estuniv'] = 1 * (rule0 & rule1 & rule2 & rule3)
-        new_desc['weight'] = val['weight'].fillna(0).values
+        new_desc['weight'] = val['circ_mv'].fillna(0) / 1e8
 
         self.estuniv.add(new_desc , date)
         return new_desc
