@@ -21,8 +21,8 @@ result      : str = os.path.join(_MAIN_DIR , 'result')
 for v in [main,data,batch,block,database,dataset,hidden,norm,tree,updater,conf,logs,model,result]:
     os.makedirs(v,exist_ok=True)
 
-def read_yaml(yaml_file):
-    with open(yaml_file ,'r') as f:
+def read_yaml(yaml_file , **kwargs):
+    with open(yaml_file ,'r' , **kwargs) as f:
         d = yaml.load(f , Loader = yaml.FullLoader)
     return d
 

@@ -74,7 +74,7 @@ class TuShareCNE5_Calculator:
         self.desc = pd.read_feather('./data/DataBase/DB_information_ts/description.feather')
         self.cname = pd.read_feather('./data/DataBase/DB_information_ts/change_name.feather')
 
-        self.indus_dict = pd.DataFrame(PATH.read_yaml('./configs/setting/tushare_indus.yaml'))
+        self.indus_dict = pd.DataFrame(PATH.read_yaml('./configs/setting/tushare_indus.yaml',encoding='gbk'))
         self.indus_data = pd.read_feather('./data/DataBase/DB_information_ts/industry.feather')
 
         self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values
