@@ -20,9 +20,10 @@ def parse_ts_input(
     date_cols = ['date' , 'end_date'] , 
     feat_cols = ['secid' , 'factor']
 ):
-    value_cols = np.intersect1d(value_cols , [*ts.index.names , *ts.columns])
-    date_cols  = np.intersect1d(date_cols  , [*ts.index.names , *ts.columns])
-    feat_cols  = np.intersect1d(feat_cols  , [*ts.index.names , *ts.columns])
+    ts_cols = np.array([*ts.index.names , *ts.columns]).astype(str)
+    value_cols = np.intersect1d(value_cols , ts_cols)
+    date_cols  = np.intersect1d(date_cols  , ts_cols)
+    feat_cols  = np.intersect1d(feat_cols  , ts_cols)
     assert len(value_cols) == 1 and len(date_cols) == 1 and len(feat_cols) == 1 , (value_cols , date_cols , feat_cols)
     ts = ts.pivot_table(value_cols[0] , date_cols[0] , feat_cols[0])
     return ts.to_numpy() , ts.columns.to_numpy()

@@ -18,7 +18,8 @@ class DataAPI:
         else:
             DataUpdater.update_laptop()
         print('-' * 80)
-        task.main()
+        if THIS_IS_SERVER:        
+            task.main()
         print('-' * 80)
         
     @staticmethod
