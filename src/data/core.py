@@ -6,9 +6,9 @@ from dataclasses import dataclass
 from torch import Tensor
 from typing import Any , ClassVar , Literal , Optional
 
-from .classes import StockData4D
+from .classes import Stock4DData
 from ..basic import PATH , CONF
-from ..basic.db import get_target_dates , load_target_file
+from ..basic.db import get_target_dates , load_target_file , load_target_file_dates
 from ..func import index_union , index_intersect , forward_fillna
 from ..func.time import date_offset , Timer , today
 
@@ -33,8 +33,11 @@ def data_type_alias(path : str , key : str):
 class GetData:
     Silence = CONF.Silence()
     @classmethod
-    def data_dates(cls , db_src , db_key):
-        return get_target_dates(db_src , db_key)
+    def data_dates(cls , db_src , db_key , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
+        dates = get_target_dates(db_src , db_key)
+        if end_dt   is not None: dates = dates[dates <= (end_dt   if end_dt   > 0 else today(end_dt))]
+        if start_dt is not None: dates = dates[dates >= (start_dt if start_dt > 0 else today(start_dt))]
+        return dates
 
     @classmethod
     def trade_dates(cls , start_dt : int = -1 , end_dt : int = 99991231):
@@ -93,10 +96,12 @@ class BlockLoader:
         src_path = os.path.join(PATH.database , f'DB_{self.db_src}')
         assert np.isin(self.db_key , os.listdir(src_path)).all() , f'{self.db_key} not all in {src_path}'
 
-    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , **kwargs):
-        return self.load_block(start_dt , end_dt , **kwargs)
+    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
+             parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
+        return self.load_block(start_dt , end_dt , parallel = parallel , max_workers = max_workers)
     
-    def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , **kwargs):
+    def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
+                   parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
         if end_dt is not None   and end_dt < 0:   end_dt   = today(end_dt)
         if start_dt is not None and start_dt < 0: start_dt = today(start_dt)
 
@@ -104,7 +109,8 @@ class BlockLoader:
         db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
         for db_key in db_keys:
             with Timer(f' --> {self.db_src} blocks reading [{db_key}] DataBase'):
-                blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , self.feature , **kwargs)
+                blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , self.feature , 
+                                        parallel = parallel , max_workers = max_workers)
                 sub_blocks.append(blk)
         if len(sub_blocks) <= 1:  
             block = sub_blocks[0]
@@ -117,37 +123,25 @@ class BlockLoader:
 class FrameLoader:
     db_src  : str
     db_key  : str
-    feature : Optional[list] = None
 
     def __post_init__(self):
-        assert f'DB_{self.db_src}' in os.listdir(PATH.database) , f'DB_{self.db_src} not in {PATH.database}'
-        src_path = os.path.join(PATH.database , f'DB_{self.db_src}')
-        assert np.isin(self.db_key , os.listdir(src_path)).all() , f'{self.db_key} not all in {src_path}'
+        assert os.path.exists(os.path.join(PATH.database , f'DB_{self.db_src}' , self.db_key)) , \
+            f'{PATH.database}/{self.db_src}/{self.db_key} not exists'
     
-    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , **kwargs):
-        return self.load_frame(start_dt , end_dt , **kwargs)
+    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
+             parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
+        return self.load_frame(start_dt , end_dt , parallel , max_workers)
 
-    def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , **kwargs):
-        target_dates = get_target_dates(self.db_src , self.db_key)
-        if end_dt is not None:
-            if end_dt < 0:   end_dt   = today(end_dt)
-            target_dates = target_dates[target_dates <= end_dt]
-        if start_dt is not None:
-            if start_dt < 0: start_dt = today(start_dt)
-            target_dates = target_dates[target_dates >= start_dt]
-
-        if len(target_dates) == 0:  return pd.DataFrame()
-        sub_frames = []
-        for date in target_dates:
-            df = load_target_file(self.db_src,self.db_key,date)
-            if isinstance(df , pd.DataFrame):
-                if self.feature is not None: df = df.loc[:,self.feature]
-                if 'date' not in df.columns: df['date'] = date
-                sub_frames.append(df)
-
-        return pd.concat(sub_frames , axis = 0)
+    def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
+                   parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
+        dates = GetData.data_dates(self.db_src , self.db_key , start_dt , end_dt)
+        dfs = load_target_file_dates(self.db_src , self.db_key , dates , parallel = parallel, max_workers=max_workers)
+        dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None]
+        return pd.concat(dfs) if len(dfs) else pd.DataFrame()
         
-class DataBlock(StockData4D):
+class DataBlock(Stock4DData):
+    DEFAULT_INDEX = ['secid','date','minute','factor_name']
+
     def save(self , key : str , predict=False , start_dt = None , end_dt = None):
         path = self.block_path(key , predict) 
         os.makedirs(os.path.dirname(path),exist_ok=True)
@@ -239,32 +233,16 @@ class DataBlock(StockData4D):
             return data_type_alias(path , key) if alias_search else path.format(key)
     
     @classmethod
-    def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , **kwargs):
-        target_dates = get_target_dates(db_src , db_key)
-        if start_dt is not None: target_dates = target_dates[target_dates >= start_dt]
-        if end_dt   is not None: target_dates = target_dates[target_dates <= end_dt]
-        if len(target_dates) == 0: 
-            return cls()
-        if feature is not None:
-            assert isinstance(feature , list) , feature
-            feature = [f for f in feature if f not in ['secid' , 'date' , 'minute' , 'factor_name']]
-        dfs = [cls.file_preprocess(load_target_file(db_src,db_key,date),date,feature) for date in target_dates]
-        dfs = pd.concat([df for df in dfs if df is not None] , axis = 0)
-        use_index = ['secid' , 'date'] + ['minute'] * ('minute' in dfs.columns.values) + ['factor_name'] * ('factor_name' in dfs.columns.values)
+    def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , 
+                parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
+        df = FrameLoader(db_src , db_key).load(start_dt , end_dt , parallel = parallel , max_workers = max_workers)
+        if len(df) == 0:  return cls()
+
+        use_index = [f for f in cls.DEFAULT_INDEX if f in df.columns]
         assert len(use_index) <= 3 , use_index
-        dfs = dfs.set_index(use_index)
-        return cls.from_dataframe(dfs)
-    
-    @staticmethod
-    def file_preprocess(df : Optional[pd.DataFrame] , date : int , feature = None):
-        if isinstance(df , pd.DataFrame): 
-            if 'secid' not in df.columns.values: df['secid'] = 0
-            if 'date' not in df.columns.values: df['date'] = date
-            if feature is not None: 
-                remain_cols = ['secid','date'] + ['minute']*('minute' in df.columns.values) + \
-                        ['factor_name'] * ('factor_name' in df.columns.values) + feature
-                df = df.loc[:,remain_cols]
-        return df
+        if feature is not None:  df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
+
+        return cls.from_dataframe(df.set_index(use_index))
     
     @property
     def price_adjusted(self): return getattr(self , '_price_adjusted' , False)

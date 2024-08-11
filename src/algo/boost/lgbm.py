@@ -108,13 +108,11 @@ class Lgbm():
         self.train_param['monotone_constraints'] = mono_constr
         
         [d.update_feature(use_feature) for d in self.data.values()]
-        self.train_dataset = self.lgbt_dataset(self.data['train'] , weight_param)
-        self.valid_dataset = self.lgbt_dataset(self.data['valid'] , weight_param , reference = self.train_dataset)
 
+        self.train_dataset = lgb.Dataset(self.data['train'].X() , self.data['train'].Y() , weight = self.data['train'].W(weight_param))
+        self.valid_dataset = lgb.Dataset(self.data['valid'].X() , self.data['valid'].Y() , weight = self.data['valid'].W(weight_param) ,
+                                         reference = self.train_dataset)
         return self
-
-    def lgbt_dataset(self , data : BoosterData , weight_param = None , reference = None):
-        return lgb.Dataset(data.X() , data.Y() , weight = data.W(weight_param) , reference = reference)
 
     def fit(self , use_feature = None , weight_param = None , train = None , valid = None ):
         self.setup(use_feature , weight_param , train = train , valid = valid)

@@ -4,33 +4,29 @@ import pandas as pd
 import xarray as xr
 
 from typing import Any , ClassVar , Literal , Optional
-from dataclasses import dataclass
 
-from . import NdData
+from .nd import NdData
 from ...func import match_values
 
-@dataclass
 class BoosterData:
-    raw_x   : Optional[pd.DataFrame | np.ndarray | torch.Tensor | NdData]
-    raw_y   : Optional[pd.Series    | np.ndarray | torch.Tensor | NdData]
-    secid   : Any = None
-    date    : Any = None
-    feature : Any = None
-    weight_param : Optional[dict] = None
+    SECID_COLS : ClassVar[list[str]] = ['SecID','instrument','secid']
+    DATE_COLS  : ClassVar[list[str]] = ['TradeDate','datetime','date']
 
-    VAR_SECID : ClassVar[list[str]] = ['SecID','instrument','secid']
-    VAR_DATE  : ClassVar[list[str]] = ['TradeDate','datetime','date']
-
-    def __post_init__(self):
-        x , y = self.raw_x , self.raw_y
-        assert x is not None and y is not None
+    def __init__(
+        self , 
+        x : pd.DataFrame | np.ndarray | torch.Tensor | NdData ,
+        y : pd.Series    | np.ndarray | torch.Tensor | NdData ,
+        secid   : Any = None ,
+        date    : Any = None ,
+        feature : Any = None ,
+        weight_param : Optional[dict] = None
+    ):
         assert len(x) == len(y) , f'x and y length must match'
-        assert type(x) == type(y) , (f'x and y type must match')
         self.input_type = type(y)
         if isinstance(x , pd.DataFrame) and isinstance(y , pd.Series): 
             self.df_index = y.index
-            self.var_sec  = [v for v in self.VAR_SECID  if v in x.index.names][0]
-            self.var_date = [v for v in self.VAR_DATE if v in x.index.names][0]
+            self.var_sec  = [v for v in self.SECID_COLS if v in x.index.names][0]
+            self.var_date = [v for v in self.DATE_COLS  if v in x.index.names][0]
             x = x.reset_index().set_index([self.var_sec,self.var_date])
             xarr = xr.Dataset.from_dataframe(x)
  
@@ -58,24 +54,22 @@ class BoosterData:
             assert y.shape[-1] == 1 , f'Booster Data cannot deal with multilabels, but got {y.shape}'
             y = y[...,0]
 
-        if x.ndim == 2: 
-            x , y = x[:,None,:] , y[:,None]
+        if x.ndim == 2: x , y = x[:,None,:] , y[:,None]
 
-        if self.secid is None:  self.secid = xindex[0] if xindex[0] is not None else np.arange(x.shape[0])
-        if self.date  is None : self.date  = xindex[1] if xindex[1] is not None else np.arange(x.shape[1])
-        if self.feature is None : self.feature = xindex[-1] if xindex[-1] is not None else np.array([f'F.{i}' for i in range(x.shape[-1])])
+        if secid is None:  secid = xindex[0] if xindex[0] is not None else np.arange(x.shape[0])
+        if date  is None : date  = xindex[1] if xindex[1] is not None else np.arange(x.shape[1])
+        if feature is None : feature = xindex[-1] if xindex[-1] is not None else np.array([f'F.{i}' for i in range(x.shape[-1])])
 
-        assert x.shape == (len(self.secid) , len(self.date) , len(self.feature)) , (x.shape , (len(self.secid) , len(self.date) , len(self.feature)))
-        assert y.shape == (len(self.secid) , len(self.date)) , (y.shape , (len(self.secid) , len(self.date)))
-
-        self.x , self.y = x , y
-        self.finite = np.isfinite(y)
+        assert x.shape == (len(secid) , len(date) , len(feature)) , (x.shape , (len(secid) , len(date) , len(feature)))
+        assert y.shape == (len(secid) , len(date)) , (y.shape , (len(secid) , len(date)))
+        
+        self.x , self.y , self.finite = x , y , np.isfinite(y)
 
         self.update_feature()
-        if self.weight_param is None: 
-            self.weight_param = {'tau':0.75*np.log(0.5)/np.log(0.75) , 'ts_type':'lin' , 'rate':0.5}  
+        if weight_param is None: 
+            weight_param = {'tau':0.75*np.log(0.5)/np.log(0.75) , 'ts_type':'lin' , 'rate':0.5}  
 
-        self.raw_x , self.raw_y = None , None
+        self.secid , self.date , self.feature , self.weight_param = secid , date , feature , weight_param
 
     def __repr__(self):
         return '\n'.join(
