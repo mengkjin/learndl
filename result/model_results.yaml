@@ -295,3 +295,16 @@
 8_result:
   0.best: Avg(0.1139)|Sum(208.62)|Std(0.0807)|T(60.43)|IR(6.9184)
   1.best: Avg(0.1098)|Sum(201.02)|Std(0.081)|T(58.02)|IR(6.6422)
+0_model: risk_att_gru_day.5(x4)
+1_start: Tue Aug  6 06:19:57 2024
+2_basic: full
+3_datas: day+style+indus
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170103-99991231
+6_fit: Finish Process [Fit], Cost 6.8 Hours, 6.4 Min/model, 5.4 Sec/Epoch
+7_test: Finish Process [Test], Cost 80.5 Secs
+8_result:
+  0.best: Avg(0.112)|Sum(205.11)|Std(0.0809)|T(59.28)|IR(6.7873)
+  1.best: Avg(0.1148)|Sum(210.25)|Std(0.0795)|T(61.83)|IR(7.0786)
+  2.best: Avg(0.1076)|Sum(197.1)|Std(0.0824)|T(55.93)|IR(6.4036)
+  3.best: Avg(0.1111)|Sum(203.47)|Std(0.08)|T(59.43)|IR(6.8036)
