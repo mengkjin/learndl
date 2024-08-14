@@ -1,7 +1,8 @@
 from . import daily , fina , index , info
 from ..basic import TushareFetecher
 
-TUSHARE_DOWNLOAD_TASK = [
+class TushareDownloader:
+    DOWNLOAD_TASKS = [
         info.Calendar ,
         info.Description ,
         info.SWIndustry ,
@@ -11,3 +12,12 @@ TUSHARE_DOWNLOAD_TASK = [
         daily.DailyQuote ,
         fina.FinaIndicator ,
     ]
+    def __init__(self) -> None:
+        pass
+
+    @classmethod
+    def proceed(cls):
+        for task_down in cls.DOWNLOAD_TASKS:
+            task = task_down()
+            assert isinstance(task , TushareFetecher) , task
+            task.update()

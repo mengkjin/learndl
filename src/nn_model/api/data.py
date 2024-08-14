@@ -4,7 +4,6 @@ from ..util import TrainConfig
 from ...data import DataProcessor , DataUpdater
 from ...data.tushare import task
 from ...basic import THIS_IS_SERVER
-
 class DataAPI:
     @staticmethod
     def update(): 
@@ -18,12 +17,11 @@ class DataAPI:
         else:
             DataUpdater.update_laptop()
         print('-' * 80)
-        if THIS_IS_SERVER:        
-            task.main()
+        task.main_task()
         print('-' * 80)
         
     @staticmethod
-    def prepare_train_data(): 
+    def prepare_predict_data(): 
         '''
         prepare latest(1 year or so) train data for predict use, do it after 'update'
         '''
