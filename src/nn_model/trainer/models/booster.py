@@ -65,11 +65,11 @@ class LGBM(Booster):
     @property
     def y_date(self) -> np.ndarray: return self.data.y_date
     @property
-    def model_string(self): return self.model.model_to_string()
+    def model_dict(self): return self.model.to_dict()
     @property
     def is_cuda(self) -> bool: return self.module.device.device.type == 'cuda'
     @property
-    def lgbm_params(self): return {'seed' : self.module.config['random_seed'] , **self.module.model_param}
+    def model_params(self): return {'seed' : self.module.config['random_seed'] , **self.module.model_param}
 
     @staticmethod
     def batch_data_to_booster_data(net : nn.Module , loader : Iterator[BatchData | Any] , 
@@ -98,12 +98,11 @@ class LGBM(Booster):
         return BoosterData(hh_values , yy_values , secid , date)
     
     def reset(self): self.loaded = False
-    def load(self , model_str: str):
+    def load(self , model_dict : dict):
         '''load self.model'''
-        self.model = algo_lgbm.model_from_string(model_str , cuda=self.is_cuda)
+        self.model = algo_lgbm.from_dict(model_dict , cuda=self.is_cuda)
         self.loaded = True
         return self
-
             
 class LgbmBooster(LGBM):
     '''load booster data and fit'''
@@ -124,7 +123,7 @@ class LgbmBooster(LGBM):
 
     def fit(self , *args):
         train_data , valid_data = self.train_batch_data
-        self.model = algo_lgbm(train_data , valid_data , cuda=self.is_cuda , **self.lgbm_params).fit()
+        self.model = algo_lgbm(train_data , valid_data , cuda=self.is_cuda , **self.model_params).fit()
         # self.model.plot.training()
         return self
     
@@ -135,7 +134,7 @@ class LgbmBooster(LGBM):
             x = self.train_batch_data[1]
         else: 
             x = self.test_batch_data
-        return torch.tensor(self.model.predict(x , reform = False))
+        return torch.tensor(self.model.predict(x , reshape = False , reform = False))
     
     def label(self , dataset : Literal['train' , 'valid' , 'test'] = 'test'):
         if dataset == 'train': 

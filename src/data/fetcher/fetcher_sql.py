@@ -295,17 +295,17 @@ class SQLFetcher:
     def default_factors(cls , keys = None):
         if isinstance(keys , str): keys = [keys]
         dft : dict[str,cls] = {
-            'haitong.hf_factors' :cls(    
-                'haitong','hf_factors','trade_dt',20130101,
-                startdt_query = 'select min(trade_dt) from daily_factor_db.dbo.JSJJHFFactors' ,
-                default_query = ('select * from daily_factor_db.dbo.JSJJHFFactors t ' +             
-                                'where t.trade_dt between \'{start_dt}\' and \'{end_dt}\'')) ,
-            'haitong.dl_factors' :cls(
-                'haitong','dl_factors','trade_dt',20161230,
-                startdt_query = 'select min(trade_dt) daily_factor_db.dbo.JSJJDeepLearnFactorsV2' ,
-                default_query = ('select s_info_windcode , trade_dt , f_value , model ' +
-                                'from daily_factor_db.dbo.JSJJDeepLearnFactorsV2 t where ' + 
-                                't.trade_dt between \'{start_dt}\' and \'{end_dt}\'')) ,
+            #'haitong.hf_factors' :cls(    
+            #    'haitong','hf_factors','trade_dt',20130101,
+            #    startdt_query = 'select min(trade_dt) from daily_factor_db.dbo.JSJJHFFactors' ,
+            #    default_query = ('select * from daily_factor_db.dbo.JSJJHFFactors t ' +             
+            #                    'where t.trade_dt between \'{start_dt}\' and \'{end_dt}\'')) ,
+            #'haitong.dl_factors' :cls(
+            #    'haitong','dl_factors','trade_dt',20161230,
+            #    startdt_query = 'select min(trade_dt) daily_factor_db.dbo.JSJJDeepLearnFactorsV2' ,
+            #    default_query = ('select s_info_windcode , trade_dt , f_value , model ' +
+            #                    'from daily_factor_db.dbo.JSJJDeepLearnFactorsV2 t where ' + 
+            #                    't.trade_dt between \'{start_dt}\' and \'{end_dt}\'')) ,
             'dongfang.hfq_chars' :cls('dongfang','hfq_chars' ,'tradingdate',20050101,'%Y%m%d') ,
             'dongfang.l2_chars'  :cls('dongfang','l2_chars'  ,'trade_date' ,20130930,'%Y%m%d') ,
             'dongfang.ms_chars'  :cls('dongfang','ms_chars'  ,'trade_date' ,20050101,'%Y%m%d') ,

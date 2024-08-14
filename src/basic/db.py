@@ -1,7 +1,8 @@
-import re , os
+import os , platform , re
 import numpy as np
 import pandas as pd
 
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed  
 from typing import Any , Literal
 from . import path as PATH 
 from . import conf as CONF
@@ -56,6 +57,21 @@ def load_target_file(db_src , db_key , date = None) -> pd.DataFrame | Any:
         return load_df(target_path)
     else:
         return None
+
+def load_target_file_dates(db_src , db_key , dates , 
+                           parallel : Literal['thread' , 'process'] | None = 'thread' , 
+                           max_workers = 20) -> dict[int,pd.DataFrame|None]:
+    if parallel is None:
+        dfs = {date:load_target_file(db_src , db_key , date) for date in dates}
+    else:
+        assert parallel == 'thread' or platform.system() != 'Windows' , (parallel , platform.system())
+        if n_cpu:= os.cpu_count(): max_workers = min(max_workers , n_cpu)
+        PoolExecutor = ThreadPoolExecutor if parallel == 'thread' else ProcessPoolExecutor
+        with PoolExecutor(max_workers=10) as pool:
+            futures = {pool.submit(load_target_file, db_src , db_key , date):date for date in dates}
+            dfs = {futures[future]:future.result() for future in as_completed(futures)}
+    return dfs
+ 
 
 def save_df(df : pd.DataFrame , target_path):
     if CONF.SAVE_OPT_DB == 'feather':

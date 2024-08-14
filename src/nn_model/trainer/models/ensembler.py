@@ -187,7 +187,7 @@ class LgbmEnsembler(LGBM):
         net = self.module.device(net)
         train_data = self.booster_data(net , self.train_dl)
         valid_data = self.booster_data(net , self.valid_dl)
-        self.model = algo_lgbm(train_data , valid_data , cuda=self.is_cuda , **self.lgbm_params).fit()
+        self.model = algo_lgbm(train_data , valid_data , cuda=self.is_cuda , **self.model_params).fit()
         # self.model.plot.training()
         return self
     

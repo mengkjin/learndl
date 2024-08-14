@@ -183,7 +183,6 @@ class TuShareCNE5_Calculator:
 
         # total_mv not nan
         rule3 = val['total_mv'] > 0
-        print(sum(rule3))
 
         new_desc['estuniv'] = 1 * (rule0 & rule1 & rule2 & rule3)
         new_desc['weight'] = val['circ_mv'].fillna(0) / 1e8
@@ -416,16 +415,14 @@ class TuShareCNE5_Calculator:
         self.specific_risk.add(sd , date)
         return sd
     
-    def Update(self , start : int | Any = None , end : int | Any = None , job_list = ['exposure' , 'risk']):
-        if not isinstance(job_list , list): job_list = [job_list]
-        for job in job_list:
-            dates = self.updatable_dates(job)
-            if start: dates = dates[dates >= start]
-            if end  : dates = dates[dates <= end]
-            for date in dates: 
-                self.update_date(date , job)
-                print(f'Finish {job} update at date {date}')
-            return self
+    def Update(self , job : Literal['exposure' , 'risk'] , start : int | Any = None , end : int | Any = None):
+        dates = self.updatable_dates(job)
+        if start: dates = dates[dates >= start]
+        if end  : dates = dates[dates <= end]
+        for date in dates: 
+            self.update_date(date , job)
+            print(f'Finish {job} update at date {date}')
+        return self
         
     def updatable_dates(self , job : Literal['exposure' , 'risk']):
         dates = CALENDAR.cal_trd['calendar'].to_numpy()

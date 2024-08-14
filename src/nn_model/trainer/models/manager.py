@@ -88,7 +88,7 @@ class NetManager(ModelEnsembler):
         model_dict = ModelDict()
         net = self.net_ensemblers[model_type].collect(self.module , *args)
         model_dict.state_dict = net.state_dict()
-        if self.net_lgbm_head: model_dict.booster_str = self.net_lgbm_head.fit(net).model_string
+        if self.net_lgbm_head: model_dict.boost_head = self.net_lgbm_head.fit(net).model_dict
         return model_dict
 
 class BoosterManager(ModelEnsembler):
@@ -106,7 +106,7 @@ class BoosterManager(ModelEnsembler):
     def assess(self , epoch : int , metrics : Metrics): ...
     def collect(self , model_type = 'best' , *args):
         model_dict = ModelDict()
-        model_dict.booster_str = self.booster.fit().model_string
+        model_dict.boost_dict = self.booster.fit().model_dict
         return model_dict
     
 class AggregatorManager(ModelEnsembler):
@@ -124,5 +124,5 @@ class AggregatorManager(ModelEnsembler):
     def assess(self , epoch : int , metrics : Metrics): ...
     def collect(self , model_type = 'best' , *args):
         model_dict = ModelDict()
-        model_dict.booster_str = self.booster.fit().model_string
+        model_dict.boost_dict = self.booster.fit().model_dict
         return model_dict

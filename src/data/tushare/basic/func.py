@@ -10,8 +10,7 @@ from ....func import date_diff , today
 def code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , retain = False):
     '''switch old symbol into secid'''
     if code_col not in df.columns.values: return df
-    replace_dict = {'T00018' : '600018'}
-    df['secid'] = df[code_col].astype(str).str.slice(0, 6).replace(replace_dict)
+    df['secid'] = df[code_col].astype(str).str.slice(0, 6).replace({'T00018' : '600018'})
     df['secid'] = df['secid'].where(df['secid'].str.isdigit() , '-1').astype(int)
     if not retain: del df[code_col]
     return df
