@@ -3,7 +3,9 @@ random_seed: null
 model.name: null # gru_2head # null
 model.module: risk_att_gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 model.types: [best , swalast , swabest]
-model.lgbm_ensembler: false
+
+model.booster_ensembler: false
+model.booster_type: lgbm # ada , xgboost , catboost
 
 data.hidden:
   - gru_day.0.best

@@ -6,7 +6,7 @@ from torch import nn , Tensor
 from typing import Any , Callable , final , Iterable , Iterator , Literal , Optional
 
 from .util import BatchData , BatchOutput , TrainerStatus
-from ...data import BoosterData
+from ...algo.boost import BoosterInput 
 
 class BaseCB:
     def __init__(self , model_module , with_cb , turn_off = False) -> None:
@@ -167,13 +167,13 @@ class BaseDataModule(ABC):
         self.early_test_dates : np.ndarray
         self.model_test_dates : np.ndarray
     @abstractmethod
-    def train_dataloader(self) -> Iterator[BatchData | BoosterData]: '''return train dataloaders'''
+    def train_dataloader(self) -> Iterator[BatchData | BoosterInput]: '''return train dataloaders'''
     @abstractmethod
-    def val_dataloader(self) -> Iterator[BatchData | BoosterData]: '''return valid dataloaders'''
+    def val_dataloader(self) -> Iterator[BatchData | BoosterInput]: '''return valid dataloaders'''
     @abstractmethod
-    def test_dataloader(self) -> Iterator[BatchData | BoosterData]: '''return test dataloaders'''
+    def test_dataloader(self) -> Iterator[BatchData | BoosterInput]: '''return test dataloaders'''
     @abstractmethod
-    def predict_dataloader(self) -> Iterator[BatchData | BoosterData]: '''return predict dataloaders'''
+    def predict_dataloader(self) -> Iterator[BatchData | BoosterInput]: '''return predict dataloaders'''
     def on_before_batch_transfer(self , batch , dataloader_idx = None): return batch
     def transfer_batch_to_device(self , batch , device = None , dataloader_idx = None): return batch
     def on_after_batch_transfer(self , batch , dataloader_idx = None): return batch

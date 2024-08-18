@@ -209,7 +209,8 @@ class NetTrainer(TrainerModule):
         model_date = (self.prev_model_date if self.if_transfer else 0) if training else self.model_date
         model_file = self.deposition.load_model(model_date , self.model_num , model_type)
         self.transferred = training and self.if_transfer and model_file.exists()
-        self.net : torch.nn.Module = self.model.new_model(training , model_file).model(model_file['state_dict'])
+        self.model = self.model.new_model(training , model_file)
+        self.net : torch.nn.Module = self.model.model(model_file['state_dict'])
         self.metrics.new_model(self.model_param)
         if training:
             self.optimizer : Optimizer = Optimizer(self.net , self.config , self.transferred , lr_multiplier ,

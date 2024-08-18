@@ -153,9 +153,9 @@ class BatchOutput:
 @dataclass(slots=True)
 class ModelDict:
     state_dict  : Optional[dict[str,Tensor]] = None
-    booster_str : Optional[str] = None
-    boost_dict  : Optional[dict[str,Any]] = None
-    boost_head  : Optional[dict[str,Any]] = None
+    booster_head : Optional[dict[str,Any]] = None
+    booster_dict : Optional[dict[str,Any]] = None
+    aggregator_dict : Optional[dict[str,Any]] = None
     
     def save(self , path : str):
         for key in self.__slots__:

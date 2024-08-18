@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from IPython.display import display 
-from ..classes import BaseCB , TrainerStatus , BaseDataModule , BaseTrainer , BatchData , BoosterData
+from ..classes import BaseCB , TrainerStatus , BaseDataModule , BaseTrainer , BatchData , BoosterInput
 from ..util import Checkpoint , Metrics , TrainConfig
 
 class CallBack(BaseCB):
@@ -57,7 +57,7 @@ class PredRecorder:
         if isinstance(module.batch_data , BatchData):
             ij = module.batch_data.i.cpu()
             secid , date = module.data.y_secid[ij[:,0]] , module.data.y_date[ij[:,1]]
-        elif isinstance(module.batch_data , BoosterData):
+        elif isinstance(module.batch_data , BoosterInput):
             secid , date = module.batch_data.SECID() , module.batch_data.DATE()
         pred = module.batch_output.pred_df(secid , date)
         pred = pred.loc[pred['date'].isin(self.dates),:]

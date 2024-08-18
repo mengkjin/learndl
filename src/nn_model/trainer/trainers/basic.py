@@ -11,7 +11,7 @@ from ..models import ModelEnsembler
 from ...callback import CallBackManager
 from ...classes import BaseDataModule , BaseTrainer
 from ...util import (Checkpoint , Deposition , Device , Logger , Metrics , TrainConfig ,
-                     BufferSpace , Device , Storage , TrainConfig)
+                     BufferSpace , Device , Storage)
 from ....basic import CONF
 from ....data import DataBlockNorm , DataProcessor , ModuleData
 from ....func import tensor_standardize_and_weight , BigTimer

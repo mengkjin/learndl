@@ -13,12 +13,20 @@ MODEL_YAML   = '{}.yaml'
 DEFAULT_YAML = 'default.yaml'
 
 def get_module_type(module : str):
-    if module in ['lgbm']:
+    if module in ['booster' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']:
         return 'booster'
     elif module in ['hidden_aggregator']:
         return 'aggregator'
     else:
         return 'nn'
+    
+def get_booster_type(config : 'TrainConfig'):
+    if config.model_module in ['booster' , 'hidden_aggregator', ]:
+        return config['model.booster_type']
+    elif config.model_module in ['lgbm' , 'ada' , 'xgboost' , 'catboost']:
+        return config.model_module
+    else:
+        return False
 
 def check_config_validity(config : 'TrainConfig'):
     assert socket.gethostname() == 'mengkjin-server' or config.short_test or \
@@ -226,9 +234,6 @@ class TrainConfig:
             return getattr(torch , self.Train['precision'])
         else:
             return self.Train['precision']
-
-    #@property
-    #def lgbm_ensembler(self) -> bool: return self.Train['model.lgbm_ensembler']
         
     @property
     def sample_method(self) -> Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']: 
@@ -408,8 +413,8 @@ class TrainConfig:
 
     def print_out(self):
         subset = [
-            'model_name' , 'model_module' , 
-            'model.types' , 'model.lgbm_ensembler' , 'data.type' , 'data.labels' ,
+            'model_name' , 'model_module' , 'model.types' , 'model.booster_type' ,
+            'model.booster_ensembler' , 'data.type' , 'data.labels' ,
             'random_seed' , 'beg_date' , 'end_date' , 'sample_method' , 'shuffle_option' , 
         ]
         pretty_print_dict({k:self.get(k) for k in subset})

@@ -6,8 +6,8 @@ from torch import Tensor
 from typing import Any , Iterator , Literal
 
 from .basic import DataModule , TrainerModule
-from ..models import Booster
-from ...classes import BoosterData , BatchOutput
+from ..models import BoosterModel
+from ...classes import BoosterInput , BatchOutput
 from ...util import DataloaderStored
 from ....basic import PATH , CONF
 from ....data import ModuleData , DataBlock
@@ -16,10 +16,10 @@ from ....func import index_intersect , match_values
 
 class AggregatorDataModule(DataModule):
     '''for boosting such as algo.boost.lgbm, create booster'''
-    def train_dataloader(self) -> Iterator[BoosterData]: return self.loader_dict['train']
-    def val_dataloader(self) -> Iterator[BoosterData]:   return self.loader_dict['valid']
-    def test_dataloader(self) -> Iterator[BoosterData]:  return self.loader_dict['test']
-    def predict_dataloader(self) -> Iterator[BoosterData]: return self.loader_dict['test']
+    def train_dataloader(self) -> Iterator[BoosterInput]: return self.loader_dict['train']
+    def val_dataloader(self) -> Iterator[BoosterInput]:   return self.loader_dict['valid']
+    def test_dataloader(self) -> Iterator[BoosterInput]:  return self.loader_dict['test']
+    def predict_dataloader(self) -> Iterator[BoosterInput]: return self.loader_dict['test']
         
     def load_data(self):
         #with CONF.Silence():
@@ -121,7 +121,7 @@ class AggregatorDataModule(DataModule):
                 bb_d = np.array(bb_d)
                 bnum = 0
                 batch_files = [f'{PATH.batch}/{set_key}.{bnum}.pt']
-                self.storage.save(BoosterData(bb_x , bb_y , self.y_secid , bb_d , self.hidden_cols) , batch_files[bnum] , group = self.stage)
+                self.storage.save(BoosterInput.from_tensor(bb_x , bb_y , self.y_secid , bb_d , self.hidden_cols) , batch_files[bnum] , group = self.stage)
             elif set_key == 'test':
                 batch_files = [f'{PATH.batch}/{set_key}.{bnum}.pt' for bnum in range(len(set_samples))]
                 for bnum , b_i in enumerate(set_samples):
@@ -130,7 +130,7 @@ class AggregatorDataModule(DataModule):
                     b_x = x0[i0,i1].reshape(len(self.y_secid),1,-1)
                     b_y = y[i0 , yindex1] # [n_stock x num_output]
                     dates = np.array([self.y_date[index1[yindex1[0]]]])
-                    self.storage.save(BoosterData(b_x , b_y , self.y_secid , dates , self.hidden_cols) , batch_files[bnum] , group = self.stage)
+                    self.storage.save(BoosterInput.from_tensor(b_x , b_y , self.y_secid , dates , self.hidden_cols) , batch_files[bnum] , group = self.stage)
             else:
                 raise KeyError(set_key)
             self.loader_dict[set_key] = DataloaderStored(self.storage , batch_files)
@@ -160,11 +160,10 @@ class AggregatorTrainer(TrainerModule):
 
     def batch_forward(self) -> None: 
         if self.status.dataset == 'train': self.booster.fit()
-        self.batch_output = BatchOutput(self.booster.predict(self.status.dataset))
-        self.label = self.booster.label(self.status.dataset)
+        self.batch_output = self.booster.predict(self.status.dataset)
 
     def batch_metrics(self) -> None:
-        self.metrics.calculate_from_tensor(self.status.dataset , self.label , self.batch_output.pred, assert_nan = True)
+        self.metrics.calculate_from_tensor(self.status.dataset , self.batch_output.other['label'] , self.batch_output.pred, assert_nan = True)
         self.metrics.collect_batch_metric()
 
     def batch_backward(self) -> None: ...
@@ -233,7 +232,7 @@ class AggregatorTrainer(TrainerModule):
     def load_model(self , training : bool , *args , **kwargs):
         '''load model state dict, return net and a sign of whether it is transferred'''
         model_file = self.deposition.load_model(self.model_date , self.model_num)
-        self.booster : Booster = self.model.new_model(training , model_file).model()
+        self.booster : BoosterModel = self.model.new_model(training , model_file).model()
         self.metrics.new_model(self.model_param)
 
     def stack_model(self):
@@ -247,6 +246,6 @@ class AggregatorTrainer(TrainerModule):
         for model_type in self.model_types:
             self.deposition.dump_model(self.model_date , self.model_num , model_type) 
     
-    def __call__(self , input : BoosterData): raise Exception('Undefined call')
+    def __call__(self , input : BoosterInput): raise Exception('Undefined call')
 
     
