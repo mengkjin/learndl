@@ -1,7 +1,8 @@
-import os
+
 import numpy as np
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal , Optional
 from . import path as PATH
 
@@ -23,24 +24,24 @@ class RegModel:
 
     @property
     def model_nums(self):
-        path = os.path.join(PATH.main , 'model' , self.name)
-        return np.sort(np.array([int(sub) for sub in os.listdir(path) if os.path.isdir(os.path.join(path , sub)) and sub.isdigit()]))
+        path = PATH.model.joinpath(self.name)
+        return np.sort(np.array([sub.name for sub in path.iterdir() if sub.is_dir() and sub.name.isdigit()]).astype(int))
     
     @property
     def model_dates(self):
-        path = os.path.join(PATH.main , 'model' , self.name , str(self.num0))
-        return np.sort(np.array([int(sub) for sub in os.listdir(path) if os.path.isdir(os.path.join(path , sub)) and sub.isdigit()]))
+        path = PATH.model.joinpath(self.name , str(self.num0))
+        return np.sort(np.array([sub.name for sub in path.iterdir() if sub.is_dir() and sub.name.isdigit()]).astype(int))
     
     @property
     def model_types(self):
         model_date = self.model_dates[-1]
-        path = os.path.join(PATH.main , 'model' , self.name , str(self.num0) , str(model_date))
-        return np.sort(np.array([sub for sub in os.listdir(path) if os.path.isdir(os.path.join(path , sub))]))
+        path = PATH.model.joinpath(self.name , str(self.num0) , str(model_date))
+        return np.sort(np.array([sub.name for sub in path.iterdir() if sub.is_dir()]))
     
     def full_path(self , model_num , model_date , model_type):
-        return os.path.join(PATH.main , 'model' , self.name , str(model_num) , str(model_date) , model_type)
+        return PATH.model.joinpath(self.name , str(model_num) , str(model_date) , model_type)
     
-FACTOR_DESTINATION = '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha'
+FACTOR_DESTINATION = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
 REG_MODELS = [
     RegModel('gru_day'    , 'swalast' , 0 , 'gru_day_V0') ,
     RegModel('gruRTN_day' , 'swalast' , 0 , 'gruRTN_day_V0') , 

@@ -1,0 +1,14 @@
+hidden_dim:     [32] #  2**5
+seqlens:        [{'day': 30 , '30m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
+dropout:        [0.1]
+enc_in:         [true]
+enc_att:        [false] 
+rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
+rnn_att:        [false]
+rnn_layers:     [2]
+dec_mlp_layers: [2] 
+num_output:     [1]
+which_output:   [0] #[0,1,null]
+kernel_size:    [3] # for tcn
+hidden_as_factor:    [true]
+ordered_param_group: [false]  # multiple data input , if train sequentially

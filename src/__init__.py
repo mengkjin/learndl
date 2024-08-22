@@ -1,1 +1,1 @@
-from . import api , algo , basic , data , factor , func , nn_model 
+from . import api , basic , data , deap , factor , func , model 

@@ -3,6 +3,7 @@ import os , time
 import numpy as np
 import pandas as pd
 
+from pathlib import Path
 from typing import Any , Literal
 
 from ....func import date_diff , today
@@ -61,8 +62,8 @@ def adjust_precision(df : pd.DataFrame , tol = 1e-8 , dtype_float = np.float32 ,
             df[col] = df[col].astype(dtype_int)
     return df
 
-def file_update_date(path , default = 19970101):
-    if os.path.exists(path):
+def file_update_date(path : Path , default = 19970101):
+    if path.exists():
         return int(time.strftime('%Y%m%d',time.localtime(os.path.getmtime(path))))
     else:
         return default

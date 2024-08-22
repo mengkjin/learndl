@@ -1,7 +1,8 @@
-import os , pyreadr
+import pyreadr
 import pandas as pd
 import numpy as np
 
+from pathlib import Path
 from typing import Any , Literal , Optional
 
 from ..classes import FailedData 
@@ -92,7 +93,7 @@ class RFetcher:
                 cls.col_reform : {**d_entrm , 'wind_sec_name' : {'rename' : 'concept'}} ,
             },
         }
-        if not os.path.exists(params[key]['path']): return FailedData(key)
+        if not Path(params[key]['path']).exists(): return FailedData(key)
         df = pd.read_csv(params[key]['path'] , encoding='gbk' , dtype = params[key].get('dtype'))
         if key == 'industry':
             path_dict = f'D:/Coding/ChinaShareModel/ModelParameters/setting/indus_dictionary_sw.csv'
@@ -123,8 +124,8 @@ class RFetcher:
     @classmethod
     def risk_exp(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get risk model from R environment , risk_exp(20240325)'''
-        path = f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model/jm2018_model_{date}.csv'
-        if not os.path.exists(path): return FailedData('risk_exp' , date)
+        path = Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model/jm2018_model_{date}.csv')
+        if not path.exists(): return FailedData('risk_exp' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.read_csv(path)
             df = cls.adjust_secid(df)
@@ -135,8 +136,8 @@ class RFetcher:
     @classmethod
     def risk_cov(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get risk model from R environment , risk_cov(20240325)'''
-        path = f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/6_factor_return_covariance/jm2018_model/jm2018_model_{date}.Rdata'
-        if not os.path.exists(path): return FailedData('risk_cov' , date)
+        path = Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/6_factor_return_covariance/jm2018_model/jm2018_model_{date}.Rdata')
+        if not path.exists(): return FailedData('risk_cov' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pyreadr.read_r(path)['data'] * 252
             df = df.reset_index().rename(columns={'index' :'factor_name'})
@@ -147,11 +148,11 @@ class RFetcher:
     @classmethod
     def risk_spec(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get risk model from R environment , risk_spec(20240325)'''
-        path = f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model/jm2018_model_{date}.csv'
-        if not os.path.exists(path): return FailedData('risk_spec' , date)
+        path = Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model/jm2018_model_{date}.csv')
+        if not path.exists(): return FailedData('risk_spec' , date)
 
-        paths = {'wind_id':f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/1_basic_info/wind_id/wind_id_{date}.Rdata' , 
-                 'spec_risk':f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/C_specific_risk/jm2018_model/jm2018_model_{date}.Rdata'}
+        paths = {'wind_id':Path(f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/1_basic_info/wind_id/wind_id_{date}.Rdata') , 
+                 'spec_risk':Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/C_specific_risk/jm2018_model/jm2018_model_{date}.Rdata')}
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
             df = cls.adjust_secid(df)
@@ -183,8 +184,8 @@ class RFetcher:
             df = pd.DataFrame(columns=['secid'] , dtype = int).set_index('secid')
             for k,v in a_names.items():
                 colnames = ['secid',v]
-                path = f'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/{v}/{v}_{date}.txt'
-                if not os.path.exists(path):
+                path = Path(f'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/{v}/{v}_{date}.txt')
+                if not path.exists():
                     return FailedData('longcl_exp' , date)
                 else:
                     df_new = pd.read_csv(path, header=None , delimiter='\t',dtype=float)
@@ -216,8 +217,8 @@ class RFetcher:
             'turn_fl'   : ['2_market_data' , 'day_float_turnover'] ,
             'turn_fr'   : ['2_market_data' , 'day_free_turnover'] ,
         }
-        paths = {k:f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/{v[0]}/{v[1]}/{v[1]}_{date}.Rdata' for k,v in data_params.items()}
-        paths_not_exists = {k:os.path.exists(p)==0 for k,p in paths.items()}
+        paths = {k:Path(f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/{v[0]}/{v[1]}/{v[1]}_{date}.Rdata') for k,v in data_params.items()}
+        paths_not_exists = {k:p.exists()==0 for k,p in paths.items()}
         if any(paths_not_exists.values()): 
             # something wrong
             print(f'Something wrong at date {date} on {cls.__name__}.trade_day')
@@ -268,10 +269,10 @@ class RFetcher:
     def labels(cls , date : int , days : int , lag1 : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get raw and res labels'''
         path_param = {
-            'id'  : f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/1_basic_info/wind_id' ,
-            'res' : f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
-            'adj' : f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_adjfactor' ,
-            'cp'  : f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_close' ,
+            'id'  : Path(f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/1_basic_info/wind_id') ,
+            'res' : Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model') ,
+            'adj' : Path(f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_adjfactor') ,
+            'cp'  : Path(f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_close') ,
         }
 
         _files = {k:list_files(v) for k , v in path_param.items()}
@@ -280,9 +281,9 @@ class RFetcher:
 
         pos = list(_dates['id']).index(date)
         if pos + lag1 + days >= len(_dates['id']):  return None
-        if not os.path.exists(path_param['res']+'/'+os.path.basename(path_param['res'])+f'_{date}.Rdata'):  return None
+        if not path_param['res'].joinpath(path_param['res'].name + f'_{date}.Rdata').exists(): return None
         
-        f_read = lambda k,d,p='':pyreadr.read_r(path_param[k]+'/'+os.path.basename(path_param[k])+f'_{d}.Rdata')['data'].rename(columns={'data':k+p})
+        f_read = lambda k,d,p='':pyreadr.read_r(path_param[k].joinpath(f'{path_param[k].name}_{d}.Rdata'))['data'].rename(columns={'data':k+p})
         wind_id = f_read('id',date)
 
         d0 , d1 = _dates['id'][pos + lag1] , _dates['id'][pos + lag1 + days] 
@@ -322,8 +323,8 @@ class RFetcher:
             'volume'    : 'volume' , 
             'vwap'      : 'vwap' , 
         }
-        path = f'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin/equity_pricemin_{date}.txt'
-        if not os.path.exists(path): return FailedData('min' , date)
+        path = Path(f'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin/equity_pricemin_{date}.txt')
+        if not path.exists(): return FailedData('min' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.read_csv(path , sep='\t' , low_memory=False)
             if df['ticker'].dtype in (object,str):  df = df[df['ticker'].str.isdigit()] 
@@ -393,8 +394,8 @@ class RFetcher:
     @classmethod
     def benchmark(cls , date : int , bm : Literal['csi300' , 'csi500' , 'csi800' , 'csi1000'] , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get risk model from R environment , bm_any('CSI300' , 20240325)'''
-        path = f'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/{bm.upper()}/{bm.upper()}_{date}.csv'
-        if not os.path.exists(path):  return FailedData(f'bm_{bm.lower()}' , date)
+        path = Path(f'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/{bm.upper()}/{bm.upper()}_{date}.csv')
+        if not path.exists():  return FailedData(f'bm_{bm.lower()}' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.read_csv(path)
             df = cls.adjust_secid(df)

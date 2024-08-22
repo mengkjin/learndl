@@ -1,8 +1,9 @@
-import os ,  tarfile, time
+import tarfile, time
 import numpy as np
 import pandas as pd
 
 from functools import reduce
+from pathlib import Path
 
 from .fetcher import DataFetcher , SQLFetcher
 from ..basic import PATH , THIS_IS_SERVER
@@ -18,21 +19,21 @@ class DataUpdater():
     @staticmethod
     def get_updater_paths():
         # order matters!
-        search_dirs = [PATH.database , PATH.updater] + ['/home/mengkjin/Workspace/SharedFolder'] * THIS_IS_SERVER
+        search_dirs = [PATH.database , PATH.updater] + [Path('/home/mengkjin/Workspace/SharedFolder')] * THIS_IS_SERVER
 
-        paths = []
+        paths : list[Path] = []
         for sdir in search_dirs:
-            add_paths = [os.path.join(sdir , p) for p in os.listdir(sdir) if p.startswith(UPDATER_TITLE + '.')]
-            paths = np.concatenate([paths , sorted(add_paths)])
-        return list(paths)
+            add_paths = [p for p in sdir.iterdir() if p.name.startswith(UPDATER_TITLE + '.')]
+            paths += add_paths
+        return paths
     
     @staticmethod
     def unpack_exist_updaters(del_after_dumping = True):
         assert THIS_IS_SERVER , f'must on server'
-        search_dirs = [PATH.database , PATH.updater , '/home/mengkjin/Workspace/SharedFolder']
-        paths = []
+        search_dirs = [PATH.database , PATH.updater , Path('/home/mengkjin/Workspace/SharedFolder')]
+        paths : list[Path] = []
         for sdir in search_dirs:
-            paths += [os.path.join(sdir , p) for p in os.listdir(sdir) if p.startswith(UPDATER_TITLE + '.') and p.endswith('.tar')]
+            paths += [p for p in sdir.iterdir() if p.name.startswith(UPDATER_TITLE + '.') and p.name.endswith('.tar')]
         paths.sort()
         if del_after_dumping and paths:
             print(paths)
@@ -40,14 +41,14 @@ class DataUpdater():
 
         for tar_filename in paths:
             with tarfile.open(tar_filename, 'r') as tar:  
-                tar.extractall(path = PATH.database , filter='data')  
+                tar.extractall(path = str(PATH.database) , filter='data')  
                 
-        if del_after_dumping: [os.remove(tar_filename) for tar_filename in paths]
+        if del_after_dumping: [tar_filename.unlink() for tar_filename in paths]
 
     @staticmethod
     def get_new_updater():
         stime = time.strftime('%y%m%d%H%M%S',time.localtime())
-        return os.path.join(PATH.updater , f'{UPDATER_TITLE}.{stime}.tar')
+        return PATH.updater.joinpath(f'{UPDATER_TITLE}.{stime}.tar')
 
     def get_db_params(self , db_src):
         # db_update_parameters
@@ -101,18 +102,20 @@ class DataUpdater():
         params = [DataFetcher(db_src , *args) for args in param_args]
         return params
     
-    def handle_df_result(self , df , target_path , result_dict = None):
+    def handle_df_result(self , df , target_path : Path , result_dict = None):
+        abs_path = str(target_path.absolute())
+        rel_path = str(target_path.relative_to(PATH.database))
         if isinstance(df , pd.DataFrame):
             save_df(df , target_path)
             with tarfile.open(self.Updater, 'a') as tar:  
-                tar.add(target_path, arcname = os.path.relpath(target_path, PATH.database))  
+                tar.add(abs_path , arcname = rel_path) 
             self.Success.append(target_path)
-            target_str = f'Updated ~ {os.path.relpath(target_path)}'
+            target_str = f'Updated ~ {rel_path}'
         elif df is None:
             target_str = None
         else:
             self.Failed.append(df)
-            target_str = f'Failed ~ {os.path.relpath(target_path)}'
+            target_str = f'Failed ~ {rel_path}'
             
         if result_dict is not None: result_dict[target_path] = df
         return target_str

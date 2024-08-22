@@ -1,8 +1,9 @@
-import os , torch
+import torch
 import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
+from pathlib import Path
 from torch import Tensor
 from typing import Any , ClassVar , Literal , Optional
 
@@ -22,13 +23,9 @@ def data_type_abbr(key : str):
         return 'y'
     else:
         return key
-    
-def data_type_alias(path : str , key : str):
-    alias_list = [key , f'trade_{key}' , key.replace('trade_','')]
-    for alias in alias_list:
-        if os.path.exists(path.format(alias)): 
-            return path.format(alias)
-    return path.format(key)
+
+def data_type_alias(key : str):
+    return [key , f'trade_{key}' , key.replace('trade_','')]
 
 class GetData:
     Silence = CONF.Silence()
@@ -92,9 +89,9 @@ class BlockLoader:
     feature : Optional[list] = None
 
     def __post_init__(self):
-        assert f'DB_{self.db_src}' in os.listdir(PATH.database) , f'DB_{self.db_src} not in {PATH.database}'
-        src_path = os.path.join(PATH.database , f'DB_{self.db_src}')
-        assert np.isin(self.db_key , os.listdir(src_path)).all() , f'{self.db_key} not all in {src_path}'
+        assert f'DB_{self.db_src}' in [p.name for p in PATH.database.iterdir()] , f'DB_{self.db_src} not in {PATH.database}'
+        src_path = PATH.database.joinpath(f'DB_{self.db_src}')
+        assert np.isin(self.db_key , [p.name for p in src_path.iterdir()]).all() , f'{self.db_key} not all in {src_path}'
 
     def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
              parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
@@ -125,7 +122,7 @@ class FrameLoader:
     db_key  : str
 
     def __post_init__(self):
-        assert os.path.exists(os.path.join(PATH.database , f'DB_{self.db_src}' , self.db_key)) , \
+        assert PATH.database.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
             f'{PATH.database}/{self.db_src}/{self.db_key} not exists'
     
     def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
@@ -144,7 +141,7 @@ class DataBlock(Stock4DData):
 
     def save(self , key : str , predict=False , start_dt = None , end_dt = None):
         path = self.block_path(key , predict) 
-        os.makedirs(os.path.dirname(path),exist_ok=True)
+        path.parent.mkdir(exist_ok=True)
         date_slice = np.repeat(True,len(self.date))
         if start_dt is not None: date_slice[self.date < start_dt] = False
         if end_dt   is not None: date_slice[self.date > end_dt]   = False
@@ -159,21 +156,21 @@ class DataBlock(Stock4DData):
         return self
     
     @staticmethod
-    def save_dict(data : dict , file_path : str):
+    def save_dict(data : dict , file_path : Path):
         if file_path is None: return NotImplemented
-        os.makedirs(os.path.dirname(file_path) , exist_ok=True)
-        if file_path.endswith(('.npz' , '.npy' , '.np')):
+        Path(file_path).parent.mkdir(exist_ok=True)
+        if file_path.suffix in ['.npz' , '.npy' , '.np']:
             np.savez_compressed(file_path , **data)
-        elif file_path.endswith(('.pt' , '.pth')):
+        elif file_path.suffix in ['.pt' , '.pth']:
             torch.save(data , file_path , pickle_protocol = 4)
         else:
             raise Exception(file_path)
         
     @staticmethod
-    def load_dict(file_path : str , keys = None) -> dict[str,Any]:
-        if file_path.endswith(('.npz' , '.npy' , '.np')):
+    def load_dict(file_path : Path , keys = None) -> dict[str,Any]:
+        if file_path.suffix in ['.npz' , '.npy' , '.np']:
             file = np.load(file_path)
-        elif file_path.endswith(('.pt' , '.pth')):
+        elif file_path.suffix in ['.pt' , '.pth']:
             file = torch.load(file_path)
         else:
             raise Exception(file_path)
@@ -182,13 +179,13 @@ class DataBlock(Stock4DData):
         return data
     
     @classmethod
-    def load_path(cls , path : str): return cls(**cls.load_dict(path))
+    def load_path(cls , path : Path): return cls(**cls.load_dict(path))
     
     @classmethod
-    def load_paths(cls , paths : str | list[str], fillna = 'guess' , intersect_secid = True ,
+    def load_paths(cls , paths : Path | list[Path], fillna = 'guess' , intersect_secid = True ,
                    start_dt = None , end_dt = None , dtype = torch.float):
-        if isinstance(paths , str): paths = list(paths)
-        _guess = lambda ls,excl:[os.path.basename(x).lower().startswith(excl) == 0 for x in ls]
+        if not isinstance(paths , list): paths = [paths]
+        _guess = lambda ls,excl:[Path(x).name.lower().startswith(excl) == 0 for x in ls]
         if fillna == 'guess':
             exclude_list = ('y','x_trade','x_day','x_15m','x_min','x_30m','x_60m','week')
             fillna = np.array(_guess(paths , exclude_list))
@@ -227,10 +224,13 @@ class DataBlock(Stock4DData):
     def block_path(cls , key : str , predict=False, alias_search = True):
         train_mark = '.00' if predict else ''
         if key.lower() in ['y' , 'labels']: 
-            return f'{PATH.block}/Y{train_mark}.{CONF.SAVE_OPT_BLK}'
+            return PATH.block.joinpath(f'Y{train_mark}.{CONF.SAVE_OPT_BLK}')
         else:
-            path = (f'{PATH.block}/X_'+'{}'+f'{train_mark}.{CONF.SAVE_OPT_BLK}')
-            return data_type_alias(path , key) if alias_search else path.format(key)
+            alias_list = data_type_alias(key) if alias_search else []
+            for new_key in alias_list:
+                path = PATH.block.joinpath(f'X_{new_key}{train_mark}.{CONF.SAVE_OPT_BLK}')
+                if path.exists(): return path
+            return PATH.block.joinpath(f'X_{key}{train_mark}.{CONF.SAVE_OPT_BLK}')
     
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , 
@@ -395,14 +395,14 @@ class DataBlockNorm:
         DataBlock.save_dict({'avg' : self.avg , 'std' : self.std} , self.norm_path(key))
 
     @classmethod
-    def load_path(cls , path : str , dtype = None):
-        if not os.path.exists(path): return None
+    def load_path(cls , path : Path , dtype = None):
+        if not path.exists(): return None
         data = DataBlock.load_dict(path)
         return cls(data['avg'] , data['std'] , dtype)
 
     @classmethod
-    def load_paths(cls , paths : str | list[str] , dtype = None):
-        if isinstance(paths , str): paths = [paths]
+    def load_paths(cls , paths : Path | list[Path] , dtype = None):
+        if not isinstance(paths , list): paths = [paths]
         norms = [cls.load_path(path , dtype) for path in paths]
         return norms
     
@@ -413,14 +413,17 @@ class DataBlockNorm:
 
     @classmethod
     def load_keys(cls , keys : str | list[str] , predict = False , alias_search = True , dtype = None):
-        if isinstance(keys , str): keys = [keys]
+        if not isinstance(keys , list): keys = [keys]
         return [cls.load_key(key , predict , alias_search , dtype) for key in keys]
     
     @classmethod
     def norm_path(cls , key : str , predict = False, alias_search = True):
-        if key.lower() == 'y': return f'{PATH.norm}/Y.{CONF.SAVE_OPT_NORM}'
-        path = (f'{PATH.norm}/X_'+'{}'+f'.{CONF.SAVE_OPT_NORM}')
-        return data_type_alias(path , key) if alias_search else path.format(key)
+        if key.lower() == 'y': return PATH.norm.joinpath(f'Y.{CONF.SAVE_OPT_NORM}')
+        alias_list = data_type_alias(key) if alias_search else []
+        for new_key in alias_list:
+            path = PATH.norm.joinpath(f'X_{new_key}.{CONF.SAVE_OPT_BLK}')
+            if path.exists(): return path
+        return PATH.norm.joinpath(f'X_{key}.{CONF.SAVE_OPT_BLK}')
 
 @dataclass(slots=True)
 class ModuleData:
@@ -470,7 +473,7 @@ class ModuleData:
             dataset_code = '+'.join(data_type_list)
             dataset_path = f'{PATH.dataset}/{dataset_code}.{last_date}.pt'
 
-        if y_labels is not None and os.path.exists(dataset_path):
+        if y_labels is not None and Path(dataset_path).exists():
             data = cls(**torch.load(dataset_path))
             if (np.isin(data_type_list , list(data.x.keys())).all() and
                 np.isin(y_labels , list(data.y.feature)).all()):

@@ -37,7 +37,7 @@ DEFAULT_SOLVER_CONFIG : dict[str,dict] = {
     'cvxopt': {'show_progress': False}
 }
 
-DEFAULT_OPT_CONFIG = PATH.read_yaml(f'{PATH.conf}/fmp/default.yaml')
+DEFAULT_OPT_CONFIG = PATH.read_yaml(PATH.conf.joinpath('fmp' , 'default.yaml'))
 DEFAULT_OPT_CONFIG_2 : dict[str,dict] = {
     'equity' :  {
         'target_position' : 1. , # only remnant

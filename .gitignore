@@ -8,7 +8,7 @@ __old_version__/
 /data
 /figures
 /logs
-# /model
+# /models
 /Baostock
 .vs/
 

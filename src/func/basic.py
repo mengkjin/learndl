@@ -208,6 +208,30 @@ def np_nanrankic(x : np.ndarray , y : np.ndarray):
     except:
         return np.nan
     
+def nanic_2d(x : torch.Tensor , y : torch.Tensor , dim=0):
+    x = x + y * 0
+    y = y + x * 0
+    x_xmean = x - torch.nanmean(x, dim, keepdim=True)  
+    y_ymean = y - torch.nanmean(y, dim, keepdim=True) 
+    cov  = torch.nansum(x_xmean * y_ymean, dim) 
+    ssd  = (torch.nansum(x_xmean.square(), dim) ** 0.5) * (torch.nansum(y_ymean.square(), dim) ** 0.5)
+    ssd[ssd == 0] = 1e-4
+    corr = cov / ssd
+    return corr
+
+def nanrankic(x : torch.Tensor , y : torch.Tensor):
+    pairwise_nonnan = (x.isnan()*1.0 + y.isnan() * 1.0 == 0)
+    try:
+        return nanic_2d(x[pairwise_nonnan].flatten(),y[pairwise_nonnan].flatten())
+    except:
+        return torch.ones(1) * torch.nan
+
+def nanrankic_2d(x : torch.Tensor , y : torch.Tensor , dim = 0):
+    if dim == 0:
+        return torch.concat([nanrankic(x[:,i],y[:,i]) for i in range(x.shape[1])])
+    else:
+        return torch.concat([nanrankic(x[i,:],y[i,:]) for i in range(x.shape[0])])
+
 def np_nanic_2d(x : np.ndarray , y : np.ndarray ,dim=0):
     x = x + y * 0
     y = y + x * 0

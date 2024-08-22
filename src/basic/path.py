@@ -1,25 +1,21 @@
 import os , shutil , yaml
+from pathlib import Path
 
-_SRC_DIR = os.path.dirname(os.path.abspath(__file__))
-_MAIN_DIR = os.path.dirname(os.path.dirname(_SRC_DIR))
+main        = [parent for parent in list(Path(__file__).parents) if parent.match('./src/')][-1].parent
+data        = main.joinpath('data')
+batch       = data.joinpath('MiniBatch')
+block       = data.joinpath('DataBlock')
+database    = data.joinpath('DataBase')
+dataset     = data.joinpath('DataSet')
+hidden      = data.joinpath('ModelHidden')
+norm        = data.joinpath('HistNorm')
+tree        = data.joinpath('TreeData')
+updater     = data.joinpath('Updater')
 
-main        : str = _MAIN_DIR
-data        : str = os.path.join(_MAIN_DIR , 'data')
-batch       : str = os.path.join(_MAIN_DIR , 'data' , 'MiniBatch')
-block       : str = os.path.join(_MAIN_DIR , 'data' , 'DataBlock')
-database    : str = os.path.join(_MAIN_DIR , 'data' , 'DataBase')
-dataset     : str = os.path.join(_MAIN_DIR , 'data' , 'DataSet')
-hidden      : str = os.path.join(_MAIN_DIR , 'data' , 'ModelHidden')
-norm        : str = os.path.join(_MAIN_DIR , 'data' , 'HistNorm')
-tree        : str = os.path.join(_MAIN_DIR , 'data' , 'TreeData')
-updater     : str = os.path.join(_MAIN_DIR , 'data' , 'Updater')
-conf        : str = os.path.join(_MAIN_DIR , 'configs')
-logs        : str = os.path.join(_MAIN_DIR , 'logs')
-model       : str = os.path.join(_MAIN_DIR , 'model')
-result      : str = os.path.join(_MAIN_DIR , 'result')
-
-for v in [main,data,batch,block,database,dataset,hidden,norm,tree,updater,conf,logs,model,result]:
-    os.makedirs(v,exist_ok=True)
+conf        = main.joinpath('configs')
+logs        = main.joinpath('logs')
+model       = main.joinpath('models')
+result      = main.joinpath('results')
 
 def read_yaml(yaml_file , **kwargs):
     with open(yaml_file ,'r' , **kwargs) as f:
