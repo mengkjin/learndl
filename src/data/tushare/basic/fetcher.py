@@ -4,7 +4,7 @@ from typing import Any , Literal
 from abc import abstractmethod , ABC
 
 from .func import file_update_date , updatable , dates_to_update , quarter_ends
-from ....basic.db import DB_BY_DATE , DB_BY_NAME , get_target_path , get_source_dates , get_target_dates , save_df
+from ....basic import DB_BY_DATE , DB_BY_NAME , get_target_path , get_target_dates , save_df
 from ....func import today
 
 class TushareFetecher(ABC):

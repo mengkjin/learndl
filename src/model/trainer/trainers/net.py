@@ -13,13 +13,13 @@ from ....func import match_values
 
 class NetDataModule(DataModule):
     def train_dataloader(self):
-        return LoaderWrapper(self , self.loader_dict['train'] , self.device , self.config['verbosity'])
+        return LoaderWrapper(self , self.loader_dict['train'] , self.device , self.config.verbosity)
     def val_dataloader(self):
-        return LoaderWrapper(self , self.loader_dict['valid'] , self.device , self.config['verbosity'])
+        return LoaderWrapper(self , self.loader_dict['valid'] , self.device , self.config.verbosity)
     def test_dataloader(self):
-        return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config['verbosity'])
+        return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
     def predict_dataloader(self):
-        return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config['verbosity'])
+        return LoaderWrapper(self , self.loader_dict['test'] , self.device , self.config.verbosity)
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         return batch.to(self.device if device is None else device)
 

@@ -3,7 +3,7 @@ from .net import NetTrainer
 from .booster import BoosterTrainer
 from .aggregator import AggregatorTrainer
 
-from ...util import TrainConfig , get_module_type
+from ...util import TrainConfig
 from ....basic import REG_MODELS , THIS_IS_SERVER
 
 
@@ -16,8 +16,8 @@ class Trainer:
         checkname: [-1,choose] , [0,default] , [1,yes]
         '''
         module_name = TrainConfig.guess_module(config_path)
-        module_type = get_module_type(module_name)
-        print(module_name , module_type)
+        module_type = TrainConfig.get_module_type(module_name)
+
         use_trainer = {
             'nn' : NetTrainer ,
             'booster' : BoosterTrainer ,

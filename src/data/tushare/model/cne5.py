@@ -4,10 +4,9 @@ import statsmodels.api as sm
 from typing import Any , Literal , Optional
 
 from ..basic import TradeCalendar , TradeDataAccess , ModelDataAccess , FinaDataAccess
-from ....basic import PATH , RISK_INDUS , RISK_STYLE
-from ....basic.db import get_target_path , load_target_file , get_target_dates
+from ....basic import (PATH , RISK_INDUS , RISK_STYLE ,
+                       get_target_path , load_target_file , get_target_dates)
 from ....func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
-
 
 CALENDAR = TradeCalendar()
 TRADE_DATA = TradeDataAccess()
@@ -72,11 +71,12 @@ class DateSeriesDict:
 class TuShareCNE5_Calculator:
     START_DATE = 20050101
     def __init__(self) -> None:
-        self.desc = pd.read_feather('./data/DataBase/DB_information_ts/description.feather')
-        self.cname = pd.read_feather('./data/DataBase/DB_information_ts/change_name.feather')
+        get_target_path('information_ts' , 'description')
+        self.desc = pd.read_feather(get_target_path('information_ts' , 'description'))
+        self.cname = pd.read_feather(get_target_path('information_ts' , 'change_name'))
 
-        self.indus_dict = pd.DataFrame(PATH.read_yaml('./configs/setting/tushare_indus.yaml',encoding='gbk'))
-        self.indus_data = pd.read_feather('./data/DataBase/DB_information_ts/industry.feather')
+        self.indus_dict = pd.DataFrame(PATH.setting('tushare_indus'))
+        self.indus_data = pd.read_feather(get_target_path('information_ts' , 'industry'))
 
         self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values
 

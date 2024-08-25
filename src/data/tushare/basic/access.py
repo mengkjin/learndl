@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 from typing import Any , Literal
 
-from ....basic.db import load_target_file , get_target_dates
+from ....basic import load_target_file , get_target_path
 
 class TradeCalendar:
     def __init__(self) -> None:
-        cal = pd.read_feather('./data/DataBase/DB_information_ts/calendar.feather').loc[:,['calendar' , 'trade']]
+        cal = pd.read_feather(get_target_path('information_ts' , 'calendar')).loc[:,['calendar' , 'trade']]
 
         trd = cal[cal['trade'] == 1].reset_index(drop=True)
         trd['td'] = trd['calendar']
@@ -89,7 +89,6 @@ class TradeDataAccess:
         if cols is not None: df = df.loc[:,cols]
         return df
     
-
 class ModelDataAccess:
     MAX_LEN = 1000
 

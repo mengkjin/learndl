@@ -9,9 +9,9 @@ from typing import Any , Literal , Optional
 
 from ..models import ModelEnsembler
 from ...callback import CallBackManager
-from ...util import (BaseDataModule , BaseTrainer , Checkpoint , Deposition , Device , Logger , Metrics , TrainConfig ,
+from ...util import (BaseDataModule , BaseTrainer , Checkpoint , Deposition , Device , Metrics , TrainConfig ,
                      BufferSpace , Device , Storage)
-from ....basic import CONF
+from ....basic import CONF , Logger
 from ....data import DataBlockNorm , DataProcessor , ModuleData
 from ....func import tensor_standardize_and_weight , BigTimer
 
@@ -37,7 +37,7 @@ class DataModule(BaseDataModule):
         self.buffer  = BufferSpace(self.device)
 
     def load_data(self):
-        self.datas = ModuleData.load(self.data_type_list, self.config['data.labels'], 
+        self.datas = ModuleData.load(self.data_type_list, self.config.model_data_labels, 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision)
         self.config.update_data_param(self.datas.x)
@@ -215,7 +215,7 @@ class TrainerModule(BaseTrainer):
     @property
     def model_param(self): return self.config.Model.params[self.model_num]
     @property
-    def model_types(self): return self.config['model.types']
+    def model_types(self): return self.config.model_types
     @property
     def if_transfer(self): return bool(self.config['train.trainer.transfer'])
     @property

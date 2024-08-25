@@ -1,7 +1,7 @@
 from typing import Any , Optional
 
 from . import base , display, train , test , nnspecific
-from ..util import BaseTrainer , TrainConfig , get_module_type
+from ..util import BaseTrainer , TrainConfig
 
 SEARCH_MODS = [train , display , test]
 BOOSTER_AVAILABLE_CALLBACKS = ['StatusDisplay' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis']
@@ -21,7 +21,7 @@ class CallBackManager(base.CallBack):
     def setup(cls , model_module : BaseTrainer):
         config : TrainConfig = model_module.config
         cb_configs = config.callbacks
-        if get_module_type(config.model_module) in ['booster' , 'aggregator']: 
+        if config.module_type in ['booster' , 'aggregator']: 
             # if the model is booster (lgbm , xgboost , catboost ...) , only use StatusDisplay and 
             cb_configs = {k:v for k,v in cb_configs.items() if k in BOOSTER_AVAILABLE_CALLBACKS}
         for cb_name in COMPULSARY_CALLBACKS:
@@ -37,7 +37,7 @@ class CallBackManager(base.CallBack):
         config : TrainConfig = model_module.config
         for cb_mod in SEARCH_MODS:
             if hasattr(cb_mod , cb_name): 
-                if cb_mod == display: param = {'verbosity': config['verbosity'] , **param}
+                if cb_mod == display: param = {'verbosity': config.verbosity , **param}
                 return getattr(cb_mod , cb_name)(model_module , **param)
         else: # on success
             raise KeyError(cb_name)

@@ -22,7 +22,7 @@ class AggregatorDataModule(DataModule):
         
     def load_data(self):
         #with CONF.Silence():
-        self.datas = ModuleData.load([] , self.config['data.labels'], 
+        self.datas = ModuleData.load([] , self.config.model_data_labels, 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision)
         self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
@@ -54,7 +54,7 @@ class AggregatorDataModule(DataModule):
         hidden_dates : list[np.ndarray] = []
         hidden_df : pd.DataFrame | Any = None
         ds_list = ['train' , 'valid'] if stage == 'fit' else ['test' , 'predict']
-        for hidden_key in self.config['data.hidden']:
+        for hidden_key in self.config.model_data_hiddens:
             model_name , model_num , model_type = hidden_key.split('.')
             hidden_path = PATH.hidden.joinpath(model_name , f'hidden.{model_num}.{model_type}.{model_date}.feather')
             df = pd.read_feather(hidden_path)

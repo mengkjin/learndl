@@ -1,11 +1,10 @@
-hidden_dim:     [32] #  2**5
+hidden_dim:     [64] #  2**5
 seqlens:        [{'day': 30 , 'indus': 1 , 'style': 1}] # although not a param for model, but can be different values(dict of SEQLEN) #
 dropout:        [0.1]
 rnn_layers:     [2]
 indus_dim:      [8]
-indus_embed:    [True] 
+indus_embed:    [False] 
 
-kernel_size:    [3] # for tcn
 hidden_as_factor:    [true]
 
 model.types: [best]

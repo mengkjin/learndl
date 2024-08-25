@@ -2,7 +2,7 @@ import logging
 import colorlog
 # from logging import handlers , RootLogger
 
-from ...basic import PATH
+from . import path as PATH
 
 class Logger(logging.RootLogger):
     '''custom colored log , config at {PATH.conf}/logger.yaml '''
@@ -10,8 +10,7 @@ class Logger(logging.RootLogger):
 
     @staticmethod
     def _init_logger(test_output = False):
-        config_logger = PATH.read_yaml(PATH.conf.joinpath('logger.yaml'))
-
+        config_logger = PATH.setting('logger')
         new_path = PATH.logs.joinpath(config_logger['file']['param']['filename'])
         config_logger['file']['param']['filename'] = str(new_path)
         new_path.parent.mkdir(exist_ok=True)

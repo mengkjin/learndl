@@ -1,0 +1,4 @@
+seqlens:        [{day: 5}] # although not a param for model, but can be different values(dict of SEQLEN) #
+n_learner     : [30]
+n_bins        : [20]
+max_nan_ratio : [0.8]

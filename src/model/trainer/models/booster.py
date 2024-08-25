@@ -2,7 +2,7 @@ import numpy as np
 
 from typing import Any , Literal
 
-from ...util import BaseDataModule , BaseTrainer , BatchData , BatchOutput , BoosterInput , get_booster_type , GeneralBooster
+from ...util import BaseDataModule , BaseTrainer , BatchData , BatchOutput , BoosterInput , TrainConfig , GeneralBooster
 
 class BoosterModel:
     '''Booster used in nn_model'''
@@ -11,6 +11,8 @@ class BoosterModel:
         self.model : GeneralBooster
 
     def __bool__(self): return True
+    @property
+    def config(self) -> TrainConfig: return self.module.config
     @property
     def data(self) -> BaseDataModule: return self.module.data
     @property
@@ -30,7 +32,12 @@ class BoosterModel:
     @property
     def is_cuda(self) -> bool: return self.module.device.device.type == 'cuda'
     @property
-    def booster_train_params(self): return {'seed' : self.module.config['random_seed'] , **self.module.model_param}
+    def booster_params(self): 
+        if self.config.booster_head:
+            return self.config.booster_head_param
+        else:
+            return self.module.model_param
+
     @property
     def batch_data(self) -> BatchData:
         assert isinstance(self.module.batch_data , BatchData)
@@ -39,7 +46,7 @@ class BoosterModel:
     def reset(self): self.loaded = False
     def load(self , model_dict : dict):
         '''load self.model'''
-        self.model = GeneralBooster.from_dict(model_dict)
+        self.model = GeneralBooster.from_dict(model_dict , cuda = self.is_cuda , seed = self.config.random_seed)
         self.loaded = True
         return self
     
@@ -70,8 +77,9 @@ class BoosterModel:
     def fit(self , *args , **kwargs):
         train_data = self.booster_input('train', *args , **kwargs)
         valid_data = self.booster_input('valid', *args , **kwargs)
-        self.model = GeneralBooster(get_booster_type(self.module.config) , train_param=self.booster_train_params , 
-                                    train = train_data , valid = valid_data , cuda=self.is_cuda).fit()
+        self.model = GeneralBooster(self.config.booster_type , self.booster_params , 
+                                    train = train_data , valid = valid_data , 
+                                    cuda=self.is_cuda , seed = self.config.random_seed).fit()
         self.loaded = True
         return self
     

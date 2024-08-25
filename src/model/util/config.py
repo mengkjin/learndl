@@ -1,180 +1,239 @@
-import argparse , os , random , shutil , socket , torch
+import argparse , os , random , shutil , torch
 import numpy as np
 
-from dataclasses import dataclass , field
 from pathlib import Path
-from typing import Any , ClassVar , Literal , Optional
+from typing import Any , Literal , Optional
 
+from ..boost import VALID_BOOSTERS
 from ..nn import get_nn_category , get_nn_datatype
-from ...basic import PATH
+from ...basic import PATH , THIS_IS_SERVER
 from ...func import pretty_print_dict , recur_update
 
-TRAIN_YAML = 'train_param.yaml'
-MODEL_YAML   = '{}.yaml'
-DEFAULT_YAML = 'default.yaml'
-
-def get_module_type(module : str):
-    if module in ['booster' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']:
-        return 'booster'
-    elif module in ['hidden_aggregator']:
-        return 'aggregator'
-    else:
-        return 'nn'
-    
-def get_booster_type(config : 'TrainConfig'):
-    if config.model_module in ['booster' , 'hidden_aggregator', ]:
-        return config['model.booster_type']
-    elif config.model_module in ['lgbm' , 'ada' , 'xgboost' , 'catboost']:
-        return config.model_module
-    else:
-        return False
-
-def check_config_validity(config : 'TrainConfig'):
-    assert socket.gethostname() == 'mengkjin-server' or config.short_test or \
-        (isinstance(config.Train.override,dict) and config.Train.override.get('short_test') == False), socket.gethostname()
-
-    if 'best' not in config['model.types']: config['model.types'].insert(0 , 'best')
-
-    nn_category = get_nn_category(config.model_module)
-    samp_method = config.sample_method
-
-    nn_datatype = get_nn_datatype(config.model_module)
-    
-    if nn_category == 'tra':
-        assert samp_method != 'total_shuffle' , samp_method
-    elif nn_category == 'vae':
-        assert samp_method == 'sequential' , samp_method
-
-    if nn_datatype:
-        config.Train.Param['data.type'] = nn_datatype
-
-def check_model_param_validity(model_param : 'ModelParam'):
-    if model_param.module == 'tra':
-        assert 'hist_loss_seq_len' in model_param.Param
-        assert 'hist_loss_horizon' in model_param.Param
-@dataclass    
 class TrainParam:
-    config_path : Optional[Path]
-    spec_adjust : bool = True
-    Param       : dict[str,Any] = field(default_factory=dict)
-    model_name  : Optional[str] = None
-    override    : Optional[dict] = None
+    def __init__(self , config_path : Optional[Path] , model_name  : Optional[str] = None , override = {}):
+        self.config_path = config_path
+        self.model_name = model_name
 
-    def __post_init__(self) -> None:
-        path = self.config_path if self.config_path else PATH.conf
-        Param : dict = PATH.read_yaml(path.joinpath(TRAIN_YAML))
-        
-        if socket.gethostname() != 'mengkjin-server': Param['short_test'] = True
-        if self.override: Param.update(self.override)
+        self.load_param(**override).special_adjustment().make_model_name().check_validity()
 
-        if self.spec_adjust:
-            if Param['short_test'] and Param.get('conditional.short_test'): 
-                recur_update(Param , Param['conditional.short_test'])
-            if Param['model.module'].lower() == 'transformer' and Param.get('conditional.transformer'):
-                recur_update(Param , Param['conditional.transformer'])
+    @property
+    def Param(self) -> dict[str,Any]: return self.train_param
+    def __getitem__(self , key : str): return self.Param[key]
+    def __setitem__(self , key : str , value : Any): self.Param[key] = value
 
-        if self.model_name is None:
-            if Param['model.name']:
-                self.model_name = str(Param['model.name'])
-            else:
-                self.model_name = '_'.join([Param['model.module'].lower() , Param['data.type']])
-            if Param['short_test']: 
-                self.model_name += '_ShortTest'
+    def load_param(self , **kwargs):
+        self.train_param : dict[str,Any] = PATH.read_yaml(self.source_path)
+        self.train_param.update(kwargs)
+        return self
 
-        self.Param = Param
-        if not self.is_nn: Param['model.types'] = ['best']
+    def special_adjustment(self):
+        if not THIS_IS_SERVER: self['short_test'] = True
+        if self.short_test and self.Param.get('conditional.short_test'): 
+            recur_update(self.Param , self['conditional.short_test'])
 
-    def __getitem__(self , key : str):
-        return self.Param[key]
+        if self.model_module == 'transformer' and self.Param.get('conditional.transformer'):
+            recur_update(self.Param , self['conditional.transformer'])
+        return self
     
-    def update_data_param(self , model_param : 'ModelParam'):
-        for k,v in model_param.Param.items():
-            if k in self.Param: self.Param[k] = v
+    def make_model_name(self):
+        if self.model_name: return self
+        if self['model.name']: self.model_name = str(self['model.name'])
+        else: self.model_name = '_'.join([self.model_module , self['data.types']])
+        if self.short_test: self.model_name += '_ShortTest'
+        return self
+    
+    def check_validity(self):
+        assert THIS_IS_SERVER or self.short_test , f'must be at server or short_test'
+
+        if 'best' not in self.model_types: self.model_types.insert(0 , 'best')
+
+        nn_category = get_nn_category(self.model_module)
+        nn_datatype = get_nn_datatype(self.model_module)
+        
+        if nn_category == 'tra': assert self.sample_method != 'total_shuffle' , self.sample_method
+        if nn_category == 'vae': assert self.sample_method == 'sequential'    , self.sample_method
+
+        if nn_datatype:              self['data.types'] = nn_datatype
+        if self.module_type != 'nn': self['model.types'] = ['best']
+        if 'best' not in self.model_types: self.model_types.insert(0 , 'best')
+        return self
+    
+    def generate_model_param(self , update_inplace = False , **kwargs):
+        model_param = ModelParam(self.config_path , self.model_module , self.booster_head , verbosity = self.verbosity , **kwargs)
+        if update_inplace: self.update_model_param(model_param)
+        return model_param
+    
+    def update_model_param(self , model_param : 'ModelParam'):
+        param = {k:v for k,v in model_param.Param.items() if k in self.Param}
+        self.Param.update(param)
+        return self
     
     def copy_to(self , target_dir : Path , exist_ok = False):
         target_dir.mkdir(exist_ok=True)
-        source = self.config_path if self.config_path else PATH.conf.joinpath(TRAIN_YAML)
-        target = target_dir.joinpath(source.name)
+        target = self.target_config_path(target_dir)
         if not exist_ok: assert not target.exists()
-        if source != target: shutil.copyfile(source , target)
+        if self.source_path != target: shutil.copyfile(self.source_path , target)
 
     @classmethod
     def guess_module(cls , config_path : Path | None) -> str:
-        if not config_path: config_path = PATH.conf.joinpath(TRAIN_YAML)
-        if not config_path.name == TRAIN_YAML: config_path = config_path.joinpath(TRAIN_YAML)
-        return PATH.read_yaml(config_path)['model.module'].lower()
+        return PATH.read_yaml(cls.source_config_path(config_path))['model.module'].lower()
+    
+    @classmethod
+    def get_module_type(cls , module : str):
+        if module in ['booster' , *VALID_BOOSTERS]:
+            return 'booster'
+        elif module in ['hidden_aggregator']:
+            return 'aggregator'
+        else:
+            return 'nn'
+    
+    @staticmethod
+    def source_config_path(parent : Path | None , name : str = 'default.yaml'):
+        if not parent: parent = PATH.conf_train
+        return parent.joinpath(name)
+    
+    @staticmethod
+    def target_config_path(parent : Path , name : str = 'train.yaml'):
+        return parent.joinpath(name)
     
     @property
-    def model_base_path(self) -> Path: 
+    def source_path(self): return self.source_config_path(self.config_path)
+    @property
+    def short_test(self): return bool(self['short_test'])
+    @property
+    def resumeable(self): return self.target_config_path(self.model_base_path).exists()
+    @property
+    def model_base_path(self): 
         assert self.model_name, 'model_name must not be none'
         return PATH.model.joinpath(self.model_name)
     @property
-    def resumeable(self) -> bool: return self.model_base_path.joinpath(TRAIN_YAML).exists()
+    def model_rslt_path(self): return self.model_base_path.joinpath('detailed_analysis')
     @property
-    def model_module(self) -> str: return self.Param['model.module'].lower()
+    def model_types(self) -> list: return self['model.types']
     @property
-    def is_nn(self) -> bool: return get_module_type(self.model_module) == 'nn'
+    def model_module(self): return str(self['model.module']).lower()
+    @property
+    def model_data_types(self): return str(self['data.types'])
+    @property
+    def model_data_labels(self) -> list[str]: return self['data.labels']
+    @property
+    def model_data_hiddens(self) -> list[str]: return self['data.hiddens']
+    @property
+    def module_type(self): return self.get_module_type(self.model_module)
+    @property
+    def verbosity(self): return int(self['verbosity'])
+    @property
+    def train_ratio(self): return float(self['train.dataloader.train_ratio'])
+    @property
+    def sample_method(self) -> Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']: 
+        return self['train.dataloader.sample_method']
+    @property
+    def shuffle_option(self) -> Literal['static' , 'init' , 'epoch']: 
+        return self['train.dataloader.shuffle_option']
     @property
     def callbacks(self) -> dict[str,dict]: 
         return {k.replace('callbacks.',''):v for k,v in self.Param.items() if k.startswith('callbacks.')}
+    @property
+    def random_seed(self): return self.Param.get('random_seed')
+    @property
+    def data_type_list(self) -> list[str]: return self.model_data_types.split('+')
+    @property
+    def precision(self) -> Any: 
+        return getattr(torch , self['precision']) if isinstance(self['precision'] , str) else self['precision']
+    @property
+    def nn_category(self): return get_nn_category(self.model_module)
+    @property
+    def booster_type(self):
+        if self.model_module in ['booster' , 'hidden_aggregator', ]:
+            assert self['model.booster_type'] in VALID_BOOSTERS , self['model.booster_type']
+            return self['model.booster_type']
+        elif self.model_module in VALID_BOOSTERS:
+            return self.model_module
+        elif self.booster_head:
+            assert self.booster_head in VALID_BOOSTERS , self.booster_head
+            return self.booster_head
+        else:
+            return False
+    @property
+    def booster_head(self): return self['model.booster_head']
         
-@dataclass    
 class ModelParam:
-    config_path : Optional[Path]
-    module      : str
-    Param       : dict         = field(default_factory=dict)
-    n_model     : int          = 0
-    params      : list[dict]   = field(default_factory=list)
+    INDAY_DIMS = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
 
-    INDAY_DIMS : ClassVar[dict[str,int]] = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
+    def __init__(self , config_path : Optional[Path] , module : str , booster_head : Any = False , clip_n : int = -1 , 
+                 verbosity = 2 , **kwargs):
+        self.config_path = config_path
+        self.module = module
+        self.booster_head = booster_head
+        self.clip_n = clip_n
+        self.verbosity = verbosity
+        self.override = kwargs
+        self.load_param().check_validity()
 
-    def __post_init__(self) -> None:
-        self.Param = PATH.read_yaml(self.source_path())
-        assert isinstance(self.Param , dict)
-        for key , value in self.Param.items():
-            if isinstance(value , (list,tuple)): 
-                self.n_model = max(self.n_model , len(value))
-            #else:
-            #    self.Param[key] = [value]
+    @property
+    def Param(self) -> dict[str,Any]: return self.model_param
+    def __getitem__(self , key : str): return self.Param[key]
+    def __setitem__(self , key : str , value : Any): self.Param[key] = value
+
+    def load_param(self):
+        self.model_param : dict[str,Any] = PATH.read_yaml(self.source_path)
+        self.model_param['verbosity'] = self.verbosity
+        self.model_param.update(self.override)
+        return self
+
+    def check_validity(self):
+        self.module = self.module.lower()
+        assert TrainParam.get_module_type(self.module) == 'nn'  or (not self.booster_head) , self.module
+
+        lens = [len(v) for v in self.Param.values() if isinstance(v , (list,tuple))]
+        self.n_model = max(lens) if lens else 1
+        if self.clip_n > 0: self.n_model = min(self.clip_n , self.n_model)
         assert self.n_model <= 5 , self.n_model
-        check_model_param_validity(self)
+        
+        if self.module == 'tra':
+            assert 'hist_loss_seq_len' in self.Param
+            assert 'hist_loss_horizon' in self.Param
 
-    def __getitem__(self , key : str):
-        return self.Param[key]
+        if self.booster_head:
+            assert self.booster_head in VALID_BOOSTERS , self.booster_head
+            self.booster_head_param = ModelParam(self.config_path , self.booster_head , False , 1 , self.verbosity , **self.override)
+        return self
+
+    @staticmethod
+    def source_config_path(parent : Path | None , module : str , name : str = 'default.yaml'):
+        if not parent: parent = PATH.conf_nn if TrainParam.get_module_type(module) == 'nn' else PATH.conf_boost
+        return parent.joinpath(name)
+    
+    @staticmethod
+    def target_config_path(target_dir : Path , name : str):
+        return target_dir.joinpath(name)
     
     def get(self , key : str , default = None):
         return self.Param.get(key , default)
     
     def copy_to(self , target_dir : Path , exist_ok = False):
         target_dir.mkdir(exist_ok=True)
-
-        source = self.source_path()
-        target = self.target_path(target_dir)
+        target = self.target_config_path(target_dir , f'{self.module}.yaml')
         
         if not exist_ok: assert not target.exists()
-        if source != target: shutil.copyfile(source , target)
+        if self.source_path != target: shutil.copyfile(self.source_path , target)
 
+    @property
     def source_path(self):
-        path = self.config_path if self.config_path else PATH.conf.joinpath('nn')
-        p = path.joinpath(f'{self.module.lower()}.yaml')
-        return p if p.exists() else p.with_name('default.yaml')
-    
-    def target_path(self , target_dir : Path):
-        return target_dir.joinpath(f'{self.module.lower()}.yaml')
+        path = self.source_config_path(self.config_path , self.module , f'{self.module}.yaml')
+        if not path.exists(): path = path.with_name('default.yaml')
+        return path
 
     def expand(self , base_path : Path):
         params = []
         for mm in range(self.n_model):
             par = {'path':base_path.joinpath(str(mm))}
             for k,v in self.Param.items():
-                if isinstance(v , (list, tuple)):
-                    par[k] = v[mm % len(v)]
-                else:
-                    par[k] = v
+                par[k] = v[mm % len(v)] if isinstance(v , (list, tuple)) else v
             params.append(par)
-        self.params = params
-        #self.params = [{'path':base_path.joinpath(str(mm)) , **{k:v[mm % len(v)] for k,v in self.Param.items()}} for mm in range(self.n_model)]
-
+        self.params : list[dict[str,Any]] = params
+        if self.booster_head: self.booster_head_param.expand(base_path)
+       
     def update_data_param(self , x_data : dict):
         '''when x_data is know , use it to fill some params(seq_len , input_dim , inday_dim , etc.)'''
         if not x_data: return self
@@ -197,68 +256,35 @@ class ModelParam:
     def max_num_output(self): return max(self.Param.get('num_output' , [1]))
 
 
-class TrainConfig:
-    def __init__(self , train_param : TrainParam , model_param : ModelParam):
-        self.Train : TrainParam = train_param
-        self.Model : ModelParam = model_param
+class TrainConfig(TrainParam):
+    def __init__(self , config_path : Optional[Path] , model_name  : Optional[str] = None , override = {}):
+        self.Train = TrainParam(config_path , model_name , override)
+        self.Model = self.Train.generate_model_param(update_inplace = True)
         
         self.resume_training: bool  = False
         self.stage_queue: list      = []
 
-        self.Train.update_data_param(self.Model)
-        check_config_validity(self)
-
+    @property
+    def Param(self) -> dict[str,Any]: return self.Train.Param
     @property
     def model_name(self) -> str|Any: return self.Train.model_name
     @property
-    def callbacks(self) -> dict[str,dict]: return self.Train.callbacks
+    def model_param(self): return self.Model.params
     @property
-    def short_test(self) -> bool: return self.Train['short_test']
-    @property
-    def model_base_path(self): return self.Train.model_base_path
-    @property
-    def model_param(self) -> list[dict]: return self.Model.params
-    @property
-    def model_num(self) -> int: return self.Model.n_model
+    def model_num(self): return self.Model.n_model
     @property
     def model_num_list(self) -> list[int]: return list(range(self.Model.n_model))
     @property
-    def model_module(self) -> str: return self.Train.model_module
-    @property
-    def model_rslt_path(self): return self.model_base_path.joinpath('detailed_analysis')
-    @property
-    def data_type_list(self) -> list[str]: return self['data.type'].split('+')
+    def booster_head_param(self): 
+        assert len(self.Model.booster_head_param.params) == 1 , self.Model.booster_head_param.params
+        return self.Model.booster_head_param.params[0]
 
-    @property
-    def precision(self) -> Any: 
-        if isinstance(self.Train['precision'] , str): 
-            return getattr(torch , self.Train['precision'])
-        else:
-            return self.Train['precision']
-        
-    @property
-    def sample_method(self) -> Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']: 
-        return self.Train['train.dataloader.sample_method']
-    @property
-    def train_ratio(self) -> float:  
-        return self.Train['train.dataloader.train_ratio']
-    @property
-    def shuffle_option(self) -> Literal['static' , 'init' , 'epoch']: 
-        return self.Train['train.dataloader.shuffle_option']
-
-    @property
-    def is_nn(self): return self.Train.is_nn
-    @property
-    def nn_category(self): return get_nn_category(self.model_module)
-
-    def __getitem__(self , k): return self.Train[k]
-
-    def update(self, update = {} , **kwargs):
+    def update(self, update : dict = {} , **kwargs):
         for k,v in update.items(): setattr(self , k , v)
         for k,v in kwargs.items(): setattr(self , k , v)
         return self
 
-    def reload(self , config_path : Path | None = None , do_parser = False , par_args = {} , override = None):
+    def reload(self , config_path : Path | None = None , do_parser = False , par_args = {} , override = {}):
         new_config = self.load(config_path,do_parser,par_args,override)
         self.__dict__ = new_config.__dict__
         return self
@@ -267,38 +293,32 @@ class TrainConfig:
         return self[key] if key in self.Train.Param else getattr(self , key , default)
     
     def set_config_environment(self , manual_seed = None):
-        self.set_random_seed(manual_seed if manual_seed else self.get('random_seed'))
+        self.set_random_seed(manual_seed if manual_seed else self.random_seed)
         torch.set_default_dtype(self.precision)
         torch.backends.cuda.matmul.__setattr__('allow_tf32' ,self['allow_tf32']) #= self.allow_tf32
         torch.autograd.anomaly_mode.set_detect_anomaly(self['detect_anomaly'])
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
     def update_data_param(self , x_data : dict):
-        if self.is_nn: self.Model.update_data_param(x_data)
+        if self.module_type == 'nn': self.Model.update_data_param(x_data)
     
     @classmethod
     def load(cls , config_path : Optional[Path] = None , 
-             do_parser = False , par_args = {} , override = None , makedir = True):
+             do_parser = False , par_args = {} , override = {} , makedir = True):
         '''load config yaml to get default/giving params'''
         model_name = config_path.name if config_path else None
-        train_param = TrainParam(config_path , model_name = model_name , override = override)
-        model_param = ModelParam(config_path , train_param.model_module)
-
-        config = cls(train_param , model_param)
+        config = cls(config_path , model_name , override)
         if do_parser: config.process_parser(cls.parser_args(par_args))
 
         base_path = config.model_base_path
         if base_path != config_path and config.resume_training:
-            train_param = TrainParam(base_path , model_name = config.model_name , override = override)
-            model_param = ModelParam(base_path , train_param.model_module)
-            config_resume = cls(train_param , model_param)
+            config_resume = cls(base_path , config.model_name , override)
             config.update(config_resume.__dict__)
         elif 'fit' in config.stage_queue and makedir:
             if config.Train.resumeable and not config.short_test:
                 raise Exception(f'{base_path} has to be delete manually')
-            [base_path.joinpath(str(mm)).mkdir(exist_ok=True) for mm in config.model_num_list]
-            config.Train.copy_to(base_path , exist_ok=config.short_test)
-            config.Model.copy_to(base_path , exist_ok=config.short_test)
+            [base_path.joinpath(str(mm)).mkdir(parents=True,exist_ok=True) for mm in config.model_num_list]
+            config.copy_to(base_path)
             
         config.model_rslt_path.mkdir(exist_ok=True)
         config.Model.expand(config.model_base_path)
@@ -307,6 +327,10 @@ class TrainConfig:
     def weight_scheme(self , stage : str , no_weight = False) -> Optional[str]: 
         stg = stage if stage == 'fit' else 'test'
         return None if no_weight else self.Train[f'train.criterion.weight.{stg}']
+    
+    def copy_to(self , target_dir : Path):
+        self.Train.copy_to(target_dir , exist_ok=self.short_test)
+        self.Model.copy_to(target_dir , exist_ok=self.short_test)
 
     @staticmethod
     def set_random_seed(seed = None):
@@ -342,14 +366,14 @@ class TrainConfig:
 
     def parser_resume(self , value = -1):
         '''ask if resume training when candidate names exists'''
-        model_name = self.Train.model_name
+        model_name = self.model_name
         assert model_name is not None
-        candidate_name = [model for model in [model_name] if PATH.model.joinpath(model).exists()] + \
+        candidate_name = [model for model in [model_name] if self.get_config_path(model).exists()] + \
                 [model.name for model in PATH.model.iterdir() if model.name.startswith(model_name + '.')]
         if len(candidate_name) > 0 and 'fit' in self.stage_queue:
             if value < 0:
-                print(f'--Multiple model path of {self.model_name} exists, input [yes] to resume training, or start a new one!')
-                user_input = input(f'Confirm resume training [{self.model_name}]? [yes/no] : ')
+                print(f'--Multiple model path of {model_name} exists, input [yes] to resume training, or start a new one!')
+                user_input = input(f'Confirm resume training [{model_name}]? [yes/no] : ')
                 value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
             self.resume_training = value > 0 
             print(f'--Confirm Resume Training!' if self.resume_training else '--Start Training New!')
@@ -367,10 +391,10 @@ class TrainConfig:
         else:
             if multiple: ask to choose one
             elif zero: raise
-        '''        
-        model_name = self.Train.model_name
+        '''
+        model_name = self.model_name
         assert model_name is not None
-        candidate_name = [model for model in [model_name] if PATH.model.joinpath(model).exists()] + \
+        candidate_name = [model for model in [model_name] if self.get_config_path(model).exists()] + \
                 [model.name for model in PATH.model.iterdir() if model.name.startswith(model_name + '.')]
         if self.short_test:
             ...
@@ -414,15 +438,11 @@ class TrainConfig:
     def print_out(self):
         subset = [
             'model_name' , 'model_module' , 'model.types' , 'model.booster_type' ,
-            'model.booster_ensembler' , 'data.type' , 'data.labels' ,
+            'model.booster_head' , 'data.types' , 'data.labels' ,
             'random_seed' , 'beg_date' , 'end_date' , 'sample_method' , 'shuffle_option' , 
         ]
         pretty_print_dict({k:self.get(k) for k in subset})
         pretty_print_dict(self.Model.Param)
-
-    @staticmethod
-    def guess_module(config_path : Path | None) -> str: 
-        return TrainParam.guess_module(config_path)
 
     @staticmethod
     def get_config_path(model_name : str): 

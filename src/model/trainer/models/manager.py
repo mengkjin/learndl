@@ -6,7 +6,7 @@ from typing import Any , Optional
 from .booster import BoosterModel
 from .ensembler import choose_net_ensembler , BoosterEnsembler
 from ...nn import GetNN
-from ...util import Checkpoint , Metrics , TrainConfig , get_module_type , BaseDataModule , BaseTrainer , ModelDict , ModelFile
+from ...util import Checkpoint , Metrics , TrainConfig , BaseDataModule , BaseTrainer , ModelDict , ModelFile
 
 class ModelEnsembler(ABC):
     '''a group of ensemble models , of same net structure'''
@@ -27,9 +27,9 @@ class ModelEnsembler(ABC):
     def setup(cls , model_module : BaseTrainer , **kwargs): 
         '''if model_module is booster , use booster'''
         assert isinstance(model_module.config , TrainConfig)
-        if get_module_type(model_module.config.model_module) == 'booster':
+        if model_module.config.module_type == 'booster':
             return BoosterManager(model_module , **kwargs)
-        elif get_module_type(model_module.config.model_module) == 'aggregator':
+        elif model_module.config.module_type == 'aggregator':
             return AggregatorManager(model_module , **kwargs)
         else:
             return NetManager(model_module , **kwargs)
@@ -45,7 +45,7 @@ class ModelEnsembler(ABC):
     @classmethod
     def get_model(cls , config : TrainConfig , model : ModelDict | ModelFile , 
                   model_param : dict | None = None , model_num : int | None = None , device : Any = None):
-        if get_module_type(config.model_module) == 'nn':
+        if config.module_type == 'nn':
             if model_param is None:
                 assert model_num is not None
                 model_param = config.model_param[model_num]
@@ -78,16 +78,16 @@ class NetManager(ModelEnsembler):
         super().__init__(model_module , use_score)
         self.net_ensemblers = {
             model_type:choose_net_ensembler(model_type)(self.ckpt , use_score , **kwargs)
-            for model_type in self.config['model.types']
+            for model_type in self.config.model_types
         }
-        if self.config['model.boost_ensembler']: 
-            self.net_boost_head = BoosterEnsembler(model_module)
+        if self.config.booster_head: 
+            self.booster_head = BoosterEnsembler(model_module)
         else:
-            self.net_boost_head = None
+            self.booster_head = None
 
     def new_model(self , training : bool , model_file : ModelFile):
         for model in self.net_ensemblers.values(): model.reset()
-        if not training and self.net_boost_head: self.net_boost_head.load(model_file['booster_head'])
+        if not training and self.booster_head: self.booster_head.load(model_file['booster_head'])
         return self
     
     def model(self , use_state_dict = None , *args , **kwargs): return self.net(use_state_dict)
@@ -95,7 +95,7 @@ class NetManager(ModelEnsembler):
         return self.get_net(self.config.model_module, self.module.model_param, use_state_dict, self.device)
 
     def override(self):
-        if self.net_boost_head: self.module.batch_output.override_pred(self.net_boost_head.predict().pred)
+        if self.booster_head: self.module.batch_output.override_pred(self.booster_head.predict().pred)
 
     def assess(self , epoch : int , metrics : Metrics): 
         for model in self.net_ensemblers.values():  model.assess(self.module.net , epoch , metrics)
@@ -103,7 +103,7 @@ class NetManager(ModelEnsembler):
     def collect(self , model_type = 'best' , *args):
         net = self.net_ensemblers[model_type].collect(self.module , *args)
         model_dict = ModelDict(state_dict = net.state_dict())
-        if self.net_boost_head: model_dict.booster_head = self.net_boost_head.fit(net).model_dict
+        if self.booster_head: model_dict.booster_head = self.booster_head.fit(net).model_dict
         return model_dict
 
 class BoosterManager(ModelEnsembler):

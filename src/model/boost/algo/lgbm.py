@@ -47,10 +47,13 @@ class Lgbm(BasicBoosterModel):
         valid_set = lgb.Dataset(x.cpu().numpy() , y.cpu().numpy() , weight = w.cpu().numpy() , reference = train_set)
         
         train_param = deepcopy(self.train_param)
+        train_param = {k:v for k,v in train_param.items() if k in self.DEFAULT_TRAIN_PARAM}
         train_param.update({'seed':self.seed , 
                             'device_type': 'gpu' if self.cuda and torch.cuda.is_available() else 'cpu' ,
                             'monotone_constraints' : self.mono_constr(train_param['monotone_constraints'] , 
-                                                                      len(train.use_feature))}) 
+                                                                      len(train.use_feature)) ,
+                            'verbosity': -1 if silence else 1}) 
+        print(silence)
 
         self.evals_result = dict()
         self.model : lgb.Booster = lgb.train(

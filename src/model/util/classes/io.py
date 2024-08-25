@@ -132,11 +132,11 @@ class BatchOutput:
         return self
     
     def pred_df(self , secid : np.ndarray , date : np.ndarray , narrow_df = False):
-        full_pred = self.pred.cpu().numpy()
-        if full_pred.ndim == 1: full_pred = full_pred[:,None]
-        assert full_pred.ndim == 2 , full_pred.shape
+        pred = self.pred.cpu().numpy()
+        if pred.ndim == 1: pred = pred[:,None]
+        assert pred.ndim == 2 , pred.shape
         df = pd.DataFrame({'secid' : secid , 'date' : date , 
-                           **{f'pred.{i}':full_pred[:,i] for i in range(full_pred.shape[-1])}})
+                           **{f'pred.{i}':pred[:,i] for i in range(pred.shape[-1])}})
         if narrow_df:
             df = df.melt(['secid','date'] , var_name='feature')
         return df
@@ -163,25 +163,26 @@ class ModelInstance:
     booster      : Optional[GeneralBooster] = None
     aggregator   : Optional[GeneralBooster] = None
 
-    def __call__(self , *args , **kwargs):
-        return self.forward(*args , **kwargs)
+    def __call__(self , x : Tensor | tuple[Tensor,...] | list[Tensor] , *args , **kwargs):
+        return self.forward(x , *args , **kwargs)
 
-    def forward(self , tensor1 : Tensor , *args , **kwargs):
+    def forward(self , x : Tensor | tuple[Tensor,...] | list[Tensor]  , *args , **kwargs):
         if self.net is not None:
             assert self.booster is None and self.aggregator is None
-            net_output = BatchOutput(self.net(tensor1 , *args , **kwargs))
+            out = BatchOutput(self.net(x , *args , **kwargs))
             if self.booster_head is not None:
-                return self.booster_head.forward(net_output.hidden)
+                return self.booster_head.forward(out.hidden)
             else:
-                return net_output.pred
+                return out.pred
         else:
             assert self.booster_head is None
+            x = x if isinstance(x , Tensor) else x[0]
             if self.booster is not None:
                 assert self.aggregator is None
-                return self.booster.forward(tensor1)
+                return self.booster.forward(x)
             else:
                 assert self.aggregator is not None
-                return self.aggregator.forward(tensor1)
+                return self.aggregator.forward(x)
 
 
 @dataclass(slots=True)
@@ -193,7 +194,7 @@ class ModelDict:
 
     def save(self , path : str | Path , stack = False):
         if isinstance(path , str): path = Path(path)
-        path.mkdir(exist_ok=True)
+        path.mkdir(parents=True,exist_ok=True)
         for key in self.__slots__:
             if (value := getattr(self , key)) is not None:
                 torch.save(value , path.joinpath(f'{key}.stack.pt' if stack else f'{key}.pt'))

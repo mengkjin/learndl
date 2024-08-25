@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from typing import Any , Literal
+from typing import Any
 
 from ..basic import pro , code_to_secid , InfoFetecher
  

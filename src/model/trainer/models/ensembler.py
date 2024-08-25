@@ -4,12 +4,11 @@ import numpy as np
 from abc import ABC , abstractmethod
 from copy import deepcopy
 from torch import nn , Tensor
-from torch.optim.swa_utils import AveragedModel , update_bn
-from typing import Any , Iterator , Literal , Optional
+from torch.optim.swa_utils import AveragedModel
+from typing import Any , Iterator , Optional
 
-from .booster import GeneralBooster , BoosterModel
-from ...util import Metrics , Checkpoint , BaseTrainer , BatchData , BaseDataModule , BatchOutput , BoosterInput
-from ...util.config import get_booster_type
+from .booster import BoosterModel
+from ...util import Metrics , Checkpoint , BaseTrainer , BatchData , BatchOutput , BoosterInput
 
 def choose_net_ensembler(model_type):
     '''get a subclass of _BaseEnsembler'''

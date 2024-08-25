@@ -59,8 +59,8 @@ class PredRecorder:
             ij = module.batch_data.i.cpu()
             secid , date = module.data.y_secid[ij[:,0]] , module.data.y_date[ij[:,1]]
         elif isinstance(module.batch_data , BoosterInput):
-            secid , date = module.batch_data.SECID() , module.batch_data.DATE()
-        pred = module.batch_output.pred_df(secid , date)
+            secid , date = module.batch_data.SECID(False) , module.batch_data.DATE(False)
+        pred = module.batch_output.pred_df(secid , date).dropna()
         pred = pred.loc[pred['date'].isin(self.dates),:]
         if len(pred) == 0: return
 

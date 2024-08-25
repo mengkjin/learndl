@@ -122,6 +122,8 @@ class Metrics:
         
         if label.shape != pred.shape: # if more label than output
             label = label[...,:pred.shape[-1]]
+        if self.config.module_type != 'nn':
+            label , pred = label.flatten() , pred.flatten()
         if label.ndim == 1:
             label , pred = label.reshape(-1, 1) , pred.reshape(-1, 1)
         assert label.shape == pred.shape , (label.shape , pred.shape)
@@ -131,7 +133,7 @@ class Metrics:
             score = self.score_calc(label , pred , weight , nan_check = True , which_head = self.which_output , training = False).item()
             self.output = BatchMetric(score = score)
 
-        if dataset == 'train' and self.config.is_nn:
+        if dataset == 'train' and self.config.module_type == 'nn':
             multiheadlosses = self.loss_calc(label , pred , weight , nan_check = False , training = True)
             loss = self.multi_losses(multiheadlosses , multiloss_param) 
             self.output.add_loss(self.loss_calc.criterion , loss)

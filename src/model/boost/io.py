@@ -19,7 +19,7 @@ class BoosterOutput:
     label   : torch.Tensor | Any = None
 
     def to_2d(self):
-        pred = self.label * 0
+        pred = self.label.to(self.pred) * 0
         pred[self.finite] = self.pred
         return pred
 
@@ -78,9 +78,13 @@ class BoosterInput:
             assert all(np.isin(use_feature , self.feature)) , np.setdiff1d(use_feature , self.feature)
             self.use_feature = use_feature
 
-    def SECID(self): return np.repeat(self.secid , len(self.date))[self.finite.flatten()]
+    def SECID(self , dropna = True): 
+        secid = np.repeat(self.secid , len(self.date))
+        return secid[self.finite.flatten()] if dropna else secid
 
-    def DATE(self): return np.tile(self.date , len(self.secid))[self.finite.flatten()]
+    def DATE(self , dropna = True): 
+        date = np.tile(self.date , len(self.secid))
+        return date[self.finite.flatten()] if dropna else date
 
     def X(self): return self.x[self.finite][...,self.feat_idx]
 
