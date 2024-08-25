@@ -3,9 +3,11 @@ random_seed: null
 model.name: gruRES_day # gru_2head # null
 model.module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 model.types: [best , swalast , swabest]
-model.lgbm_ensembler: false
 
-data.type: day # 'day+30m' , 30m , day
+model.booster_head: false # lgbm , ada , xgboost , catboost
+model.booster_type: lgbm # ada , xgboost , catboost
+
+data.types: day # 'day+30m' , 30m , day
 data.prenorm:
   day: {'divlast' : True  , 'histnorm' : True}
 data.labels: 

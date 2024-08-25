@@ -52,7 +52,7 @@ class ModelEnsembler(ABC):
             base_net = GetNN(config.model_module).nn_module(**model_param)
         else:
             base_net = None
-        model_instance = model.model_instance(base_net , device)
+        model_instance = model.model_instance(base_net , device).eval()
         return model_instance
     
     @abstractmethod

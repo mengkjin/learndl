@@ -1,20 +1,17 @@
 random_seed: null
 
-model.name: null # gru_2head # null
-model.module: risk_att_gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
+model.name: gruRTN_day # gru_2head # null
+model.module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 model.types: [best , swalast , swabest]
-model.lgbm_ensembler: false
 
-data.hidden:
-  - gru_day.0.best
-  - gru_day.0.swabest
+model.booster_head: false # lgbm , ada , xgboost , catboost
+model.booster_type: lgbm # ada , xgboost , catboost
 
-data.type: day # 'day+30m' , 30m , day
+data.types: day # 'day+30m' , 30m , day
 data.prenorm:
   day: {'divlast' : True  , 'histnorm' : True}
 data.labels: 
-  - std_lag1_10 # rtn_lag1_10 # std_lag1_10
-  - rtn_lag1_10 # rtn_lag1_20 # std_lag1_20
+  - rtn_lag1_10 # rtn_lag1_10 # std_lag1_10
 
 callbacks.ResetOptimizer:     {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
 callbacks.CallbackTimer:      {}
@@ -27,7 +24,6 @@ callbacks.StatusDisplay:      {}
 #callbacks.TrainConverge:      {'patience' : 5 , 'eps' : 1.0e-5} 
 #callbacks.FitConverge:        {'patience' : 5 , 'eps' : 1.0e-5}
 #callbacks.CudaEmptyCache:     {'batch_interval' : 20}
-callbacks.GroupReturnAnalysis:  {}
 callbacks.DetailedAlphaAnalysis:  {}
 
 train.dataloader.sample_method:   sequential # total_shuffle , sequential , both_shuffle , train_shuffle

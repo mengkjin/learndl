@@ -88,13 +88,13 @@ class TrainParam:
             return 'nn'
     
     @staticmethod
-    def source_config_path(parent : Path | None , name : str = 'default.yaml'):
+    def source_config_path(parent : Path | None):
         if not parent: parent = PATH.conf_train
-        return parent.joinpath(name)
+        return parent.joinpath('default.yaml') if parent == PATH.conf_train else parent.joinpath('train.yaml')
     
     @staticmethod
-    def target_config_path(parent : Path , name : str = 'train.yaml'):
-        return parent.joinpath(name)
+    def target_config_path(parent : Path):
+        return parent.joinpath('train.yaml')
     
     @property
     def source_path(self): return self.source_config_path(self.config_path)

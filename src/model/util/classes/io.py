@@ -183,6 +183,15 @@ class ModelInstance:
             else:
                 assert self.aggregator is not None
                 return self.aggregator.forward(x)
+            
+    def eval(self):
+        if self.net is not None: self.net.eval()
+        return self
+
+    def train(self):
+        if self.net is not None: self.net.train()
+        return self
+
 
 
 @dataclass(slots=True)

@@ -44,7 +44,7 @@ class Predictor:
             CONF.SILENT = False
             print(f'Finish model [{model.name}] predicting!')
         print('-' * 80)
-
+        return md
 
     def deploy(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
         '''deploy df by day to class.destination'''
@@ -119,8 +119,6 @@ class Predictor:
 
                     pred = BatchOutput(net(batch_data.x)).pred
                     pred2 = net2(batch_data.x)
-
-                    print(pred , pred2)
 
                     if len(pred) == 0: continue
                     df = pd.DataFrame({'model_num':model_num , 'date' : tdate , 

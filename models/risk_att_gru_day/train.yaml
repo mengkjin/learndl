@@ -7,11 +7,11 @@ model.types: [best , swalast , swabest]
 model.booster_head: false # lgbm , ada , xgboost , catboost
 model.booster_type: lgbm # ada , xgboost , catboost
 
-data.hidden:
+data.hiddens:
   - gru_day.0.best
   - gru_day.0.swabest
 
-data.type: day # 'day+30m' , 30m , day
+data.types: day # 'day+30m' , 30m , day
 data.prenorm:
   day: {'divlast' : True  , 'histnorm' : True}
 data.labels: 
