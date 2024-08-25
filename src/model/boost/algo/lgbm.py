@@ -53,7 +53,6 @@ class Lgbm(BasicBoosterModel):
                             'monotone_constraints' : self.mono_constr(train_param['monotone_constraints'] , 
                                                                       len(train.use_feature)) ,
                             'verbosity': -1 if silence else 1}) 
-        print(silence)
 
         self.evals_result = dict()
         self.model : lgb.Booster = lgb.train(
