@@ -133,7 +133,7 @@ class FrameLoader:
                    parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
         dates = GetData.data_dates(self.db_src , self.db_key , start_dt , end_dt)
         dfs = load_target_file_dates(self.db_src , self.db_key , dates , parallel = parallel, max_workers=max_workers)
-        dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None]
+        dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None and not df.empty]
         return pd.concat(dfs) if len(dfs) else pd.DataFrame()
         
 class DataBlock(Stock4DData):

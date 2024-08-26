@@ -1,10 +1,10 @@
 random_seed: null
 
-model.name: null # gru_2head # null
+model.name: gru_5year_day # gru_2head # null
 model.module: gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 model.types: [best , swalast , swabest]
 
-model.booster_head: lgbm # lgbm , ada , xgboost , catboost
+model.booster_head: False # lgbm , ada , xgboost , catboost
 model.booster_type: lgbm # ada , xgboost , catboost
 
 data.types: day # 'day+30m' , 30m , day
@@ -59,7 +59,7 @@ train.multilosses.param.hybrid: {'phi' : null , 'tau' : 2}
 short_test:  false
 beg_date:   20170103 # 20220613 # 20170103
 end_date:   99991231
-input_span: 2400
+input_span: 1200
 interval:   120
 max_epoch:  200
 verbosity:  2

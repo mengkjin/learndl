@@ -1,22 +1,21 @@
 random_seed: null
 
-model.name: null # gru_2head # null
-model.module: lgbm # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
+model.name: gru_5year_day # gru_2head # null
+model.module: gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 model.types: [best , swalast , swabest]
 
-model.booster_head: false # lgbm , ada , xgboost , catboost
+model.booster_head: False # lgbm , ada , xgboost , catboost
 model.booster_type: lgbm # ada , xgboost , catboost
 
-data.hidden:
-  - gru_day.0.best
-  - gru_day.0.swabest
-
-data.type: day # 'day+30m' , 30m , day
+data.types: day # 'day+30m' , 30m , day
 data.prenorm:
   day: {'divlast' : True  , 'histnorm' : True}
 data.labels: 
   - std_lag1_10 # rtn_lag1_10 # std_lag1_10
   - rtn_lag1_10 # rtn_lag1_20 # std_lag1_20
+data.hiddens:
+  - gru_day.0.best
+  - gru_day.0.swabest
 
 callbacks.ResetOptimizer:     {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
 callbacks.CallbackTimer:      {}
@@ -60,7 +59,7 @@ train.multilosses.param.hybrid: {'phi' : null , 'tau' : 2}
 short_test:  false
 beg_date:   20170103 # 20220613 # 20170103
 end_date:   99991231
-input_span: 2400
+input_span: 1200
 interval:   120
 max_epoch:  200
 verbosity:  2

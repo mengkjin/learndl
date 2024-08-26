@@ -41,7 +41,8 @@ class RegModel:
     def full_path(self , model_num , model_date , model_type):
         return PATH.model.joinpath(self.name , str(model_num) , str(model_date) , model_type)
     
-FACTOR_DESTINATION = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
+FACTOR_DESTINATION_LAPTOP = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
+FACTOR_DESTINATION_SERVER = PATH.result.joinpath('Alpha')
 REG_MODELS = [
     RegModel('gru_day'    , 'swalast' , 0 , 'gru_day_V0') ,
     RegModel('gruRTN_day' , 'swalast' , 0 , 'gruRTN_day_V0') , 

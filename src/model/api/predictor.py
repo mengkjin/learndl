@@ -7,7 +7,8 @@ from typing import Any , ClassVar , Optional
 
 from ..trainer import ModelEnsembler , NetDataModule
 from ..util import BatchOutput , Deposition , Device , TrainConfig
-from ...basic import RegModel , PATH , CONF , THIS_IS_SERVER , REG_MODELS , FACTOR_DESTINATION
+from ...basic import (RegModel , PATH , CONF , THIS_IS_SERVER , 
+                      REG_MODELS , FACTOR_DESTINATION_LAPTOP , FACTOR_DESTINATION_SERVER)
 from ...data import GetData
 from ...func import today , date_offset
 
@@ -36,7 +37,6 @@ class Predictor:
     @classmethod
     def update_factors(cls , silent = True):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
-        if THIS_IS_SERVER: return
         for model in REG_MODELS:
             md = cls(model)
             CONF.SILENT = True
@@ -50,9 +50,10 @@ class Predictor:
         '''deploy df by day to class.destination'''
         if df is None: df = self.df
         if df is None: return NotImplemented
-        FACTOR_DESTINATION.joinpath(self.alias).mkdir(exist_ok=True)
+        path_deploy = FACTOR_DESTINATION_SERVER if THIS_IS_SERVER else FACTOR_DESTINATION_LAPTOP
+        path_deploy.joinpath(self.alias).mkdir(parents=True,exist_ok=True)
         for date , subdf in df.groupby(date_col):
-            des_path = FACTOR_DESTINATION.joinpath(self.alias , f'{self.alias}_{date}.txt')
+            des_path = path_deploy.joinpath(self.alias , f'{self.alias}_{date}.txt')
             if overwrite or not des_path.exists():
                 subdf.drop(columns='date').set_index(secid_col).to_csv(des_path, sep='\t', index=True, header=False)
 
