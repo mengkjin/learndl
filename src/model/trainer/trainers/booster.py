@@ -94,7 +94,7 @@ class BoosterTrainer(TrainerModule):
         self.data : BoosterDataModule = BoosterDataModule(self.config)
 
     def batch_forward(self) -> None: 
-        if self.status.dataset == 'train': self.booster.fit()
+        if self.status.dataset == 'train': self.booster.fit(silence=True)
         self.batch_output = self.booster.predict(self.status.dataset)
 
     def batch_metrics(self) -> None:

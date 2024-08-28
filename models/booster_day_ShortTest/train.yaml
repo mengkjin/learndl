@@ -1,7 +1,7 @@
 random_seed: null
 
 model.name: null # gru_2head # null
-model.module: hidden_aggregator # booster # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
+model.module: booster # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 model.types: [best , swalast , swabest]
 
 model.booster_head: False # lgbm , ada , xgboost , catboost

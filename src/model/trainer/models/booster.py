@@ -74,9 +74,10 @@ class BoosterModel:
         assert isinstance(batch_data , BoosterInput)
         return batch_data
 
-    def fit(self , *args , **kwargs):
+    def fit(self , *args , silence = False , **kwargs):
         train_data = self.booster_input('train', *args , **kwargs)
         valid_data = self.booster_input('valid', *args , **kwargs)
+        if silence: self.booster_params['verbosity'] = 0
         self.model = GeneralBooster(self.config.booster_type , self.booster_params , 
                                     train = train_data , valid = valid_data , 
                                     cuda=self.is_cuda , seed = self.config.random_seed).fit()

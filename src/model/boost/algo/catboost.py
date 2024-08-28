@@ -22,6 +22,7 @@ class CatBoost(BasicBoosterModel):
         'random_strength' : 1.,
         'task_type': 'CPU',
         'random_seed': 42,
+        'allow_writing_files' : False ,
     }
 
     def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silence = False):

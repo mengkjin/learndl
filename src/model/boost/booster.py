@@ -3,7 +3,7 @@ import torch
 
 from typing import Any , Literal
 
-from .algo import BasicBoosterModel , choose_booster_model
+from .algo import BasicBoosterModel , choose_booster_model , VALID_BOOSTERS
 from .io import BoosterInput , BoosterWeightMethod
     
 class GeneralBooster:

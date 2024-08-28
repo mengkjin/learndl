@@ -474,3 +474,51 @@
   4.best: Avg(0.1024)|Sum(187.49)|Std(0.0747)|T(58.66)|IR(6.7162)
   4.swabest: Avg(0.102)|Sum(186.68)|Std(0.0726)|T(60.05)|IR(6.8754)
   4.swalast: Avg(0.1011)|Sum(185.07)|Std(0.0729)|T(59.31)|IR(6.7903)
+0_model: booster_day_ShortTest(x3)
+1_start: Wed Aug 28 16:22:48 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 17.0 Secs
+7_test: Finish Process [Test], Cost 3.8 Secs
+8_result:
+  0.best: Avg(0.1742)|Sum(6.1)|Std(0.0453)|T(22.77)|IR(18.8524)
+  1.best: Avg(0.1553)|Sum(5.43)|Std(0.0436)|T(21.07)|IR(17.4493)
+  2.best: Avg(0.1247)|Sum(4.36)|Std(0.0406)|T(18.15)|IR(15.0328)
+0_model: booster_day_ShortTest(x3)
+1_start: Wed Aug 28 16:44:55 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 15.8 Secs
+7_test: Finish Process [Test], Cost 3.6 Secs
+8_result:
+  0.best: Avg(0.1742)|Sum(6.1)|Std(0.0453)|T(22.77)|IR(18.8524)
+  1.best: Avg(0.1553)|Sum(5.43)|Std(0.0436)|T(21.07)|IR(17.4493)
+  2.best: Avg(0.1247)|Sum(4.36)|Std(0.0406)|T(18.15)|IR(15.0328)
+0_model: booster_day_ShortTest(x3)
+1_start: Wed Aug 28 16:56:32 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 17.9 Secs
+7_test: Finish Process [Test], Cost 1.6 Secs
+8_result:
+  0.best: Avg(0.1947)|Sum(6.82)|Std(0.0498)|T(23.14)|IR(19.1592)
+  1.best: Avg(0.1863)|Sum(6.52)|Std(0.0494)|T(22.31)|IR(18.4745)
+  2.best: Avg(0.1834)|Sum(6.42)|Std(0.047)|T(23.08)|IR(19.1111)
+0_model: hidden_aggregator_day_ShortTest(x3)
+1_start: Wed Aug 28 17:26:00 2024
+2_basic: short
+3_datas: day
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 105.7 Secs
+7_test: Finish Process [Test], Cost 3.3 Secs
+8_result:
+  0.best: Avg(0.1481)|Sum(5.18)|Std(0.0665)|T(13.17)|IR(10.9033)
+  1.best: Avg(0.1481)|Sum(5.18)|Std(0.064)|T(13.69)|IR(11.3346)
+  2.best: Avg(0.1508)|Sum(5.28)|Std(0.0633)|T(14.09)|IR(11.6695)

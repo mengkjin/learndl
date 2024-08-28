@@ -59,7 +59,9 @@ class TrainParam:
         return self
     
     def generate_model_param(self , update_inplace = False , **kwargs):
-        model_param = ModelParam(self.config_path , self.model_module , self.booster_head , verbosity = self.verbosity , **kwargs)
+        module = self.model_module if self.module_type == 'nn' else self.booster_type
+        assert isinstance(module , str) , (self.model_module , module)
+        model_param = ModelParam(self.config_path , module , self.booster_head , self.verbosity , **kwargs)
         if update_inplace: self.update_model_param(model_param)
         return model_param
     
@@ -149,9 +151,6 @@ class TrainParam:
             return self['model.booster_type']
         elif self.model_module in VALID_BOOSTERS:
             return self.model_module
-        elif self.booster_head:
-            assert self.booster_head in VALID_BOOSTERS , self.booster_head
-            return self.booster_head
         else:
             return False
     @property
@@ -160,10 +159,10 @@ class TrainParam:
 class ModelParam:
     INDAY_DIMS = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
 
-    def __init__(self , config_path : Optional[Path] , module : str , booster_head : Any = False , clip_n : int = -1 , 
-                 verbosity = 2 , **kwargs):
+    def __init__(self , config_path : Optional[Path] , module : str ,
+                 booster_head : Any = False , verbosity = 2 , clip_n : int = -1 , **kwargs):
         self.config_path = config_path
-        self.module = module
+        self.module = module.lower()
         self.booster_head = booster_head
         self.clip_n = clip_n
         self.verbosity = verbosity
@@ -182,8 +181,8 @@ class ModelParam:
         return self
 
     def check_validity(self):
-        self.module = self.module.lower()
-        assert TrainParam.get_module_type(self.module) == 'nn'  or (not self.booster_head) , self.module
+        assert TrainParam.get_module_type(self.module) == 'nn' or \
+            ((not self.booster_head) and (self.module in VALID_BOOSTERS)) , self.module
 
         lens = [len(v) for v in self.Param.values() if isinstance(v , (list,tuple))]
         self.n_model = max(lens) if lens else 1
@@ -196,7 +195,7 @@ class ModelParam:
 
         if self.booster_head:
             assert self.booster_head in VALID_BOOSTERS , self.booster_head
-            self.booster_head_param = ModelParam(self.config_path , self.booster_head , False , 1 , self.verbosity , **self.override)
+            self.booster_head_param = ModelParam(self.config_path , self.booster_head , False , self.verbosity , 1 , **self.override)
         return self
 
     @staticmethod
@@ -205,15 +204,15 @@ class ModelParam:
         return parent.joinpath(name)
     
     @staticmethod
-    def target_config_path(target_dir : Path , name : str):
-        return target_dir.joinpath(name)
+    def target_config_path(target_dir : Path):
+        return target_dir.joinpath('model.yaml')
     
     def get(self , key : str , default = None):
         return self.Param.get(key , default)
     
     def copy_to(self , target_dir : Path , exist_ok = False):
         target_dir.mkdir(exist_ok=True)
-        target = self.target_config_path(target_dir , f'{self.module}.yaml')
+        target = self.target_config_path(target_dir)
         
         if not exist_ok: assert not target.exists()
         if self.source_path != target: shutil.copyfile(self.source_path , target)

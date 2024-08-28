@@ -343,7 +343,7 @@ class BaseTrainer(ABC):
         self.on_fit_start()
         for self.status.model_date , self.status.model_num in self.model_iter:
             if self.status.fit_iter_num == 0:
-                self.logger.warn(f'First Iterance: ({self.status.model_date} , {self.status.model_num})')
+                self.logger.warning(f'First Iterance: ({self.status.model_date} , {self.status.model_num})')
             self.fit_model()
         self.on_fit_end()
 
