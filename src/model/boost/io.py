@@ -88,12 +88,24 @@ class BoosterInput:
 
     def X(self): return self.x[self.finite][...,self.feat_idx]
 
-    def Y(self): return self.y[self.finite]
+    def Y(self): return self.y[self.finite] if self.y is not None else None
 
-    def W(self): return self.weight_method.calculate_weight(self.y , self.secid)[self.finite]
+    def W(self): return self.weight_method.calculate_weight(self.y , self.secid)[self.finite] if self.y is not None else None
     
-    def XYW(self , *args) -> tuple[torch.Tensor , torch.Tensor , torch.Tensor]:
-        return self.X().to(*args) , self.Y().to(*args) , self.W().to(*args)
+    def XYW(self , *args):
+        return self.BoostXYW(self.X() , self.Y() , self.W())
+    
+    @dataclass
+    class BoostXYW:
+        x : Any
+        y : Any
+        w : Any
+        
+        def as_numpy(self):
+            if isinstance(self.x , torch.Tensor): self.x = self.x.cpu().numpy()
+            if isinstance(self.y , torch.Tensor): self.y = self.y.cpu().numpy()
+            if isinstance(self.w , torch.Tensor): self.w = self.w.cpu().numpy()
+            return self
     
     def output(self , pred : torch.Tensor | np.ndarray | Any):
         if isinstance(pred , torch.Tensor):

@@ -36,16 +36,15 @@ class AdaBoost(BasicBoosterModel):
 
         device = torch.device('cuda:0' if torch.cuda.is_available() and self.cuda else 'cpu')
         train_data = BoosterInput.concat([train , valid])
-        x , y , w = train_data.XYW(device)
+        dset = train_data.XYW(device)
 
-        x = self.input_transform(x)
-        y = self.label_transform(y)
+        dset.x = self.input_transform(dset.x)
+        dset.y = self.label_transform(dset.y)
 
-        idx = (y != 0).squeeze()
-        x , y , w = x[idx] , y[idx] , w[idx]
+        idx = (dset.y != 0).squeeze()
 
         self.model : StrongLearner = StrongLearner(**self.train_param)
-        self.model.fit(x , y , w , silence = silence , feature = train_data.feature)
+        self.model.fit(dset.x[idx] , dset.y[idx] , dset.w[idx] , silence = silence , feature = train_data.feature)
         return self
     
     def predict(self , test : BoosterInput | Any = None):

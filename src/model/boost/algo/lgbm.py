@@ -1,5 +1,4 @@
-import torch
-import lightgbm as lgb
+import lightgbm , torch
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -18,7 +17,9 @@ PLOT_PATH : Path | None = None
 class Lgbm(BasicBoosterModel):
     DEFAULT_TRAIN_PARAM = {
         'objective': 'regression', 
-        'verbosity': -1 , 
+        'metric' : None , # ndcg
+        'num_boost_round' : 1000 , 
+        'early_stopping' : 50 , 
         'linear_tree': True, 
         'learning_rate': 0.3, 
         'lambda_l2': 1e-05, 
@@ -31,7 +32,6 @@ class Lgbm(BasicBoosterModel):
         'bagging_fraction': 0.75, 
         'force_col_wise': True, 
         'monotone_constraints': 0 , 
-        'early_stopping' : 50 , 
         'zero_as_missing' : False ,
         'device_type': 'cpu',
         'seed': 42,
@@ -39,12 +39,12 @@ class Lgbm(BasicBoosterModel):
 
     def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silence = False):
         if train is None: train = self.data['train']
-        x , y , w = train.XYW()
-        train_set = lgb.Dataset(x.cpu().numpy() , y.cpu().numpy() , weight = w.cpu().numpy())
+        dset = train.XYW().as_numpy()
+        train_set = lightgbm.Dataset(dset.x , dset.y , weight = dset.w)
 
         if valid is None: valid = self.data['valid']
-        x , y , w = valid.XYW()
-        valid_set = lgb.Dataset(x.cpu().numpy() , y.cpu().numpy() , weight = w.cpu().numpy() , reference = train_set)
+        dset = valid.XYW().as_numpy()
+        valid_set = lightgbm.Dataset(dset.x , dset.y , weight = dset.w , reference = train_set)
         
         train_param = deepcopy(self.train_param)
         train_param = {k:v for k,v in train_param.items() if k in self.DEFAULT_TRAIN_PARAM}
@@ -53,15 +53,16 @@ class Lgbm(BasicBoosterModel):
                             'monotone_constraints' : self.mono_constr(train_param['monotone_constraints'] , 
                                                                       len(train.use_feature)) ,
                             'verbosity': -1 if silence else 1}) 
+        num_boost_round = train_param.pop('num_boost_round')
 
         self.evals_result = dict()
-        self.model : lgb.Booster = lgb.train(
+        self.model : lightgbm.Booster = lightgbm.train(
             train_param ,
             train_set = train_set, 
             valid_sets= [train_set, valid_set], 
             valid_names=['train', 'valid'] , 
-            num_boost_round=1000 , 
-            callbacks=[lgb.record_evaluation(self.evals_result)],
+            num_boost_round=num_boost_round , 
+            callbacks=[lightgbm.record_evaluation(self.evals_result)],
         )
         return self
         
@@ -77,7 +78,7 @@ class Lgbm(BasicBoosterModel):
     
     def load_dict(self , model_dict : dict , cuda = False , seed = None):
         super().load_dict(model_dict , cuda , seed)
-        self.model = lgb.Booster(model_str = model_dict['model'])
+        self.model = lightgbm.Booster(model_str = model_dict['model'])
         return self
     
     @property
@@ -98,16 +99,16 @@ class Lgbm(BasicBoosterModel):
         return mono_constr
 
 class LgbmPlot:
-    def __init__(self , lgb : 'Lgbm' , plot_path : Path | None = PLOT_PATH) -> None:
-        self.lgb = lgb
+    def __init__(self , lgbm : 'Lgbm' , plot_path : Path | None = PLOT_PATH) -> None:
+        self.lgbm = lgbm
         self.plot_path = plot_path
         if self.plot_path is not None: self.plot_path.mkdir(exist_ok= True)
 
     def training(self , show_plot = True , xlim = None , ylim = None , yscale = None):
         plt.figure()
-        ax = lgb.plot_metric(self.lgb.evals_result, metric='l2')
-        plt.scatter(self.lgb.model.best_iteration,list(self.lgb.evals_result['valid'].values())\
-                    [0][self.lgb.model.best_iteration],label='best iteration')
+        ax = lightgbm.plot_metric(self.lgbm.evals_result, metric='l2')
+        plt.scatter(self.lgbm.model.best_iteration,list(self.lgbm.evals_result['valid'].values())\
+                    [0][self.lgbm.model.best_iteration],label='best iteration')
         plt.legend()
         if xlim is not None: plt.xlim(xlim)
         if ylim is not None: plt.ylim(ylim)
@@ -119,7 +120,7 @@ class LgbmPlot:
         return ax
     
     def importance(self):
-        lgb.plot_importance(self.lgb.model)
+        lightgbm.plot_importance(self.lgbm.model)
         if self.plot_path:
             plt.savefig(self.plot_path.joinpath('feature_importance.png'),dpi=1200)
 
@@ -129,7 +130,7 @@ class LgbmPlot:
             return
         if isinstance(feature_idx,str):
             assert feature_idx=='all'
-            feature_idx = range(len(self.lgb.model.feature_name()))
+            feature_idx = range(len(self.lgbm.model.feature_name()))
         n_subplot = len(feature_idx)
         ncol = n_subplot if n_subplot < 5 else 5
         nrow = n_subplot // 5 + (1 if (n_subplot % 5 > 0) else 0)
@@ -139,12 +140,12 @@ class LgbmPlot:
         else:
             axes = [axes]
         for i in feature_idx:
-            feature_importance = self.lgb.model.feature_importance()[i]
+            feature_importance = self.lgbm.model.feature_importance()[i]
             if feature_importance ==0:
-                axes[i].set_title(f'feature {self.lgb.model.feature_name()[i]} has 0 importance')
+                axes[i].set_title(f'feature {self.lgbm.model.feature_name()[i]} has 0 importance')
             else:
-                lgb.plot_split_value_histogram(self.lgb.model, ax = axes[i] , 
-                                               feature=self.lgb.model.feature_name()[i], 
+                lightgbm.plot_split_value_histogram(self.lgbm.model, ax = axes[i] , 
+                                               feature=self.lgbm.model.feature_name()[i], 
                                                bins='auto' ,title="feature @feature@")
         fig.suptitle('split value histogram for feature(s)' , fontsize = 'x-large')
         plt.tight_layout()
@@ -156,19 +157,19 @@ class LgbmPlot:
             return
         for num_trees in num_trees_list:
             fig, ax = plt.subplots(figsize=(12,12))
-            ax = lgb.plot_tree(self.lgb.model,tree_index=num_trees, ax=ax)
+            ax = lightgbm.plot_tree(self.lgbm.model,tree_index=num_trees, ax=ax)
             if self.plot_path:
                 plt.savefig(self.plot_path.joinpath(f'explainer_tree_{num_trees}.png'),dpi=1200)
 
     def shap(self , train : BoosterInput | Any = None):
-        if train is None: train = self.lgb.data['train']
+        if train is None: train = self.lgbm.data['train']
         if self.plot_path is None:
             print(f'plot path not given, will not proceed')
             return
         import shap
         
         # 定义计算SHAP模型，这里使用TreeExplainer
-        explainer = shap.TreeExplainer(self.lgb.model)
+        explainer = shap.TreeExplainer(self.lgbm.model)
         X_df = deepcopy(train.X())
             
         # 计算全部因子SHAP
@@ -186,35 +187,35 @@ class LgbmPlot:
         
         # 单个特征SHAP点图
         
-        for feature , imp in zip(self.lgb.model.feature_name() , self.lgb.model.feature_importance()):
+        for feature , imp in zip(self.lgbm.model.feature_name() , self.lgbm.model.feature_importance()):
             if imp == 0: continue
             shap.dependence_plot(feature,shap_values,X_df,interaction_index=None,title=f'SHAP of {feature}',show=False)
             plt.savefig(self.plot_path.joinpath('explainer_shap' , f'explainer_shap_dot_{feature}.png'),dpi=100,bbox_inches='tight')
     
     def sdt(self , train : BoosterInput | Any = None):
-        if train is None: train = self.lgb.data['train']
+        if train is None: train = self.lgbm.data['train']
         if self.plot_path is None:
             print(f'plot path not given, will not proceed')
             return
         x = train.X().cpu().numpy()
-        pred = np.array(self.lgb.model.predict(x))
-        dtrain = lgb.Dataset(x, label=pred)
-        _params = deepcopy(self.lgb.train_param)
+        pred = np.array(self.lgbm.model.predict(x))
+        dtrain = lightgbm.Dataset(x, label=pred)
+        _params = deepcopy(self.lgbm.train_param)
         del _params['early_stopping']
-        SDT = lgb.train(_params, dtrain, num_boost_round=1)
+        SDT = lightgbm.train(_params, dtrain, num_boost_round=1)
         fig, ax = plt.subplots(figsize=(12,12))
-        ax = lgb.plot_tree(SDT, tree_index=0, ax=ax)
+        ax = lightgbm.plot_tree(SDT, tree_index=0, ax=ax)
         plt.savefig(self.plot_path.joinpath('explainer_sdt.png'),dpi=1200)
 
     def pdp(self , train : BoosterInput | Any = None):
-        if train is None: train = self.lgb.data['train']
+        if train is None: train = self.lgbm.data['train']
         if self.plot_path is None:
             print(f'plot path not given, will not proceed')
             return
         self.plot_path.joinpath('explainer_pdp').mkdir(exist_ok=True)
         [file.unlink() for file in self.plot_path.joinpath('explainer_pdp').iterdir()]
 
-        for feature , imp in zip(self.lgb.model.feature_name() , self.lgb.model.feature_importance()):
+        for feature , imp in zip(self.lgbm.model.feature_name() , self.lgbm.model.feature_importance()):
             if imp == 0: continue
             x = deepcopy(train.X()).cpu().numpy()
             if isinstance(x , pd.DataFrame): x = x.values
@@ -226,7 +227,7 @@ class LgbmPlot:
             pdp = np.zeros_like(x_range)
             for i, c in enumerate(x_range):
                 x[:,ifeat] = c
-                pdp[i] = np.array(self.lgb.model.predict(x)).mean()
+                pdp[i] = np.array(self.lgbm.model.predict(x)).mean()
 
             # plotPDP
             plt.figure()

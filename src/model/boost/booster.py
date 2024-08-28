@@ -3,16 +3,8 @@ import torch
 
 from typing import Any , Literal
 
-from .algo import Lgbm , AdaBoost , BasicBoosterModel
+from .algo import BasicBoosterModel , choose_booster_model
 from .io import BoosterInput , BoosterWeightMethod
-
-def choose_booster_model(booster_type):
-    if booster_type == 'lgbm':
-        return Lgbm
-    elif booster_type == 'ada':
-        return AdaBoost
-    else:
-        raise KeyError(booster_type)
     
 class GeneralBooster:
     def __init__(self , 
