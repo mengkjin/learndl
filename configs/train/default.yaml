@@ -1,6 +1,6 @@
 random_seed: null
 
-model.name: gru_3year_day # gru_2head # null
+model.name: gru_2year_day # gru_2head # null
 model.module: gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 model.types: [best , swalast , swabest]
 
@@ -59,7 +59,7 @@ train.multilosses.param.hybrid: {'phi' : null , 'tau' : 2}
 short_test:  false
 beg_date:   20170103 # 20220613 # 20170103
 end_date:   99991231
-input_span: 720
+input_span: 480
 interval:   120
 max_epoch:  200
 verbosity:  2
