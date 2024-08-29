@@ -60,8 +60,11 @@ def load_target_file(db_src , db_key , date = None) -> pd.DataFrame | Any:
         df = load_df(target_path)
         if df.empty:
             print(f'{db_src} , {db_key} , {date} entry is empty')
-        elif df.isna().all():
+        elif df.isna().all().all():
             print(f'{db_src} , {db_key} , {date} entry is all-NA')
+        elif df.isna().all().any():
+            cols = df.columns.values[df.isna().all()]
+            print(f'{db_src} , {db_key} , {date} entry has columns [{str(cols)}] all-NA')
         return df
     else:
         return None
