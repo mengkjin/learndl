@@ -522,3 +522,27 @@
   0.best: Avg(0.1481)|Sum(5.18)|Std(0.0665)|T(13.17)|IR(10.9033)
   1.best: Avg(0.1481)|Sum(5.18)|Std(0.064)|T(13.69)|IR(11.3346)
   2.best: Avg(0.1508)|Sum(5.28)|Std(0.0633)|T(14.09)|IR(11.6695)
+0_model: gru_3year_day.1(x5)
+1_start: Wed Aug 28 20:07:12 2024
+2_basic: full
+3_datas: day
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170103-99991231
+6_fit: Finish Process [Fit], Cost 2.4 Hours, 1.8 Min/model, 1.5 Sec/Epoch
+7_test: Finish Process [Test], Cost 130.1 Secs
+8_result:
+  0.best: Avg(0.1022)|Sum(187.2)|Std(0.0762)|T(57.44)|IR(6.576)
+  0.swabest: Avg(0.1007)|Sum(184.43)|Std(0.0753)|T(57.2)|IR(6.5492)
+  0.swalast: Avg(0.1001)|Sum(183.37)|Std(0.0751)|T(57.04)|IR(6.5299)
+  1.best: Avg(0.1005)|Sum(183.98)|Std(0.0765)|T(56.17)|IR(6.4308)
+  1.swabest: Avg(0.1005)|Sum(184.05)|Std(0.0765)|T(56.25)|IR(6.4398)
+  1.swalast: Avg(0.0986)|Sum(180.5)|Std(0.0769)|T(54.85)|IR(6.2796)
+  2.best: Avg(0.1033)|Sum(189.12)|Std(0.0759)|T(58.19)|IR(6.6626)
+  2.swabest: Avg(0.1033)|Sum(189.2)|Std(0.0754)|T(58.66)|IR(6.7159)
+  2.swalast: Avg(0.1008)|Sum(184.6)|Std(0.0767)|T(56.28)|IR(6.4436)
+  3.best: Avg(0.0995)|Sum(182.09)|Std(0.0771)|T(55.17)|IR(6.3163)
+  3.swabest: Avg(0.1003)|Sum(183.62)|Std(0.0752)|T(57.07)|IR(6.5334)
+  3.swalast: Avg(0.0984)|Sum(180.13)|Std(0.0761)|T(55.34)|IR(6.3355)
+  4.best: Avg(0.0977)|Sum(178.93)|Std(0.0749)|T(55.8)|IR(6.3885)
+  4.swabest: Avg(0.0994)|Sum(181.93)|Std(0.0752)|T(56.54)|IR(6.4728)
+  4.swalast: Avg(0.0983)|Sum(180.07)|Std(0.0756)|T(55.66)|IR(6.3727)
