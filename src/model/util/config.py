@@ -220,7 +220,7 @@ class ModelParam:
     @property
     def source_path(self):
         path = self.source_config_path(self.config_path , self.module , f'{self.module}.yaml')
-        if not path.exists(): path = path.with_name('default.yaml')
+        if not path.exists(): path = path.with_name('model.yaml')
         return path
 
     def expand(self , base_path : Path):
