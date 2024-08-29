@@ -36,6 +36,6 @@ class GeneralModel(ABC):
     def load_models(self , dates : np.ndarray | Any = None , start : int = -1 , end : int = -1):
         if dates is None:
             dates = self.available_dates()
-            dates = dates[(dates >= start) & (dates <= end)]
+        dates = dates[(dates >= start) & (dates <= end)]
         [self.append(self.load_day_model(date)) for date in dates if date not in self.models]
     def copy(self): return deepcopy(self)

@@ -57,7 +57,12 @@ def get_target_dates(db_src , db_key , year = None):
 def load_target_file(db_src , db_key , date = None) -> pd.DataFrame | Any:
     target_path = get_target_path(db_src , db_key , date)
     if target_path.exists():
-        return load_df(target_path)
+        df = load_df(target_path)
+        if df.empty:
+            print(f'{db_src} , {db_key} , {date} entry is empty')
+        elif df.isna().all():
+            print(f'{db_src} , {db_key} , {date} entry is all-NA')
+        return df
     else:
         return None
 
