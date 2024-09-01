@@ -1,6 +1,6 @@
 random_seed: null
 
-model.name: gru_2year_day # gru_2head # null
+model.name: gru_10year_day # gru_2head # null
 model.module: gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 model.types: [best , swalast , swabest]
 
@@ -41,7 +41,7 @@ train.trainer.scheduler: {'name' : 'cycle' , 'param' : {'base_lr': 1.0e-7 , 'ste
 train.trainer.learn_rate: {'base' : 0.005 , 'transfer_multiplier' : {'encoder' : 0.1 , 'decoder' : 1.0, }}
 train.trainer.gradient.clip_value: 10.0
 
-train.criterion.loss:      pearson  # mse, pearson, ccc
+train.criterion.loss:      ccc  # mse, pearson, ccc
 train.criterion.score:     spearman # mse, pearson, ccc, spearman
 train.criterion.penalty:   
   hidden_corr:  {'lamb' :  0.001 ,}
@@ -59,7 +59,7 @@ train.multilosses.param.hybrid: {'phi' : null , 'tau' : 2}
 short_test:  false
 beg_date:   20170103 # 20220613 # 20170103
 end_date:   99991231
-input_span: 480
+input_span: 2400
 interval:   120
 max_epoch:  200
 verbosity:  2

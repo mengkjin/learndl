@@ -59,7 +59,7 @@ train.multilosses.param.hybrid: {'phi' : null , 'tau' : 2}
 short_test:  false
 beg_date:   20170103 # 20220613 # 20170103
 end_date:   99991231
-input_span: 480
+input_span: 1200
 interval:   120
 max_epoch:  200
 verbosity:  2
