@@ -8,7 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass , field
 from typing import Any , Literal , Optional
 
-from ...func import match_values , index_union
+from ...func import match_values , index_union , rankic_2d , ic_2d
 
 @dataclass
 class BoosterOutput:
@@ -27,6 +27,14 @@ class BoosterOutput:
         df = pd.DataFrame(self.to_2d().cpu().numpy() , columns = self.date).assign(secid=self.secid).reset_index().\
             melt(id_vars='secid',var_name='date').set_index(['date','secid'])
         return df
+    
+    def rankic(self):
+        assert self.label is not None
+        return rankic_2d(self.to_2d() , self.label , 0)
+    
+    def ic(self):
+        assert self.label is not None
+        return ic_2d(self.to_2d() , self.label , 0)
 
 @dataclass
 class BoosterInput:

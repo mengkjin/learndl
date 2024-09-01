@@ -197,42 +197,26 @@ def transpose_output(X : Tensor , num_heads : int):
     X = X.permute(0,2,1,3)
     return X.reshape(X.shape[0],X.shape[1],-1)
 
-def np_rankic(x : np.ndarray , y : np.ndarray , w = None , dim = None):
-    return stats.spearmanr(x,y)[0]
+def np_drop_na(x : np.ndarray , y : np.ndarray):
+    pairwise_nan = np.isnan(x) + np.isnan(y)
+    x , y = x[~pairwise_nan] , y[~pairwise_nan]
+    return x , y
 
-def np_nanrankic(x : np.ndarray , y : np.ndarray):
-    assert len(x) == len(y)
-    pairwise_nonnan = (np.isnan(x)*1.0 + np.isnan(y) * 1.0 == 0)
+def np_ic(x : np.ndarray , y : np.ndarray):
+    x , y = np_drop_na(x,y)
     try:
-        return np_rankic(x[pairwise_nonnan],y[pairwise_nonnan])
+        return stats.pearsonr(x,y)[0]
     except:
         return np.nan
     
-def nanic_2d(x : torch.Tensor , y : torch.Tensor , dim=0):
-    x = x + y * 0
-    y = y + x * 0
-    x_xmean = x - torch.nanmean(x, dim, keepdim=True)  
-    y_ymean = y - torch.nanmean(y, dim, keepdim=True) 
-    cov  = torch.nansum(x_xmean * y_ymean, dim) 
-    ssd  = (torch.nansum(x_xmean.square(), dim) ** 0.5) * (torch.nansum(y_ymean.square(), dim) ** 0.5)
-    ssd[ssd == 0] = 1e-4
-    corr = cov / ssd
-    return corr
-
-def nanrankic(x : torch.Tensor , y : torch.Tensor):
-    pairwise_nonnan = (x.isnan()*1.0 + y.isnan() * 1.0 == 0)
+def np_rankic(x : np.ndarray , y : np.ndarray):
+    x , y = np_drop_na(x,y)
     try:
-        return nanic_2d(x[pairwise_nonnan].flatten(),y[pairwise_nonnan].flatten())
+        return stats.spearmanr(x,y)[0]
     except:
-        return torch.ones(1) * torch.nan
-
-def nanrankic_2d(x : torch.Tensor , y : torch.Tensor , dim = 0):
-    if dim == 0:
-        return torch.concat([nanrankic(x[:,i],y[:,i]) for i in range(x.shape[1])])
-    else:
-        return torch.concat([nanrankic(x[i,:],y[i,:]) for i in range(x.shape[0])])
-
-def np_nanic_2d(x : np.ndarray , y : np.ndarray ,dim=0):
+        return np.nan
+    
+def np_ic_2d(x : np.ndarray , y : np.ndarray , dim=0):
     x = x + y * 0
     y = y + x * 0
     x_xmean = x - np.nanmean(x, dim, keepdims=True)  
@@ -243,13 +227,46 @@ def np_nanic_2d(x : np.ndarray , y : np.ndarray ,dim=0):
     corr = cov / ssd
     return corr
 
-def np_nanrankic_2d(x : np.ndarray , y : np.ndarray , dim = 0):
-    assert type(x) == type(y)
-    assert x.shape == y.shape
+def np_rankic_2d(x : np.ndarray , y : np.ndarray , dim = 0):
     if dim == 0:
-        return np.array([np_nanrankic(x[:,i],y[:,i]) for i in range(x.shape[1])])
+        return np.array([np_rankic(x[:,i],y[:,i]) for i in range(x.shape[1])])
     else:
-        return np.array([np_nanrankic(x[i,:],y[i,:]) for i in range(x.shape[0])])
+        return np.array([np_rankic(x[i,:],y[i,:]) for i in range(x.shape[0])])
+    
+def ts_rank_pct(x : torch.Tensor ,dim=-1):
+    assert (len(x.shape) <= 3)
+    x_rank = x.argsort(dim=dim).argsort(dim=dim).to(torch.float32) + 1
+    x_rank[x.isnan()] = torch.nan
+    x_rank = x_rank / ((~x_rank.isnan()).sum(dim=dim, keepdim=True))
+    return x_rank
+
+def ic(x : torch.Tensor , y : torch.Tensor):
+    return ic_2d(x.flatten() , y.flatten() , 0)
+
+def rankic(x : torch.Tensor , y : torch.Tensor):
+    return rankic_2d(x.flatten() , y.flatten() , 0)
+
+def ic_2d(x : torch.Tensor , y : torch.Tensor , dim=0):
+    x = x + y * 0
+    y = y + x * 0
+    x_xmean = x - torch.nanmean(x, dim, keepdim=True)  
+    y_ymean = y - torch.nanmean(y, dim, keepdim=True) 
+    cov  = torch.nansum(x_xmean * y_ymean, dim) 
+    ssd  = x_xmean.square().nansum(dim).sqrt() * y_ymean.square().nansum(dim).sqrt()
+    ssd[ssd == 0] = 1e-4
+    corr = cov / ssd
+    return corr
+
+def rankic_2d(x : torch.Tensor, y : torch.Tensor , dim = 1 , universe = None , min_coverage = 0.5):
+    valid = ~y.isnan()
+    if universe is not None: valid *= universe.nan_to_num(False)
+    x = torch.where(valid , x , torch.nan)
+
+    coverage = (~x.isnan()).sum(dim=dim)
+    x = ts_rank_pct(x , dim = dim)
+    y = ts_rank_pct(y , dim = dim)
+    ic = ic_2d(x , y , dim=dim)
+    return ic if ic is None else torch.where(coverage < min_coverage * valid.sum(dim=dim) , torch.nan , ic)
 
 def total_memory(unit = 1e9):
     return psutil.Process(os.getpid()).memory_info().rss / unit

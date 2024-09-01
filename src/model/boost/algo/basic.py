@@ -11,7 +11,7 @@ from typing import Any , Literal , Optional
 
 from ..io import BoosterInput , BoosterOutput
 from ....basic import PATH
-from ....func import nanic_2d , nanrankic_2d
+from ....func import ic_2d , rankic_2d
 
 class BasicBoosterModel(ABC):
     DEFAULT_TRAIN_PARAM = {}
@@ -60,6 +60,9 @@ class BasicBoosterModel(ABC):
     def predict(self , test : BoosterInput) -> BoosterOutput:
         if test is None: test = self.data['test']
         ...
+
+    def validation_pred(self):
+        return self.predict(self.data['valid'])
     
     @abstractmethod
     def to_dict(self) -> dict[str,Any]: 
@@ -100,8 +103,8 @@ class BasicBoosterModel(ABC):
         pred  = self.predict(test).to_2d()
         index = test.date
 
-        ic = nanic_2d(pred , label , dim = 0)
-        ric = nanrankic_2d(pred , label , dim = 0)
+        ic = ic_2d(pred , label , dim = 0)
+        ric = rankic_2d(pred , label , dim = 0)
         return pd.DataFrame({'ic' : ic , 'rankic' : ric} , index = index)
 
     @staticmethod

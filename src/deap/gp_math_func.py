@@ -158,8 +158,8 @@ def rankic_2d(x , y , dim = 1 , universe = None , min_coverage = 0.5):
     x = torch.where(valid , x , NaN)
 
     coverage = (~x.isnan()).sum(dim=dim)
-    x = rank_pct(x)
-    y = rank_pct(y)
+    x = rank_pct(x , dim = dim)
+    y = rank_pct(y , dim = dim)
     ic = corrwith(x , y , dim=dim)
     return ic if ic is None else torch.where(coverage < min_coverage * valid.sum(dim=dim) , NaN , ic)
 
