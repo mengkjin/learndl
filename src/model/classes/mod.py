@@ -7,7 +7,7 @@ from typing import Any , Callable , final , Iterable , Iterator , Literal , Opti
 
 from .io import BatchData , BatchOutput
 from .status import TrainerStatus
-from ...boost import BoosterInput
+from ..boost import BoosterInput
 
 class BaseCB:
     def __init__(self , model_module , with_cb , turn_off = False) -> None:
@@ -199,7 +199,7 @@ class BaseTrainer(ABC):
         self.init_config(**kwargs)
         self.init_utilities(**kwargs)
         self.init_data(**kwargs)
-        self.status = TrainerStatus(self.config['max_epoch'])
+        self.status = TrainerStatus(self.config.train_max_epoch)
         if hasattr(self , 'callbacks'):
             [setattr(self , x , self.callbacks(getattr(self , x))) for x in dir(self) if BaseCB._possible_hook(x)]
 

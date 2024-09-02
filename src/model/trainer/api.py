@@ -3,9 +3,8 @@ from .net import NetTrainer
 from .booster import BoosterTrainer
 from .aggregator import AggregatorTrainer
 
-from ...util import TrainConfig
-from ....basic import REG_MODELS , THIS_IS_SERVER
-
+from ..classes import TrainConfig
+from ...basic import REG_MODELS , THIS_IS_SERVER
 
 class Trainer:
     @staticmethod

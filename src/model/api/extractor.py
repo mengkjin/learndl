@@ -6,8 +6,10 @@ from itertools import product
 from tqdm import tqdm
 from typing import Any , Literal , Optional
 
-from ..trainer import ModelEnsembler , NetDataModule
-from ..util import BatchOutput , Deposition , Device , TrainConfig
+from ..classes import BatchOutput , Device , TrainConfig
+from ..ensemble import ModelEnsembler
+from ..trainer import NetDataModule
+from ..util import Deposition
 from ...basic import RegModel , PATH
 
 class HiddenExtractor:

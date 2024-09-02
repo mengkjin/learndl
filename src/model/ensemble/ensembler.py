@@ -8,7 +8,8 @@ from torch.optim.swa_utils import AveragedModel
 from typing import Any , Iterator , Optional
 
 from .booster import BoosterModel
-from ...util import Metrics , Checkpoint , BaseTrainer , BatchData , BatchOutput , BoosterInput
+from ..classes import BaseTrainer , BatchData , BatchOutput , BoosterInput
+from ..util import Checkpoint , Metrics
 
 def choose_net_ensembler(model_type):
     '''get a subclass of _BaseEnsembler'''

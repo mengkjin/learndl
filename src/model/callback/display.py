@@ -76,7 +76,7 @@ class StatusDisplay(CallBack):
     @property
     def _speedup2x(self) -> bool:
         try:
-            return self.config['callbacks.ResetOptimizer']['speedup2x']
+            return self.config.callbacks['ResetOptimizer']['speedup2x']
         except KeyError:
             return False
     def _display(self , *args , **kwargs):
@@ -124,7 +124,7 @@ class StatusDisplay(CallBack):
             '2_basic' : 'short' if self.config.short_test else 'full' , 
             '3_datas' : self.config.model_data_types ,
             '4_label' : ','.join(self.config.model_data_labels),
-            '5_dates' : '-'.join([str(self.config['beg_date']),str(self.config['end_date'])]),
+            '5_dates' : '-'.join([str(self.config.beg_date),str(self.config.end_date)]),
             '6_fit'   : self._texts.get('fit'),
             '7_test'  : self._texts.get('test'),
             '8_result': test_scores,
@@ -178,7 +178,7 @@ class StatusDisplay(CallBack):
         self.update_test_score()
 
     def on_test_end(self): 
-        self.logger.warning('Testing Mean Score({}):'.format(self.config['train.criterion.score']))
+        self.logger.warning('Testing Mean Score({}):'.format(self.config.train_criterion_score))
 
         self.summarize_test_result()
 

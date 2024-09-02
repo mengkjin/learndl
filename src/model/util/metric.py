@@ -7,8 +7,7 @@ from abc import ABC , abstractmethod
 from torch import nn , no_grad , Tensor
 from typing import Any , Literal , Optional
 
-from .classes import BatchData , BatchMetric , BatchOutput , MetricList , TrainerStatus
-from .config import TrainConfig
+from ..classes import BatchData , BatchMetric , BatchOutput , MetricList , TrainConfig , TrainerStatus
 from ..nn import get_multiloss_params
 from ...func import mse , pearson , ccc , spearman
 
@@ -24,9 +23,9 @@ class Metrics:
         self.use_dataset = use_dataset
         self.use_metric  = use_metric
         
-        self.loss_calc    = LossCalculator(self.config['train.criterion.loss'])
-        self.score_calc   = ScoreCalculator(self.config['train.criterion.score'])
-        self.penalty_calc = {k:PenaltyCalculator(k,v) for k,v in self.config['train.criterion.penalty'].items()}
+        self.loss_calc    = LossCalculator(self.config.train_criterion_loss)
+        self.score_calc   = ScoreCalculator(self.config.train_criterion_score)
+        self.penalty_calc = {k:PenaltyCalculator(k,v) for k,v in self.config.train_criterion_penalty.items()}
         
         self.output    = BatchMetric()
         self.metric_batchs = MetricsAggregator()
@@ -51,8 +50,7 @@ class Metrics:
         self.num_output   = model_param.get('num_output' , 1)
         self.which_output = model_param.get('which_output' , 0)
         self.multi_losses = MultiHeadLosses(
-            self.num_output , self.config['train.multilosses.type'], 
-            **self.config['train.multilosses.param.{}'.format(self.config['train.multilosses.type'])])
+            self.num_output , self.config.train_multilosses_type, **self.config.train_multilosses_param)
 
         self.update_penalty_calc()
         self.new_attempt()

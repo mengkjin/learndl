@@ -6,12 +6,37 @@ from pathlib import Path
 from typing import Literal , Optional
 from . import path as PATH
 
-@dataclass(slots=True)
+@dataclass
+class ModelPath:
+    name : str
+
+    @property
+    def base(self): return PATH.model.joinpath(self.name)
+
+    @property
+    def archive(self): return self.base.joinpath('archive')
+
+    @property
+    def conf(self): return self.base.joinpath('configs')
+
+    @property
+    def rslt(self): return self.base.joinpath('detailed_analysis')
+
+    @property
+    def snapshot(self): return self.base.joinpath('snapshot')
+
+    def full_path(self , model_num , model_date , model_type):
+        return self.archive.joinpath(self.name , str(model_num) , str(model_date) , model_type)
+
+@dataclass
 class RegModel:
     name : str
     type : Literal['best' , 'swalast' , 'swabest'] = 'best'
     num  : int | list[int] | range | Literal['all'] = 0
     alias : Optional[str] = None
+
+    def __post_init__(self):
+        self.model_path = ModelPath(self.name)
 
     @property
     def num0(self):
@@ -39,7 +64,8 @@ class RegModel:
         return np.sort(np.array([sub.name for sub in path.iterdir() if sub.is_dir()]))
     
     def full_path(self , model_num , model_date , model_type):
-        return PATH.model.joinpath(self.name , str(model_num) , str(model_date) , model_type)
+        return self.model_path.full_path(model_num , model_date , model_type)
+
     
 FACTOR_DESTINATION_LAPTOP = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
 FACTOR_DESTINATION_SERVER = PATH.result.joinpath('Alpha')

@@ -4,8 +4,8 @@ import pandas as pd
 
 from IPython.display import display 
 
-from ..util import (BaseCB , TrainerStatus , BaseDataModule , BaseTrainer , BatchData ,
-                    BoosterInput , Checkpoint , Metrics , TrainConfig)
+from ..classes import BaseCB , TrainerStatus , BaseDataModule , BaseTrainer , BatchData , BoosterInput , TrainConfig
+from ..util import Checkpoint , Metrics
 
 class CallBack(BaseCB):
     def __init__(self , model_module : BaseTrainer , with_cb : bool , print_info = True , turn_off = False , *args , **kwargs) -> None:

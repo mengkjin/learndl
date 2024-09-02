@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from torch import nn , Tensor
 
-from ..trainer import ModelEnsembler , NetDataModule
-from ..util import BatchData , BatchOutput , TrainConfig , Metrics
+from ..classes import BatchData , BatchOutput , TrainConfig
+from ..ensemble import ModelEnsembler
+from ..trainer import NetDataModule
+from ..util import Metrics
 
 @dataclass
 class ModelTestor:

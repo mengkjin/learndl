@@ -33,6 +33,8 @@ class DetailedAlphaAnalysis(CallBack):
 
         df = df.rename(columns={'model_type':'factor_name'}).pivot_table('values',['secid','date'],'factor_name')
         #self.logger.warning(f'Performing Factor and FMP test!')
+        
+        self.df = df
         self.fac_man = PerfManager.run_test(df , verbosity = 0)
         self.fmp_man = FmpManager.run_test(df , verbosity = 0)
         

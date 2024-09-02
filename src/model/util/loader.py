@@ -4,8 +4,8 @@ from torch.utils.data import Sampler
 from tqdm import tqdm
 from typing import Literal
 
-from .classes import BaseDataModule , BatchData
 from .store import Storage
+from ..classes import BaseDataModule , BatchData
 
 class DataloaderStored:
     ''''retrieve batch_data from a Storage'''

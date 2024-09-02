@@ -7,9 +7,10 @@ from torch.utils.data import BatchSampler
 from typing import Any , Iterator , Literal , Optional
 
 from .basic import DataModule , TrainerModule
-from ...util import BatchData , DataloaderStored , LoaderWrapper , Optimizer
-from ....basic import PATH
-from ....func import match_values
+from ..classes import BatchData
+from ..util import DataloaderStored , LoaderWrapper , Optimizer
+from ...basic import PATH
+from ...func import match_values
 
 class NetDataModule(DataModule):
     def train_dataloader(self):
@@ -31,12 +32,12 @@ class NetDataModule(DataModule):
     def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid : Tensor) -> None:
         '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''
         index0, index1 = torch.arange(len(valid)) , self.step_idx
-        sample_index = self.split_sample(self.stage , valid , index0 , index1 , self.config.sample_method , 
-                                         self.config.train_ratio , self.config['batch_size'])
+        sample_index = self.split_sample(self.stage , valid , index0 , index1 , self.config.train_sample_method , 
+                                         self.config.train_train_ratio , self.config.train_batch_size)
         self.storage.del_group(self.stage)
         for set_key , set_samples in sample_index.items():
             assert set_key in ['train' , 'valid' , 'test'] , set_key
-            shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
+            shuf_opt = self.config.train_shuffle_option if set_key == 'train' else 'static'
             batch_files = [f'{PATH.batch}/{set_key}.{bnum}.pt' for bnum in range(len(set_samples))]
             for bnum , b_i in enumerate(set_samples):
                 assert torch.isin(b_i[:,1] , index1).all()

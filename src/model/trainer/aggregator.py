@@ -6,12 +6,12 @@ from torch import Tensor
 from typing import Any , Iterator , Literal
 
 from .basic import DataModule , TrainerModule
-from ..models import BoosterModel
-from ...util import DataloaderStored , BoosterInput , BatchOutput
-from ....basic import PATH , CONF
-from ....data import ModuleData , DataBlock
-from ....func import index_intersect , match_values
-    
+from ..classes import BatchOutput , BoosterInput
+from ..ensemble import BoosterModel
+from ..util import DataloaderStored
+from ...basic import PATH , CONF
+from ...data import ModuleData , DataBlock
+from ...func import index_intersect , match_values
 
 class AggregatorDataModule(DataModule):
     '''for boosting such as algo.boost.lgbm, create booster'''
@@ -30,8 +30,8 @@ class AggregatorDataModule(DataModule):
             self.model_date_list = self.datas.date[0]
             self.test_full_dates = self.datas.date[1:]
         else:
-            self.model_date_list = self.datas.date_within(self.config['beg_date'] , self.config['end_date'] , self.config['interval'])
-            self.test_full_dates = self.datas.date_within(self.config['beg_date'] , self.config['end_date'])[1:]
+            self.model_date_list = self.datas.date_within(self.config.beg_date , self.config.end_date , self.config.model_interval)
+            self.test_full_dates = self.datas.date_within(self.config.beg_date , self.config.end_date)[1:]
 
         self.static_prenorm_method = {}
         self.reset_dataloaders()
@@ -102,7 +102,7 @@ class AggregatorDataModule(DataModule):
     def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w = None , valid = None) -> None:
         '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''
         index0, index1 = torch.arange(len(y)) , self.step_idx
-        sample_index = self.split_sample(self.stage , index0 , index1 , self.config.train_ratio)
+        sample_index = self.split_sample(self.stage , index0 , index1 , self.config.train_train_ratio)
         self.storage.del_group(self.stage)
         assert len(x) == 1 , len(x)
         x0 = x['hidden']

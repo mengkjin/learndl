@@ -2,7 +2,7 @@ import numpy as np
 
 from typing import Any , Literal
 
-from ...util import BaseDataModule , BaseTrainer , BatchData , BatchOutput , BoosterInput , TrainConfig , GeneralBooster
+from ..classes import BaseDataModule , BaseTrainer , BatchData , BatchOutput , BoosterInput , GeneralBooster , TrainConfig
 
 class BoosterModel:
     '''Booster used in nn_model'''
@@ -33,7 +33,7 @@ class BoosterModel:
     def is_cuda(self) -> bool: return self.module.device.device.type == 'cuda'
     @property
     def booster_params(self): 
-        if self.config.booster_head:
+        if self.config.model_booster_head:
             return self.config.booster_head_param
         else:
             return self.module.model_param

@@ -4,7 +4,7 @@ import statsmodels.api as sm
 from typing import Any , Literal , Optional
 
 from ..basic import TradeCalendar , TradeDataAccess , ModelDataAccess , FinaDataAccess
-from ....basic import (PATH , RISK_INDUS , RISK_STYLE ,
+from ....basic import (PATH , CONF , RISK_INDUS , RISK_STYLE ,
                        get_target_path , load_target_file , get_target_dates)
 from ....func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
 
@@ -75,7 +75,7 @@ class TuShareCNE5_Calculator:
         self.desc = pd.read_feather(get_target_path('information_ts' , 'description'))
         self.cname = pd.read_feather(get_target_path('information_ts' , 'change_name'))
 
-        self.indus_dict = pd.DataFrame(PATH.setting('tushare_indus'))
+        self.indus_dict = pd.DataFrame(CONF.glob('tushare_indus'))
         self.indus_data = pd.read_feather(get_target_path('information_ts' , 'industry'))
 
         self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values

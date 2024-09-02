@@ -5,8 +5,10 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Any , ClassVar , Optional
 
-from ..trainer import ModelEnsembler , NetDataModule
-from ..util import BatchOutput , Deposition , Device , TrainConfig
+from ..classes import BatchOutput , Device , TrainConfig
+from ..ensemble import ModelEnsembler
+from ..trainer import NetDataModule
+from ..util import Deposition
 from ...basic import (RegModel , PATH , CONF , THIS_IS_SERVER , 
                       REG_MODELS , FACTOR_DESTINATION_LAPTOP , FACTOR_DESTINATION_SERVER)
 from ...data import GetData

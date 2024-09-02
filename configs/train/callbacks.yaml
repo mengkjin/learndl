@@ -1,0 +1,13 @@
+ResetOptimizer:     {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , 'speedup2x' : true , }
+CallbackTimer:      {}
+EarlyStoppage:      {'patience' : 20}
+ValidationConverge: {'patience' : 5 , 'eps' : 1.0e-5} 
+EarlyExitRetrain:   {'earliest' : 10 , 'max_attempt' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
+NanLossRetrain:     {'max_attempt' : 4}
+BatchDisplay:       {}
+StatusDisplay:      {}
+#TrainConverge:      {'patience' : 5 , 'eps' : 1.0e-5} 
+#FitConverge:        {'patience' : 5 , 'eps' : 1.0e-5}
+#CudaEmptyCache:     {'batch_interval' : 20}
+GroupReturnAnalysis:  {}
+DetailedAlphaAnalysis:  {}

@@ -6,20 +6,20 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
-from .classes import ModelDict , ModelFile
-from .config import TrainConfig
+from ..classes import ModelDict , ModelFile , TrainConfig
 from ...func.basic import Filtered
 
 class Storage:
     '''Interface of mem or disk storage, methods'''
-    def __init__(self , store_type : Literal['mem' , 'disk'] = 'disk'):
-        self.memdisk = {} if store_type == 'mem' else None
+    def __init__(self , mem_storage : bool = False):
+        self._mem_storage = mem_storage
+        self.memdisk = {} if mem_storage else None
         self.records = pd.DataFrame(columns = ['path' , 'group'] , dtype = str)
 
     @property
-    def is_disk(self): return self.memdisk is None
+    def is_disk(self): return not self.is_disk
     @property
-    def is_mem(self): return not self.is_disk
+    def is_mem(self): return self._mem_storage
     
     def exists(self , path):
         if isinstance(path , str): path = Path(path)
@@ -90,10 +90,9 @@ class Storage:
 
 class Checkpoint(Storage):
     '''model check point for epochs'''
-    def __init__(self, store_type: Literal['mem' , 'disk'] | TrainConfig):
-        if isinstance(store_type , TrainConfig): 
-            store_type = 'mem' if store_type['mem_storage'] else 'disk'
-        super().__init__(store_type)
+    def __init__(self, mem_storage: bool | TrainConfig):
+        if isinstance(mem_storage , TrainConfig): mem_storage = mem_storage.mem_storage
+        super().__init__(mem_storage)
         self.epoch_queue : list[list] = []
         self.join_record : list[str]  = [] 
         # self.model_module = model_module

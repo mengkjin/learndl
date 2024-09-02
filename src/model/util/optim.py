@@ -5,8 +5,7 @@ from torch import nn , optim
 from torch.nn.utils.clip_grad import clip_grad_value_
 from typing import Any,Optional
 
-from .classes import BatchMetric
-from .config import TrainConfig
+from ..classes import BatchMetric , TrainConfig
 
 NAN_GRADS_HALT = False
 NAN_GRADS_IGNORE = False
@@ -29,10 +28,10 @@ class Optimizer:
         self.config = config
         self.model_module = model_module
 
-        self.opt_param : dict[str,Any] = deepcopy(self.config['train.trainer.optimizer'])
-        self.shd_param : dict[str,Any] = deepcopy(self.config['train.trainer.scheduler'])
-        self.lr_param  : dict[str,Any] = deepcopy(self.config['train.trainer.learn_rate'])
-        self.clip_value = self.config['train.trainer.gradient.clip_value']
+        self.opt_param : dict[str,Any] = deepcopy(self.config.train_trainer_optimizer)
+        self.shd_param : dict[str,Any] = deepcopy(self.config.train_trainer_scheduler)
+        self.lr_param  : dict[str,Any] = deepcopy(self.config.train_trainer_learn_rate)
+        self.clip_value = self.config.train_trainer_gradient_clip_value
       
         if add_opt_param: self.opt_param.update(add_opt_param)
         if add_shd_param: self.shd_param.update(add_shd_param)

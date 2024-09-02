@@ -7,13 +7,13 @@ from torch import Tensor
 
 from typing import Any , Literal , Optional
 
-from ..models import ModelEnsembler
-from ...callback import CallBackManager
-from ...util import (BaseDataModule , BaseTrainer , Checkpoint , Deposition , Device , Metrics , TrainConfig ,
-                     BufferSpace , Device , Storage)
-from ....basic import CONF , Logger
-from ....data import DataBlockNorm , DataProcessor , ModuleData
-from ....func import tensor_standardize_and_weight , BigTimer
+from ..ensemble import ModelEnsembler
+from ..callback import CallBackManager
+from ..classes import BaseDataModule , BaseTrainer , Device , TrainConfig
+from ..util import Checkpoint , Deposition , Metrics ,BufferSpace , Storage
+from ...basic import CONF , Logger
+from ...data import DataBlockNorm , DataProcessor , ModuleData
+from ...func import tensor_standardize_and_weight , BigTimer
 
 class DataModule(BaseDataModule):
     @abstractmethod
@@ -33,7 +33,7 @@ class DataModule(BaseDataModule):
         self.config  : TrainConfig = TrainConfig.load() if config is None else config
         self.use_data : Literal['fit','predict','both'] = use_data
         self.device  = Device()
-        self.storage = Storage('mem' if self.config['mem_storage'] else 'disk')
+        self.storage = Storage(self.config.mem_storage)
         self.buffer  = BufferSpace(self.device)
 
     def load_data(self):
@@ -46,12 +46,12 @@ class DataModule(BaseDataModule):
             self.model_date_list = self.datas.date[0]
             self.test_full_dates = self.datas.date[1:]
         else:
-            self.model_date_list = self.datas.date_within(self.config['beg_date'] , self.config['end_date'] , self.config['interval'])
-            self.test_full_dates = self.datas.date_within(self.config['beg_date'] , self.config['end_date'])[1:]
+            self.model_date_list = self.datas.date_within(self.config.beg_date , self.config.end_date , self.config.model_interval)
+            self.test_full_dates = self.datas.date_within(self.config.beg_date , self.config.end_date)[1:]
 
         self.static_prenorm_method = {}
         for mdt in self.data_type_list: 
-            method : dict[str,bool] = self.config['data.prenorm'].get(mdt , {})
+            method : dict[str,bool] = self.config.model_data_prenorm.get(mdt , {})
             method['divlast']  = method.get('divlast' , True) and (mdt in DataBlockNorm.DIVLAST)
             method['histnorm'] = method.get('histnorm', True) and (mdt in DataBlockNorm.HISTNORM)
             if not CONF.SILENT: print(f'Pre-Norming method of [{mdt}] : {method}')
@@ -63,7 +63,7 @@ class DataModule(BaseDataModule):
     @property
     def data_type_list(self):
         '''get data type list (abbreviation)'''
-        return [ModuleData.abbr(data_type) for data_type in self.config.data_type_list]
+        return [ModuleData.abbr(data_type) for data_type in self.config.model_data_types.split('+')]
     
     @staticmethod
     def prepare_data(data_types : Optional[list[str]] = None):
@@ -92,17 +92,17 @@ class DataModule(BaseDataModule):
 
         if stage == 'fit':
             model_date_col = (self.datas.date < model_date).sum()
-            step_interval = self.config['input_step_day']
-            d0 = max(0 , model_date_col - self.config['skip_horizon'] - self.config['input_span'] - self.seq0)
-            d1 = max(0 , model_date_col - self.config['skip_horizon'])
+            data_step = self.config.train_data_step
+            d0 = max(0 , model_date_col - self.config.train_skip_horizon - self.config.model_train_window - self.seq0)
+            d1 = max(0 , model_date_col - self.config.train_skip_horizon)
         elif stage in ['predict' , 'test']:
             if stage == 'predict': self.model_date_list = np.array([model_date])
             next_model_date = self.next_model_date(model_date)
-            step_interval  = 1
+            data_step  = 1
 
             before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-self.seqy:]
-            test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::step_interval]
-            self.early_test_dates = test_dates[test_dates <= model_date][-(self.seqy-1) // step_interval:] if self.seqy > 1 else test_dates[-1:-1]
+            test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::data_step]
+            self.early_test_dates = test_dates[test_dates <= model_date][-(self.seqy-1) // data_step:] if self.seqy > 1 else test_dates[-1:-1]
             self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
             test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
             
@@ -112,9 +112,9 @@ class DataModule(BaseDataModule):
             raise KeyError(stage)
 
         self.day_len  = d1 - d0
-        self.step_len = (self.day_len - self.seqx + 1) // step_interval
+        self.step_len = (self.day_len - self.seqx + 1) // data_step
         if stage in ['predict' , 'test']: assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
-        self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * step_interval , [0])
+        self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * data_step , [0])
         self.date_idx = d0 + self.step_idx
         self.y_secid , self.y_date = self.datas.y.secid , self.datas.y.date[d0:d1]
 
@@ -200,8 +200,8 @@ class DataModule(BaseDataModule):
 
 class TrainerModule(BaseTrainer):
     '''run through the whole process of training'''
-    def init_config(self , config_path = None , **kwargs) -> None:
-        self.config : TrainConfig = TrainConfig.load(config_path = config_path , do_parser = True , par_args = kwargs)
+    def init_config(self , base_path = None , **kwargs) -> None:
+        self.config : TrainConfig = TrainConfig.load(base_path , do_parser = True , par_args = kwargs)
         self.stage_queue = self.config.stage_queue
     def init_utilities(self , **kwargs) -> None: 
         self.logger     = Logger()
@@ -217,7 +217,7 @@ class TrainerModule(BaseTrainer):
     @property
     def model_types(self): return self.config.model_types
     @property
-    def if_transfer(self): return bool(self.config['train.trainer.transfer'])
+    def if_transfer(self): return self.config.train_trainer_transfer
     @property
     def model_iter(self): return self.deposition.model_iter(self.status.stage , self.data.model_date_list)
     

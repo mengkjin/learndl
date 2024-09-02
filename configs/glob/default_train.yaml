@@ -1,11 +1,11 @@
 random_seed: null
 
-model.name: null # gru_2head # null
-model.module: hidden_aggregator # booster # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
+model.name: gru_10year_day # gru_2head # null
+model.module: gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 model.types: [best , swalast , swabest]
 
 model.booster_head: False # lgbm , ada , xgboost , catboost
-model.booster_type: catboost # ada , xgboost , catboost
+model.booster_type: lgbm # ada , xgboost , catboost
 
 data.types: day # 'day+30m' , 30m , day
 data.prenorm:
@@ -31,6 +31,7 @@ callbacks.StatusDisplay:      {}
 callbacks.GroupReturnAnalysis:  {}
 callbacks.DetailedAlphaAnalysis:  {}
 
+train.dataloader.train_window:    2400
 train.dataloader.sample_method:   sequential # total_shuffle , sequential , both_shuffle , train_shuffle
 train.dataloader.shuffle_option:  epoch # static , init , epoch
 train.dataloader.train_ratio:     0.8
@@ -41,7 +42,7 @@ train.trainer.scheduler: {'name' : 'cycle' , 'param' : {'base_lr': 1.0e-7 , 'ste
 train.trainer.learn_rate: {'base' : 0.005 , 'transfer_multiplier' : {'encoder' : 0.1 , 'decoder' : 1.0, }}
 train.trainer.gradient.clip_value: 10.0
 
-train.criterion.loss:      pearson  # mse, pearson, ccc
+train.criterion.loss:      ccc  # mse, pearson, ccc
 train.criterion.score:     spearman # mse, pearson, ccc, spearman
 train.criterion.penalty:   
   hidden_corr:  {'lamb' :  0.001 ,}
@@ -59,7 +60,7 @@ train.multilosses.param.hybrid: {'phi' : null , 'tau' : 2}
 short_test:  false
 beg_date:   20170103 # 20220613 # 20170103
 end_date:   99991231
-input_span: 1200
+input_span: 2400
 interval:   120
 max_epoch:  200
 verbosity:  2
@@ -70,7 +71,7 @@ skip_horizon:  20
 conditional.short_test:
   beg_date:   20170101
   end_date:   20170228 # 20170228
-  input_span: 240
+  train.dataloader.train_window: 240
   max_epoch:  3
   verbosity:  10
 conditional.transformer:

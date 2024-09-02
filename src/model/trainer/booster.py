@@ -5,10 +5,11 @@ from torch import Tensor
 from typing import Any , Iterator , Literal
 
 from .basic import DataModule , TrainerModule
-from ..models import BoosterModel
-from ...util import BoosterInput , DataloaderStored
-from ....basic import PATH
-from ....func import match_values
+from ..classes import BoosterInput
+from ..ensemble import BoosterModel
+from ..util import DataloaderStored
+from ...basic import PATH
+from ...func import match_values
     
 class BoosterDataModule(DataModule):
     '''for boosting such as algo.boost.lgbm, create booster'''
@@ -25,7 +26,7 @@ class BoosterDataModule(DataModule):
     def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w = None , valid = None) -> None:
         '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''
         index0, index1 = torch.arange(len(y)) , self.step_idx
-        sample_index = self.split_sample(self.stage , index0 , index1 , self.config.train_ratio)
+        sample_index = self.split_sample(self.stage , index0 , index1 , self.config.train_train_ratio)
         self.storage.del_group(self.stage)
         assert len(x) == 1 , len(x)
         mdt0 , x0 = [(k,v) for k,v in x.items()][0]

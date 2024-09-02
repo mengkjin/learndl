@@ -5,8 +5,9 @@ from typing import Any , Optional
 
 from .booster import BoosterModel
 from .ensembler import choose_net_ensembler , BoosterEnsembler
-from ...nn import GetNN
-from ...util import Checkpoint , Metrics , TrainConfig , BaseDataModule , BaseTrainer , ModelDict , ModelFile
+from ..classes import BaseDataModule , BaseTrainer , ModelDict , ModelFile , TrainConfig
+from ..nn import GetNN
+from ..util import Checkpoint , Metrics
 
 class ModelEnsembler(ABC):
     '''a group of ensemble models , of same net structure'''
@@ -80,7 +81,7 @@ class NetManager(ModelEnsembler):
             model_type:choose_net_ensembler(model_type)(self.ckpt , use_score , **kwargs)
             for model_type in self.config.model_types
         }
-        if self.config.booster_head: 
+        if self.config.model_booster_head: 
             self.booster_head = BoosterEnsembler(model_module)
         else:
             self.booster_head = None

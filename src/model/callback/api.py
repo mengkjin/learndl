@@ -1,7 +1,7 @@
 from typing import Any , Optional
 
 from . import base , display, train , test , nnspecific
-from ..util import BaseTrainer , TrainConfig
+from ..classes import BaseTrainer , TrainConfig
 
 SEARCH_MODS = [train , display , test]
 BOOSTER_AVAILABLE_CALLBACKS = ['StatusDisplay' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis']

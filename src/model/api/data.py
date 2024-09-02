@@ -1,6 +1,6 @@
 from typing import Optional
+from ..classes import TrainConfig
 from ..trainer import NetDataModule
-from ..util import TrainConfig
 from ...data import DataProcessor , DataUpdater
 from ...data.tushare import task
 from ...basic import THIS_IS_SERVER

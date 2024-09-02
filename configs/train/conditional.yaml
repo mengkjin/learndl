@@ -1,0 +1,8 @@
+short_test:
+  model.beg_date:   20170101
+  model.end_date:   20170228 # 20170228
+  model.train_window: 240
+  train.max_epoch:  3
+  env.verbosity:  10
+transformer:
+  callbacks.ResetOptimizer:  {'num_reset' : 1 , 'trigger' : 60 , 'recover_level' : 1. , 'speedup2x' : true , }

@@ -7,7 +7,7 @@ from pathlib import Path
 from torch import Tensor , nn
 from typing import Any , Literal , Optional
 
-from ...boost import GeneralBooster
+from ..boost import GeneralBooster
 
 @dataclass(slots=True)
 class BatchData:
@@ -191,8 +191,6 @@ class ModelInstance:
     def train(self):
         if self.net is not None: self.net.train()
         return self
-
-
 
 @dataclass(slots=True)
 class ModelDict:
