@@ -5,10 +5,9 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Any , ClassVar , Optional
 
-from ..classes import BatchOutput , Device , TrainConfig
+from ..classes import BatchOutput , Deposition , Device , TrainConfig
 from ..ensemble import ModelEnsembler
 from ..trainer import NetDataModule
-from ..util import Deposition
 from ...basic import (RegModel , PATH , CONF , THIS_IS_SERVER , 
                       REG_MODELS , FACTOR_DESTINATION_LAPTOP , FACTOR_DESTINATION_SERVER)
 from ...data import GetData
@@ -29,8 +28,8 @@ class Predictor:
 
         if self.reg_model.num == 'all': 
             self.model_nums = self.reg_model.model_nums
-        elif isinstance(self.reg_model.num , int): 
-            self.model_nums = [self.reg_model.num]
+        elif isinstance(self.reg_model.num , (int , str)): 
+            self.model_nums = [int(self.reg_model.num)]
         else:
             self.model_nums = list(self.reg_model.num)
 

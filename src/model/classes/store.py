@@ -6,7 +6,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
-from ..classes import ModelDict , ModelFile , TrainConfig
+from .config import TrainConfig
+from .io import ModelDict , ModelFile
 from ...func.basic import Filtered
 
 class Storage:
@@ -160,7 +161,7 @@ class Deposition:
     '''model saver'''
     def __init__(self , config : TrainConfig):
         self.config = config
-        self.base_path = Path(config.model_base_path)
+        self.base_path = config.model_base_path
 
     def stack_model(self , model_dict : ModelDict , model_date , model_num , model_type = 'best'):
         model_dict.save(self.model_path(model_date , model_num , model_type) , stack = True)
@@ -177,11 +178,12 @@ class Deposition:
         return ModelFile(self.model_path(model_date , model_num , model_type))
     
     def exists(self , model_date , model_num , model_type = 'best'):
-        return ModelFile(self.model_path(model_date , model_num , model_type)).exists()
+        # return ModelFile(self.model_path(model_date , model_num , model_type)).exists()
+        return self.base_path.exists(model_num , model_date , model_type)
     
     def model_path(self , model_date , model_num , model_type = 'best'):
         '''get model path of deposition giving model date / num / type'''
-        return self.base_path.joinpath(str(model_num) , str(model_date) , str(model_type))
+        return self.base_path.full_path(model_num , model_date , model_type)
     
     def model_iter(self , stage , model_date_list):
         '''iter of model_date and model_num , considering resume_training'''
@@ -194,8 +196,3 @@ class Deposition:
                     break
             new_iter = Filtered(new_iter , ~models_trained)
         return new_iter
-    
-    def model_dates(self , model_num , model_type = 'best'):
-        '''get existing model dates'''
-        path = self.base_path.joinpath(str(model_num))
-        return np.sort([int(p.name) for p in path.iterdir() if self.exists(p.name , model_num , model_type)])

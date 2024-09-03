@@ -68,23 +68,24 @@ class StatusDisplay(CallBack):
         self._epoch_model : int = 0
         self._epoch_stage : int = 0
         self._model_stage : int = 0
-    
     @property
-    def _initial_models(self) -> bool: return self._model_stage <= self.config.model_num
+    def path_test(self): return str(self.config.model_base_path.rslt('test.xlsx'))
     @property
-    def _model_test_dates(self) -> np.ndarray: return self.module.data.model_test_dates
+    def initial_models(self) -> bool: return self._model_stage <= self.config.model_num
     @property
-    def _speedup2x(self) -> bool:
+    def model_test_dates(self) -> np.ndarray: return self.module.data.model_test_dates
+    @property
+    def speedup2x(self) -> bool:
         try:
             return self.config.callbacks['ResetOptimizer']['speedup2x']
         except KeyError:
             return False
     def _display(self , *args , **kwargs):
-        return self.logger.info(*args , **kwargs) if (self._verbosity > 2 or self._initial_models) else self.logger.debug(*args , **kwargs)
+        return self.logger.info(*args , **kwargs) if (self._verbosity > 2 or self.initial_models) else self.logger.debug(*args , **kwargs)
     def event_sdout(self , event) -> str:
         if event == 'reset_learn_rate':
             sdout = f'Reset learn rate and scheduler at the end of epoch {self.status.epoch} , effective at epoch {self.status.epoch + 1}'
-            if self._speedup2x: sdout += ', and will speedup2x'
+            if self.speedup2x: sdout += ', and will speedup2x'
         elif event == 'new_attempt':
             sdout = '{attempt} {epoch} : {status}, Next attempt goes!'.format(**self._texts)
         elif event == 'nanloss':
@@ -189,8 +190,8 @@ class StatusDisplay(CallBack):
             'model_num' : self.status.model_num , 
             'model_type' : self.status.model_type ,
             'model_date' : self.status.model_date ,
-            'date' : self._model_test_dates ,
-            'value' : self.metrics.scores[-len(self._model_test_dates):]
+            'date' : self.model_test_dates ,
+            'value' : self.metrics.scores[-len(self.model_test_dates):]
         })
         df_model = df_date.groupby(['model_date' , 'model_num','model_type'])['value'].mean().reset_index()
         df_model['model_date'] = df_model['model_date'].astype(str)
@@ -237,6 +238,6 @@ class StatusDisplay(CallBack):
         df.index = df.index.set_names(None)
         df.columns = pd.MultiIndex.from_tuples([(f'{self.config.model_module}.{num}' , type) for num,type in df.columns])
         df_display(df)
-        dfs_to_excel(rslt , f'{self.config.model_rslt_path}/test.xlsx')
-        print(f'Test results are saved to {self.config.model_rslt_path}/test.xlsx')
+        dfs_to_excel(rslt , self.path_test)
+        print(f'Test results are saved to {self.path_test}')
         self.test_summarized = True

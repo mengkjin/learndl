@@ -1,6 +1,8 @@
+import torch
 import numpy as np
 
-from typing import Any , Literal
+from torch import nn , Tensor
+from typing import Any , Iterator , Literal , Optional
 
 from ..classes import BaseDataModule , BaseTrainer , BatchData , BatchOutput , BoosterInput , GeneralBooster , TrainConfig
 
@@ -89,3 +91,46 @@ class BoosterModel:
         pred  = self.model.predict(booster_input).to_2d()
         output = BatchOutput((pred , {'label' : booster_input.y}))
         return output
+    
+class BoosterEnsembler(BoosterModel):
+    '''BoosterEnsembler used in nn_model'''
+    def train_booster_input(self , net : nn.Module , *args , **kwargs) -> BoosterInput | Any: 
+        return self.loader_to_booster_input(net , self.train_dl)
+    
+    def valid_booster_input(self , net : nn.Module , *args , **kwargs) -> BoosterInput | Any:
+        return self.loader_to_booster_input(net , self.valid_dl)
+    
+    def test_booster_input(self , *args ,  **kwargs) -> BoosterInput | Any:
+        '''test datas , usually by date'''
+        assert self.loaded
+        hidden : Tensor = self.module.batch_output.other['hidden']
+        return BoosterInput.from_tensor(hidden , self.batch_data.y)
+    
+    @staticmethod
+    def batch_data_to_booster_input(net : nn.Module , loader : Iterator[BatchData | Any] , 
+                                    secid : Optional[np.ndarray] = None ,
+                                    date : Optional[np.ndarray] = None) -> BoosterInput:
+        '''create booster data of train, valid, test dataloaders'''
+        hh , yy , ii = [] , [] , []
+        net.eval()
+        with torch.no_grad():
+            for batch_data in loader:
+                hidden : Tensor = BatchOutput(net(batch_data.x)).other['hidden']
+                assert hidden is not None , f'hidden must not be none when using BoosterModel'
+                hh.append(hidden.detach().cpu())
+                yy.append(batch_data.y.detach().cpu())
+                ii.append(batch_data.i.detach().cpu())
+        hh , yy , ii = torch.vstack(hh).numpy() , torch.vstack(yy).numpy() , torch.vstack(ii).numpy()
+        secid_i , secid_j = np.unique(ii[:,0] , return_inverse=True)
+        date_i  , date_j  = np.unique(ii[:,1] , return_inverse=True)
+        hh_values = np.full((len(secid_i) , len(date_i) , hh.shape[-1]) , fill_value = np.nan)
+        yy_values = np.full((len(secid_i) , len(date_i)) , fill_value = np.nan)
+        
+        hh_values[secid_j , date_j] = hh[:]
+        yy_values[secid_j , date_j] = yy[...,0]
+        secid = secid[secid_i] if secid is not None else None
+        date  = date[date_i]   if date  is not None else None
+        return BoosterInput.from_numpy(hh_values , yy_values , secid , date)
+    
+    def loader_to_booster_input(self , net : nn.Module , loader : Iterator[BatchData | Any]) -> BoosterInput:
+        return self.batch_data_to_booster_input(net , loader , self.y_secid , self.y_date)

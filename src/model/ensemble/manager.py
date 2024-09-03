@@ -3,11 +3,10 @@ from abc import ABC , abstractmethod
 from torch import nn , Tensor
 from typing import Any , Optional
 
-from .booster import BoosterModel
-from .ensembler import choose_net_ensembler , BoosterEnsembler
-from ..classes import BaseDataModule , BaseTrainer , ModelDict , ModelFile , TrainConfig
+from .booster import BoosterModel , BoosterEnsembler
+from ..classes import BaseDataModule , BaseTrainer , Checkpoint , ModelDict , ModelFile , TrainConfig
 from ..nn import GetNN
-from ..util import Checkpoint , Metrics
+from ..util import Metrics , choose_nn_method
 
 class ModelEnsembler(ABC):
     '''a group of ensemble models , of same net structure'''
@@ -78,7 +77,7 @@ class NetManager(ModelEnsembler):
     def __init__(self, model_module : BaseTrainer , use_score = True , **kwargs) -> None:
         super().__init__(model_module , use_score)
         self.net_ensemblers = {
-            model_type:choose_net_ensembler(model_type)(self.ckpt , use_score , **kwargs)
+            model_type:choose_nn_method(model_type)(self.ckpt , use_score , **kwargs)
             for model_type in self.config.model_types
         }
         if self.config.model_booster_head: 

@@ -3,3 +3,4 @@ from .device import *
 from .io import *
 from .mod import *
 from .status import *
+from .store import *

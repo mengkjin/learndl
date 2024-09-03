@@ -1,0 +1,6 @@
+from .abstract import BaseBuffer
+
+class BufferSpace(BaseBuffer):
+    '''dynamic buffer space for some module to use (tra), can be updated at each batch / epoch '''
+    def register_setup(self) -> None: ...
+    def register_update(self) -> None: ...

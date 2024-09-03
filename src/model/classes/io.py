@@ -8,6 +8,7 @@ from torch import Tensor , nn
 from typing import Any , Literal , Optional
 
 from ..boost import GeneralBooster
+from ...basic import ModelPath
 
 @dataclass(slots=True)
 class BatchData:
@@ -135,8 +136,7 @@ class BatchOutput:
         pred = self.pred.cpu().numpy()
         if pred.ndim == 1: pred = pred[:,None]
         assert pred.ndim == 2 , pred.shape
-        df = pd.DataFrame({'secid' : secid , 'date' : date , 
-                           **{f'pred.{i}':pred[:,i] for i in range(pred.shape[-1])}})
+        df = pd.DataFrame({'secid' : secid , 'date' : date , **{f'pred.{i}':pred[:,i] for i in range(pred.shape[-1])}})
         if narrow_df:
             df = df.melt(['secid','date'] , var_name='feature')
         return df
@@ -245,3 +245,29 @@ class ModelFile:
         return ModelDict(**{key:self.load(key) for key in ModelDict.__slots__})
     def model_instance(self , base_net : nn.Module | Any = None , device = None , **kwargs):
         return self.model_dict().model_instance(base_net , device , **kwargs)
+    
+
+class SingleModelInterface:
+    def __init__(self , path : Path) -> None:
+        self.path = path
+        
+    def __getitem__(self , key): return self.load(key)
+
+    def load(self , key : str) -> Any:
+        assert key in ModelDict.__slots__ , (key , ModelDict.__slots__)
+        path = self.path.joinpath(f'{key}.pt')
+        return torch.load(path , map_location='cpu') if path.exists() else None
+    def exists(self) -> bool: 
+        return any([self.path.joinpath(f'{key}.pt').exists() for key in ModelDict.__slots__])
+    def model_dict(self):
+        return ModelDict(**{key:self.load(key) for key in ModelDict.__slots__})
+    def model_instance(self , base_net : nn.Module | Any = None , device = None , **kwargs):
+        return self.model_dict().model_instance(base_net , device , **kwargs)
+
+class ModelInterface:
+    def __init__(self , model_path : Path | ModelPath | str) -> None:
+        self.model_path = ModelPath(model_path)
+
+    def single(self , model_date , model_num , model_type = 'best'):
+        path = self.model_path.full_path(model_num = model_num , model_date = model_date , model_type=model_type)
+        return SingleModelInterface(path)

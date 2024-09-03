@@ -6,17 +6,42 @@ from typing import Any , Literal , Optional
 
 from ..boost import VALID_BOOSTERS
 from ..nn import get_nn_category , get_nn_datatype
-from ...basic import PATH , THIS_IS_SERVER
+from ...basic import ModelPath , PATH , THIS_IS_SERVER
 from ...func import pretty_print_dict , recur_update
 
 TRAIN_CONFIG_LIST = ['train' , 'env' , 'callbacks' , 'conditional' , 'model']
 
+def conf_path(base_path : ModelPath | Path | None , *args):
+    base_path = ModelPath(base_path)
+    f = base_path.conf if base_path else PATH.conf.joinpath
+    return f(*args)
+
+def conf_copy(source : Path , target : Path , override = False):
+    if source.is_dir():
+        if not override: 
+            assert not target.exists() or len([v for v in target.iterdir()]) == 0 , target
+
+        shutil.copytree(source , target , dirs_exist_ok = True)
+    else:
+        if not override: 
+            assert not target.exists() , target
+        target.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copyfile(source , target)
+
+def conf_mod_type(module : str):
+    return 'boost' if module in ['booster' , 'hidden_aggregator' ,*VALID_BOOSTERS] else 'nn'
+
 class TrainParam:
-    def __init__(self , base_path : Optional[Path] , model_name  : Optional[str] = None , override = {}):
-        self.base_path = base_path
-        self.model_name = model_name
+    def __init__(self , base_path : ModelPath | Path | None , override = {}):
+        self.base_path = ModelPath(base_path)
+        self.model_name = self.base_path.name
 
         self.load_param(**override).special_adjustment().make_model_name().check_validity()
+
+    @property
+    def model_base_path(self):
+        assert self.base_path
+        return self.base_path
 
     @property
     def Param(self) -> dict[str,Any]: return self.train_param
@@ -24,8 +49,7 @@ class TrainParam:
     def load_param(self , **kwargs):
         self.train_param : dict[str,Any] = {}
         for config_key in TRAIN_CONFIG_LIST:
-            train_param : dict = PATH.read_yaml(self.config_path(self.base_path , config_key))
-            self.train_param.update({f'{config_key}.{key}':val for key,val in train_param.items()})
+            self.train_param.update({f'{config_key}.{key}':val for key,val in self.load_config(config_key).items()})
         self.train_param.update(kwargs)
         return self
 
@@ -61,12 +85,11 @@ class TrainParam:
         if 'best' not in self.model_types: self.model_types.insert(0 , 'best')
         return self
     
-    def generate_model_param(self , update_inplace = False , **kwargs):
+    def generate_model_param(self , update_inplace = True , **kwargs):
         module = self.model_module if self.module_type == 'nn' else self.booster_type
         assert isinstance(module , str) , (self.model_module , module)
-        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , **kwargs)
+        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , **kwargs).expand()
         if update_inplace: self.update_model_param(model_param)
-        model_param.expand(self.model_base_path)
         return model_param
     
     def update_model_param(self , model_param : 'ModelParam'):
@@ -74,20 +97,21 @@ class TrainParam:
         self.Param.update(param)
         return self
     
-    def copy_to(self , target_dir : Path , exist_ok = False):
-        if self.base_path: raise Exception(f'Cannot copy TrainParam with not None base_path: {self.base_path}')
-        if not exist_ok: assert not target_dir.joinpath('configs','train').exists()
-        shutil.copytree(PATH.conf.joinpath('train') , target_dir.joinpath('configs','train') , dirs_exist_ok = exist_ok)
-        self.base_path = target_dir
+    def copy_to(self , target_dir : Path | ModelPath , override = False):
+        if self.base_path: raise Exception(f'Only copy TrainParam with from None base_path: {self.base_path.base}')
+        target_dir = ModelPath(target_dir)
 
-    @staticmethod
-    def config_path(base_path : Path | None , key : str):
-        conf_path = base_path.joinpath('configs') if base_path else PATH.conf
-        return conf_path.joinpath('train' , f'{key}.yaml')
+        source , target = conf_path(None , 'train') , conf_path(target_dir , 'train')
+        conf_copy(source , target , override)
+
+        self.base_path , self.model_name = target_dir , target_dir.name
+
+    def load_config(self , key : str) -> dict:
+        return PATH.read_yaml(conf_path(self.base_path , 'train', f'{key}.yaml'))
     
     @classmethod
-    def guess_module(cls , base_path : Path | None) -> str:
-        return PATH.read_yaml(cls.config_path(base_path , 'model'))['module'].lower()
+    def guess_module(cls , base_path : Path | ModelPath | None):
+        return str(PATH.read_yaml(conf_path(base_path , 'train', 'model.yaml'))['module']).lower()
     
     @classmethod
     def get_module_type(cls , module : str):
@@ -104,7 +128,9 @@ class TrainParam:
     def nn_category(self): return get_nn_category(self.model_module)
     @property
     def resumeable(self): 
-        return all([self.config_path(self.model_base_path,cfg_key).exists() for cfg_key in TRAIN_CONFIG_LIST])
+        assert self.model_name
+        model_path = ModelPath(self.model_name)
+        return all([model_path.conf(cfg_key).exists() for cfg_key in TRAIN_CONFIG_LIST])
 
     @property
     def booster_type(self):
@@ -133,13 +159,8 @@ class TrainParam:
     def beg_date(self): return int(self.Param['model.beg_date'])
     @property
     def end_date(self): return int(self.Param['model.end_date'])
-
     @property
-    def model_base_path(self): 
-        assert self.model_name, 'model_name must not be none'
-        return PATH.model.joinpath(self.model_name)
-    @property
-    def model_rslt_path(self): return self.model_base_path.joinpath('detailed_analysis')
+    def model_rslt_path(self): return self.model_base_path.rslt()
     @property
     def model_types(self) -> list: return self.Param['model.types']
     @property
@@ -201,11 +222,11 @@ class TrainParam:
         return {k.replace('callbacks.',''):v for k,v in self.Param.items() if k.startswith('callbacks.')}
         
 class ModelParam:
-    INDAY_DIMS = {'15m' : 16 , '30m' : 8 , '60m' : 4 , '120m' : 2}
-
-    def __init__(self , base_path : Optional[Path] , module : str ,
+    def __init__(self , base_path : Optional[Path | ModelPath] , module : str , 
                  booster_head : Any = False , verbosity = 2 , clip_n : int = -1 , **kwargs):
-        self.base_path = base_path
+        self.base_path = ModelPath(base_path)
+        self.model_name = self.base_path.name
+   
         self.module = module.lower()
         self.booster_head = booster_head
         self.clip_n = clip_n
@@ -214,11 +235,16 @@ class ModelParam:
         self.load_param().check_validity()
 
     @property
+    def model_base_path(self):
+        assert self.base_path is not None
+        return self.base_path
+
+    @property
     def Param(self) -> dict[str,Any]: return self.model_param
 
     def load_param(self):
-        self.model_param : dict[str,Any] = {}
-        self.model_param.update(PATH.read_yaml(self.config_path(self.base_path , self.module)))
+        path = conf_path(self.base_path , conf_mod_type(self.module) , f'{self.module}.yaml')
+        self.model_param : dict[str,Any] = PATH.read_yaml(path)
         self.model_param['verbosity'] = self.verbosity
         self.model_param.update(self.override)
         return self
@@ -240,37 +266,31 @@ class ModelParam:
             assert self.booster_head in VALID_BOOSTERS , self.booster_head
             self.booster_head_param = ModelParam(self.base_path , self.booster_head , False , self.verbosity , 1 , **self.override)
         return self
-
-    @staticmethod
-    def config_path(base_path : Path | None , module : str):
-        conf_path = base_path.joinpath('configs') if base_path else PATH.conf
-        module_type = TrainParam.get_module_type(module)
-        return conf_path.joinpath('nn' if module_type == 'nn' else 'boost' , f'{module}.yaml')
     
     def get(self , key : str , default = None):
         return self.Param.get(key , default)
     
-    def copy_to(self , target_dir : Path , exist_ok = False):
-        if self.base_path: raise Exception(f'Cannot copy TrainParam with not None base_path: {self.base_path}')
+    def copy_to(self , target_dir : Path | ModelPath , override = False):
+        if self.base_path: raise Exception(f'Only copy TrainParam with from None base_path: {self.base_path.base}')
 
-        source = self.config_path(None       , self.module)
-        target = self.config_path(target_dir , self.module)
-        if not exist_ok: assert not target.exists()
-        target.parent.mkdir(parents=True,exist_ok=True)
-        shutil.copyfile(source , target)
+        target_dir = ModelPath(target_dir)
+        source = conf_path(None       , conf_mod_type(self.module) , f'{self.module}.yaml')
+        target = conf_path(target_dir , conf_mod_type(self.module) , f'{self.module}.yaml')
+        conf_copy(source , target , override)
 
-        if self.booster_head: self.booster_head_param.copy_to(target_dir , exist_ok = exist_ok)
-        self.base_path = target_dir
+        self.base_path , self.model_name = target_dir , target_dir.name
 
-    def expand(self , base_path : Path):
-        params = []
+        if self.booster_head: self.booster_head_param.copy_to(target_dir , override = override)
+        return self
+
+    def expand(self):
+        self.params : list[dict[str,Any]] = []
         for mm in range(self.n_model):
-            par = {'path':base_path.joinpath(str(mm))}
-            for k,v in self.Param.items():
-                par[k] = v[mm % len(v)] if isinstance(v , (list, tuple)) else v
-            params.append(par)
-        self.params : list[dict[str,Any]] = params
-        if self.booster_head: self.booster_head_param.expand(base_path)
+            par = {k:v[mm % len(v)] if isinstance(v , (list, tuple)) else v for k,v in self.Param.items()}
+            self.params.append(par)
+
+        if self.booster_head: self.booster_head_param.expand()
+        return self
        
     def update_data_param(self , x_data : dict):
         '''when x_data is know , use it to fill some params(seq_len , input_dim , inday_dim , etc.)'''
@@ -293,19 +313,33 @@ class ModelParam:
     @property
     def max_num_output(self): return max(self.Param.get('num_output' , [1]))
 
-
 class TrainConfig(TrainParam):
-    def __init__(self , base_path : Optional[Path] , model_name  : Optional[str] = None , override = {}):
-        self.Train = TrainParam(base_path , model_name , override)
-        self.Model = self.Train.generate_model_param(update_inplace = True)
+    def __init__(self , base_path : Path | ModelPath | None , override = {}):
+        
+        self.Train = TrainParam(base_path , override)
+        self.Model = self.Train.generate_model_param()
         
         self.resume_training: bool  = False
         self.stage_queue: list      = []
 
-        
+    @classmethod
+    def load(cls , base_path : Optional[Path] = None , do_parser = False , par_args = {} , override = {} , makedir = True):
+        '''load config yaml to get default/giving params'''
+        config = cls(base_path , override)
+        if do_parser: config.process_parser(cls.parser_args(par_args))
 
+        model_path = ModelPath(config.model_name)
+        if config.resume_training:
+            config = cls(model_path , override)
+        elif 'fit' in config.stage_queue and makedir:
+            config.start_new(model_path)
+            
+        return config
+    
     @property
     def Param(self) -> dict[str,Any]: return self.Train.Param
+    @property
+    def model_base_path(self): return self.Train.model_base_path
     @property
     def model_name(self) -> str|Any: return self.Train.model_name
     @property
@@ -342,38 +376,18 @@ class TrainConfig(TrainParam):
     def update_data_param(self , x_data : dict):
         if self.module_type == 'nn': self.Model.update_data_param(x_data)
     
-    @classmethod
-    def load(cls , base_path : Optional[Path] = None , do_parser = False , par_args = {} , override = {} , makedir = True):
-        '''load config yaml to get default/giving params'''
-        model_name = base_path.name if base_path else None
-        config = cls(base_path , model_name , override)
-        if do_parser: config.process_parser(cls.parser_args(par_args))
-
-        new_base_path = config.model_base_path
-        if base_path is None and config.resume_training:
-            config = cls(new_base_path , config.model_name , override)
-        elif 'fit' in config.stage_queue and makedir:
-            #if config.Train.resumeable and not config.short_test:
-            #    raise Exception(f'{new_base_path} has to be delete manually')
-            # [new_base_path.joinpath(str(mm)).mkdir(parents=True,exist_ok=True) for mm in config.model_num_list]
-            config.start_new(new_base_path)
-            
-        # config.Model.expand(config.model_base_path)
-        return config
-    
     def weight_scheme(self , stage : str , no_weight = False) -> Optional[str]: 
         stg = stage if stage == 'fit' else 'test'
         return None if no_weight else self.Train.Param[f'train.criterion.weight.{stg}']
     
-    def start_new(self , new_base_path : Path):
-        if self.Train.resumeable and not self.short_test:
-            raise Exception(f'{new_base_path} has to be delete manually')
+    def start_new(self , new_path : Path | ModelPath):
+        new_path = ModelPath(new_path.name)
+        assert not self.Train.resumeable or self.short_test , f'{new_path.base} has to be delete manually'
 
-        self.Train.copy_to(new_base_path , exist_ok=self.short_test)
-        self.Model.copy_to(new_base_path , exist_ok=self.short_test)
-
-        [new_base_path.joinpath(str(mm)).mkdir(parents=True,exist_ok=True) for mm in self.model_num_list]
-        self.model_rslt_path.mkdir(exist_ok=True)
+        new_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
+        self.Train.copy_to(new_path , override = self.short_test)
+        self.Model.copy_to(new_path , override = self.short_test)
+        return self
 
     @staticmethod
     def set_random_seed(seed = None):
@@ -411,8 +425,7 @@ class TrainConfig(TrainParam):
         '''ask if resume training when candidate names exists'''
         model_name = self.model_name
         assert model_name is not None
-        candidate_name = [model for model in [model_name] if self.get_config_path(model).exists()] + \
-                [model.name for model in PATH.model.iterdir() if model.name.startswith(model_name + '.')]
+        candidate_name = sorted([m.name for m in PATH.model.iterdir() if m.name.split('.')[0] == model_name])
         if len(candidate_name) > 0 and 'fit' in self.stage_queue:
             if value < 0:
                 print(f'--Multiple model path of {model_name} exists, input [yes] to resume training, or start a new one!')
@@ -437,8 +450,7 @@ class TrainConfig(TrainParam):
         '''
         model_name = self.model_name
         assert model_name is not None
-        candidate_name = [model for model in [model_name] if self.get_config_path(model).exists()] + \
-                [model.name for model in PATH.model.iterdir() if model.name.startswith(model_name + '.')]
+        candidate_name = sorted([m.name for m in PATH.model.iterdir() if m.name.split('.')[0] == model_name])
         if self.short_test:
             ...
         elif 'fit' in self.stage_queue and candidate_name:
@@ -486,8 +498,3 @@ class TrainConfig(TrainParam):
         ]
         pretty_print_dict({k:self.get(k) for k in subset})
         pretty_print_dict(self.Model.Param)
-
-    @staticmethod
-    def get_config_path(model_name : str): 
-        return PATH.model.joinpath(model_name)
-    
