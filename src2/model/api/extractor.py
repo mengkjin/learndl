@@ -6,9 +6,9 @@ from itertools import product
 from tqdm import tqdm
 from typing import Any , Literal , Optional
 
-from ..util import BatchOutput , Deposition , Device , TrainConfig
+from ..util import BatchOutput , Deposition , TrainConfig
+from ..data_module import DataModule
 from ..ensemble import ModelEnsembler
-from ..trainer import NetDataModule
 from ...basic import RegModel , PATH
 
 class HiddenExtractor:
@@ -33,9 +33,8 @@ class HiddenExtractor:
         self.contents : dict[str,pd.DataFrame] = {}
         self.config     = TrainConfig.load(PATH.model.joinpath(self.reg_model.name) , override={'short_test':False})
         self.deposition = Deposition(self.config)
-        self.device     = Device()
 
-        self.data = NetDataModule(self.config , 'both').load_data()
+        self.data = DataModule(self.config , 'both').load_data()
         self.target_path = PATH.hidden.joinpath(self.reg_model.name)
 
         if not np.isin(self.reg_model.model_dates , self.data.model_date_list).all():
@@ -95,7 +94,7 @@ class HiddenExtractor:
         model_param = self.config.model_param[model_num]
         
         model = self.deposition.load_model(model_date , model_num , model_type)
-        self.net = ModelEnsembler.get_net(self.config.model_module , model_param , model['state_dict'] , self.device)
+        self.net = ModelEnsembler.get_net(self.config.model_module , model_param , model['state_dict'] , self.data.device)
         self.net.eval()
 
         df_list : list[pd.DataFrame] = []

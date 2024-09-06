@@ -38,13 +38,16 @@ class GeneralBooster:
         self.seed = seed
         self.verbosity = params.get('verbosity' , 10)
 
-        self.booster = choose_booster_model(booster_type)(self.train_param , self.weight_param , cuda , seed , **kwargs)
-        self.booster.import_data(train = train , valid = valid , test = test)
+        self.booster : BasicBoosterModel = choose_booster_model(booster_type)(self.train_param , self.weight_param , cuda , seed , **kwargs)
+        self.import_data(train = train , valid = valid , test = test)
 
     def __call__(self, x : torch.Tensor): return self.forward(x)
 
+    def import_data(self , train : Any = None , valid : Any = None , test  : Any = None):
+        self.booster.import_data(train , valid , test)
+
     def fit(self , train = None , valid = None , use_feature = None):
-        self.booster.import_data(train = train , valid = valid)
+        self.import_data(train = train , valid = valid)
         self.booster.update_feature(use_feature)
         self.booster.fit(silence = self.verbosity < 10)
         return self
@@ -53,11 +56,15 @@ class GeneralBooster:
         return self.booster.predict(test)
     
     def forward(self , x : torch.Tensor) -> torch.Tensor:
-        booster_input = BoosterInput.from_tensor(x , feature=self.use_feature)
+        booster_input = BoosterInput.from_tensor(x)
         return self.booster.predict(booster_input).pred.to(x) 
     
     def to_dict(self):
         return {'booster_type' : self.booster_type , **self.booster.to_dict()}
+    
+    def load_dict(self , model_dict , cuda = False , seed = None):
+        self.booster.load_dict(model_dict , cuda , seed)
+        return self
     
     @property
     def use_feature(self):
@@ -65,8 +72,7 @@ class GeneralBooster:
 
     @classmethod
     def from_dict(cls , model_dict : dict[str,Any] , cuda = False , seed = None):
-        obj = cls(model_dict['booster_type'])
-        obj.booster.load_dict(model_dict , cuda , seed)
+        obj = cls(model_dict['booster_type']).load_dict(model_dict , cuda , seed)
         return obj
     
     def calc_ic(self , test : BoosterInput | Any = None):

@@ -78,7 +78,7 @@ class NetManager(ModelEnsembler):
         super().__init__(model_module , use_score)
         self.net_ensemblers = {
             model_type:choose_nn_method(model_type)(self.ckpt , use_score , **kwargs)
-            for model_type in self.config.model_types
+            for model_type in self.config.model_submodels
         }
         if self.config.model_booster_head: 
             self.booster_head = BoosterEnsembler(model_module)

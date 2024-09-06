@@ -52,6 +52,7 @@ class BoosterInput:
     '''
     x : torch.Tensor
     y : torch.Tensor | Any = None
+    w : torch.Tensor | Any = None
     secid   : np.ndarray | Any = None
     date    : np.ndarray | Any = None
     feature : np.ndarray | Any = None
@@ -98,7 +99,13 @@ class BoosterInput:
 
     def Y(self): return self.y[self.finite] if self.y is not None else None
 
-    def W(self): return self.weight_method.calculate_weight(self.y , self.secid)[self.finite] if self.y is not None else None
+    def W(self): 
+        if self.w is not None:
+            return self.w[self.finite]
+        elif self.y is not None:
+            return self.weight_method.calculate_weight(self.y , self.secid)[self.finite] 
+        else:
+            return None
     
     def XYW(self , *args):
         return self.BoostXYW(self.X() , self.Y() , self.W())
@@ -164,17 +171,18 @@ class BoosterInput:
         y = torch.tensor(np.stack([arr.to_numpy() for arr in yarr.data_vars.values()] , -1)[...,0])
         
         secid , date , feature = xindex[0] , xindex[1] , xindex[-1]
-        return cls(x , y , secid , date , feature , weight_param)
+        return cls(x , y , None , secid , date , feature , weight_param)
 
     @classmethod
-    def from_numpy(cls , x : np.ndarray , y : np.ndarray | Any = None, 
+    def from_numpy(cls , x : np.ndarray , y : np.ndarray | Any = None,  w : np.ndarray | Any = None ,
                    secid : Any = None , date : Any = None , feature : Any = None , 
                    weight_param : dict[str,Any] = {}):
         return cls.from_tensor(torch.tensor(x) , None if y is None else torch.tensor(y) ,
-                              secid , date , feature , weight_param)
+                               None if w is None else torch.tensor(w) ,
+                               secid , date , feature , weight_param)
     
     @classmethod
-    def from_tensor(cls , x : torch.Tensor , y : torch.Tensor | Any = None , 
+    def from_tensor(cls , x : torch.Tensor , y : torch.Tensor | Any = None , w : torch.Tensor | Any = None ,
                     secid : Any = None , date : Any = None , feature : Any = None , 
                     weight_param : dict[str,Any] = {}):
         assert x.ndim in [2,3] , x.ndim
@@ -189,7 +197,7 @@ class BoosterInput:
         if date  is None : date  = np.arange(x.shape[1])
         if feature is None : feature = np.array([f'F.{i}' for i in range(x.shape[-1])])
 
-        return cls(x , y , secid , date , feature , weight_param)
+        return cls(x , y , w , secid , date , feature , weight_param)
     
     @classmethod
     def concat(cls , datas : list[Optional['BoosterInput']]):

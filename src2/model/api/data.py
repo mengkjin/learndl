@@ -1,6 +1,6 @@
 from typing import Optional
 from ..util import TrainConfig
-from ..trainer import NetDataModule
+from ..data_module import DataModule
 from ...data import DataProcessor , DataUpdater
 from ...data.tushare import task
 from ...basic import THIS_IS_SERVER
@@ -35,7 +35,7 @@ class DataAPI:
         '''
         # assert THIS_IS_SERVER
         if isinstance(data_types , str): data_types = data_types.split('+')
-        NetDataModule.prepare_data(data_types)
+        DataModule.prepare_data(data_types)
         print('-' * 80)
 
     @staticmethod
@@ -49,6 +49,6 @@ class DataAPI:
         ...
         '''
         model_config = TrainConfig.load().update(short_test=True, model_data_type=model_data_type)
-        data = NetDataModule(model_config , 'predict').load_data()
+        data = DataModule(model_config , 'predict').load_data()
         data.setup('predict' , model_date = data.datas.y.date[-50])
         return data.predict_dataloader()[0]

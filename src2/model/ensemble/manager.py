@@ -5,10 +5,11 @@ from typing import Any , Optional
 
 from .booster import BoosterModel , BoosterEnsembler
 
-from ..util.io import BatchData , BoosterInput , ModelDict , ModelFile
-from ..util.mod import BaseCallBack , BaseTrainer , BaseDataModule
-from ..util.unified_model import TrainConfig , Metrics , Checkpoint , choose_swa_method
+from ..util import BatchData , Checkpoint , ModelDict , Metrics , ModelFile , TrainConfig
+from ..util.classes import BaseCallBack , BaseTrainer , BaseDataModule
+from ..model_module.nn_module.swa import choose_swa_method
 from ...algo.nn import GetNN
+from ...algo.boost import BoosterInput
 
 class ModelEnsembler(ABC):
     '''a group of ensemble models , of same net structure'''
@@ -80,7 +81,7 @@ class NetManager(ModelEnsembler):
         super().__init__(model_module , use_score)
         self.net_ensemblers = {
             model_type:choose_swa_method(model_type)(self.ckpt , use_score , **kwargs)
-            for model_type in self.config.model_types
+            for model_type in self.config.model_submodels
         }
         if self.config.model_booster_head: 
             self.booster_head = BoosterEnsembler(model_module)
@@ -100,7 +101,8 @@ class NetManager(ModelEnsembler):
         if self.booster_head: self.module.batch_output.override_pred(self.booster_head.predict().pred)
 
     def assess(self , epoch : int , metrics : Metrics): 
-        for model in self.net_ensemblers.values():  model.assess(self.module.net , epoch , metrics)
+        for model in self.net_ensemblers.values():  
+            model.assess(self.module.net , epoch , metrics)
 
     def collect(self , model_type = 'best' , *args):
         net = self.net_ensemblers[model_type].collect(self.module , *args)

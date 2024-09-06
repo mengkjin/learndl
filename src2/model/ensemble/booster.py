@@ -4,9 +4,8 @@ import numpy as np
 from torch import nn , Tensor
 from typing import Any , Iterator , Literal , Optional
 
-from ..util.io import BatchData , BatchOutput
-from ..util.mod import BaseTrainer , BaseDataModule
-from ..util.unified_model.config import TrainConfig
+from ..util import BatchData , BatchOutput , TrainConfig
+from ..util.classes import BaseTrainer , BaseDataModule
 from ...algo.boost import GeneralBooster , BoosterInput
 
 class BoosterModel:

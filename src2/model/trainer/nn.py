@@ -100,7 +100,7 @@ class NetTrainer(TrainerModule):
     def batch_metrics(self) -> None:
         if isinstance(self.batch_data , BatchData) and self.batch_data.is_empty: return
         self.metrics.calculate(self.status.dataset , self.batch_data, self.batch_output, self.net, assert_nan = True)
-        self.metrics.collect_batch_metric()
+        self.metrics.collect_batch()
     def batch_backward(self) -> None:
         if isinstance(self.batch_data , BatchData) and self.batch_data.is_empty: return
         assert self.status.dataset == 'train' , self.status.dataset
@@ -158,20 +158,20 @@ class NetTrainer(TrainerModule):
         self.net.train()
         torch.set_grad_enabled(True)
         self.dataloader = self.data.train_dataloader()
-        self.metrics.new_epoch_metric('train' , self.status)
+        self.metrics.new_epoch('train' , self.status)
     
     def on_train_epoch_end(self): 
-        self.metrics.collect_epoch_metric('train')
+        self.metrics.collect_epoch('train')
         self.optimizer.scheduler_step(self.status.epoch)
     
     def on_validation_epoch_start(self):
         self.net.eval()
         torch.set_grad_enabled(False)
         self.dataloader = self.data.val_dataloader()
-        self.metrics.new_epoch_metric('valid' , self.status)
+        self.metrics.new_epoch('valid' , self.status)
     
     def on_validation_epoch_end(self):
-        self.metrics.collect_epoch_metric('valid')
+        self.metrics.collect_epoch('valid')
         self.model.assess(self.status.epoch , self.metrics)
         torch.set_grad_enabled(True)
     
@@ -187,10 +187,10 @@ class NetTrainer(TrainerModule):
         self.load_model(False , self.model_type)
         self.dataloader = self.data.test_dataloader()
         self.assert_equity(len(self.dataloader) , len(self.batch_dates))
-        self.metrics.new_epoch_metric('test' , self.status)
+        self.metrics.new_epoch('test' , self.status)
     
     def on_test_model_type_end(self): 
-        self.metrics.collect_epoch_metric('test')
+        self.metrics.collect_epoch('test')
 
     def on_test_batch(self):
         self.assert_equity(self.batch_dates[self.batch_idx] , self.data.y_date[self.batch_data.i[0,1]]) 

@@ -5,9 +5,9 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Any , ClassVar , Optional
 
-from ..util import BatchOutput , Deposition , Device , TrainConfig
+from ..util import BatchOutput , Deposition , TrainConfig
+from ..data_module import DataModule
 from ..ensemble import ModelEnsembler
-from ..trainer import NetDataModule
 from ...basic import (RegModel , PATH , CONF , THIS_IS_SERVER , 
                       REG_MODELS , FACTOR_DESTINATION_LAPTOP , FACTOR_DESTINATION_SERVER)
 from ...data import GetData
@@ -80,13 +80,12 @@ class Predictor:
         '''predict recent days'''
         if start_dt <= 0: start_dt = today(start_dt)
 
-        device       = Device()
-        model_config = TrainConfig.load(PATH.model.joinpath(self.model_name))
-        deposition   = Deposition(model_config)
+        config       = TrainConfig.load(PATH.model.joinpath(self.model_name))
+        deposition   = Deposition(config)
         model_dates  = self.reg_model.model_dates 
         start_dt     = max(start_dt , int(date_offset(min(model_dates) ,1)))
 
-        data_mod = NetDataModule(model_config , 'both' if start_dt <= today(-100) else 'predict').load_data() 
+        data_mod = DataModule(config , 'both' if start_dt <= today(-100) else 'predict').load_data() 
 
         end_dt = min(end_dt , max(data_mod.test_full_dates))
         pred_dates = GetData.trade_dates(start_dt , end_dt)
@@ -100,16 +99,16 @@ class Predictor:
         
         for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
             for model_num in self.model_nums:
-                model_param = model_config.model_param[model_num]
+                model_param = config.model_param[model_num]
                 # print(model_date , 'old' if (data is data_mod_old) else 'new') 
                 assert isinstance(model_date , int) , model_date
                 data_mod.setup('predict' ,  model_param , model_date)
                 model = deposition.load_model(model_date , model_num , self.model_type)
 
-                net = ModelEnsembler.get_net(model_config.model_module , model_param , model['state_dict'] , device)
+                net = ModelEnsembler.get_net(config.model_module , model_param , model['state_dict'] , config.device)
                 net.eval()
 
-                net2 = ModelEnsembler.get_model(model_config , model , model_num = model_num , device = device)
+                net2 = ModelEnsembler.get_model(config , model , model_num = model_num , device = config.device)
 
                 loader = data_mod.predict_dataloader()
                 secid  = data_mod.datas.secid

@@ -21,7 +21,7 @@ class AggregatorDataModule(DataModule):
         
     def load_data(self):
         #with CONF.Silence():
-        self.datas = ModuleData.load([] , self.config.model_data_labels, 
+        self.datas = ModuleData.load([] , self.config.model_labels, 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision)
         self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
@@ -53,7 +53,7 @@ class AggregatorDataModule(DataModule):
         hidden_dates : list[np.ndarray] = []
         hidden_df : pd.DataFrame | Any = None
         ds_list = ['train' , 'valid'] if stage == 'fit' else ['test' , 'predict']
-        for hidden_key in self.config.model_data_hiddens:
+        for hidden_key in self.config.model_hidden_types:
             model_name , model_num , model_type = hidden_key.split('.')
             hidden_path = PATH.hidden.joinpath(model_name , f'hidden.{model_num}.{model_type}.{model_date}.feather')
             df = pd.read_feather(hidden_path)
@@ -162,7 +162,7 @@ class AggregatorTrainer(TrainerModule):
 
     def batch_metrics(self) -> None:
         self.metrics.calculate_from_tensor(self.status.dataset , self.batch_output.other['label'] , self.batch_output.pred, assert_nan = True)
-        self.metrics.collect_batch_metric()
+        self.metrics.collect_batch()
 
     def batch_backward(self) -> None: ...
 
@@ -200,23 +200,23 @@ class AggregatorTrainer(TrainerModule):
     def on_fit_model_end(self): self.save_model()
     
     def on_train_batch_start(self):
-        self.metrics.new_epoch_metric('train' , self.status)
+        self.metrics.new_epoch('train' , self.status)
 
     def on_train_batch_end(self): 
-        self.metrics.collect_epoch_metric('train')
+        self.metrics.collect_epoch('train')
 
     def on_validation_batch_start(self):
-        self.metrics.new_epoch_metric('valid' , self.status)
+        self.metrics.new_epoch('valid' , self.status)
 
     def on_validation_batch_end(self): 
-        self.metrics.collect_epoch_metric('valid')
+        self.metrics.collect_epoch('valid')
 
     def on_test_model_type_start(self):
         self.load_model(False , self.model_type)
-        self.metrics.new_epoch_metric('test' , self.status)
+        self.metrics.new_epoch('test' , self.status)
 
     def on_test_model_type_end(self): 
-        self.metrics.collect_epoch_metric('test')
+        self.metrics.collect_epoch('test')
 
     def on_test_model_start(self):
         if not self.deposition.exists(self.model_date , self.model_num , self.model_type): self.fit_model()

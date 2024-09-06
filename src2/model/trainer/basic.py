@@ -9,8 +9,9 @@ from typing import Any , Literal , Optional
 
 from ..ensemble import ModelEnsembler
 from ..callback import CallBackManager
-from ..util import Metrics , BaseDataModule , BaseTrainer , Checkpoint , Deposition , Storage , TrainConfig , BufferSpace
-from ...basic import CONF , Logger , Device
+from ..util import Metrics , BaseDataModule , BaseTrainer , Checkpoint , Deposition , MemFileStorage , TrainConfig , BufferSpace
+from ...basic import CONF 
+from ...util import Logger
 from ...data import DataBlockNorm , DataProcessor , ModuleData
 from ...func import tensor_standardize_and_weight , BigTimer
 
@@ -31,12 +32,11 @@ class DataModule(BaseDataModule):
         '''
         self.config  : TrainConfig = TrainConfig.load() if config is None else config
         self.use_data : Literal['fit','predict','both'] = use_data
-        self.device  = Device()
-        self.storage = Storage(self.config.mem_storage)
+        self.storage = MemFileStorage(self.config.mem_storage)
         self.buffer  = BufferSpace(self.device)
 
     def load_data(self):
-        self.datas = ModuleData.load(self.data_type_list, self.config.model_data_labels, 
+        self.datas = ModuleData.load(self.data_type_list, self.config.model_labels, 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision)
         self.config.update_data_param(self.datas.x)
@@ -62,7 +62,7 @@ class DataModule(BaseDataModule):
     @property
     def data_type_list(self):
         '''get data type list (abbreviation)'''
-        return [ModuleData.abbr(data_type) for data_type in self.config.model_data_types.split('+')]
+        return [ModuleData.abbr(data_type) for data_type in self.config.model_data_types]
     
     @staticmethod
     def prepare_data(data_types : Optional[list[str]] = None):
@@ -201,10 +201,9 @@ class TrainerModule(BaseTrainer):
     '''run through the whole process of training'''
     def init_config(self , base_path = None , **kwargs) -> None:
         self.config : TrainConfig = TrainConfig.load(base_path , do_parser = True , par_args = kwargs)
-        self.stage_queue = self.config.stage_queue
+
     def init_utilities(self , **kwargs) -> None: 
         self.logger     = Logger()
-        self.device     : Device = Device()
         self.checkpoint : Checkpoint = Checkpoint(self.config)
         self.deposition : Deposition = Deposition(self.config)
         self.metrics    : Metrics = Metrics(self.config)
@@ -214,7 +213,7 @@ class TrainerModule(BaseTrainer):
     @property
     def model_param(self): return self.config.Model.params[self.model_num]
     @property
-    def model_types(self): return self.config.model_types
+    def model_types(self): return self.config.model_submodels
     @property
     def if_transfer(self): return self.config.train_trainer_transfer
     @property

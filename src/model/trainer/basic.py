@@ -37,7 +37,7 @@ class DataModule(BaseDataModule):
         self.buffer  = BufferSpace(self.device)
 
     def load_data(self):
-        self.datas = ModuleData.load(self.data_type_list, self.config.model_data_labels, 
+        self.datas = ModuleData.load(self.data_type_list, self.config.model_labels, 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision)
         self.config.update_data_param(self.datas.x)
@@ -215,7 +215,7 @@ class TrainerModule(BaseTrainer):
     @property
     def model_param(self): return self.config.Model.params[self.model_num]
     @property
-    def model_types(self): return self.config.model_types
+    def model_types(self): return self.config.model_submodels
     @property
     def if_transfer(self): return self.config.train_trainer_transfer
     @property

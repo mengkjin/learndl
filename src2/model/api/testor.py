@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from torch import nn , Tensor
 
 from ..util import BatchData , BatchOutput , TrainConfig
+from ..data_module import DataModule
 from ..ensemble import ModelEnsembler
-from ..trainer import NetDataModule
 from ..util import Metrics
 
 @dataclass
@@ -11,14 +11,14 @@ class ModelTestor:
     '''Check if a newly defined model can be forward correctly'''
     config      : TrainConfig
     net         : nn.Module
-    data        : NetDataModule
+    data        : DataModule
     batch_data  : BatchData
     metrics     : Metrics
 
     @classmethod
     def new(cls , module = 'tra_lstm' , model_data_type = 'day'):
         config = TrainConfig.load(override = {'model_module' : module , 'model_data_type' : model_data_type} , makedir = False)
-        data = NetDataModule(config , 'predict').load_data()
+        data = DataModule(config , 'predict').load_data()
         data.setup('predict' , config.model_param[0] , data.model_date_list[0])   
         
         batch_data = data.predict_dataloader()[0]

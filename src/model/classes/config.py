@@ -72,7 +72,7 @@ class TrainParam:
     def check_validity(self):
         assert THIS_IS_SERVER or self.short_test , f'must be at server or short_test'
 
-        if 'best' not in self.model_types: self.model_types.insert(0 , 'best')
+        if 'best' not in self.model_submodels: self.model_submodels.insert(0 , 'best')
 
         nn_category = get_nn_category(self.model_module)
         nn_datatype = get_nn_datatype(self.model_module)
@@ -81,8 +81,8 @@ class TrainParam:
         if nn_category == 'vae': assert self.train_sample_method == 'sequential'    , self.train_sample_method
 
         if nn_datatype:              self.Param['model.data.types'] = nn_datatype
-        if self.module_type != 'nn': self.Param['model.types'] = ['best']
-        if 'best' not in self.model_types: self.model_types.insert(0 , 'best')
+        if self.module_type != 'nn': self.Param['model.submodels'] = ['best']
+        if 'best' not in self.model_submodels: self.model_submodels.insert(0 , 'best')
         return self
     
     def generate_model_param(self , update_inplace = True , **kwargs):
@@ -162,17 +162,19 @@ class TrainParam:
     @property
     def model_rslt_path(self): return self.model_base_path.rslt()
     @property
-    def model_types(self) -> list: return self.Param['model.types']
+    def model_submodels(self) -> list: return self.Param['model.submodels']
     @property
     def model_module(self): return str(self.Param['model.module']).lower()
     @property
+    def model_input_type(self) -> Literal['data' , 'hidden']: return self.Param['model.input_type']
+    @property
+    def model_labels(self) -> list[str]: return self.Param['model.labels']
+    @property
     def model_data_types(self): return str(self.Param['model.data.types'])
     @property
-    def model_data_labels(self) -> list[str]: return self.Param['model.data.labels']
-    @property
-    def model_data_hiddens(self) -> list[str]: return self.Param['model.data.hiddens']
-    @property
     def model_data_prenorm(self) -> dict[str,Any]: return self.Param['model.data.prenorm']
+    @property
+    def model_hidden_types(self) -> list[str]: return self.Param['model.hidden.types']
     @property
     def model_train_window(self): return int(self.Param['model.train_window'])
     @property

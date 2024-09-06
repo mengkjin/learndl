@@ -498,7 +498,7 @@ class ModuleData:
             assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
 
             data = {'x' : x , 'y' : y , 'norms' : norms , 'secid' : secid , 'date' : date}
-            if not predict and save_upon_loading: 
+            if not predict and save_upon_loading and data_type_list: 
                 torch.save(data , dataset_path , pickle_protocol = 4)
             data = cls(**data)
 

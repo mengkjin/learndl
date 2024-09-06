@@ -51,7 +51,7 @@ class BasicBoosterModel(ABC):
         return self
 
     @abstractmethod
-    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None):
+    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , **kwargs):
         if train is None: train = self.data['train']
         if valid is None: valid = self.data['valid']
         return self
