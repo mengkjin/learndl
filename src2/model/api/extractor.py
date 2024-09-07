@@ -8,7 +8,6 @@ from typing import Any , Literal , Optional
 
 from ..util import BatchOutput , Deposition , TrainConfig
 from ..data_module import DataModule
-from ..ensemble import ModelEnsembler
 from ...basic import RegModel , PATH
 
 class HiddenExtractor:

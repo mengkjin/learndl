@@ -3,13 +3,12 @@ import pandas as pd
 from matplotlib.figure import Figure
 from typing import Any , Literal
 
-from .util import display
-from .util.record import PredRecorder
+from ..util import PredRecorder
 from ..util.classes import BaseCallBack
 from ...factor.perf.api import PerfManager
 from ...factor.fmp.api import FmpManager
 from ...factor.perf.stat import calc_grp_perf
-from ...func import dfs_to_excel , figs_to_pdf
+from ... import func as FUNC
 
 PRED_RECORD = PredRecorder()
 
@@ -56,10 +55,10 @@ class DetailedAlphaAnalysis(BaseCallBack):
             df = rslts['fmp_prefix'].copy()
             for col in ['pf','bm','excess','annualized','mdd','te']:  df[col] = df[col].map(lambda x:f'{x:.2%}')
             for col in ['ir','calmar','turnover']:  df[col] = df[col].map(lambda x:f'{x:.3f}')
-            display.data_frame(df)
+            FUNC.display.data_frame(df)
 
-        dfs_to_excel(rslts , self.path_data)
-        figs_to_pdf(figs , self.path_plot)
+        FUNC.dfs_to_excel(rslts , self.path_data)
+        FUNC.figs_to_pdf(figs , self.path_plot)
         
         print(f'Analytic datas are saved to {self.path_data}')
         print(f'Analytic plots are saved to {self.path_plot}')
@@ -92,8 +91,7 @@ class GroupReturnAnalysis(BaseCallBack):
             
             rslt[bm] = grp
 
-        dfs_to_excel(rslt , self.path_grp)
+        FUNC.dfs_to_excel(rslt , self.path_grp)
         grp : pd.DataFrame = rslt['market']
         grp.index.names = [col.replace('model_','') for col in grp.index.names]
-        display.data_frame(grp)
-        print(f'Grouped Return Results are saved to {self.path_grp}')
+        FUNC.display.data_frame(grp , text_after=f'Grouped Return Results are saved to {self.path_grp}')

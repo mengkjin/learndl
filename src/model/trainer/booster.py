@@ -44,9 +44,12 @@ class BoosterDataModule(DataModule):
                     assert all(yindex1 == yindex1[0]) , yindex1
                     b_x = b_x.reshape(len(self.y_secid),1,-1)
 
+                    i0 , i1 , yindex1 = b_i[:,0] , b_i[:,1] , match_values(b_i[:,1] , index1)
+
                     bb_x.append(b_x)
                     bb_y.append(b_y)
                     bb_d.append(self.y_date[index1[yindex1[0]]])
+
                 bb_x = torch.concat(bb_x , dim = 1)
                 bb_y = torch.concat(bb_y , dim = 1)
                 bb_d = np.array(bb_d)

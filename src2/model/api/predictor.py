@@ -7,7 +7,6 @@ from typing import Any , ClassVar , Optional
 
 from ..util import BatchOutput , Deposition , TrainConfig
 from ..data_module import DataModule
-from ..ensemble import ModelEnsembler
 from ...basic import (RegModel , PATH , CONF , THIS_IS_SERVER , 
                       REG_MODELS , FACTOR_DESTINATION_LAPTOP , FACTOR_DESTINATION_SERVER)
 from ...data import GetData

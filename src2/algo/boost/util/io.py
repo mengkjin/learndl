@@ -59,7 +59,6 @@ class BoosterInput:
     weight_param : dict[str,Any] = field(default_factory=dict)
     
     def __post_init__(self):
-        if self.y is not None: self.finite = self.y.isfinite()
         self.update_feature()
         self.weight_method = BoosterWeightMethod(**self.weight_param)
         self.use_feature = self.feature
@@ -74,6 +73,22 @@ class BoosterInput:
     @property
     def complete(self):
         return self.y is not None and self.secid is not None and self.date is not None and self.feature is not None
+    @property
+    def finite(self):
+        if self.y is not None:
+            return self.y.isfinite()
+        else:
+            return torch.ones_like(self.x[:,:,0] , dtype=torch.bool)
+        
+    def choose_finite(self , obj : torch.Tensor | np.ndarray | None) -> Any:
+        if obj is None: return obj
+        if self.y is None: 
+            if obj.ndim > 1: return obj.reshape(-1 , *obj.shape[2:])
+            else: return obj
+        else:
+            finite = self.y.isfinite()
+            if obj.ndim > 1: return obj[finite]
+            else: return obj[finite.flatten()]
     
     def copy(self): return deepcopy(self)
     
@@ -89,26 +104,18 @@ class BoosterInput:
 
     def SECID(self , dropna = True): 
         secid = np.repeat(self.secid , len(self.date))
-        return secid[self.finite.flatten()] if dropna else secid
+        return self.choose_finite(secid) if dropna else secid
 
     def DATE(self , dropna = True): 
         date = np.tile(self.date , len(self.secid))
-        return date[self.finite.flatten()] if dropna else date
+        return self.choose_finite(date) if dropna else date
 
-    def X(self): return self.x[self.finite][...,self.feat_idx]
-
-    def Y(self): return self.y[self.finite] if self.y is not None else None
-
+    def X(self): return self.choose_finite(self.x[...,self.feat_idx])
+    def Y(self): return self.choose_finite(self.y)
     def W(self): 
-        if self.w is not None:
-            return self.w[self.finite]
-        elif self.y is not None:
-            return self.weight_method.calculate_weight(self.y , self.secid)[self.finite] 
-        else:
-            return None
-    
-    def XYW(self , *args):
-        return self.BoostXYW(self.X() , self.Y() , self.W())
+        w = self.weight_method.calculate_weight(self.y , self.secid) if self.w is None and self.y is not None else self.w
+        return self.choose_finite(w)
+    def XYW(self , *args): return self.BoostXYW(self.X() , self.Y() , self.W())
     
     @dataclass
     class BoostXYW:
@@ -127,7 +134,8 @@ class BoosterInput:
             new_pred = pred
         else:
             new_pred = torch.tensor(np.array(pred))
-        return BoosterOutput(new_pred , self.secid , self.date , self.finite , self.y)
+        finite = self.y.isfinite() if self.y is not None else torch.full_like(new_pred , fill_value=True)
+        return BoosterOutput(new_pred , self.secid , self.date , finite , self.y)
 
     def pred_to_dataframe(self , pred : np.ndarray | torch.Tensor):
         new_pred = pred.numpy() if isinstance(pred , torch.Tensor) else pred 
@@ -145,7 +153,7 @@ class BoosterInput:
     def nfeat(self): return len(self.feature) if self.use_feature is None else len(self.use_feature)
 
     def to_dataframe(self):
-        df = pd.DataFrame(self.X().numpy() , columns = self.feature)
+        df = pd.DataFrame(self.X() , columns = self.feature)
         df['secid'] = self.SECID()
         df['date']  = self.DATE()
         df['label'] = self.Y()
@@ -196,7 +204,6 @@ class BoosterInput:
         if secid is None:  secid = np.arange(x.shape[0])
         if date  is None : date  = np.arange(x.shape[1])
         if feature is None : feature = np.array([f'F.{i}' for i in range(x.shape[-1])])
-
         return cls(x , y , w , secid , date , feature , weight_param)
     
     @classmethod

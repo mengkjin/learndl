@@ -22,6 +22,7 @@ class NNPredictor(BasePredictorModel):
             model_param = self.model_param
             device = self.device
         self.net = self.get_net(model_module , model_param, device = device)
+        self.net.eval()
         for submodel in self.submodels.values(): submodel.reset()
         return self
     
@@ -58,67 +59,40 @@ class NNPredictor(BasePredictorModel):
         else:
             model_file = self.trainer.deposition.load_model(self.trainer.model_date , self.trainer.model_num , model_type)
             self.net.load_state_dict(model_file['state_dict'])
-            self.net.eval()
-
-        return self
     
     def forward(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
         if len(batch_data) == 0: return None
         x = batch_data.x if isinstance(batch_data , BatchData) else batch_data
         return self.net(x , *args , **kwargs)
-    
-    '''
+
     def fit(self):
-        trainer = self.trainer
-        while not trainer.status.end_of_loop:
-            trainer.on_fit_epoch_start()
-            trainer.on_train_epoch_start()
-            for _ in trainer.iter_train_dataloader():
+        for _ in self.trainer.iter_fit_epoches():
+            self.trainer.on_train_epoch_start()
+            for _ in self.trainer.iter_train_dataloader():
                 self.batch_forward()
                 self.batch_metrics()
                 self.batch_backward()
-            trainer.on_train_epoch_end()
+            self.trainer.on_train_epoch_end()
 
-            trainer.on_validation_epoch_start()
-            for _ in trainer.iter_val_dataloader():
+            self.trainer.on_validation_epoch_start()
+            for _ in self.trainer.iter_val_dataloader():
                 self.batch_forward()
                 self.batch_metrics()
-            trainer.on_validation_epoch_end()
-
-            trainer.on_before_fit_epoch_end()
-            trainer.on_fit_epoch_end()
-    '''
-
-    def fit(self):
-        trainer = self.trainer
-        for _ in trainer.iter_fit_epoches():
-            trainer.on_train_epoch_start()
-            for _ in trainer.iter_train_dataloader():
-                self.batch_forward()
-                self.batch_metrics()
-                self.batch_backward()
-            trainer.on_train_epoch_end()
-
-            trainer.on_validation_epoch_start()
-            for _ in trainer.iter_val_dataloader():
-                self.batch_forward()
-                self.batch_metrics()
-            trainer.on_validation_epoch_end()
+            self.trainer.on_validation_epoch_end()
 
     def test(self):
         '''test the model inside'''
-        trainer = self.trainer
-        for _ in trainer.iter_model_types():
-            for _ in trainer.iter_test_dataloader():
-                trainer.assert_equity(trainer.batch_dates[self.batch_idx] , self.data.y_date[self.batch_data.i[0,1]]) 
+        for _ in self.trainer.iter_model_types():
+            self.load_model(False , self.model_type)
+            for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 # before this is warmup stage , only forward
-                if trainer.batch_idx >= trainer.batch_warm_up:
-                    self.batch_metrics()
+                self.batch_metrics()
 
     def batch_metrics(self) -> None:
         if isinstance(self.batch_data , BatchData) and self.batch_data.is_empty: return
+        if self.status.dataset == 'test' and self.trainer.batch_idx < self.trainer.batch_warm_up: return
         '''if net has multiloss_params , get it and pass to calculate_from_tensor'''
         self.metrics.calculate(self.status.dataset , **self.metric_kwargs()).collect_batch()
 
@@ -128,9 +102,6 @@ class NNPredictor(BasePredictorModel):
         self.trainer.on_before_backward()
         self.optimizer.backward(self.metrics.output)
         self.trainer.on_after_backward()
-        
-    def assess(self , epoch : int , metrics : Metrics): 
-        for submodel in self.submodels.values():  submodel.assess(self.net , epoch , metrics)
 
     def collect(self , submodel = 'best' , *args):
         net = self.submodels[submodel].collect(self.trainer , *args)
@@ -153,16 +124,10 @@ class NNPredictor(BasePredictorModel):
         set_grad_enabled(False)
     
     def on_validation_epoch_end(self):
-        self.assess(self.status.epoch , self.metrics)
-    
+        for submodel in self.submodels.values():  submodel.assess(self.net , self.status.epoch , self.metrics)
+
     def on_test_model_start(self):
         set_grad_enabled(False)
-
-    def on_test_model_type_start(self):
-        assert self.trainer.deposition.exists(self.trainer.model_date , self.trainer.model_num , self.trainer.model_type) , \
-            (self.trainer.model_date , self.trainer.model_num , self.trainer.model_type)
-        self.load_model(False , self.trainer.model_type)
-        self.net.eval()
 
     def on_before_save_model(self):
         self.net = self.net.cpu()

@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from ..util.classes import BaseCallBack
 from ..model_module.nn_module.optimizer import Optimizer
-from ...func import list_converge
+from ... import func as FUNC
 
 class EarlyStoppage(BaseCallBack):
     '''stop fitting when validation score cease to improve'''
@@ -31,7 +31,7 @@ class ValidationConverge(BaseCallBack):
         self.patience = patience
         self.tolerance = eps
     def on_validation_epoch_end(self):
-        if list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance):
+        if FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance):
             self.status.end_of_loop.add_status('Valid Cvg' , self.status.epoch - self.patience + 1)
 
 class TrainConverge(BaseCallBack):
@@ -42,7 +42,7 @@ class TrainConverge(BaseCallBack):
         self.patience = patience
         self.tolerance = eps
     def on_validation_epoch_end(self):
-        if list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance):
+        if FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance):
             self.status.end_of_loop.add_status('Train Cvg' , self.status.epoch - self.patience + 1)
 
 class FitConverge(BaseCallBack):
@@ -53,8 +53,8 @@ class FitConverge(BaseCallBack):
         self.patience = patience
         self.tolerance = eps
     def on_validation_epoch_end(self):
-        if (list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance) and 
-            list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance)):
+        if (FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance) and 
+            FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance)):
             self.status.end_of_loop.add_status('T & V Cvg' , self.status.epoch - self.patience + 1)
 
 class EarlyExitRetrain(BaseCallBack):

@@ -5,13 +5,11 @@ import pandas as pd
 from dataclasses import asdict
 from typing import Any , ClassVar
 
-from .util import display
 from ..util.classes import BaseCallBack
 from ..data_module import BatchDataLoader
 from ..model_module.nn_module.optimizer import Optimizer
 from ...basic import PATH
-from ...func import dfs_to_excel
-
+from ... import func as FUNC
 class CallbackTimer(BaseCallBack):
     '''record time cost of callback hooks'''
     WITH_CB = True
@@ -31,9 +29,9 @@ class CallbackTimer(BaseCallBack):
     def on_summarize_model(self):
         if self.recording: 
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']
-            values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_times.items()]
-            print('Callback Time costs')
-            display.data_frame(pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(5))
+            values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_times.items() if v]
+            df = pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(5)
+            FUNC.display.data_frame(df , text_ahead='Callback Time costs')
 
 class BatchDisplay(BaseCallBack):
     '''display batch progress bar'''
@@ -241,11 +239,9 @@ class StatusDisplay(BaseCallBack):
             df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
             rslt[f'{model_num}'] = df
 
-        
         df = self.test_df_model.round(4)
         df.index = df.index.set_names(None)
         df.columns = pd.MultiIndex.from_tuples([(f'{self.config.model_module}.{num}' , type) for num,type in df.columns])
-        display.data_frame(df)
-        dfs_to_excel(rslt , self.path_test)
-        print(f'Test results are saved to {self.path_test}')
+        FUNC.dfs_to_excel(rslt , self.path_test)
+        FUNC.display.data_frame(df , text_after = f'Test results are saved to {self.path_test}')
         self.test_summarized = True

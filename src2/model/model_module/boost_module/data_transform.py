@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 from torch import Tensor , nn
-from typing import Any , Iterator , Literal , Optional
+from typing import Any , Iterator , Optional
 
 from ...util import BatchData , BatchOutput
 from ....algo.boost import BoosterInput
@@ -51,7 +51,6 @@ def batch_data_to_boost_input(batch_data : BatchData ,
 
 def batch_loader_concat(batch_loader : Iterator[BatchData] , nn_to_calculate_hidden : Optional[nn.Module] = None):
     xx , yy , ww , ii , vv = [] , [] , [] , [] , []
-
     for batch_data in batch_loader:
         if nn_to_calculate_hidden is not None:
             hidden : Tensor = BatchOutput(nn_to_calculate_hidden(batch_data.x)).other['hidden']
@@ -65,24 +64,22 @@ def batch_loader_concat(batch_loader : Iterator[BatchData] , nn_to_calculate_hid
         yy.append(batch_data.y)
         ii.append(batch_data.i)
         vv.append(batch_data.valid)
+    return BatchData(comp_cat(xx) , comp_cat(yy) , comp_cat(ww) , comp_cat(ii) , comp_cat(vv))
 
-    assert all([w is None for w in ww]) or all([w is not None for w in ww]) , ww
-    assert all([isinstance(x , Tensor) for x in xx]) or all([not isinstance(x , Tensor) for x in xx]) , xx
-
-    if isinstance(xx[0] , Tensor):
-        xx = torch.vstack(xx)
+def comp_cat(comp_list : list) -> Any:
+    assert all([isinstance(x , type(comp_list[0])) for x in comp_list]) , comp_list
+    if comp_list[0] is None:
+        return None
+    elif isinstance(comp_list[0] , Tensor):
+        return torch.concat(comp_list)
     else:
-        assert all([len(x) == len(xx[0]) for x in xx]) , [len(x) for x in xx]
-        xx = tuple([torch.vstack([x[i] for x in xx]) for i in range(len(xx[0]))])
-    yy = torch.vstack(yy)
-    ww = None if ww[0] is None else torch.vstack(ww)
-    ii = torch.vstack(ii)
-    vv = torch.vstack(vv)
-    return BatchData(xx , yy , ww , ii , vv)
+        assert all([len(x) == len(comp_list[0]) for x in comp_list]) , comp_list
+        return type(comp_list[0])([torch.concat([x[i] for x in comp_list]) for i in range(len(comp_list[0]))])
+
 
 def batch_loader_to_boost_input(batch_loader : Iterator[BatchData] , 
                                 secid : Optional[np.ndarray] = None ,
                                 date : Optional[np.ndarray] = None , 
                                 nn_to_calculate_hidden : Optional[nn.Module] = None):
     large_batch = batch_loader_concat(batch_loader , nn_to_calculate_hidden)
-    return batch_data_to_boost_input(large_batch)
+    return batch_data_to_boost_input(large_batch , secid , date)

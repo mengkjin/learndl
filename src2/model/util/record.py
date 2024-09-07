@@ -1,8 +1,6 @@
 import pandas as pd
 
-from ...util import BatchData 
-from ...util.classes import BaseTrainer
-from ....algo.boost import BoosterInput
+from .classes import BaseTrainer
 
 class PredRecorder:
     def __init__(self) -> None:
@@ -20,11 +18,9 @@ class PredRecorder:
         if trainer.batch_idx < trainer.batch_warm_up: return
         
         which_output = trainer.model_param.get('which_output' , 0)
-        if isinstance(trainer.batch_data , BatchData):
-            ij = trainer.batch_data.i.cpu()
-            secid , date = trainer.data.y_secid[ij[:,0]] , trainer.data.y_date[ij[:,1]]
-        elif isinstance(trainer.batch_data , BoosterInput):
-            secid , date = trainer.batch_data.SECID(False) , trainer.batch_data.DATE(False)
+        ij = trainer.batch_data.i.cpu()
+        secid , date = trainer.data.y_secid[ij[:,0]] , trainer.data.y_date[ij[:,1]]
+        
         pred = trainer.batch_output.pred_df(secid , date).dropna()
         pred = pred.loc[pred['date'].isin(self.dates),:]
         if len(pred) == 0: return

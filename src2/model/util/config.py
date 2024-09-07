@@ -91,7 +91,7 @@ class TrainParam:
         return self
     
     def generate_model_param(self , update_inplace = True , **kwargs):
-        module = self.model_module if self.module_type == 'nn' else self.booster_type
+        module = self.model_module if self.module_type == 'nn' else self.model_booster_type
         assert isinstance(module , str) , (self.model_module , module)
         model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , **kwargs).expand()
         if update_inplace: self.update_model_param(model_param)
@@ -138,16 +138,6 @@ class TrainParam:
         return all([model_path.conf(cfg_key).exists() for cfg_key in TRAIN_CONFIG_LIST])
 
     @property
-    def booster_type(self):
-        if self.model_module in ['booster' , 'hidden_aggregator', ]:
-            assert self.Param['model.booster_type'] in VALID_BOOSTERS , self.Param['model.booster_type']
-            return self.Param['model.booster_type']
-        elif self.model_module in VALID_BOOSTERS:
-            return self.model_module
-        else:
-            return 'not_a_booster'
-
-    @property
     def short_test(self): return bool(self.Param['env.short_test'])
     @property
     def verbosity(self): return int(self.Param['env.verbosity'])
@@ -190,6 +180,15 @@ class TrainParam:
     def model_interval(self): return int(self.Param['model.interval'])
     @property
     def model_booster_head(self): return self.Param['model.booster_head']
+    @property
+    def model_booster_type(self):
+        if self.model_module in ['booster' , 'hidden_aggregator', ]:
+            assert self.Param['model.booster_type'] in VALID_BOOSTERS , self.Param['model.booster_type']
+            return self.Param['model.booster_type']
+        elif self.model_module in VALID_BOOSTERS:
+            return self.model_module
+        else:
+            return 'not_a_booster'
 
     @property
     def train_data_step(self): return int(self.Param['train.data_step'])

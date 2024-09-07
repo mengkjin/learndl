@@ -41,7 +41,8 @@ class GeneralBooster:
         self.booster : BasicBoosterModel = choose_booster_model(booster_type)(self.train_param , self.weight_param , cuda , seed , **kwargs)
         self.import_data(train = train , valid = valid , test = test)
 
-    def __call__(self, x : torch.Tensor): return self.forward(x)
+    def __call__(self, x : torch.Tensor) -> torch.Tensor: 
+        return self.forward(x)
 
     def import_data(self , train : Any = None , valid : Any = None , test  : Any = None):
         self.booster.import_data(train , valid , test)

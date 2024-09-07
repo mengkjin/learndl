@@ -16,7 +16,7 @@ from .storage import Checkpoint , Deposition , MemFileStorage
 from ...func import BigTimer
 from ...util import Logger
 
-class ModelStreamLine:
+class ModelStreamLine(ABC):
     def on_configure_model(self): ...
     def on_summarize_model(self): ...
     def on_data_end(self): ... 
@@ -52,7 +52,7 @@ class ModelStreamLine:
 def possible_hooks() -> list[str]: 
     return [x for x in dir(ModelStreamLine) if not x.startswith('_')]
 
-class ModelStreamLineWithTrainer(ABC , ModelStreamLine):
+class ModelStreamLineWithTrainer(ModelStreamLine):
     def bound_with_trainer(self , trainer): 
         self.trainer : BaseTrainer | Any = trainer
 
@@ -76,6 +76,12 @@ class ModelStreamLineWithTrainer(ABC , ModelStreamLine):
     def batch_idx(self): return self.trainer.batch_idx
     @property
     def verbosity(self): return self.config.verbosity
+    @property
+    def model_date(self): return self.trainer.model_date
+    @property
+    def model_num(self): return self.trainer.model_num
+    @property
+    def model_type(self): return self.trainer.model_type
 
 
 @dataclass
@@ -206,7 +212,7 @@ class BaseDataModule(ABC):
     @property
     def device(self): return self.config.device
 
-class BaseTrainer(ABC , ModelStreamLine):
+class BaseTrainer(ModelStreamLine):
     '''run through the whole process of training'''
     @final
     def __init__(self , base_path = None , **kwargs):
@@ -254,14 +260,6 @@ class BaseTrainer(ABC , ModelStreamLine):
     def init_data(self , **kwargs): 
         '''initialized data_module'''
         self.data : BaseDataModule
-
-    @abstractmethod
-    def save_model(self) -> None: 
-        '''save self.net to somewhere'''
-
-    @abstractmethod
-    def stack_model(self) -> None: 
-        '''temporaly save self.net to somewhere'''
 
     @property
     def device(self): return self.config.device
@@ -372,6 +370,18 @@ class BaseTrainer(ABC , ModelStreamLine):
             yield self.batch_idx , self.batch_data
             self.on_test_batch_end()
 
+    def stack_model(self):
+        '''temporaly save self to somewhere'''
+        self.on_before_save_model()
+        for model_type in self.model_types:
+            model_dict = self.model.collect(model_type)
+            self.deposition.stack_model(model_dict , self.model_date , self.model_num , model_type) 
+
+    def save_model(self):
+        '''save self to somewhere'''
+        if self.metrics.better_attempt(self.status.best_attempt_metric): self.stack_model()
+        [self.deposition.dump_model(self.model_date , self.model_num , model_type) for model_type in self.model_types]
+
     def on_configure_model(self):  
         self.config.set_config_environment()
 
@@ -408,9 +418,14 @@ class BaseTrainer(ABC , ModelStreamLine):
     
     def on_test_model_type_start(self):
         self.metrics.new_epoch(self.status)
+        assert self.deposition.exists(self.model_date , self.model_num , self.model_type) , \
+            (self.model_date , self.model_num , self.model_type)
         
     def on_test_model_type_end(self): 
         self.metrics.collect_epoch()
+
+    def on_test_batch_start(self):
+        self.assert_equity(self.batch_dates[self.batch_idx] , self.data.y_date[self.batch_data.i[0,1]]) 
 
     @property
     def penalty_kwargs(self): return {}
@@ -466,16 +481,21 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     def get_multiloss_params(self): return {}
 
     def reset(self):
-        self.trainer = None
-        self.raw_config = None
+        self.trainer , self.raw_config = None , None
+        return self
 
     def bound_with_config(self , config : TrainConfig):
         assert self.trainer is None , 'Cannot bound with config if assigned trainer first'
         self.raw_config = config
+        return self
 
     def bound_with_trainer(self , trainer : BaseTrainer):
         assert self.raw_config is None , 'Cannot bound with trainer if assigned raw_config first'
         self.trainer = trainer
+        return self
+
+    def prepare_training(self , trainer : BaseTrainer , *args , **kwargs):  
+        return self.reset().bound_with_trainer(trainer)
 
     @classmethod
     def create_from_trainer(cls , trainer : BaseTrainer , **kwargs):
@@ -495,29 +515,20 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         '''call when fitting/testing new model'''
         return self
     @abstractmethod
-    def load_model(self , training : bool , *args , **kwargs): 
+    def load_model(self , training : bool , *args , **kwargs) -> None: 
         '''call when fitting/testing new model'''
-        return self
     @abstractmethod
     def forward(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
-    def prepare_training(self , trainer : BaseTrainer):  
-        self.reset()
-        self.bound_with_trainer(trainer)
-        return self
     @abstractmethod
-    def fit(self):
+    def fit(self) -> None:
         '''fit the model inside'''
-        return self
     @abstractmethod
-    def test(self) -> Any:
+    def test(self) -> None:
         '''test the model inside'''
     @abstractmethod
-    def assess(self , epoch : int , *args , **kwargs) -> Any: 
-        '''update by assessing batch outout, called on_validation_epoch_end'''
-    @abstractmethod
     def collect(self , submodel = 'best' , *args) -> ModelDict: 
-        '''update by assessing batch outout, called before stacking model'''
+        '''collect model params, called before stacking model'''
     def metric_kwargs(self):
         pred   = self.batch_output.pred
         label  = self.batch_data.y

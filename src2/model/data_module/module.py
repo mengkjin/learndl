@@ -92,9 +92,12 @@ class DataModule(BaseDataModule):
     def setup_process_dataloader(self , x , y):
         # standardized y with step == 1
         self.y = self.standardize_y(y , None , None , no_weight = True)[0]
-        valid = self.full_valid_sample(x , self.y , self.step_idx) if self.stage == 'fit' else None
-        # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
+        if self.stage == 'fit' and self.config.module_type == 'nn':
+            valid = self.full_valid_sample(x , self.y , self.step_idx)
+        else: valid = None
         y , w = self.standardize_y(self.y , valid , self.step_idx)
+        
+        # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
         self.y[:,self.step_idx] = y[:]
         self.static_dataloader(x , y , w , valid)
 

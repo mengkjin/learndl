@@ -18,7 +18,7 @@ class BoostPredictor(BasePredictorModel):
 
     def new_model(self , model_module : str | Any = None , model_param = {} , device = None):
         if model_module is None:
-            model_module = self.config.booster_type 
+            model_module = self.config.model_booster_type 
             model_param = self.model_param
             
         self.booster = self.get_booster(model_module , model_param, cuda=self.device.device.type == 'cuda' , seed = self.config.random_seed)
@@ -34,58 +34,48 @@ class BoostPredictor(BasePredictorModel):
         else:
             model_file = self.trainer.deposition.load_model(self.trainer.model_date , self.trainer.model_num , model_type)
             self.booster.load_dict(model_file['booster_dict'])
-        return self
     
-    def forward(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
+    def forward(self , batch_data : BatchData | Tensor , *args , **kwargs): 
         '''model object that can be called to forward'''
         if len(batch_data) == 0: return None
         x = batch_data_flatten_x(batch_data) if isinstance(batch_data , BatchData) else batch_data
-        return self.booster(x , *args , **kwargs)
+        pred = self.booster(x , *args , **kwargs)
+        return pred
     
     def fit(self):
-        trainer = self.trainer
+        self.load_model(True)
         train_batch = batch_loader_concat(self.data.train_dataloader())
         valid_batch = batch_loader_concat(self.data.val_dataloader())
         self.booster.import_data(train = batch_data_to_boost_input(train_batch , self.data.y_secid , self.data.y_date) , 
                                  valid = batch_data_to_boost_input(valid_batch , self.data.y_secid , self.data.y_date))
         
-        trainer.on_train_epoch_start()
-        for _ in trainer.iter_train_dataloader(given_loader=[train_batch]):
+        self.trainer.on_train_epoch_start()
+        for _ in self.trainer.iter_train_dataloader(given_loader=[train_batch]):
             self.booster.fit()
             self.batch_forward()
             self.batch_metrics()
-        trainer.on_train_epoch_end()
+        self.trainer.on_train_epoch_end()
 
-        trainer.on_validation_epoch_start()
-        for _ in trainer.iter_val_dataloader(given_loader=[valid_batch]):
+        self.trainer.on_validation_epoch_start()
+        for _ in self.trainer.iter_val_dataloader(given_loader=[valid_batch]):
             self.batch_forward()
             self.batch_metrics()
-        trainer.on_validation_epoch_end()
+        self.trainer.on_validation_epoch_end()
 
     def test(self):
-        trainer = self.trainer
-        assert self.config.model_submodels == ['best'] , self.config.model_submodels
-        for _ in trainer.iter_model_types():
-            for _ in trainer.iter_test_dataloader():
-                if trainer.batch_idx < trainer.batch_warm_up: continue
+        for _ in self.trainer.iter_model_types():
+            self.load_model(False , self.model_type)
+            for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()
 
     def batch_metrics(self) -> None:
         if isinstance(self.batch_data , BatchData) and self.batch_data.is_empty: return
+        if self.status.dataset == 'test' and self.trainer.batch_idx < self.trainer.batch_warm_up: return
         '''if net has multiloss_params , get it and pass to calculate_from_tensor'''
         self.metrics.calculate(self.status.dataset , **self.metric_kwargs()).collect_batch()
-        
-    def assess(self , *args , **kwargs): ...
 
     def collect(self , submodel = 'best' , *args):
         return ModelDict(booster_dict = self.booster.to_dict())
     
     # additional actions at hook
-    def on_fit_model_start(self):
-        self.load_model(True)
-
-    def on_test_model_type_start(self):
-        assert self.trainer.deposition.exists(self.trainer.model_date , self.trainer.model_num , self.trainer.model_type) , \
-            (self.trainer.model_date , self.trainer.model_num , self.trainer.model_type)
-        self.load_model(False , self.trainer.model_type)
