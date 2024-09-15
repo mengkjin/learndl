@@ -2,8 +2,8 @@ import torch
 
 from copy import deepcopy
 
+from ..model_module.util.optimizer import Optimizer
 from ..util.classes import BaseCallBack
-from ..model_module.nn_module.optimizer import Optimizer
 from ... import func as FUNC
 
 class EarlyStoppage(BaseCallBack):
@@ -76,7 +76,7 @@ class EarlyExitRetrain(BaseCallBack):
                 self.trainer.stack_model()
             self.metrics.new_attempt()
             self.status.new_attempt()
-            self.model.load_model(True , lr_multiplier = self.lr_multiplier[:self.status.attempt+1][-1])
+            self.model.new_model(lr_multiplier = self.lr_multiplier[:self.status.attempt+1][-1])
 
 class NanLossRetrain(BaseCallBack):
     '''retrain if fitting encounters nan loss'''
@@ -97,7 +97,7 @@ class NanLossRetrain(BaseCallBack):
 
             self.metrics.new_attempt()
             self.status.new_attempt('nanloss')
-            self.model.load_model(True)
+            self.model.new_model()
         else:
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
 

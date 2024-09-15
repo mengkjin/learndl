@@ -131,4 +131,5 @@ class Predictor:
         torch.set_grad_enabled(True)
         del data_mod
         df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
+
         return df

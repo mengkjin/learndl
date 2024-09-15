@@ -30,7 +30,7 @@ class AdaBoost(BasicBoosterModel):
         assert new_weight_param.get('cs_type') in ['ones' , None] , new_weight_param.get('cs_type')
         return new_weight_param
 
-    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silence = False):
+    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False):
         if train is None: train = self.data['train']
         if valid is None: valid = self.data['valid']
 
@@ -44,7 +44,7 @@ class AdaBoost(BasicBoosterModel):
         idx = (dset.y != 0).squeeze()
 
         self.model : StrongLearner = StrongLearner(**self.train_param)
-        self.model.fit(dset.x[idx] , dset.y[idx] , dset.w[idx] , silence = silence , feature = train_data.feature)
+        self.model.fit(dset.x[idx] , dset.y[idx] , dset.w[idx] , silent = silent , feature = train_data.feature)
         return self
     
     def predict(self , test : BoosterInput | Any = None):
@@ -91,11 +91,11 @@ class StrongLearner:
         weight = torch.exp(-y * y_pred.nan_to_num(0)) * weight
         return weight / weight.sum()
 
-    def fit(self , x : Tensor , y : Tensor , w : Tensor , silence = False , feature = None):
+    def fit(self , x : Tensor , y : Tensor , w : Tensor , silent = False , feature = None):
         for i , learner in enumerate(self.weak_learners):  
             y_pred = learner.fit(x , y , w).predict(x)
             w = self.update_weight(w , y , y_pred)
-            if not silence and i % 1 == 0: 
+            if not silent and i % 1 == 0: 
                 txt = f'Round: {i+1}, Est-Err: {learner.min_feat_loss:.4f}'
                 if feature is None: 
                     txt += f', F_idx: {learner.feat_idx}'
@@ -208,7 +208,7 @@ if __name__ == '__main__':
     for idx in range(max(windows_len , start_idx) , len(MDTs)):
         ada = AdaBoost()
         input_df = AdaBoost.df_input(factor_data , idx , windows_len)
-        ada.fit(BoosterInput.from_dataframe(input_df['train']) , silence = True)
+        ada.fit(BoosterInput.from_dataframe(input_df['train']) , silent = True)
         ic_dfs.append(ada.calc_ic(input_df['test']))
     df = pd.concat(ic_dfs)
     print(df)

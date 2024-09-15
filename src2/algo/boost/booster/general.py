@@ -47,10 +47,10 @@ class GeneralBooster:
     def import_data(self , train : Any = None , valid : Any = None , test  : Any = None):
         self.booster.import_data(train , valid , test)
 
-    def fit(self , train = None , valid = None , use_feature = None):
+    def fit(self , train = None , valid = None , use_feature = None , silent = False):
         self.import_data(train = train , valid = valid)
         self.booster.update_feature(use_feature)
-        self.booster.fit(silence = self.verbosity < 10)
+        self.booster.fit(silent = silent or self.verbosity < 10)
         return self
         
     def predict(self , test : BoosterInput | Any = None):

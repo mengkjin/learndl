@@ -52,6 +52,12 @@ class ModelDict:
     booster_dict : Optional[dict[str,Any]] = None
     aggregator_dict : Optional[dict[str,Any]] = None
 
+    def reset(self):
+        self.state_dict = None
+        self.booster_head = None
+        self.booster_dict = None
+        self.aggregator_dict = None
+
     def save(self , path : str | Path , stack = False):
         if isinstance(path , str): path = Path(path)
         path.mkdir(parents=True,exist_ok=True)

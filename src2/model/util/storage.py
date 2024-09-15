@@ -6,9 +6,9 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
-from .config import TrainConfig
 from .model_io import ModelDict , ModelFile
 from ...func.basic import Filtered
+from ...basic import ModelPath
 
 class MemFileStorage:
     '''Interface of mem or disk storage, methods'''
@@ -109,8 +109,7 @@ class StoredFileLoader:
     
 class Checkpoint(MemFileStorage):
     '''model checkpoint for epochs'''
-    def __init__(self, mem_storage: bool | TrainConfig):
-        if isinstance(mem_storage , TrainConfig): mem_storage = mem_storage.mem_storage
+    def __init__(self, mem_storage: bool):
         super().__init__(mem_storage)
         self.epoch_queue : list[list] = []
         self.join_record : list[str]  = [] 
@@ -177,9 +176,10 @@ class Checkpoint(MemFileStorage):
 
 class Deposition:
     '''model saver'''
-    def __init__(self , config : TrainConfig):
-        self.config = config
-        self.base_path = config.model_base_path
+    def __init__(self , base_path : ModelPath , model_num_list : list[int] | range = [0] , resume_training = False):
+        self.base_path = base_path
+        self.model_num_list = model_num_list
+        self.resume_training = resume_training
 
     def stack_model(self , model_dict : ModelDict , model_date , model_num , model_type = 'best'):
         model_dict.save(self.model_path(model_date , model_num , model_type) , stack = True)
@@ -205,8 +205,8 @@ class Deposition:
     
     def model_iter(self , stage , model_date_list):
         '''iter of model_date and model_num , considering resume_training'''
-        new_iter = list(itertools.product(model_date_list , self.config.model_num_list))
-        if self.config.resume_training and stage == 'fit':
+        new_iter = list(itertools.product(model_date_list , self.model_num_list))
+        if self.resume_training and stage == 'fit':
             models_trained = np.full(len(new_iter) , True , dtype = bool)
             for i , (model_date , model_num) in enumerate(new_iter):
                 if not self.exists(model_date , model_num):

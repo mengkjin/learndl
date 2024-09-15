@@ -1,11 +1,11 @@
 import torch
 from typing import Any , Optional
 from ..util.classes import BaseCallBack
+from ...algo import getter
 from ...data.process import BlockLoader
-from ...algo.nn import get_nn_category
 
-def get_nn_specific_cb(module_name : str) -> Optional[Any]:
-    nn_category = get_nn_category(module_name)
+def specific_cb(module_name : str) -> Optional[Any]:
+    nn_category = getter.nn_category(module_name)
     if module_name == 'gru_dsize':
         return SpecCB_DSize
     elif nn_category == 'vae':

@@ -1,30 +1,30 @@
-from dataclasses import dataclass
-from torch import nn , Tensor
+from torch import Tensor
 
-from ..util import BatchData , BatchOutput , TrainConfig
+from ..util import TrainConfig
 from ..data_module import DataModule
-from ..util import Metrics
+from ..model_module import module_selector
 
-@dataclass
 class ModelTestor:
     '''Check if a newly defined model can be forward correctly'''
-    config      : TrainConfig
-    net         : nn.Module
-    data        : DataModule
-    batch_data  : BatchData
-    metrics     : Metrics
+    def __init__(self , config : TrainConfig) -> None:
+        self.config = config
+        self.data = DataModule(config , 'predict').load_data()
+        self.data.setup('predict' , config.model_param[0] , self.data.model_date_list[0])   
+        
+        self.batch_data = self.data.predict_dataloader()[0]
+        self.model = module_selector(self.config)
+        self.metrics = self.config.metrics.new_model(self.config.model_param[0])
 
     @classmethod
-    def new(cls , module = 'tra_lstm' , model_data_type = 'day'):
-        config = TrainConfig.load(override = {'model_module' : module , 'model_data_type' : model_data_type} , makedir = False)
-        data = DataModule(config , 'predict').load_data()
-        data.setup('predict' , config.model_param[0] , data.model_date_list[0])   
-        
-        batch_data = data.predict_dataloader()[0]
-
-        net = ModelEnsembler.get_net(module , config.model_param[0])
-        metrics = Metrics(config).new_model(config.model_param[0])
-        return cls(config , net , data , batch_data , metrics)
+    def new(cls , module = 'tra_lstm' , data_types = 'day'):
+        override_cfg = {
+            'model.module' : module , 
+            'model.input_type' : 'data' ,
+            'model.data.types' : data_types , 
+            'model.booster_head' : False
+        }
+        config = TrainConfig.load(override = override_cfg , makedir = False)
+        return cls(config)
 
     def try_forward(self) -> None:
         '''as name says, try to forward'''
@@ -32,15 +32,14 @@ class ModelTestor:
             print(f'x shape is {self.batch_data.x.shape}')
         else:
             print(f'multiple x of {len(self.batch_data.x)}')
-        getattr(self.net , 'dynamic_data_assign' , lambda *x:None)(self)
-        self.net_output = BatchOutput(self.net(self.batch_data.x))
-        print(f'y shape is {self.net_output.pred.shape}')
+        self.output = self.model(self.batch_data.x)
+        print(f'y shape is {self.output.pred.shape}')
         print(f'Test Forward Success')
 
     def try_metrics(self) -> None:
         '''as name says, try to calculate metrics'''
         if not hasattr(self , 'outputs'): self.try_forward()
-        metrics = self.metrics.calculate('train' , self.batch_data , self.net_output , self.net)
+        metrics = self.metrics.calculate('train' , self.batch_data.y , self.output.pred , self.batch_data.w)
         print('metrics : ' , metrics)
         print(f'Test Metrics Success')
     

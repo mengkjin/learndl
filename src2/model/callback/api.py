@@ -4,7 +4,6 @@ from . import display, train , test , nnspecific
 from ..util.classes import BaseCallBack , BaseTrainer 
 
 SEARCH_MODS = [train , display , test]
-BOOSTER_AVAILABLE_CALLBACKS = ['StatusDisplay' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis']
 COMPULSARY_CALLBACKS = ['StatusDisplay' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis']
 
 class CallBackManager(BaseCallBack):
@@ -20,13 +19,14 @@ class CallBackManager(BaseCallBack):
     @classmethod
     def setup(cls , trainer : BaseTrainer):
         cb_configs = trainer.config.callbacks
-        if trainer.config.module_type != 'nn': 
-            # if the model is booster (lgbm , xgboost , catboost ...) , only use StatusDisplay and 
-            cb_configs = {k:v for k,v in cb_configs.items() if k in BOOSTER_AVAILABLE_CALLBACKS}
-        for cb_name in COMPULSARY_CALLBACKS:
-            if cb_name not in cb_configs.keys(): cb_configs[cb_name] = {}
+        for cb in trainer.model.COMPULSARY_CALLBACKS:
+            if cb not in cb_configs: cb_configs.update({cb:{}})
+        
+        if avail_cbs := trainer.model.AVAILABLE_CALLBACKS:
+            cb_configs = {k:v for k,v in cb_configs.items() if k in avail_cbs}
+
         callbacks = [cls.__get_cb(cb , param , trainer) for cb , param in cb_configs.items()]
-        if nn_specific_cb := nnspecific.get_nn_specific_cb(trainer.config.model_module): 
+        if nn_specific_cb := nnspecific.specific_cb(trainer.config.model_module): 
             callbacks.append(nn_specific_cb(trainer))
         return cls(trainer , *callbacks)
     

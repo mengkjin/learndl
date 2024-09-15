@@ -1,8 +1,8 @@
 name: null # gru_2head # null
-module: booster # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
+module: gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 submodels: [best , swalast , swabest]
 
-booster_head: False # lgbm , ada , xgboost , catboost
+booster_head: lgbm # lgbm , ada , xgboost , catboost
 booster_type: lgbm # ada , xgboost , catboost
 
 labels: 

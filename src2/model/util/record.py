@@ -4,13 +4,12 @@ from .classes import BaseTrainer
 
 class PredRecorder:
     def __init__(self) -> None:
-        self.initialized = False
+        ...
 
     def initialize(self , trainer : BaseTrainer):
-        if not self.initialized:
-            self.preds : dict[str,pd.DataFrame] = {}
-            self.dates = trainer.data.test_full_dates[::5]
-            self.initialized = True
+        self.preds : dict[str,pd.DataFrame] = {}
+        self.dates = trainer.data.test_full_dates[::5]
+        self.initialized = True
 
     def append_batch_pred(self , trainer : BaseTrainer):
         pred_idx = f'{trainer.model_num}.{trainer.model_type}.{trainer.model_date}.{trainer.batch_idx}'
@@ -33,6 +32,7 @@ class PredRecorder:
         else:
             pred['values'] = pred[f'pred.{which_output}']
         df = pred.loc[:,['model_num' , 'model_type' , 'secid' , 'date' , 'values']]
+
         self.preds[pred_idx] = df
 
     @property

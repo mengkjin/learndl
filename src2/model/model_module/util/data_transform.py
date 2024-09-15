@@ -49,33 +49,22 @@ def batch_data_to_boost_input(batch_data : BatchData ,
 
     return BoosterInput.from_tensor(xx_values , yy_values , ww_values , secid , date)
 
-def batch_loader_concat(batch_loader : Iterator[BatchData] , nn_to_calculate_hidden : Optional[nn.Module] = None):
-    xx , yy , ww , ii , vv = [] , [] , [] , [] , []
-    for batch_data in batch_loader:
-        if nn_to_calculate_hidden is not None:
+def batch_x(batch_data : BatchData , nn_to_calculate_hidden : Optional[nn.Module] = None):
+    if nn_to_calculate_hidden is not None:
+        nn_to_calculate_hidden.eval()
+        with torch.no_grad():
             hidden : Tensor = BatchOutput(nn_to_calculate_hidden(batch_data.x)).other['hidden']
             assert hidden is not None , f'hidden must not be none when using BoosterModel'
-            xx.append(hidden.detach().cpu())
-        batch_data = batch_data.cpu()
-        if nn_to_calculate_hidden is None:
-            xx.append(batch_data.x)
-
-        ww.append(batch_data.w)
-        yy.append(batch_data.y)
-        ii.append(batch_data.i)
-        vv.append(batch_data.valid)
-    return BatchData(comp_cat(xx) , comp_cat(yy) , comp_cat(ww) , comp_cat(ii) , comp_cat(vv))
-
-def comp_cat(comp_list : list) -> Any:
-    assert all([isinstance(x , type(comp_list[0])) for x in comp_list]) , comp_list
-    if comp_list[0] is None:
-        return None
-    elif isinstance(comp_list[0] , Tensor):
-        return torch.concat(comp_list)
+        return hidden.detach()
     else:
-        assert all([len(x) == len(comp_list[0]) for x in comp_list]) , comp_list
-        return type(comp_list[0])([torch.concat([x[i] for x in comp_list]) for i in range(len(comp_list[0]))])
-
+        return batch_data.x
+    
+def batch_loader_concat(batch_loader : Iterator[BatchData] , nn_to_calculate_hidden : Optional[nn.Module] = None):
+    new_batchs : list[BatchData] = []
+    for b in batch_loader:
+        new_batch_data = BatchData(batch_x(b , nn_to_calculate_hidden) , b.y , b.w , b.i , b.valid)
+        new_batchs.append(new_batch_data.cpu())
+    return BatchData.concat(*new_batchs)
 
 def batch_loader_to_boost_input(batch_loader : Iterator[BatchData] , 
                                 secid : Optional[np.ndarray] = None ,

@@ -59,6 +59,31 @@ class BatchData:
         i = torch.Tensor([])
         v = torch.Tensor([])
         return cls(x , y , w , i , v)
+    @classmethod
+    def concat(cls , *batch_datas):
+        assert len(batch_datas) > 0
+        
+        x , y , w , i , v , kwargs = [] , [] , [] , [] , [] , []
+        for bd in batch_datas:
+            assert isinstance(bd , cls) , type(bd)
+            x.append(bd.x)
+            y.append(bd.y)
+            w.append(bd.w)
+            i.append(bd.i)
+            v.append(bd.valid)
+            kwargs.append(bd.kwargs)
+        assert all([len(kwg) == 0 for kwg in kwargs]) , [kwg.keys() for kwg in kwargs]
+        if isinstance(x[0] , Tensor):
+            x = torch.concat(x)
+        else:
+            assert all([len(xx) == len(x[0]) for xx in x]) , [len(xx) for xx in x]
+            x = type(x[0])([torch.concat([xx[j] for xx in x]) for j in range(len(x[0]))])
+        y = torch.concat(y)
+        assert all([type(ww) == type(w[0]) for ww in w]) , [type(ww) for ww in w]
+        w = None if w[0] is None else torch.concat(w)
+        i = torch.concat(i)
+        v = torch.concat(v)
+        return cls(x , y , w , i , v)
 
 @dataclass
 class BatchMetric:
@@ -87,12 +112,12 @@ class BatchOutput:
     def device(self): return self.pred.device
     @property
     def pred(self) -> Tensor:
-        if self.outputs is None:
-            return Tensor(size=(0,1)).requires_grad_()
-        elif isinstance(self.outputs , (list , tuple)):
-            return self.outputs[0]
-        else:
-            return self.outputs
+        if self.outputs is None: return Tensor(size=(0,1)).requires_grad_()
+        output = self.outputs[0] if isinstance(self.outputs , (list , tuple)) else self.outputs
+        if output.ndim == 1: output = output.unsqueeze(1)
+        assert output.ndim == 2
+        return output
+
     @property
     def other(self) -> dict[str,Any]:
         if isinstance(self.outputs , (list , tuple)):
@@ -117,16 +142,27 @@ class BatchOutput:
             self.outputs = pred
         return self
     
-    def pred_df(self , secid : np.ndarray , date : np.ndarray , narrow_df = False):
+    def pred_df(self , secid : np.ndarray | Any , date : np.ndarray | Any , narrow_df = False , 
+                colnames : str | list | None = None , **kwargs):
         pred = self.pred.cpu().numpy()
         if pred.ndim == 1: pred = pred[:,None]
         assert pred.ndim == 2 , pred.shape
-        df = pd.DataFrame({'secid' : secid , 'date' : date , **{f'pred.{i}':pred[:,i] for i in range(pred.shape[-1])}})
-        if narrow_df:
-            df = df.melt(['secid','date'] , var_name='feature')
-        return df
+
+        if colnames is None: columns = [f'pred.{i}' for i in range(pred.shape[-1])]
+        elif isinstance(colnames , str): columns = [colnames]
+        else: columns = colnames
+        assert pred.shape[-1] == len(columns) , (pred.shape , columns)
+
+        df = pd.DataFrame({'secid' : secid , 'date' : date , **{col:pred[:,i] for i,col in enumerate(columns)}})
+        if isinstance(colnames , str):
+            assert pred.shape[-1] == 1 , (pred.shape , colnames)
+            df = df.rename(columns={'pred.0':colnames})
+        if narrow_df: df = df.melt(['secid','date'] , var_name='feature')
+        return df.assign(**kwargs)
         
-    def hidden_df(self , batch_data : BatchData , y_secid : np.ndarray , y_date : np.ndarray , narrow_df = False):
+    def hidden_df(self , batch_data : BatchData , y_secid : np.ndarray , y_date : np.ndarray , narrow_df = False ,
+                  colnames : str | list | None = None , **kwargs):
+        '''kwargs will be used in df.assign(**kwargs)'''
         full_hidden : Tensor = self.other['hidden']
         full_hidden = full_hidden.cpu().numpy()
 
@@ -136,7 +172,11 @@ class BatchOutput:
 
         assert full_hidden.ndim == 2 , full_hidden.shape
 
-        df = pd.DataFrame({'secid' : secid , 'date' : date , 
-                           **{f'hidden.{i}':full_hidden[:,i] for i in range(full_hidden.shape[-1])}})
+        if colnames is None: columns = [f'hidden.{i}' for i in range(full_hidden.shape[-1])]
+        elif isinstance(colnames , str): columns = [colnames]
+        else: columns = colnames
+        assert full_hidden.shape[-1] == len(columns) , (full_hidden.shape , columns)
+
+        df = pd.DataFrame({'secid' : secid , 'date' : date , **{col:full_hidden[:,i] for i,col in enumerate(columns)}})
         if narrow_df: df = df.melt(['secid','date'] , var_name='feature')
-        return df
+        return df.assign(**kwargs)

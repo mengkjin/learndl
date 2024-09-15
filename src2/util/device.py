@@ -11,6 +11,10 @@ class Device:
         self.device = device
     def __repr__(self): return str(self.device)
     def __call__(self, obj): return self.send_to(obj , self.device)
+
+    def is_cuda(self):
+        if self.device is not None: return self.device.type == 'cuda'
+        return False
     
     @classmethod
     def send_to(cls , x , device = None) -> Any:
@@ -43,7 +47,6 @@ class Device:
             return x.cuda()
         else:
             return x
-    def is_cuda(self): return self.device.type == 'cuda'
     def print(self):
         print(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
               f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G')

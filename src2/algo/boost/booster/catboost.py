@@ -25,7 +25,7 @@ class CatBoost(BasicBoosterModel):
         'allow_writing_files' : False ,
     }
 
-    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silence = False):
+    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False):
         train_set = self.to_pool(self.data['train'] if train is None else train)
         valid_set = self.to_pool(self.data['valid'] if valid is None else valid)
 
@@ -34,7 +34,7 @@ class CatBoost(BasicBoosterModel):
         train_param.update({'random_seed':self.seed , 
                             'task_type': 'GPU' if self.cuda and torch.cuda.is_available() else 'CPU' ,
                             'monotone_constraints' : self.mono_constr(train_param['monotone_constraints'] , train_set.num_col()) ,
-                            'verbosity': 0 if silence else 1}) 
+                            'verbosity': 0 if silent else 1}) 
         if 'eval_metric' in train_param and train_param['eval_metric'] is None: del train_param['eval_metric']
         num_boost_round = train_param.pop('num_boost_round')
         early_stopping  = train_param.pop('early_stopping')

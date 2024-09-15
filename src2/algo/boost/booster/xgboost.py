@@ -27,7 +27,7 @@ class XgBoost(BasicBoosterModel):
         'seed': 42,
     }
 
-    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silence = False):
+    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False):
         train_set = self.to_dmatrix(self.data['train'] if train is None else train)
         valid_set = self.to_dmatrix(self.data['valid'] if valid is None else valid)
         
@@ -36,7 +36,7 @@ class XgBoost(BasicBoosterModel):
         train_param.update({'seed':self.seed , 
                             'device': 'gpu' if self.cuda and torch.cuda.is_available() else 'cpu' ,
                             'monotone_constraints' : self.mono_constr(train_param['monotone_constraints'] , train_set.num_col()) ,
-                            'verbosity': 0 if silence else 1}) 
+                            'verbosity': 0 if silent else 1}) 
         
         num_boost_round = train_param.pop('num_boost_round')
         early_stopping  = train_param.pop('early_stopping')

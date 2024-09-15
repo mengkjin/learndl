@@ -59,15 +59,17 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
     @property
     def config(self): return self.trainer.config
     @property
-    def device(self): return self.trainer.device
-    @property
-    def logger(self): return self.trainer.logger
-    @property
     def status(self):  return self.trainer.status
     @property
-    def metrics(self):  return self.trainer.metrics
+    def logger(self): return self.config.logger
     @property
-    def ckpt(self): return self.trainer.checkpoint
+    def metrics(self):  return self.config.metrics
+    @property
+    def checkpoint(self): return self.config.checkpoint
+    @property
+    def deposition(self): return self.config.deposition
+    @property
+    def device(self): return self.config.device
     @property
     def data(self): return self.trainer.data
     @property
@@ -214,9 +216,10 @@ class BaseDataModule(ABC):
 
 class BaseTrainer(ModelStreamLine):
     '''run through the whole process of training'''
+    def __bool__(self): return True
     @final
     def __init__(self , base_path = None , **kwargs):
-        self.init_config(base_path = None ,**kwargs)
+        self.init_config(base_path = base_path ,**kwargs)
         self.init_data(**kwargs)
         self.init_model(**kwargs)
         self.init_callbacks(**kwargs)
@@ -226,10 +229,6 @@ class BaseTrainer(ModelStreamLine):
         '''initialized configuration'''
         self.config     = TrainConfig.load(base_path , do_parser = True , par_args = kwargs)
         self.status     = TrainerStatus(self.config.train_max_epoch)
-        self.logger     = Logger()
-        self.checkpoint = Checkpoint(self.config)
-        self.deposition = Deposition(self.config)
-        self.metrics    = Metrics(self.config)
 
     def wrap_callbacks(self):
         [setattr(self , hook_name , self.hook_wrapper(self , self.model , self.callback , hook_name)) 
@@ -263,6 +262,14 @@ class BaseTrainer(ModelStreamLine):
 
     @property
     def device(self): return self.config.device
+    @property
+    def checkpoint(self): return self.config.checkpoint
+    @property
+    def deposition(self): return self.config.deposition
+    @property
+    def metrics(self): return self.config.metrics
+    @property
+    def logger(self): return self.config.logger    
     @property
     def stage_queue(self): return self.config.stage_queue
     @property
@@ -344,17 +351,21 @@ class BaseTrainer(ModelStreamLine):
 
     def iter_train_dataloader(self , given_loader = None):
         self.dataloader = self.data.train_dataloader() if given_loader is None else given_loader
+        self.on_train_epoch_start()
         for self.batch_idx , self.batch_data in enumerate(self.dataloader): 
             self.on_train_batch_start()
             yield self.batch_idx , self.batch_data
             self.on_train_batch_end()
+        self.on_train_epoch_end()
 
     def iter_val_dataloader(self , given_loader = None):
         self.dataloader = self.data.val_dataloader() if given_loader is None else given_loader
+        self.on_validation_epoch_start()
         for self.batch_idx , self.batch_data in enumerate(self.dataloader): 
             self.on_validation_batch_start()
             yield self.batch_idx , self.batch_data
             self.on_validation_batch_end()
+        self.on_validation_epoch_end()
 
     def iter_test_dataloader(self , given_loader = None):
         self.dataloader = self.data.test_dataloader() if given_loader is None else given_loader
@@ -467,6 +478,9 @@ class BaseCallBack(ModelStreamLineWithTrainer):
 
 class BasePredictorModel(ModelStreamLineWithTrainer):
     '''a group of ensemble models , of same net structure'''
+    AVAILABLE_CALLBACKS = []
+    COMPULSARY_CALLBACKS = ['StatusDisplay' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis']
+    
     def __init__(self, *args , **kwargs) -> None:
         self.reset()
 
@@ -478,19 +492,23 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         batch_output = BatchOutput(output)
         return batch_output
     
-    def get_multiloss_params(self): return {}
+    def multiloss_params(self): return {}
 
     def reset(self):
-        self.trainer , self.raw_config = None , None
+        self.trainer : BaseTrainer | Any = None
+        self._config : Optional[TrainConfig] = None
+        self.model_dict = ModelDict()
         return self
 
-    def bound_with_config(self , config : TrainConfig):
+    def bound_with_config(self , config : TrainConfig , model_num = 0 , model_date = -1 , model_type = 'best'):
         assert self.trainer is None , 'Cannot bound with config if assigned trainer first'
-        self.raw_config = config
+        self._config = config
+        self._model_num = model_num
+        self._model_date = model_date
+        self._model_type = model_type
         return self
 
     def bound_with_trainer(self , trainer : BaseTrainer):
-        assert self.raw_config is None , 'Cannot bound with trainer if assigned raw_config first'
         self.trainer = trainer
         return self
 
@@ -503,20 +521,38 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
 
     @property
     def config(self):
-        if self.raw_config is not None: return self.raw_config
-        return self.trainer.config
+        if self.trainer: return self.trainer.config
+        else:
+            assert self._config is not None
+            return self._config
     @property
-    def model_param(self):
-        if self.raw_config is not None: return self.raw_config.model_param[0]
-        return self.trainer.model_param
+    def model_num(self):
+        return self.trainer.model_num if self.trainer else self._model_num
+    @property
+    def model_date(self):
+        return self.trainer.model_date if self.trainer else self._model_date
+    @property
+    def model_type(self):
+        return self.trainer.model_type if self.trainer else self._model_type
+    @property
+    def model_param(self): return self.config.model_param[self.model_num]
     
-    @abstractmethod
-    def new_model(self):
+    def model_file(self , model_date = None , model_num = None , model_type = None , *args , **kwargs):
         '''call when fitting/testing new model'''
+        if model_date is None: model_date = self.model_date
+        if model_num  is None: model_num  = self.model_num
+        if model_type is None: model_type = self.model_type
+        return self.deposition.load_model(model_date , model_num , model_type)
+
+    @abstractmethod
+    def new_model(self , *args , **kwargs):
+        '''call when fitting new model'''
+        self.optimizer : Any
         return self
     @abstractmethod
-    def load_model(self , training : bool , *args , **kwargs) -> None: 
-        '''call when fitting/testing new model'''
+    def load_model(self , model_date = None , model_num = None , model_type = None , *args , **kwargs): 
+        '''call when testing new model'''
+        return self
     @abstractmethod
     def forward(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
@@ -524,18 +560,38 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     def fit(self) -> None:
         '''fit the model inside'''
     @abstractmethod
-    def test(self) -> None:
-        '''test the model inside'''
-    @abstractmethod
     def collect(self , submodel = 'best' , *args) -> ModelDict: 
         '''collect model params, called before stacking model'''
+
+    def test(self):
+        '''test the model inside'''
+        for _ in self.trainer.iter_model_types():
+            self.load_model(False , self.model_type)
+            for _ in self.trainer.iter_test_dataloader():
+                self.batch_forward()
+                self.batch_metrics()
+
     def metric_kwargs(self):
         pred   = self.batch_output.pred
         label  = self.batch_data.y
         weight = self.batch_data.w
-        multiloss = self.get_multiloss_params()
+        multiloss = self.multiloss_params()
         return {'pred':pred,'label':label,'weight':weight,'multiloss':multiloss,**self.batch_output.other}
     
     def batch_forward(self) -> None: 
         self.batch_output = self(self.batch_data)
+
+    def batch_metrics(self) -> None:
+        if self.batch_data.is_empty: return
+        # before batch_warm_up is warmup stage , only forward
+        if self.status.dataset == 'test' and self.trainer.batch_idx < self.trainer.batch_warm_up: return
+        '''if net has multiloss_params , get it and pass to calculate_from_tensor'''
+        self.metrics.calculate(self.status.dataset , **self.metric_kwargs()).collect_batch()
+
+    def batch_backward(self) -> None:
+        if self.batch_data.is_empty: return
+        assert self.status.dataset == 'train' , self.status.dataset
+        self.trainer.on_before_backward()
+        self.optimizer.backward(self.metrics.output)
+        self.trainer.on_after_backward()
 

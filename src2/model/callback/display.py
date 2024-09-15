@@ -5,11 +5,12 @@ import pandas as pd
 from dataclasses import asdict
 from typing import Any , ClassVar
 
-from ..util.classes import BaseCallBack
 from ..data_module import BatchDataLoader
-from ..model_module.nn_module.optimizer import Optimizer
+from ..model_module.util.optimizer import Optimizer
+from ..util.classes import BaseCallBack
 from ...basic import PATH
 from ... import func as FUNC
+
 class CallbackTimer(BaseCallBack):
     '''record time cost of callback hooks'''
     WITH_CB = True

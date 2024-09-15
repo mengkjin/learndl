@@ -1,16 +1,14 @@
+import torch
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import torch
 
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from torch import nn , no_grad , Tensor
 from typing import Any , Literal , Optional
 
-from .batch_io import BatchData , BatchMetric , BatchOutput
-from .config import TrainConfig
-from ...algo.nn import get_multiloss_params
+from .batch_io import BatchMetric
 from ...func import mse , pearson , ccc , spearman
 
 DISPLAY_CHECK  = True # will display once if true
@@ -31,17 +29,28 @@ class MetricList:
 
 class Metrics:
     '''calculator of batch output'''
-    def __init__(self , config : TrainConfig , use_dataset  : Literal['train','valid'] = 'valid' , 
-                 use_metric : Literal['loss' , 'score'] = 'score' , **kwargs) -> None:
-        self.config      = config
-        self.use_dataset = use_dataset
-        self.use_metric  = use_metric
+    VAL_DATASET : Literal['train','valid'] = 'valid'
+    VAL_METRIC  : Literal['loss' ,'score'] = 'score'
+    
+    def __init__(self , 
+                 module_type = 'nn' , nn_category = '' ,
+                 loss_type : Literal['mse', 'pearson', 'ccc'] = 'ccc' , 
+                 score_type : Literal['mse', 'pearson', 'ccc', 'spearman'] = 'spearman',
+                 penalty_kwargs : dict = {} ,
+                 multilosses_type: Literal['ewa','hybrid','dwa','ruw','gls','rws'] | None = None ,
+                 multilosses_param: dict[str,Any] = {} ,
+                 **kwargs) -> None:
         
-        self.loss_calc    = LossCalculator(self.config.train_criterion_loss)
-        self.score_calc   = ScoreCalculator(self.config.train_criterion_score)
-        self.penalty_calc = {k:PenaltyCalculator(k,v) for k,v in self.config.train_criterion_penalty.items()}
+        self.module_type = module_type
+        self.nn_category = nn_category
+        self.multilosses_type = multilosses_type
+        self.multilosses_param = multilosses_param
+
+        self.loss_calc    = LossCalculator(loss_type)
+        self.score_calc   = ScoreCalculator(score_type)
+        self.penalty_calc = {k:PenaltyCalculator(k,v) for k,v in penalty_kwargs.items()}
         
-        self.output    = BatchMetric()
+        self.output        = BatchMetric()
         self.metric_batchs = MetricsAggregator()
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
         self.latest : dict[str,Any] = {}
@@ -64,7 +73,7 @@ class Metrics:
         self.num_output   = model_param.get('num_output' , 1)
         self.which_output = model_param.get('which_output' , 0)
         self.multi_losses = MultiHeadLosses(
-            self.num_output , self.config.train_multilosses_type, **self.config.train_multilosses_param)
+            self.num_output , self.multilosses_type, **self.multilosses_param)
 
         self.update_penalty_calc()
         self.new_attempt()
@@ -72,7 +81,7 @@ class Metrics:
     
     def update_penalty_calc(self):
         if self.penalty_calc.get('hidden_corr'): 
-            cond_hidden_corr = (self.config.nn_category == 'tra') or self.model_param.get('hidden_as_factors',False)
+            cond_hidden_corr = (self.nn_category == 'tra') or self.model_param.get('hidden_as_factors',False)
             self.penalty_calc['hidden_corr'].cond = cond_hidden_corr
 
     def new_attempt(self):
@@ -94,18 +103,18 @@ class Metrics:
         self.metric_epochs[f'{self.dataset}.loss'].append(loss) 
         self.metric_epochs[f'{self.dataset}.score'].append(score)
 
-        if self.dataset == self.use_dataset:
-            metric = loss if self.use_metric == 'loss' else score
+        if self.dataset == self.VAL_DATASET:
+            metric = loss if self.VAL_METRIC == 'loss' else score
             self.last_metric = metric
             if (self.best_metric is None or
-                (self.use_metric == 'score' and self.best_metric < metric) or 
-                (self.use_metric == 'loss' and self.best_metric > metric)): 
+                (self.VAL_METRIC == 'score' and self.best_metric < metric) or 
+                (self.VAL_METRIC == 'loss' and self.best_metric > metric)): 
                 self.best_metric = metric
     
     def better_epoch(self , old_best_epoch : Any) -> bool:
         if old_best_epoch is None:
             return True
-        elif self.use_metric == 'score':
+        elif self.VAL_METRIC == 'score':
             return self.last_metric > old_best_epoch 
         else:
             return self.last_metric < old_best_epoch
@@ -113,7 +122,7 @@ class Metrics:
     def better_attempt(self , old_best_attempt : Any) -> bool:
         if old_best_attempt is None:
             return True
-        elif self.use_metric == 'score':
+        elif self.VAL_METRIC == 'score':
             return self.best_metric > old_best_attempt 
         else:
             return self.best_metric < old_best_attempt
@@ -123,20 +132,17 @@ class Metrics:
         '''Calculate loss(with gradient), penalty , score'''
         assert dataset in ['train','valid','test']
         
-        if label.shape != pred.shape: # if more label than output
-            label = label[...,:pred.shape[-1]]
-        if self.config.module_type != 'nn':
-            label , pred = label.flatten() , pred.flatten()
-        if label.ndim == 1:
-            label , pred = label.reshape(-1, 1) , pred.reshape(-1, 1)
+        if label.ndim == 1: label = label[:,None]
+        if pred.ndim  == 1: pred  = pred[:,None]
+        label , pred = label[:,:self.num_output] , pred[:,:self.num_output]
+
         assert label.shape == pred.shape , (label.shape , pred.shape)
-        assert label.shape[-1] == self.num_output , (label.shape[-1] , self.num_output)
 
         with no_grad():
             score = self.score_calc(label , pred , weight , nan_check = True , which_head = self.which_output , training = False).item()
             self.output = BatchMetric(score = score)
 
-        if dataset == 'train' and self.config.module_type == 'nn':
+        if dataset == 'train' and self.module_type == 'nn':
             multiheadlosses = self.loss_calc(label , pred , weight , nan_check = False , training = True)
             multiloss_param = multiloss if multiloss else {}
             loss = self.multi_losses(multiheadlosses , multiloss_param) 

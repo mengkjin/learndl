@@ -18,8 +18,8 @@ def choose_swa_method(model_type : Literal['best' , 'swabest' , 'swalast'] | Any
 
 class SWAEnsembler(ABC):
     '''abstract class of fittest model, e.g. model with the best score, swa model of best scores or last ones'''
-    def __init__(self, ckpt : Checkpoint , use_score = True , **kwargs) -> None:
-        self.ckpt , self.use_score = ckpt , use_score
+    def __init__(self, ckpt : Checkpoint ,  *args , **kwargs) -> None:
+        self.ckpt = ckpt
         self.reset()
     def __bool__(self): return True
     @abstractmethod
@@ -72,17 +72,15 @@ def update_swa_bn(loader , model : AveragedModel):
 
 class EnsembleBestOne(SWAEnsembler):
     '''state dict of epoch with best score or least loss'''
-    def __init__(self, ckpt : Checkpoint , use_score = True , **kwargs) -> None:
-        super().__init__(ckpt , use_score)
+    def __init__(self, ckpt : Checkpoint , *args , **kwargs) -> None:
+        super().__init__(ckpt , *args , **kwargs)
 
     def reset(self):
         self.epoch_fix  = -1
         self.metric_fix = None
 
     def assess(self , net , epoch : int , metrics : Metrics , score = 0. , loss = 0.):
-        # value = score if self.use_score else loss
         if metrics.better_epoch(self.metric_fix):
-        #if self.metric_fix is None or (self.metric_fix < value if self.use_score else self.metric_fix > value):
             self.ckpt.disjoin(self , self.epoch_fix)
             self.epoch_fix = epoch
             self.metric_fix = metrics.last_metric # value
@@ -96,8 +94,8 @@ class EnsembleBestOne(SWAEnsembler):
 
 class EnsembleSWABest(SWAEnsembler):
     '''state dict of n_best epochs with best score or least loss'''
-    def __init__(self, ckpt : Checkpoint , use_score = True , n_best = 5 , **kwargs) -> None:
-        super().__init__(ckpt , use_score)
+    def __init__(self, ckpt : Checkpoint , n_best = 5 ,  *args , **kwargs) -> None:
+        super().__init__(ckpt ,  *args , **kwargs)
         assert n_best > 0, n_best
         self.n_best      = n_best
 
@@ -106,11 +104,8 @@ class EnsembleSWABest(SWAEnsembler):
         self.candidates  = []
         
     def assess(self , net , epoch : int , metrics : Metrics , score = 0. , loss = 0.):
-        # value = score if self.use_score else loss
         if len(self.metric_list) == self.n_best :
-            arg = np.argmin(self.metric_list) if metrics.use_metric == 'score' else np.argmax(self.metric_list)
-            # arg = np.argmin(self.metric_list) if self.use_score else np.argmax(self.metric_list)
-            #if (self.metric_list[arg] < value if self.use_score else self.metric_list[arg] > value):
+            arg = np.argmin(self.metric_list) if metrics.VAL_METRIC == 'score' else np.argmax(self.metric_list)
             if metrics.better_epoch(self.metric_list[arg]):
                 self.metric_list.pop(arg)
                 candid = self.candidates.pop(arg)
@@ -130,8 +125,8 @@ class EnsembleSWABest(SWAEnsembler):
     
 class EnsembleSWALast(SWAEnsembler):
     '''state dict of n_last epochs around best score or least loss'''
-    def __init__(self, ckpt : Checkpoint , use_score = True , n_last = 5 , interval = 3 , **kwargs) -> None:
-        super().__init__(ckpt , use_score)
+    def __init__(self, ckpt : Checkpoint , n_last = 5 , interval = 3 ,  *args , **kwargs) -> None:
+        super().__init__(ckpt , *args , **kwargs)
         assert n_last > 0 and interval > 0, (n_last , interval)
         self.n_last      = n_last
         self.interval    = interval
@@ -143,12 +138,10 @@ class EnsembleSWALast(SWAEnsembler):
         self.candidates  = []
 
     def assess(self , net , epoch : int , metrics : Metrics , score = 0. , loss = 0.):
-        # value = score if self.use_score else loss
         if metrics.better_epoch(self.metric_fix):
-        #if self.metric_fix is None or (self.metric_fix < value if self.use_score else self.metric_fix > value):
             self.epoch_fix = epoch
-            self.metric_fix = metrics.last_metric # value
-            # self.epoch_fix , self.metric_fix = epoch , value
+            self.metric_fix = metrics.last_metric 
+
         candidates = self._full_candidates(epoch)
         [self.ckpt.disjoin(self , candid) for candid in self.candidates if candid < min(candidates)]
         if epoch in candidates: self.ckpt.join(self , epoch , net)

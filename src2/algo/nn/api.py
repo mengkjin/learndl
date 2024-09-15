@@ -4,6 +4,7 @@ from . import (
     Recurrent, Attention , CNN , ModernTCN , layer , PatchTST , TSMixer , TRA , FactorVAE ,
     RiskAttGRU , PLE
 )
+from .util import get_multiloss_params
 
 AVAILABLE_MODULES = {
     'simple_lstm'       : Recurrent.simple_lstm,
@@ -24,19 +25,6 @@ AVAILABLE_MODULES = {
     'risk_att_gru'      : RiskAttGRU.risk_att_gru,
     'ple_gru'           : PLE.ple_gru
 }
-
-class GetNN:
-    def __init__(self , module_name : str) -> None:
-        self.module_name = module_name
-
-    @property
-    def nn_module(self): return get_nn_module(self.module_name)
-        
-    @property
-    def nn_category(self): return get_nn_category(self.module_name)
-        
-    @property
-    def nn_datatype(self): return get_nn_datatype(self.module_name)
 
 def get_nn_module(module_name : str) -> nn.Module:
     return AVAILABLE_MODULES[module_name]

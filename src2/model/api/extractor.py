@@ -6,7 +6,8 @@ from itertools import product
 from tqdm import tqdm
 from typing import Any , Literal , Optional
 
-from ..util import BatchOutput , Deposition , TrainConfig
+from ..model_module.module.nn import NNPredictor
+from ..util import TrainConfig
 from ..data_module import DataModule
 from ...basic import RegModel , PATH
 
@@ -30,8 +31,8 @@ class HiddenExtractor:
             self.model_types = [model_types] if isinstance(model_nums , str) else model_types
 
         self.contents : dict[str,pd.DataFrame] = {}
-        self.config     = TrainConfig.load(PATH.model.joinpath(self.reg_model.name) , override={'short_test':False})
-        self.deposition = Deposition(self.config)
+        self.config = TrainConfig.load(PATH.model.joinpath(self.reg_model.name) , override={'short_test':False})
+        self.module = NNPredictor().bound_with_config(self.config) #.load_model(model_date , model_num , self.model_type)
 
         self.data = DataModule(self.config , 'both').load_data()
         self.target_path = PATH.hidden.joinpath(self.reg_model.name)
@@ -91,22 +92,19 @@ class HiddenExtractor:
     
     def model_hidden(self , model_num , model_type , model_date , verbose = True) -> pd.DataFrame:
         model_param = self.config.model_param[model_num]
-        
-        model = self.deposition.load_model(model_date , model_num , model_type)
-        self.net = ModelEnsembler.get_net(self.config.model_module , model_param , model['state_dict'] , self.data.device)
-        self.net.eval()
+        self.module.load_model(model_date , model_num , model_type)
 
-        df_list : list[pd.DataFrame] = []
+        hiddens : list[pd.DataFrame] = []
         desc = f'Extract {model_num}/{model_type}/{model_date}' if verbose else ''
 
         self.data.setup('fit' ,  model_param , model_date)
-        df_list += self.loader_hidden('train' , desc)
-        df_list += self.loader_hidden('valid' , desc)
+        hiddens += self.loader_hidden('train' , desc)
+        hiddens += self.loader_hidden('valid' , desc)
 
         self.data.setup('test' ,  model_param , model_date)
-        df_list += self.loader_hidden('test' , desc)
+        hiddens += self.loader_hidden('test' , desc)
 
-        df = pd.concat(df_list , axis=0)
+        df = pd.concat(hiddens , axis=0)
         return df
     
     def loader_hidden(self, dataset : Literal['train' , 'valid' , 'test'] , desc = ''):
@@ -114,17 +112,16 @@ class HiddenExtractor:
         elif dataset == 'valid': loader = self.data.val_dataloader()
         elif dataset == 'test': loader = self.data.test_dataloader()
 
-        df_list : list[pd.DataFrame] = []
+        hiddens : list[pd.DataFrame] = []
         if desc: 
             loader = tqdm(loader , total=len(loader))
             desc = f'{desc}/{dataset}'
 
+        secid , date = self.data.y_secid , self.data.y_date
         for batch_data in loader:
-            batch_output = BatchOutput(self.net(batch_data.x))
-            df = batch_output.hidden_df(batch_data , self.data.y_secid , self.data.y_date).assign(dataset = dataset)
-            df_list.append(df)
+            hiddens.append(self.module(batch_data).hidden_df(batch_data , secid , date , dataset = dataset))
             if isinstance(loader , tqdm): loader.set_description(desc)
-        return df_list
+        return hiddens
     
     @classmethod
     def extract_model_hidden(

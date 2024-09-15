@@ -7,6 +7,7 @@ from torch import Tensor
 from torch.utils.data import BatchSampler
 from typing import Any , Literal , Optional
 
+from .hidden_api import get_hidden_df
 from .loader import BatchDataLoader
 from ..util import BatchData , TrainConfig , MemFileStorage , StoredFileLoader
 from ..util.classes import BaseBuffer , BaseDataModule
@@ -89,21 +90,6 @@ class DataModule(BaseDataModule):
         assert stage in ['fit' , 'test' , 'predict'] and model_date > 0 and seqlens , (stage , model_date , seqlens)
         return stage , model_date , seqlens
     
-    def setup_process_dataloader(self , x , y):
-        # standardized y with step == 1
-        self.y = self.standardize_y(y , None , None , no_weight = True)[0]
-        if self.stage == 'fit' and self.config.module_type == 'nn':
-            valid = self.full_valid_sample(x , self.y , self.step_idx)
-        else: valid = None
-        y , w = self.standardize_y(self.y , valid , self.step_idx)
-        
-        # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
-        self.y[:,self.step_idx] = y[:]
-        self.static_dataloader(x , y , w , valid)
-
-        gc.collect() 
-        torch.cuda.empty_cache()
-
     def setup_with_hidden(
             self , stage : Literal['fit' , 'test' , 'predict'] , 
             param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
@@ -120,9 +106,7 @@ class DataModule(BaseDataModule):
         hidden_df : pd.DataFrame | Any = None
         ds_list = ['train' , 'valid'] if stage == 'fit' else ['test' , 'predict']
         for hidden_key in self.config.model_hidden_types:
-            model_name , model_num , model_type = hidden_key.split('.')
-            hidden_path = PATH.hidden.joinpath(model_name , f'hidden.{model_num}.{model_type}.{model_date}.feather')
-            df = pd.read_feather(hidden_path)
+            df = get_hidden_df(hidden_key , model_date)
             df = df[df['dataset'].isin(ds_list)].drop(columns='dataset').set_index(['secid','date'])
             hidden_dates.append(df.index.get_level_values('date').unique().to_numpy())
             df.columns = [f'{hidden_key}.{col}' for col in df.columns]
@@ -197,36 +181,66 @@ class DataModule(BaseDataModule):
 
         self.setup_process_dataloader(x , y)
 
-    def full_valid_sample(self , x_data : dict[str,Tensor] , y : Tensor , index1 : Tensor , **kwargs) -> Tensor:
+    def setup_process_dataloader(self , x , y):
+        # standardized y with step == 1
+        self.y = self.standardize_y(y , None , None , no_weight = True)[0]
+
+        valid_x = x if self.config.module_type == 'nn' else {}
+        valid_y = self.y if self.stage == 'fit' else None
+        
+        valid = self.multiple_valid(valid_x , valid_y , self.step_idx , self.seqs , x_all_valid=(self.config.module_type == 'nn'))
+        y , w = self.standardize_y(self.y , valid , self.step_idx)
+            
+        # since in fit stage , step_idx can be larger than 1 , different valid and result may occur
+        self.y[:,self.step_idx] = y[:]
+        self.static_dataloader(x , y , w , valid)
+
+        gc.collect() 
+        torch.cuda.empty_cache()
+
+
+    def multiple_valid(self , x : dict[str,Tensor] , y : Tensor | None , index1 : Tensor , 
+                       rolling_windows : dict[str,int] = {} , x_all_valid = True) -> Tensor | None:
         '''
         return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims
         x : rolling window non-nan , end non-zero if in k is divlast
         y : exact point non-nan 
         others : rolling window non-nan , default as self.seqy
         '''
-        valid = self.valid_sample(y , index1) if self.stage == 'train' else torch.ones(len(y),len(index1)).to(torch.bool)
-        for k , x in x_data.items(): 
-            valid = valid * self.valid_sample(x , index1 , self.seqs[k] , k in DataBlockNorm.DIVLAST)
-        for k , x in kwargs.items(): 
-            valid = valid * self.valid_sample(x , index1 , self.seqs[k])
+        valid = None if y is None else self.valid_sample(y,1,index1)
+        for k , v in x.items(): 
+            new_val = self.valid_sample(v , rolling_windows.get(k,1) , index1 , k in DataBlockNorm.DIVLAST , x_all_valid)
+            if x_all_valid:
+                valid = new_val * (True if valid is None else valid)
+            else:
+                valid = new_val + (False if valid is None else valid)
         return valid
     
     @staticmethod
-    def valid_sample(data : Tensor , index1 : Tensor , rolling_window = 1 , endpoint_nonzero = False):
+    def valid_sample(data : Tensor , rolling_window : int | None = 1 , index1 : Tensor | None = None , 
+                     endpoint_nonzero = False , x_all_valid = True):
         '''return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims'''
-        start_idx = rolling_window
-        assert start_idx > 0 , start_idx
-        data = torch.cat([torch.zeros_like(data[:,:start_idx]) , data],dim=1).unsqueeze(2)
+        if rolling_window is None: rolling_window = 1
+        if index1 is None: index1 = torch.arange(data.shape[1])
+        assert rolling_window > 0 , rolling_window
+        data = torch.cat([torch.zeros_like(data[:,:rolling_window]) , data],dim=1).unsqueeze(2)
         sum_dim = tuple(range(2,data.ndim))
         
-        invalid_samp = data[:,index1 + start_idx].isnan().sum(sum_dim)
-        for i in range(1 , start_idx): 
-            invalid_samp += data[:,index1 - i + start_idx].isnan().sum(sum_dim)
+        if x_all_valid:
+            nans = data[:,index1 + rolling_window].isnan().sum(sum_dim)
+            for i in range(1 , rolling_window): 
+                nans += data[:,index1 - i + rolling_window].isnan().sum(sum_dim)
+            valid = nans == 0
+        else:
+            finite = data[:,index1 + rolling_window].isfinite().sum(sum_dim)
+            for i in range(1 , rolling_window): 
+                finite += data[:,index1 - i + rolling_window].isfinite().sum(sum_dim)
+            valid = finite > 0
 
         if endpoint_nonzero: 
-            invalid_samp += (data[:,index1 + start_idx] == 0).sum(sum_dim)
+            valid *= ((data[:,index1 + rolling_window] == 0).sum(sum_dim) == 0)
         
-        return (invalid_samp == 0)
+        return valid
      
     def standardize_y(self , y : Tensor , valid : Optional[Tensor] , index1 : Optional[Tensor] , no_weight = False) -> tuple[Tensor , Optional[Tensor]]:
         '''standardize y and weight'''
@@ -262,7 +276,7 @@ class DataModule(BaseDataModule):
     def train_dataloader(self)   -> BatchDataLoader: return BatchDataLoader(self.loader_dict['train'] , self)
     def val_dataloader(self)     -> BatchDataLoader: return BatchDataLoader(self.loader_dict['valid'] , self)
     def test_dataloader(self)    -> BatchDataLoader: return BatchDataLoader(self.loader_dict['test'] , self)
-    def predict_dataloader(self) -> BatchDataLoader: return BatchDataLoader(self.loader_dict['predict'] , self)
+    def predict_dataloader(self) -> BatchDataLoader: return BatchDataLoader(self.loader_dict['test'] , self)
     
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         if self.config.module_type == 'nn':
@@ -332,5 +346,3 @@ class DataModule(BaseDataModule):
             # test dataloader should have the same length as dates, so no filtering of val[:,j].sum() > 0
             sample_index['test'] = sequential_sampling(0 , l1)
         return sample_index    
-
-    

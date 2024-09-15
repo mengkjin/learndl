@@ -36,7 +36,7 @@ class Lgbm(BasicBoosterModel):
         'seed': 42,
     }
 
-    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silence = False):
+    def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False):
         if train is None: train = self.data['train']
         dset = train.XYW().as_numpy()
         train_set = lightgbm.Dataset(dset.x , dset.y , weight = dset.w)
@@ -51,7 +51,7 @@ class Lgbm(BasicBoosterModel):
                             'device_type': 'gpu' if self.cuda and torch.cuda.is_available() else 'cpu' ,
                             'monotone_constraints' : self.mono_constr(train_param['monotone_constraints'] , 
                                                                       len(train.use_feature)) ,
-                            'verbosity': -1 if silence else 1}) 
+                            'verbosity': -1 if silent else 1}) 
         num_boost_round = train_param.pop('num_boost_round')
 
         self.evals_result = dict()

@@ -1018,3 +1018,97 @@
 7_test: Finish Process [Test], Cost 1.3 Secs
 8_result:
   0.best: Avg(0.192)|Sum(6.72)|Std(0.0449)|T(25.32)|IR(20.9695)
+0_model: booster_day_ShortTest(x1)
+1_start: Sun Sep  8 19:32:02 2024
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 1.6 Secs
+7_test: Finish Process [Test], Cost 1.2 Secs
+8_result:
+  0.best: Avg(0.192)|Sum(6.72)|Std(0.0449)|T(25.32)|IR(20.9695)
+0_model: booster_day_ShortTest(x1)
+1_start: Sun Sep  8 23:13:11 2024
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 1.9 Secs
+7_test: Finish Process [Test], Cost 1.1 Secs
+8_result:
+  0.best: Avg(0.192)|Sum(6.72)|Std(0.0449)|T(25.32)|IR(20.9695)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Sun Sep  8 23:14:03 2024
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 2.0 Secs
+7_test: Finish Process [Test], Cost 1.2 Secs
+8_result:
+  0.best: Avg(0.192)|Sum(6.72)|Std(0.0449)|T(25.32)|IR(20.9695)
+0_model: gru_day_ShortTest(x1)
+1_start: Sun Sep  8 23:50:41 2024
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 1.0 Min/model, 15.1 Sec/Epoch
+7_test: Finish Process [Test], Cost 27.1 Secs
+8_result:
+  0.best: Avg(0.0729)|Sum(2.55)|Std(0.0604)|T(7.15)|IR(5.9215)
+  0.swabest: Avg(0.0265)|Sum(0.93)|Std(0.0655)|T(2.39)|IR(1.9825)
+  0.swalast: Avg(0.0729)|Sum(2.55)|Std(0.0604)|T(7.15)|IR(5.9216)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Mon Sep  9 13:06:41 2024
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 2.2 Secs
+7_test: Finish Process [Test], Cost 1.5 Secs
+8_result:
+  0.best: Avg(0.1905)|Sum(6.67)|Std(0.0792)|T(14.24)|IR(11.7918)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Mon Sep  9 13:25:46 2024
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 2.0 Secs
+7_test: Finish Process [Test], Cost 1.5 Secs
+8_result:
+  0.best: Avg(0.192)|Sum(6.72)|Std(0.0449)|T(25.32)|IR(20.9695)
+0_model: gru_day_ShortTest(x1)
+1_start: Mon Sep  9 13:39:56 2024
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 1.3 Min/model, 20.1 Sec/Epoch
+7_test: Finish Process [Test], Cost 21.7 Secs
+8_result:
+  0.best: Avg(0.0375)|Sum(1.31)|Std(0.0955)|T(2.32)|IR(1.9249)
+  0.swabest: Avg(0.025)|Sum(0.87)|Std(0.0926)|T(1.6)|IR(1.3216)
+  0.swalast: Avg(0.0375)|Sum(1.31)|Std(0.0955)|T(2.32)|IR(1.9249)
+0_model: gru_booster_day_ShortTest(x1)
+1_start: Tue Sep 10 13:40:34 2024
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.3 Min/model, 4.8 Sec/Epoch
+7_test: Finish Process [Test], Cost 4.4 Secs
+8_result:
+  0.best: Avg(0.0881)|Sum(3.08)|Std(0.0418)|T(12.47)|IR(10.3282)
+0_model: gru_booster_day_ShortTest(x1)
+1_start: Tue Sep 10 13:56:23 2024
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 1.5 Min/model, 21.8 Sec/Epoch
+7_test: Finish Process [Test], Cost 7.0 Secs
+8_result:
+  0.best: Avg(0.0527)|Sum(1.85)|Std(0.0422)|T(7.39)|IR(6.1198)

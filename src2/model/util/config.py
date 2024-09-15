@@ -4,8 +4,10 @@ import numpy as np
 from pathlib import Path
 from typing import Any , Literal , Optional
 
-from ...algo.boost import VALID_BOOSTERS
-from ...algo.nn import get_nn_category , get_nn_datatype
+from .metric import Metrics
+from .storage import Checkpoint , Deposition
+from ...util import Logger
+from ...algo import getter , VALID_BOOSTERS
 from ...basic import ModelPath , PATH , THIS_IS_SERVER
 from ...func import pretty_print_dict , recur_update
 from ...util import Device
@@ -17,14 +19,14 @@ def conf_path(base_path : ModelPath | Path | None , *args):
     f = base_path.conf if base_path else PATH.conf.joinpath
     return f(*args)
 
-def conf_copy(source : Path , target : Path , override = False):
+def conf_copy(source : Path , target : Path , overwrite = False):
     if source.is_dir():
-        if not override: 
+        if not overwrite: 
             assert not target.exists() or len([v for v in target.iterdir()]) == 0 , target
 
         shutil.copytree(source , target , dirs_exist_ok = True)
     else:
-        if not override: 
+        if not overwrite: 
             assert not target.exists() , target
         target.parent.mkdir(parents=True,exist_ok=True)
         shutil.copyfile(source , target)
@@ -37,7 +39,9 @@ class TrainParam:
         self.base_path = ModelPath(base_path)
         self.model_name = self.base_path.name
 
-        self.load_param(**override).special_adjustment().make_model_name().check_validity()
+        self.load_param(override).special_adjustment().make_model_name().check_validity()
+
+    def __bool__(self): return True
 
     @property
     def model_base_path(self):
@@ -47,11 +51,13 @@ class TrainParam:
     @property
     def Param(self) -> dict[str,Any]: return self.train_param
 
-    def load_param(self , **kwargs):
+    def load_param(self , override = {}):
         self.train_param : dict[str,Any] = {}
-        for config_key in TRAIN_CONFIG_LIST:
-            self.train_param.update({f'{config_key}.{key}':val for key,val in self.load_config(config_key).items()})
-        self.train_param.update(kwargs)
+        for cfg_key in TRAIN_CONFIG_LIST:
+            self.train_param.update({f'{cfg_key}.{key}':val for key,val in self.load_config(cfg_key).items()})
+        for override_key in override:
+            assert override_key in self.train_param.keys() , override_key
+        self.train_param.update(override)
         return self
 
     def special_adjustment(self):
@@ -65,25 +71,31 @@ class TrainParam:
     
     def make_model_name(self):
         if self.model_name: return self
-        if self.Param['model.name']: self.model_name = str(self.Param['model.name'])
-        else: self.model_name = '_'.join([self.model_module , self.Param['model.data.types']])
+        if self.Param['model.name']: 
+            self.model_name = str(self.Param['model.name'])
+        else: 
+            mod_str = self.model_module 
+            head_str = 'booster' if self.model_booster_head else None
+            data_str = '+'.join(self.model_data_types) if self.model_input_type == 'data' else 'hidden'
+            self.model_name = '_'.join([s for s in [mod_str , head_str , data_str] if s])
         if self.short_test: self.model_name += '_ShortTest'
         return self
     
     def check_validity(self):
         assert THIS_IS_SERVER or self.short_test , f'must be at server or short_test'
 
-        if 'best' not in self.model_submodels: self.model_submodels.insert(0 , 'best')
-
-        nn_category = get_nn_category(self.model_module)
-        nn_datatype = get_nn_datatype(self.model_module)
+        nn_category = getter.nn_category(self.model_module)
+        nn_datatype = getter.nn_datatype(self.model_module)
         
         if nn_category == 'tra': assert self.train_sample_method != 'total_shuffle' , self.train_sample_method
         if nn_category == 'vae': assert self.train_sample_method == 'sequential'    , self.train_sample_method
 
-        if nn_datatype:              self.Param['model.data.types'] = nn_datatype
-        if self.module_type != 'nn': self.Param['model.submodels'] = ['best']
-        if 'best' not in self.model_submodels: self.model_submodels.insert(0 , 'best')
+        if nn_datatype:              
+            self.Param['model.data.types'] = nn_datatype
+        if self.module_type != 'nn' or self.model_booster_head: 
+            self.Param['model.submodels'] = ['best']
+        if 'best' not in self.model_submodels: 
+            self.model_submodels.insert(0 , 'best')
 
         if self.model_input_type == 'hidden' or self.module_type != 'nn':
             assert self.train_sample_method == 'sequential' , self.train_sample_method
@@ -121,16 +133,14 @@ class TrainParam:
     @classmethod
     def get_module_type(cls , module : str):
         if module in ['booster' , *VALID_BOOSTERS]:
-            return 'booster'
-        elif module in ['hidden_aggregator']:
-            return 'aggregator'
+            return 'boost'
         else:
             return 'nn'
     
     @property
     def module_type(self): return self.get_module_type(self.model_module)
     @property
-    def nn_category(self): return get_nn_category(self.model_module)
+    def nn_category(self): return getter.nn_category(self.model_module)
     @property
     def resumeable(self): 
         assert self.model_name
@@ -332,7 +342,13 @@ class TrainConfig(TrainParam):
         self.resume_training: bool  = False
         self.stage_queue: list      = []
 
-        self.device = Device()
+        self.device     = Device()
+        self.logger     = Logger()
+        self.checkpoint = Checkpoint(self.mem_storage)
+        self.deposition = Deposition(self.model_base_path , self.model_num_list , self.resume_training)
+        self.metrics    = Metrics(self.module_type , self.nn_category ,
+                                  self.train_criterion_loss , self.train_criterion_score , self.train_criterion_penalty ,
+                                  self.train_multilosses_type , self.train_multilosses_param)
 
     @classmethod
     def load(cls , base_path : Optional[Path] = None , do_parser = False , par_args = {} , override = {} , makedir = True):
@@ -504,7 +520,7 @@ class TrainConfig(TrainParam):
 
     def print_out(self):
         subset = [
-            'model_name' , 'model_module' , 'model_types' , 'model_booster_type' ,
+            'model_name' , 'model_module' , 'model_submodels' , 'model_booster_type' ,
             'model_booster_head' , 'model_data_types' , 'model_data_labels' ,
             'random_seed' , 'beg_date' , 'end_date' , 'train_sample_method' , 'train_shuffle_option' , 
         ]
