@@ -55,7 +55,7 @@ class BatchDisplay(BaseCallBack):
     def on_test_batch_end(self):         
         if self.show_info: 
             self.dataloader.display('Test {} {} score : {:.5f}'.format(
-                self.status.model_type , self.trainer.batch_dates[self.batch_idx] , self.metrics.output.score))
+                self.status.model_submodel , self.trainer.batch_dates[self.batch_idx] , self.metrics.output.score))
             
 class StatusDisplay(BaseCallBack):
     '''display epoch and event information'''
@@ -186,7 +186,7 @@ class StatusDisplay(BaseCallBack):
         self.test_df_model = pd.DataFrame()
         self.test_summarized = False
 
-    def on_test_model_type_end(self):
+    def on_test_submodel_end(self):
         self.update_test_score()
 
     def on_test_end(self): 
@@ -197,12 +197,12 @@ class StatusDisplay(BaseCallBack):
     def update_test_score(self):
         df_date = pd.DataFrame({
             'model_num' : self.status.model_num , 
-            'model_type' : self.status.model_type ,
             'model_date' : self.status.model_date ,
+            'submodel' : self.status.model_submodel ,
             'date' : self.model_test_dates ,
             'value' : self.metrics.scores[-len(self.model_test_dates):]
         })
-        df_model = df_date.groupby(['model_date' , 'model_num','model_type'])['value'].mean().reset_index()
+        df_model = df_date.groupby(['model_num' , 'model_date' , 'submodel'])['value'].mean().reset_index()
         df_model['model_date'] = df_model['model_date'].astype(str)
         self.test_df_date = pd.concat([self.test_df_date , df_date])
         self.test_df_model = pd.concat([self.test_df_model , df_model])
@@ -212,9 +212,9 @@ class StatusDisplay(BaseCallBack):
         cat_date = [md for md in self.test_df_model['model_date'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
         cat_type = ['best' , 'swalast' , 'swabest']
 
-        df_avg = self.test_df_date.groupby(['model_num','model_type'])['value'].mean()
-        df_sum = self.test_df_date.groupby(['model_num','model_type'])['value'].sum()
-        df_std = self.test_df_date.groupby(['model_num','model_type'])['value'].std()
+        df_avg = self.test_df_date.groupby(['model_num','submodel'])['value'].mean()
+        df_sum = self.test_df_date.groupby(['model_num','submodel'])['value'].sum()
+        df_std = self.test_df_date.groupby(['model_num','submodel'])['value'].std()
 
         df_tv = (df_avg / df_std) * (len(self.test_df_date['date'].unique())**0.5)
         df_ir = (df_avg / df_std) * ((240 / 10)**0.5)
@@ -228,15 +228,15 @@ class StatusDisplay(BaseCallBack):
         ])
 
         self.test_df_model['model_date'] = pd.Categorical(self.test_df_model['model_date'] , categories = cat_date, ordered=True) 
-        self.test_df_model['model_type'] = pd.Categorical(self.test_df_model['model_type'] , categories = cat_type, ordered=True) 
+        self.test_df_model['submodel']   = pd.Categorical(self.test_df_model['submodel']   , categories = cat_type, ordered=True) 
         self.test_df_model = self.test_df_model.rename(columns={'model_date' : 'stat'}).pivot_table(
-            'value' , 'stat' , ['model_num' , 'model_type'] , observed=False)
+            'value' , 'stat' , ['model_num' , 'submodel'] , observed=False)
 
         rslt = {'by_model' : self.test_df_model}
         for model_num in self.config.model_num_list:
             df : pd.DataFrame = self.test_df_date[self.test_df_date['model_num'] == model_num].pivot_table(
-                'value' , 'date' , 'model_type' , observed=False)
-            df_cum = df.cumsum().rename(columns = {model_type:f'{model_type}_cum' for model_type in df.columns})
+                'value' , 'date' , 'submodel' , observed=False)
+            df_cum = df.cumsum().rename(columns = {submodel:f'{submodel}_cum' for submodel in df.columns})
             df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
             rslt[f'{model_num}'] = df
 

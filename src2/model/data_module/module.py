@@ -7,11 +7,10 @@ from torch import Tensor
 from torch.utils.data import BatchSampler
 from typing import Any , Literal , Optional
 
-from .hidden_api import get_hidden_df
 from .loader import BatchDataLoader
 from ..util import BatchData , TrainConfig , MemFileStorage , StoredFileLoader
 from ..util.classes import BaseBuffer , BaseDataModule
-from ...basic import CONF , PATH
+from ...basic import CONF , PATH , HiddenPath
 from ...data import DataBlockNorm , DataProcessor , ModuleData , DataBlock
 from ...func import tensor_standardize_and_weight , match_values , index_intersect
 
@@ -106,7 +105,7 @@ class DataModule(BaseDataModule):
         hidden_df : pd.DataFrame | Any = None
         ds_list = ['train' , 'valid'] if stage == 'fit' else ['test' , 'predict']
         for hidden_key in self.config.model_hidden_types:
-            df = get_hidden_df(hidden_key , model_date)
+            df = HiddenPath(hidden_key).get_hidden_df(model_date)
             df = df[df['dataset'].isin(ds_list)].drop(columns='dataset').set_index(['secid','date'])
             hidden_dates.append(df.index.get_level_values('date').unique().to_numpy())
             df.columns = [f'{hidden_key}.{col}' for col in df.columns]

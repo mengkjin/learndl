@@ -1,7 +1,6 @@
 from .config import TrainConfig
 
-from .batch_io import BatchData , BatchMetric , BatchOutput
-from .model_io import ModelDict , ModelFile , ModelInstance
+from .batch import BatchData , BatchMetric , BatchOutput
 
 from .storage import MemFileStorage , StoredFileLoader , Checkpoint , Deposition
 

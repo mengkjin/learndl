@@ -12,7 +12,7 @@ class PredRecorder:
         self.initialized = True
 
     def append_batch_pred(self , trainer : BaseTrainer):
-        pred_idx = f'{trainer.model_num}.{trainer.model_type}.{trainer.model_date}.{trainer.batch_idx}'
+        pred_idx = f'{trainer.model_num}.{trainer.model_submodel}.{trainer.model_date}.{trainer.batch_idx}'
         if pred_idx in self.preds.keys(): return
         if trainer.batch_idx < trainer.batch_warm_up: return
         
@@ -25,13 +25,13 @@ class PredRecorder:
         if len(pred) == 0: return
 
         pred['model_num'] = trainer.model_num
-        pred['model_type'] = trainer.model_type
+        pred['submodel']  = trainer.model_submodel
  
         if which_output is None:
             pred['values'] = pred.loc[:,[col for col in pred.columns if col.startswith('pred.')]].mean(axis=1)
         else:
             pred['values'] = pred[f'pred.{which_output}']
-        df = pred.loc[:,['model_num' , 'model_type' , 'secid' , 'date' , 'values']]
+        df = pred.loc[:,['model_num' , 'submodel' , 'secid' , 'date' , 'values']]
 
         self.preds[pred_idx] = df
 

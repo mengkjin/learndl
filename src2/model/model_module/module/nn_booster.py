@@ -24,7 +24,7 @@ class NNBooster(BasePredictorModel):
                    model_boost_param : Optional[dict] = None , *args , **kwargs):
         nn_module    = model_nn_module    if model_nn_module    else self.config.model_module
         nn_param     = model_nn_param     if model_nn_param     else self.model_param 
-        boost_module = model_boost_module if model_boost_module else self.config.model_booster_type
+        boost_module = model_boost_module if model_boost_module else self.config.model_booster_head
         boost_param  = model_boost_param  if model_boost_param  else self.model_param
 
         device = self.config.device      if self.config else None
@@ -51,7 +51,7 @@ class NNBooster(BasePredictorModel):
         self.init_model(*args , **kwargs)
         transferred = False
         if self.trainer and self.trainer.if_transfer:
-            prev_model_file = self.deposition.load_model(self.trainer.prev_model_date , self.model_num)
+            prev_model_file = self.deposition.load_model(self.model_num , self.trainer.prev_model_date)
             if prev_model_file.exists() and prev_model_file['state_dict']:
                 self.net.load_state_dict(prev_model_file['state_dict'])
                 transferred = True
@@ -60,11 +60,11 @@ class NNBooster(BasePredictorModel):
         
         return self
 
-    def load_model(self , model_date = None , model_num = None , model_type = None , *args , **kwargs):
+    def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when fitting/testing new model'''
         self.init_model(*args , **kwargs)
 
-        model_file = self.model_file(model_date , model_num , model_type)
+        model_file = self.model_file(model_num , model_date , submodel)
         self.net.load_state_dict(model_file['state_dict'])
         self.booster.load_dict(model_file['booster_head'])
         return self
@@ -132,8 +132,8 @@ class NNBooster(BasePredictorModel):
 
     def test(self):
         '''test the model inside'''
-        for _ in self.trainer.iter_model_types():
-            self.load_model(self.model_type)
+        for _ in self.trainer.iter_model_submodels():
+            self.load_model(submodel=self.model_submodel)
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()

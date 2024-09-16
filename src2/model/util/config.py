@@ -342,6 +342,7 @@ class TrainConfig(TrainParam):
         self.resume_training: bool  = False
         self.stage_queue: list      = []
 
+    def init_utils(self):
         self.device     = Device()
         self.logger     = Logger()
         self.checkpoint = Checkpoint(self.mem_storage)
@@ -349,6 +350,7 @@ class TrainConfig(TrainParam):
         self.metrics    = Metrics(self.module_type , self.nn_category ,
                                   self.train_criterion_loss , self.train_criterion_score , self.train_criterion_penalty ,
                                   self.train_multilosses_type , self.train_multilosses_param)
+        return self
 
     @classmethod
     def load(cls , base_path : Optional[Path] = None , do_parser = False , par_args = {} , override = {} , makedir = True):
@@ -362,7 +364,7 @@ class TrainConfig(TrainParam):
         elif 'fit' in config.stage_queue and makedir:
             config.start_new(model_path)
             
-        return config
+        return config.init_utils()
     
     @property
     def Param(self) -> dict[str,Any]: return self.Train.Param

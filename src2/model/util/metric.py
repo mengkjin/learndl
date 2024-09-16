@@ -8,7 +8,7 @@ from dataclasses import dataclass , field
 from torch import nn , no_grad , Tensor
 from typing import Any , Literal , Optional
 
-from .batch_io import BatchMetric
+from .batch import BatchMetric
 from ...func import mse , pearson , ccc , spearman
 
 DISPLAY_CHECK  = True # will display once if true
@@ -90,7 +90,7 @@ class Metrics:
 
     def new_epoch(self , status):
         self.dataset : Literal['train','valid','test'] = status.dataset
-        self.metric_batchs.new(self.dataset , status.model_num , status.model_date , status.epoch , status.model_type)
+        self.metric_batchs.new(self.dataset , status.model_num , status.model_date , status.epoch , status.model_submodel)
 
     def collect_batch(self):
         self.metric_batchs.record(self.output)
@@ -278,13 +278,13 @@ class MetricsAggregator:
         self.table : Optional[pd.DataFrame] = None
         self.new('init',0,0)
     def __len__(self):  return len(self._record['loss'].values)
-    def new(self , dataset , model_num , model_date , epoch = 0 , model_type = 'best'):
-        self._params = [dataset , model_num , model_date , model_type , epoch]
-        self._record = {m:MetricList(f'{dataset}.{model_num}.{model_date}.{model_type}.{epoch}.{m}',m) for m in ['loss','score']}
+    def new(self , dataset , model_num , model_date , epoch = 0 , submodel = 'best'):
+        self._params = [dataset , model_num , model_date , submodel , epoch]
+        self._record = {m:MetricList(f'{dataset}.{model_num}.{model_date}.{submodel}.{epoch}.{m}',m) for m in ['loss','score']}
     def record(self , metrics): 
         [self._record[m].record(metrics) for m in ['loss','score']]
     def collect(self):
-        df = pd.DataFrame([[*self._params , self.loss , self.score]] , columns=['dataset','model_num','model_date','model_type','epoch','loss','score'])
+        df = pd.DataFrame([[*self._params , self.loss , self.score]] , columns=['dataset','model_num','model_date','submodel','epoch','loss','score'])
         self.table = df if self.table is None else pd.concat([self.table , df]).reindex()
     @property
     def nanloss(self): return self._record['loss'].any_nan()

@@ -19,8 +19,9 @@ class NNPredictor(BasePredictorModel):
 
         self.net = getter.nn(module , param , device)
         self.reset_submodels(*args , **kwargs)
-        self.metrics.new_model(param)
 
+        self.model_dict.reset()
+        self.metrics.new_model(param)
         return self
     
     def reset_submodels(self , *args , **kwargs):
@@ -35,7 +36,7 @@ class NNPredictor(BasePredictorModel):
         self.init_model(*args , **kwargs)
         transferred = False
         if self.trainer and self.trainer.if_transfer:
-            prev_model_file = self.deposition.load_model(self.trainer.prev_model_date , self.model_num)
+            prev_model_file = self.deposition.load_model(self.model_num , self.trainer.prev_model_date)
             if prev_model_file.exists() and prev_model_file['state_dict']:
                 self.net.load_state_dict(prev_model_file['state_dict'])
                 transferred = True
@@ -43,10 +44,10 @@ class NNPredictor(BasePredictorModel):
         self.checkpoint.new_model(self.model_param , self.model_date)
         return self
     
-    def load_model(self , model_date = None , model_num = None , model_type = None , *args , **kwargs):
+    def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when testing new model'''
         self.init_model(*args , **kwargs)
-        model_file = self.model_file(model_date , model_num , model_type)
+        model_file = self.model_file(model_num , model_date , submodel)
         self.net.load_state_dict(model_file['state_dict'])
         return self
     
@@ -72,8 +73,8 @@ class NNPredictor(BasePredictorModel):
 
     def test(self):
         '''test the model inside'''
-        for _ in self.trainer.iter_model_types():
-            self.load_model(self.model_type)
+        for _ in self.trainer.iter_model_submodels():
+            self.load_model(submodel=self.model_submodel)
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()

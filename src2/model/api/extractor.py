@@ -9,30 +9,30 @@ from typing import Any , Literal , Optional
 from ..model_module.module.nn import NNPredictor
 from ..util import TrainConfig
 from ..data_module import DataModule
-from ...basic import RegModel , PATH
+from ...basic import ModelPath , HiddenPath , PATH
 
 class HiddenExtractor:
     '''for a model to predict recent/history data'''
     def __init__(self , model_name : str , 
-                 model_nums : Optional[list | np.ndarray | int] = None , 
-                 model_types : Optional[list | np.ndarray | Literal['best' , 'swalast' , 'swabest']] = None):
+                 nums : Optional[list | np.ndarray | int] = None , 
+                 submodels : Optional[list | np.ndarray | Literal['best' , 'swalast' , 'swabest']] = None):
         
-        self.reg_model = RegModel(model_name)
+        self.reg_model = ModelPath(model_name)
         self.model_name = self.reg_model.name 
         
-        if model_nums is None:
+        if nums is None:
             self.model_nums = self.reg_model.model_nums
         else:
-            self.model_nums = [model_nums] if isinstance(model_nums , int) else model_nums
+            self.model_nums = [nums] if isinstance(nums , int) else nums
 
-        if model_types is None:
-            self.model_types = self.reg_model.model_types
+        if submodels is None:
+            self.model_submodels = self.reg_model.model_submodels
         else:
-            self.model_types = [model_types] if isinstance(model_nums , str) else model_types
+            self.model_submodels = [submodels] if isinstance(submodels , str) else submodels
 
         self.contents : dict[str,pd.DataFrame] = {}
         self.config = TrainConfig.load(PATH.model.joinpath(self.reg_model.name) , override={'short_test':False})
-        self.module = NNPredictor().bound_with_config(self.config) #.load_model(model_date , model_num , self.model_type)
+        self.module = NNPredictor().bound_with_config(self.config)
 
         self.data = DataModule(self.config , 'both').load_data()
         self.target_path = PATH.hidden.joinpath(self.reg_model.name)
@@ -43,9 +43,6 @@ class HiddenExtractor:
         else:
             self.model_dates = self.reg_model.model_dates
 
-    def hidden_key(self , model_num , model_type , model_date) : 
-        return f'hidden.{model_num}.{model_type}.{model_date}.feather'
-
     def deploy(self):
         '''deploy df in contents to target path'''
         self.target_path.mkdir(exist_ok=True)
@@ -54,11 +51,10 @@ class HiddenExtractor:
         return self
 
     def update_model_iter(self):
-
-        model_iter = [(d , n , t) for (d , n , t) 
-                      in product(self.model_dates[:-1] , self.model_nums , self.model_types)
-                      if not self.target_path.joinpath(self.hidden_key(n , t , d)).exists()]
-        model_iter += list(product(self.model_dates[-1:] , self.model_nums , self.model_types))
+        model_iter = [(d , n , s) for (d , n , s) 
+                      in product(self.model_dates[:-1] , self.model_nums , self.model_submodels)
+                      if not self.target_path.joinpath(HiddenPath.hidden_key(n , d , s)).exists()]
+        model_iter += list(product(self.model_dates[-1:] , self.model_nums , self.model_submodels))
         return model_iter
     
     def given_model_iter(self , model_dates : Optional[list | np.ndarray | int] = None):
@@ -68,7 +64,7 @@ class HiddenExtractor:
         
         if isinstance(model_dates , int): model_dates = [model_dates]
         model_dates = np.intersect1d(self.model_dates , model_dates)
-        model_iter = list(product(model_dates , self.model_nums , self.model_types))
+        model_iter = list(product(model_dates , self.model_nums , self.model_submodels))
         return model_iter
 
     def extract_hidden(self , what : Literal['given' , 'update'] , model_dates : Optional[list | np.ndarray | int] = None ,
@@ -81,21 +77,21 @@ class HiddenExtractor:
             raise KeyError(what)
         self.target_path.mkdir(exist_ok=True)
         with torch.no_grad():
-            for model_date , model_num , model_type in model_iter:
-                hidden_key = self.hidden_key(model_num , model_type , model_date)
-                hidden_df  = self.model_hidden(model_num , model_type , model_date , verbose = verbose)
+            for model_date , model_num , submodel in model_iter:
+                hidden_key = HiddenPath.hidden_key(model_num , model_date , submodel)
+                hidden_df  = self.model_hidden(model_num , model_date , submodel , verbose = verbose)
                 if deploy:
                     hidden_df.to_feather(self.target_path.joinpath(hidden_key))
                 else:
                     self.contents[hidden_key] = hidden_df
         return self
     
-    def model_hidden(self , model_num , model_type , model_date , verbose = True) -> pd.DataFrame:
+    def model_hidden(self , model_num : int , model_date :int , submodel : str, verbose = True) -> pd.DataFrame:
         model_param = self.config.model_param[model_num]
-        self.module.load_model(model_date , model_num , model_type)
+        self.module.load_model(model_num , model_date , submodel)
 
         hiddens : list[pd.DataFrame] = []
-        desc = f'Extract {model_num}/{model_type}/{model_date}' if verbose else ''
+        desc = f'Extract {model_num}/{submodel}/{model_date}' if verbose else ''
 
         self.data.setup('fit' ,  model_param , model_date)
         hiddens += self.loader_hidden('train' , desc)
@@ -126,9 +122,9 @@ class HiddenExtractor:
     @classmethod
     def extract_model_hidden(
         cls , model_name : str , model_nums : Optional[list | np.ndarray | int] = None , 
-        model_types : Optional[list | np.ndarray | Literal['best' , 'swalast' , 'swabest']] = None):
+        submodels : Optional[list | np.ndarray | Literal['best' , 'swalast' , 'swabest']] = None):
 
-        extractor = cls(model_name , model_nums , model_types)
+        extractor = cls(model_name , model_nums , submodels)
 
         extractor.extract_hidden('update' , deploy = True)
         return extractor

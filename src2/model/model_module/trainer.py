@@ -9,7 +9,7 @@ class TrainerModule(BaseTrainer):
     def init_data(self , **kwargs): 
         self.data     = DataModule(self.config)
     def init_model(self , **kwargs):
-        self.model    = module_selector(self.config).bound_with_trainer(self , **kwargs)
+        self.model    = module_selector(self.config , **kwargs).bound_with_trainer(self)
     def init_callbacks(self , **kwargs) -> None: 
         self.callback = CallBackManager.setup(self)
 

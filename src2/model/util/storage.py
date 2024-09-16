@@ -6,9 +6,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
-from .model_io import ModelDict , ModelFile
 from ...func.basic import Filtered
-from ...basic import ModelPath
+from ...basic import ModelDict , ModelPath
 
 class MemFileStorage:
     '''Interface of mem or disk storage, methods'''
@@ -181,27 +180,26 @@ class Deposition:
         self.model_num_list = model_num_list
         self.resume_training = resume_training
 
-    def stack_model(self , model_dict : ModelDict , model_date , model_num , model_type = 'best'):
-        model_dict.save(self.model_path(model_date , model_num , model_type) , stack = True)
+    def stack_model(self , model_dict : ModelDict , model_num , model_date , submodel = 'best'):
+        model_dict.save(self.model_path(model_num , model_date , submodel) , stack = True)
 
-    def dump_model(self , model_date , model_num , model_type = 'best'):
-        model_path = self.model_path(model_date , model_num , model_type)
+    def dump_model(self , model_num , model_date , submodel = 'best'):
+        model_path = self.model_path(model_num , model_date , submodel)
         for path in model_path.iterdir():
             if path.stem.endswith('.stack'):
                 new_path = path.with_stem(path.stem.replace('.stack',''))
                 if new_path.exists(): new_path.unlink()
                 path.rename(new_path)
 
-    def load_model(self , model_date , model_num , model_type = 'best'):
-        return ModelFile(self.model_path(model_date , model_num , model_type))
+    def load_model(self , model_num , model_date , submodel = 'best'):
+        return self.base_path.model_file(model_num , model_date , submodel)
     
-    def exists(self , model_date , model_num , model_type = 'best'):
-        # return ModelFile(self.model_path(model_date , model_num , model_type)).exists()
-        return self.base_path.exists(model_num , model_date , model_type)
+    def exists(self , model_num , model_date , submodel = 'best'):
+        return self.base_path.exists(model_num , model_date , submodel)
     
-    def model_path(self , model_date , model_num , model_type = 'best'):
-        '''get model path of deposition giving model date / num / type'''
-        return self.base_path.full_path(model_num , model_date , model_type)
+    def model_path(self , model_num , model_date , submodel = 'best'):
+        '''get model path of deposition giving model date / num / submodel'''
+        return self.base_path.full_path(model_num , model_date , submodel)
     
     def model_iter(self , stage , model_date_list):
         '''iter of model_date and model_num , considering resume_training'''
@@ -209,7 +207,7 @@ class Deposition:
         if self.resume_training and stage == 'fit':
             models_trained = np.full(len(new_iter) , True , dtype = bool)
             for i , (model_date , model_num) in enumerate(new_iter):
-                if not self.exists(model_date , model_num):
+                if not self.exists(model_num , model_date):
                     models_trained[max(i,0):] = False
                     break
             new_iter = Filtered(new_iter , ~models_trained)

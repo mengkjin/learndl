@@ -19,6 +19,8 @@ class BoostPredictor(BasePredictorModel):
         cuda = self.device.is_cuda()   if self.config else None
         seed = self.config.random_seed if self.config else None
         self.booster = getter.boost(module , param , cuda , seed)
+
+        self.model_dict.reset()
         self.metrics.new_model(param)
         return self
     
@@ -26,12 +28,12 @@ class BoostPredictor(BasePredictorModel):
         '''call when fitting new model'''
         return self.init_model()
 
-    def load_model(self , model_date = None , model_num = None , model_type = None , *args , **kwargs):
+    def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when testing new model'''
         self.init_model()
-        model_type = model_type if model_type is not None else self.model_type
-        assert model_type == 'best' , f'{self.model_type} does not defined in {self.__class__.__name__}'
-        model_file = self.model_file(model_date , model_num , model_type)
+        submodel = submodel if submodel is not None else self.model_submodel
+        assert submodel == 'best' , f'{self.model_submodel} does not defined in {self.__class__.__name__}'
+        model_file = self.model_file(model_num , model_date , submodel)
         self.booster.load_dict(model_file['booster_dict'])
         return self
     
@@ -64,8 +66,8 @@ class BoostPredictor(BasePredictorModel):
             self.batch_metrics()
 
     def test(self):
-        for _ in self.trainer.iter_model_types():
-            self.load_model(self.model_type)
+        for _ in self.trainer.iter_model_submodels():
+            self.load_model(submodel=self.model_submodel)
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()

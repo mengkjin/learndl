@@ -35,10 +35,10 @@ class DetailedAlphaAnalysis(BaseCallBack):
         if self.use_num == 'first':
             df = df[df['model_num'] == 0]
         else:
-            df = df.groupby(['date','secid','model_type'])['values'].mean().reset_index()
+            df = df.groupby(['date','secid','submodel'])['values'].mean().reset_index()
         df.set_index(['secid','date']).to_feather(self.path_pred)
 
-        df = df.rename(columns={'model_type':'factor_name'}).pivot_table('values',['secid','date'],'factor_name')
+        df = df.rename(columns={'submodel':'factor_name'}).pivot_table('values',['secid','date'],'factor_name')
         #self.logger.warning(f'Performing Factor and FMP test!')
         
         self.df = df
@@ -77,7 +77,7 @@ class GroupReturnAnalysis(BaseCallBack):
     def on_test_batch_end(self): PRED_RECORD.append_batch_pred(self.trainer)
     def on_test_end(self):       
         df = PRED_RECORD.all_preds
-        df['factor_name'] = df['model_num'].astype(str) + '.' + df['model_type']
+        df['factor_name'] = df['model_num'].astype(str) + '.' + df['submodel']
         df = df.pivot_table('values',['secid','date'],'factor_name')
 
         rslt = {}
@@ -86,8 +86,8 @@ class GroupReturnAnalysis(BaseCallBack):
             grp = calc_grp_perf(df , benchmark = benchmark , group_num=self.group_num , excess=True)
 
             grp = grp.groupby(['factor_name' , 'group'] , observed=False)['group_ret'].mean().reset_index()
-            grp[['model_num', 'model_type']] = grp['factor_name'].str.split('.', expand=True) 
-            grp = grp.pivot_table('group_ret',['model_num', 'model_type'],'group' , observed=False).map(lambda x:f'{x:.3%}')
+            grp[['model_num', 'submodel']] = grp['factor_name'].str.split('.', expand=True) 
+            grp = grp.pivot_table('group_ret',['model_num', 'submodel'],'group' , observed=False).map(lambda x:f'{x:.3%}')
             
             rslt[bm] = grp
 

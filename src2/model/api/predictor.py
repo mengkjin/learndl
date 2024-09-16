@@ -8,7 +8,7 @@ from typing import ClassVar , Optional
 from ..util import TrainConfig
 from ..data_module import DataModule
 from ..model_module import module_selector
-from ...basic import (RegModel , PATH , CONF , THIS_IS_SERVER , 
+from ...basic import (RegisteredModel , PATH , CONF , THIS_IS_SERVER , 
                       REG_MODELS , FACTOR_DESTINATION_LAPTOP , FACTOR_DESTINATION_SERVER)
 from ...data import GetData
 from ...func import today , date_offset
@@ -16,14 +16,14 @@ from ...func import today , date_offset
 @dataclass
 class Predictor:
     '''for a model to predict recent/history data'''
-    reg_model : RegModel
+    reg_model : RegisteredModel
 
     SECID_COLS : ClassVar[str] = 'secid'
     DATE_COLS  : ClassVar[str] = 'date'
 
     def __post_init__(self):
         self.model_name = self.reg_model.name
-        self.model_type = self.reg_model.type
+        self.model_submodel = self.reg_model.submodel
         self.alias = self.reg_model.alias if self.reg_model.alias else self.model_name
 
         if self.reg_model.num == 'all': 
@@ -98,7 +98,7 @@ class Predictor:
                 # print(model_date , 'old' if (data is data_mod_old) else 'new') 
                 assert isinstance(model_date , int) , model_date
                 data_mod.setup('predict' ,  model_param , model_date)
-                model = module_selector(config).load_model(model_date , model_num , self.model_type)
+                model = module_selector(config).load_model(model_num , model_date , self.model_submodel)
                 
                 tdates = data_mod.model_test_dates
                 within = np.isin(tdates , df_sub[df_sub['calculated'] == 0]['pred_dates'])

@@ -40,7 +40,7 @@ class SpecCB_TRA(BaseCallBack):
         self.data.buffer['hist_preds'][self.i0 , self.i1] = vp
         self.data.buffer['hist_loss'][self.i0 , self.i1] = (vp - v0).square()
     def on_fit_model_start(self):           self.init_buffer()
-    def on_test_model_type_start(self):     self.init_buffer()
+    def on_test_submodel_start(self):     self.init_buffer()
     def on_train_batch_start(self):         self.fill_batch_data()
     def on_validation_batch_start(self):    self.fill_batch_data()
     def on_test_batch_start(self):          self.fill_batch_data()
@@ -88,7 +88,7 @@ class SpecCB_DSize(BaseCallBack):
         self.batch_data.kwargs = {'size': size}
 
     def on_fit_model_start(self):           self.init_buffer()
-    def on_test_model_type_start(self):     self.init_buffer()
+    def on_test_submodel_start(self):     self.init_buffer()
     def on_train_batch_start(self):         self.fill_batch_data()
     def on_validation_batch_start(self):    self.fill_batch_data()
     def on_test_batch_start(self):          self.fill_batch_data()

@@ -7,14 +7,12 @@ from inspect import currentframe
 from torch import Tensor
 from typing import Any , final , Iterator , Literal , Optional
 
-from .batch_io import BatchData , BatchOutput
+from .batch import BatchData , BatchOutput
 from .buffer import BaseBuffer
 from .config import TrainConfig
-from .model_io import ModelDict , ModelFile
-from .metric import Metrics
-from .storage import Checkpoint , Deposition , MemFileStorage
+from .storage import MemFileStorage
+from ...basic import ModelDict
 from ...func import BigTimer
-from ...util import Logger
 
 class ModelStreamLine(ABC):
     def on_configure_model(self): ...
@@ -37,8 +35,8 @@ class ModelStreamLine(ABC):
     def on_test_end(self): ... 
     def on_test_model_end(self): ... 
     def on_test_model_start(self): ... 
-    def on_test_model_type_end(self): ... 
-    def on_test_model_type_start(self): ... 
+    def on_test_submodel_end(self): ... 
+    def on_test_submodel_start(self): ... 
     def on_test_start(self): ... 
     def on_train_batch_end(self): ... 
     def on_train_batch_start(self): ... 
@@ -83,7 +81,7 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
     @property
     def model_num(self): return self.trainer.model_num
     @property
-    def model_type(self): return self.trainer.model_type
+    def model_submodel(self): return self.trainer.model_submodel
 
 
 @dataclass
@@ -97,7 +95,7 @@ class TrainerStatus:
     
     model_num  : int = -1
     model_date : int = -1
-    model_type : str = 'best'
+    model_submodel : str = 'best'
     epoch_event : list[str] = field(default_factory=list)
     best_attempt_metric : Any = None
 
@@ -281,13 +279,13 @@ class BaseTrainer(ModelStreamLine):
     @property
     def model_num(self): return self.status.model_num
     @property
-    def model_type(self): return self.status.model_type
+    def model_submodel(self): return self.status.model_submodel
     @property
     def prev_model_date(self): return self.data.prev_model_date(self.model_date)
     @property
     def model_param(self): return self.config.Model.params[self.model_num]
     @property
-    def model_types(self): return self.config.model_submodels
+    def model_submodels(self): return self.config.model_submodels
     @property
     def if_transfer(self): return self.config.train_trainer_transfer
     @property
@@ -343,11 +341,11 @@ class BaseTrainer(ModelStreamLine):
             self.on_before_fit_epoch_end()
             self.on_fit_epoch_end()
 
-    def iter_model_types(self):
-        for self.status.model_type in self.model_types: 
-            self.on_test_model_type_start()
-            yield self.status.model_type
-            self.on_test_model_type_end()
+    def iter_model_submodels(self):
+        for self.status.model_submodel in self.model_submodels: 
+            self.on_test_submodel_start()
+            yield self.status.model_submodel
+            self.on_test_submodel_end()
 
     def iter_train_dataloader(self , given_loader = None):
         self.dataloader = self.data.train_dataloader() if given_loader is None else given_loader
@@ -384,14 +382,14 @@ class BaseTrainer(ModelStreamLine):
     def stack_model(self):
         '''temporaly save self to somewhere'''
         self.on_before_save_model()
-        for model_type in self.model_types:
-            model_dict = self.model.collect(model_type)
-            self.deposition.stack_model(model_dict , self.model_date , self.model_num , model_type) 
+        for submodel in self.model_submodels:
+            model_dict = self.model.collect(submodel)
+            self.deposition.stack_model(model_dict , self.model_date , self.model_num , submodel) 
 
     def save_model(self):
         '''save self to somewhere'''
         if self.metrics.better_attempt(self.status.best_attempt_metric): self.stack_model()
-        [self.deposition.dump_model(self.model_date , self.model_num , model_type) for model_type in self.model_types]
+        [self.deposition.dump_model(self.model_date , self.model_num , submodel) for submodel in self.model_submodels]
 
     def on_configure_model(self):  
         self.config.set_config_environment()
@@ -427,12 +425,12 @@ class BaseTrainer(ModelStreamLine):
         self.status.dataset_test()
         self.data.setup('test' , self.model_param , self.model_date)
     
-    def on_test_model_type_start(self):
+    def on_test_submodel_start(self):
         self.metrics.new_epoch(self.status)
-        assert self.deposition.exists(self.model_date , self.model_num , self.model_type) , \
-            (self.model_date , self.model_num , self.model_type)
+        assert self.deposition.exists(self.model_date , self.model_num , self.model_submodel) , \
+            (self.model_date , self.model_num , self.model_submodel)
         
-    def on_test_model_type_end(self): 
+    def on_test_submodel_end(self): 
         self.metrics.collect_epoch()
 
     def on_test_batch_start(self):
@@ -500,12 +498,12 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         self.model_dict = ModelDict()
         return self
 
-    def bound_with_config(self , config : TrainConfig , model_num = 0 , model_date = -1 , model_type = 'best'):
+    def bound_with_config(self , config : TrainConfig , model_num = 0 , model_date = -1 , submodel = 'best'):
         assert self.trainer is None , 'Cannot bound with config if assigned trainer first'
         self._config = config
-        self._model_num = model_num
+        self._model_num  = model_num
         self._model_date = model_date
-        self._model_type = model_type
+        self._model_submodel = submodel
         return self
 
     def bound_with_trainer(self , trainer : BaseTrainer):
@@ -532,25 +530,24 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     def model_date(self):
         return self.trainer.model_date if self.trainer else self._model_date
     @property
-    def model_type(self):
-        return self.trainer.model_type if self.trainer else self._model_type
+    def model_submodel(self):
+        return self.trainer.model_submodel if self.trainer else self._model_submodel
     @property
     def model_param(self): return self.config.model_param[self.model_num]
     
-    def model_file(self , model_date = None , model_num = None , model_type = None , *args , **kwargs):
+    def model_file(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when fitting/testing new model'''
-        if model_date is None: model_date = self.model_date
         if model_num  is None: model_num  = self.model_num
-        if model_type is None: model_type = self.model_type
-        return self.deposition.load_model(model_date , model_num , model_type)
-
+        if model_date is None: model_date = self.model_date
+        if submodel   is None: submodel   = self.model_submodel
+        return self.deposition.load_model(model_num , model_date , submodel)
     @abstractmethod
     def new_model(self , *args , **kwargs):
         '''call when fitting new model'''
         self.optimizer : Any
         return self
     @abstractmethod
-    def load_model(self , model_date = None , model_num = None , model_type = None , *args , **kwargs): 
+    def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when testing new model'''
         return self
     @abstractmethod
@@ -565,8 +562,8 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
 
     def test(self):
         '''test the model inside'''
-        for _ in self.trainer.iter_model_types():
-            self.load_model(False , self.model_type)
+        for _ in self.trainer.iter_model_submodels():
+            self.load_model(submodel=self.model_submodel)
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()

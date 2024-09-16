@@ -9,12 +9,12 @@ from typing import Any , Literal
 from ...util import BatchData , Checkpoint , Metrics
 from ...util.classes import BaseTrainer
 
-def choose_swa_method(model_type : Literal['best' , 'swabest' , 'swalast'] | Any):
+def choose_swa_method(submodel : Literal['best' , 'swabest' , 'swalast'] | Any):
     '''get a subclass of _BaseEnsembler'''
-    if model_type == 'best': return EnsembleBestOne
-    elif model_type == 'swabest': return EnsembleSWABest
-    elif model_type == 'swalast': return EnsembleSWALast
-    else: raise KeyError(model_type)
+    if submodel == 'best': return EnsembleBestOne
+    elif submodel == 'swabest': return EnsembleSWABest
+    elif submodel == 'swalast': return EnsembleSWALast
+    else: raise KeyError(submodel)
 
 class SWAEnsembler(ABC):
     '''abstract class of fittest model, e.g. model with the best score, swa model of best scores or last ones'''
