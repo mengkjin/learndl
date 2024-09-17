@@ -1,9 +1,9 @@
-from .module.nn import NNPredictor
-from .module.boost import BoostPredictor
-from .module.nn_booster import NNBooster
-from ..util import TrainConfig
+from ..module.nn import NNPredictor
+from ..module.boost import BoostPredictor
+from ..module.nn_booster import NNBooster
+from ...util import TrainConfig
 
-def module_selector(model_module : str | TrainConfig , *args , **kwargs):
+def get_predictor_module(model_module : str | TrainConfig , *args , **kwargs):
     if isinstance(model_module , str):
         module_type = TrainConfig.get_module_type(model_module)
         if module_type == 'nn':

@@ -10,7 +10,8 @@ from .builder import group_optimize
 from .stat import group_accounting , calc_fmp_account
 from ..loader import factor
 from ..util import Benchmark , AlphaModel
-from ...basic import PATH , DEFAULT_BENCHMARKS
+from ...basic import PATH
+from ...basic.conf import DEFAULT_BENCHMARKS
 from ...data import DataBlock
 from ...func import dfs_to_excel , figs_to_pdf
 

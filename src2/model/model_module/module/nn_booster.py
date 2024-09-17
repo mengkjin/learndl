@@ -62,9 +62,10 @@ class NNBooster(BasePredictorModel):
 
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when fitting/testing new model'''
-        self.init_model(*args , **kwargs)
+        model_file = self.load_model_file(model_num , model_date , submodel)
+        assert self.model_submodel == 'best' , f'{self.model_submodel} does not defined in {self.__class__.__name__}'
 
-        model_file = self.model_file(model_num , model_date , submodel)
+        self.init_model(*args , **kwargs)
         self.net.load_state_dict(model_file['state_dict'])
         self.booster.load_dict(model_file['booster_head'])
         return self

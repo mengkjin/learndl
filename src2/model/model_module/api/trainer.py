@@ -1,15 +1,16 @@
-from .selector import module_selector
-from ..callback import CallBackManager
-from ..data_module import DataModule
-from ..util.classes import BaseTrainer
-from ...basic import REG_MODELS , THIS_IS_SERVER
+from .module_selector import get_predictor_module
+from ...callback import CallBackManager
+from ...data_module import DataModule
+from ...util.classes import BaseTrainer
+from ....basic import CONF
+from ....basic.util import REG_MODELS
 
-class TrainerModule(BaseTrainer):
+class ModelTrainer(BaseTrainer):
     '''run through the whole process of training'''
     def init_data(self , **kwargs): 
         self.data     = DataModule(self.config)
     def init_model(self , **kwargs):
-        self.model    = module_selector(self.config , **kwargs).bound_with_trainer(self)
+        self.model    = get_predictor_module(self.config , **kwargs).bound_with_trainer(self)
     def init_callbacks(self , **kwargs) -> None: 
         self.callback = CallBackManager.setup(self)
 
@@ -35,7 +36,7 @@ class TrainerModule(BaseTrainer):
 
     @classmethod
     def update_models(cls):
-        if not THIS_IS_SERVER:
+        if not CONF.THIS_IS_SERVER:
             print('This is not server! Will not update models!')
         else:
             [cls.initialize(0 , 1 , 0 , model.model_path).go() for model in REG_MODELS]

@@ -7,7 +7,7 @@ from typing import Any , Literal
 from .builder import PortOptimTuple
 
 from ..util import RISK_MODEL , Portfolio , Benchmark , Port
-from ...basic import ROUNDING_RETURN , ROUNDING_TURNOVER , TRADE_COST , AVAIL_BENCHMARKS
+from ...basic.conf import ROUNDING_RETURN , ROUNDING_TURNOVER , TRADE_COST , AVAIL_BENCHMARKS
 from ...data.vendor import DATAVENDOR
 from ...func import date_diff
 

@@ -4,7 +4,7 @@ from typing import Any , Literal
 from abc import abstractmethod , ABC
 
 from .func import file_update_date , updatable , dates_to_update , quarter_ends
-from ....basic import DB_BY_DATE , DB_BY_NAME , get_target_path , get_target_dates , save_df
+from ....basic import PATH
 from ....func import today
 
 class TushareFetecher(ABC):
@@ -12,9 +12,9 @@ class TushareFetecher(ABC):
         self.db_type : Literal['info' , 'date' , 'fina'] = db_type
         self.update_freq : Literal['d' , 'w' , 'm']= update_freq
         if db_type == 'info':
-            assert self.db_src() in DB_BY_NAME , (db_type , self.db_src() , self.db_key())
+            assert self.db_src() in PATH.DB_BY_NAME , (db_type , self.db_src() , self.db_key())
         elif db_type in ['date' , 'fina']:
-            assert self.db_src() in DB_BY_DATE , (db_type , self.db_src() , self.db_key())
+            assert self.db_src() in PATH.DB_BY_DATE , (db_type , self.db_src() , self.db_key())
         else:
             raise KeyError(db_type)
     
@@ -32,17 +32,17 @@ class TushareFetecher(ABC):
     def target_path(self , date : int | Any = None , makedir = False):
         if self.use_date_type:  assert date is not None
         else: date = None
-        return get_target_path(self.db_src() , self.db_key() , date = date , makedir=makedir)
+        return PATH.get_target_path(self.db_src() , self.db_key() , date = date , makedir=makedir)
 
     def fetch_and_save(self , date : int | Any = None):
         if self.use_date_type:  assert date is not None
         print(f'{self.__class__.__name__} Updating {self.db_src()}/{self.db_key()} at {date}')
         df = self.get_data(date)
-        if len(df): save_df(df , self.target_path(date , True))
+        if len(df): PATH.save_df(df , self.target_path(date , True))
 
     def last_date(self , default = 19970101):
         if self.use_date_type:
-            dates = get_target_dates(self.db_src() , self.db_key())
+            dates = PATH.get_target_dates(self.db_src() , self.db_key())
             return max(dates) if len(dates) else default
         else:
             return file_update_date(self.target_path() , default)

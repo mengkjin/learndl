@@ -2,26 +2,24 @@ import torch
 import numpy as np
 import pandas as pd
 
-from dataclasses import dataclass
 from typing import ClassVar , Optional
 
-from ..util import TrainConfig
-from ..data_module import DataModule
-from ..model_module import module_selector
-from ...basic import (RegisteredModel , PATH , CONF , THIS_IS_SERVER , 
-                      REG_MODELS , FACTOR_DESTINATION_LAPTOP , FACTOR_DESTINATION_SERVER)
-from ...data import GetData
-from ...func import today , date_offset
+from .module_selector import get_predictor_module
+from ...util import TrainConfig
+from ...data_module import DataModule
+from ....basic import PATH , CONF
+from ....basic.util import RegisteredModel , REG_MODELS
+from ....data import GetData
+from ....func import today , date_offset
 
-@dataclass
-class Predictor:
+class ModelPredictor:
     '''for a model to predict recent/history data'''
-    reg_model : RegisteredModel
-
     SECID_COLS : ClassVar[str] = 'secid'
     DATE_COLS  : ClassVar[str] = 'date'
 
-    def __post_init__(self):
+    def __init__(self , reg_model : RegisteredModel):
+        self.reg_model = reg_model
+
         self.model_name = self.reg_model.name
         self.model_submodel = self.reg_model.submodel
         self.alias = self.reg_model.alias if self.reg_model.alias else self.model_name
@@ -33,14 +31,20 @@ class Predictor:
         else:
             self.model_nums = list(self.reg_model.num)
 
+        self.config = TrainConfig.load_model(self.model_name , override={'env.verbosity':0})
+        self.model = get_predictor_module(self.config)
         self.df = pd.DataFrame()
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(reg_model={str(self.reg_model)})'
 
     @classmethod
     def update_factors(cls , silent = True):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
-        for model in REG_MODELS:
+        reg_models = [RegisteredModel(**reg_model) for reg_model in REG_MODELS]
+        for model in reg_models:
             md = cls(model)
-            with CONF.Silence(): md.get_df().deploy()
+            with CONF.SILENT: md.get_df().deploy()
             print(f'Finish model [{model.name}] predicting!')
         print('-' * 80)
         return md
@@ -49,7 +53,7 @@ class Predictor:
         '''deploy df by day to class.destination'''
         if df is None: df = self.df
         if df is None: return NotImplemented
-        path_deploy = FACTOR_DESTINATION_SERVER if THIS_IS_SERVER else FACTOR_DESTINATION_LAPTOP
+        path_deploy = PATH.FACTOR_DESTINATION_SERVER if CONF.THIS_IS_SERVER else PATH.FACTOR_DESTINATION_LAPTOP
         path_deploy.joinpath(self.alias).mkdir(parents=True,exist_ok=True)
         for date , subdf in df.groupby(date_col):
             des_path = path_deploy.joinpath(self.alias , f'{self.alias}_{date}.txt')
@@ -78,12 +82,11 @@ class Predictor:
         '''predict recent days'''
         if start_dt <= 0: start_dt = today(start_dt)
 
-        config       = TrainConfig.load(PATH.model.joinpath(self.model_name) , override={'env.verbosity':0})
         model_dates  = self.reg_model.model_dates 
         start_dt     = max(start_dt , int(date_offset(min(model_dates) ,1)))
-        data_mod     = DataModule(config , 'both' if start_dt <= today(-100) else 'predict').load_data() 
+        data_module  = DataModule(self.config , 'both' if start_dt <= today(-100) else 'predict').load_data() 
 
-        end_dt = min(end_dt , max(data_mod.test_full_dates))
+        end_dt = min(end_dt , max(data_module.test_full_dates))
         pred_dates = GetData.trade_dates(start_dt , end_dt)
         
         df_task = pd.DataFrame({'pred_dates' : pred_dates , 
@@ -94,19 +97,19 @@ class Predictor:
         
         for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
             for model_num in self.model_nums:
-                model_param = config.model_param[model_num]
+                model_param = self.config.model_param[model_num]
                 # print(model_date , 'old' if (data is data_mod_old) else 'new') 
                 assert isinstance(model_date , int) , model_date
-                data_mod.setup('predict' ,  model_param , model_date)
-                model = module_selector(config).load_model(model_num , model_date , self.model_submodel)
+                data_module.setup('predict' ,  model_param , model_date)
+                model = self.model.load_model(model_num , model_date , self.model_submodel , model_param = model_param)
                 
-                tdates = data_mod.model_test_dates
+                tdates = data_module.model_test_dates
                 within = np.isin(tdates , df_sub[df_sub['calculated'] == 0]['pred_dates'])
-                loader = data_mod.predict_dataloader()
+                loader = data_module.predict_dataloader()
 
                 for tdate , do_calc , batch_data in zip(tdates , within , loader):
                     if not do_calc or len(batch_data) == 0: continue
-                    secid = data_mod.datas.secid[batch_data.i[:,0].cpu().numpy()]
+                    secid = data_module.datas.secid[batch_data.i[:,0].cpu().numpy()]
                     df = model(batch_data).pred_df(secid , tdate , colnames = self.model_name , model_num = model_num)
                     df_list.append(df)
                     df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1

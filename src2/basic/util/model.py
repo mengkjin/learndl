@@ -6,11 +6,9 @@ from pathlib import Path
 from torch import Tensor
 from typing import Any , Literal , Optional
 
-from . import path as PATH
+from ..path import glob as PATH
 
-FACTOR_DESTINATION_LAPTOP = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
-FACTOR_DESTINATION_SERVER = PATH.result.joinpath('Alpha')
-_registered_models = [
+REG_MODELS = [
     {'name': 'gru_day' , 'submodel' : 'swalast' , 'num'  : 0 , 'alias' : 'gru_day_V0'} ,
     {'name': 'gruRTN_day' , 'submodel' : 'swalast' , 'num'  : 0 , 'alias' : 'gruRTN_day_V0'} ,
     {'name': 'gru_avg' , 'submodel' : 'swalast' , 'num'  : 'all' , 'alias' : 'gru_day_V1'} ,
@@ -69,29 +67,50 @@ class ModelPath:
         return self.sub_dirs(self.archive(self.model_nums[-1] , self.model_dates[-1]) , as_int = False)
     
 class HiddenPath:
-    def __init__(self , hidden_key : str) -> None:
-        self.key = hidden_key
+    def __init__(self , model_name : str , model_num : int , submodel : str) -> None:
+        self.model_name , self.model_num , self.submodel = model_name , model_num , submodel
+
+    @classmethod
+    def from_key(cls , hidden_key : str):
+        model_name , model_num , submodel = cls.parse_hidden_key(hidden_key)
+        return cls(model_name , model_num , submodel)
 
     @staticmethod
-    def hidden_key(model_num : int , model_date : int , submodel : str) : 
-        return f'hidden.{model_num}.{submodel}.{model_date}.feather'
+    def create_hidden_key(model_name : str , model_num : int , submodel : str) : 
+        return f'{model_name}.{model_num}.{submodel}'
+    
+    @property
+    def hidden_key(self):
+        return self.create_hidden_key(self.model_name , self.model_num , self.submodel)
+    
+    @staticmethod
+    def parse_hidden_key(hidden_key : str): 
+        model_name , model_num , submodel = hidden_key.split('.')
+        assert submodel in ['best' , 'swabest' , 'swalast'] , hidden_key
+        return model_name , int(model_num) , submodel
+    
+    @staticmethod
+    def target_hidden_path(model_name : str , model_num : int , model_date , submodel : str):
+        return PATH.hidden.joinpath(model_name , str(model_num) , f'{model_date}.{submodel}.feather')
+    
+    def target_path(self , model_date: int):
+        return self.target_hidden_path(self.model_name , self.model_num , model_date , self.submodel)
 
     def model_dates(self):
-        name , num , submodel = self.key.split('.')
-        prefix = f'hidden.{num}.{submodel}.'
-        suffix = f'.feather'
-        dates = []
-        for p in PATH.hidden.joinpath(name).iterdir():
-            if p.name.startswith(prefix) and p.name.endswith(suffix):
-                dates.append(int(p.name.removeprefix(prefix).removesuffix(suffix)))
+        suffix = f'.{self.submodel}.feather'
+        parent = self.target_path(0).parent
+        dates = [int(p.name.removesuffix(suffix)) for p in parent.iterdir() if p.name.endswith(suffix)]
         return np.sort(dates)
+
+    def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int):
+        hidden_path = self.target_path(model_date)
+        hidden_path.parent.mkdir(parents=True , exist_ok=True)
+        hidden_df.to_feather(hidden_path)
 
     def get_hidden_df(self , model_date : int):
         possible_model_dates = self.model_dates()
-        hmd = possible_model_dates[possible_model_dates <= model_date].max()
-        name , num , submodel = self.key.split('.')
-        hidden_path = PATH.hidden.joinpath(name , f'hidden.{num}.{submodel}.{hmd}.feather')
-        hidden_df = pd.read_feather(hidden_path)
+        latest_model_date = possible_model_dates[possible_model_dates <= model_date].max()
+        hidden_df = pd.read_feather(self.target_path(latest_model_date))
         return hidden_df
 
 class ModelDict:
@@ -148,6 +167,3 @@ class RegisteredModel(ModelPath):
         self.model_path = ModelPath(self.name)
 
     def __repr__(self) -> str:  return f'{self.__class__.__name__}(name={self.name},type={self.submodel},num={str(self.num)},alias={str(self.alias)})'
-
-
-REG_MODELS = [RegisteredModel(**reg_model) for reg_model in _registered_models]

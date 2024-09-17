@@ -1,30 +1,25 @@
 from torch import Tensor
 
-from ..util import TrainConfig
-from ..data_module import DataModule
-from ..model_module import module_selector
+from .module_selector import get_predictor_module
+from ...data_module import DataModule
+from ...util import TrainConfig
 
 class ModelTestor:
     '''Check if a newly defined model can be forward correctly'''
-    def __init__(self , config : TrainConfig) -> None:
-        self.config = config
-        self.data = DataModule(config , 'predict').load_data()
-        self.data.setup('predict' , config.model_param[0] , self.data.model_date_list[0])   
-        
-        self.batch_data = self.data.predict_dataloader()[0]
-        self.model = module_selector(self.config)
-        self.metrics = self.config.metrics.new_model(self.config.model_param[0])
-
-    @classmethod
-    def new(cls , module = 'tra_lstm' , data_types = 'day'):
+    def __init__(self , module = 'tra_lstm' , data_types = 'day') -> None:
         override_cfg = {
             'model.module' : module , 
             'model.input_type' : 'data' ,
             'model.data.types' : data_types , 
             'model.booster_head' : False
         }
-        config = TrainConfig.load(override = override_cfg , makedir = False)
-        return cls(config)
+        self.config = TrainConfig.load(override = override_cfg , makedir = False)
+        self.data = DataModule(self.config , 'predict').load_data()
+        self.data.setup('predict' , self.config.model_param[0] , self.data.model_date_list[0])   
+        
+        self.batch_data = self.data.predict_dataloader()[0]
+        self.model = get_predictor_module(self.config)
+        self.metrics = self.config.metrics.new_model(self.config.model_param[0])
 
     def try_forward(self) -> None:
         '''as name says, try to forward'''

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from . import layer as Layer
-from ...basic import RISK_INDUS , RISK_STYLE
+from ...basic.conf import RISK_INDUS , RISK_STYLE
 
 __all__ = ['risk_att_gru']
 

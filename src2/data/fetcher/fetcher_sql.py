@@ -9,8 +9,7 @@ from datetime import date , datetime
 from sqlalchemy import create_engine , exc
 from typing import ClassVar , Literal
 
-from ...basic.db import get_target_dates , get_target_path , save_df
-
+from ...basic import PATH
 @dataclass
 class Connection:
     dialect     : str
@@ -190,7 +189,7 @@ class SQLFetcher:
         return df
 
     def get_target_dates(self):
-        return get_target_dates(self.DB_SRC , self.db_key)
+        return PATH.get_target_dates(self.DB_SRC , self.db_key)
 
     def save_data(self , data):
         if len(data) == 0: return
@@ -198,8 +197,8 @@ class SQLFetcher:
         for d in data.index.unique():
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: continue
-            target_path = get_target_path(self.DB_SRC , self.db_key , d , True , force_type='date')
-            save_df(data_at_d , target_path)
+            target_path = PATH.get_target_path(self.DB_SRC , self.db_key , d , True , force_type='date')
+            PATH.save_df(data_at_d , target_path)
 
     @classmethod
     def convert_id(cls , x):
@@ -373,7 +372,7 @@ class SQLFetcher:
             factor.download('all' , connection)
         
 if __name__ == '__main__':
-    from src.data.fetcher.fetcher_sql import SQLFetcher
+    from src2.data.fetcher.fetcher_sql import SQLFetcher
 
     start_dt = 20100901 
     end_dt   = 20100915

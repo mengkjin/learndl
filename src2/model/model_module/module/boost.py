@@ -30,10 +30,10 @@ class BoostPredictor(BasePredictorModel):
 
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when testing new model'''
-        self.init_model()
-        submodel = submodel if submodel is not None else self.model_submodel
-        assert submodel == 'best' , f'{self.model_submodel} does not defined in {self.__class__.__name__}'
-        model_file = self.model_file(model_num , model_date , submodel)
+        model_file = self.load_model_file(model_num , model_date , submodel)
+        assert self.model_submodel == 'best' , f'{self.model_submodel} does not defined in {self.__class__.__name__}'
+
+        self.init_model(*args , **kwargs)
         self.booster.load_dict(model_file['booster_dict'])
         return self
     

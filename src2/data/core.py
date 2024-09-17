@@ -9,7 +9,6 @@ from typing import Any , ClassVar , Literal , Optional
 
 from .classes import Stock4DData
 from ..basic import PATH , CONF
-from ..basic.db import get_target_dates , load_target_file , load_target_file_dates
 from ..func import index_union , index_intersect , forward_fillna
 from ..func.time import date_offset , Timer , today
 
@@ -28,18 +27,17 @@ def data_type_alias(key : str):
     return [key , f'trade_{key}' , key.replace('trade_','')]
 
 class GetData:
-    Silence = CONF.Silence()
     @classmethod
     def data_dates(cls , db_src , db_key , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
-        dates = get_target_dates(db_src , db_key)
+        dates = PATH.get_target_dates(db_src , db_key)
         if end_dt   is not None: dates = dates[dates <= (end_dt   if end_dt   > 0 else today(end_dt))]
         if start_dt is not None: dates = dates[dates >= (start_dt if start_dt > 0 else today(start_dt))]
         return dates
 
     @classmethod
     def trade_dates(cls , start_dt : int = -1 , end_dt : int = 99991231):
-        with cls.Silence:
-            calendar = load_target_file('information' , 'calendar')
+        with CONF.SILENT:
+            calendar = PATH.load_target_file('information' , 'calendar')
             assert calendar is not None
             calendar = np.array(calendar['calendar'].values[calendar['trade'] == 1])
             calendar = calendar[(calendar >= start_dt) & (calendar <= end_dt)]
@@ -47,8 +45,8 @@ class GetData:
     
     @classmethod
     def stocks(cls , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
-        with cls.Silence:
-            stocks = load_target_file('information' , 'description')
+        with CONF.SILENT:
+            stocks = PATH.load_target_file('information' , 'description')
             assert stocks is not None
             if listed: stocks = stocks[stocks['list_dt'] > 0]
             if exchange: stocks = stocks[stocks['exchange_name'].isin(exchange)]
@@ -56,20 +54,20 @@ class GetData:
     
     @classmethod
     def st_stocks(cls):
-        with cls.Silence:
-            st = load_target_file('information' , 'st')
+        with CONF.SILENT:
+            st = PATH.load_target_file('information' , 'st')
             assert st is not None
         return st
     
     @classmethod
     def day_quote(cls , date : int) -> pd.DataFrame | None:
-        with cls.Silence:
-            q = load_target_file('trade' , 'day' , date)[['secid','adjfactor','close','vwap']]
+        with CONF.SILENT:
+            q = PATH.load_target_file('trade' , 'day' , date)[['secid','adjfactor','close','vwap']]
         return q
     
     @classmethod
     def daily_returns(cls , start_dt : int , end_dt : int):
-        with cls.Silence:
+        with CONF.SILENT:
             pre_start_dt = int(date_offset(start_dt , -20))
             feature = ['close' , 'vwap']
             block = BlockLoader('trade' , 'day' , ['close' , 'vwap' , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
@@ -132,7 +130,7 @@ class FrameLoader:
     def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
                    parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
         dates = GetData.data_dates(self.db_src , self.db_key , start_dt , end_dt)
-        dfs = load_target_file_dates(self.db_src , self.db_key , dates , parallel = parallel, max_workers=max_workers)
+        dfs = PATH.load_target_file_dates(self.db_src , self.db_key , dates , parallel = parallel, max_workers=max_workers)
         dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None and not df.empty]
         return pd.concat(dfs) if len(dfs) else pd.DataFrame()
         
@@ -224,13 +222,13 @@ class DataBlock(Stock4DData):
     def block_path(cls , key : str , predict=False, alias_search = True):
         train_mark = '.00' if predict else ''
         if key.lower() in ['y' , 'labels']: 
-            return PATH.block.joinpath(f'Y{train_mark}.{CONF.SAVE_OPT_BLK}')
+            return PATH.block.joinpath(f'Y{train_mark}.{PATH.SAVE_OPT_BLK}')
         else:
             alias_list = data_type_alias(key) if alias_search else []
             for new_key in alias_list:
-                path = PATH.block.joinpath(f'X_{new_key}{train_mark}.{CONF.SAVE_OPT_BLK}')
+                path = PATH.block.joinpath(f'X_{new_key}{train_mark}.{PATH.SAVE_OPT_BLK}')
                 if path.exists(): return path
-            return PATH.block.joinpath(f'X_{key}{train_mark}.{CONF.SAVE_OPT_BLK}')
+            return PATH.block.joinpath(f'X_{key}{train_mark}.{PATH.SAVE_OPT_BLK}')
     
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , 
@@ -299,7 +297,7 @@ class DataBlock(Stock4DData):
         if not mask : return self
         mask_pos = np.full(self.shape , fill_value=False , dtype=bool)
         if mask_list_dt := mask.get('list_dt'):
-            desc = load_target_file('information' , 'description')
+            desc = PATH.load_target_file('information' , 'description')
             assert desc is not None
             desc = desc[desc['secid'] > 0].loc[:,['secid','list_dt','delist_dt']]
             if len(np.setdiff1d(self.secid , desc['secid'])) > 0:
@@ -418,12 +416,12 @@ class DataBlockNorm:
     
     @classmethod
     def norm_path(cls , key : str , predict = False, alias_search = True):
-        if key.lower() == 'y': return PATH.norm.joinpath(f'Y.{CONF.SAVE_OPT_NORM}')
+        if key.lower() == 'y': return PATH.norm.joinpath(f'Y.{PATH.SAVE_OPT_NORM}')
         alias_list = data_type_alias(key) if alias_search else []
         for new_key in alias_list:
-            path = PATH.norm.joinpath(f'X_{new_key}.{CONF.SAVE_OPT_BLK}')
+            path = PATH.norm.joinpath(f'X_{new_key}.{PATH.SAVE_OPT_BLK}')
             if path.exists(): return path
-        return PATH.norm.joinpath(f'X_{key}.{CONF.SAVE_OPT_BLK}')
+        return PATH.norm.joinpath(f'X_{key}.{PATH.SAVE_OPT_BLK}')
 
 @dataclass(slots=True)
 class ModuleData:

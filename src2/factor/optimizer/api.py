@@ -219,7 +219,7 @@ def exec_socp(engine_type, u, cov_info, wb, te: float, lin_con, bnd_con, turn_co
 '''
 
 if __name__ == '__main__':
-    from src.factor.optimizer.api import PortfolioOptimizer
+    from src2.factor.optimizer.api import PortfolioOptimizer
     config_path = 'custom_opt_config.yaml'
 
     optim = PortfolioOptimizer('socp')

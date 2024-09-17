@@ -1,4 +1,4 @@
-import gc , itertools , torch
+import gc , torch
 import numpy as np
 import pandas as pd
 
@@ -6,8 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
-from ...func.basic import Filtered
-from ...basic import ModelDict , ModelPath
+from ...basic.util import ModelDict , ModelPath
 
 class MemFileStorage:
     '''Interface of mem or disk storage, methods'''
@@ -175,10 +174,8 @@ class Checkpoint(MemFileStorage):
 
 class Deposition:
     '''model saver'''
-    def __init__(self , base_path : ModelPath , model_num_list : list[int] | range = [0] , resume_training = False):
+    def __init__(self , base_path : ModelPath):
         self.base_path = base_path
-        self.model_num_list = model_num_list
-        self.resume_training = resume_training
 
     def stack_model(self , model_dict : ModelDict , model_num , model_date , submodel = 'best'):
         model_dict.save(self.model_path(model_num , model_date , submodel) , stack = True)
@@ -200,15 +197,3 @@ class Deposition:
     def model_path(self , model_num , model_date , submodel = 'best'):
         '''get model path of deposition giving model date / num / submodel'''
         return self.base_path.full_path(model_num , model_date , submodel)
-    
-    def model_iter(self , stage , model_date_list):
-        '''iter of model_date and model_num , considering resume_training'''
-        new_iter = list(itertools.product(model_date_list , self.model_num_list))
-        if self.resume_training and stage == 'fit':
-            models_trained = np.full(len(new_iter) , True , dtype = bool)
-            for i , (model_date , model_num) in enumerate(new_iter):
-                if not self.exists(model_num , model_date):
-                    models_trained[max(i,0):] = False
-                    break
-            new_iter = Filtered(new_iter , ~models_trained)
-        return new_iter

@@ -4,7 +4,7 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal , Optional
 
-from ...basic.factor import AVAIL_BENCHMARKS , EPS_WEIGHT
+from ...basic.conf import EPS_WEIGHT , AVAIL_BENCHMARKS
 from ...data import DataBlock , get_target_dates , load_target_file
 from ...data.vendor import DATAVENDOR
 

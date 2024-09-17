@@ -46,8 +46,9 @@ class NNPredictor(BasePredictorModel):
     
     def load_model(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when testing new model'''
+        model_file = self.load_model_file(model_num , model_date , submodel)
+
         self.init_model(*args , **kwargs)
-        model_file = self.model_file(model_num , model_date , submodel)
         self.net.load_state_dict(model_file['state_dict'])
         return self
     

@@ -6,11 +6,10 @@ from typing import Any , Literal , Optional
 
 from .metric import Metrics
 from .storage import Checkpoint , Deposition
-from ...util import Logger
 from ...algo import getter , VALID_BOOSTERS
-from ...basic import ModelPath , PATH , THIS_IS_SERVER
+from ...basic import CONF , PATH
+from ...basic.util import Device , Logger , ModelPath
 from ...func import pretty_print_dict , recur_update
-from ...util import Device
 
 TRAIN_CONFIG_LIST = ['train' , 'env' , 'callbacks' , 'conditional' , 'model']
 
@@ -61,7 +60,7 @@ class TrainParam:
         return self
 
     def special_adjustment(self):
-        if not THIS_IS_SERVER: self.Param['env.short_test'] = True
+        if not CONF.THIS_IS_SERVER: self.Param['env.short_test'] = True
         if self.short_test and self.Param.get('conditional.short_test'): 
             recur_update(self.Param , self.Param['conditional.short_test'])
 
@@ -82,7 +81,7 @@ class TrainParam:
         return self
     
     def check_validity(self):
-        assert THIS_IS_SERVER or self.short_test , f'must be at server or short_test'
+        assert CONF.THIS_IS_SERVER or self.short_test , f'must be at server or short_test'
 
         nn_category = getter.nn_category(self.model_module)
         nn_datatype = getter.nn_datatype(self.model_module)
@@ -342,15 +341,8 @@ class TrainConfig(TrainParam):
         self.resume_training: bool  = False
         self.stage_queue: list      = []
 
-    def init_utils(self):
         self.device     = Device()
         self.logger     = Logger()
-        self.checkpoint = Checkpoint(self.mem_storage)
-        self.deposition = Deposition(self.model_base_path , self.model_num_list , self.resume_training)
-        self.metrics    = Metrics(self.module_type , self.nn_category ,
-                                  self.train_criterion_loss , self.train_criterion_score , self.train_criterion_penalty ,
-                                  self.train_multilosses_type , self.train_multilosses_param)
-        return self
 
     @classmethod
     def load(cls , base_path : Optional[Path] = None , do_parser = False , par_args = {} , override = {} , makedir = True):
@@ -364,7 +356,11 @@ class TrainConfig(TrainParam):
         elif 'fit' in config.stage_queue and makedir:
             config.start_new(model_path)
             
-        return config.init_utils()
+        return config
+    
+    @classmethod
+    def load_model(cls , model_name : str | ModelPath | Path , override = {}):
+        return cls.load(ModelPath(model_name).base , override = override)
     
     @property
     def Param(self) -> dict[str,Any]: return self.Train.Param
@@ -409,6 +405,14 @@ class TrainConfig(TrainParam):
     def weight_scheme(self , stage : str , no_weight = False) -> Optional[str]: 
         stg = stage if stage == 'fit' else 'test'
         return None if no_weight else self.Train.Param[f'train.criterion.weight.{stg}']
+    
+    def init_utils(self):
+        self.metrics = Metrics(self.module_type , self.nn_category ,
+                               self.train_criterion_loss , self.train_criterion_score , self.train_criterion_penalty ,
+                               self.train_multilosses_type , self.train_multilosses_param)
+        self.checkpoint = Checkpoint(self.mem_storage)
+        self.deposition = Deposition(self.model_base_path)
+        return self
     
     def start_new(self , new_path : Path | ModelPath):
         new_path = ModelPath(new_path.name)

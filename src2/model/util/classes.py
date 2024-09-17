@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 
 from abc import ABC , abstractmethod
@@ -11,8 +12,8 @@ from .batch import BatchData , BatchOutput
 from .buffer import BaseBuffer
 from .config import TrainConfig
 from .storage import MemFileStorage
-from ...basic import ModelDict
-from ...func import BigTimer
+from ...basic.util import ModelDict
+from ...func import BigTimer , Filtered
 
 class ModelStreamLine(ABC):
     def on_configure_model(self): ...
@@ -50,40 +51,6 @@ class ModelStreamLine(ABC):
 def possible_hooks() -> list[str]: 
     return [x for x in dir(ModelStreamLine) if not x.startswith('_')]
 
-class ModelStreamLineWithTrainer(ModelStreamLine):
-    def bound_with_trainer(self , trainer): 
-        self.trainer : BaseTrainer | Any = trainer
-
-    @property
-    def config(self): return self.trainer.config
-    @property
-    def status(self):  return self.trainer.status
-    @property
-    def logger(self): return self.config.logger
-    @property
-    def metrics(self):  return self.config.metrics
-    @property
-    def checkpoint(self): return self.config.checkpoint
-    @property
-    def deposition(self): return self.config.deposition
-    @property
-    def device(self): return self.config.device
-    @property
-    def data(self): return self.trainer.data
-    @property
-    def batch_data(self): return self.trainer.batch_data
-    @property
-    def batch_idx(self): return self.trainer.batch_idx
-    @property
-    def verbosity(self): return self.config.verbosity
-    @property
-    def model_date(self): return self.trainer.model_date
-    @property
-    def model_num(self): return self.trainer.model_num
-    @property
-    def model_submodel(self): return self.trainer.model_submodel
-
-
 @dataclass
 class TrainerStatus:
     max_epoch : int = 200
@@ -102,6 +69,19 @@ class TrainerStatus:
     def __post_init__(self):
         self.end_of_loop = self.EndofLoop(self.max_epoch)
         self.fit_iter_num : int = 0
+
+    @property
+    def status(self):
+        return {
+            'stage' : self.stage ,
+            'dataset' : self.dataset ,
+            'model_num' : self.model_num ,
+            'model_date' : self.model_date ,
+            'model_submodel' : self.model_submodel ,
+            'epoch' : self.epoch ,
+            'attempt' : self.attempt ,
+            'round' : self.round
+        }
 
     def stage_data(self): self.stage = 'data'
     def stage_fit(self):  self.stage = 'fit'
@@ -225,8 +205,8 @@ class BaseTrainer(ModelStreamLine):
         
     def init_config(self , base_path = None , **kwargs) -> None:
         '''initialized configuration'''
-        self.config     = TrainConfig.load(base_path , do_parser = True , par_args = kwargs)
-        self.status     = TrainerStatus(self.config.train_max_epoch)
+        self.config = TrainConfig.load(base_path , do_parser = True , par_args = kwargs)
+        self.status = TrainerStatus(self.config.train_max_epoch)
 
     def wrap_callbacks(self):
         [setattr(self , hook_name , self.hook_wrapper(self , self.model , self.callback , hook_name)) 
@@ -261,11 +241,11 @@ class BaseTrainer(ModelStreamLine):
     @property
     def device(self): return self.config.device
     @property
+    def metrics(self):  return self.config.metrics
+    @property
     def checkpoint(self): return self.config.checkpoint
     @property
     def deposition(self): return self.config.deposition
-    @property
-    def metrics(self): return self.config.metrics
     @property
     def logger(self): return self.config.logger    
     @property
@@ -287,9 +267,8 @@ class BaseTrainer(ModelStreamLine):
     @property
     def model_submodels(self): return self.config.model_submodels
     @property
-    def if_transfer(self): return self.config.train_trainer_transfer
-    @property
-    def model_iter(self): return self.deposition.model_iter(self.status.stage , self.data.model_date_list)
+    def if_transfer(self): return self.config.train_trainer_transfer     
+    
     @property
     def batch_output(self): return self.model.batch_output
     
@@ -316,7 +295,7 @@ class BaseTrainer(ModelStreamLine):
         '''stage of fitting'''
         self.status.stage_fit()
         self.on_fit_start()
-        for self.status.model_date , self.status.model_num in self.model_iter:
+        for self.status.model_date , self.status.model_num in self.iter_model_num_date():
             if self.status.fit_iter_num == 0:
                 self.logger.warning(f'First Iterance: ({self.status.model_date} , {self.status.model_num})')
             self.on_fit_model_start()
@@ -328,11 +307,29 @@ class BaseTrainer(ModelStreamLine):
         '''stage of testing'''
         self.status.stage_test()
         self.on_test_start()
-        for self.status.model_date , self.status.model_num in self.model_iter:
+        for self.status.model_date , self.status.model_num in self.iter_model_num_date():
             self.on_test_model_start()
             self.model.test()
             self.on_test_model_end()
         self.on_test_end()    
+
+    def iter_model_num_date(self): 
+        '''iter of model_date and model_num , considering resume_training'''
+        new_iter = list(itertools.product(self.data.model_date_list , self.config.model_num_list))
+        if self.config.resume_training and self.status.stage == 'fit':
+            models_trained = np.full(len(new_iter) , True , dtype = bool)
+            for i , (model_date , model_num) in enumerate(new_iter):
+                if not self.deposition.exists(model_num , model_date):
+                    models_trained[max(i,0):] = False
+                    break
+            new_iter = Filtered(new_iter , ~models_trained)
+        return new_iter
+
+    def iter_model_submodels(self):
+        for self.status.model_submodel in self.model_submodels: 
+            self.on_test_submodel_start()
+            yield self.status
+            self.on_test_submodel_end()
 
     def iter_fit_epoches(self):
         while not self.status.end_of_loop:
@@ -340,12 +337,6 @@ class BaseTrainer(ModelStreamLine):
             yield self.status
             self.on_before_fit_epoch_end()
             self.on_fit_epoch_end()
-
-    def iter_model_submodels(self):
-        for self.status.model_submodel in self.model_submodels: 
-            self.on_test_submodel_start()
-            yield self.status.model_submodel
-            self.on_test_submodel_end()
 
     def iter_train_dataloader(self , given_loader = None):
         self.dataloader = self.data.train_dataloader() if given_loader is None else given_loader
@@ -372,8 +363,8 @@ class BaseTrainer(ModelStreamLine):
             yield self.batch_idx , self.batch_data
             self.on_test_batch_end()
 
-    def iter_predict_dataloader(self):
-        self.dataloader = self.data.predict_dataloader()
+    def iter_predict_dataloader(self , given_loader = None):
+        self.dataloader = self.data.predict_dataloader() if given_loader is None else given_loader
         for self.batch_idx , self.batch_data in enumerate(self.dataloader): 
             self.on_test_batch_start()
             yield self.batch_idx , self.batch_data
@@ -409,14 +400,14 @@ class BaseTrainer(ModelStreamLine):
 
     def on_train_epoch_start(self): 
         self.status.dataset_train()
-        self.metrics.new_epoch(self.status)
+        self.metrics.new_epoch(**self.status.status)
 
     def on_train_epoch_end(self):
         self.metrics.collect_epoch()
     
     def on_validation_epoch_start(self):
         self.status.dataset_validation()
-        self.metrics.new_epoch(self.status)
+        self.metrics.new_epoch(**self.status.status)
 
     def on_validation_epoch_end(self):
         self.metrics.collect_epoch()
@@ -426,7 +417,7 @@ class BaseTrainer(ModelStreamLine):
         self.data.setup('test' , self.model_param , self.model_date)
     
     def on_test_submodel_start(self):
-        self.metrics.new_epoch(self.status)
+        self.metrics.new_epoch(**self.status.status)
         assert self.deposition.exists(self.model_date , self.model_num , self.model_submodel) , \
             (self.model_date , self.model_num , self.model_submodel)
         
@@ -440,6 +431,40 @@ class BaseTrainer(ModelStreamLine):
     def penalty_kwargs(self): return {}
     @staticmethod
     def assert_equity(a , b): assert a == b , (a , b)
+
+class ModelStreamLineWithTrainer(ModelStreamLine):
+    def bound_with_trainer(self , trainer): 
+        self.trainer : BaseTrainer | Any = trainer
+        return self
+
+    @property
+    def config(self): return self.trainer.config
+    @property
+    def status(self):  return self.trainer.status
+    @property
+    def logger(self): return self.config.logger
+    @property
+    def metrics(self):  return self.config.metrics
+    @property
+    def checkpoint(self): return self.config.checkpoint
+    @property
+    def deposition(self): return self.config.deposition
+    @property
+    def device(self): return self.config.device
+    @property
+    def data(self): return self.trainer.data
+    @property
+    def batch_data(self): return self.trainer.batch_data
+    @property
+    def batch_idx(self): return self.trainer.batch_idx
+    @property
+    def verbosity(self): return self.config.verbosity
+    @property
+    def model_date(self): return self.trainer.model_date
+    @property
+    def model_num(self): return self.trainer.model_num
+    @property
+    def model_submodel(self): return self.trainer.model_submodel
 
 class BaseCallBack(ModelStreamLineWithTrainer):
     def __init__(self , trainer , turn_off = False) -> None:
@@ -481,6 +506,7 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     
     def __init__(self, *args , **kwargs) -> None:
         self.reset()
+        self.model_dict = ModelDict()
 
     def __call__(self , input : BatchData | Tensor | Any , *args , **kwargs):
         if input is None or len(input) == 0:
@@ -494,35 +520,30 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
 
     def reset(self):
         self.trainer : BaseTrainer | Any = None
-        self._config : Optional[TrainConfig] = None
-        self.model_dict = ModelDict()
+        self._config : TrainConfig | Any = None
         return self
 
-    def bound_with_config(self , config : TrainConfig , model_num = 0 , model_date = -1 , submodel = 'best'):
-        assert self.trainer is None , 'Cannot bound with config if assigned trainer first'
+    def bound_with_config(self , config : TrainConfig):
+        assert self.trainer is None , 'Cannot bound with config if bound with trainer first'
         self._config = config
-        self._model_num  = model_num
-        self._model_date = model_date
-        self._model_submodel = submodel
-        return self
+        return self.init_utils()
 
     def bound_with_trainer(self , trainer : BaseTrainer):
+        self.reset()
         self.trainer = trainer
+        return self.init_utils()
+    
+    def init_utils(self):
+        self.config.init_utils()
         return self
 
-    def prepare_training(self , trainer : BaseTrainer , *args , **kwargs):  
-        return self.reset().bound_with_trainer(trainer)
-
     @classmethod
-    def create_from_trainer(cls , trainer : BaseTrainer , **kwargs):
-        return cls().prepare_training(trainer , **kwargs)
+    def create_from_trainer(cls , trainer : BaseTrainer):
+        return cls().bound_with_trainer(trainer)
 
     @property
     def config(self):
-        if self.trainer: return self.trainer.config
-        else:
-            assert self._config is not None
-            return self._config
+        return self.trainer.config if self.trainer else self._config
     @property
     def model_num(self):
         return self.trainer.model_num if self.trainer else self._model_num
@@ -535,12 +556,16 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     @property
     def model_param(self): return self.config.model_param[self.model_num]
     
-    def model_file(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
+    def load_model_file(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when fitting/testing new model'''
-        if model_num  is None: model_num  = self.model_num
-        if model_date is None: model_date = self.model_date
-        if submodel   is None: submodel   = self.model_submodel
+        if model_num is not None: self._model_num  = model_num
+        else: model_num = self.model_num
+        if model_date is not None: self._model_date = model_date
+        else: model_date = self.model_date
+        if submodel is not None: self._model_submodel = submodel
+        else: submodel = self.model_submodel
         return self.deposition.load_model(model_num , model_date , submodel)
+    
     @abstractmethod
     def new_model(self , *args , **kwargs):
         '''call when fitting new model'''

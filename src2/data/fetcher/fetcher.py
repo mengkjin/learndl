@@ -5,11 +5,8 @@ from dataclasses import dataclass , field
 from typing import Any , Callable
 
 from .fetcher_R import RFetcher
-from ...basic.db import DB_BY_DATE , DB_BY_NAME , get_target_path , get_source_dates , get_target_dates
+from ...basic import PATH
 
-# %%
-# def stime(compact = False): return time.strftime('%y%m%d%H%M%S' if compact else '%Y-%m-%d %H:%M:%S',time.localtime())
-   
 @dataclass
 class DataFetcher:
     db_src      : str
@@ -43,20 +40,20 @@ class DataFetcher:
 
     def eval(self , date = None , **kwargs) -> Any:
         assert callable(self.fetcher)
-        if self.db_src in DB_BY_NAME:
+        if self.db_src in PATH.DB_BY_NAME:
             v = self.fetcher(self.db_key , *self.args , **kwargs)
-        elif self.db_src in DB_BY_DATE:
+        elif self.db_src in PATH.DB_BY_DATE:
             v = self.fetcher(date , *self.args , **kwargs)  
         return v
     
     def target_path(self , date = None):
-        return get_target_path(self.db_src , self.db_key , date , makedir=True)
+        return PATH.get_target_path(self.db_src , self.db_key , date , makedir=True)
     
     def source_dates(self):
-        return get_source_dates(self.db_src , self.db_key)
+        return PATH.get_source_dates(self.db_src , self.db_key)
     
     def target_dates(self):
-        return get_target_dates(self.db_src , self.db_key)
+        return PATH.get_target_dates(self.db_src , self.db_key)
     
     def get_update_dates(self , start_dt = None , end_dt = None , trace = 0 , incremental = True , force = False):
         source_dates = self.source_dates()

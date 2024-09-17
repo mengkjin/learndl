@@ -88,9 +88,10 @@ class Metrics:
         self.best_metric = None
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
 
-    def new_epoch(self , status):
-        self.dataset : Literal['train','valid','test'] = status.dataset
-        self.metric_batchs.new(self.dataset , status.model_num , status.model_date , status.epoch , status.model_submodel)
+    def new_epoch(self , dataset : Literal['train','valid','test'] , model_num : int , model_date : int , 
+                  model_submodel , epoch : int , **kwargs):
+        self.dataset : Literal['train','valid','test'] = dataset
+        self.metric_batchs.new(self.dataset , model_num , model_date , epoch , model_submodel)
 
     def collect_batch(self):
         self.metric_batchs.record(self.output)

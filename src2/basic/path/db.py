@@ -5,8 +5,14 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any , Literal
-from . import path as PATH 
-from . import conf as CONF
+
+from . import glob as PATH 
+
+
+SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
+SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
+SAVE_OPT_NORM : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
+SAVE_OPT_MODEL: Literal['pt'] = 'pt'
 
 DB_BY_NAME  : list[str] = ['information' , 'information_ts']
 DB_BY_DATE  : list[str] = ['models' , 'trade' , 'labels' , 'benchmark' , 'membership_ts' , 'trade_ts' , 'financial_ts']  
@@ -29,12 +35,12 @@ def get_target_path(db_src , db_key , date = None , makedir = False ,
                     force_type : Literal['name' , 'date'] | None = None):
     if db_src in DB_BY_NAME or force_type == 'name':
         db_path = PATH.database.joinpath(f'DB_{db_src}')
-        db_base = f'{db_key}.{CONF.SAVE_OPT_DB}'
+        db_base = f'{db_key}.{SAVE_OPT_DB}'
     elif db_src in DB_BY_DATE or force_type == 'date':
         assert date is not None
         year_group = int(date) // 10000
         db_path = PATH.database.joinpath(f'DB_{db_src}' , db_key , str(year_group))
-        db_base = f'{db_key}.{str(date)}.{CONF.SAVE_OPT_DB}'
+        db_base = f'{db_key}.{str(date)}.{SAVE_OPT_DB}'
     else:
         raise KeyError(db_src)
     if makedir: db_path.mkdir(exist_ok=True)
@@ -83,15 +89,14 @@ def load_target_file_dates(db_src , db_key , dates ,
             dfs = {futures[future]:future.result() for future in as_completed(futures)}
     return dfs
  
-
 def save_df(df : pd.DataFrame , target_path):
-    if CONF.SAVE_OPT_DB == 'feather':
+    if SAVE_OPT_DB == 'feather':
         df.to_feather(target_path)
     else:
         df.to_parquet(target_path , engine='fastparquet')
 
 def load_df(target_path):
-    if CONF.SAVE_OPT_DB == 'feather':
+    if SAVE_OPT_DB == 'feather':
         return pd.read_feather(target_path)
     else:
         return pd.read_parquet(target_path , engine='fastparquet')

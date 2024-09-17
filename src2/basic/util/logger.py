@@ -1,8 +1,8 @@
 import logging
 import colorlog
-# from logging import handlers , RootLogger
 
-from ..basic import path as PATH , CONF
+from .. import path as PATH
+from .. import conf as CONF
 
 class Logger(logging.RootLogger):
     '''custom colored log , config at {PATH.conf}/logger.yaml '''

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from ....basic.factor import EPS_ACCURACY
+from ....basic.conf import EPS_ACCURACY
 
 @dataclass
 class SolveCond:

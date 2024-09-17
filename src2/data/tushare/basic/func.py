@@ -6,7 +6,7 @@ import pandas as pd
 from pathlib import Path
 from typing import Any , Literal
 
-from ....basic import get_target_path
+from ....basic import PATH
 from ....func import date_diff , today
 
 def code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , retain = False):
@@ -48,7 +48,7 @@ def quarter_ends(date , last_date = None , start_year = 1997):
     return date_list
 
 def complete_calendar():
-    cal = pd.read_feather(get_target_path('information_ts' , 'calendar'))
+    cal = pd.read_feather(PATH.get_target_path('information_ts' , 'calendar'))
     trd = cal[cal['trade'] == 1].reset_index(drop=True)
     trd['pre'] = trd['calendar'].shift(1, fill_value=-1)
     return trd.reset_index()

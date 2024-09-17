@@ -5,8 +5,8 @@ import torch.nn.functional as F
 
 from typing import Any , Literal
 
-from .core import DataBlock , GetData , BlockLoader , get_target_dates
-from ..basic import RISK_STYLE , RISK_INDUS
+from .core import DataBlock , GetData , BlockLoader
+from ..basic import PATH , CONF
 
 class DataVendor:
     '''
@@ -20,7 +20,7 @@ class DataVendor:
         self.all_stocks = GetData.stocks().sort_values('secid')
         self.st_stocks  = GetData.st_stocks()
         self.day_quotes : dict[int,pd.DataFrame] = {}
-        self.last_quote_dt = get_target_dates('trade','day').max()
+        self.last_quote_dt = PATH.get_target_dates('trade','day').max()
 
     @property
     def secid(self): return self.all_stocks.secid.unique()
@@ -74,7 +74,7 @@ class DataVendor:
     def get_named_data_block(self , start_dt : int , end_dt : int , db_src , db_key , data_key):
         td_within = self.td_within(start_dt , end_dt)
         if len(td_within) == 0: return
-        with GetData.Silence:
+        with CONF.SILENT:
             early_dates , late_dates = self.update_dates(data_key , td_within)
             datas : list[DataBlock] = []
             if len(early_dates): datas.append(BlockLoader(db_src , db_key).load_block(early_dates.min() , early_dates.max()))
@@ -133,12 +133,12 @@ class DataVendor:
     
     def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):
         self.get_risk_exp(date.min() , date.max())
-        block = self.risk_exp.align(secid , date , RISK_STYLE , inplace=False).as_tensor()
+        block = self.risk_exp.align(secid , date , CONF.RISK_STYLE , inplace=False).as_tensor()
         return block
     
     def risk_industry_exp(self , secid : np.ndarray , date : np.ndarray):
         self.get_risk_exp(date.min() , date.max())
-        block = self.risk_exp.align(secid , date , RISK_INDUS , inplace=False).as_tensor()
+        block = self.risk_exp.align(secid , date , CONF.RISK_INDUS , inplace=False).as_tensor()
         return block
     
     def get_ffmv(self , secid : np.ndarray , d : int):

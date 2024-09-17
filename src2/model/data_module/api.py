@@ -1,9 +1,11 @@
 from typing import Optional
+
+from .module import DataModule
 from ..util import TrainConfig
-from ..data_module import DataModule
 from ...data import DataProcessor , DataUpdater
 from ...data.tushare import task
-from ...basic import THIS_IS_SERVER
+from ...basic import CONF
+
 class DataAPI:
     @staticmethod
     def update(): 
@@ -12,7 +14,7 @@ class DataAPI:
         a. for laptop, transform data from R dataset and SQL to Database, create Updater's in './data/DataBase'
         b. for server, move Updater's to Database'
         '''
-        if THIS_IS_SERVER:
+        if CONF.THIS_IS_SERVER:
             DataUpdater.update_server()
         else:
             DataUpdater.update_laptop()
