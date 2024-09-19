@@ -6,6 +6,7 @@ from itertools import product
 from tqdm import tqdm
 from typing import Literal , Optional
 
+from .module_selector import get_predictor_module
 from ..module.nn import NNPredictor
 from ...util import TrainConfig
 from ...data_module import DataModule
@@ -18,7 +19,11 @@ class ModelHiddenExtractor:
                  model_submodels : Optional[list | np.ndarray | Literal['best' , 'swalast' , 'swabest']] = None):
         
         self.model_path = ModelPath(model_name)
-        
+        self.config = TrainConfig.load_model(self.model_path , override={'env.short_test':False , 'train.dataloader.sample_method':'sequential'})
+        self.model  = get_predictor_module(self.config)
+        assert isinstance(self.model , NNPredictor) , self.model
+        self.data   = DataModule(self.config , 'both' , after_test_days = 40).load_data()
+
         if model_nums is None:
             self.model_nums = self.model_path.model_nums
         else:
@@ -28,11 +33,6 @@ class ModelHiddenExtractor:
             self.model_submodels = self.model_path.model_submodels
         else:
             self.model_submodels = [model_submodels] if isinstance(model_submodels , str) else model_submodels
-
-        self.contents : dict[str,pd.DataFrame] = {}
-        self.config = TrainConfig.load_model(self.model_path.name , override={'env.short_test':False})
-        self.model  = NNPredictor().bound_with_config(self.config)
-        self.data   = DataModule(self.config , 'both').load_data()
 
         if not np.isin(self.model_path.model_dates , self.data.model_date_list).all():
             print('Caution! Not all model dates are in data.model_date_list, possibly due to short_test!')
@@ -57,64 +57,65 @@ class ModelHiddenExtractor:
         model_iter = list(product(model_dates , self.model_nums , self.model_submodels))
         return model_iter
 
-    def extract_hidden(self , what : Literal['given' , 'update'] , model_dates : Optional[list | np.ndarray | int] = None ,
-                       verbose = True , deploy = False):
-        if what == 'given':
-            model_iter = self.given_model_iter(model_dates)
-        elif what == 'update':
-            model_iter = self.update_model_iter()
-        else:
-            raise KeyError(what)
-
+    def extract_hidden(self , model_dates : Optional[list | np.ndarray | int] = None ,
+                       verbose = True , update = True):
+        model_iter = self.update_model_iter() if update else self.given_model_iter(model_dates)
         with torch.no_grad():
             for model_date , model_num , submodel in model_iter:
                 hidden_path = HiddenPath(self.model_path.name , model_num , submodel)
-                hidden_df  = self.model_hidden(model_num , model_date , submodel , verbose = verbose)
-                if deploy:
-                    hidden_path.save_hidden_df(hidden_df , model_date)
-                else:
-                    self.contents[hidden_path.hidden_key] = hidden_df
+                self.model_hidden(hidden_path , model_date , verbose , update)
         return self
     
-    def model_hidden(self , model_num : int , model_date :int , submodel : str, verbose = True) -> pd.DataFrame:
+    def model_hidden(self , hidden_path : HiddenPath , model_date :int , verbose = True , update = True) -> pd.DataFrame | None:
+        model_num , submodel = hidden_path.model_num , hidden_path.submodel
+        old_hidden_df = None 
+        exclude_dates = None
+        if update:
+            _ , old_hidden_df = hidden_path.get_hidden_df(model_date , exact = True)
+            if len(old_hidden_df):
+                exclude_dates = old_hidden_df['date'].unique()
+        
         model_param = self.config.model_param[model_num]
         self.model.load_model(model_num , model_date , submodel)
 
         hiddens : list[pd.DataFrame] = []
-        desc = f'Extract {model_num}/{submodel}/{model_date}' if verbose else ''
+        desc = f'Extract {self.model_path.name}/{model_num}/{model_date}/{submodel}' if verbose else ''
 
         self.data.setup('fit' ,  model_param , model_date)
-        hiddens += self.loader_hidden('train' , desc)
-        hiddens += self.loader_hidden('valid' , desc)
+        hiddens += self.loader_hidden('train' , desc , exclude_dates)
+        hiddens += self.loader_hidden('valid' , desc , exclude_dates)
 
         self.data.setup('test' ,  model_param , model_date)
-        hiddens += self.loader_hidden('test' , desc)
+        hiddens += self.loader_hidden('test' , desc , exclude_dates)
 
-        df = pd.concat(hiddens , axis=0)
-        return df
+        if len(hiddens) == 0: return
+
+        hidden_df = pd.concat(hiddens , axis=0)
+        if old_hidden_df is None: 
+            hidden_df = pd.concat([old_hidden_df , hidden_df] , axis=0).drop_duplicates(['secid','date','dataset'])
+        self.hidden_df = hidden_df
+        hidden_path.save_hidden_df(hidden_df , model_date)
     
-    def loader_hidden(self, dataset : Literal['train' , 'valid' , 'test'] , desc = ''):
+    def loader_hidden(self, dataset : Literal['train' , 'valid' , 'test'] , desc = '' , exclude_dates = None):
         if dataset == 'train': loader = self.data.train_dataloader()
         elif dataset == 'valid': loader = self.data.val_dataloader()
         elif dataset == 'test': loader = self.data.test_dataloader()
 
         hiddens : list[pd.DataFrame] = []
-        if desc: 
-            loader = tqdm(loader , total=len(loader))
-            desc = f'{desc}/{dataset}'
+        loader = loader.filter_dates(exclude_dates=exclude_dates)        
+        if desc:  loader = loader.init_tqdm()
 
-        secid , date = self.data.y_secid , self.data.y_date
         for batch_data in loader:
-            hiddens.append(self.model(batch_data).hidden_df(batch_data , secid , date , dataset = dataset))
-            if isinstance(loader , tqdm): loader.set_description(desc)
+            df = self.model(batch_data).hidden_df(batch_data , self.data.y_secid , self.data.y_date , dataset = dataset)
+            if df is not None: hiddens.append(df)
+            loader.display(f'{desc}/{dataset}/{df.date[0]}')
         return hiddens
     
     @classmethod
-    def extract_model_hidden(
+    def update_hidden(
         cls , model_name : str , model_nums : Optional[list | np.ndarray | int] = None , 
-        submodels : Optional[list | np.ndarray | Literal['best' , 'swalast' , 'swabest']] = None):
+        model_submodels : Optional[list | np.ndarray | Literal['best' , 'swalast' , 'swabest']] = ['best']):
 
-        extractor = cls(model_name , model_nums , submodels)
-
-        extractor.extract_hidden('update' , deploy = True)
+        extractor = cls(model_name , model_nums , model_submodels)
+        extractor.extract_hidden()
         return extractor

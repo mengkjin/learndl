@@ -255,6 +255,8 @@ class BaseTrainer(ModelStreamLine):
     @property
     def batch_warm_up(self): return len(self.data.early_test_dates)
     @property
+    def batch_aftermath(self): return len(self.data.early_test_dates) + len(self.data.model_test_dates)
+    @property
     def model_date(self): return self.status.model_date
     @property
     def model_num(self): return self.status.model_num
@@ -375,12 +377,12 @@ class BaseTrainer(ModelStreamLine):
         self.on_before_save_model()
         for submodel in self.model_submodels:
             model_dict = self.model.collect(submodel)
-            self.deposition.stack_model(model_dict , self.model_date , self.model_num , submodel) 
+            self.deposition.stack_model(model_dict , self.model_num , self.model_date , submodel) 
 
     def save_model(self):
         '''save self to somewhere'''
         if self.metrics.better_attempt(self.status.best_attempt_metric): self.stack_model()
-        [self.deposition.dump_model(self.model_date , self.model_num , submodel) for submodel in self.model_submodels]
+        [self.deposition.dump_model(self.model_num , self.model_date , submodel) for submodel in self.model_submodels]
 
     def on_configure_model(self):  
         self.config.set_config_environment()
@@ -418,8 +420,8 @@ class BaseTrainer(ModelStreamLine):
     
     def on_test_submodel_start(self):
         self.metrics.new_epoch(**self.status.status)
-        assert self.deposition.exists(self.model_date , self.model_num , self.model_submodel) , \
-            (self.model_date , self.model_num , self.model_submodel)
+        assert self.deposition.exists(self.model_num , self.model_date , self.model_submodel) , \
+            (self.model_num , self.model_date , self.model_submodel)
         
     def on_test_submodel_end(self): 
         self.metrics.collect_epoch()
@@ -601,12 +603,15 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         return {'pred':pred,'label':label,'weight':weight,'multiloss':multiloss,**self.batch_output.other}
     
     def batch_forward(self) -> None: 
+        if self.status.dataset == 'test':
+            if self.trainer.batch_idx >= self.trainer.batch_aftermath: return
         self.batch_output = self(self.batch_data)
 
     def batch_metrics(self) -> None:
         if self.batch_data.is_empty: return
-        # before batch_warm_up is warmup stage , only forward
-        if self.status.dataset == 'test' and self.trainer.batch_idx < self.trainer.batch_warm_up: return
+        if self.status.dataset == 'test':
+            if self.trainer.batch_idx < self.trainer.batch_warm_up: return
+            if self.trainer.batch_idx >= self.trainer.batch_aftermath: return
         '''if net has multiloss_params , get it and pass to calculate_from_tensor'''
         self.metrics.calculate(self.status.dataset , **self.metric_kwargs()).collect_batch()
 

@@ -107,11 +107,17 @@ class HiddenPath:
         hidden_path.parent.mkdir(parents=True , exist_ok=True)
         hidden_df.to_feather(hidden_path)
 
-    def get_hidden_df(self , model_date : int):
+    def get_hidden_df(self , model_date : int , exact = False):
+        if not exact: model_date = self.latest_hidden_model_date(model_date)
+        if not self.target_path(model_date).exists(): 
+            hidden_df = pd.DataFrame()
+        else:
+            hidden_df = pd.read_feather(self.target_path(model_date))
+        return model_date , hidden_df
+    
+    def latest_hidden_model_date(self , model_date):
         possible_model_dates = self.model_dates()
-        latest_model_date = possible_model_dates[possible_model_dates <= model_date].max()
-        hidden_df = pd.read_feather(self.target_path(latest_model_date))
-        return hidden_df
+        return possible_model_dates[possible_model_dates <= model_date].max()
 
 class ModelDict:
     __slots__ = ['state_dict' , 'booster_head' , 'booster_dict']

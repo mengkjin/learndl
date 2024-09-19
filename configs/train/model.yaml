@@ -1,5 +1,5 @@
 name: null # gru_2head # null
-module: gru # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
+module: lgbm # hidden_aggregator # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
 submodels: [best , swalast , swabest]
 
 booster_head: null # lgbm , ada , xgboost , catboost
@@ -9,7 +9,7 @@ labels:
   - std_lag1_10 # rtn_lag1_10 # std_lag1_10
   - rtn_lag1_10 # rtn_lag1_20 # std_lag1_20
 
-input_type: data # data or hidden
+input_type: hidden # data or hidden
 
 data.types: day # 'day+30m' , 30m , day
 data.prenorm:
@@ -17,10 +17,9 @@ data.prenorm:
 
 hidden.types:
   - gru_day.0.best
-  - gru_day.0.swabest
 
 beg_date:   20170103 # 20220613 # 20170103
 end_date:   99991231
-interval:   120
+interval:   20 # 120
 train_window:    2400
 

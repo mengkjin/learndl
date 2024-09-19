@@ -16,7 +16,8 @@ from ...data import DataBlockNorm , DataProcessor , ModuleData , DataBlock
 from ...func import tensor_standardize_and_weight , match_values , index_intersect
 
 class DataModule(BaseDataModule):    
-    def __init__(self , config : Optional[TrainConfig] = None , use_data : Literal['fit','predict','both'] = 'fit'):
+    def __init__(self , config : Optional[TrainConfig] = None , use_data : Literal['fit','predict','both'] = 'fit' ,
+                 after_test_days = 0):
         '''
         1. load Package of BlockDatas of x , y , norms and index
         2. Setup model_date dataloaders
@@ -26,6 +27,7 @@ class DataModule(BaseDataModule):
         self.use_data = use_data
         self.storage  = MemFileStorage(self.config.mem_storage)
         self.buffer   = BaseBuffer(self.device)
+        self.after_test_days = after_test_days
 
     def load_data(self):
         self.datas = ModuleData.load(self.data_type_list , self.config.model_labels, 
@@ -41,14 +43,7 @@ class DataModule(BaseDataModule):
             self.model_date_list = self.datas.date_within(self.config.beg_date , self.config.end_date , self.config.model_interval)
             self.test_full_dates = self.datas.date_within(self.config.beg_date , self.config.end_date)[1:]
 
-        self.static_prenorm_method = {}
-        for mdt in self.data_type_list: 
-            method : dict[str,bool] = self.config.model_data_prenorm.get(mdt , {})
-            method['divlast']  = method.get('divlast' , True) and (mdt in DataBlockNorm.DIVLAST)
-            method['histnorm'] = method.get('histnorm', True) and (mdt in DataBlockNorm.HISTNORM)
-            if not CONF.SILENT: print(f'Pre-Norming method of [{mdt}] : {method}')
-            self.static_prenorm_method[mdt] = method
-
+        self.parse_prenorm_method()
         self.reset_dataloaders()
         return self
 
@@ -61,6 +56,15 @@ class DataModule(BaseDataModule):
             data_type_list = []
         return data_type_list
     
+    @property
+    def hidden_type_list(self) -> list[str]:
+        '''get data type list (abbreviation)'''
+        if self.config.model_input_type == 'data':
+            hidden_type_list = []
+        else:
+            hidden_type_list = self.config.model_hidden_types
+        return hidden_type_list
+    
     @staticmethod
     def prepare_data(data_types : Optional[list[str]] = None):
         DataProcessor.main(predict = False , data_types = data_types)
@@ -69,15 +73,18 @@ class DataModule(BaseDataModule):
     def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1) -> None:
+        if self.setup_param_parsing(stage , param , model_date) == 'return': 
+            return
         if self.config.model_input_type == 'data':
-            self.setup_with_data(stage , param , model_date)
+            self.setup_data_prepare()
         else:
-            self.setup_with_hidden(stage , param , model_date)
+            self.setup_hidden_prepare()
+        self.setup_loader_create()
 
-    def setup_parse_param(
+    def setup_param_parsing(
             self , stage : Literal['fit' , 'test' , 'predict'] , 
             param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
-            model_date = -1):
+            model_date = -1) -> Literal['setup' , 'return']:
         if self.use_data == 'predict': stage = 'predict'
         self.stage = stage
 
@@ -85,60 +92,41 @@ class DataModule(BaseDataModule):
             seqlens : dict = {key:param['seqlens'][key] for key in self.data_type_list}
             seqlens.update({k:v for k,v in param.items() if k.endswith('_seq_len')})
         else:
-            seqlens : dict = {'hidden':1}
+            seqlens : dict = {key:1 for key in self.hidden_type_list}
 
         assert stage in ['fit' , 'test' , 'predict'] and model_date > 0 and seqlens , (stage , model_date , seqlens)
-        return stage , model_date , seqlens
+        if self.loader_param == (stage , model_date , seqlens): 
+            return 'return'
+        else:
+            self.loader_param = stage , model_date , seqlens
+            return 'setup'
     
-    def setup_with_hidden(
-            self , stage : Literal['fit' , 'test' , 'predict'] , 
-            param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
-            model_date = -1) -> None:
+    def setup_hidden_prepare(self) -> None:
+        stage , model_date , seqlens = self.loader_param
         
-        stage , model_date , seqlens = self.setup_parse_param(stage , param , model_date)
-        if self.loader_param == (stage , model_date , seqlens): return
-        self.loader_param = stage , model_date , seqlens
-
-        self.seqs = {'hidden':1}
+        self.seqs = {key:1 for key in self.hidden_type_list}
         self.seq0 = self.seqx = self.seqy = 1
 
-        hidden_dates : list[np.ndarray] = []
-        hidden_df : pd.DataFrame | Any = None
-        ds_list = ['train' , 'valid'] if stage == 'fit' else ['test' , 'predict']
-        for hidden_key in self.config.model_hidden_types:
-            df = HiddenPath.from_key(hidden_key).get_hidden_df(model_date)
-            df = df[df['dataset'].isin(ds_list)].drop(columns='dataset').set_index(['secid','date'])
-            hidden_dates.append(df.index.get_level_values('date').unique().to_numpy())
+        hidden_max_date : int | Any = None
+        self.hidden_input : dict[str,tuple[int,pd.DataFrame]] = {}
+        for hidden_key in self.hidden_type_list:
+            hidden_path = HiddenPath.from_key(hidden_key)
+            if hidden_key in self.hidden_input and self.hidden_input[hidden_key][0] == hidden_path.latest_hidden_model_date(model_date):
+                df = self.hidden_input[hidden_key][1]
+            else:
+                hidden_model_date , df = hidden_path.get_hidden_df(model_date , exact=False)
+                self.hidden_input[hidden_key] = (hidden_model_date , df)
+            hidden_max_date = df['date'].max() if hidden_max_date is None else min(hidden_max_date , df['date'].max())
+
+            df = df.drop(columns='dataset').set_index(['secid','date'])
             df.columns = [f'{hidden_key}.{col}' for col in df.columns]
-            hidden_df = df if hidden_df is None else hidden_df.join(df , how='outer')
+            self.datas.x[hidden_key] = DataBlock.from_dataframe(df).align_secid_date(self.datas.secid , self.datas.date)
 
-        stage_date = index_intersect(hidden_dates)[0]
-        if self.stage != 'fit':
-            stage_date = index_intersect([stage_date , self.test_full_dates])[0]
-        self.day_len = len(stage_date)
-        self.step_len = len(stage_date)
-        self.date_idx , self.step_idx = torch.arange(self.day_len) , torch.arange(self.day_len)
+        assert self.datas.date[self.datas.date < self.next_model_date(model_date)][-1] <= hidden_max_date , \
+            (self.next_model_date(model_date) , hidden_max_date)
 
-        y_aligned = self.datas.y.align_date(stage_date , inplace=False)
-        self.y_secid , self.y_date = y_aligned.secid , y_aligned.date
-
-        if stage in ['predict' , 'test']:
-            self.model_test_dates = stage_date
-            self.early_test_dates = stage_date[:0]
-
-        x = {'hidden':DataBlock.from_dataframe(hidden_df).align_secid_date(self.y_secid , self.y_date).as_tensor().values}
-        y = Tensor(y_aligned.values).squeeze(2)[...,:self.labels_n]
-
-        self.setup_process_dataloader(x , y)
-
-    def setup_with_data(
-            self , stage : Literal['fit' , 'test' , 'predict'] , 
-            param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
-            model_date = -1) -> None:
-        
-        stage , model_date , seqlens = self.setup_parse_param(stage , param , model_date)
-        if self.loader_param == (stage , model_date , seqlens): return
-        self.loader_param = stage , model_date , seqlens
+    def setup_data_prepare(self) -> None:
+        stage , model_date , seqlens = self.loader_param
 
         x_keys = self.data_type_list
         y_keys = [k for k in seqlens.keys() if k not in x_keys]
@@ -148,6 +136,8 @@ class DataModule(BaseDataModule):
         self.seqx = max([v for k,v in self.seqs.items() if k in x_keys]) if x_keys else 1
         self.seq0 = self.seqx + self.seqy - 1
 
+    def setup_loader_create(self):
+        stage , model_date = self.loader_param[:2]
         if stage == 'fit':
             model_date_col = (self.datas.date < model_date).sum()
             data_step = self.config.train_data_step
@@ -162,6 +152,7 @@ class DataModule(BaseDataModule):
             test_dates = np.concatenate([before_test_dates , self.test_full_dates])[::data_step]
             self.early_test_dates = test_dates[test_dates <= model_date][-(self.seqy-1) // data_step:] if self.seqy > 1 else test_dates[-1:-1]
             self.model_test_dates = test_dates[(test_dates > model_date) * (test_dates <= next_model_date)]
+            
             test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
             
             d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - self.seqx + 1 , 0)
@@ -179,9 +170,6 @@ class DataModule(BaseDataModule):
         x = {k:Tensor(v.values)[:,d0:d1] for k,v in self.datas.x.items()}
         y = Tensor(self.datas.y.values)[:,d0:d1].squeeze(2)[...,:self.labels_n]
 
-        self.setup_process_dataloader(x , y)
-
-    def setup_process_dataloader(self , x , y):
         # standardized y with step == 1
         self.y = self.standardize_y(y , None , None , no_weight = True)[0]
 
@@ -197,7 +185,6 @@ class DataModule(BaseDataModule):
 
         gc.collect() 
         torch.cuda.empty_cache()
-
 
     def multiple_valid(self , x : dict[str,Tensor] , y : Tensor | None , index1 : Tensor , 
                        rolling_windows : dict[str,int] = {} , x_all_valid = True) -> Tensor | None:
@@ -260,15 +247,29 @@ class DataModule(BaseDataModule):
         if squeeze_out: new_x = new_x.squeeze(-2)
         return new_x
         
+    def parse_prenorm_method(self):
+        prenorm_keys = self.data_type_list if self.config.model_input_type == 'data' else self.hidden_type_list
+        self.prenorm_divlast  : dict[str,bool] = {}
+        self.prenorm_histnorm : dict[str,bool] = {}
+        for mdt in prenorm_keys: 
+            method : dict = self.config.model_data_prenorm.get(mdt , {})
+            new_method = {
+                'divlast' : method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST) ,
+                'histnorm': method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM) ,
+            }
+            if not CONF.SILENT: print(f'Pre-Norming method of [{mdt}] : {new_method}')
+            self.prenorm_divlast[mdt]  = new_method['divlast']
+            self.prenorm_histnorm[mdt] = new_method['histnorm']
+
     def prenorm(self , x : Tensor, key : str) -> Tensor:
         '''
         return panel_normalized x
         1.divlast: divide by the last value, get seq-mormalized x
         2.histnorm: normalized by history avg and std
         '''
-        if self.static_prenorm_method[key]['divlast']:
+        if self.prenorm_divlast[key] and x.shape[-2] > 1:
             x = x / (x.select(-2,-1).unsqueeze(-2) + 1e-6)
-        if self.static_prenorm_method[key]['histnorm']:
+        if self.prenorm_histnorm[key]:
             x = x - self.datas.norms[key].avg[-x.shape[-2]:]
             x = x / (self.datas.norms[key].std[-x.shape[-2]:] + 1e-6)
         return x

@@ -56,11 +56,11 @@ class TrainParam:
             self.train_param.update({f'{cfg_key}.{key}':val for key,val in self.load_config(cfg_key).items()})
         for override_key in override:
             assert override_key in self.train_param.keys() , override_key
+        if not CONF.THIS_IS_SERVER: self.train_param['env.short_test'] = True
         self.train_param.update(override)
         return self
 
     def special_adjustment(self):
-        if not CONF.THIS_IS_SERVER: self.Param['env.short_test'] = True
         if self.short_test and self.Param.get('conditional.short_test'): 
             recur_update(self.Param , self.Param['conditional.short_test'])
 
@@ -81,7 +81,8 @@ class TrainParam:
         return self
     
     def check_validity(self):
-        assert CONF.THIS_IS_SERVER or self.short_test , f'must be at server or short_test'
+        if not CONF.THIS_IS_SERVER and not self.short_test:
+            print(f'Beware! Should be at server or short_test, but short_test is False now!')
 
         nn_category = getter.nn_category(self.model_module)
         nn_datatype = getter.nn_datatype(self.model_module)
