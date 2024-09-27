@@ -3,6 +3,7 @@ from tqdm import tqdm
 
 from ..util import BatchData
 from ..util.classes import BaseDataModule
+from ...basic import CONF
     
 class BatchDataLoader:
     '''wrap loader to impletement DataModule Callbacks'''
@@ -11,7 +12,7 @@ class BatchDataLoader:
         self.data_module = data_module
         self.device      = data_module.device
         self.verbosity   = data_module.config.verbosity
-        if self.verbosity >= 10: self.init_tqdm()
+        if self.verbosity >= 10: self.enable_tqdm()
         self.filter_dates(exclude_dates , include_dates)
 
     def __len__(self):  return len(self.loader)
@@ -33,13 +34,13 @@ class BatchDataLoader:
         batch_data = self.data_module.on_after_batch_transfer(batch_data , batch_i)
         return batch_data
 
-    def init_tqdm(self):
-        assert not isinstance(self.loader , tqdm) , self.loader
-        self.loader = tqdm(self.loader , total=len(self.loader))
+    def enable_tqdm(self , disable = False):
+        if not isinstance(self.loader , tqdm): self.loader = tqdm(self.loader , total=len(self.loader))
+        self.loader.disable = disable or CONF.SILENT
         return self
 
     def display(self , text : str):
-        if isinstance(self.loader , tqdm):  self.loader.set_description(text)
+        if isinstance(self.loader , tqdm) and not self.loader.disable:  self.loader.set_description(text)
 
     def filter_dates(self , exclude_dates = None , include_dates = None):
         if exclude_dates is not None or include_dates is not None:

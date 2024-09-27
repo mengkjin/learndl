@@ -2,6 +2,7 @@ import gc , torch
 import numpy as np
 import pandas as pd
 
+from dataclasses import dataclass
 from numpy.random import permutation
 from torch import Tensor
 from torch.utils.data import BatchSampler
@@ -16,8 +17,7 @@ from ...data import DataBlockNorm , DataProcessor , ModuleData , DataBlock
 from ...func import tensor_standardize_and_weight , match_values , index_intersect
 
 class DataModule(BaseDataModule):    
-    def __init__(self , config : Optional[TrainConfig] = None , use_data : Literal['fit','predict','both'] = 'fit' ,
-                 after_test_days = 0):
+    def __init__(self , config : Optional[TrainConfig] = None , use_data : Literal['fit','predict','both'] = 'fit'):
         '''
         1. load Package of BlockDatas of x , y , norms and index
         2. Setup model_date dataloaders
@@ -27,7 +27,6 @@ class DataModule(BaseDataModule):
         self.use_data = use_data
         self.storage  = MemFileStorage(self.config.mem_storage)
         self.buffer   = BaseBuffer(self.device)
-        self.after_test_days = after_test_days
 
     def load_data(self):
         self.datas = ModuleData.load(self.data_type_list , self.config.model_labels, 
@@ -70,23 +69,25 @@ class DataModule(BaseDataModule):
         DataProcessor.main(predict = False , data_types = data_types)
         DataProcessor.main(predict = True , data_types = data_types)
         
-    def setup(self, stage : Literal['fit' , 'test' , 'predict'] , 
+    def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
-              model_date = -1) -> None:
-        if self.setup_param_parsing(stage , param , model_date) == 'return': 
-            return
+              model_date = -1 , extract_backward_days = 300 , extract_forward_days = 160) -> None:
+        loader_param = self.setup_param_parsing(stage , param , model_date , extract_backward_days , extract_forward_days)
+        if self.loader_param == loader_param: return
+        self.loader_param = loader_param
+
         if self.config.model_input_type == 'data':
             self.setup_data_prepare()
         else:
             self.setup_hidden_prepare()
+
         self.setup_loader_create()
 
     def setup_param_parsing(
-            self , stage : Literal['fit' , 'test' , 'predict'] , 
+            self , stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
             param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
-            model_date = -1) -> Literal['setup' , 'return']:
+            model_date = -1 , extract_backward_days = 300 , extract_forward_days = 160):
         if self.use_data == 'predict': stage = 'predict'
-        self.stage = stage
 
         if self.config.model_input_type == 'data':
             seqlens : dict = {key:param['seqlens'][key] for key in self.data_type_list}
@@ -94,15 +95,11 @@ class DataModule(BaseDataModule):
         else:
             seqlens : dict = {key:1 for key in self.hidden_type_list}
 
-        assert stage in ['fit' , 'test' , 'predict'] and model_date > 0 and seqlens , (stage , model_date , seqlens)
-        if self.loader_param == (stage , model_date , seqlens): 
-            return 'return'
-        else:
-            self.loader_param = stage , model_date , seqlens
-            return 'setup'
+        loader_param = self.LoaderParam(stage , model_date , seqlens , extract_backward_days , extract_forward_days)
+        return loader_param
     
     def setup_hidden_prepare(self) -> None:
-        stage , model_date , seqlens = self.loader_param
+        model_date = self.loader_param.model_date
         
         self.seqs = {key:1 for key in self.hidden_type_list}
         self.seq0 = self.seqx = self.seqy = 1
@@ -126,7 +123,7 @@ class DataModule(BaseDataModule):
             (self.next_model_date(model_date) , hidden_max_date)
 
     def setup_data_prepare(self) -> None:
-        stage , model_date , seqlens = self.loader_param
+        seqlens = self.loader_param.seqlens
 
         x_keys = self.data_type_list
         y_keys = [k for k in seqlens.keys() if k not in x_keys]
@@ -137,7 +134,7 @@ class DataModule(BaseDataModule):
         self.seq0 = self.seqx + self.seqy - 1
 
     def setup_loader_create(self):
-        stage , model_date = self.loader_param[:2]
+        stage , model_date = self.loader_param.stage , self.loader_param.model_date
         if stage == 'fit':
             model_date_col = (self.datas.date < model_date).sum()
             data_step = self.config.train_data_step
@@ -157,6 +154,11 @@ class DataModule(BaseDataModule):
             
             d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - self.seqx + 1 , 0)
             d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
+        elif stage == 'extract':
+            model_date_col = (self.datas.date < model_date).sum()
+            data_step = 1
+            d0 = max(0 , model_date_col - self.loader_param.extract_backward_days - self.seq0)
+            d1 = min(max(0 , model_date_col + self.loader_param.extract_forward_days) , len(self.datas.date))
         else:
             raise KeyError(stage)
 
@@ -174,7 +176,7 @@ class DataModule(BaseDataModule):
         self.y = self.standardize_y(y , None , None , no_weight = True)[0]
 
         valid_x = x if self.config.module_type == 'nn' else {}
-        valid_y = self.y if self.stage == 'fit' else None
+        valid_y = self.y if stage == 'fit' else None
         
         valid = self.multiple_valid(valid_x , valid_y , self.step_idx , self.seqs , x_all_valid=(self.config.module_type == 'nn'))
         y , w = self.standardize_y(self.y , valid , self.step_idx)
@@ -233,7 +235,7 @@ class DataModule(BaseDataModule):
         '''standardize y and weight'''
         y = y[:,index1].clone() if index1 is not None else y.clone()
         if valid is not None: y.nan_to_num_(0)[~valid] = torch.nan
-        return tensor_standardize_and_weight(y , 0 , self.config.weight_scheme(self.stage , no_weight))
+        return tensor_standardize_and_weight(y , 0 , self.config.weight_scheme(self.loader_param.stage , no_weight))
 
     @staticmethod
     def rolling_rotation(x : Tensor , rolling : int , index0 , index1 , dim = 1 , squeeze_out = True) -> Tensor:
@@ -277,7 +279,8 @@ class DataModule(BaseDataModule):
     def train_dataloader(self)   -> BatchDataLoader: return BatchDataLoader(self.loader_dict['train'] , self)
     def val_dataloader(self)     -> BatchDataLoader: return BatchDataLoader(self.loader_dict['valid'] , self)
     def test_dataloader(self)    -> BatchDataLoader: return BatchDataLoader(self.loader_dict['test'] , self)
-    def predict_dataloader(self) -> BatchDataLoader: return BatchDataLoader(self.loader_dict['test'] , self)
+    def predict_dataloader(self) -> BatchDataLoader: return BatchDataLoader(self.loader_dict['predict'] , self)
+    def extract_dataloader(self) -> BatchDataLoader: return BatchDataLoader(self.loader_dict['extract'] , self)
     
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         if self.config.module_type == 'nn':
@@ -288,11 +291,11 @@ class DataModule(BaseDataModule):
         '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''
         if valid is None: valid = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
         index0, index1 = torch.arange(len(valid)) , self.step_idx
-        sample_index = self.split_sample(self.stage , valid , index0 , index1 , self.config.train_sample_method , 
+        sample_index = self.split_sample(valid , index0 , index1 , self.config.train_sample_method , 
                                          self.config.train_train_ratio , self.config.train_batch_size)
-        self.storage.del_group(self.stage)
+        self.storage.del_group(self.loader_param.stage)
         for set_key , set_samples in sample_index.items():
-            assert set_key in ['train' , 'valid' , 'test'] , set_key
+            assert set_key in ['train' , 'valid' , 'test' , 'predict' , 'extract'] , set_key
             shuf_opt = self.config.train_shuffle_option if set_key == 'train' else 'static'
             batch_files = [f'{PATH.batch}/{set_key}.{bnum}.pt' for bnum in range(len(set_samples))]
             for bnum , b_i in enumerate(set_samples):
@@ -304,10 +307,10 @@ class DataModule(BaseDataModule):
                 b_w = None if w is None else w[i0 , yindex1]
                 b_v = valid[i0 , yindex1]
 
-                self.storage.save(BatchData(b_x , b_y , b_w , b_i , b_v) , batch_files[bnum] , group = self.stage)
+                self.storage.save(BatchData(b_x , b_y , b_w , b_i , b_v) , batch_files[bnum] , group = self.loader_param.stage)
             self.loader_dict[set_key] = StoredFileLoader(self.storage , batch_files , shuf_opt)
 
-    def split_sample(self , stage , valid : Tensor , index0 : Tensor , index1 : Tensor ,
+    def split_sample(self , valid : Tensor , index0 : Tensor , index1 : Tensor ,
                      sample_method : Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle'] = 'sequential' ,
                      train_ratio   : float = 0.8 , batch_size : int = 2000) -> dict[str,list]:
         '''
@@ -317,7 +320,7 @@ class DataModule(BaseDataModule):
         train/valid sample method: total_shuffle , sequential , both_shuffle , train_shuffle
         test sample method: sequential
         '''
-        
+        stage = self.loader_param.stage
         l0 , l1 = valid.shape[:2]
         pos = torch.stack([index0.repeat_interleave(l1) , index1.repeat(l0)] , -1).reshape(l0,l1,2)
         
@@ -344,6 +347,5 @@ class DataModule(BaseDataModule):
                 sample_index['train'] = sequential_sampling(0 , sep)
                 sample_index['valid'] = sequential_sampling(sep , l1)
         else:
-            # test dataloader should have the same length as dates, so no filtering of val[:,j].sum() > 0
-            sample_index['test'] = sequential_sampling(0 , l1)
+            sample_index[stage] = sequential_sampling(0 , l1)
         return sample_index    

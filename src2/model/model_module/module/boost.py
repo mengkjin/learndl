@@ -54,8 +54,7 @@ class BoostPredictor(BasePredictorModel):
     
     def fit(self):
         self.new_model()
-        self.booster.import_data(train = self.train_boost_input() , valid = self.valid_boost_input())
-        self.booster.fit(silent = True)
+        self.booster.import_data(train = self.train_boost_input() , valid = self.valid_boost_input()).fit(silent = True)
 
         for _ in self.trainer.iter_train_dataloader():
             self.batch_forward()

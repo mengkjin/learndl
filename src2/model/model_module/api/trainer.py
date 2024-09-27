@@ -15,7 +15,7 @@ class ModelTrainer(BaseTrainer):
         self.callback = CallBackManager.setup(self)
 
     @classmethod
-    def initialize(cls , stage = -1 , resume = -1 , checkname = -1 , base_path = None , **kwargs):
+    def initialize(cls , stage = -1 , resume = -1 , checkname = -1 , base_path = None , override = {} , **kwargs):
         '''
         state:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
         resume:    [-1,choose] , [0,no] , [1,yes]
@@ -31,7 +31,7 @@ class ModelTrainer(BaseTrainer):
             # 'boost' : BoosterTrainer ,
         }[module_type]
         '''
-        app = cls(base_path = base_path , stage = stage , resume = resume , checkname = checkname , **kwargs)
+        app = cls(base_path = base_path , override = override , stage = stage , resume = resume , checkname = checkname , **kwargs)
         return app
 
     @classmethod

@@ -17,6 +17,7 @@ data.prenorm:
 
 hidden.types:
   - gru_day.0.best
+  - gru_day.1.best
 
 beg_date:   20170103 # 20220613 # 20170103
 end_date:   99991231

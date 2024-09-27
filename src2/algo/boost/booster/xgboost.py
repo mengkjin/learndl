@@ -53,10 +53,10 @@ class XgBoost(BasicBoosterModel):
 
         return self
         
-    def predict(self , test : BoosterInput | Any = None):
-        test = self.data['test'] if test is None else test
-        x = self.to_dmatrix(test)
-        return test.output(self.model.predict(x))
+    def predict(self , x : BoosterInput | str = 'test'):
+        data = self.booster_input(x)
+        X = self.to_dmatrix(data)
+        return data.output(self.model.predict(X))
     
     def to_dmatrix(self , input : BoosterInput):
         dset = input.XYW().as_numpy()

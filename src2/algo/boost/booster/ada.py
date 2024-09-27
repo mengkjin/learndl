@@ -47,10 +47,10 @@ class AdaBoost(BasicBoosterModel):
         self.model.fit(dset.x[idx] , dset.y[idx] , dset.w[idx] , silent = silent , feature = train_data.feature)
         return self
     
-    def predict(self , test : BoosterInput | Any = None):
-        if test is None: test = self.data['test']
-        x = self.input_transform(test.X())
-        return test.output(self.model.predict(x))
+    def predict(self , x : BoosterInput | str = 'test'):
+        data = self.booster_input(x)
+        X = self.input_transform(data.X())
+        return data.output(self.model.predict(X))
     
     def to_dict(self):
         model_dict = super().to_dict()

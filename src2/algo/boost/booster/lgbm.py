@@ -65,10 +65,10 @@ class Lgbm(BasicBoosterModel):
         )
         return self
         
-    def predict(self , test : BoosterInput | Any = None):
-        if test is None: test = self.data['test']
-        x = test.X().cpu().numpy()
-        return test.output(self.model.predict(x))
+    def predict(self , x : BoosterInput | str = 'test'):
+        data = self.booster_input(x)
+        X = data.X().cpu().numpy()
+        return data.output(self.model.predict(X))
     
     def to_dict(self):
         model_dict = super().to_dict()

@@ -10,7 +10,7 @@ __old_version__/
 /logs
 /models
 /Baostock
-/visualization
+/runs
 .vs/
 
 # Data

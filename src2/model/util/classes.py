@@ -159,7 +159,6 @@ class BaseDataModule(ABC):
     @abstractmethod
     def setup(self , *args , **kwargs) -> None: 
         '''create train / valid / test dataloaders'''
-        self.stage : Literal['fit' , 'test' , 'predict']
         self.y : Tensor
         self.y_secid : Any
         self.y_date : Any
@@ -179,7 +178,7 @@ class BaseDataModule(ABC):
     def reset_dataloaders(self):
         '''reset for every fit / test / predict'''
         self.loader_dict  = {}
-        self.loader_param = ()
+        self.loader_param = self.LoaderParam()
     def prev_model_date(self , model_date):
         prev_dates = [d for d in self.model_date_list if d < model_date]
         return max(prev_dates) if prev_dates else -1
@@ -189,23 +188,41 @@ class BaseDataModule(ABC):
         else:
             return max(self.test_full_dates) + 1
         
+    @dataclass
+    class LoaderParam:
+        stage : Literal['fit' , 'test' , 'predict' , 'extract'] | Any = None
+        model_date : int | Any = None
+        seqlens : dict[str,int] | Any = None
+        extract_backward_days : int | Any = None
+        extract_forward_days  : int | Any = None
+
+        def __post_init__(self):
+            assert self.stage is None or self.stage in ['fit' , 'test' , 'predict' , 'extract'] , self.stage
+            assert self.model_date is None or self.model_date > 0 , self.model_date
+            assert self.seqlens is None or self.seqlens , self.seqlens
+            if self.stage != 'extract':
+                self.extract_backward_days = None 
+                self.extract_forward_days  = None
+        
     @property
     def device(self): return self.config.device
 
 class BaseTrainer(ModelStreamLine):
     '''run through the whole process of training'''
     def __bool__(self): return True
+    
     @final
-    def __init__(self , base_path = None , **kwargs):
-        self.init_config(base_path = base_path ,**kwargs)
+    def __init__(self , base_path = None , override = {} , **kwargs):
+        self.init_config(base_path = base_path , override = override , **kwargs)
         self.init_data(**kwargs)
         self.init_model(**kwargs)
         self.init_callbacks(**kwargs)
         self.wrap_callbacks()
         
-    def init_config(self , base_path = None , **kwargs) -> None:
+    @final
+    def init_config(self , base_path = None , override = {} , **kwargs) -> None:
         '''initialized configuration'''
-        self.config = TrainConfig.load(base_path , do_parser = True , par_args = kwargs)
+        self.config = TrainConfig.load(base_path , do_parser = True , par_args = kwargs , override = override)
         self.status = TrainerStatus(self.config.train_max_epoch)
 
     def wrap_callbacks(self):

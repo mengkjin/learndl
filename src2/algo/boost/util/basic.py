@@ -23,20 +23,23 @@ class BasicBoosterModel(ABC):
                  train_param : dict[str,Any] = {} ,
                  weight_param : dict[str,Any] = {} ,
                  cuda = True , seed = None , **kwargs):   
-        self.cuda = cuda
-        self.seed = seed
+        self.update_param(train_param , weight_param , cuda = cuda , seed = seed , **kwargs)
+        self.data : dict[str,BoosterInput] = {}
 
+    def update_param(self , train_param , weight_param , **kwargs):
         self.train_param = self.new_train_param(train_param , **kwargs)
         self.weight_param = self.new_weight_param(weight_param , **kwargs)
-        self.data : dict[Literal['train','valid','test'],BoosterInput] = {}
+        if 'cuda' in kwargs: self.cuda = kwargs.pop('cuda')
+        if 'seed' in kwargs: self.seed = kwargs.pop('seed')
+        return self
 
     def new_train_param(self , train_param , **kwargs) -> dict[str,Any]:
-        new_train_param = deepcopy(self.DEFAULT_TRAIN_PARAM)
+        new_train_param = deepcopy(getattr(self , 'train_param' , self.DEFAULT_TRAIN_PARAM))
         new_train_param.update(train_param)
         return new_train_param
 
     def new_weight_param(self , weight_param , **kwargs) -> dict[str,Any]:
-        new_weight_param = deepcopy(self.DEFAULT_WEIGHT_PARAM)
+        new_weight_param = deepcopy(getattr(self , 'weight_param' , self.DEFAULT_WEIGHT_PARAM))
         new_weight_param.update(weight_param)
         return new_weight_param
     
@@ -55,15 +58,14 @@ class BasicBoosterModel(ABC):
         if train is None: train = self.data['train']
         if valid is None: valid = self.data['valid']
         return self
-        
+
+    def booster_input(self , x : BoosterInput | str | Any = 'test'):
+        return self.data[x]  if isinstance(x , str) else x
+
     @abstractmethod
-    def predict(self , test : BoosterInput) -> BoosterOutput:
-        if test is None: test = self.data['test']
+    def predict(self , x : BoosterInput | str | Any = 'test') -> BoosterOutput:
         ...
 
-    def validation_pred(self):
-        return self.predict(self.data['valid'])
-    
     @abstractmethod
     def to_dict(self) -> dict[str,Any]: 
         model_dict = {

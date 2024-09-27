@@ -51,9 +51,9 @@ class CatBoost(BasicBoosterModel):
 
         return self
         
-    def predict(self , test : BoosterInput | Any = None):
-        test = self.data['test'] if test is None else test
-        return test.output(self.model.predict(test.X().cpu().numpy()))
+    def predict(self , x : BoosterInput | str = 'test'):
+        data = self.booster_input(x)
+        return data.output(self.model.predict(data.X().cpu().numpy()))
     
     def to_pool(self , input : BoosterInput):
         dset = input.XYW().as_numpy()

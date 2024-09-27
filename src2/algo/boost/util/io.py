@@ -110,7 +110,7 @@ class BoosterInput:
         date = np.tile(self.date , len(self.secid))
         return self.choose_finite(date) if dropna else date
 
-    def X(self): return self.choose_finite(self.x[...,self.feat_idx])
+    def X(self) -> torch.Tensor: return self.choose_finite(self.x[...,self.feat_idx])
     def Y(self): return self.choose_finite(self.y)
     def W(self): 
         w = self.weight_method.calculate_weight(self.y , self.secid) if self.w is None and self.y is not None else self.w
@@ -153,7 +153,7 @@ class BoosterInput:
     def nfeat(self): return len(self.feature) if self.use_feature is None else len(self.use_feature)
 
     def to_dataframe(self):
-        df = pd.DataFrame(self.X() , columns = self.feature)
+        df = pd.DataFrame(self.X().cpu().numpy() , columns = self.feature)
         df['secid'] = self.SECID()
         df['date']  = self.DATE()
         df['label'] = self.Y()

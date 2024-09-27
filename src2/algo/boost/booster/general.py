@@ -32,29 +32,41 @@ class GeneralBooster:
                  cuda = True , seed = None , **kwargs):
         assert booster_type , booster_type
         self.booster_type = booster_type
-        self.train_param = {k:v for k,v in params.items() if k not in BoosterWeightMethod.__slots__}
-        self.weight_param = {k:v for k,v in params.items() if k in BoosterWeightMethod.__slots__}
-        self.cuda = cuda
-        self.seed = seed
-        self.verbosity = params.get('verbosity' , 10)
-
-        self.booster : BasicBoosterModel = choose_booster_model(booster_type)(self.train_param , self.weight_param , cuda , seed , **kwargs)
+        self.data : dict[str,BoosterInput] = {}
+        self.booster : BasicBoosterModel = choose_booster_model(self.booster_type)()
+        self.update_param(params , cuda = cuda , seed = seed , **kwargs)
         self.import_data(train = train , valid = valid , test = test)
 
     def __call__(self, x : torch.Tensor) -> torch.Tensor: 
         return self.forward(x)
 
+    def update_param(self , params : dict[str,Any] , **kwargs):
+        self.train_param = {k:v for k,v in params.items() if k not in BoosterWeightMethod.__slots__}
+        self.weight_param = {k:v for k,v in params.items() if k in BoosterWeightMethod.__slots__}
+        self.verbosity = params.get('verbosity' , 10)
+
+        self.booster.update_param(self.train_param , self.weight_param , **kwargs)
+        return self
+
     def import_data(self , train : Any = None , valid : Any = None , test  : Any = None):
-        self.booster.import_data(train , valid , test)
+        if train is not None: self.data['train'] = self.booster.to_booster_input(train , self.weight_param)
+        if valid is not None: self.data['valid'] = self.booster.to_booster_input(valid , self.weight_param)
+        if test  is not None: self.data['test']  = self.booster.to_booster_input(test , self.weight_param)
+        return self
 
     def fit(self , train = None , valid = None , use_feature = None , silent = False):
         self.import_data(train = train , valid = valid)
+        self.booster.import_data(train=self.data['train'] , valid = self.data['valid'])
         self.booster.update_feature(use_feature)
         self.booster.fit(silent = silent or self.verbosity < 10)
         return self
         
-    def predict(self , test : BoosterInput | Any = None):
-        return self.booster.predict(test)
+    def booster_input(self , x : BoosterInput | str | Any = 'test'):
+        return self.data[x] if isinstance(x , str) else x
+    
+    def predict(self , x : BoosterInput | str | Any = 'test'):
+        x = self.booster_input(x)
+        return self.booster.predict(x)
     
     def forward(self , x : torch.Tensor) -> torch.Tensor:
         booster_input = BoosterInput.from_tensor(x)
