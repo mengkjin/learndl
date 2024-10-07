@@ -76,7 +76,7 @@ class BasicBoosterModel(ABC):
         return model_dict
 
     @abstractmethod
-    def load_dict(self , model_dict : dict[str,Any] , cuda = False , seed = None) -> dict[str,Any]: 
+    def load_dict(self , model_dict : dict[str,Any] , cuda = False , seed = None): 
         assert self.__class__.__name__ == model_dict['class_name'] , (self.__class__.__name__ , model_dict['class_name'])
 
         self.cuda = cuda
