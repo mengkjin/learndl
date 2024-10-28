@@ -5,8 +5,7 @@ import pandas as pd
 from typing import Any , Literal , Optional
 
 from ..util import Benchmark , BENCHMARKS
-from ...data import DataBlock
-from ...data.vendor import DATAVENDOR 
+from ...data import DataBlock , DATAVENDOR 
 
 def get_benchmark(benchmark : Optional[Benchmark | str] = None) -> Optional[Benchmark]:
     if isinstance(benchmark , str): benchmark = BENCHMARKS[benchmark]

@@ -9,9 +9,9 @@ from typing import Any , ClassVar , Literal , Optional
 
 from .classes import Stock4DData
 from ..basic import PATH , CONF
-from ..basic.db import get_target_dates , load_target_file , load_target_file_dates
+from ..basic.util import Timer
 from ..func import index_union , index_intersect , forward_fillna
-from ..func.time import date_offset , Timer , today
+from ..func.time import date_offset , today
 
 def data_type_abbr(key : str):
     key = key.lower()
@@ -27,115 +27,6 @@ def data_type_abbr(key : str):
 def data_type_alias(key : str):
     return [key , f'trade_{key}' , key.replace('trade_','')]
 
-class GetData:
-    Silence = CONF.Silence()
-    @classmethod
-    def data_dates(cls , db_src , db_key , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
-        dates = get_target_dates(db_src , db_key)
-        if end_dt   is not None: dates = dates[dates <= (end_dt   if end_dt   > 0 else today(end_dt))]
-        if start_dt is not None: dates = dates[dates >= (start_dt if start_dt > 0 else today(start_dt))]
-        return dates
-
-    @classmethod
-    def trade_dates(cls , start_dt : int = -1 , end_dt : int = 99991231):
-        with cls.Silence:
-            calendar = load_target_file('information' , 'calendar')
-            assert calendar is not None
-            calendar = np.array(calendar['calendar'].values[calendar['trade'] == 1])
-            calendar = calendar[(calendar >= start_dt) & (calendar <= end_dt)]
-        return calendar
-    
-    @classmethod
-    def stocks(cls , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
-        with cls.Silence:
-            stocks = load_target_file('information' , 'description')
-            assert stocks is not None
-            if listed: stocks = stocks[stocks['list_dt'] > 0]
-            if exchange: stocks = stocks[stocks['exchange_name'].isin(exchange)]
-        return stocks.reset_index()
-    
-    @classmethod
-    def st_stocks(cls):
-        with cls.Silence:
-            st = load_target_file('information' , 'st')
-            assert st is not None
-        return st
-    
-    @classmethod
-    def day_quote(cls , date : int) -> pd.DataFrame | None:
-        with cls.Silence:
-            q = load_target_file('trade' , 'day' , date)[['secid','adjfactor','close','vwap']]
-        return q
-    
-    @classmethod
-    def daily_returns(cls , start_dt : int , end_dt : int):
-        with cls.Silence:
-            pre_start_dt = int(date_offset(start_dt , -20))
-            feature = ['close' , 'vwap']
-            block = BlockLoader('trade' , 'day' , ['close' , 'vwap' , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
-            block = block.adjust_price().align_feature(feature)
-            values = block.values[:,1:] / block.values[:,:-1] - 1
-            secid  = block.secid
-            date   = block.date[1:]
-            new_date = block.date_within(start_dt , end_dt)
-
-            block = DataBlock(values , secid , date , feature).align_date(new_date)
-        return block
-
-@dataclass(slots=True)
-class BlockLoader:
-    db_src  : str
-    db_key  : str | list
-    feature : Optional[list] = None
-
-    def __post_init__(self):
-        assert f'DB_{self.db_src}' in [p.name for p in PATH.database.iterdir()] , f'DB_{self.db_src} not in {PATH.database}'
-        src_path = PATH.database.joinpath(f'DB_{self.db_src}')
-        assert np.isin(self.db_key , [p.name for p in src_path.iterdir()]).all() , f'{self.db_key} not all in {src_path}'
-
-    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
-             parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
-        return self.load_block(start_dt , end_dt , parallel = parallel , max_workers = max_workers)
-    
-    def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
-                   parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
-        if end_dt is not None   and end_dt < 0:   end_dt   = today(end_dt)
-        if start_dt is not None and start_dt < 0: start_dt = today(start_dt)
-
-        sub_blocks = []
-        db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
-        for db_key in db_keys:
-            with Timer(f' --> {self.db_src} blocks reading [{db_key}] DataBase'):
-                blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , self.feature , 
-                                        parallel = parallel , max_workers = max_workers)
-                sub_blocks.append(blk)
-        if len(sub_blocks) <= 1:  
-            block = sub_blocks[0]
-        else:
-            with Timer(f' --> {self.db_src} blocks merging ({len(sub_blocks)})'): 
-                block = DataBlock.merge(sub_blocks)
-        return block
-    
-@dataclass(slots=True)
-class FrameLoader:
-    db_src  : str
-    db_key  : str
-
-    def __post_init__(self):
-        assert PATH.database.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
-            f'{PATH.database}/{self.db_src}/{self.db_key} not exists'
-    
-    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
-             parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
-        return self.load_frame(start_dt , end_dt , parallel , max_workers)
-
-    def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
-                   parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
-        dates = GetData.data_dates(self.db_src , self.db_key , start_dt , end_dt)
-        dfs = load_target_file_dates(self.db_src , self.db_key , dates , parallel = parallel, max_workers=max_workers)
-        dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None and not df.empty]
-        return pd.concat(dfs) if len(dfs) else pd.DataFrame()
-        
 class DataBlock(Stock4DData):
     DEFAULT_INDEX = ['secid','date','minute','factor_name']
 
@@ -224,19 +115,22 @@ class DataBlock(Stock4DData):
     def block_path(cls , key : str , predict=False, alias_search = True):
         train_mark = '.00' if predict else ''
         if key.lower() in ['y' , 'labels']: 
-            return PATH.block.joinpath(f'Y{train_mark}.{CONF.SAVE_OPT_BLK}')
+            return PATH.block.joinpath(f'Y{train_mark}.{PATH.SAVE_OPT_BLK}')
         else:
             alias_list = data_type_alias(key) if alias_search else []
             for new_key in alias_list:
-                path = PATH.block.joinpath(f'X_{new_key}{train_mark}.{CONF.SAVE_OPT_BLK}')
+                path = PATH.block.joinpath(f'X_{new_key}{train_mark}.{PATH.SAVE_OPT_BLK}')
                 if path.exists(): return path
-            return PATH.block.joinpath(f'X_{key}{train_mark}.{CONF.SAVE_OPT_BLK}')
+            return PATH.block.joinpath(f'X_{key}{train_mark}.{PATH.SAVE_OPT_BLK}')
     
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , 
                 parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
-        df = FrameLoader(db_src , db_key).load(start_dt , end_dt , parallel = parallel , max_workers = max_workers)
-        if len(df) == 0:  return cls()
+        dates = PATH.get_target_dates(db_src , db_key , start_dt=start_dt , end_dt=end_dt)
+        dfs = PATH.load_target_file_dates(db_src , db_key , dates , parallel = parallel, max_workers=max_workers)
+        dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None and not df.empty]
+        df  = pd.concat(dfs) if len(dfs) else pd.DataFrame()
+        if len(df) == 0: return cls()
 
         use_index = [f for f in cls.DEFAULT_INDEX if f in df.columns]
         assert len(use_index) <= 3 , use_index
@@ -299,7 +193,7 @@ class DataBlock(Stock4DData):
         if not mask : return self
         mask_pos = np.full(self.shape , fill_value=False , dtype=bool)
         if mask_list_dt := mask.get('list_dt'):
-            desc = load_target_file('information' , 'description')
+            desc = PATH.load_target_file('information' , 'description')
             assert desc is not None
             desc = desc[desc['secid'] > 0].loc[:,['secid','list_dt','delist_dt']]
             if len(np.setdiff1d(self.secid , desc['secid'])) > 0:
@@ -418,12 +312,12 @@ class DataBlockNorm:
     
     @classmethod
     def norm_path(cls , key : str , predict = False, alias_search = True):
-        if key.lower() == 'y': return PATH.norm.joinpath(f'Y.{CONF.SAVE_OPT_NORM}')
+        if key.lower() == 'y': return PATH.norm.joinpath(f'Y.{PATH.SAVE_OPT_NORM}')
         alias_list = data_type_alias(key) if alias_search else []
         for new_key in alias_list:
-            path = PATH.norm.joinpath(f'X_{new_key}.{CONF.SAVE_OPT_BLK}')
+            path = PATH.norm.joinpath(f'X_{new_key}.{PATH.SAVE_OPT_BLK}')
             if path.exists(): return path
-        return PATH.norm.joinpath(f'X_{key}.{CONF.SAVE_OPT_BLK}')
+        return PATH.norm.joinpath(f'X_{key}.{PATH.SAVE_OPT_BLK}')
 
 @dataclass(slots=True)
 class ModuleData:
@@ -498,7 +392,7 @@ class ModuleData:
             assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
 
             data = {'x' : x , 'y' : y , 'norms' : norms , 'secid' : secid , 'date' : date}
-            if not predict and save_upon_loading: 
+            if not predict and save_upon_loading and data_type_list: 
                 torch.save(data , dataset_path , pickle_protocol = 4)
             data = cls(**data)
 

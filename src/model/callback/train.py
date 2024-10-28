@@ -2,138 +2,147 @@ import torch
 
 from copy import deepcopy
 
-from .base import CallBack
-from ..util import Optimizer
-from ...func import list_converge
+from ..model_module.util.optimizer import Optimizer
+from ..util.classes import BaseCallBack
+from ... import func as FUNC
 
-class EarlyStoppage(CallBack):
+class EarlyStoppage(BaseCallBack):
     '''stop fitting when validation score cease to improve'''
-    def __init__(self , model_module , patience = 20 , **kwargs) -> None:
-        super().__init__(model_module , with_cb=False , **kwargs)
-        self._patience = patience
+    def __init__(self , trainer , patience = 20 , **kwargs) -> None:
+        super().__init__(trainer , **kwargs)
+        self.print_info()
+        self.patience = patience
+
     def on_fit_model_start(self):
-        self._epoch_best  = -1
-        self._metric_best = None
+        self.metric_best_epoch  = -1
+        self.metric_best_level = None
     def on_validation_epoch_end(self):
-        if self.metrics.better_epoch(self._metric_best): 
-            self._epoch_best  = self.status.epoch 
-            self._metric_best = self.metrics.last_metric
-        if self.status.epoch - self._epoch_best >= self._patience:
-            self.status.end_of_loop.add_status('EarlyStop' , self._epoch_best)
+        if self.metrics.better_epoch(self.metric_best_level): 
+            self.metric_best_epoch  = self.status.epoch 
+            self.metric_best_level = self.metrics.last_metric
+        if self.status.epoch - self.metric_best_epoch >= self.patience:
+            self.status.end_of_loop.add_status('EarlyStop' , self.metric_best_epoch)
 
-class ValidationConverge(CallBack):
+class ValidationConverge(BaseCallBack):
     '''stop fitting when valid_score converge'''
-    def __init__(self , model_module , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
-        super().__init__(model_module , with_cb=False , **kwargs)
-        self._patience = patience
-        self._eps      = eps
+    def __init__(self , trainer , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
+        super().__init__(trainer , **kwargs)
+        self.print_info()
+        self.patience = patience
+        self.tolerance = eps
     def on_validation_epoch_end(self):
-        if list_converge(self.metrics.metric_epochs['valid.score'], self._patience , self._eps):
-            self.status.end_of_loop.add_status('Valid Cvg' , self.status.epoch - self._patience + 1)
+        if FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance):
+            self.status.end_of_loop.add_status('Valid Cvg' , self.status.epoch - self.patience + 1)
 
-class TrainConverge(CallBack):
+class TrainConverge(BaseCallBack):
     '''stop fitting when train_loss converge'''
-    def __init__(self , model_module , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
-        super().__init__(model_module , with_cb=False , **kwargs)
-        self._patience = patience
-        self._eps      = eps
+    def __init__(self , trainer , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
+        super().__init__(trainer , **kwargs)
+        self.print_info()
+        self.patience = patience
+        self.tolerance = eps
     def on_validation_epoch_end(self):
-        if list_converge(self.metrics.metric_epochs['train.loss'], self._patience , self._eps):
-            self.status.end_of_loop.add_status('Train Cvg' , self.status.epoch - self._patience + 1)
+        if FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance):
+            self.status.end_of_loop.add_status('Train Cvg' , self.status.epoch - self.patience + 1)
 
-class FitConverge(CallBack):
+class FitConverge(BaseCallBack):
     '''stop fitting when train_loss and valid_score converge'''
-    def __init__(self , model_module , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
-        super().__init__(model_module , with_cb=False , **kwargs)
-        self._patience = patience
-        self._eps      = eps
+    def __init__(self , trainer , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
+        super().__init__(trainer , **kwargs)
+        self.print_info()
+        self.patience = patience
+        self.tolerance = eps
     def on_validation_epoch_end(self):
-        if (list_converge(self.metrics.metric_epochs['train.loss'], self._patience , self._eps) and 
-            list_converge(self.metrics.metric_epochs['valid.score'], self._patience , self._eps)):
-            self.status.end_of_loop.add_status('T & V Cvg' , self.status.epoch - self._patience + 1)
+        if (FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance) and 
+            FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance)):
+            self.status.end_of_loop.add_status('T & V Cvg' , self.status.epoch - self.patience + 1)
 
-class EarlyExitRetrain(CallBack):
+class EarlyExitRetrain(BaseCallBack):
     '''retrain with new lr if fitting stopped too early'''
-    def __init__(self, model_module , earliest = 5 , max_attempt = 4 , lr_multiplier = [1 , 0.1 , 10 , 0.01 , 100] , **kwargs) -> None:
-        super().__init__(model_module , with_cb=False , **kwargs)
-        self._earliest = earliest
-        self._max_attempt = max_attempt
-        self._lr_multiplier = lr_multiplier
+    def __init__(self, trainer , earliest = 5 , max_attempt = 4 , lr_multiplier = [1 , 0.1 , 10 , 0.01 , 100] , **kwargs) -> None:
+        super().__init__(trainer , **kwargs)
+        self.print_info()
+        self.earliest = earliest
+        self.max_attempt = max_attempt
+        self.lr_multiplier = lr_multiplier
     def on_fit_model_start(self):
         self.status.attempt = 0
     def on_before_fit_epoch_end(self):
         if (self.status.end_of_loop and 
-            self.status.end_of_loop.trigger_ep <= self._earliest 
-            and self.status.attempt < self._max_attempt):
+            self.status.end_of_loop.trigger_ep <= self.earliest 
+            and self.status.attempt < self.max_attempt):
             if self.metrics.better_attempt(self.status.best_attempt_metric):
                 self.status.best_attempt_metric = self.metrics.best_metric
-                self.module.stack_model()
+                self.trainer.stack_model()
             self.metrics.new_attempt()
             self.status.new_attempt()
-            self.module.load_model(True , lr_multiplier = self._lr_multiplier[:self.status.attempt+1][-1])
+            self.model.new_model(lr_multiplier = self.lr_multiplier[:self.status.attempt+1][-1])
 
-class NanLossRetrain(CallBack):
+class NanLossRetrain(BaseCallBack):
     '''retrain if fitting encounters nan loss'''
-    def __init__(self, model_module , max_attempt = 4 , **kwargs) -> None:
-        super().__init__(model_module , with_cb=False , **kwargs)
-        self._max_attempt = max_attempt
+    def __init__(self, trainer , max_attempt = 4 , **kwargs) -> None:
+        super().__init__(trainer , **kwargs)
+        self.print_info()
+        self.max_attempt = max_attempt
     def on_fit_model_start(self):
-        self._nanlife = self._max_attempt
+        self.remain_nan_life = self.max_attempt
     def on_train_epoch_end(self):
-        self._nanloss = self.metrics.metric_batchs.nanloss
+        self.is_nanloss = self.metrics.metric_batchs.nanloss
     def on_before_fit_epoch_end(self):
-        if not self._nanloss:
+        if not self.is_nanloss:
             pass
-        elif self._nanlife > 0:
-            self.logger.error(f'Initialize a new model to retrain! Lives remaining {self._nanlife}')
-            self._nanlife -= 1
+        elif self.remain_nan_life > 0:
+            self.logger.error(f'Initialize a new model to retrain! Lives remaining {self.remain_nan_life}')
+            self.remain_nan_life -= 1
 
             self.metrics.new_attempt()
             self.status.new_attempt('nanloss')
-            self.module.load_model(True)
+            self.model.new_model()
         else:
             raise Exception('Nan loss life exhausted, possible gradient explosion/vanish!')
 
-class CudaEmptyCache(CallBack):
+class CudaEmptyCache(BaseCallBack):
     '''CudaEmptyCache every few batch (pretty slow)'''
-    def __init__(self , model_module , batch_interval = 20 , **kwargs) -> None:
-        super().__init__(model_module , with_cb=False , **kwargs)
-        self._interval = batch_interval
+    def __init__(self , trainer , batch_interval = 20 , **kwargs) -> None:
+        super().__init__(trainer , **kwargs)
+        self.print_info()
+        self.batch_interval = batch_interval
         # 2.5s for 86 epochs
-    def _empty_cache(self):
-        if (self.module.batch_idx + 1) % self._interval == 0 : torch.cuda.empty_cache()
-    def on_train_batch_end(self):        self._empty_cache()
-    def on_validation_batch_end(self):   self._empty_cache()
-    def on_test_batch_end(self):         self._empty_cache()
+    def empty_cache(self):
+        if (self.trainer.batch_idx + 1) % self.batch_interval == 0 : torch.cuda.empty_cache()
+    def on_train_batch_end(self):        self.empty_cache()
+    def on_validation_batch_end(self):   self.empty_cache()
+    def on_test_batch_end(self):         self.empty_cache()
 
-class ResetOptimizer(CallBack):
+class ResetOptimizer(BaseCallBack):
     '''reset optimizer on some epoch (can speedup scheduler)'''
     reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
-    def __init__(self, model_module, num_reset = 2 , trigger = 40 , recover_level = 1. , speedup2x = True , **kwargs) -> None:
-        super().__init__(model_module , with_cb=False , **kwargs)
-        self._num_reset = num_reset
-        self._trigger = trigger
-        self._recover_level = recover_level 
-        self._speedup2x = speedup2x
-        self._trigger_intvl = max(self._trigger // 2 , 1) if self._speedup2x else self._trigger
+    def __init__(self, trainer, num_reset = 2 , trigger = 40 , recover_level = 1. , speedup2x = True , **kwargs) -> None:
+        super().__init__(trainer , **kwargs)
+        self.print_info()
+        self.num_reset = num_reset
+        self.trigger = trigger
+        self.recover_level = recover_level 
+        self.speedup2x = speedup2x
+        self.trigger_intvl = max(self.trigger // 2 , 1) if self.speedup2x else self.trigger
     @property
-    def optim(self) -> Optimizer: return self.module.optimizer
+    def optimizer(self) -> Optimizer: return getattr(self.trainer.model , 'optimizer')
     @property
-    def _reset_epoch(self) -> bool:
-        i = self.status.epoch + 1 - self._trigger
-        return (0 <= i < self._trigger_intvl * self._num_reset) and (i % self._trigger_intvl == 0)
-    def _halved_param(self , param : dict):
+    def reset_epoch(self) -> bool:
+        i = self.status.epoch + 1 - self.trigger
+        return (0 <= i < self.trigger_intvl * self.num_reset) and (i % self.trigger_intvl == 0)
+    def halved_param(self , param : dict):
         return {k:((v // 2) if k in self.reset_speedup_param_list else v) for k,v in param.items()}
     def on_train_epoch_end(self):
-        if not self._reset_epoch: return
+        if not self.reset_epoch: return
 
         # confirm reset : change back optimizor learn rate
-        for param_group in self.optim.optimizer.param_groups:
-            param_group['lr'] = param_group['lr_param']  * self._recover_level
+        for param_group in self.optimizer.optimizer.param_groups:
+            param_group['lr'] = param_group['lr_param']  * self.recover_level
         
         # confirm reset : reassign scheduler
-        shd_param = deepcopy(self.optim.shd_param)
-        if self._speedup2x: shd_param = self._halved_param(shd_param)
+        shd_param = deepcopy(self.optimizer.shd_param)
+        if self.speedup2x: shd_param = self.halved_param(shd_param)
 
-        self.optim.scheduler = self.optim.load_scheduler(self.optim.optimizer , shd_param)
+        self.optimizer.scheduler = self.optimizer.load_scheduler(self.optimizer.optimizer , shd_param)
         self.status.add_event('reset_learn_rate')

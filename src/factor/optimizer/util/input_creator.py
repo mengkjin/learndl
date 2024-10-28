@@ -5,7 +5,7 @@ from typing import Any
 from .bound import StockBound , StockPool , IndustryPool , GeneralBound , ValidRange , STOCK_UB , STOCK_LB
 from .constr import LinearConstraint , TurnConstraint , CovConstraint , BoundConstraint , ShortConstraint
 from ...util import BENCHMARKS , RISK_MODEL , Port , Benchmark
-from ....data.vendor import DATAVENDOR
+from ....data import DATAVENDOR
 
 stock_bound_list : list[StockBound] = []
 linear_bound_list : list[LinearConstraint] = []

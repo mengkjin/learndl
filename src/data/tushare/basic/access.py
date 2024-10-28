@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 from typing import Any , Literal
 
-from ....basic import load_target_file , get_target_path
+from ....basic import PATH
 
 class TradeCalendar:
     def __init__(self) -> None:
-        cal = pd.read_feather(get_target_path('information_ts' , 'calendar')).loc[:,['calendar' , 'trade']]
+        cal = pd.read_feather(PATH.get_target_path('information_ts' , 'calendar')).loc[:,['calendar' , 'trade']]
 
         trd = cal[cal['trade'] == 1].reset_index(drop=True)
         trd['td'] = trd['calendar']
@@ -69,11 +69,11 @@ class TradeDataAccess:
     
     def load_val(self, dates , drop_old = True):
         if drop_old and (len(self.day_val) + len(dates) > self.MAX_LEN):  self.day_val = {}
-        for d in dates: self.day_val[d] = load_target_file('trade_ts' , 'day_val' , d)
+        for d in dates: self.day_val[d] = PATH.load_target_file('trade_ts' , 'day_val' , d)
 
     def load_trd(self, dates , drop_old = True):
         if drop_old and (len(self.day_trd) + len(dates) > self.MAX_LEN):  self.day_trd = {}
-        for d in dates: self.day_trd[d] = load_target_file('trade_ts' , 'day' , d)
+        for d in dates: self.day_trd[d] = PATH.load_target_file('trade_ts' , 'day' , d)
 
     def get_val(self , date , cols = None):
         if date not in self.day_val:  self.load_val([date] , drop_old=False)
@@ -102,11 +102,11 @@ class ModelDataAccess:
 
     def load_res(self, dates , drop_old = True):
         if drop_old and (len(self.cne5_res) + len(dates) > self.MAX_LEN):  self.cne5_res = {}
-        for d in dates: self.cne5_res[d] = load_target_file('models' , 'tushare_cne5_res' , d)
+        for d in dates: self.cne5_res[d] = PATH.load_target_file('models' , 'tushare_cne5_res' , d)
 
     def load_exp(self, dates , drop_old = True):
         if drop_old and (len(self.cne5_exp) + len(dates) > self.MAX_LEN):  self.cne5_exp = {}
-        for d in dates: self.cne5_exp[d] = load_target_file('models' , 'tushare_cne5_exp' , d)
+        for d in dates: self.cne5_exp[d] = PATH.load_target_file('models' , 'tushare_cne5_exp' , d)
 
     def get_res(self , date , cols = None):
         if date not in self.cne5_res:  self.load_res([date] , drop_old=False)
@@ -135,7 +135,7 @@ class FinaDataAccess:
     def load_indi(self, dates , drop_old = True):
         if drop_old and (len(self.fina_indi) + len(dates) > self.MAX_LEN):  self.fina_indi = {}
         for d in dates: 
-            df = load_target_file('financial_ts' , 'indicator' , d)
+            df = PATH.load_target_file('financial_ts' , 'indicator' , d)
             df['ann_date'] = df['ann_date'].fillna(99991231).astype(int)
             df['end_date'] = df['end_date'].fillna(-1).astype(int)
             self.fina_indi[d] = df

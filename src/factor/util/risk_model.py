@@ -6,9 +6,8 @@ from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
 from ..classes import GeneralModel , Port
-from ...basic.factor import RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
-from ...data import GetData, BlockLoader , FrameLoader , get_target_dates , load_target_file
-from ...data.vendor import DATAVENDOR
+from ...basic.conf import SILENT , RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
+from ...data import BlockLoader , FrameLoader , DATAVENDOR
 
 @dataclass
 class Rmodel:
@@ -124,7 +123,7 @@ class RiskModel(GeneralModel):
     def __init__(self) -> None:
         self.models : dict[int,Rmodel] = {}
         self.name = 'cne5'
-        self.riskmodel_available_dates = get_target_dates('models' , 'risk_exp')
+        self.riskmodel_available_dates = DATAVENDOR.file_dates('models' , 'risk_exp')
         self.F_loader = BlockLoader('models' , 'risk_exp')
         self.C_loader = FrameLoader('models' , 'risk_cov')
         self.S_loader = BlockLoader('models' , 'risk_spec')
@@ -136,7 +135,7 @@ class RiskModel(GeneralModel):
         assert isinstance(model , Rmodel) , f'rmodel does not exists!'
         return model
     def load_day_model(self , date : int):
-        with GetData.Silence:
+        with SILENT:
             F = self.F_loader.load(date , date)
             C = self.C_loader.load(date , date)
             S = self.S_loader.load(date , date)

@@ -4,9 +4,8 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal , Optional
 
-from ...basic.factor import AVAIL_BENCHMARKS , EPS_WEIGHT
-from ...data import DataBlock , get_target_dates , load_target_file
-from ...data.vendor import DATAVENDOR
+from ...basic.conf import EPS_WEIGHT , AVAIL_BENCHMARKS
+from ...data import DataBlock , DATAVENDOR
 
 class Port:
     '''portfolio realization of one day'''
@@ -223,7 +222,7 @@ class Benchmark(Portfolio):
     def __init__(self , name : str) -> None:
         assert name is None or name in AVAIL_BENCHMARKS , name
         super().__init__(name)
-        self.benchmark_available_dates = get_target_dates('benchmark' , self.name)
+        self.benchmark_available_dates = DATAVENDOR.file_dates('benchmark' , self.name)
         self.benchmark_attempted_dates = []
 
     def __call__(self, input : Any):
@@ -244,7 +243,7 @@ class Benchmark(Portfolio):
 
         if port is None:
             if use_date in self.available_dates():
-                port = Port(load_target_file('benchmark' , self.name , use_date) , date , self.name)
+                port = Port(DATAVENDOR.single_file('benchmark' , self.name , use_date) , date , self.name)
                 self.append(port)
             else:
                 port = Port.none_port(date)

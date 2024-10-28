@@ -4,8 +4,7 @@ import statsmodels.api as sm
 from typing import Any , Literal , Optional
 
 from ..basic import TradeCalendar , TradeDataAccess , ModelDataAccess , FinaDataAccess
-from ....basic import (PATH , CONF , RISK_INDUS , RISK_STYLE ,
-                       get_target_path , load_target_file , get_target_dates)
+from ....basic import PATH , CONF
 from ....func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
 
 CALENDAR = TradeCalendar()
@@ -71,12 +70,12 @@ class DateSeriesDict:
 class TuShareCNE5_Calculator:
     START_DATE = 20050101
     def __init__(self) -> None:
-        get_target_path('information_ts' , 'description')
-        self.desc = pd.read_feather(get_target_path('information_ts' , 'description'))
-        self.cname = pd.read_feather(get_target_path('information_ts' , 'change_name'))
+        PATH.get_target_path('information_ts' , 'description')
+        self.desc = pd.read_feather(PATH.get_target_path('information_ts' , 'description'))
+        self.cname = pd.read_feather(PATH.get_target_path('information_ts' , 'change_name'))
 
         self.indus_dict = pd.DataFrame(CONF.glob('tushare_indus'))
-        self.indus_data = pd.read_feather(get_target_path('information_ts' , 'industry'))
+        self.indus_data = pd.read_feather(PATH.get_target_path('information_ts' , 'industry'))
 
         self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values
 
@@ -106,11 +105,11 @@ class TuShareCNE5_Calculator:
     def get_exposure(self , date : int , read = False):
         df = self.exposure.get(date)
         if df is None and read: 
-            df = load_target_file('models' , 'tushare_cne5_exp' , date)
+            df = PATH.load_target_file('models' , 'tushare_cne5_exp' , date)
             self.exposure.add(df , date)
         if df is None: 
             df = pd.concat([self.get_estuniv(date).loc[:,['estuniv','weight']] , self.get_industry(date) , 
-                            *[self.get_style(date , name) for name in RISK_STYLE]] , axis=1)
+                            *[self.get_style(date , name) for name in CONF.RISK_STYLE]] , axis=1)
             self.exposure.add(df , date)
         return df
 
@@ -123,14 +122,14 @@ class TuShareCNE5_Calculator:
         return df
     
     def get_style(self , date : int , name : str):
-        assert name in RISK_STYLE , name
+        assert name in CONF.RISK_STYLE , name
         if (df := self.style.get(date , name)) is None: df = getattr(self , f'calc_{name}')(date)
         return df
     
     def get_coef(self , date : int , read = False):
         coef = self.coef.get(date)
         if coef is None and read: 
-            coef = load_target_file('models' , 'tushare_cne5_coef' , date)
+            coef = PATH.load_target_file('models' , 'tushare_cne5_coef' , date)
             self.coef.add(coef , date)
         if coef is None: 
             coef , resid = self.calc_model(date)
@@ -139,7 +138,7 @@ class TuShareCNE5_Calculator:
     def get_resid(self , date : int , read = False):
         resid = self.resid.get(date)
         if resid is None and read: 
-            resid = load_target_file('models' , 'tushare_cne5_res' , date)
+            resid = PATH.load_target_file('models' , 'tushare_cne5_res' , date)
             self.resid.add(resid , date)
         if resid is None: 
             coef , resid = self.calc_model(date)
@@ -196,14 +195,14 @@ class TuShareCNE5_Calculator:
         df = df.groupby('secid')[['indus']].last()
         self.ind_grp.add(df , date)
 
-        df = df.assign(values = 1).pivot_table('values' , 'secid' , 'indus', fill_value=0).loc[:,RISK_INDUS]
+        df = df.assign(values = 1).pivot_table('values' , 'secid' , 'indus', fill_value=0).loc[:,CONF.RISK_INDUS]
         df = df.reindex(univ.index).fillna(0).rename_axis(columns=None)
         self.ind_exp.add(df , date)
         
         return df
     
     def calc_style(self , date : int):
-        for style_name in RISK_STYLE: getattr(self , f'calc_{style_name}')(date)
+        for style_name in CONF.RISK_STYLE: getattr(self , f'calc_{style_name}')(date)
     
     def calc_size(self , date : int):
         v = np.log(TRADE_DATA.get_val(date).set_index('secid')['total_mv'] / 10**8)
@@ -426,8 +425,8 @@ class TuShareCNE5_Calculator:
         
     def updatable_dates(self , job : Literal['exposure' , 'risk']):
         dates = CALENDAR.cal_trd['calendar'].to_numpy()
-        end_date = np.min([get_target_dates('trade_ts' , 'day').max(),
-                           get_target_dates('trade_ts' , 'day_val').max()])
+        end_date = np.min([PATH.get_target_dates('trade_ts' , 'day').max(),
+                           PATH.get_target_dates('trade_ts' , 'day_val').max()])
         dates = dates[(dates > self.START_DATE) & (dates <= end_date)]
         
         all_updated : np.ndarray | Any = None
@@ -439,26 +438,26 @@ class TuShareCNE5_Calculator:
             raise KeyError(job)
         
         for x in check_list:
-            updated = get_target_dates('models' , x)
+            updated = PATH.get_target_dates('models' , x)
             all_updated = updated if all_updated is None else np.intersect1d(all_updated , updated)
         return np.setdiff1d(dates , all_updated)
         
     def update_date(self , date : int , job : Literal['exposure' , 'risk']):
         if job == 'exposure':
             exp = self.get_exposure(date)
-            exp.to_feather(get_target_path('models' , 'tushare_cne5_exp' , date , makedir=True))
+            exp.to_feather(PATH.get_target_path('models' , 'tushare_cne5_exp' , date , makedir=True))
 
             coef = self.get_coef(date)
-            coef.to_feather(get_target_path('models' , 'tushare_cne5_coef' , date , makedir=True))
+            coef.to_feather(PATH.get_target_path('models' , 'tushare_cne5_coef' , date , makedir=True))
 
             resid = self.get_resid(date)
-            resid.to_feather(get_target_path('models' , 'tushare_cne5_res' , date , makedir=True))
+            resid.to_feather(PATH.get_target_path('models' , 'tushare_cne5_res' , date , makedir=True))
         elif job == 'risk':
             cov = self.calc_common_risk(date)
-            cov.to_feather(get_target_path('models' , 'tushare_cne5_cov' , date , makedir=True))
+            cov.to_feather(PATH.get_target_path('models' , 'tushare_cne5_cov' , date , makedir=True))
 
             spec = self.calc_specific_risk(date)
-            spec.to_feather(get_target_path('models' , 'tushare_cne5_spec' , date , makedir=True))
+            spec.to_feather(PATH.get_target_path('models' , 'tushare_cne5_spec' , date , makedir=True))
         else:
             raise KeyError(job)
 

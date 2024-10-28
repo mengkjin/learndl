@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>贪吃蛇游戏</title>
+    <style>
+        .game-container {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 2px solid #333;
+            display: block;
+            margin: 20px auto;
+            background-color: #f0f0f0;
+        }
+        .controls {
+            margin: 20px;
+        }
+        .score {
+            font-size: 24px;
+            margin: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        select {
+            padding: 5px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="score">分数: <span id="scoreText">0</span> | 最高分: <span id="highScoreText">0</span></div>
+        <canvas id="gameCanvas" width="400" height="400"></canvas>
+        <div class="controls">
+            <button id="startBtn">开始游戏</button>
+            <button id="pauseBtn">暂停</button>
+            <select id="difficulty">
+                <option value="easy">简单</option>
+                <option value="medium">中等</option>
+                <option value="hard">困难</option>
+            </select>
+        </div>
+        <div>
+            <p>操作说明：使用方向键控制蛇的移动</p>
+            <p>按空格键可以快速暂停/继续游戏</p>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>

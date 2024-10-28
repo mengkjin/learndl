@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any , Literal , Optional
 
 from ..classes import FailedData 
-from ...basic.db import list_files , R_path_date
+from ...basic import PATH
 
 class RFetcher:
     '''Fetch data from R environment'''
@@ -275,9 +275,9 @@ class RFetcher:
             'cp'  : Path(f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_close') ,
         }
 
-        _files = {k:list_files(v) for k , v in path_param.items()}
+        _files = {k:PATH.list_files(v) for k , v in path_param.items()}
         for v in _files.values(): v.sort()
-        _dates = {k:R_path_date(v) for k , v in _files.items()}
+        _dates = {k:PATH.R_path_date(v) for k , v in _files.items()}
 
         pos = list(_dates['id']).index(date)
         if pos + lag1 + days >= len(_dates['id']):  return None

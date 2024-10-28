@@ -6,9 +6,10 @@ from dataclasses import dataclass , field
 from torch import Tensor
 from typing import Any , Iterator , Optional
 
-from .core import BlockLoader , DataBlock , data_type_abbr
-from ..basic import RISK_STYLE , RISK_INDUS
-from ..func.time import Timer
+from .core import DataBlock , data_type_abbr
+from .loader import BlockLoader
+from ..basic import CONF
+from ..basic.util import Timer
 from ..func.primas import neutralize_2d , process_factor
 
 TRAIN_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']
@@ -109,7 +110,7 @@ def select_processor(key : str) -> _TypeProcessor:
 class procY(_TypeProcessor):
     def block_loaders(self):
         return {'y' : BlockLoader('labels', ['ret10_lag', 'ret20_lag']) ,
-                'risk' : BlockLoader('models', 'risk_exp', [*RISK_INDUS, 'size'])}
+                'risk' : BlockLoader('models', 'risk_exp', [*CONF.RISK_INDUS, 'size'])}
     def final_feat(self): return None
     def process(self , blocks : dict[str,DataBlock]): 
         data_block , model_exp = blocks['y'] , blocks['risk']
@@ -210,12 +211,12 @@ class procWeek(_TypeProcessor):
     
 class procStyle(_TypeProcessor):
     def block_loaders(self): 
-        return {'style' : BlockLoader('models', 'risk_exp', RISK_STYLE)}
+        return {'style' : BlockLoader('models', 'risk_exp', CONF.RISK_STYLE)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['style']
 
 class procIndus(_TypeProcessor):
     def block_loaders(self): 
-        return {'indus' : BlockLoader('models', 'risk_exp', RISK_INDUS)}
+        return {'indus' : BlockLoader('models', 'risk_exp', CONF.RISK_INDUS)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['indus']

@@ -3,8 +3,8 @@ booster:        [gbtree] # 'dart' , 'gbtree' ,
 objective:      [reg:squarederror] # rank:ndcg , rank:pairwise
 eval_metric:    [null]  # rank:ndcg ,
 learning_rate:  [0.3] 
-lambda:         [1.0e-05]
-alpha:          [1.0e-07]
+reg_lambda:     [1.0e-05]
+reg_alpha:      [1.0e-07]
 max_depth:      [6 , 8 , 10]
 rate_drop:      [0.1]
 monotone_constraints:     [0]

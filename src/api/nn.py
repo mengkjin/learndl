@@ -1,1 +1,1 @@
-from ..model.api import DataAPI , ModelTestor , Predictor , Trainer , HiddenExtractor
+from ..model.api import DataAPI , ModelTestor , ModelPredictor , ModelTrainer , ModelHiddenExtractor

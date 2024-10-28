@@ -1,33 +1,56 @@
+import torch
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import torch
 
 from abc import ABC , abstractmethod
+from dataclasses import dataclass , field
 from torch import nn , no_grad , Tensor
 from typing import Any , Literal , Optional
 
-from ..classes import BatchData , BatchMetric , BatchOutput , MetricList , TrainConfig , TrainerStatus
-from ..nn import get_multiloss_params
+from .batch import BatchMetric
 from ...func import mse , pearson , ccc , spearman
 
 DISPLAY_CHECK  = True # will display once if true
 DISPLAY_RECORD = {'loss' : {} , 'score' : {} , 'penalty' : {}}
 METRIC_FUNC    = {'mse':mse ,'pearson':pearson,'ccc':ccc,'spearman':spearman,}
 
+@dataclass(slots=True)
+class MetricList:
+    name : str
+    type : str
+    values : list[Any] = field(default_factory=list) 
+
+    def __post_init__(self): assert self.type in ['loss' , 'score']
+    def record(self , metrics): self.values.append(metrics.loss_item if self.type == 'loss' else metrics.score)
+    def last(self): self.values[-1]
+    def mean(self): return np.mean(self.values)
+    def any_nan(self): return np.isnan(self.values).any()
+
 class Metrics:
     '''calculator of batch output'''
-    def __init__(self , config : TrainConfig , use_dataset  : Literal['train','valid'] = 'valid' , 
-                 use_metric : Literal['loss' , 'score'] = 'score' , **kwargs) -> None:
-        self.config      = config
-        self.use_dataset = use_dataset
-        self.use_metric  = use_metric
+    VAL_DATASET : Literal['train','valid'] = 'valid'
+    VAL_METRIC  : Literal['loss' ,'score'] = 'score'
+    
+    def __init__(self , 
+                 module_type = 'nn' , nn_category = '' ,
+                 loss_type : Literal['mse', 'pearson', 'ccc'] = 'ccc' , 
+                 score_type : Literal['mse', 'pearson', 'ccc', 'spearman'] = 'spearman',
+                 penalty_kwargs : dict = {} ,
+                 multilosses_type: Literal['ewa','hybrid','dwa','ruw','gls','rws'] | None = None ,
+                 multilosses_param: dict[str,Any] = {} ,
+                 **kwargs) -> None:
         
-        self.loss_calc    = LossCalculator(self.config.train_criterion_loss)
-        self.score_calc   = ScoreCalculator(self.config.train_criterion_score)
-        self.penalty_calc = {k:PenaltyCalculator(k,v) for k,v in self.config.train_criterion_penalty.items()}
+        self.module_type = module_type
+        self.nn_category = nn_category
+        self.multilosses_type = multilosses_type
+        self.multilosses_param = multilosses_param
+
+        self.loss_calc    = LossCalculator(loss_type)
+        self.score_calc   = ScoreCalculator(score_type)
+        self.penalty_calc = {k:PenaltyCalculator(k,v) for k,v in penalty_kwargs.items()}
         
-        self.output    = BatchMetric()
+        self.output        = BatchMetric()
         self.metric_batchs = MetricsAggregator()
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
         self.latest : dict[str,Any] = {}
@@ -50,7 +73,7 @@ class Metrics:
         self.num_output   = model_param.get('num_output' , 1)
         self.which_output = model_param.get('which_output' , 0)
         self.multi_losses = MultiHeadLosses(
-            self.num_output , self.config.train_multilosses_type, **self.config.train_multilosses_param)
+            self.num_output , self.multilosses_type, **self.multilosses_param)
 
         self.update_penalty_calc()
         self.new_attempt()
@@ -58,39 +81,41 @@ class Metrics:
     
     def update_penalty_calc(self):
         if self.penalty_calc.get('hidden_corr'): 
-            cond_hidden_corr = (self.config.nn_category == 'tra') or self.model_param.get('hidden_as_factors',False)
+            cond_hidden_corr = (self.nn_category == 'tra') or self.model_param.get('hidden_as_factors',False)
             self.penalty_calc['hidden_corr'].cond = cond_hidden_corr
 
     def new_attempt(self):
         self.best_metric = None
         self.metric_epochs = {f'{ds}.{mt}':[] for ds in ['train','valid','test'] for mt in ['loss','score']}
 
-    def new_epoch_metric(self , dataset : Literal['train','valid','test'] , status : TrainerStatus):
-        self.metric_batchs.new(dataset , status.model_num , status.model_date , status.epoch , status.model_type)
+    def new_epoch(self , dataset : Literal['train','valid','test'] , model_num : int , model_date : int , 
+                  model_submodel , epoch : int , **kwargs):
+        self.dataset : Literal['train','valid','test'] = dataset
+        self.metric_batchs.new(self.dataset , model_num , model_date , epoch , model_submodel)
 
-    def collect_batch_metric(self):
+    def collect_batch(self):
         self.metric_batchs.record(self.output)
 
-    def collect_epoch_metric(self , dataset : Literal['train','valid','test']):
+    def collect_epoch(self):
         self.metric_batchs.collect()
         loss , score = self.metric_batchs.loss , self.metric_batchs.score
-        self.latest[f'{dataset}.loss']  = loss
-        self.latest[f'{dataset}.score'] = score
-        self.metric_epochs[f'{dataset}.loss'].append(loss) 
-        self.metric_epochs[f'{dataset}.score'].append(score)
+        self.latest[f'{self.dataset}.loss']  = loss
+        self.latest[f'{self.dataset}.score'] = score
+        self.metric_epochs[f'{self.dataset}.loss'].append(loss) 
+        self.metric_epochs[f'{self.dataset}.score'].append(score)
 
-        if dataset == self.use_dataset:
-            metric = loss if self.use_metric == 'loss' else score
+        if self.dataset == self.VAL_DATASET:
+            metric = loss if self.VAL_METRIC == 'loss' else score
             self.last_metric = metric
             if (self.best_metric is None or
-                (self.use_metric == 'score' and self.best_metric < metric) or 
-                (self.use_metric == 'loss' and self.best_metric > metric)): 
+                (self.VAL_METRIC == 'score' and self.best_metric < metric) or 
+                (self.VAL_METRIC == 'loss' and self.best_metric > metric)): 
                 self.best_metric = metric
     
     def better_epoch(self , old_best_epoch : Any) -> bool:
         if old_best_epoch is None:
             return True
-        elif self.use_metric == 'score':
+        elif self.VAL_METRIC == 'score':
             return self.last_metric > old_best_epoch 
         else:
             return self.last_metric < old_best_epoch
@@ -98,44 +123,33 @@ class Metrics:
     def better_attempt(self , old_best_attempt : Any) -> bool:
         if old_best_attempt is None:
             return True
-        elif self.use_metric == 'score':
+        elif self.VAL_METRIC == 'score':
             return self.best_metric > old_best_attempt 
         else:
             return self.best_metric < old_best_attempt
 
-    def calculate(self , dataset , batch_data : BatchData , batch_output : BatchOutput , net : Optional[nn.Module] = None , 
-                  assert_nan = False , **kwargs):
-        label  = batch_data.y
-        pred   = batch_output.pred
-        weight = batch_data.w
-        other  = batch_output.other
-        penalty_kwargs = {'net':net,'pre':pred,'label':label,**kwargs,**other}
-        mt_param = get_multiloss_params(net)
-        self.calculate_from_tensor(dataset, label, pred, weight, penalty_kwargs, mt_param, assert_nan)
-
-    def calculate_from_tensor(self , dataset , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
-                              penalty_kwargs : dict[str,Any] = {} , multiloss_param = {} , assert_nan = False):
+    def calculate(self , dataset , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
+                  multiloss : dict = {} , assert_nan = True , **kwargs):
         '''Calculate loss(with gradient), penalty , score'''
         assert dataset in ['train','valid','test']
         
-        if label.shape != pred.shape: # if more label than output
-            label = label[...,:pred.shape[-1]]
-        if self.config.module_type != 'nn':
-            label , pred = label.flatten() , pred.flatten()
-        if label.ndim == 1:
-            label , pred = label.reshape(-1, 1) , pred.reshape(-1, 1)
+        if label.ndim == 1: label = label[:,None]
+        if pred.ndim  == 1: pred  = pred[:,None]
+        label , pred = label[:,:self.num_output] , pred[:,:self.num_output]
+
         assert label.shape == pred.shape , (label.shape , pred.shape)
-        assert label.shape[-1] == self.num_output , (label.shape[-1] , self.num_output)
 
         with no_grad():
             score = self.score_calc(label , pred , weight , nan_check = True , which_head = self.which_output , training = False).item()
             self.output = BatchMetric(score = score)
 
-        if dataset == 'train' and self.config.module_type == 'nn':
+        if dataset == 'train' and self.module_type == 'nn':
             multiheadlosses = self.loss_calc(label , pred , weight , nan_check = False , training = True)
+            multiloss_param = multiloss if multiloss else {}
             loss = self.multi_losses(multiheadlosses , multiloss_param) 
             self.output.add_loss(self.loss_calc.criterion , loss)
-
+            
+            penalty_kwargs = {'label':label,'pred':pred,'weight':weight,**kwargs}
             for key , value in penalty_kwargs.items():
                 if key.startswith('loss_') or key.startswith('penalty_'): 
                     self.output.add_loss(key , value)
@@ -147,7 +161,7 @@ class Metrics:
         #if assert_nan and self.output.loss.isnan():
         #    print(self.output)
         #    raise Exception('nan loss here')
-        
+        return self
 
 class _MetricCalculator(ABC):
     KEY : Literal['loss' , 'score' , 'penalty'] = 'loss'
@@ -265,13 +279,13 @@ class MetricsAggregator:
         self.table : Optional[pd.DataFrame] = None
         self.new('init',0,0)
     def __len__(self):  return len(self._record['loss'].values)
-    def new(self , dataset , model_num , model_date , epoch = 0 , model_type = 'best'):
-        self._params = [dataset , model_num , model_date , model_type , epoch]
-        self._record = {m:MetricList(f'{dataset}.{model_num}.{model_date}.{model_type}.{epoch}.{m}',m) for m in ['loss','score']}
+    def new(self , dataset , model_num , model_date , epoch = 0 , submodel = 'best'):
+        self._params = [dataset , model_num , model_date , submodel , epoch]
+        self._record = {m:MetricList(f'{dataset}.{model_num}.{model_date}.{submodel}.{epoch}.{m}',m) for m in ['loss','score']}
     def record(self , metrics): 
         [self._record[m].record(metrics) for m in ['loss','score']]
     def collect(self):
-        df = pd.DataFrame([[*self._params , self.loss , self.score]] , columns=['dataset','model_num','model_date','model_type','epoch','loss','score'])
+        df = pd.DataFrame([[*self._params , self.loss , self.score]] , columns=['dataset','model_num','model_date','submodel','epoch','loss','score'])
         self.table = df if self.table is None else pd.concat([self.table , df]).reindex()
     @property
     def nanloss(self): return self._record['loss'].any_nan()
