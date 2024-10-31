@@ -3,7 +3,7 @@ from tqdm import tqdm
 
 from ..util import BatchData
 from ..util.classes import BaseDataModule
-from ...basic import CONF
+from ...basic import SILENT
     
 class BatchDataLoader:
     '''wrap loader to impletement DataModule Callbacks'''
@@ -36,7 +36,7 @@ class BatchDataLoader:
 
     def enable_tqdm(self , disable = False):
         if not isinstance(self.loader , tqdm): self.loader = tqdm(self.loader , total=len(self.loader))
-        self.loader.disable = disable or CONF.SILENT
+        self.loader.disable = disable or SILENT
         return self
 
     def display(self , text : str):

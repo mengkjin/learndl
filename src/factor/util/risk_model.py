@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
 from ..classes import GeneralModel , Port
-from ...basic.conf import SILENT , RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
+from ...basic.env_var import SILENT
+from ...basic.conf import RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
 from ...data import BlockLoader , FrameLoader , DATAVENDOR
 
 @dataclass

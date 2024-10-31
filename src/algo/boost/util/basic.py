@@ -58,6 +58,16 @@ class BasicBoosterModel(ABC):
     def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False , **kwargs):
         self.booster_fit_inputs(train , valid , silent)
         return self
+    
+    @property
+    def booster_objective_multi(self):
+        obj = self.train_param.get('objective' , None)
+        return obj is not None and 'softmax' in obj
+    
+    @property
+    def booster_objective_rank(self):
+        obj = self.train_param.get('objective' , None)
+        return obj is not None and 'rank' in obj
 
     def booster_input(self , x : BoosterInput | str | Any = 'test'):
         return self.data[x] if isinstance(x , str) else x
@@ -65,12 +75,11 @@ class BasicBoosterModel(ABC):
     def booster_fit_inputs(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False , **kwargs):
         self.silent = silent
 
-        train_param = deepcopy(self.train_param)
-        train_param = {k:v for k,v in train_param.items() if k in self.DEFAULT_TRAIN_PARAM}
+        train_param = {k:v for k,v in deepcopy(self.train_param).items() if k in self.DEFAULT_TRAIN_PARAM}
 
         # categorical_label
         n_bins = train_param.pop('n_bins', None)
-        if self.train_param.get('objective') in ['softmax']:
+        if self.booster_objective_multi:
             if n_bins is None: 
                 n_bins = self.DEFAULT_CATEGORICAL_N_BINS
                 if not self.silent: print(f'n_bins not specified, using default value {self.DEFAULT_CATEGORICAL_N_BINS}')

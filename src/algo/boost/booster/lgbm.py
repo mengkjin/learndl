@@ -45,8 +45,8 @@ class Lgbm(BasicBoosterModel):
     def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False):
         self.booster_fit_inputs(train , valid , silent)
 
-        train_set = lightgbm.Dataset(**self.fit_train_ds.lgbm_inputs())
-        valid_set = lightgbm.Dataset(**self.fit_valid_ds.lgbm_inputs() , reference = train_set)
+        train_set = lightgbm.Dataset(**self.fit_train_ds.booster_inputs('lgbm'))
+        valid_set = lightgbm.Dataset(**self.fit_valid_ds.booster_inputs('lgbm') , reference = train_set)
         
         num_boost_round = self.fit_train_param.pop('num_boost_round')
         num_class       = self.fit_train_param.pop('n_bins' , None)

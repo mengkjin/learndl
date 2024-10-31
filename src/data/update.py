@@ -6,7 +6,7 @@ from functools import reduce
 from pathlib import Path
 
 from .fetcher import DataFetcher , SQLFetcher
-from ..basic import PATH , CONF
+from ..basic import PATH , THIS_IS_SERVER
 from ..basic.path.db import DB_BY_DATE , DB_BY_NAME , save_df
 
 UPDATER_TITLE = 'DB_updater'
@@ -19,7 +19,7 @@ class DataUpdater():
     @staticmethod
     def get_updater_paths():
         # order matters!
-        search_dirs = [PATH.database , PATH.updater] + [Path('/home/mengkjin/Workspace/SharedFolder')] * CONF.THIS_IS_SERVER
+        search_dirs = [PATH.database , PATH.updater] + [Path('/home/mengkjin/Workspace/SharedFolder')] * THIS_IS_SERVER
 
         paths : list[Path] = []
         for sdir in search_dirs:
@@ -29,7 +29,7 @@ class DataUpdater():
     
     @staticmethod
     def unpack_exist_updaters(del_after_dumping = True):
-        assert CONF.THIS_IS_SERVER , f'must on server'
+        assert THIS_IS_SERVER , f'must on server'
         search_dirs = [PATH.database , PATH.updater , Path('/home/mengkjin/Workspace/SharedFolder')]
         paths : list[Path] = []
         for sdir in search_dirs:
@@ -149,7 +149,7 @@ class DataUpdater():
         return result
 
     def update_all(self , db_srcs = DB_BY_NAME + DB_BY_DATE , start_dt = None , end_dt = None , force = False):
-        assert not CONF.THIS_IS_SERVER , f'must on laptop'
+        assert not THIS_IS_SERVER , f'must on laptop'
         # selected DB is totally refreshed , so delete first
         if not isinstance(db_srcs , (list,tuple)): db_srcs = [db_srcs]
         for db_src in db_srcs:
@@ -165,7 +165,7 @@ class DataUpdater():
 
     @classmethod
     def update_server(cls):
-        assert CONF.THIS_IS_SERVER , f'must on server'
+        assert THIS_IS_SERVER , f'must on server'
         start_time = time.time()
 
         print(f'Unpack Update Files') 
@@ -175,7 +175,7 @@ class DataUpdater():
 
     @classmethod
     def update_laptop(cls):
-        assert not CONF.THIS_IS_SERVER , f'must on laptop'
+        assert not THIS_IS_SERVER , f'must on laptop'
         start_time = time.time()
         print(f'Update Files')
         Updater = cls()

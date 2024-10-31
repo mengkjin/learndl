@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_compl
 from pathlib import Path
 from typing import Any , Literal
 
-from . import glob as PATH 
+from .project import database
 from ...func.time import today
 
 SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
@@ -34,12 +34,12 @@ def list_files(directory : str | Path , fullname = False , recur = False):
 def get_target_path(db_src , db_key , date = None , makedir = False , 
                     force_type : Literal['name' , 'date'] | None = None):
     if db_src in DB_BY_NAME or force_type == 'name':
-        db_path = PATH.database.joinpath(f'DB_{db_src}')
+        db_path = database.joinpath(f'DB_{db_src}')
         db_base = f'{db_key}.{SAVE_OPT_DB}'
     elif db_src in DB_BY_DATE or force_type == 'date':
         assert date is not None
         year_group = int(date) // 10000
-        db_path = PATH.database.joinpath(f'DB_{db_src}' , db_key , str(year_group))
+        db_path = database.joinpath(f'DB_{db_src}' , db_key , str(year_group))
         db_base = f'{db_key}.{str(date)}.{SAVE_OPT_DB}'
     else:
         raise KeyError(db_src)
@@ -51,7 +51,7 @@ def get_source_dates(db_src , db_key):
     return R_source_dates(db_src , db_key)
 
 def get_target_dates(db_src , db_key , start_dt = None , end_dt = None , year = None):
-    db_path = PATH.database.joinpath(f'DB_{db_src}' , db_key)
+    db_path = database.joinpath(f'DB_{db_src}' , db_key)
     if year is None:
         target_files = list_files(db_path , recur=True)
     else:

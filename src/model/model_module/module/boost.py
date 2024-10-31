@@ -19,7 +19,8 @@ class BoostPredictor(BasePredictorModel):
         cuda = self.device.is_cuda()   if self.config else None
         seed = self.config.random_seed if self.config else None
 
-        self.booster = getter.boost(module , param , cuda , seed , given_name = self.model_full_name)
+        self.booster = getter.boost(module , param , cuda , seed , given_name = self.model_full_name ,
+                                    optuna = self.config.model_booster_optuna , n_trials = self.config.model_booster_optuna_n_trials)
 
         self.model_dict.reset()
         self.metrics.new_model(param)

@@ -7,8 +7,9 @@ from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
 from .core import DataBlock
-from ..basic import PATH , CONF
+from ..basic import PATH , CONF , SILENT
 from ..basic.util import Timer
+from ..func.singleton import singleton_threadsafe
 from ..func.time import date_offset , today
 
 class GetData:
@@ -19,7 +20,7 @@ class GetData:
 
     @classmethod
     def trade_dates(cls , start_dt : int = -1 , end_dt : int = 99991231):
-        with CONF.SILENT:
+        with SILENT:
             calendar = PATH.load_target_file('information' , 'calendar')
             assert calendar is not None
             calendar = np.array(calendar['calendar'].values[calendar['trade'] == 1])
@@ -28,7 +29,7 @@ class GetData:
     
     @classmethod
     def stocks(cls , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
-        with CONF.SILENT:
+        with SILENT:
             stocks = PATH.load_target_file('information' , 'description')
             assert stocks is not None
             if listed: stocks = stocks[stocks['list_dt'] > 0]
@@ -37,20 +38,20 @@ class GetData:
     
     @classmethod
     def st_stocks(cls):
-        with CONF.SILENT:
+        with SILENT:
             st = PATH.load_target_file('information' , 'st')
             assert st is not None
         return st
     
     @classmethod
     def day_quote(cls , date : int) -> pd.DataFrame | None:
-        with CONF.SILENT:
+        with SILENT:
             q = PATH.load_target_file('trade' , 'day' , date)[['secid','adjfactor','close','vwap']]
         return q
     
     @classmethod
     def daily_returns(cls , start_dt : int , end_dt : int):
-        with CONF.SILENT:
+        with SILENT:
             pre_start_dt = int(date_offset(start_dt , -20))
             feature = ['close' , 'vwap']
             block = BlockLoader('trade' , 'day' , ['close' , 'vwap' , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
@@ -117,16 +118,12 @@ class FrameLoader:
         dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None and not df.empty]
         return pd.concat(dfs) if len(dfs) else pd.DataFrame()
     
+
+@singleton_threadsafe
 class DataVendor:
     '''
     Vender for most factor / portfolio analysis related data
     '''
-    _instance = None  
-  
-    def __new__(cls, *args, **kwargs):  
-        if cls._instance is None:  
-            cls._instance = super().__new__(cls)
-        return cls._instance  
     
     def __init__(self):
         self.start_dt = 99991231
@@ -138,8 +135,10 @@ class DataVendor:
         self.day_quotes : dict[int,pd.DataFrame] = {}
         self.last_quote_dt = self.file_dates('trade','day').max()
 
-    @property
-    def secid(self): return self.all_stocks.secid.unique()
+    def secid(self , date : int | None = None): 
+        stk = self.all_stocks
+        if date is not None: stk = stk[(stk.list_dt <= date) & (stk.delist_dt > date)]
+        return stk.secid.unique()
 
     @staticmethod
     def single_file(db_src , db_key , date : int | None = None):
@@ -171,7 +170,7 @@ class DataVendor:
 
     def random_factor(self , start_dt = 20240101 , end_dt = 20240531 , step = 5 , nfactor = 2):
         date  = self.td_within(start_dt , end_dt , step)
-        secid = self.secid
+        secid = self.secid()
         factor_val = DataBlock(np.random.randn(len(secid),len(date),1,nfactor),
                                secid,date,[f'factor{i+1}' for i in range(nfactor)])
         return factor_val
@@ -198,7 +197,7 @@ class DataVendor:
     def get_named_data_block(self , start_dt : int , end_dt : int , db_src , db_key , data_key):
         td_within = self.td_within(start_dt , end_dt)
         if len(td_within) == 0: return
-        with CONF.SILENT:
+        with SILENT:
             early_dates , late_dates = self.update_dates(data_key , td_within)
             datas : list[DataBlock] = []
             if len(early_dates): datas.append(BlockLoader(db_src , db_key).load_block(early_dates.min() , early_dates.max()))

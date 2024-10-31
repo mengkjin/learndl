@@ -7,7 +7,7 @@ from typing import Any , Literal , Optional
 from .metric import Metrics
 from .storage import Checkpoint , Deposition
 from ...algo import getter , VALID_BOOSTERS
-from ...basic import CONF , PATH
+from ...basic import PATH , THIS_IS_SERVER
 from ...basic.util import Device , Logger , ModelPath
 from ...func import pretty_print_dict , recur_update
 
@@ -56,7 +56,7 @@ class TrainParam:
             self.train_param.update({f'{cfg_key}.{key}':val for key,val in self.load_config(cfg_key).items()})
         for override_key in override:
             assert override_key in self.train_param.keys() , override_key
-        if not CONF.THIS_IS_SERVER: self.train_param['env.short_test'] = True
+        if not THIS_IS_SERVER: self.train_param['env.short_test'] = True
         self.train_param.update(override)
         return self
 
@@ -81,7 +81,7 @@ class TrainParam:
         return self
     
     def check_validity(self):
-        if not CONF.THIS_IS_SERVER and not self.short_test:
+        if not THIS_IS_SERVER and not self.short_test:
             print(f'Beware! Should be at server or short_test, but short_test is False now!')
 
         nn_category = getter.nn_category(self.model_module)
@@ -199,7 +199,10 @@ class TrainParam:
             return self.model_module
         else:
             return 'not_a_booster'
-
+    @property
+    def model_booster_optuna(self): return bool(self.Param['model.booster_optuna'])
+    @property
+    def model_booster_optuna_n_trials(self): return int(self.Param['model.booster_optuna_n_trials'])
     @property
     def train_data_step(self): return int(self.Param['train.data_step'])
     @property
@@ -527,7 +530,7 @@ class TrainConfig(TrainParam):
 
     def print_out(self):
         subset = [
-            'model_name' , 'model_module' , 'model_submodels' , 'model_booster_type' ,
+            'model_name' , 'model_module' , 'model_submodels' , 'model_booster_type' , 'model_booster_optuna' ,
             'model_booster_head' , 'model_data_types' , 'model_data_labels' ,
             'random_seed' , 'beg_date' , 'end_date' , 'train_sample_method' , 'train_shuffle_option' , 
         ]

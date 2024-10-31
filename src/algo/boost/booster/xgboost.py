@@ -12,10 +12,12 @@ PLOT_PATH : Path | None = None
 class XgBoost(BasicBoosterModel):
     DEFAULT_TRAIN_PARAM = {
         'booster' : 'gbtree' , # 'dart' , 'gbtree' , 
-        'objective': 'reg:squarederror', # rank:ndcg , rank:pairwise
+        'objective': 'reg:squarederror', # 'reg:squarederror', 'reg:absoluteerror' , multi:softmax
         'num_boost_round' : 100 , 
         'early_stopping' : 50 , 
-        'eval_metric' : None , # rank:ndcg ,
+        # 'eval_metric' : None , # rank:ndcg ,
+        'subsample': 1.,
+        'colsample_bytree':1.,
         'verbosity': 1 , 
         'learning_rate': 0.3, 
         'reg_lambda': 1e-05, 
@@ -30,8 +32,8 @@ class XgBoost(BasicBoosterModel):
     def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False):
         self.booster_fit_inputs(train , valid , silent)
 
-        train_set = xgboost.DMatrix(**self.fit_train_ds.xgboost_inputs())
-        valid_set = xgboost.DMatrix(**self.fit_valid_ds.xgboost_inputs())
+        train_set = xgboost.DMatrix(**self.fit_train_ds.booster_inputs('xgboost'))
+        valid_set = xgboost.DMatrix(**self.fit_valid_ds.booster_inputs('xgboost'))
         self.fit_train_param.update({
             'seed':                 self.seed , 
             'device':               'gpu' if self.use_gpu else 'cpu' , 
@@ -58,7 +60,7 @@ class XgBoost(BasicBoosterModel):
         
     def predict(self , x : BoosterInput | str = 'test'):
         data = self.booster_input(x)
-        X = xgboost.DMatrix(**data.Dataset().xgboost_inputs())
+        X = xgboost.DMatrix(**data.Dataset().booster_inputs('xgboost'))
         return data.output(self.model.predict(X))
     
     def to_dict(self):

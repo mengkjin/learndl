@@ -7,7 +7,7 @@ from typing import ClassVar , Optional
 from .module_selector import get_predictor_module
 from ...util import TrainConfig
 from ...data_module import DataModule
-from ....basic import PATH , CONF
+from ....basic import PATH , SILENT , THIS_IS_SERVER
 from ....basic.util import RegisteredModel , REG_MODELS
 from ....data import GetData
 from ....func import today , date_offset
@@ -44,7 +44,7 @@ class ModelPredictor:
         reg_models = [RegisteredModel(**reg_model) for reg_model in REG_MODELS]
         for model in reg_models:
             md = cls(model)
-            with CONF.SILENT: md.get_df().deploy()
+            with SILENT: md.get_df().deploy()
             print(f'Finish model [{model.name}] predicting!')
         print('-' * 80)
         return md
@@ -53,7 +53,7 @@ class ModelPredictor:
         '''deploy df by day to class.destination'''
         if df is None: df = self.df
         if df is None: return NotImplemented
-        path_deploy = PATH.FACTOR_DESTINATION_SERVER if CONF.THIS_IS_SERVER else PATH.FACTOR_DESTINATION_LAPTOP
+        path_deploy = PATH.FACTOR_DESTINATION_SERVER if THIS_IS_SERVER else PATH.FACTOR_DESTINATION_LAPTOP
         path_deploy.joinpath(self.alias).mkdir(parents=True,exist_ok=True)
         for date , subdf in df.groupby(date_col):
             des_path = path_deploy.joinpath(self.alias , f'{self.alias}_{date}.txt')

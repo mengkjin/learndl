@@ -2,7 +2,6 @@ import gc , torch
 import numpy as np
 import pandas as pd
 
-from dataclasses import dataclass
 from numpy.random import permutation
 from torch import Tensor
 from torch.utils.data import BatchSampler
@@ -11,7 +10,7 @@ from typing import Any , Literal , Optional
 from .loader import BatchDataLoader
 from ..util import BatchData , TrainConfig , MemFileStorage , StoredFileLoader
 from ..util.classes import BaseBuffer , BaseDataModule
-from ...basic import CONF , PATH
+from ...basic import CONF , PATH , SILENT
 from ...basic.util import HiddenPath
 from ...data import DataBlockNorm , DataProcessor , ModuleData , DataBlock
 from ...func import tensor_standardize_and_weight , match_values , index_intersect
@@ -115,7 +114,7 @@ class DataModule(BaseDataModule):
                 self.hidden_input[hidden_key] = (hidden_model_date , df)
             hidden_max_date = df['date'].max() if hidden_max_date is None else min(hidden_max_date , df['date'].max())
 
-            df = df.drop(columns='dataset').set_index(['secid','date'])
+            df = df.drop(columns='dataset' , errors='ignore').set_index(['secid','date'])
             df.columns = [f'{hidden_key}.{col}' for col in df.columns]
             self.datas.x[hidden_key] = DataBlock.from_dataframe(df).align_secid_date(self.datas.secid , self.datas.date)
 
@@ -259,7 +258,7 @@ class DataModule(BaseDataModule):
                 'divlast' : method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST) ,
                 'histnorm': method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM) ,
             }
-            if not CONF.SILENT: print(f'Pre-Norming method of [{mdt}] : {new_method}')
+            if not SILENT: print(f'Pre-Norming method of [{mdt}] : {new_method}')
             self.prenorm_divlast[mdt]  = new_method['divlast']
             self.prenorm_histnorm[mdt] = new_method['histnorm']
 

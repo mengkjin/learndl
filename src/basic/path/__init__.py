@@ -1,2 +1,2 @@
-from .glob import *
+from .project import *
 from .db import *

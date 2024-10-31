@@ -41,7 +41,7 @@ class GeneralBooster:
         return self.forward(x)
 
     def update_param(self , params : dict[str,Any] , **kwargs):
-        self.train_param = {k:v for k,v in params.items() if k not in BoosterWeightMethod.__slots__}
+        self.train_param = {k:v for k,v in params.items() if k not in [*BoosterWeightMethod.__slots__,'verbosity','seqlens']}
         self.weight_param = {k:v for k,v in params.items() if k in BoosterWeightMethod.__slots__}
         self.verbosity = params.get('verbosity' , 10)
 

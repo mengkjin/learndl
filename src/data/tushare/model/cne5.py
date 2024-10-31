@@ -3,14 +3,9 @@ import pandas as pd
 import statsmodels.api as sm
 from typing import Any , Literal , Optional
 
-from ..basic import TradeCalendar , TradeDataAccess , ModelDataAccess , FinaDataAccess
+from ..basic import TradeDate , CALENDAR , TRADE_DATA , MODEL_DATA , FINA_DATA
 from ....basic import PATH , CONF
 from ....func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
-
-CALENDAR = TradeCalendar()
-TRADE_DATA = TradeDataAccess()
-MODEL_DATA = ModelDataAccess()
-FINA_DATA = FinaDataAccess()
 
 def parse_ts_input(
     ts : pd.DataFrame , 
@@ -358,7 +353,7 @@ class TuShareCNE5_Calculator:
         return self.descriptor(v , date , 'leverage' , 'median')
     
     def calc_model(self , date : int):
-        exp_date = CALENDAR.offset(date , -1)
+        exp_date = int(TradeDate(date) - 1) # CALENDAR.offset(date , -1)
         exp = self.get_exposure(exp_date , read = True)
         exp = exp[exp['estuniv'] == 1]
         ret = TRADE_DATA.get_trd(date , ['secid','pctchange']).set_index('secid') / 100

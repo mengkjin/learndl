@@ -11,13 +11,16 @@ PLOT_PATH : Path | None = None
 
 class CatBoost(BasicBoosterModel):
     DEFAULT_TRAIN_PARAM = {
-        'objective': 'RMSE', # NDCG , RMSE
+        'objective': 'RMSE' , # 'MAE' NDCG , RMSE
         'num_boost_round' : 100 , 
         'early_stopping' : 50 , 
         'verbosity': 1 , 
         'learning_rate': 0.3, 
         'l2_leaf_reg': 1e-05, 
+        'min_data_in_leaf' : 20, 
         'max_depth': 6, 
+        'od_type': 'Iter' ,
+        'bagging_temperature' : 1. ,
         'monotone_constraints': 0 , 
         'random_strength' : 1.,
         'task_type': 'CPU',
@@ -28,26 +31,26 @@ class CatBoost(BasicBoosterModel):
     def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False):
         self.booster_fit_inputs(train , valid , silent)
 
-        train_set = catboost.Pool(**self.fit_train_ds.catboost_inputs())
-        valid_set = catboost.Pool(**self.fit_valid_ds.catboost_inputs())
+        train_set = catboost.Pool(**self.fit_train_ds.booster_inputs('catboost'))
+        valid_set = catboost.Pool(**self.fit_valid_ds.booster_inputs('catboost'))
 
         num_boost_round = self.fit_train_param.pop('num_boost_round')
         early_stopping  = self.fit_train_param.pop('early_stopping')
-        verbose_eval    = self.fit_train_param.pop('verbosity') > 0
+        verbose_eval    = self.fit_train_param.pop('verbosity') > 0 and not silent
         num_class       = self.fit_train_param.pop('n_bins' , None)
         if 'eval_metric' in self.fit_train_param and self.fit_train_param['eval_metric'] is None: del self.fit_train_param['eval_metric']
 
         self.fit_train_param.update({
             'random_seed':          self.seed , 
             'task_type':            'GPU' if self.use_gpu else 'CPU' , 
-            'verbosity':            0 if silent else 1 ,
+            # 'verbose':            0 if silent else 1 ,
             'monotone_constraints': self.mono_constr(self.fit_train_param , self.fit_train_ds.nfeat , as_tuple=True)}) 
         if self.fit_train_param['objective'] in ['softmax']: self.fit_train_param['num_class'] = num_class
                
         self.evals_result = dict()
         self.model : catboost.CatBoost = catboost.train(
             dtrain = train_set,
-            params = self.fit_train_param,
+            params = {k:v for k,v in self.fit_train_param.items() if v is not None},
             num_boost_round=num_boost_round, 
             early_stopping_rounds = early_stopping,
             evals=[valid_set] , 

@@ -1,61 +1,14 @@
+import torch
 import numpy as np
 import pandas as pd
 from typing import Any , Literal
 
+from .calendar import TradeCalendar , TradeDate
 from ....basic import PATH
+from ....func.time import today
+from ....func.singleton import singleton_threadsafe
 
-class TradeCalendar:
-    def __init__(self) -> None:
-        cal = pd.read_feather(PATH.get_target_path('information_ts' , 'calendar')).loc[:,['calendar' , 'trade']]
-
-        trd = cal[cal['trade'] == 1].reset_index(drop=True)
-        trd['td'] = trd['calendar']
-        trd['pre'] = trd['calendar'].shift(1, fill_value=-1)
-        trd = cal.merge(trd.drop(columns='trade') , on = 'calendar' , how = 'left').ffill()
-        trd['cd_index'] = np.arange(len(trd))
-        trd['td_index'] = trd['trade'].cumsum() - 1
-        trd = trd.astype(int)
-
-        self.calendar = trd.set_index('calendar')
-        self.cal_cal = trd.set_index('cd_index')
-        self.cal_trd = trd[trd['trade'] == 1].set_index('td_index')
-    
-    def __td_transform(self , td , as_numpy : bool) -> Any:
-        if isinstance(td , pd.Series): td = td.to_numpy()
-        if as_numpy and isinstance(td , int): td = np.array([td])
-        return td 
-
-    def td(self , date , as_numpy = True): 
-        td = self.calendar.loc[date , 'td']
-        return self.__td_transform(td , as_numpy)
-    
-    def pre(self , date , as_numpy = True):
-        td = self.calendar.loc[date , 'pre']
-        return self.__td_transform(td , as_numpy)
-    
-    def offset(self , date , n : Any = 0 , type : Literal['t' , 'c'] = 't' , as_numpy = True):
-        if type == 't':
-            d_index = self.calendar.loc[date , 'td_index'] + n
-            d_index = np.maximum(np.minimum(d_index , len(self.cal_trd) - 1) , 0)
-            td = self.cal_trd.loc[d_index , 'calendar']
-        else:
-            d_index = self.calendar.loc[date , 'cd_index'] + n
-            d_index = np.maximum(np.minimum(d_index , len(self.cal_cal) - 1) , 0)
-            td = self.cal_cal.loc[d_index , 'calendar']
-        return self.__td_transform(td , as_numpy)
-    
-    def trailing(self , date , n : int , type : Literal['t' , 'c'] = 't' , ):
-        if type == 't':
-            td = self.cal_trd[self.cal_trd['calendar'] <= date]
-        else:
-            td = self.cal_cal[self.cal_cal['calendar'] <= date]
-        return np.sort(td[-n:]['calendar'].to_numpy())
-    
-    @property
-    def calendar_start(self): return self.calendar.index.min()
-    @property
-    def calendar_end(self): return self.calendar.index.max()
-
+@singleton_threadsafe
 class TradeDataAccess:
     MAX_LEN = 1000
 
@@ -89,6 +42,14 @@ class TradeDataAccess:
         if cols is not None: df = df.loc[:,cols]
         return df
     
+    def get_rets(self , start_dt : int | TradeDate , end_dt : int | TradeDate):
+        dates = CALENDAR.td_within(int(start_dt) , int(end_dt))
+        self.load(dates)
+        df_list = [self.get_trd(d , ['secid','pctchange']).assign(date = d) for d in dates]
+        df = pd.concat(df_list).loc[:,['date','secid','pctchange']].pivot_table('pctchange','date','secid') / 100
+        return df
+    
+@singleton_threadsafe
 class ModelDataAccess:
     MAX_LEN = 1000
 
@@ -122,6 +83,7 @@ class ModelDataAccess:
         if cols is not None: df = df.loc[:,cols]
         return df
 
+@singleton_threadsafe
 class FinaDataAccess:
     MAX_LEN = 40
 
@@ -212,3 +174,8 @@ class FinaDataAccess:
             df_ttm = df_ttm.stack().reset_index().rename(columns={0:val}).sort_values(['secid' , 'end_date']).\
                 groupby('secid').tail(lastn).set_index('secid').sort_index()
         return df_ttm
+
+CALENDAR = TradeCalendar()
+TRADE_DATA = TradeDataAccess()
+MODEL_DATA = ModelDataAccess()
+FINA_DATA = FinaDataAccess()

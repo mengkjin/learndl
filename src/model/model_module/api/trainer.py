@@ -2,7 +2,7 @@ from .module_selector import get_predictor_module
 from ...callback import CallBackManager
 from ...data_module import DataModule
 from ...util.classes import BaseTrainer
-from ....basic import CONF
+from ....basic import THIS_IS_SERVER
 from ....basic.util import REG_MODELS
 
 class ModelTrainer(BaseTrainer):
@@ -36,7 +36,7 @@ class ModelTrainer(BaseTrainer):
 
     @classmethod
     def update_models(cls):
-        if not CONF.THIS_IS_SERVER:
+        if not THIS_IS_SERVER:
             print('This is not server! Will not update models!')
         else:
             [cls.initialize(0 , 1 , 0 , model.model_path).go() for model in REG_MODELS]

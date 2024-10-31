@@ -8,7 +8,7 @@ from torch import Tensor
 from typing import Any , ClassVar , Literal , Optional
 
 from .classes import Stock4DData
-from ..basic import PATH , CONF
+from ..basic import PATH , SILENT
 from ..basic.util import Timer
 from ..func import index_union , index_intersect , forward_fillna
 from ..func.time import date_offset , today
@@ -371,9 +371,9 @@ class ModuleData:
             data = cls(**torch.load(dataset_path))
             if (np.isin(data_type_list , list(data.x.keys())).all() and
                 np.isin(y_labels , list(data.y.feature)).all()):
-                if not CONF.SILENT: print(f'try using {dataset_path} , success!')
+                if not SILENT: print(f'try using {dataset_path} , success!')
             else:
-                if not CONF.SILENT: print(f'try using {dataset_path} , but incompatible, load raw blocks!')
+                if not SILENT: print(f'try using {dataset_path} , but incompatible, load raw blocks!')
                 data = None
         else:
             data = None

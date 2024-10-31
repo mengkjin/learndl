@@ -119,17 +119,14 @@ class BoosterInput:
     def obj_flatten(self , obj : torch.Tensor | np.ndarray | None , dropna = True , date_first = True) -> Any:
         if obj is None: return obj
 
-        if dropna and self.y is not None:
-            finite = self.finite
-            if date_first: finite = finite.transpose(1,0)
-            if obj.ndim == 1: finite = finite.flatten()
-        else:
-            finite = None
+        finite = self.finite if dropna else self.finite.fill_(True)
 
-        if date_first:
+        if date_first and obj.ndim > 1:
             obj = obj.transpose(1,0) if isinstance(obj , torch.Tensor) else obj.swapaxes(1,0)
+            if finite.ndim > 1: finite = finite.transpose(1,0)
 
-        return obj[finite] if finite is not None else obj
+        if obj.ndim == 1: finite = finite.flatten()
+        return obj[finite]
 
     def SECID(self , dropna = True):
         return self.obj_flatten(self.secid[:,None].repeat(len(self.date),axis=1) , dropna=dropna)
@@ -166,15 +163,24 @@ class BoosterInput:
              if isinstance(getattr(self , attr) , torch.Tensor)]
             return self
         
-        def lgbm_inputs(self):
+        def booster_inputs(self , booster_type : Literal['lgbm' , 'xgboost' , 'catboost'] , group = False):
             self.as_numpy()
-            return {'data' : self.x , 'label' : self.y , 'weight' : self.w , 'group' : self.group_arr()}
-        def catboost_inputs(self): 
-            self.as_numpy()
-            return {'data' : self.x , 'label' : self.y , 'weight' : self.w , 'group_id' : self.group_id()}
-        def xgboost_inputs(self): 
-            self.as_numpy()
-            return {'data' : self.x , 'label' : self.y , 'weight' : self.w , 'group' : self.group_arr()}
+            booster_inputs = {'data' : self.x , 'label' : self.y}
+            if booster_type == 'lgbm':
+                # if group: booster_inputs['group'] = self.group_arr()
+                booster_inputs['weight'] = self.w
+            elif booster_type == 'xgboost':
+                if False and group: 
+                    g = self.group_arr()
+                    booster_inputs['group'] = g
+                    booster_inputs['weight'] = np.array([self.w[e-length:e].sum() for e , length in zip(g.cumsum() , g)])
+                booster_inputs['weight'] = self.w
+            elif booster_type == 'catboost':    
+                # if group: booster_inputs['group_id'] = self.group_id()
+                booster_inputs['weight'] = self.w
+            else:
+                raise ValueError(f'Booster type {booster_type} not supported')
+            return booster_inputs
         
         def group_arr(self):
             assert (np.diff(self.date) >= 0).all() , 'date must be sorted'

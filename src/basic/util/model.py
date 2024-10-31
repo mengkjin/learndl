@@ -6,7 +6,7 @@ from pathlib import Path
 from torch import Tensor
 from typing import Any , Literal , Optional
 
-from ..path import glob as PATH
+from .. import path as PATH
 
 REG_MODELS = [
     {'name': 'gru_day' , 'submodel' : 'swalast' , 'num'  : 0 , 'alias' : 'gru_day_V0'} ,

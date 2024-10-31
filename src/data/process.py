@@ -46,10 +46,8 @@ class DataProcessor:
             parser = argparse.ArgumentParser(description = 'manual to this script')
             parser.add_argument("--confirm", type=str, default = confirm)
             args , _ = parser.parse_known_args()
-
         if not predict and not args.confirm and \
             not input('Confirm update data? print "yes" to confirm!').lower()[0] == 'y' : return
-
         t1 = time.time()
         print(f'predict is {predict} , Data Processing start!')
         
@@ -59,7 +57,7 @@ class DataProcessor:
             blocks = data_types
         processor = cls(predict , blocks = blocks)
         print(f'{len(processor.blocks)} datas :' + str(list(processor.blocks)))
-
+        # return processor
         for key , proc in processor.processors():
             tt1 = time.time()
             with Timer(f'{key} blocks loading' , newline=True):
@@ -83,7 +81,7 @@ class _TypeProcessor(ABC):
     TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']
 
     @abstractmethod
-    def block_loaders(self) -> dict[str,'BlockLoader']: ... 
+    def block_loaders(self) -> dict[str,BlockLoader]: ... 
     @abstractmethod
     def final_feat(self) -> Optional[list]: ... 
     @abstractmethod

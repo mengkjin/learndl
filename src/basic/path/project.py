@@ -1,7 +1,9 @@
 import os , shutil , yaml
 from pathlib import Path
 
-main        = [parent for parent in list(Path(__file__).parents) if parent.match('./src/')][-1].parent
+from ..env_var import MAIN_PATH as main
+from ..env_var import FACTOR_DESTINATION_LAPTOP , FACTOR_DESTINATION_SERVER
+
 data        = main.joinpath('data')
 batch       = data.joinpath('MiniBatch')
 block       = data.joinpath('DataBlock')
@@ -10,17 +12,13 @@ dataset     = data.joinpath('DataSet')
 norm        = data.joinpath('HistNorm')
 tree        = data.joinpath('TreeData')
 updater     = data.joinpath('Updater')
+hidden      = data.joinpath('models_hidden_feature')
+factor      = data.joinpath('stock_factor')
 
 conf        = main.joinpath('configs')
 logs        = main.joinpath('logs')
-
 model       = main.joinpath('models')
-hidden      = main.joinpath('models_hidden_feature')
-
 result      = main.joinpath('results')
-
-FACTOR_DESTINATION_LAPTOP = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
-FACTOR_DESTINATION_SERVER = result.joinpath('Alpha')
 
 def read_yaml(yaml_file , **kwargs):
     if isinstance(yaml_file , Path) and yaml_file.suffix == '' and yaml_file.with_name(f'{yaml_file.name}.yaml').exists():
