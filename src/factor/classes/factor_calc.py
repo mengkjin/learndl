@@ -2,16 +2,19 @@
 
 import numpy as np
 import pandas as pd
+import importlib.util
+import inspect
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any , Literal , Type
 
 from ...basic import PATH
 from ...data.tushare.basic import CALENDAR
+from ...func.singleton import singleton_threadsafe
 
-_FACTOR_UPDATE_JOBS : dict[int , dict[str , 'StockFactorCalculator']] = {}
+_FACTOR_UPDATE_JOBS : list[tuple[int , str , 'StockFactorCalculator']] = []
 
 _FACTOR_INIT_DATE = 20070101
 _FACTOR_CATEGORY0_SET = ['fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative']
@@ -30,10 +33,31 @@ def factor_folder(factor_name : str):
 def factor_path(factor_name : str , date : int): 
     return factor_folder(factor_name).joinpath(f'{int(date) // 10000}/{factor_name}.{int(date)}.feather')
 
+def insert_update_job(date : int , level : str , obj : 'StockFactorCalculator'):
+    _FACTOR_UPDATE_JOBS.append((date , level , obj))
+
+def perform_update_jobs(overwrite = False , show_progress = True , ignore_error = False , selective_cls : Type['StockFactorCalculator'] | None = None):
+    _FACTOR_UPDATE_JOBS.sort(key=lambda x: (x[0], x[1], x[2]))
+    
+    for item in _FACTOR_UPDATE_JOBS[:]:
+        date , level , obj = item
+        if selective_cls is not None and obj.__class__ != selective_cls: continue
+        
+        try:
+            obj.calculate(date).deploy(overwrite = overwrite , show_progress = show_progress)
+        except Exception as e:
+            if ignore_error:
+                print(f'Factor : {obj.factor_name} update at date {date} failed: {e}')
+            else:
+                raise e
+        _FACTOR_UPDATE_JOBS.remove(item)
+
 class StockFactorCalculator(ABC):
     init_date : int = -1
-    category0 : str = '' # 'fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative'
-    category1 : str = ''
+    category0 : Literal['fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative'] | Any
+    category1 : Literal['quality' , 'growth' , 'value' , 'earning' , 'surprise' , 'coverage' , 'forecast' , 
+                        'adjustment' , 'hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity' , 
+                        'momentum' , 'volatility' , 'correlation' , 'liquidity' , 'holding' , 'trading'] | Any = None
     description : str = ''
 
     def __new__(cls , *args , **kwargs):
@@ -44,7 +68,7 @@ class StockFactorCalculator(ABC):
         self.factors : dict[int , pd.DataFrame] = {}
 
     def __repr__(self):
-        return f'StockFactor(name={self.factor_name},category0={self.category0},category1={self.category1},from={self.init_date})'
+        return f'{self.factor_name}(from {self.init_date} , {self.category0} , {self.category1})'
 
     @abstractmethod
     def calc_factor(self , date : int) -> pd.DataFrame:
@@ -54,16 +78,18 @@ class StockFactorCalculator(ABC):
     @property
     def factor_name(self): return self.__class__.__name__
     
-    def factor_folder(self , factor_name : str | None = None):
-        return factor_folder(self.factor_name if factor_name is None else factor_name)
+    @classmethod
+    def factor_folder(cls , factor_name : str | None = None):
+        return factor_folder(cls.__name__ if factor_name is None else factor_name)
+    
+    @classmethod
+    def factor_path(cls , date : int | Any , mkdir = True , factor_name : str | None = None):
+        path = factor_path(cls.__name__ if factor_name is None else factor_name , date)
+        if mkdir and factor_name is None: path.parent.mkdir(parents=True , exist_ok=True)
+        return path
     
     def factor_values(self):
         return pd.concat([df.assign(date = d) for d , df in self.factors.items()]).reset_index().set_index(['date','secid'])
-
-    def factor_path(self , date : int | Any , mkdir = True , factor_name : str | None = None):
-        path = factor_path(self.factor_name if factor_name is None else factor_name , date)
-        if mkdir and factor_name is None: path.parent.mkdir(parents=True , exist_ok=True)
-        return path
 
     @classmethod
     def validate_attr(cls):
@@ -98,17 +124,16 @@ class StockFactorCalculator(ABC):
         
         return self
 
-    def calculate(self , date : int | Iterable| Any , overwrite = False):
+    def calculate(self , date : int | Iterable| Any):
         '''calculate factor value of a given date and store to factor_data'''
         if isinstance(date , Iterable):
-            for d in date: self.calculate(d , overwrite)
+            for d in date: self.calculate(d)
         else:
             date = int(date)
             assert date >= self.init_date , f'date is should be greater than or equal to {self.init_date}, but got {date}'
-            if overwrite or date not in self.factors: 
-                df = self.calc_factor(date).reset_index().set_index('secid').\
-                    rename(columns={'factor_value':self.factor_name})[[self.factor_name]]
-                self.factors[date] = df
+            df = self.calc_factor(date).reset_index().set_index('secid').\
+                rename(columns={'factor_value':self.factor_name})[[self.factor_name]]
+            self.factors[date] = df
         return self
 
     def deploy(self , strict = True , overwrite = False , show_progress = False):
@@ -118,14 +143,14 @@ class StockFactorCalculator(ABC):
             df = self.factors.pop(date)
             path = self.factor_path(date , True)
             if path.exists() and not overwrite: 
-                if show_progress: print(f'Factor:{self.factor_name} at date {date} already there')
+                if show_progress: print(f'Factor : {self.factor_name} at date {date} already there')
                 continue
             try:
                 self.validate_value(date , df , strict = strict)
                 df.to_feather(self.factor_path(date , True))
-                if show_progress: print(f'Factor:{self.factor_name} at date {date} deploy successful')
+                if show_progress: print(f'Factor : {self.factor_name} at date {date} deploy successful')
             except ValueError as e:
-                print(f'Factor:{self.factor_name} at date {date} is invalid: {e}')
+                print(f'Factor : {self.factor_name} at date {date} is invalid: {e}')
 
         return self
 
@@ -146,35 +171,105 @@ class StockFactorCalculator(ABC):
             else:
                 return None
 
-    def stored_dates(self):
-        paths = PATH.list_files(self.factor_folder() , recur=True)
+    @classmethod
+    def stored_dates(cls):
+        paths = PATH.list_files(cls.factor_folder() , recur=True)
         dates = np.array(sorted(PATH.R_path_date(paths)) , dtype=int)
         return dates
     
-    def update_jobs(self , start : int = -1 , end : int = 99991231):
-        store_dates = self.stored_dates()
-        dates = np.setdiff1d(CALENDAR.td_within(max(start , self.init_date) , end) , store_dates)
-        for d in dates:
-            if d not in _FACTOR_UPDATE_JOBS: _FACTOR_UPDATE_JOBS[d] = {}
-            _FACTOR_UPDATE_JOBS[d][self.factor_name] = self
-        return self
+    @classmethod
+    def update_jobs(cls , start : int = -1 , end : int = 99991231 , overwrite = False , level : str | None = None):
+        obj = cls()
+        dates = CALENDAR.td_within(max(start , cls.init_date) , end)
+        if not overwrite:
+            dates = np.setdiff1d(CALENDAR.td_within(max(start , cls.init_date) , end) , cls.stored_dates())
+        [insert_update_job(d , 'levelunknown' if level is None else level , obj) for d in dates]
+        return obj
 
-    def Update(self , start : int = -1 , end : int = 99991231 , show_progress = True , ignore_error = False):
+    @classmethod
+    def Update(cls , overwrite = False , show_progress = True , ignore_error = False):
         '''update factor data from self.init_date to today'''
-        self.update_jobs(start , end)
+        perform_update_jobs(overwrite , show_progress , ignore_error , cls)
+    
+    @classmethod
+    def factor_hierarchy(cls):
+        return StockFactorHierarchy()
+    
+@singleton_threadsafe
+class StockFactorHierarchy(ABC):
+    def __init__(self):
+        self.definition_path =  PATH.main.joinpath('src' , 'factor' , 'factor_definition')
+        assert self.definition_path.exists() , f'{self.definition_path} does not exist'
+        self.hier : dict[str , list[Type[StockFactorCalculator]]] = {}
+        
+        self.load()
 
-        for date in _FACTOR_UPDATE_JOBS: 
-            obj = _FACTOR_UPDATE_JOBS[date].pop(self.factor_name , None)
-            if obj is None: continue
-            assert obj is self , f'obj is should be {self} , but got {obj}'
+    def load(self):        
+        for level_path in self.definition_path.iterdir():
+            if not level_path.is_dir(): continue
 
-            try:
-                obj.calculate(date).deploy()
-                if show_progress: print(f'Factor:{self.factor_name} update at date {date} finish')
-            except Exception as e:
-                if ignore_error:
-                    print(f'Factor:{self.factor_name} update at date {date} failed: {e}')
-                else:
-                    raise e
+            for file_path in level_path.iterdir():
+                if file_path.suffix != '.py': continue
+                spec_name = f'{level_path.stem}.{file_path.stem}'
                 
+                spec = importlib.util.spec_from_file_location(spec_name, file_path)
+                assert spec is not None and spec.loader is not None , f'{file_path} is not a valid module'
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                
+                for _ , obj in inspect.getmembers(module, inspect.isclass):
+                    if obj.__module__ == spec_name:
+                        assert issubclass(obj , StockFactorCalculator) , f'{obj} is not a subclass of StockFactorCalculator'
+                        if level_path.stem not in self.hier: self.hier[level_path.stem] = []
+                        self.hier[level_path.stem].append(obj)
+
         return self
+
+    def factor_df(self , level : str | None = None , category0 : str | None = None , category1 : str | None = None):
+        attr_list = ['__name__' , 'init_date' , 'category0' , 'category1' , 'description']
+        
+        df_dict = [
+            [level , *[getattr(factor_cls , attr) for attr in attr_list]] 
+            for level , factor_cls in self
+        ]
+
+        df = pd.DataFrame(df_dict, columns=['level' , *attr_list]).rename(columns={'__name__' : 'factor_name'})
+        if level is not None: df = df[df['level'] == level]
+        if category0 is not None: df = df[df['category0'] == category0]
+        if category1 is not None: df = df[df['category1'] == category1]
+        return df
+    
+    def jobs(self , as_df = True):
+        if as_df:
+            return pd.DataFrame(_FACTOR_UPDATE_JOBS , columns=['date' , 'level' , 'factor'])
+        else:
+            return _FACTOR_UPDATE_JOBS
+
+    def __repr__(self):
+        str_level_factors = [','.join(f'{level}({len(factors)})' for level , factors in self.hier.items())]
+        return f'StockFactorHierarchy({str_level_factors})'
+
+    def factor_names(self):
+        return [f'{level} : {factor_cls.__name__}' for level in self.iter_levels() for factor_cls in self.iter_factors(level)]
+
+    def __iter__(self):
+        return ((level , factor_cls) for level in self.iter_levels() for factor_cls in self.iter_factors(level))
+
+    def iter_levels(self):
+        return iter(self.hier)
+    
+    def iter_factors(self , level : str):
+        return iter(self.hier[level])
+    
+    def __getitem__(self , key : str):
+        return self.hier[key]
+    
+    @classmethod
+    def update_jobs(cls , start : int = -1 , end : int = 99991231 , overwrite = False):
+        obj = cls()
+        [factor_cls().update_jobs(start , end , overwrite , level) for level , factor_cls in obj]
+        return obj
+    
+    @classmethod
+    def Update(cls , overwrite = False , show_progress = True , ignore_error = True):
+        perform_update_jobs(overwrite , show_progress , ignore_error)

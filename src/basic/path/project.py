@@ -1,8 +1,10 @@
-import os , shutil , yaml
+import os , shutil , sys , yaml
 from pathlib import Path
 
 from ..env_var import MAIN_PATH as main
 from ..env_var import FACTOR_DESTINATION_LAPTOP , FACTOR_DESTINATION_SERVER
+
+sys.path.append(str(main))
 
 data        = main.joinpath('data')
 batch       = data.joinpath('MiniBatch')
