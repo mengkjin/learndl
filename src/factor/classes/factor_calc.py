@@ -7,11 +7,12 @@ import inspect
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
+from itertools import combinations
 from pathlib import Path
 from typing import Any , Literal , Type
 
 from ...basic import PATH
-from ...data.tushare.basic import CALENDAR
+from ...data import TSData
 from ...func.singleton import singleton_threadsafe
 
 _FACTOR_UPDATE_JOBS : list[tuple[int , str , 'StockFactorCalculator']] = []
@@ -53,6 +54,7 @@ def perform_update_jobs(overwrite = False , show_progress = True , ignore_error 
         _FACTOR_UPDATE_JOBS.remove(item)
 
 class StockFactorCalculator(ABC):
+    _instance = None
     init_date : int = -1
     category0 : Literal['fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative'] | Any
     category1 : Literal['quality' , 'growth' , 'value' , 'earning' , 'surprise' , 'coverage' , 'forecast' , 
@@ -61,17 +63,22 @@ class StockFactorCalculator(ABC):
     description : str = ''
 
     def __new__(cls , *args , **kwargs):
-        cls.validate_attr()
-        return super().__new__(cls)
+        if cls._instance is None:
+            cls.validate_attr()
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __init__(self):
         self.factors : dict[int , pd.DataFrame] = {}
 
     def __repr__(self):
         return f'{self.factor_name}(from {self.init_date} , {self.category0} , {self.category1})'
+    
+    def __getitem__(self , date : int):
+        return self.factors[date]
 
     @abstractmethod
-    def calc_factor(self , date : int) -> pd.DataFrame:
+    def calc_factor(self , date : int) -> pd.DataFrame | pd.Series:
         '''calculate factor value , must have secid and factor_value / factor_name columns'''
         return pd.DataFrame()
 
@@ -131,8 +138,14 @@ class StockFactorCalculator(ABC):
         else:
             date = int(date)
             assert date >= self.init_date , f'date is should be greater than or equal to {self.init_date}, but got {date}'
-            df = self.calc_factor(date).reset_index().set_index('secid').\
-                rename(columns={'factor_value':self.factor_name})[[self.factor_name]]
+
+            df = self.calc_factor(date)
+            if isinstance(df , pd.Series):
+                df = df.rename(self.factor_name).to_frame()
+            elif isinstance(df , pd.DataFrame):
+                df = df.reset_index().set_index('secid').rename(columns={'factor_value':self.factor_name})[[self.factor_name]]
+            else:
+                raise ValueError(f'calc_factor must return a DataFrame or Series , but got {type(df)}')
             self.factors[date] = df
         return self
 
@@ -180,9 +193,9 @@ class StockFactorCalculator(ABC):
     @classmethod
     def update_jobs(cls , start : int = -1 , end : int = 99991231 , overwrite = False , level : str | None = None):
         obj = cls()
-        dates = CALENDAR.td_within(max(start , cls.init_date) , end)
+        dates = TSData.CALENDAR.td_within(max(start , cls.init_date) , end)
         if not overwrite:
-            dates = np.setdiff1d(CALENDAR.td_within(max(start , cls.init_date) , end) , cls.stored_dates())
+            dates = np.setdiff1d(TSData.CALENDAR.td_within(max(start , cls.init_date) , end) , cls.stored_dates())
         [insert_update_job(d , 'levelunknown' if level is None else level , obj) for d in dates]
         return obj
 
@@ -198,15 +211,16 @@ class StockFactorCalculator(ABC):
 @singleton_threadsafe
 class StockFactorHierarchy(ABC):
     def __init__(self):
-        self.definition_path =  PATH.main.joinpath('src' , 'factor' , 'factor_definition')
+        self.definition_path =  PATH.main.joinpath('src_factor_definition')
         assert self.definition_path.exists() , f'{self.definition_path} does not exist'
-        self.hier : dict[str , list[Type[StockFactorCalculator]]] = {}
-        
+        self.hier : dict[str , dict[Type[StockFactorCalculator],dict[str , Any]]] = {}
         self.load()
 
     def load(self):        
+
+        factor_names : list[str] = []
         for level_path in self.definition_path.iterdir():
-            if not level_path.is_dir(): continue
+            if not level_path.is_dir() or level_path.stem == 'ignore': continue
 
             for file_path in level_path.iterdir():
                 if file_path.suffix != '.py': continue
@@ -218,22 +232,24 @@ class StockFactorHierarchy(ABC):
                 spec.loader.exec_module(module)
                 
                 for _ , obj in inspect.getmembers(module, inspect.isclass):
-                    if obj.__module__ == spec_name:
-                        assert issubclass(obj , StockFactorCalculator) , f'{obj} is not a subclass of StockFactorCalculator'
-                        if level_path.stem not in self.hier: self.hier[level_path.stem] = []
-                        self.hier[level_path.stem].append(obj)
+                    if obj.__module__ == spec_name and issubclass(obj , StockFactorCalculator):
+                        assert obj.__name__ not in factor_names , f'{obj.__name__} in module {spec_name} is duplicated'
+                        factor_names.append(obj.__name__)
+                        if level_path.stem not in self.hier: self.hier[level_path.stem] = {}
+                        self.hier[level_path.stem][obj] = {'level' : level_path.stem , 'file_name' : file_path.stem}
 
         return self
 
     def factor_df(self , level : str | None = None , category0 : str | None = None , category1 : str | None = None):
+        info_list = ['level' , 'file_name']
         attr_list = ['__name__' , 'init_date' , 'category0' , 'category1' , 'description']
         
         df_dict = [
-            [level , *[getattr(factor_cls , attr) for attr in attr_list]] 
-            for level , factor_cls in self
+            [*[info[attr] for attr in info_list] ,  *[getattr(cls , attr) for attr in attr_list]] 
+            for cls , info in self
         ]
 
-        df = pd.DataFrame(df_dict, columns=['level' , *attr_list]).rename(columns={'__name__' : 'factor_name'})
+        df = pd.DataFrame(df_dict, columns=[*info_list , *attr_list]).rename(columns={'__name__' : 'factor_name'})
         if level is not None: df = df[df['level'] == level]
         if category0 is not None: df = df[df['category0'] == category0]
         if category1 is not None: df = df[df['category1'] == category1]
@@ -250,24 +266,54 @@ class StockFactorHierarchy(ABC):
         return f'StockFactorHierarchy({str_level_factors})'
 
     def factor_names(self):
-        return [f'{level} : {factor_cls.__name__}' for level in self.iter_levels() for factor_cls in self.iter_factors(level)]
+        return [f'{cls.__name__}({str(info)})' for cls , info in self]
 
     def __iter__(self):
-        return ((level , factor_cls) for level in self.iter_levels() for factor_cls in self.iter_factors(level))
+        return ((cls , info) for level in self.iter_levels() for cls , info in self.iter_level_factors(level))
 
     def iter_levels(self):
         return iter(self.hier)
     
-    def iter_factors(self , level : str):
-        return iter(self.hier[level])
+    def iter_level_factors(self , level : str):
+        return ((cls , info) for cls , info in self.hier[level].items())
+
+    def iter_factors(self):
+        return (cls for level in self.iter_levels() for cls , _ in self.iter_level_factors(level))
     
     def __getitem__(self , key : str):
         return self.hier[key]
     
+    def get_factor(self , factor_name : str):
+        for cls , _ in self:
+            if cls.__name__ == factor_name: return cls
+        raise ValueError(f'{factor_name} is not in StockFactorHierarchy')
+    
+    def test_calc_all_factors(self , date : int , check_duplicates = True):
+        factor_values : dict[str , pd.Series] = {}
+        for factor_cls in self.iter_factors():
+            df = factor_cls().calc_factor(date)
+            factor_values[factor_cls.__name__] = df[factor_cls.factor_name] if isinstance(df , pd.DataFrame) else df
+            print(f'{factor_cls.__name__} calculated')
+        if check_duplicates:
+            abnormal_diffs = {}
+            for fn1 , fn2 in combinations(factor_values.keys() , 2):
+                f1 = (factor_values[fn1] - factor_values[fn1].mean()) / factor_values[fn1].std()
+                f2 = (factor_values[fn2] - factor_values[fn2].mean()) / factor_values[fn2].std()
+
+                diff = (f1 - f2).fillna(0).abs().std()
+                corr = f1.corr(f2)
+                if diff <= 0.01 or abs(corr) >= 0.999: 
+                    abnormal_diffs[f'{fn1}.{fn2}'] = {'diff_std':diff , 'corr' : corr}
+            if len(abnormal_diffs) == 0: 
+                print('no abnormal factor diffs')
+            else:
+                print(f'abnormal factor diffs: {abnormal_diffs}')
+        return factor_values
+    
     @classmethod
     def update_jobs(cls , start : int = -1 , end : int = 99991231 , overwrite = False):
         obj = cls()
-        [factor_cls().update_jobs(start , end , overwrite , level) for level , factor_cls in obj]
+        [cls().update_jobs(start , end , overwrite , info['level']) for cls , info in obj]
         return obj
     
     @classmethod

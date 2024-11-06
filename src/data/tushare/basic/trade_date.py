@@ -53,12 +53,14 @@ class TradeDate:
     def __eq__(self , other):
         return int(self) == int(other)
 
+    def as_int(self):
+        return int(self)
+
     def offset(self , n : int):
         if n == 0: return self
         d_index = _calendar['td_index'].loc[self.trade_date] + n
         d_index = np.maximum(np.minimum(d_index , len(_calendar) - 1) , 0)
         return self.__class__(_calendar[_calendar['td_index'] == d_index]['td'].iloc[0] , force_trade_date = True) 
-    
 
     @staticmethod
     def as_numpy(td):
@@ -70,41 +72,78 @@ class TradeDate:
 
 @singleton_threadsafe
 class TradeCalendar:
-    def __init__(self) -> None:
-        self.calendar = _calendar
-        self.cal_cal = _cal_cal
-        self.cal_trd = _cal_trd
+
+    @property
+    def calendar(self):
+        return _calendar
+    
+    @property
+    def cal_cal(self):
+        return _cal_cal
+    
+    @property
+    def cal_trd(self):
+        return _cal_trd
+
+    @property
+    def today(self):
+        return today()
+    
+    @classmethod
+    def td(cls , date : int | TradeDate , offset : int = 0):
+        return TradeDate(date).offset(offset)
         
-    def td(self , date):
-        return TradeDate.as_numpy(self.calendar.loc[date , 'td'])
+    @classmethod
+    def tds(cls , date):
+        return TradeDate.as_numpy(_calendar.loc[date , 'td'])
     
-    def pre(self , date):
-        return TradeDate.as_numpy(self.calendar.loc[date , 'pre'])
+    @classmethod
+    def previous(cls , date):
+        return TradeDate.as_numpy(_calendar.loc[date , 'pre'])
     
-    def offset(self , date , n : Any = 0 , type : Literal['t' , 'c'] = 't'):
+    @classmethod
+    def offset(cls , date , n : Any = 0 , type : Literal['t' , 'c'] = 't'):
         if type == 't':
-            d_index = self.calendar.loc[date , 'td_index'] + n
-            d_index = np.maximum(np.minimum(d_index , len(self.cal_trd) - 1) , 0)
-            td = self.cal_trd.loc[d_index , 'calendar']
+            d_index = _calendar.loc[date , 'td_index'] + n
+            d_index = np.maximum(np.minimum(d_index , len(_cal_trd) - 1) , 0)
+            td = _cal_trd.loc[d_index , 'calendar']
         else:
-            d_index = self.calendar.loc[date , 'cd_index'] + n
-            d_index = np.maximum(np.minimum(d_index , len(self.cal_cal) - 1) , 0)
-            td = self.cal_cal.loc[d_index , 'calendar']
+            d_index = _calendar.loc[date , 'cd_index'] + n
+            d_index = np.maximum(np.minimum(d_index , len(_cal_cal) - 1) , 0)
+            td = _cal_cal.loc[d_index , 'calendar']
         return TradeDate.as_numpy(td)
     
-    def trailing(self , date , n : int , type : Literal['t' , 'c'] = 't' , ):
+    @classmethod
+    def trailing(cls , date , n : int , type : Literal['t' , 'c'] = 't' , ):
         if type == 't':
-            td = self.cal_trd[self.cal_trd['calendar'] <= date]
+            td = _cal_trd[_cal_trd['calendar'] <= date]
         else:
-            td = self.cal_cal[self.cal_cal['calendar'] <= date]
+            td = _cal_cal[_cal_cal['calendar'] <= date]
         return np.sort(td[-n:]['calendar'].to_numpy())
     
-    def td_within(self , start_dt : int = -1 , end_dt : int = 99991231 , step : int = 1 , until_today = True):
-        dates = self.cal_trd['calendar'].to_numpy()
+    @classmethod
+    def td_within(cls , start_dt : int | TradeDate = -1 , end_dt : int | TradeDate = 99991231 , step : int = 1 , until_today = True):
+        start_dt , end_dt = int(start_dt) , int(end_dt)
+        dates = _cal_trd['calendar'].to_numpy()
         if until_today: end_dt = min(end_dt , today())
         return dates[(dates >= start_dt) & (dates <= end_dt)][::step]
     
-    @property
-    def calendar_start(self): return self.calendar.index.min()
-    @property
-    def calendar_end(self): return self.calendar.index.max()
+    @classmethod
+    def calendar_start(cls): return _calendar.index.min()
+
+    @classmethod
+    def calendar_end(cls): return _calendar.index.max()
+
+    @classmethod
+    def td_start_end(cls , reference_date , period_num : int , 
+                     period_type : Literal['d','w','m','q','y'] = 'm' , 
+                     lag_num : int = 0):
+        td = TradeDate(reference_date)
+        pdays = {'d':1 , 'w':7 , 'm':21 , 'q':63 , 'y':252}[period_type]
+        start_date = td - pdays * (period_num + lag_num) + 1
+        end_date   = td - pdays * lag_num
+        return start_date , end_date
+    
+    @classmethod
+    def is_trade_date(cls , date : int | TradeDate):
+        return _calendar.loc[int(date) , 'trade'] == 1

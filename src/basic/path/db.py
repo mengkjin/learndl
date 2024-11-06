@@ -43,7 +43,7 @@ def get_target_path(db_src , db_key , date = None , makedir = False ,
         db_base = f'{db_key}.{str(date)}.{SAVE_OPT_DB}'
     else:
         raise KeyError(db_src)
-    if makedir: db_path.mkdir(exist_ok=True)
+    if makedir: db_path.mkdir(parents=True , exist_ok=True)
     return db_path.joinpath(db_base)
 
 def get_source_dates(db_src , db_key):

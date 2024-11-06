@@ -4,7 +4,7 @@ import pandas as pd
 from ..basic import pro , code_to_secid , DateFetecher
 
 class DailyQuote(DateFetecher):
-    '''Tonghuashun Concept'''
+    '''Daily Quote'''
     def db_src(self): return 'trade_ts'
     def db_key(self): return 'day'    
     def get_data(self , date : int):
@@ -45,7 +45,7 @@ class DailyQuote(DateFetecher):
         return trade
     
 class DailyValuation(DateFetecher):
-    '''Tonghuashun Concept'''
+    '''Daily Valuation'''
     def db_src(self): return 'trade_ts'
     def db_key(self): return 'day_val'    
     def get_data(self , date : int):
@@ -54,3 +54,13 @@ class DailyValuation(DateFetecher):
 
         val = code_to_secid(val).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return val
+    
+class DailyMoneyFlow(DateFetecher):
+    '''Daily Money Flow'''
+    START_DATE = 20100101
+    def db_src(self): return 'trade_ts'
+    def db_key(self): return 'day_moneyflow'    
+    def get_data(self , date : int):
+        mf = code_to_secid(pro.moneyflow(trade_date=str(date)))
+        mf = code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        return mf

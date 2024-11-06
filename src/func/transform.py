@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
+import warnings
+warnings.filterwarnings('ignore' , category=RuntimeWarning , message='Mean of empty slice')
 
 from typing import Any , Literal , Optional
 from scipy.stats import norm, rankdata
@@ -190,8 +192,11 @@ def winsorize(v ,
 
     return v
 
-def time_weight(length : int , halflife : int):
-    wgt = np.exp(np.log(0.5) * np.flip(np.arange(length)) / halflife)
+def time_weight(length : int , halflife : int = 0):
+    if halflife > 0:
+        wgt = np.exp(np.log(0.5) * np.flip(np.arange(length)) / halflife)
+    else:
+        wgt = np.ones(length)
     wgt /= np.mean(wgt)
     return wgt
 
@@ -210,10 +215,11 @@ def apply_ols(mkt , stk , time_weight = None):
     assert len(mkt) == len(wgt) , (mkt.shape , wgt.shape)
 
     stk = stk - np.nanmean(stk , axis=0 , keepdims=True)
+    all_zeros = np.all(stk == 0 , axis = 0)
     bm = np.hstack([np.ones_like(mkt)[:,None] , ((mkt - mkt.mean()) * wgt)[:,None]])
     ts = (stk * wgt[:,None] / np.nanmean(np.isfinite(stk) * wgt[:,None] , axis=0 , keepdims=True))
     b = np.linalg.inv(bm.T @ bm) @ bm.T @ np.nan_to_num(ts)
-
+    b[: , all_zeros] = np.nan
     return b
 
 def neutral_resid(x , y , weight : Any = None , whiten = True):

@@ -3,9 +3,10 @@ import pandas as pd
 import statsmodels.api as sm
 from typing import Any , Literal , Optional
 
-from ..basic import TradeDate , CALENDAR , TRADE_DATA , MODEL_DATA , FINA_DATA
+from .. import access as TSData
 from ....basic import PATH , CONF
 from ....func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
+from ....func.singleton import singleton_threadsafe
 
 def parse_ts_input(
     ts : pd.DataFrame , 
@@ -65,14 +66,6 @@ class DateSeriesDict:
 class TuShareCNE5_Calculator:
     START_DATE = 20050101
     def __init__(self) -> None:
-        PATH.get_target_path('information_ts' , 'description')
-        self.desc = pd.read_feather(PATH.get_target_path('information_ts' , 'description'))
-        self.cname = pd.read_feather(PATH.get_target_path('information_ts' , 'change_name'))
-
-        self.indus_dict = pd.DataFrame(CONF.glob('tushare_indus'))
-        self.indus_data = pd.read_feather(PATH.get_target_path('information_ts' , 'industry'))
-
-        self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values
 
         self.estuniv = DateDfs(50)
         self.ind_grp = DateDfs(50)
@@ -143,37 +136,29 @@ class TuShareCNE5_Calculator:
         list_days = 252
         redempt_tmv_pct = 0.8
 
-        dates = CALENDAR.trailing(date , 63)
-        TRADE_DATA.load(dates)
+        dates = TSData.CALENDAR.trailing(date , 63)
 
-        new_desc = self.desc[(self.desc['list_dt'] <= date) & (self.desc['delist_dt'] > date)].copy()
-        new_desc['list_dt'] = np.maximum(new_desc['list_dt'] , CALENDAR.calendar_start)
-        new_desc = new_desc.set_index('secid')
+        new_desc = TSData.INFO.get_desc(date)
+        abnormal = TSData.INFO.get_abnormal(date)
+        new_list_dt = TSData.INFO.get_list_dt(date , list_days)
 
-        cal_after = CALENDAR.offset(new_desc['list_dt'] , list_days , 't')
-
-        trd = TRADE_DATA.get_trd(CALENDAR.offset(date , -21 , 't')).loc[:,['secid','status']]
-        trd = TRADE_DATA.get_trd(date).loc[:,['secid','status']].merge(trd , on = 'secid' , how = 'left').\
+        trd = TSData.TRADE.get_trd(TSData.CALENDAR.offset(date , -21 , 't')).loc[:,['secid','status']]
+        trd = TSData.TRADE.get_trd(date).loc[:,['secid','status']].merge(trd , on = 'secid' , how = 'left').\
             set_index('secid').reindex(new_desc.index).fillna(0)
         
-        val = pd.concat([TRADE_DATA.get_val(d , ['secid','date','circ_mv','total_mv']) for d in dates]).\
+        val = pd.concat([TSData.TRADE.get_val(d , ['secid','date','circ_mv','total_mv']) for d in dates]).\
             sort_values(['secid','date']).set_index('secid').groupby('secid').ffill().\
             groupby('secid').last().reindex(new_desc.index)
-
-        
-        new_cname = self.cname[self.cname['secid'] >= 0].sort_values(['secid','ann_date','start_date'])
-        new_cname = new_cname[new_cname['start_date'] <= date].drop_duplicates('secid' , keep = 'last')
-        new_cname = new_cname[new_cname['change_reason'].isin(['终止上市', '暂停上市' , 'ST', '*ST', ])]
         
         # trade status are 1.0 this day or 1 month ealier
-        rule0 = pd.concat([TRADE_DATA.get_trd(d , ['secid','date','status']) for d in dates]).\
+        rule0 = pd.concat([TSData.TRADE.get_trd(d , ['secid','date','status']) for d in dates]).\
             groupby('secid')['status'].sum().reindex(new_desc.index) > 0
 
         # list date 1 year eailier and not delisted or total mv in the top 90%
-        rule1 = ((new_desc['delist_dt'] > date) & (cal_after <= date)) | (val['total_mv'].rank(pct = True , na_option='bottom') >= redempt_tmv_pct)
-
+        rule1 = ((new_desc['delist_dt'] > date) & (new_list_dt['list_dt'] <= date)) | \
+            (val['total_mv'].rank(pct = True , na_option='bottom') >= redempt_tmv_pct)
         # not st
-        rule2 = ~new_desc.index.isin(new_cname['secid'])
+        rule2 = ~new_desc.index.isin(abnormal['secid'])
 
         # total_mv not nan
         rule3 = val['total_mv'] > 0
@@ -186,8 +171,7 @@ class TuShareCNE5_Calculator:
     
     def calc_indus(self , date : int):
         univ = self.get_estuniv(date)
-        df = self.indus_data[self.indus_data['in_date'] <= date].sort_values(['secid','in_date'])
-        df = df.groupby('secid')[['indus']].last()
+        df = TSData.INFO.get_indus(date)
         self.ind_grp.add(df , date)
 
         df = df.assign(values = 1).pivot_table('values' , 'secid' , 'indus', fill_value=0).loc[:,CONF.RISK_INDUS]
@@ -200,38 +184,30 @@ class TuShareCNE5_Calculator:
         for style_name in CONF.RISK_STYLE: getattr(self , f'calc_{style_name}')(date)
     
     def calc_size(self , date : int):
-        v = np.log(TRADE_DATA.get_val(date).set_index('secid')['total_mv'] / 10**8)
+        v = np.log(TSData.TRADE.get_val(date).set_index('secid')['total_mv'] / 10**8)
         return self.descriptor(v , date , 'size' , 'min')
     
     def calc_beta(self , date : int):
-        dates = CALENDAR.trailing(date , 253)
-        wgt = time_weight(252 , 63)
-        TRADE_DATA.load(dates)
+        n_window = 252
+        half_life = 63
+        min_finite_ratio = 0.25
 
-        df_list = []
-        for i in range(len(dates[1:])):
-            trd = TRADE_DATA.get_trd(dates[1 + i] , ['secid','pctchange']) 
-            val = TRADE_DATA.get_val(dates[0 + i] , ['secid','circ_mv'])
-            ret = trd.merge(val , on = 'secid').assign(date = dates[1 + i])
-            df_list.append(ret)
-        df = pd.concat(df_list)
-        mkt_ret = df.groupby('date').apply(lambda x:(x['pctchange']*x['circ_mv']).sum()/x['circ_mv'].sum(),include_groups=False).\
-            rename('market').to_frame() / 100
-        stk_ret = df.loc[:,['date','secid','pctchange']].pivot_table('pctchange','date','secid') / 100
-
+        dates = TSData.CALENDAR.trailing(date , n_window)
+        
+        stk_ret = TSData.TRADE.get_returns(dates[0], dates[-1] , mask = False)
+        mkt_ret = TSData.TRADE.get_market_return(dates[0], dates[-1])
+        wgt = time_weight(n_window , half_life)
         b = apply_ols(mkt_ret.values.flatten() , stk_ret.values , wgt)[1]
-        b[np.isfinite(stk_ret).sum() < 63] = np.nan
+        b[np.isfinite(stk_ret).sum() < n_window * min_finite_ratio] = np.nan
         v = pd.Series(b , index = stk_ret.columns)
 
         return self.descriptor(v , date , 'beta' , 0)
 
     def calc_momentum(self , date : int):
-        dates = CALENDAR.trailing(date , 525)[:504]
+        dates = TSData.CALENDAR.trailing(date , 525)[:504]
         wgt_df = pd.DataFrame({'date':dates , 'weight':time_weight(504,126)})
 
-        TRADE_DATA.load(dates)
-
-        df = pd.concat([TRADE_DATA.get_trd(d , ['date','secid','pctchange']) for d in dates]).merge(wgt_df , on = 'date')
+        df = pd.concat([TSData.TRADE.get_trd(d , ['date','secid','pctchange']) for d in dates]).merge(wgt_df , on = 'date')
         df['lnret'] = np.log(1 + df['pctchange'] / 100) * df['weight']
         v = df.groupby('secid')['lnret'].sum()
         
@@ -244,12 +220,10 @@ class TuShareCNE5_Calculator:
         # cmra : cumulative log range , (zmax - zmin) over the last 12 months
         # hsigma : annualized daily standard deviation of daily residual return (same parameters as beta calculation)
 
-        dates = np.sort(CALENDAR.trailing(date , 252 , 't'))
+        dates = TSData.CALENDAR.trailing(date , 253 , 't')[:-1]
         wgt = time_weight(252 , 42)
 
-        TRADE_DATA.load(dates)
-
-        df_trd = pd.concat([TRADE_DATA.get_trd(d,['date','secid','pctchange']) for d in dates])
+        df_trd = pd.concat([TSData.TRADE.get_trd(d,['date','secid','pctchange']) for d in dates])
         df_trd = df_trd.pivot_table('pctchange','date','secid') / 100
         dsastd = self.descriptor((df_trd * wgt.reshape(-1,1)).std() , date , 'dsastd' , 'median')
 
@@ -257,11 +231,10 @@ class TuShareCNE5_Calculator:
         cmra = self.descriptor(df_cum.max() - df_cum.min() , date , 'cmra' , 'median')
 
         wgt = time_weight(252 , 63)
-        MODEL_DATA.load(dates)
 
-        res_list = [MODEL_DATA.get_res(d) for d in dates]
+        res_list = [TSData.MODEL.get_res(d) for d in dates]
         if len([res for res in res_list if res is not None]) >= 63:
-            df_res = pd.concat([MODEL_DATA.get_res(d) for d in dates])
+            df_res = pd.concat([TSData.MODEL.get_res(d) for d in dates])
             df_res = df_res.pivot_table('resid','date','secid').reindex(dates)
             hsigma = self.descriptor((df_res * wgt.reshape(-1,1)).std() , date , 'hsigma' , 'median')
         else:
@@ -281,21 +254,21 @@ class TuShareCNE5_Calculator:
         return self.descriptor(v , date , 'non_linear_size' , 'min')
     
     def calc_book_to_price(self , date : int):
-        v = (1 / TRADE_DATA.get_val(date)['pb']).fillna(0)
+        v = (1 / TSData.TRADE.get_val(date)['pb']).fillna(0)
         return self.descriptor(v , date , 'book_to_price' , 'median')
     
     def calc_liquidity(self , date : int):
 
         cols = ['secid','turnover_rate']
-        stom = pd.concat([TRADE_DATA.get_val(d , cols) for d in CALENDAR.trailing(date , 21)]).\
+        stom = pd.concat([TSData.TRADE.get_val(d , cols) for d in TSData.CALENDAR.trailing(date , 21)]).\
             groupby('secid')['turnover_rate'].sum()
         stom = self.descriptor(stom.fillna(0) , date , 'stom' , 'min')
         
-        stoq = pd.concat([TRADE_DATA.get_val(d , cols) for d in CALENDAR.trailing(date , 63)]).\
+        stoq = pd.concat([TSData.TRADE.get_val(d , cols) for d in TSData.CALENDAR.trailing(date , 63)]).\
             groupby('secid')['turnover_rate'].sum()
         stoq = self.descriptor(stoq.fillna(0) , date , 'stoq' , 'min')
         
-        stoa = pd.concat([TRADE_DATA.get_val(d , cols) for d in CALENDAR.trailing(date ,252)]).\
+        stoa = pd.concat([TSData.TRADE.get_val(d , cols) for d in TSData.CALENDAR.trailing(date ,252)]).\
             groupby('secid')['turnover_rate'].sum()
         stoa = self.descriptor(stoa.fillna(0) , date , 'stoa' , 'min')
 
@@ -304,11 +277,11 @@ class TuShareCNE5_Calculator:
         return self.descriptor(v , date , 'liquidity' , 'median')
     
     def calc_earnings_yield(self , date : int):
-        cp = TRADE_DATA.get_trd(date , ['secid' , 'close']).set_index('secid')
-        cetop = FINA_DATA.get_ttm('ocfps' , date , 1)['ocfps'] / cp['close']
+        cp = TSData.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')
+        cetop = TSData.FINA.get_ttm('ocfps' , date , 1)['ocfps'] / cp['close']
         cetop = self.descriptor(cetop.fillna(0) , date , 'cetop' , 'median')
 
-        etop  = 1 / TRADE_DATA.get_val(date , ['secid' , 'pe']).set_index('secid')['pe']
+        etop  = 1 / TSData.TRADE.get_val(date , ['secid' , 'pe']).set_index('secid')['pe']
         etop = self.descriptor(etop.fillna(0) , date , 'etop' , 'median')
 
         v = 0.21 * cetop + 0.79 * etop
@@ -318,14 +291,14 @@ class TuShareCNE5_Calculator:
     def calc_growth(self , date : int):
 
         val = 'diluted2_eps'
-        df = FINA_DATA.get_acc(val , date , 6 , year_only=True).groupby('secid').tail(5).copy()
+        df = TSData.FINA.get_acc(val , date , 6 , year_only=True).groupby('secid').tail(5).copy()
         df = df.assign(idx = df.groupby('secid').cumcount()).pivot_table(val , 'idx' , 'secid')
         df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.values,df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
         egro = df[df['na'] <= 1].set_index('secid')['value']
         egro = self.descriptor(egro.fillna(0) , date , 'egro' , 'median')
 
         val = 'revenue_ps'
-        df = FINA_DATA.get_acc(val , date , 6 , year_only=True).groupby('secid').tail(5).copy()
+        df = TSData.FINA.get_acc(val , date , 6 , year_only=True).groupby('secid').tail(5).copy()
         df = df.assign(idx = df.groupby('secid').cumcount()).pivot_table(val , 'idx' , 'secid')
         df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.values,df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
         sgro = df[df['na'] <= 1].set_index('secid')['value']
@@ -336,16 +309,16 @@ class TuShareCNE5_Calculator:
     
     def calc_leverage(self , date : int):
 
-        cp = TRADE_DATA.get_trd(date , ['secid' , 'close']).set_index('secid')
-        mlev = (FINA_DATA.get_acc('longdeb_to_debt' , date , 1)['longdeb_to_debt'].fillna(100) / 100 *
-            FINA_DATA.get_acc('debt_to_eqt' , date , 1)['debt_to_eqt'] / 100 *
-            FINA_DATA.get_acc('bps' , date , 1)['bps'] / cp['close'])
+        cp = TSData.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')
+        mlev = (TSData.FINA.get_acc('longdeb_to_debt' , date , 1)['longdeb_to_debt'].fillna(100) / 100 *
+            TSData.FINA.get_acc('debt_to_eqt' , date , 1)['debt_to_eqt'] / 100 *
+            TSData.FINA.get_acc('bps' , date , 1)['bps'] / cp['close'])
         mlev = self.descriptor(mlev , date , 'mlev' , 'median')
 
-        dtoa = FINA_DATA.get_acc('debt_to_assets' , date , 1)['debt_to_assets']
+        dtoa = TSData.FINA.get_acc('debt_to_assets' , date , 1)['debt_to_assets']
         dtoa = self.descriptor(dtoa , date , 'dtoa' , 'median')
 
-        blev = FINA_DATA.get_acc('assets_to_eqt' , date , 1)['assets_to_eqt']
+        blev = TSData.FINA.get_acc('assets_to_eqt' , date , 1)['assets_to_eqt']
         blev = self.descriptor(blev , date , 'blev' , 'median')
 
         v = 0.38 * mlev + 0.35 * dtoa + 0.27 * blev
@@ -353,10 +326,10 @@ class TuShareCNE5_Calculator:
         return self.descriptor(v , date , 'leverage' , 'median')
     
     def calc_model(self , date : int):
-        exp_date = int(TradeDate(date) - 1) # CALENDAR.offset(date , -1)
+        exp_date = TSData.CALENDAR.td(date , -1).as_int() # TSData.CALENDAR.offset(date , -1)
         exp = self.get_exposure(exp_date , read = True)
         exp = exp[exp['estuniv'] == 1]
-        ret = TRADE_DATA.get_trd(date , ['secid','pctchange']).set_index('secid') / 100
+        ret = TSData.TRADE.get_trd(date , ['secid','pctchange']).set_index('secid') / 100
         ret = ret.reindex(exp.index).fillna(0).rename(columns={'pctchange':'ret'})
 
         wgt : Any = exp['weight']
@@ -375,7 +348,7 @@ class TuShareCNE5_Calculator:
     
     def calc_common_risk(self , date : int):
         assert date >= self.START_DATE , (date , self.START_DATE)
-        dates = np.sort(CALENDAR.trailing(date , 504 , 't'))
+        dates = TSData.CALENDAR.trailing(date , 504 , 't')
         dates = dates[dates >= self.START_DATE]
         if len(dates) < (504 // 4): 
             factors = self.get_coef(date,True).index.to_numpy()
@@ -394,7 +367,7 @@ class TuShareCNE5_Calculator:
 
     def calc_specific_risk(self , date : int):
         assert date >= self.START_DATE , (date , self.START_DATE)
-        dates = np.sort(CALENDAR.trailing(date , 504 , 't'))
+        dates = TSData.CALENDAR.trailing(date , 504 , 't')
         dates = dates[dates >= self.START_DATE]
         if len(dates) < (504 // 4): 
             secids = self.get_resid(date,True).index.to_numpy()
@@ -419,7 +392,7 @@ class TuShareCNE5_Calculator:
         return self
         
     def updatable_dates(self , job : Literal['exposure' , 'risk']):
-        dates = CALENDAR.cal_trd['calendar'].to_numpy()
+        dates = TSData.CALENDAR.cal_trd['calendar'].to_numpy()
         end_date = np.min([PATH.get_target_dates('trade_ts' , 'day').max(),
                            PATH.get_target_dates('trade_ts' , 'day_val').max()])
         dates = dates[(dates > self.START_DATE) & (dates <= end_date)]
@@ -438,6 +411,7 @@ class TuShareCNE5_Calculator:
         return np.setdiff1d(dates , all_updated)
         
     def update_date(self , date : int , job : Literal['exposure' , 'risk']):
+        assert TSData.CALENDAR.is_trade_date(date) , f'{date} is not a trade date'
         if job == 'exposure':
             exp = self.get_exposure(date)
             exp.to_feather(PATH.get_target_path('models' , 'tushare_cne5_exp' , date , makedir=True))

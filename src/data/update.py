@@ -7,7 +7,6 @@ from pathlib import Path
 
 from .fetcher import DataFetcher , SQLFetcher
 from ..basic import PATH , THIS_IS_SERVER
-from ..basic.path.db import DB_BY_DATE , DB_BY_NAME , save_df
 
 UPDATER_TITLE = 'DB_updater'
 class DataUpdater():
@@ -106,7 +105,7 @@ class DataUpdater():
         abs_path = str(target_path.absolute())
         rel_path = str(target_path.relative_to(PATH.database))
         if isinstance(df , pd.DataFrame):
-            save_df(df , target_path)
+            PATH.save_df(df , target_path)
             with tarfile.open(self.Updater, 'a') as tar:  
                 tar.add(abs_path , arcname = rel_path) 
             self.Success.append(target_path)
@@ -148,14 +147,14 @@ class DataUpdater():
                 if target_str: print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
         return result
 
-    def update_all(self , db_srcs = DB_BY_NAME + DB_BY_DATE , start_dt = None , end_dt = None , force = False):
+    def update_all(self , db_srcs = PATH.DB_BY_NAME + PATH.DB_BY_DATE , start_dt = None , end_dt = None , force = False):
         assert not THIS_IS_SERVER , f'must on laptop'
         # selected DB is totally refreshed , so delete first
         if not isinstance(db_srcs , (list,tuple)): db_srcs = [db_srcs]
         for db_src in db_srcs:
-            if db_src in DB_BY_NAME:
+            if db_src in PATH.DB_BY_NAME:
                 self.update_by_name(db_src)
-            elif db_src in DB_BY_DATE:
+            elif db_src in PATH.DB_BY_DATE:
                 self.update_by_date(db_src , start_dt , end_dt , force = force)
             else:
                 raise Exception(db_src)

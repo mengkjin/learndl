@@ -2,8 +2,7 @@ from typing import Optional
 
 from .module import DataModule
 from ..util import TrainConfig
-from ...data import DataProcessor , DataUpdater
-from ...data.tushare import task
+from ...data import DataProcessor , DataUpdater , TushareTask
 from ...basic import THIS_IS_SERVER
 
 class DataAPI:
@@ -19,7 +18,7 @@ class DataAPI:
         else:
             DataUpdater.update_laptop()
         print('-' * 80)
-        task.main_task()
+        TushareTask.proceed()
         print('-' * 80)
         
     @staticmethod
