@@ -24,7 +24,8 @@ class ModelDataAccess(DateDataAccess):
             df = PATH.load_target_file('models' , 'tushare_cne5_exp' , date)
         else:
             raise KeyError(data_type)
-        return df.reset_index().assign(date = date)
+        if df is not None: df = df.reset_index().assign(date = date)
+        return df
 
     def get_res(self , date , cols = None , drop_old = False):
         return self.get_df(date , 'res' , cols , drop_old)
