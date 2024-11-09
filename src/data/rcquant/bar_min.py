@@ -14,6 +14,7 @@ RC_PATH = PATH.data.joinpath('Rcquant')
 
 final_path = RC_PATH.joinpath(f'min')
 secdf_path = RC_PATH.joinpath('secdf')
+target_path = PATH.data.joinpath('trade_ts' , 'min')
 
 final_path.mkdir(exist_ok=True , parents=True)
 secdf_path.mkdir(exist_ok=True , parents=True)
@@ -38,7 +39,8 @@ def rcquant_past_dates(file_type : Literal['secdf' , 'min']):
     return past_dates
     
 def updated_dates():
-    return rcquant_past_dates('min')
+    return PATH.get_target_dates('trade_ts' , 'min')
+    # return rcquant_past_dates('min')
 
 def last_date(offset : int = 0):
     dates = updated_dates()

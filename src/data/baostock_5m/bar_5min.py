@@ -49,6 +49,7 @@ def baostock_past_dates(file_type : Literal['secdf' , '5min']):
     return past_dates
     
 def updated_dates():
+    return PATH.get_target_dates('trade_ts' , '5min')
     return baostock_past_dates('5min')
 
 def updatable(date , last_date):
@@ -71,7 +72,7 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
     if pending_dt == end_date: pending_dt = -1
     for dt in [pending_dt , end_date]:
         last_dt = last_date(1)
-        if updatable(dt , last_dt) or (end_date == dt):
+        if (updatable(dt , last_dt) or (end_date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
                 print(f'{last_dt} - {dt} failed')
