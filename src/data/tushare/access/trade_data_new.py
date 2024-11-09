@@ -2,9 +2,9 @@ import pandas as pd
 import numpy as np
 
 from typing import Literal
-from ....func.singleton import singleton_threadsafe
+from ....func.singleton import singleton
 
-@singleton_threadsafe
+@singleton
 class TradeDataAccess:
     def get_income_statement(self, date: int, field: str, freq: Literal['quarterly', 'yearly'] = 'yearly') -> pd.Series:
         """获取利润表数据

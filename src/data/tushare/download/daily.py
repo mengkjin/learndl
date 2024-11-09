@@ -64,3 +64,13 @@ class DailyMoneyFlow(DateFetecher):
         mf = code_to_secid(pro.moneyflow(trade_date=str(date)))
         mf = code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return mf
+    
+class DailyLimit(DateFetecher):
+    '''Daily Price Limit Infomation'''
+    START_DATE = 20070101
+    def db_src(self): return 'trade_ts'
+    def db_key(self): return 'day_limit'    
+    def get_data(self , date : int):
+        lmt = code_to_secid(pro.stk_limit(trade_date=str(date)))
+        lmt = code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        return lmt

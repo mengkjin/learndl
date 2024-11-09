@@ -348,3 +348,28 @@ class DataModule(BaseDataModule):
         else:
             sample_index[stage] = sequential_sampling(0 , l1)
         return sample_index    
+    
+    @classmethod
+    def reconstruct_train_data(cls , data_types : Optional[list[str] | str] = None): 
+        '''
+        reconstruct historical(since 2007 , use for models starting at 2017) train data
+        '''
+        # assert THIS_IS_SERVER
+        if isinstance(data_types , str): data_types = data_types.split('+')
+        cls.prepare_data(data_types)
+        print('-' * 80)
+
+    @classmethod
+    def get_realistic_batch_data(cls , model_data_type='day'):
+        '''
+        get a sample of realistic batch_data , 'day' , 'day+style' , '15m+style' ...
+        day : stock_num x seq_len x 6
+        30m : stock_num x seq_len x 8 x 6
+        style : stock_num x 1 x 10
+        indus : stock_num x 1 x 35
+        ...
+        '''
+        model_config = TrainConfig.load().update(short_test=True, model_data_type=model_data_type)
+        data = cls(model_config , 'predict').load_data()
+        data.setup('predict' , model_date = data.datas.y.date[-50])
+        return data.predict_dataloader()[0]

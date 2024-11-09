@@ -6,7 +6,7 @@ from abc import ABC , abstractmethod
 from .calendar import CALENDAR
 from ..basic import TradeDate
 from ....basic import PATH , CONF
-from ....func.singleton import singleton_threadsafe
+from ....func.singleton import singleton
 
 class DateDataAccess(ABC):
     MAX_LEN = -1
@@ -45,7 +45,7 @@ class DateDataAccess(ABC):
         if df is not None and cols is not None:  df = df.loc[:,cols]
         return df
 
-@singleton_threadsafe
+@singleton
 class InfoDataAccess:
     def __init__(self) -> None:
         self.desc = pd.read_feather(PATH.get_target_path('information_ts' , 'description'))

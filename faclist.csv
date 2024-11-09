@@ -61,22 +61,22 @@ exret_std12m,1,20070101,behavior,volatility,超额收益率标准差,量价,波�
 exret_std1m,1,20070101,behavior,volatility,超额收益率标准差,量价,波动率
 exret_std2m,1,20070101,behavior,volatility,超额收益率标准差,量价,波动率
 exret_std3m,1,20070101,behavior,volatility,超额收益率标准差,量价,波动率
-exret_std6m,,20070101,behavior,volatility,超额收益率标准差,量价,波动率
-ffret_r212m,,20070101,behavior,correlation,回归R2,量价,波动率
-ffret_r21m,,20070101,behavior,correlation,回归R2,量价,波动率
-ffret_r22m,,20070101,behavior,correlation,回归R2,量价,波动率
-ffret_r23m,,20070101,behavior,correlation,回归R2,量价,波动率
-ffret_r26m,,20070101,behavior,correlation,回归R2,量价,波动率
-ffret_skew12m,,20070101,behavior,volatility,回归残差偏度,量价,波动率
-ffret_skew1m,,20070101,behavior,volatility,回归残差偏度,量价,波动率
-ffret_skew2m,,20070101,behavior,volatility,回归残差偏度,量价,波动率
-ffret_skew3m,,20070101,behavior,volatility,回归残差偏度,量价,波动率
-ffret_skew6m,,20070101,behavior,volatility,回归残差偏度,量价,波动率
-ffret_std12m,,20070101,behavior,volatility,残差标准差,量价,波动率
-ffret_std1m,,20070101,behavior,volatility,残差标准差,量价,波动率
-ffret_std2m,,20070101,behavior,volatility,残差标准差,量价,波动率
-ffret_std3m,,20070101,behavior,volatility,残差标准差,量价,波动率
-ffret_std6m,,20070101,behavior,volatility,残差标准差,量价,波动率
+exret_std6m,1,20070101,behavior,volatility,超额收益率标准差,量价,波动率
+ffret_r212m,1,20070101,behavior,correlation,回归R2,量价,波动率
+ffret_r21m,1,20070101,behavior,correlation,回归R2,量价,波动率
+ffret_r22m,1,20070101,behavior,correlation,回归R2,量价,波动率
+ffret_r23m,1,20070101,behavior,correlation,回归R2,量价,波动率
+ffret_r26m,1,20070101,behavior,correlation,回归R2,量价,波动率
+ffret_skew12m,1,20070101,behavior,volatility,回归残差偏度,量价,波动率
+ffret_skew1m,1,20070101,behavior,volatility,回归残差偏度,量价,波动率
+ffret_skew2m,1,20070101,behavior,volatility,回归残差偏度,量价,波动率
+ffret_skew3m,1,20070101,behavior,volatility,回归残差偏度,量价,波动率
+ffret_skew6m,1,20070101,behavior,volatility,回归残差偏度,量价,波动率
+ffret_std12m,1,20070101,behavior,volatility,残差标准差,量价,波动率
+ffret_std1m,1,20070101,behavior,volatility,残差标准差,量价,波动率
+ffret_std2m,1,20070101,behavior,volatility,残差标准差,量价,波动率
+ffret_std3m,1,20070101,behavior,volatility,残差标准差,量价,波动率
+ffret_std6m,1,20070101,behavior,volatility,残差标准差,量价,波动率
 flow_correls,,20070101,behavior,liquidity,超大单-小单相关性,量价,资金流
 flow_corrss,,20070101,behavior,liquidity,小单滞后相关性,量价,资金流
 flow_exlarge,,20070101,behavior,liquidity,资金流强度--超大单,量价,资金流
@@ -123,9 +123,9 @@ liab_pctq4,,20070101,fundamental,growth,总负债同比变化率,基本面,成�
 liab_ta,,20070101,fundamental,quality,资产负债率,基本面,财务质量
 liabcur_liab,,20070101,fundamental,quality,流动负债/总负债,基本面,财务质量
 liabnoncur_liab,,20070101,fundamental,quality,非流动负债/总负债,基本面,财务质量
-lncap,,20070101,behavior,liquidity,市值因子,量价,规模
-lncap_free,,20070101,behavior,liquidity,市值因子,量价,规模
-lncap_liq,,20070101,behavior,liquidity,市值因子,量价,规模
+lncap,1,20070101,behavior,liquidity,市值因子,量价,规模
+lncap_free,1,20070101,behavior,liquidity,市值因子,量价,规模
+lncap_liq,1,20070101,behavior,liquidity,市值因子,量价,规模
 lockedstk,,20070101,behavior,liquidity,锁仓比,量价,波动率
 lpnp,,20070101,fundamental,earning,线性提纯净利润,基本面,盈利
 maxdd_intra,,20070101,high_frequency,hf_volatility,日内最大回撤,高频,动量反转
@@ -138,18 +138,18 @@ mom_3m,1,20070101,behavior,momentum,3月动量因子,量价,动量反转
 mom_6m,1,20070101,behavior,momentum,6月动量因子,量价,动量反转
 mom_aaa,,20070101,behavior,momentum,公告日后3日超额收益,量价,动量反转
 mom_aog,,20070101,behavior,momentum,公告日次日超额收益,量价,动量反转
-mom_ff1m,,20070101,behavior,momentum,残差动量,量价,动量反转
-mom_ff2m,,20070101,behavior,momentum,残差动量,量价,动量反转
-mom_ff3m,,20070101,behavior,momentum,残差动量,量价,动量反转
-mom_ff6m,,20070101,behavior,momentum,残差动量,量价,动量反转
+mom_ff1m,1,20070101,behavior,momentum,残差动量,量价,动量反转
+mom_ff2m,1,20070101,behavior,momentum,残差动量,量价,动量反转
+mom_ff3m,1,20070101,behavior,momentum,残差动量,量价,动量反转
+mom_ff6m,1,20070101,behavior,momentum,残差动量,量价,动量反转
 mom_1m_intraday,1,20070101,behavior,momentum,日内动量因子,量价,动量反转
-mom_ltampl,,20070101,behavior,momentum,长端动量-振幅划分,量价,动量反转
+mom_ltampl_v1,1,20070101,behavior,momentum,长端动量-振幅划分,量价,动量反转
 mom_mdr12m,1,20070101,behavior,momentum,区间最大日收益率,量价,动量反转
 mom_mdr1m,1,20070101,behavior,momentum,区间最大日收益率,量价,动量反转
 mom_mdr2m,1,20070101,behavior,momentum,区间最大日收益率,量价,动量反转
 mom_mdr3m,1,20070101,behavior,momentum,区间最大日收益率,量价,动量反转
 mom_mdr6m,1,20070101,behavior,momentum,区间最大日收益率,量价,动量反转
-mom_new,,20070101,behavior,momentum,日内-日间合成因子,量价,动量反转
+mom_new1m,1,20070101,behavior,momentum,日内-日间合成因子,量价,动量反转
 mom_1m_overnight,1,20070101,behavior,momentum,日间动量因子,量价,动量反转
 mom_phigh12m,1,20070101,behavior,momentum,最高价距离,量价,动量反转
 mom_phigh1m,1,20070101,behavior,momentum,最高价距离,量价,动量反转
@@ -355,3 +355,4 @@ volpct_phigh,,20070101,high_frequency,hf_liquidity,价格排序成交占比,高�
 volpct_plow,,20070101,high_frequency,hf_liquidity,价格排序成交占比,高频,流动性
 volvr_intra,,20070101,high_frequency,hf_liquidity,成交量占比,高频,流动性
 vov_intra,,20070101,high_frequency,hf_volatility,日内波动率,高频,波动率
+mom_ltampl_v2,1,20070101,behavior,momentum,长端动量-振幅划分,量价,动量反转

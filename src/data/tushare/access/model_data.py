@@ -4,15 +4,15 @@ import pandas as pd
 
 from typing import Any , Callable , Literal
 
-from .abstract import DateDataAccess
+from .abstract_data_data import DateDataAccess
 
 from .calendar import CALENDAR
 from .stock_info import INFO
 from ..basic.trade_date import TradeDate
 from ....basic import PATH
-from ....func.singleton import singleton_threadsafe
+from ....func.singleton import singleton
     
-@singleton_threadsafe
+@singleton
 class ModelDataAccess(DateDataAccess):
     MAX_LEN = 2000
     DATA_TYPE_LIST = ['res' , 'exp']

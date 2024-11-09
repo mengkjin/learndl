@@ -6,6 +6,7 @@ warnings.filterwarnings('ignore' , category=RuntimeWarning , message='Mean of em
 
 from typing import Any , Literal , Optional
 from scipy.stats import norm, rankdata
+from scipy.linalg import lstsq
 
 def fill_na_as_const(x_: np.ndarray, c_ : float = 0.0):
     rtn = x_.copy()
@@ -207,27 +208,42 @@ def descriptor(v : pd.Series , whiten_weight , fillna : Literal['min','max','med
         fillv = v.to_frame(name='value').join(group).groupby('indus').transform('min').fillna(fillv)['value']
     return v.where(~v.isna() , fillv)
 
-def apply_ols(mkt , stk , time_weight = None):
-    assert mkt.ndim == 1 , mkt.shape
-    assert stk.ndim == 2 , stk.shape
-    assert len(mkt) == len(stk) , (mkt.shape , stk.shape)
-    wgt = np.ones_like(mkt) if time_weight is None else time_weight / time_weight.mean()
-    assert len(mkt) == len(wgt) , (mkt.shape , wgt.shape)
+def apply_ols(x : np.ndarray | pd.DataFrame | pd.Series , y : np.ndarray | pd.DataFrame | pd.Series , 
+              time_weight = None , intercept = True , respective = False):
+    if isinstance(x , (pd.Series | pd.DataFrame)): x = x.to_numpy()
+    if isinstance(y , (pd.Series | pd.DataFrame)): y = y.to_numpy()
+    if x.ndim == 1: x = x[:,None]
+    assert x.ndim == 2 and y.ndim == 2 , (x.shape , y.shape)
+    assert len(x) == len(y) , (x.shape , y.shape)
+    n_vars = y.shape[-1]
+    all_nan = np.all(np.isnan(y) , axis = 0)
+    if respective: 
+        assert x.shape[-1] == n_vars , (x.shape , n_vars)
+        all_nan *= np.all(np.isnan(x) , axis = 0)
+    wgt = np.ones(len(x)) if time_weight is None else time_weight / time_weight.mean()
 
-    stk = stk - np.nanmean(stk , axis=0 , keepdims=True)
-    all_zeros = np.all(stk == 0 , axis = 0)
-    bm = np.hstack([np.ones_like(mkt)[:,None] , ((mkt - mkt.mean()) * wgt)[:,None]])
-    ts = (stk * wgt[:,None] / np.nanmean(np.isfinite(stk) * wgt[:,None] , axis=0 , keepdims=True))
-    b = np.linalg.inv(bm.T @ bm) @ bm.T @ np.nan_to_num(ts)
-    b[: , all_zeros] = np.nan
-    return b
+    y_weighted = np.nan_to_num(y * wgt[:,None] / wgt[:,None].mean(axis=0 , keepdims=True))
+    x_weighted = np.nan_to_num(x) * wgt[:,None]
+
+    if respective:
+        x_weighted = x_weighted[:,None]
+        if intercept: x_weighted = np.pad(x_weighted , ((0,0),(1,0),(0,0)) , constant_values=1)
+        coef = np.concatenate([lstsq(x_weighted[...,i], y_weighted[:,i][:,None])[0] for i in range(n_vars)] , axis = 1)
+    else:
+        if intercept: x_weighted = np.pad(x_weighted , ((0,0),(1,0)) , constant_values=1)
+        coef = lstsq(x_weighted, y_weighted)[0]
+    coef[:,all_nan] = np.nan
+    return coef
 
 def neutral_resid(x , y , weight : Any = None , whiten = True):
+    finite = np.isfinite(x) * np.isfinite(y)
+    _x , _y = x[finite] , y[finite]
+    _w = weight if weight is None else weight[finite]
     if weight is None:
-        model = sm.OLS(y , sm.add_constant(x)).fit()
+        model = sm.OLS(_y , sm.add_constant(_x)).fit()
     else:
-        model = sm.WLS(y , sm.add_constant(x) , weights = weight).fit()
-    resid = model.resid
+        model = sm.WLS(_y , sm.add_constant(_x) , weights = _w).fit()
+    resid = y - model.predict(sm.add_constant(x))
     if whiten:
         resid = (resid - np.nanmean(resid)) / (np.nanstd(resid) + 1e-6)
     return resid

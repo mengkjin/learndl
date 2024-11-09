@@ -50,9 +50,15 @@ class DateDataAccess(ABC):
         assert len(dates) == len(use_dates) , 'dates and val_dates should have the same length'
 
         remain_cols = ['secid' , 'date'] + ([cols] if isinstance(cols , str) else list(cols))
-        df = pd.concat([self.get_df(ud , data_type , remain_cols).assign(date = d) for d , ud in zip(dates , use_dates)]).\
-            set_index(['secid' , 'date']).sort_index()
-        df = INFO.mask_list_dt(df , mask)
+        df_list = []
+        for d , ud in zip(dates , use_dates):
+            df = self.get_df(ud , data_type , remain_cols)
+            if df is not None: df_list.append(df.assign(date = d))
+
+        if not df_list: 
+            df = pd.DataFrame(columns = remain_cols).set_index(['secid' , 'date'])
+        else:
+            df = INFO.mask_list_dt(pd.concat(df_list).set_index(['secid' , 'date']).sort_index() , mask)
         self.len_control(data_type , drop_old)
         if pivot: df = df.pivot_table(cols , 'date' , 'secid')
         return df

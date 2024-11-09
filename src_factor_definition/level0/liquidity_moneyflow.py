@@ -4,7 +4,6 @@ from typing import Literal
 
 from src.factor.classes import StockFactorCalculator
 from src.data import TSData
-from src.func.singleton import singleton_threadsafe
 
 def money_inflow(date , n_months : int , direction : Literal[-1,1] , div_amt = True ,
                  min_finite_ratio = 0.25):
@@ -19,9 +18,8 @@ def money_inflow(date , n_months : int , direction : Literal[-1,1] , div_amt = T
         inflow /= TSData.TRADE.get_volumes(start_date , end_date , 'amount' , pivot = True).sum()
     return inflow
     
-@singleton_threadsafe
 class bsact_neg_1m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '1个月资金流入-负收益'
@@ -29,9 +27,8 @@ class bsact_neg_1m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return money_inflow(date , 1 , -1)
     
-@singleton_threadsafe
 class bsact_pos_1m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '1个月资金流入-正收益'

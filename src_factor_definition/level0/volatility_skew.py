@@ -3,7 +3,6 @@ import pandas as pd
 
 from src.factor.classes import StockFactorCalculator
 from src.data import TSData
-from src.func.singleton import singleton_threadsafe
 
 def skewness_volwei(date , n_months : int , lag_months : int = 0):
     start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
@@ -16,7 +15,6 @@ def skewness_volwei(date , n_months : int , lag_months : int = 0):
     wgt = vol.pow(1/3) / vol.pow(1/3).mean()
     return (ret * wgt).skew()
 
-@singleton_threadsafe
 class price_weiskew1m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -25,7 +23,6 @@ class price_weiskew1m(StockFactorCalculator):
     def calc_factor(self , date : int):
         return skewness_volwei(date , 1)
     
-@singleton_threadsafe
 class price_weiskew2m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -34,7 +31,6 @@ class price_weiskew2m(StockFactorCalculator):
     def calc_factor(self , date : int):
         return skewness_volwei(date , 2)
     
-@singleton_threadsafe
 class price_weiskew3m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -43,7 +39,6 @@ class price_weiskew3m(StockFactorCalculator):
     def calc_factor(self , date : int):
         return skewness_volwei(date , 3)
     
-@singleton_threadsafe
 class price_weiskew6m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -52,7 +47,6 @@ class price_weiskew6m(StockFactorCalculator):
     def calc_factor(self , date : int):
         return skewness_volwei(date , 6)
     
-@singleton_threadsafe
 class price_weiskew12m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'

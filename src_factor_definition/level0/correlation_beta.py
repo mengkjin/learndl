@@ -3,7 +3,6 @@ import pandas as pd
 from src.factor.classes import StockFactorCalculator
 from src.data import TSData
 from src.func.transform import time_weight , apply_ols
-from src.func.singleton import singleton_threadsafe
 
 def calc_beta(date , n_months : int , lag_months : int = 0 , half_life = 0 , min_finite_ratio = 0.25):
     start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
@@ -17,7 +16,6 @@ def calc_beta(date , n_months : int , lag_months : int = 0 , half_life = 0 , min
 
     return beta
 
-@singleton_threadsafe
 class beta_1m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -27,7 +25,6 @@ class beta_1m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return calc_beta(date , 1)
     
-@singleton_threadsafe
 class beta_2m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -37,7 +34,6 @@ class beta_2m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return calc_beta(date , 2)
 
-@singleton_threadsafe
 class beta_3m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -47,7 +43,6 @@ class beta_3m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return calc_beta(date , 3)
 
-@singleton_threadsafe
 class beta_6m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -57,7 +52,6 @@ class beta_6m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return calc_beta(date , 6)
     
-@singleton_threadsafe
 class beta_12m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'

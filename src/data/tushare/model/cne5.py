@@ -6,7 +6,7 @@ from typing import Any , Literal , Optional
 from .. import access as TSData
 from ....basic import PATH , CONF
 from ....func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
-from ....func.singleton import singleton_threadsafe
+from ....func.singleton import singleton
 
 def parse_ts_input(
     ts : pd.DataFrame , 

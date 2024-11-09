@@ -5,7 +5,7 @@ from typing import Any , Literal
 
 from ....basic import PATH
 from ....func.time import today
-from ....func.singleton import singleton_threadsafe
+from ....func.singleton import singleton
 
 _calendar = pd.read_feather(PATH.get_target_path('information_ts' , 'calendar')).loc[:,['calendar' , 'trade']]
 _trd = _calendar[_calendar['trade'] == 1].reset_index(drop=True)
@@ -70,7 +70,7 @@ class TradeDate:
         elif isinstance(td , torch.Tensor): td = td.cpu().numpy()
         return td.astype(int)
 
-@singleton_threadsafe
+@singleton
 class TradeCalendar:
 
     @property

@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 from typing import Literal
 from src.factor.classes import StockFactorCalculator
-from src.func.singleton import singleton_threadsafe
 from src.data import TSData
 
 def coefficient_variance(date , n_months : int , data_type : Literal['amount' , 'turnover'] , min_finite_ratio = 0.25):
@@ -16,7 +15,6 @@ def coefficient_variance(date , n_months : int , data_type : Literal['amount' , 
     vals = TSData.TRADE.mask_min_finite(vals , min_finite_ratio = min_finite_ratio)
     return vals.std() / vals.mean()
 
-@singleton_threadsafe
 class amt_cv1m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -26,7 +24,6 @@ class amt_cv1m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return coefficient_variance(date , 1 , 'amount')
 
-@singleton_threadsafe
 class amt_cv2m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -36,7 +33,6 @@ class amt_cv2m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return coefficient_variance(date , 2 , 'amount')
     
-@singleton_threadsafe
 class amt_cv3m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -46,7 +42,6 @@ class amt_cv3m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return coefficient_variance(date , 3 , 'amount')
     
-@singleton_threadsafe
 class amt_cv6m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -56,7 +51,6 @@ class amt_cv6m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return coefficient_variance(date , 6 , 'amount')
     
-@singleton_threadsafe
 class amt_cv12m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -66,7 +60,6 @@ class amt_cv12m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return coefficient_variance(date , 12 , 'amount')
 
-@singleton_threadsafe
 class turn_cv1m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -76,7 +69,6 @@ class turn_cv1m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return coefficient_variance(date , 1 , 'turnover')
 
-@singleton_threadsafe
 class turn_cv2m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -86,7 +78,6 @@ class turn_cv2m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return coefficient_variance(date , 2 , 'turnover')
     
-@singleton_threadsafe
 class turn_cv3m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -96,7 +87,6 @@ class turn_cv3m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return coefficient_variance(date , 3 , 'turnover')
     
-@singleton_threadsafe
 class turn_cv6m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -106,7 +96,6 @@ class turn_cv6m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return coefficient_variance(date , 6 , 'turnover')
     
-@singleton_threadsafe
 class turn_cv12m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'

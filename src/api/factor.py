@@ -1,7 +1,7 @@
 import importlib.util
 import inspect
 
-from ..factor.classes import StockFactorCalculator
+from ..factor.classes import StockFactorHierarchy
 from ..factor.perf.api import PerfManager
 from ..factor.fmp.api import FmpManager
 from ..basic import PATH
@@ -15,5 +15,5 @@ def fmp_test():
     return pm
 
 def factor_hierarchy():
-    return StockFactorCalculator.factor_hierarchy()
+    return StockFactorHierarchy()
 

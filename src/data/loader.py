@@ -9,7 +9,7 @@ from typing import Any , Literal , Optional
 from .core import DataBlock
 from ..basic import PATH , CONF , SILENT
 from ..basic.util import Timer
-from ..func.singleton import singleton_threadsafe
+from ..func.singleton import singleton
 from ..func.time import date_offset , today
 
 class GetData:
@@ -119,7 +119,7 @@ class FrameLoader:
         return pd.concat(dfs) if len(dfs) else pd.DataFrame()
     
 
-@singleton_threadsafe
+@singleton
 class DataVendor:
     '''
     Vender for most factor / portfolio analysis related data

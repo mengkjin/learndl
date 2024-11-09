@@ -4,18 +4,18 @@ import pandas as pd
 
 from typing import Any , Callable , Literal
 
-from .abstract import DateDataAccess
+from .abstract_data_data import DateDataAccess
 from .calendar import CALENDAR
 from .stock_info import INFO
 
 from ..basic.trade_date import TradeDate
 from ....basic import PATH
-from ....func.singleton import singleton_threadsafe
+from ....func.singleton import singleton
 
-@singleton_threadsafe
+@singleton
 class TradeDataAccess(DateDataAccess):
     MAX_LEN = 2000
-    DATA_TYPE_LIST = ['trd' , 'val' , 'mf']
+    DATA_TYPE_LIST = ['trd' , 'val' , 'mf' , 'limit']
     
     def loader_func(self , date , data_type):
         if data_type == 'trd': 
@@ -24,6 +24,8 @@ class TradeDataAccess(DateDataAccess):
             df = PATH.load_target_file('trade_ts' , 'day_val' , date)
         elif data_type == 'mf': 
             df = PATH.load_target_file('trade_ts' , 'day_moneyflow' , date)
+        elif data_type == 'limit': 
+            df = PATH.load_target_file('trade_ts' , 'day_limit' , date)
         else:
             raise KeyError(data_type)
         if df is not None: df['date'] = date
@@ -37,6 +39,9 @@ class TradeDataAccess(DateDataAccess):
     
     def get_mf(self , date , cols = None , drop_old = False):
         return self.get_df(date , 'mf' , cols , drop_old)
+    
+    def get_limit(self , date , cols = None , drop_old = False):
+        return self.get_df(date , 'limit' , cols , drop_old)
 
     def get_quotes(self , start_dt : int | TradeDate , end_dt : int | TradeDate , 
                    cols : Literal['adjfactor','open','high','low','close','amount','volume',
@@ -44,21 +49,19 @@ class TradeDataAccess(DateDataAccess):
                                   'turn_fl','turn_fr'] | list , 
                    mask = False , pivot = False , drop_old = True , adj_price = True):
         qte = self.get_specific_data(start_dt , end_dt , 'trd' , cols , prev = False , 
-                                     mask = mask , pivot = pivot , drop_old = drop_old)
+                                     mask = mask , pivot = False , drop_old = drop_old)
         if adj_price:
-            price_list = ['open','high','low','close','vwap']
-            if (isinstance(cols , str) and cols in price_list) or any(col in cols for col in price_list):
-                adj = self.get_adjfactor(start_dt , end_dt , pivot = pivot , drop_old = drop_old)
-                if isinstance(cols , str):
-                    qte *= adj
-                else:
-                    for col in cols:
-                        if col in price_list: qte[col] *= adj
+            price_cols = [col for col in ([cols] if isinstance(cols , str) else cols) if col in ['open','high','low','close','vwap','preclose']]
+            if price_cols:
+                adj = self.get_adjfactor(start_dt , end_dt , pivot = False , drop_old = drop_old)['adjfactor']
+                for col in price_cols:
+                    qte[col] = qte[col] * adj
+        if pivot: qte = qte.pivot_table(cols , 'date' , 'secid')
         return qte
     
     def get_adjfactor(self , start_dt : int | TradeDate , end_dt : int | TradeDate , pivot = False , drop_old = True):
         return self.get_specific_data(start_dt , end_dt , 'trd' , 'adjfactor' , prev = False , 
-                                     mask = False , pivot = pivot , drop_old = drop_old)
+                                      mask = False , pivot = pivot , drop_old = drop_old)
     
     def get_val_data(self , start_dt : int | TradeDate , end_dt : int | TradeDate , 
                      cols : Literal[
@@ -77,6 +80,12 @@ class TradeDataAccess(DateDataAccess):
                         'sell_elg_amount','net_mf_vol','net_mf_amount'] | list , 
                     mask = False , pivot = False , drop_old = True):
         return self.get_specific_data(start_dt , end_dt , 'mf' , cols , 
+                                      prev = False , mask = mask , pivot = pivot , drop_old = drop_old)
+    
+    def get_limit_data(self , start_dt : int | TradeDate , end_dt : int | TradeDate , 
+                       cols : Literal['up_limit','down_limit','pre_close',] | list , 
+                       mask = False , pivot = False , drop_old = True):
+        return self.get_specific_data(start_dt , end_dt , 'limit' , cols , 
                                       prev = False , mask = mask , pivot = pivot , drop_old = drop_old)
     
     def get_returns(self , start_dt : int | TradeDate , end_dt : int | TradeDate , 
@@ -119,19 +128,9 @@ class TradeDataAccess(DateDataAccess):
                mv_type : Literal['circ_mv' , 'total_mv'] = 'circ_mv' , prev = True , pivot = False , drop_old = True):
         return self.get_val_data(start_dt , end_dt , mv_type , prev = prev , pivot = pivot , drop_old = drop_old)
 
-    def get_market_return(self , start_dt : int | TradeDate , end_dt : int | TradeDate):
-        '''
-        dates = CALENDAR.td_within(CALENDAR.td(start_dt , -1) , end_dt)
-        df_list = []
-        for i in range(len(dates[1:])):
-            trd = self.get_trd(dates[1 + i] , ['secid','pctchange']) 
-            val = self.get_val(dates[0 + i] , ['secid','circ_mv'])
-            ret = trd.merge(val , on = 'secid').assign(date = dates[1 + i])
-            df_list.append(ret)
-        df = pd.concat(df_list)
-        '''
-
-        rets = self.get_returns(start_dt , end_dt , return_type = 'close' , mask = False , pivot = False)
+    def get_market_return(self , start_dt : int | TradeDate , end_dt : int | TradeDate , 
+                          return_type : Literal['close' , 'vwap' , 'open' , 'intraday' , 'overnight'] = 'close'):
+        rets = self.get_returns(start_dt , end_dt , return_type = return_type , mask = False , pivot = False)
         circ = self.get_mv(start_dt , end_dt , mv_type = 'circ_mv' , pivot = False)
         rets = rets.merge(circ , on = ['date' , 'secid'])
         rets['mv_change'] = rets['pctchange'] * rets['circ_mv']
@@ -139,4 +138,9 @@ class TradeDataAccess(DateDataAccess):
             rename('market').to_frame()
         return mkt_ret
     
+    def get_market_amount(self , start_dt : int | TradeDate , end_dt : int | TradeDate):
+        amount = self.get_volumes(start_dt , end_dt , volume_type = 'amount' , mask = False , pivot = False)
+        mkt_amt = amount.groupby('date')['amount'].sum().rename('market').to_frame()
+        return mkt_amt  
+        
 TRADE = TradeDataAccess()

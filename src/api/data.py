@@ -1,9 +1,9 @@
 from typing import Optional
 
-from .module import DataModule
-from ..util import TrainConfig
-from ...data import DataProcessor , DataUpdater , TushareTask
-from ...basic import THIS_IS_SERVER
+from ..data import DataProcessor , DataUpdater , TushareTask , Baostock5minBarDownloader , RcquantMinBarDownloader
+from ..basic import THIS_IS_SERVER
+from ..model.data_module.module import DataModule
+from ..model.util import TrainConfig
 
 class DataAPI:
     @staticmethod
@@ -19,6 +19,8 @@ class DataAPI:
             DataUpdater.update_laptop()
         print('-' * 80)
         TushareTask.proceed()
+        RcquantMinBarDownloader.proceed()
+        Baostock5minBarDownloader.proceed()
         print('-' * 80)
         
     @staticmethod
@@ -34,10 +36,7 @@ class DataAPI:
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
-        # assert THIS_IS_SERVER
-        if isinstance(data_types , str): data_types = data_types.split('+')
-        DataModule.prepare_data(data_types)
-        print('-' * 80)
+        DataModule.reconstruct_train_data(data_types)
 
     @staticmethod
     def get_realistic_batch_data(model_data_type='day'):
@@ -49,7 +48,4 @@ class DataAPI:
         indus : stock_num x 1 x 35
         ...
         '''
-        model_config = TrainConfig.load().update(short_test=True, model_data_type=model_data_type)
-        data = DataModule(model_config , 'predict').load_data()
-        data.setup('predict' , model_date = data.datas.y.date[-50])
-        return data.predict_dataloader()[0]
+        return DataModule.get_realistic_batch_data(model_data_type)

@@ -1,6 +1,5 @@
 import numpy as np
 from tqdm import tqdm
-
 from ..util import BatchData
 from ..util.classes import BaseDataModule
 from ...basic import SILENT

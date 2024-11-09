@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 
 from typing import Any , Literal
@@ -69,12 +70,28 @@ class TushareFetecher(ABC):
 
         return dates
 
-    def update(self):
+    def update(self , timeout_wait_seconds = 20 , timeout_max_retries = 20):
         dates = self.update_dates()
+
         if len(dates) == 0: 
             print(f'{self.__class__.__name__} Already Updated at {self.last_date()}')
         else:
-            for date in dates: self.fetch_and_save(date)
+            retries = 0
+            while retries < timeout_max_retries:
+                try:
+                    for date in dates: self.fetch_and_save(date)
+                except Exception as e:
+                    if '最多访问' in str(e):
+                        if retries > timeout_max_retries: raise e
+                        print(f'{e} , wait {timeout_wait_seconds} seconds')
+                        time.sleep(timeout_wait_seconds)
+                    else: 
+                        raise e
+                else:
+                    break
+                retries += 1
+                dates = self.update_dates()
+                if len(dates) == 0: break
         
 class InfoFetecher(TushareFetecher):
     DB_TYPE = 'info'

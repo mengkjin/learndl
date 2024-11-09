@@ -1,3 +1,3 @@
 import tushare as ts
 
-pro = ts.pro_api('2026c96ef5fa7fc3241c96baafd638c585284c7fefaa00b93ef0a62c')
+pro = ts.pro_api('08232196bbac2a4ec51587784169f501f6387de3ad2fbe7719b5444a')

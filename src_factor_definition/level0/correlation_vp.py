@@ -3,7 +3,6 @@ import pandas as pd
 from typing import Literal
 from src.factor.classes import StockFactorCalculator
 from src.data import TSData
-from src.func.singleton import singleton_threadsafe
 
 def vp_correlation(date , n_months : int , volume_type : Literal['amount' , 'volume' , 'turn_tt' , 'turn_fl' , 'turn_fr'] = 'volume' ,
                    price_type : Literal['open' , 'high' , 'close' , 'low' , 'vwap'] = 'close' ,
@@ -19,7 +18,6 @@ def vp_correlation(date , n_months : int , volume_type : Literal['amount' , 'vol
 
     return price.corrwith(volume)
 
-@singleton_threadsafe
 class turnvp_corr1m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -29,7 +27,6 @@ class turnvp_corr1m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return vp_correlation(date , 1 , 'turn_fr' , 'vwap')
     
-@singleton_threadsafe
 class turnvp_corr2m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -39,7 +36,6 @@ class turnvp_corr2m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return vp_correlation(date , 2 , 'turn_fr' , 'vwap')
     
-@singleton_threadsafe
 class turnvp_corr3m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -49,7 +45,6 @@ class turnvp_corr3m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return vp_correlation(date , 3 , 'turn_fr' , 'vwap')
     
-@singleton_threadsafe
 class turnvp_corr6m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -59,7 +54,6 @@ class turnvp_corr6m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return vp_correlation(date , 6 , 'turn_fr' , 'vwap')
     
-@singleton_threadsafe
 class turnvp_corr12m(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
