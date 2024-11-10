@@ -11,8 +11,10 @@ __old_version__/
 /models
 /board_sql
 /results
+
 .vs/
-.confidential.py
+.confidential.yaml
+
 # Data
 *.h5
 *.pt

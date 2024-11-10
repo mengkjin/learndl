@@ -6,7 +6,6 @@ from dataclasses import asdict
 from typing import Any , ClassVar
 
 from ..data_module import BatchDataLoader
-from ..model_module.util.optimizer import Optimizer
 from ..util.classes import BaseCallBack
 from ...basic import PATH
 from ... import func as FUNC
@@ -85,7 +84,7 @@ class StatusDisplay(BaseCallBack):
         except KeyError:
             return False
     @property
-    def optimizer(self) -> Optimizer: return getattr(self.trainer.model , 'optimizer')
+    def optimizer(self): return getattr(self.trainer.model , 'optimizer')
     def display(self , *args , **kwargs):
         return self.logger.info(*args , **kwargs) if (self.show_info_step or self.initial_models) else self.logger.debug(*args , **kwargs)
     def event_sdout(self , event) -> str:
