@@ -3,9 +3,9 @@ import pandas as pd
 
 from typing import Any
 
-from ..basic import pro , code_to_secid , InfoFetecher
+from ..basic import pro , code_to_secid , InfoFetcher
  
-class Calendar(InfoFetecher):
+class Calendar(InfoFetcher):
     def db_src(self): return 'information_ts'
     def db_key(self): return 'calendar'
     def get_data(self , date):
@@ -25,7 +25,7 @@ class Calendar(InfoFetecher):
 
         return trd
     
-class Description(InfoFetecher):
+class Description(InfoFetcher):
     def db_src(self): return 'information_ts'
     def db_key(self): return 'description'
     def get_data(self , date):
@@ -50,41 +50,27 @@ class Description(InfoFetecher):
         df = df.reset_index(drop = True)
         return df
     
-class SWIndustry(InfoFetecher):
+class SWIndustry(InfoFetcher):
     def db_src(self): return 'information_ts'
     def db_key(self): return 'industry'    
     def get_data(self , date):
-        limit = 2000
-        args_is_new = ['Y' , 'N']
-        dfs = []
-        for is_new in args_is_new:
-            offset = 0
-            while True:
-                df = pro.index_member_all(is_new = is_new , limit = limit , offset = offset)
-                if len(df) == 0: break
-                dfs.append(df)
-                offset += limit
 
-        df = pd.concat(dfs)
+        df1 = self.iterate_fetch(pro.index_member_all , limit = 2000 , is_new = 'Y')
+        df2 = self.iterate_fetch(pro.index_member_all , limit = 2000 , is_new = 'N')
+
+        df = pd.concat([df1 , df2])
         df = code_to_secid(df)
         df['in_date'] = df['in_date'].fillna(99991231).astype(int)
         df['out_date'] = df['out_date'].fillna(99991231).astype(int)
         df = df.reset_index(drop=True)
         return df
     
-class ChangeName(InfoFetecher):
+class ChangeName(InfoFetcher):
     def db_src(self): return 'information_ts'
     def db_key(self): return 'change_name'    
     def get_data(self , date):
-        limit = 5000
-        dfs = []
-        offset = 0
-        while True:
-            df = pro.namechange(limit = limit , offset = offset)
-            if len(df) == 0: break
-            dfs.append(df)
-            offset += limit
-        df = pd.concat(dfs).reset_index(drop = True)
+
+        df = self.iterate_fetch(pro.namechange , limit = 5000)
         df = code_to_secid(df)
         df['start_date'] = df['start_date'].fillna(-1).astype(int)
         df['ann_date'] = df['ann_date'].fillna(-1).astype(int)

@@ -99,7 +99,7 @@ class FamaFrench3:
         return self.model.r2
     
     def alpha(self):
-        return self.model.coef[0]
+        return pd.Series(self.model.coef[0] , index = self.model.stk.columns)
     
     def resid_vol(self):
         return self.model.resid.std()

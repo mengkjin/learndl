@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from ..basic import pro , code_to_secid , DateFetecher
+from ..basic import pro , code_to_secid , DateFetcher
 
-class DailyQuote(DateFetecher):
+class DailyQuote(DateFetcher):
     '''Daily Quote'''
     def db_src(self): return 'trade_ts'
     def db_key(self): return 'day'    
@@ -44,7 +44,7 @@ class DailyQuote(DateFetecher):
             'status', 'limit', 'pctchange', 'preclose', 'turn_tt','turn_fl', 'turn_fr']]
         return trade
     
-class DailyValuation(DateFetecher):
+class DailyValuation(DateFetcher):
     '''Daily Valuation'''
     def db_src(self): return 'trade_ts'
     def db_key(self): return 'day_val'    
@@ -55,7 +55,7 @@ class DailyValuation(DateFetecher):
         val = code_to_secid(val).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return val
     
-class DailyMoneyFlow(DateFetecher):
+class DailyMoneyFlow(DateFetcher):
     '''Daily Money Flow'''
     START_DATE = 20100101
     def db_src(self): return 'trade_ts'
@@ -65,7 +65,7 @@ class DailyMoneyFlow(DateFetecher):
         mf = code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return mf
     
-class DailyLimit(DateFetecher):
+class DailyLimit(DateFetcher):
     '''Daily Price Limit Infomation'''
     START_DATE = 20070101
     def db_src(self): return 'trade_ts'

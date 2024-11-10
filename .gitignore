@@ -9,11 +9,10 @@ __old_version__/
 /figures
 /logs
 /models
-/Baostock
-/runs
+/board_sql
 /results
 .vs/
-
+.confidential.py
 # Data
 *.h5
 *.pt

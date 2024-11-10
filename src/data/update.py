@@ -35,8 +35,10 @@ class DataUpdater():
             paths += [p for p in sdir.iterdir() if p.name.startswith(UPDATER_TITLE + '.') and p.name.endswith('.tar')]
         paths.sort()
         if del_after_dumping and paths:
+            print('-' * 80)
+            print(f'Delete {len(paths)} updaters after completion')
             print(paths)
-            del_after_dumping = input(f'''Delete {len(paths)} updaters after completion? (press yes/y) : {paths}''')[0].lower() == 'y'
+            # del_after_dumping = input(f'''Delete {len(paths)} updaters after completion? (press yes/y) : {paths}''')[0].lower() == 'y'
 
         for tar_filename in paths:
             with tarfile.open(tar_filename, 'r') as tar:  

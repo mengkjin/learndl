@@ -34,11 +34,12 @@ def dates_to_update(date , last_date , freq : Literal['d' , 'w' , 'm']):
     elif freq == 'm':
         date_list = pd.date_range(str(last_date) , str(date) , freq='ME').strftime('%Y%m%d').astype(int).to_numpy()
         if last_date in date_list: date_list = date_list[1:]
-    return date_list
+    return np.sort(date_list)
 
-def quarter_ends(date , last_date = None , start_year = 1997):
+def quarter_ends(date , last_date = None , start_year = 1997 , consider_future = False):
     date_list = np.sort(np.concatenate([np.arange(start_year , date // 10000 + 1) * 10000 + qe for qe in  [331,630,930,1231]]))
-    date_list = date_list[date_list < date]
+    if not consider_future: 
+        date_list = date_list[date_list < date]
     
     if last_date is not None: 
         date_list_0 = date_list[date_list <= last_date][-3:]

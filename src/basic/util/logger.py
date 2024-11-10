@@ -1,4 +1,4 @@
-import logging
+import logging , sys
 import colorlog
 
 from .. import path as PATH
@@ -63,4 +63,30 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
         if record.levelno in self._level_formatters:
             return self._level_formatters[record.levelno].format(record)
         return super(_LevelColorFormatter, self).format(record)
+
+def dual_printer(func):
+    '''redirect stdout to log file and terminal'''
+    target_filename = str(PATH.logs.joinpath('print_log.txt'))
+    class DualPrinter:
+        def __init__(self, filename):
+            self.terminal = sys.stdout
+            self.log = open(filename, "w")
+
+        def write(self, message):
+            self.terminal.write(message)
+            self.log.write(message)
+
+        def flush(self):
+            # This flush method is needed for Python 3 compatibility.
+            # This handles the flush command by doing nothing.
+            # You might want to specify some extra behavior here.
+            pass
+
+    def wrapper(*args , **kwargs):
+        sys.stdout = DualPrinter(target_filename)
+        ret = func(*args , **kwargs)
+        sys.stdout = sys.stdout.terminal
+        return ret
+    
+    return wrapper
 

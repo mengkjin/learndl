@@ -3,8 +3,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Callable
-
-from ..env_var import SILENT
+from .silence import SILENT
 
 class Timer:
     '''simple timer to print out time'''

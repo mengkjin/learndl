@@ -1,8 +1,8 @@
 import pandas as pd
 
-from ..basic import pro , code_to_secid , MonthFetecher
+from ..basic import pro , code_to_secid , MonthFetcher
 
-class THSConcept(MonthFetecher):
+class THSConcept(MonthFetcher):
     '''Tonghuashun Concept'''
     def db_src(self): return 'membership_ts'
     def db_key(self): return 'concept'    

@@ -3,11 +3,11 @@ import numpy as np
 import pandas as pd
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal
 
 from .project import database
-from ...func.time import today
 
 SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
 SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
@@ -15,7 +15,11 @@ SAVE_OPT_NORM : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
 SAVE_OPT_MODEL: Literal['pt'] = 'pt'
 
 DB_BY_NAME  : list[str] = ['information' , 'information_ts']
-DB_BY_DATE  : list[str] = ['models' , 'trade' , 'labels' , 'benchmark' , 'membership_ts' , 'trade_ts' , 'financial_ts']  
+DB_BY_DATE  : list[str] = ['models' , 'trade' , 'labels' , 'benchmark' , 'membership_ts' , 'trade_ts' , 'financial_ts' , 'analyst_ts']  
+
+def today(offset = 0 , astype : Any = int):
+    d = datetime.today() + timedelta(days=offset)
+    return astype(d.strftime('%Y%m%d'))
 
 def list_files(directory : str | Path , fullname = False , recur = False):
     '''list all files in directory'''

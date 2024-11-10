@@ -1,6 +1,3 @@
-import torch
-from pathlib import Path
-
 class Silence:
     _instance = None
     def __new__(cls):
@@ -25,13 +22,4 @@ class Silence:
     def enable(self): 
         self._enable = True
 
-# variables
-MAIN_PATH       = [parent for parent in list(Path(__file__).parents) if parent.match('./src/')][-1].parent
-SILENT          = Silence()
-THIS_IS_SERVER  = torch.cuda.is_available() # socket.gethostname() == 'mengkjin-server'
-
-FACTOR_DESTINATION_LAPTOP = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
-FACTOR_DESTINATION_SERVER = MAIN_PATH.joinpath('results' , 'Alpha')
-
-# assertions
-assert not THIS_IS_SERVER or torch.cuda.is_available() , f'SERVER must have cuda available'
+SILENT = Silence()

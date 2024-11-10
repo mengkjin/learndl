@@ -1,9 +1,11 @@
 import os , shutil , sys , yaml
 from pathlib import Path
 
-from ..env_var import MAIN_PATH as main
-from ..env_var import FACTOR_DESTINATION_LAPTOP , FACTOR_DESTINATION_SERVER
+MAIN_PATH = [parent for parent in list(Path(__file__).parents) if parent.match('./src/')][-1].parent
+FACTOR_DESTINATION_LAPTOP = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
+FACTOR_DESTINATION_SERVER = MAIN_PATH.joinpath('results' , 'Alpha')
 
+main = MAIN_PATH
 sys.path.append(str(main))
 
 data        = main.joinpath('data')
@@ -21,6 +23,7 @@ conf        = main.joinpath('configs')
 logs        = main.joinpath('logs')
 model       = main.joinpath('models')
 result      = main.joinpath('results')
+boardsql    = main.joinpath('board_sqls')
 
 def read_yaml(yaml_file , **kwargs):
     if isinstance(yaml_file , Path) and yaml_file.suffix == '' and yaml_file.with_name(f'{yaml_file.name}.yaml').exists():

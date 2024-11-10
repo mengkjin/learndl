@@ -1,9 +1,8 @@
 from typing import Optional
 
-from ..data import DataProcessor , DataUpdater , TushareTask , Baostock5minBarDownloader , RcquantMinBarDownloader
-from ..basic import THIS_IS_SERVER
-from ..model.data_module.module import DataModule
-from ..model.util import TrainConfig
+from src.data import DataProcessor , DataUpdater , TushareTask , Baostock5minBarDownloader , RcquantMinBarDownloader
+from src.basic import THIS_IS_SERVER
+from src.model.data_module.module import DataModule
 
 class DataAPI:
     @staticmethod

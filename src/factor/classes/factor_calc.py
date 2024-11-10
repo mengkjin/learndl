@@ -14,6 +14,7 @@ from typing import Any , Literal , Type , final
 from ...basic import PATH
 from ...data import TSData
 from ...func.singleton import SingletonABCMeta
+from ...func.classproperty import classproperty_str
 
 _FACTOR_UPDATE_JOBS : list[tuple[int , str , 'StockFactorCalculator']] = []
 
@@ -28,43 +29,33 @@ _FACTOR_CATEGORY1_SET = {
     'alternative' : None
 }
 
-def validate_factor_calculator_attr(cls : Type['StockFactorCalculator']):
-    '''validate attribute of factor'''
-    assert cls.init_date >= _FACTOR_INIT_DATE , f'init_date should be later than {_FACTOR_INIT_DATE} , but got {cls.init_date}'
-
-    assert cls.category0 in _FACTOR_CATEGORY0_SET , \
-        f'category0 is should be in {_FACTOR_CATEGORY0_SET}, but got {cls.category0}'
-    
-    category1_list = _FACTOR_CATEGORY1_SET[cls.category0]
-    
-    if category1_list is not None:
-        assert cls.category1 in category1_list , \
-            f'category1 is should be in {category1_list}, but got {cls.category1}'
-    else:
-        assert cls.category1 , 'category1 is not set'
-    
-    assert cls.description , 'description is not set'
-
-    return cls
-
-
 def factor_folder(factor_name : str): 
+    '''return the target folder of factor data'''
     return Path(f'{PATH.factor}/{factor_name}')
 
 def factor_path(factor_name : str , date : int , mkdir = True): 
+    '''return the target path of factor data of a given date'''
     path = factor_folder(factor_name).joinpath(f'{int(date) // 10000}/{factor_name}.{int(date)}.feather')
     if mkdir: path.parent.mkdir(parents=True , exist_ok=True)
     return path
 
 def factor_stored_dates(factor_name):
+    '''return a list of stored dates of factor given by factor_name'''
     paths = PATH.list_files(factor_folder(factor_name) , recur=True)
     dates = np.array(sorted(PATH.R_path_date(paths)) , dtype=int)
     return dates
 
+def factor_filter(cls : Type['StockFactorCalculator'] , **kwargs):
+    '''filter factor by given attributes'''
+    conditions = [getattr(cls , k) == v for k , v in kwargs.items() if v is not None]
+    return not conditions or all(conditions)
+
 def insert_update_job(date : int , level : str , obj : 'StockFactorCalculator'):
+    '''insert a update job to _FACTOR_UPDATE_JOBS'''
     _FACTOR_UPDATE_JOBS.append((date , level , obj))
 
 def perform_update_jobs(overwrite = False , show_progress = True , ignore_error = False , factor_name : str | None = None):
+    '''perform all update jobs , if factor_name is not None , only perform update jobs of the factor'''
     _FACTOR_UPDATE_JOBS.sort(key=lambda x: (x[0], x[1], x[2]))
     
     for item in _FACTOR_UPDATE_JOBS[:]:
@@ -87,21 +78,74 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
                         'adjustment' , 'hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity' , 
                         'momentum' , 'volatility' , 'correlation' , 'liquidity' , 'holding' , 'trading'] | Any = None
     description : str = ''
-    other_info : dict[str , Any] = {}
 
-    @classmethod
-    def update_info(cls , **kwargs): 
-        cls.other_info.update(kwargs)
-        return cls
+    def __new__(cls , *args , **kwargs):
+        return super().__new__(cls.validate_attr())
 
     @abstractmethod
     def calc_factor(self , date : int) -> pd.DataFrame | pd.Series:
         '''calculate factor value , must have secid and factor_value / factor_name columns'''
-        return pd.DataFrame()
+    
+    @classmethod
+    def calc_factor_wrapper(cls , raw_calc_factor):
+        '''validate calculated factor value'''
+        def new_calc_factor(self , date):
+            date = int(date)
+            assert date >= cls.init_date , f'for factor {cls.factor_name} , date is should be greater than or equal to {cls.init_date}, but got {date}'
+            df = raw_calc_factor(self , date)
+            assert isinstance(df , (pd.DataFrame | pd.Series)) , f'for factor {cls.factor_name} , calc_factor must return a DataFrame or Series , but got {type(df)}'
+            return df
+        return new_calc_factor
 
-    def __new__(cls , *args , **kwargs):
-        validate_factor_calculator_attr(cls)
-        return super().__new__(cls)
+    def __init_subclass__(cls, **kwargs):
+        '''after subclassing , set calc_factor as wrapper'''
+        super().__init_subclass__(**kwargs)
+        setattr(cls , 'calc_factor' , cls.calc_factor_wrapper(cls.calc_factor))
+    
+    @classproperty_str
+    def factor_name(cls) -> str:
+        return cls.__qualname__
+
+    @classproperty_str
+    def level(cls) -> str:
+        '''level of the factor'''
+        return cls.__module__.split('.')[-2]
+    
+    @classproperty_str
+    def file_name(cls) -> str:
+        '''file name of the factor'''
+        return cls.__module__.split('.')[-1]
+    
+    @classmethod
+    def validate_attr(cls):
+        '''
+        validate attribute of factor
+        init_date : must be greater than _FACTOR_INIT_DATE(20070101)
+        category0 : must be in _FACTOR_CATEGORY0_SET([fundamental , analyst , high_frequency , behavior , money_flow , alternative])
+        category1 : must be in _FACTOR_CATEGORY1_SET[category0] if category1_list is not None , otherwise must be not None
+            fundamental : quality , growth , value , earning
+            analyst : surprise , coverage , forecast , adjustment
+            high_frequency : hf_momentum , hf_volatility , hf_correlation , hf_liquidity
+            behavior : momentum , volatility , correlation , liquidity
+            money_flow : holding , trading
+            alternative : None
+        description : must be a non-empty string
+        '''
+        assert cls.init_date >= _FACTOR_INIT_DATE , f'init_date should be later than {_FACTOR_INIT_DATE} , but got {cls.init_date}'
+
+        assert cls.category0 in _FACTOR_CATEGORY0_SET , \
+            f'category0 is should be in {_FACTOR_CATEGORY0_SET}, but got {cls.category0}'
+        
+        category1_list = _FACTOR_CATEGORY1_SET[cls.category0]
+        
+        if category1_list is not None:
+            assert cls.category1 in category1_list , \
+                f'category1 is should be in {category1_list}, but got {cls.category1}'
+        else:
+            assert cls.category1 , 'category1 is not set'
+        
+        assert cls.description , 'description is not set'
+        return cls
 
     @final
     def __init__(self):
@@ -112,25 +156,42 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         return f'{self.factor_name}(from{self.init_date},{self.category0},{self.category1})[{len(self.factors)}dates]'
     
     def __getitem__(self , date : int):
+        '''
+        return calculated factor value of a given date
+        '''
         return self.factors[date]
     
     def __call__(self , date : int):
+        '''
+        return factor value of a given date , calculate if not exist
+        '''
         if date not in self.factors: self.calculate(date)
         return self.factors[date]
 
     @property
-    def factor_name(self): return self.__class__.__name__
+    def factor_folder(self): 
+        '''
+        return the target folder of factor data
+        '''
+        return factor_folder(self.factor_name)
 
     @property
-    def factor_folder(self): return factor_folder(self.factor_name)
-
-    @property
-    def stored_dates(self): return factor_stored_dates(self.factor_name)
+    def stored_dates(self): 
+        '''
+        return list of stored dates of factor data
+        '''
+        return factor_stored_dates(self.factor_name)
     
     def factor_path(self , date : int | Any):
+        '''
+        return the target path of factor data of a given date
+        '''
         return factor_path(self.factor_name , date , mkdir = True)
     
     def factor_values(self):
+        '''
+        return a DataFrame of all calculated factor values with date and secid index
+        '''
         return pd.concat([df.assign(date = d) for d , df in self.factors.items()]).reset_index().set_index(['date','secid'])
     
     def validate_value(self , date : int , df : pd.DataFrame , strict = False):
@@ -152,17 +213,14 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         if isinstance(date , Iterable):
             for d in date: self.calculate(d)
         else:
-            date = int(date)
-            assert date >= self.init_date , f'date is should be greater than or equal to {self.init_date}, but got {date}'
+            #date = int(date)
+            #assert date >= self.init_date , f'date is should be greater than or equal to {self.init_date}, but got {date}'
 
             df = self.calc_factor(date)
             if isinstance(df , pd.Series):
-                df = df.rename(self.factor_name).to_frame()
+                self.factors[date] = df.rename(self.factor_name).to_frame()
             elif isinstance(df , pd.DataFrame):
-                df = df.reset_index().set_index('secid').rename(columns={'factor_value':self.factor_name})[[self.factor_name]]
-            else:
-                raise ValueError(f'calc_factor must return a DataFrame or Series , but got {type(df)}')
-            self.factors[date] = df
+                self.factors[date] = df.reset_index().set_index('secid').rename(columns={'factor_value':self.factor_name})[[self.factor_name]]
         return self
 
     def deploy(self , strict = True , overwrite = False , show_progress = False):
@@ -214,6 +272,9 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         perform_update_jobs(overwrite , show_progress , ignore_error , cls.__name__)
     
 class StockFactorHierarchy:
+    '''
+    hierarchy of factor classes
+    '''
     _instance = None
     def __new__(cls):
         if cls._instance is None:
@@ -226,6 +287,9 @@ class StockFactorHierarchy:
         self.load()
 
     def load(self):     
+        '''
+        load all factor classes from definition path
+        '''
         self.pool : dict[str , Type[StockFactorCalculator]] = {}   
         self.hier : dict[str , list[Type[StockFactorCalculator]]] = {}
         for level_path in self.definition_path.iterdir():
@@ -242,25 +306,25 @@ class StockFactorHierarchy:
                 
                 for _ , obj in inspect.getmembers(module, inspect.isclass):
                     if obj.__module__ == spec_name and issubclass(obj , StockFactorCalculator) and (obj is not StockFactorCalculator):
-                        assert obj.__name__ not in self.pool , f'{obj.__name__} in module {spec_name} is duplicated'
-                        obj.update_info(level = level_path.stem , file_name = file_path.stem , factor_name = obj.__name__)
-                        
+                        assert obj.__name__ not in self.pool , f'{obj.__name__} in module {spec_name} is duplicated'                        
                         self.pool[obj.__name__] = obj
                         if level_path.stem not in self.hier: self.hier[level_path.stem] = []
                         self.hier[level_path.stem].append(obj)
 
         return self
 
-    def factor_df(self , level : str | None = None , category0 : str | None = None , category1 : str | None = None , file_name : str | None = None):
-        info_list = ['level' , 'file_name' , 'factor_name']
-        attr_list = ['init_date' , 'category0' , 'category1' , 'description']
-        
-        df_dict = [[cls.other_info[i] for i in info_list] + [getattr(cls , a) for a in attr_list] for cls in self]
-        df = pd.DataFrame(df_dict, columns=[*info_list , *attr_list])
-        if level is not None: df = df[df['level'] == level]
-        if category0 is not None: df = df[df['category0'] == category0]
-        if category1 is not None: df = df[df['category1'] == category1]
-        if file_name is not None: df = df[df['file_name'] == file_name]
+    def factor_df(self , **kwargs):
+        '''
+        return a DataFrame of all factors with given attributes
+        factor_name : str | None = None
+        level : str | None = None 
+        file_name : str | None = None
+        category0 : str | None = None 
+        category1 : str | None = None 
+        '''
+        attr_list = ['level' , 'file_name' , 'factor_name' , 'init_date' , 'category0' , 'category1' , 'description']
+        df_dict = [[getattr(cls , a) for a in attr_list] for cls in self if factor_filter(cls , **kwargs)]
+        df = pd.DataFrame(df_dict, columns=attr_list)
         return df
     
     def jobs(self , as_df = True):
@@ -271,33 +335,73 @@ class StockFactorHierarchy:
         return f'StockFactorHierarchy({str_level_factors})'
 
     def factor_names(self):
-        return [f'{cls.__name__}({str(cls.other_info)})' for cls in self]
+        '''
+        return a list of factor names
+        '''
+        return [f'{cls.factor_name}({cls.level}.{cls.file_name})' for cls in self]
 
     def __iter__(self):
+        '''
+        return a generator of factor classes
+        '''
         return (cls for level in self.iter_levels() for cls in self.iter_level_factors(level))
 
     def iter_levels(self):
+        '''
+        return a list of levels
+        '''
         return iter(self.hier)
     
     def iter_level_factors(self , level : str):
+        '''
+        return a list of factor classes in a given level
+        '''
         return (cls for cls in self.hier[level])
 
-    def iter_instance(self):
-        return (cls() for cls in self)
+    def iter_instance(self , **kwargs):
+        '''
+        return a list of factor instances with given attributes
+        factor_name : str | None = None
+        level : str | None = None 
+        file_name : str | None = None
+        category0 : str | None = None 
+        category1 : str | None = None 
+        '''
+        return (cls() for cls in self if factor_filter(cls , **kwargs))
     
     def __getitem__(self , key : str):
+        '''
+        return a list of factor classes in a given level
+        '''
         return self.hier[key]
     
     def get_factor(self , factor_name : str):
+        '''
+        return a factor class by factor_name
+        e.g.
+        factor_name = 'turn_12m'
+        factor_cls = StockFactorHierarchy()[factor_name]
+        '''
         return self.pool[factor_name]
     
-    def test_calc_all_factors(self , date : int , check_duplicates = True):
+    def test_calc_all_factors(self , date : int = 20241031 , check_duplicates = True , **kwargs):
+        '''
+        test calculation of all factors , if check_duplicates is True , check factors diffs' standard deviation and correlation
+        factor_name : str | None = None
+        level : str | None = None 
+        file_name : str | None = None
+        category0 : str | None = None 
+        category1 : str | None = None 
+        '''
+        
         factor_values : dict[str , pd.Series] = {}
-        for obj in self.iter_instance():
+        for obj in self.iter_instance(**kwargs):
             print(f'{obj.factor_name} ' , end='')
             df = obj.calc_factor(date)
             factor_values[obj.factor_name] = df[obj.factor_name] if isinstance(df , pd.DataFrame) else df
             print('calculated')
+
+        self.calc_factor_values = factor_values
         if check_duplicates:
             abnormal_diffs = {}
             for fn1 , fn2 in combinations(factor_values.keys() , 2):
@@ -316,10 +420,16 @@ class StockFactorHierarchy:
     
     @classmethod
     def update_jobs(cls , start : int = -1 , end : int = 99991231 , overwrite = False):
+        '''
+        update update jobs for all factors between start and end date
+        '''
         obj = cls()
-        [factor_cls().update_jobs(start , end , overwrite , factor_cls.other_info['level']) for factor_cls in obj]
+        [factor_cls().update_jobs(start , end , overwrite , factor_cls.level) for factor_cls in obj]
         return obj
     
     @staticmethod
     def Update(overwrite = False , show_progress = True , ignore_error = True):
+        '''
+        update factor data according to update jobs
+        '''
         perform_update_jobs(overwrite , show_progress , ignore_error)
