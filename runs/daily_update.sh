@@ -1,3 +1,3 @@
 #!/bin/bash
-cd "/home/mengkjin/Workspace/learndl/src_autorun"
-python daily_update.py
+cd /home/mengkjin/Workspace/learndl
+python3.10 src_autorun/daily_update.py
