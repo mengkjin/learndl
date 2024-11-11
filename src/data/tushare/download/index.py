@@ -1,6 +1,7 @@
 import pandas as pd
 
-from ..basic import pro , code_to_secid , MonthFetcher
+from .abstract_fetcher import MonthFetcher
+from ..basic import pro , code_to_secid
 
 class THSConcept(MonthFetcher):
     '''Tonghuashun Concept'''

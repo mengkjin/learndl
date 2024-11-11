@@ -36,13 +36,13 @@ def dates_to_update(date , last_date , freq : Literal['d' , 'w' , 'm']):
         if last_date in date_list: date_list = date_list[1:]
     return np.sort(date_list)
 
-def quarter_ends(date , last_date = None , start_year = 1997 , consider_future = False):
+def quarter_ends(date , last_date = None , start_year = 1997 , consider_future = False , trailing_quarters = 3):
     date_list = np.sort(np.concatenate([np.arange(start_year , date // 10000 + 1) * 10000 + qe for qe in  [331,630,930,1231]]))
     if not consider_future: 
         date_list = date_list[date_list < date]
     
     if last_date is not None: 
-        date_list_0 = date_list[date_list <= last_date][-3:]
+        date_list_0 = date_list[date_list <= last_date][-trailing_quarters:]
         date_list_1 = date_list[date_list >  last_date]
         date_list = np.concatenate([date_list_0 , date_list_1])
 

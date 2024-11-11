@@ -1,5 +1,6 @@
 import logging , sys
 import colorlog
+from pathlib import Path
 
 from .. import path as PATH
 from .. import conf as CONF
@@ -64,29 +65,40 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
             return self._level_formatters[record.levelno].format(record)
         return super(_LevelColorFormatter, self).format(record)
 
+class DualPrinter:
+    '''change print target to both terminal and file'''
+    def __init__(self, filename : str | Path = PATH.logs.joinpath('print_log.txt')):
+        self.filename = filename
+        self.terminal = sys.stdout
+        self.log = open(self.filename, "w")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+
+    def flush(self):
+        # This flush method is needed for Python 3 compatibility.
+        # This handles the flush command by doing nothing.
+        # You might want to specify some extra behavior here.
+        pass
+
+    def __enter__(self):
+        sys.stdout = self
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        sys.stdout = self.terminal
+        self.log.close()
+
+    def contents(self):
+        with open(self.log.name , 'r') as f:
+            return f.read()
+
 def dual_printer(func):
     '''redirect stdout to log file and terminal'''
-    target_filename = str(PATH.logs.joinpath('print_log.txt'))
-    class DualPrinter:
-        def __init__(self, filename):
-            self.terminal = sys.stdout
-            self.log = open(filename, "w")
-
-        def write(self, message):
-            self.terminal.write(message)
-            self.log.write(message)
-
-        def flush(self):
-            # This flush method is needed for Python 3 compatibility.
-            # This handles the flush command by doing nothing.
-            # You might want to specify some extra behavior here.
-            pass
-
     def wrapper(*args , **kwargs):
-        sys.stdout = DualPrinter(target_filename)
-        ret = func(*args , **kwargs)
-        sys.stdout = sys.stdout.terminal
-        return ret
-    
+        with DualPrinter() as printer:
+            ret = func(*args , **kwargs)
+        return {'ret' : ret , 'log' : printer.contents()}
     return wrapper
 

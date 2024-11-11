@@ -1,7 +1,6 @@
 import inspect
 
-from .basic import TushareFetcher
-from .download import daily , fina , index , info
+from .download import TushareFetcher , daily , fina , index , info
 from .model import TuShareCNE5_Calculator
 
 def proceed():

@@ -1,7 +1,8 @@
 import inspect
 
+from .abstract_fetcher import TushareFetcher
 from . import analyst, daily , fina , index , info
-from ..basic import TushareFetcher
+
 
 class TushareDownloader:
     '''download data from tushare'''

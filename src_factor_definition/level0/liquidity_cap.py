@@ -42,3 +42,14 @@ class lncap_free(StockFactorCalculator):
     
     def calc_factor(self, date: int):
         return cap_classic(date , 'fr')
+
+class lockedstk(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'behavior'
+    category1 = 'liquidity'
+    description = '锁仓比'
+    
+    def calc_factor(self, date: int):
+        val = TSData.TRADE.get_val(date).set_index('secid')
+        locked = 1 - val['free_share'] / val['total_share']
+        return locked

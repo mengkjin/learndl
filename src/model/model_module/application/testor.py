@@ -1,6 +1,6 @@
 from torch import Tensor
 
-from .module_selector import get_predictor_module
+from ..module import get_predictor_module
 from ...data_module import DataModule
 from ...util import TrainConfig
 

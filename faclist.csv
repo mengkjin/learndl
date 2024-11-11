@@ -77,13 +77,13 @@ ffret_std1m,1,20070101,behavior,volatility,残差标准差,量价,波动率
 ffret_std2m,1,20070101,behavior,volatility,残差标准差,量价,波动率
 ffret_std3m,1,20070101,behavior,volatility,残差标准差,量价,波动率
 ffret_std6m,1,20070101,behavior,volatility,残差标准差,量价,波动率
-flow_correls,,20070101,behavior,liquidity,超大单-小单相关性,量价,资金流
-flow_corrss,,20070101,behavior,liquidity,小单滞后相关性,量价,资金流
-flow_exlarge,,20070101,behavior,liquidity,资金流强度--超大单,量价,资金流
-flow_hels,,20070101,behavior,liquidity,超大单-小单占比,量价,资金流
-flow_large,,20070101,behavior,liquidity,资金流强度--大单,量价,资金流
-flow_med,,20070101,behavior,liquidity,资金流强度--中单,量价,资金流
-flow_small,,20070101,behavior,liquidity,资金流强度--小单,量价,资金流
+flow_correlsm,1,20070101,behavior,liquidity,超大单-小单相关性,量价,资金流
+flow_corrsm_lag,1,20070101,behavior,liquidity,小单滞后相关性,量价,资金流
+flow_exlarge,1,20070101,behavior,liquidity,资金流强度--超大单,量价,资金流
+flow_hels,1,20070101,behavior,liquidity,超大单-小单占比,量价,资金流
+flow_large,1,20070101,behavior,liquidity,资金流强度--大单,量价,资金流
+flow_medium,1,20070101,behavior,liquidity,资金流强度--中单,量价,资金流
+flow_small,1,20070101,behavior,liquidity,资金流强度--小单,量价,资金流
 gp_acce,,20070101,fundamental,growth,毛利润加速度,基本面,成长
 gp_czscore,,20070101,fundamental,growth,gp单季度同比增速的标准化得分,基本面,成长
 gp_pctq4,,20070101,fundamental,growth,毛利润同比变化率,基本面,成长
@@ -107,16 +107,16 @@ holding_relawei,,20070101,money_flow,holding,基金持股市值占比/市场市�
 holding_relaweibu,,20070101,money_flow,holding,基金内个股主动权重中位数,基本面,机构持仓
 holding_shares,,20070101,money_flow,holding,持有个股股票数量,基本面,机构持仓
 hphigh_intra,,20070101,high_frequency,hf_momentum,日内高点位置,高频,动量反转
-ideal_ampl,,20070101,behavior,liquidity,振幅因子--收盘价划分,量价,资金流
-ideal_reves,,20070101,behavior,momentum,反转因子--单笔成交金额划分,量价,动量反转
-ideal_revesbeta,,20070101,behavior,momentum,反转因子--单笔成交金额划分,量价,动量反转
-ideal_revescor,,20070101,behavior,momentum,反转因子--单笔成交金额划分,量价,动量反转
-ideal_reveswei,,20070101,behavior,momentum,反转因子--单笔成交金额划分,量价,动量反转
-illiq_12m,,20070101,behavior,liquidity,非流动性-12月,量价,流动性
-illiq_1m,,20070101,behavior,liquidity,非流动性-1月,量价,流动性
-illiq_2m,,20070101,behavior,liquidity,非流动性-2月,量价,流动性
-illiq_3m,,20070101,behavior,liquidity,非流动性-3月,量价,流动性
-illiq_6m,,20070101,behavior,liquidity,非流动性-6月,量价,流动性
+ampl_slicecp1m,1,20070101,behavior,liquidity,振幅因子--收盘价划分,量价,资金流
+mom_slicevol1m,1,20070101,behavior,momentum,反转因子--单笔成交金额划分,量价,动量反转
+beta_slicevol1m,1,20070101,behavior,momentum,反转因子--单笔成交金额划分,量价,动量反转
+corr_slicevol1m,1,20070101,behavior,momentum,反转因子--单笔成交金额划分,量价,动量反转
+skew_slicevol1m,1,20070101,behavior,momentum,反转因子--单笔成交金额划分,量价,动量反转
+illiq_12m,1,20070101,behavior,liquidity,非流动性-12月,量价,流动性
+illiq_1m,1,20070101,behavior,liquidity,非流动性-1月,量价,流动性
+illiq_2m,1,20070101,behavior,liquidity,非流动性-2月,量价,流动性
+illiq_3m,1,20070101,behavior,liquidity,非流动性-3月,量价,流动性
+illiq_6m,1,20070101,behavior,liquidity,非流动性-6月,量价,流动性
 liab_equ,,20070101,fundamental,quality,净资产负债率,基本面,财务质量
 liab_equ_incl,,20070101,fundamental,quality,产权比率,基本面,财务质量
 liab_pctq4,,20070101,fundamental,growth,总负债同比变化率,基本面,成长
@@ -126,10 +126,10 @@ liabnoncur_liab,,20070101,fundamental,quality,非流动负债/总负债,基本�
 lncap,1,20070101,behavior,liquidity,市值因子,量价,规模
 lncap_free,1,20070101,behavior,liquidity,市值因子,量价,规模
 lncap_liq,1,20070101,behavior,liquidity,市值因子,量价,规模
-lockedstk,,20070101,behavior,liquidity,锁仓比,量价,波动率
+lockedstk,1,20070101,behavior,liquidity,锁仓比,量价,波动率
 lpnp,,20070101,fundamental,earning,线性提纯净利润,基本面,盈利
 maxdd_intra,,20070101,high_frequency,hf_volatility,日内最大回撤,高频,动量反转
-mif_orig,,20070101,behavior,momentum,市场效率因子-原始,量价,动量反转
+mif_1m,1,20070101,behavior,momentum,市场效率因子-原始,量价,动量反转
 mom_12_1m,1,20070101,behavior,momentum,12月动量因子,量价,动量反转
 mom_12m,1,20070101,behavior,momentum,12月动量因子,量价,动量反转
 mom_1m,1,20070101,behavior,momentum,1月动量因子,量价,动量反转

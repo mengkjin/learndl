@@ -3,7 +3,8 @@ import pandas as pd
 
 from typing import Any
 
-from ..basic import pro , code_to_secid , InfoFetcher
+from .abstract_fetcher import InfoFetcher
+from ..basic import pro , code_to_secid
  
 class Calendar(InfoFetcher):
     def db_src(self): return 'information_ts'

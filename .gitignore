@@ -9,11 +9,11 @@ __old_version__/
 /figures
 /logs
 /models
-/board_sql
+/board_sqls
 /results
 
 .vs/
-.confidential.yaml
+/configs/confidential
 
 # Data
 *.h5

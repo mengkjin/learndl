@@ -1,14 +1,11 @@
-
-
 import numpy as np
 import pandas as pd
 import importlib.util
-import inspect , threading
+import inspect
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from itertools import combinations
-from pathlib import Path
 from typing import Any , Literal , Type , final
 
 from ...basic import PATH
@@ -16,7 +13,7 @@ from ...data import TSData
 from ...func.singleton import SingletonABCMeta
 from ...func.classproperty import classproperty_str
 
-_FACTOR_UPDATE_JOBS : list[tuple[int , str , 'StockFactorCalculator']] = []
+_FACTOR_UPDATE_JOBS : list[tuple['StockFactorCalculator' , int]] = []
 
 _FACTOR_INIT_DATE = 20070101
 _FACTOR_CATEGORY0_SET = ['fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative']
@@ -31,7 +28,7 @@ _FACTOR_CATEGORY1_SET = {
 
 def factor_folder(factor_name : str): 
     '''return the target folder of factor data'''
-    return Path(f'{PATH.factor}/{factor_name}')
+    return PATH.factor.joinpath(factor_name)
 
 def factor_path(factor_name : str , date : int , mkdir = True): 
     '''return the target path of factor data of a given date'''
@@ -50,26 +47,27 @@ def factor_filter(cls : Type['StockFactorCalculator'] , **kwargs):
     conditions = [getattr(cls , k) == v for k , v in kwargs.items() if v is not None]
     return not conditions or all(conditions)
 
-def insert_update_job(date : int , level : str , obj : 'StockFactorCalculator'):
+def insert_update_job(obj : 'StockFactorCalculator' , date : int):
     '''insert a update job to _FACTOR_UPDATE_JOBS'''
-    _FACTOR_UPDATE_JOBS.append((date , level , obj))
+    _FACTOR_UPDATE_JOBS.append((obj , date))
 
 def perform_update_jobs(overwrite = False , show_progress = True , ignore_error = False , factor_name : str | None = None):
     '''perform all update jobs , if factor_name is not None , only perform update jobs of the factor'''
-    _FACTOR_UPDATE_JOBS.sort(key=lambda x: (x[0], x[1], x[2]))
-    
+    _FACTOR_UPDATE_JOBS.sort(key=lambda x: (x[0].level , x[1] , x[0].factor_name))
+    date = -1
     for item in _FACTOR_UPDATE_JOBS[:]:
-        date , level , obj = item
+        if item[1] != date: TSData.len_control()
+        obj , date = item
         if factor_name is not None and obj.factor_name != factor_name: continue
         
         try:
             obj.calculate(date).deploy(overwrite = overwrite , show_progress = show_progress)
+            _FACTOR_UPDATE_JOBS.remove(item)
         except Exception as e:
             if ignore_error:
                 print(f'Factor : {obj.factor_name} update at date {date} failed: {e}')
             else:
                 raise e
-        _FACTOR_UPDATE_JOBS.remove(item)
 
 class StockFactorCalculator(metaclass=SingletonABCMeta):
     init_date : int = -1
@@ -259,11 +257,11 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
             else:
                 return None
     
-    def update_jobs(self , start : int = -1 , end : int = 99991231 , overwrite = False , level : str | None = None):
+    def update_jobs(self , start : int = -1 , end : int = 99991231 , overwrite = False):
         dates = TSData.CALENDAR.td_within(max(start , self.init_date) , end)
         if not overwrite:
             dates = np.setdiff1d(TSData.CALENDAR.td_within(max(start , self.init_date) , end) , self.stored_dates)
-        [insert_update_job(d , 'levelunknown' if level is None else level , self) for d in dates]
+        [insert_update_job(self , d) for d in dates]
         return self
 
     @classmethod
@@ -328,7 +326,14 @@ class StockFactorHierarchy:
         return df
     
     def jobs(self , as_df = True):
-        return pd.DataFrame(_FACTOR_UPDATE_JOBS , columns=['date' , 'level' , 'factor']) if as_df else _FACTOR_UPDATE_JOBS
+        if as_df:
+            return pd.DataFrame([(x.level , d , x) for x,d in _FACTOR_UPDATE_JOBS] , columns=['level' , 'date' , 'factor'])
+        else:
+            return _FACTOR_UPDATE_JOBS
+        
+    def clear_jobs(self):
+        _FACTOR_UPDATE_JOBS.clear()
+        return self
 
     def __repr__(self):
         str_level_factors = [','.join(f'{level}({len(factors)})' for level , factors in self.hier.items())]
@@ -419,13 +424,19 @@ class StockFactorHierarchy:
         return factor_values
     
     @classmethod
-    def update_jobs(cls , start : int = -1 , end : int = 99991231 , overwrite = False):
+    def update_jobs(cls , start : int = -1 , end : int = 99991231 , overwrite = False , **kwargs):
         '''
         update update jobs for all factors between start and end date
+        **kwargs:
+            factor_name : str | None = None
+            level : str | None = None 
+            file_name : str | None = None
+            category0 : str | None = None 
+            category1 : str | None = None 
         '''
-        obj = cls()
-        [factor_cls().update_jobs(start , end , overwrite , factor_cls.level) for factor_cls in obj]
-        return obj
+        self = cls()
+        [obj.update_jobs(start , end , overwrite) for obj in self.iter_instance(**kwargs)]
+        return self
     
     @staticmethod
     def Update(overwrite = False , show_progress = True , ignore_error = True):

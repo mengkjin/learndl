@@ -3,14 +3,13 @@ import numpy as np
 import pandas as pd
 
 from itertools import product
-from tqdm import tqdm
 from typing import Literal , Optional
 
-from .module_selector import get_predictor_module
-from ..module.nn import NNPredictor
+from ..module import NNPredictor , get_predictor_module
 from ...util import TrainConfig
 from ...data_module import DataModule
-from ....basic.util import ModelPath , HiddenPath
+
+from ....basic.util import ModelPath , HiddenPath , HID_MODELS
 
 class ModelHiddenExtractor:
     '''for a model to predict recent/history data'''
@@ -95,11 +94,22 @@ class ModelHiddenExtractor:
     
     @classmethod
     def update_hidden(
-        cls , model_name : str , model_nums : Optional[list | np.ndarray | int] = None , 
+        cls , model_name : str | None = None , model_nums : Optional[list | np.ndarray | int] = None , 
         model_submodels : Optional[list | np.ndarray | Literal['best' , 'swalast' , 'swabest']] = ['best'] , 
         update = True , overwrite = False):
+        if model_name is None:
+            assert model_nums is None , 'cannot assign model_nums when model_name is None'
 
-        extractor = cls(model_name , model_nums , model_submodels)
-        extractor.extract_hidden(update = update , overwrite = overwrite)
-        print('-' * 80)
-        return extractor
+            print(f'model_name is None, update all hidden models')
+            [print(f'  -->  {model}') for model in HID_MODELS]
+            
+            for model in HID_MODELS:
+                extractor = cls(model['name'] , model['nums'] , model['submodels'])
+                extractor.extract_hidden(update = update , overwrite = overwrite)
+                print('-' * 80)
+            return extractor
+        else:
+            extractor = cls(model_name , model_nums , model_submodels)
+            extractor.extract_hidden(update = update , overwrite = overwrite)
+            print('-' * 80)
+            return extractor

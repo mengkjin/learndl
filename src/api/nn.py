@@ -1,1 +1,2 @@
-from ..model.model_module import ModelTestor , ModelPredictor , ModelTrainer , ModelHiddenExtractor
+from src.model.model_module.application import ModelTestor , ModelPredictor , ModelTrainer , ModelHiddenExtractor
+

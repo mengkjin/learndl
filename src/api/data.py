@@ -4,6 +4,8 @@ from src.data import DataProcessor , DataUpdater , TushareTask , Baostock5minBar
 from src.basic import THIS_IS_SERVER
 from src.model.data_module.module import DataModule
 
+import src.model.data_module as data_module
+
 class DataAPI:
     @staticmethod
     def update(): 
@@ -35,7 +37,7 @@ class DataAPI:
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
-        DataModule.reconstruct_train_data(data_types)
+        data_module.application.reconstruct_train_data(data_types)
 
     @staticmethod
     def get_realistic_batch_data(model_data_type='day'):
@@ -47,4 +49,4 @@ class DataAPI:
         indus : stock_num x 1 x 35
         ...
         '''
-        return DataModule.get_realistic_batch_data(model_data_type)
+        return data_module.application.get_realistic_batch_data(model_data_type)

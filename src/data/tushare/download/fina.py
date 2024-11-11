@@ -1,4 +1,5 @@
-from ..basic import pro , code_to_secid , FinaFetcher
+from .abstract_fetcher import FinaFetcher
+from ..basic import pro , code_to_secid
 
 class FinaIndicator(FinaFetcher):
     '''financial indicators'''
@@ -37,6 +38,15 @@ class CashFlow(FinaFetcher):
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.cashflow_vip(period = str(date))
+        df = code_to_secid(df , 'ts_code' , retain=True)
+        return df
+
+class Dividend(FinaFetcher):
+    '''dividend'''
+    def db_src(self): return 'financial_ts'
+    def db_key(self): return 'dividend'
+    def get_data(self , date : int):
+        df = pro.dividend(end_date = str(date))
         df = code_to_secid(df , 'ts_code' , retain=True)
         return df
 

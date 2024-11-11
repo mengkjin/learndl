@@ -1258,3 +1258,13 @@
 7_test: Finish Process [Test], Cost 2.0 Secs
 8_result:
   0.best: Avg(0.2044)|Sum(7.16)|Std(0.0466)|T(25.93)|IR(21.4709)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Mon Nov 11 12:18:29 2024
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 37.4 Secs
+7_test: Finish Process [Test], Cost 2.7 Secs
+8_result:
+  0.best: Avg(0.1941)|Sum(6.79)|Std(0.0455)|T(25.26)|IR(20.9134)

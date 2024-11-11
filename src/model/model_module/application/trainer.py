@@ -1,4 +1,4 @@
-from .module_selector import get_predictor_module
+from ..module import get_predictor_module
 from ...callback import CallBackManager
 from ...data_module import DataModule
 from ...util.classes import BaseTrainer

@@ -7,7 +7,7 @@ from ....basic import PATH
 from ....func.time import today
 from ....func.singleton import singleton
 
-_calendar = pd.read_feather(PATH.get_target_path('information_ts' , 'calendar')).loc[:,['calendar' , 'trade']]
+_calendar = PATH.load_target_file('information_ts' , 'calendar').loc[:,['calendar' , 'trade']] # pd.read_feather(PATH.get_target_path('information_ts' , 'calendar')).loc[:,['calendar' , 'trade']]
 _trd = _calendar[_calendar['trade'] == 1].reset_index(drop=True)
 _trd['td'] = _trd['calendar']
 _trd['pre'] = _trd['calendar'].shift(1, fill_value=-1)
@@ -136,10 +136,10 @@ class TradeCalendar:
 
     @classmethod
     def td_start_end(cls , reference_date , period_num : int , 
-                     period_type : Literal['d','w','m','q','y'] = 'm' , 
+                     freq : Literal['d','w','m','q','y'] = 'm' , 
                      lag_num : int = 0):
         td = TradeDate(reference_date)
-        pdays = {'d':1 , 'w':7 , 'm':21 , 'q':63 , 'y':252}[period_type]
+        pdays = {'d':1 , 'w':7 , 'm':21 , 'q':63 , 'y':252}[freq]
         start_date = td - pdays * (period_num + lag_num) + 1
         end_date   = td - pdays * lag_num
         return start_date , end_date

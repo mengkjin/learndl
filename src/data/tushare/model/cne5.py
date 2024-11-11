@@ -278,7 +278,7 @@ class TuShareCNE5_Calculator:
     
     def calc_earnings_yield(self , date : int):
         cp = TSData.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')
-        cetop = TSData.FINA.get_ttm('ocfps' , date , 1)['ocfps'] / cp['close']
+        cetop = TSData.INDI.get_ttm('ocfps' , date , 1)['ocfps'] / cp['close']
         cetop = self.descriptor(cetop.fillna(0) , date , 'cetop' , 'median')
 
         etop  = 1 / TSData.TRADE.get_val(date , ['secid' , 'pe']).set_index('secid')['pe']
@@ -291,14 +291,14 @@ class TuShareCNE5_Calculator:
     def calc_growth(self , date : int):
 
         val = 'diluted2_eps'
-        df = TSData.FINA.get_acc(val , date , 6 , year_only=True).groupby('secid').tail(5).copy()
+        df = TSData.INDI.get_acc(val , date , 6 , year_only=True).groupby('secid').tail(5).copy()
         df = df.assign(idx = df.groupby('secid').cumcount()).pivot_table(val , 'idx' , 'secid')
         df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.values,df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
         egro = df[df['na'] <= 1].set_index('secid')['value']
         egro = self.descriptor(egro.fillna(0) , date , 'egro' , 'median')
 
         val = 'revenue_ps'
-        df = TSData.FINA.get_acc(val , date , 6 , year_only=True).groupby('secid').tail(5).copy()
+        df = TSData.INDI.get_acc(val , date , 6 , year_only=True).groupby('secid').tail(5).copy()
         df = df.assign(idx = df.groupby('secid').cumcount()).pivot_table(val , 'idx' , 'secid')
         df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.values,df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
         sgro = df[df['na'] <= 1].set_index('secid')['value']
@@ -310,15 +310,15 @@ class TuShareCNE5_Calculator:
     def calc_leverage(self , date : int):
 
         cp = TSData.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')
-        mlev = (TSData.FINA.get_acc('longdeb_to_debt' , date , 1)['longdeb_to_debt'].fillna(100) / 100 *
-            TSData.FINA.get_acc('debt_to_eqt' , date , 1)['debt_to_eqt'] / 100 *
-            TSData.FINA.get_acc('bps' , date , 1)['bps'] / cp['close'])
+        mlev = (TSData.INDI.get_acc('longdeb_to_debt' , date , 1)['longdeb_to_debt'].fillna(100) / 100 *
+            TSData.INDI.get_acc('debt_to_eqt' , date , 1)['debt_to_eqt'] / 100 *
+            TSData.INDI.get_acc('bps' , date , 1)['bps'] / cp['close'])
         mlev = self.descriptor(mlev , date , 'mlev' , 'median')
 
-        dtoa = TSData.FINA.get_acc('debt_to_assets' , date , 1)['debt_to_assets']
+        dtoa = TSData.INDI.get_acc('debt_to_assets' , date , 1)['debt_to_assets']
         dtoa = self.descriptor(dtoa , date , 'dtoa' , 'median')
 
-        blev = TSData.FINA.get_acc('assets_to_eqt' , date , 1)['assets_to_eqt']
+        blev = TSData.INDI.get_acc('assets_to_eqt' , date , 1)['assets_to_eqt']
         blev = self.descriptor(blev , date , 'blev' , 'median')
 
         v = 0.38 * mlev + 0.35 * dtoa + 0.27 * blev

@@ -1,59 +1,20 @@
 import numpy as np
 import pandas as pd
 
-from abc import ABC , abstractmethod
-
 from .calendar import CALENDAR
 from ..basic import TradeDate
 from ....basic import PATH , CONF
 from ....func.singleton import singleton
 
-class DateDataAccess(ABC):
-    MAX_LEN = -1
-    DATA_TYPE_LIST = []
-
-    def __init__(self) -> None:
-        self.data_dict : dict[str , dict[int , pd.DataFrame]] = {data_type : {} for data_type in self.DATA_TYPE_LIST}
-
-    def load_dates(self , dates , drop_old = True):
-        for data_type in self.DATA_TYPE_LIST:
-            for date in dates:  self.load(date , data_type , False)
-            self.len_control(data_type , drop_old)
-
-    def load(self, date : int | TradeDate , data_type : str , drop_old = False):
-        if data_type not in self.data_dict: raise KeyError(data_type)
-        self.loader_to_dict(date , data_type , overwrite = False)
-        self.len_control(data_type , drop_old)
-        return self.data_dict[data_type][int(date)]
-
-    def loader_to_dict(self , date : int | TradeDate , data_type : str , overwrite = False):
-        assert data_type in self.data_dict , f'{data_type} should be in {self.data_dict.keys()}'
-        if overwrite or int(date) not in self.data_dict[data_type]:
-            self.data_dict[data_type][int(date)] = self.loader_func(int(date) , data_type)
-
-    @abstractmethod
-    def loader_func(self , date , data_type : str) -> pd.DataFrame:
-        '''loader function should return a pd.DataFrame'''
-
-    def len_control(self , data_type : str , drop_old = False):
-        if drop_old and len(self.data_dict[data_type]) > self.MAX_LEN:
-            drop_keys = sorted(list(self.data_dict[data_type].keys()))[:-self.MAX_LEN]
-            [self.data_dict[data_type].__delitem__(key) for key in drop_keys]
-
-    def get_df(self , date: int | TradeDate , data_type : str , cols = None , drop_old = False):
-        df = self.load(date , data_type , drop_old)
-        if df is not None and cols is not None:  df = df.loc[:,cols]
-        return df
-
 @singleton
 class InfoDataAccess:
     def __init__(self) -> None:
-        self.desc = pd.read_feather(PATH.get_target_path('information_ts' , 'description'))
-        self.cname = pd.read_feather(PATH.get_target_path('information_ts' , 'change_name'))
+        self.desc = PATH.load_target_file('information_ts' , 'description') # pd.read_feather(PATH.get_target_path('information_ts' , 'description'))
+        self.cname = PATH.load_target_file('information_ts' , 'change_name') # pd.read_feather(PATH.get_target_path('information_ts' , 'change_name'))
         self.cname = self.cname[self.cname['secid'] >= 0].sort_values(['secid','ann_date','start_date'])
 
         self.indus_dict = pd.DataFrame(CONF.glob('tushare_indus'))
-        self.indus_data = pd.read_feather(PATH.get_target_path('information_ts' , 'industry'))
+        self.indus_data = PATH.load_target_file('information_ts' , 'industry') # pd.read_feather(PATH.get_target_path('information_ts' , 'industry'))
 
         self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values
         self.indus_data = self.indus_data.sort_values(['secid','in_date'])

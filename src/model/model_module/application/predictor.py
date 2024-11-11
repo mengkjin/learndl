@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import ClassVar , Optional
 
-from .module_selector import get_predictor_module
+from ..module import get_predictor_module
 from ...util import TrainConfig
 from ...data_module import DataModule
 from ....basic import PATH , SILENT , THIS_IS_SERVER

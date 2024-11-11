@@ -1,10 +1,6 @@
-import importlib.util
-import inspect
-
-from ..factor.classes import StockFactorHierarchy
-from ..factor.perf.api import PerfManager
-from ..factor.fmp.api import FmpManager
-from ..basic import PATH
+from src.factor.classes import StockFactorHierarchy
+from src.factor.perf.api import PerfManager
+from src.factor.fmp.api import FmpManager
 
 def perf_test():
     pm = PerfManager.random_test(nfactor=1)

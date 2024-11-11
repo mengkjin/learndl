@@ -3,14 +3,16 @@ import pandas as pd
 
 from typing import Any
 
-from ..basic import pro , code_to_secid , RollingFetcher
-    
+from .abstract_fetcher import RollingFetcher
+from ..basic import pro , code_to_secid
+
 class AnalystReport(RollingFetcher):
     '''analyst report'''
     START_DATE = 20100101
     ROLLING_DATE_COL = 'report_date'
     ROLLING_SEP_DAYS = 30
     ROLLING_BACK_DAYS = 30
+    
     def db_src(self): return 'analyst_ts'
     def db_key(self): return 'report'    
     def get_data(self , start_date , end_date):

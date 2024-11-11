@@ -4,11 +4,11 @@ import pandas as pd
 
 from typing import Any , Callable , Literal
 
-from .abstract_data_data import DateDataAccess
+from .abstract_access import DateDataAccess
 
 from .calendar import CALENDAR
 from .stock_info import INFO
-from ..basic.trade_date import TradeDate
+from ..basic import TradeDate
 from ....basic import PATH
 from ....func.singleton import singleton
     
@@ -27,11 +27,11 @@ class ModelDataAccess(DateDataAccess):
         if df is not None: df = df.reset_index().assign(date = date)
         return df
 
-    def get_res(self , date , cols = None , drop_old = False):
-        return self.get_df(date , 'res' , cols , drop_old)
+    def get_res(self , date , field = None , drop_old = False):
+        return self.get_df(date , 'res' , field , drop_old)
     
-    def get_exp(self , date , cols = None , drop_old = False):
-        return self.get_df(date , 'exp' , cols , drop_old)
+    def get_exp(self , date , field = None , drop_old = False):
+        return self.get_df(date , 'exp' , field , drop_old)
     
     def get_exret(self , start_dt : int | TradeDate , end_dt : int | TradeDate , 
                   mask = True , pivot = True):
