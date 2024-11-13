@@ -4,11 +4,11 @@ import pandas as pd
 
 from typing import Literal
 from datetime import datetime , timedelta
-from ...basic import PATH
-from ...func import date_diff , today
+from ....basic import PATH
+from ....func import date_diff , today
 
 START_DATE = 20241101
-BAO_PATH = PATH.data.joinpath('Baostock')
+BAO_PATH = PATH.miscel.joinpath('Baostock')
 
 final_path = BAO_PATH.joinpath(f'5min')
 secdf_path = BAO_PATH.joinpath('secdf')
@@ -49,7 +49,7 @@ def baostock_past_dates(file_type : Literal['secdf' , '5min']):
     return past_dates
     
 def updated_dates():
-    return PATH.get_target_dates('trade_ts' , '5min')
+    return PATH.db_dates('trade_ts' , '5min')
     return baostock_past_dates('5min')
 
 def updatable(date , last_date):
@@ -72,7 +72,7 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
     if pending_dt == end_date: pending_dt = -1
     for dt in [pending_dt , end_date]:
         last_dt = last_date(1)
-        if (updatable(dt , last_dt) or (end_date == dt)) and (dt >= last_dt):
+        if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
                 print(f'{last_dt} - {dt} failed')
@@ -117,7 +117,8 @@ def baostock_bar_5min(start_date : int , end_date : int , first_n : int = -1 , r
                 if isinstance(result , pd.DataFrame):
                     result.to_feather(tmp_file_path(start_date , end_date , code))
 
-                print(f'{i + 1}/{len(task_codes)} {start_date} - {end_date} : {code}...' , end = '\r')
+                if i % 100 == 0:
+                    print(f'{i + 1}/{len(task_codes)} {start_date} - {end_date} : {code}...' , end = '\r')
 
         except Exception as e:
             bs.logout()
@@ -137,7 +138,7 @@ def baostock_bar_5min(start_date : int , end_date : int , first_n : int = -1 , r
         df.to_feather(final_path.joinpath(f'5min_bar_{date}.feather'))
 
         df = baostock_5min_to_normal_5min(df)
-        PATH.save_df(df , PATH.get_target_path('trade_ts' , '5min' , date = date , makedir=True))
+        PATH.db_save(df , 'trade_ts' , '5min' , date = date , verbose = True)
     # del after : No!
     '''
     if first_n <= 0:

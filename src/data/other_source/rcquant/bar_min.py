@@ -6,11 +6,11 @@ from typing import Literal
 from datetime import datetime , timedelta
 
 from .license_uri import uri as rcquant_uri
-from ...basic import PATH
-from ...func import today
+from ....basic import PATH
+from ....func import today
 
 START_DATE = 20241101
-RC_PATH = PATH.data.joinpath('Rcquant')
+RC_PATH = PATH.miscel.joinpath('Rcquant')
 
 final_path = RC_PATH.joinpath(f'min')
 secdf_path = RC_PATH.joinpath('secdf')
@@ -39,7 +39,7 @@ def rcquant_past_dates(file_type : Literal['secdf' , 'min']):
     return past_dates
     
 def updated_dates():
-    return PATH.get_target_dates('trade_ts' , 'min')
+    return PATH.db_dates('trade_ts' , 'min')
     # return rcquant_past_dates('min')
 
 def last_date(offset : int = 0):
@@ -90,7 +90,7 @@ def rcquant_bar_min(date : int , first_n : int = -1):
         data.to_feather(final_path.joinpath(f'min_bar_{date}.feather'))
 
         df = rcquant_min_to_normal_min(data)
-        PATH.save_df(df , PATH.get_target_path('trade_ts' , 'min' , date = date , makedir = True))
+        PATH.db_save(df , 'trade_ts' , 'min' , date = date , verbose = True)
         return True
     else:
         return False

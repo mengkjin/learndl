@@ -26,27 +26,6 @@ _FACTOR_CATEGORY1_SET = {
     'alternative' : None
 }
 
-def factor_folder(factor_name : str): 
-    '''return the target folder of factor data'''
-    return PATH.factor.joinpath(factor_name)
-
-def factor_path(factor_name : str , date : int , mkdir = True): 
-    '''return the target path of factor data of a given date'''
-    path = factor_folder(factor_name).joinpath(f'{int(date) // 10000}/{factor_name}.{int(date)}.feather')
-    if mkdir: path.parent.mkdir(parents=True , exist_ok=True)
-    return path
-
-def factor_stored_dates(factor_name):
-    '''return a list of stored dates of factor given by factor_name'''
-    paths = PATH.list_files(factor_folder(factor_name) , recur=True)
-    dates = np.array(sorted(PATH.R_path_date(paths)) , dtype=int)
-    return dates
-
-def factor_filter(cls : Type['StockFactorCalculator'] , **kwargs):
-    '''filter factor by given attributes'''
-    conditions = [getattr(cls , k) == v for k , v in kwargs.items() if v is not None]
-    return not conditions or all(conditions)
-
 def insert_update_job(obj : 'StockFactorCalculator' , date : int):
     '''insert a update job to _FACTOR_UPDATE_JOBS'''
     _FACTOR_UPDATE_JOBS.append((obj , date))
@@ -167,24 +146,13 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         return self.factors[date]
 
     @property
-    def factor_folder(self): 
-        '''
-        return the target folder of factor data
-        '''
-        return factor_folder(self.factor_name)
-
-    @property
     def stored_dates(self): 
         '''
         return list of stored dates of factor data
         '''
-        return factor_stored_dates(self.factor_name)
-    
-    def factor_path(self , date : int | Any):
-        '''
-        return the target path of factor data of a given date
-        '''
-        return factor_path(self.factor_name , date , mkdir = True)
+        paths = PATH.list_files(PATH.factor.joinpath(self.factor_name) , recur=True)
+        dates = np.array(sorted(PATH.file_dates(paths)) , dtype=int)
+        return dates
     
     def factor_values(self):
         '''
@@ -226,14 +194,12 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         dates = list(self.factors.keys())
         for date in dates:
             df = self.factors.pop(date)
-            path = self.factor_path(date)
-            if path.exists() and not overwrite: 
-                if show_progress: print(f'Factor : {self.factor_name} at date {date} already there')
-                continue
             try:
                 self.validate_value(date , df , strict = strict)
-                df.to_feather(self.factor_path(date))
-                if show_progress: print(f'Factor : {self.factor_name} at date {date} deploy successful')
+                saved = PATH.factor_save(df , self.factor_name , date , overwrite)
+                if show_progress:
+                    if saved: print(f'Factor : {self.factor_name} at date {date} deploy successful')
+                    else: print(f'Factor : {self.factor_name} at date {date} already there')
             except ValueError as e:
                 print(f'Factor : {self.factor_name} at date {date} is invalid: {e}')
 
@@ -251,11 +217,7 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
                 return None
         else:
             if int(date) in self.factors and factor_name is None: return self.factors[int(date)]
-            path = factor_path(factor_name , date , False)
-            if path.exists():
-                return pd.read_feather(path)
-            else:
-                return None
+            return PATH.factor_load(factor_name , date)
     
     def update_jobs(self , start : int = -1 , end : int = 99991231 , overwrite = False):
         dates = TSData.CALENDAR.td_within(max(start , self.init_date) , end)
@@ -321,7 +283,7 @@ class StockFactorHierarchy:
         category1 : str | None = None 
         '''
         attr_list = ['level' , 'file_name' , 'factor_name' , 'init_date' , 'category0' , 'category1' , 'description']
-        df_dict = [[getattr(cls , a) for a in attr_list] for cls in self if factor_filter(cls , **kwargs)]
+        df_dict = [[getattr(cls , a) for a in attr_list] for cls in self if self.factor_filter(cls , **kwargs)]
         df = pd.DataFrame(df_dict, columns=attr_list)
         return df
     
@@ -372,7 +334,7 @@ class StockFactorHierarchy:
         category0 : str | None = None 
         category1 : str | None = None 
         '''
-        return (cls() for cls in self if factor_filter(cls , **kwargs))
+        return (cls() for cls in self if self.factor_filter(cls , **kwargs))
     
     def __getitem__(self , key : str):
         '''
@@ -444,3 +406,9 @@ class StockFactorHierarchy:
         update factor data according to update jobs
         '''
         perform_update_jobs(overwrite , show_progress , ignore_error)
+
+    @staticmethod
+    def factor_filter(stock_factor_cls : Type['StockFactorCalculator'] , **kwargs):
+        '''filter factor by given attributes'''
+        conditions = [getattr(stock_factor_cls , k) == v for k , v in kwargs.items() if v is not None]
+        return not conditions or all(conditions)

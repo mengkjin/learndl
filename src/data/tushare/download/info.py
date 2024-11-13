@@ -7,8 +7,8 @@ from .abstract_fetcher import InfoFetcher
 from ..basic import pro , code_to_secid
  
 class Calendar(InfoFetcher):
-    def db_src(self): return 'information_ts'
-    def db_key(self): return 'calendar'
+    DB_KEY = 'calendar'
+
     def get_data(self , date):
         renamer = {'cal_date' : 'calendar' ,
                    'is_open'  : 'trade'}
@@ -27,8 +27,7 @@ class Calendar(InfoFetcher):
         return trd
     
 class Description(InfoFetcher):
-    def db_src(self): return 'information_ts'
-    def db_key(self): return 'description'
+    DB_KEY = 'description'
     def get_data(self , date):
         renamer = {
             'ts_code' : 'ts_code' ,
@@ -52,8 +51,7 @@ class Description(InfoFetcher):
         return df
     
 class SWIndustry(InfoFetcher):
-    def db_src(self): return 'information_ts'
-    def db_key(self): return 'industry'    
+    DB_KEY = 'industry' 
     def get_data(self , date):
 
         df1 = self.iterate_fetch(pro.index_member_all , limit = 2000 , is_new = 'Y')
@@ -67,8 +65,7 @@ class SWIndustry(InfoFetcher):
         return df
     
 class ChangeName(InfoFetcher):
-    def db_src(self): return 'information_ts'
-    def db_key(self): return 'change_name'    
+    DB_KEY = 'change_name'      
     def get_data(self , date):
 
         df = self.iterate_fetch(pro.namechange , limit = 5000)

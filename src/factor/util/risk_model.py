@@ -124,10 +124,10 @@ class RiskModel(GeneralModel):
     def __init__(self) -> None:
         self.models : dict[int,Rmodel] = {}
         self.name = 'cne5'
-        self.riskmodel_available_dates = DATAVENDOR.file_dates('models' , 'risk_exp')
-        self.F_loader = BlockLoader('models' , 'risk_exp')
-        self.C_loader = FrameLoader('models' , 'risk_cov')
-        self.S_loader = BlockLoader('models' , 'risk_spec')
+        self.riskmodel_available_dates = DATAVENDOR.file_dates('models' , 'tushare_cne5_exp')
+        self.F_loader = BlockLoader('models' , 'tushare_cne5_exp')
+        self.C_loader = FrameLoader('models' , 'tushare_cne5_cov')
+        self.S_loader = BlockLoader('models' , 'tushare_cne5_spec')
     def append(self , model : Rmodel , override = False):
         return super().append(model , override)
     def available_dates(self): return self.riskmodel_available_dates

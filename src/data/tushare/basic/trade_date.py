@@ -7,21 +7,27 @@ from ....basic import PATH
 from ....func.time import today
 from ....func.singleton import singleton
 
-_calendar = PATH.load_target_file('information_ts' , 'calendar').loc[:,['calendar' , 'trade']] # pd.read_feather(PATH.get_target_path('information_ts' , 'calendar')).loc[:,['calendar' , 'trade']]
-_trd = _calendar[_calendar['trade'] == 1].reset_index(drop=True)
-_trd['td'] = _trd['calendar']
-_trd['pre'] = _trd['calendar'].shift(1, fill_value=-1)
-_calendar = _calendar.merge(_trd.drop(columns='trade') , on = 'calendar' , how = 'left').ffill()
-_calendar['cd_index'] = np.arange(len(_calendar))
-_calendar['td_index'] = _calendar['trade'].cumsum() - 1
-_calendar = _calendar.astype(int).set_index('calendar')
-_cal_cal = _calendar.reset_index().set_index('cd_index')
-_cal_trd = _calendar[_calendar['trade'] == 1].reset_index().set_index('td_index')
+def load_calendar():
+    calendar = PATH.db_load('information_ts' , 'calendar').loc[:,['calendar' , 'trade']]
+    trd = calendar[calendar['trade'] == 1].reset_index(drop=True)
+    trd['td'] = trd['calendar']
+    trd['pre'] = trd['calendar'].shift(1, fill_value=-1)
+    calendar = calendar.merge(trd.drop(columns='trade') , on = 'calendar' , how = 'left').ffill()
+    calendar['cd_index'] = np.arange(len(calendar))
+    calendar['td_index'] = calendar['trade'].cumsum() - 1
+    calendar['td_forward_index'] = calendar['td_index'] + 1 - calendar['trade']
+    calendar['td_forward'] = trd.iloc[calendar['td_forward_index'].clip(upper = len(trd) - 1).to_numpy()]['calendar'].values
+    calendar = calendar.astype(int).set_index('calendar')
+    cal_cal = calendar.reset_index().set_index('cd_index')
+    cal_trd = calendar[calendar['trade'] == 1].reset_index().set_index('td_index')
+    return calendar , cal_cal , cal_trd
+
+_CALENDAR , _CALENDAR_CAL , _CALENDAR_TRD = load_calendar()
 
 class TradeDate:
     def __init__(self , date : int | Any , force_trade_date = False):
         self.calendar_date = int(date)
-        self.trade_date : int = self.calendar_date if force_trade_date else _calendar['td'].loc[self.calendar_date]
+        self.trade_date : int = self.calendar_date if force_trade_date else _CALENDAR['td'].loc[self.calendar_date]
 
     def __repr__(self):
         return str(self.trade_date)
@@ -58,9 +64,9 @@ class TradeDate:
 
     def offset(self , n : int):
         if n == 0: return self
-        d_index = _calendar['td_index'].loc[self.trade_date] + n
-        d_index = np.maximum(np.minimum(d_index , len(_calendar) - 1) , 0)
-        return self.__class__(_calendar[_calendar['td_index'] == d_index]['td'].iloc[0] , force_trade_date = True) 
+        d_index = _CALENDAR['td_index'].loc[self.trade_date] + n
+        d_index = np.maximum(np.minimum(d_index , len(_CALENDAR) - 1) , 0)
+        return self.__class__(_CALENDAR[_CALENDAR['td_index'] == d_index]['td'].iloc[0] , force_trade_date = True) 
 
     @staticmethod
     def as_numpy(td):
@@ -75,19 +81,25 @@ class TradeCalendar:
 
     @property
     def calendar(self):
-        return _calendar
+        return _CALENDAR
     
     @property
     def cal_cal(self):
-        return _cal_cal
+        return _CALENDAR_CAL
     
     @property
     def cal_trd(self):
-        return _cal_trd
+        return _CALENDAR_TRD
 
     @property
     def today(self):
         return today()
+    
+    @staticmethod
+    def date_convert(date):
+        if isinstance(date , TradeDate): date = int(date)
+        elif isinstance(date , pd.Series): date = date.to_numpy().astype(int).tolist()
+        return date
     
     @classmethod
     def td(cls , date : int | TradeDate , offset : int = 0):
@@ -95,44 +107,48 @@ class TradeCalendar:
         
     @classmethod
     def tds(cls , date):
-        return TradeDate.as_numpy(_calendar.loc[date , 'td'])
+        return TradeDate.as_numpy(_CALENDAR.loc[cls.date_convert(date) , 'td'])
+    
+    @classmethod
+    def tds_forward(cls , date):
+        return TradeDate.as_numpy(_CALENDAR.loc[cls.date_convert(date) , 'td_forward'])
     
     @classmethod
     def previous(cls , date):
-        return TradeDate.as_numpy(_calendar.loc[date , 'pre'])
+        return TradeDate.as_numpy(_CALENDAR.loc[cls.date_convert(date) , 'pre'])
     
     @classmethod
     def offset(cls , date , n : Any = 0 , type : Literal['t' , 'c'] = 't'):
         if type == 't':
-            d_index = _calendar.loc[date , 'td_index'] + n
-            d_index = np.maximum(np.minimum(d_index , len(_cal_trd) - 1) , 0)
-            td = _cal_trd.loc[d_index , 'calendar']
+            d_index = _CALENDAR.loc[cls.date_convert(date) , 'td_index'] + n
+            d_index = np.maximum(np.minimum(d_index , len(_CALENDAR_TRD) - 1) , 0)
+            td = _CALENDAR_TRD.loc[d_index , 'calendar']
         else:
-            d_index = _calendar.loc[date , 'cd_index'] + n
-            d_index = np.maximum(np.minimum(d_index , len(_cal_cal) - 1) , 0)
-            td = _cal_cal.loc[d_index , 'calendar']
+            d_index = _CALENDAR.loc[cls.date_convert(date) , 'cd_index'] + n
+            d_index = np.maximum(np.minimum(d_index , len(_CALENDAR_CAL) - 1) , 0)
+            td = _CALENDAR_CAL.loc[d_index , 'calendar']
         return TradeDate.as_numpy(td)
     
     @classmethod
     def trailing(cls , date , n : int , type : Literal['t' , 'c'] = 't' , ):
         if type == 't':
-            td = _cal_trd[_cal_trd['calendar'] <= date]
+            td = _CALENDAR_TRD[_CALENDAR_TRD['calendar'] <= date]
         else:
-            td = _cal_cal[_cal_cal['calendar'] <= date]
+            td = _CALENDAR_CAL[_CALENDAR_CAL['calendar'] <= date]
         return np.sort(td[-n:]['calendar'].to_numpy())
     
     @classmethod
     def td_within(cls , start_dt : int | TradeDate = -1 , end_dt : int | TradeDate = 99991231 , step : int = 1 , until_today = True):
         start_dt , end_dt = int(start_dt) , int(end_dt)
-        dates = _cal_trd['calendar'].to_numpy()
+        dates = _CALENDAR_TRD['calendar'].to_numpy()
         if until_today: end_dt = min(end_dt , today())
         return dates[(dates >= start_dt) & (dates <= end_dt)][::step]
     
     @classmethod
-    def calendar_start(cls): return _calendar.index.min()
+    def calendar_start(cls): return _CALENDAR.index.min()
 
     @classmethod
-    def calendar_end(cls): return _calendar.index.max()
+    def calendar_end(cls): return _CALENDAR.index.max()
 
     @classmethod
     def td_start_end(cls , reference_date , period_num : int , 
@@ -146,4 +162,4 @@ class TradeCalendar:
     
     @classmethod
     def is_trade_date(cls , date : int | TradeDate):
-        return _calendar.loc[int(date) , 'trade'] == 1
+        return _CALENDAR.loc[int(date) , 'trade'] == 1

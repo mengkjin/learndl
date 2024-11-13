@@ -19,9 +19,9 @@ class ModelDataAccess(DateDataAccess):
     
     def loader_func(self , date , data_type):
         if data_type == 'res': 
-            df = PATH.load_target_file('models' , 'tushare_cne5_res' , date)
+            df = PATH.db_load('models' , 'tushare_cne5_res' , date)
         elif data_type == 'exp': 
-            df = PATH.load_target_file('models' , 'tushare_cne5_exp' , date)
+            df = PATH.db_load('models' , 'tushare_cne5_exp' , date)
         else:
             raise KeyError(data_type)
         if df is not None: df = df.reset_index().assign(date = date)

@@ -173,11 +173,12 @@ class ModelFile:
 class RegisteredModel(ModelPath):
     def __init__(self, name: str , submodel : Literal['best' , 'swalast' , 'swabest'] = 'best' ,
                  num  : int | list[int] | range | Literal['all'] = 0 , 
-                 alias : Optional[str] = None) -> None:
+                 alias : Optional[str] = None , start_dt = -1) -> None:
         super().__init__(name)
         self.submodel = submodel
         self.num = num
         self.alias = alias
         self.model_path = ModelPath(self.name)
+        self.start_dt = start_dt
 
     def __repr__(self) -> str:  return f'{self.__class__.__name__}(name={self.name},type={self.submodel},num={str(self.num)},alias={str(self.alias)})'

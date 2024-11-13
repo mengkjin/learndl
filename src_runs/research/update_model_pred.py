@@ -1,5 +1,5 @@
 import sys , pathlib
-if (path := str(pathlib.Path(__file__).parent.parent)) not in sys.path:
+if (path := str(pathlib.Path(__file__).parent.parent.parent)) not in sys.path:
     sys.path.append(path)
 
 from src.api import DataAPI , ModelTrainer , ModelPredictor , ModelHiddenExtractor

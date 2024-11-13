@@ -233,7 +233,7 @@ class Benchmark(Portfolio):
 
     def available_dates(self): return self.benchmark_available_dates
 
-    def get(self , date : int , latest = False):
+    def get(self , date : int , latest = True):
 
         port = self.ports.get(date , None)
 

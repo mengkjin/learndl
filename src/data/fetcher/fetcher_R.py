@@ -277,7 +277,7 @@ class RFetcher:
 
         _files = {k:PATH.list_files(v) for k , v in path_param.items()}
         for v in _files.values(): v.sort()
-        _dates = {k:PATH.R_path_date(v) for k , v in _files.items()}
+        _dates = {k:PATH.file_dates(v) for k , v in _files.items()}
 
         pos = list(_dates['id']).index(date)
         if pos + lag1 + days >= len(_dates['id']):  return None

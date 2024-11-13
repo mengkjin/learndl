@@ -1,7 +1,9 @@
 from typing import Optional
 
-from src.data import DataProcessor , DataUpdater , TushareTask , Baostock5minBarDownloader , RcquantMinBarDownloader
+from src.data import (DataProcessor , DataUpdater , TushareDownloader , Baostock5minBarDownloader , RcquantMinBarDownloader ,
+                      ClassicLabelsUpdater)
 from src.basic import THIS_IS_SERVER
+from src.factor.model import FactorModelUpdater
 from src.model.data_module.module import DataModule
 
 import src.model.data_module as data_module
@@ -19,9 +21,13 @@ class DataAPI:
         else:
             DataUpdater.update_laptop()
         print('-' * 80)
-        TushareTask.proceed()
+        TushareDownloader.proceed()
         RcquantMinBarDownloader.proceed()
         Baostock5minBarDownloader.proceed()
+        print('-' * 80)
+        FactorModelUpdater.proceed()
+        print('-' * 80)
+        ClassicLabelsUpdater.proceed()
         print('-' * 80)
         
     @staticmethod

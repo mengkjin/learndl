@@ -108,7 +108,7 @@ def select_processor(key : str) -> _TypeProcessor:
 class procY(_TypeProcessor):
     def block_loaders(self):
         return {'y' : BlockLoader('labels', ['ret10_lag', 'ret20_lag']) ,
-                'risk' : BlockLoader('models', 'risk_exp', [*CONF.RISK_INDUS, 'size'])}
+                'risk' : BlockLoader('models', 'tushare_cne5_exp', [*CONF.RISK_INDUS, 'size'])}
     def final_feat(self): return None
     def process(self , blocks : dict[str,DataBlock]): 
         data_block , model_exp = blocks['y'] , blocks['risk']
@@ -209,12 +209,12 @@ class procWeek(_TypeProcessor):
     
 class procStyle(_TypeProcessor):
     def block_loaders(self): 
-        return {'style' : BlockLoader('models', 'risk_exp', CONF.RISK_STYLE)}
+        return {'style' : BlockLoader('models', 'tushare_cne5_exp', CONF.RISK_STYLE)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['style']
 
 class procIndus(_TypeProcessor):
     def block_loaders(self): 
-        return {'indus' : BlockLoader('models', 'risk_exp', CONF.RISK_INDUS)}
+        return {'indus' : BlockLoader('models', 'tushare_cne5_exp', CONF.RISK_INDUS)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['indus']

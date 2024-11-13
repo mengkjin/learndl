@@ -1,23 +1,31 @@
-import os , shutil , sys , yaml
+import os , shutil , sys , yaml , socket , torch
 from pathlib import Path
 
-MAIN_PATH = [parent for parent in list(Path(__file__).parents) if parent.match('./src/')][-1].parent
-FACTOR_DESTINATION_LAPTOP = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
-FACTOR_DESTINATION_SERVER = MAIN_PATH.joinpath('results' , 'Alpha')
-
-main = MAIN_PATH
+# variables
+THIS_IS_SERVER  = torch.cuda.is_available() and socket.gethostname() == 'mengkjin-server'
+main = Path('D:/Coding/learndl/learndl') if not THIS_IS_SERVER else Path('home/mengkjin/Workspace/learndl')
 sys.path.append(str(main))
 
+FACTOR_DESTINATION_LAPTOP = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
+FACTOR_DESTINATION_SERVER = None # MAIN_PATH.joinpath('results' , 'Alpha')
+
 data        = main.joinpath('data')
-batch       = data.joinpath('MiniBatch')
-block       = data.joinpath('DataBlock')
 database    = data.joinpath('DataBase')
-dataset     = data.joinpath('DataSet')
-norm        = data.joinpath('HistNorm')
-tree        = data.joinpath('TreeData')
+
+interim     = data.joinpath('Interim')
+block       = interim.joinpath('DataBlock')
+batch       = interim.joinpath('MiniBatch')
+dataset     = interim.joinpath('DataSet')
+norm        = interim.joinpath('HistNorm')
+
 updater     = data.joinpath('Updater')
-hidden      = data.joinpath('models_hidden_feature')
-factor      = data.joinpath('stock_factor')
+
+export      = data.joinpath('Export')
+hidden      = export.joinpath('hidden_feature')
+factor      = export.joinpath('stock_factor')
+preds       = export.joinpath('model_prediction')
+
+miscel      = data.joinpath('Miscellaneous')
 
 conf        = main.joinpath('configs')
 logs        = main.joinpath('logs')

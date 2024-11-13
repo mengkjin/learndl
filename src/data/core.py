@@ -8,6 +8,7 @@ from torch import Tensor
 from typing import Any , ClassVar , Literal , Optional
 
 from .classes import Stock4DData
+from .tushare import TSData
 from ..basic import PATH , SILENT
 from ..basic.util import Timer
 from ..func import index_union , index_intersect , forward_fillna
@@ -126,16 +127,15 @@ class DataBlock(Stock4DData):
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , 
                 parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
-        dates = PATH.get_target_dates(db_src , db_key , start_dt=start_dt , end_dt=end_dt)
-        dfs = PATH.load_target_file_dates(db_src , db_key , dates , parallel = parallel, max_workers=max_workers)
+        dates = PATH.db_dates(db_src , db_key , start_dt=start_dt , end_dt=end_dt)
+        dfs = PATH.db_load_multi(db_src , db_key , dates , parallel = parallel, max_workers=max_workers)
         dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None and not df.empty]
         df  = pd.concat(dfs) if len(dfs) else pd.DataFrame()
         if len(df) == 0: return cls()
-
+        df = df.reset_index(drop = (len(df.index.names) == 0))
         use_index = [f for f in cls.DEFAULT_INDEX if f in df.columns]
         assert len(use_index) <= 3 , use_index
         if feature is not None:  df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
-
         return cls.from_dataframe(df.set_index(use_index))
     
     @property
@@ -193,8 +193,7 @@ class DataBlock(Stock4DData):
         if not mask : return self
         mask_pos = np.full(self.shape , fill_value=False , dtype=bool)
         if mask_list_dt := mask.get('list_dt'):
-            desc = PATH.load_target_file('information' , 'description')
-            assert desc is not None
+            desc = TSData.INFO.get_desc(set_index=False)
             desc = desc[desc['secid'] > 0].loc[:,['secid','list_dt','delist_dt']]
             if len(np.setdiff1d(self.secid , desc['secid'])) > 0:
                 add_df = pd.DataFrame({

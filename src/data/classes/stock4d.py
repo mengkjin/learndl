@@ -37,8 +37,8 @@ class Stock4DData:
 
     def asserted(self):
         if self.shape:
-            assert self.ndim == 4
-            assert isinstance(self.values , (np.ndarray , Tensor))
+            assert isinstance(self.values , (np.ndarray , Tensor)) , self.values
+            assert self.ndim == 4 , self.shape
             assert self.shape[0] == len(self.secid) 
             assert self.shape[1] == len(self.date)
             assert self.shape[3] == len(self.feature)
@@ -207,7 +207,16 @@ class Stock4DData:
     @classmethod
     def from_dataframe(cls , df : pd.DataFrame):
         xarr = NdData.from_xarray(xr.Dataset.from_dataframe(df))
-        return cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
+        try:
+            value = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
+        except:
+            import src
+            setattr(src , 'xarr' , xarr)
+            print(xarr)
+            raise
+        return value
+
+        # return cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
     
     def to_dataframe(self , drop_inday = True):
         df_dict = {}

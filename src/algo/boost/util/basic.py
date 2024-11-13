@@ -192,7 +192,7 @@ class BasicBoosterModel(ABC):
     def use_gpu(self): return self.cuda and torch.cuda.is_available()
 
 def load_xingye_data():
-    factor_data = pd.read_feather(f'{PATH.data}/TreeData/CombStdByZXMkt_All_TrainLabel.feather') # 训练集，带Label
+    factor_data = pd.read_feather(f'{PATH.miscel}/CombStdByZXMkt_All_TrainLabel.feather') # 训练集，带Label
     factor_data['date'] = factor_data['date'].astype(str).str.replace('-','').astype(int)
     v = factor_data['StockID'].astype(str).str.slice(0, 6).replace({'T00018' : '600018'})
     v = v.where(v.str.isdigit() , '-1').astype(int)

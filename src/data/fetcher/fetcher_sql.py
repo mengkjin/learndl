@@ -133,9 +133,10 @@ class SQLFetcher:
 
             end_dt = min(end_dt , int(date.today().strftime('%Y%m%d')))
             date_intervals = self.date_seg(start_dt , end_dt)
-
+        if not date_intervals: return 
+        
         print(f'{time.ctime()} : {self.DB_SRC}/{self.db_key} from ' + 
-              f'{date_intervals[0][0]} to {date_intervals[-1][1]}, total {len(date_intervals)} periods')
+            f'{date_intervals[0][0]} to {date_intervals[-1][1]}, total {len(date_intervals)} periods')
 
         if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang':
             connection.stay_connect = True
@@ -189,7 +190,7 @@ class SQLFetcher:
         return df
 
     def get_target_dates(self):
-        return PATH.get_target_dates(self.DB_SRC , self.db_key)
+        return PATH.db_dates(self.DB_SRC , self.db_key)
 
     def save_data(self , data):
         if len(data) == 0: return
@@ -197,8 +198,7 @@ class SQLFetcher:
         for d in data.index.unique():
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: continue
-            target_path = PATH.get_target_path(self.DB_SRC , self.db_key , d , True , force_type='date')
-            PATH.save_df(data_at_d , target_path)
+            PATH.db_save(data_at_d , self.DB_SRC , self.db_key , d , force_type='date')
 
     @classmethod
     def convert_id(cls , x):
@@ -267,6 +267,7 @@ class SQLFetcher:
 
     @classmethod
     def date_seg(cls , start_dt , end_dt , astype = int):
+        if start_dt >= end_dt: return []
         dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=cls.FREQ).strftime('%Y%m%d').astype(int)
         dt_starts = [cls.date_offset(start_dt) , *cls.date_offset(dt_list[:-1],1)]
         dt_ends = [*dt_list[:-1] , cls.date_offset(end_dt)]
@@ -274,6 +275,7 @@ class SQLFetcher:
     
     @classmethod
     def date_between(cls , start_dt , end_dt , astype = int):
+        if start_dt >= end_dt: return []
         dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=cls.FREQ).strftime('%Y%m%d').astype(int)
         return dt_list.values
     

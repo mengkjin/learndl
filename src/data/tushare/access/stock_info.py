@@ -9,24 +9,30 @@ from ....func.singleton import singleton
 @singleton
 class InfoDataAccess:
     def __init__(self) -> None:
-        self.desc = PATH.load_target_file('information_ts' , 'description') # pd.read_feather(PATH.get_target_path('information_ts' , 'description'))
-        self.cname = PATH.load_target_file('information_ts' , 'change_name') # pd.read_feather(PATH.get_target_path('information_ts' , 'change_name'))
-        self.cname = self.cname[self.cname['secid'] >= 0].sort_values(['secid','ann_date','start_date'])
+        self.desc = PATH.db_load('information_ts' , 'description') 
+        self.cname = PATH.db_load('information_ts' , 'change_name') 
+        self.cname = self.cname[self.cname['secid'] >= 0].sort_values(['secid','ann_date','start_date']).rename(columns={'ann_date':'ann_dt'})
 
         self.indus_dict = pd.DataFrame(CONF.glob('tushare_indus'))
-        self.indus_data = PATH.load_target_file('information_ts' , 'industry') # pd.read_feather(PATH.get_target_path('information_ts' , 'industry'))
+        self.indus_data = PATH.db_load('information_ts' , 'industry') 
 
         self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values
         self.indus_data = self.indus_data.sort_values(['secid','in_date'])
 
-    def get_desc(self , date : int | TradeDate | None = None):
+    def get_desc(self , date : int | TradeDate | None = None , set_index : bool = True):
         if date is None: 
             new_desc = self.desc.copy()
         else:
             new_desc = self.desc[(self.desc['list_dt'] <= int(date)) & (self.desc['delist_dt'] > int(date))].copy()
         new_desc['list_dt'] = np.maximum(new_desc['list_dt'] , CALENDAR.calendar_start())
-        new_desc = new_desc.set_index('secid')
+        if set_index: new_desc = new_desc.set_index('secid')
         return new_desc
+    
+    def get_st(self , date : int | TradeDate | None = None , reason = ['终止上市', '暂停上市' , 'ST', '*ST']):
+        new_cname = self.cname[self.cname['change_reason'].isin(reason)]
+        if date is not None: 
+            new_cname = self.cname[self.cname['start_date'] <= date].copy().drop_duplicates('secid' , keep = 'last')
+        return new_cname.loc[:,['secid','entry_dt','remove_dt','ann_dt']]
     
     def get_list_dt(self , date : int | TradeDate | None = None , offset = 0):
         desc = self.get_desc(date)

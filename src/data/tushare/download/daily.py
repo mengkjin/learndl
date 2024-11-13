@@ -6,8 +6,7 @@ from ..basic import pro , code_to_secid
 
 class DailyQuote(DateFetcher):
     '''Daily Quote'''
-    def db_src(self): return 'trade_ts'
-    def db_key(self): return 'day'    
+    DB_KEY = 'day'
     def get_data(self , date : int):
         date_str = str(date)
         adj = pro.query('adj_factor',  trade_date=date_str).rename(columns={'adj_factor':'adjfactor'})
@@ -47,8 +46,7 @@ class DailyQuote(DateFetcher):
     
 class DailyValuation(DateFetcher):
     '''Daily Valuation'''
-    def db_src(self): return 'trade_ts'
-    def db_key(self): return 'day_val'    
+    DB_KEY = 'day_val'   
     def get_data(self , date : int):
         val = code_to_secid(pro.daily_basic(trade_date=str(date)))
         val.loc[:,['total_share','float_share','free_share','total_mv','circ_mv']] *= 1e4
@@ -59,8 +57,7 @@ class DailyValuation(DateFetcher):
 class DailyMoneyFlow(DateFetcher):
     '''Daily Money Flow'''
     START_DATE = 20100101
-    def db_src(self): return 'trade_ts'
-    def db_key(self): return 'day_moneyflow'    
+    DB_KEY = 'day_moneyflow'  
     def get_data(self , date : int):
         mf = code_to_secid(pro.moneyflow(trade_date=str(date)))
         mf = code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
@@ -69,8 +66,7 @@ class DailyMoneyFlow(DateFetcher):
 class DailyLimit(DateFetcher):
     '''Daily Price Limit Infomation'''
     START_DATE = 20070101
-    def db_src(self): return 'trade_ts'
-    def db_key(self): return 'day_limit'    
+    DB_KEY = 'day_limit'       
     def get_data(self , date : int):
         lmt = code_to_secid(pro.stk_limit(trade_date=str(date)))
         lmt = code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')

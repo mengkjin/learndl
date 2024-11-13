@@ -3,10 +3,9 @@ import pandas as pd
 import statsmodels.api as sm
 from typing import Any , Literal , Optional
 
-from .. import access as TSData
-from ....basic import PATH , CONF
-from ....func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
-from ....func.singleton import singleton
+from ...data.tushare import access as TSData
+from ...basic import PATH , CONF
+from ...func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
 
 def parse_ts_input(
     ts : pd.DataFrame , 
@@ -93,7 +92,7 @@ class TuShareCNE5_Calculator:
     def get_exposure(self , date : int , read = False):
         df = self.exposure.get(date)
         if df is None and read: 
-            df = PATH.load_target_file('models' , 'tushare_cne5_exp' , date)
+            df = PATH.db_load('models' , 'tushare_cne5_exp' , date)
             self.exposure.add(df , date)
         if df is None: 
             df = pd.concat([self.get_estuniv(date).loc[:,['estuniv','weight']] , self.get_industry(date) , 
@@ -117,7 +116,7 @@ class TuShareCNE5_Calculator:
     def get_coef(self , date : int , read = False):
         coef = self.coef.get(date)
         if coef is None and read: 
-            coef = PATH.load_target_file('models' , 'tushare_cne5_coef' , date)
+            coef = PATH.db_load('models' , 'tushare_cne5_coef' , date)
             self.coef.add(coef , date)
         if coef is None: 
             coef , resid = self.calc_model(date)
@@ -126,7 +125,7 @@ class TuShareCNE5_Calculator:
     def get_resid(self , date : int , read = False):
         resid = self.resid.get(date)
         if resid is None and read: 
-            resid = PATH.load_target_file('models' , 'tushare_cne5_res' , date)
+            resid = PATH.db_load('models' , 'tushare_cne5_res' , date)
             self.resid.add(resid , date)
         if resid is None: 
             coef , resid = self.calc_model(date)
@@ -388,13 +387,12 @@ class TuShareCNE5_Calculator:
         if end  : dates = dates[dates <= end]
         for date in dates: 
             self.update_date(date , job)
-            print(f'Finish {job} update at date {date}')
         return self
         
     def updatable_dates(self , job : Literal['exposure' , 'risk']):
         dates = TSData.CALENDAR.cal_trd['calendar'].to_numpy()
-        end_date = np.min([PATH.get_target_dates('trade_ts' , 'day').max(),
-                           PATH.get_target_dates('trade_ts' , 'day_val').max()])
+        end_date = np.min([PATH.db_dates('trade_ts' , 'day').max(),
+                           PATH.db_dates('trade_ts' , 'day_val').max()])
         dates = dates[(dates > self.START_DATE) & (dates <= end_date)]
         
         all_updated : np.ndarray | Any = None
@@ -406,27 +404,19 @@ class TuShareCNE5_Calculator:
             raise KeyError(job)
         
         for x in check_list:
-            updated = PATH.get_target_dates('models' , x)
+            updated = PATH.db_dates('models' , x)
             all_updated = updated if all_updated is None else np.intersect1d(all_updated , updated)
         return np.setdiff1d(dates , all_updated)
         
     def update_date(self , date : int , job : Literal['exposure' , 'risk']):
         assert TSData.CALENDAR.is_trade_date(date) , f'{date} is not a trade date'
         if job == 'exposure':
-            exp = self.get_exposure(date)
-            exp.to_feather(PATH.get_target_path('models' , 'tushare_cne5_exp' , date , makedir=True))
-
-            coef = self.get_coef(date)
-            coef.to_feather(PATH.get_target_path('models' , 'tushare_cne5_coef' , date , makedir=True))
-
-            resid = self.get_resid(date)
-            resid.to_feather(PATH.get_target_path('models' , 'tushare_cne5_res' , date , makedir=True))
+            PATH.db_save(self.get_exposure(date) , 'models' , 'tushare_cne5_exp'  , date , verbose=True)
+            PATH.db_save(self.get_coef(date)     , 'models' , 'tushare_cne5_coef' , date , verbose=True)
+            PATH.db_save(self.get_resid(date)    , 'models' , 'tushare_cne5_res'  , date , verbose=True)
         elif job == 'risk':
-            cov = self.calc_common_risk(date)
-            cov.to_feather(PATH.get_target_path('models' , 'tushare_cne5_cov' , date , makedir=True))
-
-            spec = self.calc_specific_risk(date)
-            spec.to_feather(PATH.get_target_path('models' , 'tushare_cne5_spec' , date , makedir=True))
+            PATH.db_save(self.calc_common_risk(date)   , 'models' , 'tushare_cne5_cov'  , date , verbose=True)
+            PATH.db_save(self.calc_specific_risk(date) , 'models' , 'tushare_cne5_spec' , date , verbose=True)
         else:
             raise KeyError(job)
 

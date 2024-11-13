@@ -6,7 +6,7 @@ amt_cv1m,1,20070101,behavior,liquidity,成交额变异系数,量价,流动性
 amt_cv2m,1,20070101,behavior,liquidity,成交额变异系数,量价,流动性
 amt_cv3m,1,20070101,behavior,liquidity,成交额变异系数,量价,流动性
 amt_cv6m,1,20070101,behavior,liquidity,成交额变异系数,量价,流动性
-anndt_phigh,,20070101,behavior,momentum,公告日最高价举例,量价,动量反转
+anndt_phigh,1,20070101,behavior,momentum,公告日最高价举例,量价,动量反转
 apm_orig,,20070101,high_frequency,hf_momentum,APM原始值,高频,动量反转
 asset_pctq4,,20070101,fundamental,growth,总资产同比变化率,基本面,成长
 assetcur_asset,,20070101,fundamental,quality,流动资产/总资产,基本面,财务质量
@@ -136,8 +136,8 @@ mom_1m,1,20070101,behavior,momentum,1月动量因子,量价,动量反转
 mom_2m,1,20070101,behavior,momentum,2月动量因子,量价,动量反转
 mom_3m,1,20070101,behavior,momentum,3月动量因子,量价,动量反转
 mom_6m,1,20070101,behavior,momentum,6月动量因子,量价,动量反转
-mom_aaa,,20070101,behavior,momentum,公告日后3日超额收益,量价,动量反转
-mom_aog,,20070101,behavior,momentum,公告日次日超额收益,量价,动量反转
+mom_aaa,1,20070101,behavior,momentum,公告日后3日超额收益,量价,动量反转
+mom_aog,1,20070101,behavior,momentum,公告日次日超额收益,量价,动量反转
 mom_ff1m,1,20070101,behavior,momentum,残差动量,量价,动量反转
 mom_ff2m,1,20070101,behavior,momentum,残差动量,量价,动量反转
 mom_ff3m,1,20070101,behavior,momentum,残差动量,量价,动量反转

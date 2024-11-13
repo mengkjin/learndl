@@ -55,11 +55,11 @@ class DataUpdater():
         # db_update_parameters
         if db_src == 'information':
             param_args : list[list] = [
-                ['calendar',] ,    # market trading calendar
-                ['description',] , # stock list_date and delist_date
-                ['st',] ,          # st treatment of stocks
-                ['industry',] ,    # SW 2021 industry criterion
-                ['concepts',] ,    # wind concepts
+                #['calendar',] ,    # market trading calendar
+                #['description',] , # stock list_date and delist_date
+                #['st',] ,          # st treatment of stocks
+                #['industry',] ,    # SW 2021 industry criterion
+                #['concepts',] ,    # wind concepts
             ]
         elif db_src == 'models':
             param_args = [
@@ -96,10 +96,9 @@ class DataUpdater():
                 ['csi500',['csi500']] , 
                 ['csi1000',['csi1000']] , 
             ]
-        elif db_src in ['information_ts' , 'membership_ts' , 'trade_ts' , 'financial_ts']:
-            param_args = []
         else:
-            raise KeyError(db_src)
+            param_args = []
+
         params = [DataFetcher(db_src , *args) for args in param_args]
         return params
     

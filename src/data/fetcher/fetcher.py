@@ -47,13 +47,13 @@ class DataFetcher:
         return v
     
     def target_path(self , date = None):
-        return PATH.get_target_path(self.db_src , self.db_key , date , makedir=True)
+        return PATH.db_path(self.db_src , self.db_key , date)
     
     def source_dates(self):
         return PATH.get_source_dates(self.db_src , self.db_key)
     
     def target_dates(self):
-        return PATH.get_target_dates(self.db_src , self.db_key)
+        return PATH.db_dates(self.db_src , self.db_key)
     
     def get_update_dates(self , start_dt = None , end_dt = None , trace = 0 , incremental = True , force = False):
         source_dates = self.source_dates()

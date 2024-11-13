@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import pandas as pd
 
-from typing import ClassVar , Optional
+from typing import Any , ClassVar , Optional
 
 from ..module import get_predictor_module
 from ...util import TrainConfig
@@ -35,6 +35,14 @@ class ModelPredictor:
         self.model = get_predictor_module(self.config)
         self.df = pd.DataFrame()
 
+        self.dir_save = PATH.preds.joinpath(self.alias)
+        self.dir_save.mkdir(parents=True,exist_ok=True)
+
+        self.dir_deploy = PATH.FACTOR_DESTINATION_SERVER if THIS_IS_SERVER else PATH.FACTOR_DESTINATION_LAPTOP
+        if self.dir_deploy is not None: 
+            self.dir_deploy = self.dir_deploy.joinpath(self.alias)
+            self.dir_deploy.mkdir(parents=True,exist_ok=True)
+
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(reg_model={str(self.reg_model)})'
 
@@ -44,53 +52,36 @@ class ModelPredictor:
         reg_models = [RegisteredModel(**reg_model) for reg_model in REG_MODELS]
         for model in reg_models:
             md = cls(model)
-            with SILENT: md.get_df().deploy()
+            with SILENT: md.update().deploy()
             print(f'Finish model [{model.name}] predicting!')
         print('-' * 80)
         return md
 
-    def deploy(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
-        '''deploy df by day to class.destination'''
-        if df is None: df = self.df
-        if df is None: return NotImplemented
-        path_deploy = PATH.FACTOR_DESTINATION_SERVER if THIS_IS_SERVER else PATH.FACTOR_DESTINATION_LAPTOP
-        path_deploy.joinpath(self.alias).mkdir(parents=True,exist_ok=True)
-        for date , subdf in df.groupby(date_col):
-            des_path = path_deploy.joinpath(self.alias , f'{self.alias}_{date}.txt')
-            if overwrite or not des_path.exists():
-                subdf.drop(columns='date').set_index(secid_col).to_csv(des_path, sep='\t', index=True, header=False)
-
-    def get_df(self , start_dt = -10 , end_dt = 20991231):
-        '''save recent prediction to self.df'''
-        self.df = self.predict(start_dt= start_dt , end_dt = end_dt)
-        return self
-
-    def df_corr(self , df = None , window = 30 , secid_col = SECID_COLS , date_col = DATE_COLS):
-        '''prediction correlation of ecent days'''
-        if df is None: df = self.df
-        if df is None: return NotImplemented
-        df = df[df[date_col] >= today(-window)]
-        assert isinstance(df , pd.DataFrame)
-        return df.pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()
-
-    def write_df(self , path):
-        '''write down prediction df'''
-        assert isinstance(self.df , pd.DataFrame)
-        self.df.to_feather(path)
-
-    def predict(self , start_dt = -10 , end_dt = 20991231) -> pd.DataFrame:
-        '''predict recent days'''
-        if start_dt <= 0: start_dt = today(start_dt)
+    def update(self , start_dt = -10 , end_dt = 20991231 , update = True):
+        '''get update dates and predict these dates'''
+        end_dt = min(end_dt , today())
+        if update and self.reg_model.start_dt > 0:
+            start_dt = self.reg_model.start_dt
+        elif start_dt <= 0: 
+            start_dt = today(start_dt)
 
         model_dates  = self.reg_model.model_dates 
         start_dt     = max(start_dt , int(date_offset(min(model_dates) ,1)))
-        data_module  = DataModule(self.config , 'both' if start_dt <= today(-100) else 'predict').load_data() 
 
-        end_dt = min(end_dt , max(data_module.test_full_dates))
-        pred_dates = GetData.trade_dates(start_dt , end_dt)
+        update_dates = GetData.trade_dates(start_dt , end_dt)
+        stored_dates = PATH.pred_dates(self.alias , start_dt , end_dt)
+
+        self.predict(np.setdiff1d(update_dates , stored_dates))
+        self.deploy()
+        return self
+
+    def predict(self , dates : np.ndarray | list[int]):
+        '''predict recent days'''
+        data_module  = DataModule(self.config , 'both' if min(dates) <= today(-100) else 'predict').load_data() 
+        pred_dates = dates[dates <= max(data_module.test_full_dates)]
         
         df_task = pd.DataFrame({'pred_dates' : pred_dates , 
-                                'model_date' : [max(model_dates[model_dates < d]) for d in pred_dates] , 
+                                'model_date' : [max(self.reg_model.model_dates[self.reg_model.model_dates  < d]) for d in pred_dates] , 
                                 'calculated' : 0})
         torch.set_grad_enabled(False)
         df_list = []
@@ -114,5 +105,28 @@ class ModelPredictor:
                     df_list.append(df)
                     df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
 
-        df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
-        return df
+        self.df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
+        return self
+    
+    def deploy(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
+        '''deploy df by day to class.destination'''
+        if df is None: df = self.df
+        if df.empty: return self
+
+        for date , subdf in df.groupby(date_col):
+            new_df = subdf.drop(columns='date').set_index(secid_col)
+            PATH.pred_save(new_df , self.alias , date , overwrite)
+
+            if self.dir_deploy is not None:
+                path_deploy = self.dir_deploy.joinpath(f'{self.alias}_{date}.txt')
+                if (not overwrite or not path_deploy.exists()):
+                    new_df.to_csv(path_deploy, sep='\t', index=True, header=False)
+        return self
+    
+    def df_corr(self , df = None , window = 30 , secid_col = SECID_COLS , date_col = DATE_COLS):
+        '''prediction correlation of ecent days'''
+        if df is None: df = self.df
+        if df is None: return NotImplemented
+        df = df[df[date_col] >= today(-window)]
+        assert isinstance(df , pd.DataFrame)
+        return df.pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()

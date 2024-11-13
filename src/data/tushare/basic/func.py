@@ -48,12 +48,6 @@ def quarter_ends(date , last_date = None , start_year = 1997 , consider_future =
 
     return date_list
 
-def complete_calendar():
-    cal = pd.read_feather(PATH.get_target_path('information_ts' , 'calendar'))
-    trd = cal[cal['trade'] == 1].reset_index(drop=True)
-    trd['pre'] = trd['calendar'].shift(1, fill_value=-1)
-    return trd.reset_index()
-
 def adjust_precision(df : pd.DataFrame , tol = 1e-8 , dtype_float = np.float32 , dtype_int = np.int64):
     '''adjust precision for df columns'''
     for col in df.columns:

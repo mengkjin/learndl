@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
 from .core import DataBlock
+from .tushare import TSData
 from ..basic import PATH , CONF , SILENT
 from ..basic.util import Timer
 from ..func.singleton import singleton
@@ -15,23 +16,20 @@ from ..func.time import date_offset , today
 class GetData:
     @classmethod
     def data_dates(cls , db_src , db_key , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
-        dates = PATH.get_target_dates(db_src , db_key , start_dt= start_dt , end_dt=end_dt)
+        dates = PATH.db_dates(db_src , db_key , start_dt= start_dt , end_dt=end_dt)
         return dates
 
     @classmethod
     def trade_dates(cls , start_dt : int = -1 , end_dt : int = 99991231):
         with SILENT:
-            calendar = PATH.load_target_file('information' , 'calendar')
-            assert calendar is not None
-            calendar = np.array(calendar['calendar'].values[calendar['trade'] == 1])
+            calendar = TSData.CALENDAR.calendar[TSData.CALENDAR.calendar['trade'] == 1].index.to_numpy()
             calendar = calendar[(calendar >= start_dt) & (calendar <= end_dt)]
         return calendar
     
     @classmethod
     def stocks(cls , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
         with SILENT:
-            stocks = PATH.load_target_file('information' , 'description')
-            assert stocks is not None
+            stocks = TSData.INFO.get_desc(set_index=False)
             if listed: stocks = stocks[stocks['list_dt'] > 0]
             if exchange: stocks = stocks[stocks['exchange_name'].isin(exchange)]
         return stocks.reset_index()
@@ -39,14 +37,13 @@ class GetData:
     @classmethod
     def st_stocks(cls):
         with SILENT:
-            st = PATH.load_target_file('information' , 'st')
-            assert st is not None
+            st = TSData.INFO.get_st()
         return st
     
     @classmethod
     def day_quote(cls , date : int) -> pd.DataFrame | None:
         with SILENT:
-            q = PATH.load_target_file('trade' , 'day' , date)[['secid','adjfactor','close','vwap']]
+            q = PATH.db_load('trade_ts' , 'day' , date)[['secid','adjfactor','close','vwap']]
         return q
     
     @classmethod
@@ -54,7 +51,7 @@ class GetData:
         with SILENT:
             pre_start_dt = int(date_offset(start_dt , -20))
             feature = ['close' , 'vwap']
-            block = BlockLoader('trade' , 'day' , ['close' , 'vwap' , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
+            block = BlockLoader('trade_ts' , 'day' , ['close' , 'vwap' , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
             block = block.adjust_price().align_feature(feature)
             values = block.values[:,1:] / block.values[:,:-1] - 1
             secid  = block.secid
@@ -114,7 +111,7 @@ class FrameLoader:
     def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
                    parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
         dates = GetData.data_dates(self.db_src , self.db_key , start_dt , end_dt)
-        dfs = PATH.load_target_file_dates(self.db_src , self.db_key , dates , parallel = parallel, max_workers=max_workers)
+        dfs = PATH.db_load_multi(self.db_src , self.db_key , dates , parallel = parallel, max_workers=max_workers)
         dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None and not df.empty]
         return pd.concat(dfs) if len(dfs) else pd.DataFrame()
     
@@ -128,12 +125,12 @@ class DataVendor:
     def __init__(self):
         self.start_dt = 99991231
         self.end_dt   = -1
-        self.max_date   = GetData.data_dates('trade' , 'day')[-1]
+        self.max_date   = GetData.data_dates('trade_ts' , 'day')[-1]
         self.trade_date = GetData.trade_dates()
         self.all_stocks = GetData.stocks().sort_values('secid')
         self.st_stocks  = GetData.st_stocks()
         self.day_quotes : dict[int,pd.DataFrame] = {}
-        self.last_quote_dt = self.file_dates('trade','day').max()
+        self.last_quote_dt = self.file_dates('trade_ts','day').max()
 
     def secid(self , date : int | None = None): 
         stk = self.all_stocks
@@ -142,11 +139,11 @@ class DataVendor:
 
     @staticmethod
     def single_file(db_src , db_key , date : int | None = None):
-        return PATH.load_target_file(db_src , db_key , date)
+        return PATH.db_load(db_src , db_key , date)
     
     @staticmethod
     def file_dates(db_src , db_key , start_dt : int | None = None , end_dt : int | None = None , year : int | None = None):
-        return PATH.get_target_dates(db_src , db_key , start_dt=start_dt , end_dt=end_dt , year = year)
+        return PATH.db_dates(db_src , db_key , start_dt=start_dt , end_dt=end_dt , year = year)
 
     def td_within(self , start_dt : int = -1 , end_dt : int = 99991231 , step : int = 1):
         return self.trade_date[(self.trade_date >= start_dt) & (self.trade_date <= end_dt)][::step]
@@ -206,7 +203,7 @@ class DataVendor:
         return DataBlock.merge(datas)
 
     def get_quote(self , start_dt : int , end_dt : int):
-        db_src , db_key = 'trade' , 'day'
+        db_src , db_key = 'trade_ts' , 'day'
         data = self.get_named_data_block(start_dt , end_dt , db_src , db_key , 'daily_quote')
         if isinstance(data , DataBlock):
             self.daily_quote = data
@@ -214,7 +211,7 @@ class DataVendor:
 
     def get_risk_exp(self , start_dt : int , end_dt : int):
         db_src , db_key = 'models' , 'risk_exp'
-        data = self.get_named_data_block(start_dt , end_dt , db_src , db_key , 'risk_exp')
+        data = self.get_named_data_block(start_dt , end_dt , db_src , db_key , 'tushare_cne5_exp')
         if isinstance(data , DataBlock):
             self.risk_exp = data
         return

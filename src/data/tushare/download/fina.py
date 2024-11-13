@@ -3,8 +3,7 @@ from ..basic import pro , code_to_secid
 
 class FinaIndicator(FinaFetcher):
     '''financial indicators'''
-    def db_src(self): return 'financial_ts'
-    def db_key(self): return 'indicator'    
+    DB_KEY = 'indicator'  
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.fina_indicator_vip(period = str(date))
@@ -13,8 +12,7 @@ class FinaIndicator(FinaFetcher):
     
 class IncomeStatement(FinaFetcher):
     '''income statement'''
-    def db_src(self): return 'financial_ts'
-    def db_key(self): return 'income'
+    DB_KEY = 'income'
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.income_vip(period = str(date))
@@ -23,8 +21,7 @@ class IncomeStatement(FinaFetcher):
     
 class BalanceSheet(FinaFetcher):
     '''balance sheet'''
-    def db_src(self): return 'financial_ts'
-    def db_key(self): return 'balance'
+    DB_KEY = 'balance'
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.balancesheet_vip(period = str(date))
@@ -33,8 +30,7 @@ class BalanceSheet(FinaFetcher):
     
 class CashFlow(FinaFetcher):
     '''cash flow'''
-    def db_src(self): return 'financial_ts'
-    def db_key(self): return 'cashflow'
+    DB_KEY = 'cashflow'
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.cashflow_vip(period = str(date))
@@ -43,8 +39,7 @@ class CashFlow(FinaFetcher):
 
 class Dividend(FinaFetcher):
     '''dividend'''
-    def db_src(self): return 'financial_ts'
-    def db_key(self): return 'dividend'
+    DB_KEY = 'dividend'
     def get_data(self , date : int):
         df = pro.dividend(end_date = str(date))
         df = code_to_secid(df , 'ts_code' , retain=True)
@@ -52,9 +47,8 @@ class Dividend(FinaFetcher):
 
 class Forecast(FinaFetcher):
     '''forecast'''
+    DB_KEY = 'forecast'
     CONSIDER_FUTURE = True
-    def db_src(self): return 'financial_ts'
-    def db_key(self): return 'forecast'
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.forecast_vip(period = str(date))
@@ -63,8 +57,7 @@ class Forecast(FinaFetcher):
     
 class Express(FinaFetcher):
     '''express'''
-    def db_src(self): return 'financial_ts'
-    def db_key(self): return 'express'
+    DB_KEY = 'express'
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.express_vip(period = str(date))
@@ -73,9 +66,8 @@ class Express(FinaFetcher):
     
 class MainBusiness(FinaFetcher):
     '''main business'''
+    DB_KEY = 'mainbz'
     DATA_FREQ = 'y'
-    def db_src(self): return 'financial_ts'
-    def db_key(self): return 'mainbz'
     def get_data(self , date : int):
         df = pro.fina_mainbz_vip(period = str(date))
         df = code_to_secid(df , 'ts_code' , retain=True)
@@ -83,9 +75,8 @@ class MainBusiness(FinaFetcher):
     
 class DisclosureDate(FinaFetcher):
     '''disclosure date'''
+    DB_KEY = 'disclosure'
     CONSIDER_FUTURE = True
-    def db_src(self): return 'financial_ts'
-    def db_key(self): return 'disclosure'
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.disclosure_date(end_date = str(date))
