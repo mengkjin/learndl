@@ -7,7 +7,7 @@ from ..tushare import TSData
 from ...basic import PATH
 
 class ClassicLabelsUpdater:
-    START_DATE = 20240102
+    START_DATE = 20050101
     DB_SRC = 'labels_ts'
 
     DAYS = [5 , 10 , 20]
