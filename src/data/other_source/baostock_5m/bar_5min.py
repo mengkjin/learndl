@@ -56,15 +56,17 @@ def updated_dates(x_min : int = 5):
 def updatable(date , last_date):
     return (len(updated_dates()) == 0) or (date > 0 and date_diff(date , last_date) > 6)
 
-def x_mins_update_dates(date):
+def x_mins_update_dates(date) -> list[int]:
     all_dates = np.array([])
     for x_min in [10 , 15 , 30 , 60]:
-        dates = np.setdiff1d(CALENDAR.td_within(last_date_x_min(1 , x_min) , last_date()) , PATH.db_dates('trade_ts' , f'{x_min}min'))
+        source_dates = PATH.db_dates('trade_ts' , '5min')
+        stored_dates = PATH.db_dates('trade_ts' , f'{x_min}min')
+        dates = np.setdiff1d(CALENDAR.td_within(last_date_x_min(1 , x_min) , max(source_dates)) , stored_dates)
         all_dates = np.concatenate([all_dates , dates])
-    return np.unique(all_dates)
+    return np.unique(all_dates).astype(int).tolist()
 
 def x_mins_to_update(date):
-    x_mins = []
+    x_mins : list[int] = []
     for x_min in [10 , 15 , 30 , 60]:
         path = PATH.db_path('trade_ts' , f'{x_min}min' , date)
         if not path.exists(): x_mins.append(x_min)
@@ -172,7 +174,6 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
                 print(f'{last_dt} - {dt} failed')
-                return False
             else:
                 print(f'{last_dt} - {dt} success')
 
@@ -182,6 +183,6 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
         for x_min in x_mins_to_update(dt):
             five_min_df = PATH.db_load('trade_ts' , '5min' , dt)
             x_min_df = trade_min_reform(five_min_df , x_min , 5)
-            PATH.db_save(x_min_df , 'trade_ts' , f'{x_min}min' , verbose = True)
+            PATH.db_save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , verbose = True)
 
     return True

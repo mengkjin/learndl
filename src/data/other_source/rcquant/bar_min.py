@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Literal
-from datetime import datetime , timedelta
+from datetime import datetime , timedelta , time
 
 from .license_uri import uri as rcquant_uri
 from ...transform import secid_adjust , trade_min_reform
@@ -50,15 +50,17 @@ def min_update_dates(date):
     end_date = today(-1) if date is None else date
     return CALENDAR.td_within(start_date , end_date)
 
-def x_mins_update_dates(date):
+def x_mins_update_dates(date) -> list[int]:
     all_dates = np.array([])
     for x_min in [5 , 10 , 15 , 30 , 60]:
-        dates = np.setdiff1d(CALENDAR.td_within(last_date(1 , x_min) , today()) , PATH.db_dates('trade_ts' , f'{x_min}min'))
+        source_dates = PATH.db_dates('trade_ts' , 'min')
+        stored_dates = PATH.db_dates('trade_ts' , f'{x_min}min')
+        dates = np.setdiff1d(CALENDAR.td_within(last_date(1 , x_min) , max(source_dates)) , stored_dates)
         all_dates = np.concatenate([all_dates , dates])
-    return np.unique(all_dates)
+    return np.unique(all_dates).astype(int).tolist()
 
 def x_mins_to_update(date):
-    x_mins = []
+    x_mins : list[int]= []
     for x_min in [5 , 10 , 15 , 30 , 60]:
         path = PATH.db_path('trade_ts' , f'{x_min}min' , date)
         if not path.exists(): x_mins.append(x_min)
@@ -74,6 +76,7 @@ def rcquant_trading_dates(start_date, end_date):
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
 
 def rcquant_bar_min(date : int , first_n : int = -1):
+    if date == today() and datetime.now().time() <= time(19, 0, 0): return False
     if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
     def code_map(x : str):
         x = x.split('.')[0]
@@ -90,8 +93,8 @@ def rcquant_bar_min(date : int , first_n : int = -1):
     sec_df = sec_df[sec_df['is_active']]
     if first_n > 0: sec_df = sec_df.iloc[:first_n]
     stock_list = sec_df['code'].to_numpy()
-    data = rqdatac.get_price(stock_list, start_date=date, end_date=date, frequency='1m',expect_df=True)
-    if isinstance(data , pd.DataFrame):
+    data = rqdatac.get_price(stock_list, start_date=str(date), end_date=str(date), frequency='1m',expect_df=True)
+    if isinstance(data , pd.DataFrame) and not data.empty:
         data = data.reset_index().rename(columns = {'total_turnover':'amount', 'order_book_id':'code'}).assign(date = date)
         data['code'] = data['code'].map(code_map)
         data['time'] = data['datetime'].map(lambda x: x.strftime('%H%M%S')).str.slice(0,4)
@@ -121,7 +124,6 @@ def rcquant_proceed(date : int | None = None , first_n : int = -1):
         mark = rcquant_bar_min(dt , first_n)
         if not mark: 
             print(f'rcquant bar min {dt} failed')
-            return False
         else:
             print(f'rcquant bar min {dt} success')
 
@@ -131,5 +133,5 @@ def rcquant_proceed(date : int | None = None , first_n : int = -1):
         for x_min in x_mins_to_update(dt):
             min_df = PATH.db_load('trade_ts' , 'min' , dt)
             x_min_df = trade_min_reform(min_df , x_min , 1)
-            PATH.db_save(x_min_df , 'trade_ts' , f'{x_min}min' , verbose = True)
+            PATH.db_save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , verbose = True)
     return True

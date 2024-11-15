@@ -81,7 +81,7 @@ def trade_min_reform(df : pd.DataFrame , x_min_new : int , x_min_old = 1):
     df = trade_min_fillna(df)
     if x_min_new == x_min_old: return df
     assert x_min_new % x_min_old == 0 , f'{x_min_new} % {x_min_old} != 0'
-    by = x_min_old // x_min_new
+    by = x_min_new // x_min_old
     max_nbar = 240 // x_min_old
     assert df['minute'].max() in [max_nbar-1 , max_nbar] , f'{df["minute"].max()} should be {max_nbar-1} or {max_nbar}'
     if df['minute'].max() == max_nbar: df['minute'] = df['minute'] -1
