@@ -33,7 +33,7 @@ class DataAPI:
         '''
         prepare latest(1 year or so) train data for predict use, do it after 'update'
         '''
-        DataProcessor.main(True)
+        DataProcessor.main(predict=True)
         print('-' * 80)
 
     @staticmethod

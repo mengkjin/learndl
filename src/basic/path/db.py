@@ -111,7 +111,9 @@ def db_save(df : pd.DataFrame | None , db_src , db_key , date = None ,
     return mark
 
 @db_src_deprecated(0)
-def db_load(db_src , db_key , date = None , check_na_cols = True , raise_if_not_exist = False) -> pd.DataFrame | Any:
+def db_load(db_src , db_key , date = None , check_na_cols = True , raise_if_not_exist = False , 
+            ignored_fields = []) -> pd.DataFrame | Any: 
+    #  ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code']
     path = db_path(db_src , db_key , date)
     df = load_df(path , raise_if_not_exist=raise_if_not_exist)
     if df is None: return None
@@ -121,6 +123,7 @@ def db_load(db_src , db_key , date = None , check_na_cols = True , raise_if_not_
         print(f'{db_src} , {db_key} , {date} entry is all-NA')
     elif check_na_cols and df.isna().all().any():
         print(f'{db_src} , {db_key} , {date} entry has columns [{str(df.columns.values[df.isna().all()])}] all-NA')
+    if ignored_fields: df = df.drop(columns=ignored_fields , errors='ignore')
     return df
 
 @db_src_deprecated(0)

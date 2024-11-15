@@ -4,9 +4,8 @@ import pandas as pd
 from typing import Any , Literal
 from abc import abstractmethod , ABC
 
-from ..basic.func import file_update_date , updatable , dates_to_update , quarter_ends
-from ....basic import PATH
-from ....func import today , date_offset
+from ..basic.func import updatable , dates_to_update , quarter_ends
+from ....basic import PATH , CALENDAR
 
 class TushareFetcher(ABC):
     START_DATE  : int = 19970101
@@ -46,13 +45,13 @@ class TushareFetcher(ABC):
             dates = PATH.db_dates(self.DB_SRC , self.DB_KEY)
             return max(dates) if len(dates) else self.START_DATE
         else:
-            return file_update_date(self.target_path() , self.START_DATE)
+            return PATH.modified_date(self.target_path() , self.START_DATE)
             
     def last_update_date(self):
         if self.use_date_type:
-            return file_update_date(self.target_path(self.last_date()) , self.START_DATE)
+            return PATH.modified_date(self.target_path(self.last_date()) , self.START_DATE)
         else:
-            return file_update_date(self.target_path() , self.START_DATE)
+            return PATH.modified_date(self.target_path() , self.START_DATE)
 
     def update(self , timeout_wait_seconds = 20 , timeout_max_retries = 20):
         update_func = self.update_with_try_except(self.update_with_dates , timeout_wait_seconds , timeout_max_retries)
@@ -102,7 +101,7 @@ class InfoFetcher(TushareFetcher):
     DB_SRC = 'information_ts'
 
     def update_dates(self):
-        this_date = today()
+        this_date = CALENDAR.today()
         last_update_date = self.last_date()
         if update := updatable(this_date , last_update_date , self.UPDATE_FREQ):
             return [this_date]
@@ -115,7 +114,7 @@ class DateFetcher(TushareFetcher):
     DB_SRC = 'trade_ts'
 
     def update_dates(self):
-        this_date = today()
+        this_date = CALENDAR.today()
         last_update_date = self.last_date()
         dates = dates_to_update(this_date , last_update_date , self.UPDATE_FREQ) 
         return dates
@@ -126,7 +125,7 @@ class WeekFetcher(TushareFetcher):
     DB_SRC = 'trade_ts'
 
     def update_dates(self):
-        this_date = today()
+        this_date = CALENDAR.today()
         last_update_date = self.last_date()
         dates = dates_to_update(this_date , last_update_date , self.UPDATE_FREQ) 
         return dates
@@ -137,7 +136,7 @@ class MonthFetcher(TushareFetcher):
     DB_SRC = 'trade_ts'
 
     def update_dates(self):
-        this_date = today()
+        this_date = CALENDAR.today()
         last_update_date = self.last_date()
         dates = dates_to_update(this_date , last_update_date , self.UPDATE_FREQ) 
         return dates
@@ -150,7 +149,7 @@ class FinaFetcher(TushareFetcher):
     CONSIDER_FUTURE = False
 
     def update_dates(self):
-        this_date , last_date , last_update_date = today() , self.last_date() , self.last_update_date()
+        this_date , last_date , last_update_date = CALENDAR.today() , self.last_date() , self.last_update_date()
 
         update = updatable(this_date , last_update_date , self.UPDATE_FREQ)
         dates = quarter_ends(this_date , last_date , consider_future = self.CONSIDER_FUTURE) 
@@ -170,25 +169,24 @@ class RollingFetcher(TushareFetcher):
     SAVEING_DATE_COL = True
 
     def update_dates(self):
-        this_date , last_date , last_update_date = today() , self.last_date() , self.last_update_date()
+        this_date , last_date , last_update_date = CALENDAR.today() , self.last_date() , self.last_update_date()
 
         assert self.ROLLING_BACK_DAYS > 0 , 'ROLLING_BACK_DAYS must be positive'
         assert self.ROLLING_SEP_DAYS > 0 , 'ROLLING_BACK_DAYS must be positive'
         update = updatable(this_date , last_update_date , self.UPDATE_FREQ)
         if not update: return []
-
-        all_dates = dates_to_update(this_date , max(self.START_DATE , int(date_offset(last_date , -self.ROLLING_BACK_DAYS))) , self.UPDATE_FREQ)
+        all_dates = dates_to_update(this_date , max(self.START_DATE , CALENDAR.cd(last_date , -self.ROLLING_BACK_DAYS)) , self.UPDATE_FREQ)
         d = all_dates[0]
         dates = [d]
         while True:
-            d = date_offset(d , self.ROLLING_SEP_DAYS)
+            d = CALENDAR.cd(d , self.ROLLING_SEP_DAYS)
             dates.append(min(d , this_date))
             if d >= this_date: break
         return dates
 
     def update_with_dates(self , dates):
         for i in range(len(dates) - 1):
-            start_date = date_offset(dates[i] , 1)
+            start_date = CALENDAR.cd(dates[i] , 1)
             end_date   = dates[i+1]
             assert start_date is not None and end_date is not None , 'start_date and end_date must be provided'
             assert self.DB_TYPE == 'rolling' , f'{self.__class__.__name__} is not a rolling fetcher'

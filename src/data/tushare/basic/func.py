@@ -1,13 +1,8 @@
-# 导入tushare
-import os , time
 import numpy as np
 import pandas as pd
 
-from pathlib import Path
-from typing import Any , Literal
-
-from ....basic import PATH
-from ....func import date_diff , today
+from typing import Literal
+from ....basic import CALENDAR
 
 def code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , retain = False):
     '''switch old symbol into secid'''
@@ -21,7 +16,7 @@ def updatable(date , last_date , freq : Literal['d' , 'w' , 'm']):
     if freq == 'd':
         return date > last_date
     elif freq == 'w':
-        return date_diff(date , last_date) > 6
+        return date > CALENDAR.cd(last_date , 6)
     elif freq == 'm':
         return ((date // 100) % 100) != ((last_date // 100) % 100)
     
@@ -57,9 +52,3 @@ def adjust_precision(df : pd.DataFrame , tol = 1e-8 , dtype_float = np.float32 ,
         if np.issubdtype(df[col].to_numpy().dtype , np.integer): 
             df[col] = df[col].astype(dtype_int)
     return df
-
-def file_update_date(path : Path , default = 19970101):
-    if path.exists():
-        return int(time.strftime('%Y%m%d',time.localtime(os.path.getmtime(path))))
-    else:
-        return default

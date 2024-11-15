@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import pandas as pd
 
-from datetime import datetime , timedelta
+from datetime import datetime , timedelta , time
 from pathlib import Path
 from typing import Any , Literal
 
@@ -99,14 +99,17 @@ class TradeCalendar:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    @property
-    def calendar(self): return _CALENDAR
-    @property
-    def cal_cal(self): return _CALENDAR_CAL
-    @property
-    def cal_trd(self): return _CALENDAR_TRD
-    @property
-    def today(self):   return today()
+    @staticmethod
+    def calendar(): return _CALENDAR
+    @staticmethod
+    def cal_cal(): return _CALENDAR_CAL
+    @staticmethod
+    def cal_trd(): return _CALENDAR_TRD
+    @staticmethod
+    def today():   return today()
+    @staticmethod
+    def update_to():
+        return today(-1 if datetime.now().time() <= time(19, 0, 0) else 0)
     
     @staticmethod
     def _date_convert_to_index(date):
@@ -114,8 +117,8 @@ class TradeCalendar:
         elif isinstance(date , pd.Series): date = date.to_numpy().astype(int).tolist()
         return date
     
-    @classmethod
-    def td(cls , date : int | TradeDate , offset : int = 0):
+    @staticmethod
+    def td(date : int | TradeDate , offset : int = 0):
         return TradeDate(date).offset(offset)
     
     @classmethod
@@ -127,15 +130,15 @@ class TradeCalendar:
             td_arr = TradeDate.as_numpy(_CALENDAR_TRD.loc[d_index , 'calendar'])
         return td_arr
     
-    @classmethod
-    def cd(cls , date : int | TradeDate , offset : int = 0):
+    @staticmethod
+    def cd(date : int | TradeDate , offset : int = 0):
         d = date.cd if isinstance(date , TradeDate) else date
         if offset == 0: return d
         d = datetime.strptime(str(d) , '%Y%m%d') + timedelta(days=offset)
         return int(d.strftime('%Y%m%d'))
     
-    @classmethod
-    def cd_array(cls , date , offset : int = 0):
+    @staticmethod
+    def cd_array(date , offset : int = 0):
         cd_arr = np.array([d.cd if isinstance(d , TradeDate) else int(d) for d in date])
         if offset != 0: 
             d_index = _CALENDAR.loc[cd_arr , 'cd_index'] + offset
@@ -143,16 +146,24 @@ class TradeCalendar:
             cd_arr = _CALENDAR_CAL.loc[d_index , 'calendar'].astype(int).to_numpy()
         return cd_arr
     
-    @classmethod
-    def td_trailing(cls , date , n : int):
+    @staticmethod
+    def td_diff(date1 , date2):
+        return _CALENDAR.loc[[date1 , date2] , 'td_index'].diff().astype(int).iloc[1]
+    
+    @staticmethod
+    def cd_diff(date1 , date2):
+        return _CALENDAR.loc[[date1 , date2] , 'cd_index'].diff().astype(int).iloc[1]
+    
+    @staticmethod
+    def td_trailing(date , n : int):
         return np.sort(_CALENDAR_TRD[_CALENDAR_TRD['calendar'] <= date].iloc[-n:]['calendar'].to_numpy())
     
-    @classmethod
-    def cd_trailing(cls , date , n : int):
+    @staticmethod
+    def cd_trailing(date , n : int):
         return np.sort(_CALENDAR_CAL[_CALENDAR_CAL['calendar'] <= date].iloc[-n:]['calendar'].to_numpy())
     
-    @classmethod
-    def td_within(cls , start_dt : int | TradeDate = -1 , end_dt : int | TradeDate = 99991231 , step : int = 1 , until_today = True):
+    @staticmethod
+    def td_within(start_dt : int | TradeDate = -1 , end_dt : int | TradeDate = 99991231 , step : int = 1 , until_today = True):
         start_dt , end_dt = int(start_dt) , int(end_dt)
         dates = _CALENDAR_TRD['calendar'].to_numpy()
         if until_today: end_dt = min(end_dt , today())
@@ -163,21 +174,21 @@ class TradeCalendar:
         td_list = cls.td_within(min(date_list) , max(date_list))
         return td_list[np.isin(td_list , date_list)]
     
-    @classmethod
-    def cd_within(cls , start_dt : int | TradeDate = -1 , end_dt : int | TradeDate = 99991231 , step : int = 1 , until_today = True):
+    @staticmethod
+    def cd_within(start_dt : int | TradeDate = -1 , end_dt : int | TradeDate = 99991231 , step : int = 1 , until_today = True):
         start_dt , end_dt = int(start_dt) , int(end_dt)
         dates = _CALENDAR_CAL['calendar'].to_numpy()
         if until_today: end_dt = min(end_dt , today())
         return dates[(dates >= start_dt) & (dates <= end_dt)][::step]
     
-    @classmethod
-    def calendar_start(cls): return _CALENDAR.index.min()
+    @staticmethod
+    def calendar_start(): return _CALENDAR.index.min()
 
-    @classmethod
-    def calendar_end(cls): return _CALENDAR.index.max()
+    @staticmethod
+    def calendar_end(): return _CALENDAR.index.max()
 
-    @classmethod
-    def td_start_end(cls , reference_date , period_num : int , 
+    @staticmethod
+    def td_start_end(reference_date , period_num : int , 
                      freq : Literal['d','w','m','q','y'] = 'm' , 
                      lag_num : int = 0):
         td = TradeDate(reference_date)
@@ -190,8 +201,12 @@ class TradeCalendar:
     def as_trade_date(date : int | Any):
         return TradeDate(date)
 
-    @classmethod
-    def is_trade_date(cls , date : int | TradeDate):
+    @staticmethod
+    def is_trade_date(date : int | TradeDate):
         return _CALENDAR.loc[int(date) , 'trade'] == 1
+    
+    @staticmethod
+    def trade_dates():
+        return _CALENDAR_TRD['calendar'].to_numpy()
 
 CALENDAR = TradeCalendar()

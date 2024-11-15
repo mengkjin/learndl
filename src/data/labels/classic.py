@@ -18,7 +18,7 @@ class ClassicLabelsUpdater:
         for days in cls.DAYS:
             for lag1 in cls.LAGS:
                 label_name = f'ret{days}' + ('_lag' if lag1 else '')
-                end_date : Any = CALENDAR.td(CALENDAR.today , -days + 1)
+                end_date : Any = CALENDAR.td(CALENDAR.today() , -days + 1)
                 dates = CALENDAR.td_within(cls.START_DATE , end_date)
                 stored_dates = PATH.db_dates(cls.DB_SRC , label_name)
                 update_dates = np.setdiff1d(dates , stored_dates)

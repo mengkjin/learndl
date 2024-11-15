@@ -3,10 +3,9 @@ import numpy as np
 import pandas as pd  
 
 from typing import Literal
-from datetime import datetime , timedelta
 from ...transform import secid_adjust , trade_min_reform
 from ....basic import PATH , CALENDAR
-from ....func import date_diff , today
+from ....func import date_diff
 
 START_DATE = 20241101
 BAO_PATH = PATH.miscel.joinpath('Baostock')
@@ -26,9 +25,6 @@ def tmp_file_dir(start_date : int , end_date : int):
 def tmp_file_path(start_date : int , end_date : int , code : str):
     path = task_path.joinpath(f'{start_date}_{end_date}' , str(code))
     return path
-
-def date_offset(date:int , n = 1):
-    return int((datetime.strptime(str(date), '%Y%m%d') + timedelta(days=n)).strftime('%Y%m%d'))
 
 def baostock_secdf(date : int):
     path = secdf_path.joinpath(f'secdf_{date}.feather')
@@ -74,17 +70,17 @@ def x_mins_to_update(date):
 
 def last_date_x_min(offset : int = 0 , x_min : int = 10):
     dates = updated_dates(x_min)
-    last_dt = max(dates) if len(dates) > 0 else date_offset(START_DATE , -1)
-    return date_offset(last_dt , offset)
+    last_dt = max(dates) if len(dates) > 0 else CALENDAR.cd(START_DATE , -1)
+    return CALENDAR.cd(last_dt , offset)
 
 def last_date(offset : int = 0):
     dates = baostock_past_dates('5min')
-    last_dt = max(dates) if len(dates) > 0 else date_offset(START_DATE , -1)
-    return date_offset(last_dt , offset)
+    last_dt = max(dates) if len(dates) > 0 else CALENDAR.cd(START_DATE , -1)
+    return CALENDAR.cd(last_dt , offset)
 
 def pending_date():
     dates0 = baostock_past_dates('secdf')
-    d0 = max(dates0) if len(dates0) > 0 else date_offset(START_DATE , -1)
+    d0 = max(dates0) if len(dates0) > 0 else CALENDAR.cd(START_DATE , -1)
     d1 = last_date()
     return d0 if d0 > d1 else -1
 
@@ -166,7 +162,7 @@ def baostock_5min_to_normal_5min(df : pd.DataFrame):
 
 def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : int = 10):
     pending_dt = pending_date()
-    end_date = today(-1) if date is None else date
+    end_date = CALENDAR.update_to() if date is None else date
     if pending_dt == end_date: pending_dt = -1
     for dt in [pending_dt , end_date]:
         last_dt = last_date(1)

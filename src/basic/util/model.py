@@ -10,7 +10,7 @@ from .. import path as PATH
 from .. import conf as CONF
 
 
-models = CONF.load('schedule' , 'models')
+
 
 class ModelPath:
     def __init__(self , model_name : Path | str | None | Any) -> None:
@@ -185,6 +185,6 @@ class HiddenExtractingModel(ModelPath):
         self.alias = alias
         self.model_path = ModelPath(self.name)
         
-
-REG_MODELS = [RegisteredModel(**reg_model) for reg_model in models['REG_MODELS']]
-HID_MODELS = [HiddenExtractingModel(**hid_model) for hid_model in models['HID_MODELS']]
+update_models = CONF.load('schedule' , 'update_models')
+REG_MODELS = [RegisteredModel(**reg_model)       for reg_model in update_models['REG_MODELS']]
+HID_MODELS = [HiddenExtractingModel(**hid_model) for hid_model in update_models['HID_MODELS']]

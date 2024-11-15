@@ -28,8 +28,35 @@ def data_type_abbr(key : str):
 def data_type_alias(key : str):
     return [key , f'trade_{key}' , key.replace('trade_','')]
 
+def block_file_path(key : str , predict=False, alias_search = True):
+    train_mark = '.00' if predict else ''
+    if key.lower() in ['y' , 'labels']: 
+        return PATH.block.joinpath(f'Y{train_mark}.{PATH.SAVE_OPT_BLK}')
+    else:
+        alias_list = data_type_alias(key) if alias_search else []
+        for new_key in alias_list:
+            path = PATH.block.joinpath(f'X_{new_key}{train_mark}.{PATH.SAVE_OPT_BLK}')
+            if path.exists(): return path
+        return PATH.block.joinpath(f'X_{key}{train_mark}.{PATH.SAVE_OPT_BLK}')
+
+def norm_file_path(key : str , predict = False, alias_search = True):
+    if key.lower() == 'y': return PATH.norm.joinpath(f'Y.{PATH.SAVE_OPT_NORM}')
+    alias_list = data_type_alias(key) if alias_search else []
+    for new_key in alias_list:
+        path = PATH.norm.joinpath(f'X_{new_key}.{PATH.SAVE_OPT_BLK}')
+        if path.exists(): return path
+    return PATH.norm.joinpath(f'X_{key}.{PATH.SAVE_OPT_BLK}')
+
 class DataBlock(Stock4DData):
     DEFAULT_INDEX = ['secid','date','minute','factor_name']
+
+    @staticmethod
+    def block_path(key : str , predict=False, alias_search = True):
+        return block_file_path(key , predict , alias_search)
+        
+    @staticmethod
+    def norm_path(key : str , predict = False, alias_search = True):
+        return norm_file_path(key , predict , alias_search)
 
     def save(self , key : str , predict=False , start_dt = None , end_dt = None):
         path = self.block_path(key , predict) 
@@ -111,18 +138,6 @@ class DataBlock(Stock4DData):
     def load_keys(cls , keys : list[str] , predict = False , alias_search = True , **kwargs):
         paths = [cls.block_path(key , predict , alias_search) for key in keys]
         return cls.load_paths(paths , **kwargs)
-
-    @classmethod
-    def block_path(cls , key : str , predict=False, alias_search = True):
-        train_mark = '.00' if predict else ''
-        if key.lower() in ['y' , 'labels']: 
-            return PATH.block.joinpath(f'Y{train_mark}.{PATH.SAVE_OPT_BLK}')
-        else:
-            alias_list = data_type_alias(key) if alias_search else []
-            for new_key in alias_list:
-                path = PATH.block.joinpath(f'X_{new_key}{train_mark}.{PATH.SAVE_OPT_BLK}')
-                if path.exists(): return path
-            return PATH.block.joinpath(f'X_{key}{train_mark}.{PATH.SAVE_OPT_BLK}')
     
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , 
@@ -311,12 +326,7 @@ class DataBlockNorm:
     
     @classmethod
     def norm_path(cls , key : str , predict = False, alias_search = True):
-        if key.lower() == 'y': return PATH.norm.joinpath(f'Y.{PATH.SAVE_OPT_NORM}')
-        alias_list = data_type_alias(key) if alias_search else []
-        for new_key in alias_list:
-            path = PATH.norm.joinpath(f'X_{new_key}.{PATH.SAVE_OPT_BLK}')
-            if path.exists(): return path
-        return PATH.norm.joinpath(f'X_{key}.{PATH.SAVE_OPT_BLK}')
+        return norm_file_path(key , predict , alias_search)
 
 @dataclass(slots=True)
 class ModuleData:

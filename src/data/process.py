@@ -1,15 +1,13 @@
-import argparse , gc , inspect, time
+import argparse , gc , inspect, time , torch
 import numpy as np
 
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
-from torch import Tensor
 from typing import Any , Iterator , Optional
 
 from .core import DataBlock , data_type_abbr
 from .loader import BlockLoader
-from ..basic import CONF
-from ..basic.util import Timer
+from ..basic import CONF , PATH , Timer , CALENDAR
 from ..func.primas import neutralize_2d , process_factor
 
 TRAIN_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']
@@ -59,6 +57,10 @@ class DataProcessor:
         print(f'{len(processor.blocks)} datas :' + str(list(processor.blocks)))
         # return processor
         for key , proc in processor.processors():
+            modified_date = PATH.modified_date(DataBlock.norm_path(key , predict))
+            if modified_date == CALENDAR.today():
+                print(f'{key} is up to {modified_date} already!')
+                continue
             tt1 = time.time()
             with Timer(f'{key} blocks loading' , newline=True):
                 block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt)
@@ -113,17 +115,17 @@ class procY(_TypeProcessor):
     def process(self , blocks : dict[str,DataBlock]): 
         data_block , model_exp = blocks['y'] , blocks['risk']
         indus_size = model_exp.values[...,:]
-        x = Tensor(indus_size).permute(1,0,2,3).squeeze(2)
+        x = torch.Tensor(indus_size).permute(1,0,2,3).squeeze(2)
         for i_feat,lb_name in enumerate(data_block.feature):
             if lb_name[:3] == 'rtn':
-                y_raw = Tensor(data_block.values[...,i_feat]).permute(1,0,2).squeeze(2)
-                y_std = Tensor(neutralize_2d(y_raw , x)).permute(1,0).unsqueeze(2).numpy()
+                y_raw = torch.Tensor(data_block.values[...,i_feat]).permute(1,0,2).squeeze(2)
+                y_std = torch.Tensor(neutralize_2d(y_raw , x)).permute(1,0).unsqueeze(2).numpy()
                 data_block.add_feature('std'+lb_name[3:],y_std)
 
-        y_ts = Tensor(data_block.values)[:,:,0]
+        y_ts = torch.Tensor(data_block.values)[:,:,0]
         for i_feat,lb_name in enumerate(data_block.feature):
             y_pro = process_factor(y_ts[...,i_feat], dim = 0)
-            if not isinstance(y_pro , Tensor): continue
+            if not isinstance(y_pro , torch.Tensor): continue
             y_pro = y_pro.unsqueeze(-1).numpy()
             data_block.values[...,i_feat] = y_pro
 

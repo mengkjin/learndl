@@ -1,31 +1,28 @@
-import pyreadr
 import pandas as pd
 import numpy as np
 
-from pathlib import Path
-from typing import Any , Literal , Optional
-
-from ..classes import FailedData 
-from ...basic import PATH
-
 def secid_adjust(df : pd.DataFrame , old_id_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code'] , 
-                 drop_old = True , decode_first = False):
+                 drop_old = True , decode_first = False , raise_if_no_secid = True):
     '''switch various type of codes into secid'''
     new_id_col = 'secid'
     replace_dict = {'T00018' : '600018'}
+
     if isinstance(old_id_cols , str): old_id_cols = [old_id_cols]
     old_id_col = [col for col in df.columns.values if str(col).lower() in old_id_cols]
     if not old_id_col: old_id_col = [new_id_col]
-    assert len(old_id_col) == 1 , f'old_id_col {old_id_col} not supported'
+    elif len(old_id_col) > 1: raise ValueError(f'Duplicated {old_id_col} not supported')
     old_id_col = old_id_col[0]
-    if decode_first:
-        secid = pd.Series([(id.decode('utf-8') if isinstance(id , bytes) else str(id)) for id in df[old_id_col]])
-    else:
-        secid = df[old_id_col]
+    if (old_id_col not in df.columns): 
+        if raise_if_no_secid: raise ValueError(f'{new_id_col} not found')
+        else: return df
 
+    secid = df[old_id_col]
+    if decode_first: secid = pd.Series([(id.decode('utf-8') if isinstance(id , bytes) else str(id)) for id in secid])
     secid = secid.str.replace('[-.@a-zA-Z]','',regex=True).replace(replace_dict)
+
     df[new_id_col] = secid.where(secid.str.isdigit() , -1).astype(int)
     if drop_old and (old_id_col != new_id_col): df = df.drop(columns=[old_id_col])
+
     return df
 
 def col_reform(df : pd.DataFrame , col : str , rename = None , fillna = None , astype = None , use_func = None):

@@ -9,7 +9,6 @@ from .builder import PortOptimTuple
 from ..util import RISK_MODEL , Portfolio , Benchmark , Port
 from ...basic.conf import ROUNDING_RETURN , ROUNDING_TURNOVER , TRADE_COST , AVAIL_BENCHMARKS
 from ...data import DATAVENDOR
-from ...func import date_diff
 
 def calc_fmp_account(port_optim_tuples : PortOptimTuple | list[PortOptimTuple]):
     if not isinstance(port_optim_tuples , list): port_optim_tuples = [port_optim_tuples]
@@ -113,7 +112,7 @@ def eval_max_drawdown(v : pd.Series | np.ndarray | Any , how : Literal['exp' , '
     return mdd , idx_st , idx_ed
 
 def eval_fmp_stats(grp : pd.DataFrame , mdd_period = True , **kwargs):
-    period_len = abs(date_diff(grp['start'].min() , grp['end'].max()))
+    period_len = abs(DATAVENDOR.CALENDAR.cd_diff(grp['start'].min() , grp['end'].max()))
     period_n   = len(grp)
 
     with np.errstate(divide = 'ignore'):

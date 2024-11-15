@@ -200,9 +200,9 @@ class TrainParam:
         else:
             return 'not_a_booster'
     @property
-    def model_booster_optuna(self): return bool(self.Param['model.booster_optuna'])
+    def model_booster_optuna(self): return bool(self.Param.get('model.booster_optuna'))
     @property
-    def model_booster_optuna_n_trials(self): return int(self.Param['model.booster_optuna_n_trials'])
+    def model_booster_optuna_n_trials(self): return int(self.Param.get('model.booster_optuna_n_trials',10))
     @property
     def train_data_step(self): return int(self.Param['train.data_step'])
     @property

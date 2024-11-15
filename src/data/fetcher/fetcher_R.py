@@ -2,12 +2,20 @@ import pyreadr
 import pandas as pd
 import numpy as np
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any , Literal , Optional
 
-from ..classes import FailedData 
 from ..transform import secid_adjust , col_reform , row_filter , adjust_precision , trade_min_reform , trade_min_fillna
 from ...basic import PATH
+
+@dataclass
+class FailedData:
+    type: str
+    date: Optional[int] = None
+    def add_attr(self , key , value): 
+        self.__dict__[key] = value
+        return self
 
 class RFetcher:
     '''Fetch data from R environment'''
@@ -66,7 +74,7 @@ class RFetcher:
                 }
                 df = df.merge(pd.DataFrame(tmp) , on = f'ind_code_{i+1}' , how='left')
 
-        df = secid_adjust(df , 'wind_id' , drop_old=False)
+        df = secid_adjust(df , 'wind_id' , drop_old=True , raise_if_no_secid=False)
         if params[key].get(col_reform) is not None:
             for col , kwargs in params[key].get(col_reform).items(): 
                 df = col_reform(df , col , **kwargs)
@@ -85,7 +93,7 @@ class RFetcher:
         if not path.exists(): return FailedData('risk_exp' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.read_csv(path)
-            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=False))
+            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=True))
         if with_date: df['date'] = date
         return df
     
@@ -110,7 +118,7 @@ class RFetcher:
                  'spec_risk':Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/C_specific_risk/jm2018_model/jm2018_model_{date}.Rdata')}
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
-            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=False))
+            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=True))
             df['spec_risk'] = df['spec_risk'] * np.sqrt(252)
         if with_date: df['date'] = date
         return df
@@ -179,7 +187,7 @@ class RFetcher:
             return FailedData('day' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
-            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=False)).reset_index(drop=True)
+            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=True)).reset_index(drop=True)
         if with_date: df['date'] = date
         return df
 
@@ -257,7 +265,7 @@ class RFetcher:
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.merge(rtn,res,how='left',on='id')
             df.columns = ['wind_id' , f'rtn_lag{int(lag1)}_{days}' , f'res_lag{int(lag1)}_{days}']
-            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=False)).reset_index(drop=True)
+            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=True)).reset_index(drop=True)
         if with_date: df['date'] = date
         return df
 
@@ -309,7 +317,7 @@ class RFetcher:
         if not path.exists():  return FailedData(f'bm_{bm.lower()}' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.read_csv(path)
-            df = secid_adjust(df , 'wind_id' , drop_old=False)
+            df = secid_adjust(df , 'wind_id' , drop_old=True)
             df['weight'] = df['weight'] / df['weight'].sum()
             df = adjust_precision(df)
         return df

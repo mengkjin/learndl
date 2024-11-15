@@ -3,12 +3,11 @@ import pandas as pd
 import numpy as np
 
 from typing import Literal
-from datetime import datetime , timedelta , time
 
 from .license_uri import uri as rcquant_uri
 from ...transform import secid_adjust , trade_min_reform
 from ....basic import PATH , CALENDAR
-from ....func import today
+
 
 START_DATE = 20241101
 RC_PATH = PATH.miscel.joinpath('Rcquant')
@@ -18,9 +17,6 @@ secdf_path = RC_PATH.joinpath('secdf')
 
 final_path.mkdir(exist_ok=True , parents=True)
 secdf_path.mkdir(exist_ok=True , parents=True)
-
-def date_offset(date : int , n = 1):
-    return int((datetime.strptime(str(date), '%Y%m%d') + timedelta(days=n)).strftime('%Y%m%d'))
 
 def rcquant_secdf(date : int):
     path = secdf_path.joinpath(f'secdf_{date}.feather')
@@ -47,7 +43,7 @@ def updated_dates(x_min = 1):
 
 def min_update_dates(date):
     start_date = last_date(1)
-    end_date = today(-1) if date is None else date
+    end_date = CALENDAR.update_to() if date is None else date
     return CALENDAR.td_within(start_date , end_date)
 
 def x_mins_update_dates(date) -> list[int]:
@@ -68,15 +64,14 @@ def x_mins_to_update(date):
 
 def last_date(offset : int = 0 , x_min : int = 1):
     dates = updated_dates(x_min)
-    last_dt = max(dates) if len(dates) > 0 else date_offset(START_DATE , -1)
-    return date_offset(last_dt , offset)
+    last_dt = max(dates) if len(dates) > 0 else CALENDAR.cd(START_DATE , -1)
+    return CALENDAR.cd(last_dt , offset)
 
 def rcquant_trading_dates(start_date, end_date):
     if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
 
 def rcquant_bar_min(date : int , first_n : int = -1):
-    if date == today() and datetime.now().time() <= time(19, 0, 0): return False
     if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
     def code_map(x : str):
         x = x.split('.')[0]

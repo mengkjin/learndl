@@ -133,7 +133,7 @@ class SQLFetcher:
                     last1_dt = min(self.date_offset(old_dates[-1],1,astype=int))
                     start_dt = max(start_dt , last1_dt)
 
-            end_dt = min(end_dt , int(date.today().strftime('%Y%m%d')))
+            end_dt = min(end_dt , CALENDAR.update_to())
             date_intervals = self.date_seg(start_dt , end_dt)
         if not date_intervals: return 
         
@@ -243,7 +243,9 @@ class SQLFetcher:
         elif factor_src == 'huatai':
             assert isinstance(df , dict)
             df0 = pd.DataFrame(columns = ['date','secid']).astype(int)
+           
             for k , subdf in df.items():
+                assert 'instrument' in subdf.columns , subdf.columns
                 subdf = subdf.rename(columns = {'datetime':'date','value':k})
                 df0 = df0.merge(subdf.rename(columns = {'factor':k}),how='outer',on=['date','instrument'])
             df = secid_adjust(df0 , ['instrument'] , drop_old=True)
@@ -270,12 +272,6 @@ class SQLFetcher:
         dt_starts = [cls.date_offset(start_dt) , *cls.date_offset(dt_list[:-1],1)]
         dt_ends = [*dt_list[:-1] , cls.date_offset(end_dt)]
         return [(int(s),int(e)) for s,e in zip(dt_starts , dt_ends)]
-    
-    @classmethod
-    def date_between(cls , start_dt , end_dt):
-        if start_dt >= end_dt: return []
-        dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=cls.FREQ).strftime('%Y%m%d').astype(int).to_numpy()
-        return CALENDAR.td_filter(dt_list)
     
     @staticmethod
     def date_offset(date , offset = 0 , astype = int):
@@ -354,7 +350,7 @@ class SQLFetcher:
 
     @classmethod
     def update_dates(cls , start_dt , end_dt):
-        dates = cls.date_between(start_dt , end_dt)
+        dates = CALENDAR.td_within(start_dt , end_dt)
         if len(dates) == 0: return NotImplemented
 
         for factor , connection in cls.factors_and_conns():  
@@ -376,7 +372,7 @@ if __name__ == '__main__':
 
     start_dt = 20100901 
     end_dt   = 20100915
-    dates = SQLFetcher.date_between(start_dt , end_dt)
+    dates = CALENDAR.td_within(start_dt , end_dt)
 
     factors_set = SQLFetcher.factors_and_conns('dongfang.hfq_chars')
     factor , connection = factors_set[0]

@@ -1,4 +1,4 @@
-import os , shutil , sys , yaml , socket , torch
+import os , shutil , sys , yaml , socket , torch , time
 from pathlib import Path
 
 # variables
@@ -52,3 +52,9 @@ def copyfiles(src , dst , bases):
 
 def deltrees(dir , bases):
     [shutil.rmtree(f'{dir}/{base}') for base in bases]
+
+def modified_date(path : Path | str , default = 19970101):
+    if Path(path).exists():
+        return int(time.strftime('%Y%m%d',time.localtime(os.path.getmtime(path))))
+    else:
+        return default

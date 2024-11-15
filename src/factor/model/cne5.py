@@ -135,7 +135,7 @@ class TuShareCNE5_Calculator:
         list_days = 252
         redempt_tmv_pct = 0.8
 
-        dates = DATAVENDOR.CALENDAR.cd_trailing(date , 63)
+        dates = DATAVENDOR.CALENDAR.td_trailing(date , 63)
 
         new_desc = DATAVENDOR.INFO.get_desc(date)
         abnormal = DATAVENDOR.INFO.get_abnormal(date)
@@ -191,11 +191,13 @@ class TuShareCNE5_Calculator:
         half_life = 63
         min_finite_ratio = 0.25
 
-        dates = DATAVENDOR.CALENDAR.cd_trailing(date , n_window)
+        dates = DATAVENDOR.CALENDAR.td_trailing(date , n_window)
         
         stk_ret = DATAVENDOR.TRADE.get_returns(dates[0], dates[-1] , mask = False)
         mkt_ret = DATAVENDOR.TRADE.get_market_return(dates[0], dates[-1])
+        
         wgt = time_weight(n_window , half_life)
+
         b = apply_ols(mkt_ret.values.flatten() , stk_ret.values , wgt)[1]
         b[np.isfinite(stk_ret).sum() < n_window * min_finite_ratio] = np.nan
         v = pd.Series(b , index = stk_ret.columns)
@@ -203,7 +205,7 @@ class TuShareCNE5_Calculator:
         return self.descriptor(v , date , 'beta' , 0)
 
     def calc_momentum(self , date : int):
-        dates = DATAVENDOR.CALENDAR.cd_trailing(date , 525)[:504]
+        dates = DATAVENDOR.CALENDAR.td_trailing(date , 525)[:504]
         wgt_df = pd.DataFrame({'date':dates , 'weight':time_weight(504,126)})
 
         df = pd.concat([DATAVENDOR.TRADE.get_trd(d , ['date','secid','pctchange']) for d in dates]).merge(wgt_df , on = 'date')
@@ -219,7 +221,7 @@ class TuShareCNE5_Calculator:
         # cmra : cumulative log range , (zmax - zmin) over the last 12 months
         # hsigma : annualized daily standard deviation of daily residual return (same parameters as beta calculation)
 
-        dates = DATAVENDOR.CALENDAR.cd_trailing(date , 253)[:-1]
+        dates = DATAVENDOR.CALENDAR.td_trailing(date , 253)[:-1]
         wgt = time_weight(252 , 42)
 
         df_trd = pd.concat([DATAVENDOR.TRADE.get_trd(d,['date','secid','pctchange']) for d in dates])
@@ -259,15 +261,15 @@ class TuShareCNE5_Calculator:
     def calc_liquidity(self , date : int):
 
         cols = ['secid','turnover_rate']
-        stom = pd.concat([DATAVENDOR.TRADE.get_val(d , cols) for d in DATAVENDOR.CALENDAR.cd_trailing(date , 21)]).\
+        stom = pd.concat([DATAVENDOR.TRADE.get_val(d , cols) for d in DATAVENDOR.CALENDAR.td_trailing(date , 21)]).\
             groupby('secid')['turnover_rate'].sum()
         stom = self.descriptor(stom.fillna(0) , date , 'stom' , 'min')
         
-        stoq = pd.concat([DATAVENDOR.TRADE.get_val(d , cols) for d in DATAVENDOR.CALENDAR.cd_trailing(date , 63)]).\
+        stoq = pd.concat([DATAVENDOR.TRADE.get_val(d , cols) for d in DATAVENDOR.CALENDAR.td_trailing(date , 63)]).\
             groupby('secid')['turnover_rate'].sum()
         stoq = self.descriptor(stoq.fillna(0) , date , 'stoq' , 'min')
         
-        stoa = pd.concat([DATAVENDOR.TRADE.get_val(d , cols) for d in DATAVENDOR.CALENDAR.cd_trailing(date ,252)]).\
+        stoa = pd.concat([DATAVENDOR.TRADE.get_val(d , cols) for d in DATAVENDOR.CALENDAR.td_trailing(date ,252)]).\
             groupby('secid')['turnover_rate'].sum()
         stoa = self.descriptor(stoa.fillna(0) , date , 'stoa' , 'min')
 
@@ -347,7 +349,7 @@ class TuShareCNE5_Calculator:
     
     def calc_common_risk(self , date : int):
         assert date >= self.START_DATE , (date , self.START_DATE)
-        dates = DATAVENDOR.CALENDAR.cd_trailing(date , 504)
+        dates = DATAVENDOR.CALENDAR.td_trailing(date , 504)
         dates = dates[dates >= self.START_DATE]
         if len(dates) < (504 // 4): 
             factors = self.get_coef(date,True).index.to_numpy()
@@ -366,7 +368,7 @@ class TuShareCNE5_Calculator:
 
     def calc_specific_risk(self , date : int):
         assert date >= self.START_DATE , (date , self.START_DATE)
-        dates = DATAVENDOR.CALENDAR.cd_trailing(date , 504)
+        dates = DATAVENDOR.CALENDAR.td_trailing(date , 504)
         dates = dates[dates >= self.START_DATE]
         if len(dates) < (504 // 4): 
             secids = self.get_resid(date,True).index.to_numpy()
@@ -390,9 +392,8 @@ class TuShareCNE5_Calculator:
         return self
         
     def updatable_dates(self , job : Literal['exposure' , 'risk']):
-        dates = DATAVENDOR.CALENDAR.cal_trd['calendar'].to_numpy()
-        end_date = np.min([PATH.db_dates('trade_ts' , 'day').max(),
-                           PATH.db_dates('trade_ts' , 'day_val').max()])
+        dates = DATAVENDOR.CALENDAR.trade_dates()
+        end_date = np.min([PATH.db_dates('trade_ts' , 'day').max(), PATH.db_dates('trade_ts' , 'day_val').max()])
         dates = dates[(dates > self.START_DATE) & (dates <= end_date)]
         
         all_updated : np.ndarray | Any = None
