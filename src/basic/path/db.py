@@ -65,7 +65,7 @@ def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
 
 def save_df(df : pd.DataFrame | None , target_path : Path | str , overwrite = True , printing_prefix = None):
     target_path = Path(target_path)
-    if df is None or df.empty or len(df) == 0: 
+    if df is None or df.empty: 
         return False
     elif overwrite or not target_path.exists(): 
         target_path.parent.mkdir(parents=True , exist_ok=True)
@@ -79,15 +79,29 @@ def save_df(df : pd.DataFrame | None , target_path : Path | str , overwrite = Tr
         if printing_prefix: print(f'{printing_prefix} already exists')
         return False
 
-def load_df(target_path : Path | str , none_if_not_exist = False):
+def load_df(target_path : Path | str , raise_if_not_exist = False , date = None):
     target_path = Path(target_path)
     if not target_path.exists():
-        if none_if_not_exist: return None
-        raise FileNotFoundError(target_path)
+        if raise_if_not_exist: raise FileNotFoundError(target_path)
+        else: return None
     if SAVE_OPT_DB == 'feather':
-        return pd.read_feather(target_path)
+        df = pd.read_feather(target_path)
     else:
-        return pd.read_parquet(target_path , engine='fastparquet')
+        df = pd.read_parquet(target_path , engine='fastparquet')
+    if date is not None: df['date'] = date
+    return df
+
+def load_df_multi(paths : dict , parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 10 , assign_date = False):
+    if parallel is None:
+        dfs = {d:load_df(p , date=d if assign_date else None) for d,p in paths.items()}
+    else:
+        assert parallel == 'thread' or platform.system() != 'Windows' , (parallel , platform.system())
+        if n_cpu:= os.cpu_count(): max_workers = min(max_workers , n_cpu)
+        PoolExecutor = ThreadPoolExecutor if parallel == 'thread' else ProcessPoolExecutor
+        with PoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(load_df, p , date=d if assign_date else None):d for d,p in paths.items()}
+            dfs = {futures[future]:future.result() for future in as_completed(futures)}
+    return dfs
 
 @db_src_deprecated(1)
 def db_save(df : pd.DataFrame | None , db_src , db_key , date = None , 
@@ -97,9 +111,9 @@ def db_save(df : pd.DataFrame | None , db_src , db_key , date = None ,
     return mark
 
 @db_src_deprecated(0)
-def db_load(db_src , db_key , date = None , check_na_cols = True) -> pd.DataFrame | Any:
+def db_load(db_src , db_key , date = None , check_na_cols = True , raise_if_not_exist = False) -> pd.DataFrame | Any:
     path = db_path(db_src , db_key , date)
-    df = load_df(path , none_if_not_exist=True)
+    df = load_df(path , raise_if_not_exist=raise_if_not_exist)
     if df is None: return None
     if df.empty:
         print(f'{db_src} , {db_key} , {date} entry is empty')
@@ -110,7 +124,21 @@ def db_load(db_src , db_key , date = None , check_na_cols = True) -> pd.DataFram
     return df
 
 @db_src_deprecated(0)
-def db_load_multi(db_src , db_key , dates , parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
+def db_load_multi(db_src , db_key , dates , parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 10):
+    paths = {date:db_path(db_src , db_key , date) for date in dates}
+    return load_df_multi(paths , parallel , max_workers)
+    '''
+    if parallel is None:
+        dfs = {date:db_load(db_src , db_key , date) for date in dates}
+    else:
+        assert parallel == 'thread' or platform.system() != 'Windows' , (parallel , platform.system())
+        if n_cpu:= os.cpu_count(): max_workers = min(max_workers , n_cpu)
+        PoolExecutor = ThreadPoolExecutor if parallel == 'thread' else ProcessPoolExecutor
+        with PoolExecutor(max_workers=10) as pool:
+            futures = {pool.submit(db_load, db_src , db_key , date):date for date in dates}
+            dfs = {futures[future]:future.result() for future in as_completed(futures)}
+    return dfs
+    '''
     if parallel is None:
         dfs = {date:db_load(db_src , db_key , date) for date in dates}
     else:
@@ -147,8 +175,12 @@ def pred_dates(model_name : str , start_dt = None , end_dt = None , year = None)
 def pred_save(df : pd.DataFrame | None , model_name : str , date : int | Any , overwrite = True):
     return save_df(df , pred_path(model_name , date) , overwrite)
 
-def pred_load(model_name : str , date : int | Any):
-    return load_df(pred_path(model_name , date) , none_if_not_exist=True)
+def pred_load(model_name : str , date : int | Any , assign_date = False):
+    return load_df(pred_path(model_name , date) , raise_if_not_exist=False , date = date if assign_date else None)
+
+def pred_load_multi(model_name : str , dates , parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 10 , assign_date = False):
+    paths = {date:pred_path(model_name , date) for date in dates}
+    return load_df_multi(paths , parallel , max_workers , assign_date = assign_date)
 
 def factor_path(factor_name : str , date : int | Any):
     return PATH.factor.joinpath(factor_name , str(date // 10000) , f'{factor_name}.{date}.feather')
@@ -159,8 +191,12 @@ def factor_dates(factor_name : str , start_dt = None , end_dt = None , year = No
 def factor_save(df : pd.DataFrame | None , factor_name : str , date : int | Any , overwrite = True):
     return save_df(df , factor_path(factor_name , date) , overwrite)
 
-def factor_load(factor_name : str , date : int | Any):
-    return load_df(factor_path(factor_name , date) , none_if_not_exist=True)
+def factor_load(factor_name : str , date : int | Any , assign_date = False):
+    return load_df(factor_path(factor_name , date) , raise_if_not_exist=False , date = date if assign_date else None)
+
+def factor_load_multi(factor_name : str , dates , parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 10 , assign_date = False):
+    paths = {date:factor_path(factor_name , date) for date in dates}
+    return load_df_multi(paths , parallel , max_workers , assign_date = assign_date)
 
 @laptop_func_deprecated
 def get_source_dates(db_src , db_key):

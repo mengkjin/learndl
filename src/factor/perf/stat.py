@@ -4,11 +4,11 @@ import pandas as pd
 
 from typing import Any , Literal , Optional
 
-from ..util import Benchmark , BENCHMARKS
+from ..util import Benchmark
 from ...data import DataBlock , DATAVENDOR 
 
 def get_benchmark(benchmark : Optional[Benchmark | str] = None) -> Optional[Benchmark]:
-    if isinstance(benchmark , str): benchmark = BENCHMARKS[benchmark]
+    if isinstance(benchmark , str): benchmark = Benchmark(benchmark)
     return benchmark
 
 def factor_val_breakdown(factor_val : DataBlock | pd.DataFrame , 
@@ -122,8 +122,8 @@ def calc_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Be
     df = factor_val.groupby('date').apply(eval_grp_avg , x_cols = factor_list , y_name = 'ret' , group_num = group_num , excess = excess) # type: ignore
     df = df.rename_axis('factor_name', axis='columns').stack().rename('group_ret').reset_index().sort_values(['date','group'])
     if trade_date:
-        df['start'] = DATAVENDOR.td_offset(df['date'] , lag)
-        df['end']   = DATAVENDOR.td_offset(df['date'] , lag + nday - 1)
+        df['start'] = DATAVENDOR.td_array(df['date'] , lag)
+        df['end']   = DATAVENDOR.td_array(df['date'] , lag + nday - 1)
     return df
 
 def calc_decay_grp_perf(factor_val : DataBlock | pd.DataFrame, benchmark : Optional[Benchmark | str] = None , 
@@ -185,7 +185,7 @@ def calc_distribution(factor_val : DataBlock | pd.DataFrame , benchmark : Option
     for factor_name in factor_list:
         hist_dict = {}
         for date in date_chosen:
-            factor_sample = factor_val_date.loc[date, [factor_name]].copy()
+            factor_sample = factor_val_date.loc[date, [factor_name]].dropna().copy()
             cnts, bins = np.histogram(factor_sample, bins=hist_bins, density=False)
             hist_dict[date] = (cnts, bins)
         hist_df = pd.DataFrame(hist_dict, index=['hist_cnts', 'hist_bins']).T
@@ -328,7 +328,7 @@ def calc_pnl(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchm
     pnl_0 = pnl.groupby(['factor_name' , 'weight_type'])['date'].min().reset_index()
     pnl_0['cum_ret'] = 0.
 
-    pnl['date'] = DATAVENDOR.td_offset(pnl['date'] , lag + nday - 1)
+    pnl['date'] = DATAVENDOR.td_array(pnl['date'] , lag + nday - 1)
     pnl = pd.concat([pnl_0 , pnl])
 
     return pnl

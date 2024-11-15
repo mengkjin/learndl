@@ -8,7 +8,7 @@ from torch import Tensor
 from typing import Any , ClassVar , Literal , Optional
 
 from .classes import Stock4DData
-from .tushare import TSData
+from .tushare.access import INFO
 from ..basic import PATH , SILENT
 from ..basic.util import Timer
 from ..func import index_union , index_intersect , forward_fillna
@@ -132,7 +132,7 @@ class DataBlock(Stock4DData):
         dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None and not df.empty]
         df  = pd.concat(dfs) if len(dfs) else pd.DataFrame()
         if len(df) == 0: return cls()
-        df = df.reset_index(drop = (len(df.index.names) == 0))
+        if len(df.index.names) >=1 and df.index.names[0] is not None: df = df.reset_index()
         use_index = [f for f in cls.DEFAULT_INDEX if f in df.columns]
         assert len(use_index) <= 3 , use_index
         if feature is not None:  df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
@@ -193,7 +193,7 @@ class DataBlock(Stock4DData):
         if not mask : return self
         mask_pos = np.full(self.shape , fill_value=False , dtype=bool)
         if mask_list_dt := mask.get('list_dt'):
-            desc = TSData.INFO.get_desc(set_index=False)
+            desc = INFO.get_desc(set_index=False)
             desc = desc[desc['secid'] > 0].loc[:,['secid','list_dt','delist_dt']]
             if len(np.setdiff1d(self.secid , desc['secid'])) > 0:
                 add_df = pd.DataFrame({

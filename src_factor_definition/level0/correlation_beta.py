@@ -1,14 +1,14 @@
 import numpy as np
 import pandas as pd
 from src.factor.classes import StockFactorCalculator
-from src.data import TSData
+from src.data import DATAVENDOR
 from src.func.transform import time_weight , apply_ols
 
 def calc_beta(date , n_months : int , lag_months : int = 0 , half_life = 0 , min_finite_ratio = 0.25):
-    start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
 
-    stk_ret = TSData.TRADE.get_returns(start_date, end_date)
-    mkt_ret = TSData.TRADE.get_market_return(start_date, end_date)
+    stk_ret = DATAVENDOR.TRADE.get_returns(start_date, end_date)
+    mkt_ret = DATAVENDOR.TRADE.get_market_return(start_date, end_date)
     wgt = time_weight(len(mkt_ret) , half_life)
     beta = pd.Series(apply_ols(mkt_ret.values.flatten() , stk_ret.values , wgt)[1] , index = stk_ret.columns)
     mask = np.isfinite(stk_ret).sum() < len(mkt_ret) * min_finite_ratio

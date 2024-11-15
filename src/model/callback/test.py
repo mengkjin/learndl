@@ -57,12 +57,9 @@ class DetailedAlphaAnalysis(BaseCallBack):
             for col in ['ir','calmar','turnover']:  df[col] = df[col].map(lambda x:f'{x:.3f}')
             FUNC.display.data_frame(df)
 
-        FUNC.dfs_to_excel(rslts , self.path_data)
-        FUNC.figs_to_pdf(figs , self.path_plot)
+        FUNC.dfs_to_excel(rslts , self.path_data , print_prefix='Analytic datas')
+        FUNC.figs_to_pdf(figs , self.path_plot , print_prefix='Analytic plots')
         
-        print(f'Analytic datas are saved to {self.path_data}')
-        print(f'Analytic plots are saved to {self.path_plot}')
-
 class GroupReturnAnalysis(BaseCallBack):
     '''record and concat each model to Alpha model instance'''
     def __init__(self , trainer , 

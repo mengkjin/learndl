@@ -7,9 +7,8 @@ from typing import Any , ClassVar , Optional
 from ..module import get_predictor_module
 from ...util import TrainConfig
 from ...data_module import DataModule
-from ....basic import PATH , SILENT , THIS_IS_SERVER
+from ....basic import PATH , SILENT , THIS_IS_SERVER , CALENDAR
 from ....basic.util import RegisteredModel , REG_MODELS
-from ....data import GetData
 from ....func import today , date_offset
 
 class ModelPredictor:
@@ -49,8 +48,7 @@ class ModelPredictor:
     @classmethod
     def update_factors(cls , silent = True):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
-        reg_models = [RegisteredModel(**reg_model) for reg_model in REG_MODELS]
-        for model in reg_models:
+        for model in REG_MODELS:
             md = cls(model)
             with SILENT: md.update().deploy()
             print(f'Finish model [{model.name}] predicting!')
@@ -68,7 +66,7 @@ class ModelPredictor:
         model_dates  = self.reg_model.model_dates 
         start_dt     = max(start_dt , int(date_offset(min(model_dates) ,1)))
 
-        update_dates = GetData.trade_dates(start_dt , end_dt)
+        update_dates = CALENDAR.td_within(start_dt , end_dt)
         stored_dates = PATH.pred_dates(self.alias , start_dt , end_dt)
 
         self.predict(np.setdiff1d(update_dates , stored_dates))

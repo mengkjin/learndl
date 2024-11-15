@@ -4,9 +4,8 @@ import pandas as pd
 from abc import ABC , abstractmethod
 from typing import Any
 
-from .calendar import CALENDAR
 from .stock_info import INFO
-from ..basic.trade_date import TradeDate
+from ....basic import CALENDAR , TradeDate
 
 class DateDataAccess(ABC):
     MAX_LEN = -1
@@ -49,7 +48,7 @@ class DateDataAccess(ABC):
         assert data_type in self.DATA_TYPE_LIST , f'data_type must be in {self.DATA_TYPE_LIST}'
 
         dates = CALENDAR.td_within(start_dt , end_dt)
-        use_dates = CALENDAR.offset(dates , -1) if prev else dates
+        use_dates = CALENDAR.td_array(dates , -1) if prev else dates
 
         assert len(dates) <= self.MAX_LEN , f'No more than {self.MAX_LEN} dates between {start_dt} and {end_dt}'
         assert len(dates) == len(use_dates) , 'dates and val_dates should have the same length'

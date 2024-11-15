@@ -4,7 +4,8 @@ import pandas as pd
 
 from typing import Literal
 from datetime import datetime , timedelta
-from ....basic import PATH
+from ...transform import secid_adjust , trade_min_reform
+from ....basic import PATH , CALENDAR
 from ....func import date_diff , today
 
 START_DATE = 20241101
@@ -48,12 +49,31 @@ def baostock_past_dates(file_type : Literal['secdf' , '5min']):
     past_dates = sorted([int(p.name.split('.')[-2][-8:]) for p in past_files])
     return past_dates
     
-def updated_dates():
-    return PATH.db_dates('trade_ts' , '5min')
-    return baostock_past_dates('5min')
+def updated_dates(x_min : int = 5):
+    assert x_min in [5 , 10 , 15 , 30 , 60]
+    return PATH.db_dates('trade_ts' , f'{x_min}min')
 
 def updatable(date , last_date):
     return (len(updated_dates()) == 0) or (date > 0 and date_diff(date , last_date) > 6)
+
+def x_mins_update_dates(date):
+    all_dates = np.array([])
+    for x_min in [10 , 15 , 30 , 60]:
+        dates = np.setdiff1d(CALENDAR.td_within(last_date_x_min(1 , x_min) , last_date()) , PATH.db_dates('trade_ts' , f'{x_min}min'))
+        all_dates = np.concatenate([all_dates , dates])
+    return np.unique(all_dates)
+
+def x_mins_to_update(date):
+    x_mins = []
+    for x_min in [10 , 15 , 30 , 60]:
+        path = PATH.db_path('trade_ts' , f'{x_min}min' , date)
+        if not path.exists(): x_mins.append(x_min)
+    return x_mins
+
+def last_date_x_min(offset : int = 0 , x_min : int = 10):
+    dates = updated_dates(x_min)
+    last_dt = max(dates) if len(dates) > 0 else date_offset(START_DATE , -1)
+    return date_offset(last_dt , offset)
 
 def last_date(offset : int = 0):
     dates = baostock_past_dates('5min')
@@ -65,22 +85,6 @@ def pending_date():
     d0 = max(dates0) if len(dates0) > 0 else date_offset(START_DATE , -1)
     d1 = last_date()
     return d0 if d0 > d1 else -1
-
-def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : int = 10):
-    pending_dt = pending_date()
-    end_date = today(-1) if date is None else date
-    if pending_dt == end_date: pending_dt = -1
-    for dt in [pending_dt , end_date]:
-        last_dt = last_date(1)
-        if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
-            mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
-            if not mark: 
-                print(f'{last_dt} - {dt} failed')
-                return False
-            else:
-                print(f'{last_dt} - {dt} success')
-
-    return True
 
 def baostock_bar_5min(start_date : int , end_date : int , first_n : int = -1 , retry_n : int = 10):
     # date = 20240704
@@ -150,10 +154,34 @@ def baostock_bar_5min(start_date : int , end_date : int , first_n : int = -1 , r
 
 def baostock_5min_to_normal_5min(df : pd.DataFrame):
     df.loc[:,['open','high','low','close','volume','amount']] = df.loc[:,['open','high','low','close','volume','amount']].astype(float)
-    df['secid'] = df['code'].str.extract(r'\.(\w+)$').astype(int)
+    df = secid_adjust(df , ['code'] , drop_old=True)
     df['minute'] = ((df['time'].str.slice(8,10).astype(int) - 9.5) * 12 + df['time'].str.slice(10,12).astype(int) / 5).astype(int) - 1
     df.loc[df['minute'] >= 24 , 'minute'] -= 18
     df['vwap'] = df['amount'] / df['volume'].where(df['volume'] > 0 , np.nan)
     df['vwap'] = df['vwap'].where(df['vwap'].notna() , df['open'])
     df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap']].sort_values(['secid','minute']).reset_index(drop = True)
     return df
+
+def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : int = 10):
+    pending_dt = pending_date()
+    end_date = today(-1) if date is None else date
+    if pending_dt == end_date: pending_dt = -1
+    for dt in [pending_dt , end_date]:
+        last_dt = last_date(1)
+        if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
+            mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
+            if not mark: 
+                print(f'{last_dt} - {dt} failed')
+                return False
+            else:
+                print(f'{last_dt} - {dt} success')
+
+    print('-' * 80)
+    print('process other min bars:')
+    for dt in x_mins_update_dates(date):
+        for x_min in x_mins_to_update(dt):
+            five_min_df = PATH.db_load('trade_ts' , '5min' , dt)
+            x_min_df = trade_min_reform(five_min_df , x_min , 5)
+            PATH.db_save(x_min_df , 'trade_ts' , f'{x_min}min' , verbose = True)
+
+    return True

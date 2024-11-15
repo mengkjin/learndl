@@ -7,7 +7,7 @@ from typing import Any , Callable , Literal , Optional
 
 from . import stat as Stat
 from . import plot as Plot
-from ..util import Benchmark , BENCHMARKS
+from ..classes import Benchmark
 from ...data import DataBlock
 
 class suppress_warnings:
@@ -71,7 +71,7 @@ class Group_Ret_Cum_Curve(BasePerfCalc):
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag = lag , group_num = group_num , ret_type = ret_type)
-        self.default_benchmarks = [None , *BENCHMARKS.values()]
+        self.default_benchmarks = [None , *Benchmark.defaults()]
     def calculator(self): return Stat.calc_grp_perf
     def plotter(self): return Plot.plot_grp_perf
 
@@ -141,7 +141,7 @@ class PnL_Cum_Curve(BasePerfCalc):
                  weight_type_list : list[str] = ['long' , 'long_short' , 'short'] , **kwargs) -> None:
         super().__init__(nday = nday , lag = lag , group_num = group_num , ret_type = ret_type ,
                          given_direction = given_direction , weight_type_list = weight_type_list)
-        self.default_benchmarks = [None , *BENCHMARKS.values()]
+        self.default_benchmarks = [None , *Benchmark.defaults()]
     def calculator(self): return Stat.calc_pnl
     def plotter(self): return Plot.plot_pnl
 

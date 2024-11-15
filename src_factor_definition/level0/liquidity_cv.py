@@ -2,17 +2,17 @@ import numpy as np
 import pandas as pd
 from typing import Literal
 from src.factor.classes import StockFactorCalculator
-from src.data import TSData
+from src.data import DATAVENDOR
 
 def coefficient_variance(date , n_months : int , data_type : Literal['amount' , 'turnover'] , min_finite_ratio = 0.25):
-    start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm')
+    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
     if data_type == 'amount':
-        vals = TSData.TRADE.get_volumes(start_date , end_date , volume_type = 'amount')
+        vals = DATAVENDOR.TRADE.get_volumes(start_date , end_date , volume_type = 'amount')
     elif data_type == 'turnover':
-        vals = TSData.TRADE.get_turnovers(start_date , end_date)
+        vals = DATAVENDOR.TRADE.get_turnovers(start_date , end_date)
     else:
         raise ValueError(f'data_type must be "amount" or "turnover" , but got {data_type}')
-    vals = TSData.TRADE.mask_min_finite(vals , min_finite_ratio = min_finite_ratio)
+    vals = DATAVENDOR.TRADE.mask_min_finite(vals , min_finite_ratio = min_finite_ratio)
     return vals.std() / vals.mean()
 
 class amt_cv1m(StockFactorCalculator):

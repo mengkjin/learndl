@@ -1,4 +1,4 @@
-import sys , pathlib
+import sys , pathlib , traceback
 if (path := str(pathlib.Path(__file__).parent.parent.parent)) not in sys.path:
     sys.path.append(path)
 
@@ -14,25 +14,36 @@ email_title = f'daily update at {datetime.now().strftime("%Y-%m-%d")}'
 def proceed_new_version():
     return main_process()
 
-def proceed_old_version():
-    with DualPrinter() as printer:
-        main_process()
-    send_email(title = email_title , body = printer.contents())
-
 def main_process():
     try:
+        print('update_data: ' + '*' * 20)
         DataAPI.update()
-    except Exception as e:
-        print(f'DataAPI went wrong: {e}')
 
-    print('prepare_predict_data')
-    DataAPI.prepare_predict_data()
-    ModelTrainer.update_models()
-    ModelHiddenExtractor.update_hidden()
-    ModelPredictor.update_factors()
+        print('prepare_predict_data: ' + '*' * 20)
+        DataAPI.prepare_predict_data()
+
+        print('update_models: ' + '*' * 20)
+        ModelTrainer.update_models()
+
+        print('update_hidden: ' + '*' * 20)
+        ModelHiddenExtractor.update_hidden()
+
+        print('update_factors: ' + '*' * 20)
+        ModelPredictor.update_factors()
+
+    except Exception as e:
+        print(f'Error Occured!')
+
+        print('Error Info : ' + '*' * 20)
+        print(e)
+
+        print('Traceback : ' + '*' * 20)
+        print(traceback.format_exc())
 
 if __name__ == '__main__':
     # proceed_new_version()    
-    proceed_old_version()
+    with DualPrinter() as printer:
+        main_process()
+    send_email(title = email_title , body = printer.contents())
     
     

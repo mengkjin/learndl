@@ -3,10 +3,10 @@ import pandas as pd
 
 from typing import Literal
 from src.factor.classes import StockFactorCalculator
-from src.data import TSData
+from src.data import DATAVENDOR
 
 def cap_classic(date , cap_type : Literal['tt' , 'fl' , 'fr']):
-    val = TSData.TRADE.get_val(date).set_index('secid')
+    val = DATAVENDOR.TRADE.get_val(date).set_index('secid')
     if cap_type == 'tt':
         return np.log(val['total_share'] * val['close'])
     elif cap_type == 'fl':
@@ -50,6 +50,6 @@ class lockedstk(StockFactorCalculator):
     description = '锁仓比'
     
     def calc_factor(self, date: int):
-        val = TSData.TRADE.get_val(date).set_index('secid')
+        val = DATAVENDOR.TRADE.get_val(date).set_index('secid')
         locked = 1 - val['free_share'] / val['total_share']
         return locked

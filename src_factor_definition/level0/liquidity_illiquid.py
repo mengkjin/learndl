@@ -4,27 +4,27 @@ import pandas as pd
 from typing import Literal
 
 from src.factor.classes import StockFactorCalculator
-from src.data import TSData
+from src.data import DATAVENDOR
 
 def amihud(date , n_months : int , lag_months : int = 0):
     '''
     Amihud illiquidity factor
     '''
-    start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    ret = TSData.TRADE.get_returns(start_date , end_date , pivot=True)
-    vol = TSData.TRADE.get_volumes(start_date , end_date , volume_type='volume' , pivot=True)
-    amihud = (TSData.TRADE.mask_min_finite(ret).abs() / vol).mean() * (10 ** 6)
+    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    ret = DATAVENDOR.TRADE.get_returns(start_date , end_date , pivot=True)
+    vol = DATAVENDOR.TRADE.get_volumes(start_date , end_date , volume_type='volume' , pivot=True)
+    amihud = (DATAVENDOR.TRADE.mask_min_finite(ret).abs() / vol).mean() * (10 ** 6)
     return amihud
 
 def mif(date , n_months : int , lag_months : int = 0):
     '''
     market impact factor
     '''
-    start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    vwap = TSData.TRADE.get_quotes(start_date , end_date , 'vwap' , pivot=True)
-    cp   = TSData.TRADE.get_quotes(start_date , end_date , 'close' , pivot=True)
-    vol = TSData.TRADE.get_volumes(start_date , end_date , volume_type='amount' , pivot=True)
-    mif = (TSData.TRADE.mask_min_finite(vwap / cp - 1) / vol).sum() * (10 ** 6)
+    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    vwap = DATAVENDOR.TRADE.get_quotes(start_date , end_date , 'vwap' , pivot=True)
+    cp   = DATAVENDOR.TRADE.get_quotes(start_date , end_date , 'close' , pivot=True)
+    vol = DATAVENDOR.TRADE.get_volumes(start_date , end_date , volume_type='amount' , pivot=True)
+    mif = (DATAVENDOR.TRADE.mask_min_finite(vwap / cp - 1) / vol).sum() * (10 ** 6)
     return mif
 
 class illiq_1m(StockFactorCalculator):

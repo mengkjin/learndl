@@ -3,15 +3,14 @@ import pandas as pd
 from dataclasses import asdict , dataclass , field
 from IPython.display import display
 from matplotlib.figure import Figure
+from pathlib import Path
 from typing import Any , Optional
 
 from . import calculator as Calc
 from .builder import group_optimize
 from .stat import group_accounting , calc_fmp_account
-from ..loader import factor
-from ..util import Benchmark , AlphaModel
-from ...basic import PATH
-from ...basic.conf import DEFAULT_BENCHMARKS
+from ..classes import Benchmark
+from ..util import AlphaModel
 from ...data import DataBlock
 from ...func import dfs_to_excel , figs_to_pdf
 
@@ -33,12 +32,12 @@ class FmpManager:
     def __post_init__(self) -> None:
         self.perf_calc_dict = {k:self.select_perf_calc(k,self.perf_params) for k,v in self.perf_calc_boolean.items() if v}
 
-    def optim(self , factor_val: DataBlock | pd.DataFrame, benchmarks: Optional[list[Benchmark|Any]] | Any = DEFAULT_BENCHMARKS , 
+    def optim(self , factor_val: DataBlock | pd.DataFrame, benchmarks: Optional[list[Benchmark|Any]] | Any = 'defaults' , 
               add_lag = 1 , config_path = None , verbosity = 2):
         if isinstance(factor_val , DataBlock): factor_val = factor_val.to_dataframe()
         alpha_models = [AlphaModel.from_dataframe(factor_val[[factor_name]]) for factor_name in factor_val.columns]
-
-        self.optim_tuples = group_optimize(alpha_models , benchmarks , add_lag , config_path = config_path , verbosity = verbosity)
+        bms = Benchmark.get_benchmarks(benchmarks)
+        self.optim_tuples = group_optimize(alpha_models , bms , add_lag , config_path = config_path , verbosity = verbosity)
         self.optim_tuples = group_accounting(self.optim_tuples , verbosity=verbosity)
         self.account = calc_fmp_account(self.optim_tuples)
 
@@ -78,15 +77,14 @@ class FmpManager:
         [display(fig) for key , fig in figs.items()]
         return figs
     
-    def rslt_to_excel(self , path : str):
-        assert path.endswith('.xlsx') , path
+    def write_down(self , path : Path | str):
+        path = Path(path)
         rslts = self.get_rslts()
-        dfs_to_excel(rslts , path , 'w' , 'fmp_')
-
-    def figs_to_pdf(self , path : str):
-        assert path.endswith('.pdf') , path
         figs = self.get_figs()
-        figs_to_pdf(figs , path)
+        dfs_to_excel(rslts , path.joinpath('data.xlsx') , print_prefix='Model Portfolio datas')
+        figs_to_pdf(figs , path.joinpath('plot.pdf') , print_prefix='Model Portfolio plots')
+
+        return self
 
     @property
     def perf_calc_boolean(self) -> dict[str,bool]:
@@ -108,16 +106,10 @@ class FmpManager:
         }[key](**param)
     
     @classmethod
-    def run_test(cls , factor_val : pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = DEFAULT_BENCHMARKS ,
-                 all = True , config_path : Optional[str] = None , verbosity = 2 , **kwargs):
+    def run_test(cls , factor_val : pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
+                 all = True , config_path : Optional[str] = None , verbosity = 2 ,**kwargs):
         pm = cls(all=all , **kwargs)
-        pm.optim(factor_val , benchmark , config_path=config_path , verbosity = verbosity)
+        bms = Benchmark.get_benchmarks(benchmark)
+        pm.optim(factor_val , bms , config_path=config_path , verbosity = verbosity)
         pm.calc(verbosity = verbosity).plot(show=False , verbosity = verbosity)
-        return pm
-    
-    @classmethod
-    def random_test(cls , nfactor = 1 , config_path :str | None = f'{PATH.conf}/fmp/custom.yaml' , verbosity = 2):
-        factor_val = factor.random(20231201 , 20240228 , nfactor=nfactor)
-        benchmark  = DEFAULT_BENCHMARKS
-        pm = cls.run_test(factor_val , benchmark , all = True , config_path = config_path , verbosity = verbosity)
         return pm

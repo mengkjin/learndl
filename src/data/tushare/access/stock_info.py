@@ -1,9 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from .calendar import CALENDAR
-from ..basic import TradeDate
-from ....basic import PATH , CONF
+from ....basic import PATH , CONF , CALENDAR , TradeDate
 from ....func.singleton import singleton
 
 @singleton
@@ -36,7 +34,7 @@ class InfoDataAccess:
     
     def get_list_dt(self , date : int | TradeDate | None = None , offset = 0):
         desc = self.get_desc(date)
-        if offset != 0: desc['list_dt'] = CALENDAR.offset(desc['list_dt'] , offset , 't')
+        if offset != 0: desc['list_dt'] = CALENDAR.td_array(desc['list_dt'] , offset)
         return desc.loc[:,['list_dt']].reset_index().drop_duplicates(subset='secid').set_index('secid')
     
     def get_abnormal(self , date : int | TradeDate | None = None , reason = ['终止上市', '暂停上市' , 'ST', '*ST', ]):

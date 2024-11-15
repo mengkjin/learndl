@@ -16,6 +16,7 @@ REG_MODELS:
 
 HID_MODELS:
   - name: gru_day
-    nums: NULL
     submodels: [best]
+    nums: NULL
+    alias: gru_day_V0
       

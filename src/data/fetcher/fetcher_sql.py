@@ -9,7 +9,9 @@ from datetime import date , datetime
 from sqlalchemy import create_engine , exc
 from typing import ClassVar , Literal
 
-from ...basic import PATH
+from ..transform import secid_adjust
+from ...basic import PATH , CALENDAR
+
 @dataclass
 class Connection:
     dialect     : str
@@ -125,7 +127,7 @@ class SQLFetcher:
         else:
             start_dt = max(self.start_dt , start_dt)
             if option == 'since':
-                old_dates = self.get_target_dates()
+                old_dates = PATH.db_dates(self.DB_SRC , self.db_key)
                 if trace > 0 and len(old_dates) > trace: old_dates = old_dates[:-trace]
                 if len(old_dates): 
                     last1_dt = min(self.date_offset(old_dates[-1],1,astype=int))
@@ -189,11 +191,8 @@ class SQLFetcher:
                                            connection) for factor in self.factors}
         return df
 
-    def get_target_dates(self):
-        return PATH.db_dates(self.DB_SRC , self.db_key)
-
-    def save_data(self , data):
-        if len(data) == 0: return
+    def save_data(self , data : pd.DataFrame | None):
+        if data is None or data.empty or len(data) == 0: return
         data = data.sort_values(['date' , 'secid']).set_index('date')
         for d in data.index.unique():
             data_at_d = data.loc[d]
@@ -215,9 +214,10 @@ class SQLFetcher:
         if factor_src == 'haitong':
             assert isinstance(df , pd.DataFrame)
             df.columns = [col.lower() for col in df.columns.values]
-            df = df.rename(columns={'s_info_windcode':'secid','trade_dt':'date'})
+            df = df.rename(columns={'trade_dt':'date'})
+            df = secid_adjust(df , 's_info_windcode' , drop_old=True , decode_first=True)
             df['date'] = df['date'].astype(int)
-            df['secid'] = cls.convert_id(df['secid'])
+
             if factor_set == 'hf_factors':
                 df = df.reset_index(drop = True)
             else:
@@ -226,9 +226,9 @@ class SQLFetcher:
         elif factor_src == 'dongfang':
             assert isinstance(df , pd.DataFrame)
             df.columns = [col.lower() for col in df.columns.values]
-            df = df.rename(columns={'stockcode':'secid','ticker':'secid',
-                                    'tradingdate':'date','trade_dt':'date' , 'trade_date':'date'})
-            df['secid'] = df['secid'].str.replace('[-.a-zA-Z]','',regex=True).astype(int)
+            df = secid_adjust(df , ['stockcode' , 'ticker'] , drop_old=True)
+
+            df = df.rename(columns={'tradingdate':'date','trade_dt':'date' , 'trade_date':'date'})
             df['date'] = df['date'].astype(str).str.replace('-','').astype(int)
         elif factor_src == 'kaiyuan':
             assert isinstance(df , dict)
@@ -237,18 +237,16 @@ class SQLFetcher:
                 subdf.rename(columns = {'factor':k})
                 # print(subdf.iloc[:5])
                 df0 = df0.merge(subdf.rename(columns = {'factor':k}),how='outer',on=['date','code'])
-            df = df0.rename(columns={'code':'secid'})
-            df['secid'] = df['secid'].str.replace('[-.a-zA-Z]','',regex=True).astype(int)
+            df = secid_adjust(df0 , ['code'] , drop_old=True)
             df['date']  = df['date'].astype(int)
             df = df.set_index(['date','secid']).reset_index()
         elif factor_src == 'huatai':
             assert isinstance(df , dict)
             df0 = pd.DataFrame(columns = ['date','secid']).astype(int)
             for k , subdf in df.items():
-                subdf = subdf.rename(columns = {'datetime':'date','instrument':'secid','value':k})
-                df0 = df0.merge(subdf.rename(columns = {'factor':k}),how='outer',on=['date','secid'])
-            df = df0
-            df['secid'] = df['secid'].str.replace('[-.a-zA-Z]','',regex=True).astype(int)
+                subdf = subdf.rename(columns = {'datetime':'date','value':k})
+                df0 = df0.merge(subdf.rename(columns = {'factor':k}),how='outer',on=['date','instrument'])
+            df = secid_adjust(df0 , ['instrument'] , drop_old=True)
             df['date']  = df['date'].astype(str).str.replace('[-.a-zA-Z]','',regex=True).astype(int)
             df = df.set_index(['date','secid']).reset_index()
         elif factor_src == 'guojin':
@@ -266,18 +264,18 @@ class SQLFetcher:
         return df
 
     @classmethod
-    def date_seg(cls , start_dt , end_dt , astype = int):
+    def date_seg(cls , start_dt , end_dt):
         if start_dt >= end_dt: return []
         dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=cls.FREQ).strftime('%Y%m%d').astype(int)
         dt_starts = [cls.date_offset(start_dt) , *cls.date_offset(dt_list[:-1],1)]
         dt_ends = [*dt_list[:-1] , cls.date_offset(end_dt)]
-        return [(astype(s),astype(e)) for s,e in zip(dt_starts , dt_ends)]
+        return [(int(s),int(e)) for s,e in zip(dt_starts , dt_ends)]
     
     @classmethod
-    def date_between(cls , start_dt , end_dt , astype = int):
+    def date_between(cls , start_dt , end_dt):
         if start_dt >= end_dt: return []
-        dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=cls.FREQ).strftime('%Y%m%d').astype(int)
-        return dt_list.values
+        dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=cls.FREQ).strftime('%Y%m%d').astype(int).to_numpy()
+        return CALENDAR.td_filter(dt_list)
     
     @staticmethod
     def date_offset(date , offset = 0 , astype = int):

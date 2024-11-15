@@ -3,11 +3,10 @@ from . import (
 )
 
 from .core import DataBlock , DataBlockNorm , ModuleData 
-from .loader import GetData , BlockLoader , FrameLoader , DATAVENDOR
+from .loader import BlockLoader , FrameLoader , DATAVENDOR
 from .process import DataProcessor
 from .update import DataFetcher , DataUpdater
-from .tushare import TushareDownloader , TSData
-from .other_source.baostock_5m import Baostock5minBarDownloader
-from .other_source.rcquant import RcquantMinBarDownloader
+from .tushare import TushareDownloader
+from .other_source import OtherSourceDownloader
 
 from .labels import ClassicLabelsUpdater

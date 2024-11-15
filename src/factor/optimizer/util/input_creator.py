@@ -4,7 +4,7 @@ from typing import Any
 
 from .bound import StockBound , StockPool , IndustryPool , GeneralBound , ValidRange , STOCK_UB , STOCK_LB
 from .constr import LinearConstraint , TurnConstraint , CovConstraint , BoundConstraint , ShortConstraint
-from ...util import BENCHMARKS , RISK_MODEL , Port , Benchmark
+from ...util import Benchmark , RISK_MODEL , Port , Benchmark
 from ....data import DATAVENDOR
 
 stock_bound_list : list[StockBound] = []
@@ -105,7 +105,7 @@ def append_bound_limit(opt_input : Any):
 
     if ld := limitation.get('list_days'):
         df = DATAVENDOR.all_stocks
-        pool = df[df['list_dt'] > DATAVENDOR.td_offset(model_date , -ld)]['secid'].to_numpy()
+        pool = df[df['list_dt'] > DATAVENDOR.td(model_date , -ld).td]['secid'].to_numpy()
         bound_limit.intersect(StockPool.bnd_ub(secid , pool , 0))
 
     if limitation.get('kcb_no_buy'):
@@ -178,9 +178,9 @@ def append_linear_board(opt_input : Any):
         elif board_name == 'kcb':
             where = (secid >= 688000) * (secid <= 689999)
         elif board_name == 'csi':
-            pool = np.concatenate([BENCHMARKS['csi300'].get(model_date,True).secid , 
-                                   BENCHMARKS['csi500'].get(model_date,True).secid , 
-                                   BENCHMARKS['csi1000'].get(model_date,True).secid])
+            pool = np.concatenate([Benchmark('csi300').get(model_date,True).secid , 
+                                   Benchmark('csi500').get(model_date,True).secid , 
+                                   Benchmark('csi1000').get(model_date,True).secid])
             where = np.isin(secid , pool)
         else:
             raise KeyError(board_name)

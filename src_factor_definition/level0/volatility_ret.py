@@ -2,12 +2,12 @@ import numpy as np
 import pandas as pd
 
 from src.factor.classes import StockFactorCalculator
-from src.data import TSData
+from src.data import DATAVENDOR
 
 
 def ret_std_classic(date , n_months : int , lag_months : int = 0):
-    start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    returns = TSData.TRADE.get_returns(start_date , end_date)
+    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    returns = DATAVENDOR.TRADE.get_returns(start_date , end_date)
     return returns.std() * np.sqrt(252)
 
 class ret_std1m(StockFactorCalculator):

@@ -9,7 +9,7 @@ from itertools import combinations
 from typing import Any , Literal , Type , final
 
 from ...basic import PATH
-from ...data import TSData
+from ...data import DATAVENDOR
 from ...func.singleton import SingletonABCMeta
 from ...func.classproperty import classproperty_str
 
@@ -35,7 +35,7 @@ def perform_update_jobs(overwrite = False , show_progress = True , ignore_error 
     _FACTOR_UPDATE_JOBS.sort(key=lambda x: (x[0].level , x[1] , x[0].factor_name))
     date = -1
     for item in _FACTOR_UPDATE_JOBS[:]:
-        if item[1] != date: TSData.len_control()
+        if item[1] != date: DATAVENDOR.data_storage_control()
         obj , date = item
         if factor_name is not None and obj.factor_name != factor_name: continue
         
@@ -220,9 +220,9 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
             return PATH.factor_load(factor_name , date)
     
     def update_jobs(self , start : int = -1 , end : int = 99991231 , overwrite = False):
-        dates = TSData.CALENDAR.td_within(max(start , self.init_date) , end)
+        dates = DATAVENDOR.CALENDAR.td_within(max(start , self.init_date) , end)
         if not overwrite:
-            dates = np.setdiff1d(TSData.CALENDAR.td_within(max(start , self.init_date) , end) , self.stored_dates)
+            dates = np.setdiff1d(DATAVENDOR.CALENDAR.td_within(max(start , self.init_date) , end) , self.stored_dates)
         [insert_update_job(self , d) for d in dates]
         return self
 

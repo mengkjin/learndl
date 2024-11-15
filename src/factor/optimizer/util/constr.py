@@ -197,8 +197,8 @@ class CovConstraint:
                 assert self.S is None or (self.S.ndim == 1 and (self.S >= 0.0).all()) , self.S
         else:
             if self.cov_type == 'model':
-                assert self.F is None or self.F.shape[-1] == N , self.F.shape
-                assert self.S is None or len(self.S) == N , self.S.shape
+                assert self.F is None or self.F.shape[-1] == N , (self.F.shape , N)
+                assert self.S is None or len(self.S) == N , (self.S.shape , N)
             else:
                 assert self.cov is None or self.cov.shape == (N, N)
 

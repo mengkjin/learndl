@@ -2,12 +2,12 @@ import numpy as np
 import pandas as pd
 
 from src.factor.classes import StockFactorCalculator
-from src.data import TSData
+from src.data import DATAVENDOR
 from src.func.transform import apply_ols
 
 def turnover_classic(date , n_months : int , lag_months : int = 0 , min_finite_ratio = 0.25):
-    start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    turns = TSData.TRADE.mask_min_finite(TSData.TRADE.get_turnovers(start_date , end_date , turnover_type = 'fr') , 
+    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    turns = DATAVENDOR.TRADE.mask_min_finite(DATAVENDOR.TRADE.get_turnovers(start_date , end_date , turnover_type = 'fr') , 
                                          min_finite_ratio = min_finite_ratio)
     turns = turns.mean()
     return turns
@@ -64,17 +64,17 @@ class turn_unexpected(StockFactorCalculator):
     description = '1个月意外换手率'
     
     def calc_factor(self, date: int):
-        start_date , end_date = TSData.CALENDAR.td_start_end(date , 3 , 'm' , 1)
-        x = TSData.TRADE.get_market_amount(start_date, end_date) / 1e8
-        y = TSData.TRADE.get_turnovers(start_date, end_date)
+        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 3 , 'm' , 1)
+        x = DATAVENDOR.TRADE.get_market_amount(start_date, end_date) / 1e8
+        y = DATAVENDOR.TRADE.get_turnovers(start_date, end_date)
 
         coef = pd.DataFrame(apply_ols(x , y) , index = ['intercept' , 'slope'] , columns = y.columns)
 
-        start_date , end_date = TSData.CALENDAR.td_start_end(date , 1 , 'm')
-        x = TSData.TRADE.get_market_amount(start_date, end_date) / 1e8
-        y = TSData.TRADE.get_turnovers(start_date, end_date)
+        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'm')
+        x = DATAVENDOR.TRADE.get_market_amount(start_date, end_date) / 1e8
+        y = DATAVENDOR.TRADE.get_turnovers(start_date, end_date)
 
         pred = pd.DataFrame(x.values * coef.loc[['slope'],:].values + coef.loc[['intercept'],:].values , 
                             index = x.index , columns = coef.columns)
-        excess = TSData.TRADE.mask_min_finite(y - pred , min_finite_ratio = 0.25)
+        excess = DATAVENDOR.TRADE.mask_min_finite(y - pred , min_finite_ratio = 0.25)
         return excess.mean()

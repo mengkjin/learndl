@@ -2,12 +2,12 @@ import numpy as np
 import pandas as pd
 
 from src.factor.classes import StockFactorCalculator
-from src.data import TSData
+from src.data import DATAVENDOR
 
 def skewness_volwei(date , n_months : int , lag_months : int = 0):
-    start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    vol = TSData.TRADE.get_quotes(start_date,end_date,'volume',pivot=True) + 1e-6
-    ret = TSData.TRADE.get_returns(start_date,end_date,'close',pivot=True)
+    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    vol = DATAVENDOR.TRADE.get_quotes(start_date,end_date,'volume',pivot=True) + 1e-6
+    ret = DATAVENDOR.TRADE.get_returns(start_date,end_date,'close',pivot=True)
 
     wgt = vol / vol.mean()
     ret -= (ret * wgt).mean()

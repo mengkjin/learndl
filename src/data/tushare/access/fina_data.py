@@ -6,8 +6,7 @@ from typing import Any , Callable , Literal
 
 from .abstract_access import DateDataAccess
 
-from .calendar import CALENDAR 
-from ....basic import PATH
+from ....basic import CALENDAR , PATH
 from ....func.singleton import singleton
 
 QUARTER_ENDS = np.sort(np.concatenate([np.arange(1997 , 2099) * 10000 + qe for qe in [331,630,930,1231]]))
@@ -118,12 +117,12 @@ class FinancialDataAccess(FDataAccess):
         income_ann_dt = [self.get_df(qtr_end , 'income' , ['secid' , 'ann_date']) for qtr_end in self.qtr_ends(date , latest_n + 5 , 0)]
         ann_dt : pd.DataFrame = pd.concat(income_ann_dt)
         ann_dt['ann_date'] = ann_dt['ann_date'].astype(int)
-        ann_dt['td']         = CALENDAR.tds(ann_dt['ann_date'])
-        ann_dt['td_forward'] = CALENDAR.tds_forward(ann_dt['ann_date'])
+        ann_dt['td_backward'] = CALENDAR.td_array(ann_dt['ann_date'] , backward = True)
+        ann_dt['td_forward']  = CALENDAR.td_array(ann_dt['ann_date'] , backward = False)
         ann_dt = ann_dt[ann_dt['td_forward'] <= date]
         if within_days > 0:
-            ann_dt = ann_dt[ann_dt['td'] >= CALENDAR.offset(date , -within_days , 'c')]
-        grp = ann_dt.sort_values(['secid' , 'td']).set_index('secid').groupby('secid')
+            ann_dt = ann_dt[ann_dt['td_backward'] >= CALENDAR.cd(date , -within_days)]
+        grp = ann_dt.sort_values(['secid' , 'td_backward']).set_index('secid').groupby('secid')
         return grp.last() if latest_n == 1 else grp.tail(latest_n + 1).groupby('secid').first()
 
 FINA = FinancialDataAccess()

@@ -2,15 +2,15 @@ import numpy as np
 import pandas as pd
 from typing import Literal
 from src.factor.classes import StockFactorCalculator
-from src.data import TSData
+from src.data import DATAVENDOR
 
 def vp_correlation(date , n_months : int , volume_type : Literal['amount' , 'volume' , 'turn_tt' , 'turn_fl' , 'turn_fr'] = 'volume' ,
                    price_type : Literal['open' , 'high' , 'close' , 'low' , 'vwap'] = 'close' ,
                    min_finite_ratio = 0.25):
-    start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm')
+    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
     
-    volume = TSData.TRADE.get_quotes(start_date, end_date , volume_type , pivot = True)
-    price = TSData.TRADE.get_quotes(start_date, end_date , price_type , mask=True , pivot = True)
+    volume = DATAVENDOR.TRADE.get_quotes(start_date, end_date , volume_type , pivot = True)
+    price = DATAVENDOR.TRADE.get_quotes(start_date, end_date , price_type , mask=True , pivot = True)
 
     corr = price.corrwith(volume)
     mask = np.isfinite(price).sum() < len(price) * min_finite_ratio

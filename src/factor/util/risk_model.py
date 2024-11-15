@@ -25,7 +25,11 @@ class Rmodel:
         self.C = self.C.loc[comfac , comfac]
         self.S.fillna(self.S.quantile(0.95) , inplace=True)
         self.regressed : int | Any = None
-        self.next_date = int(DATAVENDOR.td_next(self.date))
+        self.next_date = DATAVENDOR.td(self.date , 1).td
+
+    def assert_valid(self):
+        assert self.F.shape[-1] == self.C.shape[0] == self.S.shape[0] == self.C.shape[1], (self.F.shape , self.C.shape , self.S.shape)
+        assert self.S.shape[1] == 1 , self.S.shape
 
     @property
     def secid(self): return self.F.index.values
@@ -121,13 +125,31 @@ class RiskModel(GeneralModel):
     '''
     risk model instance for multiple days
     '''
-    def __init__(self) -> None:
-        self.models : dict[int,Rmodel] = {}
-        self.name = 'cne5'
+    _instance_dict : dict = {}
+    _singleton_names = ['cne5']
+
+    def __new__(cls , name : str | Any = 'cne5' , *args , **kwargs):
+        if name in cls._instance_dict:
+            return cls._instance_dict[name]
+        elif name in cls._singleton_names:
+            instance = super().__new__(cls , *args , **kwargs)
+            cls._instance_dict[name] = instance
+            return instance
+        else:
+            raise ValueError(f'{cls.__name__} does not have {name} as a riskmodel name!')
+    
+    def __init__(self , model_name = 'cne5') -> None:
+        self.name = model_name
+        if not getattr(self , 'models' , None):
+            self.models : dict[int,Rmodel] = {}
+            self.init_loaders()
+        
+    def init_loaders(self):
         self.riskmodel_available_dates = DATAVENDOR.file_dates('models' , 'tushare_cne5_exp')
         self.F_loader = BlockLoader('models' , 'tushare_cne5_exp')
         self.C_loader = FrameLoader('models' , 'tushare_cne5_cov')
         self.S_loader = BlockLoader('models' , 'tushare_cne5_spec')
+
     def append(self , model : Rmodel , override = False):
         return super().append(model , override)
     def available_dates(self): return self.riskmodel_available_dates
@@ -140,7 +162,7 @@ class RiskModel(GeneralModel):
             F = self.F_loader.load(date , date)
             C = self.C_loader.load(date , date)
             S = self.S_loader.load(date , date)
-        F = F.to_dataframe().reset_index(['date'],drop=True).astype(float)
+        F = F.to_dataframe().assign(market=1).reset_index(['date'],drop=True).astype(float)
         C = C.drop(columns='date').set_index('factor_name').astype(float)
         S = S.to_dataframe().reset_index(['date'],drop=True).astype(float)
         return Rmodel(date , F , C , S)    

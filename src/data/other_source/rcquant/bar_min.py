@@ -6,7 +6,8 @@ from typing import Literal
 from datetime import datetime , timedelta
 
 from .license_uri import uri as rcquant_uri
-from ....basic import PATH
+from ...transform import secid_adjust , trade_min_reform
+from ....basic import PATH , CALENDAR
 from ....func import today
 
 START_DATE = 20241101
@@ -14,7 +15,6 @@ RC_PATH = PATH.miscel.joinpath('Rcquant')
 
 final_path = RC_PATH.joinpath(f'min')
 secdf_path = RC_PATH.joinpath('secdf')
-target_path = PATH.data.joinpath('trade_ts' , 'min')
 
 final_path.mkdir(exist_ok=True , parents=True)
 secdf_path.mkdir(exist_ok=True , parents=True)
@@ -38,30 +38,40 @@ def rcquant_past_dates(file_type : Literal['secdf' , 'min']):
     past_dates = sorted([int(p.name.split('.')[-2][-8:]) for p in past_files])
     return past_dates
     
-def updated_dates():
-    return PATH.db_dates('trade_ts' , 'min')
-    # return rcquant_past_dates('min')
+def updated_dates(x_min = 1):
+    assert x_min in [1 , 5 , 10 , 15 , 30 , 60]
+    if x_min == 1:
+        return PATH.db_dates('trade_ts' , 'min')
+    else:
+        return PATH.db_dates('trade_ts' , f'{x_min}min')
 
-def last_date(offset : int = 0):
-    dates = updated_dates()
+def min_update_dates(date):
+    start_date = last_date(1)
+    end_date = today(-1) if date is None else date
+    return CALENDAR.td_within(start_date , end_date)
+
+def x_mins_update_dates(date):
+    all_dates = np.array([])
+    for x_min in [5 , 10 , 15 , 30 , 60]:
+        dates = np.setdiff1d(CALENDAR.td_within(last_date(1 , x_min) , today()) , PATH.db_dates('trade_ts' , f'{x_min}min'))
+        all_dates = np.concatenate([all_dates , dates])
+    return np.unique(all_dates)
+
+def x_mins_to_update(date):
+    x_mins = []
+    for x_min in [5 , 10 , 15 , 30 , 60]:
+        path = PATH.db_path('trade_ts' , f'{x_min}min' , date)
+        if not path.exists(): x_mins.append(x_min)
+    return x_mins
+
+def last_date(offset : int = 0 , x_min : int = 1):
+    dates = updated_dates(x_min)
     last_dt = max(dates) if len(dates) > 0 else date_offset(START_DATE , -1)
     return date_offset(last_dt , offset)
 
-def trading_dates(start_date, end_date):
+def rcquant_trading_dates(start_date, end_date):
     if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
-
-def rcquant_proceed(date : int | None = None , first_n : int = -1):
-    start_date = last_date(1)
-    end_date = today(-1) if date is None else date
-    for dt in trading_dates(start_date , end_date):
-        mark = rcquant_bar_min(dt , first_n)
-        if not mark: 
-            print(f'rcquant bar min {dt} failed')
-            return False
-        else:
-            print(f'rcquant bar min {dt} success')
-    return True
 
 def rcquant_bar_min(date : int , first_n : int = -1):
     if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
@@ -98,10 +108,28 @@ def rcquant_bar_min(date : int , first_n : int = -1):
 def rcquant_min_to_normal_min(df : pd.DataFrame):
     df = df.copy()
     df.loc[:,['open','high','low','close','volume','amount']] = df.loc[:,['open','high','low','close','volume','amount']].astype(float)
-    df['secid'] = df['code'].str.extract(r'^(\w+)\.').astype(int)
+    df = secid_adjust(df , ['code'] , drop_old=True)
     df['minute'] = ((df['time'].str.slice(0,2).astype(int) - 9.5) * 60 + df['time'].str.slice(2,4).astype(int)).astype(int) - 1
     df.loc[df['minute'] >= 120 , 'minute'] -= 90
     df['vwap'] = df['amount'] / df['volume'].where(df['volume'] > 0 , np.nan)
     df['vwap'] = df['vwap'].where(df['vwap'].notna() , df['open'])
     df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap','num_trades']].sort_values(['secid','minute']).reset_index(drop = True)
     return df
+
+def rcquant_proceed(date : int | None = None , first_n : int = -1):
+    for dt in min_update_dates(date):
+        mark = rcquant_bar_min(dt , first_n)
+        if not mark: 
+            print(f'rcquant bar min {dt} failed')
+            return False
+        else:
+            print(f'rcquant bar min {dt} success')
+
+    print('-' * 80)
+    print('process other min bars:')
+    for dt in x_mins_update_dates(date):
+        for x_min in x_mins_to_update(dt):
+            min_df = PATH.db_load('trade_ts' , 'min' , dt)
+            x_min_df = trade_min_reform(min_df , x_min , 1)
+            PATH.db_save(x_min_df , 'trade_ts' , f'{x_min}min' , verbose = True)
+    return True

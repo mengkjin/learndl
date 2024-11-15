@@ -40,29 +40,29 @@ def accounting_fmp(portfolio : Portfolio , benchmark : Portfolio | Benchmark | A
         print(f'{portfolio.name} accounting start...' , end='')
     port_min , port_max = portfolio.available_dates().min() , portfolio.available_dates().max()
     start = np.max([port_min , start])
-    end   = np.min([int(DATAVENDOR.td_offset(port_max,5)) , end , int(DATAVENDOR.td_offset(DATAVENDOR.last_quote_dt,-1))])
+    end   = np.min([DATAVENDOR.td(port_max,5).td , end , DATAVENDOR.td(DATAVENDOR.last_quote_dt,-1).td])
 
     not_lagged = portfolio.name.endswith('.lag0') or len(portfolio.name.split('.lag')) == 1
-    model_date = DATAVENDOR.td_within(start , end)
+    model_dates = DATAVENDOR.td_within(start , end)
     if daily:
-        period_st : np.ndarray | Any = DATAVENDOR.td_offset(model_date , 1)
+        period_st : np.ndarray | Any = DATAVENDOR.td_array(model_dates , 1)
         period_ed : np.ndarray | Any = period_st
     else:
-        model_date = np.intersect1d(model_date , portfolio.available_dates())
-        period_st = DATAVENDOR.td_offset(model_date , 1)
-        period_ed = np.concatenate([model_date[1:] , [int(DATAVENDOR.td_offset(end,1))]])
-    assert np.all(model_date < period_st) 
+        model_dates = np.intersect1d(model_dates , portfolio.available_dates())
+        period_st = DATAVENDOR.td_array(model_dates , 1)
+        period_ed = np.concatenate([model_dates[1:] , [DATAVENDOR.td(end,1).td]])
+    assert np.all(model_dates < period_st) 
     assert np.all(period_st <= period_ed) , (period_st , period_ed)
 
-    df = pd.DataFrame({'model_date':np.concatenate([[-1],model_date]) , 
-                       'st':np.concatenate([[model_date[0]],period_st]) , 
-                       'ed':np.concatenate([[model_date[0]],period_ed]) ,
+    df = pd.DataFrame({'model_date':np.concatenate([[-1],model_dates]) , 
+                       'st':np.concatenate([[model_dates[0]],period_st]) , 
+                       'ed':np.concatenate([[model_dates[0]],period_ed]) ,
                        'pf':0. , 'bm':0. , 'turn':0. , 'excess':0. ,
                        'analytic':None , 'attribution':None}).set_index('model_date')
-    port_old = Port.none_port(model_date[0])
+    port_old = Port.none_port(model_dates[0])
 
     t1 = time.time()
-    for date , ed in zip(model_date , period_ed):
+    for date , ed in zip(model_dates , period_ed):
         port_new = portfolio.get(date) if portfolio.has(date) else port_old
         bench = Port.none_port(date) if benchmark is None else benchmark.get(date , True)
 
@@ -81,7 +81,7 @@ def accounting_fmp(portfolio : Portfolio , benchmark : Portfolio | Benchmark | A
     df['excess'] = df['pf'] - df['bm']
     t2 = time.time()
     if verbosity > 1: 
-        print(f' Total time: {t2-t0:.2f} secs, Each period time: {(t2-t1)/len(model_date):.2f} secs')
+        print(f' Total time: {t2-t0:.2f} secs, Each period time: {(t2-t1)/len(model_dates):.2f} secs')
     return df # , ana , att
 
 def eval_drawdown(v : pd.Series | np.ndarray | Any , how : Literal['exp' , 'lin'] = 'lin'):

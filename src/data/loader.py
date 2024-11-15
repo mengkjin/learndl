@@ -7,59 +7,11 @@ from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
 from .core import DataBlock
-from .tushare import TSData
+from .tushare.access import CALENDAR , INFO , TRADE , RISK , FINA , INDI
 from ..basic import PATH , CONF , SILENT
 from ..basic.util import Timer
 from ..func.singleton import singleton
 from ..func.time import date_offset , today
-
-class GetData:
-    @classmethod
-    def data_dates(cls , db_src , db_key , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
-        dates = PATH.db_dates(db_src , db_key , start_dt= start_dt , end_dt=end_dt)
-        return dates
-
-    @classmethod
-    def trade_dates(cls , start_dt : int = -1 , end_dt : int = 99991231):
-        with SILENT:
-            calendar = TSData.CALENDAR.calendar[TSData.CALENDAR.calendar['trade'] == 1].index.to_numpy()
-            calendar = calendar[(calendar >= start_dt) & (calendar <= end_dt)]
-        return calendar
-    
-    @classmethod
-    def stocks(cls , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
-        with SILENT:
-            stocks = TSData.INFO.get_desc(set_index=False)
-            if listed: stocks = stocks[stocks['list_dt'] > 0]
-            if exchange: stocks = stocks[stocks['exchange_name'].isin(exchange)]
-        return stocks.reset_index()
-    
-    @classmethod
-    def st_stocks(cls):
-        with SILENT:
-            st = TSData.INFO.get_st()
-        return st
-    
-    @classmethod
-    def day_quote(cls , date : int) -> pd.DataFrame | None:
-        with SILENT:
-            q = PATH.db_load('trade_ts' , 'day' , date)[['secid','adjfactor','close','vwap']]
-        return q
-    
-    @classmethod
-    def daily_returns(cls , start_dt : int , end_dt : int):
-        with SILENT:
-            pre_start_dt = int(date_offset(start_dt , -20))
-            feature = ['close' , 'vwap']
-            block = BlockLoader('trade_ts' , 'day' , ['close' , 'vwap' , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
-            block = block.adjust_price().align_feature(feature)
-            values = block.values[:,1:] / block.values[:,:-1] - 1
-            secid  = block.secid
-            date   = block.date[1:]
-            new_date = block.date_within(start_dt , end_dt)
-
-            block = DataBlock(values , secid , date , feature).align_date(new_date)
-        return block
 
 @dataclass(slots=True)
 class BlockLoader:
@@ -110,7 +62,7 @@ class FrameLoader:
 
     def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
                    parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
-        dates = GetData.data_dates(self.db_src , self.db_key , start_dt , end_dt)
+        dates = PATH.db_dates(self.db_src , self.db_key , start_dt= start_dt , end_dt=end_dt)
         dfs = PATH.db_load_multi(self.db_src , self.db_key , dates , parallel = parallel, max_workers=max_workers)
         dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None and not df.empty]
         return pd.concat(dfs) if len(dfs) else pd.DataFrame()
@@ -121,16 +73,36 @@ class DataVendor:
     '''
     Vender for most factor / portfolio analysis related data
     '''
-    
     def __init__(self):
         self.start_dt = 99991231
         self.end_dt   = -1
-        self.max_date   = GetData.data_dates('trade_ts' , 'day')[-1]
-        self.trade_date = GetData.trade_dates()
-        self.all_stocks = GetData.stocks().sort_values('secid')
-        self.st_stocks  = GetData.st_stocks()
+        self.max_date   = PATH.db_dates('trade_ts' , 'day')[-1]
+
         self.day_quotes : dict[int,pd.DataFrame] = {}
         self.last_quote_dt = self.file_dates('trade_ts','day').max()
+
+        self.CALENDAR = CALENDAR
+        self.TRADE = TRADE
+        self.INFO = INFO
+        self.RISK = RISK
+        self.FINA = FINA
+        self.INDI = INDI
+
+        self.init_stocks()
+
+    def data_storage_control(self):
+        self.TRADE.len_control(drop_old = True)
+        self.RISK.len_control(drop_old = True)
+        self.FINA.len_control(drop_old = True)
+        self.INDI.len_control(drop_old = True)
+
+    def init_stocks(self , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
+        with SILENT:
+            stocks = self.INFO.get_desc(set_index=False)
+            if listed: stocks = stocks[stocks['list_dt'] > 0]
+            if exchange: stocks = stocks[stocks['exchange_name'].isin(exchange)]
+            self.all_stocks = stocks.reset_index().sort_values('secid')
+            self.st_stocks = self.INFO.get_st()
 
     def secid(self , date : int | None = None): 
         stk = self.all_stocks
@@ -145,37 +117,62 @@ class DataVendor:
     def file_dates(db_src , db_key , start_dt : int | None = None , end_dt : int | None = None , year : int | None = None):
         return PATH.db_dates(db_src , db_key , start_dt=start_dt , end_dt=end_dt , year = year)
 
-    def td_within(self , start_dt : int = -1 , end_dt : int = 99991231 , step : int = 1):
-        return self.trade_date[(self.trade_date >= start_dt) & (self.trade_date <= end_dt)][::step]
+    @staticmethod
+    def td_within(start_dt : int = -1 , end_dt : int = 99991231 , step : int = 1):
+        return CALENDAR.td_within(start_dt , end_dt , step)
+    
+    @staticmethod
+    def td_array(date , offset : int = 0): return CALENDAR.td_array(date , offset)
+    
+    @staticmethod
+    def td(date , offset : int = 0): return CALENDAR.td(date , offset)
 
-    def td_offset(self , date , offset : int = 0) -> int | np.ndarray | Any:
-        if np.isscalar(date):
-            # assert isinstance(date , int) , date
-            if date not in self.trade_date: date = self.trade_date[self.trade_date <= date][-1]
-            if offset: date = self.trade_date[np.where(self.trade_date == date)[0][0] + offset]
-            return date
+    @classmethod
+    def real_factor(cls , factor_type : Literal['pred' , 'factor'] , names : str | list[str] | np.ndarray , 
+                    start_dt = 20240101 , end_dt = 20240531 , step = 5):
+        if isinstance(names , str): names = [names]
+        date  = DATAVENDOR.td_within(start_dt , end_dt , step)
+        values = []
+        func = PATH.pred_load_multi if factor_type == 'pred' else PATH.factor_load_multi
+
+        for name in names: 
+            ret = func(name , date , assign_date=True)
+            if ret: values.append(pd.concat(ret.values()).reset_index().set_index(['secid','date']))
+
+        if values:
+            return DataBlock.from_dataframe(pd.concat([v for v in values] , axis=1).sort_index())
         else:
-            return np.array([self.td_offset(d , offset) for d in date])
-        
-    def td_next(self , date) -> int | np.ndarray | Any:
-        return self.td_offset(date , 1)
-    
-    def td_prev(self , date) -> int | np.ndarray | Any:
-        return self.td_offset(date , -1)
-    
-    def latest_td(self , date : int): return self.td_offset(date)
+            print(f'None of {names} found in {start_dt} ~ {end_dt}')
+            return DataBlock()
 
+    @classmethod
+    def stock_factor(cls , factor_names : str | list[str] | np.ndarray , start_dt = 20240101 , end_dt = 20240531 , step = 5):
+        return cls.real_factor('factor' , factor_names , start_dt , end_dt , step)
+        
+    @classmethod
+    def model_preds(cls , model_names : str | list[str] | np.ndarray , start_dt = 20240101 , end_dt = 20240531 , step = 5):
+        return cls.real_factor('pred' , model_names , start_dt , end_dt , step)
+            
     def random_factor(self , start_dt = 20240101 , end_dt = 20240531 , step = 5 , nfactor = 2):
         date  = self.td_within(start_dt , end_dt , step)
         secid = self.secid()
-        factor_val = DataBlock(np.random.randn(len(secid),len(date),1,nfactor),
-                               secid,date,[f'factor{i+1}' for i in range(nfactor)])
-        return factor_val
+        return DataBlock(np.random.randn(len(secid),len(date),1,nfactor),
+                         secid,date,[f'factor{i+1}' for i in range(nfactor)])
 
     def get_returns(self , start_dt : int , end_dt : int):
         td_within = self.td_within(start_dt , end_dt)
         if (not hasattr(self , 'day_ret')) or (not np.isin(td_within , self.day_ret.date).all()):
-            self.day_ret  = GetData.daily_returns(start_dt , end_dt)
+            with SILENT:
+                pre_start_dt = int(date_offset(start_dt , -20))
+                feature = ['close' , 'vwap']
+                block = BlockLoader('trade_ts' , 'day' , ['close' , 'vwap' , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
+                block = block.adjust_price().align_feature(feature)
+                values = block.values[:,1:] / block.values[:,:-1] - 1
+                secid  = block.secid
+                date   = block.date[1:]
+                new_date = block.date_within(start_dt , end_dt)
+
+                self.day_ret = DataBlock(values , secid , date , feature).align_date(new_date)
 
     def update_dates(self , data_key : str , dates : np.ndarray) -> tuple[np.ndarray,np.ndarray]:
         if hasattr(self , data_key):
@@ -220,7 +217,7 @@ class DataVendor:
         d = date[0] if isinstance(date , np.ndarray) else date
         assert d > 0 , 'Attempt to get unaccessable date'
         if d not in self.day_quotes: 
-            df = GetData.day_quote(d)
+            df = PATH.db_load('trade_ts' , 'day' , date)[['secid','adjfactor','close','vwap']]
             if df is not None: self.day_quotes[d] = df
         return self.day_quotes.get(d , None)
     
@@ -237,8 +234,8 @@ class DataVendor:
     def nday_fut_ret(self , secid : np.ndarray , date : np.ndarray , nday : int = 10 , lag : int = 2 , 
                      ret_type : Literal['close' , 'vwap'] = 'close'):
         assert lag > 0 , f'lag must be positive : {lag}'
-        date_min = int(self.td_offset(date.min() , -10))
-        date_max = int(self.td_offset(int(date.max()) , nday + lag + 10))
+        date_min = self.td(date.min() , -10).td
+        date_max = self.td(int(date.max()) , nday + lag + 10).td
         self.get_returns(date_min , date_max)
         full_date = self.td_within(date_min , date_max)
 
@@ -262,13 +259,13 @@ class DataVendor:
         return block
     
     def get_ffmv(self , secid : np.ndarray , d : int):
-        if d not in self.trade_date: return None
+        if not CALENDAR.is_trade_date(d): return None
         self.get_risk_exp(d , d)
         value = self.risk_exp.loc(secid = secid , date = d , feature = 'weight').flatten()
         return value
     
     def get_cp(self , secid : np.ndarray , d : int):
-        if d not in self.trade_date: return None
+        if not CALENDAR.is_trade_date(d): return None
         self.get_quote(d , d)
         value = self.daily_quote.loc(secid = secid , date = d , feature = 'close').flatten()
         return value

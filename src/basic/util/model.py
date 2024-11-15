@@ -9,18 +9,8 @@ from typing import Any , Literal , Optional
 from .. import path as PATH
 from .. import conf as CONF
 
-'''
-REG_MODELS = [
-    {'name': 'gru_day' , 'submodel' : 'swalast' , 'num'  : 0 , 'alias' : 'gru_day_V0'} ,
-    {'name': 'gruRTN_day' , 'submodel' : 'swalast' , 'num'  : 0 , 'alias' : 'gruRTN_day_V0'} ,
-    {'name': 'gru_avg' , 'submodel' : 'swalast' , 'num'  : 'all' , 'alias' : 'gru_day_V1'} ,
-]
-
-'''
 
 models = CONF.load('schedule' , 'models')
-REG_MODELS = models['REG_MODELS']
-HID_MODELS = models['HID_MODELS']
 
 class ModelPath:
     def __init__(self , model_name : Path | str | None | Any) -> None:
@@ -182,3 +172,19 @@ class RegisteredModel(ModelPath):
         self.start_dt = start_dt
 
     def __repr__(self) -> str:  return f'{self.__class__.__name__}(name={self.name},type={self.submodel},num={str(self.num)},alias={str(self.alias)})'
+
+class HiddenExtractingModel(ModelPath):
+    '''for a model to predict recent/history data'''
+    def __init__(self , name : str , 
+                 submodels : Optional[list | np.ndarray | Literal['best' , 'swalast' , 'swabest']] = None ,
+                 nums : Optional[list | np.ndarray | int] = None ,
+                 alias : Optional[str] = None):
+        super().__init__(name)
+        self.submodels = submodels
+        self.nums = nums
+        self.alias = alias
+        self.model_path = ModelPath(self.name)
+        
+
+REG_MODELS = [RegisteredModel(**reg_model) for reg_model in models['REG_MODELS']]
+HID_MODELS = [HiddenExtractingModel(**hid_model) for hid_model in models['HID_MODELS']]

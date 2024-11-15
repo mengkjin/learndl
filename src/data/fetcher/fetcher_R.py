@@ -6,54 +6,11 @@ from pathlib import Path
 from typing import Any , Literal , Optional
 
 from ..classes import FailedData 
+from ..transform import secid_adjust , col_reform , row_filter , adjust_precision , trade_min_reform , trade_min_fillna
 from ...basic import PATH
 
 class RFetcher:
     '''Fetch data from R environment'''
-    @staticmethod
-    def adjust_secid(df : pd.DataFrame):
-        '''switch old wind_id into secid'''
-        if 'wind_id' not in df.columns.values: return df
-
-        df['wind_id'] = df['wind_id'].astype(str)
-        replace_dict = {'T00018' : '600018'}
-        df['wind_id'] = df['wind_id'].str.slice(0, 6).replace(replace_dict)
-        df['wind_id'] = df['wind_id'].where(df['wind_id'].str.isdigit() , '-1')
-        df['wind_id'] = df['wind_id'].astype(int)
-        return df.rename(columns={'wind_id':'secid'})
-
-    @staticmethod
-    def col_reform(df : pd.DataFrame , col : str , rename = None , fillna = None , astype = None , use_func = None):
-        '''do certain processing to DataFrame columns: newcol(rename) , fillna , astype or use_func'''
-        if use_func is not None:
-            df[col] = use_func(df[col])
-        else:
-            x = df[col]
-            if fillna is not None: x = x.fillna(fillna)
-            if astype is not None: x = x.astype(astype)
-            df[col] = x 
-        if rename: df = df.rename(columns={col:rename})
-        return df
-
-    @staticmethod
-    def row_filter(df : pd.DataFrame , col : str | list | tuple , cond_func = lambda x:x):
-        '''filter pd.DataFrame rows: cond_func(col)'''
-        if isinstance(col , str):
-            return df[cond_func(df[col])]
-        else:
-            return df[cond_func(*[df[_c] for _c in col])]
-    
-    @staticmethod
-    def adjust_precision(df : pd.DataFrame , tol = 1e-8 , dtype_float = np.float32 , dtype_int = np.int64):
-        '''adjust precision for df columns'''
-        for col in df.columns:
-            if np.issubdtype(df[col].to_numpy().dtype , np.floating): 
-                df[col] = df[col].astype(dtype_float)
-                df[col] *= (df[col].abs() > tol)
-            if np.issubdtype(df[col].to_numpy().dtype , np.integer): 
-                df[col] = df[col].astype(dtype_int)
-        return df
-
     @classmethod
     def basic_info(cls , key = None , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get basic info data from R environment , basic_info('concepts')'''
@@ -69,15 +26,15 @@ class RFetcher:
             'description': {
                 'path': f'D:/Coding/ChinaShareModel/ModelData/1_attributes/a_share_description.csv' ,
                 'remain_cols' : ['secid' , 'sec_name' , 'exchange_name' , 'list_dt' , 'delist_dt'] ,
-                cls.col_reform :  {
+                col_reform :  {
                     'list_dt' : {'fillna' : -1 , 'astype' : int} ,
                     'delist_dt' : {'fillna' : 99991231 , 'astype' : int}} ,
             } ,
             'st' : {
                 'path' : f'D:/Coding/ChinaShareModel/ModelData/1_attributes/a_share_st.csv' ,
                 'remain_cols' : ['secid' , 'st_type' , 'entry_dt' , 'remove_dt' , 'ann_dt'] ,
-                cls.col_reform : {**d_entrm , 'ann_dt' : {'fillna' : -1 , 'astype' : int}} ,
-                cls.row_filter : {'st_type' : {'cond_func' : lambda x:x != 'R'}}
+                col_reform : {**d_entrm , 'ann_dt' : {'fillna' : -1 , 'astype' : int}} ,
+                row_filter : {'st_type' : {'cond_func' : lambda x:x != 'R'}}
             },
             'industry' : {
                 'path' : f'D:/Coding/ChinaShareModel/ModelData/1_attributes/a_share_industries_class_sw_2021.csv' ,
@@ -85,12 +42,12 @@ class RFetcher:
                                  'ind_code_1', 'chn_name_1', 'abbr_1', 'indexcode_1' ,
                                  'ind_code_2', 'chn_name_2', 'abbr_2', 'indexcode_2' ,
                                  'ind_code_3', 'chn_name_3', 'abbr_3', 'indexcode_3'] ,
-                cls.col_reform : d_entrm ,
+                col_reform : d_entrm ,
             },
             'concepts' : {
                 'path' : f'D:/Coding/ChinaShareModel/ModelData/1_attributes/a_share_wind_concepts.csv' ,
                 'remain_cols' : ['secid' , 'concept' , 'entry_dt' , 'remove_dt'] ,
-                cls.col_reform : {**d_entrm , 'wind_sec_name' : {'rename' : 'concept'}} ,
+                col_reform : {**d_entrm , 'wind_sec_name' : {'rename' : 'concept'}} ,
             },
         }
         if not Path(params[key]['path']).exists(): return FailedData(key)
@@ -109,13 +66,13 @@ class RFetcher:
                 }
                 df = df.merge(pd.DataFrame(tmp) , on = f'ind_code_{i+1}' , how='left')
 
-        df = cls.adjust_secid(df)
-        if params[key].get(cls.col_reform) is not None:
-            for col , kwargs in params[key].get(cls.col_reform).items(): 
-                df = cls.col_reform(df , col , **kwargs)
-        if params[key].get(cls.row_filter) is not None:
-            for col , kwargs in params[key].get(cls.row_filter).items(): 
-                df = cls.row_filter(df , col , **kwargs)
+        df = secid_adjust(df , 'wind_id' , drop_old=False)
+        if params[key].get(col_reform) is not None:
+            for col , kwargs in params[key].get(col_reform).items(): 
+                df = col_reform(df , col , **kwargs)
+        if params[key].get(row_filter) is not None:
+            for col , kwargs in params[key].get(row_filter).items(): 
+                df = row_filter(df , col , **kwargs)
         if params[key].get('remain_cols'):
             df = df.loc[:,params[key]['remain_cols']]
         df = df.reset_index(drop=True)
@@ -128,8 +85,7 @@ class RFetcher:
         if not path.exists(): return FailedData('risk_exp' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.read_csv(path)
-            df = cls.adjust_secid(df)
-            df = cls.adjust_precision(df)
+            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=False))
         if with_date: df['date'] = date
         return df
     
@@ -140,8 +96,7 @@ class RFetcher:
         if not path.exists(): return FailedData('risk_cov' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pyreadr.read_r(path)['data'] * 252
-            df = df.reset_index().rename(columns={'index' :'factor_name'})
-            df = cls.adjust_precision(df)
+            df = adjust_precision(df.reset_index().rename(columns={'index' :'factor_name'}))
         if with_date: df['date'] = date
         return df
     
@@ -155,8 +110,7 @@ class RFetcher:
                  'spec_risk':Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/C_specific_risk/jm2018_model/jm2018_model_{date}.Rdata')}
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
-            df = cls.adjust_secid(df)
-            df = cls.adjust_precision(df)
+            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=False))
             df['spec_risk'] = df['spec_risk'] * np.sqrt(252)
         if with_date: df['date'] = date
         return df
@@ -192,7 +146,7 @@ class RFetcher:
                     df_new.columns = colnames
                 df_new['secid'] = df_new['secid'].astype(int)
                 df = pd.merge(df , df_new.set_index('secid') , how='outer' , on='secid')
-            df = cls.adjust_precision(df).reset_index()
+            df = adjust_precision(df).reset_index()
         if with_date: df['date'] = date
         return df
 
@@ -225,8 +179,7 @@ class RFetcher:
             return FailedData('day' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
-            df = cls.adjust_secid(df)
-            df = cls.adjust_precision(df).reset_index(drop=True)
+            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=False)).reset_index(drop=True)
         if with_date: df['date'] = date
         return df
 
@@ -304,8 +257,7 @@ class RFetcher:
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.merge(rtn,res,how='left',on='id')
             df.columns = ['wind_id' , f'rtn_lag{int(lag1)}_{days}' , f'res_lag{int(lag1)}_{days}']
-            df = cls.adjust_secid(df)
-            df = cls.adjust_precision(df).reset_index(drop=True)
+            df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=False)).reset_index(drop=True)
         if with_date: df['date'] = date
         return df
 
@@ -330,55 +282,14 @@ class RFetcher:
             if df['ticker'].dtype in (object,str):  df = df[df['ticker'].str.isdigit()] 
             df['ticker'] = df['ticker'].astype(int)
             cond_stock = lambda x,y:((600000<=x)&(x<=699999)&(y=='XSHG'))|((0<=x)&(x<=398999)&(y=='XSHE'))
-            df = cls.row_filter(df,('ticker','exchangecd'),cond_stock)
+            df = row_filter(df,('ticker','exchangecd'),cond_stock)
             df = df.loc[:,list(data_params.keys())].rename(columns=data_params)
             df['minute'] = (df['minute']/60).astype(int)
             df['minute'] = (df['minute'] - 90) * (df['minute'] <= 240) + (df['minute'] - 180) * (df['minute'] > 240)
             df = df.sort_values(['secid','minute'])
-            df = cls.trade_min_fillna(df)
+            df = trade_min_fillna(df)
         if with_date: df['date'] = date
         return df
-
-    @staticmethod
-    def trade_min_fillna(df : pd.DataFrame):
-        '''fillna for minute trade data'''
-        #'amount' , 'volume' to 0
-        df['amount'] = df['amount'].where(~df['amount'].isna() , 0)
-        df['volume'] = df['volume'].where(~df['volume'].isna() , 0)
-
-        # close price
-        df1 = df.loc[:,['secid','minute','close']].copy().rename(columns={'close':'fix'})
-        df1['minute'] = df1['minute'] + 1
-        df = df.merge(df1,on=['secid','minute'],how='left')
-        df['fix'] = df['fix'].where(~df['fix'].isna() , df['open'])
-
-        # prices to last time price (min != 0)
-        for feat in ['open','high','low','vwap','close']: 
-            if df[feat].isna().any():
-                df[feat] = df[feat].where(~df[feat].isna() , df['fix'])
-        del df['fix']
-        return df
-
-    @classmethod
-    def trade_min_reform(cls , df : pd.DataFrame , by : int):
-        '''from minute trade data to xmin trade data'''
-        df = cls.trade_min_filter(df)
-        assert len(df['minute'].unique()) in [240,241] , df['minute'].unique()
-        assert 240 % by == 0 , by
-        df['minute'] = (df['minute'].clip(lower=1) - 1) // by
-        agg_dict = {'open':'first','high':'max','low':'min','close':'last','amount':'sum','volume':'sum'}
-        data_new = df.groupby(['secid' , 'minute']).agg(agg_dict)
-        if 'vwap' in df.columns: data_new['vwap'] = data_new['amount'] / data_new['volume']
-        return data_new.reset_index(drop=False)
-
-    @staticmethod
-    def trade_min_filter(df : pd.DataFrame):
-        '''fillna for minute trade data, remain ashare'''
-        assert isinstance(df , pd.DataFrame) , type(df)
-        secid , minute = df['secid'] , df['minute']
-        x1 = (secid>=0)*(secid<100000)+(secid>=300000)*(secid<=398999)+(secid>=600000)*(secid<=699999)
-        x2 = minute <= 240
-        return df[(x1*x2)>0].copy()
 
     @classmethod
     def trade_Xmin(cls , date : int , x : int , df_min : Any = None , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
@@ -386,7 +297,7 @@ class RFetcher:
         df = df_min if df_min is not None else cls.trade_min(date , **kwargs)
         if df is None or isinstance(df , FailedData): return FailedData(f'{x}min' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
-            if x != 1: df = cls.trade_min_reform(df , by = x)
+            if x != 1: df = trade_min_reform(df , x)
             if df is None: return df
         if with_date: df['date'] = date
         return df
@@ -398,7 +309,7 @@ class RFetcher:
         if not path.exists():  return FailedData(f'bm_{bm.lower()}' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.read_csv(path)
-            df = cls.adjust_secid(df)
+            df = secid_adjust(df , 'wind_id' , drop_old=False)
             df['weight'] = df['weight'] / df['weight'].sum()
-            df = cls.adjust_precision(df)
+            df = adjust_precision(df)
         return df

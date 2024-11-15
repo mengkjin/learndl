@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 
 from src.factor.classes import StockFactorCalculator
-from src.data import TSData
+from src.data import DATAVENDOR
 
 def exret_std(date , n_months : int , lag_months : int = 0):
-    start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    exrets = TSData.MODEL.get_exret(start_date , end_date , pivot=True)
+    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    exrets = DATAVENDOR.RISK.get_exret(start_date , end_date , pivot=True)
     return exrets.std() * np.sqrt(252)
 
 class exret_std1m(StockFactorCalculator):

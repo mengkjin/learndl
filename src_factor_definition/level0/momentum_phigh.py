@@ -2,12 +2,12 @@ import numpy as np
 import pandas as pd
 
 from src.factor.classes import StockFactorCalculator
-from src.data import TSData
+from src.data import DATAVENDOR
 
 def phigh(date , n_months : int , lag_months : int = 0):
-    start_date , end_date = TSData.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
-    high = TSData.TRADE.get_quotes(start_date,end_date,'high',pivot=True).max()
-    cp   = TSData.TRADE.get_quotes(end_date,end_date,'close',pivot=True).iloc[-1]
+    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
+    high = DATAVENDOR.TRADE.get_quotes(start_date,end_date,'high',pivot=True).max()
+    cp   = DATAVENDOR.TRADE.get_quotes(end_date,end_date,'close',pivot=True).iloc[-1]
     mom  = cp / high - 1
     return mom
 

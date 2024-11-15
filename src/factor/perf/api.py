@@ -3,6 +3,7 @@ import pandas as pd
 from dataclasses import asdict , dataclass , field
 from IPython.display import display 
 from matplotlib.figure import Figure
+from pathlib import Path
 from typing import Any , Optional
 
 from . import calculator as Calc
@@ -67,15 +68,14 @@ class PerfManager:
         [display(fig) for key , fig in figs.items()]
         return figs
     
-    def rslt_to_excel(self , path : str):
-        assert path.endswith('.xlsx') , path
+    def write_down(self , path : Path | str):
+        path = Path(path)
         rslts = self.get_rslts()
-        dfs_to_excel(rslts , path , 'w' , 'factor_')
-
-    def figs_to_pdf(self , path : str):
-        assert path.endswith('.pdf') , path
         figs = self.get_figs()
-        figs_to_pdf(figs , path)
+        dfs_to_excel(rslts , path.joinpath('data.xlsx') , print_prefix='Analytic datas')
+        figs_to_pdf(figs , path.joinpath('plot.pdf') , print_prefix='Analytic plots')
+
+        return self
 
     @property
     def perf_calc_boolean(self) -> dict[str,bool]:
@@ -100,14 +100,9 @@ class PerfManager:
         }[key](**param)
     
     @classmethod
-    def run_test(cls , factor_val : pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any = None ,
+    def run_test(cls , factor_val : pd.DataFrame | DataBlock , benchmark : list[str|Benchmark|Any] | Any = None ,
                  all = True , verbosity = 2 , **kwargs):
         pm = cls(all=all , **kwargs)
-        pm.calc(factor_val , benchmark , verbosity = verbosity).plot(show=False , verbosity = verbosity)
+        bms = Benchmark.get_benchmarks(benchmark)
+        pm.calc(factor_val , bms , verbosity = verbosity).plot(show=False , verbosity = verbosity)
         return pm
-    
-    @classmethod
-    def random_test(cls , nfactor = 1):
-        factor_val = factor.random(20231201 , 20240228 , nfactor=nfactor)
-        benchmark  = None # Benchmark('csi500')
-        return cls.run_test(factor_val , benchmark)

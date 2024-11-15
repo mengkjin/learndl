@@ -3,11 +3,11 @@ import pandas as pd
 
 from typing import Literal
 from src.factor.classes import StockFactorCalculator
-from src.data import TSData
+from src.data import DATAVENDOR
 from src.func.transform import neutral_resid
 
 def get_amplitudes(start_date , end_date , pivot = True):
-    quotes = TSData.TRADE.get_quotes(start_date , end_date , ['high' , 'low' , 'preclose'] , adj_price = False)
+    quotes = DATAVENDOR.TRADE.get_quotes(start_date , end_date , ['high' , 'low' , 'preclose'] , adj_price = False)
     amplitudes = ((quotes['high'] - quotes['low']) / quotes['preclose']).rename('amplitude').\
         to_frame()
     if pivot: amplitudes = amplitudes.pivot_table('amplitude' , 'date' , 'secid').fillna(0)
@@ -17,18 +17,18 @@ def get_slicing(start_date , end_date , sliced_by : Literal['amplitude' , 'vol' 
     if sliced_by == 'amplitude':
         slice_values = get_amplitudes(start_date , end_date , pivot = True)
     elif sliced_by == 'vol':
-        slice_values =  TSData.TRADE.get_volumes(start_date , end_date , 'volume' , pivot = True)
+        slice_values =  DATAVENDOR.TRADE.get_volumes(start_date , end_date , 'volume' , pivot = True)
     elif sliced_by == 'cp':
-        slice_values =  TSData.TRADE.get_quotes(start_date , end_date , 'close' , pivot = True , adj_price = False)
+        slice_values =  DATAVENDOR.TRADE.get_quotes(start_date , end_date , 'close' , pivot = True , adj_price = False)
     sliced_pct = slice_values.rank(axis = 0 , pct = True , method = 'first') 
     slicing = sliced_pct >= slice_ratio 
     return slicing , ~slicing
 
 def mom_low_amp_v2(date , n_days : int , low_amplitude_ratio = 0.7):
-    start_date , end_date = TSData.CALENDAR.td_start_end(date , n_days , 'd' , 0)
+    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_days , 'd' , 0)
 
-    quotes = TSData.TRADE.get_quotes(start_date , end_date , ['pctchange' , 'high' , 'low' , 'preclose' , 'close' , 'status' , 'limit'] , adj_price = False)
-    mkt_ret = TSData.TRADE.get_market_return(start_date , end_date)
+    quotes = DATAVENDOR.TRADE.get_quotes(start_date , end_date , ['pctchange' , 'high' , 'low' , 'preclose' , 'close' , 'status' , 'limit'] , adj_price = False)
+    mkt_ret = DATAVENDOR.TRADE.get_market_return(start_date , end_date)
 
     quotes = quotes.join(mkt_ret , on = ['date'] , how = 'left')
 
@@ -41,7 +41,7 @@ def mom_low_amp_v2(date , n_days : int , low_amplitude_ratio = 0.7):
     lamp = pivoted['amplitude'].rank(axis = 0 , pct = True , method = 'first') <= low_amplitude_ratio
     mom = pivoted['alpha'].where(lamp , np.nan).sum()
 
-    ret20 = ((1 + TSData.TRADE.get_returns(*TSData.CALENDAR.td_start_end(date , 20 , 'd') , pivot=True)).prod() - 1).reindex(mom.index)
+    ret20 = ((1 + DATAVENDOR.TRADE.get_returns(*DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd') , pivot=True)).prod() - 1).reindex(mom.index)
 
     mom = neutral_resid(ret20 , mom , whiten = False)
     return mom
@@ -53,8 +53,8 @@ class mom_ltampl_v1(StockFactorCalculator):
     description = '160日长端动量(低振幅)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = TSData.CALENDAR.td_start_end(date , 160 , 'd' , 0)
-        rets = TSData.TRADE.get_returns(start_date , end_date , pivot = True)
+        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 160 , 'd' , 0)
+        rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , pivot = True)
         h , l = get_slicing(start_date , end_date , 'amplitude' , 0.7)
         mom = rets.where(l , np.nan).sum()
         return mom
@@ -75,8 +75,8 @@ class mom_slicevol1m(StockFactorCalculator):
     description = '1个月理想反转(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = TSData.CALENDAR.td_start_end(date , 20 , 'd' , 0)
-        rets = TSData.TRADE.get_returns(start_date , end_date , pivot = True)
+        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
+        rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , pivot = True)
         h , l = get_slicing(start_date , end_date , 'vol')
         mom = rets.where(h , np.nan).sum() - rets.where(l , np.nan).sum()
         return mom
@@ -88,9 +88,9 @@ class corr_slicevol1m(StockFactorCalculator):
     description = '1个月corr差(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = TSData.CALENDAR.td_start_end(date , 20 , 'd' , 0)
-        rets = TSData.TRADE.get_returns(start_date , end_date , pivot = True)
-        market_rets = TSData.TRADE.get_market_return(start_date , end_date)
+        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
+        rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , pivot = True)
+        market_rets = DATAVENDOR.TRADE.get_market_return(start_date , end_date)
         h , l = get_slicing(start_date , end_date , 'vol')
         h_stk , h_mkt = rets.where(h , np.nan) , (h.T * market_rets['market']).T.where(h , np.nan)
         l_stk , l_mkt = rets.where(l , np.nan) , (l.T * market_rets['market']).T.where(l , np.nan)
@@ -104,9 +104,9 @@ class beta_slicevol1m(StockFactorCalculator):
     description = '1个月beta差(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = TSData.CALENDAR.td_start_end(date , 20 , 'd' , 0)
-        rets = TSData.TRADE.get_returns(start_date , end_date , pivot = True)
-        market_rets = TSData.TRADE.get_market_return(start_date , end_date)
+        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
+        rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , pivot = True)
+        market_rets = DATAVENDOR.TRADE.get_market_return(start_date , end_date)
         h , l = get_slicing(start_date , end_date , 'vol')
         h_stk , h_mkt = rets.where(h , np.nan) , (h.T * market_rets['market']).T.where(h , np.nan)
         l_stk , l_mkt = rets.where(l , np.nan) , (l.T * market_rets['market']).T.where(l , np.nan)
@@ -120,8 +120,8 @@ class skew_slicevol1m(StockFactorCalculator):
     description = '1个月skew差(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = TSData.CALENDAR.td_start_end(date , 20 , 'd' , 0)
-        rets = TSData.TRADE.get_returns(start_date , end_date , pivot = True)
+        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
+        rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , pivot = True)
         h , l = get_slicing(start_date , end_date , 'vol')
         h_rets , l_rets = rets.where(h , np.nan) , rets.where(l , np.nan)
         diff = h_rets.skew() - l_rets.skew()
@@ -134,7 +134,7 @@ class ampl_slicecp1m(StockFactorCalculator):
     description = '1个月振幅(收盘价切分，较大)'
     
     def calc_factor(self, date: int):
-        start_date , end_date = TSData.CALENDAR.td_start_end(date , 20 , 'd' , 0)
+        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
         ampl = get_amplitudes(start_date , end_date , pivot = True)
         h , l = get_slicing(start_date , end_date , 'cp')
         ampl = ampl.where(h , np.nan).mean()

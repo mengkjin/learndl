@@ -4,7 +4,7 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal , Optional
 
-from ...basic.conf import EPS_WEIGHT , AVAIL_BENCHMARKS
+from ...basic.conf import EPS_WEIGHT , AVAIL_BENCHMARKS , DEFAULT_BENCHMARKS
 from ...data import DataBlock , DATAVENDOR
 
 class Port:
@@ -39,20 +39,20 @@ class Port:
         if n == 0: return self if inplace else self.copy()
         assert self.date >= 0 , f'Must assign date first! (now date={self.date})'
         assert n > 0 , f'n must be non-negative! ({n})'
-        return self.evolve_to_date(DATAVENDOR.td_offset(self.date , n) , inplace)
+        return self.evolve_to_date(DATAVENDOR.td(self.date , n).td , inplace)
 
     def backward(self , n : int = -1 , inplace = True):
         if n == 0: return self if inplace else self.copy()
         assert self.date >= 0 , f'Must assign date first! (now date={self.date})'
         assert n < 0 , f'n must be non-positive! ({n})'
-        return self.evolve_to_date(DATAVENDOR.td_offset(self.date , n) , inplace)
+        return self.evolve_to_date(DATAVENDOR.td(self.date , n).td , inplace)
     
     def evolve_to_date(self , date : int | Any , inplace = True , rebalance = False):
         rslt = self if inplace else self.copy()
         if date == rslt.date: return rslt
 
-        old_date = int(DATAVENDOR.latest_td(self.date))
-        new_date = int(DATAVENDOR.latest_td(date))
+        old_date = DATAVENDOR.td(self.date).td
+        new_date = DATAVENDOR.td(date).td
         if old_date == new_date: 
             rslt.date = date
             return rslt
@@ -74,8 +74,8 @@ class Port:
     
     def fut_ret(self , new_date : Optional[int] = None) -> float:
         if not self: return 0.
-        old_date = int(DATAVENDOR.latest_td(self.date))
-        if new_date is None: new_date = int(DATAVENDOR.td_offset(old_date , 1))
+        old_date = DATAVENDOR.td(self.date).td
+        if new_date is None: new_date = DATAVENDOR.td(old_date , 1).td
 
         q = DATAVENDOR.get_quote_ret(old_date , new_date)
         assert q is not None, f'Ret Quote (at {new_date}) is does not exists'
@@ -158,8 +158,8 @@ class Portfolio:
     '''
     portfolio realization for multiple days
     '''
-    def __init__(self , name : str = 'default' , is_default = False) -> None:
-        self.name = name
+    def __init__(self , name : str | Any = 'default' , is_default = False) -> None:
+        self.name = self.get_object_name(name)
         self.ports : dict[int,Port] = {}
         self.is_default = is_default
         self.weight_block_completed = False
@@ -214,13 +214,35 @@ class Portfolio:
             return Port.none_port(date)
         else:
             return port.evolve_to_date(date)
+    @classmethod
+    def get_object_name(cls , obj : str | Any):
+        if obj is None: return 'none'
+        elif isinstance(obj , cls): return obj.name
+        elif isinstance(obj , str): return obj
+        else: raise TypeError(obj)
     
 class Benchmark(Portfolio):
     '''
-    orthodox benchmark in AVAIL_BENCHMARK : csi300 , csi500 , csi1000
+    orthodox benchmark in AVAIL_BENCHMARK : csi300 , csi500 , csi800 , csi1000
     '''
-    def __init__(self , name : str) -> None:
-        assert name is None or name in AVAIL_BENCHMARKS , name
+    _instance_dict = {}
+    _singleton_names = ['csi300' , 'csi500' , 'csi800' , 'csi1000']
+
+    def __new__(cls , name : str | Any , *args , **kwargs):
+        name = cls.get_object_name(name)
+        if name in cls._instance_dict:
+            return cls._instance_dict[name]
+        elif name in cls._singleton_names:
+            instance = super().__new__(cls , *args , **kwargs)
+            cls._instance_dict[name] = instance
+            return instance
+        else:
+            assert name in AVAIL_BENCHMARKS , name
+            instance = super().__new__(cls , *args , **kwargs)
+            return instance
+
+    def __init__(self , name : str | Any) -> None:
+        if getattr(self , 'ports' , None): return
         super().__init__(name)
         self.benchmark_available_dates = DATAVENDOR.file_dates('benchmark' , self.name)
         self.benchmark_attempted_dates = []
@@ -232,6 +254,11 @@ class Benchmark(Portfolio):
             raise TypeError(input)
 
     def available_dates(self): return self.benchmark_available_dates
+
+    def clear(self):
+        self.ports = {}
+        self.benchmark_attempted_dates = []
+        return self
 
     def get(self , date : int , latest = True):
 
@@ -290,7 +317,7 @@ class Benchmark(Portfolio):
                 port = bm.get(model_date , latest=True)
             return port
         elif isinstance(bm , str):
-            return BENCHMARKS[bm].get(model_date , latest=True)
+            return cls(bm).get(model_date , latest=True)
         elif isinstance(bm , dict):
             name = str({(k if isinstance(k,(Portfolio,Port)) else str(k)):v for k,v in bm.items()})
             for i , (key , value) in enumerate(bm.items()):
@@ -308,15 +335,21 @@ class Benchmark(Portfolio):
             raise TypeError(bm)
         
     @classmethod
-    def get_benchmarks(cls , benchmarks : Optional[str] | list[Optional[str]]):
-        if not isinstance(benchmarks , list): benchmarks = [benchmarks]
-        benches = []
-        for bm in benchmarks:
-            if bm is None: benches.append(bm)
-            elif isinstance(bm , str): benches.append(BENCHMARKS[bm])
-            elif isinstance(bm , Portfolio): benches.append(bm)
-            else: raise TypeError(bm)
+    def get_benchmarks(cls , benchmarks : Any):
+        if benchmarks == 'defaults': return cls.defaults()
+        elif benchmarks is None: return None
+        else:
+            if not isinstance(benchmarks , list): benchmarks = [benchmarks]
+            benches = []
+            for bm in benchmarks:
+                if bm is None or isinstance(bm , Portfolio): benches.append(bm)
+                elif isinstance(bm , str): benches.append(cls(bm))
+                else: raise TypeError(bm)
         return benches
+    
+    @classmethod
+    def defaults(cls):
+        return [cls(bm) for bm in DEFAULT_BENCHMARKS]
 
 BENCHMARKS = {
     'csi300' : Benchmark('csi300') ,

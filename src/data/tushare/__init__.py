@@ -1,6 +1,5 @@
 import inspect
 
-from . import access as TSData
 from .basic.connect import pro
 from .download import TushareFetcher , daily , fina , index , info , analyst
 
