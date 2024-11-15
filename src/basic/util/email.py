@@ -8,22 +8,24 @@ def send_email(title = 'This is test! Hello, World!' ,
                body = 'This is test! Hello, World!' , 
                recipient : str | None = None,
                server : Literal['netease'] = 'netease'):
+    if not PATH.THIS_IS_SERVER:
+        print('not in server , skip sending email')
+        return
+    
     email_conf = CONF.confidential('email')[server]
     smtp_server = email_conf['smtp_server']
     smtp_port   = email_conf['smtp_port']
     sender      = email_conf['sender']  
     password    = email_conf['password']  
 
-    message = MIMEText(body , 'plain', 'utf-8')
-    message['From'] = Header('发件人昵称 <{}>'.format(sender), 'utf-8')  # type: ignore
-    message['To'] = Header('收件人昵称 <{}>'.format(recipient_email), 'utf-8')  # type: ignore
-    message['Subject'] = Header(title, 'utf-8')  # type: ignore
+    if recipient is None: recipient = str(sender)
+    assert recipient , 'recipient is required'
+    assert '@' in recipient , f'recipient address must contain @ , got {recipient}'
 
-    if recipient is None:
-        recipient = str(sender)
-    else:
-        assert recipient , 'recipient is required'
-        assert '@' in recipient , f'recipient address must contain @ , got {recipient}'
+    message = MIMEText(body , 'plain', 'utf-8')
+    message['From'] = sender # Header('发件人昵称 <{}>'.format(sender), 'utf-8')  # type: ignore
+    message['To'] = recipient # Header('收件人昵称 <{}>'.format(recipient), 'utf-8') 
+    message['Subject'] = title #Header(title, 'utf-8')  # type: ignore
 
     try:
         smtp_connection = smtplib.SMTP(smtp_server, smtp_port)
