@@ -10,3 +10,5 @@ from . import factor
 from . import model
 
 from . import api
+
+from .basic import INSTANCE_RECORD

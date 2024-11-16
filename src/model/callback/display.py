@@ -94,7 +94,7 @@ class StatusDisplay(BaseCallBack):
         elif event == 'new_attempt':
             sdout = '{attempt} {epoch} : {status}, Next attempt goes!'.format(**self.record_texts)
         elif event == 'nanloss':
-            sdout = 'Model {model_date}.{model_num} Attempt{attempt}, epoch{epoch} got nanloss!'.format(**asdict(self.status))
+            sdout = 'Model {model_date}.{model_num} Attempt{attempt}, epoch{epoch} got nanloss!'.format(self.status.as_dict())
         else:
             raise KeyError(event)
         return sdout
@@ -166,7 +166,7 @@ class StatusDisplay(BaseCallBack):
             self.display('{attempt} {epoch} : {status}'.format(**self.record_texts))
     
     def on_fit_epoch_end(self):
-        if self.status.end_of_loop: self.record_texts['exit'] = self.status.end_of_loop.trigger_reason
+        if self.status.fit_loop_breaker: self.record_texts['exit'] = self.status.fit_loop_breaker.trigger_reason
         while self.status.epoch_event: self.display(self.event_sdout(self.status.epoch_event.pop()))
     
     def on_fit_model_end(self):
@@ -207,7 +207,7 @@ class StatusDisplay(BaseCallBack):
         self.test_df_model = pd.concat([self.test_df_model , df_model])
 
     def summarize_test_result(self):
-
+        if self.test_df_model.empty: return
         cat_date = [md for md in self.test_df_model['model_date'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
         cat_type = ['best' , 'swalast' , 'swabest']
 

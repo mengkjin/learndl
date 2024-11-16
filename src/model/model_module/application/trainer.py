@@ -18,18 +18,8 @@ class ModelTrainer(BaseTrainer):
     def initialize(cls , stage = -1 , resume = -1 , checkname = -1 , base_path = None , override = {} , **kwargs):
         '''
         state:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
-        resume:    [-1,choose] , [0,no] , [1,yes]
-        checkname: [-1,choose] , [0,default] , [1,yes]
-        '''
-        
-        '''
-        module_name = TrainConfig.guess_module(base_path)
-        module_type = TrainConfig.get_module_type(module_name)
-
-        use_trainer = {
-            'nn' : NNTrainer ,
-            # 'boost' : BoosterTrainer ,
-        }[module_type]
+        resume:    [-1,choose] , [0,no]       , [1,yes]
+        checkname: [-1,choose] , [0,default]  , [1,yes]
         '''
         app = cls(base_path = base_path , override = override , stage = stage , resume = resume , checkname = checkname , **kwargs)
         return app

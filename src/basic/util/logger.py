@@ -7,7 +7,15 @@ from .. import conf as CONF
 
 class Logger(logging.RootLogger):
     '''custom colored log , config at {PATH.conf}/logger.yaml '''
-    def __new__(cls): return cls._init_logger()
+    _instance = None
+    def __new__(cls, *args , **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._init_logger()
+        return cls._instance
+    
+    def __init__(self , *args , **kwargs):
+        super().__init__(0)
 
     @staticmethod
     def _init_logger(test_output = False):
@@ -67,8 +75,8 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
 
 class DualPrinter:
     '''change print target to both terminal and file'''
-    def __init__(self, filename : str | Path = PATH.logs.joinpath('print_log.txt')):
-        self.filename = filename
+    def __init__(self, filename : str):
+        self.filename = PATH.logs.joinpath(filename)
         self.terminal = sys.stdout
         self.log = open(self.filename, "w")
 
@@ -93,12 +101,3 @@ class DualPrinter:
     def contents(self):
         with open(self.log.name , 'r') as f:
             return f.read()
-
-def dual_printer(func):
-    '''redirect stdout to log file and terminal'''
-    def wrapper(*args , **kwargs):
-        with DualPrinter() as printer:
-            ret = func(*args , **kwargs)
-        return {'ret' : ret , 'log' : printer.contents()}
-    return wrapper
-

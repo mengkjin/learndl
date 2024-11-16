@@ -7,7 +7,8 @@ from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal
 
-from . import project as PATH
+from . import structure as PATH
+from ..project import THIS_IS_SERVER
 
 SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
 SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
@@ -35,7 +36,7 @@ def db_src_deprecated(i):
 
 def laptop_func_deprecated(func):
     def wrapper(*args , **kwargs):
-        if PATH.THIS_IS_SERVER:
+        if THIS_IS_SERVER:
             print(f'at {func.__name__} will be deprecated soon, please update your code')
         return func(*args , **kwargs)
     return wrapper

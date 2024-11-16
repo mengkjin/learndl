@@ -13,7 +13,7 @@ file:
   param:
     backupCount: 5
     encoding: utf-8
-    filename: ./logs/rnn_log.log
+    filename: ./logs/project_log.log
     when: D
 formatters:
   color:

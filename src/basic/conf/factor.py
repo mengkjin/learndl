@@ -1,7 +1,7 @@
 '''
 basic variables in factor package
 '''
-from . import loader
+from . import load_config
 
 RISK_STYLE = [
     'size','beta','momentum','residual_volatility','non_linear_size',
@@ -36,8 +36,8 @@ DEFAULT_SOLVER_CONFIG : dict[str,dict] = {
     'cvxopt': {'show_progress': False}
 }
 
-DEFAULT_OPT_CONFIG = loader.factor('default_opt_config')
-CUSTOM_OPT_CONFIG = loader.factor('custom_opt_config')
+DEFAULT_OPT_CONFIG = load_config.factor('default_opt_config')
+CUSTOM_OPT_CONFIG = load_config.factor('custom_opt_config')
 
 RESERVE_OPT_CONFIG : dict[str,dict] = {
     'equity' :  {

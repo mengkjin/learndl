@@ -1,6 +1,9 @@
 from .device import Device
-from .logger import Logger
+from .logger import Logger , DualPrinter
 from .model import *
 from .silence import SILENT
 from .timer import Timer , BigTimer , PTimer
 from .calendar import CALENDAR , TradeDate
+
+from .email import send_email
+from .routine import ProcessAndEmail

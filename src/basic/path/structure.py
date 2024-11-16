@@ -1,14 +1,14 @@
-import os , shutil , sys , yaml , socket , torch , time
+import os , shutil , yaml , time
 from pathlib import Path
 
+from ..project import MAIN_PATH
+
 # variables
-THIS_IS_SERVER  = torch.cuda.is_available() and socket.gethostname() == 'mengkjin-server'
-main = Path('D:/Coding/learndl/learndl') if not THIS_IS_SERVER else Path('/home/mengkjin/Workspace/learndl')
-sys.path.append(str(main))
 
 FACTOR_DESTINATION_LAPTOP = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
 FACTOR_DESTINATION_SERVER = None # MAIN_PATH.joinpath('results' , 'Alpha')
 
+main        = MAIN_PATH
 data        = main.joinpath('data')
 database    = data.joinpath('DataBase')
 

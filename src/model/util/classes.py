@@ -12,12 +12,15 @@ from .batch import BatchData , BatchOutput
 from .buffer import BaseBuffer
 from .config import TrainConfig
 from .storage import MemFileStorage
-from ...basic.util import ModelDict , BigTimer
+from ...basic import ModelDict , BigTimer , INSTANCE_RECORD
 from ...func import Filtered
 
 class ModelStreamLine(ABC):
     def on_configure_model(self): ...
     def on_summarize_model(self): ...
+    def stage_data(self): ...
+    def stage_fit(self):  ...
+    def stage_test(self): ...
     def on_data_end(self): ... 
     def on_data_start(self): ... 
     def on_after_backward(self): ... 
@@ -47,28 +50,69 @@ class ModelStreamLine(ABC):
     def on_validation_batch_start(self): ...
     def on_validation_epoch_end(self): ...
     def on_validation_epoch_start(self): ...
-    
+
 def possible_hooks() -> list[str]: 
     return [x for x in dir(ModelStreamLine) if not x.startswith('_')]
 
 @dataclass
-class TrainerStatus:
-    max_epoch : int = 200
-    stage   : Literal['data' , 'fit' , 'test'] = 'data'
-    dataset : Literal['train' , 'valid' , 'test' , 'predict'] = 'train'
-    epoch   : int = -1
-    attempt : int = 0
-    round   : int = 0
-    
-    model_num  : int = -1
-    model_date : int = -1
-    model_submodel : str = 'best'
-    epoch_event : list[str] = field(default_factory=list)
-    best_attempt_metric : Any = None
+class _EndEpochStamp:
+    name  : str
+    epoch : int # epoch of trigger
 
-    def __post_init__(self):
-        self.end_of_loop = self.EndofLoop(self.max_epoch)
+class _FitLoopBreaker:
+    def __init__(self , max_epoch : int = 200):
+        self.max_epoch = max_epoch
+        self.status : list[_EndEpochStamp] = []
+    def __bool__(self): return len(self.status) > 0
+    def __repr__(self): return f'{self.__class__.__name__}(max_epoch={self.max_epoch},status={self.status})'  
+    def new_loop(self): 
+        self.status = []
+    def loop_end(self , epoch):
+        if epoch >= self.max_epoch: self.add_status('Max Epoch' , epoch)
+    def add_status(self , status : str , epoch : int): 
+        self.status.append(_EndEpochStamp(status , epoch))
+    @property
+    def end_epochs(self) -> list[int]:
+        return [sta.epoch for sta in self.status]
+    @property
+    def trigger_i(self) -> int:
+        return np.argmin(self.end_epochs).item()
+    @property
+    def trigger_ep(self) -> int:
+        return self.status[self.trigger_i].epoch
+    @property
+    def trigger_reason(self):
+        return self.status[self.trigger_i].name
+
+class TrainerStatus(ModelStreamLine):
+    def __init__(self , max_epoch : int = 200):
+        self.max_epoch : int = max_epoch
+        self.stage   : Literal['data' , 'fit' , 'test'] = 'data'
+        self.dataset : Literal['train' , 'valid' , 'test' , 'predict'] = 'train'
+        self.epoch   : int = -1
+        self.attempt : int = 0
+        self.round   : int = 0
+        
+        self.model_num  : int = -1
+        self.model_date : int = -1
+        self.model_submodel : str = 'best'
+        self.epoch_event : list[str] = []
+        self.best_attempt_metric : Any = None
+
+        self.fitted_model_num : int = 0
+
+        self.fit_loop_breaker = _FitLoopBreaker(self.max_epoch)
         self.fit_iter_num : int = 0
+
+    def as_dict(self):
+        d = {k:getattr(self,k) for k in 
+             ['max_epoch' , 'stage' , 'dataset' , 'epoch' , 'attempt' , 
+              'round' , 'model_num' , 'model_date' , 'model_submodel' , 
+              'epoch_event' , 'best_attempt_metric' , 'fitted_model_num']}
+        return d
+
+    def __repr__(self):
+        return f'TrainerStatus({", ".join([f"{k}={v}" for k,v in self.status.items()])})'
 
     @property
     def status(self):
@@ -86,60 +130,31 @@ class TrainerStatus:
     def stage_data(self): self.stage = 'data'
     def stage_fit(self):  self.stage = 'fit'
     def stage_test(self): self.stage = 'test'
-    def dataset_train(self): self.dataset = 'train'
-    def dataset_validation(self): self.dataset = 'valid'
-    def dataset_test(self): self.dataset = 'test'
-    def fit_model_start(self):
+    def on_train_epoch_start(self): self.dataset = 'train'
+    def on_validation_epoch_start(self): self.dataset = 'valid'
+    def on_test_model_start(self): self.dataset = 'test'
+    def on_fit_model_start(self):
         self.fit_iter_num += 1
         self.attempt = -1
         self.best_attempt_metric = None
         self.new_attempt()
-    def fit_epoch_start(self):
+    def on_fit_model_end(self):
+        self.fitted_model_num += 1
+    def on_fit_epoch_start(self):
         self.epoch   += 1
         self.epoch_event = []
-    def fit_epoch_end(self):
-        self.end_of_loop.loop_end(self.epoch)
+    def on_fit_epoch_end(self):
+        self.fit_loop_breaker.loop_end(self.epoch)
     def new_attempt(self , event : Literal['new_attempt' , 'nanloss'] = 'new_attempt'):
         self.epoch   = -1
         self.round   = 0
-        self.end_of_loop = self.EndofLoop(self.max_epoch)
         self.epoch_event = []
-
+        self.fit_loop_breaker.new_loop()
         self.add_event(event)
         if event == 'new_attempt': self.attempt += 1
 
     def add_event(self , event : Optional[str]):
         if event: self.epoch_event.append(event)
-
-    @dataclass
-    class EndofLoop:
-        max_epoch : int = 200
-        status : list['EndStatus'] = field(default_factory=list)
-
-        @dataclass
-        class EndStatus:
-            name  : str
-            epoch : int # epoch of trigger
-
-        def __post_init__(self) -> None: ...
-        def __bool__(self): return len(self.status) > 0
-        def new_loop(self): self.status = []
-        def loop_end(self , epoch):
-            if epoch >= self.max_epoch: self.add_status('Max Epoch' , epoch)
-        def add_status(self , status : str , epoch : int): 
-            self.status.append(self.EndStatus(status , epoch))
-        @property
-        def end_epochs(self) -> list[int]:
-            return [sta.epoch for sta in self.status]
-        @property
-        def trigger_i(self) -> int:
-            return np.argmin(self.end_epochs).item()
-        @property
-        def trigger_ep(self) -> int:
-            return self.status[self.trigger_i].epoch
-        @property
-        def trigger_reason(self):
-            return self.status[self.trigger_i].name
         
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
@@ -218,6 +233,7 @@ class BaseTrainer(ModelStreamLine):
         self.init_model(**kwargs)
         self.init_callbacks(**kwargs)
         self.wrap_callbacks()
+        INSTANCE_RECORD['trainer'] = self
         
     @final
     def init_config(self , base_path = None , override = {} , **kwargs) -> None:
@@ -226,18 +242,19 @@ class BaseTrainer(ModelStreamLine):
         self.status = TrainerStatus(self.config.train_max_epoch)
 
     def wrap_callbacks(self):
-        [setattr(self , hook_name , self.hook_wrapper(self , self.model , self.callback , hook_name)) 
-         for hook_name in possible_hooks()]
+        [setattr(self , hook , self.hook_wrapper(self , hook)) for hook in possible_hooks()]
 
     @staticmethod
-    def hook_wrapper(trainer : 'BaseTrainer' , model : 'BasePredictorModel' , callback : 'BaseCallBack' , hook_name : str):
-        action_trainer = getattr(trainer , hook_name)
-        action_model = getattr(model , hook_name)
+    def hook_wrapper(trainer : 'BaseTrainer' , hook : str):
+        action_status  = getattr(trainer.status , hook)
+        action_trainer = getattr(trainer , hook)
+        action_model   = getattr(trainer.model , hook)
         def wrapper() -> None:
-            callback.at_enter(hook_name)
+            trainer.callback.at_enter(hook)
+            action_status()
             action_trainer()
             action_model()
-            callback.at_exit(hook_name)
+            trainer.callback.at_exit(hook)
         return wrapper
 
     @abstractmethod
@@ -293,26 +310,35 @@ class BaseTrainer(ModelStreamLine):
     
     def main_process(self):
         '''Main stage of data & fit & test'''
-        self.on_configure_model()
-        for self.stage in self.stage_queue: 
-            getattr(self , f'stage_{self.stage}')()
-        self.on_summarize_model()
+        with BigTimer(self.logger.critical , 'Main Process'):
+            self.on_configure_model()
+
+            if not self.stage_queue:
+                self.logger.warning("stage_queue is empty , please check src.INSTANCE_RECORD['trainer']")
+                raise Exception("stage_queue is empty , please check src.INSTANCE_RECORD['trainer']")
+
+            if 'data' in self.stage_queue: self.stage_data()
+
+            if 'fit' in self.stage_queue:  self.stage_fit()
+
+            if 'test' in self.stage_queue: self.stage_test()
+
+            self.on_summarize_model()
+
+        return self
 
     def go(self):
-        with BigTimer(self.logger.critical , 'Main Process'):
-            self.main_process()
-        return self
+        '''alias of main_process'''
+        return self.main_process()
 
     def stage_data(self):
         '''stage of loading model data'''
-        self.status.stage_data()
         self.on_data_start()
         self.data.load_data()
         self.on_data_end()
         
     def stage_fit(self):
         '''stage of fitting'''
-        self.status.stage_fit()
         self.on_fit_start()
         for self.status.model_date , self.status.model_num in self.iter_model_num_date():
             if self.status.fit_iter_num == 0:
@@ -324,7 +350,6 @@ class BaseTrainer(ModelStreamLine):
 
     def stage_test(self):
         '''stage of testing'''
-        self.status.stage_test()
         self.on_test_start()
         for self.status.model_date , self.status.model_num in self.iter_model_num_date():
             self.on_test_model_start()
@@ -334,15 +359,20 @@ class BaseTrainer(ModelStreamLine):
 
     def iter_model_num_date(self): 
         '''iter of model_date and model_num , considering resume_training'''
-        new_iter = list(itertools.product(self.data.model_date_list , self.config.model_num_list))
-        if self.config.resume_training and self.status.stage == 'fit':
-            models_trained = np.full(len(new_iter) , True , dtype = bool)
-            for i , (model_date , model_num) in enumerate(new_iter):
-                if not self.deposition.exists(model_num , model_date):
-                    models_trained[max(i,0):] = False
-                    break
-            new_iter = Filtered(new_iter , ~models_trained)
-        return new_iter
+        model_iter = list(itertools.product(self.data.model_date_list , self.config.model_num_list))
+        assert self.status.stage in ['fit' , 'test'] , self.status.stage
+        if self.config.resume_training:
+            if self.status.stage == 'fit':
+                models_trained = np.full(len(model_iter) , True , dtype = bool)
+                for i , (model_date , model_num) in enumerate(model_iter):
+                    if not self.deposition.exists(model_num , model_date):
+                        models_trained[max(i,0):] = False
+                        break
+                model_iter = Filtered(model_iter , ~models_trained)
+                
+            elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:
+                model_iter = []
+        return model_iter
 
     def iter_model_submodels(self):
         for self.status.model_submodel in self.model_submodels: 
@@ -351,7 +381,7 @@ class BaseTrainer(ModelStreamLine):
             self.on_test_submodel_end()
 
     def iter_fit_epoches(self):
-        while not self.status.end_of_loop:
+        while not self.status.fit_loop_breaker:
             self.on_fit_epoch_start()
             yield self.status
             self.on_before_fit_epoch_end()
@@ -403,36 +433,30 @@ class BaseTrainer(ModelStreamLine):
 
     def on_configure_model(self):  
         self.config.set_config_environment()
-
+        
     def on_fit_model_start(self):
-        self.status.fit_model_start()
         self.data.setup('fit' , self.model_param , self.model_date)
 
     def on_fit_model_end(self): 
         self.save_model()
 
-    def on_fit_epoch_start(self):
-        self.status.fit_epoch_start()
+    def on_fit_epoch_start(self): ...
 
-    def on_fit_epoch_end(self):
-        self.status.fit_epoch_end()
+    def on_fit_epoch_end(self): ...
 
-    def on_train_epoch_start(self): 
-        self.status.dataset_train()
+    def on_train_epoch_start(self):
         self.metrics.new_epoch(**self.status.status)
 
     def on_train_epoch_end(self):
         self.metrics.collect_epoch()
     
     def on_validation_epoch_start(self):
-        self.status.dataset_validation()
         self.metrics.new_epoch(**self.status.status)
 
     def on_validation_epoch_end(self):
         self.metrics.collect_epoch()
     
     def on_test_model_start(self):
-        self.status.dataset_test()
         self.data.setup('test' , self.model_param , self.model_date)
     
     def on_test_submodel_start(self):
@@ -504,8 +528,8 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         self.__hook_stack.append(self.trace_hook_name())
         self.at_enter(self.__hook_stack[-1])
     def __exit__(self , *args): self.at_exit(self.__hook_stack.pop())
-    def at_enter(self , hook_name : str):  ...
-    def at_exit(self , hook_name : str): getattr(self , hook_name)()
+    def at_enter(self , hook : str):  ...
+    def at_exit(self , hook : str): getattr(self , hook)()
 
     def trace_hook_name(self) -> str:
         env = getattr(currentframe() , 'f_back')

@@ -338,15 +338,27 @@ class ModelParam:
 
 class TrainConfig(TrainParam):
     def __init__(self , base_path : Path | ModelPath | None , override = {}):
-        
-        self.Train = TrainParam(base_path , override)
-        self.Model = self.Train.generate_model_param()
-        
         self.resume_training: bool  = False
         self.stage_queue: list      = []
 
         self.device     = Device()
         self.logger     = Logger()
+
+        self.Train = TrainParam(base_path , override)
+        self.Model = self.Train.generate_model_param()
+        
+    def resume_old(self , old_path : Path | ModelPath):
+        self.Train = TrainParam(old_path)
+        self.Model = self.Train.generate_model_param()
+
+    def start_new(self , new_path : Path | ModelPath):
+        new_path = ModelPath(new_path.name)
+        assert not self.Train.resumeable or self.short_test , f'{new_path.base} has to be delete manually'
+
+        new_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
+        self.Train.copy_to(new_path , override = self.short_test)
+        self.Model.copy_to(new_path , override = self.short_test)
+        return self
 
     @classmethod
     def load(cls , base_path : Optional[Path] = None , do_parser = False , par_args = {} , override = {} , makedir = True):
@@ -356,7 +368,7 @@ class TrainConfig(TrainParam):
 
         model_path = ModelPath(config.model_name)
         if config.resume_training:
-            config = cls(model_path , override)
+            config.resume_old(model_path)
         elif 'fit' in config.stage_queue and makedir:
             config.start_new(model_path)
             
@@ -416,15 +428,6 @@ class TrainConfig(TrainParam):
                                self.train_multilosses_type , self.train_multilosses_param)
         self.checkpoint = Checkpoint(self.mem_storage)
         self.deposition = Deposition(self.model_base_path)
-        return self
-    
-    def start_new(self , new_path : Path | ModelPath):
-        new_path = ModelPath(new_path.name)
-        assert not self.Train.resumeable or self.short_test , f'{new_path.base} has to be delete manually'
-
-        new_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
-        self.Train.copy_to(new_path , override = self.short_test)
-        self.Model.copy_to(new_path , override = self.short_test)
         return self
 
     @staticmethod

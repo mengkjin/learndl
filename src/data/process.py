@@ -57,8 +57,7 @@ class DataProcessor:
         print(f'{len(processor.blocks)} datas :' + str(list(processor.blocks)))
         # return processor
         for key , proc in processor.processors():
-            modified_date = PATH.modified_date(DataBlock.norm_path(key , predict))
-            if modified_date == CALENDAR.today():
+            if (modified_date:= DataBlock.last_modified_date(key , predict)) >= CALENDAR.today():
                 print(f'{key} is up to {modified_date} already!')
                 continue
             tt1 = time.time()

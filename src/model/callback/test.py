@@ -30,8 +30,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def on_test_start(self):     PRED_RECORD.initialize(self.trainer)
     def on_test_batch_end(self): PRED_RECORD.append_batch_pred(self.trainer)
     def on_test_end(self):       
-
-        df = PRED_RECORD.all_preds
+        if (df := PRED_RECORD.all_preds).empty: return
         if self.use_num == 'first':
             df = df[df['model_num'] == 0]
         else:
@@ -73,7 +72,7 @@ class GroupReturnAnalysis(BaseCallBack):
     def on_test_start(self):     PRED_RECORD.initialize(self.trainer)
     def on_test_batch_end(self): PRED_RECORD.append_batch_pred(self.trainer)
     def on_test_end(self):       
-        df = PRED_RECORD.all_preds
+        if (df := PRED_RECORD.all_preds).empty: return
         df['factor_name'] = df['model_num'].astype(str) + '.' + df['submodel']
         df = df.pivot_table('values',['secid','date'],'factor_name')
 

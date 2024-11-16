@@ -147,12 +147,16 @@ class TradeCalendar:
         return cd_arr
     
     @staticmethod
-    def td_diff(date1 , date2):
-        return _CALENDAR.loc[[date1 , date2] , 'td_index'].diff().astype(int).iloc[1]
+    def td_diff(date1 , date2) -> int | Any:
+        diff = _CALENDAR.loc[[date1 , date2] , 'td_index'].astype(int).diff().iloc[1]
+        assert isinstance(diff , int) , f'{date1} and {date2} are not in calendar'
+        return diff
     
     @staticmethod
-    def cd_diff(date1 , date2):
-        return _CALENDAR.loc[[date1 , date2] , 'cd_index'].diff().astype(int).iloc[1]
+    def cd_diff(date1 , date2) -> int | Any:
+        diff = _CALENDAR.loc[[date1 , date2] , 'cd_index'].astype(int).diff().iloc[1]
+        assert isinstance(diff , int) , f'{date1} and {date2} are not in calendar'
+        return diff
     
     @staticmethod
     def td_trailing(date , n : int):

@@ -119,7 +119,7 @@ class NNBooster(BasePredictorModel):
         self.collect_net()
 
         # fit booster
-        self.status.fit_model_start()
+        self.status.on_fit_model_start()
         self.booster.import_data(train = self.train_boost_input() , valid = self.valid_boost_input()).fit(silent = True)
 
         for _ in self.trainer.iter_train_dataloader():

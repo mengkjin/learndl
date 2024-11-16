@@ -103,7 +103,10 @@ class ModelPredictor:
                     df_list.append(df)
                     df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
 
-        self.df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
+        if df_list:
+            self.df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
+        else:
+            self.df = pd.DataFrame()
         return self
     
     def deploy(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):

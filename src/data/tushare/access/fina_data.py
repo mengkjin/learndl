@@ -17,7 +17,7 @@ class FDataAccess(DateDataAccess):
     DATA_TYPE_LIST = ['income' , 'cashflow' , 'balance' , 'dividend' , 'disclosure' ,
                       'express' , 'forecast' , 'mainbz' , 'indicator']
 
-    def loader_func(self , date , data_type):
+    def data_loader(self , date , data_type):
         if data_type in self.DATA_TYPE_LIST: 
             return PATH.db_load('financial_ts' , data_type , date , check_na_cols=False)
         else:
@@ -48,7 +48,8 @@ class FDataAccess(DateDataAccess):
 
         field = ['secid' , 'ann_date' , 'end_date' , 'update_flag' , val]
         
-        df_acc = pd.concat([self.get_df(qe , data_type , field) for qe in q_ends]).dropna(subset = ['ann_date' , 'end_date'])
+        df_acc = self.gets(q_ends , data_type , field).dropna(subset = ['ann_date' , 'end_date'])
+        # df_acc = pd.concat([self.get(qe , data_type , field) for qe in q_ends]).dropna(subset = ['ann_date' , 'end_date'])
         df_acc['ann_date'] = df_acc['ann_date'].astype(int)
         df_acc['end_date'] = df_acc['end_date'].astype(int)
         df_acc = df_acc[(df_acc['ann_date'] <= date) & df_acc['end_date'].isin(q_ends) & (df_acc['secid'] >= 0)]
@@ -88,13 +89,12 @@ class IndicatorDataAccess(FDataAccess):
     DATA_TYPE_LIST = ['indicator']
 
     def get_indi(self , date , field = None):
-        return self.get_df(date , 'indicator' , field)
+        return self.get(date , 'indicator' , field)
     
     @property
     def fields(self):
-        if self.data_dict['indicator']: 
-            date = list(self.data_dict['indicator'].keys())[0]
-            return self.data_dict['indicator'][date].columns.values
+        if self.collections['indicator']: 
+            return self.collections['indicator'].columns()
         else:
             return self.get_indi(20231231).columns.values
 
@@ -114,12 +114,13 @@ class FinancialDataAccess(FDataAccess):
     
     def get_ann_dt(self , date , latest_n = 1 , within_days = 365):
         assert latest_n >= 1 , 'latest_n must be positive'
-        income_ann_dt = [self.get_df(qtr_end , 'income' , ['secid' , 'ann_date']) for qtr_end in self.qtr_ends(date , latest_n + 5 , 0)]
-        ann_dt : pd.DataFrame = pd.concat(income_ann_dt)
+        ann_dt = self.gets(self.qtr_ends(date , latest_n + 5 , 0) , 'income' , ['secid' , 'ann_date']).dropna(subset = ['ann_date'])
+        #income_ann_dt = [self.get(qtr_end , 'income' , ['secid' , 'ann_date']) for qtr_end in self.qtr_ends(date , latest_n + 5 , 0)]
+        #ann_dt : pd.DataFrame = pd.concat(income_ann_dt)
         ann_dt['ann_date'] = ann_dt['ann_date'].astype(int)
         ann_dt['td_backward'] = CALENDAR.td_array(ann_dt['ann_date'] , backward = True)
         ann_dt['td_forward']  = CALENDAR.td_array(ann_dt['ann_date'] , backward = False)
-        ann_dt = ann_dt[ann_dt['td_forward'] <= date]
+        ann_dt = ann_dt.loc[ann_dt['td_forward'] <= date , :]
         if within_days > 0:
             ann_dt = ann_dt[ann_dt['td_backward'] >= CALENDAR.cd(date , -within_days)]
         grp = ann_dt.sort_values(['secid' , 'td_backward']).set_index('secid').groupby('secid')

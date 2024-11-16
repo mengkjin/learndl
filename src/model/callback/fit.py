@@ -21,7 +21,7 @@ class EarlyStoppage(BaseCallBack):
             self.metric_best_epoch  = self.status.epoch 
             self.metric_best_level = self.metrics.last_metric
         if self.status.epoch - self.metric_best_epoch >= self.patience:
-            self.status.end_of_loop.add_status('EarlyStop' , self.metric_best_epoch)
+            self.status.fit_loop_breaker.add_status('EarlyStop' , self.metric_best_epoch)
 
 class ValidationConverge(BaseCallBack):
     '''stop fitting when valid_score converge'''
@@ -32,7 +32,7 @@ class ValidationConverge(BaseCallBack):
         self.tolerance = eps
     def on_validation_epoch_end(self):
         if FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance):
-            self.status.end_of_loop.add_status('Valid Cvg' , self.status.epoch - self.patience + 1)
+            self.status.fit_loop_breaker.add_status('Valid Cvg' , self.status.epoch - self.patience + 1)
 
 class TrainConverge(BaseCallBack):
     '''stop fitting when train_loss converge'''
@@ -43,7 +43,7 @@ class TrainConverge(BaseCallBack):
         self.tolerance = eps
     def on_validation_epoch_end(self):
         if FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance):
-            self.status.end_of_loop.add_status('Train Cvg' , self.status.epoch - self.patience + 1)
+            self.status.fit_loop_breaker.add_status('Train Cvg' , self.status.epoch - self.patience + 1)
 
 class FitConverge(BaseCallBack):
     '''stop fitting when train_loss and valid_score converge'''
@@ -55,7 +55,7 @@ class FitConverge(BaseCallBack):
     def on_validation_epoch_end(self):
         if (FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance) and 
             FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance)):
-            self.status.end_of_loop.add_status('T & V Cvg' , self.status.epoch - self.patience + 1)
+            self.status.fit_loop_breaker.add_status('T & V Cvg' , self.status.epoch - self.patience + 1)
 
 class EarlyExitRetrain(BaseCallBack):
     '''retrain with new lr if fitting stopped too early'''
@@ -68,8 +68,8 @@ class EarlyExitRetrain(BaseCallBack):
     def on_fit_model_start(self):
         self.status.attempt = 0
     def on_before_fit_epoch_end(self):
-        if (self.status.end_of_loop and 
-            self.status.end_of_loop.trigger_ep <= self.earliest 
+        if (self.status.fit_loop_breaker and 
+            self.status.fit_loop_breaker.trigger_ep <= self.earliest 
             and self.status.attempt < self.max_attempt):
             if self.metrics.better_attempt(self.status.best_attempt_metric):
                 self.status.best_attempt_metric = self.metrics.best_metric

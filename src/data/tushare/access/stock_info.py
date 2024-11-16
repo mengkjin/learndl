@@ -62,7 +62,7 @@ class InfoDataAccess:
     def mask_list_dt(self , df : pd.DataFrame , mask : bool = True , list_dt_offset : int = 21 , reference_date : int | None = None):
         if not mask: return df
         pivoted = df.columns.name == 'secid' and df.index.name == 'date'
-        date_values  = df.index.values if pivoted else df.index.get_level_values('date').values
+        date_values  = df.index.values   if pivoted else df.index.get_level_values('date').values
         secid_values = df.columns.values if pivoted else df.index.get_level_values('secid').values
 
         if reference_date is None: reference_date = date_values.max()

@@ -1,2 +1,2 @@
 from .factor import *
-from .loader import *
+from .load_config import *

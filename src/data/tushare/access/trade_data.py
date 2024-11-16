@@ -14,7 +14,7 @@ class TradeDataAccess(DateDataAccess):
     MAX_LEN = 2000
     DATA_TYPE_LIST = ['trd' , 'val' , 'mf' , 'limit']
     
-    def loader_func(self , date , data_type):
+    def data_loader(self , date , data_type):
         if data_type == 'trd': 
             df = PATH.db_load('trade_ts' , 'day' , date)
         elif data_type == 'val': 
@@ -28,17 +28,17 @@ class TradeDataAccess(DateDataAccess):
         if df is not None: df['date'] = date
         return df
 
-    def get_val(self , date , field = None , drop_old = False):
-        return self.get_df(date , 'val' , field , drop_old)
+    def get_val(self , date , field = None):
+        return self.get(date , 'val' , field)
     
-    def get_trd(self , date , field = None , drop_old = False):
-        return self.get_df(date , 'trd' , field , drop_old)
+    def get_trd(self , date , field = None):
+        return self.get(date , 'trd' , field)
     
-    def get_mf(self , date , field = None , drop_old = False):
-        return self.get_df(date , 'mf' , field , drop_old)
+    def get_mf(self , date , field = None):
+        return self.get(date , 'mf' , field)
     
-    def get_limit(self , date , field = None , drop_old = False):
-        return self.get_df(date , 'limit' , field , drop_old)
+    def get_limit(self , date , field = None):
+        return self.get(date , 'limit' , field)
 
     def get_quotes(self , start_dt : int | TradeDate , end_dt : int | TradeDate , 
                    field : Literal['adjfactor','open','high','low','close','amount','volume',

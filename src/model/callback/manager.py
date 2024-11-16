@@ -1,9 +1,9 @@
 from typing import Any , Optional
 
-from . import display, train , test , nnspecific
+from . import display, fit, test , nnspecific
 from ..util.classes import BaseCallBack , BaseTrainer 
 
-SEARCH_MODS = [train , display , test]
+SEARCH_MODS = [fit , display , test]
 COMPULSARY_CALLBACKS = ['StatusDisplay' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis']
 
 class CallBackManager(BaseCallBack):
@@ -11,10 +11,10 @@ class CallBackManager(BaseCallBack):
         super().__init__(trainer)   
         self.callbacks : list[BaseCallBack] = [cb for cb in callbacks if isinstance(cb , BaseCallBack) and not cb.turn_off]
 
-    def at_enter(self , hook_name):
-        [cb.at_enter(hook_name) for cb in self.callbacks]
-    def at_exit(self, hook_name):
-        [cb.at_exit(hook_name) for cb in self.callbacks]
+    def at_enter(self , hook):
+        [cb.at_enter(hook) for cb in self.callbacks]
+    def at_exit(self, hook):
+        [cb.at_exit(hook) for cb in self.callbacks]
 
     @classmethod
     def setup(cls , trainer : BaseTrainer):

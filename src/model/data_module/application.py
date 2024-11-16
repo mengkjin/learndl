@@ -3,14 +3,6 @@ from typing import Optional
 from .module import DataModule
 from ..util import TrainConfig
 
-def reconstruct_train_data(data_types : Optional[list[str] | str] = None): 
-    '''
-    reconstruct historical(since 2007 , use for models starting at 2017) train data
-    '''
-    if isinstance(data_types , str): data_types = data_types.split('+')
-    DataModule.prepare_data(data_types)
-    print('-' * 80)
-
 def get_realistic_batch_data(model_data_type='day'):
     '''
     get a sample of realistic batch_data , 'day' , 'day+style' , '15m+style' ...

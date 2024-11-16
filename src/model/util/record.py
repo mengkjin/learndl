@@ -37,4 +37,4 @@ class PredRecorder:
 
     @property
     def all_preds(self):
-        return pd.concat(list(self.preds.values()))
+        return pd.concat(list(self.preds.values())) if self.preds else pd.DataFrame()

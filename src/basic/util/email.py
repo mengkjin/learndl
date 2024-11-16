@@ -36,27 +36,3 @@ def send_email(title = 'This is test! Hello, World!' ,
         print('sending email success')
     except Exception as e:
         print('sending email went wrong:', e)
-
-def email_myself(do_send = False , 
-                 title : str = '' , 
-                 body_content : str = '' ,
-                 body_file : Literal['print_log.txt'] | None = None , 
-                 server : Literal['netease'] = 'netease'):
-    def wrapper(func):
-        if not do_send: return func
-        assert title , 'title is required'
-        def inner(*args , **kwargs):
-            ret = func(*args , **kwargs)
-            if isinstance(ret , dict) and 'log' in ret:
-                body = ret['log']
-            elif body_file is not None:
-                fn = str(PATH.logs.joinpath(body_file))
-                with open(fn , 'r') as f:
-                    body = f.read()
-            else:
-                body = body_content
-            assert body , 'body is required , or body_file is not None'
-            send_email(title , body , server = server)
-            return ret
-        return inner
-    return wrapper

@@ -11,8 +11,9 @@ email_title = f'daily update at {datetime.now().strftime("%Y-%m-%d")}'
 
 @ProcessAndEmail('daily_update' , email_title)
 def update_main():
-    DataAPI.update()
-    ModelAPI.update()
+    DataAPI.reconstruct_train_data()
+    ModelAPI.update_models()
+
 
 if __name__ == '__main__':
     # proceed_new_version()
@@ -23,8 +24,8 @@ if __name__ == '__main__':
         
     with DualPrinter('daily_update.txt') as printer:
         try:
-            DataAPI.update()
-            ModelAPI.update()
+            DataAPI.reconstruct_train_data()
+            ModelAPI.update_models()
 
         except Exception as e:
             print(f'Error Occured!')
@@ -35,5 +36,3 @@ if __name__ == '__main__':
             print('Traceback : ' + '*' * 20)
             print(traceback.format_exc())
     send_email(title = email_title , body = printer.contents())
-    
-    

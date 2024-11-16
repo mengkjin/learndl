@@ -91,10 +91,10 @@ class DataVendor:
         self.init_stocks()
 
     def data_storage_control(self):
-        self.TRADE.len_control(drop_old = True)
-        self.RISK.len_control(drop_old = True)
-        self.FINA.len_control(drop_old = True)
-        self.INDI.len_control(drop_old = True)
+        self.TRADE.truncate(drop_old = True)
+        self.RISK.truncate(drop_old = True)
+        self.FINA.truncate(drop_old = True)
+        self.INDI.truncate(drop_old = True)
 
     def init_stocks(self , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
         with SILENT:

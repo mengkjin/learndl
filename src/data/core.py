@@ -50,6 +50,10 @@ def norm_file_path(key : str , predict = False, alias_search = True):
 class DataBlock(Stock4DData):
     DEFAULT_INDEX = ['secid','date','minute','factor_name']
 
+    @classmethod
+    def last_modified_date(cls , key , predict):
+        return PATH.modified_date(cls.block_path(key , predict))
+
     @staticmethod
     def block_path(key : str , predict=False, alias_search = True):
         return block_file_path(key , predict , alias_search)
