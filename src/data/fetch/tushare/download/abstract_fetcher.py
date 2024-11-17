@@ -192,7 +192,7 @@ class RollingFetcher(TushareFetcher):
             assert self.DB_TYPE == 'rolling' , f'{self.__class__.__name__} is not a rolling fetcher'
             print(f'{self.__class__.__name__} Updating {self.DB_SRC}/{self.DB_KEY} from {start_date} to {end_date}')
             df = self.get_data(start_date , end_date)
-            if df is None or len(df) == 0: continue
+            if df.empty: continue
             assert self.ROLLING_DATE_COL in df.columns , f'{self.ROLLING_DATE_COL} not in {df.columns}'
             for date in df[self.ROLLING_DATE_COL].unique():
                 subdf = df[df[self.ROLLING_DATE_COL] == date].copy()

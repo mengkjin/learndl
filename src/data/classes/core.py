@@ -147,22 +147,16 @@ class DataBlock(Stock4DData):
         return cls.load_paths(paths , **kwargs)
     
     @classmethod
-    def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None ,
-                alternative_src : Optional[str] = None):
+    def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None):
         assert start_dt is not None or end_dt is not None , f'start_dt or end_dt must be provided when dates is None'
         dates = CALENDAR.td_within(start_dt , end_dt)
         main_dates = np.intersect1d(dates , PATH.db_dates(db_src , db_key))
         df = PATH.db_load_multi(db_src , db_key , main_dates , date_colname = 'date')
-        if alternative_src is not None:
-            alt_dates = np.intersect1d(dates , PATH.db_dates(alternative_src , db_key))
-            alt_dates = np.setdiff1d(alt_dates , main_dates)
-            df0 = PATH.db_load_multi(alternative_src , db_key , alt_dates , date_colname = 'date')
-            df = pd.concat([df , df0])
 
         if len(df) == 0: return cls()
         if len(df.index.names) > 1 or df.index.name: df = df.reset_index()
         use_index = [f for f in cls.DEFAULT_INDEX if f in df.columns]
-        assert len(use_index) <= 3 , use_index
+        assert 2 <= len(use_index) <= 3 , use_index
         if feature is not None:  df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
         return cls.from_dataframe(df.set_index(use_index))
     
@@ -390,13 +384,20 @@ class ModuleData:
             dataset_path = f'{PATH.dataset}/{dataset_code}.{last_date}.pt'
 
         if y_labels is not None and Path(dataset_path).exists():
-            data = cls(**torch.load(dataset_path))
-            if (np.isin(data_type_list , list(data.x.keys())).all() and
-                np.isin(y_labels , list(data.y.feature)).all()):
-                if not SILENT: print(f'try using {dataset_path} , success!')
-            else:
-                if not SILENT: print(f'try using {dataset_path} , but incompatible, load raw blocks!')
+            try:
+                data = cls(**torch.load(dataset_path))
+                if (np.isin(data_type_list , list(data.x.keys())).all() and
+                    np.isin(y_labels , list(data.y.feature)).all()):
+                    if not SILENT: print(f'try using {dataset_path} , success!')
+                else:
+                    if not SILENT: print(f'try using {dataset_path} , but incompatible, load raw blocks!')
+                    data = None
+            except ModuleNotFoundError:
+                '''can be caused by different package version'''
+                print(f'try using {dataset_path} , but incompatible, load raw blocks!')
                 data = None
+            except Exception as e:
+                raise e
         else:
             data = None
 

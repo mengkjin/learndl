@@ -14,17 +14,11 @@ class TradeDataAccess(DateDataAccess):
     DATA_TYPE_LIST = ['trd' , 'val' , 'mf' , 'limit']
     
     def data_loader(self , date , data_type):
-        if data_type == 'trd': 
-            df = PATH.db_load('trade_ts' , 'day' , date)
-        elif data_type == 'val': 
-            df = PATH.db_load('trade_ts' , 'day_val' , date)
-        elif data_type == 'mf': 
-            df = PATH.db_load('trade_ts' , 'day_moneyflow' , date)
-        elif data_type == 'limit': 
-            df = PATH.db_load('trade_ts' , 'day_limit' , date)
+        db_key_dict = {'trd' : 'day' , 'val' : 'day_val' , 'mf' : 'day_moneyflow' , 'limit' : 'day_limit'}
+        if data_type in db_key_dict: 
+            df = PATH.db_load('trade_ts' , db_key_dict[data_type] , date , verbose = False)
         else:
             raise KeyError(data_type)
-        # if df is not None: df['date'] = date
         return df
 
     def get_val(self , date , field = None):

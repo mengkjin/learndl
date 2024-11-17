@@ -12,13 +12,11 @@ from ...func.singleton import singleton
 @singleton
 class RiskModelAccess(DateDataAccess):
     MAX_LEN = 2000
-    DATA_TYPE_LIST = ['res' , 'exp']
+    DATA_TYPE_LIST = ['res' , 'exp' , 'spec' , 'cov' , 'coef']  
     
     def data_loader(self , date , data_type):
-        if data_type == 'res': 
-            df = PATH.db_load('models' , 'tushare_cne5_res' , date)
-        elif data_type == 'exp': 
-            df = PATH.db_load('models' , 'tushare_cne5_exp' , date)
+        if data_type in self.DATA_TYPE_LIST: 
+            df = PATH.db_load('models' , f'tushare_cne5_{data_type}' , date , verbose = False)
         else:
             raise KeyError(data_type)
         # if df is not None: df = df.reset_index().assign(date = date)

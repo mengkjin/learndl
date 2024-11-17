@@ -133,7 +133,7 @@ class SQLFetcher:
                     last1_dt = min(self.date_offset(old_dates[-1],1,astype=int))
                     start_dt = max(start_dt , last1_dt)
 
-            end_dt = min(end_dt , CALENDAR.update_to())
+            end_dt = CALENDAR.td(min(end_dt , CALENDAR.update_to()))
             date_intervals = self.date_seg(start_dt , end_dt)
         if not date_intervals: return 
         
@@ -197,7 +197,7 @@ class SQLFetcher:
         for d in data.index.unique():
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: continue
-            PATH.db_save(data_at_d , self.DB_SRC , self.db_key , d , force_type='date')
+            PATH.db_save(data_at_d , self.DB_SRC , self.db_key , d)
 
     @classmethod
     def convert_id(cls , x):
@@ -242,8 +242,7 @@ class SQLFetcher:
             df = df.set_index(['date','secid']).reset_index()
         elif factor_src == 'huatai':
             assert isinstance(df , dict)
-            df0 = pd.DataFrame(columns = ['date','secid']).astype(int)
-           
+            df0 = pd.DataFrame(columns = ['date','instrument']).astype(int)
             for k , subdf in df.items():
                 assert 'instrument' in subdf.columns , subdf.columns
                 subdf = subdf.rename(columns = {'datetime':'date','value':k})

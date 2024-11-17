@@ -1,4 +1,4 @@
-import os , platform , re
+import inspect , os , platform , re
 import numpy as np
 import pandas as pd
 
@@ -81,7 +81,7 @@ def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , pr
             df.to_feather(path)
         else:
             df.to_parquet(path , engine='fastparquet')
-        if printing_prefix: print(f'{printing_prefix} saved successfully')
+        if printing_prefix: print(f'{printing_prefix} save to {path} successfully')
         return True
     else:
         if printing_prefix: print(f'{printing_prefix} already exists')
@@ -110,83 +110,130 @@ def load_df_multi(paths : dict , raise_if_not_exist = False):
             dfs = {futures[future]:future.result() for future in as_completed(futures)}
     return dfs
 
-def examine_df(df : pd.DataFrame , db_src , db_key , date , check_na_cols = False):
-    if df.empty:
-        print(f'{db_src} , {db_key} , {date} entry is empty')
-    elif df.isna().all().all():
-        print(f'{db_src} , {db_key} , {date} entry is all-NA')
-    elif check_na_cols and df.isna().all().any():
-        print(f'{db_src} , {db_key} , {date} entry has columns [{str(df.columns.values[df.isna().all()])}] all-NA')
-
-def proc_df(raw_df : pd.DataFrame | dict[int , pd.DataFrame] , date = None, date_colname = None , check_na_cols = False , check_txt_head = 'some df' ,
-            reset_index = True , ignored_fields = []):
+def process_df(raw_df : pd.DataFrame | dict[int , pd.DataFrame] , date = None, date_colname = None , check_na_cols = False , 
+               df_syntax : str | None = 'some df' , reset_index = True , ignored_fields = []):
     if isinstance(raw_df , dict):
-        if date_colname: [ddf.assign(**{date_colname:d} , inplace=True) for d , ddf in raw_df.items()]
+        if not raw_df: return pd.DataFrame()
+        assert date_colname is not None , 'date_colname must be provided if raw_df is a dict'
+        for d , ddf in raw_df.items(): ddf[date_colname] = d
         df = pd.concat(raw_df.values())
     else:
         if date_colname and date is not None: raw_df[date_colname] = date
         df = raw_df
 
-    if df.empty:
-        print(f'{check_txt_head} is empty')
-    elif df.isna().all().all():
-        print(f'{check_txt_head} is all-NA')
-    elif check_na_cols and df.isna().all().any():
-        print(f'{check_txt_head} has columns [{str(df.columns.values[df.isna().all()])}] all-NA')
+    if df_syntax:
+        if df.empty:
+            print(f'{df_syntax} is empty')
+        elif df.isna().all().all():
+            print(f'{df_syntax} is all-NA')
+        elif check_na_cols and df.isna().all().any():
+            print(f'{df_syntax} has columns [{str(df.columns.values[df.isna().all()])}] all-NA')
 
-    if date_colname and date is not None: df[date_colname] = date
     if reset_index and len(df.index.names) > 1 or df.index.name: df = df.reset_index()
     if ignored_fields: df = df.drop(columns=ignored_fields , errors='ignore')
     return df
 
-def db_path(db_src , db_key , date = None , force_type : Literal['name' , 'date'] | None = None , use_alternative = True):
-    if db_src in DB_BY_NAME or force_type == 'name':
+def db_path(db_src , db_key , date = None):
+    if db_src in DB_BY_NAME:
         parent = PATH.database.joinpath(f'DB_{db_src}')
         base = f'{db_key}.{SAVE_OPT_DB}'
-    elif db_src in DB_BY_DATE or force_type == 'date':
+    elif db_src in DB_BY_DATE:
         assert date is not None
         parent = PATH.database.joinpath(f'DB_{db_src}' , db_key , str(int(date) // 10000))
         base = f'{db_key}.{str(date)}.{SAVE_OPT_DB}'
     else:
         raise KeyError(db_src)
-    path = parent.joinpath(base)
-    if not path.exists() and use_alternative and db_src in DB_ALTERNATIVES:
-        return db_path(DB_ALTERNATIVES[db_src] , db_key , date , force_type , use_alternative = False)
-    else:
-        return path
+    return parent.joinpath(base)
+    
+def db_path_with_alt(db_src , db_key , date = None):
+    '''
+    if the path does not exist, try to find the alternative path
+    '''
+    assert inspect.stack()[1].function in ['db_load' , 'db_load_multi'] , \
+        f'db_path_with_alt can only be used in db_load or db_load_multi , but got {inspect.stack()[1].function}'
+    path = db_path(db_src , db_key , date)
+    if not path.exists() and db_src in DB_ALTERNATIVES:
+        alt_path = db_path(DB_ALTERNATIVES[db_src] , db_key , date)
+        if alt_path.exists(): return alt_path
+    return path
 
 def db_dates(db_src , db_key , start_dt = None , end_dt = None , year = None):
     path = PATH.database.joinpath(f'DB_{db_src}' , db_key)
     return dir_dates(path , start_dt , end_dt , year)
 
+def db_dates_with_alt(db_src , db_key , start_dt = None , end_dt = None , year = None):
+    '''
+    get both the original dates and the alternative dates
+    '''
+    assert inspect.stack()[1].function in ['db_load_multi'] , \
+        f'db_dates_with_alt can only be used in db_load_multi , but got {inspect.stack()[1].function}'
+    dates = db_dates(db_src , db_key , start_dt , end_dt , year)
+    if db_src in DB_ALTERNATIVES:
+        alt_dates = db_dates(DB_ALTERNATIVES[db_src] , db_key , start_dt , end_dt , year)
+        dates = np.concatenate([dates , alt_dates])
+    return dates
+
 @db_src_deprecated(1)
-def db_save(df : pd.DataFrame | None , db_src , db_key , date = None , 
-            force_type : Literal['name' , 'date'] | None = None , verbose = False):
+def db_save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True):
+    '''
+    Save data to database
+    Parameters  
+    ----------
+    df: pd.DataFrame | None
+        data to be saved
+    db_src: str
+        database source name
+    db_key: str
+        database key
+    date: int, default None
+        date to be saved, if the db is by date, date is required
+    '''
     printing_prefix = f'DataBase object [{db_src}],[{db_key}],[{date}]' if verbose else None
     if df is not None and (len(df.index.names) > 1 or df.index.name): df = df.reset_index()
-    mark = save_df(df , db_path(db_src , db_key , date , force_type = force_type) , overwrite = True , printing_prefix = printing_prefix)
+    mark = save_df(df , db_path(db_src , db_key , date) , overwrite = True , printing_prefix = printing_prefix)
     return mark
 
 @db_src_deprecated(0)
-def db_load(db_src , db_key , date = None , date_colname = None , 
-            check_na_cols = True , raise_if_not_exist = False , ignored_fields = []) -> pd.DataFrame: 
-    #  ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code']
-    path = db_path(db_src , db_key , date)
-    df = load_df(path , raise_if_not_exist=raise_if_not_exist)
-    df = proc_df(df , date , date_colname , check_na_cols , 
-                 check_txt_head=f'{db_src} , {db_key} , {date}' , 
-                 ignored_fields=ignored_fields)
+def db_load(db_src , db_key , date = None , date_colname = None , verbose = True , raise_if_not_exist = False , **kwargs) -> pd.DataFrame: 
+    '''
+    Load data from database
+    Parameters
+    ----------
+    db_src: str
+        database source name : ['information_js' , 'information_ts' , 'trade_js' , 'labels_js' , 'benchmark_js' , 
+                               'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'sellside']
+    db_key: str
+        database key that can be found in the database directory
+    date: int, default None
+        date to be loaded , if the db is by date , date is required
+    date_colname: str, default None
+        date column name , if submitted , the date will be assigned to this column
+    silent: default False
+        if True, no message will be printed
+    kwargs: kwargs for process_df
+        raise_if_not_exist: bool, default False
+            if True, raise FileNotFoundError if the file does not exist
+        ignored_fields: list, default []
+            fields to be dropped , consider ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code']
+        reset_index: bool, default True
+            if True, reset index (no drop index)
+    '''
+    path = db_path_with_alt(db_src , db_key , date)
+    df_syntax = f'{db_src}/{db_key}/{date}' if verbose else None
+    df = load_df(path , raise_if_not_exist = raise_if_not_exist)
+    df = process_df(df , date , date_colname , df_syntax = df_syntax , **kwargs)
     return df
 
 @db_src_deprecated(0)
 def db_load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None , date_colname = None , 
-                  raise_if_not_exist = False , ignored_fields = []):
+                  verbose = True , raise_if_not_exist = False , **kwargs):
     if dates is None:
         assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
-        dates = db_dates(db_src , db_key , start_dt , end_dt)
-    paths = {date:db_path(db_src , db_key , date) for date in dates}
+        dates = db_dates_with_alt(db_src , db_key , start_dt , end_dt)
+    paths : dict[int , Path] = {int(date):db_path_with_alt(db_src , db_key , date) for date in dates}
+    df_syntax = f'{db_src}/{db_key}/multi-dates' if verbose else None
     dfs = load_df_multi(paths , raise_if_not_exist=raise_if_not_exist)
-    df = proc_df(dfs , date_colname = date_colname , check_txt_head=f'{db_src} , {db_key} , multi dates' , ignored_fields=ignored_fields)
+    df = process_df(dfs , date_colname = date_colname , df_syntax = df_syntax , **kwargs)
     return df
 
 def pred_path(model_name : str , date : int | Any):
@@ -198,17 +245,16 @@ def pred_dates(model_name : str , start_dt = None , end_dt = None , year = None)
 def pred_save(df : pd.DataFrame | None , model_name : str , date : int | Any , overwrite = True):
     return save_df(df , pred_path(model_name , date) , overwrite)
 
-def pred_load(model_name : str , date : int | Any , date_colname = None):
-    path = pred_path(model_name , date)
-    df = load_df(path , raise_if_not_exist=False)
-    df = proc_df(df , date , date_colname , check_txt_head=f'pred of {model_name} , {date}')
-    return df
+def pred_load(model_name : str , date : int | Any , date_colname = None , verbose = True , **kwargs):
+    df = load_df(pred_path(model_name , date))
+    return process_df(df , date , date_colname , df_syntax = f'pred/{model_name}/{date}' if verbose else None , **kwargs)
 
-def pred_load_multi(model_name : str , dates , date_colname = None):
-    paths = {date:pred_path(model_name , date) for date in dates}
-    dfs = load_df_multi(paths)
-    df = proc_df(dfs , date_colname = date_colname , check_txt_head=f'pred of {model_name} , multi dates')
-    return df
+def pred_load_multi(model_name : str , dates = None , start_dt = None , end_dt = None , date_colname = None , verbose = True , **kwargs):
+    if dates is None:
+        assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
+        dates = pred_dates(model_name , start_dt , end_dt)
+    dfs = load_df_multi({date:pred_path(model_name , date) for date in dates})
+    return process_df(dfs , date_colname = date_colname , df_syntax = f'pred/{model_name}/multi-dates' if verbose else None , **kwargs)
 
 def factor_path(factor_name : str , date : int | Any):
     return PATH.factor.joinpath(factor_name , str(date // 10000) , f'{factor_name}.{date}.feather')
@@ -219,17 +265,16 @@ def factor_dates(factor_name : str , start_dt = None , end_dt = None , year = No
 def factor_save(df : pd.DataFrame | None , factor_name : str , date : int | Any , overwrite = True):
     return save_df(df , factor_path(factor_name , date) , overwrite)
 
-def factor_load(factor_name : str , date : int | Any , date_colname = None):
-    path = factor_path(factor_name , date)
-    df = load_df(path , raise_if_not_exist=False)
-    df = proc_df(df , date , date_colname , check_txt_head=f'factor of {factor_name} , {date}')
-    return df
+def factor_load(factor_name : str , date : int | Any , date_colname = None , verbose = True , **kwargs):
+    df = load_df(factor_path(factor_name , date))
+    return process_df(df , date , date_colname , df_syntax = f'factor/{factor_name}/{date}' if verbose else None , **kwargs)
 
-def factor_load_multi(factor_name : str , dates , date_colname = None):
-    paths = {date:factor_path(factor_name , date) for date in dates}
-    dfs = load_df_multi(paths)
-    df = proc_df(dfs , date_colname = date_colname , check_txt_head=f'factor of {factor_name} , multi dates')
-    return df
+def factor_load_multi(factor_name : str , dates = None , start_dt = None , end_dt = None , date_colname = None , verbose = True , **kwargs):
+    if dates is None:
+        assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
+        dates = factor_dates(factor_name , start_dt , end_dt)
+    dfs    = load_df_multi({date:factor_path(factor_name , date) for date in dates})
+    return process_df(dfs , date_colname = date_colname , df_syntax = f'factor/{factor_name}/multi-dates' if verbose else None , **kwargs)
 
 @laptop_func_deprecated
 def get_source_dates(db_src , db_key):
@@ -266,6 +311,7 @@ def R_source_dates(db_src , db_key):
         'labels_js/ret_lag'    : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
         'benchmark_js/csi300'  : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI300' ,
         'benchmark_js/csi500'  : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI500' ,
+        'benchmark_js/csi800'  : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI800' ,
         'benchmark_js/csi1000' : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI1000' ,
     }[source_key]
 

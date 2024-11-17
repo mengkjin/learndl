@@ -35,7 +35,7 @@ def calc_classic_labels(date : int , days : int , lag1 : bool) -> Optional[pd.Da
 
     q1 = TRADE.get_trd(d1)
     res1 = RISK.get_res(d1)
-    if q1 is None or res1 is None: return
+    if q1.empty or res1.empty: return
 
     q1 = q1.rename(columns={'adjfactor':'adj1' , 'close':'cp1'})[['secid','adj1','cp1']]
     q0 = TRADE.get_trd(d0).rename(columns={'adjfactor':'adj0' , 'close':'cp0'})[['secid','adj0','cp0']]

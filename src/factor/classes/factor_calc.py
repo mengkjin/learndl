@@ -216,7 +216,7 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
             else:
                 return None
         else:
-            if int(date) in self.factors and factor_name is None: return self.factors[int(date)]
+            if int(date) in self.factors: return self.factors[int(date)]
             return PATH.factor_load(factor_name , date)
     
     def update_jobs(self , start : int = -1 , end : int = 99991231 , overwrite = False):

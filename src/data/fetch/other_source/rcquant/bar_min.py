@@ -7,7 +7,6 @@ from typing import Literal
 from .license_uri import uri as rcquant_uri
 from ....basic import PATH , CALENDAR , secid_adjust , trade_min_reform
 
-
 START_DATE = 20241101
 RC_PATH = PATH.miscel.joinpath('Rcquant')
 
@@ -71,7 +70,7 @@ def rcquant_trading_dates(start_date, end_date):
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
 
 def rcquant_bar_min(date : int , first_n : int = -1):
-    if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
+    
     def code_map(x : str):
         x = x.split('.')[0]
         if x[:1] in ['3', '0']:
@@ -82,7 +81,14 @@ def rcquant_bar_min(date : int , first_n : int = -1):
             y = x
         return y
 
-    # date = 20240704
+    if final_path.joinpath(f'min_bar_{date}.feather').exists():
+        data = pd.read_feather(final_path.joinpath(f'min_bar_{date}.feather'))
+        df = rcquant_min_to_normal_min(data)
+        PATH.db_save(df , 'trade_ts' , 'min' , date = date , verbose = True)
+        return True
+
+    if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
+
     sec_df = rcquant_secdf(date)
     sec_df = sec_df[sec_df['is_active']]
     if first_n > 0: sec_df = sec_df.iloc[:first_n]

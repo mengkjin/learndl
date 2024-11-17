@@ -7,7 +7,7 @@ def index_weight_get_data(self : RollingFetcher , index_code , start_date , end_
     assert start_date is not None and end_date is not None , 'start_date and end_date must be provided'
     df = self.iterate_fetch(pro.index_weight , limit = limit , max_fetch_times = 500 , index_code=index_code , 
                             start_date = str(start_date) , end_date = str(end_date))
-    if df is None or len(df) == 0: return df
+    if df.empty: return df
     df = code_to_secid(df , 'con_code').rename(columns={'trade_date':self.ROLLING_DATE_COL})
     df = df.sort_values([self.ROLLING_DATE_COL ,'weight'] , ascending=False)
     df['weight'] = df.groupby(self.ROLLING_DATE_COL)['weight'].transform(lambda x: x / x.sum())

@@ -81,7 +81,8 @@ class TuShareCNE5_Calculator:
     def descriptor(self , v , date : int , name : str , fillna : Any = 0) -> pd.Series:
         assert isinstance(v , pd.Series) , v
         univ = self.get_estuniv(date)
-        if (indus := self.ind_grp.get(date)) is None:
+        indus = self.ind_grp.get(date)
+        if indus is None or indus.empty:
             self.calc_indus(date)
             indus = self.ind_grp.get(date)
         v = descriptor(v.reindex(univ.index) , univ['weight'] , fillna , indus)
@@ -91,44 +92,46 @@ class TuShareCNE5_Calculator:
 
     def get_exposure(self , date : int , read = False):
         df = self.exposure.get(date)
-        if df is None and read: 
+        if (df is None or df.empty) and read: 
             df = PATH.db_load('models' , 'tushare_cne5_exp' , date)
-            self.exposure.add(df , date)
-        if df is None: 
+        if df is None or df.empty: 
             df = pd.concat([self.get_estuniv(date).loc[:,['estuniv','weight','market']] , 
                             self.get_industry(date) , 
                             *[self.get_style(date , name) for name in CONF.RISK_STYLE]] , axis=1)
-            self.exposure.add(df , date)
+        self.exposure.add(df , date)
         return df
 
     def get_estuniv(self , date : int):
-        if (df := self.estuniv.get(date)) is None: df = self.calc_estuniv(date)
+        df = self.estuniv.get(date)
+        if df is None or df.empty: df = self.calc_estuniv(date)
         return df
     
     def get_industry(self , date : int):
-        if (df := self.ind_exp.get(date)) is None: df = self.calc_indus(date)
+        df = self.ind_exp.get(date)
+        if df is None or df.empty: df = self.calc_indus(date)
         return df
     
     def get_style(self , date : int , name : str):
         assert name in CONF.RISK_STYLE , name
-        if (df := self.style.get(date , name)) is None: df = getattr(self , f'calc_{name}')(date)
+        df = self.style.get(date , name)
+        if df is None or df.empty: df = getattr(self , f'calc_{name}')(date)
         return df
     
     def get_coef(self , date : int , read = False):
         coef = self.coef.get(date)
-        if coef is None and read: 
+        if (coef is None or coef.empty) and read: 
             coef = PATH.db_load('models' , 'tushare_cne5_coef' , date)
             self.coef.add(coef , date)
-        if coef is None: 
+        if coef is None or coef.empty: 
             coef , resid = self.calc_model(date)
         return coef
     
     def get_resid(self , date : int , read = False):
         resid = self.resid.get(date)
-        if resid is None and read: 
+        if (resid is None or resid.empty) and read: 
             resid = PATH.db_load('models' , 'tushare_cne5_res' , date)
             self.resid.add(resid , date)
-        if resid is None: 
+        if resid is None or resid.empty: 
             coef , resid = self.calc_model(date)
         return resid
 

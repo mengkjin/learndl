@@ -54,7 +54,7 @@ class DataProcessor:
         else:
             blocks = data_types
         processor = cls(predict , blocks = blocks)
-        print(f'{len(processor.blocks)} datas :' + str(list(processor.blocks)))
+        print(f'{len(processor.blocks)} datas : {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
         # return processor
         for key , proc in processor.processors():
             if (modified_date:= DataBlock.last_modified_date(key , predict)) >= CALENDAR.today():

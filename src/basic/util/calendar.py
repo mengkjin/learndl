@@ -106,7 +106,7 @@ class TradeCalendar:
     @staticmethod
     def cal_trd(): return _CALENDAR_TRD
     @staticmethod
-    def today():   return today()
+    def today(offset = 0):   return today(offset)
     @staticmethod
     def update_to():
         return today(-1 if datetime.now().time() <= time(19, 0, 0) else 0)

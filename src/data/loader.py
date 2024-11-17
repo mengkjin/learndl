@@ -26,8 +26,8 @@ class BlockLoader:
         return self.load_block(start_dt , end_dt)
     
     def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
-        if end_dt is not None   and end_dt < 0:   end_dt   = CALENDAR.cd(end_dt)
-        if start_dt is not None and start_dt < 0: start_dt = CALENDAR.cd(start_dt)
+        if end_dt is not None   and end_dt < 0:   end_dt   = CALENDAR.today(end_dt)
+        if start_dt is not None and start_dt < 0: start_dt = CALENDAR.today(start_dt)
 
         sub_blocks = []
         db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
@@ -123,10 +123,10 @@ class DataVendor:
     def real_factor(cls , factor_type : Literal['pred' , 'factor'] , names : str | list[str] | np.ndarray , 
                     start_dt = 20240101 , end_dt = 20240531 , step = 5):
         if isinstance(names , str): names = [names]
-        date  = DATAVENDOR.td_within(start_dt , end_dt , step)
+        dates = DATAVENDOR.td_within(start_dt , end_dt , step)
 
         func = PATH.pred_load_multi if factor_type == 'pred' else PATH.factor_load_multi
-        values = [func(name , date , date_colname = 'date') for name in names]
+        values = [func(name , dates , date_colname = 'date') for name in names]
         values = [v.set_index(['secid','date']) for v in values if not v.empty]
         if values:
             return DataBlock.from_dataframe(pd.concat(values , axis=1).sort_index())

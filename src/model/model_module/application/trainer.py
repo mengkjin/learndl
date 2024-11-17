@@ -2,8 +2,7 @@ from ..module import get_predictor_module
 from ...callback import CallBackManager
 from ...data_module import DataModule
 from ...util.classes import BaseTrainer
-from ....basic import THIS_IS_SERVER
-from ....basic.util import REG_MODELS
+from ....basic import THIS_IS_SERVER , REG_MODELS
 
 class ModelTrainer(BaseTrainer):
     '''run through the whole process of training'''
