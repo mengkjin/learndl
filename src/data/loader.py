@@ -6,12 +6,10 @@ import torch.nn.functional as F
 from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
-from .core import DataBlock
-from .tushare.access import CALENDAR , INFO , TRADE , RISK , FINA , INDI
-from ..basic import PATH , CONF , SILENT
-from ..basic.util import Timer
+from .classes import DataBlock
+from .access import CALENDAR , INFO , TRADE , RISK , FINA , INDI
+from ..basic import PATH , CONF , SILENT , Timer
 from ..func.singleton import singleton
-from ..func.time import date_offset , today
 
 @dataclass(slots=True)
 class BlockLoader:
@@ -24,21 +22,18 @@ class BlockLoader:
         src_path = PATH.database.joinpath(f'DB_{self.db_src}')
         assert np.isin(self.db_key , [p.name for p in src_path.iterdir()]).all() , f'{self.db_key} not all in {src_path}'
 
-    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
-             parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
-        return self.load_block(start_dt , end_dt , parallel = parallel , max_workers = max_workers)
+    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
+        return self.load_block(start_dt , end_dt)
     
-    def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
-                   parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
-        if end_dt is not None   and end_dt < 0:   end_dt   = today(end_dt)
-        if start_dt is not None and start_dt < 0: start_dt = today(start_dt)
+    def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
+        if end_dt is not None   and end_dt < 0:   end_dt   = CALENDAR.cd(end_dt)
+        if start_dt is not None and start_dt < 0: start_dt = CALENDAR.cd(start_dt)
 
         sub_blocks = []
         db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
         for db_key in db_keys:
             with Timer(f' --> {self.db_src} blocks reading [{db_key}] DataBase'):
-                blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , self.feature , 
-                                        parallel = parallel , max_workers = max_workers)
+                blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , feature = self.feature)
                 sub_blocks.append(blk)
         if len(sub_blocks) <= 1:  
             block = sub_blocks[0]
@@ -46,26 +41,23 @@ class BlockLoader:
             with Timer(f' --> {self.db_src} blocks merging ({len(sub_blocks)})'): 
                 block = DataBlock.merge(sub_blocks)
         return block
-    
+
 @dataclass(slots=True)
 class FrameLoader:
     db_src  : str
     db_key  : str
+    reserved_src : Optional[list[str]] = None
 
     def __post_init__(self):
         assert PATH.database.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
             f'{PATH.database}/{self.db_src}/{self.db_key} not exists'
     
-    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
-             parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
-        return self.load_frame(start_dt , end_dt , parallel , max_workers)
+    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
+        return self.load_frame(start_dt , end_dt)
 
-    def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None , 
-                   parallel : Literal['thread' , 'process'] | None = 'thread' , max_workers = 20):
-        dates = PATH.db_dates(self.db_src , self.db_key , start_dt= start_dt , end_dt=end_dt)
-        dfs = PATH.db_load_multi(self.db_src , self.db_key , dates , parallel = parallel, max_workers=max_workers)
-        dfs = [df.assign(date = date) for date,df in dfs.items() if df is not None and not df.empty]
-        return pd.concat(dfs) if len(dfs) else pd.DataFrame()
+    def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
+        df = PATH.db_load_multi(self.db_src , self.db_key , start_dt=start_dt , end_dt=end_dt , date_colname = 'date')
+        return df
     
 
 @singleton
@@ -91,10 +83,10 @@ class DataVendor:
         self.init_stocks()
 
     def data_storage_control(self):
-        self.TRADE.truncate(drop_old = True)
-        self.RISK.truncate(drop_old = True)
-        self.FINA.truncate(drop_old = True)
-        self.INDI.truncate(drop_old = True)
+        self.TRADE.truncate()
+        self.RISK.truncate()
+        self.FINA.truncate()
+        self.INDI.truncate()
 
     def init_stocks(self , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
         with SILENT:
@@ -132,15 +124,12 @@ class DataVendor:
                     start_dt = 20240101 , end_dt = 20240531 , step = 5):
         if isinstance(names , str): names = [names]
         date  = DATAVENDOR.td_within(start_dt , end_dt , step)
-        values = []
+
         func = PATH.pred_load_multi if factor_type == 'pred' else PATH.factor_load_multi
-
-        for name in names: 
-            ret = func(name , date , assign_date=True)
-            if ret: values.append(pd.concat(ret.values()).reset_index().set_index(['secid','date']))
-
+        values = [func(name , date , date_colname = 'date') for name in names]
+        values = [v.set_index(['secid','date']) for v in values if not v.empty]
         if values:
-            return DataBlock.from_dataframe(pd.concat([v for v in values] , axis=1).sort_index())
+            return DataBlock.from_dataframe(pd.concat(values , axis=1).sort_index())
         else:
             print(f'None of {names} found in {start_dt} ~ {end_dt}')
             return DataBlock()
@@ -163,9 +152,10 @@ class DataVendor:
         td_within = self.td_within(start_dt , end_dt)
         if (not hasattr(self , 'day_ret')) or (not np.isin(td_within , self.day_ret.date).all()):
             with SILENT:
-                pre_start_dt = int(date_offset(start_dt , -20))
+                pre_start_dt = CALENDAR.cd(start_dt , -20)
                 feature = ['close' , 'vwap']
-                block = BlockLoader('trade_ts' , 'day' , ['close' , 'vwap' , 'adjfactor']).load_block(pre_start_dt , end_dt).as_tensor()
+                loader = BlockLoader('trade_ts' , 'day' , ['close' , 'vwap' , 'adjfactor'])
+                block : DataBlock | Any = loader.load_block(pre_start_dt , end_dt).as_tensor()
                 block = block.adjust_price().align_feature(feature)
                 values = block.values[:,1:] / block.values[:,:-1] - 1
                 secid  = block.secid

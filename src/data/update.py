@@ -5,7 +5,7 @@ import pandas as pd
 from functools import reduce
 from pathlib import Path
 
-from .fetcher import DataFetcher , SQLFetcher
+from .fetch import JSFetcher , SQLFetcher
 from ..basic import PATH , THIS_IS_SERVER
 
 UPDATER_TITLE = 'DB_updater'
@@ -53,13 +53,13 @@ class DataUpdater():
 
     def get_db_params(self , db_src):
         # db_update_parameters
-        if db_src == 'information':
+        if db_src == 'information_js':
             param_args : list[list] = [
-                #['calendar',] ,    # market trading calendar
-                #['description',] , # stock list_date and delist_date
-                #['st',] ,          # st treatment of stocks
-                #['industry',] ,    # SW 2021 industry criterion
-                #['concepts',] ,    # wind concepts
+                ['calendar',] ,    # market trading calendar
+                ['description',] , # stock list_date and delist_date
+                ['st',] ,          # st treatment of stocks
+                ['industry',] ,    # SW 2021 industry criterion
+                ['concepts',] ,    # wind concepts
             ]
         elif db_src == 'models':
             param_args = [
@@ -68,7 +68,7 @@ class DataUpdater():
                 ['risk_spec',] ,  # specific risk (annualized standard deviation) of risk model jm2018
                 ['longcl_exp',] , # sub alpha factor exposure of longcl
             ]
-        elif db_src == 'trade':
+        elif db_src == 'trade_js':
             param_args = [
                 ['day',] , 
                 ['5day',[5],] ,
@@ -81,7 +81,7 @@ class DataUpdater():
                 ['30min',[30],] , 
                 ['60min',[60],] ,
             ]
-        elif db_src == 'labels':
+        elif db_src == 'labels_js':
             param_args = [
                 ['ret5',[5 ,False],] , 
                 ['ret5_lag',[5 ,True],] , 
@@ -90,16 +90,17 @@ class DataUpdater():
                 ['ret20',[20 ,False],] , 
                 ['ret20_lag',[20 ,True],] , 
             ]
-        elif db_src == 'benchmark':
+        elif db_src == 'benchmark_js':
             param_args = [
                 ['csi300',['csi300']] , 
                 ['csi500',['csi500']] , 
+                ['csi800',['csi800']] , 
                 ['csi1000',['csi1000']] , 
             ]
         else:
             param_args = []
 
-        params = [DataFetcher(db_src , *args) for args in param_args]
+        params = [JSFetcher(db_src , *args) for args in param_args]
         return params
     
     def handle_df_result(self , df , target_path : Path , result_dict = None):
@@ -144,7 +145,7 @@ class DataUpdater():
                 start_time = time.time()
                 df , target_path = param(date , df_min = temporal.get('df_min'))
                 target_str = self.handle_df_result(df , target_path , result)
-                if param.db_src == 'trade' and param.db_key == 'min': temporal['df_min'] = df
+                if param.db_src == 'trade_js' and param.db_key == 'min': temporal['df_min'] = df
                 if target_str: print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
         return result
 

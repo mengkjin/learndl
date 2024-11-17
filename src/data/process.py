@@ -5,7 +5,7 @@ from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from typing import Any , Iterator , Optional
 
-from .core import DataBlock , data_type_abbr
+from .classes import DataBlock
 from .loader import BlockLoader
 from ..basic import CONF , PATH , Timer , CALENDAR
 from ..func.primas import neutralize_2d , process_factor
@@ -26,7 +26,7 @@ class DataProcessor:
     hist_end_dt     : Optional[int] = None    
 
     def __post_init__(self):
-        self.blocks = [data_type_abbr(blk) for blk in self.blocks]
+        self.blocks = [DataBlock.data_type_abbr(blk) for blk in self.blocks]
         if self.predict:
             self.load_start_dt = -366
         else:
@@ -108,7 +108,7 @@ def select_processor(key : str) -> _TypeProcessor:
 
 class procY(_TypeProcessor):
     def block_loaders(self):
-        return {'y' : BlockLoader('labels', ['ret10_lag', 'ret20_lag']) ,
+        return {'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag']) ,
                 'risk' : BlockLoader('models', 'tushare_cne5_exp', [*CONF.RISK_INDUS, 'size'])}
     def final_feat(self): return None
     def process(self , blocks : dict[str,DataBlock]): 
@@ -131,14 +131,14 @@ class procY(_TypeProcessor):
         return data_block
 class procDay(_TypeProcessor):
     def block_loaders(self): 
-        return {'day' : BlockLoader('trade', 'day', ['adjfactor', *self.TRADE_FEAT])}
+        return {'day' : BlockLoader('trade_ts', 'day', ['adjfactor', *self.TRADE_FEAT])}
     def final_feat(self): return self.TRADE_FEAT
     def process(self , blocks): return blocks['day'].adjust_price()
     
 class proc15m(_TypeProcessor):
     def block_loaders(self): 
-        return {'15m' : BlockLoader('trade', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
-                'day' : BlockLoader('trade', 'day', ['volume', 'turn_fl', 'preclose'])}
+        return {'15m' : BlockLoader('trade_ts', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
+                'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
     def final_feat(self): return self.TRADE_FEAT
     def process(self , blocks): 
         data_block = blocks['15m']
@@ -153,8 +153,8 @@ class proc15m(_TypeProcessor):
     
 class proc30m(_TypeProcessor):
     def block_loaders(self): 
-        return {'30m' : BlockLoader('trade', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,            
-                'day' : BlockLoader('trade', 'day', ['volume', 'turn_fl', 'preclose'])}
+        return {'30m' : BlockLoader('trade_ts', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,            
+                'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
     def final_feat(self): return self.TRADE_FEAT
 
     def process(self , blocks): 
@@ -170,8 +170,8 @@ class proc30m(_TypeProcessor):
     
 class proc60m(_TypeProcessor):
     def block_loaders(self): 
-        return {'60m' : BlockLoader('trade', '60min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,            
-                'day' : BlockLoader('trade', 'day', ['volume', 'turn_fl', 'preclose'])}
+        return {'60m' : BlockLoader('trade_ts', '60min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,            
+                'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
     def final_feat(self): return self.TRADE_FEAT
     def process(self , blocks): 
         data_block = blocks['60m']
@@ -187,7 +187,7 @@ class proc60m(_TypeProcessor):
 class procWeek(_TypeProcessor):
     WEEKDAYS = 5
     def block_loaders(self): 
-        return {'day':BlockLoader('trade', 'day', ['adjfactor', 'preclose', *self.TRADE_FEAT])}
+        return {'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.TRADE_FEAT])}
     def final_feat(self): return self.TRADE_FEAT
     def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , **kwargs):
         if start_dt is not None and start_dt < 0: start_dt = 2 * start_dt

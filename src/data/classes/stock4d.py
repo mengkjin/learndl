@@ -174,8 +174,8 @@ class Stock4DData:
         self.feature = feature.astype(str)
         return self
     
-    def loc(self , **kwargs) -> np.ndarray | Tensor:
-        values : np.ndarray | Tensor = self.values
+    def loc(self , **kwargs):
+        values : np.ndarray | Tensor | Any = self.values
         for k,v in kwargs.items():  
             if isinstance(v , (str,int,float)): kwargs[k] = [v]
         if 'feature' in kwargs.keys(): 
@@ -189,8 +189,9 @@ class Stock4DData:
             values = values[:,index]
         if 'secid'   in kwargs.keys(): 
             index  = match_values(kwargs['secid'] , self.secid)
-            values = values[index]
+            values = values[index,:]
         return values
+
 
     @classmethod
     def concat_feature(cls , block_list):

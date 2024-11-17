@@ -167,7 +167,9 @@ class TradeCalendar:
         return np.sort(_CALENDAR_CAL[_CALENDAR_CAL['calendar'] <= date].iloc[-n:]['calendar'].to_numpy())
     
     @staticmethod
-    def td_within(start_dt : int | TradeDate = -1 , end_dt : int | TradeDate = 99991231 , step : int = 1 , until_today = True):
+    def td_within(start_dt : int | TradeDate | None = -1 , end_dt : int | TradeDate | None = 99991231 , step : int = 1 , until_today = True):
+        if start_dt is None: start_dt = -1
+        if end_dt is None: end_dt = 99991231
         start_dt , end_dt = int(start_dt) , int(end_dt)
         dates = _CALENDAR_TRD['calendar'].to_numpy()
         if until_today: end_dt = min(end_dt , today())

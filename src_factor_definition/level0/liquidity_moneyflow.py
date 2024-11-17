@@ -16,15 +16,6 @@ def inflow_by_return(date , n_months : int , direction : Literal[-1,1] , div_amt
     if div_amt:
         inflow /= DATAVENDOR.TRADE.get_volumes(start_date , end_date , 'amount' , pivot = True).sum()
     return inflow
-
-def moneyflow_type(date , n_months : int , size : Literal['sm' , 'md' , 'lg' , 'elg'] , 
-                   act : Literal['buy' , 'sell'] , vol_type : Literal['volume' , 'amount'] , div_amt = False):
-    start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
-    mf_type : Any = f'{act}_{size}_' + 'vol' if vol_type == 'volume' else 'amount'
-    mf   = DATAVENDOR.TRADE.get_mf_data(start_date , end_date , mf_type , pivot = True)
-    if div_amt:
-        mf /= DATAVENDOR.TRADE.get_volumes(start_date , end_date , vol_type , pivot = True)
-    return mf
     
 class bsact_neg_1m(StockFactorCalculator):
     init_date = 20110101
@@ -53,9 +44,9 @@ class flow_small(StockFactorCalculator):
     def calc_factor(self, date: int):
         start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'm')
         mf   = DATAVENDOR.TRADE.get_mf_data(start_date , end_date , ['buy_sm_amount','sell_sm_amount'] , pivot = True)
-        net_mf = mf['buy_sm_amount'] - mf['buy_sm_amount']
+        net_mf = mf['buy_sm_amount'] - mf['sell_sm_amount']
         net_mf /= DATAVENDOR.TRADE.get_volumes(start_date , end_date , 'amount' , pivot = True)
-        return net_mf
+        return net_mf.mean()
     
 class flow_medium(StockFactorCalculator):
     init_date = 20110101
@@ -68,7 +59,7 @@ class flow_medium(StockFactorCalculator):
         mf   = DATAVENDOR.TRADE.get_mf_data(start_date , end_date , ['buy_md_amount','sell_md_amount'] , pivot = True)
         net_mf = mf['buy_md_amount'] - mf['sell_md_amount']
         net_mf /= DATAVENDOR.TRADE.get_volumes(start_date , end_date , 'amount' , pivot = True)
-        return net_mf
+        return net_mf.mean()
     
 class flow_large(StockFactorCalculator):
     init_date = 20110101
@@ -81,7 +72,7 @@ class flow_large(StockFactorCalculator):
         mf   = DATAVENDOR.TRADE.get_mf_data(start_date , end_date , ['buy_lg_amount','sell_lg_amount'] , pivot = True)
         net_mf = mf['buy_lg_amount'] - mf['sell_lg_amount']
         net_mf /= DATAVENDOR.TRADE.get_volumes(start_date , end_date , 'amount' , pivot = True)
-        return net_mf
+        return net_mf.mean()
     
 class flow_exlarge(StockFactorCalculator):
     init_date = 20110101
@@ -94,7 +85,7 @@ class flow_exlarge(StockFactorCalculator):
         mf   = DATAVENDOR.TRADE.get_mf_data(start_date , end_date , ['buy_elg_amount','sell_elg_amount'] , pivot = True)
         net_mf = mf['buy_elg_amount'] - mf['sell_elg_amount']
         net_mf /= DATAVENDOR.TRADE.get_volumes(start_date , end_date , 'amount' , pivot = True)
-        return net_mf
+        return net_mf.mean()
     
 class flow_elsm(StockFactorCalculator):
     init_date = 20110101
@@ -107,7 +98,7 @@ class flow_elsm(StockFactorCalculator):
         mf   = DATAVENDOR.TRADE.get_mf_data(start_date , end_date , ['buy_elg_amount','sell_sm_amount'] , pivot = True)
         net_mf = mf['buy_elg_amount'] - mf['sell_sm_amount']
         net_mf /= DATAVENDOR.TRADE.get_volumes(start_date , end_date , 'amount' , pivot = True)
-        return net_mf
+        return net_mf.mean()
 
 class flow_corr_elsm(StockFactorCalculator):
     init_date = 20110101
@@ -119,9 +110,9 @@ class flow_corr_elsm(StockFactorCalculator):
         start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'm')
         mf = DATAVENDOR.TRADE.get_mf_data(start_date , end_date , ['buy_elg_amount','sell_elg_amount','buy_sm_amount','sell_sm_amount'] , pivot = True)
         el = mf['buy_elg_amount'] - mf['sell_elg_amount']
-        sm = mf['buy_sm_amount'] - mf['buy_sm_amount']
+        sm = mf['buy_sm_amount'] - mf['sell_sm_amount']
 
-        corr = el.corr(sm)
+        corr = el.corrwith(sm)
         return corr
 
 class flow_corr_smlag(StockFactorCalculator):
@@ -133,7 +124,7 @@ class flow_corr_smlag(StockFactorCalculator):
     def calc_factor(self, date: int):
         start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 22 , 'd')
         mf = DATAVENDOR.TRADE.get_mf_data(start_date , end_date , ['buy_sm_amount','sell_sm_amount'] , pivot = True)
-        sm = mf['buy_sm_amount'] - mf['buy_sm_amount']
+        sm = mf['buy_sm_amount'] - mf['sell_sm_amount']
 
-        corr = sm.corr(sm.shift(1))
+        corr = sm.corrwith(sm.shift(1))
         return corr

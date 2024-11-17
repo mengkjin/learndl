@@ -246,10 +246,27 @@ class StockFactorHierarchy:
         assert self.definition_path.exists() , f'{self.definition_path} does not exist'
         self.load()
 
+    def __repr__(self):
+        str_level_factors = [','.join(f'{level}({len(factors)})' for level , factors in self.hier.items())]
+        return f'StockFactorHierarchy({str_level_factors})'
+    
+    def __iter__(self):
+        '''
+        return a generator of factor classes
+        '''
+        return (cls for level in self.iter_levels() for cls in self.iter_level_factors(level))
+    
+    def __getitem__(self , key : str):
+        '''
+        return a list of factor classes in a given level / or a factor class by factor_name
+        '''
+        if key in self.pool: 
+            return self.pool[key]
+        else:
+            return self.hier[key]
+
     def load(self):     
-        '''
-        load all factor classes from definition path
-        '''
+        '''load all factor classes from definition path'''
         self.pool : dict[str , Type[StockFactorCalculator]] = {}   
         self.hier : dict[str , list[Type[StockFactorCalculator]]] = {}
         for level_path in self.definition_path.iterdir():
@@ -287,42 +304,25 @@ class StockFactorHierarchy:
         df = pd.DataFrame(df_dict, columns=attr_list)
         return df
     
-    def jobs(self , as_df = True):
-        if as_df:
-            return pd.DataFrame([(x.level , d , x) for x,d in _FACTOR_UPDATE_JOBS] , columns=['level' , 'date' , 'factor'])
-        else:
-            return _FACTOR_UPDATE_JOBS
-        
+    def jobs(self):
+        '''return a DataFrame of update jobs'''
+        return pd.DataFrame([(x.level , d , x) for x,d in _FACTOR_UPDATE_JOBS] , columns=['level' , 'date' , 'factor'])
+
     def clear_jobs(self):
+        '''clear update jobs'''
         _FACTOR_UPDATE_JOBS.clear()
         return self
 
-    def __repr__(self):
-        str_level_factors = [','.join(f'{level}({len(factors)})' for level , factors in self.hier.items())]
-        return f'StockFactorHierarchy({str_level_factors})'
-
     def factor_names(self):
-        '''
-        return a list of factor names
-        '''
+        '''return a list of factor names'''
         return [f'{cls.factor_name}({cls.level}.{cls.file_name})' for cls in self]
 
-    def __iter__(self):
-        '''
-        return a generator of factor classes
-        '''
-        return (cls for level in self.iter_levels() for cls in self.iter_level_factors(level))
-
     def iter_levels(self):
-        '''
-        return a list of levels
-        '''
+        '''return a list of levels'''
         return iter(self.hier)
     
     def iter_level_factors(self , level : str):
-        '''
-        return a list of factor classes in a given level
-        '''
+        '''return a list of factor classes in a given level'''
         return (cls for cls in self.hier[level])
 
     def iter_instance(self , **kwargs):
@@ -336,12 +336,6 @@ class StockFactorHierarchy:
         '''
         return (cls() for cls in self if self.factor_filter(cls , **kwargs))
     
-    def __getitem__(self , key : str):
-        '''
-        return a list of factor classes in a given level
-        '''
-        return self.hier[key]
-    
     def get_factor(self , factor_name : str):
         '''
         return a factor class by factor_name
@@ -351,7 +345,7 @@ class StockFactorHierarchy:
         '''
         return self.pool[factor_name]
     
-    def test_calc_all_factors(self , date : int = 20241031 , check_duplicates = True , **kwargs):
+    def test_calc_all_factors(self , date : int = 20241031 , check_variation = True , check_duplicates = True , **kwargs):
         '''
         test calculation of all factors , if check_duplicates is True , check factors diffs' standard deviation and correlation
         factor_name : str | None = None
@@ -369,6 +363,23 @@ class StockFactorHierarchy:
             print('calculated')
 
         self.calc_factor_values = factor_values
+
+
+        if check_variation:
+            abnormal_vars = {}
+
+            for fn in factor_values.keys():
+                std = factor_values[fn].std()
+                box = factor_values[fn].quantile([0.01 , 0.99]).diff().dropna().astype(float).item()
+                
+                if std <= 1e-4 or abs(box) <= 1e-4: 
+                    abnormal_vars[fn] = {'std':std , 'box':box}
+            if len(abnormal_vars) == 0: 
+                print('no abnormal factor variation')
+            else:
+                print(f'abnormal factor variation: {abnormal_vars}')
+
+
         if check_duplicates:
             abnormal_diffs = {}
             for fn1 , fn2 in combinations(factor_values.keys() , 2):
@@ -402,9 +413,7 @@ class StockFactorHierarchy:
     
     @staticmethod
     def Update(overwrite = False , show_progress = True , ignore_error = True):
-        '''
-        update factor data according to update jobs
-        '''
+        '''update factor data according to update jobs'''
         perform_update_jobs(overwrite , show_progress , ignore_error)
 
     @staticmethod

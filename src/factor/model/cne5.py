@@ -95,7 +95,8 @@ class TuShareCNE5_Calculator:
             df = PATH.db_load('models' , 'tushare_cne5_exp' , date)
             self.exposure.add(df , date)
         if df is None: 
-            df = pd.concat([self.get_estuniv(date).loc[:,['estuniv','weight']] , self.get_industry(date) , 
+            df = pd.concat([self.get_estuniv(date).loc[:,['estuniv','weight','market']] , 
+                            self.get_industry(date) , 
                             *[self.get_style(date , name) for name in CONF.RISK_STYLE]] , axis=1)
             self.exposure.add(df , date)
         return df
@@ -149,11 +150,11 @@ class TuShareCNE5_Calculator:
             sort_values(['secid','date']).set_index('secid').groupby('secid').ffill().\
             groupby('secid').last().reindex(new_desc.index)
         
-        # trade status are 1.0 this day or 1 month ealier
+        # trading status are 1.0 this day or 1 month ealier
         rule0 = pd.concat([DATAVENDOR.TRADE.get_trd(d , ['secid','date','status']) for d in dates]).\
             groupby('secid')['status'].sum().reindex(new_desc.index) > 0
 
-        # list date 1 year eailier and not delisted or total mv in the top 90%
+        # list date 1 year earlier and not delisted or total mv in the top 20%
         rule1 = ((new_desc['delist_dt'] > date) & (new_list_dt['list_dt'] <= date)) | \
             (val['total_mv'].rank(pct = True , na_option='bottom') >= redempt_tmv_pct)
         # not st
@@ -164,7 +165,7 @@ class TuShareCNE5_Calculator:
 
         new_desc['estuniv'] = 1 * (rule0 & rule1 & rule2 & rule3)
         new_desc['weight'] = val['circ_mv'].fillna(0) / 1e8
-
+        new_desc['market'] = 1.0
         self.estuniv.add(new_desc , date)
         return new_desc
     
@@ -334,14 +335,16 @@ class TuShareCNE5_Calculator:
         ret = ret.reindex(exp.index).fillna(0).rename(columns={'pctchange':'ret'})
 
         wgt : Any = exp['weight']
-        mkt_model = sm.WLS(ret[['ret']] , exp['estuniv'].rename('market') , weights = wgt).fit()
-        res_model = sm.WLS(mkt_model.resid , exp.drop(columns=['estuniv','weight']) , weights = wgt).fit()
+        mkt = (exp['estuniv'] * exp['market']).rename('market')
+        rsk = exp.drop(columns=['estuniv','weight','market'])
+        mkt_model = sm.WLS(ret[['ret']] , mkt , weights = wgt).fit()
+        rsk_model = sm.WLS(mkt_model.resid , rsk , weights = wgt).fit()
 
         coef = pd.concat([
-            pd.concat([mkt_model.params , res_model.params]) ,
-            pd.concat([mkt_model.tvalues , res_model.tvalues])] , 
+            pd.concat([mkt_model.params , rsk_model.params]) ,
+            pd.concat([mkt_model.tvalues , rsk_model.tvalues])] , 
             axis = 1).rename(columns={0:'coef',1:'tvalue'})
-        resid = res_model.resid.rename('resid').to_frame()
+        resid = rsk_model.resid.rename('resid').to_frame()
 
         self.coef.add(coef , date)
         self.resid.add(resid , date)
@@ -410,7 +413,7 @@ class TuShareCNE5_Calculator:
         return np.setdiff1d(dates , all_updated)
         
     def update_date(self , date : int , job : Literal['exposure' , 'risk']):
-        assert DATAVENDOR.CALENDAR.is_trade_date(date) , f'{date} is not a trade date'
+        assert DATAVENDOR.CALENDAR.is_trade_date(date) , f'{date} is not a trade_date'
         if job == 'exposure':
             PATH.db_save(self.get_exposure(date) , 'models' , 'tushare_cne5_exp'  , date , verbose=True)
             PATH.db_save(self.get_coef(date)     , 'models' , 'tushare_cne5_coef' , date , verbose=True)

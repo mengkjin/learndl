@@ -3,7 +3,7 @@ import numpy as np
 
 from typing import Any , Literal , Optional
 
-from ..tushare.access import CALENDAR , TRADE , RISK
+from ..access import CALENDAR , TRADE , RISK
 from ...basic import PATH
 
 class ClassicLabelsUpdater:

@@ -5,6 +5,9 @@ from typing import Literal
 from src.factor.classes import StockFactorCalculator
 from src.data import DATAVENDOR
 
+def date_min_max(date_col : pd.Series):
+    return date_col.min() , date_col.max()
+
 class anndt_phigh(StockFactorCalculator):
     init_date = 20070101
     category0 = 'behavior'
@@ -12,8 +15,9 @@ class anndt_phigh(StockFactorCalculator):
     description = '公告日最高价距离'
     
     def calc_factor(self, date: int):
-        ann_dt = DATAVENDOR.FINA.get_ann_dt(date , 1 , within_days=365).rename(columns={'td_forward':'date'})
-        start_date , end_date = ann_dt['date'].min() , ann_dt['date'].max()
+        ann_dt = DATAVENDOR.FINA.get_ann_dt(date , 1 , within_days=365)
+        ann_dt['date'] = ann_dt['td_forward']
+        start_date , end_date = date_min_max(ann_dt['date'])
         
         quotes = DATAVENDOR.TRADE.get_quotes(start_date , end_date , ['close' , 'high'] , pivot = False)
         ann_dt_perf = ann_dt.merge(quotes , on = ['secid','date'])
@@ -28,9 +32,8 @@ class mom_aog(StockFactorCalculator):
     
     def calc_factor(self, date: int):
         ann_dt = DATAVENDOR.FINA.get_ann_dt(date , 1 , within_days=365)
-        ann_dt['date'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td'] , 1)
-
-        start_date , end_date = ann_dt['date'].min() , ann_dt['date'].max()
+        ann_dt['date'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 1)
+        start_date , end_date = date_min_max(ann_dt['date'])
         
         quotes = DATAVENDOR.RISK.get_exret(start_date , end_date , pivot = False)
         ann_dt_perf = ann_dt.merge(quotes , on = ['secid','date'])
@@ -45,14 +48,16 @@ class mom_aaa(StockFactorCalculator):
     
     def calc_factor(self, date: int):
         ann_dt = DATAVENDOR.FINA.get_ann_dt(date , 1 , within_days=365)
-        ann_dt['date0'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td'] , 1)
-        ann_dt['date1'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td'] , 2)
-        ann_dt['date2'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td'] , 3)
+        ann_dt['d0'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 1)
+        ann_dt['d1'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 2)
+        ann_dt['d2'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 3)
 
-        start_date , end_date = ann_dt['date0'].min() , ann_dt['date1'].max()
+        start_date , end_date = ann_dt['d0'].min() , ann_dt['d2'].max()
+
         quotes = DATAVENDOR.RISK.get_exret(start_date , end_date , pivot = False)
         ann_dt = ann_dt.reset_index().melt(
-            id_vars=['secid'], value_vars=['date0', 'date1', 'date2'], var_name='date_type', value_name='date')
+            id_vars=['secid'], value_vars=['d0', 'd1', 'd2'], var_name='date_type', value_name='new_date').\
+            rename(columns={'new_date':'date'})
 
         ann_dt_perf = ann_dt.merge(quotes , on = ['secid','date'])
         return ann_dt_perf.groupby('secid')['resid'].sum()

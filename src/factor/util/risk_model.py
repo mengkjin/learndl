@@ -162,7 +162,7 @@ class RiskModel(GeneralModel):
             F = self.F_loader.load(date , date)
             C = self.C_loader.load(date , date)
             S = self.S_loader.load(date , date)
-        F = F.to_dataframe().assign(market=1).reset_index(['date'],drop=True).astype(float)
+        F = F.to_dataframe().assign(market=1.).reset_index(['date'],drop=True).astype(float)
         C = C.drop(columns='date').set_index('factor_name').astype(float)
         S = S.to_dataframe().reset_index(['date'],drop=True).astype(float)
         return Rmodel(date , F , C , S)    
