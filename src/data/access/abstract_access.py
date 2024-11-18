@@ -41,7 +41,7 @@ class DFCollection:
             rename_date_key : str | None = 'date'):
         '''get a DataFrame with given (1) date , fields and set_index'''
         date = int(date)
-        assert date in self.dates , f'{date} is not in {self.dates}'
+        if date not in self.dates: return pd.DataFrame()
         if date in self.data_frames: df = self.data_frames[date]
         else: df = self.long_frame[self.long_frame[self.date_key] == date]
         df = self.reform_df(df , field , rename_date_key = rename_date_key , set_index = set_index)
@@ -78,8 +78,7 @@ class DFCollection:
         return df
 
     def add(self , date : int | TradeDate , df : pd.DataFrame | None):
-        if date not in self.dates:
-            if df is None: df = pd.DataFrame()
+        if date not in self.dates and df is not None and not df.empty:
             date = int(date)
             df[self.date_key] = date
             self.dates.append(date)
