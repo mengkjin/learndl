@@ -163,6 +163,8 @@ class Portfolio:
         self.ports : dict[int,Port] = {}
         self.is_default = is_default
         self.weight_block_completed = False
+        self._last_port : Port | None = None
+
     def __len__(self): return len(self.available_dates())
     def __bool__(self): return len(self) > 0
     def __repr__(self): return f'<{self.name}> : {len(self.ports)} ports'
@@ -195,6 +197,9 @@ class Portfolio:
         assert override or (port.date not in self.ports.keys()) , (port.name , port.date)
         self.ports[port.date] = port
         self.weight_block_completed = False
+        self._last_port = port
+
+    def last_port(self , date): return self._last_port.evolve_to_date(date) if self._last_port is not None else None
 
     def available_dates(self): return self.port_date
 
@@ -215,7 +220,7 @@ class Portfolio:
         else:
             return port.evolve_to_date(date)
     @classmethod
-    def get_object_name(cls , obj : str | Any | None):
+    def get_object_name(cls , obj : str | Any | None) -> str:
         if obj is None: return 'none'
         elif isinstance(obj , cls): return obj.name
         elif isinstance(obj , str): return obj

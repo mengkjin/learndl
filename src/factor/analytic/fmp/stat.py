@@ -4,84 +4,8 @@ import numpy as np
 
 from typing import Any , Literal
 
-from .builder import PortOptimTuple
-
-from ...util import RISK_MODEL , Portfolio , Benchmark , Port
-from ....basic.conf import ROUNDING_RETURN , ROUNDING_TURNOVER , TRADE_COST , CATEGORIES_BENCHMARKS
+from ....basic.conf import CATEGORIES_BENCHMARKS
 from ....data import DATAVENDOR
-
-def calc_fmp_account(port_optim_tuples : PortOptimTuple | list[PortOptimTuple]):
-    if not isinstance(port_optim_tuples , list): port_optim_tuples = [port_optim_tuples]
-    renaming = {'st':'start' , 'ed':'end'}
-    df = pd.concat([pot.account.assign(factor_name = pot.alpha.name , benchmark = pot.benchmark.name , lag = pot.lag) 
-                    for pot in port_optim_tuples]).reset_index().rename(columns=renaming)
-    return df
-
-def group_accounting(port_optim_tuples : PortOptimTuple | list[PortOptimTuple] , 
-                     start : int = -1 , end : int = 99991231 , daily = False , 
-                     analytic = True , attribution = True , trade_cost = TRADE_COST , verbosity : int = 1):
-    if not isinstance(port_optim_tuples , list): port_optim_tuples = [port_optim_tuples]
-    for pot in port_optim_tuples:
-        pot.account = accounting_fmp(
-            pot.portfolio , pot.benchmark , start , end , daily , 
-            analytic and (not pot.lag) , attribution and (not pot.lag), 
-            trade_cost , verbosity = verbosity)
-    return port_optim_tuples
-
-def accounting_fmp(portfolio : Portfolio , benchmark : Portfolio | Benchmark | Any = None ,
-                   start : int = -1 , end : int = 99991231 , daily = False , 
-                   analytic = True , attribution = True , trade_cost = TRADE_COST , verbosity : int = 1):
-    '''
-    Accounting portfolio through date, require at least portfolio
-    '''
-    t0 = time.time()
-    if verbosity > 1: 
-        print(f'{portfolio.name} accounting start...' , end='')
-    port_min , port_max = portfolio.available_dates().min() , portfolio.available_dates().max()
-    start = np.max([port_min , start])
-    end   = np.min([DATAVENDOR.td(port_max,5).td , end , DATAVENDOR.td(DATAVENDOR.last_quote_dt,-1).td])
-
-    not_lagged = portfolio.name.endswith('.lag0') or len(portfolio.name.split('.lag')) == 1
-    model_dates = DATAVENDOR.td_within(start , end)
-    if daily:
-        period_st : np.ndarray | Any = DATAVENDOR.td_array(model_dates , 1)
-        period_ed : np.ndarray | Any = period_st
-    else:
-        model_dates = np.intersect1d(model_dates , portfolio.available_dates())
-        period_st = DATAVENDOR.td_array(model_dates , 1)
-        period_ed = np.concatenate([model_dates[1:] , [DATAVENDOR.td(end,1).td]])
-    assert np.all(model_dates < period_st) 
-    assert np.all(period_st <= period_ed) , (period_st , period_ed)
-
-    df = pd.DataFrame({'model_date':np.concatenate([[-1],model_dates]) , 
-                       'st':np.concatenate([[model_dates[0]],period_st]) , 
-                       'ed':np.concatenate([[model_dates[0]],period_ed]) ,
-                       'pf':0. , 'bm':0. , 'turn':0. , 'excess':0. ,
-                       'analytic':None , 'attribution':None}).set_index('model_date')
-    port_old = Port.none_port(model_dates[0])
-
-    t1 = time.time()
-    for date , ed in zip(model_dates , period_ed):
-        port_new = portfolio.get(date) if portfolio.has(date) else port_old
-        bench = Port.none_port(date) if benchmark is None else benchmark.get(date , True)
-
-        turn = np.round(port_new.turnover(port_old),ROUNDING_TURNOVER)
-        df.loc[date , ['pf' , 'bm' , 'turn']] = \
-            [np.round(port_new.fut_ret(ed),ROUNDING_RETURN) , 
-             np.round(bench.fut_ret(ed),ROUNDING_RETURN) , turn]
-        
-        if analytic and not_lagged: 
-            df.loc[date , 'analytic']    = RISK_MODEL.get(date).analyze(port_new , bench , port_old) #type:ignore
-        if attribution and not_lagged: 
-            df.loc[date , 'attribution'] = RISK_MODEL.get(date).attribute(port_new , bench , ed , turn * trade_cost)  #type:ignore
-        port_old = port_new.evolve_to_date(ed , inplace=False)
-
-    df['pf']  = df['pf'] - df['turn'] * trade_cost
-    df['excess'] = df['pf'] - df['bm']
-    t2 = time.time()
-    if verbosity > 1: 
-        print(f' Total time: {t2-t0:.2f} secs, Each period time: {(t2-t1)/len(model_dates):.2f} secs')
-    return df # , ana , att
 
 def eval_drawdown(v : pd.Series | np.ndarray | Any , how : Literal['exp' , 'lin'] = 'lin'):
     if isinstance(v , np.ndarray): v = pd.Series(v)

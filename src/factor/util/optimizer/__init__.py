@@ -1,3 +1,3 @@
-from . import solver , interpreter , api
+from . import optim, solver , interpreter
 
-from .api import PortfolioOptimizer , PortOptimResult
+from .optim import PortfolioOptimizer , PortOptimResult
