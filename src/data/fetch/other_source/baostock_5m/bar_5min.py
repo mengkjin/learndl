@@ -171,9 +171,9 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
             else:
                 print(f'{last_dt} - {dt} success')
 
-    print('-' * 80)
-    print('process other min bars:')
     for dt in x_mins_update_dates(date):
+        print('-' * 80)
+        print(f'process other min bars at {dt} from source baostock')
         for x_min in x_mins_to_update(dt):
             five_min_df = PATH.db_load('trade_ts' , '5min' , dt)
             x_min_df = trade_min_reform(five_min_df , x_min , 5)
