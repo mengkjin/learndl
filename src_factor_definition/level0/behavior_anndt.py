@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from typing import Literal
-from src.factor.classes import StockFactorCalculator
+from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
 def date_min_max(date_col : pd.Series):

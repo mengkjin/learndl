@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from ....basic.conf import EPS_ACCURACY
+from .....basic import CONF
 
 @dataclass
 class SolveCond:
@@ -72,8 +72,8 @@ class Accuarcy:
         self.component = {}
         self.add(**kwargs)
 
-    def cond_expr(self , v): return ('(√)' if v >= -EPS_ACCURACY else '(X)') + str(v)
-    def __bool__(self): return all([v >= -EPS_ACCURACY for v in self.component.values()]) if self.component else False
+    def cond_expr(self , v): return ('(√)' if v >= -CONF.EPS_ACCURACY else '(X)') + str(v)
+    def __bool__(self): return all([v >= -CONF.EPS_ACCURACY for v in self.component.values()]) if self.component else False
     def __call__(self, **kwargs): return self.add(**kwargs)
     def __repr__(self): 
         return (',\n' + ' ' * 10).join([

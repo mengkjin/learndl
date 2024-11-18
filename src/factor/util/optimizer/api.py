@@ -5,9 +5,11 @@ from dataclasses import dataclass , field
 from typing import Any , Literal , Optional
 
 from .solver import MosekSolver , CvxpySolver
-from .util import Accuarcy , PortfolioOptimizerInput , SolverInput , Utility
-from ..util import Analytic , Port , AlphaModel , Amodel , Portfolio , Benchmark
-from ...basic import PATH
+from .interpreter import Accuarcy , PortfolioOptimizerInput , SolverInput , Utility
+from ..classes import Port , Portfolio , Benchmark
+from ..alpha_model import AlphaModel , Amodel
+from ..risk_model import RiskAnalytic , Attribution
+from ....basic import PATH
 
 @dataclass
 class PortfolioOptimizer:
@@ -96,13 +98,13 @@ class PortOptimResult:
     status      : Literal['optimal', 'max_iteration', 'stall'] | Any = ''
     utility     : Utility | Any = None
     accuracy    : Accuarcy | Any = None
-    analytic    : Analytic | Any = None
+    analytic    : RiskAnalytic | Any = None
     time        : dict[str,float] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.utility is None: self.utility = Utility()
         if self.accuracy is None: self.accuracy = Accuarcy()
-        if self.analytic is None: self.analytic = Analytic()
+        if self.analytic is None: self.analytic = RiskAnalytic()
 
     def __repr__(self):
         return '\n'.join([
@@ -219,7 +221,7 @@ def exec_socp(engine_type, u, cov_info, wb, te: float, lin_con, bnd_con, turn_co
 '''
 
 if __name__ == '__main__':
-    from src.factor.optimizer.api import PortfolioOptimizer
+    from src.factor.util.optimizer.api import PortfolioOptimizer
     config_path = 'custom_opt_config.yaml'
 
     optim = PortfolioOptimizer('socp')

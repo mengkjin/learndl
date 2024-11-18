@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from typing import Literal
-from src.factor.classes import StockFactorCalculator
+from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
 def cap_classic(date , cap_type : Literal['tt' , 'fl' , 'fr']):

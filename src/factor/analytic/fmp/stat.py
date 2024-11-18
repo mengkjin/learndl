@@ -6,9 +6,9 @@ from typing import Any , Literal
 
 from .builder import PortOptimTuple
 
-from ..util import RISK_MODEL , Portfolio , Benchmark , Port
-from ...basic.conf import ROUNDING_RETURN , ROUNDING_TURNOVER , TRADE_COST , AVAIL_BENCHMARKS
-from ...data import DATAVENDOR
+from ...util import RISK_MODEL , Portfolio , Benchmark , Port
+from ....basic.conf import ROUNDING_RETURN , ROUNDING_TURNOVER , TRADE_COST , CATEGORIES_BENCHMARKS
+from ....data import DATAVENDOR
 
 def calc_fmp_account(port_optim_tuples : PortOptimTuple | list[PortOptimTuple]):
     if not isinstance(port_optim_tuples , list): port_optim_tuples = [port_optim_tuples]
@@ -238,7 +238,6 @@ def calc_fmp_prefix(account : pd.DataFrame):
     stats = grouped.apply(eval_fmp_stats , include_groups=False).reset_index(group_cols).\
         reset_index(drop=True).set_index(group_cols)
     df = basic.join(stats).reset_index()
-    categories = np.array(['default'] + AVAIL_BENCHMARKS)
-    df['benchmark'] = pd.Categorical(df['benchmark'] , categories = categories[np.isin(categories , df['benchmark'])] , ordered=True) 
+    df['benchmark'] = pd.Categorical(df['benchmark'] , categories = np.intersect1d(CATEGORIES_BENCHMARKS , df['benchmark']) , ordered=True) 
     df = df.sort_values(group_cols)
     return df

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from typing import Literal
-from src.factor.classes import StockFactorCalculator
+from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
 def coefficient_variance(date , n_months : int , data_type : Literal['amount' , 'turnover'] , min_finite_ratio = 0.25):

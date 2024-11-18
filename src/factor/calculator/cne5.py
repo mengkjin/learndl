@@ -94,10 +94,12 @@ class TuShareCNE5_Calculator:
         df = self.exposure.get(date)
         if (df is None or df.empty) and read: 
             df = PATH.db_load('models' , 'tushare_cne5_exp' , date)
+            if 'secid' in df.columns: df = df.set_index('secid')
         if df is None or df.empty: 
             df = pd.concat([self.get_estuniv(date).loc[:,['estuniv','weight','market']] , 
                             self.get_industry(date) , 
                             *[self.get_style(date , name) for name in CONF.RISK_STYLE]] , axis=1)
+        df = df.loc[:,['estuniv' , 'weight'] + CONF.RISK_COMMON]
         self.exposure.add(df , date)
         return df
 

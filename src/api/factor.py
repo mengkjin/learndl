@@ -1,9 +1,8 @@
 import datetime
 from typing import Any , Literal
 
-from src.factor.classes import StockFactorHierarchy
-from src.factor.perf.api import PerfManager
-from src.factor.fmp.api import FmpManager
+from src.factor.calculator import StockFactorHierarchy
+from src.factor.analytic import PerfManager , FmpManager
 from src.basic import PATH
 from src.data import DATAVENDOR
 

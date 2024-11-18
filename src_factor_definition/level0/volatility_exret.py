@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.factor.classes import StockFactorCalculator
+from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
 def exret_std(date , n_months : int , lag_months : int = 0):

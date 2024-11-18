@@ -3,8 +3,9 @@ import mosek
 
 from typing import Any , Literal
 
-from ..util import SolverInput , SolveCond , SolveVars
-from ....basic.conf import SYMBOL_INF as INF
+from ..interpreter import SolverInput , SolveCond , SolveVars
+from .....basic import CONF
+INF = CONF.SYMBOL_INF
 
 _SOLVER_PARAM = {}
 

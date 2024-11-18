@@ -15,8 +15,10 @@ RISK_INDUS = [
 ]
 
 RISK_COMMON = ['market'] + RISK_INDUS + RISK_STYLE
+
 AVAIL_BENCHMARKS = ['csi300' , 'csi500' , 'csi800' , 'csi1000' , 'csi2000'] 
 DEFAULT_BENCHMARKS = ['csi300' , 'csi500' , 'csi1000']
+CATEGORIES_BENCHMARKS = ['default' , 'none' , 'market'] + AVAIL_BENCHMARKS
 
 EPS_WEIGHT = 1e-6
 EPS_ACCURACY = 2e-6

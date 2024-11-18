@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import Any , Literal
 
-from src.factor.classes import StockFactorCalculator
+from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
 def inflow_by_return(date , n_months : int , direction : Literal[-1,1] , div_amt = True , min_finite_ratio = 0.25):

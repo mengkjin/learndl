@@ -7,10 +7,9 @@ from pathlib import Path
 from typing import Any , Optional
 
 from . import calculator as Calc
-from ..loader import factor
-from ..util import Benchmark
-from ...data import DataBlock
-from ...func import dfs_to_excel , figs_to_pdf
+from ...util import Benchmark
+from ....data import DataBlock
+from ....func import dfs_to_excel , figs_to_pdf
 
 @dataclass
 class PerfManager:

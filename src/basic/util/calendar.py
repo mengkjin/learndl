@@ -154,8 +154,7 @@ class TradeCalendar:
     
     @staticmethod
     def cd_diff(date1 , date2) -> int | Any:
-        diff = _CALENDAR.loc[[date1 , date2] , 'cd_index'].astype(int).diff().iloc[1]
-        assert isinstance(diff , int) , f'{date1} and {date2} are not in calendar'
+        diff = int(_CALENDAR.loc[[date1 , date2] , 'cd_index'].diff().dropna().astype(int).item())
         return diff
     
     @staticmethod

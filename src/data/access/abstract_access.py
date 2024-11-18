@@ -127,12 +127,12 @@ class DateDataAccess(ABC):
         for data_type in data_type_list:
             self.collections[data_type].truncate()
 
-    def get(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = 'date'):
+    def get(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
         if overwrite or date not in self.collections[data_type]:
             self.collections[data_type].add(date , self.data_loader(date , data_type))
         return self.collections[data_type].get(date , field , rename_date_key = rename_date_key)
 
-    def gets(self , dates: list[int] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = 'date'):
+    def gets(self , dates: list[int] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
         for date in self.collections[data_type].dates_diff(dates , overwrite):
             self.collections[data_type].add(date , self.data_loader(date , data_type))
         return self.collections[data_type].gets(dates , field , rename_date_key = rename_date_key)

@@ -8,7 +8,7 @@ from packaging import version
 from plottable import Table , ColumnDefinition
 from typing import Any , Callable , Optional
 
-from ...basic.conf import AVAIL_BENCHMARKS
+from ...basic.conf import CATEGORIES_BENCHMARKS
 
 CURRENT_SEABORN_VERSION = version.Version(getattr(sns , '__version__')) > version.Version('0.9.1')
 
@@ -18,12 +18,11 @@ plt.rcParams['font.family'] = ['monospace'] # ['sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
 
 def bm_order(bm_list):
-    order = [None , 'default'] + AVAIL_BENCHMARKS
-    new_bm_list = [bm for bm in order if bm in bm_list]
+    new_bm_list = [bm for bm in CATEGORIES_BENCHMARKS if bm in bm_list]
     return new_bm_list
 
 def bm_name(bm : Any | str | None = None):
-    if bm is None or bm == '': name = 'default'
+    if bm is None or bm == '': name = 'none'
     elif isinstance(bm ,str) : name = bm
     else: name = bm.name
     assert isinstance(name , str) , bm

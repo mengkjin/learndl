@@ -7,8 +7,8 @@ from typing import Any , Callable , Literal , Optional
 
 from . import stat as Stat
 from . import plot as Plot
-from ..classes import Benchmark
-from ...data import DataBlock
+from ...util import Benchmark
+from ....data import DataBlock
 
 class suppress_warnings:
     def __enter__(self):
@@ -28,12 +28,11 @@ class BasePerfCalc(ABC):
     def plotter(self) -> Callable: '''Define plotter'''
     def calc(self , factor_val : DataBlock | pd.DataFrame, benchmarks : Optional[list[Benchmark|Any]] | Any = None):
         with suppress_warnings(): 
-            benchmarks = benchmarks if benchmarks is not None else self.default_benchmarks
-            if not isinstance(benchmarks , list): benchmarks = [benchmarks]
+            benchmarks = Benchmark.get_benchmarks(benchmarks)
             func = self.calculator()
             #self.benchmark_names = [(bm.name if bm else None) for bm in benchmarks]
             self.calc_rslt : pd.DataFrame = pd.concat(
-                [func(factor_val,benchmark=bm,**self.params).assign(benchmark=(bm.name if bm else 'default')) for bm in benchmarks])
+                [func(factor_val,benchmark=bm,**self.params).assign(benchmark= bm.name) for bm in benchmarks])
         return self
     def plot(self , show = False): 
         figs = self.plotter()(self.calc_rslt , show = show) #  benchmark = self.benchmark_names

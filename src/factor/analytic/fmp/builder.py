@@ -5,8 +5,7 @@ import numpy as np
 from dataclasses import dataclass , field
 from typing import Any , Literal
 
-from ..optimizer.api import PortfolioOptimizer , PortOptimResult
-from ..util import AlphaModel , RISK_MODEL , Portfolio , Benchmark
+from ...util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortfolioOptimizer , PortOptimResult
 
 @dataclass
 class PortOptimTuple:
@@ -36,6 +35,7 @@ def group_optimize(alpha_models : AlphaModel | list[AlphaModel] , benchmarks : s
     lags = [0 , add_lag]
 
     benches = Benchmark.get_benchmarks(benchmarks)
+    if benches is None: benches = [Benchmark('csi800')]
     relevant_dates = np.unique(np.concatenate([amodel.available_dates() for amodel in alpha_models]))
     if verbosity > 0: 
         print(f'Group optimization of {len(alpha_models)} alphas , {len(benches)} benchmarks , ' + 

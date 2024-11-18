@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from typing import Literal
-from src.factor.classes import StockFactorCalculator
+from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
 def mom_classic(date , n_months : int , lag_months : int = 0 , return_type : Literal['close' , 'overnight' , 'intraday'] = 'close'):

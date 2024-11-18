@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from src.factor.classes import StockFactorCalculator
+from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 from src.func.transform import time_weight , apply_ols
 

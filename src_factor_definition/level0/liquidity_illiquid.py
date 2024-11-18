@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Literal
 
-from src.factor.classes import StockFactorCalculator
+from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
 def amihud(date , n_months : int , lag_months : int = 0):

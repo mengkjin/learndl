@@ -149,8 +149,6 @@ def db_path_with_alt(db_src , db_key , date = None):
     '''
     if the path does not exist, try to find the alternative path
     '''
-    assert inspect.stack()[1].function in ['db_load' , 'db_load_multi'] , \
-        f'db_path_with_alt can only be used in db_load or db_load_multi , but got {inspect.stack()[1].function}'
     path = db_path(db_src , db_key , date)
     if not path.exists() and db_src in DB_ALTERNATIVES:
         alt_path = db_path(DB_ALTERNATIVES[db_src] , db_key , date)
@@ -165,8 +163,6 @@ def db_dates_with_alt(db_src , db_key , start_dt = None , end_dt = None , year =
     '''
     get both the original dates and the alternative dates
     '''
-    assert inspect.stack()[1].function in ['db_load_multi'] , \
-        f'db_dates_with_alt can only be used in db_load_multi , but got {inspect.stack()[1].function}'
     dates = db_dates(db_src , db_key , start_dt , end_dt , year)
     if db_src in DB_ALTERNATIVES:
         alt_dates = db_dates(DB_ALTERNATIVES[db_src] , db_key , start_dt , end_dt , year)

@@ -1,5 +1,5 @@
-from .. import path as PATH
 from typing import Literal
+from .. import path as PATH
 
 def load(conf_type : Literal['glob' , 'confidential' , 'schedule' , 'factor' , 'boost' , 'nn'] , name : str , **kwargs):
     p = PATH.conf.joinpath(conf_type , f'{name}.yaml')

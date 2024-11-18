@@ -3,7 +3,7 @@ from typing import Optional
 from src.basic import THIS_IS_SERVER
 from src.data import (DataProcessor , DataUpdater , TushareDownloader , OtherSourceDownloader ,
                       ClassicLabelsUpdater)
-from src.factor.model import FactorModelUpdater
+from src.factor.calculator import FactorModelUpdater
 
 import src.model.data_module as data_module
 

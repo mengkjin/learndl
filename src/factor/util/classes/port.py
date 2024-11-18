@@ -4,8 +4,8 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal , Optional
 
-from ...basic.conf import EPS_WEIGHT , AVAIL_BENCHMARKS , DEFAULT_BENCHMARKS
-from ...data import DataBlock , DATAVENDOR
+from ....basic.conf import EPS_WEIGHT , AVAIL_BENCHMARKS , DEFAULT_BENCHMARKS , CATEGORIES_BENCHMARKS
+from ....data import DataBlock , DATAVENDOR
 
 class Port:
     '''portfolio realization of one day'''
@@ -215,7 +215,7 @@ class Portfolio:
         else:
             return port.evolve_to_date(date)
     @classmethod
-    def get_object_name(cls , obj : str | Any):
+    def get_object_name(cls , obj : str | Any | None):
         if obj is None: return 'none'
         elif isinstance(obj , cls): return obj.name
         elif isinstance(obj , str): return obj
@@ -226,25 +226,30 @@ class Benchmark(Portfolio):
     orthodox benchmark in AVAIL_BENCHMARK : csi300 , csi500 , csi800 , csi1000
     '''
     _instance_dict = {}
-    _singleton_names = ['csi300' , 'csi500' , 'csi800' , 'csi1000']
+    
+    AVAILABLES = AVAIL_BENCHMARKS
+    DEFAULTS = DEFAULT_BENCHMARKS
+    CATEGORIES = CATEGORIES_BENCHMARKS
+    NONE = ['none' , 'default' , 'market']
 
-    def __new__(cls , name : str | Any , *args , **kwargs):
+    def __new__(cls , name : str | Any | None , *args , **kwargs):
         name = cls.get_object_name(name)
         if name in cls._instance_dict:
             return cls._instance_dict[name]
-        elif name in cls._singleton_names:
+        elif name in cls.AVAILABLES + cls.NONE:
             instance = super().__new__(cls , *args , **kwargs)
             cls._instance_dict[name] = instance
             return instance
         else:
-            assert name in AVAIL_BENCHMARKS , name
-            instance = super().__new__(cls , *args , **kwargs)
-            return instance
+            raise ValueError(name)
 
-    def __init__(self , name : str | Any) -> None:
-        if getattr(self , 'ports' , None): return
+    def __init__(self , name : str | Any | None) -> None:
+        if getattr(self , 'ports' , None): return # avoid double initialization
         super().__init__(name)
-        self.benchmark_available_dates = DATAVENDOR.file_dates('benchmark' , self.name)
+        if name in self.NONE:
+            self.benchmark_available_dates = []
+        else:
+            self.benchmark_available_dates = DATAVENDOR.file_dates('benchmark_ts' , self.name)
         self.benchmark_attempted_dates = []
 
     def __call__(self, input : Any):
@@ -252,6 +257,8 @@ class Benchmark(Portfolio):
             return self.factor_mask(input)
         else:
             raise TypeError(input)
+        
+    def __bool__(self): return self.name not in self.NONE
 
     def available_dates(self): return self.benchmark_available_dates
 
@@ -261,16 +268,15 @@ class Benchmark(Portfolio):
         return self
 
     def get(self , date : int , latest = True):
-
+        if self.name in self.NONE: return Port.none_port(date)
         port = self.ports.get(date , None)
-
         if port is None:
             use_date = self.latest_avail_date(date) if latest else date
             port = self.ports.get(use_date , None)
 
         if port is None:
             if use_date in self.available_dates():
-                port = Port(DATAVENDOR.single_file('benchmark' , self.name , use_date) , date , self.name)
+                port = Port(DATAVENDOR.single_file('benchmark_ts' , self.name , use_date) , date , self.name)
                 self.append(port)
             else:
                 port = Port.none_port(date)
@@ -337,23 +343,15 @@ class Benchmark(Portfolio):
     @classmethod
     def get_benchmarks(cls , benchmarks : Any):
         if benchmarks == 'defaults': return cls.defaults()
-        elif benchmarks is None: return None
+        elif not benchmarks or benchmarks == 'none': return [cls(None)]
         else:
             if not isinstance(benchmarks , list): benchmarks = [benchmarks]
             benches = []
             for bm in benchmarks:
-                if bm is None or isinstance(bm , Portfolio): benches.append(bm)
-                elif isinstance(bm , str): benches.append(cls(bm))
+                if bm is None or isinstance(bm , str): benches.append(cls(bm))
+                elif isinstance(bm , Portfolio): benches.append(bm)
                 else: raise TypeError(bm)
         return benches
     
     @classmethod
-    def defaults(cls):
-        return [cls(bm) for bm in DEFAULT_BENCHMARKS]
-
-BENCHMARKS = {
-    'csi300' : Benchmark('csi300') ,
-    'csi500' : Benchmark('csi500') ,
-    'csi800' : Benchmark('csi800') ,
-    'csi1000': Benchmark('csi1000') ,
-}
+    def defaults(cls): return [cls(bm) for bm in cls.DEFAULTS]

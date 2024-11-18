@@ -2,7 +2,7 @@ import numpy as np
 import cvxpy as cp
 
 from typing import Literal
-from ..util import SolverInput , SolveCond , SolveVars
+from ..interpreter import SolverInput , SolveCond , SolveVars
 
 _SOLVER_PARAM = {
     'ECOS': {'max_iters': 200},

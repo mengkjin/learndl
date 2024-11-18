@@ -5,9 +5,8 @@ from typing import Any , Literal
 
 from ..util import PredRecorder
 from ..util.classes import BaseCallBack
-from ...factor.perf.api import PerfManager
-from ...factor.fmp.api import FmpManager
-from ...factor.perf.stat import calc_grp_perf
+from ...factor.analytic import PerfManager , FmpManager
+from ...factor.analytic.perf.stat import calc_grp_perf
 from ... import func as FUNC
 
 PRED_RECORD = PredRecorder()

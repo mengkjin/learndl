@@ -5,7 +5,7 @@ import statsmodels.api as sm
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
-from ..classes import GeneralModel , Port
+from .classes import GeneralModel , Port
 from ...basic import SILENT
 from ...basic.conf import RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
 from ...data import BlockLoader , FrameLoader , DATAVENDOR
@@ -75,7 +75,7 @@ class Rmodel:
         return RiskProfile(self.common_factors , common_exp , variance)
     def analyze(self , port : Port , bench : Port | Any = None , init : Port | Any = None):
         '''Analyze day end risk profile'''
-        rslt = Analytic(self.date)
+        rslt = RiskAnalytic(self.date)
         rslt.append('portfolio' , self._analysis(port))
         rslt.append('initial'   , self._analysis(init))
         rslt.append('benchmark' , self._analysis(bench))
@@ -188,7 +188,7 @@ class RiskProfile:
         return pd.concat([df0,df1]).set_index('factor_name')
     
 @dataclass
-class Analytic:
+class RiskAnalytic:
     '''
     portfolio risk analysis result
     '''
