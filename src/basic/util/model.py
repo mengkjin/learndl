@@ -9,9 +9,6 @@ from typing import Any , Literal , Optional
 from .. import path as PATH
 from .. import conf as CONF
 
-
-
-
 class ModelPath:
     def __init__(self , model_name : Path | str | None | Any) -> None:
         if isinstance(model_name , ModelPath):
@@ -31,7 +28,7 @@ class ModelPath:
         if as_int: arr = np.array([v for v in arr if v.isdigit()]).astype(int)
         return np.sort(arr)
     def __bool__(self):         return bool(self.name)
-    def __repr__(self) -> str:  return f'{self.__class__.__name__}(name={self.name})'
+    def __repr__(self) -> str:  return f'{self.__class__.__name__}(model_name={self.name})'
     def __call__(self , *args): return self.base.joinpath(*[str(arg) for arg in args])
     def archive(self , *args):  return self('archive' , *args)
     def conf(self , *args):     return self('configs' , *args)
@@ -67,6 +64,8 @@ class ModelPath:
 class HiddenPath:
     def __init__(self , model_name : str , model_num : int , submodel : str) -> None:
         self.model_name , self.model_num , self.submodel = model_name , model_num , submodel
+
+    def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name},model_num={self.model_num},submodel={self.submodel})'
 
     @classmethod
     def from_key(cls , hidden_key : str):
@@ -127,6 +126,8 @@ class ModelDict:
         self.booster_head = booster_head
         self.booster_dict = booster_dict
 
+    def __repr__(self): return f'{self.__class__.__name__}(state_dict={self.state_dict},booster_head={self.booster_head},booster_dict={self.booster_dict})'
+
     def reset(self):
         self.state_dict = None
         self.booster_head = None
@@ -151,6 +152,7 @@ class ModelFile:
     def __init__(self , model_path : Path) -> None:
         self.model_path = model_path
     def __getitem__(self , key): return self.load(key)
+    def __repr__(self): return f'{self.__class__.__name__}(path={self.model_path})'
     def load(self , key : str) -> Any:
         assert key in ModelDict.__slots__ , (key , ModelDict.__slots__)
         path = self.model_path.joinpath(f'{key}.pt')
@@ -173,6 +175,11 @@ class RegisteredModel(ModelPath):
 
     def __repr__(self) -> str:  return f'{self.__class__.__name__}(name={self.name},type={self.submodel},num={str(self.num)},alias={str(self.alias)})'
 
+    @classmethod
+    def MODELS(cls):
+        return [cls(**reg_model) for reg_model in update_models['REG_MODELS']]
+
+
 class HiddenExtractingModel(ModelPath):
     '''for a model to predict recent/history data'''
     def __init__(self , name : str , 
@@ -184,7 +191,9 @@ class HiddenExtractingModel(ModelPath):
         self.nums = nums
         self.alias = alias
         self.model_path = ModelPath(self.name)
+
+    @classmethod
+    def MODELS(cls):
+        return [cls(**hid_model) for hid_model in update_models['HID_MODELS']]
         
 update_models = CONF.load('schedule' , 'update_models')
-REG_MODELS = [RegisteredModel(**reg_model)       for reg_model in update_models['REG_MODELS']]
-HID_MODELS = [HiddenExtractingModel(**hid_model) for hid_model in update_models['HID_MODELS']]

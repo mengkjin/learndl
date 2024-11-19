@@ -4,8 +4,8 @@ import numpy as np
 
 from typing import Any , Literal
 
-from ....basic.conf import CATEGORIES_BENCHMARKS
-from ....data import DATAVENDOR
+from src.basic import CONF
+from src.data import DATAVENDOR
 
 def eval_drawdown(v : pd.Series | np.ndarray | Any , how : Literal['exp' , 'lin'] = 'lin'):
     if isinstance(v , np.ndarray): v = pd.Series(v)
@@ -162,6 +162,6 @@ def calc_fmp_prefix(account : pd.DataFrame):
     stats = grouped.apply(eval_fmp_stats , include_groups=False).reset_index(group_cols).\
         reset_index(drop=True).set_index(group_cols)
     df = basic.join(stats).reset_index()
-    df['benchmark'] = pd.Categorical(df['benchmark'] , categories = np.intersect1d(CATEGORIES_BENCHMARKS , df['benchmark']) , ordered=True) 
+    df['benchmark'] = pd.Categorical(df['benchmark'] , categories = np.intersect1d(CONF.CATEGORIES_BENCHMARKS , df['benchmark']) , ordered=True) 
     df = df.sort_values(group_cols)
     return df

@@ -236,7 +236,7 @@ class FactorPredictor(nn.Module):
         return self.factor_net(f)
     
 if __name__ == '__main__':
-    from src.model.classes import BatchData
+    from src.model.util import BatchData
 
     batch_data = BatchData.random(batch_size=40)
     x = batch_data.x

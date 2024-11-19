@@ -4,16 +4,16 @@ import numpy as np
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from inspect import currentframe
-
 from torch import Tensor
 from typing import Any , final , Iterator , Literal , Optional
+
+from src.basic import ModelDict , BigTimer , INSTANCE_RECORD
+from src.func import Filtered
 
 from .batch import BatchData , BatchOutput
 from .buffer import BaseBuffer
 from .config import TrainConfig
 from .storage import MemFileStorage
-from ...basic import ModelDict , BigTimer , INSTANCE_RECORD
-from ...func import Filtered
 
 class ModelStreamLine(ABC):
     def on_configure_model(self): ...
@@ -558,6 +558,9 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
             output = self.forward(input , *args , **kwargs)
         batch_output = BatchOutput(output)
         return batch_output
+    
+    def __repr__(self): 
+        return f'{self.__class__.__name__}(model_full_name={self.model_full_name})'
     
     def multiloss_params(self): return {}
 

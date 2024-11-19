@@ -2,13 +2,12 @@ import time
 import numpy as np
 import pandas as pd
 
-from dataclasses import asdict
 from typing import Any , ClassVar
 
-from ..data_module import BatchDataLoader
-from ..util.classes import BaseCallBack
-from ...basic import PATH
-from ... import func as FUNC
+from src import func as FUNC
+from src.basic import PATH
+from src.model.data_module import BatchDataLoader
+from src.model.util import BaseCallBack
 
 class CallbackTimer(BaseCallBack):
     '''record time cost of callback hooks'''

@@ -4,8 +4,8 @@ import numpy as np
 from torch import Tensor , nn
 from typing import Any , Iterator , Optional
 
-from ...util import BatchData , BatchOutput
-from ....algo.boost import BoosterInput
+from src.algo.boost import BoosterInput
+from src.model.util import BatchData , BatchOutput
 
 def tensor_refiller(values : Optional[Tensor] , target_i0 , target_i1 , target_shape : tuple):
     if values is None: return None

@@ -1,8 +1,9 @@
 import torch
 from typing import Any , Optional
-from ..util.classes import BaseCallBack
-from ...algo import getter
-from ...data.process import BlockLoader
+
+from src.algo import getter
+from src.data import BlockLoader
+from src.model.util import BaseCallBack
 
 def specific_cb(module_name : str) -> Optional[Any]:
     nn_category = getter.nn_category(module_name)

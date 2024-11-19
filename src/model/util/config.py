@@ -4,12 +4,12 @@ import numpy as np
 from pathlib import Path
 from typing import Any , Literal , Optional
 
+from src.algo import getter , VALID_BOOSTERS
+from src.basic import Device , Logger , ModelPath , PATH , THIS_IS_SERVER
+from src.func import pretty_print_dict , recur_update
+
 from .metric import Metrics
 from .storage import Checkpoint , Deposition
-from ...algo import getter , VALID_BOOSTERS
-from ...basic import PATH , THIS_IS_SERVER
-from ...basic.util import Device , Logger , ModelPath
-from ...func import pretty_print_dict , recur_update
 
 TRAIN_CONFIG_LIST = ['train' , 'env' , 'callbacks' , 'conditional' , 'model']
 
@@ -41,17 +41,19 @@ class TrainParam:
         self.load_param(override).special_adjustment().make_model_name().check_validity()
 
     def __bool__(self): return True
+    def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
 
     @property
     def model_base_path(self):
-        assert self.base_path
+        # assert self.base_path
         return self.base_path
 
     @property
     def Param(self) -> dict[str,Any]: return self.train_param
 
-    def load_param(self , override = {}):
+    def load_param(self , override : dict = {}):
         self.train_param : dict[str,Any] = {}
+        if 'short_test' in override: override['env.short_test'] = override.pop('short_test')
         for cfg_key in TRAIN_CONFIG_LIST:
             self.train_param.update({f'{cfg_key}.{key}':val for key,val in self.load_config(cfg_key).items()})
         for override_key in override:
@@ -256,6 +258,7 @@ class ModelParam:
         self.verbosity = verbosity
         self.override = kwargs
         self.load_param().check_validity()
+    def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
 
     @property
     def model_base_path(self):
@@ -346,6 +349,8 @@ class TrainConfig(TrainParam):
 
         self.Train = TrainParam(base_path , override)
         self.Model = self.Train.generate_model_param()
+
+    def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
         
     def resume_old(self , old_path : Path | ModelPath):
         self.Train = TrainParam(old_path)

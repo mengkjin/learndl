@@ -6,7 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
-from ...basic.util import ModelDict , ModelPath
+from src.basic import ModelDict , ModelPath
 
 class MemFileStorage:
     '''Interface of mem or disk storage, methods'''

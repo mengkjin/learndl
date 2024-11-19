@@ -4,12 +4,10 @@ import pandas as pd
 
 from typing import Any , ClassVar , Optional
 
-from ..module import get_predictor_module
-from ...util import TrainConfig
-from ...data_module import DataModule
-from ....basic import PATH , SILENT , THIS_IS_SERVER , CALENDAR
-from ....basic.util import RegisteredModel , REG_MODELS
-from ....func import today , date_offset
+from src.basic import PATH , SILENT , THIS_IS_SERVER , CALENDAR , RegisteredModel
+from src.model.util import TrainConfig
+from src.model.data_module import DataModule
+from src.model.model_module.module import get_predictor_module
 
 class ModelPredictor:
     '''for a model to predict recent/history data'''
@@ -48,7 +46,7 @@ class ModelPredictor:
     @classmethod
     def update_factors(cls , silent = True):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
-        for model in REG_MODELS:
+        for model in RegisteredModel.MODELS():
             md = cls(model)
             with SILENT: md.update().deploy()
             print(f'Finish model [{model.name}] predicting!')
@@ -57,14 +55,14 @@ class ModelPredictor:
 
     def update(self , start_dt = -10 , end_dt = 20991231 , update = True):
         '''get update dates and predict these dates'''
-        end_dt = min(end_dt , today())
+        end_dt = min(end_dt , CALENDAR.today())
         if update and self.reg_model.start_dt > 0:
             start_dt = self.reg_model.start_dt
         elif start_dt <= 0: 
-            start_dt = today(start_dt)
+            start_dt = CALENDAR.today(start_dt)
 
         model_dates  = self.reg_model.model_dates 
-        start_dt     = max(start_dt , int(date_offset(min(model_dates) ,1)))
+        start_dt     = max(start_dt , CALENDAR.cd(min(model_dates) ,1))
 
         update_dates = CALENDAR.td_within(start_dt , end_dt)
         stored_dates = PATH.pred_dates(self.alias , start_dt , end_dt)
@@ -75,7 +73,7 @@ class ModelPredictor:
 
     def predict(self , dates : np.ndarray | list[int]):
         '''predict recent days'''
-        data_module  = DataModule(self.config , 'both' if min(dates) <= today(-100) else 'predict').load_data() 
+        data_module  = DataModule(self.config , 'both' if min(dates) <= CALENDAR.today(-100) else 'predict').load_data() 
         pred_dates = dates[dates <= max(data_module.test_full_dates)]
         
         df_task = pd.DataFrame({'pred_dates' : pred_dates , 
@@ -128,6 +126,6 @@ class ModelPredictor:
         '''prediction correlation of ecent days'''
         if df is None: df = self.df
         if df is None: return NotImplemented
-        df = df[df[date_col] >= today(-window)]
+        df = df[df[date_col] >= CALENDAR.today(-window)]
         assert isinstance(df , pd.DataFrame)
         return df.pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()

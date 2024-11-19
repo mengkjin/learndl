@@ -4,8 +4,8 @@ import pandas as pd
 from typing import Any , Literal
 from abc import abstractmethod , ABC
 
+from src.basic import PATH , CALENDAR , Timer
 from ..basic.func import updatable , dates_to_update , quarter_ends
-from .....basic import PATH , CALENDAR
 
 class TushareFetcher(ABC):
     START_DATE  : int = 19970101
@@ -85,12 +85,16 @@ class TushareFetcher(ABC):
         dfs = []
         offset = 0
         while True:
-            df = fetch_func(**kwargs , offset = offset , limit = limit)
-            if len(df) == 0: break
-            if len(dfs) >= max_fetch_times: raise Exception(f'{self.__class__.__name__} got more than {max_fetch_times} dfs')
-            dfs.append(df)
+            df : pd.DataFrame | Any = fetch_func(**kwargs , offset = offset , limit = limit)
+            if not isinstance(df , pd.DataFrame): raise TypeError(f'{fetch_func.__name__} must return a pd.DataFrame')
+            elif df.empty: break
+            elif len(dfs) >= max_fetch_times: raise Exception(f'{self.__class__.__name__} got more than {max_fetch_times} dfs')
+
+            if not df.isna().all().all(): dfs.append(df)
             offset += limit
-        if len(dfs):
+        if dfs:
+            all_df = pd.concat(dfs)
+            all_df = all_df.reset_index(drop = (len(all_df.index.names) == 1) and (not all_df.index.name))
             return pd.concat(dfs).reset_index(drop = True)
         else:
             return pd.DataFrame()
@@ -190,11 +194,11 @@ class RollingFetcher(TushareFetcher):
             end_date   = dates[i+1]
             assert start_date is not None and end_date is not None , 'start_date and end_date must be provided'
             assert self.DB_TYPE == 'rolling' , f'{self.__class__.__name__} is not a rolling fetcher'
-            print(f'{self.__class__.__name__} Updating {self.DB_SRC}/{self.DB_KEY} from {start_date} to {end_date}')
             df = self.get_data(start_date , end_date)
             if df.empty: continue
             assert self.ROLLING_DATE_COL in df.columns , f'{self.ROLLING_DATE_COL} not in {df.columns}'
-            for date in df[self.ROLLING_DATE_COL].unique():
-                subdf = df[df[self.ROLLING_DATE_COL] == date].copy()
-                if not self.SAVEING_DATE_COL: subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
-                PATH.db_save(subdf , self.DB_SRC , self.DB_KEY , date = date)
+            with Timer(f'DataBase object [{self.DB_SRC}],[{self.DB_KEY}],[{start_date} to {end_date}]'):
+                for date in df[self.ROLLING_DATE_COL].unique():
+                    subdf = df[df[self.ROLLING_DATE_COL] == date].copy()
+                    if not self.SAVEING_DATE_COL: subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
+                    PATH.db_save(subdf , self.DB_SRC , self.DB_KEY , date = date , verbose = False)

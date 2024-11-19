@@ -6,8 +6,8 @@ from matplotlib.axes import Axes
 from matplotlib.ticker import FuncFormatter
 from typing import Any , Optional
 
-from ...util.plot import multi_factor_plot , plot_head , plot_tail , plot_table , plot_xaxis
-from ....basic.conf import CATEGORIES_BENCHMARKS
+from src.basic import CONF
+from src.factor.util.plot import multi_factor_plot , plot_head , plot_tail , plot_table , plot_xaxis
 
 @multi_factor_plot
 def plot_fmp_perf_lag(df : pd.DataFrame , factor_name : Optional[str] = None , benchmark : Optional[str] = None , show = False):
@@ -183,7 +183,7 @@ def plot_fmp_prefix(df : pd.DataFrame , factor_name : Optional[str] = None , ben
     df , fig = plot_head(df , None , None)
 
     df = df.rename(columns={'factor_name':'factor'}).set_index('factor')
-    df['benchmark'] = pd.Categorical(df['benchmark'] , categories = np.intersect1d(CATEGORIES_BENCHMARKS , df['benchmark']) , ordered=True) 
+    df['benchmark'] = pd.Categorical(df['benchmark'] , categories = np.intersect1d(CONF.CATEGORIES_BENCHMARKS , df['benchmark']) , ordered=True) 
     df = df.sort_values(['factor','benchmark'])  
 
     plot_table(df , 

@@ -1,12 +1,11 @@
 import numpy as np
-
 from typing import Any
+
+from src.data import DATAVENDOR
 
 from .bound import StockBound , StockPool , IndustryPool , GeneralBound , ValidRange , STOCK_UB , STOCK_LB
 from .constr import LinearConstraint , TurnConstraint , CovConstraint , BoundConstraint , ShortConstraint
-from ...classes import Benchmark , Port , Benchmark
-from ...risk_model import RISK_MODEL
-from .....data import DATAVENDOR
+from ...classes import Benchmark , Port , RISK_MODEL
 
 stock_bound_list : list[StockBound] = []
 linear_bound_list : list[LinearConstraint] = []

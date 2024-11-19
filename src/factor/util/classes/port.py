@@ -4,8 +4,8 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal , Optional
 
-from ....basic.conf import EPS_WEIGHT , AVAIL_BENCHMARKS , DEFAULT_BENCHMARKS , CATEGORIES_BENCHMARKS
-from ....data import DataBlock , DATAVENDOR
+from src.basic.conf import EPS_WEIGHT , AVAIL_BENCHMARKS , DEFAULT_BENCHMARKS , CATEGORIES_BENCHMARKS
+from src.data import DataBlock , DATAVENDOR
 
 class Port:
     '''portfolio realization of one day'''

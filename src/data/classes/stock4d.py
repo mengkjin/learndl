@@ -8,8 +8,10 @@ from dataclasses import dataclass
 from torch import Tensor
 from typing import Any
 
+from src.func import match_values , index_union
+
 from .nd import NdData
-from ...func import match_values , index_union
+
 
 @dataclass
 class Stock4DData:

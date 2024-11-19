@@ -5,7 +5,8 @@ from torch import nn , optim
 from torch.nn.utils.clip_grad import clip_grad_value_
 from typing import Any,Optional
 
-from ...util import BatchMetric , TrainConfig
+from .metric import BatchMetric
+from .config import TrainConfig
 
 NAN_GRADS_HALT = False
 NAN_GRADS_IGNORE = False

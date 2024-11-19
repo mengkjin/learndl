@@ -1,7 +1,7 @@
 from typing import Any , Optional
 
+from src.model.util import BaseCallBack , BaseTrainer 
 from . import display, fit, test , nnspecific
-from ..util.classes import BaseCallBack , BaseTrainer 
 
 SEARCH_MODS = [fit , display , test]
 COMPULSARY_CALLBACKS = ['StatusDisplay' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis']

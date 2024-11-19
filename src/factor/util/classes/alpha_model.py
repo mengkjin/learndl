@@ -6,8 +6,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
-from .classes import GeneralModel
-from ...func.transform import fill_na_as_const , winsorize_by_dist , zscore
+from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
+from .general_model import GeneralModel
 
 @dataclass
 class Amodel:

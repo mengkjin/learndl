@@ -1,8 +1,8 @@
 from copy import deepcopy
 from typing import Any
 
+from src.basic import CONF
 from .bound import StockPool , IndustryPool , GeneralBound , ValidRange
-from .....basic import CONF
 
 def parse_config_equity(config : dict) -> dict[str,float|Any]:
     '''

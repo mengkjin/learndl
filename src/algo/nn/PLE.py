@@ -120,8 +120,8 @@ class ExpertNetwork(nn.Module):
         return self.expert(x)[0]
     
 if __name__ == '__main__' :
-    from src.api import DataAPI
-    batch_data = DataAPI.get_realistic_batch_data('day')
+    from src.model.data_module import get_realistic_batch_data
+    batch_data = get_realistic_batch_data('day')
 
     rau = ple_gru(indus_embed=True)
     rau(batch_data.x).shape

@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Literal
-from ...func.singleton import singleton
+from src.func.singleton import singleton
 
 @singleton
 class TradeDataAccess:

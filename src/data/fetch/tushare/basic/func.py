@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from typing import Literal
-from ....basic import CALENDAR
+from src.basic import CALENDAR
 
 def code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , retain = False):
     '''switch old symbol into secid'''

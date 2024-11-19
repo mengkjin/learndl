@@ -3,12 +3,8 @@ import numpy as np
 from copy import deepcopy
 from typing import Any , Optional
 
+from src.basic.conf import DEFAULT_OPT_CONFIG
 from .solver_input import SolverInput
-from ...classes import Port , Benchmark , Portfolio
-from ...risk_model import RISK_MODEL
-from ...alpha_model import AlphaModel , Amodel
-from .....basic.conf import DEFAULT_OPT_CONFIG
-
 from .parser import (
     parse_config_benchmark , parse_config_board , parse_config_bound ,
     parse_config_component , parse_config_equity , parse_config_induspool ,
@@ -21,6 +17,7 @@ from .input_creator import (
     create_input_bnd_con , create_input_lin_con , create_input_turn_con ,
     create_input_cov_con ,  create_input_short_con
 )
+from ...classes import AlphaModel , Amodel , Benchmark , Port , Portfolio , RISK_MODEL
 
 class PortfolioOptimizerInput:
     def __init__(

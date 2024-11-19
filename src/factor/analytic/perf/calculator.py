@@ -5,10 +5,11 @@ from abc import abstractmethod , ABC
 from matplotlib.figure import Figure
 from typing import Any , Callable , Literal , Optional
 
+from src.data import DataBlock
+from src.factor.util import Benchmark
+
 from . import stat as Stat
 from . import plot as Plot
-from ...util import Benchmark
-from ....data import DataBlock
 
 class suppress_warnings:
     def __enter__(self):

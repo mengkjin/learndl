@@ -1,12 +1,10 @@
 from torch import Tensor , set_grad_enabled
 from typing import Any , Optional
 
-from ..util.swa import choose_swa_method
-from ..util.optimizer import Optimizer
-from ..util.data_transform import batch_data_to_boost_input , batch_loader_concat
-from ...util import BatchData , BatchOutput
-from ...util.classes import BasePredictorModel
-from ....algo import getter
+from src.algo import getter
+from src.model.util import BasePredictorModel , BatchData , BatchOutput , Optimizer
+from src.model.model_module.util.swa import choose_swa_method
+from src.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat
 
 class NNBooster(BasePredictorModel):
     '''a group of ensemble models , of same net structure'''    
@@ -21,7 +19,10 @@ class NNBooster(BasePredictorModel):
                    model_nn_module : Optional[str] = None , 
                    model_nn_param : Optional[dict] = None , 
                    model_boost_module : Optional[str] = None, 
-                   model_boost_param : Optional[dict] = None , *args , **kwargs):
+                   model_boost_param : Optional[dict] = None , 
+                   testor_mode : bool = False ,
+                   *args , **kwargs):
+        if testor_mode: self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
         nn_module    = model_nn_module    if model_nn_module    else self.config.model_module
         nn_param     = model_nn_param     if model_nn_param     else self.model_param 
         boost_module = model_boost_module if model_boost_module else self.config.model_booster_head

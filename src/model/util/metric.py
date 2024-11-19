@@ -8,8 +8,8 @@ from dataclasses import dataclass , field
 from torch import nn , no_grad , Tensor
 from typing import Any , Literal , Optional
 
+from src.func import mse , pearson , ccc , spearman
 from .batch import BatchMetric
-from ...func import mse , pearson , ccc , spearman
 
 DISPLAY_CHECK  = True # will display once if true
 DISPLAY_RECORD = {'loss' : {} , 'score' : {} , 'penalty' : {}}
@@ -46,6 +46,10 @@ class Metrics:
         self.multilosses_type = multilosses_type
         self.multilosses_param = multilosses_param
 
+        self.loss_type = loss_type
+        self.score_type = score_type
+        self.penalty_type = list(penalty_kwargs.keys())
+
         self.loss_calc    = LossCalculator(loss_type)
         self.score_calc   = ScoreCalculator(score_type)
         self.penalty_calc = {k:PenaltyCalculator(k,v) for k,v in penalty_kwargs.items()}
@@ -56,6 +60,9 @@ class Metrics:
         self.latest : dict[str,Any] = {}
         self.last_metric : Any = None
         self.best_metric : Any = None
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(loss={self.loss_type},metric={self.score_type},penalty={self.penalty_type})'
 
     @property
     def loss(self): return self.output.loss

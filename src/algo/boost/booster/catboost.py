@@ -4,8 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from ..util.basic import BasicBoosterModel
-from ..util.io import BoosterInput
+from ..util import BasicBoosterModel , BoosterInput
 
 PLOT_PATH : Path | None = None
 

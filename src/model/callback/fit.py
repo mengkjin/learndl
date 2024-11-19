@@ -1,10 +1,8 @@
 import torch
-
 from copy import deepcopy
 
-from ..model_module.util.optimizer import Optimizer
-from ..util.classes import BaseCallBack
-from ... import func as FUNC
+from src import func as FUNC
+from src.model.util import BaseCallBack , Optimizer
 
 class EarlyStoppage(BaseCallBack):
     '''stop fitting when validation score cease to improve'''
@@ -126,7 +124,8 @@ class ResetOptimizer(BaseCallBack):
         self.speedup2x = speedup2x
         self.trigger_intvl = max(self.trigger // 2 , 1) if self.speedup2x else self.trigger
     @property
-    def optimizer(self) -> Optimizer: return getattr(self.trainer.model , 'optimizer')
+    def optimizer(self) -> Optimizer: 
+        return self.trainer.model.optimizer
     @property
     def reset_epoch(self) -> bool:
         i = self.status.epoch + 1 - self.trigger

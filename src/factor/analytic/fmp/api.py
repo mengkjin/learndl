@@ -6,10 +6,10 @@ from typing import Any , Literal , Optional , Type
 
 from src.func import dfs_to_excel , figs_to_pdf
 from src.data import DataBlock
+from src.factor.util import AlphaModel , Benchmark
 
 from .builder import PortfolioBuilderGroup
 from . import calculator as Calc
-from ...util import AlphaModel , Benchmark
 
 class FmpManager:
     '''

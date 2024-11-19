@@ -1,22 +1,16 @@
-
 import torch
 
 from typing import Any , Literal , Optional
 
-from .ada import AdaBoost
-from .catboost import CatBoost
-from .lgbm import Lgbm
-from .xgboost import XgBoost
-
-from ..util.io import BoosterInput , BoosterWeightMethod
-from ..util.basic import BasicBoosterModel
+from . import ada , catboost , lgbm , xgboost
+from ..util import BasicBoosterModel , BoosterInput , BoosterWeightMethod
 
 VALID_BOOSTERS = ['lgbm' , 'ada' , 'xgboost' , 'catboost']
 _booster_dict = {
-    'lgbm' : Lgbm,
-    'ada' : AdaBoost,
-    'xgboost' : XgBoost,
-    'catboost' : CatBoost,
+    'lgbm' : lgbm.Lgbm,
+    'ada' : ada.AdaBoost,
+    'xgboost' : xgboost.XgBoost,
+    'catboost' : catboost.CatBoost,
 }
 
 def choose_booster_model(booster_type : str):

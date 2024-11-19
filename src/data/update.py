@@ -5,8 +5,8 @@ import pandas as pd
 from functools import reduce
 from pathlib import Path
 
+from src.basic import PATH , THIS_IS_SERVER
 from .fetch import JSFetcher , SQLFetcher
-from ..basic import PATH , THIS_IS_SERVER
 
 UPDATER_TITLE = 'DB_updater'
 class DataUpdater():

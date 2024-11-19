@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 
+from src.basic.conf import RISK_INDUS , RISK_STYLE
+
 from . import layer as Layer
-from ...basic.conf import RISK_INDUS , RISK_STYLE
 
 __all__ = ['risk_att_gru']
 
@@ -57,8 +58,8 @@ class risk_att_gru(nn.Module):
         return z
     
 if __name__ == '__main__' :
-    from src.api import DataAPI
-    batch_data = DataAPI.get_realistic_batch_data('day+style+indus')
+    from src.model.data_module import get_realistic_batch_data
+    batch_data = get_realistic_batch_data('day+style+indus')
 
     rau = risk_att_gru(indus_embed=True)
     rau(batch_data.x).shape

@@ -6,10 +6,11 @@ import torch.nn.functional as F
 from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
+from src.basic import PATH , CONF , SILENT , Timer
+from src.func.singleton import singleton
+
 from .classes import DataBlock
 from .access import CALENDAR , INFO , TRADE , RISK , FINA , INDI
-from ..basic import PATH , CONF , SILENT , Timer
-from ..func.singleton import singleton
 
 @dataclass(slots=True)
 class BlockLoader:

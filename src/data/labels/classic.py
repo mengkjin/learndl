@@ -3,8 +3,8 @@ import numpy as np
 
 from typing import Any , Literal , Optional
 
-from ..access import CALENDAR , TRADE , RISK
-from ...basic import PATH
+from src.basic import PATH
+from src.data.access import CALENDAR , TRADE , RISK
 
 class ClassicLabelsUpdater:
     START_DATE = 20050101

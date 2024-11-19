@@ -1,8 +1,9 @@
+from src.model.callback import CallBackManager
+from src.model.data_module import DataModule
+from src.model.util import BaseTrainer
+from src.basic import THIS_IS_SERVER , RegisteredModel
+
 from ..module import get_predictor_module
-from ...callback import CallBackManager
-from ...data_module import DataModule
-from ...util.classes import BaseTrainer
-from ....basic import THIS_IS_SERVER , REG_MODELS
 
 class ModelTrainer(BaseTrainer):
     '''run through the whole process of training'''
@@ -28,4 +29,4 @@ class ModelTrainer(BaseTrainer):
         if not THIS_IS_SERVER:
             print('This is not server! Will not update models!')
         else:
-            [cls.initialize(0 , 1 , 0 , model.model_path).go() for model in REG_MODELS]
+            [cls.initialize(0 , 1 , 0 , model.model_path).go() for model in RegisteredModel.MODELS()]

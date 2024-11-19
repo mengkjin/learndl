@@ -1,8 +1,8 @@
 import numpy as np
 from tqdm import tqdm
-from ..util import BatchData
-from ..util.classes import BaseDataModule
-from ...basic import SILENT
+
+from src.basic import SILENT
+from src.model.util import BaseDataModule , BatchData
     
 class BatchDataLoader:
     '''wrap loader to impletement DataModule Callbacks'''

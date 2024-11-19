@@ -1,7 +1,8 @@
+from src.model.util import TrainConfig
+
 from .nn import NNPredictor
 from .boost import BoostPredictor
 from .nn_booster import NNBooster
-from ...util import TrainConfig
 
 def get_predictor_module(model_module : str | TrainConfig , *args , **kwargs):
     if isinstance(model_module , str):

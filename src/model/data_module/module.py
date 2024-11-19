@@ -7,13 +7,13 @@ from torch import Tensor
 from torch.utils.data import BatchSampler
 from typing import Any , Literal , Optional
 
+from src.basic import CONF , PATH , SILENT , HiddenPath
+from src.data import DataBlockNorm , DataProcessor , ModuleData , DataBlock
+from src.func import tensor_standardize_and_weight , match_values , index_intersect
+from src.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig , MemFileStorage , StoredFileLoader
+
 from .loader import BatchDataLoader
-from ..util import BatchData , TrainConfig , MemFileStorage , StoredFileLoader
-from ..util.classes import BaseBuffer , BaseDataModule
-from ...basic import CONF , PATH , SILENT
-from ...basic.util import HiddenPath
-from ...data import DataBlockNorm , DataProcessor , ModuleData , DataBlock
-from ...func import tensor_standardize_and_weight , match_values , index_intersect
+
 
 class DataModule(BaseDataModule):    
     def __init__(self , config : Optional[TrainConfig] = None , use_data : Literal['fit','predict','both'] = 'fit'):
@@ -27,6 +27,8 @@ class DataModule(BaseDataModule):
         self.storage  = MemFileStorage(self.config.mem_storage)
         self.buffer   = BaseBuffer(self.device)
 
+    def __repr__(self): return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={self.data_type_list})'
+
     def load_data(self):
         self.datas = ModuleData.load(self.data_type_list , self.config.model_labels, 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
@@ -35,7 +37,7 @@ class DataModule(BaseDataModule):
         self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
 
         if self.use_data == 'predict':
-            self.model_date_list = self.datas.date[0]
+            self.model_date_list = self.datas.date[:1]
             self.test_full_dates = self.datas.date[1:]
         else:
             self.model_date_list = self.datas.date_within(self.config.beg_date , self.config.end_date , self.config.model_interval)
@@ -153,6 +155,8 @@ class DataModule(BaseDataModule):
             
             d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - self.seqx + 1 , 0)
             d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
+            test_dates = self.datas.date[d0 + self.seqx - 1:d1]
+
         elif stage == 'extract':
             model_date_col = (self.datas.date < model_date).sum()
             data_step = 1

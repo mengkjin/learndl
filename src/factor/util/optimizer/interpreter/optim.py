@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from .....basic import CONF
+from src.basic import CONF
 
 @dataclass
 class SolveCond:

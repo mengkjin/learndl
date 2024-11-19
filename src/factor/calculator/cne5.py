@@ -3,9 +3,9 @@ import pandas as pd
 import statsmodels.api as sm
 from typing import Any , Literal , Optional
 
-from ...data import DATAVENDOR
-from ...basic import PATH , CONF
-from ...func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
+from src.basic import PATH , CONF
+from src.data import DATAVENDOR
+from src.func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
 
 def parse_ts_input(
     ts : pd.DataFrame , 

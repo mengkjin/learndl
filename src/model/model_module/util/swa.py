@@ -6,8 +6,7 @@ from torch import nn , no_grad
 from torch.optim.swa_utils import AveragedModel
 from typing import Any , Literal
 
-from ...util import BatchData , Checkpoint , Metrics
-from ...util.classes import BaseTrainer
+from src.model.util import BaseTrainer , BatchData , Checkpoint , Metrics
 
 def choose_swa_method(submodel : Literal['best' , 'swabest' , 'swalast'] | Any):
     '''get a subclass of _BaseEnsembler'''

@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from ...basic import PATH , CONF , CALENDAR , TradeDate
-from ...func.singleton import singleton
+from src.basic import PATH , CONF , CALENDAR , TradeDate
+from src.func.singleton import singleton
 
 @singleton
 class InfoDataAccess:

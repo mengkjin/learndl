@@ -1,17 +1,18 @@
 from torch import Tensor , set_grad_enabled
 from typing import Any , Optional
 
-from ..util.swa import choose_swa_method
-from ..util.optimizer import Optimizer
-from ...util import BatchData
-from ...util.classes import BasePredictorModel
-from ....algo import getter
+
+from src.algo import getter
+from src.model.util import BasePredictorModel , BatchData , Optimizer
+from src.model.model_module.util.swa import choose_swa_method
 
 class NNPredictor(BasePredictorModel):
     def init_model(self , 
                    model_module : Optional[str] = None , 
                    model_param : Optional[dict] = None , 
+                   testor_mode : bool = False ,
                    *args , **kwargs):
+        if testor_mode: self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
         module = model_module if model_module else self.config.model_module
         param  = model_param  if model_param  else self.model_param 
 

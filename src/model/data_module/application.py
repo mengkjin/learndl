@@ -1,7 +1,8 @@
 from typing import Optional
 
+from src.model.util import TrainConfig
 from .module import DataModule
-from ..util import TrainConfig
+
 
 def get_realistic_batch_data(model_data_type='day'):
     '''

@@ -1,10 +1,11 @@
 import sys , pathlib , traceback
+from datetime import datetime
+
 if (path := str(pathlib.Path(__file__).parent.parent.parent)) not in sys.path:
     sys.path.append(path)
 
 from src.api import DataAPI , ModelAPI
 from src.basic import ProcessAndEmail , DualPrinter , send_email
-from datetime import datetime
 
 
 email_title = f'daily update at {datetime.now().strftime("%Y-%m-%d")}'

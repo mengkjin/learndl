@@ -5,11 +5,10 @@ import pandas as pd
 from itertools import product
 from typing import Literal , Optional
 
-from ..module import NNPredictor , get_predictor_module
-from ...util import TrainConfig
-from ...data_module import DataModule
-
-from ....basic.util import ModelPath , HiddenPath , HID_MODELS , HiddenExtractingModel
+from src.basic import ModelPath , HiddenPath , HiddenExtractingModel
+from src.model.util import TrainConfig
+from src.model.data_module import DataModule
+from src.model.model_module.module import NNPredictor , get_predictor_module
 
 class ModelHiddenExtractor:
     '''for a model to predict recent/history data'''
@@ -22,6 +21,9 @@ class ModelHiddenExtractor:
         assert isinstance(self.model , NNPredictor) , self.model
         self.data   = DataModule(self.config , 'both').load_data()
     
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.hidden_model})'
+
     @property
     def model_path(self):
         return self.hidden_model.model_path
@@ -115,7 +117,7 @@ class ModelHiddenExtractor:
         cls , model_name : str | None = None , update = True , overwrite = False):
         if model_name is None:
             print(f'model_name is None, update all hidden models')
-            models = HID_MODELS
+            models = HiddenExtractingModel.MODELS()
         else:
             models = [HiddenExtractingModel(model_name)]
         [print(f'  -->  update hidden feature for {model}') for model in models]

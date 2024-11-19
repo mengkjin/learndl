@@ -1,10 +1,9 @@
 from torch import Tensor
 from typing import Any , Optional
 
-from ..util.data_transform import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
-from ...util import BatchData
-from ...util.classes import BasePredictorModel
-from ....algo import getter
+from src.algo import getter
+from src.model.util import BasePredictorModel , BatchData
+from src.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
 
 class BoostPredictor(BasePredictorModel):
     '''a group of ensemble models , of same net structure'''
@@ -13,7 +12,9 @@ class BoostPredictor(BasePredictorModel):
     def init_model(self , 
                    model_module : Optional[str] = None , 
                    model_param : Optional[dict] = None ,
+                   testor_mode : bool = False ,
                    *args , **kwargs):
+        if testor_mode: self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
         module = model_module if model_module else self.config.model_booster_type
         param  = model_param  if model_param  else self.model_param
         cuda = self.device.is_cuda()   if self.config else None

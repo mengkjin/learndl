@@ -5,10 +5,11 @@ from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from typing import Any , Iterator , Optional
 
+from src.basic import CONF , PATH , Timer , CALENDAR
+from src.func.primas import neutralize_2d , process_factor
+
 from .classes import DataBlock
 from .loader import BlockLoader
-from ..basic import CONF , PATH , Timer , CALENDAR
-from ..func.primas import neutralize_2d , process_factor
 
 TRAIN_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']
 PREDICT_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']

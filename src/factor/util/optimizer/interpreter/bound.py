@@ -3,7 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
-from .....basic import CONF
+from src.basic import CONF
 STOCK_LB , STOCK_UB = CONF.SYMBOL_STOCK_LB , CONF.SYMBOL_STOCK_UB
 
 @dataclass

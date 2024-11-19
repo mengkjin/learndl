@@ -4,13 +4,15 @@ import pandas as pd
 import numpy as np
 import multiprocessing as mp  
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date , datetime
 from sqlalchemy import create_engine , exc
-from typing import ClassVar , Literal
+from typing import Any , ClassVar , Literal
 
-from ..basic.transform import secid_adjust
-from ...basic import PATH , CALENDAR
+from src.basic import PATH , CALENDAR
+from src.data.basic import secid_adjust
+
 
 @dataclass
 class Connection:
@@ -273,17 +275,11 @@ class SQLFetcher:
         return [(int(s),int(e)) for s,e in zip(dt_starts , dt_ends)]
     
     @staticmethod
-    def date_offset(date , offset = 0 , astype = int):
-        if isinstance(date , (np.ndarray,pd.Index,pd.Series,list,tuple,np.ndarray)):
-            new_date = pd.DatetimeIndex(np.array(date).astype(str))
-        else:
-            new_date = pd.DatetimeIndex([str(date)])
-        if offset == 0:
-            new_date = new_date.strftime('%Y%m%d') #type: ignore
-        else:
-            new_date = (new_date + pd.DateOffset(offset)).strftime('%Y%m%d') #type: ignore
-        new_date = new_date.astype(astype)
-        return new_date.values
+    def date_offset(date : Any , offset : int = 0 , astype = int):
+        date = pd.DatetimeIndex(np.array(date).astype(str)) if isinstance(date , Iterable) else pd.DatetimeIndex([str(date)])
+        dseries : pd.DatetimeIndex = (date + pd.DateOffset(n=offset))
+        new_date = dseries.strftime('%Y%m%d').astype(astype).to_numpy()
+        return new_date if isinstance(date , Iterable) else new_date[0]
 
     @classmethod
     def default_factors(cls , keys = None):

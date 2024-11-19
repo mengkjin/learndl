@@ -3,7 +3,9 @@ import numpy as np
 import pandas as pd  
 
 from typing import Literal
-from ....basic import secid_adjust , trade_min_reform , PATH , CALENDAR
+
+from src.basic import PATH , CALENDAR
+from src.data.basic import secid_adjust , trade_min_reform
 
 START_DATE = 20241101
 BAO_PATH = PATH.miscel.joinpath('Baostock')

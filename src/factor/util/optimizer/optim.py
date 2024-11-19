@@ -4,12 +4,10 @@ import numpy as np
 from dataclasses import dataclass , field
 from typing import Any , Literal , Optional
 
+from src.basic import PATH
 from .solver import MosekSolver , CvxpySolver
 from .interpreter import Accuarcy , PortfolioOptimizerInput , SolverInput , Utility
-from ..classes import Port , Portfolio , Benchmark
-from ..alpha_model import AlphaModel , Amodel
-from ..risk_model import RiskAnalytic , Attribution
-from ....basic import PATH
+from ..classes import AlphaModel , Amodel , Benchmark , Port , Portfolio , Benchmark , RiskAnalytic , Attribution
 
 @dataclass
 class PortfolioOptimizer:

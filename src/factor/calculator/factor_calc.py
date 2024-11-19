@@ -8,10 +8,10 @@ from collections.abc import Iterable
 from itertools import combinations
 from typing import Any , Literal , Type , final
 
-from ...basic import PATH
-from ...data import DATAVENDOR
-from ...func.singleton import SingletonABCMeta
-from ...func.classproperty import classproperty_str
+from src.basic import PATH
+from src.data import DATAVENDOR
+from src.func.singleton import SingletonABCMeta
+from src.func.classproperty import classproperty_str
 
 _FACTOR_UPDATE_JOBS : list[tuple['StockFactorCalculator' , int]] = []
 

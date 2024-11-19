@@ -36,6 +36,10 @@ boardsql    = main.joinpath('board_sqls')
 def read_yaml(yaml_file , **kwargs):
     if isinstance(yaml_file , Path) and yaml_file.suffix == '' and yaml_file.with_name(f'{yaml_file.name}.yaml').exists():
         yaml_file = yaml_file.with_name(f'{yaml_file.name}.yaml')
+    if not yaml_file.exists():
+        if yaml_file.parent.stem == 'nn':
+            print(f'{yaml_file} does not exist, trying default.yaml')
+            yaml_file = yaml_file.with_name(f'default.yaml')
     with open(yaml_file ,'r' , **kwargs) as f:
         d = yaml.load(f , Loader = yaml.FullLoader)
     return d
