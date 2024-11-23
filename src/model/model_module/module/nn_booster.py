@@ -37,7 +37,7 @@ class NNBooster(BasePredictorModel):
         self.booster = getter.boost(boost_module , boost_param, cuda , seed , given_name = self.model_full_name)
 
         self.model_dict.reset()
-        self.metrics.new_model({**nn_param , **boost_param})
+        self.metrics.new_model(nn_param | boost_param)
         return self
     
     def reset_submodels(self , *args , **kwargs):

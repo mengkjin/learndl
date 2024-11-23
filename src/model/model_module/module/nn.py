@@ -1,7 +1,6 @@
 from torch import Tensor , set_grad_enabled
 from typing import Any , Optional
 
-
 from src.algo import getter
 from src.model.util import BasePredictorModel , BatchData , Optimizer
 from src.model.model_module.util.swa import choose_swa_method

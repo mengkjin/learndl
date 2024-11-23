@@ -2,14 +2,15 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 
-from dataclasses import dataclass
+from dataclasses import dataclass , field
 from typing import Any , ClassVar , Literal , Optional
 
 from src.basic import SILENT
-from src.basic.conf import RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
+from src.basic.conf import EPS_ACCURACY , RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
-from .general_model import GeneralModel
-from .port import Port
+from .general import GeneralModel , Port
+
+__all__ = ['RiskModel' , 'RiskProfile' , 'RiskAnalytic' , 'Attribution' , 'RISK_MODEL']
 
 @dataclass
 class Rmodel:
@@ -106,7 +107,7 @@ class Rmodel:
             self.futret = futret.loc[:,['tot']].join(excess_ret).join(model.resid.rename('specific'))
             self.regressed = target_date
         return self
-    
+    def get_model(self , *args , **kwargs): return self
     @staticmethod
     def loc_secid(df : pd.DataFrame | Any , secid : np.ndarray , fillna : Literal['max','min'] | float | None = None):    
         try:  
@@ -313,5 +314,5 @@ class Attribution:
         if self.style    is not None:   self.style    = self.style.round(decimals)
         if self.aggregated is not None: self.aggregated = self.aggregated.round(decimals)
         return self
-    
+
 RISK_MODEL = RiskModel()

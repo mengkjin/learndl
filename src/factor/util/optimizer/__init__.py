@@ -1,3 +1,2 @@
 from . import optim, solver , interpreter
-
-from .optim import PortfolioOptimizer , PortOptimResult
+from .optim import PortfolioOptimizer

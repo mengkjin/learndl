@@ -14,7 +14,7 @@ def today(offset = 0 , astype : Any = int):
 
 def load_calendar():
     calendar = PATH.db_load('information_ts' , 'calendar' , raise_if_not_exist = True).loc[:,['calendar' , 'trade']]
-    if (res_path := Path('./reserved_calendar.json')).exists():
+    if (res_path := PATH.conf.joinpath('glob','reserved_calendar.json')).exists():
         res_calendar = pd.read_json(res_path).loc[:,['calendar' , 'trade']]
         calendar = pd.concat([calendar , res_calendar[res_calendar['calendar'] > calendar['calendar'].max()]]).sort_values('calendar')
 
@@ -154,7 +154,10 @@ class TradeCalendar:
     
     @staticmethod
     def cd_diff(date1 , date2) -> int | Any:
-        diff = int(_CALENDAR.loc[[date1 , date2] , 'cd_index'].diff().dropna().astype(int).item())
+        try:
+            diff = int(_CALENDAR.loc[[date1 , date2] , 'cd_index'].diff().dropna().astype(int).item())
+        except:
+            diff = (datetime.strptime(str(date1), '%Y%m%d') - datetime.strptime(str(date2), '%Y%m%d')).days
         return diff
     
     @staticmethod

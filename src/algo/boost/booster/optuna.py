@@ -9,7 +9,7 @@ from .general import GeneralBooster
 class OptunaBooster(GeneralBooster):
     DEFAULT_SILENT_STUDY = False
     DEFAULT_N_TRIALS = 20
-    DEFAULT_STORAGE = f'sqlite:///{PATH.boardsql.relative_to(PATH.main)}/optuna/booster_{time.strftime("%Y%m") }.sqlite3'
+    DEFAULT_STORAGE = f'sqlite:///{PATH.log_optuna.relative_to(PATH.main)}/booster_{time.strftime("%Y%m") }.sqlite3'
 
     @property
     def best_params(self):

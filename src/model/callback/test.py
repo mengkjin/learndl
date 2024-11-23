@@ -1,22 +1,23 @@
 import pandas as pd
 
-from matplotlib.figure import Figure
 from typing import Any , Literal
 
 from src import func as FUNC
-from src.factor.analytic import PerfManager , FmpManager
-from src.factor.analytic.perf.stat import calc_grp_perf
+from src.factor.analytic import eval_group_perf , FactorTestAPI , TYPE_of_TASK
 from src.model.util import BaseCallBack , PredRecorder
 
 PRED_RECORD = PredRecorder()
 
 class DetailedAlphaAnalysis(BaseCallBack):
+    ANALYTIC_TASKS : list[TYPE_of_TASK] = ['factor' , 'optim' , 'top']
     '''record and concat each model to Alpha model instance'''
     def __init__(self , trainer , use_num : Literal['avg' , 'first'] = 'avg' , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         self.print_info()
         assert use_num in ['first' , 'avg'] , use_num
         self.use_num = use_num
+        assert all(task in FactorTestAPI.TASK_TYPES for task in self.ANALYTIC_TASKS) , \
+            f'ANALYTIC_TASKS must be a list of valid tasks: {FactorTestAPI.TASK_TYPES} , but got {self.ANALYTIC_TASKS}'
 
     @property
     def path_data(self): return str(self.config.model_base_path.rslt('data.xlsx'))
@@ -39,17 +40,18 @@ class DetailedAlphaAnalysis(BaseCallBack):
         #self.logger.warning(f'Performing Factor and FMP test!')
         
         self.df = df
-        self.fac_man = PerfManager.run_test(df , verbosity = 0)
-        self.fmp_man = FmpManager.run_test(df , verbosity = 0)
-        
-        rslts : dict[str , pd.DataFrame] = {f'fmp_{k}':v for k,v in self.fmp_man.get_rslts().items()}
-        rslts.update({f'factor_{k}':v for k,v in self.fac_man.get_rslts().items()})
-        figs : dict[str , Figure] = {f'fmp_{k}':v for k,v in self.fmp_man.get_figs().items()}
-        figs.update({f'factor_{k}':v for k,v in self.fac_man.get_figs().items()})
 
-        if 'fmp_prefix' in rslts.keys(): 
+        self.test_results = {
+            task:FactorTestAPI.run_test(task , df , verbosity = 0 , write_down=False , display_figs=False)
+            for task in self.ANALYTIC_TASKS
+        }
+
+        rslts = {f'{task}@{k}':v for task in self.ANALYTIC_TASKS for k,v in self.test_results[task].get_rslts().items()}
+        figs  = {f'{task}@{k}':v for task in self.ANALYTIC_TASKS for k,v in self.test_results[task].get_figs().items()}
+
+        if 'optim@frontface' in rslts.keys(): 
             # print(f'FMP test Result:')
-            df = rslts['fmp_prefix'].copy()
+            df = rslts['optim@frontface'].copy()
             for col in ['pf','bm','excess','annualized','mdd','te']:  df[col] = df[col].map(lambda x:f'{x:.2%}')
             for col in ['ir','calmar','turnover']:  df[col] = df[col].map(lambda x:f'{x:.3f}')
             FUNC.display.data_frame(df)
@@ -77,7 +79,7 @@ class GroupReturnAnalysis(BaseCallBack):
         rslt = {}
         for bm in ['market' , 'csi300' , 'csi500' , 'csi1000']:
             benchmark = None if bm == 'market' else bm
-            grp = calc_grp_perf(df , benchmark = benchmark , group_num=self.group_num , excess=True)
+            grp = eval_group_perf(df , benchmark = benchmark , group_num=self.group_num , excess=True)
 
             grp = grp.groupby(['factor_name' , 'group'] , observed=False)['group_ret'].mean().reset_index()
             grp[['model_num', 'submodel']] = grp['factor_name'].str.split('.', expand=True) 

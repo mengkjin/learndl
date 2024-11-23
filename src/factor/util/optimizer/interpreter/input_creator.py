@@ -26,7 +26,8 @@ def create_input_benchmark(opt_input : Any) -> np.ndarray | Any:
 
 def create_input_initial(opt_input : Any):
     pf : Port | Any = opt_input.initial_port
-    w0 = pf.weight_align(opt_input.secid) if isinstance(pf , Port) else None
+    w0 = pf.weight_align(opt_input.secid) if isinstance(pf , Port) and not pf.is_emtpy() else np.zeros(len(opt_input.secid))
+    if (w0 == 0).all(): w0 = None
     return w0
 
 def create_input_turn_con(opt_input : Any):

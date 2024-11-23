@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from typing import Any , Optional
 
 from .constr import LinearConstraint , BoundConstraint , TurnConstraint , CovConstraint , ShortConstraint
-from .optim import Accuarcy , Utility
+from ...classes import Accuarcy , Utility
+
+__all__ = ['SolverInput' , 'Relaxer' , 'SolveCond' , 'SolveVars']
 
 def rescale_array(v : np.ndarray , scale_value : float = 1):
     return scale_value * v / (v.sum() + 1e-6)
@@ -61,7 +63,7 @@ class SolverInput:
         if self.relaxer : self.relaxer(self)
         return self
     
-    def utility(self , w : Optional[np.ndarray] = None , prob_type = 'linprog' , turn = True ,  qobj = True , short = True):
+    def utility(self , w : Optional[np.ndarray] = None , prob_type = 'linprog' , turn = True ,  qobj = True , qcon = True , short = True):
         utility = Utility()
         if w is not None:
             utility(alpha = w.dot(self.alpha))
@@ -84,14 +86,14 @@ class SolverInput:
             accuracy(bnd_ub_bias = np.min(self.bnd_con.ub - w))
             accuracy(bnd_lb_bias = np.min(w - self.bnd_con.lb))
             
-            if self.turn_con.dbl is not None:
+            if self.turn_con and self.w0 is not None:
                 accuracy(excess_turn = self.turn_con.dbl - np.abs(w - self.w0).sum())
                 
-            if self.cov_con.te is not None:
+            if self.cov_con is not None and self.cov_con.te is not None and self.wb is not None:
                 optimize_te = np.sqrt(self.cov_con.variance(w - self.wb))
                 accuracy(excess_te = self.cov_con.te - optimize_te)
 
-            if self.short_con.pos is not None:
+            if self.short_con:
                 accuracy(excess_short = self.short_con.pos + np.minimum(0 , w).sum())
 
         return accuracy
@@ -234,3 +236,41 @@ class Relaxer:
         for idx in np.unique(new_index):
             rslt.append(duplicated[new_index == idx])
         return rslt
+
+@dataclass
+class SolveCond:
+    '''
+    additional condition for solver
+    turn : if consider turnover constrains
+    qobj : if consider quad objective for risk aversion
+    qcon : if consider quad constraint for tracking error
+    short : if consider possible short position
+    '''
+    turn : bool = True
+    qobj : bool = True
+    qcon : bool = True
+    short : bool = True
+
+@dataclass
+class SolveVars:
+    '''
+    record number of vars or start position of vars in solver
+    N : weight variable to solve
+    T : turnover variable , 0 or N , must be positive
+    S : shortsell variable , 0 or N , must be positive
+    L : risk model factor variable , 0 or len(cov_con.F) , equals portfolio risk factor exposure
+    Q : risk model quad constraint variable , 0 or 2 , equals portfolio common risk and spec risk
+    '''
+    N : int         # normal variable
+    T : int = 0     # turnover variable
+    S : int = 0     # shortsell variable
+    L : int = 0     # model factor
+    Q : int = 0     # quadprog factor
+
+    def start_of(self):
+        start_of   = SolveVars(0)
+        start_of.T = start_of.N + self.N
+        start_of.S = start_of.T + self.T
+        start_of.L = start_of.S + self.S
+        start_of.Q = start_of.L + self.L
+        return start_of

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any , Literal
 
 from . import path_structure as PATH
-from ..project import THIS_IS_SERVER
+from ..project_setting import THIS_IS_SERVER
 
 SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
 SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
@@ -16,10 +16,10 @@ SAVE_OPT_NORM : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
 SAVE_OPT_MODEL: Literal['pt'] = 'pt'
 
 DB_BY_NAME  : list[str] = ['information_js' , 'information_ts']
-DB_BY_DATE  : list[str] = ['models' , 
+DB_BY_DATE  : list[str] = ['models' , 'sellside' ,
                            'trade_js' , 'labels_js' , 'benchmark_js' , 
                            'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 
-                           'sellside']  
+                           ]  
 
 DB_ALTERNATIVES : dict[str , str] = {
     'trade_ts' : 'trade_js' ,

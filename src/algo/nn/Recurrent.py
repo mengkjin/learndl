@@ -286,7 +286,7 @@ class multi_rnn_mapping(nn.Module):
 class gru(rnn_univariate):
     def __init__(self , input_dim , hidden_dim , **kwargs):
         kwargs.update({'rnn_type' : 'gru'})
-        super().__init__(input_dim , hidden_dim , **kwargs)
+        super().__init__(input_dim , hidden_dim , **kwargs )
         
 class lstm(rnn_univariate):
     def __init__(self , input_dim , hidden_dim , **kwargs):

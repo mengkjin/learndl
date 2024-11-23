@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
 from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
-from .general_model import GeneralModel
+from .general import GeneralModel
+from .risk_model import RISK_MODEL
+
+__all__ = ['AlphaModel' , 'Amodel']
 
 @dataclass
 class Amodel:
@@ -23,6 +26,7 @@ class Amodel:
     def __len__(self): return len(self.alpha)
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},date={self.date},length={len(self)})'
+    def get_model(self , *args , **kwargs): return self
     def copy(self): return deepcopy(self)
     def align(self , secid : np.ndarray | Any = None , inplace = False , nan = 0.):
         if secid is None: return self
@@ -42,6 +46,13 @@ class Amodel:
         new = self if inplace else self.copy()
         new.alpha = zscore(winsorize_by_dist(fill_na_as_const(new.alpha) , winsor_rng=0.5))
         return new
+
+    def to_dataframe(self , industry = False , na_industry_as : Any = None):
+        df = pd.DataFrame({'secid' : self.secid , 'alpha' : self.alpha})
+        if industry: 
+            df['industry'] = RISK_MODEL.get(self.date).industry(self.secid)
+            if na_industry_as is not None: df['industry'] = df['industry'].fillna(na_industry_as)
+        return df
 
     @classmethod
     def create_random(cls , date : int , secid : np.ndarray | Any = None):

@@ -2,51 +2,57 @@ import datetime
 from typing import Any , Literal
 
 from src.factor.calculator import StockFactorHierarchy
-from src.factor.analytic import PerfManager , FmpManager
+from src.factor.analytic import FactorPerfManager , FmpOptimManager , FmpTopManager , FactorTestAPI
 from src.basic import PATH
 from src.data import DATAVENDOR
 
-def _project_path(prefix : str):
-    start_time = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-    return PATH.result.joinpath(f'{prefix}_{start_time}')
+def get_random_factor(start_dt = 20240101 , end_dt = 20240331 , step = 5 , default_random_n = 2):
+    return DATAVENDOR.random_factor(start_dt , end_dt , step , default_random_n).to_dataframe()
 
-def get_factor_vals(names = None ,
-              factor_type : Literal['factor' , 'pred'] = 'factor' , 
-              start_dt = 20240101 , end_dt = 20240531 , step = 5 ,
-              default_random_n = 2):
-    if names is None:
-        factor_val = DATAVENDOR.random_factor(start_dt , end_dt , step , default_random_n).to_dataframe()
-    else:
-        factor_val = DATAVENDOR.real_factor(factor_type , names , start_dt , end_dt , step).to_dataframe()
-    return factor_val
+def get_real_factor(names = None ,
+                    factor_type : Literal['factor' , 'pred'] = 'factor' , 
+                    start_dt = 20240101 , end_dt = 20240331 , step = 5):
+    assert names is not None , 'Names are required for real factor!'
+    return DATAVENDOR.real_factor(factor_type , names , start_dt , end_dt , step).to_dataframe()
 
-def perf_test(names = None ,
-              factor_type : Literal['factor' , 'pred'] = 'factor' , 
-              benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
-              start_dt = 20240101 , end_dt = 20240531 , step = 5 ,
-              write_down = True , display_figs = False):
-    project_path = _project_path('perf_test')
-    factor_val = get_factor_vals(names , factor_type , start_dt , end_dt , step)
-
-    pm = PerfManager.run_test(factor_val , benchmark)
-    if write_down:   pm.write_down(project_path)
-    if display_figs: pm.display_figs()
+def get_factor_vals(names = None , factor_type : Literal['factor' , 'pred'] = 'factor' , 
+                     start_dt = 20240101 , end_dt = 20240331 , step = 5 , verbosity = 1):
     
-    return pm
+    if names is None:
+        if verbosity > 0: print(f'Getting random factor values...')
+        return DATAVENDOR.random_factor(start_dt , end_dt , step).to_dataframe()
+    else:
+        if verbosity > 0: print(f'Getting factor values for {names}...')
+        return DATAVENDOR.real_factor(factor_type , names , start_dt , end_dt , step).to_dataframe()
 
-def fmp_test(names = None ,
-             factor_type : Literal['factor' , 'pred'] = 'factor' , 
-             benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
-             start_dt = 20240101 , end_dt = 20240531 , step = 5 ,
-             write_down = True , display_figs = False):
-    project_path = _project_path('fmp_test')
-    factor_val = get_factor_vals(names , factor_type , start_dt , end_dt , step)
-    pm = FmpManager.run_test(factor_val , benchmark , verbosity=2)
-
-    if write_down:   pm.write_down(project_path)
-    if display_figs: pm.display_figs()
-    return pm
-
-def factor_hierarchy():
-    return StockFactorHierarchy()
-
+class FactorAPI:
+    class Test:
+        @staticmethod
+        def FactorPerf(names = None ,
+                       factor_type : Literal['factor' , 'pred'] = 'factor' , 
+                       benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
+                       start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
+                       write_down = True , display_figs = False , verbosity = 1 , **kwargs):
+            factor_val = get_factor_vals(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
+            return FactorTestAPI.FactorPerf(factor_val , benchmark , write_down , display_figs , verbosity , **kwargs)
+        
+        @staticmethod
+        def FmpOptim(names = None , factor_type : Literal['factor' , 'pred'] = 'factor' , 
+                     benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
+                     start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
+                     write_down = True , display_figs = False , verbosity = 1 , **kwargs):
+            factor_val = get_factor_vals(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
+            return FactorTestAPI.FmpOptim(factor_val , benchmark , write_down , display_figs , verbosity , **kwargs)
+        
+        @staticmethod
+        def FmpTop(names = None , factor_type : Literal['factor' , 'pred'] = 'factor' , 
+                   benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
+                   start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
+                   write_down = True , display_figs = False , verbosity = 1 , **kwargs):
+            factor_val = get_factor_vals(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
+            return FactorTestAPI.FmpTop(factor_val , benchmark , write_down , display_figs , verbosity , **kwargs)
+    
+    @classmethod
+    def factor_hierarchy(cls):
+        return StockFactorHierarchy()
+    

@@ -1,37 +1,49 @@
 import os , shutil , yaml , time
 from pathlib import Path
 
-from ..project import MAIN_PATH
+from ..project_setting import MAIN_PATH
 
 # variables
-
+main        = MAIN_PATH
 FACTOR_DESTINATION_LAPTOP = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
 FACTOR_DESTINATION_SERVER = None # MAIN_PATH.joinpath('results' , 'Alpha')
 
-main        = MAIN_PATH
+# data folder and subfolders
 data        = main.joinpath('data')
 database    = data.joinpath('DataBase')
-
+export      = data.joinpath('Export')
 interim     = data.joinpath('Interim')
+miscel      = data.joinpath('Miscellaneous')
+updater     = data.joinpath('Updater')
+
 block       = interim.joinpath('DataBlock')
 batch       = interim.joinpath('MiniBatch')
 dataset     = interim.joinpath('DataSet')
 norm        = interim.joinpath('HistNorm')
 
-updater     = data.joinpath('Updater')
-
-export      = data.joinpath('Export')
 hidden      = export.joinpath('hidden_feature')
 factor      = export.joinpath('stock_factor')
 preds       = export.joinpath('model_prediction')
 
-miscel      = data.joinpath('Miscellaneous')
-
+# config folder and subfolders
 conf        = main.joinpath('configs')
+
+# logs folder and subfolders
 logs        = main.joinpath('logs')
+log_main    = logs.joinpath('main')
+log_optuna  = logs.joinpath('optuna')
+log_update  = logs.joinpath('update')
+log_tensor  = logs.joinpath('tensorboard')
+
+# models folder and subfolders
 model       = main.joinpath('models')
+
+# results folder and subfolders
 result      = main.joinpath('results')
-boardsql    = main.joinpath('board_sqls')
+rslt_factor = result.joinpath('perf_test')
+rslt_optim    = result.joinpath('factor_port')
+rslt_top    = result.joinpath('top_port')
+rslt_model  = result.joinpath('model_result')
 
 def read_yaml(yaml_file , **kwargs):
     if isinstance(yaml_file , Path) and yaml_file.suffix == '' and yaml_file.with_name(f'{yaml_file.name}.yaml').exists():

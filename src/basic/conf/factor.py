@@ -17,11 +17,21 @@ RISK_INDUS = [
 RISK_COMMON = ['market'] + RISK_INDUS + RISK_STYLE
 
 AVAIL_BENCHMARKS = ['csi300' , 'csi500' , 'csi800' , 'csi1000' , 'csi2000'] 
+BENCHMARK_ORDER = {
+    'none' : 0 ,
+    'default' : 1 ,
+    'market' : 2 ,
+    'csi300' : 3 ,
+    'csi800' : 4 ,
+    'csi500' : 5 ,
+    'csi1000' : 6 ,
+    'csi2000' : 7 ,
+}
 DEFAULT_BENCHMARKS = ['csi300' , 'csi500' , 'csi1000']
 CATEGORIES_BENCHMARKS = ['default' , 'none' , 'market'] + AVAIL_BENCHMARKS
 
 EPS_WEIGHT = 1e-6
-EPS_ACCURACY = 2e-6
+EPS_ACCURACY = 1e-5
 
 TRADE_COST = 0.002
 

@@ -58,15 +58,8 @@ class PortfolioOptimizerInput:
                         benchmark : Optional[Benchmark | Portfolio | Port] = None , init_port : Port | Any = None):
 
         self.model_date = model_date
-        self.risk_model = RISK_MODEL.get(model_date)
-
-        if isinstance(alpha_model , AlphaModel):
-            self.alpha_model = alpha_model.get(model_date)
-        elif isinstance(alpha_model , Amodel):
-            self.alpha_model = alpha_model
-        else:
-            self.alpha_model = Amodel.create_random(model_date , self.risk_model.universe)
-        self.alpha_model = self.alpha_model.preprocess()
+        self.risk_model = RISK_MODEL.get_model(model_date)
+        self.alpha_model = alpha_model.get_model(model_date).preprocess()
         
         self.initial_port = init_port
         self.secid = self.risk_model.universe

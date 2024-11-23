@@ -57,7 +57,7 @@ class BatchDisplay(BaseCallBack):
             
 class StatusDisplay(BaseCallBack):
     '''display epoch and event information'''
-    RESULT_PATH = PATH.result.joinpath('model_results.yaml')
+    RESULT_PATH = PATH.rslt_model.joinpath('model_results.yaml')
     SUMMARY_NDIGITS : ClassVar[dict[str,int]] = {'Avg':4,'Sum':2,'Std':4,'T':2,'IR':4}
 
     def __init__(self , trainer , **kwargs) -> None:

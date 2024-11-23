@@ -196,4 +196,4 @@ class HiddenExtractingModel(ModelPath):
     def MODELS(cls):
         return [cls(**hid_model) for hid_model in update_models['HID_MODELS']]
         
-update_models = CONF.load('schedule' , 'update_models')
+update_models = CONF.schedule('update_models')

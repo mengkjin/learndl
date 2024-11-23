@@ -1,2 +1,3 @@
 from .classes import *
-from .optimizer import PortfolioOptimizer , PortOptimResult
+from .optimizer import PortfolioOptimizer
+from .generator import PortfolioGenerator

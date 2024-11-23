@@ -1,6 +1,4 @@
-from src.basic import THIS_IS_SERVER
-from src.data import (DataProcessor , DataUpdater , TushareDownloader , OtherSourceDownloader ,
-                      ClassicLabelsUpdater)
+from src.data import DataDownloader , JsUpdater , DataUpdater , DataProcessor
 from src.factor.calculator import FactorModelUpdater
 
 class DataAPI:
@@ -11,19 +9,26 @@ class DataAPI:
         a. for laptop, transform data from R dataset and SQL to Database, create Updater's in './data/DataBase'
         b. for server, move Updater's to Database'
         '''
-        print('update data: ' + '*' * 20)
-        if THIS_IS_SERVER:
-            DataUpdater.update_server()
-        else:
-            DataUpdater.update_laptop()
+        # download data from tushare and other sources
+        print('download data: ' + '*' * 20)
+        DataDownloader.proceed()
         print('-' * 80)
-        TushareDownloader.proceed()
-        OtherSourceDownloader.proceed()
+
+        # update data from js updaters
+        print('fetch js data: ' + '*' * 20)
+        JsUpdater.proceed()
         print('-' * 80)
+
+        # update other datas
+        print('update other datas: ' + '*' * 20)
+        DataUpdater.proceed()
+        print('-' * 80)
+
+        # update models
+        print('update factor models: ' + '*' * 20)
         FactorModelUpdater.proceed()
         print('-' * 80)
-        ClassicLabelsUpdater.proceed()
-        print('-' * 80)
+
         
     @staticmethod
     def prepare_predict_data(): 

@@ -244,9 +244,9 @@ def gp_namespace(gp_params):
             gp_space.tensors.universe   = ~CP.isnan() 
             gp_space.tensors.labels_raw = gp_labels_raw(CP , gp_space.tensors.size , gp_space.tensors.indus)
             os.makedirs(defaults.DIR_pack , exist_ok=True)
-            saved_data = {**gp_space.subset(['gp_argnames' , 'gp_inputs'] , require = True) ,
-                          **gp_space.tensors.subset(['size' , 'indus' , 'labels_raw' , 'universe'] , require = True) ,
-                          **gp_space.records.subset(['df_index' , 'df_columns'] , require = True) ,}
+            saved_data = (gp_space.subset(['gp_argnames' , 'gp_inputs'] , require = True) |
+                          gp_space.tensors.subset(['size' , 'indus' , 'labels_raw' , 'universe'] , require = True) |
+                          gp_space.records.subset(['df_index' , 'df_columns'] , require = True) )
             torch.save(saved_data , package_path)
 
     if gp_space.param.verbose: print(f'  --> {len(gp_space.param.gp_fac_list)} factors, {len(gp_space.param.gp_raw_list)} raw data loaded!')

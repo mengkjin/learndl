@@ -8,8 +8,7 @@ from typing import Any , Iterator , Optional
 from src.basic import CONF , PATH , Timer , CALENDAR
 from src.func.primas import neutralize_2d , process_factor
 
-from .classes import DataBlock
-from .loader import BlockLoader
+from .util import DataBlock , BlockLoader
 
 TRAIN_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']
 PREDICT_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']
@@ -39,6 +38,10 @@ class DataProcessor:
         for blk in self.blocks:
             yield blk , select_processor(blk)
     
+    @classmethod
+    def proceed(cls):
+        return cls.main(predict = True)
+
     @classmethod
     def main(cls , predict = False, confirm = 0 , parser = None , data_types : Optional[list[str]] = None):
         if parser is None:

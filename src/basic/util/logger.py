@@ -1,6 +1,5 @@
 import logging , sys
 import colorlog
-from pathlib import Path
 
 from .. import path as PATH
 from .. import conf as CONF
@@ -20,7 +19,7 @@ class Logger(logging.RootLogger):
     @staticmethod
     def _init_logger(test_output = False):
         config_logger = CONF.glob('logger')
-        new_path = PATH.logs.joinpath(config_logger['file']['param']['filename'])
+        new_path = PATH.log_main.joinpath(config_logger['file']['param']['filename'])
         config_logger['file']['param']['filename'] = str(new_path)
         new_path.parent.mkdir(exist_ok=True)
         log = logging.getLogger(config_logger['name'])
@@ -76,7 +75,7 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
 class DualPrinter:
     '''change print target to both terminal and file'''
     def __init__(self, filename : str):
-        self.filename = PATH.logs.joinpath(filename)
+        self.filename = PATH.log_update.joinpath(filename)
         self.terminal = sys.stdout
         self.log = open(self.filename, "w")
 
