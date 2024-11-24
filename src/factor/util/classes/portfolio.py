@@ -48,7 +48,7 @@ class Portfolio:
         return self.weight
         
     def append(self , port : Port , override = False , ignore_name = False):
-        assert ignore_name or self.name == port.name , (self.name , port.name)
+        assert ignore_name or port.name in ['none' , 'empty'] or self.name == port.name , (self.name , port.name)
         assert override or (port.date not in self.ports.keys()) , (port.name , port.date)
         if port.is_emtpy(): return
         self.ports[port.date] = port
@@ -70,7 +70,7 @@ class Portfolio:
             use_date = self.latest_avail_date(date) if latest else date
             port = self.ports.get(use_date , None)
         if port is None: 
-            return Port.none_port(date)
+            return Port.none_port(date , self.name)
         else:
             return port.evolve_to_date(date)
     @classmethod

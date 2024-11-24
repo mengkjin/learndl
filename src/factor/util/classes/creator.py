@@ -26,7 +26,7 @@ class PortCreator(ABC):
                detail_infos = True) -> 'PortCreateResult': 
         self.model_date = model_date
         self.alpha_model = alpha_model if alpha_model is not None else Amodel.create_random(model_date)
-        self.init_port = Port.none_port(model_date) if init_port is None else init_port
+        self.init_port = Port.none_port(model_date , self.name) if init_port is None else init_port
         self.value = self.init_port.value
         if benchmark is None:
             self.bench_port = Port.none_port(model_date)
@@ -91,7 +91,7 @@ class Accuarcy:
         self.add(**kwargs)
 
     def cond_expr(self , v): return ('(√)' if v >= -CONF.EPS_ACCURACY else '(X)') + str(v)
-    def __bool__(self): return all([v >= -CONF.EPS_ACCURACY for v in self.component.values()]) if self.component else False
+    def __bool__(self): return self.accurate
     def __call__(self, **kwargs): return self.add(**kwargs)
     def __repr__(self): 
         return (',\n' + ' ' * 10).join([
@@ -105,7 +105,7 @@ class Accuarcy:
 
     @property
     def accurate(self):
-        l = [v >= -1e-6 for v in self.component.values() if v is not None]
+        l = [v >= -CONF.EPS_ACCURACY for v in self.component.values() if v is not None]
         return all(l) if l else False
     
 @dataclass

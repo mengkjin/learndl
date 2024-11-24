@@ -261,7 +261,7 @@ class Attribution:
         if risk_model.regressed != target_date: risk_model = risk_model.regress_fut_ret(target_date)
         if risk_model.futret is None: return cls(risk_model.next_date , risk_model.regressed)
 
-        benchport = bench.port if bench else Port.EMPTY_PORT
+        benchport = Port.none_port(risk_model.date).port if bench is None else bench.port
         weight = port.port.merge(benchport , on='secid' , how='outer').set_index('secid').fillna(0)
         weight.columns = ['portfolio' , 'benchmark']
         weight['active'] = weight['portfolio'] - weight['benchmark']

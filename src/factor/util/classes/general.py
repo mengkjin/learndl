@@ -51,12 +51,14 @@ class GeneralModel(ABC):
 
 class Port:
     '''portfolio realization of one day'''
-    EMPTY_PORT = pd.DataFrame(columns=['secid','weight']).astype({'secid':int,'weight':float})
 
     def __init__(self , port : Optional[pd.DataFrame] , date : int = -1 , 
                  name : str = 'default' , value : float | Any = None) -> None:
         self.exists = port is not None 
-        port = self.EMPTY_PORT if port is None else port.groupby('secid')['weight'].sum().reset_index()
+        if port is None or port.empty:
+            port = pd.DataFrame(columns=['secid','weight']).astype({'secid':int,'weight':float})
+        else:
+            port = port.groupby('secid')['weight'].sum().reset_index()
         self.port = port[port['weight'] != 0]
         self.date = date
         self.name = name
@@ -149,9 +151,6 @@ class Port:
 
     @classmethod
     def none_port(cls , date : int , name = 'none'): return cls(None , date , name)
-
-    @classmethod
-    def empty_port(cls , date : int , name = 'empty'): return cls(cls.EMPTY_PORT , date , name)
     
     @property
     def port_with_date(self):

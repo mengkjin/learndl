@@ -58,10 +58,10 @@ class Benchmark(Portfolio):
         return self
 
     def get(self , date : int , latest = True):
-        if self.name in self.NONE: return Port.none_port(date)
+        if self.name in self.NONE: return Port.none_port(date , self.name)
         port = self.ports.get(date , None)
         if port is not None: return port
-        if not latest: return Port.none_port(date)
+        if not latest: return Port.none_port(date , self.name)
         use_date = self.latest_avail_date(date)
         if use_date in self.ports:
             port = self.ports[use_date].evolve_to_date(date)
@@ -70,7 +70,7 @@ class Benchmark(Portfolio):
             if use_date != date: self.append(port)
             self.benchmark_attempted_dates.append(use_date)
         else:
-            port = Port.none_port(date)
+            port = Port.none_port(date , self.name)
         port = port.evolve_to_date(date)
         assert port.date == date , (port.date , date)
         self.append(port)
@@ -86,7 +86,7 @@ class Benchmark(Portfolio):
         return weight
     
     def factor_mask(self , factor_val : DataBlock | pd.DataFrame):
-        if not self: return factor_val
+        if not self or not self.ports: return factor_val
         if isinstance(factor_val , DataBlock): factor_val = factor_val.to_dataframe()
         factor_list = factor_val.columns.to_list()
         secid = factor_val.index.get_level_values('secid').unique().values
@@ -103,7 +103,7 @@ class Benchmark(Portfolio):
             if default_config:
                 return cls.day_port(default_config , model_date)
             else:
-                return Port.empty_port(model_date)
+                return Port.none_port(model_date)
         elif isinstance(bm , Port):
             return bm
         elif isinstance(bm , Benchmark):
