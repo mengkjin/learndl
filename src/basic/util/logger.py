@@ -9,12 +9,8 @@ class Logger(logging.RootLogger):
     _instance = None
     def __new__(cls, *args , **kwargs):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._init_logger()
+            cls._instance = cls._init_logger()
         return cls._instance
-    
-    def __init__(self , *args , **kwargs):
-        super().__init__(0)
 
     @staticmethod
     def _init_logger(test_output = False):
@@ -98,5 +94,5 @@ class DualPrinter:
         self.log.close()
 
     def contents(self):
-        with open(self.log.name , 'r') as f:
+        with open(self.filename , 'r') as f:
             return f.read()

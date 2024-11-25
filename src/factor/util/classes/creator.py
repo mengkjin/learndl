@@ -83,20 +83,27 @@ class Utility:
         l = [v for v in self.component.values()]
         return sum(l) if l else 0
     
-class Accuarcy:
+class Accuracy:
     '''record custom optimization accuracy'''
+    EPS = 1e-5
+    EPS_DICT = {'excess_turn' : 1e-4}
+
     def __init__(self , **kwargs) -> None:
         '''input any numerical component of accuracy function'''
         self.component = {}
         self.add(**kwargs)
 
-    def cond_expr(self , v): return ('(√)' if v >= -CONF.EPS_ACCURACY else '(X)') + str(v)
+    def cond_expr(self , k : str , v): 
+        return ('(√)' if self.cond_assess(k , v) else '(X)') + str(v)
+    def cond_assess(self , k : str , v):
+        if v is None: return True
+        return v >= -self.EPS_DICT.get(k , self.EPS)
     def __bool__(self): return self.accurate
     def __call__(self, **kwargs): return self.add(**kwargs)
     def __repr__(self): 
         return (',\n' + ' ' * 10).join([
             f'{self.__class__.__name__}(Is Accurate={bool(self)}' ,
-            *[f'{k}={self.cond_expr(v)}' for k,v in self.component.items()]
+            *[f'{k}={self.cond_expr(k , v)}' for k,v in self.component.items()]
         ])
     def __mul__(self , other):
         for key , val in self.component.items(): self.component[key] = val * other
@@ -105,8 +112,7 @@ class Accuarcy:
 
     @property
     def accurate(self):
-        l = [v >= -CONF.EPS_ACCURACY for v in self.component.values() if v is not None]
-        return all(l) if l else False
+        return all([self.cond_assess(k , v) for k , v in self.component.items()])
     
 @dataclass
 class PortCreateResult:
@@ -114,13 +120,13 @@ class PortCreateResult:
     is_success  : bool = False
     status      : Literal['optimal', 'max_iteration', 'stall'] | Any = ''
     utility     : Utility | Any = None
-    accuracy    : Accuarcy | Any = None
+    accuracy    : Accuracy | Any = None
     analytic    : RiskAnalytic | Any = None
     time        : dict[str,float] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.utility is None: self.utility = Utility()
-        if self.accuracy is None: self.accuracy = Accuarcy()
+        if self.accuracy is None: self.accuracy = Accuracy()
 
     @property
     def name(self): return self.port.name

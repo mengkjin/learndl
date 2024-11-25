@@ -6,7 +6,7 @@ from dataclasses import dataclass , field
 from typing import Any , ClassVar , Literal , Optional
 
 from src.basic import SILENT
-from src.basic.conf import EPS_ACCURACY , RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
+from src.basic.conf import RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
 from .general import GeneralModel , Port
 

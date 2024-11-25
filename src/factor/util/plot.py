@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -113,7 +114,7 @@ class PlotFactorData:
             return ''
 
 def plot_table(df : pd.DataFrame , int_cols = [] , pct_cols = [] , flt_cols = [] , capitalize = True , 
-               index_width = 1. , fontsize = 8 , pct_ndigit = 2 , flt_ndigit = 3 , emph_last_row = True , 
+               index_width = 1. , fontsize = 8 , pct_ndigit = 2 , flt_ndigit = 3 , emph_last_row = False , 
                column_definitions : list[ColumnDefinition] = [] , 
                stripe_by : str | list[str] | Literal[1] | None = None , 
                ignore_cols : list[str] | None = None , stripe_colors = ['#ffffff' , '#a2cffe']):
@@ -176,19 +177,16 @@ def set_xaxis(ax : Axes , index : Any = None , labels = None , rotation : float 
     tick_args : dict[str , Any] = {}
     title_args : dict[str , Any] = {}
     if index is not None:  
-        if labels is not None: 
-            assert len(index) == len(labels) , f'len(ticks) {len(index)} != len(labels) {len(labels)}'
-
         if len(index) == 0: 
-            ticks = []
+            ax.set_xticks([])
+        elif labels is not None: 
+            assert len(index) == len(labels) , f'len(ticks) {len(index)} != len(labels) {len(labels)}'
+            ax.set_xticks(index , labels = labels)
         else:
-            num_ticks = min(num_ticks , len(index))
-            ticks = index[::max(1,len(index)//num_ticks)]
-
-        if labels is not None:
-            num_ticks = min(num_ticks , len(labels))
-            labels = labels[::max(1,len(labels)//num_ticks)]
-        ax.set_xticks(ticks , labels = labels)
+            ticks = np.unique(index)
+            num_ticks = min(num_ticks , len(ticks))
+            ticks = ticks[::max(1,len(index)//num_ticks)]
+            ax.set_xticks(ticks)
 
     if rotation is not None:ax.xaxis.set_tick_params(rotation=rotation)
     if formatter := axis_formatter(format , digits): ax.xaxis.set_major_formatter(formatter)

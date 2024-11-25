@@ -22,7 +22,7 @@ if __name__ == '__main__':
     # 
     # update_main()
         
-    with DualPrinter('daily_update.txt') as printer:
+    with DualPrinter(f'daily_update.{datetime.now().strftime("%Y%m%d")}.txt') as printer:
         try:
             DataAPI.update()
             ModelAPI.update()

@@ -44,6 +44,9 @@ class BaseCalculator(ABC):
         self.calc_rslt = self.calculator()(*args , **kwargs)
         return self
     def plot(self , show = False , verbosity = 0): 
+        if self.calc_rslt.empty: 
+            self.figs = {}
+            return self
         figs = self.plotter()(self.calc_rslt , show = show)
         self.figs = {'all':figs} if isinstance(figs , Figure) else figs
         if verbosity > 0: print(f'    --->{self.__class__.__name__} plot Finished!')

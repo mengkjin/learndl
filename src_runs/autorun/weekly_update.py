@@ -21,7 +21,7 @@ if __name__ == '__main__':
     # 
     # update_main()
         
-    with DualPrinter('daily_update.txt') as printer:
+    with DualPrinter(f'weekly_update.{datetime.now().strftime("%Y%m%d")}.txt') as printer:
         try:
             DataAPI.reconstruct_train_data()
             ModelAPI.update_models()

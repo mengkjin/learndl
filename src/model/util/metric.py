@@ -15,6 +15,36 @@ DISPLAY_CHECK  = True # will display once if true
 DISPLAY_RECORD = {'loss' : {} , 'score' : {} , 'penalty' : {}}
 METRIC_FUNC    = {'mse':mse ,'pearson':pearson,'ccc':ccc,'spearman':spearman,}
 
+
+def slice_data(label , pred , weight = None , nan_check : bool = False , 
+               which_head : Optional[int] = None , training = False) -> tuple[Tensor , Tensor , Optional[Tensor]]:
+    '''each element return ith column, if negative then return raw element'''
+    if nan_check: label , pred , weight = slice_data_nonnan(label , pred , weight)
+    label  = slice_data_col(label , None if training else 0)
+    pred   = slice_data_col(pred  , None if training else which_head)
+    weight = slice_data_col(weight, None if training else which_head)
+
+    if pred.ndim > label.ndim:
+        pred = pred.nanmean(dim = -1)
+        if weight is not None: weight = weight.nanmean(dim = -1)
+    assert label.shape == pred.shape , (label.shape , pred.shape)
+    return label , pred , weight
+
+def slice_data_col(data : Optional[Tensor] , col : Optional[int] = None) -> Any:
+    return data if data is None or col is None else data[...,col]
+    
+def slice_data_nonnan(*args , print_all_nan = False):
+    nanpos = False
+    for arg in args:
+        if arg is not None: nanpos += arg.isnan()
+    if isinstance(nanpos , Tensor) and nanpos.any():
+        if nanpos.ndim > 1: nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
+        if print_all_nan and nanpos.all(): 
+            print('Encountered all nan inputs in metric calculation!')
+            [print(arg) for arg in args]
+        args = [None if arg is None else arg[~nanpos] for arg in args]
+    return args
+
 @dataclass(slots=True)
 class MetricList:
     name : str
@@ -183,7 +213,7 @@ class _MetricCalculator(ABC):
                  dim : int = 0 , nan_check : bool = False , which_head : Optional[int] = None, 
                  training = False , **kwargs) -> Tensor:
         '''calculate the resulting metric'''
-        label , pred , weight = self.slice_data(label , pred , weight , nan_check , which_head , training)
+        label , pred , weight = slice_data(label , pred , weight , nan_check , which_head , training)
         v = self.forward(label , pred , weight, dim , **kwargs)
         self.display()
         return v
@@ -197,36 +227,6 @@ class _MetricCalculator(ABC):
         if DISPLAY_CHECK and not DISPLAY_RECORD[self.KEY].get(self.criterion , False):
             print(f'{self.KEY} function of [{self.criterion}] calculated and success!')
             DISPLAY_RECORD[self.KEY][self.criterion] = True
-    
-    @classmethod
-    def slice_data(cls , label , pred , weight = None , nan_check : bool = False , 
-                   which_head : Optional[int] = None , training = False) -> tuple[Tensor , Tensor , Optional[Tensor]]:
-        '''each element return ith column, if negative then return raw element'''
-        if nan_check: label , pred , weight = cls.slice_data_nonnan(label , pred , weight)
-        label  = cls.slice_data_col(label , None if training else 0)
-        pred   = cls.slice_data_col(pred  , None if training else which_head)
-        weight = cls.slice_data_col(weight, None if training else which_head)
-
-        if pred.ndim > label.ndim:
-            pred = pred.nanmean(dim = -1)
-            if weight is not None: weight = weight.nanmean(dim = -1)
-        assert label.shape == pred.shape , (label.shape , pred.shape)
-        return label , pred , weight
-    
-    @staticmethod
-    def slice_data_col(data : Optional[Tensor] , col : Optional[int] = None) -> Any:
-        return data if data is None or col is None else data[...,col]
-        
-    @staticmethod
-    def slice_data_nonnan(*args):
-        nanpos = False
-        for arg in args:
-            if arg is not None: nanpos = arg.isnan() + nanpos
-        if isinstance(nanpos , Tensor) and nanpos.any():
-            if nanpos.ndim > 1: nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
-            if nanpos.all(): [print(arg) for arg in args]
-            args = [None if arg is None else arg[~nanpos] for arg in args]
-        return args
     
 class LossCalculator(_MetricCalculator):
     KEY = 'loss'

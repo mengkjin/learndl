@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any , Optional
 
 from .constr import LinearConstraint , BoundConstraint , TurnConstraint , CovConstraint , ShortConstraint
-from ...classes import Accuarcy , Utility
+from ...classes import Accuracy , Utility
 
 __all__ = ['SolverInput' , 'Relaxer' , 'SolveCond' , 'SolveVars']
 
@@ -78,7 +78,7 @@ class SolverInput:
         return utility
     
     def accuracy(self , w : Optional[np.ndarray] = None):
-        accuracy = Accuarcy()
+        accuracy = Accuracy()
         if w is not None:
             accuracy(lin_ub_bias = np.min(self.lin_con.ub - self.lin_con.A.dot(w)))
             accuracy(lin_lb_bias = np.min(self.lin_con.A.dot(w) - self.lin_con.lb))

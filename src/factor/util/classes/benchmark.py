@@ -75,10 +75,13 @@ class Benchmark(Portfolio):
         assert port.date == date , (port.date , date)
         self.append(port)
         return port
+    
+    def get_dates(self , dates : np.ndarray | list):
+        for d in np.setdiff1d(dates , self.benchmark_attempted_dates): self.get(d , latest = True)
 
     def universe(self , secid : np.ndarray , date : np.ndarray):
         assert self , 'No need of calculating universe for none benchmark'
-        for d in np.setdiff1d(date , self.benchmark_attempted_dates): self.get(d , latest = True)
+        self.get_dates(date)
         weight = self.weight_block().copy().align_secid_date(secid , date).as_tensor()
         weight.values = weight.values.nan_to_num(0) > 0
         weight.feature = ['universe']
@@ -86,11 +89,13 @@ class Benchmark(Portfolio):
         return weight
     
     def factor_mask(self , factor_val : DataBlock | pd.DataFrame):
-        if not self or not self.ports: return factor_val
+        if not self: return factor_val
         if isinstance(factor_val , DataBlock): factor_val = factor_val.to_dataframe()
         factor_list = factor_val.columns.to_list()
         secid = factor_val.index.get_level_values('secid').unique().values
         date  = factor_val.index.get_level_values('date').unique().values
+        self.get_dates(date)
+        if not self.ports: return factor_val
         univ  = self.universe(secid , date).to_dataframe()
         factor_val = factor_val.join(univ)
         factor_val.loc[~factor_val['universe'] , factor_list] = np.nan

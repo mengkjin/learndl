@@ -11,8 +11,7 @@ def get_benchmark(benchmark : Optional[Benchmark | str] = None) -> Optional[Benc
     if isinstance(benchmark , str): benchmark = Benchmark(benchmark)
     return benchmark
 
-def factor_val_breakdown(factor_val : DataBlock | pd.DataFrame , 
-                         benchmark : Optional[Benchmark | str] = None):
+def factor_val_breakdown(factor_val : DataBlock | pd.DataFrame , benchmark : Optional[Benchmark | str] = None):
     benchmark = get_benchmark(benchmark)
     if benchmark: factor_val = benchmark(factor_val)
     if isinstance(factor_val , DataBlock):

@@ -15,22 +15,24 @@ def calc_top_frontface(account : pd.DataFrame):
     return df
 
 def calc_top_perf_curve(account : pd.DataFrame):
-    df = filter_account(account).loc[:,['end','pf','bm','excess']].set_index('end' , append=True)
+    df = filter_account(account).loc[:,['end','pf','bm','excess']]
+    df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
     df[['bm','pf']] = np.log(df[['bm','pf']] + 1)
-    df = df.groupby(df.index.names , observed=True).cumsum()
+    df[['bm','pf','excess']] = df.groupby(df.index.names , observed=True)[['bm','pf','excess']].cumsum()
     df[['bm','pf']] = np.exp(df[['bm','pf']]) - 1
-    df = df.rename_axis(index={'end':'trade_date'})
+    df = df.set_index('trade_date' , append=True)
     return df
 
 def calc_top_perf_excess(account : pd.DataFrame):
     return calc_top_perf_curve(account)
 
 def calc_top_perf_drawdown(account : pd.DataFrame):
-    df = filter_account(account).loc[:,['end','excess']].sort_index()
+    df = filter_account(account).loc[:,['end','excess']]
+    df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
     df['excess'] = df.groupby(df.index.names , observed=True)[['excess']].cumsum()
     df['peak']   = df.groupby(df.index.names , observed=True)[['excess']].cummax()
     df['drawdown'] = df['excess'] - df['peak']
-    df = df.set_index('end' , append=True).loc[:,['excess' , 'drawdown']].rename_axis(index={'end':'trade_date'})
+    df = df.set_index('trade_date' , append=True).loc[:,['excess' , 'drawdown']]
     return df
 
 def calc_top_perf_period(account : pd.DataFrame , period : Literal['year' , 'yearmonth' , 'month'] = 'year'):
@@ -58,30 +60,44 @@ def calc_top_perf_month(account : pd.DataFrame):
     '''Calculate performance stats for each calendar month'''
     return calc_top_perf_period(account , 'month')
 
+def fetch_exp_style(x : pd.Series) -> pd.DataFrame:
+    return x.iloc[0].style.loc[:,['active']]
+
+def fetch_exp_indus(x : pd.Series) -> pd.DataFrame:
+    return x.iloc[0].industry.loc[:,['active']]
+
+def fetch_attrib_source(x : pd.Series) -> pd.DataFrame:
+    return x.iloc[0].source.loc[:,['contribution']].rename_axis('source')
+
+def fetch_attrib_style(x : pd.Series) -> pd.DataFrame:
+    return x.iloc[0].style.loc[:,['contribution']].rename_axis('style')
+
 def calc_top_exp_style(account : pd.DataFrame):
     df = filter_account(account , pos_model_date=True)
     df = df.loc[:,['start','analytic']].set_index('start' , append=True)
-    df = df.groupby(df.index.names , observed=True)['analytic'].apply(lambda x:x.iloc[0].style.loc[:,['active']]).\
-        pivot_table('active' , df.index.names , columns='style' , observed=True).rename_axis(None , axis='columns')
-    return df.rename_axis(index={'start':'trade_date'})
+    df = df.groupby(df.index.names , observed=True)['analytic'].apply(fetch_exp_style).reset_index('style')
+    df = df.pivot_table('active' , df.index.names , columns='style' , observed=True)
+    df = df.rename_axis(None , axis='columns').rename_axis(index={'start':'trade_date'})
+    return df
 
 def calc_top_exp_indus(account : pd.DataFrame):
     df = filter_account(account , pos_model_date=True)
     df = df.loc[:,['start','analytic']].set_index('start' , append=True)
-    df = df.groupby(df.index.names , observed=True)['analytic'].apply(lambda x:x.iloc[0].industry.loc[:,['active']]).\
-        pivot_table('active' , df.index.names , columns='industry' , observed=True).rename_axis(None , axis='columns')
-    return df.rename_axis(index={'start':'trade_date'})
+    df = df.groupby(df.index.names , observed=True)['analytic'].apply(fetch_exp_indus).reset_index('industry')
+    df = df.pivot_table('active' , df.index.names , columns='industry' , observed=True)
+    df = df.rename_axis(None , axis='columns').rename_axis(index={'start':'trade_date'})
+    return df
 
 def calc_top_attrib_source(account : pd.DataFrame):
     df = filter_account(account , pos_model_date=True)
-    df = df.groupby(df.index.names , observed=True)['attribution'].\
-        apply(lambda x:x.iloc[0].source.loc[:,['contribution']].rename_axis('source'))
+    df = df.loc[:,['end','attribution']].set_index('end' , append=True)
+    df = df.groupby(df.index.names , observed=True)['attribution'].apply(fetch_attrib_source).reset_index('end',drop=True)
     df = df.groupby(df.index.names , observed=True).sum()
     return df
 
 def calc_top_attrib_style(account : pd.DataFrame):
     df = filter_account(account , pos_model_date=True)
-    df = df.groupby(df.index.names , observed=True)['attribution'].\
-        apply(lambda x:x.iloc[0].style.loc[:,['contribution']].rename_axis('style'))
+    df = df.loc[:,['end','attribution']].set_index('end' , append=True)
+    df = df.groupby(df.index.names , observed=True)['attribution'].apply(fetch_attrib_style).reset_index('end',drop=True)
     df = df.groupby(df.index.names , observed=True).sum()
     return df

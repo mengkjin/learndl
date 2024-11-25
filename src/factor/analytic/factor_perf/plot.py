@@ -1,9 +1,6 @@
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from matplotlib.axes import Axes
-from matplotlib.ticker import FuncFormatter
-from typing import Any
 
 from src.factor.util.plot import plot_table , get_twin_axes , set_xaxis , set_yaxis , PlotMultipleData , PlotFactorData , sns_lineplot , sns_barplot
 
@@ -11,7 +8,8 @@ def plot_factor_frontface(data : pd.DataFrame , show = False):
     with PlotFactorData(data , drop = [] , title = 'Factor Front Face' , show=show) as (df , fig):
         df = df.reset_index().drop(columns=['sum' , 'year_ret']).set_index('factor_name').sort_values(['factor_name','benchmark']).\
             rename(columns={'avg': 'IC_avg', 'std': 'IC_std','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
-        plot_table(df , flt_cols = ['IC_avg' , 'IC_std' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , capitalize=False , stripe_by='factor_name')
+        plot_table(df , flt_cols = ['IC_avg' , 'IC_std' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 
+                   capitalize=False , stripe_by='factor_name')
     return fig
 
 def plot_factor_ic_curve(data : pd.DataFrame , show = False):
@@ -85,7 +83,8 @@ def plot_factor_ic_year(data : pd.DataFrame , show = False):
             df['direction'] = 'N(-)' if df['direction'].values[-1] < 0 else 'P(+)'
             df = df.rename(columns={'avg': 'IC_avg', 'std': 'IC_std','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, 
                         errors='raise').drop(columns=['sum' , 'year_ret']).rename(columns={'year':'Year'})
-            plot_table(df.set_index('Year') , flt_cols = ['IC_avg' , 'IC_std' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , capitalize=False , stripe_by=1)
+            plot_table(df.set_index('Year') , flt_cols = ['IC_avg' , 'IC_std' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 
+                       capitalize=False , stripe_by=1 , emph_last_row=True)
     return group_plot.fig_dict
 
 def plot_factor_ic_benchmark(data : pd.DataFrame , show = False):
@@ -203,7 +202,7 @@ def plot_factor_group_year(data : pd.DataFrame , show = False):
             plot_table(df.set_index('year') , 
                        int_cols = ['group'] ,
                        pct_cols = ['sum' , 'avg' , 'year_ret', 'std', 'cum_mdd'] , 
-                       flt_cols = ['ir'] , pct_ndigit = 3 , stripe_by=1)
+                       flt_cols = ['ir'] , pct_ndigit = 3 , stripe_by=1 , emph_last_row=True)
     return group_plot.fig_dict
 
 def plot_factor_distrib_curve(data : pd.DataFrame , show = False):

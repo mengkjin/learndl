@@ -16,11 +16,12 @@ class BasePerfCalc(BaseCalculator):
     COMPULSORY_BENCHMARKS : Any = None
     def calc(self , factor_val : DataBlock | pd.DataFrame, benchmarks : Optional[list[Benchmark|Any]] | Any = None , verbosity = 0):
         with self.suppress_warnings():
-            benches = self.use_benchmarks(benchmarks)
             func = self.calculator()
-            rslt = pd.concat([func(factor_val , bm , **self.params).assign(benchmark = bm.name) for bm in benches])
+            bms = self.use_benchmarks(benchmarks)
+            rslt = pd.concat([func(factor_val , bm , **self.params).assign(benchmark = bm.name) for bm in bms])
             rslt['benchmark'] = pd.Categorical(rslt['benchmark'] , categories = CONF.CATEGORIES_BENCHMARKS , ordered=True) 
             self.calc_rslt = rslt.set_index(['factor_name', 'benchmark']).sort_index()
+
         if verbosity > 0: print(f'    --->{self.__class__.__name__} calc Finished!')
         return self
     
@@ -32,14 +33,14 @@ class BasePerfCalc(BaseCalculator):
         return benchmarks
     
 class Factor_FrontFace(BasePerfCalc):
-    COMPULSORY_BENCHMARKS = 'market'
+    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , **kwargs) -> None:
         super().__init__()
     def calculator(self): return Stat.calc_factor_frontface
     def plotter(self): return Plot.plot_factor_frontface
     
 class Factor_IC_Curve(BasePerfCalc):
-    COMPULSORY_BENCHMARKS = Benchmark.DEFAULTS
+    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , nday : int = 10 , lag : int = 2 , ma_windows : int | list[int] = [10,20] ,
                  ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
@@ -48,7 +49,7 @@ class Factor_IC_Curve(BasePerfCalc):
     def plotter(self): return Plot.plot_factor_ic_curve
 
 class Factor_IC_Decay(BasePerfCalc):
-    COMPULSORY_BENCHMARKS = Benchmark.DEFAULTS
+    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , nday : int = 10 , lag_init : int = 2 , lag_num : int = 5 ,
                  ic_type : Literal['pearson' , 'spearman'] = 'pearson' , 
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
@@ -91,7 +92,7 @@ class Factor_IC_Monotony(BasePerfCalc):
     def plotter(self): return Plot.plot_factor_ic_monotony
 
 class Factor_PnL_Curve(BasePerfCalc):
-    COMPULSORY_BENCHMARKS = Benchmark.DEFAULTS
+    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , given_direction : Literal[1,0,-1] = 0 ,
                  weight_type_list : list[str] = ['long' , 'long_short' , 'short'] , **kwargs) -> None:
@@ -115,7 +116,7 @@ class Factor_Style_Corr_Distrib(BasePerfCalc):
     def plotter(self): return Plot.plot_factor_style_corr_distrib
 
 class Factor_Group_Curve(BasePerfCalc):
-    COMPULSORY_BENCHMARKS = Benchmark.DEFAULTS
+    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag = lag , group_num = group_num , ret_type = ret_type)
@@ -123,7 +124,7 @@ class Factor_Group_Curve(BasePerfCalc):
     def plotter(self): return Plot.plot_factor_group_curve
 
 class Factor_Group_Decay(BasePerfCalc):
-    COMPULSORY_BENCHMARKS = Benchmark.DEFAULTS
+    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , nday : int = 10 , lag_init : int = 2 , group_num : int = 10 ,
                  lag_num : int = 5 , ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag_init = lag_init , group_num = group_num , lag_num = lag_num , ret_type = ret_type)
@@ -131,7 +132,7 @@ class Factor_Group_Decay(BasePerfCalc):
     def plotter(self): return Plot.plot_factor_group_decay
 
 class Factor_Group_IR_Decay(BasePerfCalc):
-    COMPULSORY_BENCHMARKS = Benchmark.DEFAULTS
+    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , nday : int = 10 , lag_init : int = 2 , group_num : int = 10 ,
                  lag_num : int = 5 , ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag_init = lag_init , group_num = group_num , lag_num = lag_num , ret_type = ret_type)
@@ -139,7 +140,7 @@ class Factor_Group_IR_Decay(BasePerfCalc):
     def plotter(self): return Plot.plot_factor_group_ir_decay
 
 class Factor_Group_Year(BasePerfCalc):
-    COMPULSORY_BENCHMARKS = Benchmark.DEFAULTS
+    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag = lag , group_num = group_num , ret_type = ret_type)

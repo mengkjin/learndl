@@ -16,7 +16,7 @@ def plot_top_frontface(data : pd.DataFrame , show = False):
     num_pages  : int | Any = num_groups // num_per_page + (1 if num_groups % num_per_page > 0 else 0)
     group_plot = PlotMultipleData(data , group_key = 'factor_name' , max_num = num_per_page)
     for i , sub_data in enumerate(group_plot):     
-        full_title = f'TopPort FMP Prefix Information for Factors (P{i+1}/{num_pages})'
+        full_title = f'TopPort FMP Front Face for Factors (P{i+1}/{num_pages})'
         with PlotFactorData(sub_data , drop = [] , name_key = None , show = show , full_title = full_title) as (df , fig):
             df = df.reset_index([i for i in df.index.names if i])
             df['strategy'] = df.apply(lambda x:'.'.join(x[col] for col in MAJOR_KEYS) , axis=1)
@@ -26,7 +26,7 @@ def plot_top_frontface(data : pd.DataFrame , show = False):
                 fontsize = 7 , index_width = 3 ,
                 column_definitions = [ColumnDefinition(name='lag'       , width=0.5) ,
                                       ColumnDefinition(name='mdd_period', width=2)] , 
-                emph_last_row=False , stripe_by = ['factor_name' , 'benchmark'] , 
+                stripe_by = ['factor_name' , 'benchmark'] , 
                 ignore_cols = ['prefix' , 'factor_name' , 'benchmark' , 'suffix'])
     return group_plot.fig_dict
 
@@ -81,7 +81,7 @@ def plot_top_perf_year(data : pd.DataFrame , show = False):
                 pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                 flt_cols = ['ir','calmar'] , 
                 column_definitions = [ColumnDefinition(name='Mdd_period', width=2)] , 
-                stripe_by = 1)
+                stripe_by = 1 , emph_last_row=True)
     return group_plot.fig_dict
 
 def plot_top_perf_month(data : pd.DataFrame , show = False):
@@ -93,7 +93,7 @@ def plot_top_perf_month(data : pd.DataFrame , show = False):
                 pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                 flt_cols = ['ir','calmar'] , 
                 column_definitions = [ColumnDefinition(name='Mdd_period', width=2)] ,
-                stripe_by = 1)
+                stripe_by = 1 , emph_last_row=True)
     return group_plot.fig_dict
 
 def plot_top_exp_style(data : pd.DataFrame , show = False):

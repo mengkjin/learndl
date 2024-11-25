@@ -5,4 +5,4 @@ from .risk_model import RiskModel , Rmodel , RiskAnalytic , RiskProfile , Attrib
 from .portfolio import Portfolio
 from .benchmark import Benchmark
 
-from .creator import Accuarcy , Utility , PortCreator , PortCreateResult
+from .creator import Accuracy , Utility , PortCreator , PortCreateResult

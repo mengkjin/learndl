@@ -31,7 +31,6 @@ DEFAULT_BENCHMARKS = ['csi300' , 'csi500' , 'csi1000']
 CATEGORIES_BENCHMARKS = ['default' , 'none' , 'market'] + AVAIL_BENCHMARKS
 
 EPS_WEIGHT = 1e-6
-EPS_ACCURACY = 1e-5
 
 TRADE_COST = 0.002
 

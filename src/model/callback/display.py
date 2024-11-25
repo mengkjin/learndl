@@ -118,10 +118,9 @@ class StatusDisplay(BaseCallBack):
         self.config.print_out()
     def on_summarize_model(self):
         assert self.test_summarized
-        df = self.test_df_model
         test_scores = {
-            '{}.{}'.format(*col):'|'.join([f'{k}({round(df[col][k],v)})' for k,v in self.SUMMARY_NDIGITS.items()]) 
-            for col in df.columns}
+            '{}.{}'.format(*col):'|'.join([f'{k}({round(self.summary_df[col][k],v)})' for k,v in self.SUMMARY_NDIGITS.items()]) 
+            for col in self.summary_df.columns}
     
         result = {
             '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
@@ -216,8 +215,8 @@ class StatusDisplay(BaseCallBack):
 
         df_tv = (df_avg / df_std) * (len(self.test_df_date['date'].unique())**0.5)
         df_ir = (df_avg / df_std) * ((240 / 10)**0.5)
-        self.test_df_model = pd.concat([
-            self.test_df_model , 
+
+        self.summary_df = pd.concat([
             df_avg.reset_index().assign(model_date = 'Avg') ,
             df_sum.reset_index().assign(model_date = 'Sum') , 
             df_std.reset_index().assign(model_date = 'Std') ,
@@ -225,22 +224,32 @@ class StatusDisplay(BaseCallBack):
             df_ir.reset_index().assign(model_date = 'IR') ,
         ])
 
-        self.test_df_model['model_date'] = pd.Categorical(self.test_df_model['model_date'] , categories = cat_date, ordered=True) 
-        self.test_df_model['submodel']   = pd.Categorical(self.test_df_model['submodel']   , categories = cat_type, ordered=True) 
-        self.test_df_model = self.test_df_model.rename(columns={'model_date' : 'stat'}).pivot_table(
-            'value' , 'stat' , ['model_num' , 'submodel'] , observed=False)
-
-        rslt = {'by_model' : self.test_df_model}
+        # export excel
+        rslt = {'summary' : self.summary_df , 'by_model' : self.test_df_model}
         for model_num in self.config.model_num_list:
             df : pd.DataFrame = self.test_df_date[self.test_df_date['model_num'] == model_num].pivot_table(
                 'value' , 'date' , 'submodel' , observed=False)
             df_cum = df.cumsum().rename(columns = {submodel:f'{submodel}_cum' for submodel in df.columns})
             df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
             rslt[f'{model_num}'] = df
-
-        df = self.test_df_model.round(4)
-        df.index = df.index.set_names(None)
-        df.columns = pd.MultiIndex.from_tuples([(f'{self.config.model_module}.{num}' , type) for num,type in df.columns])
         FUNC.dfs_to_excel(rslt , self.path_test)
+
+        # display summary
+        if len(self.test_df_model) > 100:
+            # more than 100 rows of test_df_model means the cycle is month / day
+            df = self.summary_df
+        else:
+            df = pd.concat([self.test_df_model , self.summary_df])
+
+        df['model_date'] = pd.Categorical(df['model_date'] , categories = cat_date, ordered=True) 
+        df['submodel']   = pd.Categorical(df['submodel']   , categories = cat_type, ordered=True) 
+        df = df.rename(columns={'model_date' : 'stat'}).pivot_table(
+            'value' , 'stat' , ['model_num' , 'submodel'] , observed=False).round(4)
+        df.index.set_names(None , inplace=True)
+
+        base_name = self.config.model_module
+        if self.config.module_type == 'boost' and self.config.model_booster_optuna: base_name += '.optuna'
+        df.columns = pd.MultiIndex.from_tuples([(f'{base_name}.{num}' , type) for num,type in df.columns])
         FUNC.display.data_frame(df , text_after = f'Test results are saved to {self.path_test}')
+        
         self.test_summarized = True

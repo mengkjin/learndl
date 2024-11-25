@@ -107,7 +107,7 @@ class DataVendor:
     
     @staticmethod
     def file_dates(db_src , db_key , start_dt : int | None = None , end_dt : int | None = None , year : int | None = None):
-        return PATH.db_dates(db_src , db_key , start_dt=start_dt , end_dt=end_dt , year = year)
+        return PATH.db_dates_with_alt(db_src , db_key , start_dt=start_dt , end_dt=end_dt , year = year)
 
     @staticmethod
     def td_within(start_dt : int = -1 , end_dt : int = 99991231 , step : int = 1):
