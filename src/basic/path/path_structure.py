@@ -24,6 +24,7 @@ norm        = interim.joinpath('HistNorm')
 hidden      = export.joinpath('hidden_feature')
 factor      = export.joinpath('stock_factor')
 preds       = export.joinpath('model_prediction')
+fmp         = export.joinpath('factor_model_port')
 
 # config folder and subfolders
 conf        = main.joinpath('configs')
@@ -40,10 +41,13 @@ model       = main.joinpath('models')
 
 # results folder and subfolders
 result      = main.joinpath('results')
-rslt_factor = result.joinpath('perf_test')
-rslt_optim    = result.joinpath('factor_port')
-rslt_top    = result.joinpath('top_port')
-rslt_model  = result.joinpath('model_result')
+rslt_factor = result.joinpath('test').joinpath('perf')
+rslt_optim  = result.joinpath('test').joinpath('optim')
+rslt_top    = result.joinpath('test').joinpath('top')
+monitor     = result.joinpath('monitor')
+
+# some records to upload
+upload      = main.joinpath('upload')
 
 def read_yaml(yaml_file , **kwargs):
     if isinstance(yaml_file , Path) and yaml_file.suffix == '' and yaml_file.with_name(f'{yaml_file.name}.yaml').exists():

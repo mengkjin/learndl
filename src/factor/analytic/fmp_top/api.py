@@ -1,13 +1,9 @@
-import pandas as pd
-import torch
+from typing import Any , Optional
 
-from typing import Any , Literal , Optional
-
-from src.data import DataBlock
-from src.factor.util import AlphaModel , Benchmark
+from src.factor.util import Benchmark , StockFactor
+from src.factor.builder import PortfolioBuilderGroup
 
 from . import calculator as Calc
-from ..builder import PortfolioBuilderGroup
 from ..test_manager import BaseTestManager
 
 class FmpTopManager(BaseTestManager):
@@ -40,18 +36,17 @@ class FmpTopManager(BaseTestManager):
         Calc.Top_Attrib_Style ,
     ]
 
-    def generate(self , factor_val: DataBlock | pd.DataFrame, benchmarks: Optional[list[Benchmark|Any]] | Any = 'defaults' , 
+    def generate(self , factor: StockFactor , benchmarks: Optional[list[Benchmark|Any]] | Any = 'defaults' , 
                  n_bests = [20,30,50,100] , verbosity = 2):
-        if isinstance(factor_val , DataBlock): factor_val = factor_val.to_dataframe()
-        alpha_models = [AlphaModel.from_dataframe(factor_val[[factor_name]]) for factor_name in factor_val.columns]
+        alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)
         self.update_kwargs(n_bests = n_bests , verbosity = verbosity)
         self.portfolio_group = PortfolioBuilderGroup('top' , alpha_models , benchmarks , **self.kwargs)
         self.account = self.portfolio_group.building().accounting().total_account()
 
-    def calc(self , factor_val : pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
+    def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              n_bests = [20,30,50,100] , verbosity = 1 , **kwargs):
-        self.generate(factor_val , benchmark , n_bests = n_bests , verbosity = verbosity)
+        self.generate(factor , benchmark , n_bests = n_bests , verbosity = verbosity)
         for task in self.tasks.values():  task.calc(self.account , verbosity = verbosity - 1) 
         if verbosity > 0: print(f'{self.__class__.__name__} calc Finished!')
         return self

@@ -7,6 +7,7 @@ from typing import Any , Iterator , Optional
 
 from src.basic import CONF , PATH , Timer , CALENDAR
 from src.func.primas import neutralize_2d , process_factor
+from src.func.display import print_seperator
 
 from .util import DataBlock , BlockLoader
 
@@ -78,7 +79,7 @@ class DataProcessor:
             del data_block
             gc.collect()
             print(f'{key} finished! Cost {time.time() - tt1:.2f} Seconds')
-            print('-' * 80)
+            print_seperator()
 
         print(f'Data Processing Finished! Cost {time.time() - t1:.2f} Seconds')
 

@@ -282,7 +282,7 @@ class DataModule(BaseDataModule):
     def train_dataloader(self)   -> BatchDataLoader: return BatchDataLoader(self.loader_dict['train'] , self)
     def val_dataloader(self)     -> BatchDataLoader: return BatchDataLoader(self.loader_dict['valid'] , self)
     def test_dataloader(self)    -> BatchDataLoader: return BatchDataLoader(self.loader_dict['test'] , self)
-    def predict_dataloader(self) -> BatchDataLoader: return BatchDataLoader(self.loader_dict['predict'] , self)
+    def predict_dataloader(self) -> BatchDataLoader: return BatchDataLoader(self.loader_dict['predict'] , self , tqdm = False)
     def extract_dataloader(self) -> BatchDataLoader: return BatchDataLoader(self.loader_dict['extract'] , self)
     
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):

@@ -1,12 +1,9 @@
-import pandas as pd
-
 from typing import Any , Literal , Optional
 
-from src.data import DataBlock
-from src.factor.util import AlphaModel , Benchmark
+from src.factor.util import Benchmark , StockFactor
+from src.factor.builder import PortfolioBuilderGroup
 
 from . import calculator as Calc
-from ..builder import PortfolioBuilderGroup
 from ..test_manager import BaseTestManager
 
 class FmpOptimManager(BaseTestManager):
@@ -40,18 +37,17 @@ class FmpOptimManager(BaseTestManager):
         Calc.Optim_Attrib_Style ,
     ]
 
-    def optim(self , factor_val: DataBlock | pd.DataFrame, benchmarks: Optional[list[Benchmark|Any]] | Any = 'defaults' , 
+    def optim(self , factor: StockFactor , benchmarks: Optional[list[Benchmark|Any]] | Any = 'defaults' , 
               add_lag = 1 , optim_config = None , verbosity = 2):
-        if isinstance(factor_val , DataBlock): factor_val = factor_val.to_dataframe()
-        alpha_models = [AlphaModel.from_dataframe(factor_val[[factor_name]]) for factor_name in factor_val.columns]
+        alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)
         self.update_kwargs(add_lag = add_lag , optim_config = optim_config , verbosity = verbosity)
         self.portfolio_group = PortfolioBuilderGroup('optim' , alpha_models , benchmarks , **self.kwargs)
         self.account = self.portfolio_group.building().accounting().total_account()
 
-    def calc(self , factor_val : pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
+    def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              add_lag = 1 , optim_config : Optional[str | Literal['default' , 'custome']] = None , verbosity = 1 , **kwargs):
-        self.optim(factor_val , benchmark , add_lag = add_lag ,optim_config = optim_config , verbosity = verbosity)
+        self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , verbosity = verbosity)
         for task in self.tasks.values():  task.calc(self.account , verbosity = verbosity - 1) 
         if verbosity > 0: print(f'{self.__class__.__name__} calc Finished!')
         return self

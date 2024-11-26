@@ -13,10 +13,10 @@ class Portfolio:
     '''
     portfolio realization for multiple days
     '''
-    def __init__(self , name : str | Any = 'default' , is_default = False) -> None:
+    def __init__(self , name : str | Any = None) -> None:
         self.name = self.get_object_name(name)
         self.ports : dict[int,Port] = {}
-        self.is_default = is_default
+        self.is_default = name is None
         self.weight_block_completed = False
         self._last_port : Port | None = None
 
@@ -37,7 +37,7 @@ class Portfolio:
     @classmethod
     def random(cls):  
         rand_ps = cls('rand_port')
-        for _ in range(3): rand_ps.append(Port.random() , override = True)
+        for _ in range(3): rand_ps.append(Port.rand_port() , override = True)
         return rand_ps
 
     def weight_block(self):
@@ -79,3 +79,18 @@ class Portfolio:
         elif isinstance(obj , cls): return obj.name
         elif isinstance(obj , str): return obj
         else: raise TypeError(obj)
+
+    @classmethod
+    def from_dataframe(cls , df : pd.DataFrame , name : str | Any = None):
+        if df.empty: return cls(name)
+        df = df.reset_index()
+        assert all(col in df.columns for col in ['name' , 'date' , 'secid' , 'weight']) , \
+            f'expect columns: name , date , secid , weight , got {df.columns.tolist()}'
+        if name is None: 
+            assert df['name'].nunique() == 1 , f'all ports must have the same name , got multiple names: {df["name"].unique()}'
+            name = df['name'][0]
+        else:
+            df = df[df['name'] == name]
+        portfolio = cls(name)
+        [portfolio.append(Port(subdf[['secid' , 'weight']] , date , name)) for date , subdf in df.groupby('date')]
+        return portfolio

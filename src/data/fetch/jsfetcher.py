@@ -6,7 +6,7 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Any , Callable , Literal , Optional
 
-from src.basic import PATH
+from src.basic import PATH , CALENDAR
 from src.data.util import secid_adjust , col_reform , row_filter , adjust_precision , trade_min_reform , trade_min_fillna
 
 @dataclass
@@ -76,10 +76,7 @@ class JSFetcher:
             if len(target_dates):
                 source_dates = source_dates[source_dates >= min(target_dates)]
         if trace > 0 and len(target_dates) > 0: target_dates = target_dates[:-trace]
-
-        new_dates = np.setdiff1d(source_dates , target_dates)
-        if start_dt is not None: new_dates = new_dates[new_dates >= start_dt]
-        if end_dt   is not None: new_dates = new_dates[new_dates <= end_dt  ]
+        new_dates = CALENDAR.slice(CALENDAR.diffs(source_dates , target_dates) , start_dt , end_dt)
 
         return new_dates   
 

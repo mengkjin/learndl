@@ -52,8 +52,8 @@ class GeneralModel(ABC):
 class Port:
     '''portfolio realization of one day'''
 
-    def __init__(self , port : Optional[pd.DataFrame] , date : int = -1 , 
-                 name : str = 'default' , value : float | Any = None) -> None:
+    def __init__(self , port : Optional[pd.DataFrame] , date : int | Any = -1 , 
+                 name : str | Any = 'default' , value : float = 1.) -> None:
         self.exists = port is not None 
         if port is None or port.empty:
             port = pd.DataFrame(columns=['secid','weight']).astype({'secid':int,'weight':float})
@@ -62,7 +62,7 @@ class Port:
         self.port = port[port['weight'] != 0]
         self.date = date
         self.name = name
-        self.value = value if value else 1e7
+        self.value = value
         self.sort()
 
     def __bool__(self): return self.exists
@@ -143,11 +143,10 @@ class Port:
         return cls(df , **kwargs)
     
     @classmethod
-    def random(cls):
-        date = np.random.randint(20200101 , 20231231)
-        name = 'rand_port'
-        port = pd.DataFrame({'secid' : np.random.choice(np.arange(1 , 101) , 30) , 'weight' : np.random.rand(30)})
-        return cls(port,date,name).rescale()
+    def rand_port(cls , date : int | None = None , name : str = 'rand_port' , size : int = 30):
+        date = np.random.randint(20200101 , 20231231) if date is None else date
+        port = pd.DataFrame({'secid' : np.random.choice(DATAVENDOR.secid(date) , size) , 'weight' : np.random.rand(size)})
+        return cls(port , date , name).rescale()
 
     @classmethod
     def none_port(cls , date : int , name = 'none'): return cls(None , date , name)
@@ -160,11 +159,20 @@ class Port:
             return pd.DataFrame(columns=['date','secid','weight']).astype({'date':int,'secid':int,'weight':float})
         
     @property
+    def full_table(self):
+        if len(self.port):
+            return self.port.assign(name = self.name , date = self.date)[['name' , 'date' , 'secid' , 'weight']]
+        else:
+            return pd.DataFrame()
+        
+    @property
     def secid(self): return self.port['secid'].to_numpy()
     @property
     def weight(self): return self.port['weight'].to_numpy()
     @property
     def position(self): return self.port['weight'].sum()
+    @property
+    def holdings(self): return self.value * self.weight
     @property
     def long_position(self): return self.port[self.port['weight'] > 0]['weight'].sum()
     @property

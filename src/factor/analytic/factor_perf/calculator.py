@@ -4,7 +4,7 @@ from typing import Any , Callable , Literal , Optional
 
 from src.basic import CONF
 from src.data import DataBlock
-from src.factor.util import Benchmark
+from src.factor.util import Benchmark , StockFactor
 
 from . import stat as Stat
 from . import plot as Plot
@@ -14,13 +14,11 @@ class BasePerfCalc(BaseCalculator):
     TASK_TYPE = 'factor'
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
     COMPULSORY_BENCHMARKS : Any = None
-    def calc(self , factor_val : DataBlock | pd.DataFrame, benchmarks : Optional[list[Benchmark|Any]] | Any = None , verbosity = 0):
+    def calc(self , factor : StockFactor, benchmarks : Optional[list[Benchmark|Any]] | Any = None , verbosity = 0):
         with self.suppress_warnings():
             func = self.calculator()
-            bms = self.use_benchmarks(benchmarks)
-            rslt = pd.concat([func(factor_val , bm , **self.params).assign(benchmark = bm.name) for bm in bms])
-            rslt['benchmark'] = pd.Categorical(rslt['benchmark'] , categories = CONF.CATEGORIES_BENCHMARKS , ordered=True) 
-            self.calc_rslt = rslt.set_index(['factor_name', 'benchmark']).sort_index()
+            rslt = pd.concat([func(factor.within(bm) , **self.params).assign(benchmark = bm.name) for bm in self.use_benchmarks(benchmarks)])
+            self.calc_rslt = rslt.assign(benchmark = Benchmark.as_category(rslt['benchmark'])).set_index(['factor_name', 'benchmark']).sort_index()
 
         if verbosity > 0: print(f'    --->{self.__class__.__name__} calc Finished!')
         return self

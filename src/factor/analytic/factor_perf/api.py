@@ -1,12 +1,10 @@
-import pandas as pd
+from typing import Any , Optional
 
-from typing import Any , Literal , Optional
-
-from src.data import DataBlock
-from src.factor.util import Benchmark
+from src.factor.util import Benchmark , StockFactor
 
 from . import calculator as Calc
 from ..test_manager import BaseTestManager
+
 class FactorPerfManager(BaseTestManager):
     '''
     Factor Performance Calculator Manager
@@ -50,7 +48,7 @@ class FactorPerfManager(BaseTestManager):
         # Calc.Factor_Distrib_Qtile ,
     ]
 
-    def calc(self , factor_val: DataBlock | pd.DataFrame, benchmarks: Optional[list[Benchmark|Any]] | Any = None , verbosity = 1):
-        for task in self.tasks.values(): task.calc(factor_val , benchmarks , verbosity = verbosity - 1)
+    def calc(self , factor: StockFactor , benchmarks: Optional[list[Benchmark|Any]] | Any = None , verbosity = 1):
+        for task in self.tasks.values(): task.calc(factor , benchmarks , verbosity = verbosity - 1)
         if verbosity > 0: print(f'{self.__class__.__name__} calc Finished!')
         return self

@@ -3,7 +3,8 @@ import pandas as pd
 from typing import Any , Literal
 
 from src import func as FUNC
-from src.factor.analytic import eval_group_perf , FactorTestAPI , TYPE_of_TASK
+from src.factor.util import StockFactor
+from src.factor.analytic import FactorTestAPI , TYPE_of_TASK
 from src.model.util import BaseCallBack , PredRecorder
 
 PRED_RECORD = PredRecorder()
@@ -74,14 +75,12 @@ class GroupReturnAnalysis(BaseCallBack):
     def on_test_end(self):       
         if (df := PRED_RECORD.all_preds).empty: return
         df['factor_name'] = df['model_num'].astype(str) + '.' + df['submodel']
-        df = df.pivot_table('values',['secid','date'],'factor_name')
 
+        factor = StockFactor(df.pivot_table('values',['secid','date'],'factor_name'))
         rslt = {}
         for bm in ['market' , 'csi300' , 'csi500' , 'csi1000']:
-            benchmark = None if bm == 'market' else bm
-            grp = eval_group_perf(df , benchmark = benchmark , group_num=self.group_num , excess=True)
-
-            grp = grp.groupby(['factor_name' , 'group'] , observed=False)['group_ret'].mean().reset_index()
+            grp = factor.within(bm).eval_group_perf(group_num=self.group_num , excess=True).\
+                groupby(['factor_name' , 'group'] , observed=False)['group_ret'].mean().reset_index()
             grp[['model_num', 'submodel']] = grp['factor_name'].str.split('.', expand=True) 
             grp = grp.pivot_table('group_ret',['model_num', 'submodel'],'group' , observed=False).map(lambda x:f'{x:.3%}')
             

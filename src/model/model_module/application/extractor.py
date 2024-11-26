@@ -47,11 +47,8 @@ class ModelHiddenExtractor:
             return self.hidden_model.submodels
     
     @property
-    def model_alias(self):
-        if self.hidden_model.alias is None:
-            return self.hidden_model.name
-        else:
-            return self.hidden_model.alias
+    def hidden_name(self):
+        return self.hidden_model.hidden_name
         
     @property
     def model_dates(self):
@@ -70,22 +67,22 @@ class ModelHiddenExtractor:
         if update:
             model_iter = [(model_date , model_num , submodel) for (model_date , model_num , submodel) 
                         in product(model_dates[:-1] , self.model_nums , self.model_submodels)
-                        if not HiddenPath.target_hidden_path(self.model_alias , model_num , model_date , submodel).exists()]
+                        if not HiddenPath.target_hidden_path(self.hidden_name , model_num , model_date , submodel).exists()]
             model_iter += list(product(model_dates[-1:] , self.model_nums , self.model_submodels))
         else:
             model_iter = list(product(model_dates , self.model_nums , self.model_submodels))
         return model_iter
 
     def extract_hidden(self , model_dates : Optional[list | np.ndarray | int] = None ,
-                       verbose = True , update = True , overwrite = False):
+                       update = True , overwrite = False , silent = False):
         model_iter = self.model_iter(model_dates , update)
         with torch.no_grad():
             for model_date , model_num , submodel in model_iter:
-                hidden_path = HiddenPath(self.model_alias , model_num , submodel)
-                self.model_hidden(hidden_path , model_date , verbose , overwrite)
+                hidden_path = HiddenPath(self.hidden_name , model_num , submodel)
+                self.model_hidden(hidden_path , model_date , overwrite , silent)
         return self
     
-    def model_hidden(self , hidden_path : HiddenPath , model_date :int , verbose = True , overwrite = False) -> pd.DataFrame | None:
+    def model_hidden(self , hidden_path : HiddenPath , model_date :int , overwrite = False , silent = False) -> pd.DataFrame | None:
         model_num , submodel = hidden_path.model_num , hidden_path.submodel
         self.model.load_model(model_num , model_date , submodel)
 
@@ -96,8 +93,8 @@ class ModelHiddenExtractor:
                 exclude_dates = old_hidden_df['date'].unique()
 
         self.data.setup('extract' ,  self.config.model_param[model_num] , model_date , self.backward_days , self.forward_days)
-        loader = self.data.extract_dataloader().filter_dates(exclude_dates=exclude_dates).enable_tqdm(disable = not verbose)      
-        desc = f'Extract {self.model_alias}/{model_num}/{model_date}/{submodel}'
+        loader = self.data.extract_dataloader().filter_dates(exclude_dates=exclude_dates).enable_tqdm(disable = silent)      
+        desc = f'Extract {self.hidden_name}/{model_num}/{model_date}/{submodel}'
         hiddens : list[pd.DataFrame] = []
         for batch_data in loader:
             df = self.model(batch_data).hidden_df(batch_data , self.data.y_secid , self.data.y_date)
@@ -113,16 +110,12 @@ class ModelHiddenExtractor:
         hidden_path.save_hidden_df(hidden_df , model_date)
     
     @classmethod
-    def update_hidden(
-        cls , model_name : str | None = None , update = True , overwrite = False):
-        if model_name is None:
-            print(f'model_name is None, update all hidden models')
-            models = HiddenExtractingModel.MODELS()
-        else:
-            models = [HiddenExtractingModel(model_name)]
+    def update(cls , model_name : str | None = None , update = True , overwrite = False , silent = False):
+        if model_name is None: print(f'model_name is None, update all hidden models')
+        models = HiddenExtractingModel.SelectModels(model_name)
         [print(f'  -->  update hidden feature for {model}') for model in models]
         for model in models:
             extractor = cls(model)
-            extractor.extract_hidden(update = update , overwrite = overwrite)
-            print('-' * 80)
+            extractor.extract_hidden(update = update , overwrite = overwrite , silent = silent)
+            print(f'Finish model [{model}] extracting!')
         return extractor

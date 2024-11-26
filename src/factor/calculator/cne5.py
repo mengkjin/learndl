@@ -400,10 +400,11 @@ class TuShareCNE5_Calculator:
         return self
         
     def updatable_dates(self , job : Literal['exposure' , 'risk']):
-        dates = DATAVENDOR.CALENDAR.trade_dates()
         end_date = np.min([PATH.db_dates('trade_ts' , 'day').max(), PATH.db_dates('trade_ts' , 'day_val').max()])
-        dates = dates[(dates > self.START_DATE) & (dates <= end_date)]
-        
+        dates = DATAVENDOR.CALENDAR.diffs(self.START_DATE , end_date , self.updated_dates(job))
+        return dates
+    
+    def updated_dates(self , job : Literal['exposure' , 'risk']):
         all_updated : np.ndarray | Any = None
         if job == 'exposure':
             check_list = ['tushare_cne5_exp','tushare_cne5_coef','tushare_cne5_res']
@@ -415,7 +416,7 @@ class TuShareCNE5_Calculator:
         for x in check_list:
             updated = PATH.db_dates('models' , x)
             all_updated = updated if all_updated is None else np.intersect1d(all_updated , updated)
-        return np.setdiff1d(dates , all_updated)
+        return all_updated
         
     def update_date(self , date : int , job : Literal['exposure' , 'risk']):
         assert DATAVENDOR.CALENDAR.is_trade_date(date) , f'{date} is not a trade_date'

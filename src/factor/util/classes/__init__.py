@@ -5,4 +5,6 @@ from .risk_model import RiskModel , Rmodel , RiskAnalytic , RiskProfile , Attrib
 from .portfolio import Portfolio
 from .benchmark import Benchmark
 
+from .stock_factor import StockFactor
+
 from .creator import Accuracy , Utility , PortCreator , PortCreateResult

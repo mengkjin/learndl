@@ -6,8 +6,10 @@ from pathlib import Path
 from torch import Tensor
 from typing import Any , Literal , Optional
 
+from .calendar import CALENDAR
 from .. import path as PATH
 from .. import conf as CONF
+from ..project_setting import THIS_IS_SERVER
 
 class ModelPath:
     def __init__(self , model_name : Path | str | None | Any) -> None:
@@ -163,37 +165,114 @@ class ModelFile:
         return ModelDict(**{key:self.load(key) for key in ModelDict.__slots__})
     
 class RegisteredModel(ModelPath):
-    def __init__(self, name: str , submodel : Literal['best' , 'swalast' , 'swabest'] = 'best' ,
-                 num  : int | list[int] | range | Literal['all'] = 0 , 
-                 alias : Optional[str] = None , start_dt = -1) -> None:
+    '''
+    for a registeredmodel to predict recent/history data
+    model dict stored in configs/schedule/update_models.yaml
+    '''
+    START_DT = 20170101 if THIS_IS_SERVER else 20241101
+    FMP_STEP = 5
+    MODEL_DICT : dict[str,dict[str,Any]] = CONF.schedule('registered_models')
+
+    def __init__(self, pred_name : str , name: str | Any = None , 
+                 submodel : Literal['best' , 'swalast' , 'swabest'] | Any = None ,
+                 num  : int | list[int] | range | Literal['all'] | Any = None , 
+                 start_dt = START_DT , assertion = True) -> None:
+        if assertion:
+            assert pred_name in self.MODEL_DICT , f'{pred_name} is not a registered model'
+        if pred_name in self.MODEL_DICT:
+            reg_dict = self.MODEL_DICT[pred_name]
+            name     = reg_dict['name']
+            submodel = reg_dict['submodel']
+            num      = reg_dict['num']
+
+        self.pred_name = pred_name
         super().__init__(name)
         self.submodel = submodel
         self.num = num
-        self.alias = alias
         self.model_path = ModelPath(self.name)
         self.start_dt = start_dt
+        assert start_dt > 20070101 , f'start_dt must be a valid date , got {start_dt}'
 
-    def __repr__(self) -> str:  return f'{self.__class__.__name__}(name={self.name},type={self.submodel},num={str(self.num)},alias={str(self.alias)})'
-
+    def __repr__(self) -> str:  
+        return f'{self.__class__.__name__}(pred_name={self.pred_name},name={self.name},submodel={self.submodel},num={str(self.num)})'
+    
     @classmethod
-    def MODELS(cls):
-        return [cls(**reg_model) for reg_model in update_models['REG_MODELS']]
+    def SelectModels(cls , pred_names : list[str] | str | None = None):
+        if pred_names is None: pred_names = list(cls.MODEL_DICT.keys())
+        if isinstance(pred_names , str): pred_names = [pred_names]
+        return [cls(key) for key in pred_names]
+    
+    @property
+    def pred_dates(self):
+        return PATH.pred_dates(self.pred_name)
+    
+    @property
+    def pred_target_dates(self):
+        start_dt = max(self.start_dt , CALENDAR.td(min(self.model_dates) , 1))
+        end_dt = None
+        return CALENDAR.td_within(start_dt , end_dt)
+    
+    @property
+    def fmp_dates(self):
+        return PATH.dir_dates(PATH.fmp.joinpath(self.pred_name))
+    
+    @property
+    def fmp_target_dates(self):
+        return self.fmp_dates[::self.FMP_STEP]
+    
+    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False):
+        PATH.pred_save(df , self.pred_name , date , overwrite)
 
+    def load_pred(self , date : int , verbose = True , **kwargs):
+        df = PATH.pred_load(self.pred_name , date , verbose = verbose , **kwargs)
+        if df.empty: return df
+        if self.pred_name not in df.columns:
+            assert self.name in df.columns , f'{self.pred_name} or {self.name} not in df.columns : {df.columns}'
+            df = df.rename(columns={self.name:self.pred_name})
+            self.save_pred(df , date , overwrite = True)
+        return df
+
+    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False):
+        if df.empty: return
+        path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
+        path.parent.mkdir(parents=True , exist_ok=True)
+        if not path.exists() or overwrite: df.to_feather(path)
+
+    def load_fmp(self , date : int , verbose = True , **kwargs):
+        path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
+        if not path.exists(): 
+            if verbose: print(f'{path} does not exist')
+            return pd.DataFrame()
+        return pd.read_feather(path , **kwargs)
 
 class HiddenExtractingModel(ModelPath):
-    '''for a model to predict recent/history data'''
-    def __init__(self , name : str , 
+    '''
+    for a registeredmodel to extract hidden states
+    model dict stored in configs/schedule/update_models.yaml
+    '''
+    MODEL_DICT : dict[str,dict[str,Any]] = CONF.schedule('hidden_models')
+    def __init__(self , hidden_name : str , name: str | Any = None , 
                  submodels : Optional[list | np.ndarray | Literal['best' , 'swalast' , 'swabest']] = None ,
-                 nums : Optional[list | np.ndarray | int] = None ,
-                 alias : Optional[str] = None):
+                 nums : Optional[list | np.ndarray | int] = None , assertion = True):
+        if assertion:
+            assert hidden_name in self.MODEL_DICT , f'{hidden_name} is not a registered model'
+        if hidden_name in self.MODEL_DICT:
+            reg_dict  = self.MODEL_DICT[hidden_name]
+            name      = reg_dict['name']
+            submodels = reg_dict['submodels']
+            nums      = reg_dict['nums']
+
+        self.hidden_name = hidden_name
         super().__init__(name)
         self.submodels = submodels
         self.nums = nums
-        self.alias = alias
         self.model_path = ModelPath(self.name)
 
+    def __repr__(self) -> str:  
+        return f'{self.__class__.__name__}(hidden_name={self.hidden_name},name={self.name},submodels={self.submodels},nums={str(self.nums)})'
+
     @classmethod
-    def MODELS(cls):
-        return [cls(**hid_model) for hid_model in update_models['HID_MODELS']]
-        
-update_models = CONF.schedule('update_models')
+    def SelectModels(cls , hidden_names : list[str] | str | None = None):
+        if hidden_names is None: hidden_names = list(cls.MODEL_DICT.keys())
+        if isinstance(hidden_names , str): hidden_names = [hidden_names]
+        return [cls(key) for key in hidden_names]

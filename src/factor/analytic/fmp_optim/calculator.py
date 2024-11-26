@@ -3,6 +3,7 @@ import pandas as pd
 from . import stat as Stat
 from . import plot as Plot
 from ..test_manager import BaseCalculator
+
 class BaseOptimCalc(BaseCalculator):
     TASK_TYPE = 'optim'
     DEFAULT_BENCHMARKS = 'defaults'

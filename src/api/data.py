@@ -1,4 +1,5 @@
 from src.data import DataDownloader , JsUpdater , DataUpdater , DataProcessor
+from src.func.display import EnclosedMessage
 from src.factor.calculator import FactorModelUpdater
 
 class DataAPI:
@@ -10,24 +11,22 @@ class DataAPI:
         b. for server, move Updater's to Database'
         '''
         # download data from tushare and other sources
-        print('download data: ' + '*' * 20)
-        DataDownloader.proceed()
-        print('-' * 80)
+        with EnclosedMessage(' download data '):
+            DataDownloader.proceed()
+
 
         # update data from js updaters
-        print('fetch js data: ' + '*' * 20)
-        JsUpdater.proceed()
-        print('-' * 80)
+        with EnclosedMessage(' fetch js data '):
+            JsUpdater.proceed()
+
 
         # update other datas
-        print('update other datas: ' + '*' * 20)
-        DataUpdater.proceed()
-        print('-' * 80)
+        with EnclosedMessage(' update other datas '):
+            DataUpdater.proceed()
 
         # update models
-        print('update factor models: ' + '*' * 20)
-        FactorModelUpdater.proceed()
-        print('-' * 80)
+        with EnclosedMessage(' update factor models '):
+            FactorModelUpdater.proceed()
 
         
     @staticmethod
@@ -35,15 +34,13 @@ class DataAPI:
         '''
         prepare latest(1 year or so) train data for predict use, do it after 'update'
         '''
-        print('prepare predict data: ' + '*' * 20)
-        DataProcessor.main(predict=True)
-        print('-' * 80)
+        with EnclosedMessage(' prepare predict data '):
+            DataProcessor.main(predict=True)
 
     @staticmethod
     def reconstruct_train_data(): 
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
-        print('reconstruct historical data: ' + '*' * 20)
-        DataProcessor.main(predict=False)
-        print('-' * 80)
+        with EnclosedMessage(' reconstruct historical data '):
+            DataProcessor.main(predict=False)

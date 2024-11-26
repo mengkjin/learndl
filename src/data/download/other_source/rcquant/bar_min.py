@@ -6,6 +6,7 @@ from typing import Literal
 
 from src.basic import PATH , CALENDAR
 from src.data.util.basic import secid_adjust , trade_min_reform
+from src.func.display import print_seperator
 
 from .license_uri import uri as rcquant_uri
 
@@ -51,7 +52,7 @@ def x_mins_update_dates(date) -> list[int]:
     for x_min in [5 , 10 , 15 , 30 , 60]:
         source_dates = PATH.db_dates('trade_ts' , 'min')
         stored_dates = PATH.db_dates('trade_ts' , f'{x_min}min')
-        dates = np.setdiff1d(CALENDAR.td_within(last_date(1 , x_min) , max(source_dates)) , stored_dates)
+        dates = CALENDAR.diffs(last_date(1 , x_min) , max(source_dates) , stored_dates)
         all_dates = np.concatenate([all_dates , dates])
     return np.unique(all_dates).astype(int).tolist()
 
@@ -130,10 +131,10 @@ def rcquant_proceed(date : int | None = None , first_n : int = -1):
             print(f'rcquant bar min {dt} success')
 
     for dt in x_mins_update_dates(date):
-        print('-' * 80)
         print(f'process other min bars at {dt} from source rcquant')
         for x_min in x_mins_to_update(dt):
             min_df = PATH.db_load('trade_ts' , 'min' , dt)
             x_min_df = trade_min_reform(min_df , x_min , 1)
             PATH.db_save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , verbose = True)
+        print_seperator()
     return True

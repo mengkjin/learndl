@@ -15,10 +15,9 @@ class NDaysUpdater:
     def proceed(cls):
         for n_day in cls.DAYS:
             label_name = f'{n_day}day'
-            end_date : Any = PATH.db_dates('trade_ts' , 'day').max()
-            dates = CALENDAR.td_within(cls.START_DATE , end_date)
             stored_dates = PATH.db_dates(cls.DB_SRC , label_name)
-            update_dates = np.setdiff1d(dates , stored_dates)
+            end_date     = PATH.db_dates('trade_ts' , 'day').max()
+            update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
             for date in update_dates: cls.update_one(date , n_day , label_name)
 
     @classmethod

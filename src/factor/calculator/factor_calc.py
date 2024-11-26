@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from itertools import combinations
 from typing import Any , Literal , Type , final
 
-from src.basic import PATH
+from src.basic import PATH , CALENDAR
 from src.data import DATAVENDOR
 from src.func.singleton import SingletonABCMeta
 from src.func.classproperty import classproperty_str
@@ -219,10 +219,10 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
             if int(date) in self.factors: return self.factors[int(date)]
             return PATH.factor_load(factor_name , date)
     
-    def update_jobs(self , start : int = -1 , end : int = 99991231 , overwrite = False):
-        dates = DATAVENDOR.CALENDAR.td_within(max(start , self.init_date) , end)
-        if not overwrite:
-            dates = np.setdiff1d(DATAVENDOR.CALENDAR.td_within(max(start , self.init_date) , end) , self.stored_dates)
+    def update_jobs(self , start : int | None = None , end : int | None = None , overwrite = False):
+        dates = CALENDAR.td_within(start , end)
+        dates = CALENDAR.slice(dates , self.init_date)
+        if not overwrite: dates = CALENDAR.diffs(dates , self.stored_dates)
         [insert_update_job(self , d) for d in dates]
         return self
 

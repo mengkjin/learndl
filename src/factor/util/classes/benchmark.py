@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from typing import Any , Literal , Optional
+from typing import Any
 
 from src.basic.conf import AVAIL_BENCHMARKS , DEFAULT_BENCHMARKS , CATEGORIES_BENCHMARKS
 from src.data import DataBlock , DATAVENDOR
@@ -77,7 +77,8 @@ class Benchmark(Portfolio):
         return port
     
     def get_dates(self , dates : np.ndarray | list):
-        for d in np.setdiff1d(dates , self.benchmark_attempted_dates): self.get(d , latest = True)
+        for d in DATAVENDOR.CALENDAR.diffs(dates , self.benchmark_attempted_dates): 
+            self.get(d , latest = True)
 
     def universe(self , secid : np.ndarray , date : np.ndarray):
         assert self , 'No need of calculating universe for none benchmark'
@@ -153,3 +154,7 @@ class Benchmark(Portfolio):
     
     @classmethod
     def defaults(cls): return [cls(bm) for bm in cls.DEFAULTS]
+
+    @staticmethod
+    def as_category(bm : Any):
+        return pd.Categorical(bm , categories = CATEGORIES_BENCHMARKS , ordered=True) 

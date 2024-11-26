@@ -165,7 +165,8 @@ def whiten(v , weight = None):
     if weight is None:
         return (v - np.mean(v)) / (np.std(v) + 1e-6)
     else:
-        return (v - np.sum(v * weight) / np.sum(weight)) / (np.std(v) + 1e-6)
+        weight = np.nan_to_num(weight)
+        return (v - np.sum(v * weight) / (np.sum(weight) + 1e-6)) / (np.std(v) + 1e-6)
 
 def winsorize(v , 
               center : Literal['median' , 'mean'] = 'median', 

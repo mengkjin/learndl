@@ -6,12 +6,12 @@ from src.model.util import BaseDataModule , BatchData
     
 class BatchDataLoader:
     '''wrap loader to impletement DataModule Callbacks'''
-    def __init__(self , raw_loader , data_module : BaseDataModule , exclude_dates = None , include_dates = None) -> None:
+    def __init__(self , raw_loader , data_module : BaseDataModule , exclude_dates = None , include_dates = None , tqdm = True) -> None:
         self.loader      = raw_loader
         self.data_module = data_module
         self.device      = data_module.device
         self.verbosity   = data_module.config.verbosity
-        if self.verbosity >= 10: self.enable_tqdm()
+        if self.verbosity >= 10 and tqdm: self.enable_tqdm()
         self.filter_dates(exclude_dates , include_dates)
 
     def __len__(self):  return len(self.loader)

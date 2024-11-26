@@ -7,10 +7,10 @@ from IPython.display import display
 from matplotlib.figure import Figure
 from typing import Any , Callable , Literal , Type
 
-from src.basic import CONF , PATH
+from src.basic import PATH
 from src.func import dfs_to_excel , figs_to_pdf
 from src.data import DataBlock
-from src.factor.util import Benchmark
+from src.factor.util import Benchmark , StockFactor
 
 TASK_TYPES = ['optim' , 'top' , 'factor']
 TYPE_of_TASK = Literal['optim' , 'top' , 'factor']
@@ -56,7 +56,7 @@ class BaseTestManager(ABC):
     TASK_TYPE : TYPE_of_TASK
     TASK_LIST : list[Type[BaseCalculator]] = []
 
-    def __init__(self , which : str | list[str] | Literal['all'] = 'all' , **kwargs):
+    def __init__(self , which : str | list[str] | Literal['all'] = 'all' , project_name : str | None = None , **kwargs):
         candidates = {task.task_name():task for task in self.TASK_LIST}
         if which == 'all':
             self.tasks = {k:v() for k,v in candidates.items()}
@@ -66,27 +66,28 @@ class BaseTestManager(ABC):
             assert len(illegal) == 0 , f'Illegal task: {illegal}'
             self.tasks = {k:v() for k,v in candidates.items() if k in which}
         self.kwargs = kwargs
+        self.project_name = project_name
         self.get_project_name()
 
     def __repr__(self):
         return f'{self.__class__.__name__} of task {self.TASK_TYPE} with {len(self.tasks)} calculators'
 
     @classmethod
-    def run_test(cls , factor_val : pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
+    def run_test(cls , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
                  which = 'all' , verbosity = 2 ,**kwargs):
         pm = cls(which = which , **kwargs)
-        pm.calc(factor_val , benchmark , verbosity = verbosity)
+        pm.calc(StockFactor(factor) , benchmark , verbosity = verbosity)
         pm.plot(show = False , verbosity = verbosity)
         return pm
 
     @abstractmethod
-    def calc(self , *args , verbosity = 1 , **kwargs):
-        for task in self.tasks.values():  task.calc(*args , verbosity = verbosity - 1 , **kwargs) 
+    def calc(self , factor : StockFactor , *args , verbosity = 1 , **kwargs):
+        for task in self.tasks.values():  task.calc(factor , *args , verbosity = verbosity - 1 , **kwargs) 
         if verbosity > 0: print(f'{self.__class__.__name__} calc Finished!')
         return self
 
     def get_project_name(self):
-        if not hasattr(self , 'project_name'):
+        if self.project_name is None:
             start_time = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
             self.project_name = f'test_{start_time}'
         return self.project_name

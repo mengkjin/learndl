@@ -110,7 +110,7 @@ class DataVendor:
         return PATH.db_dates_with_alt(db_src , db_key , start_dt=start_dt , end_dt=end_dt , year = year)
 
     @staticmethod
-    def td_within(start_dt : int = -1 , end_dt : int = 99991231 , step : int = 1):
+    def td_within(start_dt : int | None = None , end_dt : int | None = None , step : int = 1):
         return CALENDAR.td_within(start_dt , end_dt , step)
     
     @staticmethod
@@ -239,6 +239,13 @@ class DataVendor:
 
         new_block = DataBlock(new_value , secid , full_date[:new_value.shape[1]] , feature).align_date(date)
         return new_block
+    
+    def ffmv(self , secid : np.ndarray , date : np.ndarray , prev = True):
+        if prev : date = self.td_array(date , -1)
+        self.get_risk_exp(date.min() , date.max())
+        block = self.risk_exp.align(secid , date , ['weight'] , inplace=False).as_tensor()
+        if prev : block.date = self.td_array(block.date , 1)
+        return block
     
     def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):
         self.get_risk_exp(date.min() , date.max())

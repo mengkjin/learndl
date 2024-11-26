@@ -6,3 +6,8 @@ from . import path as PATH
 
 from . import conf as CONF
 from .util import *
+
+# print some info after import basic
+print('Basic module imported!')
+if torch.cuda.is_available(): print(f'Use device name: ' + torch.cuda.get_device_name(0))
+print(f'INSTANCE_RECORD can be accessed to check trainer , account or else...')

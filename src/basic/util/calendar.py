@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 
 from datetime import datetime , timedelta , time
-from pathlib import Path
 from typing import Any , Literal
 
 from .. import path as PATH
@@ -168,14 +167,33 @@ class TradeCalendar:
     def cd_trailing(date , n : int):
         return np.sort(_CALENDAR_CAL[_CALENDAR_CAL['calendar'] <= date].iloc[-n:]['calendar'].to_numpy())
     
-    @staticmethod
-    def td_within(start_dt : int | TradeDate | None = -1 , end_dt : int | TradeDate | None = 99991231 , step : int = 1 , until_today = True):
-        if start_dt is None: start_dt = -1
-        if end_dt is None: end_dt = 99991231
-        start_dt , end_dt = int(start_dt) , int(end_dt)
-        dates = _CALENDAR_TRD['calendar'].to_numpy()
-        if until_today: end_dt = min(end_dt , today())
-        return dates[(dates >= start_dt) & (dates <= end_dt)][::step]
+    @classmethod
+    def td_within(cls , start : int | TradeDate | None = -1 , end : int | TradeDate | None = 99991231 , step : int = 1 , until_today = True):
+        if start is None: start = 0
+        if end   is None: end = 99991231
+        start , end = int(start) , int(end)
+        if start < 0: start = today(start)
+        if end   < 0: end   = today(end)
+        if until_today: end = min(end , today())
+        dates = cls.slice(_CALENDAR_TRD['calendar'].to_numpy() , start , end)[::step]
+        return dates
+
+    @classmethod
+    def diffs(cls , *args , td = True):
+        '''
+        return the difference between target dates and source dates
+        inputs *args options:
+            1. start_dt , end_dt , source_dates , target_dates will be dates within start_dt and end_dt
+            2. target_dates , source_dates
+        td : bool , when using start_dt and end_dt , will return TradeDate (default=True)
+        '''
+        assert len(args) in [2, 3] , 'Use tuple date_target must be a tuple of length 2 or 3'
+        if len(args) == 2:
+            target_dates , source_dates = args
+        else:
+            start_dt , end_dt , source_dates = args
+            target_dates = cls.td_within(start_dt , end_dt) if td else cls.cd_within(start_dt , end_dt)
+        return np.setdiff1d(target_dates , source_dates)
     
     @classmethod
     def td_filter(cls , date_list):
@@ -216,5 +234,12 @@ class TradeCalendar:
     @staticmethod
     def trade_dates():
         return _CALENDAR_TRD['calendar'].to_numpy()
+
+    @staticmethod
+    def slice(dates , start = None , end = None , year = None) -> np.ndarray:
+        if end   is not None: dates = dates[dates <= (end   if end   > 0 else today(end))]
+        if start is not None: dates = dates[dates >= (start if start > 0 else today(start))]
+        if year  is not None: dates = dates[(dates // 10000) == year]
+        return dates
 
 CALENDAR = TradeCalendar()

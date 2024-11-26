@@ -29,4 +29,4 @@ class ModelTrainer(BaseTrainer):
         if not THIS_IS_SERVER:
             print('This is not server! Will not update models!')
         else:
-            [cls.initialize(0 , 1 , 0 , model.model_path).go() for model in RegisteredModel.MODELS()]
+            [cls.initialize(0 , 1 , 0 , model.model_path).go() for model in RegisteredModel.SelectModels()]

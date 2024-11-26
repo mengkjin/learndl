@@ -3,7 +3,6 @@ import numpy as np
 
 from typing import Any , Literal
 
-from src.data import DATAVENDOR
 from ..fmp_optim.stat import eval_pf_stats , filter_account
 
 def calc_top_frontface(account : pd.DataFrame):

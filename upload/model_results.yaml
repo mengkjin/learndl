@@ -1,0 +1,10 @@
+0_model: lgbm_day_ShortTest(x1)
+1_start: Sun Nov 24 12:40:17 2024
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170101-20170228
+6_fit: Finish Process [Fit], Cost 27.3 Secs
+7_test: Finish Process [Test], Cost 1.4 Secs
+8_result:
+  0.best: Avg(0.2022)|Sum(7.08)|Std(0.0451)|T(26.51)|IR(21.9483)

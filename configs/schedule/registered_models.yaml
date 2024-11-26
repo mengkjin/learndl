@@ -1,0 +1,20 @@
+# models for predictions : 
+# prediction name
+#   name: module_name
+#   submodel: submodel_type , best , swalast , swabest
+#   num: num , a valid number or all
+
+gru_day_V0:
+  name: gru_day
+  submodel: swalast
+  num: 0
+
+gruRTN_day_V0:
+  name: gruRTN_day
+  submodel: swalast
+  num: 0
+
+gru_avg_V1:
+  name: gru_avg
+  submodel: swalast
+  num: all

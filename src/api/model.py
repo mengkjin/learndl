@@ -1,24 +1,28 @@
-from src.model.model_module.application import ModelTestor , ModelPredictor , ModelTrainer , ModelHiddenExtractor
+import src.model.model_module.application as app
 from src.data import DataProcessor
 from src.basic import THIS_IS_SERVER
+from src.func.display import EnclosedMessage
 
 class ModelAPI:
-    Trainer = ModelTrainer
-    Testor = ModelTestor
-    Predictor = ModelPredictor
-    HiddenExtractor = ModelHiddenExtractor
+    Trainer    = app.ModelTrainer
+    Testor     = app.ModelTestor
+    Predictor  = app.ModelPredictor
+    Extractor  = app.ModelHiddenExtractor
+    FmpBuilder = app.ModelPortfolioBuilder
 
     @classmethod
     def update(cls):
         cls.prepare_predict_data()
 
-        print('update_hidden: ' + '*' * 20)
-        ModelHiddenExtractor.update_hidden()
-        print('-' * 80)
+        with EnclosedMessage(' update hidden '):
+            cls.Extractor.update()
 
-        print('update_factors: ' + '*' * 20)
-        ModelPredictor.update_factors()
-        print('-' * 80)
+        with EnclosedMessage(' update factors '):
+            cls.Predictor.update()
+
+        with EnclosedMessage(' update factor portfolios '):
+            cls.FmpBuilder.update()
+
     
     @classmethod
     def update_models(cls):
@@ -30,11 +34,11 @@ class ModelAPI:
         if THIS_IS_SERVER:
             cls.reconstruct_train_data()
 
-            print('update_models: ' + '*' * 20)
-            ModelTrainer.update_models()
-            print('-' * 80)
+            with EnclosedMessage(' update models '):
+                cls.Trainer.update_models()
         else:
-            print('update_models: skip for laptop')
+            with EnclosedMessage(' update models '):
+                print('In Laptop, skip this process')
 
     @classmethod
     def update_hidden(cls):
@@ -43,9 +47,8 @@ class ModelAPI:
         '''
         cls.prepare_predict_data()
         
-        print('update_hidden: ' + '*' * 20)
-        ModelHiddenExtractor.update_hidden()
-        print('-' * 80)
+        with EnclosedMessage(' update hidden '):
+            cls.Extractor.update()
     
     @classmethod
     def update_factors(cls):
@@ -54,37 +57,34 @@ class ModelAPI:
         '''
         cls.prepare_predict_data()
 
-        print('update_factors: ' + '*' * 20)
-        ModelPredictor.update_factors()
-        print('-' * 80)
+        with EnclosedMessage(' update factors '):
+            cls.Predictor.update()
     
-    @staticmethod
-    def test_models(module = 'tra_lstm' , data_types = 'day'):
-        return ModelTestor(module , data_types).try_forward()
+    @classmethod
+    def test_models(cls , module = 'tra_lstm' , data_types = 'day'):
+        return cls.Testor(module , data_types).try_forward()
     
-    @staticmethod
-    def initialize_trainer(stage = 0 , resume = 0 , checkname= 1):
+    @classmethod
+    def initialize_trainer(cls , stage = 0 , resume = 0 , checkname= 1):
         '''
         state:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
         resume:    [-1,choose] , [0,no]       , [1,yes]
         checkname: [-1,choose] , [0,default]  , [1,yes]
         '''
-        return ModelTrainer.initialize(stage , resume , checkname)
+        return cls.Trainer.initialize(stage , resume , checkname)
     
-    @staticmethod
-    def prepare_predict_data(): 
+    @classmethod
+    def prepare_predict_data(cls): 
         '''
         prepare latest(1 year or so) train data for predict use, do it after 'update'
         '''
-        print('prepare predict data: ' + '*' * 20)
-        DataProcessor.main(predict=True)
-        print('-' * 80)
+        with EnclosedMessage(' prepare predict data '):
+            DataProcessor.main(predict=True)
 
     @staticmethod
     def reconstruct_train_data(): 
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
-        print('reconstruct historical data: ' + '*' * 20)
-        DataProcessor.main(predict=False)
-        print('-' * 80)
+        with EnclosedMessage(' reconstruct historical data '):
+            DataProcessor.main(predict=False)

@@ -34,7 +34,7 @@ class DFCollection:
         '''return the last added df'''
         return self.get(self.last_added_date)
     
-    def dates_diff(self , dates : list[int] | np.ndarray , overwrite = False):
+    def date_diffs(self , dates : list[int] | np.ndarray , overwrite = False):
         '''return the difference between given dates and self.dates'''
         return dates if not overwrite else np.setdiff1d(dates , self.dates)
     
@@ -133,7 +133,7 @@ class DateDataAccess(ABC):
         return self.collections[data_type].get(date , field , rename_date_key = rename_date_key)
 
     def gets(self , dates: list[int] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
-        for date in self.collections[data_type].dates_diff(dates , overwrite):
+        for date in self.collections[data_type].date_diffs(dates , overwrite):
             self.collections[data_type].add(date , self.data_loader(date , data_type))
         return self.collections[data_type].gets(dates , field , rename_date_key = rename_date_key)
     

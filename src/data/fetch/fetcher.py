@@ -6,6 +6,8 @@ from functools import reduce
 from pathlib import Path
 
 from src.basic import PATH , THIS_IS_SERVER
+from src.func.display import print_seperator
+
 from .jsfetcher import JSFetcher
 
 UPDATER_TITLE = 'DB_updater'
@@ -35,7 +37,7 @@ class JsUpdater():
             paths += [p for p in sdir.iterdir() if p.name.startswith(UPDATER_TITLE + '.') and p.name.endswith('.tar')]
         paths.sort()
         if del_after_dumping and paths:
-            print('-' * 80)
+            print_seperator()
             print(f'Delete {len(paths)} updaters after completion')
             print(paths)
             # del_after_dumping = input(f'''Delete {len(paths)} updaters after completion? (press yes/y) : {paths}''')[0].lower() == 'y'
