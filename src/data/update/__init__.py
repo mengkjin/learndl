@@ -1,8 +1,8 @@
-from .ndays import NDaysUpdater
+from .multi_kline import MultiKlineUpdater
 from .labels import ClassicLabelsUpdater
 
-class DataUpdater:
+class OtherDataUpdater:
     @classmethod
-    def proceed(cls):
-        NDaysUpdater.proceed()
-        ClassicLabelsUpdater.proceed()
+    def update(cls):
+        MultiKlineUpdater.update()
+        ClassicLabelsUpdater.update()

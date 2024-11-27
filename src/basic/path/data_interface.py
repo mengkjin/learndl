@@ -1,4 +1,4 @@
-import inspect , os , platform , re
+import os , platform , re
 import numpy as np
 import pandas as pd
 
@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any , Literal
 
 from . import path_structure as PATH
-from ..project_setting import THIS_IS_SERVER
+from ..project_setting import IS_SERVER
 
 SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
 SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
@@ -25,8 +25,8 @@ DB_ALTERNATIVES : dict[str , str] = {
     'trade_ts' : 'trade_js' ,
     'benchmark_ts' : 'benchmark_js'
 }
-LOAD_PARALLEL : Literal['thread' , 'process'] | None = 'thread' if THIS_IS_SERVER else None
-LOAD_MAX_WORKERS : int | Any = 40 if THIS_IS_SERVER else os.cpu_count()
+LOAD_PARALLEL : Literal['thread' , 'process'] | None = 'thread' if IS_SERVER else None
+LOAD_MAX_WORKERS : int | Any = 40 if IS_SERVER else os.cpu_count()
 
 deprecated_db_by_name  : list[str] = ['information_js']
 deprecated_db_by_date  : list[str] = ['trade' , 'labels' , 'benchmark' , 'trade_js' , 'labels_js' , 'benchmark_js'] 
@@ -43,7 +43,7 @@ def db_src_deprecated(i):
 
 def laptop_func_deprecated(func):
     def wrapper(*args , **kwargs):
-        if THIS_IS_SERVER:
+        if IS_SERVER:
             print(f'at {func.__name__} will be deprecated soon, please update your code')
         return func(*args , **kwargs)
     return wrapper

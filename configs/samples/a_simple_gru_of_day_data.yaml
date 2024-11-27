@@ -1,0 +1,25 @@
+name: sample_gru_avg  # any name or null
+module: gru # tra_lstm2 # 'LSTM' # 'TRA_LSTM' # 'GeneralRNN' # patch_tst # lgbm , gru_dsize
+submodels: [best , swalast , swabest]
+
+booster_head: false # lgbm , ada , xgboost , catboost
+booster_type: lgbm # ada , xgboost , catboost
+
+labels: 
+  - std_lag1_10 # rtn_lag1_10 # std_lag1_10
+input_type: data
+
+data.types: day # 'day+30m' , 30m , day
+data.prenorm:
+  day: {'divlast' : True  , 'histnorm' : True}
+
+hidden.types:
+  - gru_day.0.best
+  - gru_day.0.swabest
+
+data.input_step_day:  5
+
+beg_date:   20170103 # 20220613 # 20170103
+end_date:   99991231
+interval:   120
+train_window:    2400

@@ -1,3 +1,3 @@
-from .from_sql import SQLDownloader
-from .from_ftp import FTPDownloader
+from .from_sql import SellsideSQLDownloader
+from .from_ftp import SellsideFTPDownloader
 

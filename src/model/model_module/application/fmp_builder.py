@@ -5,8 +5,8 @@ from contextlib import nullcontext
 
 from typing import Any , Literal
 
-from src.basic import PATH , CALENDAR , RegisteredModel , SILENT
-from src.factor.util import Port , StockFactor , Benchmark , Portfolio
+from src.basic import CALENDAR , RegisteredModel , SILENT
+from src.factor.util import StockFactor , Benchmark , Portfolio
 from src.factor.builder import PortfolioBuilder
 
 class ModelPortfolioBuilder:

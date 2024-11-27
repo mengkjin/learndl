@@ -1,6 +1,6 @@
 import src.model.model_module.application as app
+from src.basic import IS_SERVER
 from src.data import DataProcessor
-from src.basic import THIS_IS_SERVER
 from src.func.display import EnclosedMessage
 
 class ModelAPI:
@@ -12,7 +12,11 @@ class ModelAPI:
 
     @classmethod
     def update(cls):
-        cls.prepare_predict_data()
+        '''
+        Update prediction interims and results periodically:
+        '''
+        with EnclosedMessage(' prepare predict data '):
+            cls.prepare_predict_data()
 
         with EnclosedMessage(' update hidden '):
             cls.Extractor.update()
@@ -29,24 +33,26 @@ class ModelAPI:
         '''
         Update models for both laptop and server:
         a. for laptop, do nothing
-        b. for server, updated registered models in model'
+        b. for server, continue training registered models in model'
         '''
-        if THIS_IS_SERVER:
-            cls.reconstruct_train_data()
+        if IS_SERVER:
+            with EnclosedMessage(' reconstruct train data '):
+                cls.reconstruct_train_data()
 
             with EnclosedMessage(' update models '):
                 cls.Trainer.update_models()
         else:
             with EnclosedMessage(' update models '):
-                print('In Laptop, skip this process')
+                print('This is not a server with cuda, skip this process')
 
     @classmethod
     def update_hidden(cls):
         '''
         Update hidden features for hidden feature models for both laptop and server:
         '''
-        cls.prepare_predict_data()
-        
+        with EnclosedMessage(' prepare predict data '):
+            cls.prepare_predict_data()
+
         with EnclosedMessage(' update hidden '):
             cls.Extractor.update()
     
@@ -55,7 +61,8 @@ class ModelAPI:
         '''
         Update factors for prediction models (registered models) for both laptop and server:
         '''
-        cls.prepare_predict_data()
+        with EnclosedMessage(' prepare predict data '):
+            cls.prepare_predict_data()
 
         with EnclosedMessage(' update factors '):
             cls.Predictor.update()
@@ -78,13 +85,11 @@ class ModelAPI:
         '''
         prepare latest(1 year or so) train data for predict use, do it after 'update'
         '''
-        with EnclosedMessage(' prepare predict data '):
-            DataProcessor.main(predict=True)
+        DataProcessor.main(predict=True)
 
     @staticmethod
     def reconstruct_train_data(): 
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
-        with EnclosedMessage(' reconstruct historical data '):
-            DataProcessor.main(predict=False)
+        DataProcessor.main(predict=False)

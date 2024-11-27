@@ -1,15 +1,17 @@
 import smtplib
 from email.mime.text import MIMEText
-from email.header import Header
+# from email.header import Header
 from typing import Literal
-from .. import PATH , CONF
+
+from .. import CONF
+from ..project_setting import MY_SERVER
 
 def send_email(title = 'This is test! Hello, World!' , 
                body = 'This is test! Hello, World!' , 
                recipient : str | None = None,
                server : Literal['netease'] = 'netease'):
-    if not PATH.THIS_IS_SERVER:
-        print('not in server , skip sending email')
+    if not MY_SERVER:
+        print('not in my server , skip sending email')
         return
     
     email_conf = CONF.confidential('email')[server]

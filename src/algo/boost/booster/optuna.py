@@ -3,7 +3,7 @@ import optuna , random , string , time
 from contextlib import nullcontext
 from typing import Any , Literal
 
-from src.basic import PATH , THIS_IS_SERVER
+from src.basic import PATH , IS_SERVER
 from .general import GeneralBooster
 
 class OptunaSilent:
@@ -16,7 +16,7 @@ class OptunaSilent:
 class OptunaBooster(GeneralBooster):
     DEFAULT_SILENT_CREATION = True
     DEFAULT_SILENT_STUDY = True
-    DEFAULT_N_TRIALS = 50 if THIS_IS_SERVER else 20
+    DEFAULT_N_TRIALS = 50 if IS_SERVER else 20
     DEFAULT_SAVE_STUDIES = True
     DEFAULT_STORAGE = f'sqlite:///{PATH.log_optuna.relative_to(PATH.main)}/booster_{time.strftime("%Y%m") }.sqlite3'
 

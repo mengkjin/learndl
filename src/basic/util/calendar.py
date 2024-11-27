@@ -242,4 +242,9 @@ class TradeCalendar:
         if year  is not None: dates = dates[(dates // 10000) == year]
         return dates
 
+    @staticmethod
+    def format(date : Any , old_fmt = '%Y%m%d' , new_fmt = '%Y%m%d'):
+        if old_fmt == new_fmt: return date
+        return datetime.strptime(str(date), old_fmt).strftime(new_fmt)
+
 CALENDAR = TradeCalendar()

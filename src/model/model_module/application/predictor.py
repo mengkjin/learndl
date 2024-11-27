@@ -5,7 +5,7 @@ import pandas as pd
 from contextlib import nullcontext
 from typing import Any , ClassVar , Optional
 
-from src.basic import PATH , SILENT , THIS_IS_SERVER , CALENDAR , RegisteredModel
+from src.basic import SILENT , CALENDAR , RegisteredModel , JS_FACTOR_DESTINATION
 from src.model.util import TrainConfig
 from src.model.data_module import DataModule
 from src.model.model_module.module import get_predictor_module
@@ -32,7 +32,7 @@ class ModelPredictor:
         self.model = get_predictor_module(self.config)
         self.df = pd.DataFrame()
 
-        self.dir_deploy = PATH.FACTOR_DESTINATION_SERVER if THIS_IS_SERVER else PATH.FACTOR_DESTINATION_LAPTOP
+        self.dir_deploy = JS_FACTOR_DESTINATION
 
 
     def __repr__(self) -> str:

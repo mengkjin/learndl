@@ -5,8 +5,6 @@ from ..project_setting import MAIN_PATH
 
 # variables
 main        = MAIN_PATH
-FACTOR_DESTINATION_LAPTOP = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
-FACTOR_DESTINATION_SERVER = None # MAIN_PATH.joinpath('results' , 'Alpha')
 
 # data folder and subfolders
 data        = main.joinpath('data')

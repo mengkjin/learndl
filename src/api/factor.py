@@ -33,6 +33,13 @@ def get_project_name(names = None , factor_type : Literal['factor' , 'pred'] = '
         return f'{factor_type}_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
 class FactorAPI:
+    '''
+    Interface for factor related operations
+    .Test.FactorPerf()    : test factor performance
+    .Test.FmpOptim()      : test optimized fmp
+    .Test.FmpTop()        : test top fmp
+    .factor_hierarchy()   : get factor hierarchy
+    '''
     class Test:
         @staticmethod
         def FactorPerf(names = None ,

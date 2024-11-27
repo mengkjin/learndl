@@ -9,7 +9,7 @@ from typing import Any , Literal , Optional
 from .calendar import CALENDAR
 from .. import path as PATH
 from .. import conf as CONF
-from ..project_setting import THIS_IS_SERVER
+from ..project_setting import IS_SERVER
 
 class ModelPath:
     def __init__(self , model_name : Path | str | None | Any) -> None:
@@ -169,7 +169,7 @@ class RegisteredModel(ModelPath):
     for a registeredmodel to predict recent/history data
     model dict stored in configs/schedule/update_models.yaml
     '''
-    START_DT = 20170101 if THIS_IS_SERVER else 20241101
+    START_DT = 20170101 if IS_SERVER else 20241101
     FMP_STEP = 5
     MODEL_DICT : dict[str,dict[str,Any]] = CONF.schedule('registered_models')
 

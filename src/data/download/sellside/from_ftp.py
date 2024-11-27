@@ -3,7 +3,7 @@ import pandas as pd
 
 from ftplib import FTP
 
-class FTPDownloader(object):
+class SellsideFTPDownloader(object):
     def __init__(self, host='47.100.224.38', user="factor", password="msjg_factor@1024"):
         self.ftp = self.ftp_login(host, user, password)
         self.ftp_param = {
@@ -35,7 +35,11 @@ class FTPDownloader(object):
             df = pd.read_csv(file , sep=sep)
         return df
 
+    @classmethod
+    def update(cls):
+        pass
+
 def main():
-    connector = FTPDownloader()
+    connector = SellsideFTPDownloader()
     df = connector.open_file('/StockFactor_cier/cier.csv')
     print(df)

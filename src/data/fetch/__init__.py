@@ -1,1 +1,1 @@
-from .fetcher import JsUpdater
+from .fetcher import JSDataUpdater

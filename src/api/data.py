@@ -1,4 +1,4 @@
-from src.data import DataDownloader , JsUpdater , DataUpdater , DataProcessor
+from src.data import CoreDataUpdater , SellsideDataUpdater , JSDataUpdater , OtherDataUpdater , DataProcessor
 from src.func.display import EnclosedMessage
 from src.factor.calculator import FactorModelUpdater
 
@@ -11,22 +11,23 @@ class DataAPI:
         b. for server, move Updater's to Database'
         '''
         # download data from tushare and other sources
-        with EnclosedMessage(' download data '):
-            DataDownloader.proceed()
+        with EnclosedMessage(' download core data '):
+            CoreDataUpdater.update()
 
+        with EnclosedMessage(' download sellside data '):
+            SellsideDataUpdater.update()
 
         # update data from js updaters
         with EnclosedMessage(' fetch js data '):
-            JsUpdater.proceed()
-
+            JSDataUpdater.update()
 
         # update other datas
         with EnclosedMessage(' update other datas '):
-            DataUpdater.proceed()
+            OtherDataUpdater.update()
 
         # update models
         with EnclosedMessage(' update factor models '):
-            FactorModelUpdater.proceed()
+            FactorModelUpdater.update()
 
         
     @staticmethod

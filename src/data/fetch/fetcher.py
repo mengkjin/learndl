@@ -1,17 +1,22 @@
-import tarfile, time
+import tarfile, time , socket
 import numpy as np
 import pandas as pd
 
 from functools import reduce
 from pathlib import Path
 
-from src.basic import PATH , THIS_IS_SERVER
+from src.basic import PATH , MY_SERVER , MY_LAPTOP
 from src.func.display import print_seperator
 
 from .jsfetcher import JSFetcher
 
 UPDATER_TITLE = 'DB_updater'
-class JsUpdater():
+SHARE_FOLDERS = [Path('/home/mengkjin/Workspace/SharedFolder')] if MY_SERVER else []
+class JSDataUpdater():
+    '''
+    in JS environment, update js source data from jinmeng's laptop
+    must update after the original R database is updated
+    '''
     def __init__(self) -> None:
         self.Updater = self.get_new_updater()
         self.Success = []
@@ -20,7 +25,7 @@ class JsUpdater():
     @staticmethod
     def get_updater_paths():
         # order matters!
-        search_dirs = [PATH.database , PATH.updater] + [Path('/home/mengkjin/Workspace/SharedFolder')] * THIS_IS_SERVER
+        search_dirs = [PATH.database , PATH.updater] + SHARE_FOLDERS
 
         paths : list[Path] = []
         for sdir in search_dirs:
@@ -30,8 +35,8 @@ class JsUpdater():
     
     @staticmethod
     def unpack_exist_updaters(del_after_dumping = True):
-        assert THIS_IS_SERVER , f'must on server'
-        search_dirs = [PATH.database , PATH.updater , Path('/home/mengkjin/Workspace/SharedFolder')]
+        assert MY_SERVER , f'must on server'
+        search_dirs = [PATH.database , PATH.updater] + SHARE_FOLDERS
         paths : list[Path] = []
         for sdir in search_dirs:
             paths += [p for p in sdir.iterdir() if p.name.startswith(UPDATER_TITLE + '.') and p.name.endswith('.tar')]
@@ -152,7 +157,7 @@ class JsUpdater():
         return result
 
     def update_all(self , db_srcs = PATH.DB_BY_NAME + PATH.DB_BY_DATE , start_dt = None , end_dt = None , force = False):
-        assert not THIS_IS_SERVER , f'must on laptop'
+        assert MY_LAPTOP , f'must on my laptop'
         # selected DB is totally refreshed , so delete first
         if not isinstance(db_srcs , (list,tuple)): db_srcs = [db_srcs]
         for db_src in db_srcs:
@@ -167,18 +172,8 @@ class JsUpdater():
         [print(fail) for fail in self.Failed]
 
     @classmethod
-    def update_server(cls):
-        assert THIS_IS_SERVER , f'must on server'
-        start_time = time.time()
-
-        print(f'Unpack Update Files') 
-        cls.unpack_exist_updaters(del_after_dumping=True)
-
-        print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
-
-    @classmethod
     def update_laptop(cls):
-        assert not THIS_IS_SERVER , f'must on laptop'
+        assert MY_LAPTOP , f'must on my laptop'
         start_time = time.time()
         print(f'Update Files')
         Updater = cls()
@@ -187,8 +182,25 @@ class JsUpdater():
         print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
 
     @classmethod
-    def proceed(cls):
-        if THIS_IS_SERVER:
+    def update_server(cls):
+        assert MY_SERVER , f'must on my server'
+        start_time = time.time()
+
+        print(f'Unpack Update Files') 
+        cls.unpack_exist_updaters(del_after_dumping=True)
+
+        print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
+
+    @classmethod
+    def update(cls):
+        '''
+        in JS environment, update js source data from jinmeng's laptop
+        1. In laptop, update js source data from R project to updaters
+        2. In server, unpack update files and move to Database
+        '''
+        if MY_SERVER:
             cls.update_server()
-        else:
+        elif MY_LAPTOP:
             cls.update_laptop()
+        else:
+            print(f'Unidentified machine: {socket.gethostname()} , do nothing')

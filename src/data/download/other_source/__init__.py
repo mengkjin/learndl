@@ -3,6 +3,6 @@ from .baostock_5m import Baostock5minBarDownloader
 
 class OtherSourceDownloader:
     @classmethod
-    def proceed(cls):
+    def update(cls):
         RcquantMinBarDownloader.proceed()
         Baostock5minBarDownloader.proceed()

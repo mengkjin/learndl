@@ -3,9 +3,9 @@ import inspect
 from .basic.connect import pro
 from .download import TushareFetcher , daily , fina , index , info , analyst
 
-class TushareDownloader:
+class TushareDataDownloader:
     @classmethod
-    def proceed(cls):
+    def update(cls):
         module_list = [info , index , daily , fina , analyst]
         for module in module_list:
             for name , task_cls in inspect.getmembers(module, inspect.isclass):

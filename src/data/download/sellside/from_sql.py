@@ -1,10 +1,9 @@
-import platform , time
+import platform , time , traceback
 import pandas as pd
 import numpy as np
 import multiprocessing as mp  
 
 from dataclasses import dataclass
-from datetime import date , datetime
 from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal
 
@@ -103,7 +102,7 @@ class Connection:
         return {k:dft[k] for k in keys}
 
 @dataclass
-class SQLDownloader:
+class SellsideSQLDownloader:
     factor_src      : str
     factor_set      : str
     date_col        : str
@@ -177,8 +176,8 @@ class SQLDownloader:
 
     def make_query(self , query , connection , start_dt = None , end_dt = None):
         if self.date_fmt is not None:
-            if start_dt: start_dt = datetime.strptime(str(start_dt), '%Y%m%d').strftime(self.date_fmt)
-            if end_dt:   end_dt   = datetime.strptime(str(end_dt)  , '%Y%m%d').strftime(self.date_fmt)
+            if start_dt: start_dt = CALENDAR.format(start_dt , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
+            if end_dt:   end_dt   = CALENDAR.format(end_dt   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         kwargs = {'factor_src' : self.factor_src , 
                   'factor_set' : self.factor_set , 
                   'date_col'   : self.date_col ,
@@ -316,7 +315,7 @@ class SQLDownloader:
 
     @classmethod
     def update_since(cls , trace = 0):
-        prompt = f'{time.ctime()} : download since!'
+        prompt = f'{time.ctime()} : download since last update!'
         print(prompt)
 
         for factor , connection in cls.factors_and_conns():  
@@ -340,14 +339,22 @@ class SQLDownloader:
 
         for factor , connection in cls.factors_and_conns():  
             factor.download('all' , connection)
+
+    @classmethod
+    def update(cls):
+        try:
+            cls.update_since(trace = 0)
+        except Exception as e:
+            print(f'In {cls.__name__} : Error in update_since: {e}')
+            traceback.print_exc()
         
 if __name__ == '__main__':
-    from src.data.download.sellside.from_sql import SQLDownloader
+    from src.data.download.sellside.from_sql import SellsideSQLDownloader
 
     start_dt = 20100901 
     end_dt   = 20100915
     dates = CALENDAR.td_within(start_dt , end_dt)
 
-    factors_set = SQLDownloader.factors_and_conns('dongfang.hfq_chars')
+    factors_set = SellsideSQLDownloader.factors_and_conns('dongfang.hfq_chars')
     factor , connection = factors_set[0]
     df = factor.query_default(connection , start_dt , end_dt)

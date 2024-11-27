@@ -14,7 +14,7 @@ class ClassicLabelsUpdater:
     LAGS = [False , True]
 
     @classmethod
-    def proceed(cls):
+    def update(cls):
         for days in cls.DAYS:
             for lag1 in cls.LAGS:
                 label_name = f'ret{days}' + ('_lag' if lag1 else '')
