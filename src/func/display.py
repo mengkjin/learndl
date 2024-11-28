@@ -13,8 +13,8 @@ def data_frame(df : pd.DataFrame , text_ahead : str | None = None , text_after :
         display(df)
     if text_after: print(text_after)
 
-def print_seperator(width = 80):
-    print('-' * width)
+def print_seperator(width = 80 , char = '-'):
+    print(char * width)
 
 class EnclosedMessage:
     def __init__(self , title : str , width = 80):
@@ -30,6 +30,5 @@ class EnclosedMessage:
             print(padding + self.title.upper() + padding)
 
     def __exit__(self , exc_type , exc_value , traceback):
-        print('*' * self.width)
         print_seperator(self.width)
 

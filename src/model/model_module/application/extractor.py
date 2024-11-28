@@ -111,11 +111,11 @@ class ModelHiddenExtractor:
     
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , silent = False):
-        if model_name is None: print(f'model_name is None, update all hidden models')
+        
         models = HiddenExtractingModel.SelectModels(model_name)
-        [print(f'  -->  update hidden feature for {model}') for model in models]
+        if model_name is None: print(f'model_name is None, update all hidden models (len={len(models)})')
         for model in models:
             extractor = cls(model)
             extractor.extract_hidden(update = update , overwrite = overwrite , silent = silent)
-            print(f'Finish model [{model}] extracting!')
+            print(f'  -->  Finish extracting hidden feature for {model}')
         return extractor

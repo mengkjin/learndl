@@ -110,11 +110,10 @@ class ModelPredictor:
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , silent = True):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
-        if model_name is None: print(f'model_name is None, predict all registered models')
         models = RegisteredModel.SelectModels(model_name)
-        [print(f'  -->  update pred for {model}') for model in models]
+        if model_name is None: print(f'model_name is None, update all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
             md.update_preds(update = update , overwrite = overwrite , silent = silent)
-            print(f'Finish model [{model}] predicting!')
+            print(f'  -->  Finish updating model prediction for {model}')
         return md

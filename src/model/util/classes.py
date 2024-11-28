@@ -225,6 +225,9 @@ class BaseDataModule(ABC):
 class BaseTrainer(ModelStreamLine):
     '''run through the whole process of training'''
     def __bool__(self): return True
+
+    def __repr__(self): 
+        return f'{self.__class__.__name__}(path={self.config.model_base_path.base})'
     
     @final
     def __init__(self , base_path = None , override = {} , **kwargs):

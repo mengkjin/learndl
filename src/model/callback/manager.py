@@ -1,6 +1,8 @@
 from typing import Any , Optional
 
 from src.model.util import BaseCallBack , BaseTrainer 
+from src.func.display import EnclosedMessage
+
 from . import display, fit, test , nnspecific
 
 SEARCH_MODS = [fit , display , test]
@@ -18,16 +20,17 @@ class CallBackManager(BaseCallBack):
 
     @classmethod
     def setup(cls , trainer : BaseTrainer):
-        cb_configs = trainer.config.callbacks
-        for cb in trainer.model.COMPULSARY_CALLBACKS:
-            if cb not in cb_configs: cb_configs.update({cb:{}})
-        
-        if avail_cbs := trainer.model.AVAILABLE_CALLBACKS:
-            cb_configs = {k:v for k,v in cb_configs.items() if k in avail_cbs}
+        with EnclosedMessage(' setup callbacks '):
+            cb_configs = trainer.config.callbacks
+            for cb in trainer.model.COMPULSARY_CALLBACKS:
+                if cb not in cb_configs: cb_configs.update({cb:{}})
+            
+            if avail_cbs := trainer.model.AVAILABLE_CALLBACKS:
+                cb_configs = {k:v for k,v in cb_configs.items() if k in avail_cbs}
 
-        callbacks = [cls.__get_cb(cb , param , trainer) for cb , param in cb_configs.items()]
-        if nn_specific_cb := nnspecific.specific_cb(trainer.config.model_module): 
-            callbacks.append(nn_specific_cb(trainer))
+            callbacks = [cls.__get_cb(cb , param , trainer) for cb , param in cb_configs.items()]
+            if nn_specific_cb := nnspecific.specific_cb(trainer.config.model_module): 
+                callbacks.append(nn_specific_cb(trainer))
         return cls(trainer , *callbacks)
     
     @staticmethod

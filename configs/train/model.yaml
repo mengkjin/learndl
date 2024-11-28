@@ -1,9 +1,9 @@
 # main model configs ----------------------------------------------------------------
 name          : null  # any name or null
 module        : lgbm  # any of [nn defined in src/algo/nn/api.py] or ['booster' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
-submodels     : [best , swalast , swabest] # subset of ['best' , 'swalast' , 'swabest']
+submodels     : [best , swalast , swabest] # subset of ['best' , 'swalast' , 'swabest'] , but for booster , only use best
 beg_date      : 20170103 # model start date
-  end_date    : 99991231 # model end date
+end_date      : 99991231 # model end date
 interval      : 20       # model update interval in days , nn is prefered to be 120 , booster is prefered to be 20 , but is up to you
 train_window  : 240      # train window in days , nn is prefered to be 2400 , booster is prefered to be 240 , but is up to you
 
@@ -12,19 +12,16 @@ booster_head            : null # [null , lgbm , ada , xgboost , catboost] , if n
 
 # if module is a booster ----------------------------------------------------------------
 booster_type            : lgbm # [lgbm , ada , xgboost , catboost] , if module is Literal['booster'] , use this to specify the booster type
-booster_optuna          : True # [True , False] , if True , use optuna to optimize the booster parameters
+booster_optuna          : False # [True , False] , if True , use optuna to optimize the booster parameters
 booster_optuna_n_trials : 10   # int , the number of trials for optuna
 
 # labels specification ------------------------------------------------------------
-# list of labels [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
-# res : risk model residual
-# rtn : raw return
-# std : standardized return
-# if module is a neural network , use multiloss combination of the labels
-# if module is a booster , only use the first label
+# rtn : raw return | std : standardized return | res : risk model residual
+# if module is nn , use multiloss combination of the labels
+# if module is booster , only use the first label
 labels: 
-  - std_lag1_10 # rtn_lag1_10 # std_lag1_10
-  - rtn_lag1_10 # rtn_lag1_20 # std_lag1_20
+  - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
+  - rtn_lag1_10 
 
 # input specification ----------------------------------------------------------------
 input_type: data # [data , hidden] , if data , use the data as input , if hidden , use other models' hidden states as input
@@ -34,5 +31,5 @@ data.prenorm:   # should the day be prenormalized? recommendation : not to chang
   day: {'divlast' : True  , 'histnorm' : True}
 
 hidden.types: # list of hidden states , use if input_type is hidden
-  - gru_day.0.best
-  - gru_day.1.best
+  - gru_day_V0.0.best
+  - gru_day_V0.1.best

@@ -22,5 +22,3 @@ sys.path.append(str(MAIN_PATH))
 # if the machine is in js environment , set the (additional) path for factor storage
 JS_ENVIRONMENT = socket.gethostname().lower().startswith(('hno' , 'hpo'))
 JS_FACTOR_DESTINATION = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha') if JS_ENVIRONMENT else None
-
-INSTANCE_RECORD : dict[str, Any] = {}

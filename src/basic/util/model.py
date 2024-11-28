@@ -66,6 +66,8 @@ class ModelPath:
 class HiddenPath:
     def __init__(self , model_name : str , model_num : int , submodel : str) -> None:
         self.model_name , self.model_num , self.submodel = model_name , model_num , submodel
+        assert self.model_name in [p.name for p in PATH.hidden.iterdir()] , \
+            f'Hidden path does not contains hidden data of {self.model_name}'
 
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name},model_num={self.model_num},submodel={self.submodel})'
 

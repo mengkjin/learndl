@@ -84,12 +84,11 @@ class ModelPortfolioBuilder:
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , silent = True):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
-        if model_name is None: print(f'model_name is None, build fmps for all registered models')
         models = RegisteredModel.SelectModels(model_name)
-        [print(f'  -->  build fmps for {model}') for model in models]
+        if model_name is None: print(f'model_name is None, build fmps for all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
             md.update_fmps(update = update , overwrite = overwrite , silent = silent)
-            print(f'Finish build fmps for [{model}] predicting!')
+            print(f'  -->  Finish building model portfolios for {model}')
         return md
     

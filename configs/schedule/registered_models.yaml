@@ -14,7 +14,7 @@ gruRTN_day_V0:
   submodel: swalast
   num: 0
 
-gru_avg_V1:
+gru_day_V1:
   name: gru_avg
   submodel: swalast
   num: all

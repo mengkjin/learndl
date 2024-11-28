@@ -2,7 +2,7 @@ import pandas as pd
 
 from dataclasses import dataclass
 
-from src.factor.util.classes import Port , PortCreateResult , PortCreator
+from src.factor.util import Port , PortCreateResult , PortCreator
 
 DEFAULT_N_BEST = 50
 

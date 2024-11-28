@@ -8,10 +8,21 @@ from typing import Any , Literal , Optional
 from src.basic import CONF ,Timer , INSTANCE_RECORD
 from src.basic.conf import ROUNDING_RETURN , ROUNDING_TURNOVER , TRADE_COST
 from src.data import DATAVENDOR
-from src.factor.util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortfolioOptimizer , PortCreateResult , Port , PortfolioGenerator
+from src.factor.util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , Port
+
+from .optimizer import PortfolioOptimizer
+from .generator import PortfolioGenerator
 
 class PortfolioBuilder:
     '''
+    alpha : AlphaModel
+    benchmark : Benchmark | str
+    category : Literal['optim' , 'top'] | Any
+    lag : int , lag periods (not days)
+    strategy : str
+    suffixes : list[str] | str
+    build_on : Optional[Portfolio]
+
     optim accepted kwargs:
         prob_type : PROB_TYPE = 'quadprog'
         engine_type : ENGINE_TYPE = 'mosek'

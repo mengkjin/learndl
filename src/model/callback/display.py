@@ -206,23 +206,34 @@ class StatusDisplay(BaseCallBack):
 
     def summarize_test_result(self):
         if self.test_df_model.empty: return
-        cat_date = [md for md in self.test_df_model['model_date'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
-        cat_type = ['best' , 'swalast' , 'swabest']
+        cat_stat = [md for md in self.test_df_model['model_date'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
+        cat_subm = ['best' , 'swalast' , 'swabest']
 
-        df_avg = self.test_df_date.groupby(['model_num','submodel'])['value'].mean()
-        df_sum = self.test_df_date.groupby(['model_num','submodel'])['value'].sum()
-        df_std = self.test_df_date.groupby(['model_num','submodel'])['value'].std()
+        dfs : dict[str,pd.DataFrame|pd.Series] = {}
+        dfs['Avg'] = self.test_df_date.groupby(['model_num','submodel'])['value'].mean()
+        dfs['Sum'] = self.test_df_date.groupby(['model_num','submodel'])['value'].sum()
+        dfs['Std'] = self.test_df_date.groupby(['model_num','submodel'])['value'].std()
 
-        df_tv = (df_avg / df_std) * (len(self.test_df_date['date'].unique())**0.5)
-        df_ir = (df_avg / df_std) * ((240 / 10)**0.5)
+        dfs['T']   = ((dfs['Avg'] / dfs['Std']) * (len(self.test_df_date['date'].unique())**0.5))
+        dfs['IR']  = ((dfs['Avg'] / dfs['Std']) * ((240 / 10)**0.5))
 
-        self.summary_df = pd.concat([
-            df_avg.reset_index().assign(model_date = 'Avg') ,
-            df_sum.reset_index().assign(model_date = 'Sum') , 
-            df_std.reset_index().assign(model_date = 'Std') ,
-            df_tv.reset_index().assign(model_date = 'T') , 
-            df_ir.reset_index().assign(model_date = 'IR') ,
-        ])
+        stat_df = pd.concat([df.reset_index().assign(stat=k) for k,df in dfs.items()])
+
+        # display summary
+        df = pd.concat([self.test_df_model.rename(columns={'model_date':'stat'}) , stat_df])
+
+        base_name = self.config.model_module
+        if self.config.module_type == 'boost' and self.config.model_booster_optuna: base_name += '.optuna'
+        df['model_num'] = df['model_num'].map(lambda x: f'{base_name}.{x}')
+        df['submodel']  = pd.Categorical(df['submodel'] , categories = cat_subm, ordered=True) 
+        df['stat']      = pd.Categorical(df['stat']     , categories = cat_stat, ordered=True) 
+
+        self.summary_df = df.rename(columns={'model_num':'model'}).pivot_table('value' , 'stat' , ['model' , 'submodel'] , observed=False).round(4)
+
+        # more than 100 rows of test_df_model means the cycle is month / day
+        df_display = self.summary_df
+        if len(self.test_df_model) > 100: df_display = df_display[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]
+        FUNC.display.data_frame(df_display , text_after = f'Test results are saved to {self.path_test}')
 
         # export excel
         rslt = {'summary' : self.summary_df , 'by_model' : self.test_df_model}
@@ -233,23 +244,4 @@ class StatusDisplay(BaseCallBack):
             df = df.merge(df_cum , on = 'date').rename_axis(None , axis = 'columns')
             rslt[f'{model_num}'] = df
         FUNC.dfs_to_excel(rslt , self.path_test)
-
-        # display summary
-        if len(self.test_df_model) > 100:
-            # more than 100 rows of test_df_model means the cycle is month / day
-            df = self.summary_df
-        else:
-            df = pd.concat([self.test_df_model , self.summary_df])
-
-        df['model_date'] = pd.Categorical(df['model_date'] , categories = cat_date, ordered=True) 
-        df['submodel']   = pd.Categorical(df['submodel']   , categories = cat_type, ordered=True) 
-        df = df.rename(columns={'model_date' : 'stat'}).pivot_table(
-            'value' , 'stat' , ['model_num' , 'submodel'] , observed=False).round(4)
-        df.index.set_names(None , inplace=True)
-
-        base_name = self.config.model_module
-        if self.config.module_type == 'boost' and self.config.model_booster_optuna: base_name += '.optuna'
-        df.columns = pd.MultiIndex.from_tuples([(f'{base_name}.{num}' , type) for num,type in df.columns])
-        FUNC.display.data_frame(df , text_after = f'Test results are saved to {self.path_test}')
-        
         self.test_summarized = True

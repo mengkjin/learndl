@@ -6,7 +6,8 @@ from typing import Any , Literal , Optional
 
 from src.algo import getter , VALID_BOOSTERS
 from src.basic import Device , Logger , ModelPath , PATH , IS_SERVER
-from src.func import pretty_print_dict , recur_update
+from src.func import recur_update
+from src.func.display import EnclosedMessage
 
 from .metric import Metrics
 from .storage import Checkpoint , Deposition
@@ -531,16 +532,41 @@ class TrainConfig(TrainParam):
         self.Train.model_name = model_name
 
     def process_parser(self , par_args = {}):
-        self.parser_stage(getattr(par_args , 'stage' , -1))
-        self.parser_resume(getattr(par_args , 'resume' , -1))
-        self.parser_select(getattr(par_args , 'checkname' , -1)) 
+        with EnclosedMessage(' parser training args '):
+            self.parser_stage(getattr(par_args , 'stage' , -1))
+            self.parser_resume(getattr(par_args , 'resume' , -1))
+            self.parser_select(getattr(par_args , 'checkname' , -1)) 
         return self
 
     def print_out(self):
-        subset = [
-            'model_name' , 'model_module' , 'model_submodels' , 'model_booster_type' , 'model_booster_optuna' ,
-            'model_booster_head' , 'model_data_types' , 'model_data_labels' ,
-            'random_seed' , 'beg_date' , 'end_date' , 'train_sample_method' , 'train_shuffle_option' , 
-        ]
-        pretty_print_dict({k:self.get(k) for k in subset})
-        pretty_print_dict(self.Model.Param)
+        info_strs = []
+        info_strs.append(f'Model Name   : {self.model_name}')
+        info_strs.append(f'Model Module : {self.model_module}')
+        if self.module_type == 'boost':
+            if self.model_module != self.model_booster_type:
+                info_strs.append(f'  -->  Booster Type   : {self.model_booster_type}')
+            if self.model_booster_optuna:
+                info_strs.append(f'  -->  Booster Params :  Optuna for {self.model_booster_optuna_n_trials} trials')
+            else:
+                info_strs.append(f'  -->  Booster Params :')
+                for k , v in self.Model.Param.items():
+                    info_strs.append(f'    -->  {k} : {v}')
+        else:
+            if self.model_booster_head:
+                info_strs.append(f'  -->  Use Booster Head : {self.model_booster_head}')
+            info_strs.append(f'  -->  Model Params :')
+            for k , v in self.Model.Param.items():
+                info_strs.append(f'    -->  {k} : {v}')
+        info_strs.append(f'Model Inputs : {self.model_input_type}')
+        if self.model_input_type == 'data':
+            info_strs.append(f'  -->  Data Types : {self.model_data_types}')
+        else:
+            info_strs.append(f'  -->  Hidden Models : {self.model_hidden_types}')
+        info_strs.append(f'Model Labels : {self.model_labels}')
+        info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
+        info_strs.append(f'Sampling     : {self.train_sample_method}')
+        info_strs.append(f'Shuffling    : {self.train_shuffle_option}')
+        info_strs.append(f'Random Seed  : {self.random_seed}')
+
+        with EnclosedMessage(' model info '): 
+            print('\n'.join(info_strs))

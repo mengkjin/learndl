@@ -2,10 +2,10 @@ from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
 from src.basic import CONF
+from src.factor.util import Port , PortCreateResult , PortCreator
 
 from .interpreter import PortfolioOptimizerInput
 from .solver import MosekSolver , CvxpySolver
-from ..classes import Port , PortCreateResult , PortCreator
 
 PROB_TYPE = Literal['linprog' , 'quadprog' , 'socp']
 ENGINE_TYPE = Literal['mosek' , 'cvxopt' , 'cvxpy']
@@ -87,7 +87,7 @@ class PortfolioOptimizer(PortCreator):
         return self
     
 if __name__ == '__main__':
-    from src.factor.util.optimizer.optim import PortfolioOptimizer
+    from src.factor.builder.optimizer.optim import PortfolioOptimizer
     config_path = 'custom_opt_config.yaml'
 
     optim = PortfolioOptimizer('test').setup(config_path = config_path , prob_type='socp')

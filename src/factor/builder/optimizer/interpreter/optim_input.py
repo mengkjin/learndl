@@ -4,6 +4,8 @@ from copy import deepcopy
 from typing import Any , Optional
 
 from src.basic.conf import DEFAULT_OPT_CONFIG
+from src.factor.util import AlphaModel , Amodel , Benchmark , Port , Portfolio , RISK_MODEL
+
 from .solver_input import SolverInput
 from .parser import (
     parse_config_benchmark , parse_config_board , parse_config_bound ,
@@ -17,7 +19,6 @@ from .input_creator import (
     create_input_bnd_con , create_input_lin_con , create_input_turn_con ,
     create_input_cov_con ,  create_input_short_con
 )
-from ...classes import AlphaModel , Amodel , Benchmark , Port , Portfolio , RISK_MODEL
 
 class PortfolioOptimizerInput:
     def __init__(

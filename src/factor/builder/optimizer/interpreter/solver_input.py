@@ -4,8 +4,9 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any , Optional
 
+from src.factor.util import Accuracy , Utility
+
 from .constr import LinearConstraint , BoundConstraint , TurnConstraint , CovConstraint , ShortConstraint
-from ...classes import Accuracy , Utility
 
 __all__ = ['SolverInput' , 'Relaxer' , 'SolveCond' , 'SolveVars']
 
