@@ -23,6 +23,13 @@ class BaseCalculator(ABC):
         self.params : dict[str,Any] = kwargs
     def __repr__(self):
         return f'{self.__class__.__name__} of task {self.TASK_TYPE}(params={self.params})'
+    @classmethod
+    def match_name(cls , name : str):
+        candidate_names = [
+            cls.__name__.lower() ,
+            cls.__name__.lower().removeprefix(f'{cls.TASK_TYPE}_'),
+        ]
+        return name.lower() in candidate_names
 
     class suppress_warnings:
         def __enter__(self):

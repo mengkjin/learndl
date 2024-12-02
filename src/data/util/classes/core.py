@@ -58,6 +58,10 @@ class DataBlock(Stock4DData):
     @classmethod
     def last_modified_date(cls , key , predict):
         return PATH.file_modified_date(cls.block_path(key , predict))
+    
+    @classmethod
+    def last_modified_time(cls , key , predict):
+        return PATH.file_modified_time(cls.block_path(key , predict))
 
     @staticmethod
     def block_path(key : str , predict=False, alias_search = True):
@@ -376,6 +380,7 @@ class ModuleData:
     def load_datas(cls , data_type_list : list[str] , y_labels : Optional[list[str]] = None , 
                    predict : bool = False , dtype : Optional[str | Any] = torch.float , 
                    save_upon_loading : bool = True):
+        '''if predict is True, only load recent data'''
         if dtype is None: dtype = torch.float
         if isinstance(dtype , str): dtype = getattr(torch , dtype)
         if predict: 

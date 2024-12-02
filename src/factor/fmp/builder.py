@@ -6,12 +6,13 @@ from contextlib import nullcontext
 from typing import Any , Literal , Optional
 
 from src.basic import CONF ,Timer , INSTANCE_RECORD
-from src.basic.conf import ROUNDING_RETURN , ROUNDING_TURNOVER , TRADE_COST
-from src.data import DATAVENDOR
-from src.factor.util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , Port
+from src.factor.util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult
 
+from .accountant import PortfolioAccountant
 from .optimizer import PortfolioOptimizer
 from .generator import PortfolioGenerator
+from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , 
+                        get_full_name , get_benchmark , get_benchmark_name , parse_full_name)
 
 class PortfolioBuilder:
     '''
@@ -45,16 +46,16 @@ class PortfolioBuilder:
                  build_on : Optional[Portfolio] = None , verbosity : int = 1 , **kwargs):
         self.category  = category
         self.alpha     = alpha
-        self.benchmark = self.get_benchmark(benchmark)
+        self.benchmark = get_benchmark(benchmark)
         self.kwargs    = kwargs
         self.lag       = lag
         self.verbosity = verbosity
         
-        self.prefix         = self.get_prefix(category)
+        self.prefix         = get_prefix(category)
         self.factor_name    = alpha.name
-        self.benchmark_name = self.get_benchmark_name(benchmark)
-        self.strategy       = self.get_strategy_name(category , strategy , kwargs)
-        self.suffix         = self.get_suffix(lag , suffixes)
+        self.benchmark_name = get_benchmark_name(benchmark)
+        self.strategy       = get_strategy_name(category , strategy , kwargs)
+        self.suffix         = get_suffix(lag , suffixes)
 
         self.portfolio = Portfolio(self.full_name) if build_on is None else build_on
         self.creations : list[PortCreateResult] = []
@@ -62,98 +63,26 @@ class PortfolioBuilder:
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name=\'{self.full_name}\',kwargs={self.kwargs},'+\
             f'{len(self.portfolio)} fmps,'+'not '* (not hasattr(self , 'account')) + 'accounted)'
-
-    @staticmethod
-    def get_prefix(category : Literal['optim' , 'top']): return category.capitalize()
-        
-    @staticmethod
-    def get_factor_name(alpha : AlphaModel):
-        return alpha.name
-
-    @staticmethod
-    def get_benchmark(benchmark : Optional[Portfolio | Benchmark | str] = None): 
-        if benchmark is None:
-            benchmark = Portfolio()
-        elif isinstance(benchmark , str):
-            benchmark = Benchmark(benchmark)
-        return benchmark
-    
-    @classmethod
-    def get_benchmark_name(cls , benchmark : Optional[Portfolio | Benchmark | str]):
-        if benchmark is None:
-            return 'default'
-        elif isinstance(benchmark , (Portfolio , Benchmark)):
-            return benchmark.name
-        elif isinstance(benchmark , str):
-            return benchmark
-        else:
-            raise ValueError(f'Unknown benchmark type: {type(benchmark)}')
-
-    @classmethod
-    def get_strategy_name(cls , category : Literal['optim' , 'top'] , strategy : str = 'default' , kwargs : dict[str,Any] = {}):
-        if not strategy or strategy == 'default':
-            if category == 'top':
-                n = kwargs['n_best'] if 'n_best' in kwargs else PortfolioGenerator.DEFAULT_N_BEST
-                strategy = f'Top{n:_>3d}'
-            else:
-                strategy = os.path.basename(kwargs['config_path']) if 'config_path' in kwargs else 'default'
-        assert '.' not in strategy , f'To avoid conflict with factor name, strategy name cannot contain dot: {strategy}'
-        return strategy
-
-    @classmethod
-    def get_suffix(cls , lag : int , suffixes : list[str] | str = []): 
-        if isinstance(suffixes , str): suffixes = [suffixes]
-        return '.'.join([f'lag{lag}' , *suffixes])
     
     @property
     def full_name(self):
         return '.'.join([self.prefix , self.factor_name , self.benchmark.name , self.strategy , self.suffix])
     
+    @property
+    def port_index(self):
+        return get_port_index(self.full_name)
+    
     @classmethod
-    def get_full_name(cls , category : Literal['optim' , 'top'] , alpha : AlphaModel , 
+    def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Optional[Portfolio] = None , verbosity : int = 1 , **kwargs):
+        elements = parse_full_name(full_name)
+        assert alpha.name == elements['factor_name'] , f'Alpha name mismatch: {alpha.name} != {elements["factor_name"]}'
+        return cls(alpha = alpha , build_on = build_on , verbosity = verbosity , **elements , **kwargs)
+    
+    @staticmethod
+    def get_full_name(category : Literal['optim' , 'top'] , alpha : AlphaModel | str , 
                       benchmark : Optional[Portfolio | Benchmark | str] = None , 
                       strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
-        return '.'.join([
-            cls.get_prefix(category) , 
-            cls.get_factor_name(alpha) , 
-            cls.get_benchmark_name(benchmark) , 
-            cls.get_strategy_name(category , strategy , kwargs) , 
-            cls.get_suffix(lag , suffixes)
-        ])
-
-    @staticmethod
-    def parse_full_name(full_name : str):
-        components = full_name.split('.')
-        assert len(components) >= 5 , f'Full name must have at least 4 components: {full_name}'
-        prefix = components[0]
-        category = prefix.lower()
-        factor_name , benchmark , strategy = components[1:4]
-        suffix = '.'.join(components[4:])
-        lag = int(components[4].split('lag')[-1])
-        
-        return {
-            'category' : category ,
-            'prefix' : prefix ,
-            'factor_name' : factor_name ,
-            'benchmark' : benchmark ,
-            'strategy' : strategy ,
-            'suffix' : suffix ,
-            'lag' : lag ,
-        }
-    
-    def port_index(self):
-        default_index : dict[str,Any] = {
-            'prefix'      : self.prefix ,
-            'factor_name' : self.alpha.name ,
-            'benchmark'   : self.benchmark.name ,
-            'strategy'    : self.strategy ,
-            'suffix'      : self.suffix ,
-        }
-
-        default_index['lag'] = self.lag
-        if self.category == 'top' and 'n_best' in self.kwargs:
-            default_index['topN'] = self.kwargs['n_best']
-        return default_index
+        return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
     
     def setup(self , verbosity : int | None = None):
         if verbosity is None: verbosity = self.verbosity
@@ -175,50 +104,11 @@ class PortfolioBuilder:
         return self
     
     def accounting(self , start : int = -1 , end : int = 99991231 , daily = False , 
-                   analytic = True , attribution = True):
+                   analytic = True , attribution = True , account_path = None):
         '''Accounting portfolio through date, require at least portfolio'''
-        port_min , port_max = self.portfolio.available_dates().min() , self.portfolio.available_dates().max()
-        start = np.max([port_min , start])
-        end   = np.min([DATAVENDOR.td(port_max,5).td , end , DATAVENDOR.td(DATAVENDOR.last_quote_dt,-1).td])
-
-        model_dates = DATAVENDOR.td_within(start , end)
-        if daily:
-            period_st = DATAVENDOR.td_array(model_dates , 1)
-            period_ed = period_st
-        else:
-            model_dates = np.intersect1d(model_dates , self.portfolio.available_dates())
-            period_st = DATAVENDOR.td_array(model_dates , 1)
-            period_ed = np.concatenate([model_dates[1:] , [DATAVENDOR.td(end,1).td]])
-
-        assert np.all(model_dates < period_st) , (model_dates , period_st)
-        assert np.all(period_st <= period_ed) , (period_st , period_ed)
-
-        index = self.port_index()
-        account = pd.DataFrame(index | {
-            'model_date':np.concatenate([[-1],model_dates]) , 
-            'start':np.concatenate([[model_dates[0]],period_st]) , 
-            'end':np.concatenate([[model_dates[0]],period_ed]) ,
-            'pf':0. , 'bm':0. , 'turn':0. , 'excess':0. ,
-            'analytic':None , 'attribution':None}).set_index('model_date').sort_index()
-
-        port_old = Port.none_port(model_dates[0])
-        for date , ed in zip(model_dates , period_ed):
-            port_new = self.portfolio.get(date) if self.portfolio.has(date) else port_old
-            bench = self.benchmark.get(date , True)
-
-            turn = np.round(port_new.turnover(port_old),ROUNDING_TURNOVER)
-            account.loc[date , ['pf' , 'bm' , 'turn']] = \
-                [np.round(port_new.fut_ret(ed) , ROUNDING_RETURN) , np.round(bench.fut_ret(ed) , ROUNDING_RETURN) , turn]
-            
-            if analytic and self.lag == 0: 
-                account.loc[date , 'analytic']    = RISK_MODEL.get(date).analyze(port_new , bench , port_old) #type:ignore
-            if attribution and self.lag == 0: 
-                account.loc[date , 'attribution'] = RISK_MODEL.get(date).attribute(port_new , bench , ed , turn * TRADE_COST)  #type:ignore
-            port_old = port_new.evolve_to_date(ed)
-
-        account['pf']  = account['pf'] - account['turn'] * TRADE_COST
-        account['excess'] = account['pf'] - account['bm']
-        self.account = account.reset_index().set_index(list(index.keys())).sort_values('model_date')
+        accountant = PortfolioAccountant(self.portfolio , self.benchmark , account_path)
+        accountant.accounting(start , end , daily , analytic and self.lag == 0 , attribution and self.lag == 0 , index = self.port_index)
+        self.account = accountant.account
         return self
 
 class PortfolioBuilderGroup:

@@ -1,4 +1,4 @@
-from typing import Any , Optional
+from typing import Any , Optional , Type
 
 from src.factor.util import Benchmark , StockFactor
 
@@ -29,7 +29,7 @@ class FactorPerfManager(BaseTestManager):
             'distr_qtile' : Distribution Quantile
     '''
     TASK_TYPE = 'factor'
-    TASK_LIST = [
+    TASK_LIST : list[Type[Calc.BasePerfCalc]] = [
         Calc.Factor_FrontFace ,
         Calc.Factor_IC_Curve , 
         Calc.Factor_IC_Decay ,

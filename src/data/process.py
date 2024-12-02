@@ -62,8 +62,10 @@ class DataProcessor:
         print(f'{len(processor.blocks)} datas : {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
         # return processor
         for key , proc in processor.processors():
-            if (modified_date:= DataBlock.last_modified_date(key , predict)) >= CALENDAR.today():
-                print(f'{key} is up to {modified_date} already!')
+            modified_time = DataBlock.last_modified_time(key , predict)
+            required_time = CALENDAR.full_clock(CALENDAR.today(0 if CALENDAR.clock() >= 213000 else -1),213000)
+            if modified_time >= required_time:
+                print(f'{key} is up to {modified_time} already!')
                 continue
             tt1 = time.time()
             with Timer(f'{key} blocks loading' , newline=True):

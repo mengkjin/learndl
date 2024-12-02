@@ -21,6 +21,8 @@ class DataModule(BaseDataModule):
         1. load Package of BlockDatas of x , y , norms and index
         2. Setup model_date dataloaders
         3. Buffer dict for dynamic nn's
+        use_data: 'fit' , 'predict' , 'both' 
+            if 'predict' only load recent data
         '''
         self.config   = TrainConfig.load() if config is None else config
         self.use_data = use_data

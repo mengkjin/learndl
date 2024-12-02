@@ -2,10 +2,10 @@ from typing import Any , Literal
 
 from src.factor.util import StockFactor
 
-from .test_manager import TASK_TYPES , TYPE_of_TASK
-from .factor_perf.api import FactorPerfManager
-from .fmp_optim.api import FmpOptimManager
-from .fmp_top.api import FmpTopManager
+from .analytic.test_manager import TASK_TYPES , TYPE_of_TASK
+from .analytic.factor_perf.api import FactorPerfManager
+from .analytic.fmp_optim.api import FmpOptimManager
+from .analytic.fmp_top.api import FmpTopManager
 
 class FactorTestAPI:
     TASK_TYPES = TASK_TYPES

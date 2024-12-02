@@ -1,7 +1,7 @@
-from typing import Any , Optional
+from typing import Any , Optional , Type
 
 from src.factor.util import Benchmark , StockFactor
-from src.factor.builder import PortfolioBuilderGroup
+from src.factor.fmp import PortfolioBuilderGroup
 
 from . import calculator as Calc
 from ..test_manager import BaseTestManager
@@ -23,13 +23,12 @@ class FmpTopManager(BaseTestManager):
             'attrib_style' : Attribution Style
     '''
     TASK_TYPE = 'top'
-    TASK_LIST = [
+    TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
         Calc.Top_FrontFace , 
         Calc.Top_Perf_Curve ,
         Calc.Top_Perf_Excess ,
         Calc.Top_Perf_Drawdown , 
         Calc.Top_Perf_Year ,
-        # Calc.Top_Perf_Month ,
         Calc.Top_Exp_Style ,
         Calc.Top_Exp_Indus ,
         Calc.Top_Attrib_Source ,

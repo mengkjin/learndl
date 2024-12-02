@@ -5,7 +5,7 @@ from src.basic import PATH
 from src.data import DATAVENDOR
 from src.func.display import EnclosedMessage
 from src.factor.util import StockFactor
-from src.factor.analytic import FactorTestAPI
+from src.factor.api import FactorTestAPI
 from src.factor.calculator import StockFactorHierarchy
 
 def get_random_factor(start_dt = 20240101 , end_dt = 20240331 , step = 5 , default_random_n = 2):

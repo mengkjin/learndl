@@ -76,10 +76,12 @@ class ModelHiddenExtractor:
     def extract_hidden(self , model_dates : Optional[list | np.ndarray | int] = None ,
                        update = True , overwrite = False , silent = False):
         model_iter = self.model_iter(model_dates , update)
+        self._current_update_dates = []
         with torch.no_grad():
             for model_date , model_num , submodel in model_iter:
                 hidden_path = HiddenPath(self.hidden_name , model_num , submodel)
                 self.model_hidden(hidden_path , model_date , overwrite , silent)
+                self._current_update_dates.append(model_date)
         return self
     
     def model_hidden(self , hidden_path : HiddenPath , model_date :int , overwrite = False , silent = False) -> pd.DataFrame | None:
@@ -117,5 +119,8 @@ class ModelHiddenExtractor:
         for model in models:
             extractor = cls(model)
             extractor.extract_hidden(update = update , overwrite = overwrite , silent = silent)
-            print(f'  -->  Finish extracting hidden feature for {model}')
+            if extractor._current_update_dates:
+                print(f'  -->  Finish updating hidden feature extraction for {model} , len={len(extractor._current_update_dates)}')
+            else:
+                print(f'  -->  No new updating hidden feature extraction for {model}')
         return extractor

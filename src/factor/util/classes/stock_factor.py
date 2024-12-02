@@ -133,11 +133,6 @@ def eval_weighted_pnl(x : pd.DataFrame , weight_type : str , direction : Any , g
     return rtn
 
 class StockFactor:
-    def __new__(cls, factor: Union[pd.DataFrame, pd.Series, DataBlock, 'StockFactor'], *args, **kwargs):
-        if isinstance(factor, StockFactor): return factor
-        instance = super().__new__(cls)
-        return instance
-    
     def __init__(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor'] , normalized = False):
         self.update(factor , normalized)
 
@@ -149,21 +144,21 @@ class StockFactor:
 
     def update(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor'] , normalized = False):
         if isinstance(factor , StockFactor):
-            return factor
+            factor = factor.prior_input
+
+        self._df  : pd.DataFrame | Any = None
+        self._blk : DataBlock | Any = None
+        if isinstance(factor , pd.Series): factor = factor.to_frame()
+        if isinstance(factor , pd.DataFrame):
+            if 'date' not in factor.index.names: factor = factor.set_index('date' , append=True)
+            if 'secid' not in factor.index.names: factor = factor.set_index('secid' , append=True)
+            if None in factor.index.names: factor = factor.reset_index([None] , drop=True)
+            self._df = factor
         else:
-            self._df  : pd.DataFrame | Any = None
-            self._blk : DataBlock | Any = None
-            if isinstance(factor , pd.Series): factor = factor.to_frame()
-            if isinstance(factor , pd.DataFrame):
-                if 'date' not in factor.index.names: factor = factor.set_index('date' , append=True)
-                if 'secid' not in factor.index.names: factor = factor.set_index('secid' , append=True)
-                if None in factor.index.names: factor = factor.reset_index([None] , drop=True)
-                self._df = factor
-            else:
-                self._blk = factor
-            self.normalized = normalized
-            self.subsets : dict[str,StockFactor] = {}
-            return self
+            self._blk = factor
+        self.normalized = normalized
+        self.subsets : dict[str,StockFactor] = {}
+        return self
 
     def copy(self): return deepcopy(self)
 
@@ -226,6 +221,10 @@ class StockFactor:
             self.subsets[benchmark.name] = StockFactor(benchmark(self.prior_input) if benchmark else self.prior_input)
         return self.subsets[benchmark.name]
     
+    def alpha_model(self) -> AlphaModel:
+        assert len(self.factor_names) == 1 , f'only one factor is supported for alpha model , but got {len(self.factor_names)}'
+        return self.alpha_models()[0]
+
     def alpha_models(self) -> list[AlphaModel]:
         return [AlphaModel.from_dataframe(data , col) for col , data in self.frame().items()]
 

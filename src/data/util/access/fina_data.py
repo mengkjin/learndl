@@ -31,7 +31,8 @@ class FDataAccess(DateDataAccess):
     def full_year_ends(start_year = 2000 , end_year = 2099):
         return YEAR_ENDS[(YEAR_ENDS >= start_year * 10000) & (YEAR_ENDS <= end_year * 10000)]
     
-    def qtr_ends(self , date , n_past = 1 , n_future = 0 , year_only = False):
+    @staticmethod
+    def qtr_ends(date , n_past = 1 , n_future = 0 , year_only = False):
         if year_only:
             qtr_past = YEAR_ENDS[YEAR_ENDS <= date][-n_past:]
             qtr_future = YEAR_ENDS[YEAR_ENDS >= date][:n_future]
@@ -62,14 +63,16 @@ class FDataAccess(DateDataAccess):
             df_acc = df_acc.pivot_table(val , 'end_date' , 'secid').sort_index()
         return df_acc
     
-    def get_qtr_data(self , data_type : str , val : str , date : int , lastn = 1 , stack = True):
+    def get_qtr_data(self , data_type : str , val : str , date : int , lastn = 1 , stack = True , ffill = False):
         df_acc = self.get_acc_data(data_type , val , date , lastn + 4 , stack = False)
         q_ends = df_acc.index.get_level_values('end_date').unique()
         y_starts = np.unique(q_ends // 10000) * 10000
         df_qtr = pd.concat([df_acc , df_acc.reindex(y_starts).fillna(0)]).sort_index().ffill().\
             fillna(0).diff().reindex(q_ends).where(~df_acc.isna() , np.nan)
+        if ffill:
+            df_qtr = df_qtr.ffill()
         if stack:
-            df_qtr = df_acc.stack().reset_index().rename(columns={0:val}).\
+            df_qtr = df_qtr.stack().reset_index().rename(columns={0:val}).\
                 sort_values(['secid','end_date']).set_index('secid').groupby('secid').tail(lastn)
         return df_qtr
 

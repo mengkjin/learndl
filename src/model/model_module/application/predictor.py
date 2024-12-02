@@ -33,6 +33,7 @@ class ModelPredictor:
         self.df = pd.DataFrame()
 
         self.dir_deploy = JS_FACTOR_DESTINATION
+        self._current_update_dates = []
 
 
     def __repr__(self) -> str:
@@ -46,6 +47,7 @@ class ModelPredictor:
             self.predict_dates(dates , deploy = True)
 
     def predict_dates(self , dates : np.ndarray | list[int] , deploy = True):
+        if len(dates) == 0: return self
         '''predict recent days'''
         data_module  = DataModule(self.config , 'both' if min(dates) <= CALENDAR.today(-100) else 'predict').load_data() 
         pred_dates = dates[dates <= max(data_module.test_full_dates)]
@@ -87,16 +89,21 @@ class ModelPredictor:
         '''deploy df by day to class.destination'''
         if df is None: df = self.df
         if df.empty: return self
-
+        self._current_update_dates = []
         for date , subdf in df.groupby(date_col):
             new_df = subdf.drop(columns='date').set_index(secid_col)
             self.reg_model.save_pred(new_df , date , overwrite)
 
             if self.dir_deploy is not None:
-                path_deploy = self.dir_deploy.joinpath(self.reg_model.pred_name , f'{self.reg_model.pred_name}_{date}.txt')
-                path_deploy.parent.mkdir(parents=True,exist_ok=True)
-                if (not overwrite or not path_deploy.exists()):
-                    new_df.to_csv(path_deploy, sep='\t', index=True, header=False)
+                try:
+                    path_deploy = self.dir_deploy.joinpath(self.reg_model.pred_name , f'{self.reg_model.pred_name}_{date}.txt')
+                    path_deploy.parent.mkdir(parents=True,exist_ok=True)
+                    if (not overwrite or not path_deploy.exists()):
+                        new_df.to_csv(path_deploy, sep='\t', index=True, header=False)
+                except OSError as e:
+                    print(f'{self.reg_model.pred_name} deploy error: {e}')
+
+            self._current_update_dates.append(date)
         return self
     
     def df_corr(self , df = None , window = 30 , secid_col = SECID_COLS , date_col = DATE_COLS):
@@ -115,5 +122,8 @@ class ModelPredictor:
         for model in models:
             md = cls(model)
             md.update_preds(update = update , overwrite = overwrite , silent = silent)
-            print(f'  -->  Finish updating model prediction for {model}')
+            if md._current_update_dates:
+                print(f'  -->  Finish updating model prediction for {model} , len={len(md._current_update_dates)}')
+            else:
+                print(f'  -->  No new updating model prediction for {model}')
         return md

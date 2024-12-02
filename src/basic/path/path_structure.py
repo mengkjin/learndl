@@ -23,6 +23,7 @@ hidden      = export.joinpath('hidden_feature')
 factor      = export.joinpath('stock_factor')
 preds       = export.joinpath('model_prediction')
 fmp         = export.joinpath('factor_model_port')
+fmp_account = export.joinpath('factor_model_account')
 
 # config folder and subfolders
 conf        = main.joinpath('configs')
@@ -42,6 +43,7 @@ result      = main.joinpath('results')
 rslt_factor = result.joinpath('test').joinpath('perf')
 rslt_optim  = result.joinpath('test').joinpath('optim')
 rslt_top    = result.joinpath('test').joinpath('top')
+
 monitor     = result.joinpath('monitor')
 
 # some records to upload
@@ -74,5 +76,11 @@ def deltrees(dir , bases):
 def file_modified_date(path : Path | str , default = 19970101):
     if Path(path).exists():
         return int(time.strftime('%Y%m%d',time.localtime(os.path.getmtime(path))))
+    else:
+        return default
+
+def file_modified_time(path : Path | str , default = 19970101000000):
+    if Path(path).exists():
+        return int(time.strftime('%Y%m%d%H%M%S',time.localtime(os.path.getmtime(path))))
     else:
         return default

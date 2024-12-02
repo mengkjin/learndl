@@ -107,6 +107,12 @@ class TradeCalendar:
     @staticmethod
     def today(offset = 0):   return today(offset)
     @staticmethod
+    def clock(): 
+        return int(datetime.now().strftime('%H%M%S'))
+    @classmethod
+    def full_clock(cls , date : int , clock : int): 
+        return date * 1000000 + clock
+    @staticmethod
     def update_to():
         return today(-1 if datetime.now().time() <= time(19, 0, 0) else 0)
     

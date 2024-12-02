@@ -4,7 +4,7 @@ from typing import Any , Literal
 
 from src import func as FUNC
 from src.factor.util import StockFactor
-from src.factor.analytic import FactorTestAPI , TYPE_of_TASK
+from src.factor.api import FactorTestAPI , TYPE_of_TASK
 from src.model.util import BaseCallBack , PredRecorder
 
 PRED_RECORD = PredRecorder()
@@ -43,7 +43,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         self.df = df
 
         self.test_results = {
-            task:FactorTestAPI.run_test(task , df , verbosity = 0 , write_down=False , display_figs=False)
+            task:FactorTestAPI.run_test(task , StockFactor(df) , verbosity = 0 , write_down=False , display_figs=False)
             for task in self.ANALYTIC_TASKS
         }
 

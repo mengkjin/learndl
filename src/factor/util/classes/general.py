@@ -158,8 +158,7 @@ class Port:
         else:
             return pd.DataFrame(columns=['date','secid','weight']).astype({'date':int,'secid':int,'weight':float})
         
-    @property
-    def full_table(self):
+    def to_dataframe(self):
         if len(self.port):
             return self.port.assign(name = self.name , date = self.date)[['name' , 'date' , 'secid' , 'weight']]
         else:

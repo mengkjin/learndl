@@ -19,10 +19,13 @@ secdf_path = RC_PATH.joinpath('secdf')
 final_path.mkdir(exist_ok=True , parents=True)
 secdf_path.mkdir(exist_ok=True , parents=True)
 
+def rcquant_init():
+    if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
+
 def rcquant_secdf(date : int):
     path = secdf_path.joinpath(f'secdf_{date}.feather')
     if path.exists(): return pd.read_feather(path)
-    if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
+    rcquant_init()
     secdf = rqdatac.all_instruments(type='CS', date=str(date))
     secdf = secdf.rename(columns = {'order_book_id':'code'})
     secdf['is_active'] = secdf['status'] == 'Active'
@@ -69,7 +72,7 @@ def last_date(offset : int = 0 , x_min : int = 1):
     return CALENDAR.cd(last_dt , offset)
 
 def rcquant_trading_dates(start_date, end_date):
-    if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
+    rcquant_init()
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
 
 def rcquant_bar_min(date : int , first_n : int = -1):

@@ -1,7 +1,7 @@
-from typing import Any , Literal , Optional
+from typing import Any , Literal , Optional , Type
 
 from src.factor.util import Benchmark , StockFactor
-from src.factor.builder import PortfolioBuilderGroup
+from src.factor.fmp import PortfolioBuilderGroup
 
 from . import calculator as Calc
 from ..test_manager import BaseTestManager
@@ -24,7 +24,7 @@ class FmpOptimManager(BaseTestManager):
             'attrib_style' : Attribution Style
     '''
     TASK_TYPE = 'optim'
-    TASK_LIST = [
+    TASK_LIST : list[Type[Calc.BaseOptimCalc]] = [
         Calc.Optim_FrontFace , 
         Calc.Optim_Perf_Curve ,
         Calc.Optim_Perf_Drawdown , 

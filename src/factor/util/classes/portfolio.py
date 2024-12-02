@@ -94,3 +94,9 @@ class Portfolio:
         portfolio = cls(name)
         [portfolio.append(Port(subdf[['secid' , 'weight']] , date , name)) for date , subdf in df.groupby('date')]
         return portfolio
+    
+    def to_dataframe(self):
+        if len(self.ports) == 0: 
+            return pd.DataFrame()
+        else:
+            return pd.concat([port.to_dataframe() for port in self.ports.values()] , axis = 0)

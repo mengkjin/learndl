@@ -87,7 +87,7 @@ class PortfolioOptimizer(PortCreator):
         return self
     
 if __name__ == '__main__':
-    from src.factor.builder.optimizer.optim import PortfolioOptimizer
+    from src.factor.fmp.optimizer.optim import PortfolioOptimizer
     config_path = 'custom_opt_config.yaml'
 
     optim = PortfolioOptimizer('test').setup(config_path = config_path , prob_type='socp')

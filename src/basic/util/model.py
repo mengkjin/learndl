@@ -220,7 +220,7 @@ class RegisteredModel(ModelPath):
     
     @property
     def fmp_target_dates(self):
-        return self.fmp_dates[::self.FMP_STEP]
+        return self.pred_target_dates[::self.FMP_STEP]
     
     def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False):
         PATH.pred_save(df , self.pred_name , date , overwrite)
@@ -246,6 +246,10 @@ class RegisteredModel(ModelPath):
             if verbose: print(f'{path} does not exist')
             return pd.DataFrame()
         return pd.read_feather(path , **kwargs)
+    
+    @property
+    def account_dir(self):
+        return PATH.fmp_account.joinpath(self.pred_name)
 
 class HiddenExtractingModel(ModelPath):
     '''

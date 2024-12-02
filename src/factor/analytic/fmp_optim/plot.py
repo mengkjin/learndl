@@ -7,7 +7,7 @@ from typing import Any , Optional
 from src.factor.util.plot import plot_table , get_twin_axes , set_xaxis , set_yaxis, PlotMultipleData , PlotFactorData
     
 DROP_KEYS  = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
-MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy']
+MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 
 def plot_optim_frontface(data : pd.DataFrame , show = False):
     num_per_page : int | Any = 32 // data.groupby('factor_name').size().max()
@@ -23,9 +23,9 @@ def plot_optim_frontface(data : pd.DataFrame , show = False):
             plot_table(df.set_index('strategy') , 
                 pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                 flt_cols = ['ir','calmar'] ,
-                fontsize = 7 , index_width = 3 ,
+                fontsize = 7 , index_width = 4 ,
                 column_definitions = [ColumnDefinition(name='Lag'       , width=0.5) ,
-                                      ColumnDefinition(name='Mdd_period', width=2)] , 
+                                      ColumnDefinition(name='Mdd_period', width=1.5)] , 
                 stripe_by = ['factor_name' , 'benchmark'] ,
                 ignore_cols = ['prefix' , 'factor_name' , 'benchmark' , 'suffix'])
     return group_plot.fig_dict
