@@ -1,6 +1,6 @@
 factor_name,complete,init_date,category0,category1,description,大类,细分
-acc_eaa,,20070101,fundamental,growth,盈利加速(Earnings acceleration),基本面,成长
-acc_eav,,20070101,fundamental,growth,盈利加速(Earnings acceleration),基本面,成长
+acc_eaa,1,20070101,fundamental,growth,盈利加速(Earnings acceleration),基本面,成长
+acc_eav,1,20070101,fundamental,growth,盈利加速(Earnings acceleration),基本面,成长
 amt_cv12m,1,20070101,behavior,liquidity,成交额变异系数,量价,流动性
 amt_cv1m,1,20070101,behavior,liquidity,成交额变异系数,量价,流动性
 amt_cv2m,1,20070101,behavior,liquidity,成交额变异系数,量价,流动性
@@ -9,8 +9,8 @@ amt_cv6m,1,20070101,behavior,liquidity,成交额变异系数,量价,流动性
 anndt_phigh,1,20070101,behavior,momentum,公告日最高价举例,量价,动量反转
 apm_orig,,20070101,high_frequency,hf_momentum,APM原始值,高频,动量反转
 asset_pctq4,,20070101,fundamental,growth,总资产同比变化率,基本面,成长
-assetcur_asset,,20070101,fundamental,quality,流动资产/总资产,基本面,财务质量
-assetnoncur_asset,,20070101,fundamental,quality,非流动资产/总资产,基本面,财务质量
+assetcur_asset,1,20070101,fundamental,quality,流动资产/总资产,基本面,财务质量
+assetnoncur_asset,1,20070101,fundamental,quality,非流动资产/总资产,基本面,财务质量
 beta_12m,1,20070101,behavior,correlation,Beta因子,量价,波动率
 beta_1m,1,20070101,behavior,correlation,Beta因子,量价,波动率
 beta_2m,1,20070101,behavior,correlation,Beta因子,量价,波动率
@@ -19,11 +19,11 @@ beta_6m,1,20070101,behavior,correlation,Beta因子,量价,波动率
 beta_intra,,20070101,high_frequency,hf_correlation,日内beta,高频,波动率
 bsact_neg_1m,1,20070101,behavior,liquidity,资金流--收益率划分,量价,资金流
 bsact_pos_1m,1,20070101,behavior,liquidity,资金流--收益率划分,量价,资金流
-btop,,20070101,fundamental,value,市净率倒数,基本面,估值
+btop,1,20070101,fundamental,value,市净率倒数,基本面,估值
 btop_est,,20070101,analyst,forecast,净资产/市值-一致预期值,分析师,估值
 btop_est_pct3m,,20070101,analyst,forecast,环比指标变化值,分析师,估值
 btop_est_pct6m,,20070101,analyst,forecast,环比指标变化值,分析师,估值
-btop_rank1y,,20070101,fundamental,value,btop分位数,基本面,估值
+btop_rank1y,1,20070101,fundamental,value,btop分位数,基本面,估值
 conf_persit,,20070101,high_frequency,hf_momentum,过度自信因子,高频,动量反转
 corr_intra,,20070101,high_frequency,hf_correlation,日内量价相关性,高频,动量反转
 cov_inst_3m,,20070101,analyst,coverage,区间内覆盖股票机构数量,分析师,覆盖度
@@ -32,31 +32,31 @@ cov_inst_anndt,,20070101,analyst,coverage,区间内覆盖股票机构数量,分�
 cov_report_3m,,20070101,analyst,coverage,区间内覆盖股票报告数量,分析师,覆盖度
 cov_report_6m,,20070101,analyst,coverage,区间内覆盖股票报告数量,分析师,覆盖度
 cov_report_anndt,,20070101,analyst,coverage,区间内覆盖股票报告数量,分析师,覆盖度
-dtop,,20070101,fundamental,value,股息率,基本面,估值
-dtop_rank1y,,20070101,fundamental,value,dtop分位数,基本面,估值
-ebit_ev1,,20070101,fundamental,value,EBIT/EV1,基本面,估值
-ebit_ev1_rank1y,,20070101,fundamental,value,ebit_ev1分位数,基本面,估值
-ebit_ev2,,20070101,fundamental,value,EBIT/EV2,基本面,估值
-ebit_ev2_rank1y,,20070101,fundamental,value,ebit_ev2分位数,基本面,估值
-ebitda_ev1,,20070101,fundamental,value,EBITDA/EV1,基本面,估值
-ebitda_ev1_rank1y,,20070101,fundamental,value,ebitda_ev1分位数,基本面,估值
-ebitda_ev2,,20070101,fundamental,value,EBITDA/EV2,基本面,估值
-ebitda_ev2_rank1y,,20070101,fundamental,value,ebitda_ev2分位数,基本面,估值
+dtop,1,20070101,fundamental,value,股息率,基本面,估值
+dtop_rank1y,1,20070101,fundamental,value,dtop分位数,基本面,估值
+ebit_ev1,1,20070101,fundamental,value,EBIT/EV1,基本面,估值
+ebit_ev1_rank1y,1,20070101,fundamental,value,ebit_ev1分位数,基本面,估值
+ebit_ev2,1,20070101,fundamental,value,EBIT/EV2,基本面,估值
+ebit_ev2_rank1y,1,20070101,fundamental,value,ebit_ev2分位数,基本面,估值
+ebitda_ev1,1,20070101,fundamental,value,EBITDA/EV1,基本面,估值
+ebitda_ev1_rank1y,1,20070101,fundamental,value,ebitda_ev1分位数,基本面,估值
+ebitda_ev2,1,20070101,fundamental,value,EBITDA/EV2,基本面,估值
+ebitda_ev2_rank1y,1,20070101,fundamental,value,ebitda_ev2分位数,基本面,估值
 egro_asset,,20070101,fundamental,growth,5年年度增长率-总资产,基本面,成长
 egro_equ,,20070101,fundamental,growth,5年年度增长率-净资产,基本面,成长
 egro_npro,,20070101,fundamental,growth,5年年度增长率-归母净利润,基本面,成长
 egro_sales,,20070101,fundamental,growth,5年年度增长率-营业收入,基本面,成长
 equ_pctq4,,20070101,fundamental,growth,净资产同比变化率,基本面,成长
 err_intra,,20070101,high_frequency,hf_volatility,日内极端收益,高频,动量反转
-etop,,20070101,fundamental,value,市盈率倒数,基本面,估值
-etop_dedu,,20070101,fundamental,value,扣非市盈率倒数,基本面,估值
-etop_dedu_rank1y,,20070101,fundamental,value,etop_dedu分位数,基本面,估值
+etop,1,20070101,fundamental,value,市盈率倒数,基本面,估值
+etop_dedu,1,20070101,fundamental,value,扣非市盈率倒数,基本面,估值
+etop_dedu_rank1y,1,20070101,fundamental,value,etop_dedu分位数,基本面,估值
 etop_est,,20070101,analyst,forecast,归母净利润/市值-一致预期值,分析师,估值
 etop_est_pct3m,,20070101,analyst,forecast,环比指标变化值,分析师,估值
 etop_est_pct6m,,20070101,analyst,forecast,环比指标变化值,分析师,估值
-etop_q,,20070101,fundamental,value,单季度市盈率倒数,基本面,估值
-etop_q_rank1y,,20070101,fundamental,value,etop_q分位数,基本面,估值
-etop_rank1y,,20070101,fundamental,value,etop分位数,基本面,估值
+etop_q,1,20070101,fundamental,value,单季度市盈率倒数,基本面,估值
+etop_q_rank1y,1,20070101,fundamental,value,etop_q分位数,基本面,估值
+etop_rank1y,1,20070101,fundamental,value,etop分位数,基本面,估值
 exret_std12m,1,20070101,behavior,volatility,超额收益率标准差,量价,波动率
 exret_std1m,1,20070101,behavior,volatility,超额收益率标准差,量价,波动率
 exret_std2m,1,20070101,behavior,volatility,超额收益率标准差,量价,波动率
@@ -117,12 +117,12 @@ illiq_1m,1,20070101,behavior,liquidity,非流动性-1月,量价,流动性
 illiq_2m,1,20070101,behavior,liquidity,非流动性-2月,量价,流动性
 illiq_3m,1,20070101,behavior,liquidity,非流动性-3月,量价,流动性
 illiq_6m,1,20070101,behavior,liquidity,非流动性-6月,量价,流动性
-liab_equ,,20070101,fundamental,quality,净资产负债率,基本面,财务质量
-liab_equ_incl,,20070101,fundamental,quality,产权比率,基本面,财务质量
+liab_equ,1,20070101,fundamental,quality,净资产负债率,基本面,财务质量
+liab_equ_incl,1,20070101,fundamental,quality,产权比率,基本面,财务质量
 liab_pctq4,,20070101,fundamental,growth,总负债同比变化率,基本面,成长
-liab_ta,,20070101,fundamental,quality,资产负债率,基本面,财务质量
-liabcur_liab,,20070101,fundamental,quality,流动负债/总负债,基本面,财务质量
-liabnoncur_liab,,20070101,fundamental,quality,非流动负债/总负债,基本面,财务质量
+liab_ta,1,20070101,fundamental,quality,资产负债率,基本面,财务质量
+liabcur_liab,1,20070101,fundamental,quality,流动负债/总负债,基本面,财务质量
+liabnoncur_liab,1,20070101,fundamental,quality,非流动负债/总负债,基本面,财务质量
 lncap,1,20070101,behavior,liquidity,市值因子,量价,规模
 lncap_free,1,20070101,behavior,liquidity,市值因子,量价,规模
 lncap_liq,1,20070101,behavior,liquidity,市值因子,量价,规模
@@ -158,10 +158,10 @@ mom_phigh3m,1,20070101,behavior,momentum,最高价距离,量价,动量反转
 mom_phigh6m,1,20070101,behavior,momentum,最高价距离,量价,动量反转
 mom_uret,,20070101,high_frequency,hf_momentum,动量因子,高频,动量反转
 turn_unexpected,1,20070101,behavior,liquidity,非预期换手,量价,流动性
-ncftop,,20070101,fundamental,value,现金净流量/市值,基本面,估值
-ncftop_q,,20070101,fundamental,value,单季度现金净流量/市值,基本面,估值
-ncftop_q_rank1y,,20070101,fundamental,value,ncftop_q分位数,基本面,估值
-ncftop_rank1y,,20070101,fundamental,value,ncftop分位数,基本面,估值
+fcfetop,1,20070101,fundamental,value,TTM企业股权自由现金流量/市值,基本面,估值
+fcfetop_rank1y,1,20070101,fundamental,value,"TTM企业股权自由现金流量/市值分位数",基本面,估值
+"fcfetop_q",1,20070101,fundamental,value,单季度企业股权自由现金流量/市值,基本面,估值
+fcfetop_q_rank1y,1,20070101,fundamental,value,单季度企业股权自由现金流量/市值分位数,基本面,估值
 north_flow10d,,20070101,money_flow,trading,北向资金净流入,量价,北向资金
 north_flow21d,,20070101,money_flow,trading,北向资金净流入,量价,北向资金
 north_flow5d,,20070101,money_flow,trading,北向资金净流入,量价,北向资金
@@ -218,10 +218,10 @@ ocf_q_ta,,20070101,fundamental,earning,经营活动产生的现金流量净额/�
 ocf_sale,,20070101,fundamental,earning,经营活动产生的现金流量净额/营业收入,基本面,盈利
 ocf_ta,,20070101,fundamental,earning,经营活动产生的现金流量净额/总资产,基本面,盈利
 ocfa,,20070101,fundamental,earning,产能利用率提升,基本面,盈利
-ocftop,,20070101,fundamental,value,经营现金流/市值,基本面,估值
-ocftop_q,,20070101,fundamental,value,单季度经营现金流/市值,基本面,估值
-ocftop_q_rank1y,,20070101,fundamental,value,ocftop_q分位数,基本面,估值
-ocftop_rank1y,,20070101,fundamental,value,ocftop分位数,基本面,估值
+ocftop,1,20070101,fundamental,value,经营现金流/市值,基本面,估值
+ocftop_q,1,20070101,fundamental,value,单季度经营现金流/市值,基本面,估值
+ocftop_q_rank1y,1,20070101,fundamental,value,ocftop_q分位数,基本面,估值
+ocftop_rank1y,1,20070101,fundamental,value,ocftop分位数,基本面,估值
 op_equ,,20070101,fundamental,earning,营业利润/净资产,基本面,盈利
 op_equ_chgq1,,20070101,fundamental,growth,op_equ环比变化值,基本面,成长
 op_equ_zscore,,20070101,fundamental,earning,op_equ标准化得分,基本面,盈利
@@ -248,10 +248,10 @@ price_weivol6m,1,20070101,behavior,momentum,成交量加权收盘价比值,量�
 pvcorrstd_intra,,20070101,high_frequency,hf_correlation,价量相关性波动性,高频,波动率
 pvi_intra,,20070101,high_frequency,hf_momentum,量升累计收益,高频,动量反转
 rar_intra,,20070101,high_frequency,hf_correlation,收益率自相关系数,高频,动量反转
-ratio_cash,,20070101,fundamental,quality,现金比率,基本面,财务质量
-ratio_current,,20070101,fundamental,quality,流动比率,基本面,财务质量
-ratio_quick,,20070101,fundamental,quality,速动比率,基本面,财务质量
-ratio_quickcon,,20070101,fundamental,quality,保守速动比率,基本面,财务质量
+ratio_cash,1,20070101,fundamental,quality,现金比率,基本面,财务质量
+ratio_current,1,20070101,fundamental,quality,流动比率,基本面,财务质量
+ratio_quick,1,20070101,fundamental,quality,速动比率,基本面,财务质量
+ratio_quickcon,1,20070101,fundamental,quality,保守速动比率,基本面,财务质量
 rec_npro_12m,,20070101,analyst,adjustment,盈利预测调整因子,分析师,盈利调整
 rec_npro_3m,,20070101,analyst,adjustment,盈利预测调整因子,分析师,盈利调整
 rec_npro_6m,,20070101,analyst,adjustment,盈利预测调整因子,分析师,盈利调整
@@ -267,22 +267,22 @@ sales_acce,,20070101,fundamental,growth,营业收入加速度,基本面,成长
 sales_czscore,,20070101,fundamental,growth,sales单季度同比增速的标准化得分,基本面,成长
 sales_pctq4,,20070101,fundamental,growth,营业收入同比变化率,基本面,成长
 sales_q_pctq4,,20070101,fundamental,growth,营业收入同比变化率,基本面,成长
-sales_q_ta,,20070101,fundamental,quality,资产周转率,基本面,财务质量
+sales_q_ta,1,20070101,fundamental,quality,资产周转率,基本面,财务质量
 sales_q_ta_chgq4,,20070101,fundamental,growth,sale_q_ta同比变化值,基本面,成长
 sales_rank_delta,,20070101,fundamental,growth,营业收入行业内分位数之差,基本面,成长
-sales_ta,,20070101,fundamental,quality,资产周转率,基本面,财务质量
+sales_ta,1,20070101,fundamental,quality,资产周转率,基本面,财务质量
 sales_ta_chgq1,,20070101,fundamental,growth,sale_ta环比变化值,基本面,成长
 sales_ta_zscore,,20070101,fundamental,earning,sale_ta标准化得分,基本面,盈利
 skew_intra1min,,20070101,high_frequency,hf_volatility,高频偏度,高频,波动率
 skew_intra5min,,20070101,high_frequency,hf_volatility,高频偏度,高频,波动率
 smart_money,,20070101,high_frequency,hf_liquidity,聪明钱因子,高频,资金流
-stop,,20070101,fundamental,value,市销率倒数,基本面,估值
+stop,1,20070101,fundamental,value,市销率倒数,基本面,估值
 stop_est,,20070101,analyst,forecast,营业收入/市值-一致预期值,分析师,估值
 stop_est_pct3m,,20070101,analyst,forecast,环比指标变化值,分析师,估值
 stop_est_pct6m,,20070101,analyst,forecast,环比指标变化值,分析师,估值
-stop_q,,20070101,fundamental,value,单季度市销率倒数,基本面,估值
-stop_q_rank1y,,20070101,fundamental,value,stop_q分位数,基本面,估值
-stop_rank1y,,20070101,fundamental,value,stop分位数,基本面,估值
+stop_q,1,20070101,fundamental,value,单季度市销率倒数,基本面,估值
+stop_q_rank1y,1,20070101,fundamental,value,stop_q分位数,基本面,估值
+stop_rank1y,1,20070101,fundamental,value,stop分位数,基本面,估值
 sue_gp,,20070101,fundamental,earning,未预期-毛利润,基本面,盈利
 sue_gpc,,20070101,fundamental,earning,未预期-毛利润-带截距,基本面,盈利
 sue_npro,,20070101,fundamental,earning,未预期-归母净利润,基本面,盈利
@@ -295,7 +295,7 @@ sue_sales,,20070101,fundamental,earning,未预期-营业收入,基本面,盈利
 sue_salesc,,20070101,fundamental,earning,未预期-营业收入-带截距,基本面,盈利
 sue_tax,,20070101,fundamental,earning,未预期-所得税,基本面,盈利
 sue_taxc,,20070101,fundamental,earning,未预期-所得税-带截距,基本面,盈利
-ta_equ,,20070101,fundamental,quality,权益乘数,基本面,财务质量
+ta_equ,1,20070101,fundamental,quality,权益乘数,基本面,财务质量
 tax_acce,,20070101,fundamental,growth,所得税加速度,基本面,成长
 tax_czscore,,20070101,fundamental,growth,tax单季度同比增速的标准化得分,基本面,成长
 tax_equ,,20070101,fundamental,earning,所得税/净资产,基本面,盈利
@@ -356,3 +356,5 @@ volpct_plow,,20070101,high_frequency,hf_liquidity,价格排序成交占比,高�
 volvr_intra,,20070101,high_frequency,hf_liquidity,成交量占比,高频,流动性
 vov_intra,,20070101,high_frequency,hf_volatility,日内波动率,高频,波动率
 mom_ltampl_v2,1,20070101,behavior,momentum,长端动量-振幅划分,量价,动量反转
+,1,,,,,,
+,1,,,,,,

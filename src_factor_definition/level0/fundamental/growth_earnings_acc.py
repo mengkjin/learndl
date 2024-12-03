@@ -11,7 +11,7 @@ class acc_eaa(StockFactorCalculator):
     description = '盈利加速(Earnings acceleration),除以去年同期EPS的绝对值'
     
     def calc_factor(self, date: int):
-        eps = DATAVENDOR.INDI.get_qtr_data('indicator' , 'eps' , date , 10 , True , ffill=True)
+        eps = DATAVENDOR.INDI.qtr('eps' , date , 10 , True , ffill=True)
         eps = eps.groupby('secid').tail(5)['eps']
         valid = eps.groupby('secid').size() > 4
         delta_eps = eps.groupby('secid').tail(1) - eps.groupby('secid').head(1)
@@ -26,7 +26,7 @@ class acc_eav(StockFactorCalculator):
     description = '盈利加速(Earnings acceleration),除以最近8个季度EPS的标准差'
     
     def calc_factor(self, date: int):
-        eps = DATAVENDOR.INDI.get_qtr_data('indicator' , 'eps' , date , 10 , True , ffill=True)
+        eps = DATAVENDOR.INDI.qtr('eps' , date , 10 , True , ffill=True)
         eps = eps.groupby('secid').tail(8)['eps']
         valid = eps.groupby('secid').size() > 4
         delta_eps = eps.groupby('secid').tail(1) - eps.groupby('secid').nth(4)

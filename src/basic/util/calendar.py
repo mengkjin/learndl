@@ -86,7 +86,7 @@ class TradeDate(int):
     def as_numpy(td):
         if isinstance(td , int): td = np.array([td])
         elif isinstance(td , pd.Series): td = td.to_numpy()
-        elif isinstance(td , list): td = np.array([td])
+        elif isinstance(td , list): td = np.array(td)
         elif isinstance(td , torch.Tensor): td = td.cpu().numpy()
         return td.astype(int)
 
@@ -119,7 +119,7 @@ class TradeCalendar:
     @staticmethod
     def _date_convert_to_index(date):
         if isinstance(date , TradeDate): date = [date.td]
-        elif isinstance(date , pd.Series): date = date.to_numpy().astype(int).tolist()
+        elif isinstance(date , pd.Series): date = date.to_numpy().astype(int) #.tolist()
         return date
     
     @staticmethod

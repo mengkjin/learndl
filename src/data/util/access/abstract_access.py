@@ -36,46 +36,41 @@ class DFCollection:
     
     def date_diffs(self , dates : list[int] | np.ndarray , overwrite = False):
         '''return the difference between given dates and self.dates'''
-        return dates if not overwrite else np.setdiff1d(dates , self.dates)
+        return dates if overwrite else np.setdiff1d(dates , self.dates)
     
-    def get(self , date : int | TradeDate , field = None , set_index : str | list[str] | None = None , 
-            rename_date_key : str | None = 'date'):
+    def get(self , date : int | TradeDate , field = None , rename_date_key : str | None = 'date'):
         '''get a DataFrame with given (1) date , fields and set_index'''
         date = int(date)
         if date not in self.dates: return pd.DataFrame()
         if date in self.data_frames: df = self.data_frames[date]
-        else: df = self.long_frame[self.long_frame[self.date_key] == date]
-        df = self.reform_df(df , field , rename_date_key = rename_date_key , set_index = set_index)
+        else: df = self.long_frame.loc[date:date]
+        df = self.reform_df(df , field , rename_date_key = rename_date_key)
         return df
     
-    def gets(self , dates : list[int] | np.ndarray , field = None , set_index : str | list[str] | None = None ,
-             rename_date_key : str | None = 'date'):
+    def gets(self , dates : list[int] | np.ndarray , field = None , rename_date_key : str | None = 'date' , copy = False):
         '''get a DataFrame with given (many) dates , fields and set_index'''
         assert len(dates) <= self.max_len , f'No more than {self.max_len} dates'
 
         self.to_long_frame(dates)
-        df = self.long_frame[self.long_frame[self.date_key].isin(dates)]
-        df = self.reform_df(df , field , rename_date_key = rename_date_key , set_index = set_index)
+        df = self.long_frame.loc[min(dates):max(dates),:] # .reset_index(drop = False)
+        df = self.reform_df(df , field , rename_date_key = rename_date_key)
+        if copy: df = df.copy()
         return df
     
-    def reform_df(self , df : pd.DataFrame , field = None , rename_date_key = None , set_index = None):
+    def reform_df(self , df : pd.DataFrame , field = None , rename_date_key = None):
         '''
         reform a DataFrame with given fields and set_index
         rename_date_key : if not None , rename the date_key column to the given name
         '''
         if field is not None: 
-            field = [field] if isinstance(field , str) else [*field]
-            if self.date_key not in field: field.append(self.date_key)
-            df = pd.DataFrame(columns = field) if df.empty else df.loc[:,field]
+            if isinstance(field , str): field = [field]
+            assert np.isin(field , df.columns).all() , f'{field} should be in df.columns : {df.columns}'
+            df = pd.DataFrame(columns = [self.date_key , *field]).set_index(self.date_key) if df.empty else df.loc[:,field]
 
         if rename_date_key and rename_date_key != self.date_key:
-            if rename_date_key in df.columns:
-                assert df[rename_date_key][0] == df[self.date_key][0] , \
-                    f'{rename_date_key} should be the same as {self.date_key}'
-                df = df.drop(columns = rename_date_key)
-            df = df.rename(columns = {self.date_key:rename_date_key})
+            assert rename_date_key not in df.columns , f'{rename_date_key} should not be in df.columns : {df.columns}'
+            df = df.rename(index = {self.date_key:rename_date_key})
 
-        if set_index is not None: df = df.set_index(set_index)
         return df
 
     def add(self , date : int | TradeDate , df : pd.DataFrame | None):
@@ -84,15 +79,16 @@ class DFCollection:
             df[self.date_key] = date
             self.dates.append(date)
             self.last_added_date = date
-            self.data_frames[date] = df
+            df = df.reset_index([i for i in df.index.names if i] , drop = False)
+            df[self.date_key] = date
+            self.data_frames[date] = df.set_index(self.date_key)
 
     def to_long_frame(self , dates : list[int] | np.ndarray):
         assert np.isin(dates , self.dates).all() , f'all dates should be in self.dates : {np.setdiff1d(dates , self.dates)}'
-        dates_to_do = np.intersect1d(dates , list(self.data_frames.keys())).tolist()
-        if not dates_to_do: return
+        dates_to_do = np.intersect1d(dates , list(self.data_frames.keys()))
+        if len(dates_to_do) == 0: return
         df_to_append = pd.concat([self.data_frames.pop(d) for d in dates_to_do] , copy = False)
         self.long_frame = pd.concat([self.long_frame , df_to_append] , copy = False).sort_values(self.date_key)
-
         intersec_dates = np.intersect1d(list(self.data_frames.keys()) , dates)
         assert intersec_dates.size == 0 , f'self.data_frames.keys should not have overlap with dates: {intersec_dates}'
 
@@ -143,8 +139,11 @@ class DateDataAccess(ABC):
         remain_field = ['secid'] + ([field] if isinstance(field , str) else list(field))
 
         df = self.gets(dates , data_type , remain_field , rename_date_key = 'date')
-        df['date'] = CALENDAR.td_array(df['date'] , 1 if prev else 0)
-        df = df.set_index(['secid' , 'date'])
+        if prev: 
+            df = df.reset_index(drop = False)
+            df['date'] = CALENDAR.td_array(df['date'] , 1)
+            df = df.set_index('date')
+        df = df.set_index('secid' , append = True)
 
         if mask:  df = INFO.mask_list_dt(df)
         if pivot: df = df.pivot_table(field , 'date' , 'secid')

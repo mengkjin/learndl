@@ -15,7 +15,7 @@ class anndt_phigh(StockFactorCalculator):
     description = '公告日最高价距离'
     
     def calc_factor(self, date: int):
-        ann_dt = DATAVENDOR.FINA.get_ann_dt(date , 1 , within_days=365)
+        ann_dt = DATAVENDOR.IS.get_ann_dt(date , 1 , within_days=365)
         ann_dt['date'] = ann_dt['td_forward']
         start_date , end_date = date_min_max(ann_dt['date'])
         
@@ -31,7 +31,7 @@ class mom_aog(StockFactorCalculator):
     description = '公告日次日超额收益'
     
     def calc_factor(self, date: int):
-        ann_dt = DATAVENDOR.FINA.get_ann_dt(date , 1 , within_days=365)
+        ann_dt = DATAVENDOR.IS.get_ann_dt(date , 1 , within_days=365)
         ann_dt['date'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 1)
         start_date , end_date = date_min_max(ann_dt['date'])
         
@@ -47,7 +47,7 @@ class mom_aaa(StockFactorCalculator):
     description = '公告日后3日超额收益'
     
     def calc_factor(self, date: int):
-        ann_dt = DATAVENDOR.FINA.get_ann_dt(date , 1 , within_days=365)
+        ann_dt = DATAVENDOR.IS.get_ann_dt(date , 1 , within_days=365)
         ann_dt['d0'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 1)
         ann_dt['d1'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 2)
         ann_dt['d2'] = DATAVENDOR.CALENDAR.td_array(ann_dt['td_backward'] , 3)

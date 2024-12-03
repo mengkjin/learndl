@@ -151,12 +151,12 @@ class TuShareCNE5_Calculator:
         trd = DATAVENDOR.TRADE.get_trd(date).loc[:,['secid','status']].merge(trd , on = 'secid' , how = 'left').\
             set_index('secid').reindex(new_desc.index).fillna(0)
         
-        val = pd.concat([DATAVENDOR.TRADE.get_val(d , ['secid','date','circ_mv','total_mv']) for d in dates]).\
+        val = pd.concat([DATAVENDOR.TRADE.get_val(d , ['secid','circ_mv','total_mv']) for d in dates]).\
             sort_values(['secid','date']).set_index('secid').groupby('secid').ffill().\
             groupby('secid').last().reindex(new_desc.index)
         
         # trading status are 1.0 this day or 1 month ealier
-        rule0 = pd.concat([DATAVENDOR.TRADE.get_trd(d , ['secid','date','status']) for d in dates]).\
+        rule0 = pd.concat([DATAVENDOR.TRADE.get_trd(d , ['secid','status']) for d in dates]).\
             groupby('secid')['status'].sum().reindex(new_desc.index) > 0
 
         # list date 1 year earlier and not delisted or total mv in the top 20%
@@ -214,7 +214,7 @@ class TuShareCNE5_Calculator:
         dates = CALENDAR.td_trailing(date , 525)[:504]
         wgt_df = pd.DataFrame({'date':dates , 'weight':time_weight(504,126)})
 
-        df = pd.concat([DATAVENDOR.TRADE.get_trd(d , ['date','secid','pctchange']) for d in dates]).merge(wgt_df , on = 'date')
+        df = pd.concat([DATAVENDOR.TRADE.get_trd(d , ['secid','pctchange']) for d in dates]).merge(wgt_df , on = 'date')
         df['lnret'] = np.log(1 + df['pctchange'] / 100) * df['weight']
         v = df.groupby('secid')['lnret'].sum()
         
@@ -230,7 +230,7 @@ class TuShareCNE5_Calculator:
         dates = CALENDAR.td_trailing(date , 253)[:-1]
         wgt = time_weight(252 , 42)
 
-        df_trd = pd.concat([DATAVENDOR.TRADE.get_trd(d,['date','secid','pctchange']) for d in dates])
+        df_trd = pd.concat([DATAVENDOR.TRADE.get_trd(d,['secid','pctchange']) for d in dates])
         df_trd = df_trd.pivot_table('pctchange','date','secid') / 100
         dsastd = self.descriptor((df_trd * wgt.reshape(-1,1)).std() , date , 'dsastd' , 'median')
 
@@ -261,7 +261,7 @@ class TuShareCNE5_Calculator:
         return self.descriptor(v , date , 'non_linear_size' , 'min')
     
     def calc_book_to_price(self , date : int):
-        v = (1 / DATAVENDOR.TRADE.get_val(date)['pb']).fillna(0)
+        v = (1 / DATAVENDOR.TRADE.get_val(date).reset_index().set_index('secid')['pb']).fillna(0)
         return self.descriptor(v , date , 'book_to_price' , 'median')
     
     def calc_liquidity(self , date : int):
@@ -285,7 +285,7 @@ class TuShareCNE5_Calculator:
     
     def calc_earnings_yield(self , date : int):
         cp = DATAVENDOR.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')
-        cetop = DATAVENDOR.INDI.get_ttm('ocfps' , date , 1)['ocfps'] / cp['close']
+        cetop = DATAVENDOR.INDI.ttm('ocfps' , date , 1 , stack = True)['ocfps'] / cp['close']
         cetop = self.descriptor(cetop.fillna(0) , date , 'cetop' , 'median')
 
         etop  = 1 / DATAVENDOR.TRADE.get_val(date , ['secid' , 'pe']).set_index('secid')['pe']
@@ -298,14 +298,14 @@ class TuShareCNE5_Calculator:
     def calc_growth(self , date : int):
 
         val = 'diluted2_eps'
-        df = DATAVENDOR.INDI.get_acc(val , date , 6 , year_only=True).groupby('secid').tail(5).copy()
+        df = DATAVENDOR.INDI.acc(val , date , 6 , stack = True ,year_only=True).groupby('secid').tail(5).copy()
         df = df.assign(idx = df.groupby('secid').cumcount()).pivot_table(val , 'idx' , 'secid')
         df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.values,df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
         egro = df[df['na'] <= 1].set_index('secid')['value']
         egro = self.descriptor(egro.fillna(0) , date , 'egro' , 'median')
 
         val = 'revenue_ps'
-        df = DATAVENDOR.INDI.get_acc(val , date , 6 , year_only=True).groupby('secid').tail(5).copy()
+        df = DATAVENDOR.INDI.acc(val , date , 6 , stack = True , year_only=True).groupby('secid').tail(5).copy()
         df = df.assign(idx = df.groupby('secid').cumcount()).pivot_table(val , 'idx' , 'secid')
         df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.values,df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
         sgro = df[df['na'] <= 1].set_index('secid')['value']
@@ -317,15 +317,15 @@ class TuShareCNE5_Calculator:
     def calc_leverage(self , date : int):
 
         cp = DATAVENDOR.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')
-        mlev = (DATAVENDOR.INDI.get_acc('longdeb_to_debt' , date , 1)['longdeb_to_debt'].fillna(100) / 100 *
-            DATAVENDOR.INDI.get_acc('debt_to_eqt' , date , 1)['debt_to_eqt'] / 100 *
-            DATAVENDOR.INDI.get_acc('bps' , date , 1)['bps'] / cp['close'])
+        mlev = (DATAVENDOR.INDI.acc('longdeb_to_debt' , date , 1 , stack = True)['longdeb_to_debt'].fillna(100) / 100 *
+            DATAVENDOR.INDI.acc('debt_to_eqt' , date , 1 , stack = True)['debt_to_eqt'] / 100 *
+            DATAVENDOR.INDI.acc('bps' , date , 1 , stack = True)['bps'] / cp['close'])
         mlev = self.descriptor(mlev , date , 'mlev' , 'median')
 
-        dtoa = DATAVENDOR.INDI.get_acc('debt_to_assets' , date , 1)['debt_to_assets']
+        dtoa = DATAVENDOR.INDI.acc('debt_to_assets' , date , 1 , stack = True)['debt_to_assets']
         dtoa = self.descriptor(dtoa , date , 'dtoa' , 'median')
 
-        blev = DATAVENDOR.INDI.get_acc('assets_to_eqt' , date , 1)['assets_to_eqt']
+        blev = DATAVENDOR.INDI.acc('assets_to_eqt' , date , 1 , stack = True)['assets_to_eqt']
         blev = self.descriptor(blev , date , 'blev' , 'median')
 
         v = 0.38 * mlev + 0.35 * dtoa + 0.27 * blev

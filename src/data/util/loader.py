@@ -10,7 +10,7 @@ from src.basic import PATH , CONF , SILENT , Timer
 from src.func.singleton import singleton
 
 from .classes import DataBlock
-from .access import CALENDAR , INFO , TRADE , RISK , FINA , INDI
+from .access import CALENDAR , INFO , TRADE , RISK , INDI , FINA , BS , IS , CF
 
 @dataclass(slots=True)
 class BlockLoader:
@@ -65,6 +65,17 @@ class DataVendor:
     '''
     Vender for most factor / portfolio analysis related data
     '''
+    CALENDAR = CALENDAR
+    TRADE = TRADE
+    INFO = INFO
+    RISK = RISK
+    
+    INDI = INDI
+    BS   = BS
+    IS   = IS
+    CF   = CF
+    FINA = FINA
+    
     def __init__(self):
         self.start_dt = 99991231
         self.end_dt   = -1
@@ -73,20 +84,17 @@ class DataVendor:
         self.day_quotes : dict[int,pd.DataFrame] = {}
         self.last_quote_dt = self.file_dates('trade_ts','day').max()
 
-        self.CALENDAR = CALENDAR
-        self.TRADE = TRADE
-        self.INFO = INFO
-        self.RISK = RISK
-        self.FINA = FINA
-        self.INDI = INDI
-
         self.init_stocks()
 
     def data_storage_control(self):
         self.TRADE.truncate()
         self.RISK.truncate()
-        self.FINA.truncate()
+        
         self.INDI.truncate()
+        self.BS.truncate()
+        self.IS.truncate()
+        self.CF.truncate()
+        self.FINA.truncate()
 
     def init_stocks(self , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
         with SILENT:
