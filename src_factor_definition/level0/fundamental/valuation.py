@@ -28,20 +28,20 @@ def calc_valuation(numerator : pd.DataFrame | pd.Series | float | int , denomina
     
 def get_ev1(date: int):
     mv = DATAVENDOR.TRADE.get_val(date , ['secid','total_mv']).set_index(['secid'])['total_mv'].sort_index()
-    debt = DATAVENDOR.INDI.acc_latest('interestdebt' , date , 1)
+    debt = DATAVENDOR.INDI.acc_latest('interestdebt' , date)
     ev = mv + debt
     return ev
 
 def get_ev2(date: int):
     ev1 = get_ev1(date)
-    cash = DATAVENDOR.BS.acc_latest('money_cap' , date , 1)
+    cash = DATAVENDOR.BS.acc_latest('money_cap' , date)
     ev2 = ev1 - cash
     return ev2
 
 def get_ev1_hist(date: int , n_year : int = 1):
     start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
     mv   = DATAVENDOR.TRADE.get_val_data(start_date , end_date , 'total_mv' , prev=False , pivot=True)
-    debt = DATAVENDOR.INDI.acc('interestdebt' , date , n_year * 4 + 1 , stack = False)
+    debt = DATAVENDOR.INDI.acc('interestdebt' , date , n_year * 4 + 1 , pivot = True)
     union_index = mv.index.union(debt.index).sort_values()
     debt = debt.reindex(index = union_index).ffill().reindex_like(mv).fillna(0)
     ev = mv + debt
@@ -49,31 +49,17 @@ def get_ev1_hist(date: int , n_year : int = 1):
 
 def get_ev2_hist(date: int , n_year : int = 1):
     ev1  = get_ev1_hist(date , n_year)
-    cash = DATAVENDOR.BS.acc('money_cap' , date , n_year * 4 + 1 , stack = False)
+    cash = DATAVENDOR.BS.acc('money_cap' , date , n_year * 4 + 1 , pivot = True)
     union_index = ev1.index.union(cash.index).sort_values()
     cash = cash.reindex(index = union_index).ffill().reindex_like(ev1).fillna(0)
     ev2 = ev1 - cash
     return ev2
 
-def get_numerator(numerator : str , date : int):
-    fin_statement , fin_type , field = numerator.split('@')
+def get_numerator(numerator : str , date : int , **kwargs):
+    return DATAVENDOR.get_fin_latest(numerator , date , **kwargs)
 
-    assert fin_statement in ['is' , 'cf' , 'indi'] , fin_statement
-    assert fin_type in ['ttm' , 'qtr' , 'acc'] , fin_type
-
-    src = getattr(DATAVENDOR , fin_statement.upper())
-    func = getattr(src , f'{fin_type}_latest')
-    return func(field , date)
-
-def get_numerator_hist(numerator : str , date : int , n_year : int = 1):
-    fin_statement , fin_type , field = numerator.split('@')
-
-    assert fin_statement in ['is' , 'cf' , 'indi'] , fin_statement
-    assert fin_type in ['ttm' , 'qtr' , 'acc'] , fin_type
-
-    src = getattr(DATAVENDOR , fin_statement.upper())
-    func = getattr(src , f'{fin_type}')
-    return func(field , date , n_year * 4 + 1 , stack = False)
+def get_numerator_hist(numerator : str , date : int , n_year : int = 1 , **kwargs):
+    return DATAVENDOR.get_fin_hist(numerator , date , n_year * 4 + 1 , pivot = True ,**kwargs)
 
 def get_denominator(denominator : Literal['mv' , 'cp' , 'ev1' , 'ev2'] | str , date : int):
     if denominator == 'mv':

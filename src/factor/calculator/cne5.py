@@ -284,8 +284,8 @@ class TuShareCNE5_Calculator:
         return self.descriptor(v , date , 'liquidity' , 'median')
     
     def calc_earnings_yield(self , date : int):
-        cp = DATAVENDOR.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')
-        cetop = DATAVENDOR.INDI.ttm('ocfps' , date , 1 , stack = True)['ocfps'] / cp['close']
+        cp = DATAVENDOR.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')['close']
+        cetop = DATAVENDOR.INDI.ttm_latest('ocfps' , date) / cp
         cetop = self.descriptor(cetop.fillna(0) , date , 'cetop' , 'median')
 
         etop  = 1 / DATAVENDOR.TRADE.get_val(date , ['secid' , 'pe']).set_index('secid')['pe']
@@ -298,14 +298,14 @@ class TuShareCNE5_Calculator:
     def calc_growth(self , date : int):
 
         val = 'diluted2_eps'
-        df = DATAVENDOR.INDI.acc(val , date , 6 , stack = True ,year_only=True).groupby('secid').tail(5).copy()
+        df = DATAVENDOR.INDI.acc(val , date , 5 , pivot = False ,year_only=True)
         df = df.assign(idx = df.groupby('secid').cumcount()).pivot_table(val , 'idx' , 'secid')
         df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.values,df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
         egro = df[df['na'] <= 1].set_index('secid')['value']
         egro = self.descriptor(egro.fillna(0) , date , 'egro' , 'median')
 
         val = 'revenue_ps'
-        df = DATAVENDOR.INDI.acc(val , date , 6 , stack = True , year_only=True).groupby('secid').tail(5).copy()
+        df = DATAVENDOR.INDI.acc(val , date , 5 , pivot = False , year_only=True)
         df = df.assign(idx = df.groupby('secid').cumcount()).pivot_table(val , 'idx' , 'secid')
         df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.values,df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
         sgro = df[df['na'] <= 1].set_index('secid')['value']
@@ -316,16 +316,16 @@ class TuShareCNE5_Calculator:
     
     def calc_leverage(self , date : int):
 
-        cp = DATAVENDOR.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')
-        mlev = (DATAVENDOR.INDI.acc('longdeb_to_debt' , date , 1 , stack = True)['longdeb_to_debt'].fillna(100) / 100 *
-            DATAVENDOR.INDI.acc('debt_to_eqt' , date , 1 , stack = True)['debt_to_eqt'] / 100 *
-            DATAVENDOR.INDI.acc('bps' , date , 1 , stack = True)['bps'] / cp['close'])
+        cp = DATAVENDOR.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')['close']
+        mlev = (DATAVENDOR.INDI.acc_latest('longdeb_to_debt' , date).fillna(100) / 100 *
+            DATAVENDOR.INDI.acc_latest('debt_to_eqt' , date) / 100 *
+            DATAVENDOR.INDI.acc_latest('bps' , date) / cp)
         mlev = self.descriptor(mlev , date , 'mlev' , 'median')
 
-        dtoa = DATAVENDOR.INDI.acc('debt_to_assets' , date , 1 , stack = True)['debt_to_assets']
+        dtoa = DATAVENDOR.INDI.acc_latest('debt_to_assets' , date)
         dtoa = self.descriptor(dtoa , date , 'dtoa' , 'median')
 
-        blev = DATAVENDOR.INDI.acc('assets_to_eqt' , date , 1 , stack = True)['assets_to_eqt']
+        blev = DATAVENDOR.INDI.acc_latest('assets_to_eqt' , date)
         blev = self.descriptor(blev , date , 'blev' , 'median')
 
         v = 0.38 * mlev + 0.35 * dtoa + 0.27 * blev

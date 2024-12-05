@@ -276,5 +276,25 @@ class DataVendor:
         self.get_quote(d , d)
         value = self.daily_quote.loc(secid = secid , date = d , feature = 'close').flatten()
         return value
+
+    def get_fin_latest(self , numerator : str , date : int , **kwargs) -> pd.Series:
+        fin_statement , fin_type , field = numerator.split('@')
+
+        assert fin_statement in ['is' , 'cf' , 'indi' , 'bs'] , fin_statement
+        assert fin_type in ['ttm' , 'qtr' , 'acc'] , fin_type
+
+        src = getattr(self , fin_statement.upper())
+        func = getattr(src , f'{fin_type}_latest')
+        return func(field , date , **kwargs)
+
+    def get_fin_hist(self, numerator : str , date : int , n_last : int , **kwargs) -> pd.DataFrame:
+        fin_statement , fin_type , field = numerator.split('@')     
+
+        assert fin_statement in ['is' , 'cf' , 'indi' , 'bs'] , fin_statement
+        assert fin_type in ['ttm' , 'qtr' , 'acc'] , fin_type
+
+        src = getattr(self , fin_statement.upper())
+        func = getattr(src , f'{fin_type}')
+        return func(field , date , n_last , **kwargs)
     
 DATAVENDOR = DataVendor()

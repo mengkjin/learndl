@@ -4,11 +4,9 @@ import numpy as np
 
 from typing import Literal
 
-from src.basic import PATH , CALENDAR
+from src.basic import PATH , CALENDAR , CONF
 from src.data.util.basic import secid_adjust , trade_min_reform
 from src.func.display import print_seperator
-
-from .license_uri import uri as rcquant_uri
 
 START_DATE = 20241101
 RC_PATH = PATH.miscel.joinpath('Rcquant')
@@ -19,8 +17,16 @@ secdf_path = RC_PATH.joinpath('secdf')
 final_path.mkdir(exist_ok=True , parents=True)
 secdf_path.mkdir(exist_ok=True , parents=True)
 
+def rcquant_license_check():
+    if 'rcquant.yaml' not in [p.name for p in PATH.conf.joinpath('confidential').rglob('*.yaml')]:
+        print(f'rcquant login info not found, please check configs/confidential/rcquant.yaml')
+        return False
+    return True
+
 def rcquant_init():
-    if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
+    if not rqdatac.initialized(): 
+        rcquant_uri = CONF.confidential('rcquant')['uri']
+        rqdatac.init(uri = rcquant_uri)
 
 def rcquant_secdf(date : int):
     path = secdf_path.joinpath(f'secdf_{date}.feather')
@@ -76,6 +82,8 @@ def rcquant_trading_dates(start_date, end_date):
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
 
 def rcquant_bar_min(date : int , first_n : int = -1):
+    if not rcquant_license_check():
+        return False
     
     def code_map(x : str):
         x = x.split('.')[0]
@@ -93,7 +101,7 @@ def rcquant_bar_min(date : int , first_n : int = -1):
         PATH.db_save(df , 'trade_ts' , 'min' , date = date , verbose = True)
         return True
 
-    if not rqdatac.initialized(): rqdatac.init(uri = rcquant_uri)
+    rcquant_init()
 
     sec_df = rcquant_secdf(date)
     sec_df = sec_df[sec_df['is_active']]
@@ -126,6 +134,9 @@ def rcquant_min_to_normal_min(df : pd.DataFrame):
     return df
 
 def rcquant_proceed(date : int | None = None , first_n : int = -1):
+    if not rcquant_license_check():
+        return False
+
     for dt in min_update_dates(date):
         mark = rcquant_bar_min(dt , first_n)
         if not mark: 
