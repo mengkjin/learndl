@@ -1,17 +1,19 @@
 import pandas as pd
 import numpy as np
-import statsmodels.api as sm
+import polars as pl
 
-from typing import Literal
+from typing import Any , Literal
 
 from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
 def get_latest(numerator : str , date : int , **kwargs):
+    '''statement@field@fin_type'''
     return DATAVENDOR.get_fin_latest(numerator , date , **kwargs)
 
-def get_hist(numerator : str , date : int , n_last : int = 1 , **kwargs):
-    return DATAVENDOR.get_fin_hist(numerator , date , n_last , **kwargs)
+def get_hist(numerator : str , date : int , n_last : int = 12 , **kwargs):
+    '''statement@field@fin_type'''
+    return DATAVENDOR.get_fin_hist(numerator , date , n_last , **kwargs).iloc[:,0]
 
 def hist_zscore(data : pd.Series | pd.DataFrame):
     if isinstance(data , pd.DataFrame):
@@ -21,76 +23,27 @@ def hist_zscore(data : pd.Series | pd.DataFrame):
     grp = data.groupby('secid')
     return (grp.last() - grp.mean()) / grp.std()
 
-def ts_std(ts : pd.Series | pd.DataFrame):
-    return (ts - ts.mean()) / ts.std()
+def hist_zscore_polars(data : pd.Series):
+    df = pl.from_pandas(data.rename('value').to_frame() , include_index=True)
+    return df.group_by('secid', maintain_order=True).\
+        agg((pl.col('value').last() - pl.col('value').mean()) / pl.col('value').std()).\
+            to_pandas().set_index('secid').iloc[:,0]
 
-def ts_reg_resid(ts : pd.DataFrame , y_col : str , x_cols : list[str]):
-    y = ts_std(ts[y_col])
-    x = sm.add_constant(ts[x_cols])
-    model = sm.OLS(y , x , missing = 'drop').fit()
-    return model.resid.iloc[-1]
+def get_ratio_latest(numerator : str , denominator : str , date : int , 
+                     fin_type : Literal['qtr' , 'ttm' , 'acc'] , numerator_kwargs : dict[str,Any] = {} , 
+                     denominator_kwargs : dict[str,Any] = {} , **kwargs):
+    '''qtr_method only available in indi'''
+    num = get_latest(f'{numerator}@{fin_type}' , date , **numerator_kwargs , **kwargs)
+    den = get_latest(f'{denominator}@{fin_type}' , date , **denominator_kwargs , **kwargs)
+    return num / den
 
-class gp_sale(StockFactorCalculator):
-    init_date = 20070101
-    category0 = 'fundamental'
-    category1 = 'earning'
-    description = 'TTM毛利润除以营业收入'
-    
-    def calc_factor(self, date: int):
-        return get_latest('indi@ttm@gross_margin' , date , qtr_method = 'diff') / get_latest('is@ttm@revenue' , date)
-
-class gp_sale_q(StockFactorCalculator):
-    init_date = 20070101
-    category0 = 'fundamental'
-    category1 = 'earning'
-    description = '单季度毛利润除以营业收入'
-    
-    def calc_factor(self, date: int):
-        return get_latest('indi@qtr@gross_margin' , date , qtr_method = 'diff') / get_latest('is@qtr@revenue' , date)
-
-class gp_ta(StockFactorCalculator):
-    init_date = 20070101
-    category0 = 'fundamental'
-    category1 = 'earning'
-    description = 'TTM毛利润除以总资产'
-    
-    def calc_factor(self, date: int):
-        return get_latest('indi@ttm@gross_margin' , date , qtr_method = 'diff') / get_latest('bs@ttm@total_assets' , date)
-
-class gp_q_ta(StockFactorCalculator):
-    init_date = 20070101
-    category0 = 'fundamental'
-    category1 = 'earning'
-    description = '单季度毛利润除以总资产'
-    
-    def calc_factor(self, date: int):
-        return get_latest('indi@qtr@gross_margin' , date , qtr_method = 'diff') / get_latest('bs@qtr@total_assets' , date)
-
-class gp_ta_zscore(StockFactorCalculator):
-    init_date = 20070101
-    category0 = 'fundamental'
-    category1 = 'earning'
-    description = '毛利润/总资产,Z-Score'
-    
-    def calc_factor(self, date: int):
-        gp = get_hist('indi@qtr@gross_margin' , date , 20).iloc[:,0]
-        ta = get_hist('bs@qtr@total_assets' , date , 20).iloc[:,0]
-        return hist_zscore(gp / ta)
-
-class lpnp(StockFactorCalculator):
-    init_date = 20070101
-    category0 = 'fundamental'
-    category1 = 'earning'
-    description = '线性提纯净利润'
-    
-    def calc_factor(self, date: int):
-        npro = get_latest('is@qtr@n_income_attr_p' , date)
-        sales = get_latest('is@qtr@revenue' , date)
-        bv = get_latest('bs@qtr@total_hldr_eqy_exc_min_int' , date)
-
-        x = sm.add_constant(pd.concat([sales , bv] , axis = 1).reindex(npro.index))
-        model = sm.OLS(npro, x , missing = 'drop').fit()
-        return (model.resid - model.resid.mean()) / model.resid.std()
+def get_ratio_zscore(numerator : str , denominator : str , date : int , 
+                     numerator_kwargs : dict[str,Any] = {} , 
+                     denominator_kwargs : dict[str,Any] = {} , **kwargs):
+    '''qtr_method only available in indi'''
+    num = get_hist(f'{numerator}@qtr' , date , 12 , **numerator_kwargs , **kwargs)
+    den = get_hist(f'{denominator}@qtr' , date , 12 , **denominator_kwargs , **kwargs)
+    return hist_zscore(num / den)
 
 class npro_cratio(StockFactorCalculator):
     init_date = 20070101
@@ -99,58 +52,95 @@ class npro_cratio(StockFactorCalculator):
     description = '核心净利润占比'
     
     def calc_factor(self, date: int):
-        npro = get_latest('is@qtr@n_income_attr_p' , date)
-        gp = get_latest('indi@qtr@gross_margin' , date , qtr_method = 'diff')
-        biz_tax_surchg = get_latest('is@qtr@biz_tax_surchg' , date)
-        sell_exp = get_latest('is@qtr@sell_exp' , date)
-        admin_exp = get_latest('is@qtr@admin_exp' , date)
-        fin_exp = get_latest('is@qtr@fin_exp' , date)
-        rd = get_latest('is@qtr@rd_exp' , date)
+        npro = get_latest('is@n_income_attr_p@qtr' , date)
+        gp = get_latest('indi@gross_margin@qtr' , date , qtr_method = 'diff')
+        biz_tax_surchg = get_latest('is@biz_tax_surchg@qtr' , date)
+        sell_exp = get_latest('is@sell_exp@qtr' , date)
+        admin_exp = get_latest('is@admin_exp@qtr' , date)
+        fin_exp = get_latest('is@fin_exp@qtr' , date)
+        rd = get_latest('is@rd_exp@qtr' , date)
         return (gp - biz_tax_surchg - sell_exp - admin_exp - fin_exp - rd) / npro
-
-class npro_dedu_equ(StockFactorCalculator):
+    
+class gp_sales_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
-    description = '扣非归母净利润/净资产'
+    description = 'TTM毛利润除以营业收入'
     
     def calc_factor(self, date: int):
-        npro_dedu = get_latest('indi@ttm@profit_dedt' , date , qtr_method = 'diff')
-        bv = get_latest('bs@ttm@total_hldr_eqy_exc_min_int' , date)
-        return npro_dedu / bv
+        return get_ratio_latest('indi@gross_margin' , 'is@revenue' , date , 'ttm' , numerator_kwargs={'qtr_method':'diff'})
 
-class npro_dedu_sales(StockFactorCalculator):
+class gp_sales_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
-    description = '扣非归母净利润/营业收入'
+    description = '单季度毛利润除以营业收入'
     
     def calc_factor(self, date: int):
-        npro_dedu = get_latest('indi@ttm@profit_dedt' , date , qtr_method = 'diff')
-        sales = get_latest('is@ttm@revenue' , date)
-        return npro_dedu / sales
+        return get_ratio_latest('indi@gross_margin' , 'is@revenue' , date , 'qtr' , numerator_kwargs={'qtr_method':'diff'})
 
-class npro_dedu_ta(StockFactorCalculator):
+class gp_ta_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
-    description = '扣非归母净利润/总资产'
+    description = 'TTM毛利润除以总资产'
     
     def calc_factor(self, date: int):
-        npro_dedu = get_latest('indi@ttm@profit_dedt' , date , qtr_method = 'diff')
-        ta = get_latest('bs@ttm@total_assets' , date)
-        return npro_dedu / ta
+        return get_ratio_latest('indi@gross_margin' , 'bs@total_assets' , date , 'ttm' , numerator_kwargs={'qtr_method':'diff'})
 
-class npro_equ(StockFactorCalculator):
+class gp_ta_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
-    description = '归母净利润/净资产'
+    description = '单季度毛利润除以总资产'
     
     def calc_factor(self, date: int):
-        npro = get_latest('is@ttm@n_income_attr_p' , date)
-        bv = get_latest('bs@ttm@total_hldr_eqy_exc_min_int' , date)
-        return npro / bv
+        return get_ratio_latest('indi@gross_margin' , 'bs@total_assets' , date , 'qtr' , numerator_kwargs={'qtr_method':'diff'})
+
+class gp_ta_zscore(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'earning'
+    description = '毛利润/总资产,Z-Score'
+
+    def calc_factor(self, date: int):
+        return get_ratio_zscore('indi@gross_margin' , 'bs@total_assets' , date)
+    
+class npdedt_equ_ttm(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'earning'
+    description = 'TTM扣非归母净利润/净资产'
+    
+    def calc_factor(self, date: int):
+        return get_ratio_latest('indi@profit_dedt' , 'bs@total_hldr_eqy_exc_min_int' , date , 'ttm' , numerator_kwargs={'qtr_method':'diff'})
+
+class npdedt_sales_ttm(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'earning'
+    description = 'TTM扣非归母净利润/营业收入'
+    
+    def calc_factor(self, date: int):
+        return get_ratio_latest('indi@profit_dedt' , 'is@revenue' , date , 'ttm' , numerator_kwargs={'qtr_method':'diff'})
+
+class npdedt_ta_ttm(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'earning'
+    description = 'TTM扣非归母净利润/总资产'
+    
+    def calc_factor(self, date: int):
+        return get_ratio_latest('indi@profit_dedt' , 'bs@total_assets' , date , 'ttm' , numerator_kwargs={'qtr_method':'diff'})
+
+class npro_equ_ttm(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'earning'
+    description = 'TTM归母净利润/净资产'
+    
+    def calc_factor(self, date: int):
+        return get_ratio_latest('is@n_income_attr_p' , 'bs@total_hldr_eqy_exc_min_int' , date , 'ttm')
 
 class npro_equ_zscore(StockFactorCalculator):
     init_date = 20070101
@@ -159,64 +149,52 @@ class npro_equ_zscore(StockFactorCalculator):
     description = '归母净利润/净资产,Z-Score'
     
     def calc_factor(self, date: int):
-        npro = get_hist('is@qtr@n_income_attr_p' , date , 20).iloc[:,0]
-        bv   = get_hist('bs@qtr@total_hldr_eqy_exc_min_int' , date , 20).iloc[:,0]
-        return hist_zscore(npro / bv)
+        return get_ratio_zscore('is@n_income_attr_p' , 'bs@total_hldr_eqy_exc_min_int' , date)
     
-class npro_q_equ(StockFactorCalculator):
+class npro_equ_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度归母净利润/净资产'
     
     def calc_factor(self, date: int):
-        npro = get_latest('is@qtr@n_income_attr_p' , date)
-        bv = get_latest('bs@qtr@total_hldr_eqy_exc_min_int' , date)
-        return npro / bv
+        return get_ratio_latest('is@n_income_attr_p' , 'bs@total_hldr_eqy_exc_min_int' , date , 'qtr')
 
-class npro_q_ta(StockFactorCalculator):
+class npro_ta_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度归母净利润/总资产'
     
     def calc_factor(self, date: int):
-        npro = get_latest('is@qtr@n_income_attr_p' , date)
-        ta = get_latest('bs@qtr@total_assets' , date)
-        return npro / ta
+        return get_ratio_latest('is@n_income_attr_p' , 'bs@total_assets' , date , 'qtr')
 
-class npro_sales(StockFactorCalculator):
+class npro_sales_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM归母净利润/营业收入'
     
     def calc_factor(self, date: int):
-        npro = get_latest('is@ttm@n_income_attr_p' , date)
-        sales = get_latest('is@ttm@revenue' , date)
-        return npro / sales
+        return get_ratio_latest('is@n_income_attr_p' , 'is@revenue' , date , 'ttm')
 
-class npro_q_sales(StockFactorCalculator):
+class npro_sales_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度归母净利润/营业收入'
     
     def calc_factor(self, date: int):
-        npro = get_latest('is@qtr@n_income_attr_p' , date)
-        sales = get_latest('is@qtr@revenue' , date)
-        return npro / sales
+        return get_ratio_latest('is@n_income_attr_p' , 'is@revenue' , date , 'qtr')
 
-class npro_ta(StockFactorCalculator):
+class npro_ta_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM归母净利润/总资产'
     
     def calc_factor(self, date: int):
-        npro = get_latest('is@ttm@n_income_attr_p' , date)
-        ta = get_latest('bs@ttm@total_assets' , date)
-        return npro / ta
+        return get_ratio_latest('is@n_income_attr_p' , 'bs@total_assets' , date , 'ttm')
 
 class npro_ta_zscore(StockFactorCalculator):
     init_date = 20070101
@@ -225,73 +203,52 @@ class npro_ta_zscore(StockFactorCalculator):
     description = 'TTM归母净利润/总资产,Z-Score'
     
     def calc_factor(self, date: int):
-        npro = get_hist('is@qtr@n_income_attr_p' , date , 20).iloc[:,0]
-        ta   = get_hist('bs@qtr@total_assets' , date , 20).iloc[:,0]
-        return hist_zscore(npro / ta)
+        return get_ratio_zscore('is@n_income_attr_p' , 'bs@total_assets' , date)
 
-class ocf_q_sales(StockFactorCalculator):
+class ocf_sales_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度经营活动现金流/营业收入'
     
     def calc_factor(self, date: int):
-        ocf = get_latest('cf@qtr@n_cashflow_act' , date)
-        sales = get_latest('is@qtr@revenue' , date)
-        return ocf / sales
+        return get_ratio_latest('cf@n_cashflow_act' , 'is@revenue' , date , 'qtr')
 
-class ocf_q_ta(StockFactorCalculator):
+class ocf_ta_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度经营活动现金流/总资产'
     
     def calc_factor(self, date: int):
-        ocf = get_latest('cf@qtr@n_cashflow_act' , date)
-        ta = get_latest('bs@qtr@total_assets' , date)
-        return ocf / ta
+        return get_ratio_latest('cf@n_cashflow_act' , 'bs@total_assets' , date , 'qtr')
 
-class ocf_sales(StockFactorCalculator):
+class ocf_sales_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM经营活动现金流/营业收入'
     
     def calc_factor(self, date: int):
-        ocf = get_latest('cf@ttm@n_cashflow_act' , date)
-        sales = get_latest('is@ttm@revenue' , date)
-        return ocf / sales
+        return get_ratio_latest('cf@n_cashflow_act' , 'is@revenue' , date , 'ttm')
 
-class ocf_ta(StockFactorCalculator):
+class ocf_ta_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM经营活动现金流/总资产'
     
     def calc_factor(self, date: int):
-        ocf = get_latest('cf@ttm@n_cashflow_act' , date)
-        ta = get_latest('bs@ttm@total_assets' , date)
-        return ocf / ta
-
-class ocfa(StockFactorCalculator):
-    init_date = 20070101
-    category0 = 'fundamental'
-    category1 = 'earning'
-    description = 'Operation Cost on Fixed Assets,产能利用率提升'
+        return get_ratio_latest('cf@n_cashflow_act' , 'bs@total_assets' , date , 'ttm')
     
-    def calc_factor(self, date: int):
-        ...
-
-class op_equ(StockFactorCalculator):
+class op_equ_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM营业利润/净资产'
     
     def calc_factor(self, date: int):
-        op = get_latest('is@ttm@operate_profit' , date)
-        bv = get_latest('bs@ttm@total_hldr_eqy_exc_min_int' , date)
-        return op / bv
+        return get_ratio_latest('is@operate_profit' , 'bs@total_hldr_eqy_exc_min_int' , date , 'ttm')
 
 class op_equ_zscore(StockFactorCalculator):
     init_date = 20070101
@@ -300,65 +257,60 @@ class op_equ_zscore(StockFactorCalculator):
     description = 'TTM营业利润/净资产,Z-Score'
     
     def calc_factor(self, date: int):
-        op = get_hist('is@qtr@operate_profit' , date , 20).iloc[:,0]
-        bv = get_hist('bs@qtr@total_hldr_eqy_exc_min_int' , date , 20).iloc[:,0]
-        return hist_zscore(op / bv)
+        return get_ratio_zscore('is@operate_profit' , 'bs@total_hldr_eqy_exc_min_int' , date)
 
-class op_q_equ(StockFactorCalculator):
+class op_equ_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度营业利润/净资产'
     
     def calc_factor(self, date: int):
-        op = get_latest('is@qtr@operate_profit' , date)
-        bv = get_latest('bs@qtr@total_hldr_eqy_exc_min_int' , date)
-        return op / bv
+        return get_ratio_latest('is@operate_profit' , 'bs@total_hldr_eqy_exc_min_int' , date , 'qtr')
 
-class periodexp_q_sale(StockFactorCalculator):
+class expense_sales_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度费用/营业收入'
     
     def calc_factor(self, date: int):
-        ...
+        sell_exp = get_latest('is@sell_exp@qtr' , date)
+        admin_exp = get_latest('is@admin_exp@qtr' , date)
+        fin_exp = get_latest('is@fin_exp@qtr' , date)
+        sales = get_latest('is@revenue@qtr' , date)
+        return (sell_exp + admin_exp + fin_exp) / sales
 
-class periodexp_sale(StockFactorCalculator):
+class expense_sales_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM费用/营业收入'
     
     def calc_factor(self, date: int):
-        ...
+        sell_exp = get_latest('is@sell_exp@ttm' , date)
+        admin_exp = get_latest('is@admin_exp@ttm' , date)
+        fin_exp = get_latest('is@fin_exp@ttm' , date)
+        sales = get_latest('is@revenue@ttm' , date)
+        return (sell_exp + admin_exp + fin_exp) / sales
 
-class roic(StockFactorCalculator):
+class roic_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM,EBIT(1-税率)/投入资本'
     
     def calc_factor(self, date: int):
-        ...
+        return get_latest('indi@roic@ttm' , date , qtr_method='diff')
 
-class rotc(StockFactorCalculator):
+class ebit_ta_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM,EBIT/有形资产'
     
     def calc_factor(self, date: int):
-        ...
-
-class rroc(StockFactorCalculator):
-    init_date = 20070101
-    category0 = 'fundamental'
-    category1 = 'earning'
-    description = '营业能力改善'
-    
-    def calc_factor(self, date: int):
-        ...
+        return get_ratio_latest('is@ebit' , 'indi@tangible_asset' , date , 'ttm' , denominator_kwargs={'qtr_method':'exact'})
 
 class sales_ta_zscore(StockFactorCalculator):
     init_date = 20070101
@@ -367,16 +319,16 @@ class sales_ta_zscore(StockFactorCalculator):
     description = '营业收入/总资产,Z-Score'
     
     def calc_factor(self, date: int):
-        ...
+        return get_ratio_zscore('is@revenue' , 'bs@total_assets' , date)
 
-class tax_equ(StockFactorCalculator):
+class tax_equ_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM所得税/净资产'
     
     def calc_factor(self, date: int):
-        ...
+        return get_ratio_latest('is@income_tax' , 'bs@total_hldr_eqy_exc_min_int' , date , 'ttm')
 
 class tax_equ_zscore(StockFactorCalculator):
     init_date = 20070101
@@ -385,25 +337,25 @@ class tax_equ_zscore(StockFactorCalculator):
     description = 'TTM所得税/净资产,Z-Score'
     
     def calc_factor(self, date: int):
-        ...
+        return get_ratio_zscore('is@income_tax' , 'bs@total_hldr_eqy_exc_min_int' , date)
 
-class tax_q_equ(StockFactorCalculator):
+class tax_equ_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度所得税/净资产'
     
     def calc_factor(self, date: int):
-        ...
+        return get_ratio_latest('is@income_tax' , 'bs@total_hldr_eqy_exc_min_int' , date , 'qtr')
 
-class tp_equ(StockFactorCalculator):
+class tp_equ_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM利润总额/净资产'
     
     def calc_factor(self, date: int):
-        ...
+        return get_ratio_latest('is@total_profit' , 'bs@total_hldr_eqy_exc_min_int' , date , 'ttm')
 
 class tp_equ_zscore(StockFactorCalculator):
     init_date = 20070101
@@ -412,13 +364,13 @@ class tp_equ_zscore(StockFactorCalculator):
     description = 'TTM利润总额/净资产,Z-Score'
     
     def calc_factor(self, date: int):
-        ...
+        return get_ratio_zscore('is@total_profit' , 'bs@total_hldr_eqy_exc_min_int' , date)
 
-class tp_q_equ(StockFactorCalculator):
+class tp_equ_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度利润总额/净资产'
     
     def calc_factor(self, date: int):
-        ...
+        return get_ratio_latest('is@total_profit' , 'bs@total_hldr_eqy_exc_min_int' , date , 'qtr')

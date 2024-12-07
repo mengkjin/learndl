@@ -1,15 +1,29 @@
-import platform , time , traceback
+import platform , re , time , traceback
 import pandas as pd
 import numpy as np
 import multiprocessing as mp  
 
 from dataclasses import dataclass
+from pypinyin import lazy_pinyin
 from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal
 
 from src.basic import PATH , CALENDAR
 from src.data.util.basic import secid_adjust
 from src.func.time import date_seg
+
+def factor_name_pinyin_conversion(text : str):
+    text = text.replace('\'' , '2').replace('因子' , '')
+    hanzi_pattern = re.compile(r'[\u4e00-\u9fff]+')
+    
+    hanzi_parts = hanzi_pattern.findall(text)
+    
+    pinyin_parts = ['_'.join(lazy_pinyin(part)) for part in hanzi_parts]
+    
+    for hanzi, pinyin in zip(hanzi_parts, pinyin_parts):
+        text = text.replace(hanzi, pinyin)
+    
+    return text
 
 @dataclass
 class Connection:
@@ -83,6 +97,13 @@ class Connection:
                 host = '1.15.124.26' ,
                 port = 5432 ,
                 database = 'kyfactor') ,
+            'guosheng': cls(
+                dialect='postgresql' , 
+                username ='jsquant' ,
+                password ='3hkpe89ksq' ,
+                host = 'frp-hub.top' ,
+                port = 43230 ,
+                database = 'gs_alpha') ,
             'huatai': cls(
                 dialect='mysql+pymysql' ,
                 username ='client_jinm' ,
@@ -251,6 +272,11 @@ class SellsideSQLDownloader:
             df = df.set_index(['date','secid']).reset_index()
         elif factor_src == 'guojin':
             ...
+        elif factor_src == 'guosheng':
+            assert isinstance(df , pd.DataFrame)
+            df.columns = [factor_name_pinyin_conversion(col.lower()) for col in df.columns.values]
+            df = secid_adjust(df , ['symbol'] , drop_old=True)
+            df['date'] = df['date'].astype(str).str.replace('-','').astype(int)
 
         int_columns = df.columns.to_numpy()[df.columns.isin(['date', 'secid'])]
         flt_columns = df.columns.difference(int_columns.tolist())  
@@ -283,6 +309,7 @@ class SellsideSQLDownloader:
             'dongfang.hist'      :cls('dongfang','hist'      ,'tradingdate',20200101,'%Y-%m-%d') ,
             'dongfang.scores_v0' :cls('dongfang','scores_v0' ,'tradingdate',20171229,'%Y-%m-%d') ,
             'dongfang.factorvae' :cls('dongfang','factorvae' ,'tradingdate',20200101,'%Y-%m-%d') ,
+            'guosheng.gs_pv_set1':cls('guosheng','gs_pv_set1','date'       ,20100129,'%Y%m%d') ,
             #'kaiyuan.positive' :cls(
             #    'kaiyuan','positive','date',20140130,
             #    factors = ['active_trading','apm','opt_synergy_effect','large_trader_ret_error',

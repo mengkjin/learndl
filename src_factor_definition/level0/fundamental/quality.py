@@ -16,15 +16,6 @@ class assetcur_asset(StockFactorCalculator):
     def calc_factor(self, date: int):
         return DATAVENDOR.INDI.acc_latest('ca_to_assets' , date) / 100
     
-class assetnoncur_asset(StockFactorCalculator):
-    init_date = 20070101
-    category0 = 'fundamental'
-    category1 = 'quality'
-    description = '非流动资产/总资产'
-    
-    def calc_factor(self, date: int):
-        return DATAVENDOR.INDI.acc_latest('nca_to_assets' , date) / 100
-    
 class liab_equ(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
@@ -51,15 +42,6 @@ class liabcur_liab(StockFactorCalculator):
     
     def calc_factor(self, date: int):
         return DATAVENDOR.INDI.acc_latest('currentdebt_to_debt' , date) / 100
-
-class liabnoncur_liab(StockFactorCalculator):
-    init_date = 20070101
-    category0 = 'fundamental'
-    category1 = 'quality'
-    description = '非流动负债/总负债'
-    
-    def calc_factor(self, date: int):
-        return DATAVENDOR.INDI.acc_latest('longdeb_to_debt' , date) / 100
     
 class ratio_cash(StockFactorCalculator):
     init_date = 20070101
@@ -88,7 +70,7 @@ class ratio_quick(StockFactorCalculator):
     def calc_factor(self, date: int):
         return DATAVENDOR.INDI.acc_latest('quick_ratio' , date) / 100
 
-class sales_ta(StockFactorCalculator):
+class sales_ta_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'quality'
@@ -96,10 +78,10 @@ class sales_ta(StockFactorCalculator):
     
     def calc_factor(self, date: int):
         sales = DATAVENDOR.IS.ttm_latest('revenue' , date)
-        ta    = DATAVENDOR.BS.acc_latest('total_assets' , date)
+        ta    = DATAVENDOR.BS.ttm_latest('total_assets' , date)
         return sales / ta
 
-class sales_q_ta(StockFactorCalculator):
+class sales_ta_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'quality'
@@ -107,7 +89,7 @@ class sales_q_ta(StockFactorCalculator):
     
     def calc_factor(self, date: int):
         sales = DATAVENDOR.IS.qtr_latest('revenue' , date)
-        ta    = DATAVENDOR.BS.acc_latest('total_assets' , date)
+        ta    = DATAVENDOR.BS.qtr_latest('total_assets' , date)
         return sales / ta
     
 class ta_equ(StockFactorCalculator):

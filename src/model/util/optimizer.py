@@ -5,6 +5,8 @@ from torch import nn , optim
 from torch.nn.utils.clip_grad import clip_grad_value_
 from typing import Any,Optional
 
+from src.algo.nn.optimizer import sam
+
 from .metric import BatchMetric
 from .config import TrainConfig
 
@@ -84,6 +86,11 @@ class Optimizer:
         return {
             'Adam': optim.Adam ,
             'SGD' : optim.SGD ,
+            'SAM' : sam.SAM ,
+            'ASAM': sam.ASAM ,  
+            'GSAM': sam.GSAM ,
+            'GAM' : sam.GAM ,
+            'FSAM': sam.FriendlySAM ,
         }[key](param_groups , **kwargs)
 
     @staticmethod

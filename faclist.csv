@@ -88,16 +88,16 @@ gp_acce,,20070101,fundamental,growth,毛利润加速度,基本面,成长
 gp_czscore,,20070101,fundamental,growth,gp单季度同比增速的标准化得分,基本面,成长
 gp_pctq4,,20070101,fundamental,growth,毛利润同比变化率,基本面,成长
 gp_q_pctq4,,20070101,fundamental,growth,毛利润同比变化率,基本面,成长
-gp_q_ta,,20070101,fundamental,earning,毛利润除以总资产,基本面,盈利
+gp_q_ta,1,20070101,fundamental,earning,毛利润除以总资产,基本面,盈利
 gp_q_ta_chgq4,,20070101,fundamental,growth,gp_q_ta同比变化值,基本面,成长
 gp_rank_delta,,20070101,fundamental,growth,毛利润行业内分位数之差,基本面,成长
-gp_sale,,20070101,fundamental,earning,毛利润/营业收入,基本面,盈利
-gp_sale_q,,20070101,fundamental,earning,毛利润/营业收入,基本面,盈利
-gp_ta,,20070101,fundamental,earning,毛利润/总资产,基本面,盈利
+gp_sale,1,20070101,fundamental,earning,毛利润/营业收入,基本面,盈利
+gp_sale_q,1,20070101,fundamental,earning,毛利润/营业收入,基本面,盈利
+gp_ta,1,20070101,fundamental,earning,毛利润/总资产,基本面,盈利
 gp_ta_chgq1,,20070101,fundamental,growth,gp_ta环比变化值,基本面,成长
 gp_ta_trendhb,,20070101,fundamental,growth,毛利润增长趋势_环比,基本面,成长
 gp_ta_trendtb,,20070101,fundamental,growth,毛利润增长趋势_同比,基本面,成长
-gp_ta_zscore,,20070101,fundamental,earning,gp_ta标准化得分,基本面,盈利
+gp_ta_zscore,1,20070101,fundamental,earning,gp_ta标准化得分,基本面,盈利
 holding_actwei,,20070101,money_flow,holding,基金持股市值占比-市场市值占比,基本面,机构持仓
 holding_actweibu,,20070101,money_flow,holding,基金内个股主动权重中位数,基本面,机构持仓
 holding_mkts,,20070101,money_flow,holding,持有个股市值,基本面,机构持仓
@@ -127,7 +127,7 @@ lncap,1,20070101,behavior,liquidity,市值因子,量价,规模
 lncap_free,1,20070101,behavior,liquidity,市值因子,量价,规模
 lncap_liq,1,20070101,behavior,liquidity,市值因子,量价,规模
 lockedstk,1,20070101,behavior,liquidity,锁仓比,量价,波动率
-lpnp,,20070101,fundamental,earning,线性提纯净利润,基本面,盈利
+lpnp,1,20070101,fundamental,earning,线性提纯净利润,基本面,盈利
 maxdd_intra,,20070101,high_frequency,hf_volatility,日内最大回撤,高频,动量反转
 mif_1m,1,20070101,behavior,momentum,市场效率因子-原始,量价,动量反转
 mom_12_1m,1,20070101,behavior,momentum,12月动量因子,量价,动量反转
@@ -174,17 +174,17 @@ north_pctm,,20070101,money_flow,trading,北向持股占比均值,量价,北向�
 north_value,,20070101,money_flow,trading,北向持股市值,量价,北向资金
 north_valuem,,20070101,money_flow,trading,北向持股市值均值,量价,北向资金
 npro_acce,,20070101,fundamental,growth,归母净利润加速度,基本面,成长
-npro_cratio,,20070101,fundamental,earning,核心净利润占比,基本面,盈利
+npro_cratio,1,20070101,fundamental,earning,核心净利润占比,基本面,盈利
 npro_czscore,,20070101,fundamental,growth,npro单季度同比增速的标准化得分,基本面,成长
 npro_dedu_acce,,20070101,fundamental,growth,扣非归母净利润加速度,基本面,成长
-npro_dedu_equ,,20070101,fundamental,earning,扣非归母净利润/净资产,基本面,盈利
+npro_dedu_equ,1,20070101,fundamental,earning,扣非归母净利润/净资产,基本面,盈利
 npro_dedu_equ_chgq1,,20070101,fundamental,growth,npro_dedu_equ环比变化值,基本面,成长
 npro_dedu_pctq4,,20070101,fundamental,growth,扣非归母净利润同比变化率,基本面,成长
-npro_dedu_sale,,20070101,fundamental,earning,扣非归母净利润/营业收入,基本面,盈利
-npro_dedu_ta,,20070101,fundamental,earning,扣非归母净利润/总资产,基本面,盈利
-npro_equ,,20070101,fundamental,earning,归母净利润/净资产,基本面,盈利
+npro_dedu_sale,1,20070101,fundamental,earning,扣非归母净利润/营业收入,基本面,盈利
+npro_dedu_ta,1,20070101,fundamental,earning,扣非归母净利润/总资产,基本面,盈利
+npro_equ,1,20070101,fundamental,earning,归母净利润/净资产,基本面,盈利
 npro_equ_chgq1,,20070101,fundamental,growth,npro_equ环比变化值,基本面,成长
-npro_equ_zscore,,20070101,fundamental,earning,npro_equ标准化得分,基本面,盈利
+npro_equ_zscore,1,20070101,fundamental,earning,npro_equ标准化得分,基本面,盈利
 npro_op_acce,,20070101,fundamental,growth,营业利润加速度,基本面,成长
 npro_op_czscore,,20070101,fundamental,growth,npro_op单季度同比增速的标准化得分,基本面,成长
 npro_op_pctq4,,20070101,fundamental,growth,营业利润同比变化率,基本面,成长
@@ -194,38 +194,38 @@ npro_pct3m_est,,20070101,analyst,forecast,环比指标变化值,分析师,成长
 npro_pct6m_est,,20070101,analyst,forecast,环比指标变化值,分析师,成长
 npro_pctfttm,,20070101,analyst,forecast,净利润预期/净利润FY0-一致预期值,分析师,成长
 npro_pctq4,,20070101,fundamental,growth,归母净利润同比变化率,基本面,成长
-npro_q_equ,,20070101,fundamental,earning,归母净利润/净资产,基本面,盈利
+npro_q_equ,1,20070101,fundamental,earning,归母净利润/净资产,基本面,盈利
 npro_q_equ_chgq4,,20070101,fundamental,growth,npro_q_equ同比变化值,基本面,成长
 npro_q_pctq4,,20070101,fundamental,growth,归母净利润同比变化率,基本面,成长
-npro_q_stk,,20070101,fundamental,earning,净利润/实收资本,基本面,盈利
-npro_q_ta,,20070101,fundamental,earning,归母净利润/总资产,基本面,盈利
+npro_q_stk,1,20070101,fundamental,earning,净利润/实收资本,基本面,盈利
+npro_q_ta,1,20070101,fundamental,earning,归母净利润/总资产,基本面,盈利
 npro_q_ta_chgq4,,20070101,fundamental,growth,npro_q_ta同比变化值,基本面,成长
 npro_rank_delta,,20070101,fundamental,growth,净利润行业内分位数之差,基本面,成长
-npro_sale,,20070101,fundamental,earning,归母净利润/营业收入,基本面,盈利
-npro_sale_q,,20070101,fundamental,earning,归母净利润/营业收入,基本面,盈利
-npro_stk,,20070101,fundamental,earning,净利润/实收资本,基本面,盈利
-npro_ta,,20070101,fundamental,earning,归母净利润/总资产,基本面,盈利
+npro_sale,1,20070101,fundamental,earning,归母净利润/营业收入,基本面,盈利
+npro_sale_q,1,20070101,fundamental,earning,归母净利润/营业收入,基本面,盈利
+npro_stk,1,20070101,fundamental,earning,净利润/实收资本,基本面,盈利
+npro_ta,1,20070101,fundamental,earning,归母净利润/总资产,基本面,盈利
 npro_ta_chgq1,,20070101,fundamental,growth,npro_ta环比变化值,基本面,成长
-npro_ta_zscore,,20070101,fundamental,earning,npro_ta标准化得分,基本面,盈利
+npro_ta_zscore,1,20070101,fundamental,earning,npro_ta标准化得分,基本面,盈利
 npro_tp_acce,,20070101,fundamental,growth,利润总额加速度,基本面,成长
 npro_tp_czscore,,20070101,fundamental,growth,npro_tp单季度同比增速的标准化得分,基本面,成长
 npro_tp_pctq4,,20070101,fundamental,growth,利润总额同比变化率,基本面,成长
 npro_tp_q_pctq4,,20070101,fundamental,growth,利润总额同比变化率,基本面,成长
 npro_tp_rank_delta,,20070101,fundamental,growth,利润总额行业内分位数之差,基本面,成长
 npro_trend,,20070101,fundamental,growth,业绩趋势因子,基本面,成长
-ocf_q_sale,,20070101,fundamental,earning,经营活动产生的现金流量净额/营业收入,基本面,盈利
-ocf_q_ta,,20070101,fundamental,earning,经营活动产生的现金流量净额/总资产,基本面,盈利
-ocf_sale,,20070101,fundamental,earning,经营活动产生的现金流量净额/营业收入,基本面,盈利
-ocf_ta,,20070101,fundamental,earning,经营活动产生的现金流量净额/总资产,基本面,盈利
-ocfa,,20070101,fundamental,earning,产能利用率提升,基本面,盈利
+ocf_q_sale,1,20070101,fundamental,earning,经营活动产生的现金流量净额/营业收入,基本面,盈利
+ocf_q_ta,1,20070101,fundamental,earning,经营活动产生的现金流量净额/总资产,基本面,盈利
+ocf_sale,1,20070101,fundamental,earning,经营活动产生的现金流量净额/营业收入,基本面,盈利
+ocf_ta,1,20070101,fundamental,earning,经营活动产生的现金流量净额/总资产,基本面,盈利
+ocfa,1,20070101,fundamental,earning,产能利用率提升,基本面,盈利
 ocftop,1,20070101,fundamental,value,经营现金流/市值,基本面,估值
 ocftop_q,1,20070101,fundamental,value,单季度经营现金流/市值,基本面,估值
 ocftop_q_rank1y,1,20070101,fundamental,value,ocftop_q分位数,基本面,估值
 ocftop_rank1y,1,20070101,fundamental,value,ocftop分位数,基本面,估值
-op_equ,,20070101,fundamental,earning,营业利润/净资产,基本面,盈利
+op_equ,1,20070101,fundamental,earning,营业利润/净资产,基本面,盈利
 op_equ_chgq1,,20070101,fundamental,growth,op_equ环比变化值,基本面,成长
-op_equ_zscore,,20070101,fundamental,earning,op_equ标准化得分,基本面,盈利
-op_q_equ,,20070101,fundamental,earning,营业利润/净资产,基本面,盈利
+op_equ_zscore,1,20070101,fundamental,earning,op_equ标准化得分,基本面,盈利
+op_q_equ,1,20070101,fundamental,earning,营业利润/净资产,基本面,盈利
 op_q_equ_chgq4,,20070101,fundamental,growth,op_q_equ同比变化值,基本面,成长
 optop_est,,20070101,analyst,forecast,营业利润/市值-一致预期值,分析师,估值
 optop_est_pct3m,,20070101,analyst,forecast,环比指标变化值,分析师,估值
@@ -233,8 +233,8 @@ optop_est_pct6m,,20070101,analyst,forecast,环比指标变化值,分析师,估�
 outperform_title,,20070101,analyst,surprise,研报标题超预期,分析师,超预期
 outperform_titlepct,,20070101,analyst,surprise,研报标题超预期,分析师,超预期
 peg_est,,20070101,analyst,forecast,PEG-一致预期值,分析师,估值
-periodexp_q_sale,,20070101,fundamental,earning,期间费用/营业收入,基本面,盈利
-periodexp_sale,,20070101,fundamental,earning,期间费用/营业收入,基本面,盈利
+periodexp_q_sale,1,20070101,fundamental,earning,期间费用/营业收入,基本面,盈利
+periodexp_sale,1,20070101,fundamental,earning,期间费用/营业收入,基本面,盈利
 price_weiskew12m,1,20070101,behavior,volatility,成交量加权偏度,量价,波动率
 price_weiskew1m,1,20070101,behavior,volatility,成交量加权偏度,量价,波动率
 price_weiskew2m,1,20070101,behavior,volatility,成交量加权偏度,量价,波动率
@@ -260,9 +260,9 @@ ret_std1m,1,20070101,behavior,volatility,收益率标准差,量价,波动率
 ret_std2m,1,20070101,behavior,volatility,收益率标准差,量价,波动率
 ret_std3m,1,20070101,behavior,volatility,收益率标准差,量价,波动率
 ret_std6m,1,20070101,behavior,volatility,收益率标准差,量价,波动率
-roic,,20070101,fundamental,earning,EBIT(1-税率)/投入资本,基本面,盈利
-rotc,,20070101,fundamental,earning,EBIT/有形资产,基本面,盈利
-rroc,,20070101,fundamental,earning,营业能力改善,基本面,盈利
+roic,1,20070101,fundamental,earning,EBIT(1-税率)/投入资本,基本面,盈利
+rotc,1,20070101,fundamental,earning,EBIT/有形资产,基本面,盈利
+rroc,1,20070101,fundamental,earning,营业能力改善,基本面,盈利
 sales_acce,,20070101,fundamental,growth,营业收入加速度,基本面,成长
 sales_czscore,,20070101,fundamental,growth,sales单季度同比增速的标准化得分,基本面,成长
 sales_pctq4,,20070101,fundamental,growth,营业收入同比变化率,基本面,成长
@@ -272,7 +272,7 @@ sales_q_ta_chgq4,,20070101,fundamental,growth,sale_q_ta同比变化值,基本面
 sales_rank_delta,,20070101,fundamental,growth,营业收入行业内分位数之差,基本面,成长
 sales_ta,1,20070101,fundamental,quality,资产周转率,基本面,财务质量
 sales_ta_chgq1,,20070101,fundamental,growth,sale_ta环比变化值,基本面,成长
-sales_ta_zscore,,20070101,fundamental,earning,sale_ta标准化得分,基本面,盈利
+sales_ta_zscore,1,20070101,fundamental,earning,sale_ta标准化得分,基本面,盈利
 skew_intra1min,,20070101,high_frequency,hf_volatility,高频偏度,高频,波动率
 skew_intra5min,,20070101,high_frequency,hf_volatility,高频偏度,高频,波动率
 smart_money,,20070101,high_frequency,hf_liquidity,聪明钱因子,高频,资金流
@@ -283,34 +283,34 @@ stop_est_pct6m,,20070101,analyst,forecast,环比指标变化值,分析师,估值
 stop_q,1,20070101,fundamental,value,单季度市销率倒数,基本面,估值
 stop_q_rank1y,1,20070101,fundamental,value,stop_q分位数,基本面,估值
 stop_rank1y,1,20070101,fundamental,value,stop分位数,基本面,估值
-sue_gp,,20070101,fundamental,earning,未预期-毛利润,基本面,盈利
-sue_gpc,,20070101,fundamental,earning,未预期-毛利润-带截距,基本面,盈利
-sue_npro,,20070101,fundamental,earning,未预期-归母净利润,基本面,盈利
-sue_npro_op,,20070101,fundamental,earning,未预期-营业利润,基本面,盈利
-sue_npro_opc,,20070101,fundamental,earning,未预期-营业利润-带截距,基本面,盈利
-sue_npro_tp,,20070101,fundamental,earning,未预期-利润总额,基本面,盈利
-sue_npro_tpc,,20070101,fundamental,earning,未预期-利润总额-带截距,基本面,盈利
-sue_nproc,,20070101,fundamental,earning,未预期-归母净利润-带截距,基本面,盈利
-sue_sales,,20070101,fundamental,earning,未预期-营业收入,基本面,盈利
-sue_salesc,,20070101,fundamental,earning,未预期-营业收入-带截距,基本面,盈利
-sue_tax,,20070101,fundamental,earning,未预期-所得税,基本面,盈利
-sue_taxc,,20070101,fundamental,earning,未预期-所得税-带截距,基本面,盈利
+sue_gp,1,20070101,fundamental,earning,未预期-毛利润,基本面,盈利
+sue_gpc,1,20070101,fundamental,earning,未预期-毛利润-带截距,基本面,盈利
+sue_npro,1,20070101,fundamental,earning,未预期-归母净利润,基本面,盈利
+sue_npro_op,1,20070101,fundamental,earning,未预期-营业利润,基本面,盈利
+sue_npro_opc,1,20070101,fundamental,earning,未预期-营业利润-带截距,基本面,盈利
+sue_npro_tp,1,20070101,fundamental,earning,未预期-利润总额,基本面,盈利
+sue_npro_tpc,1,20070101,fundamental,earning,未预期-利润总额-带截距,基本面,盈利
+sue_nproc,1,20070101,fundamental,earning,未预期-归母净利润-带截距,基本面,盈利
+sue_sales,1,20070101,fundamental,earning,未预期-营业收入,基本面,盈利
+sue_salesc,1,20070101,fundamental,earning,未预期-营业收入-带截距,基本面,盈利
+sue_tax,1,20070101,fundamental,earning,未预期-所得税,基本面,盈利
+sue_taxc,1,20070101,fundamental,earning,未预期-所得税-带截距,基本面,盈利
 ta_equ,1,20070101,fundamental,quality,权益乘数,基本面,财务质量
 tax_acce,,20070101,fundamental,growth,所得税加速度,基本面,成长
 tax_czscore,,20070101,fundamental,growth,tax单季度同比增速的标准化得分,基本面,成长
-tax_equ,,20070101,fundamental,earning,所得税/净资产,基本面,盈利
+tax_equ,1,20070101,fundamental,earning,所得税/净资产,基本面,盈利
 tax_equ_chgq1,,20070101,fundamental,growth,tax_equ环比变化值,基本面,成长
-tax_equ_zscore,,20070101,fundamental,earning,tax_equ标准化得分,基本面,盈利
+tax_equ_zscore,1,20070101,fundamental,earning,tax_equ标准化得分,基本面,盈利
 tax_pctq4,,20070101,fundamental,growth,所得税同比变化率,基本面,成长
-tax_q_equ,,20070101,fundamental,earning,所得税/净资产,基本面,盈利
+tax_q_equ,1,20070101,fundamental,earning,所得税/净资产,基本面,盈利
 tax_q_equ_chgq4,,20070101,fundamental,growth,tax_q_equ同比变化值,基本面,成长
 tax_q_pctq4,,20070101,fundamental,growth,所得税同比变化率,基本面,成长
 tax_rank_delta,,20070101,fundamental,growth,所得税行业内分位数之差,基本面,成长
 tcv_intra,,20070101,high_frequency,hf_liquidity,一致买入因子,高频,流动性
-tp_equ,,20070101,fundamental,earning,利润总额/净资产,基本面,盈利
+tp_equ,1,20070101,fundamental,earning,利润总额/净资产,基本面,盈利
 tp_equ_chgq1,,20070101,fundamental,growth,tp_equ环比变化值,基本面,成长
-tp_equ_zscore,,20070101,fundamental,earning,tp_equ标准化得分,基本面,盈利
-tp_q_equ,,20070101,fundamental,earning,利润总额/净资产,基本面,盈利
+tp_equ_zscore,1,20070101,fundamental,earning,tp_equ标准化得分,基本面,盈利
+tp_q_equ,1,20070101,fundamental,earning,利润总额/净资产,基本面,盈利
 tp_q_equ_chgq4,,20070101,fundamental,growth,tp_q_equ同比变化值,基本面,成长
 tptop_est,,20070101,analyst,forecast,利润总额/市值-一致预期值,分析师,估值
 tptop_est_pct3m,,20070101,analyst,forecast,环比指标变化值,分析师,估值

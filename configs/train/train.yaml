@@ -8,7 +8,7 @@ dataloader.shuffle_option:  epoch # static , init , epoch
 dataloader.train_ratio:     0.8
 
 trainer.transfer:  false
-trainer.optimizer: {'name' : 'Adam' , 'param' : {} ,}  #{'name' : 'SGD' , 'param' : {} ,}
+trainer.optimizer: {'name' : 'Adam' , 'param' : {} ,}  # 'ADAM' , 'SGD' , 'SAM' , 'FSAM' , 'GAM' , 'ASAM' , 'GSAM'
 trainer.scheduler: {'name' : 'cycle' , 'param' : {'base_lr': 1.0e-7 , 'step_size_up': 4} ,}  #{'name' : 'SGD' , 'param' : {} ,}
 trainer.learn_rate: {'base' : 0.005 , 'transfer_multiplier' : {'encoder' : 0.1 , 'decoder' : 1.0, }}
 trainer.gradient.clip_value: 10.0

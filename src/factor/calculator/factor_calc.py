@@ -60,7 +60,7 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         return super().__new__(cls.validate_attr())
 
     @abstractmethod
-    def calc_factor(self , date : int) -> pd.DataFrame | pd.Series:
+    def calc_factor(self , date : int) -> pd.Series:
         '''calculate factor value , must have secid and factor_value / factor_name columns'''
     
     @classmethod
@@ -70,7 +70,9 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
             date = int(date)
             assert date >= cls.init_date , f'for factor {cls.factor_name} , date is should be greater than or equal to {cls.init_date}, but got {date}'
             df = raw_calc_factor(self , date)
-            assert isinstance(df , (pd.DataFrame | pd.Series)) , f'for factor {cls.factor_name} , calc_factor must return a DataFrame or Series , but got {type(df)}'
+            assert isinstance(df , pd.Series) , \
+                f'for factor {cls.factor_name} , calc_factor must return a Series , but got {type(df)}'
+            df = df.rename(cls.factor_name).replace([np.inf , -np.inf] , np.nan)
             return df
         return new_calc_factor
 
@@ -181,12 +183,8 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         else:
             #date = int(date)
             #assert date >= self.init_date , f'date is should be greater than or equal to {self.init_date}, but got {date}'
-
             df = self.calc_factor(date)
-            if isinstance(df , pd.Series):
-                self.factors[date] = df.rename(self.factor_name).to_frame()
-            elif isinstance(df , pd.DataFrame):
-                self.factors[date] = df.reset_index().set_index('secid').rename(columns={'factor_value':self.factor_name})[[self.factor_name]]
+            self.factors[date] = df.rename(self.factor_name).to_frame()
         return self
 
     def deploy(self , strict = True , overwrite = False , show_progress = False):
@@ -358,14 +356,14 @@ class StockFactorHierarchy:
         '''
         
         factor_values : dict[str , pd.Series] = {}
+
         for obj in self.iter_instance(**kwargs):
             print(f'{obj.factor_name} ' , end='')
-            df = obj.calc_factor(date)
+            df = obj.calculate(date).factors[date]
             factor_values[obj.factor_name] = df[obj.factor_name] if isinstance(df , pd.DataFrame) else df
-            print('calculated')
+            print(f'calculated , valid_num is {df.dropna().count().item()}')
 
         self.calc_factor_values = factor_values
-
 
         if check_variation:
             abnormal_vars = {}
@@ -380,7 +378,6 @@ class StockFactorHierarchy:
                 print('no abnormal factor variation')
             else:
                 print(f'abnormal factor variation: {abnormal_vars}')
-
 
         if check_duplicates:
             abnormal_diffs = {}

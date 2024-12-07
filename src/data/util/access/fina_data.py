@@ -19,7 +19,8 @@ class FDataAccess(DateDataAccess):
                       'express' , 'forecast' , 'mainbz' , 'indicator']
     SINGLE_TYPE : str | Any = None
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
-    DEFAULT_TTM_METHOD : Literal['sum' , 'avg'] = 'sum'
+    DEFAULT_QOQ_METHOD : Literal['qtr' , 'ttm'] = 'qtr'
+    DEFAULT_YOY_METHOD : Literal['ttm' , 'acc'] = 'ttm'
 
     def data_loader(self , date , data_type):
         if data_type in self.DATA_TYPE_LIST: 
@@ -61,6 +62,15 @@ class FDataAccess(DateDataAccess):
         grp = ann_dt.sort_values(['secid' , 'td_backward']).set_index('secid').groupby('secid')
         return grp.last() if latest_n == 1 else grp.tail(latest_n + 1).groupby('secid').first()
 
+    def _fin_hist_data_transform(self , df : pd.DataFrame , val : str , benchmark_df : pd.DataFrame | None = None , 
+                                 lastn = 1 , pivot = False , ffill = False):
+        if benchmark_df is not None:
+            df = df.reindex(benchmark_df.index).where(~benchmark_df.isna() , np.nan)
+        if ffill: df = df.groupby('secid').ffill()
+        df = df.groupby('secid').tail(lastn).replace([np.inf , -np.inf] , np.nan)
+        if pivot: df = df.pivot_table(val , 'end_date' , 'secid').sort_index()
+        return df
+
     def _get_data_acc_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
                            pivot = False , ffill = False , year_only = False):
         assert data_type in ['income' , 'cashflow' , 'balance' , 'indicator'] , \
@@ -77,11 +87,7 @@ class FDataAccess(DateDataAccess):
         df_acc = df_acc[(df_acc['ann_date'] <= date) & df_acc['end_date'].isin(q_ends) & (df_acc['secid'] >= 0)]
         df_acc = df_acc.sort_values('update_flag').drop_duplicates(['secid' , 'end_date'] , keep = 'last')\
             [['secid','end_date',val]].set_index(['secid' , 'end_date']).sort_index()
-        
-        if ffill: df_acc = df_acc.ffill()
-        df_acc = df_acc.groupby('secid').tail(lastn)
-        if pivot: df_acc = df_acc.pivot_table(val , 'end_date' , 'secid').sort_index()
-        return df_acc
+        return self._fin_hist_data_transform(df_acc , val , None , lastn , pivot , ffill)
     
     def _get_data_qtr_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
                            pivot = False , ffill = False , 
@@ -96,47 +102,90 @@ class FDataAccess(DateDataAccess):
         ystarts = np.unique(q_end // 10000) * 10000
         df_ystarts = pd.DataFrame({val:0} , index = pd.MultiIndex.from_product([secid , ystarts] , names=['secid' , 'end_date']))
         df_qtr = pd.concat([df_acc , df_ystarts]).sort_index().groupby('secid').ffill().fillna(0)
-        df_qtr = df_qtr.diff().reindex(df_acc.index).where(~df_acc.isna() , np.nan)
         
-        if ffill: df_qtr = df_qtr.groupby('secid').ffill()
-        df_qtr = df_qtr.groupby('secid').tail(lastn)
-        if pivot: df_qtr = df_qtr.pivot_table(val , 'end_date' , 'secid').sort_index()
-        return df_qtr
+        return self._fin_hist_data_transform(df_qtr , val , df_acc , lastn , pivot , ffill)
 
     def _get_data_ttm_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
                            pivot = False , ffill = False , 
-                           qtr_method : Literal['diff' , 'exact'] | None = None , 
-                           ttm_method : Literal['sum' , 'avg'] | None = None):
+                           qtr_method : Literal['diff' , 'exact'] | None = None):
         if qtr_method is None: qtr_method = self.DEFAULT_QTR_METHOD 
-        if ttm_method is None: ttm_method = self.DEFAULT_TTM_METHOD
         df_qtr = self._get_data_qtr_hist(data_type , val , date , lastn + 8 , pivot = False , ffill = False , qtr_method = qtr_method)
         full_index = pd.MultiIndex.from_product([df_qtr.index.get_level_values('secid').unique() ,
                                                  df_qtr.index.get_level_values('end_date').unique()])
         df_ttm = df_qtr.reindex(full_index).fillna(0)
         grp = df_ttm.groupby('secid')
-        if ttm_method == 'sum': df_ttm = grp.rolling(4).sum()
-        elif ttm_method == 'avg': df_ttm = grp.rolling(5).mean()
-        df_ttm = df_ttm.reset_index(level=0, drop=True).reindex(df_qtr.index).where(~df_qtr.isna() , np.nan)
-        if ffill: df_ttm = df_ttm.groupby('secid').ffill()
-        df_ttm = df_ttm.groupby('secid').tail(lastn)
-        if pivot: df_ttm = df_ttm.pivot_table(val , 'end_date' , 'secid').sort_index()
-        return df_ttm
+        if qtr_method == 'diff': df_ttm = grp.rolling(4).sum()
+        elif qtr_method == 'exact': df_ttm = grp.rolling(5).mean()
+        df_ttm = df_ttm.reset_index(level=0, drop=True)
+        return self._fin_hist_data_transform(df_ttm , val , df_qtr , lastn , pivot , ffill)
     
+    def _get_data_qoq_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
+                           pivot = False , ffill = False , 
+                           qtr_method : Literal['diff' , 'exact'] | None = None , 
+                           qoq_method : Literal['qtr' , 'ttm'] | None = None):
+        if qtr_method is None: qtr_method = self.DEFAULT_QTR_METHOD 
+        if qoq_method is None: qoq_method = self.DEFAULT_QOQ_METHOD
+        if qoq_method == 'qtr':
+            df_qtr = self._get_data_qtr_hist(data_type , val , date , lastn + 2 , pivot = False , 
+                                             ffill = False , qtr_method = qtr_method)
+        elif qoq_method == 'ttm':
+            df_qtr = self._get_data_ttm_hist(data_type , val , date , lastn + 2 , pivot = False , 
+                                             ffill = False , qtr_method = qtr_method)
+        full_index = pd.MultiIndex.from_product([df_qtr.index.get_level_values('secid').unique() ,
+                                                 df_qtr.index.get_level_values('end_date').unique()])
+        df_qoq = df_qtr.reindex(full_index)
+        df_qoq_base = df_qoq.groupby('secid').shift(1)
+        df_qoq = (df_qoq - df_qoq_base) / df_qoq_base.abs()
+        return self._fin_hist_data_transform(df_qoq , val , df_qtr , lastn , pivot , ffill)
+    
+    def _get_data_yoy_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
+                           pivot = False , ffill = False , 
+                           qtr_method : Literal['diff' , 'exact'] | None = None ,
+                           yoy_method : Literal['ttm' , 'acc'] | None = None):
+        if qtr_method is None: qtr_method = self.DEFAULT_QTR_METHOD 
+        if yoy_method is None: yoy_method = self.DEFAULT_YOY_METHOD
+        if yoy_method == 'ttm':
+            df_qtr = self._get_data_ttm_hist(data_type , val , date , lastn + 5 , pivot = False , 
+                                             ffill = False , qtr_method = qtr_method)
+        elif yoy_method == 'acc':
+            df_qtr = self._get_data_acc_hist(data_type , val , date , lastn + 5 , pivot = False , 
+                                             ffill = False)
+        full_index = pd.MultiIndex.from_product([df_qtr.index.get_level_values('secid').unique() ,
+                                                 df_qtr.index.get_level_values('end_date').unique()])
+        df_yoy = df_qtr.reindex(full_index)
+        df_yoy_base = df_yoy.groupby('secid').shift(4)
+        df_yoy = (df_yoy - df_yoy_base) / df_yoy_base.abs()
+        return self._fin_hist_data_transform(df_yoy , val , df_qtr , lastn , pivot , ffill)
+    
+    def _fin_latest_data_transform(self , df : pd.DataFrame , val : str):
+        return df.dropna().groupby('secid').last()[val]
+
     def _get_data_acc_latest(self , data_type : str , val : str , date : int):
-        df_acc = self._get_data_acc_hist(data_type , val , date , 5)
-        return df_acc.dropna().groupby('secid').last()[val]
+        df_acc = self._get_data_acc_hist(data_type , val , date , 3)
+        return self._fin_latest_data_transform(df_acc , val)
     
     def _get_data_qtr_latest(self , data_type : str , val : str , date : int , 
                              qtr_method : Literal['diff' , 'exact'] | None = None):
-        df_qtr = self._get_data_qtr_hist(data_type , val , date , 5 , ffill = False , qtr_method = qtr_method)
-        return df_qtr.dropna().groupby('secid').last()[val]
+        df_qtr = self._get_data_qtr_hist(data_type , val , date , 3 , ffill = False , qtr_method = qtr_method)
+        return self._fin_latest_data_transform(df_qtr , val)
     
     def _get_data_ttm_latest(self , data_type : str , val : str , date : int , 
+                             qtr_method : Literal['diff' , 'exact'] | None = None):
+        df_ttm = self._get_data_ttm_hist(data_type , val , date , 3 , ffill = False , qtr_method = qtr_method)
+        return self._fin_latest_data_transform(df_ttm , val)
+    
+    def _get_data_qoq_latest(self , data_type : str , val : str , date : int , 
                              qtr_method : Literal['diff' , 'exact'] | None = None ,
-                             ttm_method : Literal['sum' , 'avg'] | None = None):
-        df_ttm = self._get_data_ttm_hist(data_type , val , date , 5 , ffill = False ,
-                                         qtr_method = qtr_method , ttm_method = ttm_method)
-        return df_ttm.dropna().groupby('secid').last()[val]
+                             qoq_method : Literal['qtr' , 'ttm'] | None = None):
+        df_qoq = self._get_data_qoq_hist(data_type , val , date , 3 , 
+                                         qtr_method = qtr_method , qoq_method = qoq_method)
+        return self._fin_latest_data_transform(df_qoq , val)
+    
+    def _get_data_yoy_latest(self , data_type : str , val : str , date : int , 
+                             qtr_method : Literal['diff' , 'exact'] | None = None ,
+                             yoy_method : Literal['ttm' , 'acc'] | None = None):
+        df_yoy = self._get_data_yoy_hist(data_type , val , date , 3 , qtr_method = qtr_method , yoy_method = yoy_method)
+        return self._fin_latest_data_transform(df_yoy , val)
     
     @property
     def fields(self):
@@ -153,8 +202,14 @@ class FDataAccess(DateDataAccess):
         return self._get_data_qtr_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , self.DEFAULT_QTR_METHOD)
 
     def ttm(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False):
-        return self._get_data_ttm_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , self.DEFAULT_QTR_METHOD , self.DEFAULT_TTM_METHOD)
+        return self._get_data_ttm_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , self.DEFAULT_QTR_METHOD)
     
+    def qoq(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , qoq_method : Literal['qtr' , 'ttm'] | None = None):
+        return self._get_data_qoq_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , self.DEFAULT_QTR_METHOD , qoq_method)
+    
+    def yoy(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , yoy_method : Literal['ttm' , 'acc'] | None = None):
+        return self._get_data_yoy_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , self.DEFAULT_QTR_METHOD , yoy_method)
+
     def acc_latest(self, val: str, date: int):
         return self._get_data_acc_latest(self.SINGLE_TYPE , val, date)
     
@@ -162,44 +217,60 @@ class FDataAccess(DateDataAccess):
         return self._get_data_qtr_latest(self.SINGLE_TYPE , val, date, self.DEFAULT_QTR_METHOD)
     
     def ttm_latest(self, val: str, date: int):
-        return self._get_data_ttm_latest(self.SINGLE_TYPE , val, date, self.DEFAULT_QTR_METHOD , self.DEFAULT_TTM_METHOD)
+        return self._get_data_ttm_latest(self.SINGLE_TYPE , val, date, self.DEFAULT_QTR_METHOD)
+    
+    def qoq_latest(self, val: str, date: int , qoq_method : Literal['qtr' , 'ttm'] | None = None):
+        return self._get_data_qoq_latest(self.SINGLE_TYPE , val, date, self.DEFAULT_QTR_METHOD , qoq_method)
+    
+    def yoy_latest(self, val: str, date: int , yoy_method : Literal['ttm' , 'acc'] | None = None):
+        return self._get_data_yoy_latest(self.SINGLE_TYPE , val, date, self.DEFAULT_QTR_METHOD , yoy_method)
     
 @singleton
 class IndicatorDataAccess(FDataAccess):
     SINGLE_TYPE = 'indicator'
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
-    DEFAULT_TTM_METHOD : Literal['sum' , 'avg'] = 'sum'
 
     def qtr(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None):
         return self._get_data_qtr_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method)
 
     def ttm(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , 
-             qtr_method : Literal['diff' , 'exact'] | None = None , ttm_method : Literal['sum' , 'avg'] | None = None):
-        return self._get_data_ttm_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method , ttm_method)
+            qtr_method : Literal['diff' , 'exact'] | None = None):
+        return self._get_data_ttm_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method)
+    
+    def qoq(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , 
+            qtr_method : Literal['diff' , 'exact'] | None = None , qoq_method : Literal['qtr' , 'ttm'] | None = None):
+        return self._get_data_qoq_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method , qoq_method)
+    
+    def yoy(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , 
+            qtr_method : Literal['diff' , 'exact'] | None = None , yoy_method : Literal['ttm' , 'acc'] | None = None):
+        return self._get_data_yoy_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method , yoy_method)
     
     def qtr_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None):
         return self._get_data_qtr_latest(self.SINGLE_TYPE , val, date , qtr_method)
     
-    def ttm_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None , ttm_method : Literal['sum' , 'avg'] | None = None):
-        return self._get_data_ttm_latest(self.SINGLE_TYPE , val, date , qtr_method , ttm_method)
+    def ttm_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None):
+        return self._get_data_ttm_latest(self.SINGLE_TYPE , val, date , qtr_method)
+    
+    def qoq_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None , qoq_method : Literal['qtr' , 'ttm'] | None = None):
+        return self._get_data_qoq_latest(self.SINGLE_TYPE , val, date , qtr_method , qoq_method)
+    
+    def yoy_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None , yoy_method : Literal['ttm' , 'acc'] | None = None):
+        return self._get_data_yoy_latest(self.SINGLE_TYPE , val, date , qtr_method , yoy_method)
 
 @singleton
 class BalanceSheetAccess(FDataAccess):
     SINGLE_TYPE = 'balance'
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'exact'
-    DEFAULT_TTM_METHOD : Literal['sum' , 'avg'] = 'avg'
 
 @singleton
 class CashFlowAccess(FDataAccess):
     SINGLE_TYPE = 'cashflow'
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
-    DEFAULT_TTM_METHOD : Literal['sum' , 'avg'] = 'sum'
 
 @singleton
 class IncomeStatementAccess(FDataAccess):
     SINGLE_TYPE = 'income'
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
-    DEFAULT_TTM_METHOD : Literal['sum' , 'avg'] = 'sum'
   
 @singleton
 class FinancialDataAccess(FDataAccess):
