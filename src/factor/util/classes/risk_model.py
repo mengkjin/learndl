@@ -145,19 +145,18 @@ class RiskModel(GeneralModel):
         if not getattr(self , 'models' , None):
             self.models : dict[int,Rmodel] = {}
             self.init_loaders()
-        
+
     def init_loaders(self):
-        self.riskmodel_available_dates = DATAVENDOR.file_dates('models' , 'tushare_cne5_exp')
         self.F_loader = BlockLoader('models' , 'tushare_cne5_exp')
         self.C_loader = FrameLoader('models' , 'tushare_cne5_cov')
         self.S_loader = BlockLoader('models' , 'tushare_cne5_spec')
 
     def append(self , model : Rmodel , override = False):
         return super().append(model , override)
-    def available_dates(self): return self.riskmodel_available_dates
+    def available_dates(self): return DATAVENDOR.file_dates('models' , 'tushare_cne5_exp')
     def get(self , date : int , latest = True) -> Rmodel:
         model = super().get(date , latest)
-        assert isinstance(model , Rmodel) , f'rmodel does not exists!'
+        assert isinstance(model , Rmodel) , f'rmodel at {date} does not exists!'
         return model
     def load_day_model(self , date : int):
         with SILENT:

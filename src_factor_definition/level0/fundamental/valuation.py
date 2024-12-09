@@ -150,7 +150,7 @@ class ebit_ev1_ttm(StockFactorCalculator):
     description = 'EBIT/EV(不剔除货币资金)'
     
     def calc_factor(self, date: int):
-        return valuation_latest('indi@ebit' , 'ev1' , date , 'ttm')
+        return valuation_latest('ebit' , 'ev1' , date , 'ttm')
 
 class ebit_ev1_rank1y_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -159,7 +159,7 @@ class ebit_ev1_rank1y_ttm(StockFactorCalculator):
     description = 'EBIT/EV(不剔除货币资金),1年分位数'
     
     def calc_factor(self, date: int):
-        return valuation_rank1y('indi@ebit' , 'ev1' , date , 'ttm')
+        return valuation_rank1y('ebit' , 'ev1' , date , 'ttm')
     
 class ebitda_ev1_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -168,7 +168,7 @@ class ebitda_ev1_ttm(StockFactorCalculator):
     description = 'EBITDA/EV(不剔除货币资金)'
     
     def calc_factor(self, date: int):
-        return valuation_latest('indi@ebitda' , 'ev1' , date , 'ttm')
+        return valuation_latest('ebitda' , 'ev1' , date , 'ttm')
 
 class ebitda_ev1_rank1y_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -177,7 +177,7 @@ class ebitda_ev1_rank1y_ttm(StockFactorCalculator):
     description = 'EBITDA/EV(不剔除货币资金),1年分位数'
     
     def calc_factor(self, date: int):
-        return valuation_rank1y('indi@ebitda' , 'ev1' , date , 'ttm')
+        return valuation_rank1y('ebitda' , 'ev1' , date , 'ttm')
     
 class ebit_ev2_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -186,7 +186,7 @@ class ebit_ev2_ttm(StockFactorCalculator):
     description = 'EBIT/EV(剔除货币资金)'
     
     def calc_factor(self, date: int):
-        return valuation_latest('indi@ebit' , 'ev2' , date , 'ttm')
+        return valuation_latest('ebit' , 'ev2' , date , 'ttm')
 
 class ebit_ev2_rank1y_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -195,7 +195,7 @@ class ebit_ev2_rank1y_ttm(StockFactorCalculator):
     description = 'EBIT/EV(剔除货币资金),1年分位数'
     
     def calc_factor(self, date: int):
-        return valuation_rank1y('indi@ebit' , 'ev2' , date , 'ttm')
+        return valuation_rank1y('ebit' , 'ev2' , date , 'ttm')
 
 class ebitda_ev2_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -204,7 +204,7 @@ class ebitda_ev2_ttm(StockFactorCalculator):
     description = 'EBITDA/EV(剔除货币资金)'
     
     def calc_factor(self, date: int):
-        return valuation_latest('indi@ebitda' , 'ev2' , date , 'ttm')
+        return valuation_latest('ebitda' , 'ev2' , date , 'ttm')
 
 class ebitda_ev2_rank1y_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -213,7 +213,7 @@ class ebitda_ev2_rank1y_ttm(StockFactorCalculator):
     description = 'EBITDA/EV(剔除货币资金),1年分位数'
     
     def calc_factor(self, date: int):
-        return valuation_rank1y('indi@ebitda' , 'ev2' , date , 'ttm')
+        return valuation_rank1y('ebitda' , 'ev2' , date , 'ttm')
     
 class etop_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -222,7 +222,7 @@ class etop_ttm(StockFactorCalculator):
     description = 'TTM市盈率倒数'
     
     def calc_factor(self, date: int):
-        return valuation_latest('is@n_income_attr_p' , 'mv' , date , 'ttm')
+        return valuation_latest('npro' , 'mv' , date , 'ttm')
     
 class etop_rank1y_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -231,7 +231,7 @@ class etop_rank1y_ttm(StockFactorCalculator):
     description = 'TTM市盈率倒数'
     
     def calc_factor(self, date: int):
-        return valuation_rank1y('is@n_income_attr_p' , 'mv' , date , 'ttm')
+        return valuation_rank1y('npro' , 'mv' , date , 'ttm')
     
 class etop_dedt_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -240,7 +240,7 @@ class etop_dedt_ttm(StockFactorCalculator):
     description = 'TTM扣非市盈率倒数'
     
     def calc_factor(self, date: int):
-        return valuation_latest('indi@profit_dedt' , 'mv' , date , 'ttm')
+        return valuation_latest('dedt' , 'mv' , date , 'ttm')
     
 class etop_dedt_rank1y_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -249,7 +249,7 @@ class etop_dedt_rank1y_ttm(StockFactorCalculator):
     description = 'TTM扣非市盈率倒数,1年分位数'
     
     def calc_factor(self, date: int):
-        return valuation_rank1y('indi@profit_dedt' , 'mv' , date , 'ttm')
+        return valuation_rank1y('dedt' , 'mv' , date , 'ttm')
 
 class etop_qtr(StockFactorCalculator):
     init_date = 20070101
@@ -258,7 +258,7 @@ class etop_qtr(StockFactorCalculator):
     description = '单季度市盈率倒数'
     
     def calc_factor(self, date: int):
-        return valuation_latest('is@n_income_attr_p' , 'mv' , date , 'qtr')
+        return valuation_latest('npro' , 'mv' , date , 'qtr')
 
 class etop_rank1y_qtr(StockFactorCalculator):
     init_date = 20070101
@@ -267,7 +267,7 @@ class etop_rank1y_qtr(StockFactorCalculator):
     description = '单季度市盈率倒数,1年分位数'
     
     def calc_factor(self, date: int):
-        return valuation_rank1y('is@n_income_attr_p' , 'mv' , date , 'qtr')
+        return valuation_rank1y('npro' , 'mv' , date , 'qtr')
     
 class fcfetop_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -312,7 +312,7 @@ class ocftop_ttm(StockFactorCalculator):
     description = 'TTM经营现金流/市值'
     
     def calc_factor(self, date: int):
-        return valuation_latest('cf@n_cashflow_act' , 'mv' , date , 'ttm')
+        return valuation_latest('nocf' , 'mv' , date , 'ttm')
 
 class ocftop_rank1y_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -321,7 +321,7 @@ class ocftop_rank1y_ttm(StockFactorCalculator):
     description = 'TTM经营现金流/市值,1年分位数'
     
     def calc_factor(self, date: int):
-        return valuation_rank1y('cf@n_cashflow_act' , 'mv' , date , 'ttm')
+        return valuation_rank1y('nocf' , 'mv' , date , 'ttm')
 
 class ocftop_qtr(StockFactorCalculator):
     init_date = 20070101
@@ -330,7 +330,7 @@ class ocftop_qtr(StockFactorCalculator):
     description = '单季度经营现金流/市值'
     
     def calc_factor(self, date: int):
-        return valuation_latest('cf@n_cashflow_act' , 'mv' , date , 'qtr')
+        return valuation_latest('nocf' , 'mv' , date , 'qtr')
 
 class ocftop_rank1y_qtr(StockFactorCalculator):
     init_date = 20070101
@@ -339,7 +339,7 @@ class ocftop_rank1y_qtr(StockFactorCalculator):
     description = '单季度经营现金流/市值,1年分位数'
     
     def calc_factor(self, date: int):
-        return valuation_rank1y('cf@n_cashflow_act' , 'mv' , date , 'qtr')
+        return valuation_rank1y('nocf' , 'mv' , date , 'qtr')
     
 class stop_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -348,7 +348,7 @@ class stop_ttm(StockFactorCalculator):
     description = 'TTM市销率倒数'
     
     def calc_factor(self, date: int):
-        return valuation_latest('is@revenue' , 'mv' , date , 'ttm')
+        return valuation_latest('sales' , 'mv' , date , 'ttm')
     
 class stop_rank1y_ttm(StockFactorCalculator):
     init_date = 20070101
@@ -357,7 +357,7 @@ class stop_rank1y_ttm(StockFactorCalculator):
     description = 'TTM市销率倒数,1年分位数'
     
     def calc_factor(self, date: int):
-        return valuation_rank1y('is@revenue' , 'mv' , date , 'ttm')
+        return valuation_rank1y('sales' , 'mv' , date , 'ttm')
 
 class stop_qtr(StockFactorCalculator):
     init_date = 20070101
@@ -366,7 +366,7 @@ class stop_qtr(StockFactorCalculator):
     description = '单季度市销率倒数'
     
     def calc_factor(self, date: int):
-        return valuation_latest('is@revenue' , 'mv' , date , 'qtr')
+        return valuation_latest('sales' , 'mv' , date , 'qtr')
 
 class stop_rank1y_qtr(StockFactorCalculator):
     init_date = 20070101
@@ -375,4 +375,4 @@ class stop_rank1y_qtr(StockFactorCalculator):
     description = '单季度市销率倒数,1年分位数'
     
     def calc_factor(self, date: int):
-        return valuation_rank1y('is@revenue' , 'mv' , date , 'qtr')
+        return valuation_rank1y('sales' , 'mv' , date , 'qtr')

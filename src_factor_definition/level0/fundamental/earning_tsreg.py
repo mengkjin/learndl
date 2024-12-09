@@ -54,9 +54,9 @@ class lpnp(StockFactorCalculator):
     
     def calc_factor(self, date: int):
         nonop_sales = (get_hist('is@total_revenue' , date , 12) - \
-            get_hist('is@revenue' , date , 12)).rename('nonop_sales')
+            get_hist('sales' , date , 12)).rename('nonop_sales')
         
-        df = ts_last_resid_polars(y_var='is@n_income_attr_p' , x_vars=[nonop_sales , 'bs@cip'] , date = date)
+        df = ts_last_resid_polars(y_var='npro' , x_vars=[nonop_sales , 'bs@cip'] , date = date)
         return df
     
 class ocfa(StockFactorCalculator):
@@ -76,5 +76,5 @@ class rroc(StockFactorCalculator):
     description = '营业能力改善'
     
     def calc_factor(self, date: int):
-        df = ts_last_resid_polars(y_var='is@revenue' , x_vars=['is@oper_cost'] , date = date)
+        df = ts_last_resid_polars(y_var='sales' , x_vars=['is@oper_cost'] , date = date)
         return df

@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
+from src.data import DATAVENDOR
 from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
 from .general import GeneralModel
 from .risk_model import RISK_MODEL
@@ -47,16 +48,15 @@ class Amodel:
         new.alpha = zscore(winsorize_by_dist(fill_na_as_const(new.alpha) , winsor_rng=0.5))
         return new
 
-    def to_dataframe(self , industry = False , na_industry_as : Any = None):
+    def to_dataframe(self , indus = False , na_indus_as : Any = None):
         df = pd.DataFrame({'secid' : self.secid , 'alpha' : self.alpha})
-        if industry: 
-            df['industry'] = RISK_MODEL.get(self.date).industry(self.secid)
-            if na_industry_as is not None: df['industry'] = df['industry'].fillna(na_industry_as)
+        if indus: df = DATAVENDOR.INFO.add_indus(df , self.date , na_indus_as)
         return df
 
     @classmethod
-    def create_random(cls , date : int , secid : np.ndarray | Any = None):
+    def create_random(cls , date : int , secid : np.ndarray | list[int] | Any = [1,2,600001]):
         assert secid is not None , 'When create random Amodel, secid must be submitted too!'
+        if isinstance(secid , list): secid = np.array(secid)
         return cls(date , np.random.randn(len(secid)) , secid , 'random_alpha')
 
     @classmethod

@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from typing import Any
 
 from src.basic import PATH , CONF , CALENDAR , TradeDate
 from src.func.singleton import singleton
@@ -51,6 +52,11 @@ class InfoDataAccess:
         else:
             df = self.indus_data[self.indus_data['in_date'] <= int(date)]
         df = df.groupby('secid')[['indus']].last()
+        return df
+
+    def add_indus(self , df : pd.DataFrame , date : int | TradeDate | None = None , na_industry_as : Any = None):
+        df = df.join(self.get_indus(date) , on = 'secid' , how = 'left')
+        if na_industry_as is not None: df['indus'] = df['indus'].fillna(na_industry_as)
         return df
 
     def get_listed_mask(self , df : pd.DataFrame , list_dt_offset = 21 , reference_date : int | TradeDate | None = None):

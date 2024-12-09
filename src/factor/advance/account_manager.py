@@ -17,6 +17,7 @@ class PortfolioAccountManager:
         self.account_dir = Path(account_dir)
         self.accounts : dict[str , pd.DataFrame] = {}
         self.tasks : dict[str , BaseOptimCalc | BaseTopPortCalc] = {}
+        self.account_dir.mkdir(exist_ok=True)
     
     def __repr__(self):
         return f'{self.__class__.__name__}({self.account_names})'
@@ -86,7 +87,7 @@ class PortfolioAccountManager:
         return self
     
     def deploy(self , overwrite = False):
-        fmp_paths = {p:self.account_dir.joinpath(p) for p in self.accounts}
+        fmp_paths = {p:self.account_dir.joinpath(f'{p}.pkl') for p in self.accounts}
         if not overwrite:
             existed = [path for path in fmp_paths.values() if path.exists()]
             assert not existed , f'Existed paths : {existed}'

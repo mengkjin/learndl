@@ -43,21 +43,21 @@ class PortfolioGenerator(PortCreator):
         return self
 
     def solve(self):
-        pool = self.alpha_model.get_model(self.model_date).to_dataframe(industry=True , na_industry_as = 'unknown')
+        pool = self.alpha_model.get_model(self.model_date).to_dataframe(indus=True , na_indus_as = 'unknown')
         if not self.bench_port.is_emtpy(): pool = pool.loc[pool['secid'].isin(self.bench_port.secid)]
-        pool['ind_rank']  = pool.groupby('industry')['alpha'].rank(method = 'first' , ascending = False)
+        pool['ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool['rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
         
         pool = pool.merge(self.init_port.port , on = 'secid' , how = 'outer').sort_values('alpha' , ascending = False)
         pool['selected'] = pool['weight'].fillna(0) > 0
         pool['buffered'] = (pool['rankpct'] >= self.conf.buffer_zone) + (pool['selected'].cumsum() <= self.conf.stay_num)
 
-        stay = pool[pool['selected'] & pool['buffered']][['secid' , 'industry']]
-        stay_ind_count = stay.groupby('industry')['secid'].count().rename('count')
+        stay = pool[pool['selected'] & pool['buffered']][['secid' , 'indus']]
+        stay_ind_count = stay.groupby('indus')['secid'].count().rename('count')
 
-        new_pool = pool[~pool['secid'].isin(stay['secid'])].merge(stay_ind_count , on = 'industry' , how = 'left')
+        new_pool = pool[~pool['secid'].isin(stay['secid'])].merge(stay_ind_count , on = 'indus' , how = 'left')
         selectable = new_pool['ind_rank'] < (self.conf.indus_slots - new_pool['count'].fillna(0))
-        entry = new_pool[selectable].sort_values('alpha' , ascending = False).head(self.conf.n_best - stay.shape[0])[['secid','industry']]
+        entry = new_pool[selectable].sort_values('alpha' , ascending = False).head(self.conf.n_best - stay.shape[0])[['secid','indus']]
 
         df = pd.concat([stay , entry]).drop_duplicates(subset=['secid']).assign(weight = 1)[['secid' , 'weight']]
         port = Port(df , date = self.model_date , name = self.name , value = self.value).rescale()

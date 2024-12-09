@@ -15,7 +15,7 @@ def sue(numerator: str , date: int , **kwargs):
 def sue_reg(numerator: str , date: int , n_last : int = 8 , **kwargs):
     def _last_resid(args) -> pl.Series:
         y = args[0].to_numpy()
-        x = sm.add_constant(np.arange(1, len(y) + 1))
+        x = np.arange(1, len(y) + 1)
         try:
             return pl.Series(sm.OLS(y, sm.add_constant(x)).fit().resid[-1:], dtype=pl.Float64)
         except Exception as e:
@@ -41,7 +41,7 @@ class sue_gp(StockFactorCalculator):
     description = '预期外毛利润'
     
     def calc_factor(self, date: int):
-        return sue('indi@gross_margin' , date , qtr_method = 'diff')
+        return sue('gp' , date , qtr_method = 'diff')
 
 class sue_gp_reg(StockFactorCalculator):
     init_date = 20070101
@@ -50,7 +50,7 @@ class sue_gp_reg(StockFactorCalculator):
     description = '预期外毛利润-带截距回归'
     
     def calc_factor(self, date: int):
-        return sue_reg('indi@gross_margin' , date , qtr_method = 'diff')
+        return sue_reg('gp' , date , qtr_method = 'diff')
 
 class sue_npro(StockFactorCalculator):
     init_date = 20070101
@@ -59,7 +59,7 @@ class sue_npro(StockFactorCalculator):
     description = '预期外归母净利润'
     
     def calc_factor(self, date: int):
-        return sue('is@n_income_attr_p' , date)
+        return sue('npro' , date)
 
 class sue_npro_reg(StockFactorCalculator):
     init_date = 20070101
@@ -68,7 +68,7 @@ class sue_npro_reg(StockFactorCalculator):
     description = '预期外归母净利润-带截距回归'
     
     def calc_factor(self, date: int):
-        return sue_reg('is@n_income_attr_p' , date)
+        return sue_reg('npro' , date)
 
 class sue_op(StockFactorCalculator):
     init_date = 20070101
@@ -77,7 +77,7 @@ class sue_op(StockFactorCalculator):
     description = '预期外营业利润'
     
     def calc_factor(self, date: int):
-        return sue('is@operate_profit' , date)
+        return sue('oper_np' , date)
 
 class sue_op_reg(StockFactorCalculator):
     init_date = 20070101
@@ -86,7 +86,7 @@ class sue_op_reg(StockFactorCalculator):
     description = '预期外营业利润-带截距回归'
     
     def calc_factor(self, date: int):
-        return sue_reg('is@operate_profit' , date)
+        return sue_reg('oper_np' , date)
 
 class sue_tp(StockFactorCalculator):
     init_date = 20070101
@@ -95,7 +95,7 @@ class sue_tp(StockFactorCalculator):
     description = '预期外利润总额'
     
     def calc_factor(self, date: int):
-        return sue('is@total_profit' , date)
+        return sue('total_np' , date)
 
 class sue_tp_reg(StockFactorCalculator):
     init_date = 20070101
@@ -104,7 +104,7 @@ class sue_tp_reg(StockFactorCalculator):
     description = '预期外利润总额-带截距回归'
     
     def calc_factor(self, date: int):
-        return sue_reg('is@total_profit' , date)
+        return sue_reg('total_np' , date)
 
 class sue_sales(StockFactorCalculator):
     init_date = 20070101
@@ -113,7 +113,7 @@ class sue_sales(StockFactorCalculator):
     description = '预期外营业收入'
     
     def calc_factor(self, date: int):
-        return sue('is@revenue' , date)
+        return sue('sales' , date)
 
 class sue_sales_reg(StockFactorCalculator):
     init_date = 20070101
@@ -122,7 +122,7 @@ class sue_sales_reg(StockFactorCalculator):
     description = '预期外营业收入-带截距回归'
     
     def calc_factor(self, date: int):
-        return sue_reg('is@revenue' , date)
+        return sue_reg('sales' , date)
 
 class sue_tax(StockFactorCalculator):
     init_date = 20070101

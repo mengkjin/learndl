@@ -3,13 +3,14 @@ import numpy as np
 import pandas as pd
 import torch.nn.functional as F
 
-from dataclasses import dataclass
-from typing import Any , Literal , Optional
+from dataclasses import dataclass , field
+from typing import Any , ClassVar , Literal , Optional
 
 from src.basic import CALENDAR , PATH , CONF , SILENT , Timer
 from src.func.singleton import singleton
 
-from . import access
+from .access import INFO , BS , IS , CF , INDI , TRADE , RISK , FINA
+from .access.fina_data import FinData
 from .classes import DataBlock
 
 @dataclass(slots=True)
@@ -66,15 +67,15 @@ class DataVendor:
     Vender for most factor / portfolio analysis related data
     '''
     CALENDAR = CALENDAR
-    TRADE = access.TRADE
-    INFO = access.INFO
-    RISK = access.RISK
+    TRADE = TRADE
+    INFO = INFO
+    RISK = RISK
     
-    INDI = access.INDI
-    BS   = access.BS
-    IS   = access.IS
-    CF   = access.CF
-    FINA = access.FINA
+    INDI = INDI
+    BS   = BS
+    IS   = IS
+    CF   = CF
+    FINA = FINA
     
     def __init__(self):
         self.start_dt = 99991231
@@ -277,37 +278,14 @@ class DataVendor:
         value = self.daily_quote.loc(secid = secid , date = d , feature = 'close').flatten()
         return value
 
-    @dataclass(slots=True)
-    class FinData:
-        statement : Literal['is' , 'cf' , 'indi' , 'bs'] | str
-        field : str
-        fin_type : Literal['ttm' , 'qtr' , 'acc'] | str
-
-        @classmethod
-        def from_string(cls , numerator : str):
-            statement , field , fin_type = numerator.split('@')
-            assert statement in ['is' , 'cf' , 'indi' , 'bs'] , statement
-            assert fin_type in ['ttm' , 'qtr' , 'acc'] , fin_type
-            return cls(statement , field , fin_type)
-        
-        def get_function_latest(self):
-            src = getattr(access , self.statement.upper())
-            return getattr(src , f'{self.fin_type}_latest')
-        
-        def get_function_hist(self):
-            src = getattr(access , self.statement.upper())
-            return getattr(src , f'{self.fin_type}')
-
     def get_fin_latest(self , numerator : str , date : int , **kwargs) -> pd.Series:
         '''statement@field@fin_type'''
-        fin_data = self.FinData.from_string(numerator)
-        func = fin_data.get_function_latest()
-        return func(fin_data.field , date , **kwargs)
+        fin_data = FinData.from_input(numerator , date = date , **kwargs)
+        return fin_data.get_latest()
 
-    def get_fin_hist(self, numerator : str , date : int , n_last : int , **kwargs) -> pd.DataFrame:
+    def get_fin_hist(self, numerator : str , date : int , lastn : int , **kwargs) -> pd.DataFrame:
         '''statement@field@fin_type'''
-        fin_data = self.FinData.from_string(numerator)
-        func = fin_data.get_function_hist()
-        return func(fin_data.field , date , n_last , **kwargs)
+        fin_data = FinData.from_input(numerator , date = date , lastn = lastn , **kwargs)
+        return fin_data.get_hist()
     
 DATAVENDOR = DataVendor()
