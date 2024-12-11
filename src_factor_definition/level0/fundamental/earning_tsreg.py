@@ -8,9 +8,9 @@ from typing import Literal
 from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
-def get_hist(numerator : str , date : int , n_last : int = 12 , **kwargs):
-    df = DATAVENDOR.get_fin_hist(f'{numerator}@qtr' , date , n_last , **kwargs)
-    return df.iloc[:,0]
+__all__ = [
+    'lpnp' , 'ocfa' , 'rroc'
+]
 
 def ts_last_resid_polars(y_var : str | pd.Series , x_vars : list[str | pd.Series] , date : int , n_last : int = 12):
     def _last_resid(args) -> pl.Series:
@@ -24,13 +24,13 @@ def ts_last_resid_polars(y_var : str | pd.Series , x_vars : list[str | pd.Series
         except Exception as e:
             return pl.Series([np.nan], dtype=pl.Float64)
     
-    if isinstance(y_var , str): y_var = get_hist(y_var , date , n_last)
+    if isinstance(y_var , str): y_var = DATAVENDOR.get_fin_hist(y_var , date , n_last).iloc[:,0]
     assert y_var.name , 'y_var must have a name'
     y_name = str(y_var.name)
 
     df = pl.from_pandas(y_var.to_frame() , include_index=True)
     for x_var in x_vars:
-        if isinstance(x_var , str): x_var = get_hist(x_var , date , n_last)
+        if isinstance(x_var , str): x_var = DATAVENDOR.get_fin_hist(x_var , date , n_last).iloc[:,0]
         assert x_var.name , 'x_vars must have a name'
         df = df.join(pl.from_pandas(x_var.to_frame() , include_index=True) , on = ['secid' , 'end_date'])
     cols = [col for col in df.columns if col not in ['secid', 'end_date']]
@@ -52,11 +52,8 @@ class lpnp(StockFactorCalculator):
     category1 = 'earning'
     description = '线性提纯净利润'
     
-    def calc_factor(self, date: int):
-        nonop_sales = (get_hist('is@total_revenue' , date , 12) - \
-            get_hist('sales' , date , 12)).rename('nonop_sales')
-        
-        df = ts_last_resid_polars(y_var='npro' , x_vars=[nonop_sales , 'bs@cip'] , date = date)
+    def calc_factor(self, date: int):        
+        df = ts_last_resid_polars(y_var='npro@qtr' , x_vars=['is@total_revenue@qtr - sales@qtr' , 'bs@cip@qtr'] , date = date)
         return df
     
 class ocfa(StockFactorCalculator):
@@ -66,7 +63,7 @@ class ocfa(StockFactorCalculator):
     description = '产能利用率提升'
     
     def calc_factor(self, date: int):
-        df = ts_last_resid_polars(y_var='is@oper_cost' , x_vars=['bs@fix_assets'] , date = date)
+        df = ts_last_resid_polars(y_var='is@oper_cost@qtr' , x_vars=['bs@fix_assets@qtr'] , date = date)
         return df
     
 class rroc(StockFactorCalculator):
@@ -76,5 +73,5 @@ class rroc(StockFactorCalculator):
     description = '营业能力改善'
     
     def calc_factor(self, date: int):
-        df = ts_last_resid_polars(y_var='sales' , x_vars=['is@oper_cost'] , date = date)
+        df = ts_last_resid_polars(y_var='sales@qtr' , x_vars=['is@oper_cost@qtr'] , date = date)
         return df

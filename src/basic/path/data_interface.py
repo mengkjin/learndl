@@ -18,7 +18,7 @@ SAVE_OPT_MODEL: Literal['pt'] = 'pt'
 DB_BY_NAME  : list[str] = ['information_js' , 'information_ts']
 DB_BY_DATE  : list[str] = ['models' , 'sellside' ,
                            'trade_js' , 'labels_js' , 'benchmark_js' , 
-                           'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 
+                           'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'holding_ts'
                            ]  
 
 DB_ALTERNATIVES : dict[str , str] = {

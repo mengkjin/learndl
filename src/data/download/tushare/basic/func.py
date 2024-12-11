@@ -4,11 +4,15 @@ import pandas as pd
 from typing import Literal
 from src.basic import CALENDAR
 
-def code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , retain = False):
+def code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , retain = False , ashare = True):
     '''switch old symbol into secid'''
     if code_col not in df.columns.values: return df
-    df['secid'] = df[code_col].astype(str).str.slice(0, 6).replace({'T00018' : '600018'})
-    df['secid'] = df['secid'].where(df['secid'].str.isdigit() , '-1').astype(int)
+    secid = df[code_col].astype(str).str.split('.').str[0].replace({'T00018' : '600018'})
+    secid = secid.where(secid.str.isdigit() , '-1')
+    if ashare: 
+        market = df[code_col].astype(str).str.split('.').str[-1].str.lower()
+        secid = secid.where(market.isin(['sh' , 'sz' , 'bj']) , -1)
+    df['secid'] = secid.astype(int)
     if not retain: del df[code_col]
     return df
 
@@ -37,7 +41,7 @@ def quarter_ends(date , last_date = None , start_year = 1997 , consider_future =
         date_list = date_list[date_list < date]
     
     if last_date is not None: 
-        date_list_0 = date_list[date_list <= last_date][-trailing_quarters:]
+        date_list_0 = date_list[date_list <= last_date][-trailing_quarters:] if trailing_quarters > 0 else []
         date_list_1 = date_list[date_list >  last_date]
         date_list = np.concatenate([date_list_0 , date_list_1])
 

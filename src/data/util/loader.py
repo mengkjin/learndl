@@ -278,14 +278,36 @@ class DataVendor:
         value = self.daily_quote.loc(secid = secid , date = d , feature = 'close').flatten()
         return value
 
-    def get_fin_latest(self , numerator : str , date : int , **kwargs) -> pd.Series:
+    def get_fin_latest(self , expression : str , date : int , new_name : str | None = None , **kwargs) -> pd.Series:
         '''statement@field@fin_type'''
-        fin_data = FinData.from_input(numerator , date = date , **kwargs)
-        return fin_data.get_latest()
+        fin_data = FinData(expression , **kwargs)
+        return fin_data.get_latest(date , new_name)
 
-    def get_fin_hist(self, numerator : str , date : int , lastn : int , **kwargs) -> pd.DataFrame:
+    def get_fin_hist(self, expression : str , date : int , lastn : int , new_name : str | None = None , **kwargs) -> pd.DataFrame:
         '''statement@field@fin_type'''
-        fin_data = FinData.from_input(numerator , date = date , lastn = lastn , **kwargs)
-        return fin_data.get_hist()
+        fin_data = FinData(expression , **kwargs)
+        return fin_data.get_hist(date , lastn , new_name)
+
+    def get_fin_qoq(self , expression : str , date : int , lastn : int , **kwargs) -> pd.DataFrame:
+        data = FinData(expression , **kwargs).get_hist(date = date , lastn = lastn + 2)
+        full_index = pd.MultiIndex.from_product([data.index.get_level_values('secid').unique() ,
+                                                 data.index.get_level_values('end_date').unique()])
+        df_yoy = data.reindex(full_index)
+        df_yoy_base = df_yoy.groupby('secid').shift(1)
+        df_yoy = (df_yoy - df_yoy_base) / df_yoy_base.abs()
+
+        df_yoy = df_yoy.reindex(data.index).where(~data.isna() , np.nan).replace([np.inf , -np.inf] , np.nan)
+        return df_yoy.groupby('secid').tail(lastn)
+    
+    def get_fin_yoy(self , expression : str , date : int , lastn : int , **kwargs) -> pd.DataFrame:
+        data = FinData(expression , **kwargs).get_hist(date = date , lastn = lastn + 5)
+        full_index = pd.MultiIndex.from_product([data.index.get_level_values('secid').unique() ,
+                                                 data.index.get_level_values('end_date').unique()])
+        df_yoy = data.reindex(full_index)
+        df_yoy_base = df_yoy.groupby('secid').shift(4)
+        df_yoy = (df_yoy - df_yoy_base) / df_yoy_base.abs()
+
+        df_yoy = df_yoy.reindex(data.index).where(~data.isna() , np.nan).replace([np.inf , -np.inf] , np.nan)
+        return df_yoy.groupby('secid').tail(lastn)
     
 DATAVENDOR = DataVendor()

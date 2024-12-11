@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 import importlib.util
-import inspect
+import inspect 
+import concurrent.futures
 
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
@@ -58,6 +59,10 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
 
     def __new__(cls , *args , **kwargs):
         return super().__new__(cls.validate_attr())
+    
+    @classmethod
+    def calc(cls , date : int):
+        return cls().calc_factor(date)
 
     @abstractmethod
     def calc_factor(self , date : int) -> pd.Series:
@@ -345,7 +350,8 @@ class StockFactorHierarchy:
         '''
         return self.pool[factor_name]
     
-    def test_calc_all_factors(self , date : int = 20241031 , check_variation = True , check_duplicates = True , **kwargs):
+    def test_calc_all_factors(self , date : int = 20241031 , check_variation = True , check_duplicates = True , 
+                              multi_thread = True , **kwargs):
         '''
         test calculation of all factors , if check_duplicates is True , check factors diffs' standard deviation and correlation
         factor_name : str | None = None
@@ -357,11 +363,32 @@ class StockFactorHierarchy:
         
         factor_values : dict[str , pd.Series] = {}
 
+        '''
         for obj in self.iter_instance(**kwargs):
-            print(f'{obj.factor_name} ' , end='')
             df = obj.calculate(date).factors[date]
             factor_values[obj.factor_name] = df[obj.factor_name] if isinstance(df , pd.DataFrame) else df
-            print(f'calculated , valid_num is {df.dropna().count().item()}')
+            print(f'{obj.factor_name} calculated , valid_num is {df.dropna().count().item()}')
+        
+        '''
+        def calculate_factor(obj : StockFactorCalculator , date : int):
+            factor_value = obj.calculate(date).factors[date][obj.factor_name]
+            print(f'{obj.factor_name} calculated , valid_num is {factor_value.dropna().count()}')
+            return obj.factor_name, factor_value
+
+        if multi_thread:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+                future_to_obj = {executor.submit(calculate_factor, obj, date): obj for obj in self.iter_instance(**kwargs)}
+                for future in concurrent.futures.as_completed(future_to_obj):
+                    obj = future_to_obj[future]
+                    try:
+                        factor_name, factor_value = future.result()
+                        factor_values[factor_name] = factor_value
+                    except Exception as e:
+                        print(f'{obj.factor_name} generated an exception: {e}')
+        else:
+            for obj in self.iter_instance(**kwargs):
+                factor_name, factor_value = calculate_factor(obj , date)
+                factor_values[factor_name] = factor_value
 
         self.calc_factor_values = factor_values
 

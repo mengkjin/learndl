@@ -9,7 +9,7 @@ from ..basic.func import updatable , dates_to_update , quarter_ends
 
 class TushareFetcher(ABC):
     START_DATE  : int = 19970101
-    DB_TYPE     : Literal['info' , 'date' , 'fina' , 'rolling'] = 'info'
+    DB_TYPE     : Literal['info' , 'date' , 'fina' , 'rolling' , 'fundport'] = 'info'
     UPDATE_FREQ : Literal['d' , 'w' , 'm'] = 'd'
     DB_SRC      : str = ''
     DB_KEY      : str = ''
@@ -17,8 +17,10 @@ class TushareFetcher(ABC):
     def __init__(self) -> None:
         if self.DB_TYPE == 'info':
             assert self.DB_SRC in PATH.DB_BY_NAME , (self.DB_TYPE , self.DB_SRC , self.DB_KEY)
-        elif self.DB_TYPE in ['date' , 'fina' , 'rolling']:
+            self.use_date_type = False
+        elif self.DB_TYPE in ['date' , 'fina' , 'rolling' , 'fundport']:
             assert self.DB_SRC in PATH.DB_BY_DATE , (self.DB_TYPE , self.DB_SRC , self.DB_KEY)
+            self.use_date_type = True
         else:
             raise KeyError(self.DB_TYPE)
     
@@ -27,9 +29,6 @@ class TushareFetcher(ABC):
         '''get required dataframe at date''' 
     @abstractmethod
     def update_dates(self) -> list[int]: ...
-
-    @property
-    def use_date_type(self): return self.DB_TYPE in ['date' , 'fina' , 'rolling']
     
     def target_path(self , date : int | Any = None):
         if self.use_date_type:  assert date is not None
@@ -82,20 +81,20 @@ class TushareFetcher(ABC):
         return wrapper
 
     def iterate_fetch(self , fetch_func , limit = 2000 , max_fetch_times = 200 , **kwargs):
-        dfs = []
+        dfs : list[pd.DataFrame] = []
         offset = 0
         while True:
             df : pd.DataFrame | Any = fetch_func(**kwargs , offset = offset , limit = limit)
             if not isinstance(df , pd.DataFrame): raise TypeError(f'{fetch_func.__name__} must return a pd.DataFrame')
             elif df.empty: break
             elif len(dfs) >= max_fetch_times: raise Exception(f'{self.__class__.__name__} got more than {max_fetch_times} dfs')
-
-            if not df.isna().all().all(): dfs.append(df)
+            df = df.dropna(axis=1, how='all')
+            if not df.empty: dfs.append(df)
             offset += limit
         if dfs:
-            all_df = pd.concat(dfs)
-            all_df = all_df.reset_index(drop = (len(all_df.index.names) == 1) and (not all_df.index.name))
-            return pd.concat(dfs).reset_index(drop = True)
+            all_df = pd.concat([df for df in dfs if not df.empty])
+            all_df = all_df.reset_index([idx for idx in all_df.index.names if idx is not None] , drop = False).reset_index(drop = True)
+            return all_df
         else:
             return pd.DataFrame()
         

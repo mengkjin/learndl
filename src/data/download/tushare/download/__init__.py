@@ -1,12 +1,12 @@
 import inspect
 
 from .abstract_fetcher import TushareFetcher
-from . import analyst, daily , fina , index , info
+from . import analyst, daily , fina , index , info , mutual_fund
 
 
 class TushareDownloader:
     '''download data from tushare'''
-    DOWNLOAD_MODULES = [info , index , daily , fina , analyst] # order matters
+    DOWNLOAD_MODULES = [info , index , daily , fina , analyst , mutual_fund] # order matters
     def __init__(self) -> None:
         pass
 

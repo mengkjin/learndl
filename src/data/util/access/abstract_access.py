@@ -1,3 +1,4 @@
+import threading
 import numpy as np
 import pandas as pd
 
@@ -6,6 +7,8 @@ from typing import Any
 
 from src.basic import CALENDAR , TradeDate
 from ..basic import INFO
+
+lock = threading.Lock()
 
 class DFCollection:
     def __init__(self , max_len : int = -1 , date_key : str | None = None) -> None:
@@ -32,7 +35,8 @@ class DFCollection:
     @property
     def last_added_data(self):
         '''return the last added df'''
-        return self.get(self.last_added_date)
+        with lock:
+            return self.get(self.last_added_date)
     
     def date_diffs(self , dates : list[int] | np.ndarray , overwrite = False):
         '''return the difference between given dates and self.dates'''
@@ -40,22 +44,43 @@ class DFCollection:
     
     def get(self , date : int | TradeDate , field = None , rename_date_key : str | None = 'date'):
         '''get a DataFrame with given (1) date , fields and set_index'''
-        date = int(date)
-        if date not in self.dates: return pd.DataFrame()
-        if date in self.data_frames: df = self.data_frames[date]
-        else: df = self.long_frame.loc[date:date]
-        df = self.reform_df(df , field , rename_date_key = rename_date_key)
-        return df
+        with lock:
+            date = int(date)
+            if date not in self.dates: return pd.DataFrame()
+            if date in self.data_frames: df = self.data_frames[date]
+            else: df = self.long_frame.loc[date:date]
+            df = self.reform_df(df , field , rename_date_key = rename_date_key)
+            return df
     
     def gets(self , dates : list[int] | np.ndarray , field = None , rename_date_key : str | None = 'date' , copy = False):
         '''get a DataFrame with given (many) dates , fields and set_index'''
-        assert len(dates) <= self.max_len , f'No more than {self.max_len} dates'
+        with lock:
+            assert len(dates) <= self.max_len , f'No more than {self.max_len} dates , got {len(dates)}'
 
-        self.to_long_frame(dates)
-        df = self.long_frame.loc[min(dates):max(dates),:] # .reset_index(drop = False)
-        df = self.reform_df(df , field , rename_date_key = rename_date_key)
-        if copy: df = df.copy()
+            self.to_long_frame(dates)
+            df = self.long_frame.loc[min(dates):max(dates),:] # .reset_index(drop = False)
+            df = self.reform_df(df , field , rename_date_key = rename_date_key)
+            if copy: df = df.copy()
         return df
+    
+    def add(self , date : int | TradeDate , df : pd.DataFrame | None):
+        with lock:
+            if date not in self.dates and df is not None and not df.empty:
+                date = int(date)
+                df[self.date_key] = date
+                self.dates.append(date)
+                self.last_added_date = date
+                df = df.reset_index([i for i in df.index.names if i] , drop = False)
+                df[self.date_key] = date
+                self.data_frames[date] = df.set_index(self.date_key)
+
+    def truncate(self):
+        '''truncate the df collection to the max_len , reorder the dates'''
+        with lock:
+            if len(self) > self.max_len > 0:
+                self.dates = sorted(self.dates)[-self.max_len:]
+                [self.data_frames.pop(key) for key in self.data_frames if key not in self.dates]
+                self.long_frame = self.long_frame[self.long_frame[self.date_key].isin(self.dates)].copy()
     
     def reform_df(self , df : pd.DataFrame , field = None , rename_date_key = None):
         '''
@@ -73,18 +98,8 @@ class DFCollection:
 
         return df
 
-    def add(self , date : int | TradeDate , df : pd.DataFrame | None):
-        if date not in self.dates and df is not None and not df.empty:
-            date = int(date)
-            df[self.date_key] = date
-            self.dates.append(date)
-            self.last_added_date = date
-            df = df.reset_index([i for i in df.index.names if i] , drop = False)
-            df[self.date_key] = date
-            self.data_frames[date] = df.set_index(self.date_key)
-
     def to_long_frame(self , dates : list[int] | np.ndarray):
-        assert np.isin(dates , self.dates).all() , f'all dates should be in self.dates : {np.setdiff1d(dates , self.dates)}'
+        # assert np.isin(dates , self.dates).all() , f'all dates should be in self.dates : {np.setdiff1d(dates , self.dates)}'
         dates_to_do = np.intersect1d(dates , list(self.data_frames.keys()))
         if len(dates_to_do) == 0: return
         df_to_append = pd.concat([self.data_frames.pop(d) for d in dates_to_do] , copy = False)
@@ -96,13 +111,6 @@ class DFCollection:
         if not self: return None
         elif not self.long_frame.empty: return self.long_frame.columns.tolist()
         else: return self.data_frames[self.dates[0]].columns.tolist()
-
-    def truncate(self):
-        '''truncate the df collection to the max_len , reorder the dates'''
-        if len(self) > self.max_len > 0:
-            self.dates = sorted(self.dates)[-self.max_len:]
-            [self.data_frames.pop(key) for key in self.data_frames if key not in self.dates]
-            self.long_frame = self.long_frame[self.long_frame[self.date_key].isin(self.dates)].copy()
 
 class DateDataAccess(ABC):
     MAX_LEN = -1

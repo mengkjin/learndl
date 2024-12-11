@@ -5,6 +5,11 @@ from typing import Any , Literal
 from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
+__all__ = [
+    'bsact_neg_1m' , 'bsact_pos_1m' , 'flow_small' , 'flow_medium' , 'flow_large' , 'flow_exlarge' ,
+    'flow_elsm' , 'flow_corr_elsm' , 'flow_corr_smlag'
+]
+
 def inflow_by_return(date , n_months : int , direction : Literal[-1,1] , div_amt = True , min_finite_ratio = 0.25):
     start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
     net_mfs   = DATAVENDOR.TRADE.get_mf_data(start_date , end_date , 'net_mf_amount' , pivot = True)
@@ -19,8 +24,8 @@ def inflow_by_return(date , n_months : int , direction : Literal[-1,1] , div_amt
     
 class bsact_neg_1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
-    category1 = 'liquidity'
+    category0 = 'money_flow'
+    category1 = 'trading'
     description = '1个月资金流入-负收益'
     
     def calc_factor(self, date: int):
@@ -28,8 +33,8 @@ class bsact_neg_1m(StockFactorCalculator):
     
 class bsact_pos_1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
-    category1 = 'liquidity'
+    category0 = 'money_flow'
+    category1 = 'trading'
     description = '1个月资金流入-正收益'
     
     def calc_factor(self, date: int):
@@ -37,8 +42,8 @@ class bsact_pos_1m(StockFactorCalculator):
     
 class flow_small(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
-    category1 = 'liquidity'
+    category0 = 'money_flow'
+    category1 = 'trading'
     description = '1个月资金流强度--小单'
     
     def calc_factor(self, date: int):
@@ -50,8 +55,8 @@ class flow_small(StockFactorCalculator):
     
 class flow_medium(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
-    category1 = 'liquidity'
+    category0 = 'money_flow'
+    category1 = 'trading'
     description = '1个月资金流强度--中单'
     
     def calc_factor(self, date: int):
@@ -63,8 +68,8 @@ class flow_medium(StockFactorCalculator):
     
 class flow_large(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
-    category1 = 'liquidity'
+    category0 = 'money_flow'
+    category1 = 'trading'
     description = '1个月资金流强度--大单'
     
     def calc_factor(self, date: int):
@@ -76,8 +81,8 @@ class flow_large(StockFactorCalculator):
     
 class flow_exlarge(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
-    category1 = 'liquidity'
+    category0 = 'money_flow'
+    category1 = 'trading'
     description = '1个月资金流强度--超大单'
     
     def calc_factor(self, date: int):
@@ -89,8 +94,8 @@ class flow_exlarge(StockFactorCalculator):
     
 class flow_elsm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
-    category1 = 'liquidity'
+    category0 = 'money_flow'
+    category1 = 'trading'
     description = '1个月超大单-小单占比'
     
     def calc_factor(self, date: int):
@@ -102,8 +107,8 @@ class flow_elsm(StockFactorCalculator):
 
 class flow_corr_elsm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
-    category1 = 'liquidity'
+    category0 = 'money_flow'
+    category1 = 'trading'
     description = '1个月超大单-小单相关性'
     
     def calc_factor(self, date: int):
@@ -114,11 +119,11 @@ class flow_corr_elsm(StockFactorCalculator):
 
         corr = el.corrwith(sm)
         return corr
-
+    
 class flow_corr_smlag(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
-    category1 = 'liquidity'
+    category0 = 'money_flow'
+    category1 = 'trading'
     description = '1个月小单滞后相关性'
     
     def calc_factor(self, date: int):

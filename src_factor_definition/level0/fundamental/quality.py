@@ -7,6 +7,16 @@ from typing import Literal
 from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
+__all__ = [
+    'assetcur_asset' , 'liab_ta' , 'liabcur_liab' , 
+    'ratio_cash' , 'ratio_current' , 'ratio_quick' ,
+    'assetsturn_qtr' , 'assetsturn_ttm' ,
+    'ta_equ' , 
+    'npro_tp_qtr' , 'npro_tp_ttm' ,
+    'oper_total_qtr' , 'dedt_npro_qtr' ,
+    'ocf_cf_qtr' , 'net_ocf_ratio'
+]
+
 class assetcur_asset(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
@@ -70,18 +80,7 @@ class ratio_quick(StockFactorCalculator):
     def calc_factor(self, date: int):
         return DATAVENDOR.INDI.acc_latest('quick_ratio' , date) / 100
 
-class sales_ta_ttm(StockFactorCalculator):
-    init_date = 20070101
-    category0 = 'fundamental'
-    category1 = 'quality'
-    description = 'TTM资产周转率'
-    
-    def calc_factor(self, date: int):
-        sales = DATAVENDOR.IS.ttm_latest('revenue' , date)
-        ta    = DATAVENDOR.BS.ttm_latest('total_assets' , date)
-        return sales / ta
-
-class sales_ta_qtr(StockFactorCalculator):
+class assetsturn_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'quality'
@@ -92,6 +91,16 @@ class sales_ta_qtr(StockFactorCalculator):
         ta    = DATAVENDOR.BS.qtr_latest('total_assets' , date)
         return sales / ta
     
+class assetsturn_ttm(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'quality'
+    description = 'TTM资产周转率'
+    
+    def calc_factor(self, date: int):
+        sales = DATAVENDOR.IS.ttm_latest('revenue' , date)
+        ta    = DATAVENDOR.BS.ttm_latest('total_assets' , date)
+        return sales / ta
 class ta_equ(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
@@ -100,3 +109,58 @@ class ta_equ(StockFactorCalculator):
     
     def calc_factor(self, date: int):
         return DATAVENDOR.INDI.acc_latest('assets_to_eqt' , date) / 100
+    
+class npro_tp_qtr(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'earning'
+    description = '单季度归母净利润/利润总额'
+    
+    def calc_factor(self, date: int):
+        return DATAVENDOR.get_fin_latest('npro@qtr / total_np@qtr' , date)
+
+class npro_tp_ttm(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'earning'
+    description = 'TTM归母净利润/利润总额'
+    
+    def calc_factor(self, date: int):
+        return DATAVENDOR.get_fin_latest('npro@ttm / total_np@ttm' , date)
+
+class oper_total_qtr(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'earning'
+    description = '单季度营业利润/营业收入(营业利润率)'
+    
+    def calc_factor(self, date: int):
+        return DATAVENDOR.get_fin_latest('oper_np@qtr / total_np@qtr' , date)
+
+class dedt_npro_qtr(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'earning'
+    description = '单季度净利润/营业收入(净利润率)'
+    
+    def calc_factor(self, date: int):
+        return DATAVENDOR.get_fin_latest('npro@qtr / sales@qtr' , date)
+    
+class ocf_cf_qtr(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'earning'
+    description = '单季度经营活动现金流/营业收入(经营活动现金流率)'
+    
+    def calc_factor(self, date: int):
+        return DATAVENDOR.get_fin_latest('inocf@qtr / (inocf@qtr + infcf@qtr + inicf@qtr)' , date)
+    
+class net_ocf_ratio(StockFactorCalculator):
+    init_date = 20070101
+    category0 = 'fundamental'
+    category1 = 'earning'
+    description = '单季度经营活动净额占比'
+    
+    def calc_factor(self, date: int):
+        return DATAVENDOR.get_fin_latest('nocf@qtr / inocf@qtr' , date)
+

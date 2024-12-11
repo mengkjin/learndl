@@ -1,4 +1,4 @@
-import torch
+import re , torch
 import numpy as np
 import pandas as pd
 
@@ -19,6 +19,7 @@ class FDataAccess(DateDataAccess):
     DATA_TYPE_LIST = ['income' , 'cashflow' , 'balance' , 'dividend' , 'disclosure' ,
                       'express' , 'forecast' , 'mainbz' , 'indicator']
     SINGLE_TYPE : str | Any = None
+    FROZEN_QTR_METHOD  : Literal['diff' , 'exact'] | None = None
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
     DEFAULT_QOQ_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'qtr'
     DEFAULT_YOY_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'ttm'
@@ -93,7 +94,11 @@ class FDataAccess(DateDataAccess):
     def _get_data_qtr_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
                            pivot = False , ffill = False , 
                            qtr_method : Literal['diff' , 'exact'] | None = None):
-        if qtr_method is None: qtr_method = self.DEFAULT_QTR_METHOD
+        if self.FROZEN_QTR_METHOD: 
+            qtr_method = self.FROZEN_QTR_METHOD
+        elif qtr_method is None: 
+            qtr_method = self.DEFAULT_QTR_METHOD
+
         if qtr_method == 'exact':
             return self._get_data_acc_hist(data_type , val , date , lastn , pivot , ffill)
 
@@ -102,14 +107,16 @@ class FDataAccess(DateDataAccess):
         q_end = df_acc.index.get_level_values('end_date').unique()
         ystarts = np.unique(q_end // 10000) * 10000
         df_ystarts = pd.DataFrame({val:0} , index = pd.MultiIndex.from_product([secid , ystarts] , names=['secid' , 'end_date']))
-        df_qtr = pd.concat([df_acc , df_ystarts]).sort_index().groupby('secid').ffill().fillna(0)
-        
+        df_qtr = pd.concat([df_acc , df_ystarts]).sort_index().groupby('secid').ffill().fillna(0).groupby('secid').diff()
         return self._fin_hist_data_transform(df_qtr , val , df_acc , lastn , pivot , ffill)
 
     def _get_data_ttm_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
                            pivot = False , ffill = False , 
                            qtr_method : Literal['diff' , 'exact'] | None = None):
-        if qtr_method is None: qtr_method = self.DEFAULT_QTR_METHOD 
+        if self.FROZEN_QTR_METHOD: 
+            qtr_method = self.FROZEN_QTR_METHOD
+        elif qtr_method is None: 
+            qtr_method = self.DEFAULT_QTR_METHOD
         df_qtr = self._get_data_qtr_hist(data_type , val , date , lastn + 8 , pivot = False , ffill = False , qtr_method = qtr_method)
         full_index = pd.MultiIndex.from_product([df_qtr.index.get_level_values('secid').unique() ,
                                                  df_qtr.index.get_level_values('end_date').unique()])
@@ -117,14 +124,14 @@ class FDataAccess(DateDataAccess):
         grp = df_ttm.groupby('secid')
         if qtr_method == 'diff': df_ttm = grp.rolling(4).sum()
         elif qtr_method == 'exact': df_ttm = grp.rolling(5).mean()
-        df_ttm = df_ttm.reset_index(level=0, drop=True)
+        if len(df_ttm.index.names) > 2 and df_ttm.index.names[0] == 'secid' and df_ttm.index.names[1] == 'secid':
+            df_ttm = df_ttm.reset_index(level=0, drop=True)
         return self._fin_hist_data_transform(df_ttm , val , df_qtr , lastn , pivot , ffill)
     
     def _get_data_qoq_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
                            pivot = False , ffill = False , 
                            qtr_method : Literal['diff' , 'exact'] | None = None , 
                            qoq_method : Literal['ttm' , 'acc' , 'qtr'] | None = None):
-        if qtr_method is None: qtr_method = self.DEFAULT_QTR_METHOD 
         if qoq_method is None: qoq_method = self.DEFAULT_QOQ_METHOD
         if qoq_method == 'qtr':
             df_qtr = self._get_data_qtr_hist(data_type , val , date , lastn + 2 , pivot = False , 
@@ -143,7 +150,6 @@ class FDataAccess(DateDataAccess):
                            pivot = False , ffill = False , 
                            qtr_method : Literal['diff' , 'exact'] | None = None ,
                            yoy_method : Literal['ttm' , 'acc' , 'qtr'] | None = None):
-        if qtr_method is None: qtr_method = self.DEFAULT_QTR_METHOD 
         if yoy_method is None: yoy_method = self.DEFAULT_YOY_METHOD
         if yoy_method == 'ttm':
             df_qtr = self._get_data_ttm_hist(data_type , val , date , lastn + 5 , pivot = False , 
@@ -203,35 +209,38 @@ class FDataAccess(DateDataAccess):
         return self._get_data_acc_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , year_only)
     
     def qtr(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False):
-        return self._get_data_qtr_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , self.DEFAULT_QTR_METHOD)
+        return self._get_data_qtr_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill)
 
     def ttm(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False):
-        return self._get_data_ttm_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , self.DEFAULT_QTR_METHOD)
+        return self._get_data_ttm_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill)
     
-    def qoq(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , qoq_method : Literal['qtr' , 'ttm'] | None = None):
-        return self._get_data_qoq_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , self.DEFAULT_QTR_METHOD , qoq_method)
+    def qoq(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , 
+            qtr_method : Literal['diff' , 'exact'] | None = None , qoq_method : Literal['qtr' , 'ttm'] | None = None):
+        return self._get_data_qoq_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method , qoq_method)
     
-    def yoy(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , yoy_method : Literal['ttm' , 'acc'] | None = None):
-        return self._get_data_yoy_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , self.DEFAULT_QTR_METHOD , yoy_method)
+    def yoy(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , 
+            qtr_method : Literal['diff' , 'exact'] | None = None , yoy_method : Literal['ttm' , 'acc'] | None = None):
+        return self._get_data_yoy_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method , yoy_method)
 
     def acc_latest(self, val: str, date: int):
         return self._get_data_acc_latest(self.SINGLE_TYPE , val, date)
     
     def qtr_latest(self, val: str, date: int):
-        return self._get_data_qtr_latest(self.SINGLE_TYPE , val, date, self.DEFAULT_QTR_METHOD)
+        return self._get_data_qtr_latest(self.SINGLE_TYPE , val, date)
     
     def ttm_latest(self, val: str, date: int):
-        return self._get_data_ttm_latest(self.SINGLE_TYPE , val, date, self.DEFAULT_QTR_METHOD)
+        return self._get_data_ttm_latest(self.SINGLE_TYPE , val, date)
     
-    def qoq_latest(self, val: str, date: int , qoq_method : Literal['qtr' , 'ttm'] | None = None):
-        return self._get_data_qoq_latest(self.SINGLE_TYPE , val, date, self.DEFAULT_QTR_METHOD , qoq_method)
+    def qoq_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None , qoq_method : Literal['qtr' , 'ttm'] | None = None):
+        return self._get_data_qoq_latest(self.SINGLE_TYPE , val, date , qtr_method , qoq_method)
     
-    def yoy_latest(self, val: str, date: int , yoy_method : Literal['ttm' , 'acc'] | None = None):
-        return self._get_data_yoy_latest(self.SINGLE_TYPE , val, date, self.DEFAULT_QTR_METHOD , yoy_method)
+    def yoy_latest(self, val: str, date: int , qtr_method : Literal['diff' , 'exact'] | None = None , yoy_method : Literal['ttm' , 'acc'] | None = None):
+        return self._get_data_yoy_latest(self.SINGLE_TYPE , val, date , qtr_method , yoy_method)
     
 @singleton
 class IndicatorDataAccess(FDataAccess):
     SINGLE_TYPE = 'indicator'
+    FROZEN_QTR_METHOD  : Literal['diff' , 'exact'] | None = None
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
 
     def qtr(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None):
@@ -264,6 +273,7 @@ class IndicatorDataAccess(FDataAccess):
 @singleton
 class BalanceSheetAccess(FDataAccess):
     SINGLE_TYPE = 'balance'
+    FROZEN_QTR_METHOD = 'exact'
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'exact'
     DEFAULT_YOY_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'acc'
     DEFAULT_QOQ_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'acc'
@@ -271,11 +281,13 @@ class BalanceSheetAccess(FDataAccess):
 @singleton
 class CashFlowAccess(FDataAccess):
     SINGLE_TYPE = 'cashflow'
+    FROZEN_QTR_METHOD = 'diff'
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
 
 @singleton
 class IncomeStatementAccess(FDataAccess):
     SINGLE_TYPE = 'income'
+    FROZEN_QTR_METHOD = 'diff'
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
   
 @singleton
@@ -289,64 +301,108 @@ CF   = CashFlowAccess()
 IS   = IncomeStatementAccess()
 FINA = FinancialDataAccess()
 
-@dataclass(slots=True)
 class FinData:
-    statement : Literal['is' , 'cf' , 'indi' , 'bs'] | str
-    val : str
-    fin_type : Literal['ttm' , 'qtr' , 'acc' , 'yoy' , 'qoq'] | str
-    kwargs : dict[str,Any] = field(default_factory=dict)
-
-    @classmethod
-    def from_input(cls , numerator : str , **kwargs):
-        numerator , kwargs = cls.reserved_numerator(numerator , **kwargs)
-        components = numerator.split('@')
-        assert len(components) == 3 , 'invalid numerator: ' + numerator
-        assert components[0] in ['is' , 'cf' , 'indi' , 'bs'] , components[0]
-        assert components[2] in ['ttm' , 'qtr' , 'acc' , 'yoy' , 'qoq'] , components[2]
-        return cls(components[0] , components[1] , components[2] , kwargs)
+    def __init__(self , expression : str , **kwargs):
+        self.expression = expression
+        self.kwargs = kwargs
     
     @classmethod
-    def reserved_numerator(cls , numerator : str , **kwargs):
-        first_signal = numerator.split('@')[0]
+    def reserved_numerator(cls , expr : str , kwargs):
+        first_signal = expr.split('@')[0]
         reserved_signals = {
-            
-            'ta' : 'bs@total_assets' ,
-            'equ' : 'bs@total_hldr_eqy_exc_min_int' ,
+            'ta'        : 'bs@total_assets' ,
+            'equ'       : 'bs@total_hldr_eqy_exc_min_int' ,
+            'liab'      : 'bs@total_liab' ,
 
-            'sales' : 'is@revenue' ,
-            'oper_np' : 'is@operate_profit' ,
-            'total_np' : 'is@total_profit' ,
-            'npro' : 'is@n_income_attr_p' ,
-            'ebit' : 'is@ebit' ,
-            'ebitda' : 'is@ebitda' ,
+            'sales'     : 'is@revenue' ,
+            'oper_np'   : 'is@operate_profit' ,
+            'total_np'  : 'is@total_profit' ,
+            'npro'      : 'is@n_income_attr_p' ,
+            'ebit'      : 'is@ebit' ,
+            'ebitda'    : 'is@ebitda' ,
+            'tax'       : 'is@income_tax' ,
             
-            'nocf' : 'cf@n_cashflow_act' ,
+            'nocf'      : 'cf@n_cashflow_act' ,
+            'nicf'      : 'cf@n_cashflow_inv_act' ,
+            'nfcf'      : 'cf@n_cash_flows_fnc_act' ,
+            'inocf'     : 'cf@c_inf_fr_operate_a' ,
+            'inicf'     : 'cf@stot_inflows_inv_act' ,
+            'infcf'     : 'cf@stot_cash_in_fnc_act' ,
+            'outocf'    : 'cf@st_cash_out_act' ,
+            'outicf'    : 'cf@stot_out_inv_act' ,
+            'outfcf'    : 'cf@stot_cashout_fnc_act' ,
 
-            'dedt' : 'indi@profit_dedt' ,
-            'eps' : 'indi@eps' ,
-            'gp' : 'indi@gross_margin' ,
+
+            'dedt'      : 'indi@profit_dedt' ,
+            'eps'       : 'indi@eps' ,
+            'gp'        : 'indi@gross_margin' ,
+            'fcfe'      : 'indi@fcfe' ,
+            'roic'      : 'indi@roic' ,
+
+            'tangible_asset' : 'indi@tangible_asset' ,
         }
         if first_signal not in reserved_signals:
             ...
         else:
-            numerator = numerator.replace(f'{first_signal}@' , f'{reserved_signals[first_signal]}@')
-            if first_signal in ['gp' , 'dedt']:
-                kwargs = {'qtr_method' : 'diff'} | kwargs
-        return numerator , kwargs
+            expr = expr.replace(f'{first_signal}@' , f'{reserved_signals[first_signal]}@')
+            if first_signal in ['gp' , 'dedt' , 'fcfe' , 'eps' , 'roic']:
+                kwargs['qtr_method'] = 'diff'
+            elif first_signal in ['tangible_asset']:
+                kwargs['qtr_method'] = 'exact'
+        return expr , kwargs
     
-    def get_source(self):
-        if self.statement == 'is': return IS
-        elif self.statement == 'cf': return CF
-        elif self.statement == 'indi': return INDI
-        elif self.statement == 'bs': return BS
-        else: raise ValueError(f'invalid statement: {self.statement}')
+    def parse_and_eval(self , date : int , category : Literal['latest' , 'hist'] , **kwargs):
+        pattern = re.compile(r'([a-zA-Z!@#$_@0-9]+)')
+        items = pattern.findall(self.expression)
+        repls = {item:f'dfs[{i}]' for i , item in enumerate(items)}
+        reprs = {}
+        dfs : list[pd.Series | pd.DataFrame] = []
+        for item in items:
+            expr , kwgs = self.reserved_numerator(item , self.kwargs | kwargs)
+            fstatement , fval , ftype = expr.split('@')
+            reprs[item] = fval
+            assert fstatement in ['is' , 'cf' , 'indi' , 'bs'] , fstatement
+            assert ftype in ['ttm' , 'qtr' , 'acc' , 'yoy' , 'qoq'] , ftype
+            df = self._f_func(fstatement , ftype , category)(fval , date , **kwgs)
+            if isinstance(df , pd.DataFrame) and df.shape[1] == 1 and isinstance(df.columns[0] , str): df = df.iloc[:,0]
+            dfs.append(df)
+
+        python_expression = pattern.sub(lambda x:repls[x.group()], self.expression)
+        naming_expression = pattern.sub(lambda x:reprs[x.group()], self.expression)
+
+        try:
+            result = eval(python_expression)
+            if isinstance(result , pd.Series): result.name = naming_expression
+        except Exception as e:
+            raise ValueError(f"Invalid expression: {e}")
+        
+        return result
     
-    def get_latest(self):
-        src = self.get_source()
-        func = getattr(src , f'{self.fin_type}_latest')
-        return func(self.val , **self.kwargs)
+    @classmethod
+    def _f_func(cls , fstatement : Literal['is' , 'cf' , 'indi' , 'bs'] | str , 
+                ftype : Literal['ttm' , 'qtr' , 'acc' , 'yoy' , 'qoq'] | str , 
+                category : Literal['latest' , 'hist']):
+        if fstatement == 'is': f_source = IS
+        elif fstatement == 'cf': f_source = CF
+        elif fstatement == 'indi': f_source = INDI
+        elif fstatement == 'bs': f_source = BS
+        else: raise ValueError(f'invalid statement: {fstatement}')
+        if category == 'latest':
+            return getattr(f_source , f'{ftype}_latest')
+        elif category == 'hist':
+            return getattr(f_source , f'{ftype}')
+        else: raise ValueError(f'invalid category: {category}')
+
+    def get_latest(self , date : int , new_name : str | None = None) -> pd.Series:
+        val = self.parse_and_eval(date , 'latest')
+        if isinstance(val , pd.DataFrame): val = val.iloc[:,0]
+        assert isinstance(val , pd.Series) , f'invalid latest value: {val}'
+        if new_name is not None: val.name = new_name
+        return val
     
-    def get_hist(self):
-        src = self.get_source()
-        func = getattr(src , f'{self.fin_type}')
-        return func(self.val , **self.kwargs)
+    def get_hist(self , date : int , lastn : int = 1 , new_name : str | None = None) -> pd.DataFrame:
+        val = self.parse_and_eval(date , 'hist' , lastn = lastn)
+        if isinstance(val , pd.Series): val = val.to_frame()
+        assert isinstance(val , pd.DataFrame) , f'invalid hist value: {val}'
+        if new_name is not None: val.columns = [new_name]
+        return val

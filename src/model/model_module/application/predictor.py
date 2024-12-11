@@ -34,6 +34,7 @@ class ModelPredictor:
 
         self.dir_deploy = JS_FACTOR_DESTINATION
         self._current_update_dates = []
+        self._current_deploy_dates = []
 
 
     def __repr__(self) -> str:
@@ -44,9 +45,10 @@ class ModelPredictor:
         assert update != overwrite , 'update and overwrite must be different here'
         with SILENT if silent else nullcontext():   
             dates = CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else [])
-            self.predict_dates(dates , deploy = True)
+            self.predict_dates(dates)
+            self.deploy()
 
-    def predict_dates(self , dates : np.ndarray | list[int] , deploy = True):
+    def predict_dates(self , dates : np.ndarray | list[int]):
         if len(dates) == 0: return self
         '''predict recent days'''
         data_module  = DataModule(self.config , 'both' if min(dates) <= CALENDAR.today(-100) else 'predict').load_data() 
@@ -82,28 +84,38 @@ class ModelPredictor:
             self.df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
         else:
             self.df = pd.DataFrame()
-        if deploy: self.deploy()
+        self.save_preds()
         return self
-    
-    def deploy(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
-        '''deploy df by day to class.destination'''
+
+    def save_preds(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
         if df is None: df = self.df
         if df.empty: return self
         self._current_update_dates = []
         for date , subdf in df.groupby(date_col):
             new_df = subdf.drop(columns='date').set_index(secid_col)
             self.reg_model.save_pred(new_df , date , overwrite)
-
-            if self.dir_deploy is not None:
-                try:
-                    path_deploy = self.dir_deploy.joinpath(self.reg_model.pred_name , f'{self.reg_model.pred_name}_{date}.txt')
-                    path_deploy.parent.mkdir(parents=True,exist_ok=True)
-                    if (not overwrite or not path_deploy.exists()):
-                        new_df.to_csv(path_deploy, sep='\t', index=True, header=False)
-                except OSError as e:
-                    print(f'{self.reg_model.pred_name} deploy error: {e}')
-
             self._current_update_dates.append(date)
+        return self
+
+    def deploy(self , overwrite = False):
+        '''deploy df by day to class.destination'''
+        if self.dir_deploy is None: return self
+        try:
+            path_deploy = self.dir_deploy.joinpath(self.reg_model.pred_name)
+            path_deploy.parent.mkdir(parents=True,exist_ok=True)
+            if overwrite:
+                dates = self.reg_model.pred_dates
+            else:
+                deployed_dates = [int(path.name.removesuffix('.txt').split('_')[-1]) for path in path_deploy.glob('*.txt')]
+                dates = np.setdiff1d(self.reg_model.pred_dates , deployed_dates)
+            self._current_deploy_dates = []
+            for date in dates:
+                df = self.reg_model.load_pred(date , verbose = False)
+                df.to_csv(path_deploy.joinpath(f'{self.reg_model.pred_name}_{date}.txt') , sep='\t', index=True, header=False)
+                self._current_deploy_dates.append(date)
+        except OSError as e:
+            print(f'{self.reg_model.pred_name} deploy error: {e}')
+
         return self
     
     def df_corr(self , df = None , window = 30 , secid_col = SECID_COLS , date_col = DATE_COLS):
@@ -126,4 +138,8 @@ class ModelPredictor:
                 print(f'  -->  Finish updating model prediction for {model} , len={len(md._current_update_dates)}')
             else:
                 print(f'  -->  No new updating model prediction for {model}')
+            if md._current_deploy_dates:
+                print(f'  -->  Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}')
+            else:
+                print(f'  -->  No new deploying model prediction for {model}')
         return md
