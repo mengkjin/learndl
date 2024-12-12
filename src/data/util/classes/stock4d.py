@@ -88,8 +88,9 @@ class Stock4DData:
 
         return new_blk
 
-    def merge_others(self , others : list):
-        return self.merge([self , *[others]])
+    def merge_others(self , others : list | Any):
+        if not isinstance(others , list): others = [others]
+        return self.merge([self , *others])
     
     def as_tensor(self , asTensor = True):
         if asTensor and isinstance(self.values , np.ndarray): self.values = torch.tensor(self.values)

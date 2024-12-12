@@ -253,4 +253,17 @@ class TradeCalendar:
         if old_fmt == new_fmt: return date
         return datetime.strptime(str(date), old_fmt).strftime(new_fmt)
 
+    @staticmethod
+    def quarter_ends(end_date = 99991231 , last_date = None , start_year = 1997 , consider_future = False , trailing_quarters = 3):
+        date_list = np.sort(np.concatenate([np.arange(start_year , end_date // 10000 + 1) * 10000 + qe for qe in  [331,630,930,1231]]))
+        if not consider_future: 
+            date_list = date_list[date_list < end_date]
+        
+        if last_date is not None: 
+            date_list_0 = date_list[date_list <= last_date][-trailing_quarters:] if trailing_quarters > 0 else []
+            date_list_1 = date_list[date_list >  last_date]
+            date_list = np.concatenate([date_list_0 , date_list_1])
+
+        return date_list
+
 CALENDAR = TradeCalendar()

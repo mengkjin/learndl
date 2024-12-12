@@ -111,7 +111,7 @@ class ModelPredictor:
             self._current_deploy_dates = []
             for date in dates:
                 df = self.reg_model.load_pred(date , verbose = False)
-                df.to_csv(path_deploy.joinpath(f'{self.reg_model.pred_name}_{date}.txt') , sep='\t', index=True, header=False)
+                df.to_csv(path_deploy.joinpath(f'{self.reg_model.pred_name}_{date}.txt') , sep='\t', index=False, header=False)
                 self._current_deploy_dates.append(date)
         except OSError as e:
             print(f'{self.reg_model.pred_name} deploy error: {e}')
