@@ -97,6 +97,7 @@ class PlotFactorData:
         df = self.raw_data.sort_values(self.sort_keys).drop(columns=self.drop_keys , errors='ignore')
         new_index = [i for i in self.raw_index if i not in self.drop_keys]
         df = df.set_index(new_index) if new_index else df.reset_index(drop = True)
+        df = df.dropna()
         return df , self.fig
 
     def __exit__(self , exc_type , exc_value , traceback):

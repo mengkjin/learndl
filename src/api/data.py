@@ -39,9 +39,9 @@ class DataAPI:
             DataProcessor.main(predict=True)
 
     @staticmethod
-    def reconstruct_train_data(): 
+    def reconstruct_train_data(confirm = 0): 
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
         with EnclosedMessage(' reconstruct historical data '):
-            DataProcessor.main(predict=False)
+            DataProcessor.main(predict=False , confirm = confirm)

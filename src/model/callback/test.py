@@ -10,7 +10,7 @@ from src.model.util import BaseCallBack , PredRecorder
 PRED_RECORD = PredRecorder()
 
 class DetailedAlphaAnalysis(BaseCallBack):
-    ANALYTIC_TASKS : list[TYPE_of_TASK] = ['factor' , 'optim' , 'top']
+    ANALYTIC_TASKS : list[TYPE_of_TASK] = ['factor' , 'top'] # 'optim'
     '''record and concat each model to Alpha model instance'''
     def __init__(self , trainer , use_num : Literal['avg' , 'first'] = 'avg' , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
@@ -43,7 +43,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         self.df = df
 
         self.test_results = {
-            task:FactorTestAPI.run_test(task , StockFactor(df) , verbosity = 0 , write_down=False , display_figs=False)
+            task:FactorTestAPI.run_test(task , StockFactor(df) , verbosity = 1 , write_down=False , display_figs=False)
             for task in self.ANALYTIC_TASKS
         }
 

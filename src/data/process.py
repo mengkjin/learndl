@@ -31,6 +31,7 @@ class DataProcessor:
         if self.predict:
             self.load_start_dt = -366
         else:
+            self.load_start_dt = 20070101
             self.save_start_dt = 20070101
             self.hist_end_dt   = 20161231
         if not self.mask: self.mask = {'list_dt': 91}
@@ -68,6 +69,7 @@ class DataProcessor:
                 print(f'{key} is up to {modified_time} already!')
                 continue
             tt1 = time.time()
+
             with Timer(f'{key} blocks loading' , newline=True):
                 block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt)
             with Timer(f'{key} blocks process'):

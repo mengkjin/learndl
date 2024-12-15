@@ -133,7 +133,7 @@ def process_df(raw_df : pd.DataFrame | dict[int , pd.DataFrame] , date = None, d
     if ignored_fields: df = df.drop(columns=ignored_fields , errors='ignore')
     return df
 
-def db_path(db_src , db_key , date = None):
+def db_path(db_src , db_key , date = None , use_alt = True) -> Path:
     if db_src in DB_BY_NAME:
         parent = PATH.database.joinpath(f'DB_{db_src}')
         base = f'{db_key}.{SAVE_OPT_DB}'
@@ -143,33 +143,23 @@ def db_path(db_src , db_key , date = None):
         base = f'{db_key}.{str(date)}.{SAVE_OPT_DB}'
     else:
         raise KeyError(db_src)
-    return parent.joinpath(base)
-    
-def db_path_with_alt(db_src , db_key , date = None):
-    '''
-    if the path does not exist, try to find the alternative path
-    '''
-    path = db_path(db_src , db_key , date)
-    if not path.exists() and db_src in DB_ALTERNATIVES:
-        alt_path = db_path(DB_ALTERNATIVES[db_src] , db_key , date)
-        if alt_path.exists(): return alt_path
-    return path
+    new_path = parent.joinpath(base)
+    if not new_path.exists() and db_src in DB_ALTERNATIVES and use_alt:
+        alt_path = db_path(DB_ALTERNATIVES[db_src] , db_key , date , use_alt = False)
+        if alt_path.exists(): new_path = alt_path
+    return new_path
 
 def db_dates(db_src , db_key , start_dt = None , end_dt = None , year = None):
     path = PATH.database.joinpath(f'DB_{db_src}' , db_key)
-    return dir_dates(path , start_dt , end_dt , year)
-
-def db_dates_with_alt(db_src , db_key , start_dt = None , end_dt = None , year = None):
-    '''
-    get both the original dates and the alternative dates
-    '''
-    dates = db_dates(db_src , db_key , start_dt , end_dt , year)
+    dates = dir_dates(path , start_dt , end_dt , year)
     if db_src in DB_ALTERNATIVES:
-        alt_dates = db_dates(DB_ALTERNATIVES[db_src] , db_key , start_dt , end_dt , year)
-        dates = np.concatenate([dates , alt_dates])
+        alt_src   = DB_ALTERNATIVES[db_src]
+        alt_path  = PATH.database.joinpath(f'DB_{alt_src}' , db_key)
+        alt_dates = np.setdiff1d(dir_dates(alt_path , start_dt , end_dt , year) , dates)
+        dates = np.concatenate([alt_dates , dates])
     return dates
 
-@db_src_deprecated(1)
+# @db_src_deprecated(1)
 def db_save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True):
     '''
     Save data to database
@@ -189,7 +179,7 @@ def db_save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose =
     mark = save_df(df , db_path(db_src , db_key , date) , overwrite = True , printing_prefix = printing_prefix)
     return mark
 
-@db_src_deprecated(0)
+# @db_src_deprecated(0)
 def db_load(db_src , db_key , date = None , date_colname = None , verbose = True , raise_if_not_exist = False , **kwargs) -> pd.DataFrame: 
     '''
     Load data from database
@@ -214,19 +204,19 @@ def db_load(db_src , db_key , date = None , date_colname = None , verbose = True
         reset_index: bool, default True
             if True, reset index (no drop index)
     '''
-    path = db_path_with_alt(db_src , db_key , date)
+    path = db_path(db_src , db_key , date , use_alt = True)
     df_syntax = f'{db_src}/{db_key}/{date}' if verbose else None
     df = load_df(path , raise_if_not_exist = raise_if_not_exist)
     df = process_df(df , date , date_colname , df_syntax = df_syntax , **kwargs)
     return df
 
-@db_src_deprecated(0)
+# @db_src_deprecated(0)
 def db_load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None , date_colname = None , 
                   verbose = True , raise_if_not_exist = False , **kwargs):
     if dates is None:
         assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
-        dates = db_dates_with_alt(db_src , db_key , start_dt , end_dt)
-    paths : dict[int , Path] = {int(date):db_path_with_alt(db_src , db_key , date) for date in dates}
+        dates = db_dates(db_src , db_key , start_dt , end_dt)
+    paths : dict[int , Path] = {int(date):db_path(db_src , db_key , date , use_alt = True) for date in dates}
     df_syntax = f'{db_src}/{db_key}/multi-dates' if verbose else None
     dfs = load_df_multi(paths , raise_if_not_exist=raise_if_not_exist)
     df = process_df(dfs , date_colname = date_colname , df_syntax = df_syntax , **kwargs)

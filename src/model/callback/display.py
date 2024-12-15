@@ -117,7 +117,8 @@ class StatusDisplay(BaseCallBack):
         self.logger.warning('Model Specifics:')
         self.config.print_out()
     def on_summarize_model(self):
-        assert self.test_summarized
+        if not self.test_summarized: self.summarize_test_result()
+        if self.summary_df.empty: return
         test_scores = {
             '{}.{}'.format(*col):'|'.join([f'{k}({round(self.summary_df[col][k],v)})' for k,v in self.SUMMARY_NDIGITS.items()]) 
             for col in self.summary_df.columns}
@@ -205,6 +206,7 @@ class StatusDisplay(BaseCallBack):
         self.test_df_model = pd.concat([self.test_df_model , df_model])
 
     def summarize_test_result(self):
+        self.summary_df = pd.DataFrame()
         if self.test_df_model.empty: return
         cat_stat = [md for md in self.test_df_model['model_date'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
         cat_subm = ['best' , 'swalast' , 'swabest']
@@ -232,7 +234,7 @@ class StatusDisplay(BaseCallBack):
 
         # more than 100 rows of test_df_model means the cycle is month / day
         df_display = self.summary_df
-        if len(self.test_df_model) > 100: df_display = df_display[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]
+        if len(df_display) > 100: df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]
         FUNC.display.data_frame(df_display , text_after = f'Test results are saved to {self.path_test}')
 
         # export excel

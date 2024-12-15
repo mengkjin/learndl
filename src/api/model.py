@@ -92,4 +92,4 @@ class ModelAPI:
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
-        DataProcessor.main(predict=False)
+        DataProcessor.main(predict=False , confirm=1)

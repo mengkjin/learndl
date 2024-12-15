@@ -146,6 +146,7 @@ class TradeCalendar:
     def cd_array(date , offset : int = 0):
         cd_arr = np.array([d.cd if isinstance(d , TradeDate) else int(d) for d in date])
         if offset != 0: 
+            cd_arr = np.minimum(cd_arr , _CALENDAR.index.max())
             d_index = _CALENDAR.loc[cd_arr , 'cd_index'] + offset
             d_index = np.maximum(np.minimum(d_index , len(_CALENDAR_CAL) - 1) , 0)
             cd_arr = _CALENDAR_CAL.loc[d_index , 'calendar'].astype(int).to_numpy()

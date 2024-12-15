@@ -11,7 +11,7 @@ paths = [p for p in pathlib.Path(__file__).absolute().parents if p.name == 'lear
 assert paths , f'learndl path not found , do not know where to find src file : {__file__}'
 sys.path.append(str(paths[0]))
 
-from src.api import DataAPI , ModelAPI
+from src.api import ModelAPI
 from src.basic import DualPrinter , send_email
 
 if __name__ == '__main__':
@@ -19,7 +19,6 @@ if __name__ == '__main__':
     email_title = f'Weekly Update at {time_str}'
     with DualPrinter(f'weekly_update.{time_str}.txt') as printer:
         try:
-            DataAPI.reconstruct_train_data()
             ModelAPI.update_models()
 
         except Exception as e:
