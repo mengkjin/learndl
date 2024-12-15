@@ -71,3 +71,22 @@ class DailyLimit(DateFetcher):
         lmt = code_to_secid(pro.stk_limit(trade_date=str(date)))
         lmt = code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return lmt
+"""
+class DailyOpenAuction(DateFetcher):
+    '''Daily Open Auction Infomation'''
+    START_DATE = 20070101
+    DB_KEY = 'day_open_auction'       
+    def get_data(self , date : int):
+        auc = code_to_secid(pro.stk_auction_o(trade_date=str(date)))
+        auc = code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        return auc
+    
+class DailyCloseAuction(DateFetcher):
+    '''Daily Close Auction Infomation'''
+    START_DATE = 20070101
+    DB_KEY = 'day_close_auction'       
+    def get_data(self , date : int):
+        auc = code_to_secid(pro.stk_auction_c(trade_date=str(date)))
+        auc = code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        return auc
+"""

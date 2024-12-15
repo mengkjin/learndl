@@ -166,6 +166,18 @@ class TradeCalendar:
             diff = (datetime.strptime(str(date1), '%Y%m%d') - datetime.strptime(str(date2), '%Y%m%d')).days
         return diff
     
+    @classmethod
+    def td_diff_array(cls , date1_arr , date2_arr) -> int | Any:
+        td1_arr = TradeDate.as_numpy(_CALENDAR.loc[cls._date_convert_to_index(date1_arr) , 'td_index'])
+        td2_arr = TradeDate.as_numpy(_CALENDAR.loc[cls._date_convert_to_index(date2_arr) , 'td_index'])
+        return td1_arr - td2_arr
+    
+    @classmethod
+    def cd_diff_array(cls , date1_arr , date2_arr) -> int | Any:
+        cd1_arr = TradeDate.as_numpy(_CALENDAR.loc[cls._date_convert_to_index(date1_arr) , 'cd_index'])
+        cd2_arr = TradeDate.as_numpy(_CALENDAR.loc[cls._date_convert_to_index(date2_arr) , 'cd_index'])
+        return cd1_arr - cd2_arr
+    
     @staticmethod
     def td_trailing(date , n : int):
         return np.sort(_CALENDAR_TRD[_CALENDAR_TRD['calendar'] <= date].iloc[-n:]['calendar'].to_numpy())

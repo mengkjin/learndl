@@ -12,7 +12,7 @@ __all__ = [
     'eps_yoy_zscore' , 'sales_yoy_zscore' , 'gp_yoy_zscore' , 'npro_yoy_zscore' , 
     'dedt_yoy_zscore' , 'tax_yoy_zscore' , 'roe_yoy_zscore' , 
     'gp_margin_yoy_zscore' , 'oper_margin_yoy_zscore' , 'net_margin_yoy_zscore' ,
-    'ocf_yoy_zscore'
+    'cfo_yoy_zscore'
 ]
 
 def get_yoy_zscore(expression : str , date : int , n_last : int = 20 , **kwargs):
@@ -110,12 +110,12 @@ class net_margin_yoy_zscore(StockFactorCalculator):
     def calc_factor(self, date: int):
         return get_yoy_zscore('npro@ttm / sales@ttm' , date)
     
-class ocf_yoy_zscore(StockFactorCalculator):
+class cfo_yoy_zscore(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM经营活动现金流行业内分位数之差'
     
     def calc_factor(self, date: int):
-        return get_yoy_zscore('nocf@ttm' , date)
+        return get_yoy_zscore('ncfo@ttm' , date)
 

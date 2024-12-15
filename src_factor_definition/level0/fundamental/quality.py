@@ -14,7 +14,7 @@ __all__ = [
     'ta_equ' , 
     'npro_tp_qtr' , 'npro_tp_ttm' ,
     'oper_total_qtr' , 'dedt_npro_qtr' ,
-    'ocf_cf_qtr' , 'net_ocf_ratio'
+    'cfo_cf_qtr' , 'net_cfo_ratio'
 ]
 
 class assetcur_asset(StockFactorCalculator):
@@ -146,21 +146,21 @@ class dedt_npro_qtr(StockFactorCalculator):
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('npro@qtr / sales@qtr' , date)
     
-class ocf_cf_qtr(StockFactorCalculator):
+class cfo_cf_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度经营活动现金流/营业收入(经营活动现金流率)'
     
     def calc_factor(self, date: int):
-        return DATAVENDOR.get_fin_latest('inocf@qtr / (inocf@qtr + infcf@qtr + inicf@qtr)' , date)
+        return DATAVENDOR.get_fin_latest('incfo@qtr / (incfo@qtr + incff@qtr + incfi@qtr)' , date)
     
-class net_ocf_ratio(StockFactorCalculator):
+class net_cfo_ratio(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度经营活动净额占比'
     
     def calc_factor(self, date: int):
-        return DATAVENDOR.get_fin_latest('nocf@qtr / inocf@qtr' , date)
+        return DATAVENDOR.get_fin_latest('ncfo@qtr / incfo@qtr' , date)
 

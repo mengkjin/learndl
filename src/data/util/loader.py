@@ -9,7 +9,7 @@ from typing import Any , ClassVar , Literal , Optional
 from src.basic import CALENDAR , PATH , CONF , SILENT , Timer
 from src.func.singleton import singleton
 
-from .access import INFO , BS , IS , CF , INDI , TRADE , RISK , FINA
+from .access import INFO , BS , IS , CF , INDI , TRADE , RISK , FINA , ANALYST , MKLINE
 from .access.fina_data import FinData
 from .classes import DataBlock
 
@@ -76,6 +76,10 @@ class DataVendor:
     IS   = IS
     CF   = CF
     FINA = FINA
+
+    ANALYST = ANALYST
+
+    MKLINE = MKLINE
     
     def __init__(self):
         self.start_dt = 99991231
@@ -83,6 +87,7 @@ class DataVendor:
         self.max_date   = PATH.db_dates('trade_ts' , 'day')[-1]
 
         self.day_quotes : dict[int,pd.DataFrame] = {}
+        self.day_secids : dict[int,np.ndarray] = {}
         self.last_quote_dt = self.file_dates('trade_ts','day').max()
 
         self.init_stocks()
@@ -106,9 +111,14 @@ class DataVendor:
             self.st_stocks = self.INFO.get_st()
 
     def secid(self , date : int | None = None): 
-        stk = self.all_stocks
-        if date is not None: stk = stk[(stk.list_dt <= date) & (stk.delist_dt > date)]
-        return stk.secid.unique()
+        if date is None: 
+            stk = self.all_stocks.secid.unique()
+        else: 
+            if date not in self.day_secids:
+                stk = self.all_stocks[(self.all_stocks.list_dt <= date) & (self.all_stocks.delist_dt > date)]
+                self.day_secids[date] = stk.secid.unique()
+            stk = self.day_secids[date]
+        return stk
 
     @staticmethod
     def single_file(db_src , db_key , date : int | None = None):

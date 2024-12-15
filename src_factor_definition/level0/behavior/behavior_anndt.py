@@ -15,7 +15,7 @@ class anndt_phigh(StockFactorCalculator):
     description = '公告日最高价距离'
     
     def calc_factor(self, date: int):
-        ann_dt = DATAVENDOR.IS.get_ann_dt(date , 1 , within_days=365)
+        ann_dt = DATAVENDOR.IS.get_ann_dt(date , 1 , within_days=365).reset_index().set_index('secid')
         ann_dt['date'] = ann_dt['td_forward']
         start_date , end_date = date_min_max(ann_dt['date'])
         

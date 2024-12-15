@@ -9,7 +9,7 @@ from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
 __all__ = [
-    'ta_gro5y' , 'equ_gro5y' , 'liab_gro5y' , 'sales_gro5y' , 'npro_gro5y' , 'ocf_gro5y'
+    'ta_gro5y' , 'equ_gro5y' , 'liab_gro5y' , 'sales_gro5y' , 'npro_gro5y' , 'cfo_gro5y'
 ]
 
 def get_compound_growth(expression: str , date: int , n_year : int = 5 , **kwargs):
@@ -70,11 +70,11 @@ class npro_gro5y(StockFactorCalculator):
     def calc_factor(self, date: int):
         return get_compound_growth('npro@ttm' , date)
     
-class ocf_gro5y(StockFactorCalculator):
+class cfo_gro5y(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '5年年度增长率-经营活动现金流'
     
     def calc_factor(self, date: int):
-        return get_compound_growth('nocf@ttm' , date)
+        return get_compound_growth('ncfo@ttm' , date)

@@ -9,7 +9,7 @@ from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
 
 __all__ = [
-    'gp_ta_qoq_trend' , 'gp_ta_yoy_trend' , 'npro_trend' , 'ocf_trend'
+    'gp_ta_qoq_trend' , 'gp_ta_yoy_trend' , 'npro_trend' , 'cfo_trend'
 ]
 
 def calc_trend(data : pd.Series):
@@ -62,13 +62,13 @@ class npro_trend(StockFactorCalculator):
         npro = DATAVENDOR.get_fin_hist('npro@qtr' , date , 20).iloc[:,0]
         return calc_trend(npro)
 
-class ocf_trend(StockFactorCalculator):
+class cfo_trend(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '经营活动现金流变动趋势'
     
     def calc_factor(self, date: int):
-        ocf = DATAVENDOR.get_fin_hist('nocf@qtr' , date , 20).iloc[:,0]
-        return calc_trend(ocf)
+        cfo = DATAVENDOR.get_fin_hist('ncfo@qtr' , date , 20).iloc[:,0]
+        return calc_trend(cfo)
 

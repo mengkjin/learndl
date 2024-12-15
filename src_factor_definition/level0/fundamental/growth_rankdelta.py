@@ -12,7 +12,7 @@ __all__ = [
     'eps_rank_delta' , 'sales_rank_delta' , 'gp_rank_delta' , 'npro_rank_delta' , 
     'dedt_rank_delta' , 'tax_rank_delta' , 'roe_rank_delta' , 
     'gp_margin_rank_delta' , 'oper_margin_rank_delta' , 'net_margin_rank_delta' ,
-    'ta_rank_delta' , 'equ_rank_delta' , 'liab_rank_delta' , 'ocf_rank_delta' ,
+    'ta_rank_delta' , 'equ_rank_delta' , 'liab_rank_delta' , 'cfo_rank_delta' ,
 ]
 
 def get_indrank_delta(expression : str , date : int):
@@ -141,11 +141,11 @@ class liab_rank_delta(StockFactorCalculator):
     def calc_factor(self, date: int):
         return get_indrank_delta('liab@qtr' , date)
     
-class ocf_rank_delta(StockFactorCalculator):
+class cfo_rank_delta(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '经营活动现金流行业内分位数之差'
     
     def calc_factor(self, date: int):
-        return get_indrank_delta('nocf@qtr' , date)
+        return get_indrank_delta('ncfo@qtr' , date)

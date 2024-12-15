@@ -14,8 +14,8 @@ __all__ = [
     'roe_qtr' , 'roe_ttm' , 'roe_zscore' ,
     'roa_qtr' , 'roa_ttm' , 'roa_zscore' ,
     'net_margin_qtr' , 'net_margin_ttm' , 'net_margin_zscore' ,
-    'ocf_sales_qtr' , 'ocf_sales_ttm' , 'ocf_sales_zscore' ,
-    'ocf_ta_qtr' , 'ocf_ta_ttm' , 'ocf_ta_zscore' ,
+    'cfo_sales_qtr' , 'cfo_sales_ttm' , 'cfo_sales_zscore' ,
+    'cfo_ta_qtr' , 'cfo_ta_ttm' , 'cfo_ta_zscore' ,
     'oper_margin_qtr' , 'oper_margin_ttm' , 'oper_margin_zscore' ,
     'expense_sales_qtr' , 'expense_sales_ttm' , 'expense_sales_zscore' ,
     'roic_qtr' , 'roic_ttm' , 'roic_zscore' ,
@@ -207,59 +207,59 @@ class net_margin_zscore(StockFactorCalculator):
     def calc_factor(self, date: int):
         return get_hist_zscore('npro@qtr / sales@qtr' , date)
 
-class ocf_sales_qtr(StockFactorCalculator):
+class cfo_sales_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度经营活动现金流/营业收入'
     
     def calc_factor(self, date: int):
-        return DATAVENDOR.get_fin_latest('nocf@qtr / sales@qtr' , date)
+        return DATAVENDOR.get_fin_latest('ncfo@qtr / sales@qtr' , date)
     
-class ocf_sales_ttm(StockFactorCalculator):
+class cfo_sales_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM经营活动现金流/营业收入'
     
     def calc_factor(self, date: int):
-        return DATAVENDOR.get_fin_latest('nocf@ttm / sales@ttm' , date)
+        return DATAVENDOR.get_fin_latest('ncfo@ttm / sales@ttm' , date)
 
-class ocf_sales_zscore(StockFactorCalculator):
+class cfo_sales_zscore(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM经营活动现金流/营业收入,Z-Score'
     
     def calc_factor(self, date: int):
-        return get_hist_zscore('nocf@qtr / sales@qtr' , date)
+        return get_hist_zscore('ncfo@qtr / sales@qtr' , date)
 
-class ocf_ta_qtr(StockFactorCalculator):
+class cfo_ta_qtr(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度经营活动现金流/总资产'
     
     def calc_factor(self, date: int):
-        return DATAVENDOR.get_fin_latest('nocf@qtr / ta@qtr' , date)
+        return DATAVENDOR.get_fin_latest('ncfo@qtr / ta@qtr' , date)
 
-class ocf_ta_ttm(StockFactorCalculator):
+class cfo_ta_ttm(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM经营活动现金流/总资产'
     
     def calc_factor(self, date: int):
-        return DATAVENDOR.get_fin_latest('nocf@ttm / ta@ttm' , date)
+        return DATAVENDOR.get_fin_latest('ncfo@ttm / ta@ttm' , date)
     
-class ocf_ta_zscore(StockFactorCalculator):
+class cfo_ta_zscore(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM经营活动现金流/总资产,Z-Score'
     
     def calc_factor(self, date: int):
-        return get_hist_zscore('nocf@qtr / ta@qtr' , date)
+        return get_hist_zscore('ncfo@qtr / ta@qtr' , date)
     
 class oper_margin_qtr(StockFactorCalculator):
     init_date = 20070101

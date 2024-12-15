@@ -9,7 +9,7 @@ from collections.abc import Iterable
 from itertools import combinations
 from typing import Any , Literal , Type , final
 
-from src.basic import PATH , CALENDAR
+from src.basic import PATH , CALENDAR , IS_SERVER
 from src.data import DATAVENDOR
 from src.func.singleton import SingletonABCMeta
 from src.func.classproperty import classproperty_str
@@ -27,8 +27,13 @@ _FACTOR_CATEGORY1_SET = {
     'alternative' : None
 }
 
+_FACTOR_UPDATE_START = 20070101 if IS_SERVER else 20241101
+_FACTOR_UPDATE_END   = 20991231 if IS_SERVER else 20241231
+
 def insert_update_job(obj : 'StockFactorCalculator' , date : int):
     '''insert a update job to _FACTOR_UPDATE_JOBS'''
+    assert date >= _FACTOR_UPDATE_START , f'date is should be greater than or equal to {_FACTOR_UPDATE_START}, but got {date}'
+    assert date <= _FACTOR_UPDATE_END   , f'date is should be less than or equal to {_FACTOR_UPDATE_END}, but got {date}'
     _FACTOR_UPDATE_JOBS.append((obj , date))
 
 def perform_update_jobs(overwrite = False , show_progress = True , ignore_error = False , factor_name : str | None = None):
@@ -61,8 +66,14 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         return super().__new__(cls.validate_attr())
     
     @classmethod
-    def calc(cls , date : int):
+    def Calc(cls , date : int):
         return cls().calc_factor(date)
+
+    @classmethod
+    def Eval(cls , date : int):
+        df = PATH.factor_load(cls.factor_name , date , verbose = False)
+        if df.empty: return cls.Calc(date)
+        else: return df.iloc[:,0]
 
     @abstractmethod
     def calc_factor(self , date : int) -> pd.Series:
@@ -77,7 +88,7 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
             df = raw_calc_factor(self , date)
             assert isinstance(df , pd.Series) , \
                 f'for factor {cls.factor_name} , calc_factor must return a Series , but got {type(df)}'
-            df = df.rename(cls.factor_name).replace([np.inf , -np.inf] , np.nan)
+            df = df.rename(cls.factor_name).replace([np.inf , -np.inf] , np.nan).reindex(DATAVENDOR.secid(date))
             return df
         return new_calc_factor
 
@@ -208,23 +219,18 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
 
         return self
 
-    def load(self, date : int | Iterable | Any , factor_name : str | None = None):
+    def load(self, date : int | Iterable | Any , factor_name : str | None = None , overwrite = False):
         '''load factor data from storage'''
         if factor_name is None: factor_name = self.factor_name
-        if isinstance(date , Iterable):
-            dfs = {int(d):self.load(d , factor_name) for d in date}
-            dfs = [df.assign(date = d) for d , df in dfs.items() if isinstance(df , pd.DataFrame)]
-            if dfs:
-                return pd.concat(dfs).reset_index().set_index(['date','secid'])
-            else:
-                return None
-        else:
-            if int(date) in self.factors: return self.factors[int(date)]
-            return PATH.factor_load(factor_name , date)
-    
+        if not isinstance(date , Iterable): date = [date]
+        for d in date:
+            if overwrite or int(d) not in self.factors:
+                self.factors[int(d)] = PATH.factor_load(factor_name , date)
+
     def update_jobs(self , start : int | None = None , end : int | None = None , overwrite = False):
-        dates = CALENDAR.td_within(start , end)
-        dates = CALENDAR.slice(dates , self.init_date)
+        dates = CALENDAR.td_within(self.init_date , CALENDAR.update_to())
+        dates = CALENDAR.slice(dates , _FACTOR_UPDATE_START , _FACTOR_UPDATE_END)
+        dates = CALENDAR.slice(dates , start , end)
         if not overwrite: dates = CALENDAR.diffs(dates , self.stored_dates)
         [insert_update_job(self , d) for d in dates]
         return self
@@ -351,7 +357,7 @@ class StockFactorHierarchy:
         return self.pool[factor_name]
     
     def test_calc_all_factors(self , date : int = 20241031 , check_variation = True , check_duplicates = True , 
-                              multi_thread = True , **kwargs):
+                              multi_thread = True , ignore_error = True , **kwargs):
         '''
         test calculation of all factors , if check_duplicates is True , check factors diffs' standard deviation and correlation
         factor_name : str | None = None
@@ -384,7 +390,10 @@ class StockFactorHierarchy:
                         factor_name, factor_value = future.result()
                         factor_values[factor_name] = factor_value
                     except Exception as e:
-                        print(f'{obj.factor_name} generated an exception: {e}')
+                        if ignore_error:
+                            print(f'{obj.factor_name} generated an exception: {e}')
+                        else:
+                            raise e
         else:
             for obj in self.iter_instance(**kwargs):
                 factor_name, factor_value = calculate_factor(obj , date)

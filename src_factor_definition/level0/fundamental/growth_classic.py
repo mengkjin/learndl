@@ -24,7 +24,7 @@ __all__ = [
     'sales_qoq' , 'sales_yoy' , 'sales_ttm_yoy' , 
     'assetsturn_yoy' , 'assetsturn_ttm_yoy' , 
     'tax_qoq' , 'tax_yoy' , 'tax_ttm_yoy' , 
-    'ocf_qoq' , 'ocf_yoy' , 'ocf_ttm_yoy'
+    'cfo_qoq' , 'cfo_yoy' , 'cfo_ttm_yoy'
 ]
 
 def get_yoy_latest(expression : str , date : int):
@@ -347,30 +347,30 @@ class tax_ttm_yoy(StockFactorCalculator):
     def calc_factor(self, date: int):
         return get_yoy_latest('tax@ttm' , date) 
     
-class ocf_qoq(StockFactorCalculator):
+class cfo_qoq(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '单季度经营活动现金流环比变化率'
     
     def calc_factor(self, date: int):
-        return get_qoq_latest('nocf@qtr' , date)
+        return get_qoq_latest('ncfo@qtr' , date)
     
-class ocf_yoy(StockFactorCalculator):
+class cfo_yoy(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '单季度经营活动现金流同比变化率'
     
     def calc_factor(self, date: int):
-        return get_yoy_latest('nocf@qtr' , date)
+        return get_yoy_latest('ncfo@qtr' , date)
     
-class ocf_ttm_yoy(StockFactorCalculator):
+class cfo_ttm_yoy(StockFactorCalculator):
     init_date = 20070101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM经营活动现金流同比变化率'
     
     def calc_factor(self, date: int):
-        return get_yoy_latest('nocf@ttm' , date)
+        return get_yoy_latest('ncfo@ttm' , date)
 

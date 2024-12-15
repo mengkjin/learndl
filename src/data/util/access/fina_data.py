@@ -50,19 +50,38 @@ class FDataAccess(DateDataAccess):
         return qtr_ends
     
     def get_ann_dt(self , date , latest_n = 1 , within_days = 365):
-        assert latest_n >= 1 , 'latest_n must be positive'
         assert self.SINGLE_TYPE , 'SINGLE_TYPE must be set'
-        ann_dt = self.gets(self.qtr_ends(date , latest_n + 5 , 0) , self.SINGLE_TYPE , ['secid' , 'ann_date']).dropna(subset = ['ann_date'])
+        ann_dt = self.gets(self.qtr_ends(date , latest_n + 5 , 0) , self.SINGLE_TYPE , ['secid' , 'ann_date']).\
+            dropna(subset = ['ann_date']).reset_index(drop = False)
         #income_ann_dt = [self.get(qtr_end , 'income' , ['secid' , 'ann_date']) for qtr_end in self.qtr_ends(date , latest_n + 5 , 0)]
         #ann_dt : pd.DataFrame = pd.concat(income_ann_dt)
+        ann_dt['end_date'] = ann_dt['end_date'].astype(int)
         ann_dt['ann_date'] = ann_dt['ann_date'].astype(int)
         ann_dt['td_backward'] = CALENDAR.td_array(ann_dt['ann_date'] , backward = True)
         ann_dt['td_forward']  = CALENDAR.td_array(ann_dt['ann_date'] , backward = False)
         ann_dt = ann_dt.loc[ann_dt['td_forward'] <= date , :]
         if within_days > 0:
             ann_dt = ann_dt[ann_dt['td_backward'] >= CALENDAR.cd(date , -within_days)]
-        grp = ann_dt.sort_values(['secid' , 'td_backward']).set_index('secid').groupby('secid')
-        return grp.last() if latest_n == 1 else grp.tail(latest_n + 1).groupby('secid').first()
+        ann_dt = ann_dt[ann_dt['secid'] >= 0].sort_values(['secid' , 'td_backward']).set_index(['secid','end_date'])
+        
+        if latest_n <= 0:
+            return ann_dt
+        else:
+            grp = ann_dt.groupby('secid')
+            return grp.last() if latest_n == 1 else grp.tail(latest_n).groupby('secid').first()
+
+    def get_ann_calendar(self , date , after_days = 7 , within_days = 365):
+        assert after_days > 0 , f'after_days must be greater than 0 , got {after_days}'
+        dates = CALENDAR.cd_trailing(date , within_days)
+        ann_dt = self.get_ann_dt(date , 0 , within_days).assign(count = 1)
+        v = ann_dt.pivot_table(index = 'ann_date' , columns = 'secid' , values = 'count').reindex(dates).fillna(0)
+
+        ann_calendar = 0
+        for i in range(after_days):
+            ann_calendar += v.shift(i).fillna(0)
+        assert isinstance(ann_calendar , pd.DataFrame) , 'ann_calendar must be a DataFrame'
+        ann_calendar = ann_calendar.melt(ignore_index=False).reset_index().rename(columns = {'ann_date':'date','value':'anndt'})
+        return ann_calendar[ann_calendar['anndt'] > 0].set_index(['secid','date']).sort_index().astype(bool)
 
     def _fin_hist_data_transform(self , df : pd.DataFrame , val : str , benchmark_df : pd.DataFrame | None = None , 
                                  lastn = 1 , pivot = False , ffill = False):
@@ -322,15 +341,15 @@ class FinData:
             'ebitda'    : 'is@ebitda' ,
             'tax'       : 'is@income_tax' ,
             
-            'nocf'      : 'cf@n_cashflow_act' ,
-            'nicf'      : 'cf@n_cashflow_inv_act' ,
-            'nfcf'      : 'cf@n_cash_flows_fnc_act' ,
-            'inocf'     : 'cf@c_inf_fr_operate_a' ,
-            'inicf'     : 'cf@stot_inflows_inv_act' ,
-            'infcf'     : 'cf@stot_cash_in_fnc_act' ,
-            'outocf'    : 'cf@st_cash_out_act' ,
-            'outicf'    : 'cf@stot_out_inv_act' ,
-            'outfcf'    : 'cf@stot_cashout_fnc_act' ,
+            'ncfo'      : 'cf@n_cashflow_act' ,
+            'ncfi'      : 'cf@n_cashflow_inv_act' ,
+            'ncff'      : 'cf@n_cash_flows_fnc_act' ,
+            'incfo'     : 'cf@c_inf_fr_operate_a' ,
+            'incfi'     : 'cf@stot_inflows_inv_act' ,
+            'incff'     : 'cf@stot_cash_in_fnc_act' ,
+            'outcfo'    : 'cf@st_cash_out_act' ,
+            'outcfi'    : 'cf@stot_out_inv_act' ,
+            'outcff'    : 'cf@stot_cashout_fnc_act' ,
 
 
             'dedt'      : 'indi@profit_dedt' ,
