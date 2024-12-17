@@ -54,8 +54,9 @@ class _df_collection(ABC):
         with lock:
             return self.get(self.last_added_date)
     
-    def date_diffs(self , dates : list[int] | np.ndarray , overwrite = False):
+    def date_diffs(self , dates : list[int | TradeDate] | np.ndarray , overwrite = False):
         '''return the difference between given dates and self.dates'''
+        dates = np.array([int(d) for d in dates])
         return dates if overwrite else np.setdiff1d(dates , self.dates)
     
     def get(self , date : int | TradeDate , field = None , rename_date_key : str | None = 'date'):
@@ -147,20 +148,20 @@ class DFCollection(_df_collection):
         else: df = self.long_frame.loc[date:date]
         return df
     
-    def get_multiple_days(self , dates : list[int] | np.ndarray , field = None , rename_date_key : str | None = 'date' , copy = False):
+    def get_multiple_days(self , dates : list[int] | np.ndarray):
         '''get a DataFrame with given (many) dates , fields and set_index'''
-        self.to_long_frame(dates)
+        self.to_long_frame()
         df = self.long_frame.loc[min(dates):max(dates),:] # .reset_index(drop = False)
         return df
 
-    def to_long_frame(self , dates : list[int] | np.ndarray):
+    def to_long_frame(self):
         # assert np.isin(dates , self.dates).all() , f'all dates should be in self.dates : {np.setdiff1d(dates , self.dates)}'
-        dates_to_do = np.intersect1d(dates , list(self.data_frames.keys()))
+        dates_to_do = list(self.data_frames.keys())
         if len(dates_to_do) == 0: return
-        df_to_append = pd.concat([self.data_frames.pop(d) for d in dates_to_do] , copy = False)
-        self.long_frame = pd.concat([self.long_frame , df_to_append] , copy = False).sort_values(self.date_key)
-        intersec_dates = np.intersect1d(list(self.data_frames.keys()) , dates)
-        assert intersec_dates.size == 0 , f'self.data_frames.keys should not have overlap with dates: {intersec_dates}'
+        dfs = [df for df in [self.long_frame] + [v for v in self.data_frames.values()] if df is not None and not df.empty]
+        if dfs: 
+            self.long_frame = pd.concat(dfs , copy = False).sort_values(self.date_key)
+            self.data_frames.clear()
 
 class PLDFCollection(_df_collection):
     def __init__(self , max_len : int = -1 , date_key : str | None = None) -> None:
@@ -214,17 +215,17 @@ class DateDataAccess(ABC):
             if data_type in self.pl_collections: self.pl_collections[data_type].truncate()
 
     def get(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
-        if overwrite or date not in self.collections[data_type]:
+        if overwrite or int(date) not in self.collections[data_type]:
             self.collections[data_type].add(date , self.data_loader(date , data_type))
         return self.collections[data_type].get(date , field , rename_date_key = rename_date_key)
 
-    def gets(self , dates: list[int] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def gets(self , dates: list[int | TradeDate] | np.ndarray , data_type : str , field = None , overwrite = False , rename_date_key = None):
         for date in self.collections[data_type].date_diffs(dates , overwrite):
             self.collections[data_type].add(date , self.data_loader(date , data_type))
         return self.collections[data_type].gets(dates , field , rename_date_key = rename_date_key)
     
     def get_pl(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
-        if overwrite or date not in self.pl_collections[data_type]:
+        if overwrite or int(date) not in self.pl_collections[data_type]:
             self.pl_collections[data_type].add(date , self.data_loader(date , data_type))
         return self.pl_collections[data_type].get(date , field , rename_date_key = rename_date_key)
 
@@ -244,7 +245,7 @@ class DateDataAccess(ABC):
             df = df.reset_index(drop = False)
             df['date'] = CALENDAR.td_array(df['date'] , 1)
             df = df.set_index('date')
-        df = df.set_index('secid' , append = True)
+        df = df.set_index('secid' , append = True).sort_index()
 
         if mask:  df = INFO.mask_list_dt(df)
         if pivot: df = df.pivot_table(field , 'date' , 'secid')

@@ -6,11 +6,23 @@ from src.factor.util.plot import plot_table , get_twin_axes , set_xaxis , set_ya
 
 def plot_factor_frontface(data : pd.DataFrame , show = False):
     with PlotFactorData(data , drop = [] , title = 'Factor Front Face' , show=show) as (df , fig):
-        df = df.reset_index().drop(columns=['sum' , 'year_ret']).set_index('factor_name').sort_values(['factor_name','benchmark']).\
-            rename(columns={'avg': 'IC_avg', 'std': 'IC_std','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
-        plot_table(df , flt_cols = ['IC_avg' , 'IC_std' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 
+        df = df.reset_index().drop(columns=['sum']).set_index('factor_name').sort_values(['factor_name','benchmark']).\
+            rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
+        plot_table(df , flt_cols = ['IC_avg' , 'IC_std' , 'IC(ann)' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 
                    capitalize=False , stripe_by='factor_name')
     return fig
+
+def plot_factor_coverage(data : pd.DataFrame , show = False):
+    group_plot = PlotMultipleData(data , group_key = ['factor_name'])
+    for i , sub_data in enumerate(group_plot):     
+        with PlotFactorData(sub_data , drop = ['factor_name'] , title = 'Factor Coverage Ratio' , show=show and i==0) as (df , fig):
+            df = df.reset_index().set_index('date')
+            ax = sns_lineplot(df , x='date' , y='coverage' , hue='benchmark')
+
+            set_xaxis(ax , df.index.unique() , title = 'Trade Date')
+            set_yaxis(ax , format='pct' , digits=2 , title = 'Coverage Ratio' , title_color='b' , tick_lim = (0,1))
+            
+    return group_plot.fig_dict
 
 def plot_factor_ic_curve(data : pd.DataFrame , show = False):
     group_plot = PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
@@ -81,9 +93,9 @@ def plot_factor_ic_year(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with PlotFactorData(sub_data , title = 'Factor Year IC' , show=show and i==0) as (df , fig):
             df['direction'] = 'N(-)' if df['direction'].values[-1] < 0 else 'P(+)'
-            df = df.rename(columns={'avg': 'IC_avg', 'std': 'IC_std','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, 
-                        errors='raise').drop(columns=['sum' , 'year_ret']).rename(columns={'year':'Year'})
-            plot_table(df.set_index('Year') , flt_cols = ['IC_avg' , 'IC_std' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 
+            df = df.rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, 
+                           errors='raise').drop(columns=['sum' , 'year_ret']).rename(columns={'year':'Year'})
+            plot_table(df.set_index('Year') , flt_cols = ['IC_avg' , 'IC_std' , 'IC(ann)' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 
                        capitalize=False , stripe_by=1 , emph_last_row=True)
     return group_plot.fig_dict
 
@@ -91,9 +103,9 @@ def plot_factor_ic_benchmark(data : pd.DataFrame , show = False):
     group_plot = PlotMultipleData(data , group_key = ['factor_name'])
     for i , sub_data in enumerate(group_plot):     
         with PlotFactorData(sub_data , drop = ['factor_name'] , title = 'Factor Benchmark IC' , show=show and i==0) as (df , fig):
-            df = df.reset_index().drop(columns=['sum' , 'year_ret']).set_index('benchmark').sort_index().\
-            rename(columns={'avg': 'IC_avg', 'std': 'IC_std','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
-            plot_table(df , flt_cols = ['IC_avg' , 'IC_std' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 
+            df = df.reset_index().drop(columns=['sum']).set_index('benchmark').sort_index().\
+            rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)', 'ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
+            plot_table(df , flt_cols = ['IC_avg' , 'IC_std' , 'IC(ann)' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 
                        fontsize=10 , capitalize=False , stripe_by=1)
     return group_plot.fig_dict
 
@@ -102,7 +114,7 @@ def plot_factor_ic_monotony(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with PlotFactorData(sub_data , title = 'Factor Percentile Ret & IR' , show=show and i==0) as (df , fig):
             df = df.pivot_table('stats_value' , 'group' , 'stats_name',observed=False).\
-                rename(columns={'grp_ret':'RET','grp_ir':'IR'}).reset_index()
+                rename(columns={'grp_ret':'RET','grp_ir':'IR'}).reset_index().sort_values('group')
             ax1 , ax2 = get_twin_axes(fig , 111)
 
             ax1.bar(df['group'], df['RET'], color='b', alpha=0.5)            

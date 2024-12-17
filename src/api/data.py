@@ -1,6 +1,6 @@
 from src.data import CoreDataUpdater , SellsideDataUpdater , JSDataUpdater , OtherDataUpdater , DataProcessor
 from src.func.display import EnclosedMessage
-from src.factor.calculator import FactorModelUpdater
+from src.factor.api import FactorModelUpdater , FactorCalculatorAPI
 
 class DataAPI:
     @staticmethod
@@ -25,10 +25,13 @@ class DataAPI:
         with EnclosedMessage(' update other datas '):
             OtherDataUpdater.update()
 
-        # update models
+        # update factor models
         with EnclosedMessage(' update factor models '):
             FactorModelUpdater.update()
 
+        # update stock factor
+        with EnclosedMessage(' update stock factors '):
+            FactorCalculatorAPI.update()
         
     @staticmethod
     def prepare_predict_data(): 

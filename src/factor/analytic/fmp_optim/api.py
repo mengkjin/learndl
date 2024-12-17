@@ -4,6 +4,7 @@ from src.factor.util import Benchmark , StockFactor
 from src.factor.fmp import PortfolioBuilderGroup
 
 from . import calculator as Calc
+from .calculator import BaseOptimCalc
 from ..test_manager import BaseTestManager
 
 class FmpOptimManager(BaseTestManager):

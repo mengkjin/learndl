@@ -2,10 +2,23 @@ from typing import Any , Literal
 
 from src.factor.util import StockFactor
 
-from .analytic.test_manager import TASK_TYPES , TYPE_of_TASK
-from .analytic.factor_perf.api import FactorPerfManager
-from .analytic.fmp_optim.api import FmpOptimManager
-from .analytic.fmp_top.api import FmpTopManager
+from src.factor.analytic.test_manager import TASK_TYPES , TYPE_of_TASK
+from src.factor.analytic.factor_perf.api import FactorPerfManager
+from src.factor.analytic.fmp_optim.api import FmpOptimManager
+from src.factor.analytic.fmp_top.api import FmpTopManager
+
+from src.factor.calculator.cne5 import TuShareCNE5_Calculator
+from src.factor.calculator.factor_calc import StockFactorHierarchy
+
+class FactorModelUpdater:
+    @classmethod
+    def update(cls):
+        TuShareCNE5_Calculator.update()
+
+class FactorCalculatorAPI:
+    @classmethod
+    def update(cls):
+        StockFactorHierarchy.update()
 
 class FactorTestAPI:
     TASK_TYPES = TASK_TYPES

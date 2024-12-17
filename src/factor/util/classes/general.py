@@ -64,7 +64,7 @@ class Port:
         self.name = name
         self.value = value
         self.sort()
-
+    def __len__(self): return len(self.port)
     def __bool__(self): return self.exists
     def __repr__(self): 
         return '\n'.join([f'Portfolio <date={self.date}> <name={self.name}> <value={self.value}>: ', str(self.port)])
@@ -73,6 +73,9 @@ class Port:
     def __rmul__(self , other):  return self.rescale(other)
     def __truediv__(self , other): return self.rescale(1 / other)
     def __sub__(self , other): return self.merge(other * -1.)
+
+    @property
+    def size(self): return len(self.port)
 
     def sort(self , by : Literal['secid' , 'weight'] = 'weight' , ascending=False):
         self.port = self.port.sort_values(by , ascending=ascending).reset_index(drop=True)

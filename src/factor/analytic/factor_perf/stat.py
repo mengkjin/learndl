@@ -51,6 +51,9 @@ def calc_factor_frontface(factor : StockFactor , benchmark : Optional[Benchmark 
     ic_stats = eval_ic_stats(ic_table , nday = nday)
     return ic_stats
 
+def calc_factor_coverage(factor : StockFactor , benchmark : Optional[Benchmark | str] = None):
+    return factor.coverage(benchmark).reset_index().melt(id_vars=['date'],var_name='factor_name',value_name='coverage')
+
 def calc_factor_ic_curve(factor : StockFactor , benchmark : Optional[Benchmark | str] = None , 
                          nday : int = 10 , lag : int = 2 ,  ma_windows : int | list[int] = [10,20] ,
                          ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
@@ -89,7 +92,7 @@ def calc_factor_ic_indus(factor : StockFactor , benchmark : Optional[Benchmark |
                          nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
                          ret_type : Literal['close' , 'vwap'] = 'close'):
     factor = factor.within(benchmark) 
-    ic_indus = factor.within(benchmark).eval_ic_indus(nday , lag , ic_type , ret_type)
+    ic_indus = factor.eval_ic_indus(nday , lag , ic_type , ret_type)
     ic_mean = ic_indus.groupby('industry').mean().stack()
     ic_std  = ic_indus.groupby('industry').std().stack()
     ic_ir   = ic_mean / (ic_std + 1e-6)

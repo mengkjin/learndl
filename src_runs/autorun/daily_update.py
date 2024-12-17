@@ -16,12 +16,11 @@ from src.basic import DualPrinter , send_email
 
 if __name__ == '__main__':
     time_str = datetime.now().strftime("%Y%m%d")
-    email_title = f'Daily Update at {time_str}'
     with DualPrinter(f'daily_update.{time_str}.txt') as printer:
         try:
             DataAPI.update()
             ModelAPI.update()
-
+            email_body = 'Successful Update!'
         except Exception as e:
             print(f'Error Occured!')
 
@@ -30,6 +29,7 @@ if __name__ == '__main__':
 
             print('Traceback : ' + '-' * 20)
             print(traceback.format_exc())
-    send_email(title = email_title , body = printer.contents())
+            email_body = f'Error Occured! {e}'
+    send_email(title = f'Daily Update at {time_str}' , body = email_body , attachment = printer.filename)
     
     

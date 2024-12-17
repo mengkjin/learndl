@@ -4,6 +4,7 @@ from src.factor.util import Benchmark , StockFactor
 from src.factor.fmp import PortfolioBuilderGroup
 
 from . import calculator as Calc
+from .calculator import BaseTopPortCalc
 from ..test_manager import BaseTestManager
 
 class FmpTopManager(BaseTestManager):

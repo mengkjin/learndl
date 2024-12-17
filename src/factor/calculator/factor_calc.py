@@ -2,57 +2,73 @@ import numpy as np
 import pandas as pd
 import importlib.util
 import inspect 
-import concurrent.futures
 
-from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from abc import abstractmethod
+from dataclasses import dataclass
 from itertools import combinations
-from typing import Any , Literal , Type , final
+from typing import Any , Literal , Type , ClassVar
 
 from src.basic import PATH , CALENDAR , IS_SERVER
 from src.data import DATAVENDOR
-from src.func.singleton import SingletonABCMeta
+from src.func.singleton import SingletonABCMeta , singleton
 from src.func.classproperty import classproperty_str
+from src.func.parallel import parallel
+from src.factor.util import StockFactor
 
-_FACTOR_UPDATE_JOBS : list[tuple['StockFactorCalculator' , int]] = []
+class DateError(Exception): ...
+class CategoryError(Exception): ...
 
-_FACTOR_INIT_DATE = 20070101
-_FACTOR_CATEGORY0_SET = ['fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative']
-_FACTOR_CATEGORY1_SET = {
-    'fundamental' : ['quality' , 'growth' , 'value' , 'earning'] ,
-    'analyst' : ['surprise' , 'coverage' , 'forecast' , 'adjustment'] ,
-    'high_frequency' : ['hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity'] ,
-    'behavior' : ['momentum' , 'volatility' , 'correlation' , 'liquidity'] ,
-    'money_flow' : ['holding' , 'trading'] ,
-    'alternative' : None
-}
+UPDATE_START = 20070101 if IS_SERVER else 20241101
+UPDATE_END   = 20991231 if IS_SERVER else 20241231
+@dataclass  
+class FactorUpdateJob:
+    obj : 'StockFactorCalculator'
+    date : int
 
-_FACTOR_UPDATE_START = 20070101 if IS_SERVER else 20241101
-_FACTOR_UPDATE_END   = 20991231 if IS_SERVER else 20241231
-
-def insert_update_job(obj : 'StockFactorCalculator' , date : int):
-    '''insert a update job to _FACTOR_UPDATE_JOBS'''
-    assert date >= _FACTOR_UPDATE_START , f'date is should be greater than or equal to {_FACTOR_UPDATE_START}, but got {date}'
-    assert date <= _FACTOR_UPDATE_END   , f'date is should be less than or equal to {_FACTOR_UPDATE_END}, but got {date}'
-    _FACTOR_UPDATE_JOBS.append((obj , date))
-
-def perform_update_jobs(overwrite = False , show_progress = True , ignore_error = False , factor_name : str | None = None):
-    '''perform all update jobs , if factor_name is not None , only perform update jobs of the factor'''
-    _FACTOR_UPDATE_JOBS.sort(key=lambda x: (x[0].level , x[1] , x[0].factor_name))
-    date = -1
-    for item in _FACTOR_UPDATE_JOBS[:]:
-        if item[1] != date: DATAVENDOR.data_storage_control()
-        obj , date = item
-        if factor_name is not None and obj.factor_name != factor_name: continue
-        
+    def __post_init__(self):
+        self.done = False
+        if self.date < UPDATE_START or self.date > UPDATE_END: 
+            raise DateError(f'date is should be between {UPDATE_START} and {UPDATE_END}, but got {self.date}')
+    @property
+    def level(self): return self.obj.level
+    @property
+    def factor_name(self): return self.obj.factor_name
+    @property
+    def sort_key(self): return (self.level , self.date , self.factor_name)
+    def do(self , overwrite = False , show_progress = True , catch_errors : tuple[Type[Exception],...] = ()):
         try:
-            obj.calculate(date).deploy(overwrite = overwrite , show_progress = show_progress)
-            _FACTOR_UPDATE_JOBS.remove(item)
-        except Exception as e:
-            if ignore_error:
-                print(f'Factor : {obj.factor_name} update at date {date} failed: {e}')
-            else:
-                raise e
+            self.obj.calc_and_deploy(self.date , overwrite = overwrite , show_progress = show_progress)
+            self.done = True
+        except catch_errors as e:
+            print(f'Factor : {self.factor_name} update at date {self.date} failed: {e}')
+    
+@singleton
+class FactorUpdateJobManager:
+    CATCH_ERRORS = (ValueError , TypeError)
+    def __init__(self , multi_thread = True):
+        self.jobs : list[FactorUpdateJob] = []
+        self.parallel_type : Literal['thread' , 'process' , False] | None = 'thread' if multi_thread else None
+    def __repr__(self):
+        return f'FactorUpdateJobs({len(self.jobs)} jobs)'
+    def to_dataframe(self):
+        columns = ['level' , 'date' , 'factor']
+        return pd.DataFrame([(job.level , job.date , job.factor_name) for job in self.jobs] , columns=columns).sort_values(by=columns)
+    def filter(self , jobs : list[FactorUpdateJob] , level : str , date : int):
+        return [job for job in jobs if job.level == level and job.date == date]
+    def clear(self): self.jobs.clear()
+    def sort(self): self.jobs.sort(key=lambda x: x.sort_key)
+    def append(self , job : FactorUpdateJob): self.jobs.append(job)
+    def proceed(self , overwrite = False , show_progress = True , ignore_error = False , max_update_groups : int | None = None):
+        '''perform all update jobs , if factor_name is not None , only perform update jobs of the factor'''
+        groups = sorted(set((job.level , job.date) for job in self.jobs))[:max_update_groups]
+        def do_job(job : FactorUpdateJob): job.do(overwrite , show_progress , self.CATCH_ERRORS if ignore_error else ())
+        for level , date in groups:
+            DATAVENDOR.data_storage_control()
+            jobs = self.filter(self.jobs , level , date)
+            parallel(do_job , jobs , type = self.parallel_type)
+            [self.jobs.remove(job) for job in jobs if job.done]
+
+UPDATE_JOBS = FactorUpdateJobManager()
 
 class StockFactorCalculator(metaclass=SingletonABCMeta):
     init_date : int = -1
@@ -62,33 +78,83 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
                         'momentum' , 'volatility' , 'correlation' , 'liquidity' , 'holding' , 'trading'] | Any = None
     description : str = ''
 
+    INIT_DATE = 20070101
+    CATEGORY0_SET = ['fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative']
+    CATEGORY1_SET = {
+        'fundamental' : ['quality' , 'growth' , 'value' , 'earning'] ,
+        'analyst' : ['surprise' , 'coverage' , 'forecast' , 'adjustment'] ,
+        'high_frequency' : ['hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity'] ,
+        'behavior' : ['momentum' , 'volatility' , 'correlation' , 'liquidity'] ,
+        'money_flow' : ['holding' , 'trading'] ,
+        'alternative' : None
+    }
+
     def __new__(cls , *args , **kwargs):
-        return super().__new__(cls.validate_attr())
+        return super().__new__(cls.validate_attrs())
     
     @classmethod
     def Calc(cls , date : int):
         return cls().calc_factor(date)
+    
+    @classmethod
+    def Load(cls , date : int):
+        return cls().load_factor(date)
 
     @classmethod
     def Eval(cls , date : int):
-        df = PATH.factor_load(cls.factor_name , date , verbose = False)
-        if df.empty: return cls.Calc(date)
-        else: return df.iloc[:,0]
+        return cls().eval_factor(date)
+
+    @classmethod
+    def Factor(cls , start : int | None = 20170101 , end : int | None = None , step : int = 10 , normalize = True , 
+               fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+               weighted_whiten = False , order = ['fillna' , 'whiten' , 'winsor'] ,
+               multi_thread = True , ignore_error = True):
+        dates = CALENDAR.slice(CALENDAR.td_within(start , end , step) , cls.init_date , CALENDAR.updated())
+        calc = cls()
+        def calculate_factor(date):
+            df = calc.eval_factor(date)
+            print(f'{calc.factor_name} at {date} calculated')
+            return df
+        dfs = parallel(calculate_factor , dates , dates , type = 'thread' if multi_thread else None , ignore_error = ignore_error)
+        factor = StockFactor(dfs)
+        if normalize: factor.normalize(fill_method , weighted_whiten , order , inplace = True)
+        return factor
+
+    @classmethod
+    def FastTest(cls , start : int | None = 20170101 , end : int | None = None , step : int = 10 , **kwargs):
+        factor = cls.Factor(start , end , step , **kwargs)
+        factor.fast_analyze()
+        return factor
 
     @abstractmethod
     def calc_factor(self , date : int) -> pd.Series:
         '''calculate factor value , must have secid and factor_value / factor_name columns'''
+
+    def load_factor(self , date : int):
+        df = PATH.factor_load(self.factor_name , date , verbose = False)
+        df = pd.Series() if df.empty else df.set_index('secid')[self.factor_name]
+        return df
+
+    def eval_factor(self , date : int):
+        df = self.load_factor(date)
+        return self.calc_factor(date) if df.empty else df
     
     @classmethod
     def calc_factor_wrapper(cls , raw_calc_factor):
         '''validate calculated factor value'''
         def new_calc_factor(self , date):
             date = int(date)
-            assert date >= cls.init_date , f'for factor {cls.factor_name} , date is should be greater than or equal to {cls.init_date}, but got {date}'
+            if date < cls.init_date: 
+                raise DateError(f'date should be >= {cls.init_date} for Factor {cls.factor_name} , but got {date}')
+            
             df = raw_calc_factor(self , date)
-            assert isinstance(df , pd.Series) , \
-                f'for factor {cls.factor_name} , calc_factor must return a Series , but got {type(df)}'
-            df = df.rename(cls.factor_name).replace([np.inf , -np.inf] , np.nan).reindex(DATAVENDOR.secid(date))
+
+            if not isinstance(df , pd.Series):  
+                raise TypeError(f'calc_factor must return a Series , but got {type(df)} for factor {cls.factor_name}')
+            
+            if df.empty: df = pd.Series()
+            else: df = df.rename(cls.factor_name).replace([np.inf , -np.inf] , np.nan).reindex(DATAVENDOR.secid(date))
+
             return df
         return new_calc_factor
 
@@ -110,14 +176,28 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     def file_name(cls) -> str:
         '''file name of the factor'''
         return cls.__module__.split('.')[-1]
+
+    def __repr__(self):
+        return f'{self.factor_name}(from{self.init_date},{self.category0},{self.category1})'
+    
+    def __call__(self , date : int):
+        '''
+        return factor value of a given date , calculate if not exist
+        '''
+        return self.calc_factor(date)
+
+    @classmethod
+    def stored_dates(cls): 
+        '''return list of stored dates of factor data'''
+        return PATH.factor_dates(cls.factor_name)
     
     @classmethod
-    def validate_attr(cls):
+    def validate_attrs(cls):
         '''
         validate attribute of factor
-        init_date : must be greater than _FACTOR_INIT_DATE(20070101)
-        category0 : must be in _FACTOR_CATEGORY0_SET([fundamental , analyst , high_frequency , behavior , money_flow , alternative])
-        category1 : must be in _FACTOR_CATEGORY1_SET[category0] if category1_list is not None , otherwise must be not None
+        init_date : must be greater than INIT_DATE(20070101)
+        category0 : must be in CATEGORY0_SET([fundamental , analyst , high_frequency , behavior , money_flow , alternative])
+        category1 : must be in CATEGORY1_SET[category0] if category1_list is not None , otherwise must be not None
             fundamental : quality , growth , value , earning
             analyst : surprise , coverage , forecast , adjustment
             high_frequency : hf_momentum , hf_volatility , hf_correlation , hf_liquidity
@@ -126,125 +206,58 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
             alternative : None
         description : must be a non-empty string
         '''
-        assert cls.init_date >= _FACTOR_INIT_DATE , f'init_date should be later than {_FACTOR_INIT_DATE} , but got {cls.init_date}'
+        if cls.init_date < cls.INIT_DATE: 
+            raise DateError(f'init_date should be later than {cls.INIT_DATE} , but got {cls.init_date}')
 
-        assert cls.category0 in _FACTOR_CATEGORY0_SET , \
-            f'category0 is should be in {_FACTOR_CATEGORY0_SET}, but got {cls.category0}'
+        if cls.category0 not in cls.CATEGORY0_SET:
+            raise CategoryError(f'category0 is should be in {cls.CATEGORY0_SET}, but got {cls.category0}')
         
-        category1_list = _FACTOR_CATEGORY1_SET[cls.category0]
+        if not cls.category1:
+            raise CategoryError('category1 is not set')
         
-        if category1_list is not None:
-            assert cls.category1 in category1_list , \
-                f'category1 is should be in {category1_list}, but got {cls.category1}'
-        else:
-            assert cls.category1 , 'category1 is not set'
+        if (category1_list := cls.CATEGORY1_SET[cls.category0]):
+            if cls.category1 not in category1_list:
+                raise CategoryError(f'category1 is should be in {category1_list}, but got {cls.category1}')
+
+        if not cls.description:
+            raise CategoryError('description is not set')
         
-        assert cls.description , 'description is not set'
         return cls
-
-    @final
-    def __init__(self):
-        if not hasattr(self , 'factors'):
-            self.factors : dict[int , pd.DataFrame] = {}
-
-    def __repr__(self):
-        return f'{self.factor_name}(from{self.init_date},{self.category0},{self.category1})[{len(self.factors)}dates]'
-    
-    def __getitem__(self , date : int):
-        '''
-        return calculated factor value of a given date
-        '''
-        return self.factors[date]
-    
-    def __call__(self , date : int):
-        '''
-        return factor value of a given date , calculate if not exist
-        '''
-        if date not in self.factors: self.calculate(date)
-        return self.factors[date]
-
-    @property
-    def stored_dates(self): 
-        '''
-        return list of stored dates of factor data
-        '''
-        paths = PATH.list_files(PATH.factor.joinpath(self.factor_name) , recur=True)
-        dates = np.array(sorted(PATH.file_dates(paths)) , dtype=int)
-        return dates
-    
-    def factor_values(self):
-        '''
-        return a DataFrame of all calculated factor values with date and secid index
-        '''
-        return pd.concat([df.assign(date = d) for d , df in self.factors.items()]).reset_index().set_index(['date','secid'])
-    
-    def validate_value(self , date : int , df : pd.DataFrame , strict = False):
+        
+    @classmethod
+    def validate_value(cls , df : pd.DataFrame , strict = False):
         '''validate factor value'''
-
-        assert 20991231 >= date >= self.init_date , \
-            f'calc_date is should be in [{self.init_date} , 20991231], but got {date}'
-
         mininum_finite_count = 100 if strict else 0
-        actual_finite_count = np.isfinite(df[self.factor_name].to_numpy()).sum()
+        actual_finite_count = np.isfinite(df[cls.factor_name].to_numpy()).sum()
+
         if actual_finite_count < mininum_finite_count:
             raise ValueError(f'factor_value must have at least {mininum_finite_count} finite values , but got {actual_finite_count}')
-        
-        return self
+        return df
 
-    def calculate(self , date : int | Iterable | Any):
-        '''calculate factor value of a given date and store to factor_data'''
-
-        if isinstance(date , Iterable):
-            for d in date: self.calculate(d)
-        else:
-            #date = int(date)
-            #assert date >= self.init_date , f'date is should be greater than or equal to {self.init_date}, but got {date}'
-            df = self.calc_factor(date)
-            self.factors[date] = df.rename(self.factor_name).to_frame()
-        return self
-
-    def deploy(self , strict = True , overwrite = False , show_progress = False):
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , show_progress = False):
         '''store factor data after calculate'''
-        dates = list(self.factors.keys())
-        for date in dates:
-            df = self.factors.pop(date)
-            try:
-                self.validate_value(date , df , strict = strict)
-                saved = PATH.factor_save(df , self.factor_name , date , overwrite)
-                if show_progress:
-                    if saved: print(f'Factor : {self.factor_name} at date {date} deploy successful')
-                    else: print(f'Factor : {self.factor_name} at date {date} already there')
-            except ValueError as e:
-                print(f'Factor : {self.factor_name} at date {date} is invalid: {e}')
-
-        return self
-
-    def load(self, date : int | Iterable | Any , factor_name : str | None = None , overwrite = False):
-        '''load factor data from storage'''
-        if factor_name is None: factor_name = self.factor_name
-        if not isinstance(date , Iterable): date = [date]
-        for d in date:
-            if overwrite or int(d) not in self.factors:
-                self.factors[int(d)] = PATH.factor_load(factor_name , date)
-
-    def update_jobs(self , start : int | None = None , end : int | None = None , overwrite = False):
-        dates = CALENDAR.td_within(self.init_date , CALENDAR.update_to())
-        dates = CALENDAR.slice(dates , _FACTOR_UPDATE_START , _FACTOR_UPDATE_END)
-        dates = CALENDAR.slice(dates , start , end)
-        if not overwrite: dates = CALENDAR.diffs(dates , self.stored_dates)
-        [insert_update_job(self , d) for d in dates]
+        if not overwrite and PATH.factor_path(self.factor_name , date).exists(): return self
+        df = self.calc_factor(date).rename(self.factor_name).to_frame()
+        df = self.validate_value(df , strict = strict_validation)
+        saved = PATH.factor_save(df , self.factor_name , date , overwrite)
+        if show_progress:
+            factor_str = f'Factor {self.level}/{self.category0}/{self.category1}/{self.factor_name}'
+            if saved: print(f'{factor_str} at date {date} deploy successful')
+            else: print(f'{factor_str} at date {date} already there')
         return self
 
     @classmethod
-    def Update(cls , overwrite = False , show_progress = True , ignore_error = False):
-        '''update factor data from self.init_date to today'''
-        perform_update_jobs(overwrite , show_progress , ignore_error , cls.__name__)
+    def update_jobs(cls , start : int | None = None , end : int | None = None , overwrite = False):
+        dates = CALENDAR.td_within(max(cls.init_date , UPDATE_START) , min(CALENDAR.updated() , UPDATE_END))
+        dates = CALENDAR.slice(dates , start , end)
+        if not overwrite: dates = CALENDAR.diffs(dates , cls.stored_dates())
+        self = cls()
+        [UPDATE_JOBS.append(FactorUpdateJob(self , d)) for d in dates]
     
 class StockFactorHierarchy:
-    '''
-    hierarchy of factor classes
-    '''
+    '''hierarchy of factor classes'''
     _instance = None
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -260,19 +273,25 @@ class StockFactorHierarchy:
         return f'StockFactorHierarchy({str_level_factors})'
     
     def __iter__(self):
-        '''
-        return a generator of factor classes
-        '''
+        '''return a generator of factor classes'''
         return (cls for level in self.iter_levels() for cls in self.iter_level_factors(level))
     
     def __getitem__(self , key : str):
-        '''
-        return a list of factor classes in a given level / or a factor class by factor_name
-        '''
-        if key in self.pool: 
-            return self.pool[key]
-        else:
-            return self.hier[key]
+        '''return a list of factor classes in a given level / or a factor class by factor_name'''
+        return self.pool[key] if key in self.pool else self.hier[key]
+    
+    @staticmethod
+    def factor_filter(stock_factor_cls : Type[StockFactorCalculator] , **kwargs):
+        '''filter factor by given attributes'''
+        conditions : list[bool] = []
+        for k , v in kwargs.items():
+            if v is None: continue
+            attr = getattr(stock_factor_cls , k)
+            if isinstance(v , str): 
+                v = v.replace('\\' , '/')
+                attr = attr.replace('\\' , '/')
+            conditions.append(attr == v)
+        return not conditions or all(conditions)
 
     def load(self):     
         '''load all factor classes from definition path'''
@@ -317,12 +336,7 @@ class StockFactorHierarchy:
     
     def jobs(self):
         '''return a DataFrame of update jobs'''
-        return pd.DataFrame([(x.level , d , x) for x,d in _FACTOR_UPDATE_JOBS] , columns=['level' , 'date' , 'factor'])
-
-    def clear_jobs(self):
-        '''clear update jobs'''
-        _FACTOR_UPDATE_JOBS.clear()
-        return self
+        return UPDATE_JOBS.to_dataframe()
 
     def factor_names(self):
         '''return a list of factor names'''
@@ -357,7 +371,7 @@ class StockFactorHierarchy:
         return self.pool[factor_name]
     
     def test_calc_all_factors(self , date : int = 20241031 , check_variation = True , check_duplicates = True , 
-                              multi_thread = True , ignore_error = True , **kwargs):
+                              parallel_type : Literal['thread' , 'process' , False] | None = 'thread' , ignore_error = True , verbose = True , **kwargs):
         '''
         test calculation of all factors , if check_duplicates is True , check factors diffs' standard deviation and correlation
         factor_name : str | None = None
@@ -369,36 +383,16 @@ class StockFactorHierarchy:
         
         factor_values : dict[str , pd.Series] = {}
 
-        '''
-        for obj in self.iter_instance(**kwargs):
-            df = obj.calculate(date).factors[date]
-            factor_values[obj.factor_name] = df[obj.factor_name] if isinstance(df , pd.DataFrame) else df
-            print(f'{obj.factor_name} calculated , valid_num is {df.dropna().count().item()}')
-        
-        '''
-        def calculate_factor(obj : StockFactorCalculator , date : int):
-            factor_value = obj.calculate(date).factors[date][obj.factor_name]
-            print(f'{obj.factor_name} calculated , valid_num is {factor_value.dropna().count()}')
-            return obj.factor_name, factor_value
+        def calculate_factor(obj : StockFactorCalculator):
+            factor_value = obj.calc_factor(date)
+            valid_ratio = factor_value.dropna().count() / len(factor_value)
+            if verbose or valid_ratio < 0.3: 
+                print(f'{obj.factor_name} calculated , valid_ratio is {valid_ratio :.2%}')
+            return factor_value
 
-        if multi_thread:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                future_to_obj = {executor.submit(calculate_factor, obj, date): obj for obj in self.iter_instance(**kwargs)}
-                for future in concurrent.futures.as_completed(future_to_obj):
-                    obj = future_to_obj[future]
-                    try:
-                        factor_name, factor_value = future.result()
-                        factor_values[factor_name] = factor_value
-                    except Exception as e:
-                        if ignore_error:
-                            print(f'{obj.factor_name} generated an exception: {e}')
-                        else:
-                            raise e
-        else:
-            for obj in self.iter_instance(**kwargs):
-                factor_name, factor_value = calculate_factor(obj , date)
-                factor_values[factor_name] = factor_value
-
+        factor_names = [obj.factor_name for obj in self.iter_instance(**kwargs)]
+        factor_values : dict[str , pd.Series] = \
+            parallel(calculate_factor , self.iter_instance(**kwargs) , factor_names , type = parallel_type , ignore_error = ignore_error)
         self.calc_factor_values = factor_values
 
         if check_variation:
@@ -415,7 +409,7 @@ class StockFactorHierarchy:
             else:
                 print(f'abnormal factor variation: {abnormal_vars}')
 
-        if check_duplicates:
+        if check_duplicates and len(factor_values) <= 100:
             abnormal_diffs = {}
             for fn1 , fn2 in combinations(factor_values.keys() , 2):
                 f1 = (factor_values[fn1] - factor_values[fn1].mean()) / factor_values[fn1].std()
@@ -432,7 +426,7 @@ class StockFactorHierarchy:
         return factor_values
     
     @classmethod
-    def update_jobs(cls , start : int = -1 , end : int = 99991231 , overwrite = False , **kwargs):
+    def update_jobs(cls , start : int | None = None , end : int | None = None , all_factors = False ,overwrite = False , **kwargs):
         '''
         update update jobs for all factors between start and end date
         **kwargs:
@@ -443,23 +437,17 @@ class StockFactorHierarchy:
             category1 : str | None = None 
         '''
         self = cls()
-        [obj.update_jobs(start , end , overwrite) for obj in self.iter_instance(**kwargs)]
+        UPDATE_JOBS.clear()
+        if all_factors:
+            [obj.update_jobs(start , end , overwrite) for obj in self.iter_instance(**kwargs)]
+        elif kwargs:
+            [obj.update_jobs(start , end , overwrite) for obj in self.iter_instance(**kwargs)]
         return self
     
-    @staticmethod
-    def Update(overwrite = False , show_progress = True , ignore_error = True):
+    @classmethod
+    def update(cls , show_progress = True , ignore_error = True):
         '''update factor data according to update jobs'''
-        perform_update_jobs(overwrite , show_progress , ignore_error)
+        cls.update_jobs(all_factors = True , overwrite = False)
+        UPDATE_JOBS.proceed(False , show_progress , ignore_error , max_update_groups = 100)
 
-    @staticmethod
-    def factor_filter(stock_factor_cls : Type['StockFactorCalculator'] , **kwargs):
-        '''filter factor by given attributes'''
-        conditions : list[bool] = []
-        for k , v in kwargs.items():
-            if v is None: continue
-            attr = getattr(stock_factor_cls , k)
-            if isinstance(v , str): 
-                v = v.replace('\\' , '/')
-                attr = attr.replace('\\' , '/')
-            conditions.append(attr == v)
-        return not conditions or all(conditions)
+    

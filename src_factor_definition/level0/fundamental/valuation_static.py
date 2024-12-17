@@ -125,8 +125,7 @@ class btop(StockFactorCalculator):
     description = '市净率倒数'
     
     def calc_factor(self, date: int):
-        pb = DATAVENDOR.TRADE.get_val(date).set_index(['secid'])['pb']
-        return calc_valuation(1 , pb , pct = False)
+        return valuation_latest('equ@qtr' , 'mv' , date)
     
 class btop_rank1y(StockFactorCalculator):
     init_date = 20070101
@@ -153,7 +152,12 @@ class dtop(StockFactorCalculator):
     description = '滚动分红率'
     
     def calc_factor(self, date: int):
+        # some date this column is erronous
         dv_ttm = DATAVENDOR.TRADE.get_val(date).set_index(['secid'])['dv_ttm'] / 100
+        while dv_ttm.isna().all():
+            start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'y')
+            dv_ttm = DATAVENDOR.TRADE.get_val_data(start_date , end_date , 'dv_ttm' , prev=False , pivot=False)
+            dv_ttm = dv_ttm.dropna().groupby('secid')['dv_ttm'].last() / 100
         return calc_valuation(dv_ttm , 1 , pct = False)
     
 class dtop_rank1y(StockFactorCalculator):

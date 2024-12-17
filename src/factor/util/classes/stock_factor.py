@@ -4,6 +4,8 @@ import pandas as pd
 from collections.abc import Iterable
 from copy import deepcopy
 from typing import Any , Literal , Optional , Union
+
+from src.basic import INSTANCE_RECORD
 from src.data import DataBlock , DATAVENDOR
 from src.func import transform as T
 
@@ -69,11 +71,13 @@ def winsor(df : pd.DataFrame | Any , pivot = True , **kwargs):
     return df
 
 def fillna(df : pd.DataFrame | Any , 
-           fill_method : Literal['zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'zero' ,
+           fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'zero' ,
            pivot = True , **kwargs):
     df = melt_frame(df)
-    if fill_method == 'zero':
-        ...
+    if fill_method == 'drop':
+        df = df.dropna()
+    elif fill_method == 'zero':
+        df = df.fillna(0)
     elif fill_method == 'ffill':
         df = df.groupby(by=['date' , 'factor_name']).ffill()
     elif fill_method == 'mean':
@@ -133,8 +137,9 @@ def eval_weighted_pnl(x : pd.DataFrame , weight_type : str , direction : Any , g
     return rtn
 
 class StockFactor:
-    def __init__(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor'] , normalized = False):
+    def __init__(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor',dict[int,pd.Series]] , normalized = False):
         self.update(factor , normalized)
+        INSTANCE_RECORD.update_factor(self)
 
     def __repr__(self):
         return f'{self.__class__.__name__}(normalized={self.normalized},names={self.factor_names},dates={self.date.min()}-{self.date.max()})'
@@ -142,13 +147,17 @@ class StockFactor:
     def __call__(self , benchmark):
         return self.within(benchmark)
 
-    def update(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor'] , normalized = False):
+    def update(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor',dict[int,pd.Series]] , normalized = False):
         if isinstance(factor , StockFactor):
             factor = factor.prior_input
+        elif isinstance(factor , dict):
+            factor = pd.concat([f.to_frame().assign(date = d) for d , f in factor.items() if not f.empty])
+        elif isinstance(factor , pd.Series):
+            factor = factor.to_frame()
 
         self._df  : pd.DataFrame | Any = None
         self._blk : DataBlock | Any = None
-        if isinstance(factor , pd.Series): factor = factor.to_frame()
+
         if isinstance(factor , pd.DataFrame):
             if 'date' not in factor.index.names: factor = factor.set_index('date' , append=True)
             if 'secid' not in factor.index.names: factor = factor.set_index('secid' , append=True)
@@ -156,11 +165,38 @@ class StockFactor:
             self._df = factor
         else:
             self._blk = factor
+
         self.normalized = normalized
         self.subsets : dict[str,StockFactor] = {}
         return self
 
     def copy(self): return deepcopy(self)
+
+    def rename(self , new_name : str | list[str] | dict[str,str] , inplace = True):
+        if not inplace: self = self.copy()
+        if isinstance(new_name , str):
+            assert self.factor_num == 1 , f'only one factor is supported for using str for renaming : {self.factor_names}'
+            mapping = {self.factor_names[0]:new_name}
+        elif isinstance(new_name , list):
+            assert len(new_name) == self.factor_num , f'the length of new_name must be equal to the number of factors : {self.factor_names}'
+            mapping = {self.factor_names[i]:new_name[i] for i in range(len(new_name))}
+        elif isinstance(new_name , dict):
+            mapping = new_name
+        if self._df is not None: self._df.rename(columns=mapping , inplace=True)
+        if self._blk is not None: self._blk.rename_feature(mapping)
+        return self
+
+    def join(self , *others : 'StockFactor'):
+        df = self.frame()
+        for other in others: df = df.join(other.frame() , how = 'outer')
+        return StockFactor(df)
+    
+    def ew(self):
+        if self.factor_num == 1:
+            return self
+        else:
+            df = self.frame().mean(axis = 1).rename('multifactor_ew')
+            return StockFactor(df)
 
     def frame(self) -> pd.DataFrame:
         if self._df is None:
@@ -194,6 +230,10 @@ class StockFactor:
             return self._blk.feature
         else:
             return self._df.columns.to_numpy()
+        
+    @property
+    def factor_num(self) -> int:
+        return self.prior_input.shape[-1]
 
     @property
     def prior_input(self) -> pd.DataFrame | DataBlock:
@@ -278,7 +318,17 @@ class StockFactor:
         pnl = pnl.join(pnl.groupby(['factor_name' , 'weight_type']).cumsum().rename(columns={'ret':'cum_ret'})).reset_index()
         return pnl
     
-    def normalize(self , fill_method : Literal['zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'zero' ,
+    def coverage(self , benchmark : Optional[Benchmark | str] = None):
+        dates = self.date
+        if isinstance(benchmark , str) or benchmark is None: benchmark = Benchmark(benchmark)
+        factor = self.within(benchmark)
+        benchmark_size = pd.Series(benchmark.sec_num(dates) , index = dates)
+        coverage = factor.frame().groupby('date').apply(lambda x:x.dropna().count(numeric_only=True))
+        for factor_name in coverage:
+            coverage[factor_name] /= benchmark_size
+        return coverage
+    
+    def normalize(self , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
                   weighted_whiten = False , order = ['fillna' , 'whiten' , 'winsor'] , inplace = False):
         df = self.frame()
         for step in order:
@@ -287,9 +337,39 @@ class StockFactor:
             elif step == 'winsor': df = winsor(df)
         df = pivot_frame(df)
         if inplace: 
-            self.update(df)
-            return self
+            return self.update(df , normalized = True)
         else:
             return StockFactor(df , normalized = True)
     
-    
+    def select_analytic(self , task_name : str):
+        from src.factor.analytic import FactorPerfManager , BasePerfCalc
+
+        match_task = [task for task in FactorPerfManager.TASK_LIST if task.match_name(task_name)]
+        assert match_task and len(match_task) <= 1 , f'no match or duplicate match tasks : {task_name}'
+        task , task_name = match_task[0] , match_task[0].__name__
+        if not hasattr(self , 'analytic_tasks'): self.analytic_tasks : dict[str , BasePerfCalc] = {}
+        if task_name not in self.analytic_tasks: self.analytic_tasks[task_name] = task()
+        return self.analytic_tasks[task_name]
+
+    def analyze(self , 
+                task_name : Literal['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Decay', 'IC_Indus',
+                                    'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
+                                    'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',
+                                    'Group_Year','Distrib_Curve'] | str , plot = True , display = True):
+        task = self.select_analytic(task_name)
+        task.calc(self)
+        if plot: task.plot(show = display)
+        return self
+
+    def fast_analyze(self):
+        task_list = ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr']
+        for task_name in task_list: self.analyze(task_name)
+        return self
+
+    def full_analyze(self):
+        task_list = ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Decay', 'IC_Indus',
+                     'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
+                     'Style_Corr','Group_Curve','Group_Dec  ay','Group_IR_Decay',
+                     'Group_Year','Distrib_Curve']
+        for task_name in task_list: self.analyze(task_name)
+        return self

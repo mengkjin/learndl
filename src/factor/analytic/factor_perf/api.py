@@ -3,6 +3,7 @@ from typing import Any , Optional , Type
 from src.factor.util import Benchmark , StockFactor
 
 from . import calculator as Calc
+from .calculator import BasePerfCalc
 from ..test_manager import BaseTestManager
 
 class FactorPerfManager(BaseTestManager):
@@ -12,6 +13,7 @@ class FactorPerfManager(BaseTestManager):
         which : str | list[str] | Literal['all']
             Which tasks to run. Can be any of the following:
             'frontface' : Factor Front Face
+            'coverage' : Factor Coverage
             'ic_curve' : IC Cumulative Curve
             'ic_decay' : IC Decay
             'ic_indus' : IC Industry
@@ -31,6 +33,7 @@ class FactorPerfManager(BaseTestManager):
     TASK_TYPE = 'factor'
     TASK_LIST : list[Type[Calc.BasePerfCalc]] = [
         Calc.Factor_FrontFace ,
+        Calc.Factor_Coverage ,
         Calc.Factor_IC_Curve , 
         Calc.Factor_IC_Decay ,
         Calc.Factor_IC_Indus ,

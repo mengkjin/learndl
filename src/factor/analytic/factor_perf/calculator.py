@@ -17,7 +17,7 @@ class BasePerfCalc(BaseCalculator):
     def calc(self , factor : StockFactor, benchmarks : Optional[list[Benchmark|Any]] | Any = None , verbosity = 0):
         with self.suppress_warnings():
             func = self.calculator()
-            rslt = pd.concat([func(factor.within(bm) , **self.params).assign(benchmark = bm.name) for bm in self.use_benchmarks(benchmarks)])
+            rslt = pd.concat([func(factor , bm , **self.params).assign(benchmark = bm.name) for bm in self.use_benchmarks(benchmarks)])
             self.calc_rslt = rslt.assign(benchmark = Benchmark.as_category(rslt['benchmark'])).set_index(['factor_name', 'benchmark']).sort_index()
 
         if verbosity > 0: print(f'    --->{self.__class__.__name__} calc Finished!')
@@ -36,7 +36,14 @@ class Factor_FrontFace(BasePerfCalc):
         super().__init__()
     def calculator(self): return Stat.calc_factor_frontface
     def plotter(self): return Plot.plot_factor_frontface
-    
+
+class Factor_Coverage(BasePerfCalc):
+    COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
+    def __init__(self , **kwargs) -> None:
+        super().__init__()
+    def calculator(self): return Stat.calc_factor_coverage
+    def plotter(self): return Plot.plot_factor_coverage
+
 class Factor_IC_Curve(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , nday : int = 10 , lag : int = 2 , ma_windows : int | list[int] = [10,20] ,

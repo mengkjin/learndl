@@ -10,7 +10,7 @@ from src.model.util import BaseCallBack , PredRecorder
 PRED_RECORD = PredRecorder()
 
 class DetailedAlphaAnalysis(BaseCallBack):
-    ANALYTIC_TASKS : list[TYPE_of_TASK] = ['factor' , 'top'] # 'optim'
+    ANALYTIC_TASKS : list[TYPE_of_TASK] = ['factor' , 'top' , 'optim']
     '''record and concat each model to Alpha model instance'''
     def __init__(self , trainer , use_num : Literal['avg' , 'first'] = 'avg' , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
@@ -19,6 +19,13 @@ class DetailedAlphaAnalysis(BaseCallBack):
         self.use_num = use_num
         assert all(task in FactorTestAPI.TASK_TYPES for task in self.ANALYTIC_TASKS) , \
             f'ANALYTIC_TASKS must be a list of valid tasks: {FactorTestAPI.TASK_TYPES} , but got {self.ANALYTIC_TASKS}'
+
+    @property
+    def analytic_tasks(self):
+        if self.trainer.config.resume_training:
+            return self.ANALYTIC_TASKS[:1]
+        else:
+            return self.ANALYTIC_TASKS
 
     @property
     def path_data(self): return str(self.config.model_base_path.rslt('data.xlsx'))
@@ -44,11 +51,11 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
         self.test_results = {
             task:FactorTestAPI.run_test(task , StockFactor(df) , verbosity = 1 , write_down=False , display_figs=False)
-            for task in self.ANALYTIC_TASKS
+            for task in self.analytic_tasks
         }
 
-        rslts = {f'{task}@{k}':v for task in self.ANALYTIC_TASKS for k,v in self.test_results[task].get_rslts().items()}
-        figs  = {f'{task}@{k}':v for task in self.ANALYTIC_TASKS for k,v in self.test_results[task].get_figs().items()}
+        rslts = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_rslts().items()}
+        figs  = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_figs().items()}
 
         if 'optim@frontface' in rslts.keys(): 
             # print(f'FMP test Result:')

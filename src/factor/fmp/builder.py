@@ -223,7 +223,7 @@ class PortfolioBuilderGroup:
         df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.CATEGORIES_BENCHMARKS , ordered=True) 
 
         df = df.set_index(old_index).sort_index()
-        INSTANCE_RECORD['account'] = df
+        INSTANCE_RECORD.update_account(df)
         return df
     
     def print_in_optimization(self , where : Literal['start' , 'loop' , 'end']):

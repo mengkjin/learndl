@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import pandas as pd
 
+from collections.abc import Iterable
 from datetime import datetime , timedelta , time
 from typing import Any , Literal
 
@@ -115,7 +116,9 @@ class TradeCalendar:
     @staticmethod
     def update_to():
         return today(-1 if datetime.now().time() <= time(19, 0, 0) else 0)
-    
+    @staticmethod
+    def updated():
+        return PATH.db_dates('trade_ts' , 'day').max()
     @staticmethod
     def _date_convert_to_index(date):
         if isinstance(date , TradeDate): date = [date.td]
@@ -185,17 +188,26 @@ class TradeCalendar:
     @staticmethod
     def cd_trailing(date , n : int):
         return np.sort(_CALENDAR_CAL[_CALENDAR_CAL['calendar'] <= date].iloc[-n:]['calendar'].to_numpy())
-    
-    @classmethod
-    def td_within(cls , start : int | TradeDate | None = -1 , end : int | TradeDate | None = 99991231 , step : int = 1 , until_today = True):
-        if start is None: start = 0
-        if end   is None: end = 99991231
-        start , end = int(start) , int(end)
+
+    @staticmethod
+    def start(start : int | TradeDate | None):
+        start = 0 if start is None else int(start)
         if start < 0: start = today(start)
-        if end   < 0: end   = today(end)
-        if until_today: end = min(end , today())
-        dates = cls.slice(_CALENDAR_TRD['calendar'].to_numpy() , start , end)[::step]
-        return dates
+        return start
+    
+    @staticmethod
+    def end(end : int | TradeDate | None):
+        end = 99991231 if end is None else int(end)
+        if end < 0: end = today(end)
+        return end
+
+    @classmethod
+    def td_within(cls , start : int | TradeDate | None = -1 , 
+                  end : int | TradeDate | None = 99991231 , 
+                  step : int = 1 , until_today = True):
+        dates = cls.slice(_CALENDAR_TRD['calendar'].to_numpy() , start , end)
+        if until_today: dates = dates[dates <= today()]
+        return dates[::step]
 
     @classmethod
     def diffs(cls , *args , td = True):
@@ -219,12 +231,11 @@ class TradeCalendar:
         td_list = cls.td_within(min(date_list) , max(date_list))
         return td_list[np.isin(td_list , date_list)]
     
-    @staticmethod
-    def cd_within(start_dt : int | TradeDate = -1 , end_dt : int | TradeDate = 99991231 , step : int = 1 , until_today = True):
-        start_dt , end_dt = int(start_dt) , int(end_dt)
-        dates = _CALENDAR_CAL['calendar'].to_numpy()
-        if until_today: end_dt = min(end_dt , today())
-        return dates[(dates >= start_dt) & (dates <= end_dt)][::step]
+    @classmethod
+    def cd_within(cls , start : int | TradeDate | None = -1 , end : int | TradeDate | None = 99991231 , step : int = 1 , until_today = True):    
+        dates = cls.slice(_CALENDAR_CAL['calendar'].to_numpy() , start , end)
+        if until_today: dates = dates[dates <= today()]
+        return dates[::step]
     
     @staticmethod
     def calendar_start(): return _CALENDAR.index.min()
@@ -254,10 +265,9 @@ class TradeCalendar:
     def trade_dates():
         return _CALENDAR_TRD['calendar'].to_numpy()
 
-    @staticmethod
-    def slice(dates , start = None , end = None , year = None) -> np.ndarray:
-        if end   is not None: dates = dates[dates <= (end   if end   > 0 else today(end))]
-        if start is not None: dates = dates[dates >= (start if start > 0 else today(start))]
+    @classmethod
+    def slice(cls , dates , start : int | TradeDate | None = None , end : int | TradeDate | None = None , year : int | None = None) -> np.ndarray:
+        dates = dates[(dates >= cls.start(start)) & (dates <= cls.end(end))]
         if year  is not None: dates = dates[(dates // 10000) == year]
         return dates
 

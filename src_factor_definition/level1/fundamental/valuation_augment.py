@@ -83,7 +83,10 @@ class valuation_augment(StockFactorCalculator):
     description = '估值增强因子'
     
     def calc_factor(self, date: int):
-        v = pd.concat([whiten(winsorize(calc.Eval(date))) 
-                       for calc in [btop_augment , etop_augment , cfev_augment]] , axis = 1).mean(axis = 1)
+        bp  = btop_augment.Eval(date) 
+        ep  = etop_augment.Eval(date)
+        cfp = cfev_augment.Eval(date)
+        if any(f.empty or f.isna().all() for f in [bp , ep , cfp]): return pd.Series()
+        v = pd.concat([whiten(winsorize(calc)) for calc in [bp , ep , cfp]] , axis = 1).mean(axis = 1)
         return v
     

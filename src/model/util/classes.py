@@ -236,7 +236,7 @@ class BaseTrainer(ModelStreamLine):
         self.init_model(**kwargs)
         self.init_callbacks(**kwargs)
         self.wrap_callbacks()
-        INSTANCE_RECORD['trainer'] = self
+        INSTANCE_RECORD.update_trainer(self)
         
     @final
     def init_config(self , base_path = None , override = {} , **kwargs) -> None:

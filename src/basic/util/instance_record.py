@@ -1,9 +1,8 @@
-from typing import Any
-
+import pandas as pd
 class InstanceRecord:
     '''singleton class to record instances'''
     _instance = None
-    _slots = ['trainer' , 'account']
+    _slots = ['trainer' , 'account' , 'factor']
 
     def __new__(cls , *args , **kwargs):
         if cls._instance is None:
@@ -11,28 +10,24 @@ class InstanceRecord:
         return cls._instance
     
     def __init__(self):
-        self.record : dict[str, Any] = {}
-        print(f'src.basic.INSTANCE_RECORD can be accessed to check {self._slots}')
-
-    def __getitem__(self , key: str , default: Any = None) -> Any:
-        return self.record.get(key , default)
-
-    def __setitem__(self , key: str , value: Any) -> None:
-        assert key in self._slots , f'key {key} is not in {self._slots}'
-        self.record[key] = value
-
-    def __contains__(self , key: str) -> bool:
-        return key in self.record
+        print(f'src.INSTANCE_RECORD can be accessed to check {self._slots}')
     
     def __repr__(self):
-        return f'{self.__class__.__name__}(names={list(self.record.keys())})'
+        attrs = {name:type(getattr(self , name)) for name in self._slots if hasattr(self , name)}
+        return f'{self.__class__.__name__}({attrs})'
     
-    @property
-    def trainer(self):
-        return self['trainer']
-    
-    @property
-    def account(self):
-        return self['account']
+    def update_trainer(self , trainer):
+        from src.model.util.classes import BaseTrainer
+        assert isinstance(trainer , BaseTrainer) , f'trainer is not a BaseTrainer instance: {trainer}'
+        self.trainer = trainer
+
+    def update_account(self , account):
+        assert isinstance(account , pd.DataFrame) , f'account is not a pd.DataFrame instance: {account}'
+        self.account = account
+
+    def update_factor(self , factor):
+        from src.factor.util import StockFactor
+        assert isinstance(factor , StockFactor) , f'factor is not a StockFactor instance: {factor}'
+        self.factor = factor
 
 INSTANCE_RECORD = InstanceRecord()

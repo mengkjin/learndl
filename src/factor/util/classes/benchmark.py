@@ -80,6 +80,12 @@ class Benchmark(Portfolio):
         for d in DATAVENDOR.CALENDAR.diffs(dates , self.benchmark_attempted_dates): 
             self.get(d , latest = True)
 
+    def sec_num(self , date : np.ndarray | list):
+        if self:
+            return np.array([self.get(d).size for d in date]) 
+        else:
+            return np.array([DATAVENDOR.secid(d).size for d in date])
+
     def universe(self , secid : np.ndarray , date : np.ndarray):
         assert self , 'No need of calculating universe for none benchmark'
         self.get_dates(date)

@@ -72,7 +72,7 @@ class PlotFactorData:
                  title : str = '' , full_title : str = '' , show = False , 
                  sort_keys : list[str] = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix' , 
                                           'trade_date' , 'model_date' , 'end' , 'start'] ,
-                 rounding = 6 , suptitle = False):
+                 dropna = True , rounding = 6 , suptitle = False):
         if isinstance(data , SubPlotData):
             data , name_key , fig  = data.sub_data , data.group_by , data.get_fig()
 
@@ -87,9 +87,11 @@ class PlotFactorData:
         self.name_key = name_key
         self.show = show
         self.suptitle = suptitle
+        self.dropna = dropna
 
         numeric_cols = self.raw_data.select_dtypes(include=['number']).columns
         self.raw_data[numeric_cols] = self.raw_data[numeric_cols].round(rounding)
+        
         for col in self.raw_data.columns: 
             if col.endswith('date'): self.raw_data[col] = self.raw_data[col].astype(str)
 
@@ -97,7 +99,7 @@ class PlotFactorData:
         df = self.raw_data.sort_values(self.sort_keys).drop(columns=self.drop_keys , errors='ignore')
         new_index = [i for i in self.raw_index if i not in self.drop_keys]
         df = df.set_index(new_index) if new_index else df.reset_index(drop = True)
-        df = df.dropna()
+        if self.dropna: df = df.dropna()
         return df , self.fig
 
     def __exit__(self , exc_type , exc_value , traceback):
@@ -209,7 +211,7 @@ def set_xaxis(ax : Axes , index : Any = None , labels = None , rotation : float 
 def set_yaxis(ax : Axes , format : Literal['pct' , 'flt' , 'int'] = 'pct' , digits = 1 , 
               title = '' , title_color = None , 
               tick_pos : Literal['left', 'right', 'both', 'default', 'none'] | None = 'default' , 
-              tick_color = None , tick_size = None , tick_length = None):
+              tick_color = None , tick_size = None , tick_length = None , tick_lim = None):
     tick_args : dict[str , Any] = {}
     title_args : dict[str , Any] = {}
 
@@ -225,8 +227,11 @@ def set_yaxis(ax : Axes , format : Literal['pct' , 'flt' , 'int'] = 'pct' , digi
     if tick_color: tick_args['colors'] = tick_color
     # ax.tick_params('y', colors=tick_color) 
     if tick_args: ax.yaxis.set_tick_params(**tick_args)
+    if tick_lim: ax.set_ylim(*tick_lim)
 
 def sns_lineplot(df : pd.DataFrame , x : str , y : str , hue : str , legend : bool = True , legend_loc : str = 'upper left'):
+    if isinstance(df[hue].dtype , pd.CategoricalDtype):
+        df[hue] = df[hue].cat.remove_unused_categories()
     if CURRENT_SEABORN_VERSION:
         ax = sns.lineplot(x=x, y=y, hue=hue, data=df , palette=sns.diverging_palette(140, 10, sep=10, n=df[hue].nunique()))
     else: 
