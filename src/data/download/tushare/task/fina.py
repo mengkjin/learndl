@@ -1,5 +1,5 @@
-from .abstract_fetcher import FinaFetcher
-from ..basic import pro , code_to_secid
+
+from src.data.download.tushare.basic import FinaFetcher , pro , code_to_secid
 
 class FinaIndicator(FinaFetcher):
     '''financial indicators'''

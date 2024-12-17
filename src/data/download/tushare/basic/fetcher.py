@@ -5,7 +5,7 @@ from typing import Any , Literal
 from abc import abstractmethod , ABC
 
 from src.basic import PATH , CALENDAR , Timer
-from ..basic.func import updatable , dates_to_update , quarter_ends
+from .func import updatable , dates_to_update , quarter_ends
 
 class TushareFetcher(ABC):
     START_DATE  : int = 19970101

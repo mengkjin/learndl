@@ -3,8 +3,7 @@ import pandas as pd
 
 from typing import Any
 
-from .abstract_fetcher import InfoFetcher , TushareFetcher , updatable , quarter_ends
-from ..basic import pro , code_to_secid , CALENDAR
+from src.data.download.tushare.basic import pro , code_to_secid , CALENDAR , InfoFetcher , TushareFetcher , updatable , quarter_ends
 
 class FundInfo(InfoFetcher):
     DB_KEY = 'mutual_fund_info'

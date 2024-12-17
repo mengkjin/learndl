@@ -1,15 +1,15 @@
 import numpy as np
 import pandas as pd
-import importlib.util
 import inspect 
 
 from abc import abstractmethod
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Any , Literal , Type , ClassVar
+from typing import Any , Literal , Type
 
 from src.basic import PATH , CALENDAR , IS_SERVER
 from src.data import DATAVENDOR
+from src.func.dynamic_import import dynamic_members , true_subclass
 from src.func.singleton import SingletonABCMeta , singleton
 from src.func.classproperty import classproperty_str
 from src.func.parallel import parallel
@@ -299,24 +299,14 @@ class StockFactorHierarchy:
         self.hier : dict[str , list[Type[StockFactorCalculator]]] = {}
         for level_path in self.definition_path.iterdir():
             if not level_path.is_dir(): continue
-            if not level_path.name.startswith('level'): continue
+            level_name = level_path.stem
+            if not level_name.startswith('level'): continue
 
-            for file_path in level_path.rglob('*.py'):
-                level_name = level_path.stem
-                file_name = str(file_path.relative_to(level_path).with_suffix(''))
-                spec_name = f'{level_name}.{file_name}'
-                
-                spec = importlib.util.spec_from_file_location(spec_name, file_path)
-                assert spec is not None and spec.loader is not None , f'{file_path} is not a valid module'
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
-                
-                for _ , obj in inspect.getmembers(module, inspect.isclass):
-                    if obj.__module__ == spec_name and issubclass(obj , StockFactorCalculator) and (obj is not StockFactorCalculator):
-                        assert obj.__name__ not in self.pool , f'{obj.__name__} in module {spec_name} is duplicated'                        
-                        self.pool[obj.__name__] = obj
-                        if level_path.stem not in self.hier: self.hier[level_name] = []
-                        self.hier[level_name].append(obj)
+            for name , obj in dynamic_members(level_path , lambda x: true_subclass(x , StockFactorCalculator)):
+                assert name not in self.pool , f'{name} in module {obj.__module__} is duplicated'                        
+                self.pool[name] = obj
+                if level_name not in self.hier: self.hier[level_name] = []
+                self.hier[level_name].append(obj)
 
         return self
 

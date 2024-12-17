@@ -1,7 +1,6 @@
 import pandas as pd
 
-from .abstract_fetcher import MonthFetcher , RollingFetcher
-from ..basic import pro , code_to_secid
+from src.data.download.tushare.basic import MonthFetcher , RollingFetcher , pro , code_to_secid
 
 def index_weight_get_data(self : RollingFetcher , index_code , start_date , end_date , limit = 4000):
     assert start_date is not None and end_date is not None , 'start_date and end_date must be provided'

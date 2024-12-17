@@ -3,8 +3,7 @@ import pandas as pd
 
 from typing import Any
 
-from .abstract_fetcher import RollingFetcher
-from ..basic import pro , code_to_secid
+from src.data.download.tushare.basic import RollingFetcher , pro , code_to_secid
 
 class AnalystReport(RollingFetcher):
     '''analyst report'''
