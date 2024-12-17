@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import inspect 
 
 from abc import abstractmethod
 from dataclasses import dataclass
@@ -9,7 +8,7 @@ from typing import Any , Literal , Type
 
 from src.basic import PATH , CALENDAR , IS_SERVER
 from src.data import DATAVENDOR
-from src.func.dynamic_import import dynamic_members , true_subclass
+from src.func.dynamic_import import dynamic_members
 from src.func.singleton import SingletonABCMeta , singleton
 from src.func.classproperty import classproperty_str
 from src.func.parallel import parallel
@@ -49,7 +48,10 @@ class FactorUpdateJobManager:
         self.jobs : list[FactorUpdateJob] = []
         self.parallel_type : Literal['thread' , 'process' , False] | None = 'thread' if multi_thread else None
     def __repr__(self):
-        return f'FactorUpdateJobs({len(self.jobs)} jobs)'
+        return f'FactorUpdateJobs({len(self)} jobs)'
+    def __len__(self): return len(self.jobs)
+    def levels(self): return np.unique([job.level for job in self.jobs])
+    def dates(self): return np.unique([job.date for job in self.jobs])
     def to_dataframe(self):
         columns = ['level' , 'date' , 'factor']
         return pd.DataFrame([(job.level , job.date , job.factor_name) for job in self.jobs] , columns=columns).sort_values(by=columns)
@@ -170,20 +172,18 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     @classproperty_str
     def level(cls) -> str:
         '''level of the factor'''
-        return cls.__module__.split('.')[-2]
+        return 'level' + cls.__module__.split('/level')[-1].split('/')[0]
     
     @classproperty_str
     def file_name(cls) -> str:
         '''file name of the factor'''
-        return cls.__module__.split('.')[-1]
+        return '/'.join(cls.__module__.split('level')[-1].split('/')[1:]).removesuffix('.py')
 
     def __repr__(self):
         return f'{self.factor_name}(from{self.init_date},{self.category0},{self.category1})'
     
     def __call__(self , date : int):
-        '''
-        return factor value of a given date , calculate if not exist
-        '''
+        '''return factor value of a given date , calculate if not exist'''
         return self.calc_factor(date)
 
     @classmethod
@@ -247,10 +247,12 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         return self
 
     @classmethod
-    def update_jobs(cls , start : int | None = None , end : int | None = None , overwrite = False):
+    def update_jobs(cls , start : int | None = None , end : int | None = None , 
+                    overwrite = False , max_update_groups : int | None = None):
         dates = CALENDAR.td_within(max(cls.init_date , UPDATE_START) , min(CALENDAR.updated() , UPDATE_END))
         dates = CALENDAR.slice(dates , start , end)
         if not overwrite: dates = CALENDAR.diffs(dates , cls.stored_dates())
+        if max_update_groups is not None: dates = dates[:max_update_groups]
         self = cls()
         [UPDATE_JOBS.append(FactorUpdateJob(self , d)) for d in dates]
     
@@ -302,7 +304,7 @@ class StockFactorHierarchy:
             level_name = level_path.stem
             if not level_name.startswith('level'): continue
 
-            for name , obj in dynamic_members(level_path , lambda x: true_subclass(x , StockFactorCalculator)):
+            for name , obj in dynamic_members(level_path , subclass_of = StockFactorCalculator):
                 assert name not in self.pool , f'{name} in module {obj.__module__} is duplicated'                        
                 self.pool[name] = obj
                 if level_name not in self.hier: self.hier[level_name] = []
@@ -416,7 +418,8 @@ class StockFactorHierarchy:
         return factor_values
     
     @classmethod
-    def update_jobs(cls , start : int | None = None , end : int | None = None , all_factors = False ,overwrite = False , **kwargs):
+    def update_jobs(cls , start : int | None = None , end : int | None = None , all_factors = False ,
+                    overwrite = False , max_update_groups : int | None = None , **kwargs):
         '''
         update update jobs for all factors between start and end date
         **kwargs:
@@ -428,16 +431,18 @@ class StockFactorHierarchy:
         '''
         self = cls()
         UPDATE_JOBS.clear()
-        if all_factors:
-            [obj.update_jobs(start , end , overwrite) for obj in self.iter_instance(**kwargs)]
-        elif kwargs:
-            [obj.update_jobs(start , end , overwrite) for obj in self.iter_instance(**kwargs)]
+        if all_factors: iterance = self.iter_instance()
+        elif kwargs: iterance = self.iter_instance(**kwargs)
+        else: iterance = []
+        [obj.update_jobs(start , end , overwrite , max_update_groups) for obj in iterance]
         return self
     
     @classmethod
-    def update(cls , show_progress = True , ignore_error = True):
+    def update(cls , show_progress = True , ignore_error = True , max_update_groups : int | None = 100):
         '''update factor data according to update jobs'''
-        cls.update_jobs(all_factors = True , overwrite = False)
-        UPDATE_JOBS.proceed(False , show_progress , ignore_error , max_update_groups = 100)
+        cls.update_jobs(all_factors = True , overwrite = False , max_update_groups = max_update_groups)
+        levels , dates = UPDATE_JOBS.levels() , UPDATE_JOBS.dates()
+        print(f'Finish collecting {len(UPDATE_JOBS)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
+        UPDATE_JOBS.proceed(False , show_progress , ignore_error , max_update_groups = max_update_groups)
 
     

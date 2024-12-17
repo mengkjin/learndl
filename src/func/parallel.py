@@ -1,6 +1,11 @@
+import os
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from typing import Any , Callable , Literal , Optional
+
+cpu_count = os.cpu_count()
+MAX_WORKERS : int = min(40 , cpu_count) if cpu_count is not None else 1
+
 
 def parallel(func : Callable , args : Iterable , keys : Optional[Iterable] = None , 
              type : Literal['thread' , 'process'] | bool | None = None , max_workers : int = 10 , ignore_error = False):

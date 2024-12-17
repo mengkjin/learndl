@@ -1,9 +1,8 @@
-import re , torch
+import re
 import numpy as np
 import pandas as pd
 
-from dataclasses import dataclass , field
-from typing import Any , Callable , Literal
+from typing import Any , Literal
 
 from src.basic import CALENDAR , PATH
 from src.func.singleton import singleton
@@ -12,6 +11,8 @@ from .abstract_access import DateDataAccess
 
 QUARTER_ENDS = np.sort(np.concatenate([np.arange(1997 , 2099) * 10000 + qe for qe in [331,630,930,1231]]))
 YEAR_ENDS = np.arange(1997 , 2099) * 10000 + 1231
+
+ANN_DATA_COL : Literal['ann_date' , 'f_ann_date'] = 'f_ann_date'
 
 class FDataAccess(DateDataAccess):
     MAX_LEN = 40
@@ -51,8 +52,8 @@ class FDataAccess(DateDataAccess):
     
     def get_ann_dt(self , date , latest_n = 1 , within_days = 365):
         assert self.SINGLE_TYPE , 'SINGLE_TYPE must be set'
-        ann_dt = self.gets(self.qtr_ends(date , latest_n + 5 , 0) , self.SINGLE_TYPE , ['secid' , 'ann_date']).\
-            dropna(subset = ['ann_date']).reset_index(drop = False)
+        ann_dt = self.gets(self.qtr_ends(date , latest_n + 5 , 0) , self.SINGLE_TYPE , ['secid' , ANN_DATA_COL]).\
+            rename(columns = {ANN_DATA_COL : 'ann_date'}).dropna(subset = ['ann_date']).reset_index(drop = False)
         #income_ann_dt = [self.get(qtr_end , 'income' , ['secid' , 'ann_date']) for qtr_end in self.qtr_ends(date , latest_n + 5 , 0)]
         #ann_dt : pd.DataFrame = pd.concat(income_ann_dt)
         ann_dt['end_date'] = ann_dt['end_date'].astype(int)
@@ -98,9 +99,9 @@ class FDataAccess(DateDataAccess):
             f'invalid data_type: {data_type} , must be one of ' + str(['income' , 'cashflow' , 'balance' , 'indicator'])
         q_ends = self.qtr_ends(date , lastn + 4 , year_only = year_only)
 
-        field = ['secid' , 'ann_date' , 'update_flag' , val]
+        field = ['secid' , ANN_DATA_COL , 'update_flag' , val]
         
-        df_acc = self.gets(q_ends , data_type , field , rename_date_key = 'end_date').\
+        df_acc = self.gets(q_ends , data_type , field , rename_date_key = 'end_date').rename(columns = {ANN_DATA_COL : 'ann_date'}).\
             reset_index(drop = False).dropna(subset = ['ann_date' , 'end_date'])
         # df_acc = pd.concat([self.get(qe , data_type , field) for qe in q_ends]).dropna(subset = ['ann_date' , 'end_date'])
         df_acc['ann_date'] = df_acc['ann_date'].astype(int)
