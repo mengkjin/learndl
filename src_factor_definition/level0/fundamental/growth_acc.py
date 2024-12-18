@@ -42,7 +42,7 @@ def get_accv(expression : str , date : int):
     return calc_accv(data)
 
 class eps_acce(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM每股收益行业内分位数之差'
@@ -51,7 +51,7 @@ class eps_acce(StockFactorCalculator):
         return get_acce('eps@ttm' , date)
 
 class sales_acce(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '营业收入行业内分位数之差'
@@ -60,7 +60,7 @@ class sales_acce(StockFactorCalculator):
         return get_acce('sales@ttm' , date)
     
 class gp_acce(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM毛利润行业内分位数之差'
@@ -69,7 +69,7 @@ class gp_acce(StockFactorCalculator):
         return get_acce('gp@ttm' , date)
     
 class npro_acce(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM归母净利润行业内分位数之差'
@@ -78,7 +78,7 @@ class npro_acce(StockFactorCalculator):
         return get_acce('npro@ttm' , date)
     
 class dedt_acce(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM扣非归母净利润行业内分位数之差'
@@ -87,7 +87,7 @@ class dedt_acce(StockFactorCalculator):
         return get_acce('dedt@ttm' , date)
     
 class tax_acce(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '所得税行业内分位数之差'
@@ -96,7 +96,7 @@ class tax_acce(StockFactorCalculator):
         return get_acce('tax@ttm' , date)
 
 class roe_acce(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM净资产收益率行业内分位数之差'
@@ -105,7 +105,7 @@ class roe_acce(StockFactorCalculator):
         return get_acce('npro@ttm / equ@ttm' , date)
     
 class gp_margin_acce(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM毛利润率行业内分位数之差'
@@ -114,7 +114,7 @@ class gp_margin_acce(StockFactorCalculator):
         return get_acce('gp@ttm / sales@ttm' , date)
 
 class oper_margin_acce(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM营业利润率行业内分位数之差'
@@ -123,7 +123,7 @@ class oper_margin_acce(StockFactorCalculator):
         return get_acce('oper_np@ttm / sales@ttm' , date)
 
 class net_margin_acce(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM净利率行业内分位数之差'
@@ -132,7 +132,7 @@ class net_margin_acce(StockFactorCalculator):
         return get_acce('npro@ttm / sales@ttm' , date)
     
 class eps_accv(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM每股收益行业内分位数之差'
@@ -141,7 +141,7 @@ class eps_accv(StockFactorCalculator):
         return get_accv('eps@ttm' , date)
 
 class sales_accv(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '营业收入行业内分位数之差'
@@ -150,7 +150,7 @@ class sales_accv(StockFactorCalculator):
         return get_accv('sales@ttm' , date)
     
 class gp_accv(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM毛利润行业内分位数之差'
@@ -159,7 +159,7 @@ class gp_accv(StockFactorCalculator):
         return get_accv('gp@ttm' , date)
     
 class npro_accv(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM归母净利润行业内分位数之差'
@@ -168,7 +168,7 @@ class npro_accv(StockFactorCalculator):
         return get_accv('npro@ttm' , date)
     
 class dedt_accv(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM扣非归母净利润行业内分位数之差'
@@ -177,7 +177,7 @@ class dedt_accv(StockFactorCalculator):
         return get_accv('dedt@ttm' , date)
     
 class tax_accv(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '所得税行业内分位数之差'
@@ -186,7 +186,7 @@ class tax_accv(StockFactorCalculator):
         return get_accv('tax@ttm' , date)
 
 class roe_accv(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM净资产收益率行业内分位数之差'
@@ -195,7 +195,7 @@ class roe_accv(StockFactorCalculator):
         return get_accv('npro@ttm / equ@ttm' , date)
     
 class gp_margin_accv(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM毛利润率行业内分位数之差'
@@ -204,7 +204,7 @@ class gp_margin_accv(StockFactorCalculator):
         return get_accv('gp@ttm / sales@ttm' , date)
 
 class oper_margin_accv(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM营业利润率行业内分位数之差'
@@ -213,7 +213,7 @@ class oper_margin_accv(StockFactorCalculator):
         return get_accv('oper_np@ttm / sales@ttm' , date)
 
 class net_margin_accv(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM净利率行业内分位数之差'

@@ -298,7 +298,7 @@ class TuShareCNE5_Calculator:
     def calc_growth(self , date : int):
 
         val = 'diluted2_eps'
-        df = DATAVENDOR.INDI.acc(val , date , 5 , pivot = False ,year_only=True)
+        df = DATAVENDOR.INDI.acc(val , date , 5 , pivot = False , year_only=True)
         df = df.assign(idx = df.groupby('secid').cumcount()).pivot_table(val , 'idx' , 'secid')
         df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.values,df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
         egro = df[df['na'] <= 1].set_index('secid')['value']

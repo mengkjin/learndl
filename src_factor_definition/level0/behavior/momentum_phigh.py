@@ -12,7 +12,7 @@ def phigh(date , n_months : int , lag_months : int = 0):
     return mom
 
 class mom_phigh1m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'momentum'
     description = '1个月最高价距离'

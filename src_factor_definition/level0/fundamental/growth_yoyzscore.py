@@ -21,7 +21,7 @@ def get_yoy_zscore(expression : str , date : int , n_last : int = 20 , **kwargs)
     return (grp.last() - grp.mean()) / grp.std()
 
 class eps_yoy_zscore(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM每股收益行业内分位数之差'
@@ -30,7 +30,7 @@ class eps_yoy_zscore(StockFactorCalculator):
         return get_yoy_zscore('eps@ttm' , date)
 
 class sales_yoy_zscore(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '营业收入行业内分位数之差'
@@ -39,7 +39,7 @@ class sales_yoy_zscore(StockFactorCalculator):
         return get_yoy_zscore('sales@ttm' , date)
     
 class gp_yoy_zscore(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM毛利润行业内分位数之差'
@@ -48,7 +48,7 @@ class gp_yoy_zscore(StockFactorCalculator):
         return get_yoy_zscore('gp@ttm' , date)
     
 class npro_yoy_zscore(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM归母净利润行业内分位数之差'
@@ -57,7 +57,7 @@ class npro_yoy_zscore(StockFactorCalculator):
         return get_yoy_zscore('npro@ttm' , date)
     
 class dedt_yoy_zscore(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM扣非归母净利润行业内分位数之差'
@@ -66,7 +66,7 @@ class dedt_yoy_zscore(StockFactorCalculator):
         return get_yoy_zscore('dedt@ttm' , date)
     
 class tax_yoy_zscore(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '所得税行业内分位数之差'
@@ -75,7 +75,7 @@ class tax_yoy_zscore(StockFactorCalculator):
         return get_yoy_zscore('tax@ttm' , date)
 
 class roe_yoy_zscore(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM净资产收益率行业内分位数之差'
@@ -84,7 +84,7 @@ class roe_yoy_zscore(StockFactorCalculator):
         return get_yoy_zscore('npro@ttm / equ@ttm' , date)
     
 class gp_margin_yoy_zscore(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM毛利润率行业内分位数之差'
@@ -93,7 +93,7 @@ class gp_margin_yoy_zscore(StockFactorCalculator):
         return get_yoy_zscore('gp@ttm / sales@ttm' , date)
 
 class oper_margin_yoy_zscore(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM营业利润率行业内分位数之差'
@@ -102,7 +102,7 @@ class oper_margin_yoy_zscore(StockFactorCalculator):
         return get_yoy_zscore('oper_np@ttm / sales@ttm' , date)
 
 class net_margin_yoy_zscore(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM净利率行业内分位数之差'
@@ -111,7 +111,7 @@ class net_margin_yoy_zscore(StockFactorCalculator):
         return get_yoy_zscore('npro@ttm / sales@ttm' , date)
     
 class cfo_yoy_zscore(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM经营活动现金流行业内分位数之差'

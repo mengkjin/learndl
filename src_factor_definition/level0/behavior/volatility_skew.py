@@ -16,7 +16,7 @@ def skewness_volwei(date , n_months : int , lag_months : int = 0):
     return (ret * wgt).skew()
 
 class price_weiskew1m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'volatility'
     description = '1个月成交量加权偏度'
@@ -24,7 +24,7 @@ class price_weiskew1m(StockFactorCalculator):
         return skewness_volwei(date , 1)
     
 class price_weiskew2m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'volatility'
     description = '2个月成交量加权偏度'
@@ -32,7 +32,7 @@ class price_weiskew2m(StockFactorCalculator):
         return skewness_volwei(date , 2)
     
 class price_weiskew3m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'volatility'
     description = '3个月成交量加权偏度'
@@ -40,7 +40,7 @@ class price_weiskew3m(StockFactorCalculator):
         return skewness_volwei(date , 3)
     
 class price_weiskew6m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'volatility'
     description = '6个月成交量加权偏度'
@@ -48,7 +48,7 @@ class price_weiskew6m(StockFactorCalculator):
         return skewness_volwei(date , 6)
     
 class price_weiskew12m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'volatility'
     description = '12个月成交量加权偏度'

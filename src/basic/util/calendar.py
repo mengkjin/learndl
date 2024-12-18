@@ -5,10 +5,10 @@ import pandas as pd
 from datetime import datetime , timedelta , time
 from typing import Any , Literal , Sequence
 
-from .. import path as PATH
+from src.basic import path as PATH
 
+YEAR_ENDS  = pd.date_range(start='1997-01-01', end='2099-12-31', freq='YE').strftime('%Y%m%d').astype(int).to_numpy()
 QUARTER_ENDS = pd.date_range(start='1997-01-01', end='2099-12-31', freq='QE').strftime('%Y%m%d').astype(int).to_numpy()
-YEAR_ENDS  = pd.date_range(start='1997-01-01', end='2099-12-31', freq='QE').strftime('%Y%m%d').astype(int).to_numpy()
 MONTH_ENDS = pd.date_range(start='1997-01-01', end='2099-12-31', freq='ME').strftime('%Y%m%d').astype(int).to_numpy()
 
 def today(offset = 0 , astype : Any = int):
@@ -211,10 +211,12 @@ class TradeCalendar:
     @classmethod
     def td_within(cls , start : int | TradeDate | None = -1 , 
                   end : int | TradeDate | None = 99991231 , 
-                  step : int = 1 , until_today = True):
+                  step : int = 1 , until_today = True , slice : tuple[Any,Any] | None = None):
         dates = cls.slice(_CALENDAR_TRD['calendar'].to_numpy() , start , end)
         if until_today: dates = dates[dates <= today()]
-        return dates[::step]
+        dates = dates[::step]
+        if slice is not None: dates = cls.slice(dates , slice[0] , slice[1])
+        return dates
 
     @classmethod
     def diffs(cls , *args , td = True):
@@ -312,9 +314,10 @@ class TradeCalendar:
         assert n_past >= 1 and n_future >= 0 , f'{n_past} and {n_future} must be greater than 1 and 0'
         if another_date is None: another_date = date
         dates = YEAR_ENDS if year_only else QUARTER_ENDS
-        start = dates[dates <= min(date , another_date)][-n_past]
-        end   = dates[dates >= max(date , another_date)][n_future]
-        return dates[(dates >= start) & (dates <= end)]
+        start = dates[dates <= min(date , another_date)][-n_past:]
+        mid   = dates[(dates > min(date , another_date)) & (dates <= max(date , another_date))]
+        end   = dates[dates >  max(date , another_date)][:n_future]
+        return np.concatenate([start , mid , end])
     
     @staticmethod
     def qe_within(start , end):

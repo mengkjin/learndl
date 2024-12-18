@@ -63,7 +63,7 @@ def valuation_stability(numerator : str , date : int):
     return calc_stability(num , den)
 
 class btop_stability(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'BP稳定性,均值除标准差'
@@ -72,7 +72,7 @@ class btop_stability(StockFactorCalculator):
         return valuation_stability('equ@qtr' , date)
 
 class dtop_stability(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'DP稳定性,均值除标准差'
@@ -84,7 +84,7 @@ class dtop_stability(StockFactorCalculator):
         return calc_stability(dv_ttm , 1)
 
 class etop_stability(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'ETOP稳定性,均值除标准差'
@@ -93,7 +93,7 @@ class etop_stability(StockFactorCalculator):
         return valuation_stability('npro@qtr' , date)
     
 class stop_stability(StockFactorCalculator):    
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'STOP稳定性,均值除标准差'
@@ -102,7 +102,7 @@ class stop_stability(StockFactorCalculator):
         return valuation_stability('sales@qtr' , date)
     
 class cfev_stability(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'CFEV稳定性,均值除标准差'

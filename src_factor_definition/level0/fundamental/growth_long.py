@@ -26,7 +26,7 @@ def get_compound_growth(expression: str , date: int , n_year : int = 5 , **kwarg
     return df.groupby('secid').last()
 
 class ta_gro5y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '5年年度增长率-总资产'
@@ -35,7 +35,7 @@ class ta_gro5y(StockFactorCalculator):
         return get_compound_growth('ta@qtr' , date)
     
 class equ_gro5y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '5年年度增长率-净资产'
@@ -44,7 +44,7 @@ class equ_gro5y(StockFactorCalculator):
         return get_compound_growth('equ@qtr' , date)
     
 class liab_gro5y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '5年年度增长率-总负债'
@@ -53,7 +53,7 @@ class liab_gro5y(StockFactorCalculator):
         return get_compound_growth('liab@qtr' , date)
 
 class sales_gro5y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '5年年度增长率-营业收入'
@@ -62,7 +62,7 @@ class sales_gro5y(StockFactorCalculator):
         return get_compound_growth('sales@ttm' , date)
 
 class npro_gro5y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '5年年度增长率-归母净利润'
@@ -71,7 +71,7 @@ class npro_gro5y(StockFactorCalculator):
         return get_compound_growth('npro@ttm' , date)
     
 class cfo_gro5y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'growth'
     description = '5年年度增长率-经营活动现金流'

@@ -7,7 +7,7 @@ from typing import Any , Literal
 from src.basic import PATH , CALENDAR
 from src.factor.calculator import StockFactorCalculator
 from src.data import DATAVENDOR
-from src.data.util.access.abstract_access import DFCollection
+from src.data.util import DFCollection
 
 RawHoldings = DFCollection(40 , 'end_date')
 ActiveFundHoldings = DFCollection(10 , 'end_date')

@@ -6,10 +6,11 @@ from pathlib import Path
 from torch import Tensor
 from typing import Any , Literal , Optional
 
+from src.project_setting import IS_SERVER
+from src.basic import path as PATH
+from src.basic import conf as CONF
+
 from .calendar import CALENDAR
-from .. import path as PATH
-from .. import conf as CONF
-from ..project_setting import IS_SERVER
 
 class ModelPath:
     def __init__(self , model_name : Path | str | None | Any) -> None:

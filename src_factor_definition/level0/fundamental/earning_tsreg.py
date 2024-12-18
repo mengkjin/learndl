@@ -47,7 +47,7 @@ def ts_last_resid_polars(y_var : str | pd.Series , x_vars : list[str | pd.Series
     return df
 
 class lpnp(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '线性提纯净利润'
@@ -57,7 +57,7 @@ class lpnp(StockFactorCalculator):
         return df
     
 class ocfa(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '产能利用率提升'
@@ -67,7 +67,7 @@ class ocfa(StockFactorCalculator):
         return df
     
 class rroc(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'earning'
     description = '营业能力改善'

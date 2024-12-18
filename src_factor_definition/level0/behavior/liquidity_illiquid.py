@@ -28,7 +28,7 @@ def mif(date , n_months : int , lag_months : int = 0):
     return mif
 
 class illiq_1m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '1个月Amihud非流动性因子'
@@ -37,7 +37,7 @@ class illiq_1m(StockFactorCalculator):
         return amihud(date , 1)
     
 class illiq_2m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '2个月Amihud非流动性因子'
@@ -46,7 +46,7 @@ class illiq_2m(StockFactorCalculator):
         return amihud(date , 2)
     
 class illiq_3m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '3个月Amihud非流动性因子'
@@ -55,7 +55,7 @@ class illiq_3m(StockFactorCalculator):
         return amihud(date , 3)
     
 class illiq_6m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '6个月Amihud非流动性因子'
@@ -64,7 +64,7 @@ class illiq_6m(StockFactorCalculator):
         return amihud(date , 6)
     
 class illiq_12m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '12个月Amihud非流动性因子'
@@ -73,7 +73,7 @@ class illiq_12m(StockFactorCalculator):
         return amihud(date , 12)
     
 class mif_1m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '1个月市场冲击因子'

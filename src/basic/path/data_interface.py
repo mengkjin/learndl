@@ -7,8 +7,10 @@ from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal
 
+from src.project_setting import IS_SERVER
+
 from . import path_structure as PATH
-from ..project_setting import IS_SERVER
+
 
 SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
 SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'

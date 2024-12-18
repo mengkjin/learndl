@@ -17,7 +17,7 @@ def cap_classic(date , cap_type : Literal['tt' , 'fl' , 'fr']):
         raise ValueError(f'cap_type {cap_type} not supported')
 
 class lncap(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '市值(对数总市值)'
@@ -26,7 +26,7 @@ class lncap(StockFactorCalculator):
         return cap_classic(date , 'tt')
     
 class lncap_liq(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '市值(对数流通市值)'
@@ -35,7 +35,7 @@ class lncap_liq(StockFactorCalculator):
         return cap_classic(date , 'fl')
     
 class lncap_free(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '市值(对数自由流通市值)'
@@ -44,7 +44,7 @@ class lncap_free(StockFactorCalculator):
         return cap_classic(date , 'fr')
 
 class lockedstk(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '锁仓比'

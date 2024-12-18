@@ -10,7 +10,7 @@ def mdr(date , n_months : int , lag_months : int = 0):
     return returns.max()
 
 class mom_mdr1m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'momentum'
     description = '1个月区间最大日收益率'
@@ -19,7 +19,7 @@ class mom_mdr1m(StockFactorCalculator):
         return mdr(date , 1)
 
 class mom_mdr2m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'momentum'
     description = '2个月区间最大日收益率'
@@ -28,7 +28,7 @@ class mom_mdr2m(StockFactorCalculator):
         return mdr(date , 2)
     
 class mom_mdr3m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'momentum'
     description = '3个月区间最大日收益率'
@@ -37,7 +37,7 @@ class mom_mdr3m(StockFactorCalculator):
         return mdr(date , 3)
     
 class mom_mdr6m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'momentum'
     description = '6个月区间最大日收益率'
@@ -46,7 +46,7 @@ class mom_mdr6m(StockFactorCalculator):
         return mdr(date , 6)
     
 class mom_mdr12m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'momentum'
     description = '12个月区间最大日收益率'

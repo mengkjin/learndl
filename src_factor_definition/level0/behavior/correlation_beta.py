@@ -17,7 +17,7 @@ def calc_beta(date , n_months : int , lag_months : int = 0 , half_life = 0 , min
     return beta
 
 class beta_1m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'correlation'
     description = '1个月贝塔'
@@ -26,7 +26,7 @@ class beta_1m(StockFactorCalculator):
         return calc_beta(date , 1)
     
 class beta_2m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'correlation'
     description = '2个月贝塔'
@@ -35,7 +35,7 @@ class beta_2m(StockFactorCalculator):
         return calc_beta(date , 2)
 
 class beta_3m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'correlation'
     description = '3个月贝塔'
@@ -44,7 +44,7 @@ class beta_3m(StockFactorCalculator):
         return calc_beta(date , 3)
 
 class beta_6m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'correlation'
     description = '6个月贝塔'
@@ -53,7 +53,7 @@ class beta_6m(StockFactorCalculator):
         return calc_beta(date , 6)
     
 class beta_12m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'correlation'
     description = '12个月贝塔'

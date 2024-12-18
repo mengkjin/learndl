@@ -7,8 +7,8 @@ from email import encoders
 from pathlib import Path
 from typing import Literal
 
-from .. import CONF
-from ..project_setting import MY_SERVER
+from src.project_setting import MY_SERVER
+from src.basic import conf as CONF
 
 def send_email(title : str  , 
                body : str = 'This is test! Hello, World!' ,

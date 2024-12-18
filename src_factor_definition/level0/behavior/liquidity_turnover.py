@@ -13,7 +13,7 @@ def turnover_classic(date , n_months : int , lag_months : int = 0 , min_finite_r
     return turns
 
 class turn_1m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '1个月换手率'
@@ -22,7 +22,7 @@ class turn_1m(StockFactorCalculator):
         return turnover_classic(date , 1)
 
 class turn_2m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '2个月换手率'
@@ -31,7 +31,7 @@ class turn_2m(StockFactorCalculator):
         return turnover_classic(date , 2)
 
 class turn_3m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '3个月换手率'
@@ -40,7 +40,7 @@ class turn_3m(StockFactorCalculator):
         return turnover_classic(date , 3)
     
 class turn_6m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '6个月换手率'
@@ -49,7 +49,7 @@ class turn_6m(StockFactorCalculator):
         return turnover_classic(date , 6)
     
 class turn_12m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '12个月换手率'
@@ -58,7 +58,7 @@ class turn_12m(StockFactorCalculator):
         return turnover_classic(date , 12)
     
 class turn_unexpected(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '1个月意外换手率'

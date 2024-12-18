@@ -9,13 +9,14 @@ from src.func.singleton import singleton
 
 from .access import DateDataAccess
 
-ANN_DATA_COL : Literal['ann_date' , 'f_ann_date'] = 'f_ann_date'
+ANN_DATA_COLS : list[str] = ['f_ann_date' , 'ann_date']
 
 class FDataAccess(DateDataAccess):
     MAX_LEN = 40
     DATE_KEY = 'end_date'
     DATA_TYPE_LIST = ['income' , 'cashflow' , 'balance' , 'dividend' , 'disclosure' ,
                       'express' , 'forecast' , 'mainbz' , 'indicator']
+    ANN_DATA_COL : str = 'ann_date'
     SINGLE_TYPE : str | Any = None
     FROZEN_QTR_METHOD  : Literal['diff' , 'exact'] | None = None
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
@@ -30,8 +31,8 @@ class FDataAccess(DateDataAccess):
     
     def get_ann_dt(self , date , latest_n = 1 , within_days = 365):
         assert self.SINGLE_TYPE , 'SINGLE_TYPE must be set'
-        ann_dt = self.gets(CALENDAR.qe_trailing(date , latest_n + 5 , 0) , self.SINGLE_TYPE , ['secid' , ANN_DATA_COL]).\
-            rename(columns = {ANN_DATA_COL : 'ann_date'}).dropna(subset = ['ann_date']).reset_index(drop = False)
+        ann_dt = self.gets(CALENDAR.qe_trailing(date , latest_n + 5 , 0) , self.SINGLE_TYPE , ['secid' , self.ANN_DATA_COL]).\
+            rename(columns = {self.ANN_DATA_COL : 'ann_date'}).dropna(subset = ['ann_date']).reset_index(drop = False)
         #income_ann_dt = [self.get(qtr_end , 'income' , ['secid' , 'ann_date']) for qtr_end in self.qtr_ends(date , latest_n + 5 , 0)]
         #ann_dt : pd.DataFrame = pd.concat(income_ann_dt)
         ann_dt['end_date'] = ann_dt['end_date'].astype(int)
@@ -111,16 +112,18 @@ class FDataAccess(DateDataAccess):
         return qtr_method
 
     def _get_data_acc_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
-                           pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None , year_only = False):
+                           pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None , 
+                           year_only = False):
         assert data_type in ['income' , 'cashflow' , 'balance' , 'indicator'] , \
             f'invalid data_type: {data_type} , must be one of ' + str(['income' , 'cashflow' , 'balance' , 'indicator'])
         qtr_method = self._get_qtr_method(qtr_method)
 
         dates = CALENDAR.qe_trailing(date , n_past = lastn + 4 , year_only = year_only)
 
-        field = ['secid' , ANN_DATA_COL , 'update_flag' , val]
+        field = ['secid' , self.ANN_DATA_COL , 'update_flag' , val]
         
-        df_acc = self.gets(dates , data_type , field , rename_date_key = 'end_date').rename(columns = {ANN_DATA_COL : 'ann_date'}).\
+        df_acc = self.gets(dates , data_type , field , rename_date_key = 'end_date').\
+            rename(columns = {self.ANN_DATA_COL : 'ann_date'}).\
             reset_index(drop = False).dropna(subset = ['ann_date' , 'end_date'])
         # df_acc = pd.concat([self.get(qe , data_type , field) for qe in q_ends]).dropna(subset = ['ann_date' , 'end_date'])
         df_acc['ann_date'] = df_acc['ann_date'].astype(int)
@@ -312,18 +315,21 @@ class BalanceSheetAccess(FDataAccess):
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'exact'
     DEFAULT_YOY_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'acc'
     DEFAULT_QOQ_METHOD : Literal['ttm' , 'acc' , 'qtr'] = 'acc'
+    ANN_DATA_COL : str = 'f_ann_date'
 
 @singleton
 class CashFlowAccess(FDataAccess):
     SINGLE_TYPE = 'cashflow'
     FROZEN_QTR_METHOD = 'diff'
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
+    ANN_DATA_COL : str = 'f_ann_date'
 
 @singleton
 class IncomeStatementAccess(FDataAccess):
     SINGLE_TYPE = 'income'
     FROZEN_QTR_METHOD = 'diff'
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
+    ANN_DATA_COL : str = 'f_ann_date'
   
 @singleton
 class FinancialDataAccess(FDataAccess):

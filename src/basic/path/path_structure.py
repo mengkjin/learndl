@@ -1,7 +1,7 @@
 import os , shutil , yaml , time
 from pathlib import Path
 
-from ..project_setting import MAIN_PATH
+from src.project_setting import MAIN_PATH
 
 # variables
 main        = MAIN_PATH

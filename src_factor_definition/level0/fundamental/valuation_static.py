@@ -119,7 +119,7 @@ def valuation_rank3y(numerator : str , denominator , date : int , qtr_method = '
     return calc_valuation(num , den , pct = True)
 
 class btop(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '市净率倒数'
@@ -128,7 +128,7 @@ class btop(StockFactorCalculator):
         return valuation_latest('equ@qtr' , 'mv' , date)
     
 class btop_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '市净率倒数,1年分位数'
@@ -137,7 +137,7 @@ class btop_rank1y(StockFactorCalculator):
         return valuation_rank1y('equ@qtr' , 'mv' , date)
     
 class btop_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '市净率倒数,3年分位数'
@@ -146,7 +146,7 @@ class btop_rank3y(StockFactorCalculator):
         return valuation_rank3y('equ@qtr' , 'mv' , date)
     
 class dtop(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '滚动分红率'
@@ -161,7 +161,7 @@ class dtop(StockFactorCalculator):
         return calc_valuation(dv_ttm , 1 , pct = False)
     
 class dtop_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '股东分红率,1年分位数'
@@ -172,7 +172,7 @@ class dtop_rank1y(StockFactorCalculator):
         return calc_valuation(dv_ttm , 1 , pct = True)
     
 class dtop_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '股东分红率,3年分位数'
@@ -183,7 +183,7 @@ class dtop_rank3y(StockFactorCalculator):
         return calc_valuation(dv_ttm , 1 , pct = True)
 
 class ebitev_ttm(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'EBIT/EV'
@@ -192,7 +192,7 @@ class ebitev_ttm(StockFactorCalculator):
         return valuation_latest('ebit@ttm' , 'ev' , date)
 
 class ebitev_ttm_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'EBIT/EV,1年分位数'
@@ -201,7 +201,7 @@ class ebitev_ttm_rank1y(StockFactorCalculator):
         return valuation_rank1y('ebit@ttm' , 'ev' , date)
 
 class ebitev_ttm_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'EBIT/EV,3年分位数'
@@ -210,7 +210,7 @@ class ebitev_ttm_rank3y(StockFactorCalculator):
         return valuation_rank3y('ebit@ttm' , 'ev' , date)
     
 class ebitdaev_ttm(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'EBITDA/EV'
@@ -219,7 +219,7 @@ class ebitdaev_ttm(StockFactorCalculator):
         return valuation_latest('ebitda@ttm' , 'ev' , date)
 
 class ebitdaev_ttm_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'EBITDA/EV,1年分位数'
@@ -228,7 +228,7 @@ class ebitdaev_ttm_rank1y(StockFactorCalculator):
         return valuation_rank1y('ebitda@ttm' , 'ev' , date)
 
 class ebitdaev_ttm_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'EBITDA/EV,3年分位数'
@@ -237,7 +237,7 @@ class ebitdaev_ttm_rank3y(StockFactorCalculator):
         return valuation_rank3y('ebitda@ttm' , 'ev' , date)
     
 class etop_ttm(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM市盈率倒数'
@@ -246,7 +246,7 @@ class etop_ttm(StockFactorCalculator):
         return valuation_latest('npro@ttm' , 'mv' , date)
     
 class etop_ttm_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM市盈率倒数,1年分位数'
@@ -255,7 +255,7 @@ class etop_ttm_rank1y(StockFactorCalculator):
         return valuation_rank1y('npro@ttm' , 'mv' , date)
     
 class etop_ttm_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM市盈率倒数,3年分位数'
@@ -264,7 +264,7 @@ class etop_ttm_rank3y(StockFactorCalculator):
         return valuation_rank3y('npro@ttm' , 'mv' , date)
     
 class etop_dedt_ttm(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM扣非市盈率倒数'
@@ -273,7 +273,7 @@ class etop_dedt_ttm(StockFactorCalculator):
         return valuation_latest('dedt@ttm' , 'mv' , date)
     
 class etop_dedt_ttm_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM扣非市盈率倒数,1年分位数'
@@ -282,7 +282,7 @@ class etop_dedt_ttm_rank1y(StockFactorCalculator):
         return valuation_rank1y('dedt@ttm' , 'mv' , date)
     
 class etop_dedt_ttm_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM扣非市盈率倒数,3年分位数'
@@ -291,7 +291,7 @@ class etop_dedt_ttm_rank3y(StockFactorCalculator):
         return valuation_rank3y('dedt@ttm' , 'mv' , date)
 
 class etop(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度市盈率倒数'
@@ -300,7 +300,7 @@ class etop(StockFactorCalculator):
         return valuation_latest('npro@qtr' , 'mv' , date)
 
 class etop_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度市盈率倒数,1年分位数'
@@ -309,7 +309,7 @@ class etop_rank1y(StockFactorCalculator):
         return valuation_rank1y('npro@qtr' , 'mv' , date)
     
 class etop_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度市盈率倒数,3年分位数'
@@ -318,7 +318,7 @@ class etop_rank3y(StockFactorCalculator):
         return valuation_rank3y('npro@qtr' , 'mv' , date)
     
 class fcfetop_ttm(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM企业股权自由现金流量/市值'
@@ -327,7 +327,7 @@ class fcfetop_ttm(StockFactorCalculator):
         return valuation_latest('fcfe@ttm' , 'mv' , date)
 
 class fcfetop_ttm_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM企业股权自由现金流量/市值,1年分位数'
@@ -336,7 +336,7 @@ class fcfetop_ttm_rank1y(StockFactorCalculator):
         return valuation_rank1y('fcfe@ttm' , 'mv' , date)
     
 class fcfetop_ttm_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM企业股权自由现金流量/市值,3年分位数'
@@ -346,7 +346,7 @@ class fcfetop_ttm_rank3y(StockFactorCalculator):
 
 
 class fcfetop_qtr(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度企业股权自由现金流量/市值'
@@ -355,7 +355,7 @@ class fcfetop_qtr(StockFactorCalculator):
         return valuation_latest('fcfe@qtr' , 'mv' , date)
 
 class fcfetop_qtr_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度企业股权自由现金流量/市值,1年分位数'
@@ -364,7 +364,7 @@ class fcfetop_qtr_rank1y(StockFactorCalculator):
         return valuation_rank1y('fcfe@qtr' , 'mv' , date)
     
 class fcfetop_qtr_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度企业股权自由现金流量/市值,3年分位数'
@@ -374,7 +374,7 @@ class fcfetop_qtr_rank3y(StockFactorCalculator):
 
     
 class cfotop_ttm(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM经营现金流/市值'
@@ -383,7 +383,7 @@ class cfotop_ttm(StockFactorCalculator):
         return valuation_latest('ncfo@ttm' , 'mv' , date)
 
 class cfotop_ttm_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM经营现金流/市值,1年分位数'
@@ -392,7 +392,7 @@ class cfotop_ttm_rank1y(StockFactorCalculator):
         return valuation_rank1y('ncfo@ttm' , 'mv' , date)
     
 class cfotop_ttm_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM经营现金流/市值,3年分位数'
@@ -401,7 +401,7 @@ class cfotop_ttm_rank3y(StockFactorCalculator):
         return valuation_rank3y('ncfo@ttm' , 'mv' , date)
 
 class cfotop(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度经营现金流/市值'
@@ -410,7 +410,7 @@ class cfotop(StockFactorCalculator):
         return valuation_latest('ncfo@qtr' , 'mv' , date)
 
 class cfotop_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度经营现金流/市值,1年分位数'
@@ -419,7 +419,7 @@ class cfotop_rank1y(StockFactorCalculator):
         return valuation_rank1y('ncfo@qtr' , 'mv' , date)
     
 class cfotop_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度经营现金流/市值,3年分位数'
@@ -428,7 +428,7 @@ class cfotop_rank3y(StockFactorCalculator):
         return valuation_rank3y('ncfo@qtr' , 'mv' , date)
     
 class stop_ttm(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM市销率倒数'
@@ -437,7 +437,7 @@ class stop_ttm(StockFactorCalculator):
         return valuation_latest('sales@ttm' , 'mv' , date)
     
 class stop_ttm_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM市销率倒数,1年分位数'
@@ -446,7 +446,7 @@ class stop_ttm_rank1y(StockFactorCalculator):
         return valuation_rank1y('sales@ttm' , 'mv' , date)
     
 class stop_ttm_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM市销率倒数,3年分位数'
@@ -455,7 +455,7 @@ class stop_ttm_rank3y(StockFactorCalculator):
         return valuation_rank3y('sales@ttm' , 'mv' , date)
 
 class stop(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度市销率倒数'
@@ -464,7 +464,7 @@ class stop(StockFactorCalculator):
         return valuation_latest('sales@qtr' , 'mv' , date)
 
 class stop_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度市销率倒数,1年分位数'
@@ -473,7 +473,7 @@ class stop_rank1y(StockFactorCalculator):
         return valuation_rank1y('sales@qtr' , 'mv' , date)
     
 class stop_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度市销率倒数,3年分位数'
@@ -482,7 +482,7 @@ class stop_rank3y(StockFactorCalculator):
         return valuation_rank3y('sales@qtr' , 'mv' , date)
     
 class cfev(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度经营性现金流/EV'
@@ -491,7 +491,7 @@ class cfev(StockFactorCalculator):
         return valuation_latest('ncfo@qtr' , 'ev' , date)
     
 class cfev_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度经营性现金流/EV,1年分位数'
@@ -500,7 +500,7 @@ class cfev_rank1y(StockFactorCalculator):
         return valuation_rank1y('ncfo@qtr' , 'ev' , date)
     
 class cfev_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = '单季度经营性现金流/EV,3年分位数'
@@ -510,7 +510,7 @@ class cfev_rank3y(StockFactorCalculator):
 
     
 class cfev_ttm(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM经营性现金流/EV'
@@ -519,7 +519,7 @@ class cfev_ttm(StockFactorCalculator):
         return valuation_latest('ncfo@ttm' , 'ev' , date)
     
 class cfev_ttm_rank1y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM经营性现金流/EV,1年分位数'
@@ -528,7 +528,7 @@ class cfev_ttm_rank1y(StockFactorCalculator):
         return valuation_rank1y('ncfo@ttm' , 'ev' , date)
     
 class cfev_ttm_rank3y(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'fundamental'
     category1 = 'value'
     description = 'TTM经营性现金流/EV,3年分位数'

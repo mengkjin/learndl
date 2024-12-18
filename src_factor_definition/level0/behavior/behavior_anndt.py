@@ -9,7 +9,7 @@ def date_min_max(date_col : pd.Series):
     return date_col.min() , date_col.max()
 
 class anndt_phigh(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'momentum'
     description = '公告日最高价距离'
@@ -25,7 +25,7 @@ class anndt_phigh(StockFactorCalculator):
         return ann_dt_perf['phigh']
     
 class mom_aog(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'momentum'
     description = '公告日次日超额收益'
@@ -41,7 +41,7 @@ class mom_aog(StockFactorCalculator):
 
 
 class mom_aaa(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'momentum'
     description = '公告日后3日超额收益'

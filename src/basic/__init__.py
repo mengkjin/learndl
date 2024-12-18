@@ -1,11 +1,15 @@
 from pathlib import Path
-from .project_setting import *
+from src.project_setting import *
 
 from . import path as PATH
-[p.mkdir(parents=True , exist_ok=True) for nm in dir(PATH) if isinstance(p:= getattr(PATH , nm) , Path) and p.is_relative_to(PATH.main)]
-
 from . import conf as CONF
 from .util import *
+
+for name in dir(PATH):
+    member = getattr(PATH , name)
+    if isinstance(member , Path) and member.is_relative_to(PATH.main):
+        member.mkdir(parents=True , exist_ok=True)
+
 
 # print some info after import basic
 print('Basic module imported!')

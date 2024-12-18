@@ -16,7 +16,7 @@ def coefficient_variance(date , n_months : int , data_type : Literal['amount' , 
     return vals.std() / vals.mean()
 
 class amt_cv1m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '1个月成交额变异系数'
@@ -25,7 +25,7 @@ class amt_cv1m(StockFactorCalculator):
         return coefficient_variance(date , 1 , 'amount')
 
 class amt_cv2m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '2个月成交额变异系数'
@@ -34,7 +34,7 @@ class amt_cv2m(StockFactorCalculator):
         return coefficient_variance(date , 2 , 'amount')
     
 class amt_cv3m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '3个月成交额变异系数'
@@ -43,7 +43,7 @@ class amt_cv3m(StockFactorCalculator):
         return coefficient_variance(date , 3 , 'amount')
     
 class amt_cv6m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '6个月成交额变异系数'
@@ -52,7 +52,7 @@ class amt_cv6m(StockFactorCalculator):
         return coefficient_variance(date , 6 , 'amount')
     
 class amt_cv12m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '12个月成交额变异系数'
@@ -61,7 +61,7 @@ class amt_cv12m(StockFactorCalculator):
         return coefficient_variance(date , 12 , 'amount')
 
 class turn_cv1m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '1个月换手率变异系数'
@@ -70,7 +70,7 @@ class turn_cv1m(StockFactorCalculator):
         return coefficient_variance(date , 1 , 'turnover')
 
 class turn_cv2m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '2个月换手率变异系数'
@@ -79,7 +79,7 @@ class turn_cv2m(StockFactorCalculator):
         return coefficient_variance(date , 2 , 'turnover')
     
 class turn_cv3m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '3个月换手率变异系数'
@@ -88,7 +88,7 @@ class turn_cv3m(StockFactorCalculator):
         return coefficient_variance(date , 3 , 'turnover')
     
 class turn_cv6m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '6个月换手率变异系数'
@@ -97,7 +97,7 @@ class turn_cv6m(StockFactorCalculator):
         return coefficient_variance(date , 6 , 'turnover')
     
 class turn_cv12m(StockFactorCalculator):
-    init_date = 20070101
+    init_date = 20110101
     category0 = 'behavior'
     category1 = 'liquidity'
     description = '12个月换手率变异系数'
