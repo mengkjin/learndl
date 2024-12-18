@@ -5,17 +5,17 @@ from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from typing import Any , Iterator , Optional
 
-from src.basic import CONF , PATH , Timer , CALENDAR
+from src.basic import CONF , Timer , CALENDAR
 from src.func.primas import neutralize_2d , process_factor
 from src.func.display import print_seperator
-
-from .util import DataBlock , BlockLoader
+from src.data.util import DataBlock
+from src.data.loader import BlockLoader
 
 TRAIN_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']
 PREDICT_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']
 
 @dataclass(slots=True)
-class DataProcessor:
+class DataPreProcessor:
     predict         : bool 
     blocks          : list[str] = field(default_factory=list)
     mask            : dict[str,Any] = field(default_factory=dict)

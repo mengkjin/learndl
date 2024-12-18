@@ -4,11 +4,11 @@ import pandas as pd
 
 from typing import Any , Callable , Literal
 
-from src.basic import PATH , CALENDAR , TradeDate
+from src.basic import PATH , CALENDAR
 from src.func.singleton import singleton
 
-from .abstract_access import DateDataAccess
-from ..basic import INFO
+from .access import DateDataAccess
+
 
 @singleton
 class AnalystDataAccess(DateDataAccess):

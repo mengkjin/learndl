@@ -8,7 +8,7 @@ from copy import deepcopy
 from typing import Any
 
 from src.basic import CALENDAR , TradeDate
-from ..basic import INFO
+from src.data.util import INFO
 
 lock = threading.Lock()
 

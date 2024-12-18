@@ -3,15 +3,18 @@ import numpy as np
 import pandas as pd
 import torch.nn.functional as F
 
-from dataclasses import dataclass , field
+from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
 from src.basic import CALENDAR , PATH , CONF , SILENT , Timer
 from src.func.singleton import singleton
+from src.data.util import DataBlock , INFO
 
-from .access import INFO , BS , IS , CF , INDI , TRADE , RISK , FINA , ANALYST , MKLINE
-from .access.fina_data import FinData
-from .classes import DataBlock
+from .financial_data import BS , IS , CF , INDI , FINA , FinData
+from .analyst import ANALYST
+from .min_kline import MKLINE    
+from .model_data import RISK
+from .trade_data import TRADE
 
 @dataclass(slots=True)
 class BlockLoader:

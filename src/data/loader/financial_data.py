@@ -7,10 +7,7 @@ from typing import Any , Literal
 from src.basic import CALENDAR , PATH
 from src.func.singleton import singleton
 
-from .abstract_access import DateDataAccess
-
-QUARTER_ENDS = np.sort(np.concatenate([np.arange(1997 , 2099) * 10000 + qe for qe in [331,630,930,1231]]))
-YEAR_ENDS = np.arange(1997 , 2099) * 10000 + 1231
+from .access import DateDataAccess
 
 ANN_DATA_COL : Literal['ann_date' , 'f_ann_date'] = 'f_ann_date'
 
@@ -30,29 +27,10 @@ class FDataAccess(DateDataAccess):
             return PATH.db_load('financial_ts' , data_type , date , check_na_cols=False)
         else:
             raise KeyError(data_type)
-    @staticmethod
-    def full_quarter_ends(start_year = 1997 , end_year = 2099):
-        return QUARTER_ENDS[(QUARTER_ENDS >= start_year * 10000) & (QUARTER_ENDS <= end_year * 10000)]
-    
-    @staticmethod
-    def full_year_ends(start_year = 2000 , end_year = 2099):
-        return YEAR_ENDS[(YEAR_ENDS >= start_year * 10000) & (YEAR_ENDS <= end_year * 10000)]
-    
-    @staticmethod
-    def qtr_ends(date , n_past = 1 , n_future = 0 , year_only = False):
-        if year_only:
-            qtr_past = YEAR_ENDS[YEAR_ENDS <= date][-n_past:]
-            qtr_future = YEAR_ENDS[YEAR_ENDS >= date][:n_future]
-            qtr_ends = np.concatenate([qtr_past , qtr_future])
-        else:
-            qtr_past = QUARTER_ENDS[QUARTER_ENDS <= date][-n_past:]
-            qtr_future = QUARTER_ENDS[QUARTER_ENDS >= date][:n_future]
-            qtr_ends = np.concatenate([qtr_past , qtr_future])
-        return qtr_ends
     
     def get_ann_dt(self , date , latest_n = 1 , within_days = 365):
         assert self.SINGLE_TYPE , 'SINGLE_TYPE must be set'
-        ann_dt = self.gets(self.qtr_ends(date , latest_n + 5 , 0) , self.SINGLE_TYPE , ['secid' , ANN_DATA_COL]).\
+        ann_dt = self.gets(CALENDAR.qe_trailing(date , latest_n + 5 , 0) , self.SINGLE_TYPE , ['secid' , ANN_DATA_COL]).\
             rename(columns = {ANN_DATA_COL : 'ann_date'}).dropna(subset = ['ann_date']).reset_index(drop = False)
         #income_ann_dt = [self.get(qtr_end , 'income' , ['secid' , 'ann_date']) for qtr_end in self.qtr_ends(date , latest_n + 5 , 0)]
         #ann_dt : pd.DataFrame = pd.concat(income_ann_dt)
@@ -84,6 +62,38 @@ class FDataAccess(DateDataAccess):
         ann_calendar = ann_calendar.melt(ignore_index=False).reset_index().rename(columns = {'ann_date':'date','value':'anndt'})
         return ann_calendar[ann_calendar['anndt'] > 0].set_index(['secid','date']).sort_index().astype(bool)
 
+    @staticmethod
+    def index_interpolate(df : pd.DataFrame):
+        old_index = df.dropna().index.to_frame(index=False)
+        index_range = old_index.groupby('secid')['end_date'].min().rename('min').to_frame()
+        index_range = index_range.join(old_index.groupby('secid')['end_date'].max().rename('max'))
+        full_index = pd.MultiIndex.from_product([old_index['secid'].unique() , 
+                                                CALENDAR.qe_within(index_range['min'].min(), index_range['max'].max())],
+                                                names = ['secid' , 'end_date'])
+        new_index = full_index.to_frame(index=False).join(index_range , on = ['secid'] , how='left')
+        new_index = new_index[(new_index['end_date'] >= new_index['min']) & (new_index['end_date'] <= new_index['max'])].set_index(['secid' , 'end_date'])
+        return df.reindex(new_index.index)
+
+    @staticmethod
+    def value_interpolate(df : pd.DataFrame , method : Literal['diff' , 'exact']):
+        if method == 'diff':
+            raw_index = df.index
+            quarter = raw_index.get_level_values('end_date') % 10000 // 300
+            df = df.assign(year = raw_index.get_level_values('end_date') // 10000).set_index('year' , append=True).reset_index('end_date',drop=True)
+            dfq = [df.loc[quarter == i + 1] for i in range(4)]
+
+            dfq[0] = dfq[0].fillna(dfq[1] / 2).fillna(dfq[2] / 3).fillna(dfq[3] / 4)
+            dfq[1] = dfq[1].fillna((dfq[0] + dfq[2]) / 2).fillna(dfq[2] * 2 / 3).fillna(dfq[3] / 2).fillna(dfq[0])
+            dfq[2] = dfq[2].fillna((dfq[1] + dfq[3]) / 2).fillna(dfq[3] * 3 / 4).fillna(dfq[1])
+            dfq[3] = dfq[3].fillna(dfq[2])
+
+            df = pd.concat([sub_df.assign(quarter = i + 1) for i , sub_df in enumerate(dfq)]).reset_index('year')
+            df['end_date'] = df['year'] * 10000 + df['quarter'].replace({1 : 331 , 2 : 630 , 3 : 930 , 4 : 1231})
+            df = df.set_index('end_date' , append=True).drop(columns=['year' , 'quarter']).reindex(raw_index)
+        elif method == 'exact':
+            df = df.groupby('secid').ffill()
+        return df
+
     def _fin_hist_data_transform(self , df : pd.DataFrame , val : str , benchmark_df : pd.DataFrame | None = None , 
                                  lastn = 1 , pivot = False , ffill = False):
         if benchmark_df is not None:
@@ -92,51 +102,52 @@ class FDataAccess(DateDataAccess):
         df = df.groupby('secid').tail(lastn).replace([np.inf , -np.inf] , np.nan)
         if pivot: df = df.pivot_table(val , 'end_date' , 'secid').sort_index()
         return df
-
-    def _get_data_acc_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
-                           pivot = False , ffill = False , year_only = False):
-        assert data_type in ['income' , 'cashflow' , 'balance' , 'indicator'] , \
-            f'invalid data_type: {data_type} , must be one of ' + str(['income' , 'cashflow' , 'balance' , 'indicator'])
-        q_ends = self.qtr_ends(date , lastn + 4 , year_only = year_only)
-
-        field = ['secid' , ANN_DATA_COL , 'update_flag' , val]
-        
-        df_acc = self.gets(q_ends , data_type , field , rename_date_key = 'end_date').rename(columns = {ANN_DATA_COL : 'ann_date'}).\
-            reset_index(drop = False).dropna(subset = ['ann_date' , 'end_date'])
-        # df_acc = pd.concat([self.get(qe , data_type , field) for qe in q_ends]).dropna(subset = ['ann_date' , 'end_date'])
-        df_acc['ann_date'] = df_acc['ann_date'].astype(int)
-        df_acc['end_date'] = df_acc['end_date'].astype(int)
-        df_acc = df_acc[(df_acc['ann_date'] <= date) & df_acc['end_date'].isin(q_ends) & (df_acc['secid'] >= 0)]
-        df_acc = df_acc.sort_values('update_flag').drop_duplicates(['secid' , 'end_date'] , keep = 'last')\
-            [['secid','end_date',val]].set_index(['secid' , 'end_date']).sort_index()
-        return self._fin_hist_data_transform(df_acc , val , None , lastn , pivot , ffill)
     
-    def _get_data_qtr_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
-                           pivot = False , ffill = False , 
-                           qtr_method : Literal['diff' , 'exact'] | None = None):
+    def _get_qtr_method(self , qtr_method : Literal['diff' , 'exact'] | None = None):
         if self.FROZEN_QTR_METHOD: 
             qtr_method = self.FROZEN_QTR_METHOD
         elif qtr_method is None: 
             qtr_method = self.DEFAULT_QTR_METHOD
+        return qtr_method
 
+    def _get_data_acc_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
+                           pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None , year_only = False):
+        assert data_type in ['income' , 'cashflow' , 'balance' , 'indicator'] , \
+            f'invalid data_type: {data_type} , must be one of ' + str(['income' , 'cashflow' , 'balance' , 'indicator'])
+        qtr_method = self._get_qtr_method(qtr_method)
+
+        dates = CALENDAR.qe_trailing(date , n_past = lastn + 4 , year_only = year_only)
+
+        field = ['secid' , ANN_DATA_COL , 'update_flag' , val]
+        
+        df_acc = self.gets(dates , data_type , field , rename_date_key = 'end_date').rename(columns = {ANN_DATA_COL : 'ann_date'}).\
+            reset_index(drop = False).dropna(subset = ['ann_date' , 'end_date'])
+        # df_acc = pd.concat([self.get(qe , data_type , field) for qe in q_ends]).dropna(subset = ['ann_date' , 'end_date'])
+        df_acc['ann_date'] = df_acc['ann_date'].astype(int)
+        df_acc['end_date'] = df_acc['end_date'].astype(int)
+        df_acc = df_acc[(df_acc['ann_date'] <= date) & df_acc['end_date'].isin(dates) & (df_acc['secid'] >= 0)]
+        df_acc = df_acc.sort_values('update_flag').drop_duplicates(['secid' , 'end_date'] , keep = 'last')\
+            [['secid','end_date',val]].set_index(['secid' , 'end_date']).sort_index()
+        df_acc = self.index_interpolate(df_acc)
+        df_acc = self.value_interpolate(df_acc , method = qtr_method)
+        return self._fin_hist_data_transform(df_acc , val , None , lastn , pivot , ffill)
+    
+    def _get_data_qtr_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
+                           pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None):
+        qtr_method = self._get_qtr_method(qtr_method)
         if qtr_method == 'exact':
             return self._get_data_acc_hist(data_type , val , date , lastn , pivot , ffill)
 
-        df_acc = self._get_data_acc_hist(data_type , val , date , lastn + 4 , pivot = False)
+        df_acc = self._get_data_acc_hist(data_type , val , date , lastn + 4 , pivot = False , qtr_method = qtr_method)
         secid = df_acc.index.get_level_values('secid').unique()
-        q_end = df_acc.index.get_level_values('end_date').unique()
-        ystarts = np.unique(q_end // 10000) * 10000
+        ystarts = np.unique(df_acc.index.get_level_values('end_date').unique() // 10000 * 10000)
         df_ystarts = pd.DataFrame({val:0} , index = pd.MultiIndex.from_product([secid , ystarts] , names=['secid' , 'end_date']))
         df_qtr = pd.concat([df_acc , df_ystarts]).sort_index().groupby('secid').ffill().fillna(0).groupby('secid').diff()
         return self._fin_hist_data_transform(df_qtr , val , df_acc , lastn , pivot , ffill)
 
     def _get_data_ttm_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
-                           pivot = False , ffill = False , 
-                           qtr_method : Literal['diff' , 'exact'] | None = None):
-        if self.FROZEN_QTR_METHOD: 
-            qtr_method = self.FROZEN_QTR_METHOD
-        elif qtr_method is None: 
-            qtr_method = self.DEFAULT_QTR_METHOD
+                           pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None):
+        qtr_method = self._get_qtr_method(qtr_method)
         df_qtr = self._get_data_qtr_hist(data_type , val , date , lastn + 8 , pivot = False , ffill = False , qtr_method = qtr_method)
         full_index = pd.MultiIndex.from_product([df_qtr.index.get_level_values('secid').unique() ,
                                                  df_qtr.index.get_level_values('end_date').unique()])
@@ -226,7 +237,7 @@ class FDataAccess(DateDataAccess):
             return self.get(20231231 , self.SINGLE_TYPE).columns.values
 
     def acc(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , year_only = False):
-        return self._get_data_acc_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , year_only)
+        return self._get_data_acc_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , year_only = year_only)
     
     def qtr(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False):
         return self._get_data_qtr_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill)
@@ -263,6 +274,10 @@ class IndicatorDataAccess(FDataAccess):
     FROZEN_QTR_METHOD  : Literal['diff' , 'exact'] | None = None
     DEFAULT_QTR_METHOD : Literal['diff' , 'exact'] = 'diff'
 
+    def acc(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , 
+            qtr_method : Literal['diff' , 'exact'] | None = None , year_only = False):
+        return self._get_data_acc_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method , year_only)
+    
     def qtr(self , val : str , date : int , lastn = 1 , pivot = False , ffill = False , qtr_method : Literal['diff' , 'exact'] | None = None):
         return self._get_data_qtr_hist(self.SINGLE_TYPE , val , date , lastn , pivot , ffill , qtr_method)
 

@@ -4,7 +4,7 @@ import numpy as np
 from typing import Any , Literal , Optional
 
 from src.basic import PATH , CALENDAR
-from src.data.util import TRADE , RISK
+from src.data.loader import TRADE , RISK
 
 class ClassicLabelsUpdater:
     START_DATE = 20050101

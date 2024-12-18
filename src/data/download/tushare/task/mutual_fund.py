@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Any
 
-from src.data.download.tushare.basic import pro , code_to_secid , CALENDAR , InfoFetcher , TushareFetcher , updatable , quarter_ends
+from src.data.download.tushare.basic import pro , code_to_secid , CALENDAR , InfoFetcher , TushareFetcher , updatable
 
 class FundInfo(InfoFetcher):
     DB_KEY = 'mutual_fund_info'
@@ -33,7 +33,8 @@ class FundPortfolioFetcher(TushareFetcher):
         this_date , last_date , last_update_date = CALENDAR.today() , self.last_date() , self.last_update_date()
 
         update = updatable(this_date , last_update_date , self.UPDATE_FREQ)
-        dates = quarter_ends(this_date , last_date , trailing_quarters = 1)  
+        dates = CALENDAR.qe_trailing(this_date , n_past = 1 , another_date=last_date)
+
         if not update and len(dates) <= 1: dates = []
         return dates
     

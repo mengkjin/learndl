@@ -5,7 +5,7 @@ from typing import Any , Literal
 from abc import abstractmethod , ABC
 
 from src.basic import PATH , CALENDAR , Timer
-from .func import updatable , dates_to_update , quarter_ends
+from .func import updatable , dates_to_update
 
 class TushareFetcher(ABC):
     START_DATE  : int = 19970101
@@ -155,7 +155,8 @@ class FinaFetcher(TushareFetcher):
         this_date , last_date , last_update_date = CALENDAR.today() , self.last_date() , self.last_update_date()
 
         update = updatable(this_date , last_update_date , self.UPDATE_FREQ)
-        dates = quarter_ends(this_date , last_date , consider_future = self.CONSIDER_FUTURE) 
+        dates = CALENDAR.qe_trailing(this_date , n_past = 3 , n_future = 4 if self.CONSIDER_FUTURE else 0 , another_date = last_date)
+
         if self.DATA_FREQ == 'y': dates = [date for date in dates if date % 10000 == 1231]
         elif self.DATA_FREQ == 'h': dates = [date for date in dates if date % 10000 in [630,1231]]
         

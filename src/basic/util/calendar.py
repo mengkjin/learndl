@@ -2,11 +2,14 @@ import torch
 import numpy as np
 import pandas as pd
 
-from collections.abc import Iterable
 from datetime import datetime , timedelta , time
-from typing import Any , Literal
+from typing import Any , Literal , Sequence
 
 from .. import path as PATH
+
+QUARTER_ENDS = pd.date_range(start='1997-01-01', end='2099-12-31', freq='QE').strftime('%Y%m%d').astype(int).to_numpy()
+YEAR_ENDS  = pd.date_range(start='1997-01-01', end='2099-12-31', freq='QE').strftime('%Y%m%d').astype(int).to_numpy()
+MONTH_ENDS = pd.date_range(start='1997-01-01', end='2099-12-31', freq='ME').strftime('%Y%m%d').astype(int).to_numpy()
 
 def today(offset = 0 , astype : Any = int):
     d = datetime.today() + timedelta(days=offset)
@@ -93,6 +96,10 @@ class TradeDate(int):
 
 class TradeCalendar:
     _instance = None
+
+    ME = MONTH_ENDS
+    QE = QUARTER_ENDS
+    YE = YEAR_ENDS
 
     def __new__(cls , *args , **kwargs):
         if cls._instance is None:
@@ -190,14 +197,14 @@ class TradeCalendar:
         return np.sort(_CALENDAR_CAL[_CALENDAR_CAL['calendar'] <= date].iloc[-n:]['calendar'].to_numpy())
 
     @staticmethod
-    def start(start : int | TradeDate | None):
-        start = 0 if start is None else int(start)
+    def start(date : int | TradeDate | None) -> int:
+        start = 19900101 if date is None else int(date)
         if start < 0: start = today(start)
         return start
     
     @staticmethod
-    def end(end : int | TradeDate | None):
-        end = 99991231 if end is None else int(end)
+    def end(date : int | TradeDate | None) -> int:
+        end = 99991231 if date is None else int(date)
         if end < 0: end = today(end)
         return end
 
@@ -276,17 +283,46 @@ class TradeCalendar:
         if old_fmt == new_fmt: return date
         return datetime.strptime(str(date), old_fmt).strftime(new_fmt)
 
-    @staticmethod
-    def quarter_ends(end_date = 99991231 , last_date = None , start_year = 1997 , consider_future = False , trailing_quarters = 3):
-        date_list = np.sort(np.concatenate([np.arange(start_year , end_date // 10000 + 1) * 10000 + qe for qe in  [331,630,930,1231]]))
-        if not consider_future: 
-            date_list = date_list[date_list < end_date]
-        
-        if last_date is not None: 
-            date_list_0 = date_list[date_list <= last_date][-trailing_quarters:] if trailing_quarters > 0 else []
-            date_list_1 = date_list[date_list >  last_date]
-            date_list = np.concatenate([date_list_0 , date_list_1])
+    @classmethod
+    def year_end(cls , date):
+        return cls.end(date) // 10000 * 10000 + 1231
 
-        return date_list
+    @classmethod
+    def year_start(cls , date):
+        return cls.start(date) // 10000 * 10000 + 101
+
+    @classmethod
+    def quarter_end(cls , date):
+        return cls.QE[cls.QE >= date][0]
+
+    @classmethod
+    def quarter_start(cls , date):
+        return cls.year_start(date) // 10000 * 10000 + (cls.year_start(date) % 10000 // 300 - 2)  * 100 + 1
+
+    @classmethod
+    def month_end(cls , date):
+        return cls.ME[cls.ME >= date][0]
+
+    @classmethod
+    def month_start(cls , date):
+        return cls.year_start(date) // 100 * 100 + 1
+    
+    @staticmethod
+    def qe_trailing(date , n_past = 1 , n_future = 0 , another_date = None , year_only = False):
+        assert n_past >= 1 and n_future >= 0 , f'{n_past} and {n_future} must be greater than 1 and 0'
+        if another_date is None: another_date = date
+        dates = YEAR_ENDS if year_only else QUARTER_ENDS
+        start = dates[dates <= min(date , another_date)][-n_past]
+        end   = dates[dates >= max(date , another_date)][n_future]
+        return dates[(dates >= start) & (dates <= end)]
+    
+    @staticmethod
+    def qe_within(start , end):
+        return QUARTER_ENDS[(QUARTER_ENDS >= start) & (QUARTER_ENDS <= end)]
+
+    @classmethod
+    def qe_interpolate(cls , incomplete_qtr_ends : Sequence | Any):
+        if len(incomplete_qtr_ends) == 0: return np.array([]).astype(int)
+        return cls.qe_within(min(incomplete_qtr_ends) , max(incomplete_qtr_ends))
 
 CALENDAR = TradeCalendar()

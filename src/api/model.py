@@ -1,6 +1,6 @@
 import src.model.model_module.application as app
 from src.basic import IS_SERVER
-from src.data import DataProcessor
+from src.data import DataPreProcessor
 from src.func.display import EnclosedMessage
 
 class ModelAPI:
@@ -85,11 +85,11 @@ class ModelAPI:
         '''
         prepare latest(1 year or so) train data for predict use, do it after 'update'
         '''
-        DataProcessor.main(predict=True)
+        DataPreProcessor.main(predict=True)
 
     @staticmethod
     def reconstruct_train_data(): 
         '''
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
-        DataProcessor.main(predict=False , confirm=1)
+        DataPreProcessor.main(predict=False , confirm=1)

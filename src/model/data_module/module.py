@@ -8,7 +8,7 @@ from torch.utils.data import BatchSampler
 from typing import Any , Literal , Optional
 
 from src.basic import CONF , PATH , SILENT , HiddenPath
-from src.data import DataBlockNorm , DataProcessor , ModuleData , DataBlock
+from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
 from src.func import tensor_standardize_and_weight , match_values , index_intersect
 from src.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig , MemFileStorage , StoredFileLoader
 
@@ -69,8 +69,8 @@ class DataModule(BaseDataModule):
     
     @staticmethod
     def prepare_data(data_types : Optional[list[str]] = None):
-        DataProcessor.main(predict = False , data_types = data_types)
-        DataProcessor.main(predict = True , data_types = data_types)
+        DataPreProcessor.main(predict = False , data_types = data_types)
+        DataPreProcessor.main(predict = True , data_types = data_types)
         
     def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 

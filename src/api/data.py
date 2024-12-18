@@ -1,4 +1,4 @@
-from src.data import CoreDataUpdater , SellsideDataUpdater , JSDataUpdater , OtherDataUpdater , DataProcessor
+from src.data import CoreDataUpdater , SellsideDataUpdater , JSDataUpdater , OtherDataUpdater , DataPreProcessor
 from src.func.display import EnclosedMessage
 from src.factor.api import FactorModelUpdater , FactorCalculatorAPI
 
@@ -39,7 +39,7 @@ class DataAPI:
         prepare latest(1 year or so) train data for predict use, do it after 'update'
         '''
         with EnclosedMessage(' prepare predict data '):
-            DataProcessor.main(predict=True)
+            DataPreProcessor.main(predict=True)
 
     @staticmethod
     def reconstruct_train_data(confirm = 0): 
@@ -47,4 +47,4 @@ class DataAPI:
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
         with EnclosedMessage(' reconstruct historical data '):
-            DataProcessor.main(predict=False , confirm = confirm)
+            DataPreProcessor.main(predict=False , confirm = confirm)
