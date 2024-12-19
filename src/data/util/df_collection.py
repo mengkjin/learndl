@@ -89,7 +89,7 @@ class _df_collection(ABC):
             if len(self) > self.max_len > 0:
                 self.dates = sorted(self.dates)[-self.max_len:]
                 [self.data_frames.pop(key) for key in self.data_frames if key not in self.dates]
-                if isinstance(self.long_frame , pd.DataFrame):
+                if isinstance(self.long_frame , pd.DataFrame) and self.date_key in self.long_frame.columns:
                     self.long_frame = self.long_frame[self.long_frame[self.date_key].isin(self.dates)].copy()
     
     def reform_df(self , df : pd.DataFrame | pl.DataFrame , field = None , rename_date_key = None):
