@@ -50,6 +50,7 @@ class FactorUpdateJobManager:
     def __len__(self): return len(self.jobs)
     def levels(self): return np.unique([job.level for job in self.jobs])
     def dates(self): return np.unique([job.date for job in self.jobs])
+    def groups(self): return sorted(set((job.level , job.date) for job in self.jobs))
     def to_dataframe(self):
         columns = ['level' , 'date' , 'factor']
         return pd.DataFrame([(job.level , job.date , job.factor_name) for job in self.jobs] , columns=columns).sort_values(by=columns)
@@ -59,12 +60,11 @@ class FactorUpdateJobManager:
     def sort(self): self.jobs.sort(key=lambda x: x.sort_key)
     def append(self , job : FactorUpdateJob): self.jobs.append(job)
     def grouped_jobs(self):
-        groups = sorted(set((job.level , job.date) for job in self.jobs))
-        for level , date in groups:
+        for level , date in self.groups():
             yield (level , date) , self.filter(self.jobs , level , date)
 
     def collect_jobs(self , start : int | None = None , end : int | None = None , all_factors = False ,
-                     overwrite = False , num_in_one_update : int | None = None , **kwargs):
+                     overwrite = False , groups_in_one_update : int | None = None , **kwargs):
         '''
         update update jobs for all factors between start and end date
         **kwargs:
@@ -81,12 +81,14 @@ class FactorUpdateJobManager:
 
         for calc in StockFactorHierarchy().iter_instance(**({} if all_factors else kwargs)):
             dates = calc.target_dates(start , end , overwrite = overwrite)
-            if num_in_one_update is not None: dates = dates[:num_in_one_update]
             [self.append(FactorUpdateJob(calc , d)) for d in dates]
-        
+
         if len(self) == 0:
             print('There is no update jobs to proceed...')
         else:
+            if groups_in_one_update is not None:
+                groups = self.groups()[:groups_in_one_update]
+                self.jobs = [job for level , date in groups for job in self.filter(self.jobs , level , date)]
             levels , dates = self.levels() , self.dates()
             print(f'Finish collecting {len(self)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
         return self
@@ -114,10 +116,10 @@ class FactorUpdateJobManager:
         [self.jobs.remove(job) for job in jobs if job.done]
     
     @classmethod
-    def update(cls , verbosity : int = 1 , num_in_one_update : int | None = 100):
+    def update(cls , verbosity : int = 1 , groups_in_one_update : int | None = 100):
         '''update factor data according'''
         self = cls()
-        self.collect_jobs(all_factors = True , num_in_one_update = num_in_one_update)
+        self.collect_jobs(all_factors = True , groups_in_one_update = groups_in_one_update)
         self.proceed(verbosity)
 
 UPDATE_JOBS = FactorUpdateJobManager()

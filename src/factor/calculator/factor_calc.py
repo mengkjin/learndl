@@ -200,14 +200,13 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
 
     @classmethod
     def collect_jobs(cls , start : int | None = None , end : int | None = None , 
-                     overwrite = False , num_in_one_update : int | None = None):
+                     overwrite = False , **kwargs):
         from src.factor.calculator.factor_update import UPDATE_JOBS
-        UPDATE_JOBS.collect_jobs(start , end , overwrite = overwrite , num_in_one_update = num_in_one_update , 
-                                 factor_name = cls.factor_name)
+        UPDATE_JOBS.collect_jobs(start , end , overwrite = overwrite , **kwargs , factor_name = cls.factor_name)
 
     @classmethod
-    def update(cls , verbosity : int = 1 , num_in_one_update : int | None = 100):
+    def update(cls , verbosity : int = 1 , **kwargs):
         from src.factor.calculator.factor_update import UPDATE_JOBS
-        cls.collect_jobs(overwrite = False , num_in_one_update = num_in_one_update)
+        cls.collect_jobs(overwrite = False , **kwargs)
         UPDATE_JOBS.proceed(verbosity , overwrite = False)
 
