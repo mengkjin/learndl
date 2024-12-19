@@ -9,6 +9,8 @@ from src.func.singleton import singleton
 class InfoDataAccess:
     def __init__(self) -> None:
         self.desc = PATH.db_load('information_ts' , 'description') 
+        self.desc['list_dt'] = np.maximum(self.desc['list_dt'] , CALENDAR.calendar_start())
+
         self.cname = PATH.db_load('information_ts' , 'change_name') 
         self.cname = self.cname[self.cname['secid'] >= 0].sort_values(['secid','ann_date','start_date']).rename(columns={'ann_date':'ann_dt'})
 
@@ -18,14 +20,17 @@ class InfoDataAccess:
         self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values
         self.indus_data = self.indus_data.sort_values(['secid','in_date'])
 
-    def get_desc(self , date : int | TradeDate | None = None , set_index : bool = True):
-        if date is None: 
-            new_desc = self.desc.copy()
-        else:
-            new_desc = self.desc[(self.desc['list_dt'] <= int(date)) & (self.desc['delist_dt'] > int(date))].copy()
-        new_desc['list_dt'] = np.maximum(new_desc['list_dt'] , CALENDAR.calendar_start())
-        if set_index: new_desc = new_desc.set_index('secid')
-        return new_desc
+    def get_desc(self , date : int | TradeDate | None = None , set_index : bool = True , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
+        desc = self.desc
+        if date is not None: 
+            desc = desc.loc[(desc['list_dt'] <= int(date)) & (desc['delist_dt'] > int(date))]
+        if listed: desc = desc[desc['list_dt'] > 0]
+        if exchange: desc = desc[desc['exchange_name'].isin(exchange)]
+        if set_index: desc = desc.set_index('secid')
+        return desc
+
+    def get_secid(self , date : int | None = None): 
+        return self.get_desc(date , set_index=False)['secid'].unique()
     
     def get_st(self , date : int | TradeDate | None = None , reason = ['终止上市', '暂停上市' , 'ST', '*ST']):
         new_cname = self.cname[self.cname['change_reason'].isin(reason)]

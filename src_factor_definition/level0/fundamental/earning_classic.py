@@ -28,7 +28,6 @@ def get_hist_zscore(expression : str , date : int):
     grp = data.groupby('secid')
     return (grp.last() - grp.mean()) / grp.std()
 
-
 def get_hist_zscore_polars(expression : str , date : int):
     data = DATAVENDOR.get_fin_hist(expression , date , 12).iloc[:,0]
     df = pl.from_pandas(data.rename('value').to_frame() , include_index=True)
@@ -44,7 +43,10 @@ class npro_core_ratio(StockFactorCalculator):
     
     def calc_factor(self, date: int):
         npro = DATAVENDOR.get_fin_latest('npro@ttm' , date)
-        core = DATAVENDOR.get_fin_latest('gp@ttm - is@biz_tax_surchg@ttm - is@sell_exp@ttm - is@admin_exp@ttm - is@fin_exp@ttm - is@rd_exp@ttm' , date)
+        gp = DATAVENDOR.get_fin_latest('gp@ttm' , date)
+        subtracts = [DATAVENDOR.get_fin_latest(expr , date).reindex(gp.index).fillna(0) 
+                    for expr in ['is@biz_tax_surchg@ttm' , 'is@sell_exp@ttm' , 'is@admin_exp@ttm' , 'is@fin_exp@ttm' , 'is@rd_exp@ttm']]
+        core = gp - sum(subtracts)
         return core / npro
     
 class gp_margin_qtr(StockFactorCalculator):

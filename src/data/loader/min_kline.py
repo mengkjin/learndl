@@ -7,6 +7,7 @@ from typing import Any , Callable , Literal
 
 from src.basic import PATH , CALENDAR , TradeDate
 from src.func.singleton import singleton
+from src.data.util import INFO
 
 from .access import DateDataAccess
 
@@ -18,6 +19,7 @@ class MinKLineAccess(DateDataAccess):
     def data_loader(self , date , data_type):
         if data_type in self.PL_DATA_TYPE_LIST: 
             df = PATH.db_load('trade_ts' , data_type , date , verbose = False)
+            if not df.empty: df = df[df['secid'].isin(INFO.get_secid(date))]
         else:
             raise KeyError(data_type)
         return df

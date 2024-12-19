@@ -58,21 +58,15 @@ class DataVendor:
 
     def init_stocks(self , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
         with SILENT:
-            stocks = self.INFO.get_desc(set_index=False)
-            if listed: stocks = stocks[stocks['list_dt'] > 0]
-            if exchange: stocks = stocks[stocks['exchange_name'].isin(exchange)]
-            self.all_stocks = stocks.reset_index().sort_values('secid')
+            self.all_stocks = self.INFO.get_desc(set_index=False , listed = listed , exchange = exchange)
             self.st_stocks = self.INFO.get_st()
 
     def secid(self , date : int | None = None): 
         if date is None: 
-            stk = self.all_stocks.secid.unique()
-        else: 
-            if date not in self.day_secids:
-                stk = self.all_stocks[(self.all_stocks.list_dt <= date) & (self.all_stocks.delist_dt > date)]
-                self.day_secids[date] = stk.secid.unique()
-            stk = self.day_secids[date]
-        return stk
+            return self.all_stocks['secid'].unique()
+        if date not in self.day_secids:
+            self.day_secids[date] = self.INFO.get_secid(date)
+        return self.day_secids[date]
 
     @staticmethod
     def single_file(db_src , db_key , date : int | None = None):

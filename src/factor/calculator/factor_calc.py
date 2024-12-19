@@ -166,7 +166,7 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         return cls
         
     @classmethod
-    def validate_value(cls , df : pd.DataFrame , strict = False):
+    def validate_value(cls , df : pd.Series , strict = False):
         '''validate factor value'''
         mininum_finite_count = 100 if strict else 0
         actual_finite_count = np.isfinite(df[cls.factor_name].to_numpy()).sum()
@@ -178,8 +178,9 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
         '''store factor data after calculate'''
         if not overwrite and PATH.factor_path(self.factor_name , date).exists(): return False
-        df = self.calc_factor(date).rename(self.factor_name).to_frame()
+        df = self.calc_factor(date)
         df = self.validate_value(df , strict = strict_validation)
+        df = df.rename(self.factor_name).to_frame()
         saved = PATH.factor_save(df , self.factor_name , date , overwrite)
         return saved
 
