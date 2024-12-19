@@ -8,7 +8,6 @@ from src.func.dynamic_import import dynamic_members
 from src.func.parallel import parallel
 
 from .factor_calc import StockFactorCalculator
-from .factor_update import UPDATE_JOBS
 
 class StockFactorHierarchy:
     '''hierarchy of factor classes'''
@@ -79,10 +78,6 @@ class StockFactorHierarchy:
         df_dict = [[getattr(cls , a) for a in attr_list] for cls in self if self.factor_filter(cls , **kwargs)]
         df = pd.DataFrame(df_dict, columns=attr_list)
         return df
-    
-    def jobs(self):
-        '''return a DataFrame of update jobs'''
-        return UPDATE_JOBS.to_dataframe()
 
     def factor_names(self):
         '''return a list of factor names'''
@@ -170,32 +165,5 @@ class StockFactorHierarchy:
             else:
                 print(f'abnormal factor diffs: {abnormal_diffs}')
         return factor_values
-    
-    @classmethod
-    def update_jobs(cls , start : int | None = None , end : int | None = None , all_factors = False ,
-                    overwrite = False , max_groups_in_one_update : int | None = None , **kwargs):
-        '''
-        update update jobs for all factors between start and end date
-        **kwargs:
-            factor_name : str | None = None
-            level : str | None = None 
-            file_name : str | None = None
-            category0 : str | None = None 
-            category1 : str | None = None 
-        '''
-        self = cls()
-        UPDATE_JOBS.clear()
-        if all_factors: iterance = self.iter_instance()
-        elif kwargs: iterance = self.iter_instance(**kwargs)
-        else: iterance = []
-        [obj.update_jobs(start , end , overwrite , max_groups_in_one_update) for obj in iterance]
-        return self
-    
-    @classmethod
-    def update(cls , verbosity : int = 1 , ignore_error = True , max_groups_in_one_update : int | None = 100):
-        '''update factor data according to update jobs'''
-        cls.update_jobs(all_factors = True , overwrite = False , max_groups_in_one_update = max_groups_in_one_update)
-        
-        UPDATE_JOBS.proceed(verbosity , ignore_error , overwrite = False)
 
     

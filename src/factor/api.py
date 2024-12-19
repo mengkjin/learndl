@@ -8,7 +8,7 @@ from src.factor.analytic.fmp_optim.api import FmpOptimManager
 from src.factor.analytic.fmp_top.api import FmpTopManager
 
 from src.factor.calculator.cne5 import TuShareCNE5_Calculator
-from src.factor.calculator.hierarchy import StockFactorHierarchy
+from src.factor.calculator.factor_update import UPDATE_JOBS
 
 class FactorModelUpdater:
     @classmethod
@@ -18,7 +18,7 @@ class FactorModelUpdater:
 class FactorCalculatorAPI:
     @classmethod
     def update(cls):
-        StockFactorHierarchy.update()
+        UPDATE_JOBS.update()
 
 class FactorTestAPI:
     TASK_TYPES = TASK_TYPES

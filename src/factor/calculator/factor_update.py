@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
+from threading import Lock
 from typing import Literal , Type
 
 from src.basic import CONF
@@ -10,6 +11,7 @@ from src.func.singleton import singleton
 from src.func.parallel import parallel
 
 from .factor_calc import StockFactorCalculator
+from .hierarchy import StockFactorHierarchy
 
 CATCH_ERRORS = (ValueError , TypeError)
 
@@ -41,6 +43,7 @@ class FactorUpdateJob:
 class FactorUpdateJobManager:
     def __init__(self , multi_thread = True):
         self.jobs : list[FactorUpdateJob] = []
+        self.lock = Lock()
         self.multi_thread = multi_thread
     def __repr__(self):
         return f'FactorUpdateJobs({len(self)} jobs)'
@@ -54,8 +57,8 @@ class FactorUpdateJobManager:
         return [job for job in jobs if job.level == level and job.date == date]
     def clear(self): self.jobs.clear()
     def sort(self): self.jobs.sort(key=lambda x: x.sort_key)
-    def append(self , calc : StockFactorCalculator , date : int): 
-        self.jobs.append(FactorUpdateJob(calc , date))
+    def append(self , job : FactorUpdateJob): 
+        with self.lock: self.jobs.append(job)
     def proceed(self , verbosity : int = 1 , ignore_error = False , overwrite = False):
         '''
         perform all update jobs
@@ -74,7 +77,10 @@ class FactorUpdateJobManager:
         print(f'Finish collecting {len(self)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
         groups = sorted(set((job.level , job.date) for job in self.jobs))
         errors = CATCH_ERRORS if ignore_error else ()
-        def do_job(job : FactorUpdateJob): job.do(verbosity > 1 , errors , overwrite)
+
+        def do_job(job : FactorUpdateJob): 
+            job.do(verbosity > 1 , errors , overwrite)
+
         for level , date in groups:
             DATAVENDOR.data_storage_control()
             jobs = self.filter(self.jobs , level , date)
@@ -82,5 +88,35 @@ class FactorUpdateJobManager:
             if verbosity > 0:
                 print(f'Factors of {level} at {date} done: {sum(job.done for job in jobs)} / {len(jobs)}')
             [self.jobs.remove(job) for job in jobs if job.done]
+
+    def collect_jobs(self , start : int | None = None , end : int | None = None , all_factors = False ,
+                     overwrite = False , max_groups_in_one_update : int | None = None , **kwargs):
+        '''
+        update update jobs for all factors between start and end date
+        **kwargs:
+            factor_name : str | None = None
+            level : str | None = None 
+            file_name : str | None = None
+            category0 : str | None = None 
+            category1 : str | None = None 
+        '''
+        self.clear()
+        if not all_factors or not kwargs: return
+        hier = StockFactorHierarchy()
+        calcs = hier.iter_instance(**({} if all_factors else kwargs))
+
+        def collect_jobs(calc : StockFactorCalculator):
+            dates = calc.target_dates(start , end , overwrite = overwrite)
+            if max_groups_in_one_update is not None: dates = dates[:max_groups_in_one_update]
+            [self.append(FactorUpdateJob(calc , d)) for d in dates]
+
+        parallel(collect_jobs , calcs , method = self.multi_thread)
+    
+    @classmethod
+    def update(cls , verbosity : int = 1 , ignore_error = True , max_groups_in_one_update : int | None = 100):
+        '''update factor data according'''
+        self = cls()
+        self.collect_jobs(all_factors = True , max_groups_in_one_update = max_groups_in_one_update)
+        self.proceed(verbosity , ignore_error)
 
 UPDATE_JOBS = FactorUpdateJobManager()

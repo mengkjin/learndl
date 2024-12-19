@@ -199,10 +199,15 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         return PATH.factor_dates(cls.factor_name)
 
     @classmethod
-    def update_jobs(cls , start : int | None = None , end : int | None = None , 
-                    overwrite = False , max_groups_in_one_update : int | None = None):
+    def collect_jobs(cls , start : int | None = None , end : int | None = None , 
+                     overwrite = False , max_groups_in_one_update : int | None = None):
         from src.factor.calculator.factor_update import UPDATE_JOBS
-        dates = cls.target_dates(start , end , overwrite = overwrite)
-        if max_groups_in_one_update is not None: dates = dates[:max_groups_in_one_update]
-        self = cls()
-        [UPDATE_JOBS.append(self , d) for d in dates]
+        UPDATE_JOBS.collect_jobs(start , end , overwrite = overwrite , max_groups_in_one_update = max_groups_in_one_update , 
+                                 factor_name = cls.factor_name)
+
+    @classmethod
+    def update(cls , verbosity : int = 1 , ignore_error = True , max_groups_in_one_update : int | None = 100):
+        from src.factor.calculator.factor_update import UPDATE_JOBS
+        cls.collect_jobs(overwrite = False , max_groups_in_one_update = max_groups_in_one_update)
+        UPDATE_JOBS.proceed(verbosity , ignore_error , overwrite = False)
+

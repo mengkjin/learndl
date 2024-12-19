@@ -304,11 +304,14 @@ class JSFetcher:
         pos = list(_dates['id']).index(date)
         if pos + lag1 + days >= len(_dates['id']):  return None
         if not path_param['res'].joinpath(path_param['res'].name + f'_{date}.Rdata').exists(): return None
-        
+
+        d0 , d1 = _dates['id'][pos + lag1] , _dates['id'][pos + lag1 + days] 
+        res_pos = list(_dates['res']).index(d0)
+        if res_pos + days > len(_dates['res']): return None
+
         f_read = lambda k,d,p='':pyreadr.read_r(path_param[k].joinpath(f'{path_param[k].name}_{d}.Rdata'))['data'].rename(columns={'data':k+p})
         wind_id = f_read('id',date)
 
-        d0 , d1 = _dates['id'][pos + lag1] , _dates['id'][pos + lag1 + days] 
         cp0 = pd.concat([f_read('id',d0),f_read('cp',d0,'0'),f_read('adj',d0,'0')]  , axis = 1)
         cp1 = pd.concat([f_read('id',d1),f_read('cp',d1,'1'),f_read('adj',d1,'1')]  , axis = 1)
 
@@ -316,7 +319,6 @@ class JSFetcher:
         rtn['rtn'] = rtn['adj1'] * rtn['cp1'] / rtn['adj0'] / rtn['cp0'] - 1
         rtn = rtn.loc[:,['id','rtn']]
 
-        res_pos = list(_dates['res']).index(d0)
         res_dates = [_dates['res'][res_pos + i] for i in range(days)] 
         res = wind_id
         for i , di in enumerate(res_dates): 
