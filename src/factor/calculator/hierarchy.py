@@ -195,8 +195,7 @@ class StockFactorHierarchy:
     def update(cls , verbosity : int = 1 , ignore_error = True , max_groups_in_one_update : int | None = 100):
         '''update factor data according to update jobs'''
         cls.update_jobs(all_factors = True , overwrite = False , max_groups_in_one_update = max_groups_in_one_update)
-        levels , dates = UPDATE_JOBS.levels() , UPDATE_JOBS.dates()
-        print(f'Finish collecting {len(UPDATE_JOBS)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
+        
         UPDATE_JOBS.proceed(verbosity , ignore_error , overwrite = False)
 
     

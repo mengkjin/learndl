@@ -67,6 +67,11 @@ class FactorUpdateJobManager:
         ignore_error : if True , ignore some errors and continue
         overwrite : if True , overwrite existing data
         '''
+        if len(self) == 0:
+            print('There is no update jobs to proceed...')
+            return
+        levels , dates = self.levels() , self.dates()
+        print(f'Finish collecting {len(self)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
         groups = sorted(set((job.level , job.date) for job in self.jobs))
         errors = CATCH_ERRORS if ignore_error else ()
         def do_job(job : FactorUpdateJob): job.do(verbosity > 1 , errors , overwrite)
