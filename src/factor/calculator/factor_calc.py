@@ -187,9 +187,9 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     @classmethod
     def target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False):
         '''return list of target dates of factor data'''
-        init_date = max(cls.init_date , CONF.UPDATE_START)
-        term_date = min(CALENDAR.updated() , CONF.UPDATE_END)
-        dates = CALENDAR.td_within(init_date , term_date , cls.FACTOR_STEP , slice = (start , end))
+        init_date = start if start is not None else max(cls.init_date , CONF.UPDATE_START)
+        term_date = end   if end   is not None else min(CALENDAR.updated() , CONF.UPDATE_END)
+        dates = CALENDAR.td_within(init_date , term_date , cls.FACTOR_STEP)
         if not overwrite: dates = CALENDAR.diffs(dates , cls.stored_dates())
         return dates
     
@@ -200,14 +200,14 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
 
     @classmethod
     def collect_jobs(cls , start : int | None = None , end : int | None = None , 
-                     overwrite = False , max_groups_in_one_update : int | None = None):
+                     overwrite = False , num_in_one_update : int | None = None):
         from src.factor.calculator.factor_update import UPDATE_JOBS
-        UPDATE_JOBS.collect_jobs(start , end , overwrite = overwrite , max_groups_in_one_update = max_groups_in_one_update , 
+        UPDATE_JOBS.collect_jobs(start , end , overwrite = overwrite , num_in_one_update = num_in_one_update , 
                                  factor_name = cls.factor_name)
 
     @classmethod
-    def update(cls , verbosity : int = 1 , ignore_error = True , max_groups_in_one_update : int | None = 100):
+    def update(cls , verbosity : int = 1 , num_in_one_update : int | None = 100):
         from src.factor.calculator.factor_update import UPDATE_JOBS
-        cls.collect_jobs(overwrite = False , max_groups_in_one_update = max_groups_in_one_update)
-        UPDATE_JOBS.proceed(verbosity , ignore_error , overwrite = False)
+        cls.collect_jobs(overwrite = False , num_in_one_update = num_in_one_update)
+        UPDATE_JOBS.proceed(verbosity , overwrite = False)
 

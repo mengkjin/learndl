@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import Literal , Type
 
-from src.basic import CONF
+from src.basic import CONF , CALENDAR
 from src.data import DATAVENDOR
 from src.func.singleton import singleton
 from src.func.parallel import parallel
@@ -30,13 +30,13 @@ class FactorUpdateJob:
     def factor_name(self): return self.calc.factor_name
     @property
     def sort_key(self): return (self.level , self.date , self.factor_name)
-    def do(self , show_success : bool = False , catch_errors : tuple[Type[Exception],...] = () , overwrite = False):
+    def do(self , show_success : bool = False , overwrite = False):
         prefix = f'{self.calc.factor_string} at date {self.date}'
         try:
             self.done = self.calc.calc_and_deploy(self.date , overwrite = overwrite)
             if show_success:
                 print(f'{prefix} ' + 'deploy successful' if self.done else 'already there')
-        except catch_errors as e:
+        except CATCH_ERRORS as e:
             print(f'{prefix} failed: {e}')
     
 @singleton
@@ -57,40 +57,14 @@ class FactorUpdateJobManager:
         return [job for job in jobs if job.level == level and job.date == date]
     def clear(self): self.jobs.clear()
     def sort(self): self.jobs.sort(key=lambda x: x.sort_key)
-    def append(self , job : FactorUpdateJob): 
-        with self.lock: self.jobs.append(job)
-    def proceed(self , verbosity : int = 1 , ignore_error = False , overwrite = False):
-        '''
-        perform all update jobs
-
-        verbosity : 
-            0 : show only error
-            1 : show error and success stats
-            2 : show all
-        ignore_error : if True , ignore some errors and continue
-        overwrite : if True , overwrite existing data
-        '''
-        if len(self) == 0:
-            print('There is no update jobs to proceed...')
-            return
-        levels , dates = self.levels() , self.dates()
-        print(f'Finish collecting {len(self)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
+    def append(self , job : FactorUpdateJob): self.jobs.append(job)
+    def grouped_jobs(self):
         groups = sorted(set((job.level , job.date) for job in self.jobs))
-        errors = CATCH_ERRORS if ignore_error else ()
-
-        def do_job(job : FactorUpdateJob): 
-            job.do(verbosity > 1 , errors , overwrite)
-
         for level , date in groups:
-            DATAVENDOR.data_storage_control()
-            jobs = self.filter(self.jobs , level , date)
-            parallel(do_job , jobs , method = self.multi_thread)
-            if verbosity > 0:
-                print(f'Factors of {level} at {date} done: {sum(job.done for job in jobs)} / {len(jobs)}')
-            [self.jobs.remove(job) for job in jobs if job.done]
+            yield (level , date) , self.filter(self.jobs , level , date)
 
     def collect_jobs(self , start : int | None = None , end : int | None = None , all_factors = False ,
-                     overwrite = False , max_groups_in_one_update : int | None = None , **kwargs):
+                     overwrite = False , num_in_one_update : int | None = None , **kwargs):
         '''
         update update jobs for all factors between start and end date
         **kwargs:
@@ -101,22 +75,49 @@ class FactorUpdateJobManager:
             category1 : str | None = None 
         '''
         self.clear()
-        if not all_factors or not kwargs: return
-        hier = StockFactorHierarchy()
-        calcs = hier.iter_instance(**({} if all_factors else kwargs))
+        if not all_factors and not kwargs: return
 
-        def collect_jobs(calc : StockFactorCalculator):
+        if end is None: end = min(CALENDAR.updated() , CONF.UPDATE_END)
+
+        for calc in StockFactorHierarchy().iter_instance(**({} if all_factors else kwargs)):
             dates = calc.target_dates(start , end , overwrite = overwrite)
-            if max_groups_in_one_update is not None: dates = dates[:max_groups_in_one_update]
+            if num_in_one_update is not None: dates = dates[:num_in_one_update]
             [self.append(FactorUpdateJob(calc , d)) for d in dates]
+        
+        if len(self) == 0:
+            print('There is no update jobs to proceed...')
+        else:
+            levels , dates = self.levels() , self.dates()
+            print(f'Finish collecting {len(self)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
+        return self
+    
+    def proceed(self , verbosity : int = 1 , overwrite = False):
+        '''
+        perform all update jobs
 
-        parallel(collect_jobs , calcs , method = self.multi_thread)
+        verbosity : 
+            0 : show only error
+            1 : show error and success stats
+            2 : show all
+        overwrite : if True , overwrite existing data
+        '''
+        if len(self) == 0: return
+
+        def do_job(job : FactorUpdateJob): 
+            job.do(verbosity > 1 , overwrite)
+
+        for (level , date) , jobs in self.grouped_jobs():
+            DATAVENDOR.data_storage_control()
+            parallel(do_job , jobs , method = self.multi_thread)
+            if verbosity > 0:
+                print(f'Factors of {level} at {date} done: {sum(job.done for job in jobs)} / {len(jobs)}')
+        [self.jobs.remove(job) for job in jobs if job.done]
     
     @classmethod
-    def update(cls , verbosity : int = 1 , ignore_error = True , max_groups_in_one_update : int | None = 100):
+    def update(cls , verbosity : int = 1 , num_in_one_update : int | None = 100):
         '''update factor data according'''
         self = cls()
-        self.collect_jobs(all_factors = True , max_groups_in_one_update = max_groups_in_one_update)
-        self.proceed(verbosity , ignore_error)
+        self.collect_jobs(all_factors = True , num_in_one_update = num_in_one_update)
+        self.proceed(verbosity)
 
 UPDATE_JOBS = FactorUpdateJobManager()

@@ -66,8 +66,9 @@ def list_files(directory : str | Path , fullname = False , recur = False):
     return paths
 
 def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
-    target_files = list_files(directory , recur=True)
-    dates = np.array(sorted(file_dates(target_files)) , dtype=int)
+    stems = [Path(file).stem[-8:] for _ , _ , files in os.walk(directory) for file in files]
+    dates = [int(s) for s in stems if s.isdigit()]
+    dates = np.array(sorted(dates) , dtype=int)
     if end_dt   is not None: dates = dates[dates <= (end_dt   if end_dt   > 0 else today(end_dt))]
     if start_dt is not None: dates = dates[dates >= (start_dt if start_dt > 0 else today(start_dt))]
     if year is not None:     dates = dates[dates // 10000 == year]
