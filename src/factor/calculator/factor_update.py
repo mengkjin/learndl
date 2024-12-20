@@ -24,6 +24,9 @@ class FactorUpdateJob:
         self.done = False
         assert CONF.UPDATE_START <= self.date <= CONF.UPDATE_END , \
             f'date is should be between {CONF.UPDATE_START} and {CONF.UPDATE_END}, but got {self.date}'
+        assert self.date in StockFactorCalculator.FACTOR_TARGET_DATES , \
+            f'date {self.date} is not in StockFactorCalculator.FACTOR_TARGET_DATES'
+        
     @property
     def level(self): return self.calc.level
     @property
@@ -62,6 +65,11 @@ class FactorUpdateJobManager:
     def grouped_jobs(self):
         for level , date in self.groups():
             yield (level , date) , self.filter(self.jobs , level , date)
+    
+    def unfinished_factors(self , date : int):
+        hier = StockFactorHierarchy()
+        factors = [calc for calc in hier.iter_instance() if not calc.has_date(date)]
+        return factors
 
     def collect_jobs(self , start : int | None = None , end : int | None = None , all_factors = False ,
                      overwrite = False , groups_in_one_update : int | None = None , **kwargs):
@@ -79,7 +87,8 @@ class FactorUpdateJobManager:
 
         if end is None: end = min(CALENDAR.updated() , CONF.UPDATE_END)
 
-        for calc in StockFactorHierarchy().iter_instance(**({} if all_factors else kwargs)):
+        hier = StockFactorHierarchy()
+        for calc in hier.iter_instance(**({} if all_factors else kwargs)):
             dates = calc.target_dates(start , end , overwrite = overwrite)
             [self.append(FactorUpdateJob(calc , d)) for d in dates]
 

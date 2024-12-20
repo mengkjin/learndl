@@ -11,6 +11,8 @@ from src.func.classproperty import classproperty_str
 from src.func.parallel import parallel
 from src.factor.util import StockFactor
 
+
+
 class CategoryError(Exception): ...
 
 class StockFactorCalculator(metaclass=SingletonABCMeta):
@@ -31,7 +33,8 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         'money_flow' : ['holding' , 'trading'] ,
         'alternative' : None
     }
-    FACTOR_STEP = 5
+    FACTOR_TARGET_DATES = CALENDAR.td_within(CONF.UPDATE_START , CONF.UPDATE_END , CONF.UPDATE_STEP)
+    
 
     def __new__(cls , *args , **kwargs):
         return super().__new__(cls.validate_attrs())
@@ -191,9 +194,9 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     @classmethod
     def target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False):
         '''return list of target dates of factor data'''
-        init_date = start if start is not None else max(cls.init_date , CONF.UPDATE_START)
-        term_date = end   if end   is not None else min(CALENDAR.updated() , CONF.UPDATE_END)
-        dates = CALENDAR.td_within(init_date , term_date , cls.FACTOR_STEP)
+        start = start if start is not None else cls.init_date
+        end   = end   if end   is not None else CALENDAR.updated()
+        dates = CALENDAR.slice(cls.FACTOR_TARGET_DATES , start , end)
         if not overwrite: dates = CALENDAR.diffs(dates , cls.stored_dates())
         return dates
     
@@ -201,6 +204,10 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     def stored_dates(cls): 
         '''return list of stored dates of factor data'''
         return PATH.factor_dates(cls.factor_name)
+    
+    @classmethod
+    def has_date(cls , date : int):
+        return PATH.factor_path(cls.factor_name , date).exists()
 
     @classmethod
     def collect_jobs(cls , start : int | None = None , end : int | None = None , 

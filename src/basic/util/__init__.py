@@ -7,3 +7,5 @@ from .calendar import CALENDAR , TradeDate
 
 from .email import send_email
 from .instance_record import INSTANCE_RECORD
+
+from .autorun import AutoRunTask
