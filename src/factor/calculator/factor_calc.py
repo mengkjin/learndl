@@ -168,11 +168,15 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     @classmethod
     def validate_value(cls , df : pd.Series , strict = False):
         '''validate factor value'''
-        mininum_finite_count = 100 if strict else 0
-        actual_finite_count = np.isfinite(df[cls.factor_name].to_numpy()).sum()
+        mininum_valid_count = 100 if strict else 0
+        actual_valid_count = df.notna().sum()
 
-        if actual_finite_count < mininum_finite_count:
-            raise ValueError(f'factor_value must have at least {mininum_finite_count} finite values , but got {actual_finite_count}')
+        if actual_valid_count < mininum_valid_count:
+            raise ValueError(f'factor_value must have at least {mininum_valid_count} valid values , but got {actual_valid_count}')
+        
+        if np.isinf(df).any():
+            raise ValueError(f'factor_value must not have infinite values , but got {np.isinf(df).sum()} infs')
+        
         return df
 
     def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:

@@ -112,7 +112,10 @@ class FactorUpdateJobManager:
             DATAVENDOR.data_storage_control()
             parallel(do_job , jobs , method = self.multi_thread)
             if verbosity > 0:
-                print(f'Factors of {level} at {date} done: {sum(job.done for job in jobs)} / {len(jobs)}')
+                failed_factors = [job.factor_name for job in jobs if not job.done]
+                print(f'Factors of {level} at {date} done: {len(jobs) - len(failed_factors)} / {len(jobs)}')
+                if failed_factors:
+                    print(f'Failed factors: {failed_factors}')
         [self.jobs.remove(job) for job in jobs if job.done]
     
     @classmethod
