@@ -57,19 +57,29 @@ class FactorUpdateJobManager:
     def to_dataframe(self):
         columns = ['level' , 'date' , 'factor']
         return pd.DataFrame([(job.level , job.date , job.factor_name) for job in self.jobs] , columns=columns).sort_values(by=columns)
-    def filter(self , jobs : list[FactorUpdateJob] , level : str , date : int):
-        return [job for job in jobs if job.level == level and job.date == date]
+
     def clear(self): self.jobs.clear()
     def sort(self): self.jobs.sort(key=lambda x: x.sort_key)
     def append(self , job : FactorUpdateJob): self.jobs.append(job)
     def grouped_jobs(self):
         for level , date in self.groups():
-            yield (level , date) , self.filter(self.jobs , level , date)
-    
-    def unfinished_factors(self , date : int):
-        hier = StockFactorHierarchy()
-        factors = [calc for calc in hier.iter_instance() if not calc.has_date(date)]
-        return factors
+            yield (level , date) , self.filter_jobs(self.jobs , level , date)
+    @staticmethod
+    def filter_jobs(jobs : list[FactorUpdateJob] , level : str , date : int):
+        return [job for job in jobs if job.level == level and job.date == date]
+    def unfinished_factors(self , date : int | None = None):
+        if date is None: 
+            factors = {}
+            for date in StockFactorCalculator.FACTOR_TARGET_DATES:
+                if f := self.unfinished_factors(date): factors[date] = f
+            return factors
+        else:
+            if date not in StockFactorCalculator.FACTOR_TARGET_DATES:
+                return []
+            else:
+                hier = StockFactorHierarchy()
+                factors = [calc for calc in hier.iter_instance() if not calc.has_date(date)]
+                return factors
 
     def collect_jobs(self , start : int | None = None , end : int | None = None , all_factors = False ,
                      overwrite = False , groups_in_one_update : int | None = None , **kwargs):
@@ -97,7 +107,7 @@ class FactorUpdateJobManager:
         else:
             if groups_in_one_update is not None:
                 groups = self.groups()[:groups_in_one_update]
-                self.jobs = [job for level , date in groups for job in self.filter(self.jobs , level , date)]
+                self.jobs = [job for level , date in groups for job in self.filter_jobs(self.jobs , level , date)]
             levels , dates = self.levels() , self.dates()
             print(f'Finish collecting {len(self)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
         return self

@@ -37,6 +37,8 @@ class AutoRunTask:
         parser = argparse.ArgumentParser(description='Run daily update script.')
         parser.add_argument('--source', type=str, default='not_specified', help='Source of the script call')
         parser.add_argument('--email', type=int, default=1, help='Send email or not')
+        parser.add_argument('--param', type=str, default='', help='Extra parameters for the script')
         args , _ = parser.parse_known_args()
         return args.__dict__
+
 

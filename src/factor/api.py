@@ -17,8 +17,8 @@ class FactorModelUpdater:
 
 class FactorCalculatorAPI:
     @classmethod
-    def update(cls):
-        UPDATE_JOBS.update()
+    def update(cls , **kwargs):
+        UPDATE_JOBS.update(**kwargs)
 
 class FactorTestAPI:
     TASK_TYPES = TASK_TYPES

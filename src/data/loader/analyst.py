@@ -62,12 +62,15 @@ class AnalystDataAccess(DateDataAccess):
         return est
     
     def get_val_ftm(self , date : int , val : Literal['sales' , 'np' , 'tp' , 'op' , 'eps' , 'roe'] , n_month : int = 12 , lag_month : int = 0):
+        date = CALENDAR.cd(date , -30 * lag_month)
         month = date // 100 % 100
         year = date // 10000
-        val0 = self.get_val_est(date , year , val , n_month , lag_month)
-        val1 = self.get_val_est(date , year + 1 , val , n_month , lag_month)
-        ftm = ((12 - month) * val0 + month * val1) / 12
-        return ftm
+        val0 = self.get_val_est(date , year , val , n_month)
+        val1 = self.get_val_est(date , year + 1 , val , n_month )
+        ftm = pd.concat([val0 , val1] , axis = 1).rename(columns = {0 : 'val0' , 1 : 'val1'})
+        ftm['val0'] = ftm['val0'].fillna(ftm['val1'])
+        ftm['val1'] = ftm['val1'].fillna(ftm['val0'])
+        return (12 - month) * ftm['val0'] + month * ftm['val1']
     
     def target_price(self , date : int , n_month : int = 12 , lag_month : int = 0):
         end_date = CALENDAR.cd(date , -30 * lag_month)

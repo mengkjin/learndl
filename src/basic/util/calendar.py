@@ -320,8 +320,11 @@ class TradeCalendar:
         return np.concatenate([start , mid , end])
     
     @staticmethod
-    def qe_within(start , end):
-        return QUARTER_ENDS[(QUARTER_ENDS >= start) & (QUARTER_ENDS <= end)]
+    def qe_within(start , end , year_only = False):
+        if year_only:
+            return YEAR_ENDS[(YEAR_ENDS >= start) & (YEAR_ENDS <= end)]
+        else:
+            return QUARTER_ENDS[(QUARTER_ENDS >= start) & (QUARTER_ENDS <= end)]
 
     @classmethod
     def qe_interpolate(cls , incomplete_qtr_ends : Sequence | Any):

@@ -57,7 +57,7 @@ class ModelAPI:
             cls.Extractor.update()
     
     @classmethod
-    def update_factors(cls):
+    def update_preds(cls):
         '''
         Update factors for prediction models (registered models) for both laptop and server:
         '''

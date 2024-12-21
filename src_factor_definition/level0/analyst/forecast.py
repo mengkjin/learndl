@@ -154,6 +154,8 @@ class optop_est_pct6m(StockFactorCalculator):
     category1 = 'forecast'
     description = '6个月营业利润/市值一致预期变化'
 
+    UPDATE_RELAX_DATES : list[int] = [20110104 , 20110111 , 20110118]
+
     def calc_factor(self, date: int):
         return valtop_pct(date , 'op' , 6)
 

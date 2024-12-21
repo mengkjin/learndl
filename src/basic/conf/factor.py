@@ -5,7 +5,7 @@ basic variables in factor package
 from src.project_setting import IS_SERVER
 from . import load_config
 
-UPDATE_START = 20070101 if IS_SERVER else 20241101
+UPDATE_START = 20110101 if IS_SERVER else 20241101
 UPDATE_END   = 20401231 if IS_SERVER else 20241231
 UPDATE_STEP  = 5
 

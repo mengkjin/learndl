@@ -34,6 +34,9 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         'alternative' : None
     }
     FACTOR_TARGET_DATES = CALENDAR.td_within(CONF.UPDATE_START , CONF.UPDATE_END , CONF.UPDATE_STEP)
+    UPDATE_MIN_VALID_COUNT_RELAX  = 20
+    UPDATE_MIN_VALID_COUNT_STRICT = 100
+    UPDATE_RELAX_DATES : list[int] = []
     
 
     def __new__(cls , *args , **kwargs):
@@ -169,10 +172,14 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         return cls
         
     @classmethod
-    def validate_value(cls , df : pd.Series , strict = False):
+    def validate_value(cls , df : pd.Series , date : int , strict = False):
         '''validate factor value'''
-        mininum_valid_count = 100 if strict else 0
+        
         actual_valid_count = df.notna().sum()
+
+        mininum_valid_count = cls.UPDATE_MIN_VALID_COUNT_STRICT
+        if date in cls.UPDATE_RELAX_DATES or not strict:
+            mininum_valid_count = cls.UPDATE_MIN_VALID_COUNT_RELAX
 
         if actual_valid_count < mininum_valid_count:
             raise ValueError(f'factor_value must have at least {mininum_valid_count} valid values , but got {actual_valid_count}')
@@ -186,9 +193,8 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         '''store factor data after calculate'''
         if not overwrite and PATH.factor_path(self.factor_name , date).exists(): return False
         df = self.calc_factor(date)
-        df = self.validate_value(df , strict = strict_validation)
-        df = df.rename(self.factor_name).to_frame()
-        saved = PATH.factor_save(df , self.factor_name , date , overwrite)
+        df = self.validate_value(df , date , strict = strict_validation)
+        saved = PATH.factor_save(df.rename(self.factor_name).to_frame() , self.factor_name , date , overwrite)
         return saved
 
     @classmethod

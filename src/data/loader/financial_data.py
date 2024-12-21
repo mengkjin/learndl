@@ -64,20 +64,20 @@ class FDataAccess(DateDataAccess):
         return ann_calendar[ann_calendar['anndt'] > 0].set_index(['secid','date']).sort_index().astype(bool)
 
     @staticmethod
-    def index_interpolate(df : pd.DataFrame):
+    def index_interpolate(df : pd.DataFrame , year_only : bool = False):
         old_index = df.dropna().index.to_frame(index=False)
         index_range = old_index.groupby('secid')['end_date'].min().rename('min').to_frame()
         index_range = index_range.join(old_index.groupby('secid')['end_date'].max().rename('max'))
         full_index = pd.MultiIndex.from_product([old_index['secid'].unique() , 
-                                                CALENDAR.qe_within(index_range['min'].min(), index_range['max'].max())],
+                                                CALENDAR.qe_within(index_range['min'].min(), index_range['max'].max(), year_only = year_only)],
                                                 names = ['secid' , 'end_date'])
         new_index = full_index.to_frame(index=False).join(index_range , on = ['secid'] , how='left')
         new_index = new_index[(new_index['end_date'] >= new_index['min']) & (new_index['end_date'] <= new_index['max'])].set_index(['secid' , 'end_date'])
         return df.reindex(new_index.index)
 
     @staticmethod
-    def value_interpolate(df : pd.DataFrame , method : Literal['diff' , 'exact']):
-        if method == 'diff':
+    def value_interpolate(df : pd.DataFrame , method : Literal['diff' , 'exact'] , year_only : bool = False):
+        if method == 'diff' and not year_only:
             raw_index = df.index
             quarter = raw_index.get_level_values('end_date') % 10000 // 300
             df = df.assign(year = raw_index.get_level_values('end_date') // 10000).set_index('year' , append=True).reset_index('end_date',drop=True)
@@ -119,7 +119,6 @@ class FDataAccess(DateDataAccess):
         qtr_method = self._get_qtr_method(qtr_method)
 
         dates = CALENDAR.qe_trailing(date , n_past = lastn + 4 , year_only = year_only)
-
         field = ['secid' , self.ANN_DATA_COL , 'update_flag' , val]
         
         df_acc = self.gets(dates , data_type , field , rename_date_key = 'end_date').\
@@ -131,8 +130,8 @@ class FDataAccess(DateDataAccess):
         df_acc = df_acc[(df_acc['ann_date'] <= date) & df_acc['end_date'].isin(dates) & (df_acc['secid'] >= 0)]
         df_acc = df_acc.sort_values('update_flag').drop_duplicates(['secid' , 'end_date'] , keep = 'last')\
             [['secid','end_date',val]].set_index(['secid' , 'end_date']).sort_index()
-        df_acc = self.index_interpolate(df_acc)
-        df_acc = self.value_interpolate(df_acc , method = qtr_method)
+        df_acc = self.index_interpolate(df_acc , year_only = year_only)
+        df_acc = self.value_interpolate(df_acc , method = qtr_method , year_only = year_only)
         return self._fin_hist_data_transform(df_acc , val , None , lastn , pivot , ffill)
     
     def _get_data_qtr_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
