@@ -1,9 +1,9 @@
+import time
 import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
 from threading import Lock
-from typing import Literal , Type
 
 from src.basic import CONF , CALENDAR
 from src.data import DATAVENDOR
@@ -109,7 +109,7 @@ class FactorUpdateJobManager:
                 groups = self.groups()[:groups_in_one_update]
                 self.jobs = [job for level , date in groups for job in self.filter_jobs(self.jobs , level , date)]
             levels , dates = self.levels() , self.dates()
-            print(f'Finish collecting {len(self)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
+            print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Finish collecting {len(self)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
         return self
     
     def proceed(self , verbosity : int = 1 , overwrite = False):
@@ -132,7 +132,7 @@ class FactorUpdateJobManager:
             parallel(do_job , jobs , method = self.multi_thread)
             if verbosity > 0:
                 failed_factors = [job.factor_name for job in jobs if not job.done]
-                print(f'Factors of {level} at {date} done: {len(jobs) - len(failed_factors)} / {len(jobs)}')
+                print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Factors of {level} at {date} done: {len(jobs) - len(failed_factors)} / {len(jobs)}')
                 if failed_factors:
                     print(f'Failed factors: {failed_factors}')
         [self.jobs.remove(job) for job in jobs if job.done]

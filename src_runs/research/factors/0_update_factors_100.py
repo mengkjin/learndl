@@ -2,7 +2,8 @@
 # coding: utf-8
 # author: jinmeng
 # date: 2024-11-27
-# description: 一般用于更新因子数据.
+# description: Update Factors (100 groups)
+# content: 更新前100组level , date的因子数据
 
 import sys , pathlib
 
@@ -11,8 +12,8 @@ assert paths , f'learndl path not found , do not know where to find src file : {
 sys.path.append(str(paths[0]))
 
 from src.factor.api import FactorCalculatorAPI
-from src.basic.util.autorun import AutoRunTask
+from src_runs.widget import get_argparse_dict
 
 if __name__ == '__main__':
-    args = AutoRunTask.get_args()
-    FactorCalculatorAPI.update(groups_in_one_update=int(args.get('param',100)))
+    args = get_argparse_dict()
+    FactorCalculatorAPI.update(groups_in_one_update=100)
