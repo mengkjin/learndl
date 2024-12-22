@@ -20,6 +20,10 @@ class FactorCalculatorAPI:
     def update(cls , **kwargs):
         UPDATE_JOBS.update(**kwargs)
 
+    @classmethod
+    def fix(cls , **kwargs):
+        UPDATE_JOBS.update_fix(**kwargs)
+
 class FactorTestAPI:
     TASK_TYPES = TASK_TYPES
     @classmethod

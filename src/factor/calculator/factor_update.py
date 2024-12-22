@@ -81,7 +81,8 @@ class FactorUpdateJobManager:
                 factors = [calc for calc in hier.iter_instance() if not calc.has_date(date)]
                 return factors
 
-    def collect_jobs(self , start : int | None = None , end : int | None = None , all_factors = False ,
+    def collect_jobs(self , start : int | None = None , end : int | None = None , 
+                     all_factors = False , selected_factors : list[str] = [] ,
                      overwrite = False , groups_in_one_update : int | None = None , **kwargs):
         '''
         update update jobs for all factors between start and end date
@@ -93,12 +94,10 @@ class FactorUpdateJobManager:
             category1 : str | None = None 
         '''
         self.clear()
-        if not all_factors and not kwargs: return
-
+        if not (all_factors or selected_factors or kwargs): return self
         if end is None: end = min(CALENDAR.updated() , CONF.UPDATE_END)
 
-        hier = StockFactorHierarchy()
-        for calc in hier.iter_instance(**({} if all_factors else kwargs)):
+        for calc in self.iter_calculators(all_factors , selected_factors , **kwargs):
             dates = calc.target_dates(start , end , overwrite = overwrite)
             [self.append(FactorUpdateJob(calc , d)) for d in dates]
 
@@ -138,10 +137,74 @@ class FactorUpdateJobManager:
         [self.jobs.remove(job) for job in jobs if job.done]
     
     @classmethod
-    def update(cls , verbosity : int = 1 , groups_in_one_update : int | None = 100):
+    def iter_calculators(cls , all_factors = False , selected_factors : list[str] = [] , **kwargs):
+        if selected_factors:
+            assert not all_factors , \
+                f'all_factors ({all_factors}) and selected_factors ({selected_factors}) cannot be supplied at once'
+        hier = StockFactorHierarchy()
+        if all_factors:
+            return hier.iter_instance()
+        elif selected_factors:
+            return (calc for calc in hier.iter_instance() if calc.factor_name in selected_factors)
+        else:
+            return hier.iter_instance(**kwargs)
+
+    @classmethod
+    def update(cls , verbosity : int = 1 , groups_in_one_update : int | None = 100 , start : int | None = None , end : int | None = None):
         '''update factor data according'''
         self = cls()
-        self.collect_jobs(all_factors = True , groups_in_one_update = groups_in_one_update)
+        self.collect_jobs(start = start , end = end , all_factors = True , groups_in_one_update = groups_in_one_update)
         self.proceed(verbosity)
+
+    @classmethod
+    def update_fix(cls , verbosity : int = 1):
+        self = cls()
+        fix_factors = cls.fix_factors()
+        print(f'Fixing factors : {fix_factors}')
+        self.collect_jobs(selected_factors = fix_factors , overwrite = True)
+        self.proceed(verbosity , overwrite = True)
+
+    @classmethod
+    def eval_coverage(cls , all_factors = False , selected_factors : list[str] = [] ,
+                      recal_on_error = True , **kwargs):
+        '''
+        update update jobs for all factors between start and end date
+        **kwargs:
+            factor_name : str | None = None
+            level : str | None = None 
+            file_name : str | None = None
+            category0 : str | None = None 
+            category1 : str | None = None 
+        '''
+        
+        if not (all_factors or selected_factors or kwargs): return pd.DataFrame()
+        dfs : list[pd.DataFrame] = []
+        for calc in cls.iter_calculators(all_factors , selected_factors , **kwargs):
+            dates = calc.stored_dates()
+            for date in dates:
+                try:
+                    factor = calc.load_factor(date)
+                    valid_count = factor.notna().sum()
+                    dfs.append(pd.DataFrame({'factor' : [calc.factor_string] , 'date' : [date] , 'valid_count' : [valid_count]}))
+                except Exception as e:
+                    print(f'load factor {calc.factor_string} at {date} failed: {e}')
+                    if recal_on_error:
+                        calc.calc_and_deploy(date , overwrite = True)
+                        factor = calc.load_factor(date)
+                        valid_count = factor.notna().sum()
+                        dfs.append(pd.DataFrame({'factor' : [calc.factor_string] , 'date' : [date] , 'valid_count' : [valid_count]}))
+
+        df = pd.concat(dfs)
+        df.to_csv('factor_coverage.csv' , index = True)
+        return df
+
+    @classmethod
+    def fix_factors(cls):
+        return ['outperform_title' , 'outperform_titlepct' , 'outperform_npro' , 'outperform_sales' ,
+                'rec_npro_12m' , 'rec_npro_6m' , 'rec_npro_3m' , 'rec_npro_6m_anndt' ,
+                'upnum_npro_12m' , 'upnum_npro_6m' , 'upnum_npro_3m' , 'upnum_npro_6m_anndt' ,
+                'uppct_npro_12m' , 'uppct_npro_6m' , 'uppct_npro_3m' , 'uppct_npro_6m_anndt' ,
+                'anndt_phigh' , 'mom_aog' , 'mom_aaa' , 'cov_inst_12m_anndt'
+                ]
 
 UPDATE_JOBS = FactorUpdateJobManager()

@@ -10,19 +10,26 @@ from src.data.util import INFO
 
 from .access import DateDataAccess
 
-
+db_key_dict = {'trd' : 'day' , 'val' : 'day_val' , 'mf' : 'day_moneyflow' , 'limit' : 'day_limit'}
 @singleton
 class TradeDataAccess(DateDataAccess):
     MAX_LEN = 2000
     DATA_TYPE_LIST = ['trd' , 'val' , 'mf' , 'limit']
     
     def data_loader(self , date , data_type):
-        db_key_dict = {'trd' : 'day' , 'val' : 'day_val' , 'mf' : 'day_moneyflow' , 'limit' : 'day_limit'}
         if data_type in db_key_dict: 
             df = PATH.db_load('trade_ts' , db_key_dict[data_type] , date , verbose = False)
         else:
             raise KeyError(data_type)
         return df
+    
+    def latest_date(self , data_type : str , date : int | None = None):
+        if data_type in db_key_dict:
+            dates = PATH.db_dates('trade_ts' , db_key_dict[data_type])
+            if date: dates = dates[dates <= date]
+            return dates.max()
+        else:
+            raise KeyError(data_type)
 
     def get_val(self , date , field = None):
         return self.get(date , 'val' , field)

@@ -2,8 +2,8 @@
 # coding: utf-8
 # author: jinmeng
 # date: 2024-11-27
-# description: Train Model
-# content: 训练某个新模型,模型的参数在configs/train/model.yaml里定义,也可以改变其他configs
+# description: Fix Factors
+# content: 修正所有因子数据
 
 import sys , pathlib
 
@@ -11,8 +11,14 @@ paths = [p for p in pathlib.Path(__file__).absolute().parents if p.name == 'lear
 assert paths , f'learndl path not found , do not know where to find src file : {__file__}'
 sys.path.append(str(paths[0]))
 
-from src.api import ModelAPI  
+from src.factor.api import FactorCalculatorAPI
+from src.basic import AutoRunTask
+from src_runs.widget import argparse_dict
+
+def main():
+    params = argparse_dict()
+    with AutoRunTask('fix factors' , **params) as runner:
+        FactorCalculatorAPI.fix()
 
 if __name__ == '__main__':
-    trainer = ModelAPI.initialize_trainer(stage = 0 , resume = 0 , checkname= 1)
-    trainer.go()
+    main()

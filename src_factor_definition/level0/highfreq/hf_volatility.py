@@ -40,7 +40,7 @@ class inday_err_ret(StockFactorCalculator):
 
     def calc_factor(self, date: int):
         def err_ret(date : int):
-            df = DATAVENDOR.MKLINE.get_kline(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             df = df.with_columns(
                 pl.col('ret').top_k(5).min().over('secid').alias('err_flag') ,
             ).with_columns(
@@ -59,7 +59,7 @@ class inday_maxdd(StockFactorCalculator):
 
     def calc_factor(self, date: int):
         def maxdd(date : int):
-            df = DATAVENDOR.MKLINE.get_kline(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             df = df.with_columns(
                 pl.when(pl.col('minute') == 0).then(pl.col('open')).otherwise(
                     pl.col('high').cum_max().shift(1)).over('secid').alias('cum_high') ,
@@ -79,7 +79,7 @@ class inday_std_1min(StockFactorCalculator):
 
     def calc_factor(self, date: int):
         def std(date : int):
-            df = DATAVENDOR.MKLINE.get_1min(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_1min(date , with_ret = True)
             df = df.group_by('secid').agg(
                 pl.col('ret').std().alias('value') ,
             )
@@ -94,7 +94,7 @@ class inday_std_5min(StockFactorCalculator):
 
     def calc_factor(self, date: int):
         def std(date : int):
-            df = DATAVENDOR.MKLINE.get_5min(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_5min(date , with_ret = True)
             df = df.group_by('secid').agg(
                 pl.col('ret').std().alias('value') ,
             )
@@ -109,7 +109,7 @@ class inday_skewness_1min(StockFactorCalculator):
 
     def calc_factor(self, date: int):
         def skewness(date : int):
-            df = DATAVENDOR.MKLINE.get_1min(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_1min(date , with_ret = True)
             df = df.group_by('secid').agg(
                 pl.col('ret').skew().alias('value') ,
             )
@@ -124,7 +124,7 @@ class inday_skewness_5min(StockFactorCalculator):
 
     def calc_factor(self, date: int):   
         def skewness(date : int):
-            df = DATAVENDOR.MKLINE.get_5min(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_5min(date , with_ret = True)
             df = df.group_by('secid').agg(
                 pl.col('ret').skew().alias('value') ,
             )
@@ -139,7 +139,7 @@ class inday_kurt_1min(StockFactorCalculator):
 
     def calc_factor(self, date: int):
         def kurt(date : int):
-            df = DATAVENDOR.MKLINE.get_1min(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_1min(date , with_ret = True)
             df = df.group_by('secid').agg(
                 pl.col('ret').kurtosis().alias('value') ,
             )
@@ -154,7 +154,7 @@ class inday_kurt_5min(StockFactorCalculator):
 
     def calc_factor(self, date: int):   
         def kurt(date : int):
-            df = DATAVENDOR.MKLINE.get_5min(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_5min(date , with_ret = True)
             df = df.group_by('secid').agg(
                 pl.col('ret').kurtosis().alias('value') ,
             )
@@ -169,7 +169,7 @@ class inday_vardown_1min(StockFactorCalculator):
 
     def calc_factor(self, date: int):
         def vardown(date : int):
-            df = DATAVENDOR.MKLINE.get_1min(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_1min(date , with_ret = True)
             df = df.with_columns(
                 pl.when(pl.col('ret') < 0).then(pl.col('ret')).otherwise(None).alias('ret_down')
             ).group_by('secid').agg(
@@ -189,7 +189,7 @@ class vardown_intra5min(StockFactorCalculator):
 
     def calc_factor(self, date: int):
         def vardown(date : int):
-            df = DATAVENDOR.MKLINE.get_5min(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_5min(date , with_ret = True)
             df = df.with_columns(
                 pl.when(pl.col('ret') < 0).then(pl.col('ret')).otherwise(None).alias('ret_down')
             ).group_by('secid').agg(

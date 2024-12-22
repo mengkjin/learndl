@@ -1,3 +1,4 @@
+import time
 from src.model.callback import CallBackManager
 from src.model.data_module import DataModule
 from src.model.util import BaseTrainer
@@ -29,4 +30,9 @@ class ModelTrainer(BaseTrainer):
         if not IS_SERVER:
             print('This is not server! Will not update models!')
         else:
-            [cls.initialize(0 , 1 , 0 , model.model_path).go() for model in RegisteredModel.SelectModels()]
+            for model in RegisteredModel.SelectModels():
+                print(f'Updating model: {model.model_path}')
+                print(f'Start time: {time.strftime("%Y-%m-%d %H:%M:%S")}')
+                cls.initialize(0 , 1 , 0 , model.model_path).go()
+                print(f'End time: {time.strftime("%Y-%m-%d %H:%M:%S")}')
+

@@ -74,6 +74,10 @@ class Port:
     def __truediv__(self , other): return self.rescale(1 / other)
     def __sub__(self , other): return self.merge(other * -1.)
 
+    def with_name(self , name : str):
+        self.name = name
+        return self
+
     @property
     def size(self): return len(self.port)
 
@@ -163,7 +167,8 @@ class Port:
         
     def to_dataframe(self):
         if len(self.port):
-            return self.port.assign(name = self.name , date = self.date)[['name' , 'date' , 'secid' , 'weight']]
+            return self.port.assign(name = self.name , date = self.date , value = self.value)[
+                ['name' , 'date' , 'secid' , 'weight' , 'value']]
         else:
             return pd.DataFrame()
         
@@ -205,3 +210,11 @@ class Port:
         if not self or self is another: return 0.
         assert isinstance(another , Port) , another
         return (self - another).port['weight'].abs().sum()
+    
+    @classmethod
+    def sum(cls , ports : list):
+        assert len(ports) > 0 , ports
+        port = ports[0]
+        for p in ports[1:]: port += p
+        return port
+

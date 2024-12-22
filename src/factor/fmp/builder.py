@@ -17,7 +17,7 @@ from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_su
 class PortfolioBuilder:
     '''
     alpha : AlphaModel
-    benchmark : Benchmark | str
+    benchmark : Benchmark | Portfolio | Port | str
     category : Literal['optim' , 'top'] | Any
     lag : int , lag periods (not days)
     strategy : str
@@ -95,11 +95,12 @@ class PortfolioBuilder:
         return self
         
     def build(self , date : int):
+        assert hasattr(self , 'creator') , 'PortfolioBuilder not setup!'
         assert self.alpha.has(date) , f'{self.alpha.name} has no data at {date}'
         init_port = self.portfolio.get(date , latest = True)
         port_rslt = self.creator.create(date , self.alpha.get(date , lag = self.lag) , self.benchmark , init_port)
         self.creations.append(port_rslt)
-        self.portfolio.append(port_rslt.port)
+        self.portfolio.append(port_rslt.port.with_name(self.portfolio.name))
         self.port = port_rslt.port
         return self
     

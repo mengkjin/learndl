@@ -86,13 +86,14 @@ class Portfolio:
         df = df.reset_index()
         assert all(col in df.columns for col in ['name' , 'date' , 'secid' , 'weight']) , \
             f'expect columns: name , date , secid , weight , got {df.columns.tolist()}'
+        if 'value' not in df.columns: df['value'] = 1
         if name is None: 
             assert df['name'].nunique() == 1 , f'all ports must have the same name , got multiple names: {df["name"].unique()}'
             name = df['name'][0]
         else:
             df = df[df['name'] == name]
         portfolio = cls(name)
-        [portfolio.append(Port(subdf[['secid' , 'weight']] , date , name)) for date , subdf in df.groupby('date')]
+        [portfolio.append(Port(subdf[['secid' , 'weight']] , date , name , subdf['value'][0])) for date , subdf in df.groupby('date')]
         return portfolio
     
     def to_dataframe(self):
@@ -100,3 +101,11 @@ class Portfolio:
             return pd.DataFrame()
         else:
             return pd.concat([port.to_dataframe() for port in self.ports.values()] , axis = 0)
+        
+    @classmethod
+    def from_ports(cls , *ports : Port , name : str | None = None):
+        assert ports or name , 'expect at least one port or a name'
+        portfolio = cls(name if name else ports[0].name)
+        for port in ports:
+            portfolio.append(port , override = True , ignore_name = bool(name))
+        return portfolio

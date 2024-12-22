@@ -24,27 +24,31 @@ class MinKLineAccess(DateDataAccess):
             raise KeyError(data_type)
         return df
     
-    def add_ret(self , df : pl.DataFrame):
-        df = df.with_columns(
-            pl.when(pl.col('minute') == 0).then(pl.col('open')).otherwise(pl.col('close').shift(1)).over('secid').alias('preclose')
-        ).with_columns(
-            ((pl.col('close') - pl.col('preclose')) / pl.col('preclose')).alias('ret')
-        )
+    @staticmethod
+    def reform_mkline(df : pl.DataFrame , with_ret : bool = False):
+        df = df.with_columns(pl.col('secid').cast(pl.Int64))
+        if with_ret:
+            df = df.with_columns(
+                pl.when(pl.col('minute') == 0).then(pl.col('open')).\
+                    otherwise(pl.col('close').shift(1)).over('secid').alias('preclose')
+            ).with_columns(
+                ((pl.col('close') - pl.col('preclose')) / pl.col('preclose')).alias('ret')
+            )
         return df
 
-    def get_1min(self , date , add_ret = False):
+    def get_1min(self , date , with_ret = False):
         df = self.get_pl(date , 'min')
-        if add_ret and df.shape[0] > 0: df = self.add_ret(df)
+        df = self.reform_mkline(df , with_ret)
         return df
     
-    def get_5min(self , date , add_ret = False):
+    def get_5min(self , date , with_ret = False):
         df = self.get_pl(date , '5min')
-        if add_ret and df.shape[0] > 0: df = self.add_ret(df)
+        df = self.reform_mkline(df , with_ret)
         return df
     
-    def get_kline(self , date , add_ret = False):
-        df = self.get_1min(date , add_ret)
-        if df.shape[0] == 0: df = self.get_5min(date , add_ret)
+    def get_kline(self , date , with_ret = False):
+        df = self.get_1min(date , with_ret)
+        if df.shape[0] == 0: df = self.get_5min(date , with_ret)
         return df
 
     def get_inday_corr(self , date : int , 
@@ -56,7 +60,7 @@ class MinKLineAccess(DateDataAccess):
         assert val1 != val2 or lag1 != lag2 , \
             f'val1 and val2 must be different or lag1 and lag2 must be different , got {val1} , {val2} , {lag1} , {lag2}'
 
-        df = self.get_kline(date , add_ret = (val1 in ['ret' , 'mkt']) or (val2 in ['ret' , 'mkt']))
+        df = self.get_kline(date , with_ret = (val1 in ['ret' , 'mkt']) or (val2 in ['ret' , 'mkt']))
         if val1 == 'mkt' or val2 == 'mkt':
             mkt = df.group_by('minute').agg(pl.col('ret').mean().alias('mkt'))
             df = df.join(mkt, on='minute')

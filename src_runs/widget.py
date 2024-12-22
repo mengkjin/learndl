@@ -5,27 +5,40 @@ from typing import Any
 from pathlib import Path
 from IPython.display import display
 
-def get_python_path():
+def python_path():
     if os.name == 'posix':
         return 'python3.10'
     else:
         return 'python'
 
-def get_terminal_cmd(cmd : str):
+def terminal_cmd(script : str | Path , params : dict = {}):
+    if isinstance(script , Path): script = str(script.absolute())
+    args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in params.items()])
+
     if os.name == 'posix':
+        cmd = f'python3.10 {script} {args}'
         return f'gnome-terminal -- bash -c "{cmd}; exec bash"'
     else:
+        cmd = f'python {script} {args}'
         return f'start cmd /k {cmd}'
+    
+def run_script(script : str | Path , **kwargs):
+    print(f'Script path : {script}')
+    print(f'Script args : {kwargs}')
 
-def get_argparse_dict():
+    cmd = terminal_cmd(script , kwargs)
+    process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
+    process.wait() 
+
+def argparse_dict(**kwargs):
     parser = argparse.ArgumentParser(description='Run daily update script.')
-    parser.add_argument('--source', type=str, default='', help='Source of the script call')
-    parser.add_argument('--email', type=int, default=1, help='Send email or not')
-    parser.add_argument('--param', type=str, default='', help='Extra parameters for the script')
+    parser.add_argument('--source', type=str, default=kwargs.get('source',''), help='Source of the script call')
+    parser.add_argument('--email', type=int, default=kwargs.get('email',1), help='Send email or not')
+    parser.add_argument('--param', type=str, default=kwargs.get('param',''), help='Extra parameters for the script')
     args , _ = parser.parse_known_args()
     return args.__dict__
 
-def get_script_header(file_path , verbose = False):
+def script_header(file_path , verbose = False):
     header_dict = {}
     try:
         header_char = '#'
@@ -54,52 +67,20 @@ def get_script_header(file_path , verbose = False):
     
     return header_dict
 
-def get_caption(txt : str):
+def caption(txt : str):
     return ' '.join([s.capitalize() for s in txt.split(' ')])
 
-def run_script(script : str | Path , source = 'button' , email = 1 , param = ''):
-    print(f'Script path  : {script}')
-    print(f'Script source: {source}')
-
-    main_cmd = f'{get_python_path()} {str(script)} --source {source} --email {email}'
-    if param: main_cmd += f' --param {param}'
-    terminal_cmd = get_terminal_cmd(main_cmd)
-    process = subprocess.Popen(terminal_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True , encoding='utf-8')
-    process.wait() 
-
-
-def get_script_button(script : str | Path, prefix = '' , **kwargs):
-    def func(b): run_script(script , **kwargs)
-
-    header = get_script_header(script , verbose = False)
-
-    desc = get_caption(header['description']) + prefix 
-    disabled = header.get('disabled' , False)
-    button = widgets.Button(description=desc, 
-                            layout=widgets.Layout(width='auto', min_width='200px'), 
-                            style={'button_color': 'lightgrey' , 'font_weight': 'bold'} , 
-                            disabled=disabled)
-    button.on_click(func)
-
-    value = "<br>".join([value for key , value in header.items() if key in ['content' , 'TODO']])
-    style = 'font-size: 12px; text-align: left; margin: 0.2px; padding: 0px; line-height: 1.5;'
-    text = widgets.HTML(value=f'<p style="{style}"><em>{value}</em></p>' ,
-                        layout=widgets.Layout(width='auto', min_width='300px' , border_top = '2px solid grey'))
-
-    button = get_vertical_box(button, text , border = '2px solid grey')
-    return button
-
-def get_button_grids(*buttons , max_columns = 3):
-    columns = min(len(buttons) , max_columns)
+def layout_grids(*boxes , max_columns = 3):
+    columns = min(len(boxes) , max_columns)
     layout = widgets.Layout(
         grid_template_columns=f'repeat({columns}, 1fr)',
         width='100%',
         border='2px solid grey', 
     )
-    gridbox = widgets.GridBox(buttons, layout=layout)
+    gridbox = widgets.GridBox(boxes, layout=layout)
     return gridbox
 
-def get_vertical_box(*boxes , tight_layout = True , border = None):
+def layout_vertical(*boxes , tight_layout = True , border = None):
     kwargs = {'padding' : '0px' , 'margin' : '0px' , 'spacing' : '0px'} if tight_layout else {}
     vbox_layout = widgets.Layout(
         display='flex',
@@ -128,26 +109,64 @@ def get_title(text : str , level : int):
         style = title_style(size = 16 , bold = True)
     elif level == 3:
         style = title_style(size = 14 , bold = True)
-    return widgets.HTML(f'<div style="{style}"><em>{get_caption(text)}</em></div>')
+    return widgets.HTML(f'<div style="{style}"><em>{caption(text)}</em></div>')
 
-def folder_box(folder : str | Path , level : int , exclude_self = True):
-    dir_boxes , scp_boxes = [] , []
+def get_script_box(script : str | Path, prefix = '' , **kwargs):
+    header = script_header(script , verbose = False)
+    boxes = []
+
+    desc = caption(header['description']) + prefix 
+    disabled = header.get('disabled' , False)
+    button = widgets.Button(description=desc, 
+                            layout=widgets.Layout(width='auto', min_width='200px'), 
+                            style={'button_color': 'lightgrey' , 'font_weight': 'bold'} , 
+                            disabled=disabled)
+    boxes.append(button)
+
+    value = "<br>".join([value for key , value in header.items() if key in ['content' , 'TODO']])
+    style = 'font-size: 12px; text-align: left; margin: 0.2px; padding: 0px; line-height: 1.5;'
+    text = widgets.HTML(value=f'<p style="{style}"><em>{value}</em></p>' ,
+                        layout=widgets.Layout(width='auto', min_width='300px' , border_top = '2px solid grey'))
+    boxes.append(text)
+
+    if header.get('param_input' , False):
+        param_input = widgets.Textarea(
+            placeholder=header.get('param_placeholder' , 'type parameters here...'),
+            layout=widgets.Layout(width='auto', min_width='300px', height='50px')
+        )
+        boxes.append(param_input)
+        def func(b):
+            run_script(script, **kwargs , param = param_input.value.strip())
+    else:
+        def func(b):
+            run_script(script, **kwargs)
+    
+    button.on_click(func)
+    return layout_vertical(*boxes , border = '2px solid grey')
+
+def get_folder_box(folder : str | Path , level : int , exclude_self = True):
+    dir_boxes , file_boxes = [] , []
     email = 1 if 'autorun' in str(folder) else 0
     self_path = Path(__file__).absolute() if exclude_self else None
     
     if level > 0: dir_boxes.append(get_title(f'{Path(folder).name} scripts' , min(level , 3)))
 
-    for path in Path(folder).iterdir():
+    for path in sorted(Path(folder).iterdir(), key=lambda x: x.name):
         if path.name.startswith(('.' , '_')): continue
         if path.is_dir(): 
-            dir_boxes.append(folder_box(path , level + 1 , exclude_self = exclude_self))
+            dir_boxes.append(get_folder_box(path , level + 1 , exclude_self = exclude_self))
         else:
             if self_path is not None and path.absolute() == self_path: continue
-            scp_boxes.append(get_script_button(str(path) , email = email))
+            file_boxes.append(get_script_box(str(path) , email = email))
 
-    if scp_boxes: dir_boxes.append(get_button_grids(*scp_boxes))
-    return get_vertical_box(*dir_boxes)
+    if file_boxes: dir_boxes.append(layout_grids(*file_boxes))
+    return layout_vertical(*dir_boxes)
+
+def main():
+    print('Initiating project interface...')
+    project = get_folder_box('src_runs' , 0)
+    print('Project interface initiated successfully.')
+    display(project)
 
 if __name__ == '__main__':
-    project = folder_box('src_runs' , 0)
-    display(project)
+    main()

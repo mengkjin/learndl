@@ -2,8 +2,8 @@
 # coding: utf-8
 # author: jinmeng
 # date: 2024-11-27
-# description: Update AI Models
-# content: 更新训练所有Registered模型
+# description: Train Model
+# content: 训练某个新模型,模型的参数在configs/train/model.yaml里定义,也可以改变其他configs
 
 import sys , pathlib
 
@@ -16,8 +16,10 @@ from src.basic import AutoRunTask
 from src_runs.widget import argparse_dict
 
 def main():
-    with AutoRunTask('update models' , **argparse_dict()) as runner:
-        ModelAPI.update_models()
+    params = argparse_dict()
+    with AutoRunTask('train model' , **params) as runner:
+        trainer = ModelAPI.initialize_trainer(stage = 0 , resume = 0 , checkname= 1)
+        trainer.go()
 
 if __name__ == '__main__':
     main()

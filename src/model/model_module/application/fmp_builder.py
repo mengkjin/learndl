@@ -50,8 +50,8 @@ class ModelPortfolioBuilder:
         return Portfolio.from_dataframe(table , name = port_name)
     
     def iter_builder_kwargs(self , date : int | None = None , verbosity : int = 0):
-        alpha = self.reg_model.pred_name if date is None else self.alpha_model(date)
-        iter_args = itertools.product(self.FMP_TYPES , self.SUB_TYPES , Benchmark.DEFAULTS , self.N_BESTS)
+        alpha = self.reg_model.pred_name if date is None else self.alpha_model(date) # None only for name
+        iter_args = itertools.product(self.FMP_TYPES , self.SUB_TYPES , self.BENCHMARKS , self.N_BESTS)
         for fmp_type , sub_type , benchmark , n_best in iter_args:
             # check legitimacy
             if (fmp_type == 'top' and n_best <= 0) or (fmp_type == 'optim' and n_best > 0): continue

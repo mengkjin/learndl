@@ -12,6 +12,12 @@ assert paths , f'learndl path not found , do not know where to find src file : {
 sys.path.append(str(paths[0]))
 
 from src.api import ModelAPI
+from src.basic import AutoRunTask
+from src_runs.widget import argparse_dict
+
+def main():
+    with AutoRunTask('update preds' , **argparse_dict()) as runner:
+        ModelAPI.update_preds()
 
 if __name__ == '__main__':
-    ModelAPI.update_preds()
+    main()

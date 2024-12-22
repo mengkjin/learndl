@@ -39,7 +39,7 @@ class inday_amap_orig(StockFactorCalculator):
         mom20 = (mom20 + 1).groupby('secid')['pctchange'].prod() - 1
 
         def ampm(date : int):
-            df = DATAVENDOR.MKLINE.get_kline(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             min_thres = 120. if max(df['minute']) > 200. else 24.
             df = df.with_columns(
                 (pl.when(pl.col('minute') < min_thres).then(0).otherwise(1)).alias('time_flag')
@@ -80,7 +80,7 @@ class inday_conf_persist(StockFactorCalculator):
         dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
 
         def conf_persist(date : int):
-            df = DATAVENDOR.MKLINE.get_kline(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             ret = df.group_by('secid').agg(((pl.col('ret') + 1).product() - 1).alias('ret'))
             df = df.with_columns(
                 pl.col('ret').mean().over('secid').alias('ret_mean') , pl.col('ret').std().over('secid').alias('ret_std') ,
@@ -117,7 +117,7 @@ class inday_regain_conf_persist(StockFactorCalculator):
         dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
 
         def conf_persist(date : int):
-            df = DATAVENDOR.MKLINE.get_kline(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             ret = df.group_by('secid').agg(((pl.col('ret') + 1).product() - 1).alias('ret'))
             df = df.with_columns(
                 pl.col('ret').mean().over('secid').alias('ret_mean') , pl.col('ret').std().over('secid').alias('ret_std') ,
@@ -155,7 +155,7 @@ class inday_high_time(StockFactorCalculator):
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
         def high_time(date : int):
-            df = DATAVENDOR.MKLINE.get_kline(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             df = df.with_columns(
                 pl.col('high').top_k(5).min().over('secid').alias('high_flag') ,
             ).with_columns(
@@ -179,7 +179,7 @@ class inday_incvol_mom(StockFactorCalculator):
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
         def incvol_ret(date : int):
-            df = DATAVENDOR.MKLINE.get_kline(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             df = df.with_columns(
                 (pl.col('volume') > pl.col('volume').shift(1)).over('secid').alias('incvol_flag') 
             ).filter(pl.col('incvol_flag') == 1).group_by('secid').agg(
@@ -250,7 +250,7 @@ class inday_vwap_diff_hlvol(StockFactorCalculator):
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
         def high_vol(date : int):
-            df = DATAVENDOR.MKLINE.get_kline(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             df = df.with_columns(
                 pl.col('volume').median().over('secid').alias('vol_flag')
             ).with_columns(
@@ -307,7 +307,7 @@ class mom_high_pstd(StockFactorCalculator):
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
         def vol_z(date : int):
-            df = DATAVENDOR.MKLINE.get_kline(date , add_ret = True)
+            df = DATAVENDOR.MKLINE.get_kline(date , with_ret = True)
             df = df.group_by('secid').agg(
                 (pl.col('ret').std()).alias('ret_std') ,
                 pl.lit(date).alias('date')

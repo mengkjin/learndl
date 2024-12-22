@@ -37,6 +37,7 @@ class FDataAccess(DateDataAccess):
         #ann_dt : pd.DataFrame = pd.concat(income_ann_dt)
         ann_dt['end_date'] = ann_dt['end_date'].astype(int)
         ann_dt['ann_date'] = ann_dt['ann_date'].astype(int)
+        ann_dt = ann_dt.sort_values(['end_date' , 'ann_date']).drop_duplicates(['secid' , 'end_date'])
         ann_dt['td_backward'] = CALENDAR.td_array(ann_dt['ann_date'] , backward = True)
         ann_dt['td_forward']  = CALENDAR.td_array(ann_dt['ann_date'] , backward = False)
         ann_dt = ann_dt.loc[ann_dt['td_forward'] <= date , :]

@@ -197,7 +197,7 @@ class vol_high_std(StockFactorCalculator):
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
         def ret_std(date : int):
-            df = DATAVENDOR.MKLINE.get_kline(date ,  add_ret = True)
+            df = DATAVENDOR.MKLINE.get_kline(date ,  with_ret = True)
             df = df.group_by('secid').agg(
                 pl.col('ret').std().alias('std') ,
                 pl.lit(date).alias('date')

@@ -1,7 +1,7 @@
 import os
 from typing import Any , Literal , Optional
 
-from src.factor.util import Portfolio , Benchmark , AlphaModel
+from src.factor.util import Portfolio , Benchmark , AlphaModel , Port
 
 from .generator import PortfolioGenerator
 
@@ -33,11 +33,13 @@ def get_prefix(category : Literal['optim' , 'top']): return category.capitalize(
 def get_factor_name(alpha : AlphaModel | str):
     return alpha.name if isinstance(alpha , AlphaModel) else alpha
 
-def get_benchmark(benchmark : Optional[Portfolio | Benchmark | str] = None): 
+def get_benchmark(benchmark : Optional[Portfolio | Benchmark | Port | str] = None): 
     if benchmark is None:
         benchmark = Portfolio()
     elif isinstance(benchmark , str):
         benchmark = Benchmark(benchmark)
+    elif isinstance(benchmark , Port):
+        benchmark = Portfolio.from_ports(benchmark)
     return benchmark
 
 def get_benchmark_name(benchmark : Optional[Portfolio | Benchmark | str]):

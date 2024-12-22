@@ -4,16 +4,15 @@ import colorlog
 from src.basic import path as PATH
 from src.basic import conf as CONF
 
-class Logger(logging.RootLogger):
+class Logger:
     '''custom colored log , config at {PATH.conf}/logger.yaml '''
     _instance = None
     def __new__(cls, *args , **kwargs):
         if cls._instance is None:
-            cls._instance = cls._init_logger()
+            cls._instance = super().__new__(cls)
         return cls._instance
 
-    @staticmethod
-    def _init_logger(test_output = False):
+    def __init__(self , test_output = False):
         config_logger = CONF.glob('logger')
         new_path = PATH.log_main.joinpath(config_logger['file']['param']['filename'])
         config_logger['file']['param']['filename'] = str(new_path)
@@ -39,8 +38,33 @@ class Logger(logging.RootLogger):
             log.warning('This is the WARNING  message...')
             log.error('This is the ERROR    message...')
             log.critical('This is the CRITICAL message...')
-        return log
+
+        self.log = log
+
+    def debug(self , *args , **kwargs):
+        self.log.debug(*args , **kwargs)
+        self.additional_writer(*args)
     
+    def info(self , *args , **kwargs):
+        self.log.info(*args , **kwargs)
+        self.additional_writer(*args)
+
+    def warning(self , *args , **kwargs):
+        self.log.warning(*args , **kwargs)
+        self.additional_writer(*args)
+
+    def error(self , *args , **kwargs):
+        self.log.error(*args , **kwargs)
+        self.additional_writer(*args)   
+
+    def critical(self , *args , **kwargs):
+        self.log.critical(*args , **kwargs)
+        self.additional_writer(*args)
+        
+    def additional_writer(self , *args):
+        if isinstance(sys.stdout , DualPrinter):
+            sys.stdout.log.write(' '.join([str(s) for s in args]) + '\n')
+
 class _LevelFormatter(logging.Formatter):
     def __init__(self, fmt=None, datefmt=None, level_fmts={}):
         self._level_formatters = {}
@@ -72,6 +96,7 @@ class DualPrinter:
     '''change print target to both terminal and file'''
     def __init__(self, filename : str):
         self.filename = PATH.log_update.joinpath(filename)
+        self.filename.parent.mkdir(exist_ok=True,parents=True)
         self.terminal = sys.stdout
         self.log = open(self.filename, "w")
 

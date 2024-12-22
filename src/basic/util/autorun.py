@@ -10,8 +10,10 @@ class AutoRunTask:
         self.email = email
 
     def __enter__(self):
-        self.time_str = datetime.now().strftime('%Y%m%d')
-        self.printer = DualPrinter('.'.join([self.task_name , self.time_str , 'txt']))
+        self.date_str = datetime.now().strftime('%Y%m%d')
+        self.time_str = datetime.now().strftime('%H%M%S')
+        name = '.'.join([self.task_name , f'{self.date_str}_{self.time_str}' , 'txt'])
+        self.printer = DualPrinter(f'{self.task_name}/{name}')
         self.printer.__enter__()
         return self
 
@@ -27,6 +29,7 @@ class AutoRunTask:
             self.status = ' '.join(['Successful' , *[s.capitalize() for s in self.task_name.split('_')]]) + '!'
         self.printer.__exit__(exc_type, exc_value, exc_traceback)
         if self.email: 
-            title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')] , 'at' , self.time_str])
+            title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')] , 'at' , self.date_str])
             send_email(title = title , body = self.status , attachment = self.printer.filename)
+
 
