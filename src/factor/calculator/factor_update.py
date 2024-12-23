@@ -157,11 +157,11 @@ class FactorUpdateJobManager:
         self.proceed(verbosity)
 
     @classmethod
-    def update_fix(cls , verbosity : int = 1):
+    def update_fix(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None):
         self = cls()
         fix_factors = cls.fix_factors()
         print(f'Fixing factors : {fix_factors}')
-        self.collect_jobs(selected_factors = fix_factors , overwrite = True)
+        self.collect_jobs(selected_factors = fix_factors , overwrite = True , start = start , end = end)
         self.proceed(verbosity , overwrite = True)
 
     @classmethod
