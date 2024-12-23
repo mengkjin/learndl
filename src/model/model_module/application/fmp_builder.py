@@ -93,7 +93,7 @@ class ModelPortfolioBuilder:
     def build_day(self , date : int):
         ports = [builder.build(date).port.to_dataframe() for builder in self.iter_builders(date)]
         df = pd.concat(ports).reset_index(drop=True)
-        assert df.columns.tolist() == ['name' , 'date' , 'secid' , 'weight'] , \
+        assert all(col in df.columns for col in ['name' , 'date' , 'secid' , 'weight']) , \
             f'expect columns: name , date , secid , weight , got {df.columns.tolist()}'
         return df
 
