@@ -9,7 +9,7 @@ from src.data import DATAVENDOR
 
 __all__ = [
     'etop_est' , 'etop_est_pct3m' , 'etop_est_pct6m' , 
-    'eps_est_pct3m' , 'eps_pct6m_est' , 
+    'eps_est_pct3m' , 'eps_est_pct6m' , 
     'eps_ftm_pct3m' , 'eps_ftm_pct6m' , 
     'optop_est' , 'optop_est_pct3m' , 'optop_est_pct6m' , 
     'epg_est' , 'roe_est' , 
@@ -103,7 +103,7 @@ class eps_est_pct3m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return val_pct(date , 'eps' , 3)
     
-class eps_pct6m_est(StockFactorCalculator):
+class eps_est_pct6m(StockFactorCalculator):
     init_date = 20110101
     category0 = 'analyst'
     category1 = 'forecast'

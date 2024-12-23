@@ -54,11 +54,11 @@ class AnalystDataAccess(DateDataAccess):
     
     def get_val_est(self , date : int , year : int , val : Literal['sales' , 'np' , 'tp' , 'op' , 'eps' , 'roe'] , 
                     n_month : int = 12 , lag_month : int = 0):
+        date = CALENDAR.cd(date , -30 * lag_month)
         col = {'sales' : 'op_rt' , 'np' : 'np' , 'tp' : 'tp' , 'op' : 'op_pr' , 'eps' : 'eps' , 'roe' : 'roe'}[val]
         multiplier = self.val_multiplier(val)
-        end_date = CALENDAR.cd(date , -30 * lag_month)
-        df = self.get_trailing_reports(end_date , n_month , lag_month , latest = True , quarter = f'{year}Q4')
-        est = self.weighted_val(df , end_date , col) * multiplier
+        df = self.get_trailing_reports(date , n_month , latest = True , quarter = f'{year}Q4')
+        est = self.weighted_val(df , date , col) * multiplier
         return est
     
     def get_val_ftm(self , date : int , val : Literal['sales' , 'np' , 'tp' , 'op' , 'eps' , 'roe'] , n_month : int = 12 , lag_month : int = 0):
@@ -66,17 +66,16 @@ class AnalystDataAccess(DateDataAccess):
         month = date // 100 % 100
         year = date // 10000
         val0 = self.get_val_est(date , year , val , n_month)
-        val1 = self.get_val_est(date , year + 1 , val , n_month )
+        val1 = self.get_val_est(date , year + 1 , val , n_month)
         ftm = pd.concat([val0 , val1] , axis = 1).rename(columns = {0 : 'val0' , 1 : 'val1'})
         ftm['val0'] = ftm['val0'].fillna(ftm['val1'])
         ftm['val1'] = ftm['val1'].fillna(ftm['val0'])
         return (12 - month) * ftm['val0'] + month * ftm['val1']
     
     def target_price(self , date : int , n_month : int = 12 , lag_month : int = 0):
-        end_date = CALENDAR.cd(date , -30 * lag_month)
-        df = self.get_trailing_reports(end_date , n_month , lag_month , latest = True)
+        date = CALENDAR.cd(date , -30 * lag_month)
+        df = self.get_trailing_reports(date , n_month , latest = True)
         df = df[df['max_price'].notna() | df['min_price'].notna()]
-        df = df[df['quarter'] == f'{date // 10000}Q4']
         df['target_price'] = df.loc[:,['max_price' , 'min_price']].mean(axis = 1)
         v = df.groupby('secid')['target_price'].mean()
         return v

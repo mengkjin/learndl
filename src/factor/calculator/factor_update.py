@@ -200,11 +200,17 @@ class FactorUpdateJobManager:
 
     @classmethod
     def fix_factors(cls):
-        return ['outperform_title' , 'outperform_titlepct' , 'outperform_npro' , 'outperform_sales' ,
-                'rec_npro_12m' , 'rec_npro_6m' , 'rec_npro_3m' , 'rec_npro_6m_anndt' ,
-                'upnum_npro_12m' , 'upnum_npro_6m' , 'upnum_npro_3m' , 'upnum_npro_6m_anndt' ,
-                'uppct_npro_12m' , 'uppct_npro_6m' , 'uppct_npro_3m' , 'uppct_npro_6m_anndt' ,
-                'anndt_phigh' , 'mom_aog' , 'mom_aaa' , 'cov_inst_12m_anndt'
-                ]
+        return [
+            'etop_est' , 'etop_est_pct3m' , 'etop_est_pct6m' , 
+            'eps_est_pct3m' , 'eps_est_pct6m' , 
+            'eps_ftm_pct3m' , 'eps_ftm_pct6m' , 
+            'optop_est' , 'optop_est_pct3m' , 'optop_est_pct6m' , 
+            'epg_est' , 'roe_est' , 
+            'sales_cagr1y_est' , 'sales_cagr2y_est' , 
+            'npro_cagr1y_est' , 'npro_cagr2y_est' , 
+            'stop_est' , 'stop_est_pct3m' , 'stop_est_pct6m' , 
+            'tptop_est' , 'tptop_est_pct3m' , 'tptop_est_pct6m' , 
+            'price_potential'
+         ]
 
 UPDATE_JOBS = FactorUpdateJobManager()
