@@ -2,12 +2,13 @@ import traceback
 from datetime import datetime
 
 from .logger import DualPrinter
-from .email import send_email
+from .email import Email
     
 class AutoRunTask:
-    def __init__(self , task_name : str , email = True , **kwargs):
+    def __init__(self , task_name : str , email = True , email_if_attachment = True ,**kwargs):
         self.task_name = task_name.replace(' ' , '_')
         self.email = email
+        self.email_if_attachment = email_if_attachment
 
     def __enter__(self):
         self.date_str = datetime.now().strftime('%Y%m%d')
@@ -28,8 +29,7 @@ class AutoRunTask:
         else:
             self.status = ' '.join(['Successful' , *[s.capitalize() for s in self.task_name.split('_')]]) + '!'
         self.printer.__exit__(exc_type, exc_value, exc_traceback)
-        if self.email: 
+        if self.email or (self.email_if_attachment and Email.ATTACHMENTS): 
             title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')] , 'at' , self.date_str])
-            send_email(title = title , body = self.status , attachment = self.printer.filename)
-
-
+            Email.attach(self.printer.filename)
+            Email().send(title = title , body = self.status)

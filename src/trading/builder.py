@@ -3,7 +3,7 @@ import pandas as pd
 
 from dataclasses import dataclass
 
-from src.basic import CALENDAR , RegisteredModel , PATH , send_email
+from src.basic import CALENDAR , RegisteredModel , PATH , Email
 from src.data import DATAVENDOR
 from src.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Port
 from src.factor.fmp import PortfolioBuilder
@@ -44,8 +44,8 @@ class TradingPortfolioBuilder:
         
     def updatable(self , date : int , force = False) -> bool:
         if force: return True
-        if last_date := self.last_date(date) < 0: return True
-        return CALENDAR.td(last_date , self.step) >= date
+        if (last_date := self.last_date(date)) < 0: return True
+        return CALENDAR.td(last_date , self.step) < date
 
     def get_alpha(self , date : int) -> AlphaModel:
         if self.alpha in RegisteredModel.MODEL_DICT:
@@ -116,25 +116,42 @@ class TradingPortfolioBuilder:
 
     
     @classmethod
-    def update(cls , force = False , reset_ports : list[str] = [] , email = True):
+    def update(cls , force = False , reset_ports : list[str] = []):
         date = CALENDAR.updated()
         pfs : list[pd.DataFrame] = []
         if reset_ports:
-            trading_port_names = [p[0] for p in TRADING_PORTS]
-            assert all(p in trading_port_names for p in reset_ports) , \
-                f'not all reset_ports in TRADING_PORTS: {np.setdiff1d(reset_ports , trading_port_names)}'
-            ports , reset = [p for p in TRADING_PORTS if p[0] in reset_ports] , True
+            ports , reset = reset_ports , True
         else:
-            ports , reset = TRADING_PORTS , False
+            ports , reset = range(len(TRADING_PORTS)) , False
             
+        updated_ports = []
         for port in ports:
-            task = cls(*port)
-            pfs.append(task.build(date , force , reset , save = True))
+            task = cls.SelectBuilder(port)
+            pf = task.build(date , force , reset , save = True)
+            if pf.empty: continue
+            pfs.append(pf)
+            updated_ports.append(task.name)
             
-        total_port = pd.concat([df for df in pfs if not df.empty])
-        if not total_port.empty:
-            total_path = PATH.log_update.joinpath('trading_ports',f'trading_ports.{date}.csv')
-            total_path.parent.mkdir(parents=True, exist_ok=True)
-            total_port.to_csv(total_path)
-            if email:
-                send_email(f'Trading Portfolios Updated: {date}' , 'update successfully' , total_path)
+        if len(updated_ports) == 0: 
+            print(f'No trading portfolios updated on {date}')
+            return
+        else:
+            print(f'Trading portfolios updated on {date}: {updated_ports}')
+        total_port = pd.concat([df for df in pfs])
+        total_path = PATH.log_update.joinpath('trading_ports',f'trading_ports.{date}.csv')
+        total_path.parent.mkdir(parents=True, exist_ok=True)
+        total_port.to_csv(total_path)
+        Email.attach(total_path)
+
+
+    @classmethod
+    def SelectBuilder(cls , which : str | int):
+        if isinstance(which , str):
+            port_names = [p for p in TRADING_PORTS if p[0] == which]
+            assert len(port_names) == 1 , f'{which} is not a valid builder for ports {port_names}'
+            return cls(*port_names[0])
+        elif isinstance(which , int):
+            assert 0 <= which < len(TRADING_PORTS) , f'expect 0 <= which < {len(TRADING_PORTS)} , got {which}'
+            return cls(*TRADING_PORTS[which])
+        else:
+            raise Exception(f'{which} is not a valid builder')

@@ -32,11 +32,11 @@ def run_script(script : str | Path , **kwargs):
 
 def argparse_dict(**kwargs):
     parser = argparse.ArgumentParser(description='Run daily update script.')
-    parser.add_argument('--source', type=str, default=kwargs.get('source',''), help='Source of the script call')
-    parser.add_argument('--email', type=int, default=kwargs.get('email',1), help='Send email or not')
-    parser.add_argument('--param', type=str, default=kwargs.get('param',''), help='Extra parameters for the script')
+    parser.add_argument('--source', type=str, default='', help='Source of the script call')
+    parser.add_argument('--email', type=int, default=0, help='Send email or not')
+    parser.add_argument('--param', type=str, default='', help='Extra parameters for the script')
     args , _ = parser.parse_known_args()
-    return args.__dict__
+    return kwargs | args.__dict__
 
 def script_header(file_path , verbose = False):
     header_dict = {}

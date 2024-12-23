@@ -5,14 +5,81 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
-from typing import Literal
+from typing import Literal , Any
 
 from src.project_setting import MY_SERVER
 from src.basic import conf as CONF
 
+class Email:
+    ATTACHMENTS : list[Path] = []
+    _instance = None
+
+    def __new__(cls , *args , **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self , server : Literal['netease'] = 'netease'):
+        email_conf = CONF.confidential('email')[server]
+        self.smtp_server = email_conf['smtp_server']
+        self.smtp_port   = email_conf['smtp_port']
+        self.sender      = email_conf['sender']  
+        self.password    = email_conf['password']  
+
+    @classmethod
+    def attach(cls , attachment : str | Path):
+        cls.ATTACHMENTS.append(Path(attachment))
+
+    def recipient(self , recipient : str | None = None):
+        if recipient is None: recipient = str(self.sender)
+        assert recipient , 'recipient is required'
+        assert '@' in recipient , f'recipient address must contain @ , got {recipient}'
+        return recipient
+    
+    def message(self , title : str  , body : str | None = None , recipient : str | None = None):
+        message = MIMEMultipart()
+        message['From'] = self.sender
+        message['To'] = self.recipient(recipient)
+        message['Subject'] = title
+        message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
+
+        for _ in range(len(self.ATTACHMENTS)):
+            attachment = self.ATTACHMENTS.pop()
+            with open(attachment, 'rb') as attach_file:
+                part = MIMEBase('application', 'octet-stream')
+            part.set_payload(attach_file.read())
+            encoders.encode_base64(part)
+            part.add_header('Content-Disposition', f'attachment; filename={str(attachment)}')
+            message.attach(part)
+        assert not self.ATTACHMENTS , 'attachments are not cleared'
+
+        return message
+    
+    def connection(self):
+        return smtplib.SMTP(self.smtp_server, self.smtp_port)
+
+    def send(self , title : str  , 
+             body : str = 'This is test! Hello, World!' ,
+             recipient : str | None = None):
+        
+        if not MY_SERVER:
+            print('not in my server , skip sending email')
+            return
+
+        message = self.message(title , body , recipient)
+
+        try:
+            with self.connection() as smtp:
+                smtp.starttls()
+                smtp.login(self.sender, self.password)
+                smtp.sendmail(self.sender, self.recipient(recipient), message.as_string())
+            print('sending email success')
+        except Exception as e:
+            print('sending email went wrong:', e)
+
 def send_email(title : str  , 
                body : str = 'This is test! Hello, World!' ,
-               attachment : str | Path | None = None,
+               attachments : str | Path | list[str | Path] | None = None,
                recipient : str | None = None,
                server : Literal['netease'] = 'netease'):
     if not MY_SERVER:
@@ -42,14 +109,15 @@ def send_email(title : str  ,
     message['Subject'] = title
     message.attach(MIMEText(body, 'plain', 'utf-8'))
 
-    # 添加附件
-    if attachment:
-        attachment = Path(attachment)
-        with open(attachment, 'rb') as attach_file:
-            part = MIMEBase('application', 'octet-stream')
+    if attachments:
+        if not isinstance(attachments , list): 
+            attachments = [attachments]
+        for attachment in attachments:
+            with open(attachment, 'rb') as attach_file:
+                part = MIMEBase('application', 'octet-stream')
             part.set_payload(attach_file.read())
             encoders.encode_base64(part)
-            part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
+            part.add_header('Content-Disposition', f'attachment; filename={str(attachment)}')
             message.attach(part)
 
     try:

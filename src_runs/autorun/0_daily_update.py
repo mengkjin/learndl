@@ -16,7 +16,7 @@ from src.basic import AutoRunTask
 from src_runs.widget import argparse_dict
 
 def main():
-    params = argparse_dict()
+    params = argparse_dict(email = 1)
     with AutoRunTask('daily update' , **params) as runner:
         DataAPI.update()
         ModelAPI.update()

@@ -19,7 +19,7 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    with AutoRunTask('reset trading portfolios' , **params) as runner:
+    with AutoRunTask('reset trading portfolios' , **params , email_if_attachment = True) as runner:
         TradingAPI.update(reset_ports = params['param'].split(','))
 
 if __name__ == '__main__':
