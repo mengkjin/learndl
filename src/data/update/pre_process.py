@@ -9,10 +9,10 @@ from src.basic import CONF , Timer , CALENDAR
 from src.func.primas import neutralize_2d , process_factor
 from src.func.display import print_seperator
 from src.data.util import DataBlock
-from src.data.loader import BlockLoader
+from src.data.loader import BlockLoader , FactorLoader
 
-TRAIN_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']
-PREDICT_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week']
+TRAIN_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week' , 'quality']
+PREDICT_DATASET = ['y' , 'day' , '30m' , 'style' , 'indus' , 'week' , 'quality']
 
 @dataclass(slots=True)
 class DataPreProcessor:
@@ -228,3 +228,9 @@ class procIndus(_TypeProcessor):
         return {'indus' : BlockLoader('models', 'tushare_cne5_exp', CONF.RISK_INDUS)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['indus']
+
+class procQuality(_TypeProcessor):
+    def block_loaders(self): 
+        return {'fvalue' : FactorLoader('fundamental' , 'quality')}
+    def final_feat(self): return None
+    def process(self , blocks): return blocks['fvalue']

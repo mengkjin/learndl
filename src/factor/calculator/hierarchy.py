@@ -35,6 +35,10 @@ class StockFactorHierarchy:
         '''return a list of factor classes in a given level / or a factor class by factor_name'''
         return self.pool[key] if key in self.pool else self.hier[key]
     
+    @classmethod
+    def validate_category(cls , category0 : str , category1 : str):
+        StockFactorCalculator.validate_category(category0 , category1)
+
     @staticmethod
     def factor_filter(stock_factor_cls : Type[StockFactorCalculator] , **kwargs):
         '''filter factor by given attributes'''

@@ -11,8 +11,6 @@ from src.func.classproperty import classproperty_str
 from src.func.parallel import parallel
 from src.factor.util import StockFactor
 
-
-
 class CategoryError(Exception): ...
 
 class StockFactorCalculator(metaclass=SingletonABCMeta):
@@ -49,6 +47,11 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     @classmethod
     def Load(cls , date : int):
         return cls().load_factor(date)
+
+    @classmethod
+    def Loads(cls , start : int | None = None , end : int | None = None):
+        dates = CALENDAR.slice(cls.stored_dates() , start , end)
+        return PATH.factor_load_multi(cls.factor_name , dates)
 
     @classmethod
     def Eval(cls , date : int):
@@ -120,12 +123,12 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     @classproperty_str
     def level(cls) -> str:
         '''level of the factor'''
-        return 'level' + cls.__module__.split('/level')[-1].split('/')[0]
+        return 'level' + cls.__module__.replace('\\' , '/').split('/level')[-1].split('/')[0]
     
     @classproperty_str
     def file_name(cls) -> str:
         '''file name of the factor'''
-        return '/'.join(cls.__module__.split('level')[-1].split('/')[1:]).removesuffix('.py')
+        return '/'.join(cls.__module__.replace('\\' , '/').split('level')[-1].split('/')[1:]).removesuffix('.py')
     
     @classproperty_str
     def factor_string(cls):
@@ -156,20 +159,24 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         if cls.init_date < cls.INIT_DATE: 
             raise CategoryError(f'init_date should be later than {cls.INIT_DATE} , but got {cls.init_date}')
 
-        if cls.category0 not in cls.CATEGORY0_SET:
-            raise CategoryError(f'category0 is should be in {cls.CATEGORY0_SET}, but got {cls.category0}')
-        
-        if not cls.category1:
-            raise CategoryError('category1 is not set')
-        
-        if (category1_list := cls.CATEGORY1_SET[cls.category0]):
-            if cls.category1 not in category1_list:
-                raise CategoryError(f'category1 is should be in {category1_list}, but got {cls.category1}')
+        cls.validate_category(cls.category0 , cls.category1)
 
         if not cls.description:
             raise CategoryError('description is not set')
         
         return cls
+
+    @classmethod
+    def validate_category(cls , category0 : str , category1 : str):
+        if category0 not in cls.CATEGORY0_SET:
+            raise CategoryError(f'category0 is should be in {cls.CATEGORY0_SET}, but got {category0}')
+        
+        if not category1:
+            raise CategoryError('category1 is not set')
+        
+        if (category1_list := cls.CATEGORY1_SET[category0]):
+            if category1 not in category1_list:
+                raise CategoryError(f'category1 is should be in {category1_list}, but got {category1}')
         
     @classmethod
     def validate_value(cls , df : pd.Series , date : int , strict = False):

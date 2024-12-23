@@ -238,7 +238,7 @@ def pred_load(model_name : str , date : int | Any , date_colname = None , verbos
     df = load_df(pred_path(model_name , date))
     return process_df(df , date , date_colname , df_syntax = f'pred/{model_name}/{date}' if verbose else None , **kwargs)
 
-def pred_load_multi(model_name : str , dates = None , start_dt = None , end_dt = None , date_colname = None , verbose = True , **kwargs):
+def pred_load_multi(model_name : str , dates = None , start_dt = None , end_dt = None , date_colname = 'date' , verbose = True , **kwargs):
     if dates is None:
         assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
         dates = pred_dates(model_name , start_dt , end_dt)
@@ -258,11 +258,11 @@ def factor_load(factor_name : str , date : int | Any , date_colname = None , ver
     df = load_df(factor_path(factor_name , date))
     return process_df(df , date , date_colname , df_syntax = f'factor/{factor_name}/{date}' if verbose else None , **kwargs)
 
-def factor_load_multi(factor_name : str , dates = None , start_dt = None , end_dt = None , date_colname = None , verbose = True , **kwargs):
+def factor_load_multi(factor_name : str , dates = None , start_dt = None , end_dt = None , date_colname = 'date' , verbose = True , **kwargs):
     if dates is None:
         assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
         dates = factor_dates(factor_name , start_dt , end_dt)
-    dfs    = load_df_multi({date:factor_path(factor_name , date) for date in dates})
+    dfs = load_df_multi({date:factor_path(factor_name , date) for date in dates})
     return process_df(dfs , date_colname = date_colname , df_syntax = f'factor/{factor_name}/multi-dates' if verbose else None , **kwargs)
 
 @laptop_func_deprecated

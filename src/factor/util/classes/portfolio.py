@@ -87,13 +87,16 @@ class Portfolio:
         assert all(col in df.columns for col in ['name' , 'date' , 'secid' , 'weight']) , \
             f'expect columns: name , date , secid , weight , got {df.columns.tolist()}'
         if 'value' not in df.columns: df['value'] = 1
+
         if name is None: 
             assert df['name'].nunique() == 1 , f'all ports must have the same name , got multiple names: {df["name"].unique()}'
-            name = df['name'][0]
+            name = df['name'].iloc[0]
         else:
             df = df[df['name'] == name]
+        
         portfolio = cls(name)
-        [portfolio.append(Port(subdf[['secid' , 'weight']] , date , name , subdf['value'][0])) for date , subdf in df.groupby('date')]
+        for date , subdf in df.groupby('date'):
+            portfolio.append(Port(subdf[['secid' , 'weight']] , date , name , subdf['value'].iloc[0]))
         return portfolio
     
     def to_dataframe(self):
