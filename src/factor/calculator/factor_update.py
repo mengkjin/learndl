@@ -165,8 +165,7 @@ class FactorUpdateJobManager:
         self.proceed(verbosity , overwrite = True)
 
     @classmethod
-    def eval_coverage(cls , all_factors = False , selected_factors : list[str] = [] ,
-                      recal_on_error = True , **kwargs):
+    def eval_coverage(cls , all_factors = False , selected_factors : list[str] = [] , **kwargs):
         '''
         update update jobs for all factors between start and end date
         **kwargs:
@@ -179,38 +178,34 @@ class FactorUpdateJobManager:
         
         if not (all_factors or selected_factors or kwargs): return pd.DataFrame()
         dfs : list[pd.DataFrame] = []
+
         for calc in cls.iter_calculators(all_factors , selected_factors , **kwargs):
             dates = calc.stored_dates()
-            for date in dates:
+            def load_fac(date : int):
                 try:
                     factor = calc.load_factor(date)
-                    valid_count = factor.notna().sum()
-                    dfs.append(pd.DataFrame({'factor' : [calc.factor_string] , 'date' : [date] , 'valid_count' : [valid_count]}))
                 except Exception as e:
                     print(f'load factor {calc.factor_string} at {date} failed: {e}')
-                    if recal_on_error:
-                        calc.calc_and_deploy(date , overwrite = True)
-                        factor = calc.load_factor(date)
-                        valid_count = factor.notna().sum()
-                        dfs.append(pd.DataFrame({'factor' : [calc.factor_string] , 'date' : [date] , 'valid_count' : [valid_count]}))
+                    calc.calc_and_deploy(date , overwrite = True)
+                    factor = calc.load_factor(date)
+                valid_count = factor.notna().sum()
+                return pd.DataFrame({'factor' : [calc.factor_string] , 'date' : [date] , 'valid_count' : [valid_count]})
+            factor_coverage = parallel(load_fac , dates , method = 'threading')
+            dfs.extend(list(factor_coverage.values()))
 
         df = pd.concat(dfs)
-        df.to_csv('factor_coverage.csv' , index = True)
+        agg = pd.concat([
+            df.groupby(by='factor').mean()['valid_count'].rename('mean') ,
+            df.groupby(by='factor').min()['valid_count'].rename('min') ,
+            df.groupby(by='factor').max()['valid_count'].rename('max') ,
+            df.groupby(by='factor').std()['valid_count'].rename('std') ,
+        ] , axis = 1)
+        df.to_excel('factor_coverage.xlsx' , sheet_name='full coverage')
+        agg.to_excel('factor_coverage_agg.xlsx' , sheet_name='coverage_agg_stats')
         return df
 
     @classmethod
     def fix_factors(cls):
-        return [
-            'etop_est' , 'etop_est_pct3m' , 'etop_est_pct6m' , 
-            'eps_est_pct3m' , 'eps_est_pct6m' , 
-            'eps_ftm_pct3m' , 'eps_ftm_pct6m' , 
-            'optop_est' , 'optop_est_pct3m' , 'optop_est_pct6m' , 
-            'epg_est' , 'roe_est' , 
-            'sales_cagr1y_est' , 'sales_cagr2y_est' , 
-            'npro_cagr1y_est' , 'npro_cagr2y_est' , 
-            'stop_est' , 'stop_est_pct3m' , 'stop_est_pct6m' , 
-            'tptop_est' , 'tptop_est_pct3m' , 'tptop_est_pct6m' , 
-            'price_potential'
-         ]
+        return []
 
 UPDATE_JOBS = FactorUpdateJobManager()

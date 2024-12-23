@@ -13,7 +13,7 @@ def python_path():
 
 def terminal_cmd(script : str | Path , params : dict = {}):
     if isinstance(script , Path): script = str(script.absolute())
-    args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in params.items()])
+    args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in params.items() if v != ''])
 
     if os.name == 'posix':
         cmd = f'python3.10 {script} {args}'
