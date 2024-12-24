@@ -11,9 +11,9 @@ YEAR_ENDS  = pd.date_range(start='1997-01-01', end='2099-12-31', freq='YE').strf
 QUARTER_ENDS = pd.date_range(start='1997-01-01', end='2099-12-31', freq='QE').strftime('%Y%m%d').astype(int).to_numpy()
 MONTH_ENDS = pd.date_range(start='1997-01-01', end='2099-12-31', freq='ME').strftime('%Y%m%d').astype(int).to_numpy()
 
-def today(offset = 0 , astype : Any = int):
+def today(offset = 0):
     d = datetime.today() + timedelta(days=offset)
-    return astype(d.strftime('%Y%m%d'))
+    return int(d.strftime('%Y%m%d'))
 
 def load_calendar():
     calendar = PATH.db_load('information_ts' , 'calendar' , raise_if_not_exist = True).loc[:,['calendar' , 'trade']]
@@ -113,13 +113,27 @@ class TradeCalendar:
     @staticmethod
     def cal_trd(): return _CALENDAR_TRD
     @staticmethod
-    def today(offset = 0):   return today(offset)
+    def today(offset = 0) -> int: return today(offset)
     @staticmethod
-    def clock(): 
+    def time() -> int: 
         return int(datetime.now().strftime('%H%M%S'))
+    @staticmethod
+    def clock(date : int = 0 , h = 0 , m = 0 , s = 0):
+        if date <=0:
+            date_time = (datetime.today() + timedelta(days=date))
+        else:
+            date_time = datetime.strptime(str(date) , '%Y%m%d')
+        return int(date_time.replace(hour=h, minute=m, second=s).strftime('%Y%m%d%H%M%S'))
     @classmethod
-    def full_clock(cls , date : int , clock : int): 
-        return date * 1000000 + clock
+    def is_updated_today(cls , modified_time : int , hour = 21 , minute = 0):
+        if modified_time < 1e8: modified_time = modified_time * 1000000
+        current_time = datetime.now()
+        required_date = 0 if (current_time.hour >= hour and current_time.minute >= minute) else -1
+        required_time = CALENDAR.clock(required_date , hour , minute)
+        return modified_time >= required_time
+    @classmethod
+    def now(cls):
+        return cls.today() * 1000000 + cls.time()
     @staticmethod
     def update_to():
         return today(-1 if datetime.now().time() <= time(19, 0, 0) else 0)

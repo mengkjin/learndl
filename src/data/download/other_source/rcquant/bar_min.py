@@ -2,6 +2,7 @@ import rqdatac
 import pandas as pd
 import numpy as np
 
+from rqdatac.share.errors import QuotaExceeded
 from typing import Literal
 
 from src.basic import PATH , CALENDAR , CONF
@@ -26,7 +27,12 @@ def rcquant_license_check():
 def rcquant_init():
     if not rqdatac.initialized(): 
         rcquant_uri = CONF.confidential('rcquant')['uri']
-        rqdatac.init(uri = rcquant_uri)
+        try:
+            rqdatac.init(uri = rcquant_uri)
+        except QuotaExceeded as e:
+            print(f'rcquant init failed: {e}')
+            return False
+    return True
 
 def rcquant_secdf(date : int):
     path = secdf_path.joinpath(f'secdf_{date}.feather')
@@ -134,8 +140,9 @@ def rcquant_min_to_normal_min(df : pd.DataFrame):
     return df
 
 def rcquant_proceed(date : int | None = None , first_n : int = -1):
-    if not rcquant_license_check():
-        return False
+    if not rcquant_license_check(): return False
+
+    if not rcquant_init(): return False
 
     for dt in min_update_dates(date):
         mark = rcquant_bar_min(dt , first_n)

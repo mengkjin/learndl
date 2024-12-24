@@ -5,7 +5,7 @@ import pandas as pd
 from dataclasses import dataclass
 from threading import Lock
 
-from src.basic import CONF , CALENDAR
+from src.basic import CONF , CALENDAR , PATH
 from src.data import DATAVENDOR
 from src.func.singleton import singleton
 from src.func.parallel import parallel
@@ -22,10 +22,8 @@ class FactorUpdateJob:
 
     def __post_init__(self):
         self.done = False
-        assert CONF.UPDATE_START <= self.date <= CONF.UPDATE_END , \
-            f'date is should be between {CONF.UPDATE_START} and {CONF.UPDATE_END}, but got {self.date}'
-        assert self.date in StockFactorCalculator.FACTOR_TARGET_DATES , \
-            f'date {self.date} is not in StockFactorCalculator.FACTOR_TARGET_DATES'
+        if self.date not in StockFactorCalculator.FACTOR_TARGET_DATES:
+            print(f'Warning: {self.calc.factor_string} at date {self.date} is not in StockFactorCalculator.FACTOR_TARGET_DATES')
         
     @property
     def level(self): return self.calc.level
@@ -52,7 +50,7 @@ class FactorUpdateJobManager:
         return f'FactorUpdateJobs({len(self)} jobs)'
     def __len__(self): return len(self.jobs)
     def levels(self): return np.unique([job.level for job in self.jobs])
-    def dates(self): return np.unique([job.date for job in self.jobs])
+    def dates(self):  return np.unique([job.date for job in self.jobs])
     def groups(self): return sorted(set((job.level , job.date) for job in self.jobs))
     def to_dataframe(self):
         columns = ['level' , 'date' , 'factor']
@@ -83,9 +81,11 @@ class FactorUpdateJobManager:
 
     def collect_jobs(self , start : int | None = None , end : int | None = None , 
                      all_factors = False , selected_factors : list[str] = [] ,
-                     overwrite = False , groups_in_one_update : int | None = None , **kwargs):
+                     overwrite = False , groups_in_one_update : int | None = None , 
+                     force = False ,**kwargs):
         '''
         update update jobs for all factors between start and end date
+        force : if True , will update factors beyond update_start
         **kwargs:
             factor_name : str | None = None
             level : str | None = None 
@@ -98,7 +98,7 @@ class FactorUpdateJobManager:
         if end is None: end = min(CALENDAR.updated() , CONF.UPDATE_END)
 
         for calc in self.iter_calculators(all_factors , selected_factors , **kwargs):
-            dates = calc.target_dates(start , end , overwrite = overwrite)
+            dates = calc.target_dates(start , end , overwrite = overwrite , force = force)
             [self.append(FactorUpdateJob(calc , d)) for d in dates]
 
         if len(self) == 0:
@@ -111,7 +111,7 @@ class FactorUpdateJobManager:
             print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Finish collecting {len(self)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
         return self
     
-    def proceed(self , verbosity : int = 1 , overwrite = False):
+    def process_jobs(self , verbosity : int = 1 , overwrite = False):
         '''
         perform all update jobs
 
@@ -135,7 +135,21 @@ class FactorUpdateJobManager:
                 if failed_factors:
                     print(f'Failed factors: {failed_factors}')
         [self.jobs.remove(job) for job in jobs if job.done]
-    
+
+    @classmethod
+    def clear_jobs(cls , date : int , verbosity : int = 1):
+        if verbosity > 0:
+            print(f'Clearing factors of {date}')
+
+        removed_factors = []
+        for calc in cls.iter_calculators(all_factors = True):
+            path = PATH.factor_path(calc.factor_name , date)
+            if path.exists():
+                path.unlink()
+                removed_factors.append(calc.factor_name)
+        if verbosity > 0:
+            print(f'Removed {len(removed_factors)} factors')
+
     @classmethod
     def iter_calculators(cls , all_factors = False , selected_factors : list[str] = [] , **kwargs):
         if selected_factors:
@@ -154,7 +168,7 @@ class FactorUpdateJobManager:
         '''update factor data according'''
         self = cls()
         self.collect_jobs(start = start , end = end , all_factors = True , groups_in_one_update = groups_in_one_update)
-        self.proceed(verbosity)
+        self.process_jobs(verbosity)
 
     @classmethod
     def update_fix(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None):
@@ -162,7 +176,7 @@ class FactorUpdateJobManager:
         fix_factors = cls.fix_factors()
         print(f'Fixing factors : {fix_factors}')
         self.collect_jobs(selected_factors = fix_factors , overwrite = True , start = start , end = end)
-        self.proceed(verbosity , overwrite = True)
+        self.process_jobs(verbosity , overwrite = True)
 
     @classmethod
     def eval_coverage(cls , all_factors = False , selected_factors : list[str] = [] , **kwargs):

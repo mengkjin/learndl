@@ -120,8 +120,8 @@ class StatusDisplay(BaseCallBack):
         if not self.test_summarized: self.summarize_test_result()
         if self.summary_df.empty: return
         test_scores = {
-            '{}.{}'.format(*col):'|'.join([f'{k}({round(self.summary_df[col][k],v)})' for k,v in self.SUMMARY_NDIGITS.items()]) 
-            for col in self.summary_df.columns}
+            '{}.{}'.format(*col):'|'.join([f'{k}({round(self.summary_df[col][k],v)})' for k,v in self.SUMMARY_NDIGITS.items() 
+                                           if k in self.summary_df[col].index]) for col in self.summary_df.columns}
     
         result = {
             '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',

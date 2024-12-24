@@ -97,6 +97,18 @@ class HiddenPath:
     
     def target_path(self , model_date: int):
         return self.target_hidden_path(self.model_name , self.model_num , model_date , self.submodel)
+    
+    def last_modified_date(self , model_date : int | None = None):
+        if model_date is None: 
+            model_dates = self.model_dates()
+            model_date = int(model_dates.max()) if len(model_dates) else -1
+        return PATH.file_modified_date(self.target_path(model_date))
+    
+    def last_modified_time(self , model_date : int | None = None):
+        if model_date is None: 
+            model_dates = self.model_dates()
+            model_date = int(model_dates.max()) if len(model_dates) else -1
+        return PATH.file_modified_time(self.target_path(model_date))
 
     def model_dates(self):
         suffix = f'.{self.submodel}.feather'

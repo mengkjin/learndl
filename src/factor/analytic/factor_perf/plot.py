@@ -94,7 +94,7 @@ def plot_factor_ic_year(data : pd.DataFrame , show = False):
         with PlotFactorData(sub_data , title = 'Factor Year IC' , show=show and i==0) as (df , fig):
             df['direction'] = 'N(-)' if df['direction'].values[-1] < 0 else 'P(+)'
             df = df.rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, 
-                           errors='raise').drop(columns=['sum' , 'year_ret']).rename(columns={'year':'Year'})
+                           errors='raise').drop(columns=['sum']).rename(columns={'year':'Year'})
             plot_table(df.set_index('Year') , flt_cols = ['IC_avg' , 'IC_std' , 'IC(ann)' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 
                        capitalize=False , stripe_by=1 , emph_last_row=True)
     return group_plot.fig_dict

@@ -9,6 +9,7 @@ from typing import Any , final , Iterator , Literal , Optional
 
 from src.basic import ModelDict , BigTimer , INSTANCE_RECORD
 from src.func import Filtered
+from src.data import ModuleData
 
 from .batch import BatchData , BatchOutput
 from .buffer import BaseBuffer
@@ -171,6 +172,7 @@ class BaseDataModule(ABC):
         '''load prepared data at training begin'''
         self.model_date_list : np.ndarray
         self.test_full_dates : np.ndarray
+        self.datas : ModuleData
     @abstractmethod
     def setup(self , *args , **kwargs) -> None: 
         '''create train / valid / test dataloaders'''

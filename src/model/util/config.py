@@ -78,7 +78,10 @@ class TrainParam:
         else: 
             mod_str = self.model_module 
             head_str = 'booster' if self.model_booster_head else None
-            data_str = '+'.join(self.model_data_types) if self.model_input_type == 'data' else 'hidden'
+            if self.model_input_type == 'data':
+                data_str = '+'.join(self.model_data_types)
+            else:
+                data_str = self.model_input_type
             self.model_name = '_'.join([s for s in [mod_str , head_str , data_str] if s])
         if self.short_test: self.model_name += '_ShortTest'
         return self
@@ -100,7 +103,7 @@ class TrainParam:
         if 'best' not in self.model_submodels: 
             self.model_submodels.insert(0 , 'best')
 
-        if self.model_input_type == 'hidden' or self.module_type != 'nn':
+        if self.model_input_type != 'data' or self.module_type != 'nn':
             assert self.train_sample_method == 'sequential' , self.train_sample_method
 
         return self
@@ -174,7 +177,9 @@ class TrainParam:
     @property
     def model_module(self): return str(self.Param['model.module']).lower()
     @property
-    def model_input_type(self) -> Literal['data' , 'hidden']: return self.Param['model.input_type']
+    def model_input_type(self) -> Literal['data' , 'hidden' , 'factor']: 
+        assert self.Param['model.input_type'] in ['data' , 'hidden' , 'factor'] , self.Param['model.input_type']
+        return self.Param['model.input_type']
     @property
     def model_labels(self) -> list[str]: return self.Param['model.labels']
     @property
@@ -187,6 +192,16 @@ class TrainParam:
     def model_data_prenorm(self) -> dict[str,Any]: return self.Param['model.data.prenorm']
     @property
     def model_hidden_types(self) -> list[str]: return self.Param['model.hidden.types']
+    @property
+    def model_factor_types(self) -> list[str]: 
+        factors = self.Param.get('model.factor.types' , [])
+        def striped_list(factors : list[str] | dict | str):
+            if isinstance(factors , str): 
+                return [factors.strip()]
+            else:
+                if isinstance(factors , dict): factors = list(factors.values())
+                return [ff for f in factors for ff in striped_list(f)]
+        return striped_list(factors)
     @property
     def model_train_window(self): return int(self.Param['model.train_window'])
     @property
@@ -560,8 +575,10 @@ class TrainConfig(TrainParam):
         info_strs.append(f'Model Inputs : {self.model_input_type}')
         if self.model_input_type == 'data':
             info_strs.append(f'  -->  Data Types : {self.model_data_types}')
-        else:
+        elif self.model_input_type == 'hidden':
             info_strs.append(f'  -->  Hidden Models : {self.model_hidden_types}')
+        elif self.model_input_type == 'factor':
+            info_strs.append(f'  -->  Factor Types : {self.model_factor_types}')
         info_strs.append(f'Model Labels : {self.model_labels}')
         info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
         info_strs.append(f'Sampling     : {self.train_sample_method}')

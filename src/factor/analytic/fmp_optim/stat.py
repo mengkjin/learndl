@@ -34,10 +34,10 @@ def eval_max_drawdown(v : pd.Series | np.ndarray | Any , how : Literal['exp' , '
     return mdd , idx_st , idx_ed
 
 def eval_pf_stats(grp : pd.DataFrame , mdd_period = True , **kwargs):
-    period_len = abs(DATAVENDOR.CALENDAR.cd_diff(grp['start'].min() , grp['end'].max()))
+    period_len = abs(DATAVENDOR.CALENDAR.cd_diff(grp['start'].min() , grp['end'].max())) + 1
     period_n   = len(grp)
 
-    with np.errstate(divide = 'ignore'):
+    with np.errstate(divide = 'ignore' , invalid = 'ignore'):
         pf_ret = np.prod(grp['pf'] + 1) - 1.
         bm_ret = np.prod(grp['bm'] + 1) - 1.
         excess = (pf_ret - bm_ret)

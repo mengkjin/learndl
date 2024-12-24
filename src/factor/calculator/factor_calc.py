@@ -31,11 +31,11 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         'money_flow' : ['holding' , 'trading'] ,
         'alternative' : None
     }
-    FACTOR_TARGET_DATES = CALENDAR.td_within(CONF.UPDATE_START , CONF.UPDATE_END , CONF.UPDATE_STEP)
+    FACTOR_CALENDAR = CALENDAR.td_within(INIT_DATE , step = CONF.UPDATE_STEP)
+    FACTOR_TARGET_DATES = CALENDAR.slice(FACTOR_CALENDAR , CONF.UPDATE_START , CONF.UPDATE_END)
     UPDATE_MIN_VALID_COUNT_RELAX  = 20
     UPDATE_MIN_VALID_COUNT_STRICT = 100
     UPDATE_RELAX_DATES : list[int] = []
-    
 
     def __new__(cls , *args , **kwargs):
         return super().__new__(cls.validate_attrs())
@@ -205,11 +205,11 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         return saved
 
     @classmethod
-    def target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False):
+    def target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False , force = False):
         '''return list of target dates of factor data'''
         start = start if start is not None else cls.init_date
-        end   = end   if end   is not None else CALENDAR.updated()
-        dates = CALENDAR.slice(cls.FACTOR_TARGET_DATES , start , end)
+        end   = end   if end   is not None else 99991231
+        dates = CALENDAR.slice(cls.FACTOR_CALENDAR if force else cls.FACTOR_TARGET_DATES , start , min(end , CALENDAR.updated()))
         if not overwrite: dates = CALENDAR.diffs(dates , cls.stored_dates())
         return dates
     
@@ -232,5 +232,5 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     def update(cls , verbosity : int = 1 , **kwargs):
         from src.factor.calculator.factor_update import UPDATE_JOBS
         cls.collect_jobs(overwrite = False , **kwargs)
-        UPDATE_JOBS.proceed(verbosity , overwrite = False)
+        UPDATE_JOBS.process_jobs(verbosity , overwrite = False)
 

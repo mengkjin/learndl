@@ -3,9 +3,9 @@ import numpy as np
 import pandas as pd
 
 from itertools import product
-from typing import Literal , Optional
+from typing import Optional
 
-from src.basic import ModelPath , HiddenPath , HiddenExtractingModel
+from src.basic import CALENDAR , HiddenPath , HiddenExtractingModel
 from src.model.util import TrainConfig
 from src.model.data_module import DataModule
 from src.model.model_module.module import NNPredictor , get_predictor_module
@@ -80,6 +80,11 @@ class ModelHiddenExtractor:
         with torch.no_grad():
             for model_date , model_num , submodel in model_iter:
                 hidden_path = HiddenPath(self.hidden_name , model_num , submodel)
+                modified_time = hidden_path.last_modified_time(model_date)
+                if CALENDAR.is_updated_today(modified_time , 21 , 0):
+                    print(f'{hidden_path.hidden_key} is up to {modified_time} already!')
+                    continue
+
                 self.model_hidden(hidden_path , model_date , overwrite , silent)
                 self._current_update_dates.append(model_date)
         return self
@@ -111,6 +116,10 @@ class ModelHiddenExtractor:
         self.hidden_df = hidden_df
         hidden_path.save_hidden_df(hidden_df , model_date)
     
+    @classmethod
+    def SelectModel(cls , model_name : str) -> 'ModelHiddenExtractor':
+        return cls(HiddenExtractingModel(model_name))
+
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , silent = False):
         

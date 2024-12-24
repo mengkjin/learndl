@@ -24,7 +24,7 @@ labels:
   - rtn_lag1_10 
 
 # input specification ----------------------------------------------------------------
-input_type: data # [data , hidden] , if data , use the data as input , if hidden , use other models' hidden states as input
+input_type: factor # [data , hidden , factor] , specify below
 
 data.types: day # ['day+30m' , 30m , day , ...] , use if input_type is data
 data.prenorm:   # should the day be prenormalized? recommendation : not to change
@@ -33,3 +33,11 @@ data.prenorm:   # should the day be prenormalized? recommendation : not to chang
 hidden.types: # list of hidden states , use if input_type is hidden
   - gru_day_V0.0.best
   - gru_day_V0.1.best
+
+factor.types: # list of factor names , use if input_type is factor
+  fundament:  [quality]
+  #fundament:  [quality , growth , value , earning]
+  #analyst:    [surprise , coverage , forecast , adjustment]
+  #behavioral: [momentum , volatility , correlation , liquidity]
+  #money_flow: [holding , trading]
+  #high_frequency: [hf_momentum , hf_volatility , hf_correlation , hf_liquidity]

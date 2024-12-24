@@ -14,7 +14,6 @@ from src.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig
 
 from .loader import BatchDataLoader
 
-
 class DataModule(BaseDataModule):    
     def __init__(self , config : Optional[TrainConfig] = None , use_data : Literal['fit','predict','both'] = 'fit'):
         '''
@@ -29,10 +28,49 @@ class DataModule(BaseDataModule):
         self.storage  = MemFileStorage(self.config.mem_storage)
         self.buffer   = BaseBuffer(self.device)
 
-    def __repr__(self): return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={self.data_type_list})'
+    def __repr__(self): 
+        input_keys = self.input_keys
+        if len(input_keys) >= 5: 
+            input_keys_str = f'[{input_keys[0]},...,{input_keys[-1]}({len(input_keys)})]'
+        else:
+            input_keys_str = str(input_keys)
+        return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={input_keys_str})'
+
+    @staticmethod
+    def prepare_data(data_types : Optional[list[str]] = None):
+        DataPreProcessor.main(predict = False , data_types = data_types)
+        DataPreProcessor.main(predict = True , data_types = data_types)
+
+    @property
+    def input_type(self) -> Literal['data' , 'hidden' , 'factor']: 
+        return self.config.model_input_type
+    
+    @property
+    def input_keys(self) -> list[str]:
+        if self.input_type == 'data':
+            keys = [ModuleData.abbr(data_type) for data_type in self.config.model_data_types]
+        elif self.input_type == 'hidden':
+            keys = self.config.model_hidden_types
+        elif self.input_type == 'factor':
+            keys = self.config.model_factor_types
+        else:
+            raise KeyError(self.input_type)
+        assert len(keys) > 0 , self.config.Param.get(f'model.{self.input_type}.types')
+        return keys
+        
+    def input_seqlens(self , param : dict[str,Any]) -> dict[str,int]:
+        if self.input_type == 'data':
+            seqlens : dict = {key:int(param['seqlens'][key]) for key in self.input_keys}
+            seqlens.update({k:int(v) for k,v in param.items() if k.endswith('_seq_len')})
+        elif self.input_type in ['hidden' , 'factor']:
+            seqlens : dict = {key:1 for key in self.input_keys}
+        else:
+            raise KeyError(self.input_type)
+        return seqlens
 
     def load_data(self):
-        self.datas = ModuleData.load(self.data_type_list , self.config.model_labels, 
+        load_data_types = self.input_keys if self.input_type in ['data' , 'factor'] else []
+        self.datas = ModuleData.load(load_data_types , self.config.model_labels, 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision)
         self.config.update_data_param(self.datas.x)
@@ -48,29 +86,16 @@ class DataModule(BaseDataModule):
         self.parse_prenorm_method()
         self.reset_dataloaders()
         return self
-
-    @property
-    def data_type_list(self) -> list[str]:
-        '''get data type list (abbreviation)'''
-        if self.config.model_input_type == 'data':
-            data_type_list = [ModuleData.abbr(data_type) for data_type in self.config.model_data_types]
-        else:
-            data_type_list = []
-        return data_type_list
     
-    @property
-    def hidden_type_list(self) -> list[str]:
-        '''get data type list (abbreviation)'''
-        if self.config.model_input_type == 'data':
-            hidden_type_list = []
+    def setup_input_prepare(self):
+        if self.input_type == 'data':
+            self.setup_data_prepare()
+        elif self.input_type == 'hidden':
+            self.setup_hidden_prepare()
+        elif self.input_type == 'factor':
+            self.setup_factor_prepare()
         else:
-            hidden_type_list = self.config.model_hidden_types
-        return hidden_type_list
-    
-    @staticmethod
-    def prepare_data(data_types : Optional[list[str]] = None):
-        DataPreProcessor.main(predict = False , data_types = data_types)
-        DataPreProcessor.main(predict = True , data_types = data_types)
+            raise KeyError(self.input_type)
         
     def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
@@ -79,11 +104,7 @@ class DataModule(BaseDataModule):
         if self.loader_param == loader_param: return
         self.loader_param = loader_param
 
-        if self.config.model_input_type == 'data':
-            self.setup_data_prepare()
-        else:
-            self.setup_hidden_prepare()
-
+        self.setup_input_prepare()
         self.setup_loader_create()
 
     def setup_param_parsing(
@@ -91,25 +112,19 @@ class DataModule(BaseDataModule):
             param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
             model_date = -1 , extract_backward_days = 300 , extract_forward_days = 160):
         if self.use_data == 'predict': stage = 'predict'
-
-        if self.config.model_input_type == 'data':
-            seqlens : dict = {key:param['seqlens'][key] for key in self.data_type_list}
-            seqlens.update({k:v for k,v in param.items() if k.endswith('_seq_len')})
-        else:
-            seqlens : dict = {key:1 for key in self.hidden_type_list}
-
+        seqlens = self.input_seqlens(param)
         loader_param = self.LoaderParam(stage , model_date , seqlens , extract_backward_days , extract_forward_days)
         return loader_param
     
     def setup_hidden_prepare(self) -> None:
         model_date = self.loader_param.model_date
         
-        self.seqs = {key:1 for key in self.hidden_type_list}
+        self.seqs = self.loader_param.seqlens
         self.seq0 = self.seqx = self.seqy = 1
 
         hidden_max_date : int | Any = None
         self.hidden_input : dict[str,tuple[int,pd.DataFrame]] = {}
-        for hidden_key in self.hidden_type_list:
+        for hidden_key in self.input_keys:
             hidden_path = HiddenPath.from_key(hidden_key)
             if hidden_key in self.hidden_input and self.hidden_input[hidden_key][0] == hidden_path.latest_hidden_model_date(model_date):
                 df = self.hidden_input[hidden_key][1]
@@ -128,13 +143,16 @@ class DataModule(BaseDataModule):
     def setup_data_prepare(self) -> None:
         seqlens = self.loader_param.seqlens
 
-        x_keys = self.data_type_list
+        x_keys = self.input_keys
         y_keys = [k for k in seqlens.keys() if k not in x_keys]
-        self.seqs = {k:seqlens.get(k , 1) for k in y_keys + x_keys}
+        self.seqs = {k:1 for k in x_keys} | seqlens
         assert all([v > 0 for v in self.seqs.values()]) , self.seqs
         self.seqy = max([v for k,v in self.seqs.items() if k in y_keys]) if y_keys else 1
         self.seqx = max([v for k,v in self.seqs.items() if k in x_keys]) if x_keys else 1
         self.seq0 = self.seqx + self.seqy - 1
+
+    def setup_factor_prepare(self) -> None:
+        self.setup_data_prepare()
 
     def setup_loader_create(self):
         stage , model_date = self.loader_param.stage , self.loader_param.model_date
@@ -255,10 +273,9 @@ class DataModule(BaseDataModule):
         return new_x
         
     def parse_prenorm_method(self):
-        prenorm_keys = self.data_type_list if self.config.model_input_type == 'data' else self.hidden_type_list
         self.prenorm_divlast  : dict[str,bool] = {}
         self.prenorm_histnorm : dict[str,bool] = {}
-        for mdt in prenorm_keys: 
+        for mdt in self.input_keys: 
             method : dict = self.config.model_data_prenorm.get(mdt , {})
             new_method = {
                 'divlast' : method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST) ,
