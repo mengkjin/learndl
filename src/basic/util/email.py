@@ -47,10 +47,10 @@ class Email:
             attachment = self.ATTACHMENTS.pop()
             with open(attachment, 'rb') as attach_file:
                 part = MIMEBase('application', 'octet-stream')
-            part.set_payload(attach_file.read())
-            encoders.encode_base64(part)
-            part.add_header('Content-Disposition', f'attachment; filename={str(attachment)}')
-            message.attach(part)
+                part.set_payload(attach_file.read())
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f'attachment; filename={str(attachment)}')
+                message.attach(part)
         assert not self.ATTACHMENTS , 'attachments are not cleared'
 
         return message
@@ -115,10 +115,10 @@ def send_email(title : str  ,
         for attachment in attachments:
             with open(attachment, 'rb') as attach_file:
                 part = MIMEBase('application', 'octet-stream')
-            part.set_payload(attach_file.read())
-            encoders.encode_base64(part)
-            part.add_header('Content-Disposition', f'attachment; filename={str(attachment)}')
-            message.attach(part)
+                part.set_payload(attach_file.read())
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f'attachment; filename={str(attachment)}')
+                message.attach(part)
 
     try:
         with smtplib.SMTP(smtp_server, smtp_port) as smtp_connection:

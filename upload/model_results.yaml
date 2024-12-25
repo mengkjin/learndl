@@ -78,3 +78,13 @@
 7_test: Finish Process [Test], Cost 2.2 Secs
 8_result:
   lgbm.0.best: Avg(-0.0152)|Sum(-0.96)|Std(0.0348)|T(-3.46)|IR(-2.1371)
+0_model: lgbm_factor(x1)
+1_start: Tue Dec 24 23:57:06 2024
+2_basic: full
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170103-99991231
+6_fit: Finish Process [Fit], Cost 82.3 Secs
+7_test: Finish Process [Test], Cost 44.1 Secs
+8_result:
+  lgbm.0.best: Avg(0.0101)|Sum(19.43)|Std(0.039)|T(11.35)|IR(1.2661)

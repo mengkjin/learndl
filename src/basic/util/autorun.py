@@ -40,7 +40,7 @@ class AutoRunTask:
         change_power_mode('power-saver')
 
 def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance'] , 
-                      log_path : Path | None = PATH.log_main.joinpath('suspend','power_check.log') ,
+                      log_path : Path | None = PATH.logs.joinpath('suspend','power_check.log') ,
                       verbose = False):
     # running_scripts = get_running_scripts(exclude_scripts)
     main_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S') + f' : Power set to {mode}'
@@ -56,7 +56,7 @@ def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance']
             log_file.write(main_str)
         
 
-def get_running_scripts(exclude_scripts : list[str] = [] , script_type = ['*.py', '*.sh'] , default_excludes = ['kernel_interrupt_daemon.py']):
+def get_running_scripts(exclude_scripts : list[str] = [] , script_type = ['*.py'] , default_excludes = ['kernel_interrupt_daemon.py']):
     running_scripts : list[Path] = []
     self = Path(__file__)
     exclude_scripts = exclude_scripts + default_excludes
@@ -76,7 +76,7 @@ def get_running_scripts(exclude_scripts : list[str] = [] , script_type = ['*.py'
             pass
     return running_scripts
 
-def suspend_this_machine(log_path : Path | None = PATH.log_main.joinpath('suspend','suspend.log') , verbose = False):
+def suspend_this_machine(log_path : Path | None = PATH.logs.joinpath('suspend','suspend.log') , verbose = False):
     main_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     if platform.system() == 'Windows':
         main_str += f' : Suspension aborted due windows platform\n'
