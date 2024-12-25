@@ -5,6 +5,8 @@
 # description: Update Hiddens Extraction
 # content: 更新模型隐变量,用于做其他模型的输入
 # TODO:若有模型依赖与其他模型的隐变量和结果,则需要给定更新顺序，否则可能出现循环依赖
+# email: False
+# close_after_run: False
 
 import sys , pathlib
 

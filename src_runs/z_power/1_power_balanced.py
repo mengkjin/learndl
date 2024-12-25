@@ -4,6 +4,8 @@
 # date: 2024-12-24
 # description: Change Power Balanced
 # content: 在Ubuntu系统中修改电源管理策略至"平衡"
+# email: False
+# close_after_run: True
 
 import sys , pathlib
 

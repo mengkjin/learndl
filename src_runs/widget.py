@@ -11,24 +11,119 @@ def python_path():
     else:
         return 'python'
 
-def terminal_cmd(script : str | Path , params : dict = {}):
+def terminal_cmd(script : str | Path , params : dict = {} , close_after_run = False):
     if isinstance(script , Path): script = str(script.absolute())
     args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in params.items() if v != ''])
-
+    cmd = f'{python_path()} {script} {args}'
     if os.name == 'posix':
-        cmd = f'python3.10 {script} {args}'
-        return f'gnome-terminal -- bash -c "{cmd}; exec bash"'
+        cmd = f'gnome-terminal -- bash -c "{cmd}"'
+        if not close_after_run: cmd += '; exec bash'
     else:
-        cmd = f'python {script} {args}'
-        return f'start cmd /k {cmd}'
+        # cmd = f'start cmd /k {cmd}'
+        if not close_after_run: 
+            cmd = f'start cmd /k {cmd}'
+        pass
+    return cmd
     
-def run_script(script : str | Path , **kwargs):
-    print(f'Script path : {script}')
-    print(f'Script args : {kwargs}')
-
-    cmd = terminal_cmd(script , kwargs)
+def run_script(script : str | Path , close_after_run = False , **kwargs):
+    cmd = terminal_cmd(script , kwargs , close_after_run = close_after_run)
+    print(f'Script cmd : {cmd}')
+    
     process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
-    process.wait() 
+    #process.wait() 
+    process.communicate()
+
+class ScriptRunner:
+    def __init__(self , script : Path | str , **kwargs):
+        self.script = Path(script).absolute()
+        self.kwargs = kwargs
+        self.header = self.script_header()
+        self.text_area = None
+
+    def __repr__(self):
+        return f'ScriptRunner(script_path={self.script} , kwargs={self.kwargs})'
+
+    def script_header(self , verbose = False):
+        header_dict = {}
+        try:
+            header_char = '#'
+            with open(self.script, 'r', encoding='utf-8') as file:
+                for line in file:
+                    stripped_line = line.strip()
+                    if stripped_line.startswith('#!'): continue
+                    if stripped_line.startswith(header_char):
+                        components = [s.strip() for s in stripped_line.removeprefix(header_char).strip().split(':')]
+                        assert len(components) <= 2 , f'header format error : {stripped_line}'
+                        header_dict[components[0]] = components[1] if len(components) == 2 else ''
+                    else:
+                        break
+            if 'description' not in header_dict:
+                header_dict['description'] = self.script
+        except FileNotFoundError:
+            header_dict['disabled'] = True
+            header_dict['description'] = 'file not found'
+            header_dict['content'] = f'file not found : {self.script}'
+            if verbose: print(f'file not found : {self.script}')
+        except Exception as e:
+            header_dict['disabled'] = True
+            header_dict['description'] = 'read file error'
+            header_dict['content'] = f'error info : {e}'
+            if verbose: print(f'read file error : {e}')
+
+        return header_dict
+
+    def __getitem__(self , key):
+        return self.header[key]
+
+    def get(self , key , default = None):
+        return self.header.get(key , default)
+
+    def get_func(self , text_area : widgets.Textarea | None = None , text_key = 'param'):
+        params = {'email' : int(eval(self.get('email' , '0'))) , 
+                  'close_after_run' : bool(eval(self.get('close_after_run' , 'False')))}
+        params.update(self.kwargs)
+
+        def func(b):
+            if text_area is not None:
+                params[text_key] = text_area.value.strip()
+            run_script(self.script, **params)
+
+        return func
+
+    def button(self):
+        button = widgets.Button(description=caption(self.header['description']), 
+                                layout=widgets.Layout(width='auto', min_width='200px'), 
+                                style={'button_color': 'lightgrey' , 'font_weight': 'bold'} , 
+                                disabled=self.header.get('disabled' , False))
+        return button
+    
+    def desc(self):
+        infos =  '<br>'.join([self.get(key) for key in ['content' , 'TODO'] if key in self.header])
+        style = 'font-size: 12px; text-align: left; margin: 0.2px; padding: 0px; line-height: 1.5;'
+        desc = widgets.HTML(value=f'<p style="{style}"><em>{infos}</em></p>' ,
+                            layout=widgets.Layout(width='auto', min_width='300px' , border_top = '2px solid grey'))
+        return desc
+    
+    def input_area(self):
+        if self.header.get('param_input' , False):
+            input_area = widgets.Textarea(
+                placeholder=self.header.get('param_placeholder' , 'type parameters here...'),
+                layout=widgets.Layout(width='auto', min_width='300px', height='50px')
+            )
+        else:
+            input_area = None
+        return input_area
+    
+    def boxes(self):
+        button = self.button()
+        desc = self.desc()
+        input_area = self.input_area()
+
+        button.on_click(self.get_func(input_area))
+        boxes = [button , desc]
+        if input_area is not None: boxes.append(input_area)
+        return boxes
+
 
 def argparse_dict(**kwargs):
     parser = argparse.ArgumentParser(description='Run daily update script.')
@@ -37,35 +132,6 @@ def argparse_dict(**kwargs):
     parser.add_argument('--param', type=str, default='', help='Extra parameters for the script')
     args , _ = parser.parse_known_args()
     return kwargs | args.__dict__
-
-def script_header(file_path , verbose = False):
-    header_dict = {}
-    try:
-        header_char = '#'
-        with open(file_path, 'r', encoding='utf-8') as file:
-            for line in file:
-                stripped_line = line.strip()
-                if stripped_line.startswith('#!'): continue
-                if stripped_line.startswith(header_char):
-                    components = [s.strip() for s in stripped_line.removeprefix(header_char).strip().split(':')]
-                    assert len(components) <= 2 , f'header format error : {stripped_line}'
-                    header_dict[components[0]] = components[1] if len(components) == 2 else ''
-                else:
-                    break
-        if 'description' not in header_dict:
-            header_dict['description'] = file_path
-    except FileNotFoundError:
-        header_dict['disabled'] = True
-        header_dict['description'] = 'file not found'
-        header_dict['content'] = f'file not found : {file_path}'
-        if verbose: print(f'file not found : {file_path}')
-    except Exception as e:
-        header_dict['disabled'] = True
-        header_dict['description'] = 'read file error'
-        header_dict['content'] = f'error info : {e}'
-        if verbose: print(f'read file error : {e}')
-    
-    return header_dict
 
 def caption(txt : str):
     return ' '.join([s.capitalize() for s in txt.split(' ')])
@@ -111,42 +177,12 @@ def get_title(text : str , level : int):
         style = title_style(size = 14 , bold = True)
     return widgets.HTML(f'<div style="{style}"><em>{caption(text)}</em></div>')
 
-def get_script_box(script : str | Path, prefix = '' , **kwargs):
-    header = script_header(script , verbose = False)
-    boxes = []
-
-    desc = caption(header['description']) + prefix 
-    disabled = header.get('disabled' , False)
-    button = widgets.Button(description=desc, 
-                            layout=widgets.Layout(width='auto', min_width='200px'), 
-                            style={'button_color': 'lightgrey' , 'font_weight': 'bold'} , 
-                            disabled=disabled)
-    boxes.append(button)
-
-    value = "<br>".join([value for key , value in header.items() if key in ['content' , 'TODO']])
-    style = 'font-size: 12px; text-align: left; margin: 0.2px; padding: 0px; line-height: 1.5;'
-    text = widgets.HTML(value=f'<p style="{style}"><em>{value}</em></p>' ,
-                        layout=widgets.Layout(width='auto', min_width='300px' , border_top = '2px solid grey'))
-    boxes.append(text)
-
-    if header.get('param_input' , False):
-        param_input = widgets.Textarea(
-            placeholder=header.get('param_placeholder' , 'type parameters here...'),
-            layout=widgets.Layout(width='auto', min_width='300px', height='50px')
-        )
-        boxes.append(param_input)
-        def func(b):
-            run_script(script, **kwargs , param = param_input.value.strip())
-    else:
-        def func(b):
-            run_script(script, **kwargs)
-    
-    button.on_click(func)
+def get_script_box(script : str | Path , **kwargs):
+    boxes = ScriptRunner(script , **kwargs).boxes()
     return layout_vertical(*boxes , border = '2px solid grey')
 
 def get_folder_box(folder : str | Path , level : int , exclude_self = True):
     dir_boxes , file_boxes = [] , []
-    email = 1 if 'autorun' in str(folder) else 0
     self_path = Path(__file__).absolute() if exclude_self else None
     
     if level > 0: dir_boxes.append(get_title(f'{Path(folder).name} scripts' , min(level , 3)))
@@ -157,7 +193,7 @@ def get_folder_box(folder : str | Path , level : int , exclude_self = True):
             dir_boxes.append(get_folder_box(path , level + 1 , exclude_self = exclude_self))
         else:
             if self_path is not None and path.absolute() == self_path: continue
-            file_boxes.append(get_script_box(str(path) , email = email))
+            file_boxes.append(get_script_box(str(path)))
 
     if file_boxes: dir_boxes.append(layout_grids(*file_boxes))
     return layout_vertical(*dir_boxes)
@@ -167,30 +203,6 @@ def main():
     project = get_folder_box('src_runs' , 0)
     print('Project interface initiated successfully.')
     display(project)
-
-def edit_file_button(file_path : str):
-    path = Path(file_path).absolute()
-    if os.name == 'nt':  # Windows
-        editor_command = f'notepad {str(path)}'
-    else:  # Linux
-        editor_command = f'nano {str(path)}'
-    subprocess.Popen(editor_command, shell=True)
-
-def create_open_config_button(file_path : str):
-    button = widgets.Button(
-        description='Edit Config',
-        layout=widgets.Layout(width='auto', min_width='200px'),
-        style={'button_color': 'lightgrey', 'font_weight': 'bold'}
-    )
-    def edit_file(b):
-        path = Path(file_path).absolute()
-        if os.name == 'nt':  # Windows
-            editor_command = f'notepad {str(path)}'
-        else:  # Linux
-            editor_command = f'nano {str(path)}'
-        subprocess.Popen(editor_command, shell=True)
-    button.on_click(edit_file)
-    return button
 
 if __name__ == '__main__':
     main()

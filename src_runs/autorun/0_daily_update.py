@@ -4,6 +4,8 @@
 # date: 2024-11-27
 # description: Run Daily Update
 # content: 每日更新数据,因子,模型隐变量,模型推理
+# email: True
+# close_after_run: False
 
 import sys , pathlib 
 

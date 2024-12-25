@@ -4,6 +4,8 @@
 # date: 2024-11-27
 # description: Run Weekly Update
 # content: 每周更新模型(只在服务器上)
+# email: True
+# close_after_run: False
 
 import sys , pathlib
 

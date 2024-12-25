@@ -4,6 +4,8 @@
 # date: 2024-12-22
 # description: Update Trading Portfolios
 # content: 更新所有交易组合, 无重置指定组合
+# email: True
+# close_after_run: False
 
 import sys , pathlib
 

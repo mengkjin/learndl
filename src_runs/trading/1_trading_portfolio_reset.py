@@ -6,6 +6,8 @@
 # content: 更新指定组合, 输入参数为重置组合
 # param_input: True
 # param_placeholder: 组合名称, 多个组合用逗号分隔
+# email: True
+# close_after_run: False
 
 import sys , pathlib
 

@@ -4,6 +4,8 @@
 # date: 2024-11-27
 # description: Train Model
 # content: 训练某个新模型,模型的参数在configs/train/model.yaml里定义,也可以改变其他configs
+# email: True
+# close_after_run: False
 
 import sys , pathlib
 

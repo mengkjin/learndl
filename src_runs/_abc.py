@@ -1,4 +1,4 @@
-import sys , pathlib
+import os , sys , pathlib
 
 paths = [p for p in pathlib.Path(__file__).absolute().parents if p.name == 'learndl']
 assert paths , f'learndl path not found , do not know where to find src file : {__file__}'
@@ -8,6 +8,15 @@ import fnmatch , platform , psutil , subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
+
+def edit_file(file_path : Path | str):
+    path = Path(file_path).absolute()
+    if os.name == 'nt':  # Windows
+        editor_command = f'notepad {str(path)}'
+    elif os.name == 'posix':  # Linux
+        editor_command = f'nano {str(path)}'
+    process = subprocess.Popen(editor_command, shell=True)
+    process.communicate()
 
 def get_running_scripts(exclude_scripts : list[str] | str = [] , script_type = ['*.py'] , 
                         default_excludes = ['kernel_interrupt_daemon.py']):

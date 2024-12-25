@@ -6,6 +6,8 @@
 # content: 更新区间内所有未更新的因子数据
 # param_input: True
 # param_placeholder: start,end
+# email: False
+# close_after_run: False
 
 import sys , pathlib
 

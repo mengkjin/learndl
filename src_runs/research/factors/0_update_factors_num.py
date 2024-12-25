@@ -6,6 +6,8 @@
 # content: 更新前num(默认100)组level , date的因子数据
 # param_input: True
 # param_placeholder: 100
+# email: False
+# close_after_run: False
 
 import sys , pathlib
 
