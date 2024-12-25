@@ -168,5 +168,29 @@ def main():
     print('Project interface initiated successfully.')
     display(project)
 
+def edit_file_button(file_path : str):
+    path = Path(file_path).absolute()
+    if os.name == 'nt':  # Windows
+        editor_command = f'notepad {str(path)}'
+    else:  # Linux
+        editor_command = f'nano {str(path)}'
+    subprocess.Popen(editor_command, shell=True)
+
+def create_open_config_button(file_path : str):
+    button = widgets.Button(
+        description='Edit Config',
+        layout=widgets.Layout(width='auto', min_width='200px'),
+        style={'button_color': 'lightgrey', 'font_weight': 'bold'}
+    )
+    def edit_file(b):
+        path = Path(file_path).absolute()
+        if os.name == 'nt':  # Windows
+            editor_command = f'notepad {str(path)}'
+        else:  # Linux
+            editor_command = f'nano {str(path)}'
+        subprocess.Popen(editor_command, shell=True)
+    button.on_click(edit_file)
+    return button
+
 if __name__ == '__main__':
     main()
