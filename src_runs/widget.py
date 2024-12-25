@@ -30,8 +30,10 @@ def run_script(script : str | Path , close_after_run = False , **kwargs):
     print(f'Script cmd : {cmd}')
     
     process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
-    #process.wait() 
-    process.communicate()
+    if close_after_run:
+        process.communicate()
+    else:
+        process.wait()
 
 class ScriptRunner:
     def __init__(self , script : Path | str , **kwargs):
