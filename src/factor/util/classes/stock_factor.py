@@ -363,7 +363,7 @@ class StockFactor:
         if plot: task.plot(show = display)
         return self
 
-    def fast_analyze(self , task_list = ['FrontFace', 'IC_Curve'] , **kwargs):
+    def fast_analyze(self , task_list = ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr'] , **kwargs):
         '''['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr']'''
         for task_name in task_list: self.analyze(task_name , **kwargs)
         return self

@@ -160,7 +160,8 @@ class DFCollection(_df_collection):
         dates_to_do = list(self.data_frames.keys())
         if len(dates_to_do) == 0: return
         dfs = [df for df in ([self.long_frame] + [v for v in self.data_frames.values()]) if df is not None and not df.empty]
-        with warnings.catch_warnings(action='ignore' , category=FutureWarning):
+        with warnings.catch_warnings():
+            warnings.simplefilter(action='ignore', category=FutureWarning)
             self.long_frame = pd.concat(dfs, copy=False).sort_values(self.date_key)
         self.data_frames.clear()
 
