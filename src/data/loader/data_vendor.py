@@ -76,9 +76,10 @@ class DataVendor:
     def file_dates(db_src , db_key , start_dt : int | None = None , end_dt : int | None = None , year : int | None = None):
         return PATH.db_dates(db_src , db_key , start_dt=start_dt , end_dt=end_dt , year = year)
 
-    @staticmethod
-    def td_within(start_dt : int | None = None , end_dt : int | None = None , step : int = 1):
-        return CALENDAR.td_within(start_dt , end_dt , step)
+    @classmethod
+    def td_within(cls , start_dt : int | None = None , end_dt : int | None = None , step : int = 1 , updated = False):
+        dates = CALENDAR.td_within(start_dt , end_dt , step , updated = updated)
+        return dates
     
     @staticmethod
     def td_array(date , offset : int = 0): return CALENDAR.td_array(date , offset)
@@ -116,7 +117,7 @@ class DataVendor:
                          secid,date,[f'factor{i+1}' for i in range(nfactor)])
 
     def get_returns(self , start_dt : int , end_dt : int):
-        td_within = self.td_within(start_dt , end_dt)
+        td_within = self.td_within(start_dt , end_dt , updated = True)
         if (not hasattr(self , 'day_ret')) or (not np.isin(td_within , self.day_ret.date).all()):
             with SILENT:
                 pre_start_dt = CALENDAR.cd(start_dt , -20)

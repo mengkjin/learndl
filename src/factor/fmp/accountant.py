@@ -170,7 +170,7 @@ class PortfolioAccountManager:
             self.accounts[p].to_pickle(fmp_paths[p])
         return self
     
-    def select_analytic(self , category : Literal['optim' , 'top'] , task_name : str):
+    def select_analytic(self , category : Literal['optim' , 'top'] , task_name : str , **kwargs):
         from src.factor.analytic import FmpOptimManager , FmpTopManager , BaseOptimCalc , BaseTopPortCalc
 
         task_list = FmpTopManager.TASK_LIST if category == 'top' else FmpOptimManager.TASK_LIST
@@ -178,7 +178,7 @@ class PortfolioAccountManager:
         assert match_task and len(match_task) <= 1 , f'no match or duplicate match tasks : {task_name}'
         task , task_name = match_task[0] , match_task[0].__name__
         if not hasattr(self , 'analytic_tasks'): self.analytic_tasks : dict[str , BaseOptimCalc | BaseTopPortCalc] = {}
-        if task_name not in self.analytic_tasks: self.analytic_tasks[task_name] = task()
+        if task_name not in self.analytic_tasks: self.analytic_tasks[task_name] = task(**kwargs)
         return self.analytic_tasks[task_name]
 
     def analyze(self , category : Literal['optim' , 'top'] ,
@@ -188,7 +188,7 @@ class PortfolioAccountManager:
                 plot = True , display = True , **kwargs):
         account = self.total_account(category , **kwargs)
         if account.empty: return self
-        task = self.select_analytic(category , task_name)
+        task = self.select_analytic(category , task_name , **kwargs)
         task.calc(account)
         if plot: task.plot(show = display)  
         return self      

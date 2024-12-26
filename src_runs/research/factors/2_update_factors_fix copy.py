@@ -3,9 +3,9 @@
 # author: jinmeng
 # date: 2024-11-27
 # description: Fix Factors
-# content: 修正所有因子数据
+# content: 修正某些因子
 # param_input: True
-# param_placeholder: start,end
+# param_placeholder: factor_names
 # email: False
 # close_after_run: False
 

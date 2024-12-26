@@ -80,6 +80,19 @@ class FactorAPI:
             return ret
     
     @classmethod
-    def factor_hierarchy(cls):
+    def Hierarchy(cls):
         return StockFactorHierarchy()
+
+    @classmethod
+    def FastAnalyze(cls , factor_name : str , start : int = 20170101 , end : int | None = None , step : int = 10 , lag = 2):
+        factor_calc = cls.Hierarchy().get_factor(factor_name)
+        factor = factor_calc.Factor(start,end,step,verbose= True , normalize = True , ignore_error = False)
+        factor.fast_analyze(lag = lag)
+        return factor
     
+    @classmethod
+    def FullAnalyze(cls , factor_name : str , start : int = 20170101 , end : int | None = None , step : int = 10 , lag = 2):
+        factor_calc = cls.Hierarchy().get_factor(factor_name)
+        factor = factor_calc.Factor(start,end,step,verbose= True , normalize = True , ignore_error = False)
+        factor.full_analyze(lag = lag)
+        return factor

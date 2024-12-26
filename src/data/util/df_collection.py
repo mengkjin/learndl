@@ -1,4 +1,5 @@
 import threading
+import warnings
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -139,7 +140,7 @@ class DFCollection(_df_collection):
         '''add a DataFrame with given (1) date'''
         df = df.reset_index([i for i in df.index.names if i] , drop = False).\
             assign(**{self.date_key:date}).set_index(self.date_key)
-        self.data_frames[date] = df
+        self.data_frames[date] = df.dropna(how = 'all')
     
     def get_one_day(self , date : int | TradeDate) -> pd.DataFrame:
         '''get a DataFrame with given (1) date , fields and set_index'''
@@ -158,10 +159,10 @@ class DFCollection(_df_collection):
         # assert np.isin(dates , self.dates).all() , f'all dates should be in self.dates : {np.setdiff1d(dates , self.dates)}'
         dates_to_do = list(self.data_frames.keys())
         if len(dates_to_do) == 0: return
-        dfs = [df for df in [self.long_frame] + [v for v in self.data_frames.values()] if df is not None and not df.empty]
-        if dfs: 
-            self.long_frame = pd.concat(dfs , copy = False).sort_values(self.date_key)
-            self.data_frames.clear()
+        dfs = [df for df in ([self.long_frame] + [v for v in self.data_frames.values()]) if df is not None and not df.empty]
+        with warnings.catch_warnings(action='ignore' , category=FutureWarning):
+            self.long_frame = pd.concat(dfs, copy=False).sort_values(self.date_key)
+        self.data_frames.clear()
 
 class PLDFCollection(_df_collection):
     def __init__(self , max_len : int = -1 , date_key : str | None = None) -> None:

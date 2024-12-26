@@ -21,8 +21,8 @@ class FactorCalculatorAPI:
         UPDATE_JOBS.update(**kwargs)
 
     @classmethod
-    def fix(cls , **kwargs):
-        UPDATE_JOBS.update_fix(**kwargs)
+    def fix(cls , factors : list[str] = [] , **kwargs):
+        UPDATE_JOBS.update_fix(factors , **kwargs)
 
 class FactorTestAPI:
     TASK_TYPES = TASK_TYPES

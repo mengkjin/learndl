@@ -171,11 +171,10 @@ class FactorUpdateJobManager:
         self.process_jobs(verbosity)
 
     @classmethod
-    def update_fix(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None):
+    def update_fix(cls , factors : list[str] = [] , verbosity : int = 1 , start : int | None = None , end : int | None = None):
         self = cls()
-        fix_factors = cls.fix_factors()
-        print(f'Fixing factors : {fix_factors}')
-        self.collect_jobs(selected_factors = fix_factors , overwrite = True , start = start , end = end)
+        print(f'Fixing factors : {factors}')
+        self.collect_jobs(selected_factors = factors , overwrite = True , start = start , end = end)
         self.process_jobs(verbosity , overwrite = True)
 
     @classmethod
@@ -217,9 +216,5 @@ class FactorUpdateJobManager:
         df.to_excel('factor_coverage.xlsx' , sheet_name='full coverage')
         agg.to_excel('factor_coverage_agg.xlsx' , sheet_name='coverage_agg_stats')
         return df
-
-    @classmethod
-    def fix_factors(cls):
-        return []
 
 UPDATE_JOBS = FactorUpdateJobManager()

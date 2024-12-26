@@ -161,12 +161,17 @@ def winsor(v , v1 , v2):
     if v2 is not None: v[v > v2] = v2
     return v
 
-def whiten(v , weight = None):
-    if weight is None:
-        return (v - np.mean(v)) / (np.std(v) + 1e-6)
-    else:
+def weighted_mean(v , weight = None):
+    if weight is not None:
         weight = np.nan_to_num(weight)
-        return (v - np.sum(v * weight) / (np.sum(weight) + 1e-6)) / (np.std(v) + 1e-6)
+        return np.nansum(v * weight , axis = None) / (np.nansum(weight , axis = None) + 1e-6)
+    else:
+        return np.nanmean(v , axis = None)
+
+def whiten(v : pd.DataFrame | pd.Series | np.ndarray , weight = None) -> Any:
+    stdev = np.nanstd(v) if isinstance(v , np.ndarray) else np.nanstd(v.to_numpy().flatten()) + 1e-6
+    mean = weighted_mean(v , weight)
+    return (v - mean) / stdev
 
 def winsorize(v , 
               center : Literal['median' , 'mean'] = 'median', 

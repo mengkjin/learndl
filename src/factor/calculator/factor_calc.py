@@ -61,15 +61,17 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     def Factor(cls , start : int | None = 20170101 , end : int | None = None , step : int = 10 , normalize = True , 
                fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
                weighted_whiten = False , order = ['fillna' , 'whiten' , 'winsor'] ,
-               multi_thread = True , ignore_error = True):
-        dates = CALENDAR.slice(CALENDAR.td_within(start , end , step) , cls.init_date , CALENDAR.updated())
+               multi_thread = True , ignore_error = True , verbose = False):
+        assert step % CONF.UPDATE_STEP == 0 , f'step {step} should be a multiple of {CONF.UPDATE_STEP}'
+        dates = CALENDAR.slice(cls.FACTOR_CALENDAR , start , end)
+        dates = dates[dates <= CALENDAR.updated()][::int(step/CONF.UPDATE_STEP)]
+        if len(dates) == 0: return StockFactor(pd.DataFrame())
         calc = cls()
         def calculate_factor(date):
-            df = calc.eval_factor(date)
-            print(f'{calc.factor_name} at {date} calculated')
+            df = calc.eval_factor(date , verbose = verbose)
             return df
         dfs = parallel(calculate_factor , dates , dates , method = multi_thread , ignore_error = ignore_error)
-        factor = StockFactor(dfs)
+        factor = StockFactor(dfs , step = step)
         if normalize: factor.normalize(fill_method , weighted_whiten , order , inplace = True)
         return factor
 
@@ -88,9 +90,18 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         df = pd.Series() if df.empty else df.set_index('secid')[self.factor_name]
         return df
 
-    def eval_factor(self , date : int):
-        df = self.load_factor(date)
-        return self.calc_factor(date) if df.empty else df
+    def eval_factor(self , date : int , verbose : bool = False):
+        try:
+            df = self.load_factor(date)
+        except Exception as e:
+            print(f'{self.factor_name} at {date} error : {e}')
+            df = pd.Series()
+        if df.empty: 
+            self.calc_and_deploy(date , overwrite = True)
+            df = self.load_factor(date)
+            assert not df.empty , f'factor {self.factor_name} is not calculated at {date}'
+            if verbose: print(f'{self.factor_name} at {date} recalculated')
+        return df
     
     @classmethod
     def calc_factor_wrapper(cls , raw_calc_factor):

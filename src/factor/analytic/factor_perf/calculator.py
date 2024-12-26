@@ -32,8 +32,9 @@ class BasePerfCalc(BaseCalculator):
     
 class Factor_FrontFace(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
-    def __init__(self , **kwargs) -> None:
-        super().__init__()
+    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type : Literal['pearson' , 'spearman'] = 'spearman' ,
+                 ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
+        super().__init__(nday = nday , lag = lag , ic_type = ic_type , ret_type = ret_type)
     def calculator(self): return Stat.calc_factor_frontface
     def plotter(self): return Plot.plot_factor_frontface
 
@@ -47,7 +48,7 @@ class Factor_Coverage(BasePerfCalc):
 class Factor_IC_Curve(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , nday : int = 10 , lag : int = 2 , ma_windows : int | list[int] = [10,20] ,
-                 ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
+                 ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag = lag , ma_windows = ma_windows ,ic_type = ic_type , ret_type = ret_type)
     def calculator(self): return Stat.calc_factor_ic_curve
@@ -56,7 +57,7 @@ class Factor_IC_Curve(BasePerfCalc):
 class Factor_IC_Decay(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , nday : int = 10 , lag_init : int = 2 , lag_num : int = 5 ,
-                 ic_type : Literal['pearson' , 'spearman'] = 'pearson' , 
+                 ic_type : Literal['pearson' , 'spearman'] = 'spearman' , 
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag_init = lag_init , lag_num = lag_num ,
                          ic_type = ic_type , ret_type = ret_type)
@@ -66,7 +67,7 @@ class Factor_IC_Decay(BasePerfCalc):
 class Factor_IC_Indus(BasePerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
     def __init__(self , nday : int = 10 , lag : int = 2 , 
-                 ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
+                 ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag = lag , ic_type = ic_type , ret_type = ret_type)
     def calculator(self): return Stat.calc_factor_ic_indus
@@ -74,7 +75,7 @@ class Factor_IC_Indus(BasePerfCalc):
 
 class Factor_IC_Year(BasePerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
-    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
+    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag = lag , ic_type = ic_type , ret_type = ret_type)
     def calculator(self): return Stat.calc_factor_ic_year
@@ -82,7 +83,7 @@ class Factor_IC_Year(BasePerfCalc):
 
 class Factor_IC_Benchmark(BasePerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.AVAILABLES
-    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
+    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(nday = nday , lag = lag , ic_type = ic_type , ret_type = ret_type)
     def calculator(self): return Stat.calc_factor_ic_benchmark

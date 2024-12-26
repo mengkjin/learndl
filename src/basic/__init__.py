@@ -12,5 +12,4 @@ for name in dir(PATH):
 
 
 # print some info after import basic
-print('Basic module imported!')
 if torch.cuda.is_available(): print(f'Use device name: ' + torch.cuda.get_device_name(0))

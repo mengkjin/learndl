@@ -137,8 +137,8 @@ def eval_weighted_pnl(x : pd.DataFrame , weight_type : str , direction : Any , g
     return rtn
 
 class StockFactor:
-    def __init__(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor',dict[int,pd.Series]] , normalized = False):
-        self.update(factor , normalized)
+    def __init__(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor',dict[int,pd.Series]] , normalized = False , step = None):
+        self.update(factor , normalized , step)
         INSTANCE_RECORD.update_factor(self)
 
     def __repr__(self):
@@ -147,7 +147,7 @@ class StockFactor:
     def __call__(self , benchmark):
         return self.within(benchmark)
 
-    def update(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor',dict[int,pd.Series]] , normalized = False):
+    def update(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor',dict[int,pd.Series]] , normalized = False , step = None):
         if isinstance(factor , StockFactor):
             factor = factor.prior_input
         elif isinstance(factor , dict):
@@ -168,6 +168,7 @@ class StockFactor:
 
         self.normalized = normalized
         self.subsets : dict[str,StockFactor] = {}
+        self.step = step
         return self
 
     def copy(self): return deepcopy(self)
@@ -276,14 +277,14 @@ class StockFactor:
         if ffmv:    df = append_ffmv(df)
         return df   
 
-    def eval_ic(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
+    def eval_ic(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                 ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
         factors = self.factor_names
         df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
         ic = df.groupby(by=['date'], as_index=True).apply(lambda x:x[factors].corrwith(x['ret'], method=ic_type))
         return ic.rename_axis('factor_name',axis='columns')
     
-    def eval_ic_indus(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
+    def eval_ic_indus(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                       ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
         with np.errstate(all='ignore'):
             df = self.frame_with_cols(indus = True , fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
@@ -341,35 +342,36 @@ class StockFactor:
         else:
             return StockFactor(df , normalized = True)
     
-    def select_analytic(self , task_name : str):
+    def select_analytic(self , task_name : str , **kwargs):
         from src.factor.analytic import FactorPerfManager , BasePerfCalc
 
         match_task = [task for task in FactorPerfManager.TASK_LIST if task.match_name(task_name)]
         assert match_task and len(match_task) <= 1 , f'no match or duplicate match tasks : {task_name}'
         task , task_name = match_task[0] , match_task[0].__name__
         if not hasattr(self , 'analytic_tasks'): self.analytic_tasks : dict[str , BasePerfCalc] = {}
-        if task_name not in self.analytic_tasks: self.analytic_tasks[task_name] = task()
+        if task_name not in self.analytic_tasks: self.analytic_tasks[task_name] = task(**kwargs)
         return self.analytic_tasks[task_name]
 
     def analyze(self , 
                 task_name : Literal['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Decay', 'IC_Indus',
                                     'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
                                     'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',
-                                    'Group_Year','Distrib_Curve'] | str , plot = True , display = True):
-        task = self.select_analytic(task_name)
+                                    'Group_Year','Distrib_Curve'] | str , plot = True , display = True , **kwargs):
+        if self.step is not None and 'nday' not in kwargs: kwargs['nday'] = self.step
+        task = self.select_analytic(task_name , **kwargs)
         task.calc(self)
         if plot: task.plot(show = display)
         return self
 
-    def fast_analyze(self):
-        task_list = ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr']
-        for task_name in task_list: self.analyze(task_name)
+    def fast_analyze(self , task_list = ['FrontFace', 'IC_Curve'] , **kwargs):
+        '''['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr']'''
+        for task_name in task_list: self.analyze(task_name , **kwargs)
         return self
 
-    def full_analyze(self):
+    def full_analyze(self , **kwargs):
         task_list = ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Decay', 'IC_Indus',
                      'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
-                     'Style_Corr','Group_Curve','Group_Dec  ay','Group_IR_Decay',
+                     'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',
                      'Group_Year','Distrib_Curve']
-        for task_name in task_list: self.analyze(task_name)
+        for task_name in task_list: self.analyze(task_name , **kwargs)
         return self

@@ -44,7 +44,7 @@ def eval_qtile_by_day(factor : pd.DataFrame , scaling : bool = True):
     return rtn.rename_axis('factor_name', axis='index')
 
 def calc_factor_frontface(factor : StockFactor , benchmark : Optional[Benchmark | str] = None , 
-                          nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
+                          nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                           ret_type : Literal['close' , 'vwap'] = 'close'):
     factor = factor.within(benchmark)
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type)
@@ -56,7 +56,7 @@ def calc_factor_coverage(factor : StockFactor , benchmark : Optional[Benchmark |
 
 def calc_factor_ic_curve(factor : StockFactor , benchmark : Optional[Benchmark | str] = None , 
                          nday : int = 10 , lag : int = 2 ,  ma_windows : int | list[int] = [10,20] ,
-                         ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
+                         ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                          ret_type : Literal['close' , 'vwap'] = 'close'):
     factor = factor.within(benchmark)
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type).reset_index().\
@@ -72,7 +72,7 @@ def calc_factor_ic_curve(factor : StockFactor , benchmark : Optional[Benchmark |
 
 def calc_factor_ic_decay(factor : StockFactor , benchmark : Optional[Benchmark | str] = None , 
                          nday : int = 10 , lag_init : int = 2 , lag_num : int = 5 ,
-                         ic_type : Literal['pearson' , 'spearman'] = 'pearson' , 
+                         ic_type : Literal['pearson' , 'spearman'] = 'spearman' , 
                          ret_type : Literal['close' , 'vwap'] = 'close'):
     '''
     nday : days of future return
@@ -89,7 +89,7 @@ def calc_factor_ic_decay(factor : StockFactor , benchmark : Optional[Benchmark |
     return decay_pnl_df
 
 def calc_factor_ic_indus(factor : StockFactor , benchmark : Optional[Benchmark | str] = None , 
-                         nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
+                         nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                          ret_type : Literal['close' , 'vwap'] = 'close'):
     factor = factor.within(benchmark) 
     ic_indus = factor.eval_ic_indus(nday , lag , ic_type , ret_type)
@@ -101,7 +101,7 @@ def calc_factor_ic_indus(factor : StockFactor , benchmark : Optional[Benchmark |
     return ic_stats
 
 def calc_factor_ic_year(factor : StockFactor , benchmark : Optional[Benchmark | str] = None , 
-                        nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
+                        nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                         ret_type : Literal['close' , 'vwap'] = 'close'):
     factor = factor.within(benchmark)
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type)
@@ -114,7 +114,7 @@ def calc_factor_ic_year(factor : StockFactor , benchmark : Optional[Benchmark | 
     return rtn
 
 def calc_factor_ic_benchmark(factor : StockFactor , benchmark : Optional[Benchmark | str] = None , 
-                          nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'pearson' ,
+                          nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                           ret_type : Literal['close' , 'vwap'] = 'close'):
     factor = factor.within(benchmark)
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type)

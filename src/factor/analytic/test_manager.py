@@ -66,12 +66,12 @@ class BaseTestManager(ABC):
     def __init__(self , which : str | list[str] | Literal['all'] = 'all' , project_name : str | None = None , **kwargs):
         candidates = {task.task_name():task for task in self.TASK_LIST}
         if which == 'all':
-            self.tasks = {k:v() for k,v in candidates.items()}
+            self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         else:
             if isinstance(which , str): which = [which]
             illegal = np.setdiff1d(which , list(candidates.keys()))
             assert len(illegal) == 0 , f'Illegal task: {illegal}'
-            self.tasks = {k:v() for k,v in candidates.items() if k in which}
+            self.tasks = {k:v(**kwargs) for k,v in candidates.items() if k in which}
         self.kwargs = kwargs
         self.project_name = project_name
         self.get_project_name()

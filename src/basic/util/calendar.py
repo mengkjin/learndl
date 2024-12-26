@@ -225,9 +225,10 @@ class TradeCalendar:
     @classmethod
     def td_within(cls , start : int | TradeDate | None = -1 , 
                   end : int | TradeDate | None = 99991231 , 
-                  step : int = 1 , until_today = True , slice : tuple[Any,Any] | None = None):
+                  step : int = 1 , until_today = True , slice : tuple[Any,Any] | None = None , updated = False):
         dates = cls.slice(_CALENDAR_TRD['calendar'].to_numpy() , start , end)
         if until_today: dates = dates[dates <= today()]
+        if updated: dates = dates[dates <= cls.updated()]
         dates = dates[::step]
         if slice is not None: dates = cls.slice(dates , slice[0] , slice[1])
         return dates
@@ -255,9 +256,11 @@ class TradeCalendar:
         return td_list[np.isin(td_list , date_list)]
     
     @classmethod
-    def cd_within(cls , start : int | TradeDate | None = -1 , end : int | TradeDate | None = 99991231 , step : int = 1 , until_today = True):    
+    def cd_within(cls , start : int | TradeDate | None = -1 , end : int | TradeDate | None = 99991231 , step : int = 1 , 
+                  until_today = True , updated = False):    
         dates = cls.slice(_CALENDAR_CAL['calendar'].to_numpy() , start , end)
         if until_today: dates = dates[dates <= today()]
+        if updated: dates = dates[dates <= cls.updated()]
         return dates[::step]
     
     @staticmethod
