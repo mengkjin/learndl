@@ -9,8 +9,10 @@ class TushareDataDownloader:
     @classmethod
     def update(cls):
         for name , fetcher in dynamic_members(getattr(task , '__path__')[0] , subclass_of=TushareFetcher):
+            
             try:
-                fetcher().update()
+                fet : TushareFetcher = fetcher()
+                fet.update()
             except Exception as e:
                 print(f'{name} failed: {e}')
                 continue

@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 
 from typing import Any
-
-from src.data.download.tushare.basic import pro , code_to_secid , CALENDAR , InfoFetcher , TushareFetcher , updatable
+from src.basic import IS_SERVER
+from src.data.download.tushare.basic import pro , code_to_secid , CALENDAR , InfoFetcher , TushareFetcher , updatable , DateFetcher
 
 class FundInfo(InfoFetcher):
     DB_KEY = 'mutual_fund_info'
@@ -46,3 +46,17 @@ class FundPortfolioFetcher(TushareFetcher):
             df[col] = df[col].fillna(99991231).astype(int)
         df = df.reset_index(drop=True)
         return df
+
+class ETFDailyQuote(DateFetcher):
+    START_DATE = 20200101 if IS_SERVER else 20241215
+    DB_KEY = 'etf_day'
+    def get_data(self , date : int):
+        date_str = str(date)
+        
+        quote = self.iterate_fetch(pro.fund_daily , limit = 2000 , trade_date=date_str)
+        if quote.empty: return quote
+        quote = quote.rename(columns={'pct_change':'pctchange','pre_close':'preclose','vol':'volume'})
+        quote['volume'] = quote['volume'] * 1000
+        quote['amount'] = quote['amount'] * 10000
+        quote['vwap'] = np.where(quote['volume'] == 0 , quote['close'] , quote['amount'] / quote['volume'])
+        return quote
