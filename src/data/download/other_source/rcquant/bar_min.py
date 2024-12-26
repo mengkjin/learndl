@@ -78,36 +78,36 @@ def rcquant_past_dates(data_type : Literal['sec' , 'etf' , 'fut'] , file_type : 
     past_dates = sorted([int(p.name.split('.')[-2][-8:]) for p in past_files])
     return past_dates
     
-def updated_dates(x_min = 1 , data_type : Literal['sec' , 'etf' , 'fut'] = 'sec'):
+def updated_dates(data_type : Literal['sec' , 'etf' , 'fut'] , x_min : int = 1):
     assert data_type in ['sec' , 'etf' , 'fut'] , f'only support sec , etf , fut : {data_type}'
     assert x_min in [1 , 5 , 10 , 15 , 30 , 60] , f'only support 1min , 5min , 10min , 15min , 30min , 60min : {x_min}'
     if x_min != 1:
         assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
     return PATH.db_dates('trade_ts' , src_key(data_type , x_min))
 
-def last_date(offset : int = 0 , x_min : int = 1 , data_type : Literal['sec' , 'etf' , 'fut'] = 'sec'):
-    dates = updated_dates(x_min , data_type = data_type)
+def last_date(data_type : Literal['sec' , 'etf' , 'fut'] , offset : int = 0 , x_min : int = 1):
+    dates = updated_dates(data_type , x_min)
     last_dt = max(dates) if len(dates) > 0 else 19970101
     return CALENDAR.cd(last_dt , offset)
 
-def min_update_dates(date , data_type : Literal['sec' , 'etf' , 'fut'] = 'sec'):
+def min_update_dates(date , data_type : Literal['sec' , 'etf' , 'fut']):
     assert data_type in ['sec' , 'etf' , 'fut'] , f'only support sec , etf , fut : {data_type}'
-    start = last_date(1 , data_type = data_type)
+    start = last_date(data_type , 1)
     end   = CALENDAR.update_to() if date is None else date
     dates = CALENDAR.td_within(start , end)
     return dates[dates >= src_start_date(data_type)]
 
-def x_mins_update_dates(date , data_type : Literal['sec' , 'etf' , 'fut'] = 'sec') -> list[int]:
+def x_mins_update_dates(date , data_type : Literal['sec' , 'etf' , 'fut']) -> list[int]:
     if data_type != 'sec': return []
     all_dates = np.array([])
     for x_min in [5 , 10 , 15 , 30 , 60]:
         source_dates = PATH.db_dates('trade_ts' , src_key(data_type , 1))
         stored_dates = PATH.db_dates('trade_ts' , src_key(data_type , x_min))
-        dates = CALENDAR.diffs(last_date(1 , x_min) , max(source_dates) , stored_dates)
+        dates = CALENDAR.diffs(last_date(data_type , 1 , x_min) , max(source_dates) , stored_dates)
         all_dates = np.concatenate([all_dates , dates])
     return np.unique(all_dates).astype(int).tolist()
 
-def x_mins_to_update(date , data_type : Literal['sec' , 'etf' , 'fut'] = 'sec'):
+def x_mins_to_update(date , data_type : Literal['sec' , 'etf' , 'fut']):
     if data_type != 'sec': return []
     x_mins : list[int]= []
     for x_min in [5 , 10 , 15 , 30 , 60]:
@@ -115,7 +115,7 @@ def x_mins_to_update(date , data_type : Literal['sec' , 'etf' , 'fut'] = 'sec'):
         if not path.exists(): x_mins.append(x_min)
     return x_mins
 
-def rcquant_instrument_list(date : int , data_type : Literal['sec' , 'etf' , 'fut'] = 'sec'):
+def rcquant_instrument_list(date : int , data_type : Literal['sec' , 'etf' , 'fut']):
     secdf = load_list(date , data_type)
     if secdf is not None: return secdf
     rcquant_init()
@@ -133,7 +133,7 @@ def rcquant_trading_dates(start_date, end_date):
     rcquant_init()
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
 
-def rcquant_bar_min(date : int , first_n : int = -1 , data_type : Literal['sec' , 'etf' , 'fut'] = 'sec'):
+def rcquant_bar_min(date : int , data_type : Literal['sec' , 'etf' , 'fut'] , first_n : int = -1):
     if not rcquant_license_check(): return False
     
     def code_map(x : str):
@@ -148,7 +148,7 @@ def rcquant_bar_min(date : int , first_n : int = -1 , data_type : Literal['sec' 
         return y
 
     if (sec_min := load_min(date , data_type)) is not None: 
-        df = rcquant_min_to_normal_min(sec_min)
+        df = rcquant_min_to_normal_min(sec_min , data_type)
         PATH.db_save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
         return True
 
@@ -167,13 +167,13 @@ def rcquant_bar_min(date : int , first_n : int = -1 , data_type : Literal['sec' 
 
         write_min(data , date , data_type)
 
-        df = rcquant_min_to_normal_min(data)
+        df = rcquant_min_to_normal_min(data , data_type)
         PATH.db_save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
         return True
     else:
         return False
 
-def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : Literal['sec' , 'etf' , 'fut'] = 'sec'):
+def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : Literal['sec' , 'etf' , 'fut']):
     if data_type != 'sec': return df
     df = df.copy()
     df.loc[:,['open','high','low','close','volume','amount']] = df.loc[:,['open','high','low','close','volume','amount']].astype(float)
@@ -185,9 +185,10 @@ def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : Literal['sec' , 'e
     df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap','num_trades']].sort_values(['secid','minute']).reset_index(drop = True)
     return df
 
-def rcquant_download(date : int | None = None ,data_type : Literal['sec' , 'etf' , 'fut'] = 'sec' ,  first_n : int = -1):
+def rcquant_download(date : int | None = None , data_type : Literal['sec' , 'etf' , 'fut'] | None = None ,  first_n : int = -1):
+    assert data_type is not None , f'data_type is required'
     for dt in min_update_dates(date , data_type = data_type):
-        mark = rcquant_bar_min(dt , first_n , data_type = data_type)
+        mark = rcquant_bar_min(dt , data_type , first_n )
         if not mark: 
             print(f'rcquant {data_type} bar min {dt} failed')
         else:
