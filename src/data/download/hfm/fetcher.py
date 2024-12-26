@@ -11,7 +11,9 @@ from src.func.display import print_seperator
 from .jsfetcher import JSFetcher
 
 UPDATER_TITLE = 'DB_updater'
-SHARE_FOLDERS = [Path('/home/mengkjin/Workspace/SharedFolder')] if MY_SERVER else []
+
+SHARE_FOLDERS = [Path('/home/mengkjin/workspace/SharedFolder')] if MY_SERVER else []
+
 class JSDataUpdater():
     '''
     in JS environment, update js source data from jinmeng's laptop

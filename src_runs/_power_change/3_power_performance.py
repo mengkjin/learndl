@@ -7,18 +7,18 @@
 # email: False
 # close_after_run: True
 
-import sys , pathlib
+import sys
 
-paths = [p for p in pathlib.Path(__file__).absolute().parents if p.name == 'learndl']
-assert paths , f'learndl path not found , do not know where to find src file : {__file__}'
-sys.path.append(str(paths[0]))
+assert 'learndl' in __file__ , f'learndl path not found , do not know where to find src file : {__file__}'
+path = __file__.removesuffix(__file__.split('learndl')[-1])
+sys.path.append(path)
 
-
+from pathlib import Path
 from src_runs._abc import change_power_mode , get_running_scripts
 
 def main():
     #running_scripts = get_running_scripts(__file__)
-    log_path = paths[0].joinpath('logs','suspend','power_check.log')
+    log_path = Path(path).joinpath('logs','suspend','power_check.log')
     change_power_mode('performance' , log_path , True)
 
 if __name__ == '__main__':

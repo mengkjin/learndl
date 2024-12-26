@@ -7,11 +7,11 @@
 # email: False
 # close_after_run: False
 
-import sys , pathlib
+import sys
 
-paths = [p for p in pathlib.Path(__file__).absolute().parents if p.name == 'learndl']
-assert paths , f'learndl path not found , do not know where to find src file : {__file__}'
-sys.path.append(str(paths[0]))
+assert 'learndl' in __file__ , f'learndl path not found , do not know where to find src file : {__file__}'
+path = __file__.removesuffix(__file__.split('learndl')[-1])
+sys.path.append(path)
 
 from src.api import ModelAPI
 from src.basic import AutoRunTask

@@ -5,17 +5,19 @@
 # description: Suspend Machine
 # content: 在Ubuntu系统中挂起系统，如果当前有运行脚本，则不挂起系统
 
-import sys , pathlib
+import sys
 
-paths = [p for p in pathlib.Path(__file__).absolute().parents if p.name == 'learndl']
-assert paths , f'learndl path not found , do not know where to find src file : {__file__}'
-sys.path.append(str(paths[0]))
+assert 'learndl' in __file__ , f'learndl path not found , do not know where to find src file : {__file__}'
+path = __file__.removesuffix(__file__.split('learndl')[-1])
+sys.path.append(path)
 
 import datetime , platform , subprocess
 from pathlib import Path
 from src_runs._abc import get_running_scripts
 
-def suspend_this_machine(log_path = paths[0].joinpath('logs','suspend','suspend_check.log')):
+default_log_path = Path(__file__.removesuffix(__file__.split('learndl')[-1])).joinpath('logs','suspend','suspend_check.log')
+
+def suspend_this_machine(log_path = default_log_path):
     running_scripts = get_running_scripts(__file__)
     do_suspend = not running_scripts and platform.system() != 'Windows'
     main_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')

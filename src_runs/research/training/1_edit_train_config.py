@@ -7,18 +7,19 @@
 # email: False
 # close_after_run: True
 
-import sys , pathlib
+import sys
 
-paths = [p for p in pathlib.Path(__file__).absolute().parents if p.name == 'learndl']
-assert paths , f'learndl path not found , do not know where to find src file : {__file__}'
-sys.path.append(str(paths[0]))
+assert 'learndl' in __file__ , f'learndl path not found , do not know where to find src file : {__file__}'
+path = __file__.removesuffix(__file__.split('learndl')[-1])
+sys.path.append(path)
 
+from pathlib import Path
 from src_runs._abc import edit_file
 
 def main():
-    path = paths[0].joinpath('configs/train/model.yaml')
-    print(f'Editing file : {path}')
-    edit_file(path)
+    edit_path = Path(path).joinpath('configs' , 'train' , 'model.yaml')
+    print(f'Editing file : {edit_path}')
+    edit_file(edit_path)
 
 if __name__ == '__main__':
     main()

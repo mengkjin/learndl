@@ -16,8 +16,8 @@ def terminal_cmd(script : str | Path , params : dict = {} , close_after_run = Fa
     args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in params.items() if v != ''])
     cmd = f'{python_path()} {script} {args}'
     if os.name == 'posix':
-        cmd = f'gnome-terminal -- bash -c "{cmd}"'
         if not close_after_run: cmd += '; exec bash'
+        cmd = f'gnome-terminal -- bash -c "{cmd}"'
     else:
         # cmd = f'start cmd /k {cmd}'
         if not close_after_run: 
@@ -30,10 +30,11 @@ def run_script(script : str | Path , close_after_run = False , **kwargs):
     print(f'Script cmd : {cmd}')
     
     process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
-    if close_after_run:
-        process.communicate()
-    else:
-        process.wait()
+    process.communicate()
+    #if close_after_run:
+    #    process.communicate()
+    #else:
+    #    process.wait()
 
 class ScriptRunner:
     def __init__(self , script : Path | str , **kwargs):
