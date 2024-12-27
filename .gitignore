@@ -10,6 +10,7 @@ __old_version__/
 /logs
 /models
 /results
+/tmp_pydataloader
 
 .vs/
 /configs/confidential

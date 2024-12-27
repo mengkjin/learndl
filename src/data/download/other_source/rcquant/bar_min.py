@@ -3,30 +3,34 @@ import pandas as pd
 import numpy as np
 
 from rqdatac.share.errors import QuotaExceeded
-from typing import Literal
+from typing import Literal , Type
 
 from src.basic import PATH , CALENDAR , CONF , IS_SERVER , MY_SERVER , MY_LAPTOP
 from src.data.util.basic import secid_adjust , trade_min_reform
 from src.func.display import print_seperator
 
-SEC_START_DATE = 20241101
-ETF_START_DATE = 20200101 if IS_SERVER else 20241224
-FUT_START_DATE = 20200101 if IS_SERVER else 20241224
-
 RC_PATH = PATH.miscel.joinpath('Rcquant')
+DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'idx' , 'cb']
+instrument_types = {'sec' : 'CS' , 'etf' : 'ETF' , 'fut' : 'Future' , 'idx' : 'INDX' , 'cb' : 'Convertible'}
 
-def src_start_date(data_type : Literal['sec' , 'etf' , 'fut']):
+def src_start_date(data_type : DATA_TYPES):
     if MY_SERVER or MY_LAPTOP:
         if data_type == 'sec':
-            return SEC_START_DATE
+            return 20241101
         elif data_type == 'etf':
-            return ETF_START_DATE
+            return 20200101 if IS_SERVER else 20241224
         elif data_type == 'fut':
-            return FUT_START_DATE
+            return 20200101 if IS_SERVER else 20241224
+        elif data_type == 'idx':
+            return 20200101 if IS_SERVER else 20241224
+        elif data_type == 'cb':
+            return 20200101 if IS_SERVER else 20241224
+        else:
+            raise Exception(f'unsupported data type: {data_type}')
     else:
         return 20401231
 
-def src_key(data_type : Literal['sec' , 'etf' , 'fut'] , x_min : int = 1):
+def src_key(data_type : DATA_TYPES , x_min : int = 1):
     if data_type == 'sec':
         prefix = ''
     else:
@@ -36,22 +40,22 @@ def src_key(data_type : Literal['sec' , 'etf' , 'fut'] , x_min : int = 1):
     else:
         return f'{prefix}{x_min}min'
 
-def load_list(date : int , data_type : Literal['sec' , 'etf' , 'fut']):
+def load_list(date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
     if path.exists(): return pd.read_feather(path)
     return None
 
-def write_list(df : pd.DataFrame , date : int , data_type : Literal['sec' , 'etf' , 'fut']):
+def write_list(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
     df.to_feather(path)
 
-def load_min(date : int , data_type : Literal['sec' , 'etf' , 'fut']):
+def load_min(date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     if path.exists(): return pd.read_feather(path)
     return None
 
-def write_min(df : pd.DataFrame , date : int , data_type : Literal['sec' , 'etf' , 'fut']):
+def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
     df.to_feather(path)
@@ -72,32 +76,31 @@ def rcquant_init():
             return False
     return True
 
-def rcquant_past_dates(data_type : Literal['sec' , 'etf' , 'fut'] , file_type : Literal['secdf' , 'min']):
+def rcquant_past_dates(data_type : DATA_TYPES , file_type : Literal['secdf' , 'min']):
     path = RC_PATH.joinpath(f'{data_type}min') if file_type == 'min' else RC_PATH.joinpath(f'{data_type}df')
     past_files = [p for p in path.iterdir()]
     past_dates = sorted([int(p.name.split('.')[-2][-8:]) for p in past_files])
     return past_dates
     
-def updated_dates(data_type : Literal['sec' , 'etf' , 'fut'] , x_min : int = 1):
-    assert data_type in ['sec' , 'etf' , 'fut'] , f'only support sec , etf , fut : {data_type}'
+def updated_dates(data_type : DATA_TYPES , x_min : int = 1):
     assert x_min in [1 , 5 , 10 , 15 , 30 , 60] , f'only support 1min , 5min , 10min , 15min , 30min , 60min : {x_min}'
     if x_min != 1:
         assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
     return PATH.db_dates('trade_ts' , src_key(data_type , x_min))
 
-def last_date(data_type : Literal['sec' , 'etf' , 'fut'] , offset : int = 0 , x_min : int = 1):
+def last_date(data_type : DATA_TYPES , offset : int = 0 , x_min : int = 1):
     dates = updated_dates(data_type , x_min)
     last_dt = max(dates) if len(dates) > 0 else 19970101
     return CALENDAR.cd(last_dt , offset)
 
-def min_update_dates(date , data_type : Literal['sec' , 'etf' , 'fut']):
-    assert data_type in ['sec' , 'etf' , 'fut'] , f'only support sec , etf , fut : {data_type}'
+def min_update_dates(date , data_type : DATA_TYPES):
+    assert data_type in ['sec' , 'etf' , 'fut' , 'idx'] , f'only support sec , etf , fut , idx : {data_type}'
     start = last_date(data_type , 1)
     end   = CALENDAR.update_to() if date is None else date
     dates = CALENDAR.td_within(start , end)
     return dates[dates >= src_start_date(data_type)]
 
-def x_mins_update_dates(date , data_type : Literal['sec' , 'etf' , 'fut']) -> list[int]:
+def x_mins_update_dates(date , data_type : DATA_TYPES) -> list[int]:
     if data_type != 'sec': return []
     all_dates = np.array([])
     for x_min in [5 , 10 , 15 , 30 , 60]:
@@ -107,7 +110,7 @@ def x_mins_update_dates(date , data_type : Literal['sec' , 'etf' , 'fut']) -> li
         all_dates = np.concatenate([all_dates , dates])
     return np.unique(all_dates).astype(int).tolist()
 
-def x_mins_to_update(date , data_type : Literal['sec' , 'etf' , 'fut']):
+def x_mins_to_update(date , data_type : DATA_TYPES):
     if data_type != 'sec': return []
     x_mins : list[int]= []
     for x_min in [5 , 10 , 15 , 30 , 60]:
@@ -115,11 +118,10 @@ def x_mins_to_update(date , data_type : Literal['sec' , 'etf' , 'fut']):
         if not path.exists(): x_mins.append(x_min)
     return x_mins
 
-def rcquant_instrument_list(date : int , data_type : Literal['sec' , 'etf' , 'fut']):
+def rcquant_instrument_list(date : int , data_type : DATA_TYPES):
     secdf = load_list(date , data_type)
     if secdf is not None: return secdf
     rcquant_init()
-    instrument_types = {'sec' : 'CS' , 'etf' : 'ETF' , 'fut' : 'Future'}
     secdf = rqdatac.all_instruments(type=instrument_types[data_type], date=str(date))
     secdf = secdf.rename(columns = {'order_book_id':'code'})
     if 'status' in secdf.columns:
@@ -133,7 +135,7 @@ def rcquant_trading_dates(start_date, end_date):
     rcquant_init()
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
 
-def rcquant_bar_min(date : int , data_type : Literal['sec' , 'etf' , 'fut'] , first_n : int = -1):
+def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
     if not rcquant_license_check(): return False
     
     def code_map(x : str):
@@ -173,7 +175,7 @@ def rcquant_bar_min(date : int , data_type : Literal['sec' , 'etf' , 'fut'] , fi
     else:
         return False
 
-def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : Literal['sec' , 'etf' , 'fut']):
+def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : DATA_TYPES):
     if data_type != 'sec': return df
     df = df.copy()
     df.loc[:,['open','high','low','close','volume','amount']] = df.loc[:,['open','high','low','close','volume','amount']].astype(float)
@@ -185,7 +187,7 @@ def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : Literal['sec' , 'e
     df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap','num_trades']].sort_values(['secid','minute']).reset_index(drop = True)
     return df
 
-def rcquant_download(date : int | None = None , data_type : Literal['sec' , 'etf' , 'fut'] | None = None ,  first_n : int = -1):
+def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1):
     assert data_type is not None , f'data_type is required'
     for dt in min_update_dates(date , data_type = data_type):
         mark = rcquant_bar_min(dt , data_type , first_n )
@@ -213,14 +215,29 @@ def rcquant_proceed(date : int | None = None , first_n : int = -1):
     except Exception as e:
         print(f'rcquant download sec minbar failed: {e}')
         return False
+    
     try:
         rcquant_download(date , 'etf' , first_n)
     except Exception as e:
         print(f'rcquant download etf minbar failed: {e}')
         return False
+    
     try:
         rcquant_download(date , 'fut' , first_n)
     except Exception as e:
         print(f'rcquant download fut minbar failed: {e}')
+        return False
+    
+    try:
+        rcquant_download(date , 'idx' , first_n)
+    except Exception as e:
+        print(f'rcquant download idx minbar failed: {e}')
+        return False
+    return True
+
+    try:
+        rcquant_download(date , 'cb' , first_n)
+    except Exception as e:
+        print(f'rcquant download cb minbar failed: {e}')
         return False
     return True
