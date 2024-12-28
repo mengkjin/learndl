@@ -27,19 +27,6 @@ class IndexBasic(InfoFetcher):
         df = pd.concat(dfs)
         return df
     
-class IndexDailyQuote(DateFetcher):
-    START_DATE = 20040101 if IS_SERVER else 20241215
-    DB_KEY = 'idx_day'
-    def get_data(self , date : int):
-        date_str = str(date)
-        
-        quote = self.iterate_fetch(pro.index_daily , limit = 5000 , trade_date=date_str)
-        if quote.empty: return quote
-        quote = quote.rename(columns={'pre_close':'preclose','vol':'volume' , 'pct_chg':'pctchange'})
-        quote['amount'] = quote['amount'] * 10000
-        
-        return quote
-    
 class THSConcept(MonthFetcher):
     '''Tonghuashun Concept'''
     DB_SRC = 'membership_ts'

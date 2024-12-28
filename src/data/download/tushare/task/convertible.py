@@ -15,7 +15,7 @@ class ConvertibleBasic(InfoFetcher):
         return df
 
 class ConvertibleDailyQuote(DateFetcher):
-    START_DATE = 20200101 if IS_SERVER else 20241215
+    START_DATE = 20180101 if IS_SERVER else 20241215
     DB_KEY = 'cb_day'
     def get_data(self , date : int):
         date_str = str(date)
