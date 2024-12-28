@@ -10,21 +10,19 @@ from src.data.util.basic import secid_adjust , trade_min_reform
 from src.func.display import print_seperator
 
 RC_PATH = PATH.miscel.joinpath('Rcquant')
-DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'idx' , 'cb']
-instrument_types = {'sec' : 'CS' , 'etf' : 'ETF' , 'fut' : 'Future' , 'idx' : 'INDX' , 'cb' : 'Convertible'}
+DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'cb']
+instrument_types = {'sec' : 'CS' , 'etf' : 'ETF' , 'fut' : 'Future' , 'cb' : 'Convertible'}
 
 def src_start_date(data_type : DATA_TYPES):
     if MY_SERVER or MY_LAPTOP:
         if data_type == 'sec':
             return 20241101
         elif data_type == 'etf':
-            return 20200101 if IS_SERVER else 20241224
+            return 20240901 if IS_SERVER else 20241224
         elif data_type == 'fut':
-            return 20200101 if IS_SERVER else 20241224
-        elif data_type == 'idx':
-            return 20200101 if IS_SERVER else 20241224
+            return 20240901 if IS_SERVER else 20241224
         elif data_type == 'cb':
-            return 20200101 if IS_SERVER else 20241224
+            return 20240901 if IS_SERVER else 20241224
         else:
             raise Exception(f'unsupported data type: {data_type}')
     else:
@@ -82,33 +80,35 @@ def rcquant_past_dates(data_type : DATA_TYPES , file_type : Literal['secdf' , 'm
     past_dates = sorted([int(p.name.split('.')[-2][-8:]) for p in past_files])
     return past_dates
     
-def updated_dates(data_type : DATA_TYPES , x_min : int = 1):
+def stored_dates(data_type : DATA_TYPES , x_min : int = 1):
     assert x_min in [1 , 5 , 10 , 15 , 30 , 60] , f'only support 1min , 5min , 10min , 15min , 30min , 60min : {x_min}'
     if x_min != 1:
         assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
     return PATH.db_dates('trade_ts' , src_key(data_type , x_min))
 
 def last_date(data_type : DATA_TYPES , offset : int = 0 , x_min : int = 1):
-    dates = updated_dates(data_type , x_min)
+    dates = stored_dates(data_type , x_min)
     last_dt = max(dates) if len(dates) > 0 else 19970101
     return CALENDAR.cd(last_dt , offset)
 
-def min_update_dates(date , data_type : DATA_TYPES):
-    assert data_type in ['sec' , 'etf' , 'fut' , 'idx'] , f'only support sec , etf , fut , idx : {data_type}'
-    start = last_date(data_type , 1)
+def target_dates(data_type : DATA_TYPES , date : int | None = None):
+    start = src_start_date(data_type)
     end   = CALENDAR.update_to() if date is None else date
     dates = CALENDAR.td_within(start , end)
-    return dates[dates >= src_start_date(data_type)]
+    return CALENDAR.diffs(dates , stored_dates(data_type , 1))
 
-def x_mins_update_dates(date , data_type : DATA_TYPES) -> list[int]:
+def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> list[int]:
     if data_type != 'sec': return []
     all_dates = np.array([])
     for x_min in [5 , 10 , 15 , 30 , 60]:
         source_dates = PATH.db_dates('trade_ts' , src_key(data_type , 1))
         stored_dates = PATH.db_dates('trade_ts' , src_key(data_type , x_min))
-        dates = CALENDAR.diffs(last_date(data_type , 1 , x_min) , max(source_dates) , stored_dates)
+        target_dates = CALENDAR.diffs(source_dates , stored_dates)
+        dates = target_dates[target_dates >= src_start_date(data_type)]
         all_dates = np.concatenate([all_dates , dates])
-    return np.unique(all_dates).astype(int).tolist()
+    end = CALENDAR.update_to() if date is None else date
+    all_dates = np.unique(all_dates[all_dates <= end]).astype(int).tolist()
+    return all_dates
 
 def x_mins_to_update(date , data_type : DATA_TYPES):
     if data_type != 'sec': return []
@@ -189,14 +189,14 @@ def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : DATA_TYPES):
 
 def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1):
     assert data_type is not None , f'data_type is required'
-    for dt in min_update_dates(date , data_type = data_type):
+    for dt in target_dates(data_type , date):
         mark = rcquant_bar_min(dt , data_type , first_n )
         if not mark: 
             print(f'rcquant {data_type} bar min {dt} failed')
         else:
             print(f'rcquant {data_type} bar min {dt} success')
 
-    for dt in x_mins_update_dates(date , data_type = data_type):
+    for dt in x_mins_target_dates(data_type , date):
         print(f'process other {data_type} min bars at {dt} from source rcquant')
         for x_min in x_mins_to_update(dt , data_type = data_type):
             min_df = PATH.db_load('trade_ts' , src_key(data_type) , dt)
@@ -210,34 +210,12 @@ def rcquant_proceed(date : int | None = None , first_n : int = -1):
     if not rcquant_license_check(): return False
     if not rcquant_init(): return False
 
-    try:
-        rcquant_download(date , 'sec' , first_n)
-    except Exception as e:
-        print(f'rcquant download sec minbar failed: {e}')
-        return False
+    data_types : list[DATA_TYPES] = ['sec' , 'etf' , 'fut' , 'cb']
+    for data_type in data_types:
+        try:
+            rcquant_download(date , data_type , first_n)
+        except Exception as e:
+            print(f'rcquant download {data_type} minbar failed: {e}')
+            return False
     
-    try:
-        rcquant_download(date , 'etf' , first_n)
-    except Exception as e:
-        print(f'rcquant download etf minbar failed: {e}')
-        return False
-    
-    try:
-        rcquant_download(date , 'fut' , first_n)
-    except Exception as e:
-        print(f'rcquant download fut minbar failed: {e}')
-        return False
-    
-    try:
-        rcquant_download(date , 'idx' , first_n)
-    except Exception as e:
-        print(f'rcquant download idx minbar failed: {e}')
-        return False
-    return True
-
-    try:
-        rcquant_download(date , 'cb' , first_n)
-    except Exception as e:
-        print(f'rcquant download cb minbar failed: {e}')
-        return False
     return True

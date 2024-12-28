@@ -14,7 +14,7 @@ class AutoRunTask:
         self.email_if_attachment = email_if_attachment
 
     def __enter__(self):
-        change_power_mode('balanced')
+        # change_power_mode('balanced')
         self.date_str = datetime.now().strftime('%Y%m%d')
         self.time_str = datetime.now().strftime('%H%M%S')
         name = '.'.join([self.task_name , f'{self.date_str}_{self.time_str}' , 'txt'])
@@ -37,7 +37,7 @@ class AutoRunTask:
             title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')] , 'at' , self.date_str])
             Email.attach(self.printer.filename)
             Email().send(title = title , body = self.status)
-        change_power_mode('power-saver')
+        # change_power_mode('power-saver')
 
 def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance'] , 
                       log_path : Path | None = PATH.logs.joinpath('suspend','power_check.log') ,
