@@ -11,22 +11,8 @@ with open('configs/confidential/aws.yaml' , 'r') as f:
 
 session = boto3.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, region_name='cn-north-1')
 s3 = session.resource('s3')
-bucket = s3.Bucket('datayes-data')
+bucket = s3.Bucket('datayes-data') # type: ignore
 download_path = Path('tmp_pydataloader')
-
-def fut_list():
-    ...
-
-def idx_list():
-    ...
-
-def cvt_list():
-    ...
-
-def etf_list():
-    path = 'data/DataBase/DB_information_ts/mutual_fund_info.feather'
-    fund_list = pd.read_feather(path)
-    fund_list[fund_list['market'] == 'E']
 
 def download_one_day(date , file):
     zip_file_path = download_path.joinpath(f'min.{date}.zip')
@@ -78,7 +64,6 @@ def kline_download(start = 20100104 , end = 20241226):
         futures = {executor.submit(download_wrapper, (date , file)):date for date , file in files.items()}
         for future in as_completed(futures):
             date = futures[future]
-            print(f'{datetime.datetime.now()} : {date} download done!')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

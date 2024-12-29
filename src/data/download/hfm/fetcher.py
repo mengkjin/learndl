@@ -8,10 +8,9 @@ from pathlib import Path
 from src.basic import PATH , MY_SERVER , MY_LAPTOP
 from src.func.display import print_seperator
 
-from .jsfetcher import JSFetcher
+from .task import JSFetcher , JSDownloader
 
 UPDATER_TITLE = 'DB_updater'
-
 SHARE_FOLDERS = [Path('/home/mengkjin/workspace/SharedFolder')] if MY_SERVER else []
 
 class JSDataUpdater():
@@ -112,35 +111,40 @@ class JSDataUpdater():
         params = [JSFetcher(db_src , *args) for args in param_args]
         return params
     
-    def handle_df_result(self , df , target_path : Path , result_dict = None):
+    def handle_result(self , result , target_path : Path , result_dict = None):
         abs_path = str(target_path.absolute())
         rel_path = str(target_path.relative_to(PATH.database))
-        if isinstance(df , pd.DataFrame):
-            PATH.save_df(df , target_path)
+        if isinstance(result , pd.DataFrame):
+            PATH.save_df(result , target_path)
             with tarfile.open(self.Updater, 'a') as tar:  
                 tar.add(abs_path , arcname = rel_path) 
             self.Success.append(target_path)
             target_str = f'Updated ~ {rel_path}'
-        elif df is None:
+        elif isinstance(result , Path):
+            with tarfile.open(self.Updater, 'a') as tar:  
+                tar.add(result , arcname = rel_path) 
+            self.Success.append(target_path)
+            target_str = f'Updated ~ {rel_path}'
+        elif result is None:
             target_str = None
         else:
-            self.Failed.append(df)
+            self.Failed.append(result)
             target_str = f'Failed ~ {rel_path}'
             
-        if result_dict is not None: result_dict[target_path] = df
+        if result_dict is not None: result_dict[target_path] = result
         return target_str
 
-    def update_by_name(self , db_src):
+    def fetch_by_name(self , db_src):
         params = self.get_db_params(db_src)
         result = None # {}
         for param in params:
             start_time = time.time()
             df , target_path = param()
-            target_str = self.handle_df_result(df , target_path , result)
+            target_str = self.handle_result(df , target_path , result)
             if target_str: print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
         return result
     
-    def update_by_date(self , db_src , start_dt = None , end_dt = None , force = False):
+    def fetch_by_date(self , db_src , start_dt = None , end_dt = None , force = False):
         params = self.get_db_params(db_src)
         if not params: return
         result = None # {}
@@ -153,22 +157,31 @@ class JSDataUpdater():
                 if not cond: continue
                 start_time = time.time()
                 df , target_path = param(date , df_min = temporal.get('df_min'))
-                target_str = self.handle_df_result(df , target_path , result)
+                target_str = self.handle_result(df , target_path , result)
                 if param.db_src == 'trade_js' and param.db_key == 'min': temporal['df_min'] = df
                 if target_str: print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
         return result
 
-    def update_all(self , db_srcs = PATH.DB_BY_NAME + PATH.DB_BY_DATE , start_dt = None , end_dt = None , force = False):
+    def fetch_all(self , db_srcs = PATH.DB_BY_NAME + PATH.DB_BY_DATE , start_dt = None , end_dt = None , force = False):
         assert MY_LAPTOP , f'must on my laptop'
         # selected DB is totally refreshed , so delete first
         if not isinstance(db_srcs , (list,tuple)): db_srcs = [db_srcs]
         for db_src in db_srcs:
             if db_src in PATH.DB_BY_NAME:
-                self.update_by_name(db_src)
+                self.fetch_by_name(db_src)
             elif db_src in PATH.DB_BY_DATE:
-                self.update_by_date(db_src , start_dt , end_dt , force = force)
+                self.fetch_by_date(db_src , start_dt , end_dt , force = force)
             else:
                 raise Exception(db_src)
+
+    def download_all(self):
+        paths : list[Path] = []
+        for path in JSDownloader.proceed():
+            start_time = time.time()
+            target_str = self.handle_result(path , path)
+            if target_str: print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
+            paths.append(path)
+        return paths
 
     def print_unfetch(self):
         [print(fail) for fail in self.Failed]
@@ -179,7 +192,8 @@ class JSDataUpdater():
         start_time = time.time()
         print(f'Update Files')
         Updater = cls()
-        Updater.update_all()
+        Updater.fetch_all()
+        Updater.download_all()
         Updater.print_unfetch()
         print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
 

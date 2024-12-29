@@ -384,3 +384,72 @@ class JSFetcher:
             df['weight'] = df['weight'] / df['weight'].sum()
             df = adjust_precision(df)
         return df
+
+import boto3 , re , datetime , os , yaml
+import pandas as pd
+from pathlib import Path
+
+class JSDownloader():
+    @classmethod
+    def proceed(cls , verbose = True):
+        paths = kline_download(verbose = True)
+        return paths
+
+def kline_download(verbose = True):
+    with open('configs/confidential/aws.yaml' , 'r') as f:
+        aws_info = yaml.load(f , Loader=yaml.FullLoader)
+        aws_access_key_id = aws_info['aws_access_key_id']
+        aws_secret_access_key = aws_info['aws_secret_access_key']
+
+    session = boto3.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, region_name='cn-north-1')
+    s3 = session.resource('s3')
+    bucket = s3.Bucket('datayes-data') # type: ignore
+    download_path = PATH.miscel.joinpath('JSMinute')
+
+    os.makedirs(download_path , exist_ok=True)
+    target_dates = CALENDAR.td_within(20240101 , CALENDAR.update_to())
+    stored_dates = [int(x.name.split('.')[-2]) for x in download_path.iterdir() if x.is_file() and x.name.endswith('.zip')]
+    dates = np.setdiff1d(target_dates , stored_dates)
+
+    paths : list[Path] = []
+    if len(dates) == 0: return paths
+    start , end = dates.min() , dates.max()
+
+    filedate = lambda x:int(re.findall(r'(\d{8})', x.key)[-1])
+    filefilter = lambda x:(x.key.endswith('.zip') and os.path.basename(x.key).startswith('equity_pricemin'))
+
+    if start <= 20230328 and end <= 20230328:
+        file_list = [f for f in bucket.objects.filter(Prefix = 'equity_pricemin/') if filefilter(f)]
+        file_list = [f for f in file_list if filedate(f) >= start and filedate(f) <= end]
+    elif start > 20230328 and end > 20230328:
+        file_list = [f for f in bucket.objects.filter(Prefix = 'snapshot/L1_services_equd_min/') if filefilter(f)]
+        file_list = [f for f in file_list if filedate(f) >= start and filedate(f) <= end]
+    else:
+        _file_list_1 = [f for f in bucket.objects.filter(Prefix = 'equity_pricemin/') if filefilter(f)]
+        _file_list_1 = [f for f in _file_list_1 if filedate(f) >= start and filedate(f) <= 20230328]
+        _file_list_2 = [f for f in bucket.objects.filter(Prefix = 'snapshot/L1_services_equd_min/') if filefilter(f)]
+        _file_list_2 = [f for f in _file_list_2 if filedate(f) > 20230328 and filedate(f) <= end]
+        file_list = _file_list_1 + _file_list_2
+
+    # print(f'{len(file_list)} files to download:')
+    files = dict(sorted({filedate(f): f for f in file_list}.items()))
+    files = {k:v for k,v in files.items() if k in dates}
+
+    import concurrent.futures
+    from concurrent.futures import as_completed
+
+    def download_wrapper(args):
+        date, file = args
+        zip_file_path = download_path.joinpath(f'min.{date}.zip')
+        if zip_file_path.exists(): return
+        bucket.download_file(file.key , zip_file_path)
+        return zip_file_path
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {executor.submit(download_wrapper, (date , file)):date for date , file in files.items()}
+        for future in as_completed(futures):
+            date = futures[future]
+            if (path := future.result()) is not None: paths.append(path)
+            if verbose: print(f'{datetime.datetime.now()} : {date} minute kline download done!')
+            
+    return paths
