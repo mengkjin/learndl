@@ -5,7 +5,7 @@ from src.basic import PATH
 from src.data import DATAVENDOR
 from src.func.display import EnclosedMessage
 from src.factor.util import StockFactor
-from src.factor.api import FactorTestAPI
+from src.factor.api import FactorModelUpdater , FactorCalculatorAPI , FactorTestAPI
 from src.factor.calculator import StockFactorHierarchy
 
 def get_random_factor(start_dt = 20240101 , end_dt = 20240331 , step = 5 , default_random_n = 2):
@@ -40,6 +40,21 @@ class FactorAPI:
     .Test.FmpTop()        : test top fmp
     .factor_hierarchy()   : get factor hierarchy
     '''
+    @staticmethod
+    def update(): 
+        '''
+        Update datas for both laptop and server:
+        a. for laptop, transform data from R dataset and SQL to Database, create Updater's in './data/DataBase'
+        b. for server, move Updater's to Database'
+        '''
+
+        # update factor models
+        with EnclosedMessage(' update factor models '):
+            FactorModelUpdater.update()
+
+        # update stock factor
+        with EnclosedMessage(' update stock factors '):
+            FactorCalculatorAPI.update()
     class Test:
         @staticmethod
         def FactorPerf(names = None ,

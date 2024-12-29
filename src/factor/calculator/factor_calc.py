@@ -144,6 +144,14 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     @classproperty_str
     def factor_string(cls):
         return f'Factor {cls.level}/{cls.category0}/{cls.category1}/{cls.factor_name}'
+    
+    @classproperty_str
+    def min_date(cls):
+        return PATH.factor_min_date(cls.factor_name)
+    
+    @classproperty_str
+    def max_date(cls):
+        return PATH.factor_max_date(cls.factor_name)
 
     def __repr__(self):
         return f'{self.factor_name}(from{self.init_date},{self.category0},{self.category1})'

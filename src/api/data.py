@@ -24,14 +24,6 @@ class DataAPI:
         # update other datas
         with EnclosedMessage(' update other datas '):
             OtherDataUpdater.update()
-
-        # update factor models
-        with EnclosedMessage(' update factor models '):
-            FactorModelUpdater.update()
-
-        # update stock factor
-        with EnclosedMessage(' update stock factors '):
-            FactorCalculatorAPI.update()
         
     @staticmethod
     def prepare_predict_data(): 

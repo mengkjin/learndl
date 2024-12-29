@@ -78,9 +78,13 @@ class StockFactorHierarchy:
         category0 : str | None = None 
         category1 : str | None = None 
         '''
-        attr_list = ['level' , 'file_name' , 'factor_name' , 'init_date' , 'category0' , 'category1' , 'description']
-        df_dict = [[getattr(cls , a) for a in attr_list] for cls in self if self.factor_filter(cls , **kwargs)]
-        df = pd.DataFrame(df_dict, columns=attr_list)
+        attr_list = ['level' , 'file_name' , 'factor_name' , 'init_date' , 'category0' , 'category1' , 'description' , 'min_date' , 'max_date']
+        iterance = self.iter_instance(**kwargs)
+        df_datas = []
+        for cls in iterance: 
+            attrs = [getattr(cls , a) for a in attr_list]
+            df_datas.append(attrs)
+        df = pd.DataFrame(df_datas, columns = attr_list)
         return df
 
     def factor_names(self):

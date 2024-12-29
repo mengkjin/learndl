@@ -9,6 +9,7 @@ from src.basic import PATH , MY_SERVER , MY_LAPTOP
 from src.func.display import print_seperator
 
 from .task import JSFetcher , JSDownloader
+from .minute_transform import main as minute_transform    
 
 UPDATER_TITLE = 'DB_updater'
 SHARE_FOLDERS = [Path('/home/mengkjin/workspace/SharedFolder')] if MY_SERVER else []
@@ -53,6 +54,10 @@ class JSDataUpdater():
                 tar.extractall(path = str(PATH.database) , filter='data')  
                 
         if del_after_dumping: [tar_filename.unlink() for tar_filename in paths]
+
+    @classmethod
+    def transform_datas(cls):
+        minute_transform()
 
     @staticmethod
     def get_new_updater():
@@ -204,6 +209,7 @@ class JSDataUpdater():
 
         print(f'Unpack Update Files') 
         cls.unpack_exist_updaters(del_after_dumping=True)
+        cls.transform_datas()
 
         print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
 

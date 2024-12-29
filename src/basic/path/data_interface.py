@@ -74,6 +74,18 @@ def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
     if year is not None:     dates = dates[dates // 10000 == year]
     return dates
 
+def dir_min_date(directory : Path):
+    years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
+    stems = [p.stem[-8:] for p in directory.joinpath(str(min(years))).iterdir()]
+    dates = [int(s) for s in stems if s.isdigit()]
+    return min(dates)
+
+def dir_max_date(directory : Path):
+    years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
+    stems = [p.stem[-8:] for p in directory.joinpath(str(max(years))).iterdir()]
+    dates = [int(s) for s in stems if s.isdigit()]
+    return max(dates)
+
 def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , printing_prefix = None):
     path = Path(path)
     if df is None or df.empty: 
@@ -162,6 +174,12 @@ def db_dates(db_src , db_key , start_dt = None , end_dt = None , year = None):
         dates = np.concatenate([alt_dates , dates])
     return dates
 
+def db_min_date(db_src , db_key):
+    return min(db_dates(db_src , db_key))
+
+def db_max_date(db_src , db_key):
+    return max(db_dates(db_src , db_key))
+
 # @db_src_deprecated(1)
 def db_save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True):
     '''
@@ -231,6 +249,12 @@ def pred_path(model_name : str , date : int | Any):
 def pred_dates(model_name : str , start_dt = None , end_dt = None , year = None):
     return dir_dates(PATH.preds.joinpath(model_name) , start_dt , end_dt , year)
 
+def pred_min_date(model_name : str):
+    return dir_min_date(PATH.preds.joinpath(model_name))
+
+def pred_max_date(model_name : str):
+    return dir_max_date(PATH.preds.joinpath(model_name))
+
 def pred_save(df : pd.DataFrame | None , model_name : str , date : int | Any , overwrite = True):
     return save_df(df , pred_path(model_name , date) , overwrite)
 
@@ -250,6 +274,12 @@ def factor_path(factor_name : str , date : int | Any):
 
 def factor_dates(factor_name : str , start_dt = None , end_dt = None , year = None):
     return dir_dates(PATH.factor.joinpath(factor_name) , start_dt , end_dt , year)
+
+def factor_min_date(factor_name : str):
+    return dir_min_date(PATH.factor.joinpath(factor_name))
+
+def factor_max_date(factor_name : str):
+    return dir_max_date(PATH.factor.joinpath(factor_name))
 
 def factor_save(df : pd.DataFrame | None , factor_name : str , date : int | Any , overwrite = True):
     return save_df(df , factor_path(factor_name , date) , overwrite)

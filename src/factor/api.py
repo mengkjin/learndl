@@ -1,14 +1,10 @@
 from typing import Any , Literal
 
+from src.basic import PATH
 from src.factor.util import StockFactor
 
-from src.factor.analytic.test_manager import TASK_TYPES , TYPE_of_TASK
-from src.factor.analytic.factor_perf.api import FactorPerfManager
-from src.factor.analytic.fmp_optim.api import FmpOptimManager
-from src.factor.analytic.fmp_top.api import FmpTopManager
-
-from src.factor.calculator.cne5 import TuShareCNE5_Calculator
-from src.factor.calculator.factor_update import UPDATE_JOBS
+from src.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager
+from src.factor.calculator import UPDATE_JOBS , TuShareCNE5_Calculator , StockFactorHierarchy
 
 class FactorModelUpdater:
     @classmethod
@@ -19,6 +15,7 @@ class FactorCalculatorAPI:
     @classmethod
     def update(cls , **kwargs):
         UPDATE_JOBS.update(**kwargs)
+        StockFactorHierarchy().factor_df().to_csv(PATH.main.joinpath('faclist.csv'))
 
     @classmethod
     def fix(cls , factors : list[str] = [] , **kwargs):
