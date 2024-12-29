@@ -1,7 +1,6 @@
 import datetime
 from typing import Any , Literal
 
-from src.basic import PATH
 from src.data import DATAVENDOR
 from src.func.display import EnclosedMessage
 from src.factor.util import StockFactor
@@ -47,7 +46,6 @@ class FactorAPI:
         a. for laptop, transform data from R dataset and SQL to Database, create Updater's in './data/DataBase'
         b. for server, move Updater's to Database'
         '''
-
         # update factor models
         with EnclosedMessage(' update factor models '):
             FactorModelUpdater.update()
@@ -55,6 +53,7 @@ class FactorAPI:
         # update stock factor
         with EnclosedMessage(' update stock factors '):
             FactorCalculatorAPI.update()
+
     class Test:
         @staticmethod
         def FactorPerf(names = None ,
