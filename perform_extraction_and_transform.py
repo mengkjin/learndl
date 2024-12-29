@@ -1,3 +1,4 @@
+import zipfile
 import numpy as np
 import pandas as pd
 
@@ -8,6 +9,7 @@ from src.data.util import trade_min_fillna
 from src.basic import PATH , IS_SERVER
 
 zip_path = Path('data/Miscellaneous/JSMinute')
+START_DATE = 20180630
 
 def get_js_min(date : int):
     renamer = {
@@ -23,7 +25,6 @@ def get_js_min(date : int):
     }
     df = extract_js_min(date)
     df = add_sec_type(df).rename(columns=renamer)
-    df['secid'] = df['secid'].astype(int)
     df['minute'] = (df['minute'] / 60).astype(int)
     df['minute'] = (df['minute'] - 90) * (df['minute'] <= 240) + (df['minute'] - 180) * (df['minute'] > 240)
     return df
@@ -31,14 +32,27 @@ def get_js_min(date : int):
 def extract_js_min(date):
     target_path = zip_path.joinpath(f'min/min.{date}.feather')
     target_path.parent.mkdir(parents=True , exist_ok=True)
-    if target_path.exists(): return pd.read_feather(target_path)
-    zip_file_path = zip_path.joinpath(f'min.{date}.zip')
-    txt_file_path = f'equity_pricemin{date}.txt'
+    df = None
+    if target_path.exists(): 
+        try:
+            df = pd.read_feather(target_path)
+        except Exception as e:
+            print(e)
+            target_path.unlink()
+    if df is None:
+        zip_file_path = zip_path.joinpath(f'min.{date}.zip')
+        txt_file_path = f'equity_pricemin{date}.txt'
 
-    with zipfile.ZipFile(zip_file_path, 'r') as zip_ref: 
-        zip_ref.extract(txt_file_path , zip_path)
-        df = pd.read_csv(zip_path.joinpath(txt_file_path) , sep = '\t')
-        zip_path.joinpath(txt_file_path).unlink()
+        with zipfile.ZipFile(zip_file_path, 'r') as zip_ref: 
+            zip_ref.extract(txt_file_path , zip_path)
+            df = pd.read_csv(zip_path.joinpath(txt_file_path) , sep = '\t' , low_memory=False)
+            zip_path.joinpath(txt_file_path).unlink()
+    try:
+        df['ticker'] = df['ticker'].astype(int)
+    except Exception as e:
+        print(e)
+        df = df.loc[df['ticker'].str.isdigit()]
+        df['ticker'] = df['ticker'].astype(int)
     df.to_feather(target_path)
     return df
 
@@ -120,5 +134,6 @@ def perform_extraction_and_transform(date : int):
 if __name__ == '__main__' and IS_SERVER:
     dates = np.array([int(p.name.split('.')[-2][-8:]) for p in zip_path.iterdir() if not p.is_dir()])
     dates.sort()
+    dates = dates[dates >= START_DATE]
     for date in dates:
         perform_extraction_and_transform(date)
