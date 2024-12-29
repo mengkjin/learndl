@@ -11,37 +11,38 @@ from src.func.display import print_seperator
 from .task import JSFetcher , JSDownloader
 from .minute_transform import main as minute_transform    
 
-UPDATER_TITLE = 'DB_updater'
-SHARE_FOLDERS = [Path('/home/mengkjin/workspace/SharedFolder')] if MY_SERVER else []
 
 class JSDataUpdater():
     '''
     in JS environment, update js source data from jinmeng's laptop
     must update after the original R database is updated
     '''
+    UPDATER_BASE        = PATH.data
+    UPDATER_TITLE       = 'DB_updater'
+    UPDATER_SEARCH_DIRS = [PATH.updater , Path('/home/mengkjin/workspace/SharedFolder')] if MY_SERVER else [PATH.updater]
+
     def __init__(self) -> None:
         self.Updater = self.get_new_updater()
         self.Success = []
         self.Failed  = []
         
-    @staticmethod
-    def get_updater_paths():
+    @classmethod
+    def get_updater_paths(cls):
         # order matters!
-        search_dirs = [PATH.database , PATH.updater] + SHARE_FOLDERS
 
         paths : list[Path] = []
-        for sdir in search_dirs:
-            add_paths = [p for p in sdir.iterdir() if p.name.startswith(UPDATER_TITLE + '.')]
+        for sdir in cls.UPDATER_SEARCH_DIRS:
+            add_paths = [p for p in sdir.iterdir() if p.name.startswith(cls.UPDATER_TITLE + '.')]
             paths += add_paths
         return paths
     
-    @staticmethod
-    def unpack_exist_updaters(del_after_dumping = True):
+    @classmethod
+    def unpack_exist_updaters(cls , del_after_dumping = True):
         assert MY_SERVER , f'must on server'
-        search_dirs = [PATH.database , PATH.updater] + SHARE_FOLDERS
+
         paths : list[Path] = []
-        for sdir in search_dirs:
-            paths += [p for p in sdir.iterdir() if p.name.startswith(UPDATER_TITLE + '.') and p.name.endswith('.tar')]
+        for sdir in cls.UPDATER_SEARCH_DIRS:
+            paths += [p for p in sdir.iterdir() if p.name.startswith(cls.UPDATER_TITLE + '.') and p.name.endswith('.tar')]
         paths.sort()
         if del_after_dumping and paths:
             print_seperator()
@@ -51,7 +52,7 @@ class JSDataUpdater():
 
         for tar_filename in paths:
             with tarfile.open(tar_filename, 'r') as tar:  
-                tar.extractall(path = str(PATH.database) , filter='data')  
+                tar.extractall(path = str(cls.UPDATER_BASE) , filter='data')  
                 
         if del_after_dumping: [tar_filename.unlink() for tar_filename in paths]
 
@@ -59,10 +60,10 @@ class JSDataUpdater():
     def transform_datas(cls):
         minute_transform()
 
-    @staticmethod
-    def get_new_updater():
+    @classmethod
+    def get_new_updater(cls):
         stime = time.strftime('%y%m%d%H%M%S',time.localtime())
-        return PATH.updater.joinpath(f'{UPDATER_TITLE}.{stime}.tar')
+        return PATH.updater.joinpath(f'{cls.UPDATER_TITLE}.{stime}.tar')
 
     def get_db_params(self , db_src):
         # db_update_parameters
@@ -118,7 +119,7 @@ class JSDataUpdater():
     
     def handle_result(self , result , target_path : Path , result_dict = None):
         abs_path = str(target_path.absolute())
-        rel_path = str(target_path.relative_to(PATH.database))
+        rel_path = str(target_path.relative_to(self.UPDATER_BASE))
         if isinstance(result , pd.DataFrame):
             PATH.save_df(result , target_path)
             with tarfile.open(self.Updater, 'a') as tar:  
