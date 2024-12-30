@@ -1,4 +1,4 @@
-import zipfile
+import zipfile , argparse
 import numpy as np
 import pandas as pd
 
@@ -8,8 +8,7 @@ from pathlib import Path
 from src.data.util import trade_min_fillna
 from src.basic import PATH , IS_SERVER
 
-zip_path = Path('data/Miscellaneous/JSMinute')
-START_DATE = 20180630
+zip_path = PATH.miscel.joinpath('JSMinute')
 
 def get_js_min(date : int):
     renamer = {
@@ -132,8 +131,18 @@ def perform_extraction_and_transform(date : int):
         PATH.db_save(sec_df , 'trade_js' , src_key , date , verbose = True)
     
 if __name__ == '__main__' and IS_SERVER:
+    args = argparse.ArgumentParser()
+    args.add_argument('--start' , type=int , default=0)
+    args.add_argument('--end' , type=int , default=0)
+    args.add_argument('--year' , type=int , default=0)
+    args = args.parse_args()
     dates = np.array([int(p.name.split('.')[-2][-8:]) for p in zip_path.iterdir() if not p.is_dir()])
     dates.sort()
-    dates = dates[dates >= START_DATE]
+    if args.year != 0:
+        dates = dates[dates // 10000 == args.year]
+    if args.start != 0:
+        dates = dates[dates >= args.start]
+    if args.end != 0:
+        dates = dates[dates <= args.end]
     for date in dates:
         perform_extraction_and_transform(date)

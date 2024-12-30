@@ -18,11 +18,11 @@ def src_start_date(data_type : DATA_TYPES):
         if data_type == 'sec':
             return 20241101
         elif data_type == 'etf':
-            return 20240901 if IS_SERVER else 20241224
+            return 20231201 if IS_SERVER else 20241224
         elif data_type == 'fut':
-            return 20240101 if IS_SERVER else 20241224
+            return 20231201 if IS_SERVER else 20241224
         elif data_type == 'cb':
-            return 20240101 if IS_SERVER else 20241224
+            return 20231201 if IS_SERVER else 20241224
         else:
             raise Exception(f'unsupported data type: {data_type}')
     else:

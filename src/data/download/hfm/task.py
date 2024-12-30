@@ -385,10 +385,6 @@ class JSFetcher:
             df = adjust_precision(df)
         return df
 
-import boto3 , re , datetime , os , yaml
-import pandas as pd
-from pathlib import Path
-
 class JSDownloader():
     @classmethod
     def proceed(cls , verbose = True):
@@ -396,6 +392,10 @@ class JSDownloader():
         return paths
 
 def kline_download(verbose = True):
+    import boto3 , re , datetime , os , yaml # type: ignore
+    import pandas as pd
+    from pathlib import Path
+
     with open('configs/confidential/aws.yaml' , 'r') as f:
         aws_info = yaml.load(f , Loader=yaml.FullLoader)
         aws_access_key_id = aws_info['aws_access_key_id']
