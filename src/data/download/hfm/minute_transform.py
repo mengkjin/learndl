@@ -8,7 +8,8 @@ from pathlib import Path
 from src.data.util import trade_min_fillna
 from src.basic import PATH , IS_SERVER
 
-download_path = PATH.miscel.joinpath('JSMinute')
+sec_min_path = PATH.miscel.joinpath('JSMinute')
+fut_min_path = PATH.miscel.joinpath('JSFutMinute')
 
 def get_js_min(date : int):
     renamer = {
@@ -29,23 +30,32 @@ def get_js_min(date : int):
     return df
 
 def extract_js_min(date):
-    target_path = download_path.joinpath(f'min/min.{date}.feather')
+    target_path = sec_min_path.joinpath(f'min/min.{date}.feather')
     target_path.parent.mkdir(parents=True , exist_ok=True)
     df = None
     if target_path.exists(): 
         try:
             df = pd.read_feather(target_path)
+            return df
         except Exception as e:
             print(e)
             target_path.unlink()
     if df is None:
-        zip_file_path = download_path.joinpath(f'min.{date}.zip')
-        txt_file_path = f'equity_pricemin{date}.txt'
+        zip_file = sec_min_path.joinpath(f'min.{date}.zip')
 
-        with zipfile.ZipFile(zip_file_path, 'r') as zip_ref: 
-            zip_ref.extract(txt_file_path , download_path)
-            df = pd.read_csv(download_path.joinpath(txt_file_path) , sep = '\t' , low_memory=False)
-            download_path.joinpath(txt_file_path).unlink()
+        with zipfile.ZipFile(zip_file, 'r') as zip_ref: 
+            file_list = zip_ref.namelist()
+            for file_name in file_list:
+                if not file_name.startswith('equity_pricemin') or not file_name.endswith('.txt'): continue
+                date_str = file_name.removesuffix('.txt').replace('-', '')[-8:]
+                assert date_str.isdigit() , date_str
+                date = int(date_str)
+
+                with zip_ref.open(file_name) as file:
+                    df = pd.read_csv(file , sep = '\t' , low_memory=False)
+                    df.columns = df.columns.str.lower()
+                break
+        assert df is not None , f'no data found for {date}'
     try:
         df['ticker'] = df['ticker'].astype(int)
     except Exception as e:
@@ -121,27 +131,47 @@ def transform_sec(df : pd.DataFrame):
 
     return df
 
-def perform_extraction_and_transform(date : int):
-    df = get_js_min(date)
-    for sec_type in ['sec' , 'etf' , 'cb']:
-        sec_df = filter_sec(df , sec_type)
-        if sec_type == 'sec':
-            sec_df = transform_sec(df)
-        src_key = f'min' if sec_type == 'sec' else f'{sec_type}_min'
-        PATH.db_save(sec_df , 'trade_js' , src_key , date , verbose = True)
-    
-def main():
+def process_sec_min_files():
     if not IS_SERVER: return
-    target_dates = np.array([int(p.name.split('.')[-2][-8:]) for p in download_path.iterdir() if not p.is_dir()])
+
+    target_dates = np.array([int(p.name.split('.')[-2][-8:]) for p in sec_min_path.iterdir() if not p.is_dir()])
     stored_dates_sec = PATH.db_dates('trade_js' , 'min')
     stored_dates_etf = PATH.db_dates('trade_js' , 'etf_min')
     stored_dates_cb  = PATH.db_dates('trade_js' , 'cb_min')
     dates = target_dates[np.isin(target_dates , stored_dates_sec) & 
                          np.isin(target_dates , stored_dates_etf) & 
                          np.isin(target_dates , stored_dates_cb)]
+    
     dates.sort()
     for date in dates:
-        perform_extraction_and_transform(date)
+        df = get_js_min(date)
+        for sec_type in ['sec' , 'etf' , 'cb']:
+            sec_df = filter_sec(df , sec_type)
+            if sec_type == 'sec':
+                sec_df = transform_sec(df)
+            src_key = f'min' if sec_type == 'sec' else f'{sec_type}_min'
+            PATH.db_save(sec_df , 'trade_js' , src_key , date , verbose = True)
+
+def process_fut_min_files():
+
+    for zip_file in fut_min_path.glob('*.zip'):
+        with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+            file_list = zip_ref.namelist()
+            for file_name in file_list:
+                if file_name.startswith('future-min-1min-') and file_name.endswith('.csv'):
+                    date_str = file_name.removesuffix('.csv').replace('-', '')[-8:]
+                    assert date_str.isdigit() , date_str
+                    date = int(date_str)
+
+                    if PATH.db_path('trade_js', 'fut_min', date).exists(): continue
+                    with zip_ref.open(file_name) as file:
+                        df = pd.read_csv(file)
+                        df.columns = df.columns.str.lower()
+                    PATH.db_save(df, 'trade_js', 'fut_min', date, verbose=True)
+    
+def main():
+    process_sec_min_files()
+    process_fut_min_files()
 
 if __name__ == '__main__':
      main()
