@@ -30,39 +30,30 @@ def get_js_min(date : int):
     return df
 
 def extract_js_min(date):
-    target_path = sec_min_path.joinpath(f'min/min.{date}.feather')
-    target_path.parent.mkdir(parents=True , exist_ok=True)
+
     df = None
-    if target_path.exists(): 
-        try:
-            df = pd.read_feather(target_path)
-            return df
-        except Exception as e:
-            print(e)
-            target_path.unlink()
-    if df is None:
-        zip_file = sec_min_path.joinpath(f'min.{date}.zip')
+    zip_file = sec_min_path.joinpath(f'min.{date}.zip')
 
-        with zipfile.ZipFile(zip_file, 'r') as zip_ref: 
-            file_list = zip_ref.namelist()
-            for file_name in file_list:
-                if not file_name.startswith('equity_pricemin') or not file_name.endswith('.txt'): continue
-                date_str = file_name.removesuffix('.txt').replace('-', '')[-8:]
-                assert date_str.isdigit() , date_str
-                date = int(date_str)
+    with zipfile.ZipFile(zip_file, 'r') as zip_ref: 
+        file_list = zip_ref.namelist()
+        for file_name in file_list:
+            if not file_name.startswith('equity_pricemin') or not file_name.endswith('.txt'): continue
+            date_str = file_name.removesuffix('.txt').replace('-', '')[-8:]
+            assert date_str.isdigit() , date_str
+            date = int(date_str)
 
-                with zip_ref.open(file_name) as file:
-                    df = pd.read_csv(file , sep = '\t' , low_memory=False)
-                    df.columns = df.columns.str.lower()
-                break
-        assert df is not None , f'no data found for {date}'
+            with zip_ref.open(file_name) as file:
+                df = pd.read_csv(file , sep = '\t' , low_memory=False)
+                df.columns = df.columns.str.lower()
+            break
+    assert df is not None , f'no data found for {date}'
     try:
         df['ticker'] = df['ticker'].astype(int)
     except Exception as e:
         print(e)
         df = df.loc[df['ticker'].str.isdigit()]
         df['ticker'] = df['ticker'].astype(int)
-    df.to_feather(target_path)
+
     return df
 
 def add_sec_type(df : pd.DataFrame):
@@ -138,9 +129,9 @@ def process_sec_min_files():
     stored_dates_sec = PATH.db_dates('trade_js' , 'min')
     stored_dates_etf = PATH.db_dates('trade_js' , 'etf_min')
     stored_dates_cb  = PATH.db_dates('trade_js' , 'cb_min')
-    dates = target_dates[np.isin(target_dates , stored_dates_sec) & 
-                         np.isin(target_dates , stored_dates_etf) & 
-                         np.isin(target_dates , stored_dates_cb)]
+    dates = target_dates[~np.isin(target_dates , stored_dates_sec) | 
+                         ~np.isin(target_dates , stored_dates_etf) | 
+                         ~np.isin(target_dates , stored_dates_cb)]
     
     dates.sort()
     for date in dates:
