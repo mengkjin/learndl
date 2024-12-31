@@ -154,7 +154,6 @@ class DataBlock(Stock4DData):
     
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None):
-        assert start_dt is not None or end_dt is not None , f'start_dt or end_dt must be provided when dates is None'
         dates = CALENDAR.td_within(start_dt , end_dt)
         main_dates = np.intersect1d(dates , PATH.db_dates(db_src , db_key))
         df = PATH.db_load_multi(db_src , db_key , main_dates , date_colname = 'date')

@@ -6,7 +6,7 @@ from pathlib import Path
 from torch import Tensor
 from typing import Any , Literal , Optional
 
-from src.project_setting import IS_SERVER
+from src.project_setting import MY_SERVER
 from src.basic import path as PATH
 from src.basic import conf as CONF
 
@@ -184,7 +184,7 @@ class RegisteredModel(ModelPath):
     for a registeredmodel to predict recent/history data
     model dict stored in configs/schedule/update_models.yaml
     '''
-    START_DT = 20170101 if IS_SERVER else 20241101
+    START_DT = 20170101 if MY_SERVER else 20241101
     FMP_STEP = 5
     MODEL_DICT : dict[str,dict[str,Any]] = CONF.schedule('registered_models')
 

@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 
 from contextlib import nullcontext
+from pathlib import Path
 from typing import Any , ClassVar , Optional
 
 from src.basic import SILENT , CALENDAR , RegisteredModel , JS_FACTOR_DESTINATION
@@ -32,7 +33,6 @@ class ModelPredictor:
         self.model = get_predictor_module(self.config)
         self.df = pd.DataFrame()
 
-        self.dir_deploy = JS_FACTOR_DESTINATION
         self._current_update_dates = []
         self._current_deploy_dates = []
 
@@ -99,9 +99,10 @@ class ModelPredictor:
 
     def deploy(self , overwrite = False):
         '''deploy df by day to class.destination'''
-        if self.dir_deploy is None: return self
+        if JS_FACTOR_DESTINATION is None: return self
+        assert isinstance(JS_FACTOR_DESTINATION , Path)
         try:
-            path_deploy = self.dir_deploy.joinpath(self.reg_model.pred_name)
+            path_deploy = JS_FACTOR_DESTINATION.joinpath(self.reg_model.pred_name)
             path_deploy.parent.mkdir(parents=True,exist_ok=True)
             if overwrite:
                 dates = self.reg_model.pred_dates
@@ -122,7 +123,8 @@ class ModelPredictor:
         '''prediction correlation of ecent days'''
         if df is None: df = self.df
         if df is None: return NotImplemented
-        df = df[df[date_col] >= CALENDAR.today(-window)]
+        dates = np.sort(df[date_col].unique())[-window:]
+        df = df[df[date_col].isin(dates)]
         assert isinstance(df , pd.DataFrame)
         return df.pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()
     

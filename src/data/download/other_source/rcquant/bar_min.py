@@ -5,7 +5,7 @@ import numpy as np
 from rqdatac.share.errors import QuotaExceeded
 from typing import Literal , Type
 
-from src.basic import PATH , CALENDAR , CONF , IS_SERVER
+from src.basic import PATH , CALENDAR , CONF , MY_SERVER
 from src.data.util.basic import secid_adjust , trade_min_reform
 from src.func.display import print_seperator
 
@@ -14,7 +14,7 @@ DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'cb']
 instrument_types = {'sec' : 'CS' , 'etf' : 'ETF' , 'fut' : 'Future' , 'cb' : 'Convertible'}
 
 def src_start_date(data_type : DATA_TYPES):
-    if IS_SERVER:
+    if MY_SERVER:
         if data_type == 'sec':
             return 20241101
         elif data_type == 'etf':

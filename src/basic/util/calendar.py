@@ -211,22 +211,22 @@ class TradeCalendar:
         return np.sort(_CALENDAR_CAL[_CALENDAR_CAL['calendar'] <= date].iloc[-n:]['calendar'].to_numpy())
 
     @staticmethod
-    def start(date : int | TradeDate | None) -> int:
-        start = 19900101 if date is None else int(date)
-        if start < 0: start = today(start)
-        return start
+    def start_dt(date : int | TradeDate | None) -> int:
+        date_dt = 19900101 if date is None else int(date)
+        if date_dt < 0: date_dt = today(date_dt)
+        return date_dt
     
     @staticmethod
-    def end(date : int | TradeDate | None) -> int:
-        end = 99991231 if date is None else int(date)
-        if end < 0: end = today(end)
-        return end
+    def end_dt(date : int | TradeDate | None) -> int:
+        date = 99991231 if date is None else int(date)
+        if date < 0: date = today(date)
+        return date
 
     @classmethod
-    def td_within(cls , start : int | TradeDate | None = -1 , 
-                  end : int | TradeDate | None = 99991231 , 
+    def td_within(cls , start_dt : int | TradeDate | None = None , 
+                  end_dt : int | TradeDate | None = None , 
                   step : int = 1 , until_today = True , slice : tuple[Any,Any] | None = None , updated = False):
-        dates = cls.slice(_CALENDAR_TRD['calendar'].to_numpy() , start , end)
+        dates = cls.slice(_CALENDAR_TRD['calendar'].to_numpy() , start_dt , end_dt)
         if until_today: dates = dates[dates <= today()]
         if updated: dates = dates[dates <= cls.updated()]
         dates = dates[::step]
@@ -256,9 +256,9 @@ class TradeCalendar:
         return td_list[np.isin(td_list , date_list)]
     
     @classmethod
-    def cd_within(cls , start : int | TradeDate | None = -1 , end : int | TradeDate | None = 99991231 , step : int = 1 , 
+    def cd_within(cls , start_dt : int | TradeDate | None = None , end_dt : int | TradeDate | None = None , step : int = 1 , 
                   until_today = True , updated = False):    
-        dates = cls.slice(_CALENDAR_CAL['calendar'].to_numpy() , start , end)
+        dates = cls.slice(_CALENDAR_CAL['calendar'].to_numpy() , start_dt , end_dt)
         if until_today: dates = dates[dates <= today()]
         if updated: dates = dates[dates <= cls.updated()]
         return dates[::step]
@@ -275,9 +275,9 @@ class TradeCalendar:
                      lag_num : int = 0):
         td = TradeDate(reference_date)
         pdays = {'d':1 , 'w':7 , 'm':21 , 'q':63 , 'y':252}[freq]
-        start_date = td - pdays * (period_num + lag_num) + 1
-        end_date   = td - pdays * lag_num
-        return start_date , end_date
+        start_dt = td - pdays * (period_num + lag_num) + 1
+        end_dt   = td - pdays * lag_num
+        return start_dt , end_dt
     
     @staticmethod
     def as_trade_date(date : int | Any):
@@ -292,8 +292,8 @@ class TradeCalendar:
         return _CALENDAR_TRD['calendar'].to_numpy()
 
     @classmethod
-    def slice(cls , dates , start : int | TradeDate | None = None , end : int | TradeDate | None = None , year : int | None = None) -> np.ndarray:
-        dates = dates[(dates >= cls.start(start)) & (dates <= cls.end(end))]
+    def slice(cls , dates , start_dt : int | TradeDate | None = None , end_dt : int | TradeDate | None = None , year : int | None = None) -> np.ndarray:
+        dates = dates[(dates >= cls.start_dt(start_dt)) & (dates <= cls.end_dt(end_dt))]
         if year  is not None: dates = dates[(dates // 10000) == year]
         return dates
 
@@ -304,11 +304,11 @@ class TradeCalendar:
 
     @classmethod
     def year_end(cls , date):
-        return cls.end(date) // 10000 * 10000 + 1231
+        return cls.end_dt(date) // 10000 * 10000 + 1231
 
     @classmethod
     def year_start(cls , date):
-        return cls.start(date) // 10000 * 10000 + 101
+        return cls.start_dt(date) // 10000 * 10000 + 101
 
     @classmethod
     def quarter_end(cls , date):
@@ -337,11 +337,11 @@ class TradeCalendar:
         return np.concatenate([start , mid , end])
     
     @staticmethod
-    def qe_within(start , end , year_only = False):
+    def qe_within(start_dt , end_dt , year_only = False):
         if year_only:
-            return YEAR_ENDS[(YEAR_ENDS >= start) & (YEAR_ENDS <= end)]
+            return YEAR_ENDS[(YEAR_ENDS >= start_dt) & (YEAR_ENDS <= end_dt)]
         else:
-            return QUARTER_ENDS[(QUARTER_ENDS >= start) & (QUARTER_ENDS <= end)]
+            return QUARTER_ENDS[(QUARTER_ENDS >= start_dt) & (QUARTER_ENDS <= end_dt)]
 
     @classmethod
     def qe_interpolate(cls , incomplete_qtr_ends : Sequence | Any):

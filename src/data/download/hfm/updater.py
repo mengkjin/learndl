@@ -5,16 +5,15 @@ import pandas as pd
 from functools import reduce
 from pathlib import Path
 
-from src.basic import PATH , MY_SERVER , MY_LAPTOP
+from src.basic import PATH , MY_SERVER , TERMINAL
 from src.func.display import print_seperator
 
 from .task import JSFetcher , JSDownloader
 from .minute_transform import main as minute_transform    
 
-
 class JSDataUpdater():
     '''
-    in JS environment, update js source data from jinmeng's laptop
+    in JS environment, update js source data from jinmeng's terminal
     must update after the original R database is updated
     '''
     UPDATER_BASE        = PATH.data
@@ -169,7 +168,8 @@ class JSDataUpdater():
         return result
 
     def fetch_all(self , db_srcs = PATH.DB_BY_NAME + PATH.DB_BY_DATE , start_dt = None , end_dt = None , force = False):
-        assert MY_LAPTOP , f'must on my laptop'
+        assert TERMINAL , f'must on my terminal'
+        if 'jinmeng' not in socket.gethostname().lower(): return
         # selected DB is totally refreshed , so delete first
         if not isinstance(db_srcs , (list,tuple)): db_srcs = [db_srcs]
         for db_src in db_srcs:
@@ -193,8 +193,8 @@ class JSDataUpdater():
         [print(fail) for fail in self.Failed]
 
     @classmethod
-    def update_laptop(cls):
-        assert MY_LAPTOP , f'must on my laptop'
+    def update_terminal(cls):
+        assert TERMINAL , f'must on my terminal'
         start_time = time.time()
         print(f'Update Files')
         Updater = cls()
@@ -217,13 +217,13 @@ class JSDataUpdater():
     @classmethod
     def update(cls):
         '''
-        in JS environment, update js source data from jinmeng's laptop
-        1. In laptop, update js source data from R project to updaters
+        in JS environment, update js source data from jinmeng's terminal
+        1. In terminal, update js source data from R project to updaters
         2. In server, unpack update files and move to Database
         '''
         if MY_SERVER:
             cls.update_server()
-        elif MY_LAPTOP:
-            cls.update_laptop()
+        elif TERMINAL:
+            cls.update_terminal()
         else:
             print(f'Unidentified machine: {socket.gethostname()} , do nothing')

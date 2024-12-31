@@ -19,12 +19,12 @@ final_path.mkdir(exist_ok=True , parents=True)
 secdf_path.mkdir(exist_ok=True , parents=True)
 task_path.mkdir(exist_ok=True , parents=True)
 
-def tmp_file_dir(start_date : int , end_date : int):
-    path = task_path.joinpath(f'{start_date}_{end_date}')
+def tmp_file_dir(start_dt : int , end_dt : int):
+    path = task_path.joinpath(f'{start_dt}_{end_dt}')
     return path
 
-def tmp_file_path(start_date : int , end_date : int , code : str):
-    path = task_path.joinpath(f'{start_date}_{end_date}' , str(code))
+def tmp_file_path(start_dt : int , end_dt : int , code : str):
+    path = task_path.joinpath(f'{start_dt}_{end_dt}' , str(code))
     return path
 
 def baostock_secdf(date : int):
@@ -88,16 +88,16 @@ def pending_date():
     d1 = last_date()
     return d0 if d0 > d1 else -1
 
-def baostock_bar_5min(start_date : int , end_date : int , first_n : int = -1 , retry_n : int = 10):
+def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry_n : int = 10):
     # date = 20240704
-    if end_date < start_date: return True
+    if end_dt < start_dt: return True
     retry = 0
     
-    tmp_dir = tmp_file_dir(start_date , end_date)
+    tmp_dir = tmp_file_dir(start_dt , end_dt)
     tmp_dir.mkdir(exist_ok=True)
 
-    start_date_str = f'{start_date // 10000}-{(start_date // 100) % 100}-{start_date % 100}'
-    end_date_str = f'{end_date // 10000}-{(end_date // 100) % 100}-{end_date % 100}'
+    start_date_str = f'{start_dt // 10000}-{(start_dt // 100) % 100}-{start_dt % 100}'
+    end_date_str = f'{end_dt // 10000}-{(end_dt // 100) % 100}-{end_dt % 100}'
     
     sec_df : pd.DataFrame | None = None
     while True:
@@ -105,7 +105,7 @@ def baostock_bar_5min(start_date : int , end_date : int , first_n : int = -1 , r
         try:
             bs.login()
             if sec_df is None:
-                sec_df = baostock_secdf(end_date)
+                sec_df = baostock_secdf(end_dt)
                 sec_df = sec_df[sec_df['is_sec'] == 1]
                 if first_n > 0: sec_df = sec_df.iloc[:first_n]
             downloaded = [d.name for d in tmp_dir.iterdir()]
@@ -114,17 +114,17 @@ def baostock_bar_5min(start_date : int , end_date : int , first_n : int = -1 , r
                 bs.logout()
                 break
             
-            print(f'{start_date} - {end_date} : {len(downloaded)} already downloaded , {len(task_codes)} codes to download :' , end = '\n')
+            print(f'{start_dt} - {end_dt} : {len(downloaded)} already downloaded , {len(task_codes)} codes to download :' , end = '\n')
             print('')
             for i , code in enumerate(task_codes):
                 rs = bs.query_history_k_data_plus(code, 'date,time,code,open,high,low,close,volume,amount,adjustflag',
-                                                start_date=start_date_str,end_date=end_date_str,frequency='5', adjustflag='3')
+                                                  start_date=start_date_str,end_date=end_date_str,frequency='5', adjustflag='3')
                 result = rs.get_data()
                 if isinstance(result , pd.DataFrame):
-                    result.to_feather(tmp_file_path(start_date , end_date , code))
+                    result.to_feather(tmp_file_path(start_dt , end_dt , code))
 
                 if i % 100 == 0:
-                    print(f'{i + 1}/{len(task_codes)} {start_date} - {end_date} : {code}...' , end = '\r')
+                    print(f'{i + 1}/{len(task_codes)} {start_dt} - {end_dt} : {code}...' , end = '\r')
 
         except Exception as e:
             bs.logout()
@@ -166,9 +166,9 @@ def baostock_5min_to_normal_5min(df : pd.DataFrame):
 
 def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : int = 10):
     pending_dt = pending_date()
-    end_date = CALENDAR.update_to() if date is None else date
-    if pending_dt == end_date: pending_dt = -1
-    for dt in [pending_dt , end_date]:
+    end_dt = CALENDAR.update_to() if date is None else date
+    if pending_dt == end_dt: pending_dt = -1
+    for dt in [pending_dt , end_dt]:
         last_dt = last_date(1)
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)

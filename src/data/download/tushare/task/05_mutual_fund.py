@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from typing import Any
-from src.basic import IS_SERVER
+from src.basic import MY_SERVER
 from src.data.download.tushare.basic import pro , code_to_secid , CALENDAR , InfoFetcher , TushareFetcher , updatable , DateFetcher
 
 class FundInfo(InfoFetcher):
@@ -31,10 +31,10 @@ class FundPortfolioFetcher(TushareFetcher):
     CONSIDER_FUTURE = False
 
     def update_dates(self):
-        this_date , last_date , last_update_date = CALENDAR.today() , self.last_date() , self.last_update_date()
+        update_to , last_date , last_update_date = CALENDAR.update_to() , self.last_date() , self.last_update_date()
 
-        update = updatable(this_date , last_update_date , self.UPDATE_FREQ)
-        dates = CALENDAR.qe_trailing(this_date , n_past = 1 , another_date=last_date)
+        update = updatable(update_to , last_update_date , self.UPDATE_FREQ)
+        dates = CALENDAR.qe_trailing(update_to , n_past = 1 , another_date=last_date)
 
         if not update and len(dates) <= 1: dates = []
         return dates
@@ -50,7 +50,7 @@ class FundPortfolioFetcher(TushareFetcher):
         return df
 
 class ETFDailyQuote(DateFetcher):
-    START_DATE = 20180101 if IS_SERVER else 20241215
+    START_DATE = 20180101 if MY_SERVER else 20241215
     DB_KEY = 'etf_day'
     def get_data(self , date : int):
         date_str = str(date)

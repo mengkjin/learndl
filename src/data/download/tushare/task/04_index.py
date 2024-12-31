@@ -1,11 +1,11 @@
 import pandas as pd
-from src.basic import IS_SERVER
+from src.basic import MY_SERVER
 from src.data.download.tushare.basic import InfoFetcher , DateFetcher , MonthFetcher , RollingFetcher , pro , code_to_secid
 
-def index_weight_get_data(self : RollingFetcher , index_code , start_date , end_date , limit = 4000):
-    assert start_date is not None and end_date is not None , 'start_date and end_date must be provided'
+def index_weight_get_data(self : RollingFetcher , index_code , start_dt , end_dt , limit = 4000):
+    assert start_dt is not None and end_dt is not None , 'start_dt and end_dt must be provided'
     df = self.iterate_fetch(pro.index_weight , limit = limit , max_fetch_times = 500 , index_code=index_code , 
-                            start_date = str(start_date) , end_date = str(end_date))
+                            start_date = str(start_dt) , end_date = str(end_dt))
     if df.empty: return df
     df = code_to_secid(df , 'con_code').rename(columns={'trade_date':self.ROLLING_DATE_COL})
     df = df.sort_values([self.ROLLING_DATE_COL ,'weight'] , ascending=False)
@@ -55,8 +55,8 @@ class CSI300Weight(RollingFetcher):
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = False
 
-    def get_data(self , start_date , end_date):
-        return index_weight_get_data(self , self.INDEX_CODE , start_date , end_date)
+    def get_data(self , start_dt , end_dt):
+        return index_weight_get_data(self , self.INDEX_CODE , start_dt , end_dt)
         
 class CSI500Weight(RollingFetcher):
     START_DATE = 20041231
@@ -68,8 +68,8 @@ class CSI500Weight(RollingFetcher):
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = False
 
-    def get_data(self , start_date , end_date):
-        return index_weight_get_data(self , self.INDEX_CODE , start_date , end_date)
+    def get_data(self , start_dt , end_dt):
+        return index_weight_get_data(self , self.INDEX_CODE , start_dt , end_dt)
     
 class CSI800Weight(RollingFetcher):
     START_DATE = 20041231
@@ -80,8 +80,8 @@ class CSI800Weight(RollingFetcher):
     ROLLING_BACK_DAYS = 10
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = False
-    def get_data(self , start_date , end_date):
-        return index_weight_get_data(self , self.INDEX_CODE , start_date , end_date)
+    def get_data(self , start_dt , end_dt):
+        return index_weight_get_data(self , self.INDEX_CODE , start_dt , end_dt)
     
 class CSI1000Weight(RollingFetcher):
     START_DATE = 20041231
@@ -92,8 +92,8 @@ class CSI1000Weight(RollingFetcher):
     ROLLING_BACK_DAYS = 10
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = False
-    def get_data(self , start_date , end_date):
-        return index_weight_get_data(self , self.INDEX_CODE , start_date , end_date , limit = 4000)
+    def get_data(self , start_dt , end_dt):
+        return index_weight_get_data(self , self.INDEX_CODE , start_dt , end_dt , limit = 4000)
     
 class CSI2000Weight(RollingFetcher):
     START_DATE = 20131231
@@ -104,5 +104,5 @@ class CSI2000Weight(RollingFetcher):
     ROLLING_BACK_DAYS = 10
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = False
-    def get_data(self , start_date , end_date):
-        return index_weight_get_data(self , self.INDEX_CODE , start_date , end_date , limit = 4000)
+    def get_data(self , start_dt , end_dt):
+        return index_weight_get_data(self , self.INDEX_CODE , start_dt , end_dt , limit = 4000)

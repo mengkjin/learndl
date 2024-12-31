@@ -6,7 +6,7 @@ from typing import Literal
 from pathlib import Path
 
 from src.data.util import trade_min_fillna
-from src.basic import PATH , IS_SERVER
+from src.basic import PATH , MY_SERVER
 
 zip_path = PATH.miscel.joinpath('JSMinute')
 
@@ -130,7 +130,7 @@ def perform_extraction_and_transform(date : int):
         src_key = f'min' if sec_type == 'sec' else f'{sec_type}_min'
         PATH.db_save(sec_df , 'trade_js' , src_key , date , verbose = True)
     
-if __name__ == '__main__' and IS_SERVER:
+if __name__ == '__main__' and MY_SERVER:
     args = argparse.ArgumentParser()
     args.add_argument('--start' , type=int , default=0)
     args.add_argument('--end' , type=int , default=0)

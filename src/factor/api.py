@@ -1,6 +1,6 @@
 from typing import Any , Literal
 
-from src.basic import PATH , IS_SERVER
+from src.basic import PATH , MY_SERVER
 from src.factor.util import StockFactor
 
 from src.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager
@@ -15,7 +15,7 @@ class FactorCalculatorAPI:
     @classmethod
     def update(cls , **kwargs):
         UPDATE_JOBS.update(**kwargs)
-        if IS_SERVER:
+        if MY_SERVER:
             StockFactorHierarchy().factor_df().to_csv(PATH.main.joinpath('faclist.csv'))
 
     @classmethod

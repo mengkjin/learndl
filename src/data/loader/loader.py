@@ -22,9 +22,6 @@ class BlockLoader:
         return self.load_block(start_dt , end_dt)
     
     def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
-        if end_dt is not None   and end_dt < 0:   end_dt   = CALENDAR.today(end_dt)
-        if start_dt is not None and start_dt < 0: start_dt = CALENDAR.today(start_dt)
-
         sub_blocks = []
         db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
         for db_key in db_keys:
@@ -69,9 +66,6 @@ class FactorLoader:
         return self.load_block(start_dt , end_dt)
 
     def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
-        if end_dt is not None   and end_dt < 0:   end_dt   = CALENDAR.today(end_dt)
-        if start_dt is not None and start_dt < 0: start_dt = CALENDAR.today(start_dt)
-
         factors : list[pd.DataFrame] = []
         with Timer(f' --> factor blocks reading [{self.category0} , {self.category1}]'):
             for calc in self.hier.iter_instance(category0 = self.category0 , category1 = self.category1):

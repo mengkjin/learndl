@@ -1,5 +1,5 @@
 import src.model.model_module.application as app
-from src.basic import IS_SERVER
+from src.basic import MY_SERVER
 from src.data import DataPreProcessor
 from src.func.display import EnclosedMessage
 
@@ -21,10 +21,10 @@ class ModelAPI:
         with EnclosedMessage(' update hidden '):
             cls.Extractor.update()
 
-        with EnclosedMessage(' update factors '):
+        with EnclosedMessage(' update predictors '):
             cls.Predictor.update()
 
-        with EnclosedMessage(' update factor portfolios '):
+        with EnclosedMessage(' update predictor portfolios '):
             cls.FmpBuilder.update()
 
     
@@ -35,7 +35,7 @@ class ModelAPI:
         a. for laptop, do nothing
         b. for server, continue training registered models in model'
         '''
-        if IS_SERVER:
+        if MY_SERVER:
             with EnclosedMessage(' reconstruct train data '):
                 cls.reconstruct_train_data()
 

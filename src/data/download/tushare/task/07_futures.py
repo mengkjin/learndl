@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Any
 
-from src.basic import IS_SERVER
+from src.basic import MY_SERVER
 from src.data.download.tushare.basic import pro , InfoFetcher , DateFetcher
 
 class FuturesCalendar(InfoFetcher):
@@ -33,7 +33,7 @@ class FuturesBasic(InfoFetcher):
         return df
 
 class FuturesDailyQuote(DateFetcher):
-    START_DATE = 20180101 if IS_SERVER else 20241215
+    START_DATE = 20180101 if MY_SERVER else 20241215
     DB_KEY = 'fut_day'
     def get_data(self , date : int):
         date_str = str(date)

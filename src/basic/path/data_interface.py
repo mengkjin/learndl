@@ -7,7 +7,7 @@ from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal
 
-from src.project_setting import IS_SERVER
+from src.project_setting import MY_SERVER
 
 from . import path_structure as PATH
 
@@ -27,8 +27,8 @@ DB_ALTERNATIVES : dict[str , str] = {
     'trade_ts' : 'trade_js' ,
     'benchmark_ts' : 'benchmark_js'
 }
-LOAD_PARALLEL : Literal['thread' , 'process'] | None = 'thread' if IS_SERVER else None
-LOAD_MAX_WORKERS : int | Any = 40 if IS_SERVER else os.cpu_count()
+LOAD_PARALLEL : Literal['thread' , 'process'] | None = 'thread' if MY_SERVER else None
+LOAD_MAX_WORKERS : int | Any = 40 if MY_SERVER else os.cpu_count()
 
 deprecated_db_by_name  : list[str] = ['information_js']
 deprecated_db_by_date  : list[str] = ['trade' , 'labels' , 'benchmark' , 'trade_js' , 'labels_js' , 'benchmark_js'] 
@@ -45,7 +45,7 @@ def db_src_deprecated(i):
 
 def laptop_func_deprecated(func):
     def wrapper(*args , **kwargs):
-        if IS_SERVER:
+        if MY_SERVER:
             print(f'at {func.__name__} will be deprecated soon, please update your code')
         return func(*args , **kwargs)
     return wrapper
