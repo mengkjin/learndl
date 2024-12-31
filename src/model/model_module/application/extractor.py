@@ -19,7 +19,6 @@ class ModelHiddenExtractor:
         self.config = TrainConfig.load_model(self.model_path , override={'env.short_test':False , 'train.dataloader.sample_method':'sequential'})
         self.model  = get_predictor_module(self.config)
         assert isinstance(self.model , NNPredictor) , self.model
-        self.data   = DataModule(self.config , 'both').load_data()
     
     def __repr__(self):
         return f'{self.__class__.__name__}({self.hidden_model})'
@@ -52,11 +51,12 @@ class ModelHiddenExtractor:
         
     @property
     def model_dates(self):
-        if not np.isin(self.model_path.model_dates , self.data.model_date_list).all():
-            print('Caution! Not all model dates are in data.model_date_list, possibly due to short_test!')
-            return self.data.model_date_list
-        else:
-            return self.model_path.model_dates
+        return self.model_path.model_dates
+        
+    def load_model_data(self):
+        if not getattr(self , 'data_loaded' , False):
+            self.data = DataModule(self.config , 'both').load_data()
+            self.data_loaded = True
 
     def model_iter(self , model_dates : Optional[list | np.ndarray | int] = None , update = True):
         if model_dates is None: 
@@ -84,7 +84,6 @@ class ModelHiddenExtractor:
                 if CALENDAR.is_updated_today(modified_time , 21 , 0):
                     print(f'{hidden_path.hidden_key} is up to {modified_time} already!')
                     continue
-
                 self.model_hidden(hidden_path , model_date , overwrite , silent)
                 self._current_update_dates.append(model_date)
         return self
@@ -99,6 +98,7 @@ class ModelHiddenExtractor:
             if len(old_hidden_df):
                 exclude_dates = old_hidden_df['date'].unique()
 
+        self.load_model_data()
         self.data.setup('extract' ,  self.config.model_param[model_num] , model_date , self.backward_days , self.forward_days)
         loader = self.data.extract_dataloader().filter_dates(exclude_dates=exclude_dates).enable_tqdm(disable = silent)      
         desc = f'Extract {self.hidden_name}/{model_num}/{model_date}/{submodel}'

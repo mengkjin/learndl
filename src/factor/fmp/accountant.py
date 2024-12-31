@@ -111,9 +111,11 @@ class PortfolioAccountManager:
     def account_names(self):
         return list(self.accounts.keys())
     
-    @property
-    def last_account_dates(self):
+    def account_last_model_dates(self):
         return {name:df['model_date'].max() for name,df in self.accounts.items() if not df.empty}
+    
+    def account_last_end_dates(self):
+        return {name:df['end'].max() for name,df in self.accounts.items() if not df.empty}
 
     def filter_accounts(self , **kwargs):
         dfs : dict[str,pd.DataFrame] = {}
@@ -161,13 +163,14 @@ class PortfolioAccountManager:
         [self.load_single(path , append = append) for path in self.account_dir.iterdir() if path.suffix == '.pkl']
         return self
     
-    def deploy(self , overwrite = False):
-        fmp_paths = {p:self.account_dir.joinpath(f'{p}.pkl') for p in self.accounts}
+    def deploy(self , fmp_names : list[str] | None = None , overwrite = False):
+        if fmp_names is None: fmp_names = list(self.accounts.keys())
+        fmp_paths = {name:self.account_dir.joinpath(f'{name}.pkl') for name in fmp_names}
         if not overwrite:
             existed = [path for path in fmp_paths.values() if path.exists()]
             assert not existed , f'Existed paths : {existed}'
-        for p in self.accounts:
-            self.accounts[p].to_pickle(fmp_paths[p])
+        for name in fmp_names:
+            self.accounts[name].to_pickle(fmp_paths[name])
         return self
     
     def select_analytic(self , category : Literal['optim' , 'top'] , task_name : str , **kwargs):

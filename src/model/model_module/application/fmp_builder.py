@@ -102,34 +102,43 @@ class ModelPortfolioBuilder:
         if verbose: print(f'accounts include names: {self.accountant.account_names}')
         return self
     
-    def last_account_dates(self):
-        last_dates = self.accountant.last_account_dates
-        for name in self.iter_fmp_names():
-            if name not in last_dates:
-                last_dates[name] = CALENDAR.td(self.reg_model.start_dt , -1)
-        return last_dates
+    def account_last_model_dates(self , fmp_names : list[str] | None = None):
+        last_dates = self.accountant.account_last_model_dates()
+        if fmp_names is None: fmp_names = list(self.iter_fmp_names())
+        ret = {name:last_dates.get(name , CALENDAR.td(self.reg_model.start_dt , -1)) for name in fmp_names}
+        return ret
+    
+    def account_last_end_dates(self , fmp_names : list[str] | None = None):
+        last_dates = self.accountant.account_last_end_dates()
+        if fmp_names is None: fmp_names = list(self.iter_fmp_names())
+        ret = {name:last_dates.get(name , self.reg_model.start_dt) for name in fmp_names}
+        return ret
     
     def accounting(self , resume = True , deploy = True):
         if resume: self.load_accounts(verbose = False)
+        self._update_account_record = []
 
-        fmp_names = list(self.iter_fmp_names())
-        last_dates = self.last_account_dates()
-        account_dates = [date for date in self.reg_model.fmp_dates if date >= min(list(last_dates.values()))]
+        last_end_dates   = self.account_last_end_dates()
+        update_fmp_names = [name for name , end_date in last_end_dates.items() if end_date < CALENDAR.updated()]
+        if len(update_fmp_names) == 0: return
+
+        last_model_dates = self.account_last_model_dates(update_fmp_names)
+        account_dates = [date for date in self.reg_model.fmp_dates if date >= min(list(last_model_dates.values()))]
         if len(account_dates) == 0: return
 
         all_fmp_dfs = pd.concat([self.reg_model.load_fmp(date) for date in account_dates])
         alpha_model = self.alpha_model(account_dates)
 
-        self._update_account_record = account_dates
-
-        for fmp_name in fmp_names:
+        for fmp_name in update_fmp_names:
             portfolio = Portfolio.from_dataframe(all_fmp_dfs[all_fmp_dfs['name'] == fmp_name])
             builder   = PortfolioBuilder.from_full_name(fmp_name , alpha_model , portfolio)
-            builder.accounting(last_dates[fmp_name])
+            builder.accounting(last_model_dates[fmp_name])
             self.accountant.append_accounts(**{fmp_name : builder.account})
 
         if deploy:
-            self.accountant.deploy(True)
+            self.accountant.deploy(update_fmp_names , True)
+
+        self._update_account_record = account_dates
 
     @classmethod
     def update(cls , model_name : str | None = None , update = True , overwrite = False , silent = True):

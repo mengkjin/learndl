@@ -5,7 +5,7 @@ import numpy as np
 from rqdatac.share.errors import QuotaExceeded
 from typing import Literal , Type
 
-from src.basic import PATH , CALENDAR , CONF , IS_SERVER , MY_SERVER , MY_LAPTOP
+from src.basic import PATH , CALENDAR , CONF , IS_SERVER
 from src.data.util.basic import secid_adjust , trade_min_reform
 from src.func.display import print_seperator
 
@@ -14,15 +14,15 @@ DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'cb']
 instrument_types = {'sec' : 'CS' , 'etf' : 'ETF' , 'fut' : 'Future' , 'cb' : 'Convertible'}
 
 def src_start_date(data_type : DATA_TYPES):
-    if MY_SERVER or MY_LAPTOP:
+    if IS_SERVER:
         if data_type == 'sec':
             return 20241101
         elif data_type == 'etf':
-            return 20231201 if IS_SERVER else 20241224
+            return 20230901 
         elif data_type == 'fut':
-            return 20231201 if IS_SERVER else 20241224
+            return 20230901
         elif data_type == 'cb':
-            return 20231201 if IS_SERVER else 20241224
+            return 20230901
         else:
             raise Exception(f'unsupported data type: {data_type}')
     else:
@@ -121,7 +121,7 @@ def x_mins_to_update(date , data_type : DATA_TYPES):
 def rcquant_instrument_list(date : int , data_type : DATA_TYPES):
     secdf = load_list(date , data_type)
     if secdf is not None: return secdf
-    rcquant_init()
+    if not rcquant_init(): return pd.DataFrame()
     secdf = rqdatac.all_instruments(type=instrument_types[data_type], date=str(date))
     secdf = secdf.rename(columns = {'order_book_id':'code'})
     if 'status' in secdf.columns:
@@ -132,7 +132,7 @@ def rcquant_instrument_list(date : int , data_type : DATA_TYPES):
     return secdf
 
 def rcquant_trading_dates(start_date, end_date):
-    rcquant_init()
+    if not rcquant_init(): return []
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
 
 def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
@@ -154,7 +154,7 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
         PATH.db_save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
         return True
 
-    rcquant_init()
+    if not rcquant_init(): return False
 
     instrument_list = rcquant_instrument_list(date , data_type = data_type)
     instrument_list = instrument_list[instrument_list['is_active']]
@@ -190,7 +190,7 @@ def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : DATA_TYPES):
 def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1):
     assert data_type is not None , f'data_type is required'
     for dt in target_dates(data_type , date):
-        mark = rcquant_bar_min(dt , data_type , first_n )
+        mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
             print(f'rcquant {data_type} bar min {dt} failed')
         else:
@@ -208,7 +208,6 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
 
 def rcquant_proceed(date : int | None = None , first_n : int = -1):
     if not rcquant_license_check(): return False
-    if not rcquant_init(): return False
 
     data_types : list[DATA_TYPES] = ['sec' , 'etf' , 'fut' , 'cb']
     for data_type in data_types:

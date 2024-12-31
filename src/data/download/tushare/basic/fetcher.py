@@ -63,6 +63,11 @@ class TushareFetcher(ABC):
         def wrapper(*args , **kwargs):
             retries = 0
             dates = self.update_dates()
+            if len(dates) == 0: 
+                print(f'{self.__class__.__name__} has no dates to update')
+                return
+            else:
+                print(f'{self.__class__.__name__} update dates {dates[0]} ~ {dates[-1]}')
             while retries < timeout_max_retries:
                 try:
                     func(dates)

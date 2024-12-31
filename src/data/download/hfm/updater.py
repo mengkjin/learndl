@@ -69,11 +69,11 @@ class JSDataUpdater():
         # db_update_parameters
         if db_src == 'information_js':
             param_args : list[list] = [
-                ['calendar',] ,    # market trading calendar
-                ['description',] , # stock list_date and delist_date
-                ['st',] ,          # st treatment of stocks
-                ['industry',] ,    # SW 2021 industry criterion
-                ['concepts',] ,    # wind concepts
+                #['calendar',] ,    # market trading calendar
+                #['description',] , # stock list_date and delist_date
+                #['st',] ,          # st treatment of stocks
+                #['industry',] ,    # SW 2021 industry criterion
+                #['concepts',] ,    # wind concepts
             ]
         elif db_src == 'models':
             param_args = [

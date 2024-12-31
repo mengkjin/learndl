@@ -8,7 +8,7 @@ from typing import Callable , Type
 def dynamic_modules(path : str | Path):
     if isinstance(path , str): path = Path(path)
     paths = path.rglob('*.py') if path.is_dir() else [path]
-    for p in paths:
+    for p in sorted(paths):
         spec = importlib.util.spec_from_file_location(str(p) , p)
         assert spec is not None and spec.loader is not None , f'{p} is not a valid module'
         module = importlib.util.module_from_spec(spec)
