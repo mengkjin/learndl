@@ -5,7 +5,7 @@ import pandas as pd
 from functools import reduce
 from pathlib import Path
 
-from src.basic import PATH , MY_SERVER , TERMINAL
+from src.basic import PATH , MACHINE
 from src.func.display import print_seperator
 
 from .task import JSFetcher , JSDownloader
@@ -18,7 +18,7 @@ class JSDataUpdater():
     '''
     UPDATER_BASE        = PATH.data
     UPDATER_TITLE       = 'DB_updater'
-    UPDATER_SEARCH_DIRS = [PATH.updater , Path('/home/mengkjin/workspace/SharedFolder')] if MY_SERVER else [PATH.updater]
+    UPDATER_SEARCH_DIRS = [PATH.updater , Path('/home/mengkjin/workspace/SharedFolder')] if MACHINE.is_server else [PATH.updater]
 
     def __init__(self) -> None:
         self.Updater = self.get_new_updater()
@@ -37,7 +37,7 @@ class JSDataUpdater():
     
     @classmethod
     def unpack_exist_updaters(cls , del_after_dumping = True):
-        assert MY_SERVER , f'must on server'
+        assert MACHINE.is_server , f'must on server'
 
         paths : list[Path] = []
         for sdir in cls.UPDATER_SEARCH_DIRS:
@@ -168,7 +168,7 @@ class JSDataUpdater():
         return result
 
     def fetch_all(self , db_srcs = PATH.DB_BY_NAME + PATH.DB_BY_DATE , start_dt = None , end_dt = None , force = False):
-        assert TERMINAL , f'must on my terminal'
+        assert MACHINE.type == 'terminal' , f'must on my terminal'
         if 'jinmeng' not in socket.gethostname().lower(): return
         # selected DB is totally refreshed , so delete first
         if not isinstance(db_srcs , (list,tuple)): db_srcs = [db_srcs]
@@ -194,7 +194,7 @@ class JSDataUpdater():
 
     @classmethod
     def update_terminal(cls):
-        assert TERMINAL , f'must on my terminal'
+        assert MACHINE.type == 'terminal' , f'must on my terminal'
         start_time = time.time()
         print(f'Update Files')
         Updater = cls()
@@ -205,7 +205,7 @@ class JSDataUpdater():
 
     @classmethod
     def update_server(cls):
-        assert MY_SERVER , f'must on my server'
+        assert MACHINE.is_server , f'must on my server'
         start_time = time.time()
 
         print(f'Unpack Update Files') 
@@ -221,9 +221,7 @@ class JSDataUpdater():
         1. In terminal, update js source data from R project to updaters
         2. In server, unpack update files and move to Database
         '''
-        if MY_SERVER:
+        if MACHINE.type == 'server':
             cls.update_server()
-        elif TERMINAL:
-            cls.update_terminal()
         else:
-            print(f'Unidentified machine: {socket.gethostname()} , do nothing')
+            cls.update_terminal()

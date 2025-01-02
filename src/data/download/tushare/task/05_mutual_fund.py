@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from typing import Any
-from src.basic import MY_SERVER
+from src.basic import MACHINE
 from src.data.download.tushare.basic import pro , code_to_secid , CALENDAR , InfoFetcher , TushareFetcher , updatable , DateFetcher
 
 class FundInfo(InfoFetcher):
@@ -50,7 +50,7 @@ class FundPortfolioFetcher(TushareFetcher):
         return df
 
 class ETFDailyQuote(DateFetcher):
-    START_DATE = 20180101 if MY_SERVER else 20241215
+    START_DATE = 20180101 if MACHINE.is_server else 20241215
     DB_KEY = 'etf_day'
     def get_data(self , date : int):
         date_str = str(date)

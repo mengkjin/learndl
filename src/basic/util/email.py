@@ -7,7 +7,7 @@ from email import encoders
 from pathlib import Path
 from typing import Literal , Any
 
-from src.project_setting import MY_SERVER
+from src.project_setting import MACHINE
 from src.basic import conf as CONF
 
 class Email:
@@ -62,7 +62,7 @@ class Email:
              body : str = 'This is test! Hello, World!' ,
              recipient : str | None = None):
         
-        if not MY_SERVER:
+        if not MACHINE.is_server:
             print('not in my server , skip sending email')
             return
 
@@ -82,7 +82,7 @@ def send_email(title : str  ,
                attachments : str | Path | list[str | Path] | None = None,
                recipient : str | None = None,
                server : Literal['netease'] = 'netease'):
-    if not MY_SERVER:
+    if not MACHINE.is_server:
         print('not in my server , skip sending email')
         return
     

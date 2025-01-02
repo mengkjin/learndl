@@ -6,7 +6,7 @@ from typing import Literal
 from pathlib import Path
 
 from src.data.util import trade_min_fillna
-from src.basic import PATH , MY_SERVER
+from src.basic import PATH , MACHINE
 
 sec_min_path = PATH.miscel.joinpath('JSMinute')
 fut_min_path = PATH.miscel.joinpath('JSFutMinute')
@@ -123,7 +123,7 @@ def transform_sec(df : pd.DataFrame):
     return df
 
 def process_sec_min_files():
-    if not MY_SERVER: return
+    if not MACHINE.is_server: return
 
     target_dates = np.array([int(p.name.split('.')[-2][-8:]) for p in sec_min_path.iterdir() if not p.is_dir()])
     stored_dates_sec = PATH.db_dates('trade_js' , 'min')

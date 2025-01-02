@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Any
 
-from src.basic import MY_SERVER
+from src.basic import MACHINE
 from src.data.download.tushare.basic import pro , InfoFetcher , DateFetcher
 
 class ConvertibleBasic(InfoFetcher):
@@ -15,7 +15,7 @@ class ConvertibleBasic(InfoFetcher):
         return df
 
 class ConvertibleDailyQuote(DateFetcher):
-    START_DATE = 20180101 if MY_SERVER else 20241215
+    START_DATE = 20180101 if MACHINE.is_server else 20241215
     DB_KEY = 'cb_day'
     def get_data(self , date : int):
         date_str = str(date)

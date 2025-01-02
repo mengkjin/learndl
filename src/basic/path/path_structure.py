@@ -1,10 +1,10 @@
 import os , shutil , yaml , time
 from pathlib import Path
 
-from src.project_setting import MAIN_PATH
+from src.project_setting import MACHINE
 
 # variables
-main        = MAIN_PATH
+main        = Path(MACHINE.path)
 
 # data folder and subfolders
 data        = main.joinpath('data')

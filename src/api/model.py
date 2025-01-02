@@ -1,5 +1,5 @@
 import src.model.model_module.application as app
-from src.basic import MY_SERVER
+from src.basic import MACHINE
 from src.data import DataPreProcessor
 from src.func.display import EnclosedMessage
 
@@ -35,7 +35,7 @@ class ModelAPI:
         a. for laptop, do nothing
         b. for server, continue training registered models in model'
         '''
-        if MY_SERVER:
+        if MACHINE.is_server:
             with EnclosedMessage(' reconstruct train data '):
                 cls.reconstruct_train_data()
 

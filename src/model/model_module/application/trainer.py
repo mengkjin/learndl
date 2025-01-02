@@ -2,7 +2,7 @@ import time
 from src.model.callback import CallBackManager
 from src.model.data_module import DataModule
 from src.model.util import BaseTrainer
-from src.basic import MY_SERVER , RegisteredModel
+from src.basic import MACHINE , RegisteredModel
 
 from ..module import get_predictor_module
 
@@ -27,7 +27,7 @@ class ModelTrainer(BaseTrainer):
 
     @classmethod
     def update_models(cls):
-        if not MY_SERVER:
+        if not MACHINE.is_server:
             print('This is not server! Will not update models!')
         else:
             for model in RegisteredModel.SelectModels():

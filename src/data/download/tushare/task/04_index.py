@@ -1,5 +1,5 @@
 import pandas as pd
-from src.basic import MY_SERVER
+
 from src.data.download.tushare.basic import InfoFetcher , DateFetcher , MonthFetcher , RollingFetcher , pro , code_to_secid
 
 def index_weight_get_data(self : RollingFetcher , index_code , start_dt , end_dt , limit = 4000):

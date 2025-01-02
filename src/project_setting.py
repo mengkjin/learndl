@@ -1,39 +1,42 @@
 # please check this path before running the code
 import sys , socket , torch , yaml
 from pathlib import Path
+from dataclasses import dataclass
+from typing import Literal
+
+@dataclass
+class MachineSetting:
+    type: Literal['server' , 'terminal']
+    path: str = ''
+
+    def __post_init__(self):
+        self.is_server = self.type == 'server'
+
+    def assert_valid(self):
+        assert self.type in ['server' , 'terminal'] , f'unidentified machine type: {self.type}'
+        assert self.path , f'main_path not set for {self.type}'
+        assert Path(self.path).exists() , f'MAIN_PATH not exists: {self.path}'
+        assert (not self.type == 'server') or torch.cuda.is_available() , f'server should have cuda'
+        assert Path(__file__).is_relative_to(Path(self.path)) , f'{__file__} is not in {self.path}'
+        sys.path.append(self.path)
+        print(f'main path: {self.path}')
+        if torch.cuda.is_available(): print(f'Use device name: ' + torch.cuda.get_device_name(0))
+        return self
+
+MACHINE_SETTINGS = {
+    'mengkjin-server':  MachineSetting('server' , '/home/mengkjin/workspace/learndl'),
+    'longcl-server':    MachineSetting('server' , '/home/longcl/workspace/learndl'),
+    'zhuhy-server':     MachineSetting('server' , '/home/zhuhy/workspace/learndl'),
+    'HNO-JINMENG01':    MachineSetting('terminal' , 'D:/Coding/learndl/learndl'),
+    'HPO-LONGCL05':     MachineSetting('terminal' , ''),
+    'HPO-ZHUHY01':      MachineSetting('terminal' , ''),
+    'HST-jinmeng':      MachineSetting('terminal' , 'E:/workspace/learndl'),
+}
 
 machine_name = socket.gethostname()
+assert machine_name in MACHINE_SETTINGS , f'unidentified machine: {machine_name} , please check the machine setting'
+MACHINE = MACHINE_SETTINGS[machine_name].assert_valid()
 
-# load project setting
-setting_path = Path(__file__).absolute().with_suffix('.yaml')
-if setting_path.exists():
-    with open(setting_path , 'r' , encoding = 'utf-8') as f:
-        setting = yaml.load(f , Loader=yaml.FullLoader)
-
-    MY_SERVER = machine_name in setting['SERVERS']
-    TERMINAL  = machine_name in setting['TERMINALS']
-    MAIN_PATH = Path(setting['MAIN_PATH'][machine_name])
-else:
-    MY_SERVER = machine_name == 'mengkjin-server'
-    TERMINAL  = machine_name == 'HNO-JINMENG01'
-    if TERMINAL:
-        MAIN_PATH = Path('D:/Coding/learndl/learndl')
-    elif MY_SERVER:
-        MAIN_PATH = Path('/home/mengkjin/workspace/learndl')
-    else:
-        raise Exception(f'unidentified machine: {machine_name}')
-
-assert MAIN_PATH , f'MAIN_PATH not set for {machine_name}'
-assert MAIN_PATH.exists() , f'MAIN_PATH not exists: {MAIN_PATH}'
-assert MY_SERVER or TERMINAL , f'unidentified machine: {machine_name}'
-assert (not MY_SERVER) or torch.cuda.is_available() , f'server should have cuda'
-
-assert Path(__file__).is_relative_to(MAIN_PATH) , f'{__file__} is not in {MAIN_PATH}'
-sys.path.append(str(MAIN_PATH))
-
-JS_FACTOR_DESTINATION = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha') if machine_name.lower().startswith(('hno' , 'hpo')) else None
-
-
-# print some info after import basic
-print(f'main path: {MAIN_PATH}')
-if torch.cuda.is_available(): print(f'Use device name: ' + torch.cuda.get_device_name(0))
+JS_FACTOR_DESTINATION : Path | None = None
+if machine_name.lower().startswith(('hno' , 'hpo')):
+    JS_FACTOR_DESTINATION = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
