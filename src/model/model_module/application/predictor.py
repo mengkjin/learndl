@@ -6,7 +6,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Any , ClassVar , Optional
 
-from src.basic import SILENT , CALENDAR , RegisteredModel , JS_FACTOR_DESTINATION
+from src.basic import SILENT , CALENDAR , RegisteredModel , MACHINE
 from src.model.util import TrainConfig
 from src.model.data_module import DataModule
 from src.model.model_module.module import get_predictor_module
@@ -100,10 +100,9 @@ class ModelPredictor:
 
     def deploy(self , overwrite = False):
         '''deploy df by day to class.destination'''
-        if JS_FACTOR_DESTINATION is None: return self
-        assert isinstance(JS_FACTOR_DESTINATION , Path)
+        if MACHINE.hfm_factor_dir is None: return self
         try:
-            path_deploy = JS_FACTOR_DESTINATION.joinpath(self.reg_model.pred_name)
+            path_deploy = MACHINE.hfm_factor_dir.joinpath(self.reg_model.pred_name)
             path_deploy.parent.mkdir(parents=True,exist_ok=True)
             if overwrite:
                 dates = self.reg_model.pred_dates

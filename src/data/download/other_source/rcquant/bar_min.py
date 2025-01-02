@@ -14,19 +14,14 @@ DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'cb']
 instrument_types = {'sec' : 'CS' , 'etf' : 'ETF' , 'fut' : 'Future' , 'cb' : 'Convertible'}
 
 def src_start_date(data_type : DATA_TYPES):
-    if MACHINE.server:
-        if data_type == 'sec':
-            return 20241101
-        elif data_type == 'etf':
-            return 20230601 
-        elif data_type == 'fut':
-            return 20230601
-        elif data_type == 'cb':
-            return 20230601
-        else:
-            raise Exception(f'unsupported data type: {data_type}')
+    never = 20401231
+    if data_type == 'sec':
+        return never if MACHINE.belong_to_hfm else 20241101
+    elif not MACHINE.server:
+        return never
     else:
-        return 20401231
+        assert data_type in ['etf' , 'fut' , 'cb'] , f'unsupported data type: {data_type}'
+        return 20230601
 
 def src_key(data_type : DATA_TYPES , x_min : int = 1):
     if data_type == 'sec':

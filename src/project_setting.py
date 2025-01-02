@@ -37,9 +37,17 @@ class MachineSetting:
         machine_dict = cls.MachineDict()
         assert machine_name in machine_dict , f'unidentified machine: {machine_name} , please check the MachineDict method'
         return machine_dict[machine_name].initialize()
+    
+    @property
+    def belong_to_hfm(self):
+        return self.name.lower().startswith(('hno' , 'hpo'))
+    
+    @property
+    def belong_to_jinmeng(self): # perform rcode transfer
+        return 'jinmeng' in self.name.lower()
+    
+    @property
+    def hfm_factor_dir(self): # perform rcode transfer
+        return Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha') if self.belong_to_hfm else None
 
 MACHINE = MachineSetting.select_machine()
-
-JS_FACTOR_DESTINATION : Path | None = None
-if MACHINE.name.lower().startswith(('hno' , 'hpo')):
-    JS_FACTOR_DESTINATION = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha')
