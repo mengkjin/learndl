@@ -36,7 +36,7 @@ class FundPortfolioFetcher(TushareFetcher):
         update = updatable(update_to , last_update_date , self.UPDATE_FREQ)
         dates = CALENDAR.qe_trailing(update_to , n_past = 1 , another_date=last_date)
 
-        if not update and len(dates) <= 1: dates = []
+        if not update and len(dates) <= 2: dates = [] # if a lot of dates are missing, ignore update state to update
         return dates
     
     def get_data(self , date):

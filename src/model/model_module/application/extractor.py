@@ -19,6 +19,7 @@ class ModelHiddenExtractor:
         self.config = TrainConfig.load_model(self.model_path , override={'env.short_test':False , 'train.dataloader.sample_method':'sequential'})
         self.model  = get_predictor_module(self.config)
         assert isinstance(self.model , NNPredictor) , self.model
+        self.load_model_data() # must load data before loading model, to get input_dim parameter
     
     def __repr__(self):
         return f'{self.__class__.__name__}({self.hidden_model})'
@@ -98,7 +99,6 @@ class ModelHiddenExtractor:
             if len(old_hidden_df):
                 exclude_dates = old_hidden_df['date'].unique()
 
-        self.load_model_data()
         self.data.setup('extract' ,  self.config.model_param[model_num] , model_date , self.backward_days , self.forward_days)
         loader = self.data.extract_dataloader().filter_dates(exclude_dates=exclude_dates).enable_tqdm(disable = silent)      
         desc = f'Extract {self.hidden_name}/{model_num}/{model_date}/{submodel}'

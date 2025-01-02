@@ -5,7 +5,7 @@ import statsmodels.api as sm
 from dataclasses import dataclass , field
 from typing import Any , ClassVar , Literal , Optional
 
-from src.basic import SILENT
+from src.basic import SILENT , PATH
 from src.basic.conf import RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
 from .general import GeneralModel , Port
@@ -153,7 +153,7 @@ class RiskModel(GeneralModel):
 
     def append(self , model : Rmodel , override = False):
         return super().append(model , override)
-    def available_dates(self): return DATAVENDOR.file_dates('models' , 'tushare_cne5_exp')
+    def available_dates(self): return PATH.db_dates('models' , 'tushare_cne5_exp')
     def get(self , date : int , latest = True) -> Rmodel:
         model = super().get(date , latest)
         assert isinstance(model , Rmodel) , f'rmodel at {date} does not exists!'

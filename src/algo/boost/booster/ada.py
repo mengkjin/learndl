@@ -5,7 +5,7 @@ import pandas as pd
 from torch import Tensor
 from typing import Any
 
-from ..util import BasicBoosterModel , BoosterInput , load_xingye_data
+from src.algo.boost.util import BasicBoosterModel , BoosterInput , load_xingye_data
 
 class AdaBoost(BasicBoosterModel):
     DEFAULT_TRAIN_PARAM = {

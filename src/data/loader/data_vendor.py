@@ -42,7 +42,7 @@ class DataVendor:
 
         self.day_quotes : dict[int,pd.DataFrame] = {}
         self.day_secids : dict[int,np.ndarray] = {}
-        self.last_quote_dt = self.file_dates('trade_ts','day').max()
+        self.last_quote_dt = PATH.db_dates('trade_ts' , 'day').max()
 
         self.init_stocks()
 
@@ -67,15 +67,7 @@ class DataVendor:
         if date not in self.day_secids:
             self.day_secids[date] = self.INFO.get_secid(date)
         return self.day_secids[date]
-
-    @staticmethod
-    def single_file(db_src , db_key , date : int | None = None):
-        return PATH.db_load(db_src , db_key , date)
     
-    @staticmethod
-    def file_dates(db_src , db_key , start_dt : int | None = None , end_dt : int | None = None , year : int | None = None):
-        return PATH.db_dates(db_src , db_key , start_dt=start_dt , end_dt=end_dt , year = year)
-
     @classmethod
     def td_within(cls , start_dt : int | None = None , end_dt : int | None = None , step : int = 1 , updated = False):
         dates = CALENDAR.td_within(start_dt , end_dt , step , updated = updated)

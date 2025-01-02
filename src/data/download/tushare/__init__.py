@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from src.func.dynamic_import import dynamic_members
 
 from .basic import pro , TushareFetcher

@@ -18,7 +18,7 @@ class MinKLineAccess(DateDataAccess):
     
     def data_loader(self , date , data_type):
         if data_type in self.PL_DATA_TYPE_LIST: 
-            df = PATH.db_load('trade_ts' , data_type , date , verbose = False)
+            df = PATH.db_load('trade_ts' , data_type , date , verbose = False , use_alt = True)
             if not df.empty: df = df[df['secid'].isin(INFO.get_secid(date))]
         else:
             raise KeyError(data_type)

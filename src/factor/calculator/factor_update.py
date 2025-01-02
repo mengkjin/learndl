@@ -1,4 +1,4 @@
-import time
+import time , traceback
 import numpy as np
 import pandas as pd
 
@@ -39,6 +39,7 @@ class FactorUpdateJob:
                 print(f'{prefix} ' + 'deploy successful' if self.done else 'already there')
         except CATCH_ERRORS as e:
             print(f'{prefix} failed: {e}')
+            traceback.print_exc()
     
 @singleton
 class FactorUpdateJobManager:
@@ -111,7 +112,7 @@ class FactorUpdateJobManager:
             print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Finish collecting {len(self)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
         return self
     
-    def process_jobs(self , verbosity : int = 1 , overwrite = False):
+    def process_jobs(self , verbosity : int = 1 , overwrite = False , auto_retry = True):
         '''
         perform all update jobs
 
@@ -129,11 +130,16 @@ class FactorUpdateJobManager:
         for (level , date) , jobs in self.grouped_jobs():
             DATAVENDOR.data_storage_control()
             parallel(do_job , jobs , method = self.multi_thread)
+            failed_jobs = [job for job in jobs if not job.done]
             if verbosity > 0:
-                failed_factors = [job.factor_name for job in jobs if not job.done]
-                print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Factors of {level} at {date} done: {len(jobs) - len(failed_factors)} / {len(jobs)}')
-                if failed_factors:
-                    print(f'Failed factors: {failed_factors}')
+                print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Factors of {level} at {date} done: {len(jobs) - len(failed_jobs)} / {len(jobs)}')
+                if failed_jobs: print(f'Failed factors: {[job.factor_name for job in failed_jobs]}')
+            if auto_retry and failed_jobs:
+                if verbosity > 0: print(f'Auto retry failed factors...')
+                parallel(do_job , failed_jobs , method = len(failed_jobs) > 10)
+                failed_again_jobs = [job for job in failed_jobs if not job.done]
+                if failed_again_jobs:
+                    print(f'Failed factors again: {[job.factor_name for job in failed_again_jobs]}')
         [self.jobs.remove(job) for job in jobs if job.done]
 
     @classmethod
@@ -195,14 +201,15 @@ class FactorUpdateJobManager:
         for calc in cls.iter_calculators(all_factors , selected_factors , **kwargs):
             dates = calc.stored_dates()
             def load_fac(date : int):
+                prefix = f'{calc.factor_string} at date {date}'
                 try:
                     factor = calc.load_factor(date)
                 except Exception as e:
-                    print(f'load factor {calc.factor_string} at {date} failed: {e}')
+                    print(f'{prefix} loading failed: {e}')
                     calc.calc_and_deploy(date , overwrite = True)
                     factor = calc.load_factor(date)
                 valid_count = factor.notna().sum()
-                return pd.DataFrame({'factor' : [calc.factor_string] , 'date' : [date] , 'valid_count' : [valid_count]})
+                return pd.DataFrame({'factor' : [calc.factor_name] , 'date' : [date] , 'valid_count' : [valid_count]})
             factor_coverage = parallel(load_fac , dates , method = 'threading')
             dfs.extend(list(factor_coverage.values()))
 

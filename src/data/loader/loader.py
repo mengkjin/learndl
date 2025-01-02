@@ -12,6 +12,7 @@ class BlockLoader:
     db_src  : str
     db_key  : str | list
     feature : Optional[list] = None
+    use_alt : bool = True
 
     def __post_init__(self):
         src_path = PATH.database.joinpath(f'DB_{self.db_src}')
@@ -26,7 +27,8 @@ class BlockLoader:
         db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
         for db_key in db_keys:
             with Timer(f' --> {self.db_src} blocks reading [{db_key}] DataBase'):
-                blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , feature = self.feature)
+                blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , 
+                                        feature = self.feature , use_alt = self.use_alt)
                 sub_blocks.append(blk)
         if len(sub_blocks) <= 1:  
             block = sub_blocks[0]
@@ -40,6 +42,7 @@ class FrameLoader:
     db_src  : str
     db_key  : str
     reserved_src : Optional[list[str]] = None
+    use_alt : bool = True
 
     def __post_init__(self):
         assert PATH.database.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
@@ -49,7 +52,8 @@ class FrameLoader:
         return self.load_frame(start_dt , end_dt)
 
     def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
-        df = PATH.db_load_multi(self.db_src , self.db_key , start_dt=start_dt , end_dt=end_dt , date_colname = 'date')
+        df = PATH.db_load_multi(self.db_src , self.db_key , start_dt=start_dt , end_dt=end_dt , 
+                                date_colname = 'date' , use_alt = self.use_alt)
         return df
     
 @dataclass

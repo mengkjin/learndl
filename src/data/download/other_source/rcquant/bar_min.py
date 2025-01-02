@@ -18,11 +18,11 @@ def src_start_date(data_type : DATA_TYPES):
         if data_type == 'sec':
             return 20241101
         elif data_type == 'etf':
-            return 20230901 
+            return 20230601 
         elif data_type == 'fut':
-            return 20230901
+            return 20230601
         elif data_type == 'cb':
-            return 20230901
+            return 20230601
         else:
             raise Exception(f'unsupported data type: {data_type}')
     else:
@@ -84,7 +84,7 @@ def stored_dates(data_type : DATA_TYPES , x_min : int = 1):
     assert x_min in [1 , 5 , 10 , 15 , 30 , 60] , f'only support 1min , 5min , 10min , 15min , 30min , 60min : {x_min}'
     if x_min != 1:
         assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
-    return PATH.db_dates('trade_ts' , src_key(data_type , x_min))
+    return PATH.db_dates('trade_ts' , src_key(data_type , x_min) , use_alt = False)
 
 def last_date(data_type : DATA_TYPES , offset : int = 0 , x_min : int = 1):
     dates = stored_dates(data_type , x_min)

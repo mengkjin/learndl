@@ -9,7 +9,3 @@ for name in dir(PATH):
     member = getattr(PATH , name)
     if isinstance(member , Path) and member.is_relative_to(PATH.main):
         member.mkdir(parents=True , exist_ok=True)
-
-
-# print some info after import basic
-if torch.cuda.is_available(): print(f'Use device name: ' + torch.cuda.get_device_name(0))
