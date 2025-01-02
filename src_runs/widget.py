@@ -162,9 +162,11 @@ def layout_vertical(*boxes , tight_layout = True , border = None):
     vbox = widgets.VBox(boxes, layout=vbox_layout)
     return vbox
 
-def get_title(text : str , level : int):
+def folder_title(folder : str | Path , level : int):
     assert level in [1,2,3] , f'level must be 1,2,3'
-    text = text.replace('_' , ' ').strip()
+    texts = Path(folder).name.strip().replace('_' , ' ').split(' ') + ['scripts']
+    if texts[0].isdigit(): texts.pop(0)
+    text = ' '.join(texts)
     def title_style(color : str | None = None , size : int | None = None , bold : bool = False):
         style = ''
         if color is not None: style += f'color: {color};'
@@ -188,7 +190,7 @@ def get_folder_box(folder : str | Path , level : int , exclude_self = True):
     dir_boxes , file_boxes = [] , []
     self_path = Path(__file__).absolute() if exclude_self else None
     
-    if level > 0: dir_boxes.append(get_title(f'{Path(folder).name} scripts' , min(level , 3)))
+    if level > 0: dir_boxes.append(folder_title(folder , min(level , 3)))
 
     for path in sorted(Path(folder).iterdir(), key=lambda x: x.name):
         if path.name.startswith(('.' , '_')): continue
