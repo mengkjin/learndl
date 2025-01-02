@@ -17,9 +17,10 @@ class PredRecorder:
         if trainer.batch_idx < trainer.batch_warm_up: return
         
         which_output = trainer.model_param.get('which_output' , 0)
-        ij = trainer.batch_data.i.cpu()
-        secid , date = trainer.data.y_secid[ij[:,0]] , trainer.data.y_date[ij[:,1]]
         
+        secid = trainer.data.batch_secid(trainer.batch_data)
+        date  = trainer.data.batch_date(trainer.batch_data)
+
         pred = trainer.batch_output.pred_df(secid , date).dropna()
         pred = pred.loc[pred['date'].isin(self.dates),:]
         if len(pred) == 0: return

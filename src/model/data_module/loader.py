@@ -20,9 +20,7 @@ class BatchDataLoader:
         for batch_i , batch_data in enumerate(self.loader):
             assert isinstance(batch_data , BatchData)
             if self.exclude_dates is not None or self.include_dates is not None:
-                date  = self.data_module.y_date[batch_data.i.cpu()[:,1]]
-                batch_date  = date[0]
-                assert all(date == batch_date) , date
+                batch_date  = self.data_module.batch_date0(batch_data)
                 if self.exclude_dates is not None and np.isin(batch_date , self.exclude_dates): continue
                 if self.include_dates is not None and ~np.isin(batch_date , self.include_dates): continue
             yield self.process(batch_data , batch_i)        

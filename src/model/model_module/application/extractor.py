@@ -101,18 +101,19 @@ class ModelHiddenExtractor:
 
         self.data.setup('extract' ,  self.config.model_param[model_num] , model_date , self.backward_days , self.forward_days)
         loader = self.data.extract_dataloader().filter_dates(exclude_dates=exclude_dates).enable_tqdm(disable = silent)      
+        # something wrong here , exclude_dates is not working
         desc = f'Extract {self.hidden_name}/{model_num}/{model_date}/{submodel}'
         hiddens : list[pd.DataFrame] = []
         for batch_data in loader:
-            df = self.model(batch_data).hidden_df(batch_data , self.data.y_secid , self.data.y_date)
+            date  = self.data.batch_date(batch_data)
+            secid = self.data.batch_secid(batch_data)
+            df = self.model(batch_data).hidden_df(secid , date)
             if df is not None: hiddens.append(df)
-            loader.display('/'.join([desc , str(df['date'][0])]))
+            loader.display(f'{desc}/{date[0]}')
 
         if len(hiddens) == 0: return
-
-        hidden_df = pd.concat(hiddens , axis=0)
-        if old_hidden_df is None: 
-            hidden_df = pd.concat([old_hidden_df , hidden_df] , axis=0).drop_duplicates(['secid','date'])
+        if old_hidden_df is not None:  hiddens.insert(0 , old_hidden_df)
+        hidden_df = pd.concat(hiddens , axis=0).drop_duplicates(['secid','date']).sort_values(['secid','date'])
         self.hidden_df = hidden_df
         hidden_path.save_hidden_df(hidden_df , model_date)
     
