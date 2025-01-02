@@ -19,22 +19,16 @@ import subprocess ,  socket
 from datetime import datetime
 from src_runs.widget import argparse_dict
 
-def commit(additional_message : str | list[str] = ''):
-    prefixes = [socket.gethostname() , datetime.now().strftime('%Y%m%d')]
-    if isinstance(additional_message , str): additional_message = [additional_message]
-    commit_message = ','.join([msg for msg in prefixes + additional_message if msg])
-    print(f'start committing : {commit_message}')
-    subprocess.run("git add .", shell=True, check=True)
-    subprocess.run(f"git commit -m '{commit_message}'", shell=True, check=True)
 
-def sync():
-    print('start syncing')
-    subprocess.run("git pull --rebase", shell=True, check=True)
-    subprocess.run("git push", shell=True, check=True)
-    print('finish syncing')
 
 if __name__ == '__main__':
     params = argparse_dict()
     additional_message = str(params['param']).strip()
-    commit(additional_message)
-    sync()
+    prefixes = [socket.gethostname() , datetime.now().strftime('%Y%m%d')]
+    if isinstance(additional_message , str): additional_message = [additional_message]
+    commit_message = ','.join([msg for msg in prefixes + additional_message if msg])
+
+    subprocess.run("git add .", shell=True, check=True)
+    subprocess.run(f"git commit -m '{commit_message}'", shell=True, check=True)
+    subprocess.run("git pull --rebase", shell=True, check=True)
+    subprocess.run("git push", shell=True, check=True)

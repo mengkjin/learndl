@@ -88,7 +88,7 @@ class ScriptRunner:
 
         def func(b):
             if text_area is not None:
-                params[text_key] = text_area.value.strip()
+                params[text_key] = text_area.value.strip().replace(' ' , '_')
             run_script(self.script, **params)
 
         return func
