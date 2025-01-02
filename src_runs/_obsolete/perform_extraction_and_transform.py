@@ -130,7 +130,7 @@ def perform_extraction_and_transform(date : int):
         src_key = f'min' if sec_type == 'sec' else f'{sec_type}_min'
         PATH.db_save(sec_df , 'trade_js' , src_key , date , verbose = True)
     
-if __name__ == '__main__' and MACHINE.is_server:
+if __name__ == '__main__' and MACHINE.server:
     args = argparse.ArgumentParser()
     args.add_argument('--start' , type=int , default=0)
     args.add_argument('--end' , type=int , default=0)

@@ -35,7 +35,7 @@ class ModelAPI:
         a. for laptop, do nothing
         b. for server, continue training registered models in model'
         '''
-        if MACHINE.is_server:
+        if MACHINE.server:
             with EnclosedMessage(' reconstruct train data '):
                 cls.reconstruct_train_data()
 

@@ -184,7 +184,7 @@ class RegisteredModel(ModelPath):
     for a registeredmodel to predict recent/history data
     model dict stored in configs/schedule/update_models.yaml
     '''
-    START_DT = 20170101 if MACHINE.is_server else 20241101
+    START_DT = 20170101 if MACHINE.server else 20241101
     FMP_STEP = 5
     MODEL_DICT : dict[str,dict[str,Any]] = CONF.schedule('registered_models')
 

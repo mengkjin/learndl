@@ -16,7 +16,7 @@ class OptunaSilent:
 class OptunaBooster(GeneralBooster):
     DEFAULT_SILENT_CREATION = True
     DEFAULT_SILENT_STUDY = True
-    DEFAULT_N_TRIALS = 50 if MACHINE.is_server else 20
+    DEFAULT_N_TRIALS = 50 if MACHINE.server else 20
     DEFAULT_SAVE_STUDIES = True
     DEFAULT_STORAGE = f'sqlite:///{PATH.log_optuna.relative_to(PATH.main)}/booster_{time.strftime("%Y%m") }.sqlite3'
 

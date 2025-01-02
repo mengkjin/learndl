@@ -14,7 +14,7 @@ DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'cb']
 instrument_types = {'sec' : 'CS' , 'etf' : 'ETF' , 'fut' : 'Future' , 'cb' : 'Convertible'}
 
 def src_start_date(data_type : DATA_TYPES):
-    if MACHINE.is_server:
+    if MACHINE.server:
         if data_type == 'sec':
             return 20241101
         elif data_type == 'etf':

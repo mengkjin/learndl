@@ -59,7 +59,7 @@ class TrainParam:
             self.train_param.update({f'{cfg_key}.{key}':val for key,val in self.load_config(cfg_key).items()})
         for override_key in override:
             assert override_key in self.train_param.keys() , override_key
-        if not MACHINE.is_server: self.train_param['env.short_test'] = True
+        if not MACHINE.server: self.train_param['env.short_test'] = True
         self.train_param.update(override)
         return self
 
@@ -87,7 +87,7 @@ class TrainParam:
         return self
     
     def check_validity(self):
-        if not MACHINE.is_server and not self.short_test:
+        if not MACHINE.server and not self.short_test:
             print(f'Beware! Should be at server or short_test, but short_test is False now!')
 
         nn_category = getter.nn_category(self.model_module)

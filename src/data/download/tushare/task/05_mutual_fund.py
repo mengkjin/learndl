@@ -50,7 +50,7 @@ class FundPortfolioFetcher(TushareFetcher):
         return df
 
 class ETFDailyQuote(DateFetcher):
-    START_DATE = 20180101 if MACHINE.is_server else 20241215
+    START_DATE = 20180101 if MACHINE.server else 20241215
     DB_KEY = 'etf_day'
     def get_data(self , date : int):
         date_str = str(date)

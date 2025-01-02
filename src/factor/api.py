@@ -15,7 +15,7 @@ class FactorCalculatorAPI:
     @classmethod
     def update(cls , **kwargs):
         UPDATE_JOBS.update(**kwargs)
-        if MACHINE.is_server:
+        if MACHINE.server:
             StockFactorHierarchy().factor_df().to_csv(PATH.main.joinpath('faclist.csv'))
 
     @classmethod

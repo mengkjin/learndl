@@ -27,7 +27,7 @@ class ModelTrainer(BaseTrainer):
 
     @classmethod
     def update_models(cls):
-        if not MACHINE.is_server:
+        if not MACHINE.server:
             print('This is not server! Will not update models!')
         else:
             for model in RegisteredModel.SelectModels():

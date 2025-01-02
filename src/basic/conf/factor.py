@@ -5,8 +5,8 @@ basic variables in factor package
 from src.project_setting import MACHINE
 from . import load_config
 
-UPDATE_START = 20110101 if MACHINE.is_server else 20241101
-UPDATE_END   = 20401231 if MACHINE.is_server else 20241231
+UPDATE_START = 20110101 if MACHINE.server else 20241101
+UPDATE_END   = 20401231 if MACHINE.server else 20241231
 UPDATE_STEP  = 5
 
 RISK_STYLE = [

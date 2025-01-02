@@ -62,7 +62,7 @@ class Email:
              body : str = 'This is test! Hello, World!' ,
              recipient : str | None = None):
         
-        if not MACHINE.is_server:
+        if not MACHINE.server:
             print('not in my server , skip sending email')
             return
 
@@ -82,7 +82,7 @@ def send_email(title : str  ,
                attachments : str | Path | list[str | Path] | None = None,
                recipient : str | None = None,
                server : Literal['netease'] = 'netease'):
-    if not MACHINE.is_server:
+    if not MACHINE.server:
         print('not in my server , skip sending email')
         return
     
