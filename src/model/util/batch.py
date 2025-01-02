@@ -160,15 +160,11 @@ class BatchOutput:
         if narrow_df: df = df.melt(['secid','date'] , var_name='feature')
         return df.assign(**kwargs)
         
-    def hidden_df(self , batch_data : BatchData , y_secid : np.ndarray , y_date : np.ndarray , narrow_df = False ,
+    def hidden_df(self , secid : np.ndarray , date : np.ndarray , narrow_df = False ,
                   colnames : str | list | None = None , **kwargs):
         '''kwargs will be used in df.assign(**kwargs)'''
         full_hidden : Tensor = self.other['hidden']
         full_hidden = full_hidden.cpu().numpy()
-
-        ij = batch_data.i.cpu()
-        secid = y_secid[ij[:,0]]
-        date  = y_date[ij[:,1]]
 
         assert full_hidden.ndim == 2 , full_hidden.shape
 

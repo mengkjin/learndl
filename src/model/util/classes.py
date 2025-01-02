@@ -205,6 +205,17 @@ class BaseDataModule(ABC):
         else:
             return max(self.test_full_dates) + 1
         
+    def batch_date(self , batch_data : BatchData):
+        return self.y_date[batch_data.i.cpu()[:,1]]
+    
+    def batch_secid(self , batch_data : BatchData):
+        return self.y_secid[batch_data.i.cpu()[:,0]]
+    
+    def batch_date0(self , batch_data : BatchData):
+        batch_date = self.batch_date(batch_data)
+        assert (batch_date == batch_date[0]).all() , batch_date
+        return batch_date[0]
+        
     @dataclass
     class LoaderParam:
         stage : Literal['fit' , 'test' , 'predict' , 'extract'] | Any = None
@@ -473,7 +484,7 @@ class BaseTrainer(ModelStreamLine):
         self.metrics.collect_epoch()
 
     def on_test_batch_start(self):
-        self.assert_equity(self.batch_dates[self.batch_idx] , self.data.y_date[self.batch_data.i[0,1]]) 
+        self.assert_equity(self.batch_dates[self.batch_idx] , self.data.batch_date0(self.batch_data)) 
 
     @property
     def penalty_kwargs(self): return {}
