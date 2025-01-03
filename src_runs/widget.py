@@ -111,7 +111,7 @@ class ScriptRunner:
         if self.header.get('param_input' , False):
             input_area = widgets.Textarea(
                 placeholder=self.header.get('param_placeholder' , 'type parameters here...'),
-                layout=widgets.Layout(width='auto', min_width='300px', height='50px')
+                layout=widgets.Layout(width='auto', min_width='300px', height='28px')
             )
         else:
             input_area = None

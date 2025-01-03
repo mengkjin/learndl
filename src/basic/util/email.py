@@ -49,7 +49,7 @@ class Email:
                 part = MIMEBase('application', 'octet-stream')
                 part.set_payload(attach_file.read())
                 encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f'attachment; filename={str(attachment)}')
+                part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
                 message.attach(part)
         assert not self.ATTACHMENTS , 'attachments are not cleared'
 

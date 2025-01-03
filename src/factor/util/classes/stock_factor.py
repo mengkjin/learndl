@@ -330,7 +330,7 @@ class StockFactor:
         return coverage
     
     def normalize(self , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-                  weighted_whiten = False , order = ['fillna' , 'whiten' , 'winsor'] , inplace = False):
+                  weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):
         df = self.frame()
         for step in order:
             if step == 'fillna':   df = fillna(df , fill_method = fill_method)
