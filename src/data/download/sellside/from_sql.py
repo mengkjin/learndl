@@ -90,6 +90,13 @@ class Connection:
                 host = '139.196.77.199' ,
                 port = 81 ,
                 database = 'model') ,
+            'dongfang2': cls(
+                dialect='mysql+pymysql' , 
+                username ='score' ,
+                password ='dfquant' ,
+                host = '139.196.77.199' ,
+                port = 81 ,
+                database = 'score') ,
             'kaiyuan': cls(
                 dialect='postgresql' , 
                 username ='harvest_user' ,
@@ -132,6 +139,7 @@ class SellsideSQLDownloader:
     factors         : list | None = None
     startdt_query   : str = 'select min({date_col}) from {factor_set}'
     default_query   : str = 'select * from {factor_set} where {date_col} between \'{start_dt}\' and \'{end_dt}\''
+    connection_key  : str | None = None
 
     DB_SRC : ClassVar[str] = 'sellside'
     FREQ   : ClassVar[str] = 'QE' if pd.__version__ >= '2.2.0' else 'Q'
@@ -139,6 +147,8 @@ class SellsideSQLDownloader:
 
     def __post_init__(self):
         self.db_key = self.factor_src + '.' + self.factor_set
+        if self.connection_key is None:
+            self.connection_key = self.factor_src
     
     def download(self , option : Literal['since' , 'dates' , 'all'] , connection : Connection ,
                  dates = [] , trace = 1 , start_dt = 20000101, end_dt = 99991231):
@@ -309,6 +319,7 @@ class SellsideSQLDownloader:
             'dongfang.hist'      :cls('dongfang','hist'      ,'tradingdate',20200101,'%Y-%m-%d') ,
             'dongfang.scores_v0' :cls('dongfang','scores_v0' ,'tradingdate',20171229,'%Y-%m-%d') ,
             'dongfang.scores_v2' :cls('dongfang','scores_v2' ,'tradingdate',20171229,'%Y-%m-%d') ,
+            'dongfang.scores_v3' :cls('dongfang','scores_v3' ,'tradingdate',20171229,'%Y%m%d',connection_key='dongfang2') ,
             'dongfang.factorvae' :cls('dongfang','factorvae' ,'tradingdate',20200101,'%Y-%m-%d') ,
             'guosheng.gs_pv_set1':cls('guosheng','gs_pv_set1','date'       ,20100129,'%Y%m%d') ,
             #'kaiyuan.positive' :cls(

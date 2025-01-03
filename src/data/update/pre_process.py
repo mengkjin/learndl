@@ -72,7 +72,7 @@ class DataPreProcessor:
         # return processor
         for key , proc in processor.processors():
             modified_time = DataBlock.last_modified_time(key , predict)
-            if CALENDAR.is_updated_today(modified_time , 21 , 0):
+            if CALENDAR.is_updated_today(modified_time):
                 print(f'{key} is up to {modified_time} already!')
                 continue
             tt1 = time.time()

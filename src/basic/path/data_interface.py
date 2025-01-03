@@ -245,6 +245,23 @@ def db_load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = No
     df = process_df(dfs , date_colname = date_colname , df_syntax = df_syntax , **kwargs)
     return df
 
+def db_rename(db_src , db_key , new_db_key):
+    assert new_db_key not in list_files(PATH.database.joinpath(f'DB_{db_src}' , db_key)) , f'{new_db_key} already exists'
+    if db_src in DB_BY_NAME:
+        old_path = db_path(db_src , db_key)
+        new_path = db_path(db_src , new_db_key)
+        old_path.rename(new_path)
+    else:
+        for date in db_dates(db_src , db_key):
+            old_path = db_path(db_src , db_key , date)
+            new_path = db_path(db_src , new_db_key , date)
+            new_path.parent.mkdir(parents=True , exist_ok=True)
+            old_path.rename(new_path)
+        root = PATH.database.joinpath(f'DB_{db_src}' , db_key)
+        [d.rmdir() for d in root.iterdir() if d.is_dir()]
+        root.rmdir()
+
+
 def pred_path(model_name : str , date : int | Any):
     return PATH.preds.joinpath(model_name , str(date // 10000) , f'{model_name}.{date}.feather')
 

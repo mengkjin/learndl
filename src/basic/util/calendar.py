@@ -125,7 +125,7 @@ class TradeCalendar:
             date_time = datetime.strptime(str(date) , '%Y%m%d')
         return int(date_time.replace(hour=h, minute=m, second=s).strftime('%Y%m%d%H%M%S'))
     @classmethod
-    def is_updated_today(cls , modified_time : int , hour = 21 , minute = 0):
+    def is_updated_today(cls , modified_time : int , hour = 20 , minute = 0):
         if modified_time < 1e8: modified_time = modified_time * 1000000
         current_time = datetime.now()
         required_date = 0 if (current_time.hour >= hour and current_time.minute >= minute) else -1
@@ -136,7 +136,7 @@ class TradeCalendar:
         return cls.today() * 1000000 + cls.time()
     @staticmethod
     def update_to():
-        return today(-1 if datetime.now().time() <= time(19, 0, 0) else 0)
+        return today(-1 if datetime.now().time() <= time(19, 59, 0) else 0)
     @staticmethod
     def updated():
         return PATH.db_dates('trade_ts' , 'day').max()
