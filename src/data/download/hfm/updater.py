@@ -168,8 +168,6 @@ class JSDataUpdater():
         return result
 
     def fetch_all(self , db_srcs = PATH.DB_BY_NAME + PATH.DB_BY_DATE , start_dt = None , end_dt = None , force = False):
-        assert not MACHINE.server , f'must on terminal machine'
-        if not MACHINE.belong_to_jinmeng or not MACHINE.belong_to_hfm: return
         # selected DB is totally refreshed , so delete first
         if not isinstance(db_srcs , (list,tuple)): db_srcs = [db_srcs]
         for db_src in db_srcs:
@@ -193,8 +191,9 @@ class JSDataUpdater():
         [print(fail) for fail in self.Failed]
 
     @classmethod
-    def update_terminal(cls):
+    def update_hfm_terminal(cls):
         assert not MACHINE.server , f'must on terminal machine'
+        assert MACHINE.belong_to_jinmeng and MACHINE.belong_to_hfm , f'must belong to jinmeng and hfm'
         start_time = time.time()
         print(f'Update Files')
         Updater = cls()
@@ -223,5 +222,8 @@ class JSDataUpdater():
         '''
         if MACHINE.server:
             cls.update_server()
+        elif MACHINE.belong_to_jinmeng and MACHINE.belong_to_hfm:
+            cls.update_hfm_terminal()
         else:
-            cls.update_terminal()
+            ...
+
