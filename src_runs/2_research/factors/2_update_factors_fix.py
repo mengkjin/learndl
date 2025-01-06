@@ -22,11 +22,11 @@ from src_runs.widget import argparse_dict
 def main():
     params = argparse_dict()
     if params['param'] and ',' in params['param']:
-        start , end = [int(s.strip()) for s in str(params['param']).split(',')]
+        factors = [s.strip() for s in str(params['param']).split(',')]
     else:
-        start , end = None , None
+        factors = []
     with AutoRunTask('fix factors' , **params) as runner:
-        FactorCalculatorAPI.fix(start = start , end = end)
+        FactorCalculatorAPI.fix(factors = factors)
 
 if __name__ == '__main__':
     main()

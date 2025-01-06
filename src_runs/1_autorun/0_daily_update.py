@@ -13,7 +13,7 @@ assert 'learndl' in __file__ , f'learndl path not found , do not know where to f
 path = __file__.removesuffix(__file__.split('learndl')[-1])
 sys.path.append(path)
 
-from src.api import DataAPI , FactorAPI , ModelAPI , TradingAPI
+from src.api import DataAPI , ModelAPI , TradingAPI
 from src.basic import AutoRunTask
 from src_runs.widget import argparse_dict
 
@@ -21,7 +21,6 @@ def main():
     params = argparse_dict(email = 1)
     with AutoRunTask('daily update' , **params) as runner:
         DataAPI.update()
-        FactorAPI.update()
         ModelAPI.update()
         TradingAPI.update()
         

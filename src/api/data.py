@@ -21,9 +21,17 @@ class DataAPI:
         with EnclosedMessage(' fetch js data '):
             JSDataUpdater.update()
 
+        # update factor models
+        with EnclosedMessage(' update factor models '):
+            FactorModelUpdater.update()
+
         # update other datas
-        with EnclosedMessage(' update other datas '):
-            OtherDataUpdater.update()
+        with EnclosedMessage(' update other datas '): 
+            OtherDataUpdater.update() # include labels , so must be after FactorModelUpdater
+
+        # update stock factor
+        with EnclosedMessage(' update stock factors '):
+            FactorCalculatorAPI.update()
         
     @staticmethod
     def prepare_predict_data(): 
