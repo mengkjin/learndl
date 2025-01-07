@@ -139,15 +139,14 @@ class SellsideSQLDownloader:
     factors         : list | None = None
     startdt_query   : str = 'select min({date_col}) from {factor_set}'
     default_query   : str = 'select * from {factor_set} where {date_col} between \'{start_dt}\' and \'{end_dt}\''
-    connection_key  : str | None = None
-
+    connection_key  : str = ''
     DB_SRC : ClassVar[str] = 'sellside'
     FREQ   : ClassVar[str] = 'QE' if pd.__version__ >= '2.2.0' else 'Q'
     MAX_WORKERS: ClassVar[int] = 1
 
     def __post_init__(self):
         self.db_key = self.factor_src + '.' + self.factor_set
-        if self.connection_key is None:
+        if self.connection_key == '':
             self.connection_key = self.factor_src
     
     def download(self , option : Literal['since' , 'dates' , 'all'] , connection : Connection ,
@@ -350,7 +349,8 @@ class SellsideSQLDownloader:
         factors = cls.default_factors(keys)
         conns   = Connection.default_connections()
         print(f'Connection and Factor preparation finished!')
-        return [(factor , conns[factor.factor_src]) for factor in factors.values()]
+        # return [(factor , conns[factor.factor_src]) for factor in factors.values()]
+        return [(factor , conns[factor.connection_key]) for factor in factors.values()]
 
     @classmethod
     def update_since(cls , trace = 0):
