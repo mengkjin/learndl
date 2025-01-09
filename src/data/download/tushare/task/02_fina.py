@@ -1,5 +1,5 @@
 
-from src.data.download.tushare.basic import FinaFetcher , pro , code_to_secid
+from src.data.download.tushare.basic import FinaFetcher , pro , ts_code_to_secid
 
 class FinaIndicator(FinaFetcher):
     '''financial indicators'''
@@ -7,7 +7,7 @@ class FinaIndicator(FinaFetcher):
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.fina_indicator_vip(period = str(date))
-        df = code_to_secid(df , 'ts_code' , retain=True)
+        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class IncomeStatement(FinaFetcher):
@@ -16,7 +16,7 @@ class IncomeStatement(FinaFetcher):
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.income_vip(period = str(date))
-        df = code_to_secid(df , 'ts_code' , retain=True)
+        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class BalanceSheet(FinaFetcher):
@@ -25,7 +25,7 @@ class BalanceSheet(FinaFetcher):
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.balancesheet_vip(period = str(date))
-        df = code_to_secid(df , 'ts_code' , retain=True)
+        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class CashFlow(FinaFetcher):
@@ -34,7 +34,7 @@ class CashFlow(FinaFetcher):
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.cashflow_vip(period = str(date))
-        df = code_to_secid(df , 'ts_code' , retain=True)
+        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
         return df
 
 class Dividend(FinaFetcher):
@@ -42,7 +42,7 @@ class Dividend(FinaFetcher):
     DB_KEY = 'dividend'
     def get_data(self , date : int):
         df = pro.dividend(end_date = str(date))
-        df = code_to_secid(df , 'ts_code' , retain=True)
+        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
         return df
 
 class Forecast(FinaFetcher):
@@ -52,7 +52,7 @@ class Forecast(FinaFetcher):
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.forecast_vip(period = str(date))
-        df = code_to_secid(df , 'ts_code' , retain=True)
+        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class Express(FinaFetcher):
@@ -61,7 +61,7 @@ class Express(FinaFetcher):
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.express_vip(period = str(date))
-        df = code_to_secid(df , 'ts_code' , retain=True)
+        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class MainBusiness(FinaFetcher):
@@ -70,7 +70,7 @@ class MainBusiness(FinaFetcher):
     DATA_FREQ = 'y'
     def get_data(self , date : int):
         df = pro.fina_mainbz_vip(period = str(date))
-        df = code_to_secid(df , 'ts_code' , retain=True)
+        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
         return df
     
 class DisclosureDate(FinaFetcher):
@@ -80,5 +80,5 @@ class DisclosureDate(FinaFetcher):
     def get_data(self , date : int):
         assert date % 10000 in [331,630,930,1231] , date
         df = pro.disclosure_date(end_date = str(date))
-        df = code_to_secid(df , 'ts_code' , retain=True)
+        df = ts_code_to_secid(df , 'ts_code' , drop_old=False)
         return df

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.data.download.tushare.basic import DateFetcher , pro , code_to_secid
+from src.data.download.tushare.basic import DateFetcher , pro , ts_code_to_secid
 
 class DailyQuote(DateFetcher):
     '''Daily Quote'''
@@ -38,7 +38,7 @@ class DailyQuote(DateFetcher):
         trade['turn_fl'] = (trade['volume'] / trade['float_share'] * 1e5).fillna(0)
         trade['turn_fr'] = (trade['volume'] / trade['free_share'] * 1e5).fillna(0)
 
-        trade = code_to_secid(trade).set_index('secid').sort_index().reset_index().loc[
+        trade = ts_code_to_secid(trade).set_index('secid').sort_index().reset_index().loc[
             :,['secid', 'adjfactor', 'open', 'high', 'low', 'close', 'amount','volume', 'vwap', 
             'status', 'limit', 'pctchange', 'preclose', 'turn_tt','turn_fl', 'turn_fr']]
         return trade
@@ -47,10 +47,10 @@ class DailyValuation(DateFetcher):
     '''Daily Valuation'''
     DB_KEY = 'day_val'   
     def get_data(self , date : int):
-        val = code_to_secid(pro.daily_basic(trade_date=str(date)))
+        val = ts_code_to_secid(pro.daily_basic(trade_date=str(date)))
         val.loc[:,['total_share','float_share','free_share','total_mv','circ_mv']] *= 1e4
 
-        val = code_to_secid(val).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        val = ts_code_to_secid(val).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return val
     
 class DailyMoneyFlow(DateFetcher):
@@ -58,8 +58,8 @@ class DailyMoneyFlow(DateFetcher):
     START_DATE = 20100101
     DB_KEY = 'day_moneyflow'  
     def get_data(self , date : int):
-        mf = code_to_secid(pro.moneyflow(trade_date=str(date)))
-        mf = code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        mf = ts_code_to_secid(pro.moneyflow(trade_date=str(date)))
+        mf = ts_code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return mf
     
 class DailyLimit(DateFetcher):
@@ -67,8 +67,8 @@ class DailyLimit(DateFetcher):
     START_DATE = 20070101
     DB_KEY = 'day_limit'       
     def get_data(self , date : int):
-        lmt = code_to_secid(pro.stk_limit(trade_date=str(date)))
-        lmt = code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
+        lmt = ts_code_to_secid(pro.stk_limit(trade_date=str(date)))
+        lmt = ts_code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return lmt
 """
 class DailyOpenAuction(DateFetcher):

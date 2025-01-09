@@ -8,7 +8,7 @@ from src.basic import PATH , CALENDAR
 from src.data.util.basic import secid_adjust , trade_min_reform
 from src.func.display import print_seperator
 
-START_DATE = 20241101
+START_DATE = 20401231
 BAO_PATH = PATH.miscel.joinpath('Baostock')
 
 final_path = BAO_PATH.joinpath(f'5min')

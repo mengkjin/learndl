@@ -2,18 +2,18 @@ import numpy as np
 import pandas as pd
 
 from typing import Literal
-from src.basic import CALENDAR
+from src.basic import CALENDAR , PATH
+from src.data.util.basic.transform import secid_adjust
 
-def code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , retain = False , ashare = True):
+def ts_code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , drop_old = True , ashare = True):
     '''switch old symbol into secid'''
     if code_col not in df.columns.values: return df
-    secid = df[code_col].astype(str).str.split('.').str[0].replace({'T00018' : '600018'})
-    secid = secid.where(secid.str.isdigit() , '-1')
     if ashare: 
-        market = df[code_col].astype(str).str.split('.').str[-1].str.lower()
-        secid = secid.where(market.isin(['sh' , 'sz' , 'bj']) , -1)
-    df['secid'] = secid.astype(int)
-    if not retain: del df[code_col]
+        valid = df[code_col].astype(str).str.split('.').str[-1].str.lower().isin(['sh' , 'sz' , 'bj'])
+    else:
+        valid = None
+    df = secid_adjust(df , code_cols = code_col , drop_old = drop_old)
+    if valid is not None: df['secid'] = df['secid'].where(valid , -1)
     return df
 
 def updatable(date , last_date , freq : Literal['d' , 'w' , 'm']):

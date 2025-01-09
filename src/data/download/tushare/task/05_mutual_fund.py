@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Any
 from src.basic import MACHINE
-from src.data.download.tushare.basic import pro , code_to_secid , CALENDAR , InfoFetcher , TushareFetcher , updatable , DateFetcher
+from src.data.download.tushare.basic import pro , ts_code_to_secid , CALENDAR , InfoFetcher , TushareFetcher , updatable , DateFetcher
 
 class FundInfo(InfoFetcher):
     DB_KEY = 'mutual_fund_info'
@@ -43,7 +43,7 @@ class FundPortfolioFetcher(TushareFetcher):
         renamer = {'ts_code' : 'fund_id'}
         df = self.iterate_fetch(pro.fund_portfolio , limit = 3000 , period = str(date) , max_fetch_times=500)
         if df.empty: return df
-        df = code_to_secid(df.rename(columns=renamer) , code_col='symbol' , retain = True)
+        df = ts_code_to_secid(df.rename(columns=renamer) , code_col='symbol' , drop_old = False)
         for col in ['ann_date' , 'end_date']: 
             df[col] = df[col].fillna(99991231).astype(int)
         df = df.reset_index(drop=True)

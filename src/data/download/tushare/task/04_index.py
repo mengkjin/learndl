@@ -1,13 +1,13 @@
 import pandas as pd
 
-from src.data.download.tushare.basic import InfoFetcher , DateFetcher , MonthFetcher , RollingFetcher , pro , code_to_secid
+from src.data.download.tushare.basic import InfoFetcher , DateFetcher , MonthFetcher , RollingFetcher , pro , ts_code_to_secid
 
 def index_weight_get_data(self : RollingFetcher , index_code , start_dt , end_dt , limit = 4000):
     assert start_dt is not None and end_dt is not None , 'start_dt and end_dt must be provided'
     df = self.iterate_fetch(pro.index_weight , limit = limit , max_fetch_times = 500 , index_code=index_code , 
                             start_date = str(start_dt) , end_date = str(end_dt))
     if df.empty: return df
-    df = code_to_secid(df , 'con_code').rename(columns={'trade_date':self.ROLLING_DATE_COL})
+    df = ts_code_to_secid(df , 'con_code').rename(columns={'trade_date':self.ROLLING_DATE_COL})
     df = df.sort_values([self.ROLLING_DATE_COL ,'weight'] , ascending=False)
     df['weight'] = df.groupby(self.ROLLING_DATE_COL)['weight'].transform(lambda x: x / x.sum())
     return df
@@ -41,7 +41,7 @@ class THSConcept(MonthFetcher):
             dfs.append(df)
         df_all = pd.concat(dfs).rename(columns={'name':'concept'})
         df_all = df_all.merge(df_theme , on = 'ts_code' , how='left').rename(columns={'ts_code':'index_code'})
-        df_all = code_to_secid(df_all , 'code')
+        df_all = ts_code_to_secid(df_all , 'code')
         df = df_all.reset_index(drop = True)
         return df
     

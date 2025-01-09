@@ -10,7 +10,7 @@ from typing import Any , Literal
 from src.project_setting import MACHINE
 
 from . import path_structure as PATH
-
+from .code_mapper import secid_to_secid
 
 SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
 SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
@@ -111,6 +111,14 @@ def load_df(path : Path | str , raise_if_not_exist = False):
         df = pd.read_feather(path)
     else:
         df = pd.read_parquet(path , engine='fastparquet')
+    df = load_df_mapper(df)
+    return df
+
+def load_df_mapper(df : pd.DataFrame):
+    old_index = df.index.names if 'secid' in df.index.names else None
+    if old_index is not None: df = df.reset_index(drop = False)
+    if 'secid' in df.columns:  df['secid'] = secid_to_secid(df['secid'])
+    if old_index is not None: df = df.set_index(old_index)
     return df
 
 def load_df_multi(paths : dict , raise_if_not_exist = False):

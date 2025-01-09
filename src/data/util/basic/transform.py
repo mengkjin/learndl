@@ -3,27 +3,21 @@ import numpy as np
 
 from src.basic import CALENDAR , PATH
 
-def secid_adjust(df : pd.DataFrame , old_id_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code'] , 
+def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code'] , 
                  drop_old = True , decode_first = False , raise_if_no_secid = True):
     '''switch various type of codes into secid'''
-    new_id_col = 'secid'
-    replace_dict = {'T00018' : '600018'}
 
-    if isinstance(old_id_cols , str): old_id_cols = [old_id_cols]
-    old_id_col = [col for col in df.columns.values if str(col).lower() in old_id_cols]
-    if not old_id_col: old_id_col = [new_id_col]
-    elif len(old_id_col) > 1: raise ValueError(f'Duplicated {old_id_col} not supported')
-    old_id_col = old_id_col[0]
-    if (old_id_col not in df.columns): 
-        if raise_if_no_secid: raise ValueError(f'{new_id_col} not found')
+    if isinstance(code_cols , str): code_cols = [code_cols]
+    code_cols = [col for col in df.columns.values if str(col).lower() in code_cols]
+    if not code_cols: code_cols = ['secid']
+    elif len(code_cols) > 1: raise ValueError(f'Duplicated {code_cols} not supported')
+    code_cols = code_cols[0]
+    if (code_cols not in df.columns): 
+        if raise_if_no_secid: raise ValueError(f'secid not found')
         else: return df
 
-    secid = df[old_id_col]
-    if decode_first: secid = pd.Series([(id.decode('utf-8') if isinstance(id , bytes) else str(id)) for id in secid])
-    secid = secid.str.replace('[-.@a-zA-Z]','',regex=True).replace(replace_dict)
-
-    df[new_id_col] = secid.where(secid.str.isdigit() , -1).astype(int)
-    if drop_old and (old_id_col != new_id_col): df = df.drop(columns=[old_id_col])
+    df['secid'] = PATH.code_to_secid(df[code_cols] , decode_first = decode_first)
+    if drop_old and (code_cols != 'secid'): df = df.drop(columns=[code_cols])
 
     return df
 

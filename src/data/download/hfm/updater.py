@@ -200,6 +200,7 @@ class JSDataUpdater():
         Updater = cls()
         Updater.fetch_all()
         Updater.download_all()
+        Updater.transform_datas()
         Updater.print_unfetch()
         print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
 

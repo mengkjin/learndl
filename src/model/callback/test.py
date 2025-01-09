@@ -6,7 +6,7 @@ from src import func as FUNC
 from src.factor.util import StockFactor
 from src.factor.api import FactorTestAPI , TYPE_of_TASK
 from src.model.util import BaseCallBack , PredRecorder
-
+from src.basic import PATH
 PRED_RECORD = PredRecorder()
 
 class DetailedAlphaAnalysis(BaseCallBack):
@@ -42,7 +42,8 @@ class DetailedAlphaAnalysis(BaseCallBack):
             df = df[df['model_num'] == 0]
         else:
             df = df.groupby(['date','secid','submodel'])['values'].mean().reset_index()
-        df.set_index(['secid','date']).to_feather(self.path_pred)
+        df.set_index(['secid','date'])
+        PATH.save_df(df , self.path_pred , overwrite = True)
 
         df = df.rename(columns={'submodel':'factor_name'}).pivot_table('values',['secid','date'],'factor_name')
         #self.logger.warning(f'Performing Factor and FMP test!')

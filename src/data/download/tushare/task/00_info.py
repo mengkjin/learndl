@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Any
 
-from src.data.download.tushare.basic import InfoFetcher , pro , code_to_secid
+from src.data.download.tushare.basic import InfoFetcher , pro , ts_code_to_secid
  
 class Calendar(InfoFetcher):
     DB_KEY = 'calendar'
@@ -43,7 +43,7 @@ class Description(InfoFetcher):
             pro.stock_basic(fields = fields , list_status = 'P')
         ]).rename(columns=renamer)
 
-        df = code_to_secid(df , retain=True)
+        df = ts_code_to_secid(df , drop_old=False)
         df['list_dt'] = df['list_dt'].fillna(-1).astype(int)
         df['delist_dt'] = df['delist_dt'].fillna(99991231).astype(int)
         df = df.reset_index(drop = True)
@@ -57,7 +57,7 @@ class SWIndustry(InfoFetcher):
         df2 = self.iterate_fetch(pro.index_member_all , limit = 2000 , is_new = 'N')
 
         df = pd.concat([df1 , df2])
-        df = code_to_secid(df)
+        df = ts_code_to_secid(df)
         df['in_date'] = df['in_date'].fillna(99991231).astype(int)
         df['out_date'] = df['out_date'].fillna(99991231).astype(int)
         df = df.reset_index(drop=True)
@@ -68,7 +68,7 @@ class ChangeName(InfoFetcher):
     def get_data(self , date):
 
         df = self.iterate_fetch(pro.namechange , limit = 5000)
-        df = code_to_secid(df)
+        df = ts_code_to_secid(df)
         df['start_date'] = df['start_date'].fillna(-1).astype(int)
         df['ann_date'] = df['ann_date'].fillna(-1).astype(int)
         df['end_date'] = df['end_date'].fillna(99991231).astype(int)

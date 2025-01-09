@@ -118,15 +118,11 @@ class HiddenPath:
 
     def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int):
         hidden_path = self.target_path(model_date)
-        hidden_path.parent.mkdir(parents=True , exist_ok=True)
-        hidden_df.to_feather(hidden_path)
+        PATH.save_df(hidden_df , hidden_path , overwrite = True)
 
     def get_hidden_df(self , model_date : int , exact = False):
         if not exact: model_date = self.latest_hidden_model_date(model_date)
-        if not self.target_path(model_date).exists(): 
-            hidden_df = pd.DataFrame()
-        else:
-            hidden_df = pd.read_feather(self.target_path(model_date))
+        hidden_df = PATH.load_df(self.target_path(model_date))
         return model_date , hidden_df
     
     def latest_hidden_model_date(self , model_date):
@@ -250,8 +246,7 @@ class RegisteredModel(ModelPath):
     def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False):
         if df.empty: return
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
-        path.parent.mkdir(parents=True , exist_ok=True)
-        if not path.exists() or overwrite: df.to_feather(path)
+        PATH.save_df(df , path , overwrite = overwrite)
 
     def load_fmp(self , date : int , verbose = True , **kwargs):
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')

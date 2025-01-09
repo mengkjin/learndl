@@ -123,7 +123,7 @@ def transform_sec(df : pd.DataFrame):
     return df
 
 def process_sec_min_files():
-    if not MACHINE.server: return
+    # if not MACHINE.server: return
 
     target_dates = np.array([int(p.name.split('.')[-2][-8:]) for p in sec_min_path.iterdir() if not p.is_dir()])
     stored_dates_sec = PATH.db_dates('trade_js' , 'min')
