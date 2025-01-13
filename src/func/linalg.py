@@ -1,5 +1,6 @@
 import torch
 import scipy
+import numpy as np
 from torch import Tensor
 
 def factor_standardize(A : Tensor , dim = 0):
