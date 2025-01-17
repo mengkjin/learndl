@@ -255,7 +255,7 @@ def betas_sk(x , y):
         b = np.zeros((x.shape[-1],1))
     return b
 
-def beta_calculator(method = 'torch'):
+def beta_calculator(method = 'np'):
     assert method in ['torch' , 'np' , 'sk'] , method
     if method == 'np':
         betas_func = betas_np
@@ -277,7 +277,7 @@ def neutralize_xdata_2d(factors = None , groups = None):
         x = pad(x , (1,0) , value = 1.)
     return x
 
-def neutralize_2d(y , x , dim = 1 , method = 'torch' , device = None , inplace = False):  # [tensor (TS*C), tensor (TS*C)]
+def neutralize_2d(y , x , dim = 1 , method = 'np' , device = None , inplace = False):  # [tensor (TS*C), tensor (TS*C)]
     if x  is None or y is None: return y
 
     assert isinstance(y , torch.Tensor) and isinstance(x , torch.Tensor)
