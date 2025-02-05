@@ -63,7 +63,7 @@ industry:
 
 style:
   abs:          [null , null]
-  rel:          [-0.5 , 0.05]
+  rel:          [-0.5 ,  0.5]
   por:          [null , null]
   size.rel:     [-0.25, 0.25]
   beta.rel:     [-0.25, 0.25]
