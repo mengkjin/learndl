@@ -253,6 +253,7 @@ MAPPER_SECID : dict[int , int] = {
     430300 : 920300 , 
     430139 : 920139 , 
     430017 : 920017 , 
+    300114 : 302132 ,
 }
 
 def code_to_secid(s : pd.Series , decode_first = False):
