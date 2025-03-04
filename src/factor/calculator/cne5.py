@@ -79,7 +79,7 @@ class TuShareCNE5_Calculator:
         self.specific_risk = DateDfs(50)
 
         for key in ['exp' , 'coef' , 'res' , 'cov' , 'spec']:
-            PATH.db_path('models' , f'tushare_cne5_{key}').mkdir(parents=True , exist_ok=True)
+            PATH.db_path('models' , f'tushare_cne5_{key}' , 20250101).parent.parent.mkdir(parents=True , exist_ok=True)
 
     def descriptor(self , v , date : int , name : str , fillna : Any = 0) -> pd.Series:
         assert isinstance(v , pd.Series) , v

@@ -147,6 +147,9 @@ class RiskModel(GeneralModel):
             self.init_loaders()
 
     def init_loaders(self):
+        for key in ['exp' , 'coef' , 'res' , 'cov' , 'spec']:
+            PATH.db_path('models' , f'tushare_cne5_{key}' , 20250101).parent.parent.mkdir(parents=True , exist_ok=True)
+
         self.F_loader = BlockLoader('models' , 'tushare_cne5_exp')
         self.C_loader = FrameLoader('models' , 'tushare_cne5_cov')
         self.S_loader = BlockLoader('models' , 'tushare_cne5_spec')
