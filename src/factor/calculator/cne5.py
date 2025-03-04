@@ -78,6 +78,9 @@ class TuShareCNE5_Calculator:
         self.common_risk   = DateDfs(50)
         self.specific_risk = DateDfs(50)
 
+        for key in ['exp' , 'coef' , 'res' , 'cov' , 'spec']:
+            PATH.db_path('models' , f'tushare_cne5_{key}').mkdir(parents=True , exist_ok=True)
+
     def descriptor(self , v , date : int , name : str , fillna : Any = 0) -> pd.Series:
         assert isinstance(v , pd.Series) , v
         univ = self.get_estuniv(date)
@@ -240,7 +243,7 @@ class TuShareCNE5_Calculator:
         wgt = time_weight(252 , 63)
 
         res_list = [DATAVENDOR.RISK.get_res(d) for d in dates]
-        if len([res for res in res_list if res is not None]) >= 63:
+        if len([res for res in res_list if res is not None and not res.empty]) >= 63:
             df_res = pd.concat([DATAVENDOR.RISK.get_res(d) for d in dates])
             df_res = df_res.pivot_table('resid','date','secid').reindex(dates)
             hsigma = self.descriptor((df_res * wgt.reshape(-1,1)).std() , date , 'hsigma' , 'median')
