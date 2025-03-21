@@ -218,7 +218,7 @@ def append_linear_component(opt_input : Any):
     for comp_name , gen_bounds in comp_bounds.items():
         if not gen_bounds: continue
         if comp_name == 'component':
-            value = 1 * (opt_input.wb >= 0)
+            value = 1 * (opt_input.wb > 0)
         elif comp_name == 'bsizedev1':
             if size is None: size = RISK_MODEL.get(opt_input.model_date).style(opt_input.secid , 'size').to_numpy()
             value = np.abs(size - (size * wb / wb.sum()))
