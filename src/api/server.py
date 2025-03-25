@@ -31,9 +31,8 @@ def email_to_fanghan(test = False):
     with TempFile(attachments) as temp_file:
         df = PATH.pred_load('gru_day_V1' , use_date)
         df.to_csv(temp_file)
-        attachments.append(temp_file)
         try:
-            send_email(title , body , attachments , recipient)
+            send_email(title , body , attachments , recipient , confirmation_message='Fanghan')
         except:
             print(f'发送邮件给方晗失败!')
 

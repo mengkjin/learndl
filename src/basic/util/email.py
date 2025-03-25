@@ -60,7 +60,8 @@ class Email:
 
     def send(self , title : str  , 
              body : str = 'This is test! Hello, World!' ,
-             recipient : str | None = None):
+             recipient : str | None = None , 
+             confirmation_message = ''):
         
         if not MACHINE.server:
             print('not in my server , skip sending email')
@@ -73,7 +74,7 @@ class Email:
                 smtp.starttls()
                 smtp.login(self.sender, self.password)
                 smtp.sendmail(self.sender, self.recipient(recipient), message.as_string())
-            print('sending email success')
+            print(f'sending email success {confirmation_message}')
         except Exception as e:
             print('sending email went wrong:', e)
 
@@ -81,7 +82,8 @@ def send_email(title : str  ,
                body : str = 'This is test! Hello, World!' ,
                attachments : str | Path | list[str | Path] | None = None,
                recipient : str | None = None,
-               server : Literal['netease'] = 'netease'):
+               server : Literal['netease'] = 'netease' , 
+               confirmation_message : str = ''):
     if not MACHINE.server:
         print('not in my server , skip sending email')
         return
@@ -125,6 +127,6 @@ def send_email(title : str  ,
             smtp_connection.starttls()
             smtp_connection.login(sender, password)
             smtp_connection.sendmail(sender, recipient, message.as_string())
-        print('sending email success')
+        print(f'sending email success {confirmation_message}')
     except Exception as e:
         print('sending email went wrong:', e)

@@ -320,7 +320,7 @@ class SellsideSQLDownloader:
             'dongfang.scores_v2' :cls('dongfang','scores_v2' ,'tradingdate',20171229,'%Y-%m-%d') ,
             'dongfang.scores_v3' :cls('dongfang','scores_v3' ,'tradingdate',20171229,'%Y%m%d',connection_key='dongfang2') ,
             'dongfang.factorvae' :cls('dongfang','factorvae' ,'tradingdate',20200101,'%Y-%m-%d') ,
-            'guosheng.gs_pv_set1':cls('guosheng','gs_pv_set1','date'       ,20100129,'%Y%m%d') ,
+            #'guosheng.gs_pv_set1':cls('guosheng','gs_pv_set1','date'       ,20100129,'%Y%m%d') ,
             #'kaiyuan.positive' :cls(
             #    'kaiyuan','positive','date',20140130,
             #    factors = ['active_trading','apm','opt_synergy_effect','large_trader_ret_error',

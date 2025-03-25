@@ -36,7 +36,7 @@ class AutoRunTask:
         if self.email or (self.email_if_attachment and Email.ATTACHMENTS): 
             title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')] , 'at' , self.date_str])
             Email.attach(self.printer.filename)
-            Email().send(title = title , body = self.status)
+            Email().send(title = title , body = self.status , confirmation_message='Autorun')
         # change_power_mode('power-saver')
 
 def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance'] , 
