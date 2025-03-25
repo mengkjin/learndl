@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 from datetime import datetime
-from src.basic import send_email , PATH , CALENDAR
+from src.basic import send_email , PATH , CALENDAR , MACHINE
 
 class TempFile:
     def __init__(self, file_name: str):
@@ -40,6 +40,9 @@ def email_to_fanghan(test = False):
 class ServerAPI:
     @staticmethod
     def send_email():
+        if not MACHINE.server:
+            print('not in my server , skip sending email')
+            return
         email_to_fanghan()
 
 
