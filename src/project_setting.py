@@ -29,6 +29,7 @@ class MachineSetting:
             'HPO-LONGCL05':     cls(False , ''),
             'HPO-ZHUHY01':      cls(False , ''),
             'HST-jinmeng':      cls(False , 'E:/workspace/learndl'),
+            'Mathews-Mac.wireless.yale.internal': cls(False , '/Users/mengkjin/workspace/learndl'),
         }
     
     @classmethod

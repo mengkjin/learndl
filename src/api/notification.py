@@ -25,7 +25,7 @@ def email_to_fanghan(test = False):
 
     title = f'{today} 因子数据更新'
     body = '因子数据更新完成'
-    recipient = 'mengkjin@163.com' if test else 'fanghan@jsfund.cn'
+    recipient = 'mengkjin@163.com' if test else 'Gladiator9907@hotmail.com'
     
     attachments = f'gru_score_{datetime.now().strftime("%Y%m%d")}.csv'
     with TempFile(attachments) as temp_file:
@@ -36,7 +36,11 @@ def email_to_fanghan(test = False):
         except:
             print(f'发送邮件给方晗失败!')
 
-class ServerAPI:
+class NotificationAPI:
+    @classmethod
+    def proceed(cls):
+        cls.send_email()
+
     @staticmethod
     def send_email():
         if not MACHINE.server:

@@ -1,4 +1,4 @@
-import os , argparse , subprocess
+import os , argparse , subprocess , platform
 import ipywidgets as widgets
 
 from typing import Any
@@ -6,7 +6,7 @@ from pathlib import Path
 from IPython.display import display
 
 def python_path():
-    if os.name == 'posix':
+    if platform.system() == 'Linux' and os.name == 'posix':
         return 'python3.10'
     else:
         return 'python'
@@ -15,7 +15,7 @@ def terminal_cmd(script : str | Path , params : dict = {} , close_after_run = Fa
     if isinstance(script , Path): script = str(script.absolute())
     args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in params.items() if v != ''])
     cmd = f'{python_path()} {script} {args}'
-    if os.name == 'posix':
+    if platform.system() == 'Linux' and os.name == 'posix':
         if not close_after_run: cmd += '; exec bash'
         cmd = f'gnome-terminal -- bash -c "{cmd}"'
     else:
@@ -208,6 +208,7 @@ def main():
     project = get_folder_box('src_runs' , 0)
     print('Project interface initiated successfully.')
     display(project)
+    return project
 
 if __name__ == '__main__':
     main()
