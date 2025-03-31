@@ -336,8 +336,20 @@ class SellsideSQLDownloader:
             #                    '\'{start_dt}\' and {date_col} <= \'{end_dt}\'')) ,
             'huatai.dl_factors' :cls(
                 'huatai','dl_factors','datetime',20170101,'%Y-%m-%d',
-                factors = ['price_volume_nn','text_fadt_bert',] ,
+                factors = ['price_volume_nn','text_fadt_bert'] ,
                 startdt_query = 'select min({date_col}) from price_volume_nn' ,
+                default_query = ('select * from {factor} where {date_col} >= ' + 
+                                '\'{start_dt}\' and {date_col} <= \'{end_dt}\'')) ,
+            'huatai.master_combined' :cls(
+                'huatai','master_combined','datetime',20170101,'%Y-%m-%d',
+                factors = ['master_combined'] ,
+                startdt_query = 'select min({date_col}) from master_combined' ,
+                default_query = ('select * from {factor} where {date_col} >= ' + 
+                                '\'{start_dt}\' and {date_col} <= \'{end_dt}\'')) ,
+            'huatai.fundamental_value' :cls(
+                'huatai','fundamental_value','datetime',20170101,'%Y-%m-%d',
+                factors = ['fundamental_value'] ,
+                startdt_query = 'select min({date_col}) from fundamental_value' ,
                 default_query = ('select * from {factor} where {date_col} >= ' + 
                                 '\'{start_dt}\' and {date_col} <= \'{end_dt}\'')) ,
         }

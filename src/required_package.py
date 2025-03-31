@@ -12,5 +12,6 @@ import sklearn
 import scipy
 import statsmodels
 import pytimedinput, pypinyin, pyreadr , plottable, mosek , cvxopt , cvxpy
+import pymysql
 
 from sklearn.linear_model import LinearRegression

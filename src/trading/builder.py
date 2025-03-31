@@ -12,6 +12,8 @@ EXCLUDE_BSE = True
 TRADING_PORTS = [
     ('test0' , 'gru_day_V1' , 'csi800+csi1000+csi2000') , 
     ('test1' , 'sellside@dongfang.scores_v0@avg' , 'top-1000') , 
+    ('master_daily', 'sellside@huatai.master_combined@master_combined' , 'top-1000' , 50 , 1) , 
+    ('gru_daily', 'gru_day_V1' , 'top-1000' , 50 , 1) , 
 ]
 
 @dataclass
