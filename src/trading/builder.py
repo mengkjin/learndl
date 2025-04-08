@@ -30,6 +30,19 @@ class TradingPortfolioBuilder:
         exchange = ['SZSE','SSE'] if EXCLUDE_BSE else ['SZSE','SSE','BSE']
         self.candidates = DATAVENDOR.INFO.get_desc(exchange=exchange).index
 
+        if self.step == 1:
+            self.turn_control = 0.1
+        elif self.step <= 4:
+            self.turn_control = 0.1
+        elif self.step <= 10:
+            self.turn_control = 0.2
+        elif self.step <= 30:
+            self.turn_control = 0.5
+        else:
+            self.turn_control = 1.0
+        self.buffer_zone = 0.8
+        self.indus_control = 0.1
+
     def first_date(self , date : int) -> int:
         return self.last_date(date) <= 0
     
@@ -67,21 +80,31 @@ class TradingPortfolioBuilder:
         assert len(factor.factor_names) == 1 , f'expect 1 factor name , got {factor.factor_names}'
         return factor.normalize().alpha_model()
 
-    def get_universe(self , date : int) -> Portfolio:
+    def get_universe(self , date : int , safety = True) -> Portfolio:
         if self.universe.startswith('top'):
             top_num = int(self.universe.split('.')[0].removeprefix('top'))
             val = DATAVENDOR.TRADE.get_val(DATAVENDOR.TRADE.latest_date('val' , date)).sort_values('circ_mv' , ascending=False)
             val = val[val['secid'].isin(self.candidates)].iloc[:top_num].loc[:,['secid']].\
                 reset_index().assign(date = date , name = self.universe)
             val['weight'] = 1 / len(val)
-            return Portfolio.from_dataframe(val , name = self.universe)
+            df = Portfolio.from_dataframe(val , name = self.universe)
         elif self.universe in Benchmark.AVAILABLES:
-            return Benchmark(self.universe)
+            df = Benchmark(self.universe)
         elif '+' in self.universe:
             univs = [Benchmark(univ).get(date) for univ in self.universe.split('+')]
-            return Portfolio.from_ports(Port.sum(univs) , name = self.universe)
+            df = Portfolio.from_ports(Port.sum(univs) , name = self.universe)
         else:
             raise Exception(f'{self.universe} is not a valid benchmark')
+        
+        if safety:
+            st_list = DATAVENDOR.INFO.get_st(date)
+            df = df.loc[~df['secid'].isin(st_list['secid'])]
+            
+            cp = DATAVENDOR.TRADE.get_val(date).loc[:,['secid' , 'close']].query('close > 2.0')
+            df = df.loc[df['secid'].isin(cp['secid'])]
+
+            df['weight'] = df['weight'] / df['weight'].sum()
+        return df
 
     def get_last_port(self , date : int) -> Portfolio:
         if (last_date := self.last_date(date)) > 0:
@@ -93,14 +116,16 @@ class TradingPortfolioBuilder:
 
     def get_builder(self , date : int , reset_port = False) -> PortfolioBuilder:
         alpha = self.get_alpha(date)
-        univers = self.get_universe(date)
+        universe = self.get_universe(date)
         last_port = self.get_last_port(date)
         if reset_port:
             print(f'Beware: reset port for new build! {self.name}')
             last_port = Portfolio(self.name)
         else:
             last_port = self.get_last_port(date)
-        builder = PortfolioBuilder('top' , alpha , univers , build_on = last_port , n_best = self.top_num).setup(0)
+        builder = PortfolioBuilder('top' , alpha , universe , build_on = last_port , 
+                                   n_best = self.top_num , turn_control = self.turn_control , 
+                                   buffer_zone = self.buffer_zone , indus_control = self.indus_control).setup(0)
         return builder
 
     def build(self , date : int , force = False , reset_port = False , save = False):
