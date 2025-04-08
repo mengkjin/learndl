@@ -210,7 +210,13 @@ class Port:
         if not self or self is another: return 0.
         assert isinstance(another , Port) , another
         return (self - another).port['weight'].abs().sum()
-    
+    def exclude(self , secid : np.ndarray | Any | None = None , inplace = False):
+        if secid is None: return self
+        if not inplace:
+            self = self.copy()
+        self.port = self.port[~self.port['secid'].isin(secid)]
+        return self
+
     @classmethod
     def sum(cls , ports : list):
         assert len(ports) > 0 , ports

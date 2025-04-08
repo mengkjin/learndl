@@ -105,6 +105,14 @@ class Portfolio:
         else:
             return pd.concat([port.to_dataframe() for port in self.ports.values()] , axis = 0)
         
+    def exclude(self , secid : np.ndarray | Any | None = None , inplace = False):
+        if secid is None: return self
+        if not inplace:
+            self = self.copy()
+        for port in self.ports.values():
+            port.exclude(secid , True)
+        return self
+
     @classmethod
     def from_ports(cls , *ports : Port , name : str | None = None):
         assert ports or name , 'expect at least one port or a name'

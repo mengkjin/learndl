@@ -87,24 +87,24 @@ class TradingPortfolioBuilder:
             val = val[val['secid'].isin(self.candidates)].iloc[:top_num].loc[:,['secid']].\
                 reset_index().assign(date = date , name = self.universe)
             val['weight'] = 1 / len(val)
-            df = Portfolio.from_dataframe(val , name = self.universe)
+            pf = Portfolio.from_dataframe(val , name = self.universe)
         elif self.universe in Benchmark.AVAILABLES:
-            df = Benchmark(self.universe)
+            pf = Benchmark(self.universe)
         elif '+' in self.universe:
             univs = [Benchmark(univ).get(date) for univ in self.universe.split('+')]
-            df = Portfolio.from_ports(Port.sum(univs) , name = self.universe)
+            pf = Portfolio.from_ports(Port.sum(univs) , name = self.universe)
         else:
             raise Exception(f'{self.universe} is not a valid benchmark')
         
-        if safety:
-            st_list = DATAVENDOR.INFO.get_st(date)
-            df = df.loc[~df['secid'].isin(st_list['secid'])]
-            
-            cp = DATAVENDOR.TRADE.get_val(date).loc[:,['secid' , 'close']].query('close > 2.0')
-            df = df.loc[df['secid'].isin(cp['secid'])]
+        assert isinstance(pf , Portfolio) , f'expect Portfolio , got {type(pf)}'
 
-            df['weight'] = df['weight'] / df['weight'].sum()
-        return df
+        if safety:
+            st_list = DATAVENDOR.INFO.get_st(date)['secid'].to_numpy()
+            small_cp = DATAVENDOR.TRADE.get_val(date).query('close < 2.0')['secid'].to_numpy()
+
+            pf = pf.exclude(st_list , True).exclude(small_cp , True)
+
+        return pf
 
     def get_last_port(self , date : int) -> Portfolio:
         if (last_date := self.last_date(date)) > 0:
