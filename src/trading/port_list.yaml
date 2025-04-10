@@ -1,0 +1,33 @@
+test0:
+    alpha: gru_day_V1
+    universe: csi800+csi1000+csi2000
+
+test1:
+    alpha: sellside@dongfang.scores_v0@avg
+    universe: top-1000
+
+use_daily:
+    alpha: big_combine
+    components:
+        - sellside@huatai.master_combined@master_combined
+        - sellside@dongfang.scores_v0@avg
+        - gru_day_V1
+    weights:
+        - 1.0
+        - 1.0
+        - 1.0
+    universe: top-1000
+    top_num: 50
+    step: 1
+
+master_daily:
+    alpha: sellside@huatai.master_combined@master_combined
+    universe: top-1000
+    top_num: 50
+    step: 1
+
+gru_daily:
+    alpha: gru_day_V1
+    universe: top-1000
+    top_num: 50
+    step: 1

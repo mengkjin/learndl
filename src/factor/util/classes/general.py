@@ -48,6 +48,9 @@ class GeneralModel(ABC):
         dates = dates[(dates >= start) & (dates <= end)]
         [self.append(self.load_day_model(date)) for date in dates if date not in self.models]
     def copy(self): return deepcopy(self)
+    def item(self):
+        assert len(self.models) == 1 , f'expect 1 model , but got {len(self.models)}'
+        return list(self.models.values())[0]
 
 class Port:
     '''portfolio realization of one day'''

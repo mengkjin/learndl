@@ -98,7 +98,16 @@ class Amodel:
             return cls.from_array(date , data , secid)
         else:
             return cls.from_dataframe(date , data , secid)
-    
+        
+    @classmethod
+    def combine(cls , alphas : list['Amodel'] , weights : list[float] = [] , name : str = 'combined_alpha'):
+        assert len(alphas) == len(weights) or len(weights) == 0 , f'alphas and weights must have the same length, but got {len(alphas)} and {len(weights)}'
+        if len(weights) == 0:
+            weights = np.ones(len(alphas)) / len(alphas)
+        secid = np.unique(np.concatenate([alpha.secid for alpha in alphas]))
+        alpha = np.sum(np.array([alpha.align(secid).alpha for alpha in alphas]) * np.array(weights)[:,None] , axis = 0) / np.sum(weights)
+        return cls(alphas[0].date , alpha , secid , name)
+
 class AlphaModel(GeneralModel):
     '''Alpha model instance, contains alpha for multiple days'''
     def __init__(self , name : str = 'Alpha0' , models : Amodel | list[Amodel] | dict[int,Amodel] | Any = None) -> None:
@@ -147,4 +156,3 @@ class AlphaModel(GeneralModel):
             tar_date = dates[min(i+lag_period,len(dates)-1)]
             new.models[date] = new.models[tar_date].assign(date = date , name = new.name)
         return new
-    
