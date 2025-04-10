@@ -60,7 +60,7 @@ class TradingPortfolioBuilder:
     def updatable(self , date : int , force = False) -> bool:
         if force: return True
         if (last_date := self.last_date(date)) < 0: return True
-        return CALENDAR.td(last_date , self.step) < date
+        return CALENDAR.td(last_date , self.step) <= date
 
     def get_alpha(self , date : int) -> AlphaModel:
         if self.alpha in RegisteredModel.MODEL_DICT:
