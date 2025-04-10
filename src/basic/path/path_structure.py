@@ -50,7 +50,9 @@ monitor     = result.joinpath('monitor')
 # some records to upload
 upload      = main.joinpath('upload')
 
-def read_yaml(yaml_file , **kwargs):
+def read_yaml(yaml_file : str | Path , **kwargs):
+    if isinstance(yaml_file , str):
+        yaml_file = Path(yaml_file)
     if isinstance(yaml_file , Path) and yaml_file.suffix == '' and yaml_file.with_name(f'{yaml_file.name}.yaml').exists():
         yaml_file = yaml_file.with_name(f'{yaml_file.name}.yaml')
     if not yaml_file.exists():
