@@ -2,7 +2,7 @@ import pandas as pd
 
 from pathlib import Path
 
-from src.basic import CALENDAR , PATH , Email
+from src.basic import CALENDAR , PATH , Email , CONF
 from src.trading.util import TradingPort
 
 class TradingPortfolioBuilder:
@@ -10,7 +10,7 @@ class TradingPortfolioBuilder:
     def update(cls , reset_ports : list[str] = []):
         date = CALENDAR.updated()
         pfs : list[pd.DataFrame] = []
-        port_list = PATH.read_yaml(Path('port_list.yaml').absolute())
+        port_list = CONF.trade('port_list')
 
         if reset_ports:
             ports , reset = reset_ports , True
