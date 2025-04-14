@@ -1,5 +1,5 @@
 from src.func.display import EnclosedMessage
-from src.trading.builder import TradingPortfolioBuilder
+from src.trading.tracker import TradingPortfolioTracker
 
 class TradingAPI:
     @staticmethod
@@ -8,4 +8,4 @@ class TradingAPI:
         Update trading portfolios for both laptop and server:
         '''
         with EnclosedMessage(' update trading portfolios '):
-            TradingPortfolioBuilder.update(reset_ports = reset_ports)
+            TradingPortfolioTracker.update(reset_ports = reset_ports)

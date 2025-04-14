@@ -18,16 +18,16 @@ use_daily:
         - 1.0
     universe: top-1000
     top_num: 50
-    step: 1
+    freq: 1
 
 master_daily:
     alpha: sellside@huatai.master_combined@master_combined
     universe: top-1000
     top_num: 50
-    step: 1
+    freq: 1
 
 gru_daily:
     alpha: gru_day_V1
     universe: top-1000
     top_num: 50
-    step: 1
+    freq: 1
