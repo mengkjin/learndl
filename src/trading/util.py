@@ -120,9 +120,10 @@ class TradingPort:
         date_list = CALENDAR.td_within(self.test_start , test_end , self.step)
         existing_dates = self.existing_dates(backtest = True)
         date_list = np.setdiff1d(date_list , existing_dates)
-        
+        if len(date_list):
+            print(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days')
         for date in date_list:
-            self.build_portfolio(date , reset_port = False , export = False , backtest = True)
+            self.build_portfolio(date , reset_port = False , export = True , backtest = True)
 
         return self
     
