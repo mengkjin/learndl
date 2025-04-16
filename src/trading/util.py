@@ -3,7 +3,7 @@ import numpy as np
 
 from dataclasses import dataclass , field
 from pathlib import Path
-from typing import Literal , Type
+from typing import Literal , Type , Any
 
 from src.basic import CALENDAR , RegisteredModel , PATH , CONF
 from src.data import DATAVENDOR
@@ -65,7 +65,7 @@ class TradingPort:
         return CONF.trade('portfolio_dict')
     
     @classmethod
-    def load_portfolio(cls , name : str) -> 'TradingPort':
+    def load(cls , name : str) -> 'TradingPort':
         port_dict = cls.portfolio_dict()
         assert name in port_dict , f'{name} is not in portfolio_dict'
         return cls(**port_dict[name])
@@ -130,7 +130,7 @@ class TradingPort:
             port = Portfolio(self.port_name(backtest))
         return port
     
-    def go_backtest(self , test_end : int | None = None) -> 'TradingPort':
+    def go_backtest(self , test_end : int | Any = None) -> 'TradingPort':
         if self.test_start <= 0:
             return self
         if test_end is None:
@@ -183,7 +183,7 @@ class TradingPort:
         dfs = [self.load_port(date , backtest) for date in dates]
         return Portfolio.from_dataframe(pd.concat(dfs) , name = self.port_name(backtest))
     
-    def portfolio_account(self , start : int | None = None , end : int | None = None , backtest = False ,
+    def portfolio_account(self , start : int = -1 , end : int = 99991231 , backtest = False ,
                           analytic = False , attribution = False) -> pd.DataFrame:
         port = self.load_portfolio(start , end , backtest)
         benchmark = Benchmark(self.benchmark)
@@ -195,7 +195,7 @@ class TradingPort:
         return portfolio_account(port , benchmark , start , end , 
                                  analytic = analytic , attribution = attribution , index = default_index)
 
-    def analyze(self , start : int | None = None , end : int | None = None , backtest = False , verbosity = 1 , **kwargs):
+    def analyze(self , start : int = -1 , end : int = 99991231 , backtest = False , verbosity = 1 , **kwargs):
         account = self.portfolio_account(start = start , end = end , backtest = backtest)
         candidates = {task.task_name():task for task in TASK_LIST}
         self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
@@ -270,7 +270,7 @@ class Universe:
             univs = [Benchmark(univ).get(date) for univ in self.name.split('+')]
             pf = Portfolio.from_ports(Port.sum(univs) , name = self.name)
         else:
-            raise Exception(f'{self.universe} is not a valid benchmark')
+            raise Exception(f'{self.name} is not a valid benchmark')
         
         assert isinstance(pf , Portfolio) , f'expect Portfolio , got {type(pf)}'
 

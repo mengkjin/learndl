@@ -100,7 +100,7 @@ class Amodel:
             return cls.from_dataframe(date , data , secid)
         
     @classmethod
-    def combine(cls , alphas : list['Amodel'] , weights : list[float] = [] , name : str = 'combined_alpha'):
+    def combine(cls , alphas : list['Amodel'] , weights : list[float] | np.ndarray = [] , name : str = 'combined_alpha'):
         assert len(alphas) == len(weights) or len(weights) == 0 , f'alphas and weights must have the same length, but got {len(alphas)} and {len(weights)}'
         if len(weights) == 0:
             weights = np.ones(len(alphas)) / len(alphas)
@@ -117,6 +117,10 @@ class AlphaModel(GeneralModel):
     def load_day_model(self, date: int) -> Any:
         # do something here
         ...
+    def item(self) -> Amodel:
+        return super().item()
+    def alpha(self) -> np.ndarray:
+        return self.item().alpha
     def __repr__(self):
         return f'{self.__class__.__name__} (name={self.name})({len(self.models)} days loaded)'
     @classmethod
