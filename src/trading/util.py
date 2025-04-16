@@ -3,11 +3,22 @@ import numpy as np
 
 from dataclasses import dataclass , field
 from pathlib import Path
-from typing import Literal
-from src.basic import CALENDAR , RegisteredModel , PATH 
+from typing import Literal , Type
+
+from src.basic import CALENDAR , RegisteredModel , PATH , CONF
 from src.data import DATAVENDOR
 from src.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Port
 from src.factor.fmp import PortfolioBuilder
+from src.factor.analytic.fmp_top.api import Calc
+from src.factor.fmp.accountant import portfolio_account
+
+TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
+    Calc.Top_FrontFace , 
+    Calc.Top_Perf_Curve ,
+    Calc.Top_Perf_Excess ,
+    Calc.Top_Perf_Drawdown , 
+    Calc.Top_Perf_Year ,
+]
 
 @dataclass
 class TradingPort:
@@ -19,10 +30,15 @@ class TradingPort:
     top_num     : int = 50
     freq        : int | Literal['d' , 'w' , 'm'] = 5
     init_value  : float = 1e6
-    test_start  : int = -1 # -1 for no backtest
+    backtest    : bool = False
+    test_start  : int = 20190101 # -1 for no backtest
+    benchmark   : str = 'CSI500'
 
     def __post_init__(self):
         self.init_params()
+
+        self.Alpha = Alpha(self.alpha , self.components , self.weights)
+        self.Universe = Universe(self.universe)
 
     def init_params(self):
         assert isinstance(self.freq , int) or self.freq in ['d' , 'w' , 'm'] , f'str freq must be d, w, or m : {self.freq}'
@@ -43,14 +59,24 @@ class TradingPort:
         self.indus_control = 0.1
 
         self.test_start = max(self.test_start , 20170101) if self.test_start > 0 else -1
-
-    @property
-    def is_backtest(self) -> bool:
-        return self.test_start > 0
     
+    @classmethod
+    def portfolio_dict(cls) -> dict[str , dict]:
+        return CONF.trade('portfolio_dict')
+    
+    @classmethod
+    def load_portfolio(cls , name : str) -> 'TradingPort':
+        port_dict = cls.portfolio_dict()
+        assert name in port_dict , f'{name} is not in portfolio_dict'
+        return cls(**port_dict[name])
+
     @property
     def backtest_name(self) -> str:
         return f'{self.name}.backtest'
+    
+    @property
+    def is_backtested(self) -> bool:
+        return self.port_dir().exists()
     
     def port_name(self , backtest = False) -> str:
         return self.backtest_name if backtest else self.name
@@ -71,6 +97,10 @@ class TradingPort:
     def start_date(self , backtest = False) -> int:
         dates = self.existing_dates(backtest = backtest)
         return dates.min() if len(dates) > 1 else -1
+    
+    def end_date(self , backtest = False) -> int:
+        dates = self.existing_dates(backtest = backtest)
+        return dates.max() if len(dates) > 1 else -1
     
     def port_dir(self , backtest = False) -> Path:
         return PATH.trade_port.joinpath(self.port_name(backtest))
@@ -100,13 +130,7 @@ class TradingPort:
             port = Portfolio(self.port_name(backtest))
         return port
     
-    def get_alpha(self , date : int) -> AlphaModel:
-        return Alpha(self.alpha , self.components , self.weights).get(date)
-    
-    def get_universe(self , date : int) -> Portfolio:
-        return Universe(self.universe).get(date)
-    
-    def backtest(self , test_end : int | None = None) -> 'TradingPort':
+    def go_backtest(self , test_end : int | None = None) -> 'TradingPort':
         if self.test_start <= 0:
             return self
         if test_end is None:
@@ -116,7 +140,7 @@ class TradingPort:
                 test_end = CALENDAR.updated()
             if test_end < self.test_start:
                 return self
-        # TODO: backtest
+
         date_list = CALENDAR.td_within(self.test_start , test_end , self.step)
         existing_dates = self.existing_dates(backtest = True)
         date_list = np.setdiff1d(date_list , existing_dates)
@@ -128,8 +152,8 @@ class TradingPort:
         return self
     
     def build_portfolio(self , date : int , reset_port = False , export = True , backtest = False) -> pd.DataFrame:
-        alpha = self.get_alpha(date)
-        universe = self.get_universe(date)
+        alpha = self.Alpha.get(date)
+        universe = self.Universe.get(date)
         last_port = self.get_last_port(date , reset_port , backtest)
         builder = PortfolioBuilder('top' , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
@@ -147,6 +171,38 @@ class TradingPort:
             pf.loc[:,['secid' , 'weight' , 'value']].to_csv(path)
 
         return pf
+    
+
+    
+    def load_portfolio(self , start : int | None = None , end : int | None = None , backtest = False) -> Portfolio:
+        if start is None:
+            start = self.start_date(backtest)
+        if end is None:
+            end = self.end_date(backtest)
+        dates = self.existing_dates(start , end , backtest)
+        dfs = [self.load_port(date , backtest) for date in dates]
+        return Portfolio.from_dataframe(pd.concat(dfs) , name = self.port_name(backtest))
+    
+    def portfolio_account(self , start : int | None = None , end : int | None = None , backtest = False ,
+                          analytic = False , attribution = False) -> pd.DataFrame:
+        port = self.load_portfolio(start , end , backtest)
+        benchmark = Benchmark(self.benchmark)
+        default_index = {
+            'factor_name' : port.name ,
+            'benchmark'   : benchmark.name ,
+            'strategy'    : f'top{self.top_num}' ,
+        }
+        return portfolio_account(port , benchmark , start , end , 
+                                 analytic = analytic , attribution = attribution , index = default_index)
+
+    def analyze(self , start : int | None = None , end : int | None = None , backtest = False , verbosity = 1 , **kwargs):
+        account = self.portfolio_account(start = start , end = end , backtest = backtest)
+        candidates = {task.task_name():task for task in TASK_LIST}
+        self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
+        for task in self.tasks.values():
+            task.calc(account , verbosity = verbosity - 1) 
+        if verbosity > 0: print(f'{self.port_name(backtest)} analyze Finished!')
+        return self
 
 @dataclass
 class Alpha:
@@ -158,12 +214,18 @@ class Alpha:
         assert len(self.name) > 0 or len(self.components) > 0 , 'name or components must be non-empty'
         assert len(self.components) == len(self.weights) or len(self.weights) == 0 , 'components and weights must have the same length'
     
+    def get_alphas(self , date : int) -> list[AlphaModel]:
+        if len(self.components) == 0:
+            return [self.get_single_alpha(self.name , date)]
+        else:
+            return [self.get_single_alpha(alpha , date) for alpha in self.components]
+
     def get(self , date : int) -> AlphaModel:
         if len(self.components) == 0:
             return self.get_single_alpha(self.name , date)
         else:
-            alphas = [self.get_single_alpha(alpha , date).item() for alpha in self.components]
-            amodel = Amodel.combine(alphas , self.weights)
+            alphas = self.get_alphas(date)
+            amodel = Amodel.combine([alphas.item() for alphas in alphas] , self.weights)
             return AlphaModel(self.name , amodel)
     
     @staticmethod

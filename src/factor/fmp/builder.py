@@ -5,10 +5,10 @@ import numpy as np
 from contextlib import nullcontext
 from typing import Any , Literal , Optional
 
-from src.basic import CONF ,Timer , INSTANCE_RECORD
+from src.basic import Timer
 from src.factor.util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult
 
-from .accountant import PortfolioAccountant
+from .accountant import PortfolioAccountant , total_account
 from .optimizer import PortfolioOptimizer
 from .generator import PortfolioGenerator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , 
@@ -218,13 +218,7 @@ class PortfolioBuilderGroup:
     
     def total_account(self):
         assert self.builders , 'No builders to account!'
-        df = pd.concat([builder.account for builder in self.builders])
-        old_index = list(df.index.names)
-        df = df.reset_index().sort_values('model_date')
-        df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.CATEGORIES_BENCHMARKS , ordered=True) 
-
-        df = df.set_index(old_index).sort_index()
-        INSTANCE_RECORD.update_account(df)
+        df = total_account([builder.account for builder in self.builders])
         return df
     
     def print_in_optimization(self , where : Literal['start' , 'loop' , 'end']):
