@@ -131,15 +131,15 @@ class TradingPort:
         return port
     
     def go_backtest(self , test_end : int | Any = None) -> 'TradingPort':
-        if self.test_start <= 0:
+        if not self.backtest or self.test_start <= 0:
             return self
         if test_end is None:
             if (start_date := self.start_date()) > 0:
                 test_end = CALENDAR.td(start_date , -1)
             else:
                 test_end = CALENDAR.updated()
-            if test_end < self.test_start:
-                return self
+        if test_end < self.test_start:
+            return self
 
         date_list = CALENDAR.td_within(self.test_start , test_end , self.step)
         existing_dates = self.existing_dates(backtest = True)
@@ -171,7 +171,6 @@ class TradingPort:
             pf.loc[:,['secid' , 'weight' , 'value']].to_csv(path)
 
         return pf
-    
 
     
     def load_portfolio(self , start : int | None = None , end : int | None = None , backtest = False) -> Portfolio:
