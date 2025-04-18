@@ -33,7 +33,7 @@ class TradingPort:
     backtest    : bool = False
     test_start  : int = 20190101 # -1 for no backtest
     test_end    : int = -1
-    benchmark   : str = 'CSI500'
+    benchmark   : str = 'csi500'
 
     def __post_init__(self):
         assert isinstance(self.freq , int) or self.freq in ['d' , 'w' , 'm'] , f'str freq must be d, w, or m : {self.freq}'
@@ -68,7 +68,7 @@ class TradingPort:
     def load(cls , name : str) -> 'TradingPort':
         port_dict = cls.portfolio_dict()
         assert name in port_dict , f'{name} is not in portfolio_dict'
-        return cls(**port_dict[name])
+        return cls(name , **port_dict[name])
 
     def port_dir(self) -> Path:
         return PATH.trade_port.joinpath(self.name)

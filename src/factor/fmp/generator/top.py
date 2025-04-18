@@ -8,6 +8,15 @@ DEFAULT_N_BEST = 50
 
 @dataclass(slots = True)
 class PortfolioGeneratorConfig:
+    '''
+    Config for PortfolioGenerator (Top Portfolio Generator)
+    kwargs:
+        n_best          : int = DEFAULT_N_BEST , number of best stocks to select
+        turn_control    : float = 0.2 , control the number of stocks to be substituted
+        buffer_zone     : float = 0.8 , above this rankpct, the stock will remain in the portfolio
+        no_zone         : float = 0.5 , below this rankpct, the stock will not be substituted
+        indus_control   : float = 0.1 , control the ratio of stocks to select in one industry
+    '''
     n_best          : int = DEFAULT_N_BEST
     turn_control    : float = 0.2
     buffer_zone     : float = 0.8

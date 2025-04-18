@@ -77,7 +77,7 @@ class Portfolio:
     def get_object_name(cls , obj : str | Any | None) -> str:
         if obj is None: return 'none'
         elif isinstance(obj , cls): return obj.name
-        elif isinstance(obj , str): return obj
+        elif isinstance(obj , str): return obj.lower()
         else: raise TypeError(obj)
 
     @classmethod

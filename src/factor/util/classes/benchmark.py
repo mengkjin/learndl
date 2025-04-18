@@ -32,7 +32,7 @@ class Benchmark(Portfolio):
             cls._instance_dict[name] = instance
             return instance
         else:
-            raise ValueError(name)
+            raise ValueError(name , cls.AVAILABLES + cls.NONE)
 
     def __init__(self , name : str | Any | None) -> None:
         if getattr(self , 'ports' , None): return # avoid double initialization
