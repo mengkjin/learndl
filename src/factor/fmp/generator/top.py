@@ -11,6 +11,7 @@ class PortfolioGeneratorConfig:
     n_best          : int = DEFAULT_N_BEST
     turn_control    : float = 0.2
     buffer_zone     : float = 0.8
+    no_zone         : float = 0.5
     indus_control   : float = 0.1
 
     @classmethod
@@ -48,9 +49,10 @@ class PortfolioGenerator(PortCreator):
         pool['ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool['rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
         
-        pool = pool.merge(self.init_port.port , on = 'secid' , how = 'outer').sort_values('alpha' , ascending = False)
+        pool = pool.merge(self.init_port.port , on = 'secid' , how = 'left').sort_values('alpha' , ascending = False)
         pool['selected'] = pool['weight'].fillna(0) > 0
-        pool['buffered'] = (pool['rankpct'] >= self.conf.buffer_zone) + (pool['selected'].cumsum() <= self.conf.stay_num)
+        pool['buffered'] = ((pool['rankpct'] >= self.conf.buffer_zone) + (pool['selected'].cumsum() <= self.conf.stay_num) *
+                            (pool['rankpct'] >= self.conf.no_zone))
 
         stay = pool[pool['selected'] & pool['buffered']][['secid' , 'indus']]
         stay_ind_count = stay.groupby('indus')['secid'].count().rename('count')

@@ -23,8 +23,8 @@ TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
 @dataclass
 class TradingPort:
     name        : str 
-    alpha       : str = ''
-    universe    : str = 'all'
+    alpha       : str
+    universe    : str
     components  : list[str] = field(default_factory=list)
     weights     : list[float] = field(default_factory=list)
     top_num     : int = 50
@@ -32,15 +32,10 @@ class TradingPort:
     init_value  : float = 1e6
     backtest    : bool = False
     test_start  : int = 20190101 # -1 for no backtest
+    test_end    : int = -1
     benchmark   : str = 'CSI500'
 
     def __post_init__(self):
-        self.init_params()
-
-        self.Alpha = Alpha(self.alpha , self.components , self.weights)
-        self.Universe = Universe(self.universe)
-
-    def init_params(self):
         assert isinstance(self.freq , int) or self.freq in ['d' , 'w' , 'm'] , f'str freq must be d, w, or m : {self.freq}'
         self.step = self.freq if isinstance(self.freq , int) else {'d' : 1 , 'w' : 5 , 'm' : 20}[self.freq]
 
@@ -56,9 +51,14 @@ class TradingPort:
         else:
             self.turn_control = 1.0
         self.buffer_zone = 0.8
+        self.no_zone = 0.5
         self.indus_control = 0.1
 
+        assert not self.backtest or self.test_start > 0 , f'test_start must be positive when backtest is True: {self.test_start}'
         self.test_start = max(self.test_start , 20170101) if self.test_start > 0 else -1
+
+        self.Alpha = Alpha(self.alpha , self.components , self.weights)
+        self.Universe = Universe(self.universe)
     
     @classmethod
     def portfolio_dict(cls) -> dict[str , dict]:
@@ -70,94 +70,81 @@ class TradingPort:
         assert name in port_dict , f'{name} is not in portfolio_dict'
         return cls(**port_dict[name])
 
-    @property
-    def backtest_name(self) -> str:
-        return f'{self.name}.backtest'
+    def port_dir(self) -> Path:
+        return PATH.trade_port.joinpath(self.name)
+        
+    def port_path(self , date : int) -> Path:
+        return self.port_dir().joinpath(f'{self.name}.{date}.csv')
     
-    @property
-    def is_backtested(self) -> bool:
-        return self.port_dir().exists()
-    
-    def port_name(self , backtest = False) -> str:
-        return self.backtest_name if backtest else self.name
-
-    def is_first_date(self , date : int , backtest = False) -> bool:
-        return self.last_date(date , backtest) <= 0
-    
-    def existing_dates(self , min_date : int | None = None , max_date : int | None = None , backtest = False) -> np.ndarray:
-        dates = PATH.dir_dates(self.port_dir(backtest))
+    def existing_dates(self , min_date : int | None = None , max_date : int | None = None) -> np.ndarray:
+        dates = PATH.dir_dates(self.port_dir())
         if min_date is not None: dates = dates[dates >= min_date]
         if max_date is not None: dates = dates[dates <= max_date]
         return dates
     
-    def last_date(self , date : int , backtest = False) -> int:
-        dates = self.existing_dates(max_date = date - 1 , backtest = backtest)
+    def is_first_date(self , date : int) -> bool:
+        return self.last_date(date) <= 0
+
+    def last_date(self , date : int) -> int:
+        dates = self.existing_dates(max_date = date - 1)
         return dates.max() if len(dates) > 1 else -1
         
-    def start_date(self , backtest = False) -> int:
-        dates = self.existing_dates(backtest = backtest)
+    def start_date(self) -> int:
+        dates = self.existing_dates()
         return dates.min() if len(dates) > 1 else -1
     
-    def end_date(self , backtest = False) -> int:
-        dates = self.existing_dates(backtest = backtest)
+    def end_date(self) -> int:
+        dates = self.existing_dates()
         return dates.max() if len(dates) > 1 else -1
     
-    def port_dir(self , backtest = False) -> Path:
-        return PATH.trade_port.joinpath(self.port_name(backtest))
-        
-    def port_path(self , date : int , backtest = False) -> Path:
-        return self.port_dir(backtest).joinpath(f'{self.port_name(backtest)}.{date}.csv')
-        
     def updatable(self , date : int , force = False) -> bool:
         if force: return True
-        if (last_date := self.last_date(date)) < 0: return True
-        return CALENDAR.td(last_date , self.step) <= date
+        if self.backtest:
+            if self.test_end > 0 and date > self.test_end: 
+                return False
+            if self.test_start > 0 and date < self.test_start:
+                return False
+        last_date = self.last_date(date)
+        if last_date < 0: 
+            return True
+        else:
+            return CALENDAR.td(last_date , self.step) <= date
     
-    def load_port(self , date : int , backtest = False) -> pd.DataFrame:
-        path = self.port_path(date , backtest)
+    def load_port(self , date : int) -> pd.DataFrame:
+        path = self.port_path(date)
         if path.exists():
-            return pd.read_csv(path).assign(date = date , name = self.port_name(backtest))
+            return pd.read_csv(path).assign(date = date , name = self.name)
         else:
             return pd.DataFrame()
 
-    def get_last_port(self , date : int , reset_port = False , backtest = False) -> Portfolio:
-        if not reset_port and (last_date := self.last_date(date , backtest)) > 0:
-            df = self.load_port(last_date , backtest)
+    def get_last_port(self , date : int , reset_port = False) -> Portfolio:
+        if not reset_port and (last_date := self.last_date(date)) > 0:
+            df = self.load_port(last_date)
             port = Portfolio.from_dataframe(df)
         else:
             if reset_port:
-                print(f'Beware: reset port for new build! {self.port_name(backtest)}')
-            port = Portfolio(self.port_name(backtest))
+                print(f'Beware: reset port for new build! {self.name}')
+            port = Portfolio(self.name)
         return port
     
-    def go_backtest(self , test_end : int | Any = None) -> 'TradingPort':
-        if not self.backtest or self.test_start <= 0:
-            return self
-        if test_end is None:
-            if (start_date := self.start_date()) > 0:
-                test_end = CALENDAR.td(start_date , -1)
-            else:
-                test_end = CALENDAR.updated()
-        if test_end < self.test_start:
-            return self
+    def build(self , date : int , reset = False , export = True) -> pd.DataFrame:
+        if self.backtest:
+            df = self.build_backward(date , reset_port = reset , export = export)
+        else:
+            df = self.build_portfolio(date , reset_port = reset , export = export)
 
-        date_list = CALENDAR.td_within(self.test_start , test_end , self.step)
-        existing_dates = self.existing_dates(backtest = True)
-        date_list = np.setdiff1d(date_list , existing_dates)
-        if len(date_list):
-            print(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days')
-        for date in date_list:
-            self.build_portfolio(date , reset_port = False , export = True , backtest = True)
-
-        return self
+        return df
     
-    def build_portfolio(self , date : int , reset_port = False , export = True , backtest = False) -> pd.DataFrame:
+    def build_portfolio(self , date : int , reset_port = False , export = True , last_port = None) -> pd.DataFrame:
         alpha = self.Alpha.get(date)
         universe = self.Universe.get(date)
-        last_port = self.get_last_port(date , reset_port , backtest)
+        if last_port is None:
+            last_port = self.get_last_port(date , reset_port)
+
         builder = PortfolioBuilder('top' , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
-                                   buffer_zone = self.buffer_zone , indus_control = self.indus_control).setup(0)
+                                   buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
+                                   indus_control = self.indus_control).setup(0)
 
         pf = builder.build(date).port.to_dataframe()
         if pf.empty: return pf
@@ -166,25 +153,41 @@ class TradingPort:
             pf['value'] = self.init_value
 
         if export:
-            path = self.port_path(date , backtest)
+            path = self.port_path(date)
             path.parent.mkdir(parents=True, exist_ok=True)
             pf.loc[:,['secid' , 'weight' , 'value']].to_csv(path)
 
         return pf
+    
+    def build_backward(self , date : int , reset_port = False , export = True) -> pd.DataFrame:
+        assert self.backtest , 'backtest must be True'
+        assert self.test_start > 0 , 'test_start must be positive'
+        test_end = min(date , self.test_end)
+        
+        if test_end < self.test_start: return pd.DataFrame()
 
+        end_date = self.end_date()
+        date_list = CALENDAR.td_within(self.test_start , test_end , self.step)
+        if not reset_port:
+            date_list = date_list[date_list > end_date]
+        if len(date_list) == 0: return pd.DataFrame()
+        
+        print(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days')
+        pf = None
+        for d in date_list:
+            df = self.build_portfolio(d , reset_port = False , export = export , last_port = pf)
+            pf = Portfolio.from_dataframe(df.assign(date = d , name = self.name))
+
+        return pd.DataFrame()
     
-    def load_portfolio(self , start : int | None = None , end : int | None = None , backtest = False) -> Portfolio:
-        if start is None:
-            start = self.start_date(backtest)
-        if end is None:
-            end = self.end_date(backtest)
-        dates = self.existing_dates(start , end , backtest)
-        dfs = [self.load_port(date , backtest) for date in dates]
-        return Portfolio.from_dataframe(pd.concat(dfs) , name = self.port_name(backtest))
+    def load_portfolios(self , start : int | None = None , end : int | None = None) -> Portfolio:
+        dates = self.existing_dates(start , end)
+        dfs = [self.load_port(date) for date in dates]
+        return Portfolio.from_dataframe(pd.concat(dfs) , name = self.name)
     
-    def portfolio_account(self , start : int = -1 , end : int = 99991231 , backtest = False ,
+    def portfolio_account(self , start : int = -1 , end : int = 99991231 ,
                           analytic = False , attribution = False) -> pd.DataFrame:
-        port = self.load_portfolio(start , end , backtest)
+        port = self.load_portfolios(start , end)
         benchmark = Benchmark(self.benchmark)
         default_index = {
             'factor_name' : port.name ,
@@ -194,13 +197,13 @@ class TradingPort:
         return portfolio_account(port , benchmark , start , end , 
                                  analytic = analytic , attribution = attribution , index = default_index)
 
-    def analyze(self , start : int = -1 , end : int = 99991231 , backtest = False , verbosity = 1 , **kwargs):
-        account = self.portfolio_account(start = start , end = end , backtest = backtest)
+    def analyze(self , start : int = -1 , end : int = 99991231 , verbosity = 1 , **kwargs):
+        account = self.portfolio_account(start = start , end = end)
         candidates = {task.task_name():task for task in TASK_LIST}
         self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         for task in self.tasks.values():
             task.calc(account , verbosity = verbosity - 1) 
-        if verbosity > 0: print(f'{self.port_name(backtest)} analyze Finished!')
+        if verbosity > 0: print(f'{self.name} analyze Finished!')
         return self
 
 @dataclass

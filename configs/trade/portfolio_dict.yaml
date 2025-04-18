@@ -19,7 +19,23 @@ use_daily:
     universe: top-1000
     top_num: 50
     freq: 1
+
+use_daily.backtest:
+    alpha: big_combine
+    components:
+        - sellside@huatai.master_combined@master_combined
+        - sellside@dongfang.scores_v0@avg
+        - gru_day_V1
+    weights:
+        - 1.0
+        - 1.0
+        - 1.0
+    universe: top-1000
+    top_num: 50
+    freq: 1
     backtest: True
+    test_start: 20190101
+    test_end: 20250430
 
 master_daily:
     alpha: sellside@huatai.master_combined@master_combined

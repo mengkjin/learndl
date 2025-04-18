@@ -38,6 +38,7 @@ class PortfolioBuilder:
         n_best : int = 50
         turn_control : float = 0.2
         buffer_zone : float = 0.8
+        no_zone : float = 0.5
         indus_control : float = 0.1
     '''
     def __init__(self , category : Literal['optim' , 'top'] | Any , 
@@ -131,6 +132,7 @@ class PortfolioBuilderGroup:
             n_best : int = 50
             turn_control : float = 0.2
             buffer_zone : float = 0.8
+            no_zone : float = 0.5
             indus_control : float = 0.1
     acc_kwargs:
         daily : bool = False

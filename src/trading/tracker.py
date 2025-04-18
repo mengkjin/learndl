@@ -14,8 +14,7 @@ class TradingPortfolioTracker:
         assert not reset_ports or all([port in ports for port in reset_ports]) , \
             f'expect all reset ports in port_list , got {reset_ports}'
             
-        updated_ports = {k:TradingPort(k , **v).go_backtest().build_portfolio(date , k in reset_ports)
-                         for k,v in ports.items()}
+        updated_ports = {k:TradingPort(k , **v).build(date , k in reset_ports) for k,v in ports.items()}
         updated_ports = {k:v for k,v in updated_ports.items() if not v.empty}
             
         if len(updated_ports) == 0: 

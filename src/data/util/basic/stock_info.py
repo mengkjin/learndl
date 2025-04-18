@@ -35,7 +35,7 @@ class InfoDataAccess:
     def get_st(self , date : int | TradeDate | None = None , reason = ['终止上市', '暂停上市' , 'ST', '*ST']):
         new_cname = self.cname[self.cname['change_reason'].isin(reason)]
         if date is not None: 
-            new_cname = self.cname[self.cname['start_date'] <= date].copy().drop_duplicates('secid' , keep = 'last')
+            new_cname = new_cname.query('start_date <= @date').copy().drop_duplicates('secid' , keep = 'last')
         return new_cname.loc[:,['secid','entry_dt','remove_dt','ann_dt']]
     
     def get_list_dt(self , date : int | TradeDate | None = None , offset = 0):
