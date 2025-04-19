@@ -9,6 +9,10 @@ from src.factor.util.plot import plot_table , set_xaxis , set_yaxis , PlotMultip
 DROP_KEYS  = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 
+def df_strategy(df : pd.DataFrame) -> pd.Series:
+    keys = [i for i in MAJOR_KEYS if i in df.columns or i in df.index.names]
+    return df.apply(lambda x:'.'.join(x[col] for col in keys) , axis=1)
+
 def plot_top_frontface(data : pd.DataFrame , show = False):
     num_per_page : int | Any = 32 // data.groupby('factor_name').size().max()
     if num_per_page == 0: num_per_page = 1
@@ -19,7 +23,7 @@ def plot_top_frontface(data : pd.DataFrame , show = False):
         full_title = f'TopPort FMP Front Face for Factors (P{i+1}/{num_pages})'
         with PlotFactorData(sub_data , drop = [] , name_key = None , show = show , full_title = full_title) as (df , fig):
             df = df.reset_index([i for i in df.index.names if i])
-            df['strategy'] = df.apply(lambda x:'.'.join(x[col] for col in MAJOR_KEYS) , axis=1)
+            df['strategy'] = df_strategy(df)
             plot_table(df.set_index('strategy') , 
                 pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                 flt_cols = ['ir','calmar'] ,

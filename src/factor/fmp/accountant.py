@@ -11,7 +11,7 @@ from src.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 
 from .fmp_basic import parse_full_name
 
-def portfolio_account(portfolio : Portfolio , benchmark : Benchmark | str , 
+def portfolio_account(portfolio : Portfolio , benchmark : Benchmark | Portfolio | str , 
                       start : int = -1 , end : int = 99991231 , daily = False , 
                       analytic = True , attribution = True , index : dict = {}):
     '''Accounting portfolio through date, if resume is True, will resume from last account date'''
@@ -40,6 +40,9 @@ def portfolio_account(portfolio : Portfolio , benchmark : Benchmark | str ,
         'end':np.concatenate([[model_dates[0]],period_ed]) ,
         'pf':0. , 'bm':0. , 'turn':0. , 'excess':0. ,
         'analytic':None , 'attribution':None}).set_index('model_date').sort_index()
+
+
+    if isinstance(benchmark , str): benchmark = Benchmark(benchmark)
 
     port_old = Port.none_port(model_dates[0])
     for date , ed in zip(model_dates , period_ed):

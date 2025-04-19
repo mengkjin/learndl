@@ -26,7 +26,7 @@ class PlotMultipleData:
     def __init__(self , data : pd.DataFrame , 
                  group_key : str | list[str],  max_num = 1 , **kwargs):
         self.data = data
-        self.group_key = group_key
+        self.group_key = [i for i in group_key if i in data.columns or i in data.index.names]
         self.fig_dict : dict[str , Figure] = {}
         self.max_num   = max_num
     
