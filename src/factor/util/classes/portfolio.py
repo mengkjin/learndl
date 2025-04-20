@@ -48,7 +48,7 @@ class Portfolio:
         return self.weight
         
     def append(self , port : Port , override = False , ignore_name = False):
-        assert ignore_name or port.name in ['none' , 'empty'] or self.name == port.name , (self.name , port.name)
+        assert ignore_name or port.name in ['none' , 'empty'] or str(self.name).lower() == str(port.name).lower() , (self.name , port.name)
         assert override or (port.date not in self.ports.keys()) , (port.name , port.date)
         if port.is_emtpy(): return
         self.ports[port.date] = port
