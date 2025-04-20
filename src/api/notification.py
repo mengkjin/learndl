@@ -29,7 +29,15 @@ def email_to_fanghan(test = False):
     
     attachments = f'gru_score_{datetime.now().strftime("%Y%m%d")}.csv'
     with TempFile(attachments) as temp_file:
-        df = PATH.pred_load('gru_day_V1' , use_date)
+        df1 = PATH.pred_load('gru_day_V1' , use_date)
+
+        from src.trading.util import Alpha
+        df2 = Alpha('use_daily' , [
+            'sellside@huatai.master_combined@master_combined' ,
+            'sellside@dongfang.scores_v0@avg' ,
+            'gru_day_V1'
+        ]).get(use_date).item().to_dataframe().rename(columns={'alpha' : 'use_daily'})
+        df = pd.merge(df1 , df2 , on='secid' , how='left')
         df.to_csv(temp_file)
         try:
             send_email(title , body , attachments , recipient , confirmation_message='Fanghan')
