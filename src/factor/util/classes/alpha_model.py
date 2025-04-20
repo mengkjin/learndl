@@ -100,12 +100,13 @@ class Amodel:
             return cls.from_dataframe(date , data , secid)
         
     @classmethod
-    def combine(cls , alphas : list['Amodel'] , weights : list[float] | np.ndarray = [] , name : str = 'combined_alpha'):
+    def combine(cls , alphas : list['Amodel'] , weights : list[float] | np.ndarray = [] , name : str = 'combined_alpha' , normalize = True):
         assert len(alphas) == len(weights) or len(weights) == 0 , f'alphas and weights must have the same length, but got {len(alphas)} and {len(weights)}'
         if len(weights) == 0:
             weights = np.ones(len(alphas)) / len(alphas)
         secid = np.unique(np.concatenate([alpha.secid for alpha in alphas]))
         alpha = np.sum(np.array([alpha.align(secid).alpha for alpha in alphas]) * np.array(weights)[:,None] , axis = 0) / np.sum(weights)
+        if normalize: alpha = zscore(alpha)
         return cls(alphas[0].date , alpha , secid , name)
 
 class AlphaModel(GeneralModel):

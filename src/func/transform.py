@@ -150,13 +150,13 @@ def patched_by_industry(y_: np.ndarray, ind_risk_: np.ndarray, method_: int=0):
     return y
 
 def trim(v , v1 , v2):
-    v = v + 0
+    v = v + 0.
     if v1 is not None: v[v < v1] = np.nan
     if v2 is not None: v[v > v2] = np.nan
     return v
 
 def winsor(v , v1 , v2):
-    v = v + 0
+    v = v + 0.
     if v1 is not None: v[v < v1] = v1
     if v2 is not None: v[v > v2] = v2
     return v
