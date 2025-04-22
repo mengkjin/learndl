@@ -5,7 +5,7 @@ from abc import ABC , abstractmethod
 from copy import deepcopy
 from typing import Any , Literal , Optional
 
-from src.basic.conf import EPS_WEIGHT
+from src.basic.conf import EPS_WEIGHT , ROUNDING_TURNOVER
 from src.data import DATAVENDOR
 
 __all__ = ['GeneralModel' , 'Port']
@@ -127,15 +127,23 @@ class Port:
         if rebalance: rslt.rebalance(*old_pos)
         return rslt
     
-    def fut_ret(self , new_date : Optional[int] = None) -> float:
+    def fut_ret(self , new_date : Optional[int] = None ,
+                price0 : Literal['close' , 'vwap' , 'open'] = 'close' ,
+                price1 : Literal['close' , 'vwap' , 'open'] = 'close') -> float:
         if not self: return 0.
         old_date = DATAVENDOR.td(self.date).td
         if new_date is None: new_date = DATAVENDOR.td(old_date , 1).td
-
-        q = DATAVENDOR.get_quote_ret(old_date , new_date)
+        
+        q = DATAVENDOR.get_quote_ret(old_date , new_date , price0 , price1)
         assert q is not None, f'Ret Quote (at {new_date}) is does not exists'
         port = self.port.merge(q , on = 'secid').fillna(0)
         return (port['weight'] * port['ret']).to_numpy().sum()
+    
+    def close2open(self , new_date : Optional[int] = None) -> float:
+        return self.fut_ret(new_date , price0 = 'close' , price1 = 'open')
+    
+    def close2vwap(self , new_date : Optional[int] = None) -> float:
+        return self.fut_ret(new_date , price0 = 'close' , price1 = 'vwap')
     
     def rebalance(self , long_position : float = 1., short_position : float = 0.):
         assert long_position >= 0 and short_position >= 0 , (long_position , short_position)
@@ -212,7 +220,8 @@ class Port:
     def turnover(self , another):
         if not self or self is another: return 0.
         assert isinstance(another , Port) , another
-        return (self - another).port['weight'].abs().sum()
+        turn = (self - another).port['weight'].abs().sum()
+        return np.round(turn , ROUNDING_TURNOVER)
     def exclude(self , secid : np.ndarray | Any | None = None , inplace = False):
         if secid is None: return self
         if not inplace:

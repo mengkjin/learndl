@@ -170,20 +170,22 @@ class DataVendor:
         d = date[0] if isinstance(date , np.ndarray) else date
         assert d > 0 , 'Attempt to get unaccessable date'
         if d not in self.day_quotes: 
-            df = PATH.db_load('trade_ts' , 'day' , date)[['secid','adjfactor','close','vwap']]
+            df = PATH.db_load('trade_ts' , 'day' , date)[['secid','adjfactor','close','vwap','open']]
             if df is not None: self.day_quotes[d] = df
         return self.day_quotes.get(d , None)
     
-    def get_quote_ret(self , date0 , date1):
+    def get_quote_ret(self , date0 , date1 , 
+                      price0 : Literal['close' , 'vwap' , 'open'] = 'close' ,
+                      price1 : Literal['close' , 'vwap' , 'open'] = 'close'):
         q0 = self.get_quote_df(date0)
         q1 = self.get_quote_df(date1)
         if q0 is None or q1 is None: return None
         q = q0.merge(q1 , on = 'secid')
         q['adjfactor_x'] = q['adjfactor_x'].fillna(1)
         q['adjfactor_y'] = q['adjfactor_y'].fillna(1)
-        q['ret'] = q['close_y'] * q['adjfactor_y'] / q['close_x'] / q['adjfactor_x'] - 1
-        q['ret_vwap'] = q['vwap_y'] * q['adjfactor_y'] / q['vwap_x'] / q['adjfactor_x'] - 1
-        q = q[['secid' , 'ret' , 'ret_vwap']].set_index('secid')
+        
+        q['ret'] = q[f'{price1}_y'] * q['adjfactor_y'] / q[f'{price0}_x'] / q['adjfactor_x'] - 1
+        q = q[['secid' , 'ret']].set_index('secid')
         return q
 
     def nday_fut_ret(self , secid : np.ndarray , date : np.ndarray , nday : int = 10 , lag : int = 2 , 

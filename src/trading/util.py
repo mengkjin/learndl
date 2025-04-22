@@ -10,7 +10,7 @@ from src.data import DATAVENDOR
 from src.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Port
 from src.factor.fmp import PortfolioBuilder
 from src.factor.analytic.fmp_top.api import Calc
-from src.factor.fmp.accountant import portfolio_account
+from src.factor.fmp.accountant import PortAccount
 
 TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
     Calc.Top_FrontFace , 
@@ -186,7 +186,8 @@ class TradingPort:
         return Portfolio.from_dataframe(pd.concat(dfs) , name = self.name)
     
     def portfolio_account(self , start : int = -1 , end : int = 99991231 ,
-                          analytic = False , attribution = False) -> pd.DataFrame:
+                          analytic = False , attribution = False , 
+                          trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale') -> pd.DataFrame:
         port = self.load_portfolios(start , end)
         benchmark = Benchmark(self.benchmark)
         default_index = {
@@ -194,8 +195,10 @@ class TradingPort:
             'benchmark'   : benchmark.name ,
             'strategy'    : f'top{self.top_num}' ,
         }
-        return portfolio_account(port , benchmark , start , end , 
-                                 analytic = analytic , attribution = attribution , index = default_index)
+        account = PortAccount.create(port , benchmark , start , end , 
+                                     analytic = analytic , attribution = attribution , index = default_index , 
+                                     trade_engine = trade_engine)
+        return account.account
 
     def analyze(self , start : int = -1 , end : int = 99991231 , verbosity = 1 , **kwargs):
         account = self.portfolio_account(start = start , end = end)

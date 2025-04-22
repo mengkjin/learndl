@@ -8,7 +8,7 @@ from typing import Any , Literal , Optional
 from src.basic import Timer
 from src.factor.util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult
 
-from .accountant import PortfolioAccountant , total_account
+from .accountant import PortfolioAccountant , PortAccount
 from .optimizer import PortfolioOptimizer
 from .generator import PortfolioGenerator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , 
@@ -220,7 +220,7 @@ class PortfolioBuilderGroup:
     
     def total_account(self):
         assert self.builders , 'No builders to account!'
-        df = total_account([builder.account for builder in self.builders])
+        df = PortAccount.total_account([builder.account for builder in self.builders])
         return df
     
     def print_in_optimization(self , where : Literal['start' , 'loop' , 'end']):
