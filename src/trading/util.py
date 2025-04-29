@@ -11,6 +11,7 @@ from src.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , A
 from src.factor.fmp import PortfolioBuilder
 from src.factor.analytic.fmp_top.api import Calc
 from src.factor.fmp.accountant import PortAccount
+from src.func import dfs_to_excel , figs_to_pdf
 
 TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
     Calc.Top_FrontFace , 
@@ -75,6 +76,9 @@ class TradingPort:
         
     def port_path(self , date : int) -> Path:
         return self.port_dir().joinpath(f'{self.name}.{date}.csv')
+    
+    def result_dir(self) -> Path:
+        return PATH.rslt_trade.joinpath(self.name)
     
     def existing_dates(self , min_date : int | None = None , max_date : int | None = None) -> np.ndarray:
         dates = PATH.dir_dates(self.port_dir())
@@ -200,12 +204,27 @@ class TradingPort:
                                      trade_engine = trade_engine)
         return account.account
 
-    def analyze(self , start : int = -1 , end : int = 99991231 , verbosity = 1 , **kwargs):
+    def analyze(self , start : int = -1 , end : int = 99991231 , verbosity = 1 , write_down = False , display = True , **kwargs):
+        if not write_down and not display:
+            print('write_down and display cannot be both False')
+            return self
+
         account = self.portfolio_account(start = start , end = end)
         candidates = {task.task_name():task for task in TASK_LIST}
         self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         for task in self.tasks.values():
             task.calc(account , verbosity = verbosity - 1) 
+            task.plot(show = False)  
+
+        if write_down:
+            rslts = {k:v.calc_rslt for k,v in self.tasks.items()}
+            figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
+            dfs_to_excel(rslts , self.result_dir().joinpath('data.xlsx') , print_prefix=f'Analytic Test of TradingPort {self.name} datas')
+            figs_to_pdf(figs   , self.result_dir().joinpath('plot.pdf')  , print_prefix=f'Analytic Test of TradingPort {self.name} plots')
+
+        if display:
+            figs_to_pdf(figs   , self.result_dir().joinpath('plot.pdf')  , print_prefix=f'Analytic Test of TradingPort {self.name} plots')
+            
         if verbosity > 0: print(f'{self.name} analyze Finished!')
         return self
 

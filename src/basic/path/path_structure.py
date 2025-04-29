@@ -44,6 +44,7 @@ result      = main.joinpath('results')
 rslt_factor = result.joinpath('test').joinpath('perf')
 rslt_optim  = result.joinpath('test').joinpath('optim')
 rslt_top    = result.joinpath('test').joinpath('top')
+rslt_trade  = result.joinpath('trade')
 
 monitor     = result.joinpath('monitor')
 
