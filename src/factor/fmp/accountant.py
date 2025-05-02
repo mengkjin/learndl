@@ -9,8 +9,8 @@ from src.basic.conf import ROUNDING_RETURN , TRADE_COST
 from src.data import DATAVENDOR
 from src.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 
-from .fmp_basic import parse_full_name
-    
+__all__ = ['PortfolioAccountant' , 'PortfolioAccountManager']
+
 class PortAccount:
     def __init__(self , 
                  portfolio : Portfolio , benchmark : Benchmark | Portfolio | str , 
@@ -22,7 +22,7 @@ class PortAccount:
 
         if trade_engine == 'default':
             self.price_type = 'close'
-            self.trade_cost = TRADE_COST
+            self.trade_cost = 0.00035
         elif trade_engine == 'harvest':
             self.price_type = 'vwap'
             self.trade_cost = TRADE_COST
@@ -33,7 +33,7 @@ class PortAccount:
     def __repr__(self):
         return f'{self.__class__.__name__}(portfolio={self.portfolio},benchmark={self.benchmark})'
     
-    def init_account(self , start : int = -1 , end : int = 99991231 , daily = False):
+    def setup(self , start : int = -1 , end : int = 99991231 , daily = False):
         port_min , port_max = self.port_dates.min() , self.port_dates.max()
         start = np.max([port_min , start])
         end   = np.min([DATAVENDOR.td(port_max,5).td , end , DATAVENDOR.td(DATAVENDOR.last_quote_dt,-1).td])
@@ -63,7 +63,7 @@ class PortAccount:
         
         return self
 
-    def accounting(self , analytic = True , attribution = True , index : dict = {}):
+    def make(self , analytic = True , attribution = True , index : dict = {}):
         if self.account.empty: return self
         port_old = Port.none_port(self.model_dates[0])
         for date , ed in zip(self.model_dates , self.period_ed):
@@ -108,29 +108,14 @@ class PortAccount:
     
     @classmethod
     def create(cls , portfolio : Portfolio , benchmark : Benchmark | Portfolio | str , 
-               start : int = -1 , end : int = 99991231 , daily = False , 
+               start : int = -1 , end : int = 99991231 , 
                analytic = True , attribution = True , index : dict = {} ,
-               trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default') -> 'PortAccount':
-        port_account = cls(portfolio , benchmark , trade_engine)
-        port_account.init_account(start , end , daily)
-        port_account.accounting(analytic , attribution , index)
-        return port_account
+               trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
+               daily = False):
+        acc = cls(portfolio , benchmark , trade_engine)
+        acc.setup(start , end , daily).make(analytic , attribution , index)
+        return acc
     
-    @staticmethod
-    def total_account(accounts : Sequence[pd.DataFrame] | dict[str,pd.DataFrame]) -> pd.DataFrame:
-        if not accounts: return pd.DataFrame()
-        
-        if isinstance(accounts , dict):
-            accounts = list(accounts.values())
-
-        df = pd.concat(accounts)
-        old_index = list(df.index.names)
-        df = df.reset_index().sort_values('model_date')
-        df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.CATEGORIES_BENCHMARKS , ordered=True) 
-
-        df = df.set_index(old_index).sort_index()
-        INSTANCE_RECORD.update_account(df)    
-        return df
 
 class PortfolioAccountant:
     '''
@@ -158,14 +143,32 @@ class PortfolioAccountant:
             benchmark = Benchmark(benchmark)
         return benchmark
 
-    def accounting(self , start : int = -1 , end : int = 99991231 , daily = False , 
-                   analytic = True , attribution = True , index : dict = {}):
+    def accounting(self , start : int = -1 , end : int = 99991231 , 
+                   analytic = True , attribution = True , index : dict = {} ,
+                   trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default', 
+                   daily = False):
         '''Accounting portfolio through date, if resume is True, will resume from last account date'''
         account = PortAccount.create(self.portfolio , self.benchmark , 
-                                     start , end , daily , analytic , attribution , index)
+                                     start , end , analytic , attribution , index , trade_engine , daily)
         if not account.account.empty:
             self.account = account.account
         return self
+    
+    @staticmethod
+    def total_account(accounts : Sequence[pd.DataFrame] | dict[str,pd.DataFrame]) -> pd.DataFrame:
+        if not accounts: return pd.DataFrame()
+        
+        if isinstance(accounts , dict):
+            accounts = list(accounts.values())
+
+        df = pd.concat(accounts)
+        old_index = list(df.index.names)
+        df = df.reset_index().sort_values('model_date')
+        df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.CATEGORIES_BENCHMARKS , ordered=True) 
+
+        df = df.set_index(old_index).sort_index()
+        INSTANCE_RECORD.update_account(df)    
+        return df
     
 class PortfolioAccountManager:   
     def __init__(self , account_dir : str | Path):
@@ -195,15 +198,6 @@ class PortfolioAccountManager:
     
     def account_last_end_dates(self):
         return {name:df['end'].max() for name,df in self.accounts.items() if not df.empty}
-
-    def filter_accounts(self , **kwargs):
-        dfs : dict[str,pd.DataFrame] = {}
-        for name , df in self.accounts.items():
-            elements = parse_full_name(name)
-            if any([elements[k] != v for k,v in kwargs.items() if k in elements]):
-                continue
-            dfs[name] = df
-        return dfs
 
     def load_single(self , path : str | Path , missing_ok = True , append = True):
         path = Path(path)
@@ -245,17 +239,16 @@ class PortfolioAccountManager:
         if not hasattr(self , 'analytic_tasks'): self.analytic_tasks : dict[str , BaseOptimCalc | BaseTopPortCalc] = {}
         if task_name not in self.analytic_tasks: self.analytic_tasks[task_name] = task(**kwargs)
         return self.analytic_tasks[task_name]
-
+    
     def analyze(self , category : Literal['optim' , 'top'] ,
                 task_name : Literal['FrontFace', 'Perf_Curve', 'Perf_Drawdown', 'Perf_Year', 'Perf_Month',
                                     'Perf_Excess','Perf_Lag','Exp_Style','Exp_Style','Exp_Indus',
                                     'Attrib_Source','Attrib_Style'] | str , 
                 plot = True , display = True , **kwargs):
-        
-        dfs = self.filter_accounts(category = category , **kwargs)
+        dfs = {name : df for name , df in self.accounts.items() if name.lower().startswith(category)}
         if not dfs: 
             print(f'No {category} accounts to account!')
-        account = PortAccount.total_account(dfs)
+        account = PortfolioAccountant.total_account(dfs)
         
         if account.empty: return self
         task = self.select_analytic(category , task_name , **kwargs)

@@ -58,6 +58,26 @@ def plot_optim_perf_drawdown(data : pd.DataFrame , show = False):
     group_plot = PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
+                            title = 'Optim FMP Drawdown') as (df , fig):
+            ax1 , ax2 = get_twin_axes(fig , 111)
+            
+            ax1.plot(df.index, df['drawdown'], 'g', label='Drawdown (left)')  
+            ax1.legend(loc='upper left')
+
+            ax2.plot(df.index, df['pf'], 'r-', label='pf')  
+            ax2.plot(df.index, df['stopped'], 'b', label='stopped')  
+            ax2.legend(loc='upper right')  
+
+            set_xaxis(ax1 , df.index , title = 'Trade Date')
+            set_yaxis(ax1 , format='pct' , digits=2 , title = 'Cummulative Drawdown' , title_color='b')
+            set_yaxis(ax2 , format='pct' , digits=2 , title = 'Cummulative Return' , title_color='b' , tick_pos=None)
+                
+    return group_plot.fig_dict
+
+def plot_optim_perf_excess_drawdown(data : pd.DataFrame , show = False):
+    group_plot = PlotMultipleData(data , group_key = MAJOR_KEYS)
+    for i , sub_data in enumerate(group_plot):     
+        with PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
                             title = 'Optim FMP Excess Drawdown') as (df , fig):
             ax1 , ax2 = get_twin_axes(fig , 111)
 

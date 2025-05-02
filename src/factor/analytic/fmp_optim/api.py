@@ -29,6 +29,7 @@ class FmpOptimManager(BaseTestManager):
         Calc.Optim_FrontFace , 
         Calc.Optim_Perf_Curve ,
         Calc.Optim_Perf_Drawdown , 
+        Calc.Optim_Perf_Excess_Drawdown , 
         Calc.Optim_Perf_Year ,
         Calc.Optim_Perf_Month ,
         Calc.Optim_Perf_Lag ,

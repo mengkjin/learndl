@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 
 from dataclasses import dataclass , field
+from IPython.display import display as disp
 from pathlib import Path
 from typing import Literal , Type , Any
 
@@ -10,7 +11,7 @@ from src.data import DATAVENDOR
 from src.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Port
 from src.factor.fmp import PortfolioBuilder
 from src.factor.analytic.fmp_top.api import Calc
-from src.factor.fmp.accountant import PortAccount
+from src.factor.fmp.accountant import PortfolioAccountant
 from src.func import dfs_to_excel , figs_to_pdf
 
 TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
@@ -199,32 +200,36 @@ class TradingPort:
             'benchmark'   : benchmark.name ,
             'strategy'    : f'top{self.top_num}' ,
         }
-        account = PortAccount.create(port , benchmark , start , end , 
-                                     analytic = analytic , attribution = attribution , index = default_index , 
-                                     trade_engine = trade_engine)
-        return account.account
+        accountant = PortfolioAccountant(port , benchmark)
+        accountant.accounting(start , end , analytic , attribution , default_index , trade_engine)
+        return accountant.account
 
-    def analyze(self , start : int = -1 , end : int = 99991231 , verbosity = 1 , write_down = False , display = True , **kwargs):
+    def analyze(self , start : int = -1 , end : int = 99991231 , 
+                verbosity = 1 , write_down = False , display = True , 
+                trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' , **kwargs):
         if not write_down and not display:
             print('write_down and display cannot be both False')
             return self
 
-        account = self.portfolio_account(start = start , end = end)
+        account = self.portfolio_account(start = start , end = end , trade_engine=trade_engine)
         candidates = {task.task_name():task for task in TASK_LIST}
         self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         for task in self.tasks.values():
             task.calc(account , verbosity = verbosity - 1) 
             task.plot(show = False)  
 
+        rslts = {k:v.calc_rslt for k,v in self.tasks.items()}
+        figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
+
         if write_down:
-            rslts = {k:v.calc_rslt for k,v in self.tasks.items()}
-            figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
             dfs_to_excel(rslts , self.result_dir().joinpath('data.xlsx') , print_prefix=f'Analytic Test of TradingPort {self.name} datas')
             figs_to_pdf(figs   , self.result_dir().joinpath('plot.pdf')  , print_prefix=f'Analytic Test of TradingPort {self.name} plots')
 
         if display:
-            figs_to_pdf(figs   , self.result_dir().joinpath('plot.pdf')  , print_prefix=f'Analytic Test of TradingPort {self.name} plots')
-            
+            [disp(fig) for fig in figs.values()]
+
+        self.analyze_results = rslts
+        self.analyze_figs = figs
         if verbosity > 0: print(f'{self.name} analyze Finished!')
         return self
 

@@ -31,6 +31,12 @@ class Optim_Perf_Drawdown(BaseOptimCalc):
     def calculator(self): return Stat.calc_optim_perf_drawdown
     def plotter(self): return Plot.plot_optim_perf_drawdown
 
+class Optim_Perf_Excess_Drawdown(BaseOptimCalc):
+    def __init__(self , **kwargs) -> None:
+        super().__init__()
+    def calculator(self): return Stat.calc_optim_perf_excess_drawdown
+    def plotter(self): return Plot.plot_optim_perf_excess_drawdown
+
 class Optim_Perf_Lag(BaseOptimCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__()

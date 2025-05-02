@@ -8,7 +8,7 @@ from typing import Any , Literal , Optional
 from src.basic import Timer
 from src.factor.util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult
 
-from .accountant import PortfolioAccountant , PortAccount
+from .accountant import PortfolioAccountant
 from .optimizer import PortfolioOptimizer
 from .generator import PortfolioGenerator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , 
@@ -105,11 +105,14 @@ class PortfolioBuilder:
         self.port = port_rslt.port
         return self
     
-    def accounting(self , start : int = -1 , end : int = 99991231 , daily = False , 
-                   analytic = True , attribution = True , account_path = None):
+    def accounting(self , start : int = -1 , end : int = 99991231 ,
+                   analytic = True , attribution = True , account_path = None ,
+                   trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
+                   daily = False):
         '''Accounting portfolio through date, require at least portfolio'''
         accountant = PortfolioAccountant(self.portfolio , self.benchmark , account_path)
-        accountant.accounting(start , end , daily , analytic and self.lag == 0 , attribution and self.lag == 0 , index = self.port_index)
+        accountant.accounting(start , end , analytic and self.lag == 0 , attribution and self.lag == 0 , 
+                              self.port_index , trade_engine , daily)
         self.account = accountant.account
         return self
 
@@ -165,7 +168,7 @@ class PortfolioBuilderGroup:
             self.param_groups = {key:(kwargs | kwg) for key,kwg in param_groups.items()}
         else:
             self.param_groups = {'default':kwargs}
-        self.acc_kwargs = {'daily' : daily , 'analytic' : analytic , 'attribution' : attribution}
+        self.acc_kwargs : dict[str,Any] = {'daily' : daily , 'analytic' : analytic , 'attribution' : attribution}
 
         self.verbosity = verbosity
 
@@ -220,7 +223,7 @@ class PortfolioBuilderGroup:
     
     def total_account(self):
         assert self.builders , 'No builders to account!'
-        df = PortAccount.total_account([builder.account for builder in self.builders])
+        df = PortfolioAccountant.total_account([builder.account for builder in self.builders])
         return df
     
     def print_in_optimization(self , where : Literal['start' , 'loop' , 'end']):

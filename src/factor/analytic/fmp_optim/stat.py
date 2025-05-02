@@ -83,6 +83,40 @@ def calc_optim_perf_curve(account : pd.DataFrame):
     return df
 
 def calc_optim_perf_drawdown(account : pd.DataFrame):
+    df = filter_account(account).loc[:,['end','pf']]
+    df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
+
+    index_names = df.index.names
+    dfs = []
+    for _ , subdf in df.groupby(index_names , observed=True):
+        pf = np.log(subdf['pf'] + 1)
+        subdf['pf'] = pf
+        subdf['pf'] = np.exp(subdf['pf'].cumsum()) - 1
+        subdf['peak']  = subdf['pf'].cummax()
+        subdf['drawdown'] = subdf['pf'] / subdf['peak'] - 1
+        subdf['current_max_drawdown'] = 0.
+
+        subdf = subdf.reset_index()
+        cmd = 0.
+        for i , (_ , row) in enumerate(subdf.iterrows()):
+            if int(i) > 0 and row['drawdown'] < 0:
+                cmd = min(cmd , row['drawdown'])
+                subdf.loc[i , 'current_max_drawdown'] = cmd
+            else:
+                cmd = 0.
+        
+        subdf['recover'] = 1 - (subdf['drawdown'] / subdf['current_max_drawdown'])
+        subdf['warning'] = (subdf['recover'] < 0.5) * (subdf['current_max_drawdown'] < -0.1)
+        subdf['stopped'] = (1 - subdf['warning'].shift(1).fillna(0)) * pf
+        subdf['stopped'] = np.exp(subdf['stopped'].cumsum()) - 1
+
+        dfs.append(subdf)
+
+    df = pd.concat(dfs).set_index(index_names)   
+    df = df.set_index('trade_date' , append=True).loc[:,['pf' , 'drawdown' , 'stopped']]
+    return df
+
+def calc_optim_perf_excess_drawdown(account : pd.DataFrame):
     df = filter_account(account).loc[:,['end','excess']]
     df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
     df['excess'] = df.groupby(df.index.names , observed=True)[['excess']].cumsum()

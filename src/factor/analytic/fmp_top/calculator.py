@@ -37,6 +37,12 @@ class Top_Perf_Drawdown(BaseTopPortCalc):
     def calculator(self): return Stat.calc_top_perf_drawdown
     def plotter(self): return Plot.plot_top_perf_drawdown
 
+class Top_Perf_Excess_Drawdown(BaseTopPortCalc):
+    def __init__(self , **kwargs) -> None:
+        super().__init__()
+    def calculator(self): return Stat.calc_top_perf_excess_drawdown
+    def plotter(self): return Plot.plot_top_perf_excess_drawdown
+
 class Top_Perf_Year(BaseTopPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__()

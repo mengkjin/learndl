@@ -4,8 +4,9 @@ import pandas as pd
 from plottable import ColumnDefinition
 from typing import Any , Optional
 
-from src.factor.util.plot import plot_table , set_xaxis , set_yaxis , PlotMultipleData , PlotFactorData , sns_lineplot , sns_barplot
-    
+from src.factor.util.plot import (plot_table , set_xaxis , set_yaxis , 
+                                  PlotMultipleData , PlotFactorData , sns_lineplot , sns_barplot ,
+                                  get_twin_axes)
 DROP_KEYS  = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 
@@ -39,6 +40,7 @@ def plot_top_perf_curve(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Accumulative Return') as (df , fig):
     
+            if 'topN' not in df.columns: df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
             ax = sns_lineplot(df , x='trade_date' , y='pf' , hue='topN')
@@ -53,6 +55,7 @@ def plot_top_perf_excess(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Accumulative Excess Return') as (df , fig):
     
+            if 'topN' not in df.columns: df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
             ax = sns_lineplot(df , x='trade_date' , y='excess' , hue='topN')
@@ -65,8 +68,38 @@ def plot_top_perf_excess(data : pd.DataFrame , show = False):
 def plot_top_perf_drawdown(data : pd.DataFrame , show = False):
     group_plot = PlotMultipleData(data , group_key = ['factor_name','benchmark'])
     for i , sub_data in enumerate(group_plot):     
+        with PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Drawdown') as (df , fig):
+
+            if 'topN' not in df.columns: df['topN'] = '~'
+            df = df.reset_index().sort_values(['topN' , 'trade_date'])
+            df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
+
+            if df['topN'].nunique() > 1:
+                ax1 = sns_lineplot(df , x='trade_date' , y='drawdown' , hue='topN')
+                set_yaxis(ax1 , format='pct' , digits=2 , title = 'Cummulative Drawdown' , title_color='b')
+                set_xaxis(ax1 , df['trade_date'].unique() , title = 'Trade Date')
+            else:
+                ax1 , ax2 = get_twin_axes(fig , 111)
+                
+                ax1.plot(df['trade_date'], df['drawdown'], 'g', label='Drawdown (left)')  
+                ax1.legend(loc='upper left')
+
+                ax2.plot(df['trade_date'], df['pf'], 'r-', label='pf')  
+                ax2.plot(df['trade_date'], df['stopped'], 'b', label='stopped')  
+                ax2.legend(loc='upper right')  
+
+                set_xaxis(ax1 , df['trade_date'] , title = 'Trade Date')
+                set_yaxis(ax1 , format='pct' , digits=2 , title = 'Cummulative Drawdown' , title_color='b')
+                set_yaxis(ax2 , format='pct' , digits=2 , title = 'Cummulative Return' , title_color='b' , tick_pos=None)
+                
+    return group_plot.fig_dict
+
+def plot_top_perf_excess_drawdown(data : pd.DataFrame , show = False):
+    group_plot = PlotMultipleData(data , group_key = ['factor_name','benchmark'])
+    for i , sub_data in enumerate(group_plot):     
         with PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Excess Drawdown') as (df , fig):
 
+            if 'topN' not in df.columns: df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
             ax = sns_lineplot(df , x='trade_date' , y='drawdown' , hue='topN')

@@ -29,6 +29,7 @@ class FmpTopManager(BaseTestManager):
         Calc.Top_Perf_Curve ,
         Calc.Top_Perf_Excess ,
         Calc.Top_Perf_Drawdown , 
+        Calc.Top_Perf_Excess_Drawdown ,
         Calc.Top_Perf_Year ,
         Calc.Top_Exp_Style ,
         Calc.Top_Exp_Indus ,
