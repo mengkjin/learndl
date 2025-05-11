@@ -7,13 +7,19 @@ from src.basic import path as PATH
 from .logger import DualPrinter
 from .email import Email
 
+PATH.log_record.joinpath('autorun').mkdir(parents = True , exist_ok = True)
+
 class AutoRunTask:
-    def __init__(self , task_name : str , email = True , email_if_attachment = True ,**kwargs):
+    def __init__(self , task_name : str , email = True , email_if_attachment = True , 
+                 source = 'not_specified' , **kwargs):
         self.task_name = task_name.replace(' ' , '_')
+        self.record_path = PATH.log_record.joinpath('autorun' , self.task_name)
         self.email = email
         self.email_if_attachment = email_if_attachment
+        self.source = source
 
     def __enter__(self):
+        self.already_done = self.record_path.exists()
         # change_power_mode('balanced')
         self.date_str = datetime.now().strftime('%Y%m%d')
         self.time_str = datetime.now().strftime('%H%M%S')
@@ -34,10 +40,12 @@ class AutoRunTask:
             self.status = ' '.join(['Successful' , *[s.capitalize() for s in self.task_name.split('_')]]) + '!'
         self.printer.__exit__(exc_type, exc_value, exc_traceback)
         if self.email or (self.email_if_attachment and Email.ATTACHMENTS): 
-            title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')] , 'at' , self.date_str])
+            title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')]])
             Email.attach(self.printer.filename)
             Email().send(title = title , body = self.status , confirmation_message='Autorun')
         # change_power_mode('power-saver')
+
+        self.record_path.touch()
 
 def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance'] , 
                       log_path : Path | None = PATH.logs.joinpath('suspend','power_check.log') ,

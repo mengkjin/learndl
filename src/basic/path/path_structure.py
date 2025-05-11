@@ -35,6 +35,7 @@ log_main    = logs.joinpath('main')
 log_optuna  = logs.joinpath('optuna')
 log_update  = logs.joinpath('update')
 log_tensor  = logs.joinpath('tensorboard')
+log_record  = logs.joinpath('record')
 
 # models folder and subfolders
 model       = main.joinpath('models')

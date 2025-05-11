@@ -3,7 +3,20 @@ import numpy as np
 
 from typing import Any , Literal
 
-from ..fmp_optim.stat import eval_pf_stats , filter_account
+from src.factor.util.stat import eval_pf_stats , eval_cum_ret , eval_drawdown
+from src.factor.util.agency import BaseConditioner
+
+def filter_account(account : pd.DataFrame , lag0 = True , pos_model_date = False):
+    '''drop lag if exists , and select lag0'''
+    if lag0:
+        if 'lag' in account.index.names: account = account.reset_index('lag',drop=False)
+        if 'lag' in account.columns: account = account[account['lag']==0].drop(columns=['lag'])
+    if pos_model_date:
+        if 'model_date' in account.columns:
+            account = account[account['model_date']>0]
+        elif 'model_date' in account.index.names:
+            account = account[account.index.get_level_values('model_date')>0]
+    return account
 
 def calc_top_frontface(account : pd.DataFrame):
     df = filter_account(account)
@@ -16,9 +29,8 @@ def calc_top_frontface(account : pd.DataFrame):
 def calc_top_perf_curve(account : pd.DataFrame):
     df = filter_account(account).loc[:,['end','pf','bm','excess']]
     df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
-    df[['bm','pf']] = np.log(df[['bm','pf']] + 1)
-    df[['bm','pf','excess']] = df.groupby(df.index.names , observed=True)[['bm','pf','excess']].cumsum()
-    df[['bm','pf']] = np.exp(df[['bm','pf']]) - 1
+    df[['bm','pf']] = eval_cum_ret(df[['bm','pf']] , 'exp' , groupby=df.index.names)
+    df['excess'] = eval_cum_ret(df['excess'] , 'lin' , groupby=df.index.names)
     df = df.set_index('trade_date' , append=True)
     return df
 
@@ -28,44 +40,33 @@ def calc_top_perf_excess(account : pd.DataFrame):
 def calc_top_perf_drawdown(account : pd.DataFrame):
     df = filter_account(account).loc[:,['end','pf']]
     df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
+    df['drawdown'] = eval_drawdown(df['pf'] , 'exp' , groupby = df.index.names)
+    conditioners = [BaseConditioner.select_conditioner(name)() 
+                    for name in ['balance' , 'conservative' , 'radical']]  
+    dfs = [] 
+    for grp , sub in df.groupby(df.index.names , observed=True):
+        sub['raw'] = eval_cum_ret(sub['pf'] , 'exp' , groupby = sub.index.names)
+        for conditioner in conditioners:
+            sub[conditioner.conditioner_name()] = conditioner.conditioned_pf_ret(sub['pf'] , plot = False)
+        sub = sub.set_index('trade_date' , append=True).drop(columns=['pf'])
+        dfs.append(sub)
+    df = pd.concat(dfs)
 
-    index_names = df.index.names
-    dfs = []
-    for _ , subdf in df.groupby(index_names , observed=True):
-        subdf = subdf.reset_index()
+    '''
+    df = eval_detailed_drawdown(df['pf'] , groupby = index_names)
 
-        pf = np.log(subdf['pf'] + 1)
-        subdf['pf'] = pf
-        subdf['pf'] = np.exp(subdf['pf'].cumsum()) - 1
-        subdf['peak']  = subdf['pf'].cummax()
-        subdf['drawdown'] = (subdf['pf'] + 1) / (subdf['peak'] + 1) - 1
-        subdf['current_max_drawdown'] = 0.
-
-        cmd = 0.
-        for i , (_ , row) in enumerate(subdf.iterrows()):
-            if int(i) > 0 and row['drawdown'] < 0:
-                cmd = min(cmd , row['drawdown'])
-                subdf.loc[i , 'current_max_drawdown'] = cmd
-            else:
-                cmd = 0.
-        
-        subdf['recover'] = 1 - (subdf['drawdown'] / subdf['current_max_drawdown'])
-        subdf['warning'] = (subdf['recover'].fillna(0) < 0.25) * (subdf['current_max_drawdown'] < -0.1) * 1.0
-
-        subdf['stopped'] = pf
-        subdf['stopped'] = subdf['stopped'] * (1- subdf['warning'].shift(1).fillna(0.))
-        subdf['stopped'] = np.exp(subdf['stopped'].cumsum()) - 1
-
-        dfs.append(subdf)
-
-    df = pd.concat(dfs).set_index(index_names)   
-    df = df.set_index('trade_date' , append=True)
+    df['warning'] = (df['recover_ratio'].fillna(0) < 0.25) * (df['uncovered_max_drawdown'] < -0.1) * 1.0
+    df['stopped'] = df['pf'] * (1 - df.groupby(index_names , observed=True , group_keys = False)['warning'].shift(1).fillna(0.))
+    df['stopped'] = eval_cum_ret(df['stopped'] , 'exp' , groupby = index_names)
+    df['trade_date'] = trade_date
+    df = df.set_index('trade_date' , append=True).drop(columns=['pf']).rename(columns={'cum_ret':'pf'})
+    '''
     return df
 
 def calc_top_perf_excess_drawdown(account : pd.DataFrame):
     df = filter_account(account).loc[:,['end','excess']]
     df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
-    df['excess'] = df.groupby(df.index.names , observed=True)[['excess']].cumsum()
+    df['excess'] = eval_cum_ret(df['excess'] , 'lin' , groupby=df.index.names)
     df['peak']   = df.groupby(df.index.names , observed=True)[['excess']].cummax()
     df['drawdown'] = df['excess'] - df['peak']
     df = df.set_index('trade_date' , append=True).loc[:,['excess' , 'drawdown']]

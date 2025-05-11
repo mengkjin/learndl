@@ -1,5 +1,5 @@
 from . import (
-    basic , classproperty , display , linalg , primas , time , export , transform , singleton
+    basic , classproperty , display , linalg , plot , primas , time , export , transform , singleton
 )
 from .basic import *
 from .time import *

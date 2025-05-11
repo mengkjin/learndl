@@ -7,8 +7,8 @@ from contextlib import nullcontext
 from typing import Any , Literal
 
 from src.basic import CALENDAR , RegisteredModel , SILENT
-from src.factor.util import StockFactor , Benchmark , Portfolio 
-from src.factor.fmp import PortfolioBuilder , PortfolioAccountManager
+from src.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
+from src.factor.fmp import PortfolioBuilder 
 
 class ModelPortfolioBuilder:
     FMP_TYPES  = ['top' , 'optim']

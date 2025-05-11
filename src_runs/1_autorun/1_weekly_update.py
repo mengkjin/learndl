@@ -14,12 +14,13 @@ path = __file__.removesuffix(__file__.split('learndl')[-1])
 sys.path.append(path)
 
 from src.api import ModelAPI
-from src.basic import AutoRunTask
+from src.basic import AutoRunTask , CALENDAR
 from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict(email = 1)
-    with AutoRunTask('weekly update' , **params) as runner:
+    with AutoRunTask(f'weekly update {CALENDAR.update_to()}' , **params) as runner:
+        if runner.already_done and runner.source == 'bash': return
         ModelAPI.update_models()
 
 if __name__ == '__main__':

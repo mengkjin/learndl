@@ -6,9 +6,7 @@ from contextlib import nullcontext
 from typing import Any , Literal , Optional
 
 from src.basic import Timer
-from src.factor.util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult
-
-from .accountant import PortfolioAccountant
+from src.factor.util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccountant
 from .optimizer import PortfolioOptimizer
 from .generator import PortfolioGenerator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , 
@@ -106,14 +104,14 @@ class PortfolioBuilder:
         return self
     
     def accounting(self , start : int = -1 , end : int = 99991231 ,
-                   analytic = True , attribution = True , account_path = None ,
+                   analytic = True , attribution = True ,
                    trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
                    daily = False):
         '''Accounting portfolio through date, require at least portfolio'''
-        accountant = PortfolioAccountant(self.portfolio , self.benchmark , account_path)
-        accountant.accounting(start , end , analytic and self.lag == 0 , attribution and self.lag == 0 , 
-                              self.port_index , trade_engine , daily)
-        self.account = accountant.account
+        self.portfolio.accounting(self.benchmark , start , end , 
+                                  analytic and self.lag == 0 , attribution and self.lag == 0 ,
+                                  trade_engine , daily)
+        self.account = self.portfolio.account_with_index(self.port_index)
         return self
 
 class PortfolioBuilderGroup:

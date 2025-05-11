@@ -8,7 +8,8 @@ from typing import Any , Literal , Optional
 
 from src.data import DATAVENDOR
 from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
-from .general import GeneralModel
+
+from .general_model import GeneralModel
 from .risk_model import RISK_MODEL
 
 __all__ = ['AlphaModel' , 'Amodel']

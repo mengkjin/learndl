@@ -3,6 +3,9 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# Mac
+.DS_Store
+
 # folder structure
 __old_version__/
 /data

@@ -1,10 +1,10 @@
 import numpy as np
 
+import src.factor.util.agency as AGENCY
+
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any , Optional
-
-from src.factor.util import Accuracy , Utility
 
 from .constr import LinearConstraint , BoundConstraint , TurnConstraint , CovConstraint , ShortConstraint
 
@@ -65,7 +65,7 @@ class SolverInput:
         return self
     
     def utility(self , w : Optional[np.ndarray] = None , prob_type = 'linprog' , turn = True ,  qobj = True , qcon = True , short = True):
-        utility = Utility()
+        utility = AGENCY.PortCreateUtility()
         if w is not None:
             utility(alpha = w.dot(self.alpha))
             if (qobj and prob_type != 'linprog' and self.cov_con is not None and
@@ -79,7 +79,7 @@ class SolverInput:
         return utility
     
     def accuracy(self , w : Optional[np.ndarray] = None):
-        accuracy = Accuracy()
+        accuracy = AGENCY.PortCreateAccuracy()
         if w is not None:
             accuracy(lin_ub_bias = np.min(self.lin_con.ub - self.lin_con.A.dot(w)))
             accuracy(lin_lb_bias = np.min(self.lin_con.A.dot(w) - self.lin_con.lb))

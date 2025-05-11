@@ -7,9 +7,8 @@ from src.basic import PATH
 from src.basic.conf import AVAIL_BENCHMARKS , DEFAULT_BENCHMARKS , CATEGORIES_BENCHMARKS
 from src.data import DataBlock , DATAVENDOR
 
-from .general import Port
-from .portfolio import Portfolio
-    
+from .portfolio import Port , Portfolio
+
 __all__ = ['Benchmark']
 
 class Benchmark(Portfolio):
@@ -165,3 +164,7 @@ class Benchmark(Portfolio):
     @staticmethod
     def as_category(bm : Any):
         return pd.Categorical(bm , categories = CATEGORIES_BENCHMARKS , ordered=True) 
+    
+    def accounting(self , **kwargs):
+        '''Benchmark cannot be accounted'''
+        raise NotImplementedError('Benchmark cannot be accounted')

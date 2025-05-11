@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
 from src.basic import CONF
-from src.factor.util import Port , PortCreateResult , PortCreator
+from src.factor.util import PortCreator , PortCreateResult , Port
 
 from .interpreter import PortfolioOptimizerInput
 from .solver import MosekSolver , CvxpySolver

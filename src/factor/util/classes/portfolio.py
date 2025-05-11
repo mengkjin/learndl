@@ -2,24 +2,23 @@ import numpy as np
 import pandas as pd
 
 from copy import deepcopy
-from typing import Any
+from typing import Any , Literal , Optional , Union
 
 from src.data import DataBlock
-from .general import Port
-
-__all__ = ['Portfolio']
+from .port import Port
 
 class Portfolio:
     '''
     portfolio realization for multiple days
     '''
+
     def __init__(self , name : str | Any = None) -> None:
         self.name = self.get_object_name(name)
         self.ports : dict[int,Port] = {}
         self.is_default = name is None
         self.weight_block_completed = False
         self._last_port : Port | None = None
-
+        
     def __len__(self): return len(self.available_dates())
     def __bool__(self): return len(self) > 0
     def __repr__(self): return f'<{self.name}> : {len(self.ports)} ports'
@@ -112,6 +111,15 @@ class Portfolio:
         for port in self.ports.values():
             port.exclude(secid , True)
         return self
+    
+    def replace(self , port : Union[Port, 'Portfolio'] , inplace = False):
+        if not inplace:
+            self = self.copy()
+        if isinstance(port , Portfolio):
+            self.ports = self.ports | port.ports
+        else:
+            self.ports[port.date] = port
+        return self
 
     @classmethod
     def from_ports(cls , *ports : Port , name : str | None = None):
@@ -120,3 +128,47 @@ class Portfolio:
         for port in ports:
             portfolio.append(port , override = True , ignore_name = bool(name))
         return portfolio
+    
+    def activate_accountant(self):
+        from src.factor.util.agency.portfolio_accountant import PortfolioAccountant
+        self.accountant = PortfolioAccountant(self)
+        return self
+    
+    def accounting(self , 
+                   benchmark : 'Portfolio | str | Any' = None ,
+                   start : int = -1 , end : int = 99991231 , 
+                   analytic = True , attribution = True , 
+                   trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
+                   daily = False , store = False):
+        if not hasattr(self , 'accountant'): self.activate_accountant()
+        self.accountant.accounting(benchmark , start , end , analytic , attribution , trade_engine , daily , store)
+        return self
+    
+    def account_with_index(self , add_index : dict[str,Any] = {}):
+        return self.accountant.account_with_index(add_index)
+    
+    @property
+    def account(self):
+        return self.accountant.account
+    
+    @property
+    def stored_accounts(self):
+        return self.accountant.stored_accounts
+    
+    def activate_conditioner(self , name : str):
+        from src.factor.util.agency.portfolio_conditioner import BaseConditioner
+        if not hasattr(self , 'conditioners'):
+            self.conditioners : dict[str , BaseConditioner] = {}
+        if name not in self.conditioners.keys():
+            conditioner = BaseConditioner.select_conditioner(name)(self)
+            self.conditioners[name] = conditioner
+        return self
+    
+    def conditioned_portfolio(self , name : str):
+        assert hasattr(self , 'conditioners') and name in self.conditioners.keys() , (name , self.conditioners.keys())
+        return self.conditioners[name].conditioned_portfolio()
+    
+    def conditioned_pf_ret(self , name : str , plot = False):
+        assert hasattr(self , 'conditioners') and name in self.conditioners.keys() , (name , self.conditioners.keys())
+        return self.conditioners[name].conditioned_pf_ret(plot = plot)
+

@@ -7,11 +7,7 @@ from typing import Any , Literal , Optional
 
 from src.basic import CONF
 
-from .general import Port
-from .risk_model import RiskAnalytic , RISK_MODEL
-from .alpha_model import AlphaModel , Amodel
-from .benchmark import Benchmark
-from .portfolio import Portfolio
+from ..classes import Port , Benchmark , Portfolio , AlphaModel , Amodel , RiskAnalytic , RISK_MODEL
 
 class PortCreator(ABC):
     def __init__(self , name : str):
@@ -61,7 +57,7 @@ class PortCreator(ABC):
         if self.detail_infos: ...
         return self
 
-class Utility:
+class PortCreateUtility:
     '''compute final utility of a portfolio'''
     def __init__(self , **kwargs) -> None:
         '''input any numerical component of utility function'''
@@ -83,7 +79,7 @@ class Utility:
         l = [v for v in self.component.values()]
         return sum(l) if l else 0
     
-class Accuracy:
+class PortCreateAccuracy:
     '''record custom optimization accuracy'''
     EPS = 1e-5
     EPS_DICT = {'excess_turn' : 1e-4}
@@ -119,14 +115,14 @@ class PortCreateResult:
     port        : Port
     is_success  : bool = False
     status      : Literal['optimal', 'max_iteration', 'stall'] | Any = ''
-    utility     : Utility | Any = None
-    accuracy    : Accuracy | Any = None
+    utility     : PortCreateUtility | Any = None
+    accuracy    : PortCreateAccuracy | Any = None
     analytic    : RiskAnalytic | Any = None
     time        : dict[str,float] = field(default_factory=dict)
 
     def __post_init__(self):
-        if self.utility is None: self.utility = Utility()
-        if self.accuracy is None: self.accuracy = Accuracy()
+        if self.utility is None: self.utility = PortCreateUtility()
+        if self.accuracy is None: self.accuracy = PortCreateAccuracy()
 
     @property
     def name(self): return self.port.name

@@ -8,7 +8,9 @@ from typing import Any , ClassVar , Literal , Optional
 from src.basic import SILENT , PATH
 from src.basic.conf import RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
-from .general import GeneralModel , Port
+
+from .general_model import GeneralModel
+from .port import Port
 
 __all__ = ['RiskModel' , 'RiskProfile' , 'RiskAnalytic' , 'Attribution' , 'RISK_MODEL']
 

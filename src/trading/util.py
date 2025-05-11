@@ -8,10 +8,9 @@ from typing import Literal , Type , Any
 
 from src.basic import CALENDAR , RegisteredModel , PATH , CONF
 from src.data import DATAVENDOR
-from src.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Port
+from src.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Port , PortfolioAccountant
 from src.factor.fmp import PortfolioBuilder
 from src.factor.analytic.fmp_top.api import Calc
-from src.factor.fmp.accountant import PortfolioAccountant
 from src.func import dfs_to_excel , figs_to_pdf
 
 TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
@@ -185,7 +184,7 @@ class TradingPort:
 
         return pd.DataFrame()
     
-    def load_portfolios(self , start : int | None = None , end : int | None = None) -> Portfolio:
+    def load_portfolio(self , start : int | None = None , end : int | None = None) -> Portfolio:
         dates = self.existing_dates(start , end)
         dfs = [self.load_port(date) for date in dates]
         return Portfolio.from_dataframe(pd.concat(dfs) , name = self.name)
@@ -193,16 +192,19 @@ class TradingPort:
     def portfolio_account(self , start : int = -1 , end : int = 99991231 ,
                           analytic = False , attribution = False , 
                           trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale') -> pd.DataFrame:
-        port = self.load_portfolios(start , end)
+        portfolio = self.load_portfolio(start , end)
         benchmark = Benchmark(self.benchmark)
         default_index = {
-            'factor_name' : port.name ,
+            'factor_name' : portfolio.name ,
             'benchmark'   : benchmark.name ,
             'strategy'    : f'top{self.top_num}' ,
         }
-        accountant = PortfolioAccountant(port , benchmark)
-        accountant.accounting(start , end , analytic , attribution , default_index , trade_engine)
-        return accountant.account
+        #acc = PortfolioAccountant(port)
+        #acc.accounting(benchmark , start , end , analytic , attribution , trade_engine)
+        #return acc.add_index(**default_index)
+        portfolio.accounting(benchmark , start , end , analytic , attribution , trade_engine)
+        self.portfolio = portfolio
+        return portfolio.account_with_index(default_index)
 
     def analyze(self , start : int = -1 , end : int = 99991231 , 
                 verbosity = 1 , write_down = False , display = True , 

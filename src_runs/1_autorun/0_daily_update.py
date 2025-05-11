@@ -14,12 +14,13 @@ path = __file__.removesuffix(__file__.split('learndl')[-1])
 sys.path.append(path)
 
 from src.api import DataAPI , ModelAPI , TradingAPI , NotificationAPI
-from src.basic import AutoRunTask
+from src.basic import AutoRunTask , CALENDAR
 from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict(email = 1)
-    with AutoRunTask('daily update' , **params) as runner:
+    with AutoRunTask(f'daily update {CALENDAR.update_to()}' , **params) as runner:
+        if runner.already_done and runner.source == 'bash': return
         DataAPI.update()
         ModelAPI.update()
         TradingAPI.update()

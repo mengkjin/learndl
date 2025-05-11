@@ -4,55 +4,8 @@ import numpy as np
 from typing import Any , Literal
 
 from src.data import DATAVENDOR
-
-def eval_drawdown(v : pd.Series | np.ndarray | Any , how : Literal['exp' , 'lin'] = 'lin'):
-    if isinstance(v , np.ndarray): v = pd.Series(v)
-    if how == 'lin':
-        cum = v.cumsum() + 1.
-        cummax = cum.cummax()
-        cummdd = cummax - cum
-    else:
-        cum = (v + 1.).cumprod()
-        cummax = cum.cummax()
-        cummdd = 1 - cum / cummax
-    return cummdd
-
-def eval_drawdown_st(v : pd.Series | np.ndarray | Any , how : Literal['exp' , 'lin'] = 'lin'):
-    if isinstance(v , np.ndarray): v = pd.Series(v)
-    if how == 'lin':
-        cum = v.cumsum() + 1.
-    else:
-        cum = (v + 1.).cumprod()
-    return cum.expanding().apply(lambda x: x.argmax(), raw=True).astype(int)
-
-def eval_max_drawdown(v : pd.Series | np.ndarray | Any , how : Literal['exp' , 'lin'] = 'lin'):
-    dd , st = eval_drawdown(v , how) , eval_drawdown_st(v , how)
-    mdd = dd.max()
-    idx_ed = int(dd.argmax())
-    idx_st = int(st.iloc[idx_ed])
-
-    return mdd , idx_st , idx_ed
-
-def eval_pf_stats(grp : pd.DataFrame , mdd_period = True , **kwargs):
-    period_len = abs(DATAVENDOR.CALENDAR.cd_diff(grp['start'].min() , grp['end'].max())) + 1
-    period_n   = len(grp)
-
-    with np.errstate(divide = 'ignore' , invalid = 'ignore'):
-        pf_ret = np.prod(grp['pf'] + 1) - 1.
-        bm_ret = np.prod(grp['bm'] + 1) - 1.
-        excess = (pf_ret - bm_ret)
-        ex_ann = np.power(np.prod(1 + grp['excess']) , 365 / period_len) - 1
-        # pf_mdd = eval_max_drawdown(grp['pf'] , 'exp')
-        ex_mdd , ex_mdd_st , ex_mdd_ed = eval_max_drawdown(grp['excess'] , 'lin')
-        te     = np.std(grp['excess']) * np.sqrt(365 * period_n / period_len)
-        ex_ir  = ex_ann / te
-        ex_calmar = ex_ann / ex_mdd
-        turn   = np.sum(grp['turn'])
-        rslt = pd.DataFrame({'pf':pf_ret , 'bm':bm_ret , 'excess' : excess , 'annualized' : ex_ann , 'mdd' : ex_mdd , 
-                             'te' : te , 'ir' : ex_ir , 'calmar' : ex_calmar , 'turnover' : turn} , index = [0])
-    if mdd_period:
-        rslt['mdd_period'] = ['{}-{}'.format(grp['end'].iloc[ex_mdd_st] , grp['end'].iloc[ex_mdd_ed])]
-    return rslt.assign(**kwargs)
+from src.factor.util.stat import eval_pf_stats , eval_cum_ret , eval_drawdown
+from src.factor.util.agency import BaseConditioner
 
 def filter_account(account : pd.DataFrame , lag0 = True , pos_model_date = False):
     '''drop lag if exists , and select lag0'''
@@ -76,50 +29,42 @@ def calc_optim_frontface(account : pd.DataFrame):
 def calc_optim_perf_curve(account : pd.DataFrame):
     df = filter_account(account).loc[:,['end','pf','bm','excess']]
     df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
-    df[['bm','pf']] = np.log(df[['bm','pf']] + 1)
-    df[['bm','pf','excess']] = df.groupby(df.index.names , observed=True)[['bm','pf','excess']].cumsum()
-    df[['bm','pf']] = np.exp(df[['bm','pf']]) - 1
+
+    df[['bm','pf']] = eval_cum_ret(df[['bm','pf']] , 'exp' , groupby=df.index.names)
+    df['excess'] = eval_cum_ret(df['excess'] , 'lin' , groupby=df.index.names)
     df = df.set_index('trade_date' , append=True)
     return df
 
 def calc_optim_perf_drawdown(account : pd.DataFrame):
     df = filter_account(account).loc[:,['end','pf']]
     df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
+    df['drawdown'] = eval_drawdown(df['pf'] , 'exp' , groupby = df.index.names)
+    conditioners = [BaseConditioner.select_conditioner(name)() 
+                    for name in ['balance' , 'conservative' , 'radical']]  
+    dfs = [] 
+    for grp , sub in df.groupby(df.index.names , observed=True):
+        sub['raw'] = eval_cum_ret(sub['pf'] , 'exp' , groupby = sub.index.names)
+        for conditioner in conditioners:
+            sub[conditioner.conditioner_name()] = conditioner.conditioned_pf_ret(sub['pf'] , plot = False)
+        sub = sub.set_index('trade_date' , append=True).drop(columns=['pf'])
+        dfs.append(sub)
+    df = pd.concat(dfs)
 
-    index_names = df.index.names
-    dfs = []
-    for _ , subdf in df.groupby(index_names , observed=True):
-        pf = np.log(subdf['pf'] + 1)
-        subdf['pf'] = pf
-        subdf['pf'] = np.exp(subdf['pf'].cumsum()) - 1
-        subdf['peak']  = subdf['pf'].cummax()
-        subdf['drawdown'] = subdf['pf'] / subdf['peak'] - 1
-        subdf['current_max_drawdown'] = 0.
+    '''
+    df = eval_detailed_drawdown(df['pf'] , groupby = index_names)
 
-        subdf = subdf.reset_index()
-        cmd = 0.
-        for i , (_ , row) in enumerate(subdf.iterrows()):
-            if int(i) > 0 and row['drawdown'] < 0:
-                cmd = min(cmd , row['drawdown'])
-                subdf.loc[i , 'current_max_drawdown'] = cmd
-            else:
-                cmd = 0.
-        
-        subdf['recover'] = 1 - (subdf['drawdown'] / subdf['current_max_drawdown'])
-        subdf['warning'] = (subdf['recover'] < 0.5) * (subdf['current_max_drawdown'] < -0.1)
-        subdf['stopped'] = (1 - subdf['warning'].shift(1).fillna(0)) * pf
-        subdf['stopped'] = np.exp(subdf['stopped'].cumsum()) - 1
-
-        dfs.append(subdf)
-
-    df = pd.concat(dfs).set_index(index_names)   
-    df = df.set_index('trade_date' , append=True).loc[:,['pf' , 'drawdown' , 'stopped']]
+    df['warning'] = (df['recover_ratio'].fillna(0) < 0.25) * (df['uncovered_max_drawdown'] < -0.1) * 1.0
+    df['stopped'] = df['pf'] * (1 - df.groupby(index_names , observed=True , group_keys = False)['warning'].shift(1).fillna(0.))
+    df['stopped'] = eval_cum_ret(df['stopped'] , 'exp' , groupby = index_names)
+    df['trade_date'] = trade_date
+    df = df.set_index('trade_date' , append=True).drop(columns=['pf']).rename(columns={'cum_ret':'pf'})
+    '''
     return df
 
 def calc_optim_perf_excess_drawdown(account : pd.DataFrame):
     df = filter_account(account).loc[:,['end','excess']]
     df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
-    df['excess'] = df.groupby(df.index.names , observed=True)[['excess']].cumsum()
+    df['excess'] = eval_cum_ret(df['excess'] , 'lin' , groupby=df.index.names)
     df['peak']   = df.groupby(df.index.names , observed=True)[['excess']].cummax()
     df['drawdown'] = df['excess'] - df['peak']
     df = df.set_index('trade_date' , append=True).loc[:,['excess' , 'drawdown']]
