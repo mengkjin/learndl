@@ -61,7 +61,7 @@ def plot_optim_perf_drawdown(data : pd.DataFrame , show = False):
                             title = 'Optim FMP Drawdown') as (df , fig):
             ax1 , ax2 = plot.get_twin_axes(fig , 111)
             
-            ax1.plot(df.index, df['drawdown'], 'g', label='Drawdown (left)')  
+            ax1.plot(df.index, df['drawdown'], 'grey', label='Drawdown (left)')  
             ax1.legend(loc='upper left')
 
             for col in df.columns:

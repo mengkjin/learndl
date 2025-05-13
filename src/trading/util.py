@@ -21,6 +21,16 @@ TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
     Calc.Top_Perf_Year ,
 ]
 
+def all_path_convert():
+    print(f'Converting {len(list(PATH.trade_port.glob("**/*.csv")))} files')
+    for path in PATH.trade_port.glob('**/*.csv'):
+        new_path = path.with_suffix('.feather')
+        df = pd.read_csv(path)
+        df.to_feather(new_path)
+        path.unlink()
+
+all_path_convert()
+
 @dataclass
 class TradingPort:
     name        : str 
@@ -57,10 +67,11 @@ class TradingPort:
 
         assert not self.backtest or self.test_start > 0 , f'test_start must be positive when backtest is True: {self.test_start}'
         self.test_start = max(self.test_start , 20170101) if self.test_start > 0 else -1
+        self.test_end = 20991231 if self.test_end < 0 else self.test_end
 
         self.Alpha = Alpha(self.alpha , self.components , self.weights)
         self.Universe = Universe(self.universe)
-    
+
     @classmethod
     def portfolio_dict(cls) -> dict[str , dict]:
         return CONF.trade('portfolio_dict')
@@ -75,7 +86,7 @@ class TradingPort:
         return PATH.trade_port.joinpath(self.name)
         
     def port_path(self , date : int) -> Path:
-        return self.port_dir().joinpath(f'{self.name}.{date}.csv')
+        return self.port_dir().joinpath(f'{self.name}.{date}.feather')
     
     def result_dir(self) -> Path:
         return PATH.rslt_trade.joinpath(self.name)
@@ -117,7 +128,7 @@ class TradingPort:
     def load_port(self , date : int) -> pd.DataFrame:
         path = self.port_path(date)
         if path.exists():
-            return pd.read_csv(path).assign(date = date , name = self.name)
+            return pd.read_feather(path).assign(date = date , name = self.name)
         else:
             return pd.DataFrame()
 
@@ -159,7 +170,7 @@ class TradingPort:
         if export:
             path = self.port_path(date)
             path.parent.mkdir(parents=True, exist_ok=True)
-            pf.loc[:,['secid' , 'weight' , 'value']].to_csv(path)
+            pf.loc[:,['secid' , 'weight' , 'value']].to_feather(path)
 
         return pf
     
@@ -186,8 +197,10 @@ class TradingPort:
     
     def load_portfolio(self , start : int | None = None , end : int | None = None) -> Portfolio:
         dates = self.existing_dates(start , end)
-        dfs = [self.load_port(date) for date in dates]
-        return Portfolio.from_dataframe(pd.concat(dfs) , name = self.name)
+        paths = [self.port_path(date) for date in dates]
+        dfs = [pd.read_feather(path).assign(date = date) for date , path in zip(dates , paths)]
+        df = pd.concat(dfs).assign(name = self.name)
+        return Portfolio.from_dataframe(df , name = self.name)
     
     def portfolio_account(self , start : int = -1 , end : int = 99991231 ,
                           analytic = False , attribution = False , 

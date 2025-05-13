@@ -36,7 +36,7 @@ def calc_optim_perf_curve(account : pd.DataFrame):
     return df
 
 def calc_optim_perf_drawdown(account : pd.DataFrame):
-    df = filter_account(account).loc[:,['end','pf']]
+    df = filter_account(account).loc[:,['end','pf','overnight']]
     df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
     df['drawdown'] = eval_drawdown(df['pf'] , 'exp' , groupby = df.index.names)
     conditioners = [BaseConditioner.select_conditioner(name)() 
@@ -45,20 +45,11 @@ def calc_optim_perf_drawdown(account : pd.DataFrame):
     for grp , sub in df.groupby(df.index.names , observed=True):
         sub['raw'] = eval_cum_ret(sub['pf'] , 'exp' , groupby = sub.index.names)
         for conditioner in conditioners:
-            sub[conditioner.conditioner_name()] = conditioner.conditioned_pf_ret(sub['pf'] , plot = False)
-        sub = sub.set_index('trade_date' , append=True).drop(columns=['pf'])
+            sub[conditioner.conditioner_name()] = conditioner.conditioned_pf_ret(sub , plot = False)
+        sub = sub.set_index('trade_date' , append=True).drop(columns=['pf','overnight'])
         dfs.append(sub)
     df = pd.concat(dfs)
 
-    '''
-    df = eval_detailed_drawdown(df['pf'] , groupby = index_names)
-
-    df['warning'] = (df['recover_ratio'].fillna(0) < 0.25) * (df['uncovered_max_drawdown'] < -0.1) * 1.0
-    df['stopped'] = df['pf'] * (1 - df.groupby(index_names , observed=True , group_keys = False)['warning'].shift(1).fillna(0.))
-    df['stopped'] = eval_cum_ret(df['stopped'] , 'exp' , groupby = index_names)
-    df['trade_date'] = trade_date
-    df = df.set_index('trade_date' , append=True).drop(columns=['pf']).rename(columns={'cum_ret':'pf'})
-    '''
     return df
 
 def calc_optim_perf_excess_drawdown(account : pd.DataFrame):

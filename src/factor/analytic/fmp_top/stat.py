@@ -38,7 +38,7 @@ def calc_top_perf_excess(account : pd.DataFrame):
     return calc_top_perf_curve(account)
 
 def calc_top_perf_drawdown(account : pd.DataFrame):
-    df = filter_account(account).loc[:,['end','pf']]
+    df = filter_account(account).loc[:,['end','pf','overnight']]
     df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
     df['drawdown'] = eval_drawdown(df['pf'] , 'exp' , groupby = df.index.names)
     conditioners = [BaseConditioner.select_conditioner(name)() 
@@ -47,8 +47,8 @@ def calc_top_perf_drawdown(account : pd.DataFrame):
     for grp , sub in df.groupby(df.index.names , observed=True):
         sub['raw'] = eval_cum_ret(sub['pf'] , 'exp' , groupby = sub.index.names)
         for conditioner in conditioners:
-            sub[conditioner.conditioner_name()] = conditioner.conditioned_pf_ret(sub['pf'] , plot = False)
-        sub = sub.set_index('trade_date' , append=True).drop(columns=['pf'])
+            sub[conditioner.conditioner_name()] = conditioner.conditioned_pf_ret(sub , plot = False)
+        sub = sub.set_index('trade_date' , append=True).drop(columns=['pf','overnight'])
         dfs.append(sub)
     df = pd.concat(dfs)
 

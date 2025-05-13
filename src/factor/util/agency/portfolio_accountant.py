@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Literal , Optional , Sequence , Any
 
 from src.basic import INSTANCE_RECORD , CONF
-from src.basic.conf import ROUNDING_RETURN , TRADE_COST
 from src.data import DATAVENDOR
 from src.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 
@@ -45,11 +44,11 @@ class AccountConfig:
     @property
     def trade_cost(self): 
         if self.trade_engine == 'default':
-            return 0.00035
+            return CONF.TRADE_COST
         elif self.trade_engine == 'harvest':
-            return TRADE_COST
+            return CONF.TRADE_COST_HARVEST
         elif self.trade_engine == 'yale':
-            return 0.00035
+            return CONF.TRADE_COST_YALE
         else:
             raise ValueError(f'Unknown trade engine: {self.trade_engine}')
 
@@ -114,7 +113,7 @@ class PortfolioAccountant:
             'model_date':np.concatenate([[-1],model_dates]) , 
             'start':np.concatenate([[model_dates[0]],period_st]) , 
             'end':np.concatenate([[model_dates[0]],period_ed]) ,
-            'pf':0. , 'bm':0. , 'turn':0. , 'excess':0. ,
+            'pf':0. , 'bm':0. , 'turn':0. , 'excess':0. , 'overnight': 0. ,
             'analytic':None , 'attribution':None}).set_index('model_date').sort_index()
         
         return self
@@ -131,8 +130,9 @@ class PortfolioAccountant:
             pf_ret = self.port_ret(port_old , port_new , ed , self.config.price_type)
             bm_ret = bench.fut_ret(ed)
             turn = port_new.turnover(port_old)
-
-            self.account.loc[date , ['pf' , 'bm' , 'turn']] = [pf_ret , bm_ret , turn]
+            overnight = self.overnight_ret(port_old , self.config.price_type)
+            self.account.loc[date , ['pf' , 'bm' , 'turn' , 'overnight']] = \
+                np.round([pf_ret , bm_ret , turn , overnight] , CONF.ROUNDING_RETURN)
             
             if self.config.analytic: 
                 self.account.loc[date , 'analytic']    = RISK_MODEL.get(date).analyze(port_new , bench , port_old) #type:ignore
@@ -156,7 +156,19 @@ class PortfolioAccountant:
             ret = (port_new.fut_ret(end) + 1) * (port_old.close2vwap() + 1) / (port_new.close2vwap() + 1) - 1
         else:
             raise ValueError(f'Unknown price type: {price_type}')
-        return np.round(ret , ROUNDING_RETURN)
+        return ret
+    
+    @classmethod
+    def overnight_ret(cls , port_old : Port , price_type : str = 'close'):
+        if price_type == 'close':
+            ret = 0.
+        elif price_type == 'open':
+            ret = (port_old.close2open() + 1) - 1  
+        elif price_type == 'vwap':
+            ret = (port_old.close2vwap() + 1) - 1
+        else:
+            raise ValueError(f'Unknown price type: {price_type}')
+        return ret
 
     def accounting(self , 
                    config_or_benchmark : AccountConfig | Portfolio | Benchmark | str | None = None ,

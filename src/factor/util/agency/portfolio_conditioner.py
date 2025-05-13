@@ -9,7 +9,10 @@ for example,
 import pandas as pd
 import numpy as np
 from abc import ABC , abstractmethod
+from dataclasses import dataclass
 from typing import Any , Union
+
+from src.basic import CONF
 from src.factor.util import Portfolio
 
 from ..stat.port_stat import eval_cum_ret , eval_drawdown , eval_uncovered_max_drawdown
@@ -44,7 +47,7 @@ class AccountAccessor:
                 df = self.input.rename('pf').to_frame()
             df = df.assign(
                 start = np.arange(len(df)) , end = np.arange(len(df)) , 
-                bm = 0. , turn = 0. , excess = df['pf'] ,
+                bm = 0. , turn = 0. , excess = df['pf'] , overnight = 0. ,
                 analytic = None , attribution = None
             )
         elif isinstance(self.input , AccountAccessor):
@@ -74,6 +77,14 @@ class AccountAccessor:
         return self.account['excess']
     
     @property
+    def overnight(self) -> pd.Series:
+        return self.account['overnight']
+    
+    @property
+    def intraday(self) -> pd.Series:
+        return (1 + self.pf) / (1 + self.overnight) - 1
+    
+    @property
     def analytic(self) -> pd.Series:
         return self.account['analytic']
     
@@ -94,7 +105,42 @@ class AccountAccessor:
         drawdown = eval_drawdown(self.pf)
         assert isinstance(drawdown , pd.Series) , 'drawdown must be pd.Series'
         return drawdown
+    
+@dataclass
+class AccountConditioner:
+    accessor : AccountAccessor
+    conditions : pd.Series
 
+    @property
+    def position_end(self) -> pd.Series:
+        return self.conditions.shift(1).fillna(1)
+    
+    @property
+    def conditioned_position(self) -> pd.Series:
+        return self.position_end[self.position_end != 1]
+    
+    @property
+    def position_start(self) -> pd.Series:
+        return self.position_end.shift(1).fillna(1)
+    
+    @property
+    def position_change(self) -> pd.Series:
+        return self.position_end - self.position_start
+    
+    @property
+    def unconditioned_pf(self) -> pd.Series:
+        return self.accessor.pf
+    
+    @property
+    def conditioned_pf(self) -> pd.Series:
+        if (self.accessor.overnight == 0).all():
+            pf = self.position_end * self.accessor.pf
+        else:
+            pf = (self.position_start * self.accessor.overnight + 1) * \
+                (self.position_end * self.accessor.intraday + 1) - 1
+        pf = pf - self.position_change * CONF.TRADE_COST
+        return pf
+    
 class BaseConditioner(ABC):
     '''
     the base abstract class of the conditioner
@@ -141,8 +187,7 @@ class BaseConditioner(ABC):
         '''
         account_accessor = self.account_accessor if input is None else AccountAccessor(input)
         conditions = self.conditions(account_accessor)
-        magnifier = conditions.shift(1).fillna(1)
-        return account_accessor , magnifier
+        return AccountConditioner(account_accessor , conditions)
     
     def conditioned_portfolio(self):
         assert self.portfolio is not None , 'portfolio is not set'
@@ -153,17 +198,13 @@ class BaseConditioner(ABC):
         '''
         return the conditioned comparison pf return
         '''
-        account_accessor , magnifier = self.conditioning(input)
-        #df_new = pd.DataFrame(
-        #    {self.conditioner_name() : eval_cum_ret(account_accessor.pf * magnifier , 'exp')} , 
-        #    index = account_accessor.index 
-        #)
-        df_new = eval_cum_ret(account_accessor.pf * magnifier , 'exp')
-        assert isinstance(df_new , pd.Series) , 'df_new must be pd.Series'
-        df_new.name = self.conditioner_name()
-        if plot: df_new.plot(figsize = (12 , 4))
+        conditioner = self.conditioning(input)
+        cum_cond_pf = eval_cum_ret(conditioner.conditioned_pf , 'exp')
+        assert isinstance(cum_cond_pf , pd.Series) , 'cum_cond_pf must be pd.Series'
+        cum_cond_pf.name = self.conditioner_name()
+        if plot: cum_cond_pf.plot(figsize = (12 , 4))
 
-        return df_new
+        return cum_cond_pf
     
     @staticmethod
     def select_conditioner(name : str):
@@ -180,12 +221,12 @@ class BaseConditioner(ABC):
     
     @property
     def account(self):
-        return self.account
+        return self.account_accessor.account
     
     def adjusted_portfolio(self , portfolio : Portfolio):
-        _ , magnifier = self.conditioning(portfolio)
-        magnifier = magnifier[magnifier != 1]
-        ports = [portfolio.ports[date].magnify(magnifier.loc[date]) for date in magnifier.index]
+        conditioner = self.conditioning(portfolio)
+        position = conditioner.conditioned_position
+        ports = [portfolio.ports[date].magnify(position.loc[date]) for date in position.index]
         return Portfolio.from_ports(*ports)
 
     def __call__(self) -> Portfolio:

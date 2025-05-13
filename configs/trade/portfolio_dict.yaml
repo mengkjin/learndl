@@ -35,7 +35,6 @@ use_daily.backtest:
     freq: 1
     backtest: True
     test_start: 20190101
-    test_end: 20250430
 
 master_daily:
     alpha: sellside@huatai.master_combined@master_combined

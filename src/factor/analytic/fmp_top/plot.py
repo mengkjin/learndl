@@ -80,7 +80,7 @@ def plot_top_perf_drawdown(data : pd.DataFrame , show = False):
             else:
                 ax1 , ax2 = plot.get_twin_axes(fig , 111)
                 
-                ax1.plot(df['trade_date'], df['drawdown'], 'g', label='Drawdown (left)')  
+                ax1.plot(df['trade_date'], df['drawdown'], 'grey', label='Drawdown (left)')  
                 ax1.legend(loc='upper left')
 
                 for col in df.columns:
