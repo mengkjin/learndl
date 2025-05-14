@@ -22,8 +22,11 @@ TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
 ]
 
 def all_path_convert():
-    print(f'Converting {len(list(PATH.trade_port.glob("**/*.csv")))} files')
-    for path in PATH.trade_port.glob('**/*.csv'):
+    file_list = list(PATH.trade_port.glob("**/*.csv"))
+    if not file_list:
+        return
+    print(f'Converting {len(file_list)} csv files to feather files')
+    for path in file_list:
         new_path = path.with_suffix('.feather')
         df = pd.read_csv(path)
         df.to_feather(new_path)
