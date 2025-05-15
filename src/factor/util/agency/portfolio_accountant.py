@@ -137,7 +137,7 @@ class PortfolioAccountant:
             if self.config.analytic: 
                 self.account.loc[date , 'analytic']    = RISK_MODEL.get(date).analyze(port_new , bench , port_old) #type:ignore
             if self.config.attribution: 
-                self.account.loc[date , 'attribution'] = RISK_MODEL.get(date).attribute(port_new , bench , ed , turn * self.trade_cost)  #type:ignore
+                self.account.loc[date , 'attribution'] = RISK_MODEL.get(date).attribute(port_new , bench , ed , turn * self.config.trade_cost)  #type:ignore
             port_old = port_new.evolve_to_date(ed)
 
         self.account['pf']  = self.account['pf'] - self.account['turn'] * self.config.trade_cost
