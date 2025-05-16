@@ -20,7 +20,7 @@ from src_runs.widget import argparse_dict
 def main():
     params = argparse_dict(email = 1)
     with AutoRunTask(f'weekly update {CALENDAR.update_to()}' , **params) as runner:
-        if runner.already_done and runner.source == 'bash': return
+        if runner.forfeit_task: return
         ModelAPI.update_models()
 
 if __name__ == '__main__':

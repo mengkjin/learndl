@@ -20,7 +20,7 @@ from src_runs.widget import argparse_dict
 def main():
     params = argparse_dict(email = 1)
     with AutoRunTask(f'daily update {CALENDAR.update_to()}' , **params) as runner:
-        if runner.already_done and runner.source == 'bash': return
+        if runner.forfeit_task: return
         DataAPI.update()
         ModelAPI.update()
         TradingAPI.update()

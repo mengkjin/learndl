@@ -13,7 +13,6 @@ class AutoRunTask:
     def __init__(self , task_name : str , email = True , email_if_attachment = True , 
                  source = 'not_specified' , **kwargs):
         self.task_name = task_name.replace(' ' , '_')
-        self.record_path = PATH.log_record.joinpath('autorun' , self.task_name)
         self.email = email
         self.email_if_attachment = email_if_attachment
         self.source = source
@@ -39,6 +38,10 @@ class AutoRunTask:
         else:
             self.status = ' '.join(['Successful' , *[s.capitalize() for s in self.task_name.split('_')]]) + '!'
         self.printer.__exit__(exc_type, exc_value, exc_traceback)
+
+        if self.forfeit_task:
+            return
+
         if self.email or (self.email_if_attachment and Email.ATTACHMENTS): 
             title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')]])
             Email.attach(self.printer.filename)
@@ -46,6 +49,15 @@ class AutoRunTask:
         # change_power_mode('power-saver')
 
         self.record_path.touch()
+
+    @property
+    def record_path(self):
+        return PATH.log_record.joinpath('autorun' , self.task_name)
+    
+    @property
+    def forfeit_task(self):
+        return self.already_done and self.source == 'bash'
+        
 
 def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance'] , 
                       log_path : Path | None = PATH.logs.joinpath('suspend','power_check.log') ,
