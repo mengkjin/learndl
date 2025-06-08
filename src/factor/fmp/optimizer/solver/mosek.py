@@ -146,7 +146,7 @@ class Solver:
         task.appendcons(num)
         for i , (bkx , blx , bux , subi , vali) in con_iter:
             task.putconbound(i, bkx , blx , bux)
-            task.putarow(i, subi , vali)
+            task.putarow(i, subi.astype(np.int32) , vali)
 
     def task_add_lin_obj(self , task : mosek.Task):
         # num_N stock weight
@@ -171,8 +171,8 @@ class Solver:
         if self.cov_con.cov_type == 'normal':
             u       = self.alpha.T + self.cov_con.lmbd * self.wb.dot(self.cov_con.cov)
             idx     = np.tril_indices(self.num_vars.N)
-            qosubi  = idx[0]
-            qosubj  = idx[1]
+            qosubi  = idx[0].astype(np.int32)
+            qosubj  = idx[1].astype(np.int32)
             qoval   = self.cov_con.lmbd * self.cov_con.cov[idx]
         else:
             u       = self.alpha.T + self.cov_con.lmbd * \
@@ -180,12 +180,12 @@ class Solver:
                  (0 if self.cov_con is None else self.wb * self.cov_con.S))
             idx     = np.tril_indices(self.num_vars.L)
             if self.cov_con.S is None:
-                qosubi = idx[0] + self.start_of.L
-                qosubj = idx[1] + self.start_of.L
+                qosubi = (idx[0] + self.start_of.L).astype(np.int32)
+                qosubj = (idx[1] + self.start_of.L).astype(np.int32)
                 qoval  = self.cov_con.lmbd * self.cov_con.C[idx]
             else: 
-                qosubi = np.concatenate([np.arange(self.num_vars.N) , idx[0] + self.start_of.L])
-                qosubj = np.concatenate([np.arange(self.num_vars.N) , idx[1] + self.start_of.L])
+                qosubi = np.concatenate([np.arange(self.num_vars.N) , idx[0] + self.start_of.L]).astype(np.int32)
+                qosubj = np.concatenate([np.arange(self.num_vars.N) , idx[1] + self.start_of.L]).astype(np.int32)
                 qoval  = self.cov_con.lmbd * np.concatenate([self.cov_con.S , self.cov_con.C[idx]])
 
         # override linear objective coefficient , mind the direction is negative for minimize
@@ -258,7 +258,7 @@ class Solver:
             # total risk  
             task.appendcons(3) 
             task.putconbound(start, mosek.boundkey.up, -INF, te_sq)
-            task.putarow(start, self.start_of.Q + np.arange(2), [1.0, 1.0])
+            task.putarow(start, self.start_of.Q + np.arange(2), np.ones(2))
 
             # common risk
             idx   = np.tril_indices(len(self.cov_con.F))

@@ -7,6 +7,7 @@ from inspect import currentframe
 from torch import Tensor
 from typing import Any , final , Iterator , Literal , Optional
 
+from src.algo import getter
 from src.basic import ModelDict , BigTimer , INSTANCE_RECORD
 from src.func import Filtered
 from src.data import ModuleData
@@ -243,7 +244,7 @@ class BaseTrainer(ModelStreamLine):
         return f'{self.__class__.__name__}(path={self.config.model_base_path.base})'
     
     @final
-    def __init__(self , base_path = None , override = {} , **kwargs):
+    def __init__(self , base_path = None , override : dict | None = None , **kwargs):
         self.init_config(base_path = base_path , override = override , **kwargs)
         self.init_data(**kwargs)
         self.init_model(**kwargs)
@@ -252,25 +253,27 @@ class BaseTrainer(ModelStreamLine):
         INSTANCE_RECORD.update_trainer(self)
         
     @final
-    def init_config(self , base_path = None , override = {} , **kwargs) -> None:
+    def init_config(self , base_path = None , override : dict | None = None , **kwargs) -> None:
         '''initialized configuration'''
-        self.config = TrainConfig.load(base_path , do_parser = True , par_args = kwargs , override = override)
+        self.config = TrainConfig.load(base_path , do_parser = True , override = override , **kwargs)
         self.status = TrainerStatus(self.config.train_max_epoch)
 
     def wrap_callbacks(self):
-        [setattr(self , hook , self.hook_wrapper(self , hook)) for hook in possible_hooks()]
+        [setattr(self , hook , self.hook_wrapper(self , hook , self.verbosity)) for hook in possible_hooks()]
 
     @staticmethod
-    def hook_wrapper(trainer : 'BaseTrainer' , hook : str):
+    def hook_wrapper(trainer : 'BaseTrainer' , hook : str , verbosity : int = 0):
         action_status  = getattr(trainer.status , hook)
         action_trainer = getattr(trainer , hook)
         action_model   = getattr(trainer.model , hook)
         def wrapper() -> None:
-            trainer.callback.at_enter(hook)
+            if verbosity > 10: print(f'{hook} of stage {trainer.status.stage} start')
+            trainer.callback.at_enter(hook , verbosity)
             action_status()
             action_trainer()
             action_model()
-            trainer.callback.at_exit(hook)
+            trainer.callback.at_exit(hook , verbosity)
+            if verbosity > 10: print(f'{hook} of stage {trainer.status.stage} end')
         return wrapper
 
     @abstractmethod
@@ -288,6 +291,8 @@ class BaseTrainer(ModelStreamLine):
         '''initialized data_module'''
         self.data : BaseDataModule
 
+    @property
+    def verbosity(self): return self.config.verbosity
     @property
     def device(self): return self.config.device
     @property
@@ -338,7 +343,7 @@ class BaseTrainer(ModelStreamLine):
             if 'fit' in self.stage_queue:  self.stage_fit()
 
             if 'test' in self.stage_queue: self.stage_test()
-
+            
             self.on_summarize_model()
 
         return self
@@ -490,6 +495,9 @@ class BaseTrainer(ModelStreamLine):
     def penalty_kwargs(self): return {}
     @staticmethod
     def assert_equity(a , b): assert a == b , (a , b)
+    @staticmethod
+    def available_modules(module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
+        return getter.available_modules(module_type)
 
 class ModelStreamLineWithTrainer(ModelStreamLine):
     def bound_with_trainer(self , trainer): 
@@ -544,8 +552,11 @@ class BaseCallBack(ModelStreamLineWithTrainer):
         self.__hook_stack.append(self.trace_hook_name())
         self.at_enter(self.__hook_stack[-1])
     def __exit__(self , *args): self.at_exit(self.__hook_stack.pop())
-    def at_enter(self , hook : str):  ...
-    def at_exit(self , hook : str): getattr(self , hook)()
+    def at_enter(self , hook : str , verbosity : int = 0):  
+        if verbosity > 10: print(f'{hook} of callback {self.__class__.__name__} start')
+    def at_exit(self , hook : str , verbosity : int = 0): 
+        getattr(self , hook)()
+        if verbosity > 10: print(f'{hook} of callback {self.__class__.__name__} end')
 
     def trace_hook_name(self) -> str:
         env = getattr(currentframe() , 'f_back')
@@ -659,11 +670,13 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
                 self.batch_metrics()
 
     def metric_kwargs(self):
-        pred   = self.batch_output.pred
-        label  = self.batch_data.y
-        weight = self.batch_data.w
-        multiloss = self.multiloss_params()
-        return {'pred':pred,'label':label,'weight':weight,'multiloss':multiloss,**self.batch_output.other}
+        kwargs = {}
+        kwargs['pred'] = self.batch_output.pred
+        kwargs['label'] = self.batch_data.y
+        kwargs['weight'] = self.batch_data.w
+        kwargs['multiloss'] = self.multiloss_params()
+        kwargs.update(self.batch_output.other)
+        return kwargs
     
     def batch_forward(self) -> None: 
         if self.status.dataset == 'test':

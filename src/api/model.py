@@ -1,5 +1,6 @@
+import shutil
 import src.model.model_module.application as app
-from src.basic import MACHINE
+from src.basic import MACHINE , PATH
 from src.data import DataPreProcessor
 from src.func.display import EnclosedMessage
 
@@ -93,3 +94,26 @@ class ModelAPI:
         reconstruct historical(since 2007 , use for models starting at 2017) train data
         '''
         DataPreProcessor.main(predict=False , confirm=1)
+
+    @classmethod
+    def short_test(cls , module : str | None = None , verbosity : int | None = 10):
+        '''
+        Short test a module
+        module :
+            None: use default module
+            str : use the module name , must be in ModelAPI.Trainer.available_modules
+        verbosity :
+            None: use default verbosity
+            int : use the verbosity level , if above 10 will print more details
+        '''
+        app = cls.Trainer.initialize(stage = 0 , resume = 0 , checkname= 1 , module= module , short_test=True , verbosity = verbosity)
+        app.go()
+        return app
+    
+    @classmethod
+    def clear_st_models(cls):
+        '''
+        Clear short test models in model folder
+        '''
+        bases = [model.name for model in PATH.model.iterdir() if model.name.endswith('ShortTest')]
+        PATH.deltrees(PATH.model , bases , verbose = True)

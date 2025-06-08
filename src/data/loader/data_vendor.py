@@ -124,9 +124,8 @@ class DataVendor:
                 secid  = block.secid
                 date   = block.date[1:]
                 new_date = block.date_within(start_dt , end_dt)
-
                 self.day_ret = DataBlock(values , secid , date , feature).align_date(new_date)
-
+                
     def update_dates(self , data_key : str , dates : np.ndarray) -> tuple[np.ndarray,np.ndarray]:
         if hasattr(self , data_key):
             exist_dates = getattr(self , data_key).date

@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from src.basic.conf import RISK_INDUS , RISK_STYLE
 
-from . import layer as Layer
+import src.algo.nn.layer as Layer
 
 __all__ = ['risk_att_gru']
 

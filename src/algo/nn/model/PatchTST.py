@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 
 from torch import nn , Tensor
-from . import layer as Layer
+import src.algo.nn.layer as Layer
 
 __all__ = ['PatchTST']
 
@@ -371,7 +371,7 @@ class patch_tst(PatchTST):
 if __name__ == '__main__' :
 
     import torch
-    from src.algo.nn.PatchTST import ModelPretrain,  ModelPredict
+    from src.algo.nn.model.PatchTST import ModelPretrain,  ModelPredict
     batch_size = 2 
     seq_len = 30
     patch_len = 3

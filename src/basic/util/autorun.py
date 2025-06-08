@@ -57,10 +57,29 @@ class AutoRunTask:
     @property
     def forfeit_task(self):
         return self.already_done and self.source == 'bash'
-        
+
+DEFAULT_EXCLUDES = ['kernel_interrupt_daemon.py']
+def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py']):
+    running_scripts : list[Path] = []
+    if isinstance(exclude_scripts , str): exclude_scripts = [exclude_scripts]
+    excludes = [Path(scp).name for scp in (exclude_scripts or []) + DEFAULT_EXCLUDES]
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            cmdline = proc.info['cmdline']
+            if not cmdline: continue
+            for line in cmdline:
+                if any(fnmatch.fnmatch(line, pattern) for pattern in script_type):
+                    if any(scp in line for scp in excludes): 
+                        pass
+                    else:
+                        running_scripts.append(Path(line))
+                        break
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            pass
+    return running_scripts
 
 def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance'] , 
-                      log_path : Path | None = PATH.logs.joinpath('suspend','power_check.log') ,
+                      log_path : Path | None = None ,
                       verbose = False):
     # running_scripts = get_running_scripts(exclude_scripts)
     main_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S') + f' : Power set to {mode}'
@@ -74,27 +93,6 @@ def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance']
         log_path.parent.mkdir(parents = True , exist_ok = True)
         with open(log_path, 'a') as log_file:
             log_file.write(main_str)
-        
-
-def get_running_scripts(exclude_scripts : list[str] = [] , script_type = ['*.py'] , default_excludes = ['kernel_interrupt_daemon.py']):
-    running_scripts : list[Path] = []
-    self = Path(__file__)
-    exclude_scripts = exclude_scripts + default_excludes
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-        try:
-            cmdline = proc.info['cmdline']
-            if not cmdline: continue
-            for line in cmdline:
-                if any(fnmatch.fnmatch(line, pattern) for pattern in script_type):
-                    script = Path(line)
-                    if script == self or any(scp in line for scp in exclude_scripts): 
-                        pass
-                    else:
-                        running_scripts.append(Path(line))
-                        break
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            pass
-    return running_scripts
 
 def suspend_this_machine(log_path : Path | None = PATH.logs.joinpath('suspend','suspend.log') , verbose = False):
     main_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

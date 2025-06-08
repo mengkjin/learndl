@@ -118,7 +118,10 @@ def bin_label(x : np.ndarray | Tensor):
 def tensor_rank(x : Tensor):    
     assert x.dim() == 1 , x.dim()
     # faster than x.argsort().argsort().to(x) for longer x
-    return torch.zeros_like(x).index_copy_(0,x.argsort(),torch.arange(len(x)).to(x))
+    # return torch.zeros_like(x).index_copy_(0,x.argsort(),torch.arange(len(x)).to(x))
+    y = torch.zeros_like(x)
+    y[x.argsort()] = torch.arange(len(x)).to(x)
+    return y
 
 def rank_weight(x : Tensor):    
     r = tensor_rank(x)

@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 from torch import nn , Tensor
 
-from . import layer as Layer
+import src.algo.nn.layer as Layer
 
 class ModernTCN(nn.Module):
     '''
@@ -328,7 +328,7 @@ class modern_tcn(ModernTCN):
 if __name__ == '__main__':
     import torch
     import torch.nn as nn
-    from src.algo.nn.ModernTCN import ModernTCNEmbed , ModernTCN
+    from src.algo.nn.model.ModernTCN import ModernTCNEmbed , ModernTCN
 
     batch_size = 2 
     seq_len = 30

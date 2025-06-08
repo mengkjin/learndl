@@ -2,7 +2,7 @@ import torch
 
 from torch import nn , Tensor
 
-from . import layer as Layer
+import src.algo.nn.layer as Layer
 
 __all__ = ['TSMixer']
 

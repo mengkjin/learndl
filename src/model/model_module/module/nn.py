@@ -21,6 +21,7 @@ class NNPredictor(BasePredictorModel):
         self.reset_submodels(*args , **kwargs)
 
         self.model_dict.reset()
+        self.metrics.new_net(self.net)
         self.metrics.new_model(param)
         return self
     
@@ -61,6 +62,8 @@ class NNPredictor(BasePredictorModel):
         return self.net(x , *args , **kwargs)
 
     def fit(self):
+        if self.trainer.verbosity > 10: print('model fit start')
+
         self.new_model()
         for _ in self.trainer.iter_fit_epoches():
             for _ in self.trainer.iter_train_dataloader():
@@ -72,13 +75,19 @@ class NNPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
+        if self.trainer.verbosity > 10: print('model fit done')
+
     def test(self):
         '''test the model inside'''
+        if self.trainer.verbosity > 10: print('model test start')
+
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()
+
+        if self.trainer.verbosity > 10: print('model test done')
 
     def collect(self , submodel = 'best' , *args):
         net = self.submodels[submodel].collect(self.trainer , *args)

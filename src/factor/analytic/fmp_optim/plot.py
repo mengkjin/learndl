@@ -66,7 +66,7 @@ def plot_optim_perf_drawdown(data : pd.DataFrame , show = False):
 
             for col in df.columns:
                 if col != 'drawdown':
-                    ax2.plot(df['trade_date'] , df[col] , label=col)
+                    ax2.plot(df.index , df[col] , label=col)
             ax2.legend(loc='upper right')  
 
             plot.set_xaxis(ax1 , df.index , title = 'Trade Date')

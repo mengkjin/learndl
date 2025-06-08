@@ -20,14 +20,14 @@ def plot_factor_coverage(data : pd.DataFrame , show = False):
             ax = plot.sns_lineplot(df , x='date' , y='coverage' , hue='benchmark')
 
             plot.set_xaxis(ax , df.index.unique() , title = 'Trade Date')
-            plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Coverage Ratio' , title_color='b' , tick_lim = (0,1))
+            plot.set_yaxis(ax , format='pct' , digits=2 , title = 'Coverage Ratio' , title_color='b' , tick_lim = (0.,1.2))
             
     return group_plot.fig_dict
 
 def plot_factor_ic_curve(data : pd.DataFrame , show = False):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
-    for i , sub_data in enumerate(group_plot):     
-        with plot.PlotFactorData(sub_data , title = 'Factor IC Curve' , show=show and i==0) as (df , fig):
+    for i , sub_data in enumerate(group_plot):  
+        with plot.PlotFactorData(sub_data , title = 'Factor IC Curve' , show=show and i==0 , dropna = 'all') as (df , fig):
             df = df.set_index('date').sort_index()
             ax1 , ax2 = plot.get_twin_axes(fig , 111)
 
@@ -40,7 +40,7 @@ def plot_factor_ic_curve(data : pd.DataFrame , show = False):
             ax2.plot(df.index, df['cum_ic'], 'r-', label='Cum IC (right)')  
             ax2.legend(loc='upper right')  
 
-            plot.set_xaxis(ax1 , df.index)
+            plot.set_xaxis(ax1 , df.index , title = 'Trade Date')
             plot.set_yaxis(ax1 , format='flt' , digits=2 , title = 'Period IC' , title_color='b' , tick_color='b')
             plot.set_yaxis(ax2 , format='flt' , digits=2 , title = 'Cummulative IC' , title_color='r' , tick_color='r' , tick_pos=None)
             

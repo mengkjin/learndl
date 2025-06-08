@@ -144,7 +144,8 @@ class Portfolio:
         self.accountant.accounting(benchmark , start , end , analytic , attribution , trade_engine , daily , store)
         return self
     
-    def account_with_index(self , add_index : dict[str,Any] = {}):
+    def account_with_index(self , add_index : dict[str,Any] | None = None):
+        add_index = add_index or {}
         return self.accountant.account_with_index(add_index)
     
     @property

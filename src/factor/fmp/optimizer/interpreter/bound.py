@@ -203,7 +203,9 @@ class GeneralBound:
                 ub = None if self.ub is None else self.ub * wb
         return StockBound(lb , ub)
     
-    def export_lin(self , A : np.ndarray , wb : np.ndarray | Any = None , others : list['GeneralBound'] = []) -> tuple:
+    def export_lin(self , A : np.ndarray , wb : np.ndarray | Any = None , 
+                   others : list['GeneralBound'] | None = None) -> tuple:
+        others = others or []
         #assert not isinstance(self.lb , np.ndarray) , self.lb
         #assert not isinstance(self.ub , np.ndarray) , self.ub
         if A.ndim == 1: A = A.reshape(1,-1)

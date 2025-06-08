@@ -93,7 +93,7 @@ class Stock4DData:
         return self.merge([self , *others])
     
     def as_tensor(self , asTensor = True):
-        if asTensor and isinstance(self.values , np.ndarray): self.values = torch.tensor(self.values)
+        if asTensor and isinstance(self.values , np.ndarray): self.values = torch.from_numpy(self.values)
         return self
     
     def as_type(self , dtype = None):

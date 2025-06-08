@@ -1,54 +1,63 @@
 import psutil , torch
+from torch import Tensor
+from torch.nn import Module
 from typing import Any
 
-use_device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+if torch.backends.mps.is_available():
+    use_device = torch.device('mps')
+elif torch.cuda.is_available():
+    use_device = torch.device('cuda:0')
+else:
+    use_device = torch.device('cpu')
         
+# MPS memory management
+if use_device.type == 'mps':
+    # clear MPS cache
+    torch.mps.empty_cache()
+    
+    # set memory allocation strategy
+    torch.mps.set_per_process_memory_fraction(0.7)  # 使用60%的GPU内存
+
+def send_to(x : Any , device = None) -> Any:
+    if isinstance(x , Tensor | Module):
+        return x.to(device)
+    if isinstance(x , (list,tuple)):
+        return type(x)(send_to(v , device) for v in x)
+    elif isinstance(x , (dict)):
+        return {k:send_to(v , device) for k,v in x.items()}
+    elif hasattr(x , 'to'): # maybe modulelist ... self defined class
+        return x.to(device)
+    else:
+        return x
+
 class Device:
-    '''cpu / cuda device , callable'''
+    '''cpu / cuda / mps device , callable'''
     def __init__(self , device : torch.device | None = None) -> None:
         if device is None: device = use_device
         self.device = device
     def __repr__(self): return str(self.device)
-    def __call__(self, obj): return self.send_to(obj , self.device)
+    def __call__(self, obj): return send_to(obj , self.device)
 
-    def is_cuda(self):
-        if self.device is not None: return self.device.type == 'cuda'
-        return False
-    
-    @classmethod
-    def send_to(cls , x , device = None) -> Any:
-        if isinstance(x , (list,tuple)):
-            return type(x)(cls.send_to(v , device) for v in x)
-        elif isinstance(x , (dict)):
-            return {k:cls.send_to(v , device) for k,v in x.items()}
-        elif hasattr(x , 'to'): # maybe modulelist ... should be included
-            return x.to(device)
-        else:
-            return x
+    @property
+    def is_cuda(self): return self.device.type == 'cuda'
+    @property
+    def is_mps(self): return self.device.type == 'mps'
+    @property
+    def is_cpu(self): return self.device.type == 'cpu'
         
-    @classmethod
-    def cpu(cls , x):
-        if isinstance(x , (list,tuple)):
-            return type(x)(cls.cpu(v) for v in x)
-        elif isinstance(x , (dict)):
-            return {k:cls.cpu(v) for k,v in x.items()}
-        elif hasattr(x , 'cpu'): # maybe modulelist ... should be included
-            return x.cpu()
-        else:
-            return x
-    @classmethod
-    def cuda(cls , x):
-        if isinstance(x , (list,tuple)):
-            return type(x)(cls.cuda(v) for v in x)
-        elif isinstance(x , (dict)):
-            return {k:cls.cuda(v) for k,v in x.items()}
-        elif hasattr(x , 'cuda'): # maybe modulelist ... should be included
-            return x.cuda()
-        else:
-            return x
+    def cpu(self , x): return send_to(x , 'cpu')
+    def cuda(self , x): return send_to(x , 'cuda')
+    def mps(self , x): return send_to(x , 'mps')
+    
     def print(self):
-        print(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
-              f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G')
+        if self.is_cuda:
+            print(f'Allocated {torch.cuda.memory_allocated(self.device) / 1024**3:.1f}G, '+\
+                  f'Reserved {torch.cuda.memory_reserved(self.device) / 1024**3:.1f}G')
+        elif self.is_mps:
+            print(f'Allocated {torch.mps.current_allocated_memory() / 1024**3:.1f}G, '+\
+                  f'Driver Allocated {torch.mps.driver_allocated_memory() / 1024**3:.1f}G')
+        else:
+            print(f'Not using cuda or mps {self.device}')
         
 class MemoryPrinter:
     def __repr__(self) -> str:

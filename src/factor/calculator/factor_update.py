@@ -81,7 +81,7 @@ class FactorUpdateJobManager:
                 return factors
 
     def collect_jobs(self , start : int | None = None , end : int | None = None , 
-                     all_factors = False , selected_factors : list[str] = [] ,
+                     all_factors = False , selected_factors : list[str] | None = None ,
                      overwrite = False , groups_in_one_update : int | None = None , 
                      force = False ,**kwargs):
         '''
@@ -94,7 +94,9 @@ class FactorUpdateJobManager:
             category0 : str | None = None 
             category1 : str | None = None 
         '''
+        selected_factors = selected_factors or []
         self.clear()
+        
         if not (all_factors or selected_factors or kwargs): return self
         if end is None: end = min(CALENDAR.updated() , CONF.UPDATE_END)
 
@@ -157,7 +159,8 @@ class FactorUpdateJobManager:
             print(f'Removed {len(removed_factors)} factors')
 
     @classmethod
-    def iter_calculators(cls , all_factors = False , selected_factors : list[str] = [] , **kwargs):
+    def iter_calculators(cls , all_factors = False , selected_factors : list[str] | None = None , **kwargs):
+        selected_factors = selected_factors or []
         if selected_factors:
             assert not all_factors , \
                 f'all_factors ({all_factors}) and selected_factors ({selected_factors}) cannot be supplied at once'
@@ -177,14 +180,15 @@ class FactorUpdateJobManager:
         self.process_jobs(verbosity)
 
     @classmethod
-    def update_fix(cls , factors : list[str] = [] , verbosity : int = 1 , start : int | None = None , end : int | None = None):
+    def update_fix(cls , factors : list[str] | None = None , verbosity : int = 1 , start : int | None = None , end : int | None = None):
+        factors = factors or []
         self = cls()
         print(f'Fixing factors : {factors}')
         self.collect_jobs(selected_factors = factors , overwrite = True , start = start , end = end)
         self.process_jobs(verbosity , overwrite = True)
 
     @classmethod
-    def eval_coverage(cls , all_factors = False , selected_factors : list[str] = [] , **kwargs):
+    def eval_coverage(cls , all_factors = False , selected_factors : list[str] | None = None , **kwargs):
         '''
         update update jobs for all factors between start and end date
         **kwargs:
@@ -194,7 +198,7 @@ class FactorUpdateJobManager:
             category0 : str | None = None 
             category1 : str | None = None 
         '''
-        
+        selected_factors = selected_factors or []
         if not (all_factors or selected_factors or kwargs): return pd.DataFrame()
         dfs : list[pd.DataFrame] = []
 

@@ -63,6 +63,13 @@ class ModelPath:
     @property
     def model_submodels(self):
         return self.sub_dirs(self.archive(self.model_nums[-1] , self.model_dates[-1]) , as_int = False)
+    def load_config(self):
+        from src.model.util.config import TrainConfig
+        return TrainConfig.load(self.base)
+    def next_model_date(self):
+        from src.basic.util.calendar import CALENDAR
+        config = self.load_config()
+        return CALENDAR.td(self.model_dates[-1] , config.model_interval)
     
 class HiddenPath:
     def __init__(self , model_name : str , model_num : int , submodel : str) -> None:

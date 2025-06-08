@@ -29,12 +29,12 @@ class MachineSetting:
             'HPO-LONGCL05':     cls(False , ''),
             'HPO-ZHUHY01':      cls(False , ''),
             'HST-jinmeng':      cls(False , 'E:/workspace/learndl'),
-            'Mathews-Mac.wireless.yale.internal': cls(False , '/Users/mengkjin/workspace/learndl'),
+            'Mathews-Mac':      cls(False , '/Users/mengkjin/workspace/learndl'),
         }
     
     @classmethod
     def select_machine(cls):
-        machine_name = socket.gethostname()
+        machine_name = socket.gethostname().split('.')[0]
         machine_dict = cls.MachineDict()
         assert machine_name in machine_dict , f'unidentified machine: {machine_name} , please check the MachineDict method'
         return machine_dict[machine_name].initialize()

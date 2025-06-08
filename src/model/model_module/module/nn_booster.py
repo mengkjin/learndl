@@ -29,7 +29,7 @@ class NNBooster(BasePredictorModel):
         boost_param  = model_boost_param  if model_boost_param  else self.model_param
 
         device = self.config.device      if self.config else None
-        cuda   = self.device.is_cuda()   if self.config else None
+        cuda   = self.device.is_cuda     if self.config else None
         seed   = self.config.random_seed if self.config else None
 
         self.net = getter.nn(nn_module , nn_param , device)
@@ -97,6 +97,8 @@ class NNBooster(BasePredictorModel):
         return batch_data_to_boost_input(long_batch , self.data.y_secid , self.data.y_date)
     
     def fit(self):
+        if self.trainer.verbosity > 10: print('model fit start')
+
         self.new_model()
 
         # fit net
@@ -130,13 +132,19 @@ class NNBooster(BasePredictorModel):
             self.batch_forward()
             self.batch_metrics()
 
+        if self.trainer.verbosity > 10: print('model fit done')
+
     def test(self):
         '''test the model inside'''
+        if self.trainer.verbosity > 10: print('model test start')
+
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
             for _ in self.trainer.iter_test_dataloader():
                 self.batch_forward()
                 self.batch_metrics()
+
+        if self.trainer.verbosity > 10: print('model test done')
 
     def batch_forward_net(self) -> None: 
         self.batch_output = BatchOutput(self.forward_net(self.batch_data))

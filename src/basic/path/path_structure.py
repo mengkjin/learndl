@@ -75,8 +75,10 @@ def copytree(src , dst):
 def copyfiles(src , dst , bases):
     [shutil.copyfile(f'{src}/{base}' , f'{dst}/{base}') for base in bases]
 
-def deltrees(dir , bases):
-    [shutil.rmtree(f'{dir}/{base}') for base in bases]
+def deltrees(dir , bases , verbose = True):
+    for base in bases:
+        if verbose: print(f'Deleting {base} in {dir}')
+        shutil.rmtree(f'{dir}/{base}')
 
 def file_modified_date(path : Path | str , default = 19970101):
     if Path(path).exists():

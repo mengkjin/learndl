@@ -73,7 +73,7 @@ class PlotFactorData:
                  title : str = '' , full_title : str = '' , show = False , 
                  sort_keys : list[str] = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix' , 
                                           'trade_date' , 'model_date' , 'end' , 'start'] ,
-                 dropna = True , rounding = 6 , suptitle = False):
+                 dropna : bool | Literal['all' , 'any'] = True , rounding = 6 , suptitle = False):
         if isinstance(data , SubPlotData):
             data , name_key , fig  = data.sub_data , data.group_by , data.get_fig()
 
@@ -100,7 +100,7 @@ class PlotFactorData:
         df = self.raw_data.sort_values(self.sort_keys).drop(columns=self.drop_keys , errors='ignore')
         new_index = [i for i in self.raw_index if i not in self.drop_keys]
         df = df.set_index(new_index) if new_index else df.reset_index(drop = True)
-        if self.dropna: df = df.dropna()
+        if self.dropna: df = df.dropna(how='any' if self.dropna != 'all' else 'all')
         return df , self.fig
 
     def __exit__(self , exc_type , exc_value , traceback):
@@ -117,11 +117,16 @@ class PlotFactorData:
         else:
             return ''
 
-def plot_table(df : pd.DataFrame , int_cols = [] , pct_cols = [] , flt_cols = [] , capitalize = True , 
+def plot_table(df : pd.DataFrame , int_cols = None , pct_cols = None , flt_cols = None , capitalize = True , 
                index_width = 1. , fontsize = 8 , pct_ndigit = 2 , flt_ndigit = 3 , emph_last_row = False , 
-               column_definitions : list[ColumnDefinition] = [] , 
+               column_definitions : list[ColumnDefinition] | None = [] , 
                stripe_by : str | list[str] | Literal[1] | None = None , 
                ignore_cols : list[str] | None = None , stripe_colors = ['#ffffff' , '#a2cffe']):
+    int_cols = int_cols or []
+    pct_cols = pct_cols or []
+    flt_cols = flt_cols or []
+    column_definitions = column_definitions or []
+    
     if stripe_by and stripe_by != 1:
         if isinstance(stripe_by , str): stripe_by = [stripe_by]
         df0 = df.copy().reset_index()[stripe_by]

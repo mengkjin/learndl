@@ -20,7 +20,8 @@ class int4(int): pass
 class float1(float): pass
 
 class gpFitness:
-    def __init__(self, fitness_weights = {} , **kwargs) -> None:
+    def __init__(self, fitness_weights : dict | None = None , **kwargs) -> None:
+        fitness_weights = fitness_weights or {}
         # assert len(weights) > 0, f'weights must have positive length'
         self.title = list(fitness_weights.keys())
         self.weights = tuple(fitness_weights.values())
@@ -225,10 +226,10 @@ class gpHandler:
         return [toolbox.syx2ind(ind) for ind in population]
     
     @classmethod
-    def deduplicate(cls , population , forbidden = []):
+    def deduplicate(cls , population , forbidden : list | None = []):
         # return the unique population excuding specific ones (forbidden)
         ori = [cls.syx2str(ind) for ind in population]
-        fbd = [cls.syx2str(ind) for ind in forbidden]
+        fbd = [cls.syx2str(ind) for ind in forbidden] if forbidden else []
         index_maps = {value: index for index, value in enumerate(ori)} # remove duplicates
         index_keys = np.setdiff1d(list(index_maps.keys()) , fbd)       # remove forbidden members
         # return [population[i] for i in index_mapping.values()]
@@ -551,10 +552,10 @@ class gpTimer:
         self.df_cols = {}
 
     class PTimer:
-        def __init__(self , key , record = False , target_dict = {} , print = True , print_str = None , memory_check = False):
+        def __init__(self , key , record = False , target_dict : dict | None = None , print = True , print_str = None , memory_check = False):
             self.key = key
             self.record = record
-            self.target_dict = target_dict
+            self.target_dict = target_dict or {}
             self.print = print
             self.print_str = key if print_str is None else print_str
             self.memory_check = memory_check and torch.cuda.is_available()

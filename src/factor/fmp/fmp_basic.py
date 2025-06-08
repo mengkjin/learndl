@@ -52,7 +52,8 @@ def get_benchmark_name(benchmark : Optional[Portfolio | Benchmark | str]):
     else:
         raise ValueError(f'Unknown benchmark type: {type(benchmark)}')
 
-def get_strategy_name(category : Literal['optim' , 'top'] , strategy : str = 'default' , kwargs : dict[str,Any] = {}):
+def get_strategy_name(category : Literal['optim' , 'top'] , strategy : str = 'default' , kwargs : dict[str,Any] | None = None):
+    kwargs = kwargs or {}
     if not strategy or strategy == 'default':
         if category == 'top':
             n = kwargs['n_best'] if 'n_best' in kwargs else PortfolioGenerator.DEFAULT_N_BEST
@@ -62,13 +63,15 @@ def get_strategy_name(category : Literal['optim' , 'top'] , strategy : str = 'de
     assert '.' not in strategy , f'To avoid conflict with factor name, strategy name cannot contain dot: {strategy}'
     return strategy
 
-def get_suffix(lag : int , suffixes : list[str] | str = []): 
+def get_suffix(lag : int , suffixes : list[str] | str | None = None): 
+    suffixes = suffixes or []
     if isinstance(suffixes , str): suffixes = [suffixes]
     return '.'.join([f'lag{lag}' , *suffixes])
 
 def get_full_name(category : Literal['optim' , 'top'] , alpha : AlphaModel | str , 
                   benchmark : Optional[Portfolio | Benchmark | str] = None , 
-                  strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
+                  strategy : str = 'default' , suffixes : list[str] | str | None = None , lag : int = 0 , **kwargs):
+    suffixes = suffixes or []
     return '.'.join([
         get_prefix(category) , 
         get_factor_name(alpha) , 

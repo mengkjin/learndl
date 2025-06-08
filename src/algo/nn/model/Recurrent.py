@@ -3,10 +3,10 @@ import torch
 from torch import nn , Tensor
 from typing import Optional
 
-from . import layer as Layer
-from .Attention import mod_transformer,TimeWiseAttention,ModuleWiseAttention
-from .CNN import mod_resnet_1d , mod_tcn
-from .util import add_multiloss_params
+import src.algo.nn.layer as Layer
+from src.algo.nn.model.Attention import mod_transformer,TimeWiseAttention,ModuleWiseAttention
+from src.algo.nn.model.CNN import mod_resnet_1d , mod_tcn
+from src.algo.nn.util import add_multiloss_params
 
 def get_rnn_mod(rnn_type):
     return {'transformer':mod_transformer,'lstm':mod_lstm,'gru':mod_gru,'tcn':mod_tcn,}[rnn_type]

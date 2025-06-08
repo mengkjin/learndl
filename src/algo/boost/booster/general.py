@@ -5,16 +5,12 @@ from typing import Any , Literal , Optional
 from . import ada , catboost , lgbm , xgboost
 from ..util import BasicBoosterModel , BoosterInput , BoosterWeightMethod
 
-VALID_BOOSTERS = ['lgbm' , 'ada' , 'xgboost' , 'catboost']
-_booster_dict = {
+AVAILABLE_BOOSTERS = {
     'lgbm' : lgbm.Lgbm,
     'ada' : ada.AdaBoost,
     'xgboost' : xgboost.XgBoost,
     'catboost' : catboost.CatBoost,
 }
-
-def choose_booster_model(booster_type : str):
-    return _booster_dict[booster_type]
 
 class GeneralBooster:
     def __init__(self , 
@@ -24,9 +20,9 @@ class GeneralBooster:
                  valid : Any = None ,
                  test  : Any = None , 
                  cuda = True , seed = None , given_name : Optional[str] = None , **kwargs):
-        assert booster_type in VALID_BOOSTERS , f'{booster_type} is not a valid booster type'
+        assert booster_type in AVAILABLE_BOOSTERS , f'{booster_type} is not a valid booster type'
         self.booster_type = booster_type
-        self.booster : BasicBoosterModel = choose_booster_model(self.booster_type)()
+        self.booster : BasicBoosterModel = AVAILABLE_BOOSTERS[self.booster_type]()
         self.given_name = given_name
         self.update_param(params , cuda = cuda , seed = seed , **kwargs)
         self.import_data(train = train , valid = valid , test = test)

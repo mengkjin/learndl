@@ -7,7 +7,8 @@ from src.trading.util import TradingPort
 
 class TradingPortfolioTracker:
     @classmethod
-    def update(cls , reset_ports : list[str] = []):
+    def update(cls , reset_ports : list[str] | None = None):
+        reset_ports = reset_ports or []
         date = CALENDAR.updated()
         ports = TradingPort.portfolio_dict()
 

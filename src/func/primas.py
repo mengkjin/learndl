@@ -2,13 +2,6 @@ import torch
 from torch.nn.functional import pad , one_hot
 import numpy as np
 from sklearn.linear_model import LinearRegression
-#from numba import jit , cuda
-#import pandas as pd
-
-#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-#import os
-#if os.name == 'posix': assert(device == torch.device('cuda'))
-#print(__name__)
 
 NaN = torch.nan
 

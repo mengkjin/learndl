@@ -14,7 +14,7 @@ class XgBoost(BasicBoosterModel):
         'objective': 'reg:squarederror', # 'reg:squarederror', 'reg:absoluteerror' , multi:softmax
         'num_boost_round' : 100 , 
         'early_stopping' : 50 , 
-        # 'eval_metric' : None , # rank:ndcg ,
+        'eval_metric' : None , # rank:ndcg ,
         'subsample': 1.,
         'colsample_bytree':1.,
         'verbosity': 1 , 

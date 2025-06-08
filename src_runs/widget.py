@@ -11,7 +11,8 @@ def python_path():
     else:
         return 'python'
 
-def terminal_cmd(script : str | Path , params : dict = {} , close_after_run = False):
+def terminal_cmd(script : str | Path , params : dict | None = None , close_after_run = False):
+    params = params or {}
     if isinstance(script , Path): script = str(script.absolute())
     args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in params.items() if v != ''])
     cmd = f'{python_path()} {script} {args}'

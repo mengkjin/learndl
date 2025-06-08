@@ -19,7 +19,8 @@ class FactorCalculatorAPI:
             StockFactorHierarchy().factor_df().to_csv(PATH.main.joinpath('faclist.csv'))
 
     @classmethod
-    def fix(cls , factors : list[str] = [] , **kwargs):
+    def fix(cls , factors : list[str] | None = None , **kwargs):
+        factors = factors or []
         UPDATE_JOBS.update_fix(factors , **kwargs)
 
 class FactorTestAPI:

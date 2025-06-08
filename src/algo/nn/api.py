@@ -1,33 +1,36 @@
 from torch import nn
 from typing import Literal
-from . import (
-    Recurrent, Attention , CNN , ModernTCN , layer , PatchTST , TSMixer , TRA , FactorVAE ,
-    RiskAttGRU , PLE
-)
+
+from . import layer as Layer
+from . import model as Model
 from .util import get_multiloss_params
 
-AVAILABLE_MODULES = {
-    'simple_lstm'       : Recurrent.simple_lstm,
-    'gru'               : Recurrent.gru, 
-    'lstm'              : Recurrent.lstm, 
-    'resnet_lstm'       : Recurrent.resnet_lstm, 
-    'resnet_gru'        : Recurrent.resnet_gru,
-    'transformer'       : Recurrent.transformer, 
-    'tcn'               : Recurrent.tcn, 
-    'rnn_ntask'         : Recurrent.rnn_ntask, 
-    'rnn_general'       : Recurrent.rnn_general, 
-    'gru_dsize'         : Recurrent.gru_dsize, 
-    'patch_tst'         : PatchTST.patch_tst, 
-    'modern_tcn'        : ModernTCN.modern_tcn, 
-    'ts_mixer'          : TSMixer.ts_mixer, 
-    'tra'               : TRA.tra, 
-    'factor_vae'        : FactorVAE.FactorVAE,
-    'risk_att_gru'      : RiskAttGRU.risk_att_gru,
-    'ple_gru'           : PLE.ple_gru
+AVAILABLE_NNS = {
+    'simple_lstm'       : Model.Recurrent.simple_lstm,
+    'gru'               : Model.Recurrent.gru, 
+    'lstm'              : Model.Recurrent.lstm, 
+    'resnet_lstm'       : Model.Recurrent.resnet_lstm, 
+    'resnet_gru'        : Model.Recurrent.resnet_gru,
+    'transformer'       : Model.Recurrent.transformer, 
+    'tcn'               : Model.Recurrent.tcn, 
+    'rnn_ntask'         : Model.Recurrent.rnn_ntask, 
+    'rnn_general'       : Model.Recurrent.rnn_general, 
+    'gru_dsize'         : Model.Recurrent.gru_dsize, 
+    'patch_tst'         : Model.PatchTST.patch_tst, 
+    'modern_tcn'        : Model.ModernTCN.modern_tcn, 
+    'ts_mixer'          : Model.TSMixer.ts_mixer, 
+    'tra'               : Model.TRA.tra, 
+    'factor_vae'        : Model.FactorVAE.FactorVAE,
+    'risk_att_gru'      : Model.RiskAttGRU.risk_att_gru,
+    'ple_gru'           : Model.PLE.ple_gru,
+    'tft'               : Model.TemporalFusionTransformer.TemporalFusionTransformer
 }
 
+def valid_nn(nn_type : str):
+    return nn_type in AVAILABLE_NNS
+
 def get_nn_module(module_name : str) -> nn.Module:
-    return AVAILABLE_MODULES[module_name]
+    return AVAILABLE_NNS[module_name]
 
 def get_nn_category(module_name : str) -> Literal['vae' , 'tra' , '']:
     if module_name == 'factor_vae':

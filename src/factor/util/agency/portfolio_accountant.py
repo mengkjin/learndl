@@ -125,14 +125,12 @@ class PortfolioAccountant:
         port_old = Port.none_port(self.account.index.values[1])
         for date , ed in zip(self.account.index.values[1:] , self.account['end'].values[1:]):
             port_new = self.portfolio.get(date) if self.portfolio.has(date) else port_old
-            bench : Port = self.config.benchmark.get(date , True)
+            bench = self.config.benchmark.get(date , True)
 
-            pf_ret = self.port_ret(port_old , port_new , ed , self.config.price_type)
-            bm_ret = bench.fut_ret(ed)
+            rets = self.get_rets(port_old , port_new , bench , ed)
             turn = port_new.turnover(port_old)
-            overnight = self.overnight_ret(port_old , self.config.price_type)
-            self.account.loc[date , ['pf' , 'bm' , 'turn' , 'overnight']] = \
-                np.round([pf_ret , bm_ret , turn , overnight] , CONF.ROUNDING_RETURN)
+            self.account.loc[date , ['pf' , 'bm' , 'overnight' , 'turn']] = \
+                np.round([rets['pf'] , rets['bm'] , rets['overnight'] , turn] , CONF.ROUNDING_RETURN)
             
             if self.config.analytic: 
                 self.account.loc[date , 'analytic']    = RISK_MODEL.get(date).analyze(port_new , bench , port_old) #type:ignore
@@ -146,29 +144,29 @@ class PortfolioAccountant:
 
         return self
 
-    @classmethod
-    def port_ret(cls , port_old : Port , port_new : Port , end : int , price_type : str = 'close'):
-        if port_new is port_old or price_type == 'close':
-            ret = port_new.fut_ret(end)
-        elif price_type == 'open':
-            ret = (port_new.fut_ret(end) + 1) * (port_old.close2open() + 1) / (port_new.close2open() + 1) - 1  
-        elif price_type == 'vwap':
-            ret = (port_new.fut_ret(end) + 1) * (port_old.close2vwap() + 1) / (port_new.close2vwap() + 1) - 1
+    def get_rets(self , port_old : Port , port_new : Port , bench : Port , end : int) -> dict[str,float]:
+        assert self.config is not None , 'config is not set'
+        
+        rets : dict[str,float] = {}
+        fut_ret = port_new.fut_ret(end)
+        bm_ret = bench.fut_ret(end)
+        overnight_ret = 0.
+        if port_new is port_old or self.config.price_type == 'close':
+            ...
+        elif self.config.price_type == 'open':
+            overnight_ret = (port_old.close2open() + 1) - 1
+            shadow_overnight = (port_new.close2open() + 1) - 1
+            fut_ret = (fut_ret + 1) * (overnight_ret + 1) / (shadow_overnight + 1) - 1      
+        elif self.config.price_type == 'vwap':
+            overnight_ret = (port_old.close2vwap() + 1) - 1
+            shadow_overnight = (port_new.close2vwap() + 1) - 1
+            fut_ret = (fut_ret + 1) * (overnight_ret + 1) / (shadow_overnight + 1) - 1
         else:
-            raise ValueError(f'Unknown price type: {price_type}')
-        return ret
-    
-    @classmethod
-    def overnight_ret(cls , port_old : Port , price_type : str = 'close'):
-        if price_type == 'close':
-            ret = 0.
-        elif price_type == 'open':
-            ret = (port_old.close2open() + 1) - 1  
-        elif price_type == 'vwap':
-            ret = (port_old.close2vwap() + 1) - 1
-        else:
-            raise ValueError(f'Unknown price type: {price_type}')
-        return ret
+            raise ValueError(f'Unknown price type: {self.config.price_type}')
+        rets['pf'] = fut_ret
+        rets['bm'] = bm_ret
+        rets['overnight'] = overnight_ret
+        return rets
 
     def accounting(self , 
                    config_or_benchmark : AccountConfig | Portfolio | Benchmark | str | None = None ,
@@ -192,7 +190,8 @@ class PortfolioAccountant:
             if store: self.stored_accounts[self.config] = self.account
         return self
     
-    def account_with_index(self , add_index : dict[str,Any] = {}):
+    def account_with_index(self , add_index : dict[str,Any] | None = None):
+        add_index = add_index or {}
         if not add_index: return self.account
         return self.account.assign(**add_index).set_index(list(add_index.keys())).sort_values('model_date')
     

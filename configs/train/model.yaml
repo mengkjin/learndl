@@ -11,7 +11,7 @@ train_window  : 240      # train window in days , nn is prefered to be 2400 , bo
 booster_head            : null # [null , lgbm , ada , xgboost , catboost] , if not null the last layer of the nn is a booster
 
 # if module is a booster ----------------------------------------------------------------
-booster_type            : lgbm # [lgbm , ada , xgboost , catboost] , if module is Literal['booster'] , use this to specify the booster type
+booster_type            : xgboost # [lgbm , ada , xgboost , catboost] , if module is Literal['booster'] , use this to specify the booster type
 booster_optuna          : False # [True , False] , if True , use optuna to optimize the booster parameters
 booster_optuna_n_trials : 10   # int , the number of trials for optuna
 
@@ -24,7 +24,7 @@ labels:
   - rtn_lag1_10 
 
 # input specification ----------------------------------------------------------------
-input_type: factor # [data , hidden , factor] , specify below
+input_type: data # [data , hidden , factor] , specify below
 
 data.types: day # ['day+30m' , 30m , day , ...] , use if input_type is data
 data.prenorm:   # should the day be prenormalized? recommendation : not to change

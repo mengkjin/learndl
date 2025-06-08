@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 from typing import Any , Literal , Optional
 
-from src.algo import getter , VALID_BOOSTERS
+from src.algo import getter
 from src.basic import Device , Logger , ModelPath , PATH , MACHINE
 from src.func import recur_update
 from src.func.display import EnclosedMessage
@@ -32,14 +32,14 @@ def conf_copy(source : Path , target : Path , overwrite = False):
         shutil.copyfile(source , target)
 
 def conf_mod_type(module : str):
-    return 'boost' if module in ['booster' , 'hidden_aggregator' ,*VALID_BOOSTERS] else 'nn'
+    return getter.module_type(module)
 
 class TrainParam:
-    def __init__(self , base_path : ModelPath | Path | None , override = {}):
+    def __init__(self , base_path : ModelPath | Path | None , override = None):
+        override = override or {}
         self.base_path = ModelPath(base_path)
         self.model_name = self.base_path.name
-
-        self.load_param(override).special_adjustment().make_model_name().check_validity()
+        self.load_param().special_adjustment(override).make_model_name().check_validity()
 
     def __bool__(self): return True
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
@@ -52,23 +52,29 @@ class TrainParam:
     @property
     def Param(self) -> dict[str,Any]: return self.train_param
 
-    def load_param(self , override : dict = {}):
+    def load_param(self):
         self.train_param : dict[str,Any] = {}
-        if 'short_test' in override: override['env.short_test'] = override.pop('short_test')
-        for cfg_key in TRAIN_CONFIG_LIST:
-            self.train_param.update({f'{cfg_key}.{key}':val for key,val in self.load_config(cfg_key).items()})
-        for override_key in override:
-            assert override_key in self.train_param.keys() , override_key
-        if not MACHINE.server: self.train_param['env.short_test'] = True
-        self.train_param.update(override)
+        for cfg in TRAIN_CONFIG_LIST:
+            self.train_param.update({f'{cfg}.{k}':v for k,v in self.load_config(cfg).items()})
         return self
 
-    def special_adjustment(self):
-        if self.short_test and self.Param.get('conditional.short_test'): 
-            recur_update(self.Param , self.Param['conditional.short_test'])
+    def special_adjustment(self , override : dict | None = None):
+        override = override or {}
+        if 'verbosity'  in override: override['env.verbosity']  = override.pop('verbosity')
+        if 'short_test' in override: override['env.short_test'] = override.pop('short_test')
+        if 'module'     in override: override['model.module']   = override.pop('module')
+        if not MACHINE.server: override['env.short_test'] = True
+        for override_key in override:
+            assert override_key in self.Param.keys() , override_key
+        self.Param.update(override)
 
-        if self.model_module == 'transformer' and self.Param.get('conditional.transformer'):
-            recur_update(self.Param , self.Param['conditional.transformer'])
+        if self.short_test:
+            new_dict = {k:v for k,v in self.Param.get('conditional.short_test' , {}).items() if k not in override}
+            recur_update(self.Param , new_dict)
+
+        if self.model_module == 'transformer':
+            new_dict = {k:v for k,v in self.Param.get('conditional.transformer' , {}).items() if k not in override}
+            recur_update(self.Param , new_dict)
         return self
     
     def make_model_name(self):
@@ -136,15 +142,12 @@ class TrainParam:
     def guess_module(cls , base_path : Path | ModelPath | None):
         return str(PATH.read_yaml(conf_path(base_path , 'train', 'model.yaml'))['module']).lower()
     
-    @classmethod
-    def get_module_type(cls , module : str):
-        if module in ['booster' , *VALID_BOOSTERS]:
-            return 'boost'
-        else:
-            return 'nn'
+    @staticmethod
+    def get_module_type(module : str):
+        return conf_mod_type(module)
     
     @property
-    def module_type(self): return self.get_module_type(self.model_module)
+    def module_type(self): return conf_mod_type(self.model_module)
     @property
     def nn_category(self): return getter.nn_category(self.model_module)
     @property
@@ -210,10 +213,10 @@ class TrainParam:
     def model_booster_head(self): return self.Param['model.booster_head']
     @property
     def model_booster_type(self):
-        if self.model_module in ['booster' , 'hidden_aggregator', ]:
-            assert self.Param['model.booster_type'] in VALID_BOOSTERS , self.Param['model.booster_type']
+        if self.model_module in ['booster' , 'hidden_aggregator']:
+            assert getter.valid_booster(self.Param['model.booster_type']) , self.Param['model.booster_type']
             return self.Param['model.booster_type']
-        elif self.model_module in VALID_BOOSTERS:
+        elif getter.valid_booster(self.model_module):
             return self.model_module
         else:
             return 'not_a_booster'
@@ -292,8 +295,7 @@ class ModelParam:
         return self
 
     def check_validity(self):
-        assert TrainParam.get_module_type(self.module) == 'nn' or \
-            ((not self.booster_head) and (self.module in VALID_BOOSTERS)) , self.module
+        assert conf_mod_type(self.module) == 'nn' or not self.booster_head , f'{self.module} is not a valid module'
 
         lens = [len(v) for v in self.Param.values() if isinstance(v , (list,tuple))]
         self.n_model = max(lens) if lens else 1
@@ -305,7 +307,7 @@ class ModelParam:
             assert 'hist_loss_horizon' in self.Param
 
         if self.booster_head:
-            assert self.booster_head in VALID_BOOSTERS , self.booster_head
+            assert getter.valid_booster(self.booster_head) , self.booster_head
             self.booster_head_param = ModelParam(self.base_path , self.booster_head , False , self.verbosity , 1 , **self.override)
         return self
     
@@ -356,7 +358,7 @@ class ModelParam:
     def max_num_output(self): return max(self.Param.get('num_output' , [1]))
 
 class TrainConfig(TrainParam):
-    def __init__(self , base_path : Path | ModelPath | None , override = {}):
+    def __init__(self , base_path : Path | ModelPath | None , override = None):
         self.resume_training: bool  = False
         self.stage_queue: list      = []
 
@@ -382,10 +384,11 @@ class TrainConfig(TrainParam):
         return self
 
     @classmethod
-    def load(cls , base_path : Optional[Path] = None , do_parser = False , par_args = {} , override = {} , makedir = True):
+    def load(cls , base_path : Optional[Path] = None , do_parser = False , 
+             override = None , makedir = True , **kwargs):
         '''load config yaml to get default/giving params'''
         config = cls(base_path , override)
-        if do_parser: config.process_parser(cls.parser_args(par_args))
+        if do_parser: config.process_parser(cls.parser_args(**kwargs))
 
         model_path = ModelPath(config.model_name)
         if config.resume_training:
@@ -396,7 +399,7 @@ class TrainConfig(TrainParam):
         return config
     
     @classmethod
-    def load_model(cls , model_name : str | ModelPath | Path , override = {}):
+    def load_model(cls , model_name : str | ModelPath | Path , override = None):
         return cls.load(ModelPath(model_name).base , override = override)
     
     @property
@@ -416,13 +419,14 @@ class TrainConfig(TrainParam):
         assert len(self.Model.booster_head_param.params) == 1 , self.Model.booster_head_param.params
         return self.Model.booster_head_param.params[0]
 
-    def update(self, update : dict = {} , **kwargs):
+    def update(self, update = None , **kwargs):
+        update = update or {}
         for k,v in update.items(): setattr(self , k , v)
         for k,v in kwargs.items(): setattr(self , k , v)
         return self
 
-    def reload(self , base_path : Path | None = None , do_parser = False , par_args = {} , override = {}):
-        new_config = self.load(base_path,do_parser,par_args,override)
+    def reload(self , base_path : Path | None = None , do_parser = False , override = None , **kwargs):
+        new_config = self.load(base_path,do_parser,override,**kwargs)
         self.__dict__ = new_config.__dict__
         return self
     
@@ -464,10 +468,11 @@ class TrainConfig(TrainParam):
         torch.backends.cudnn.deterministic = True
     
     @classmethod
-    def parser_args(cls , kwargs : dict , description='manual to this script'):
-        parser = argparse.ArgumentParser(description=description)
-        for arg in ['stage' , 'resume' , 'checkname']:
-            parser.add_argument(f'--{arg}', type=int, default = kwargs.get(arg , -1))
+    def parser_args(cls , stage = -1 , resume = -1 , checkname = -1 , **kwargs):
+        parser = argparse.ArgumentParser(description='manual to this script')
+        parser.add_argument(f'--stage', type=int, default = stage)
+        parser.add_argument(f'--resume', type=int, default = resume)
+        parser.add_argument(f'--checkname', type=int, default = checkname)
         args , _ = parser.parse_known_args()
         return args
 
@@ -546,7 +551,8 @@ class TrainConfig(TrainParam):
         print(f'--Model_name is set to {model_name}!')  
         self.Train.model_name = model_name
 
-    def process_parser(self , par_args = {}):
+    def process_parser(self , par_args = None):
+        par_args = par_args or {}
         with EnclosedMessage(' parser training args '):
             self.parser_stage(getattr(par_args , 'stage' , -1))
             self.parser_resume(getattr(par_args , 'resume' , -1))

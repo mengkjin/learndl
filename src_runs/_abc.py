@@ -3,6 +3,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
+DEFAULT_EXCLUDES = ['kernel_interrupt_daemon.py']
+
 def edit_file(file_path : Path | str):
     path = Path(file_path).absolute()
     if os.name == 'nt':  # Windows
@@ -12,18 +14,17 @@ def edit_file(file_path : Path | str):
     process = subprocess.Popen(editor_command, shell=True)
     process.communicate()
 
-def get_running_scripts(exclude_scripts : list[str] | str = [] , script_type = ['*.py'] , 
-                        default_excludes = ['kernel_interrupt_daemon.py']):
+def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py']):
     running_scripts : list[Path] = []
     if isinstance(exclude_scripts , str): exclude_scripts = [exclude_scripts]
-    exclude_scripts = [Path(scp).name for scp in exclude_scripts + default_excludes]
+    excludes = [Path(scp).name for scp in (exclude_scripts or []) + DEFAULT_EXCLUDES]
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             cmdline = proc.info['cmdline']
             if not cmdline: continue
             for line in cmdline:
                 if any(fnmatch.fnmatch(line, pattern) for pattern in script_type):
-                    if any(scp in line for scp in exclude_scripts): 
+                    if any(scp in line for scp in excludes): 
                         pass
                     else:
                         running_scripts.append(Path(line))

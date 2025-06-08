@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from . import layer as Layer
-from .util import add_multiloss_params , get_multiloss_params
+import src.algo.nn.layer as Layer
+from src.algo.nn.util import add_multiloss_params , get_multiloss_params
 
 __all__ = ['ple_gru']
 

@@ -3,7 +3,7 @@ import torch
 from torch import nn , Tensor
 from torch.nn.utils.parametrizations import weight_norm
 
-from . import layer as Layer
+import src.algo.nn.layer as Layer
 
 # 1-d conv resnet
 class _tcn_block(nn.Module):
@@ -155,8 +155,8 @@ if __name__ == '__main__':
     import torch
     import torch.nn as nn
     # pip install pytimedinput -i https://pypi.tuna.tsinghua.edu.cn/simple
-    from src.algo.nn.Recurrent import mod_gru
-    from src.algo.nn.CNN import mod_resnet_1d, mod_resnet_2d
+    from src.algo.nn.model.Recurrent import mod_gru
+    from src.algo.nn.model.CNN import mod_resnet_1d, mod_resnet_2d
         
     class resnet1d_gru(nn.Module):
         def __init__(self, seq_len , feat_len , dim_res = 16 , dim_rnn = 64 , **kwargs) -> None:

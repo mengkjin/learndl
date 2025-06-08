@@ -3,9 +3,10 @@ import pandas as pd
 
 from collections.abc import Iterable
 from copy import deepcopy
+from os import listdir
 from typing import Any , Literal , Optional , Union
 
-from src.basic import INSTANCE_RECORD
+from src.basic import INSTANCE_RECORD , PATH
 from src.data import DataBlock , DATAVENDOR
 from src.func import transform as T
 
@@ -136,6 +137,11 @@ def eval_weighted_pnl(x : pd.DataFrame , weight_type : str , direction : Any , g
     rtn = (weights * rets).sum(axis = 0)
     return rtn
 
+def param_match(args1 : dict[str,Any] , args2 : dict[str,Any]) -> bool:
+    if len(args1) != len(args2): return False
+    matches = [k in args2 and args2[k] == v for k , v in args1.items()]
+    return all(matches)
+
 class StockFactor:
     def __init__(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor',dict[int,pd.Series]] , normalized = False , step = None):
         self.update(factor , normalized , step)
@@ -169,6 +175,7 @@ class StockFactor:
         self.normalized = normalized
         self.subsets : dict[str,StockFactor] = {}
         self.step = step
+        self.stats : dict[str,tuple[dict[str,Any],pd.DataFrame]] = {}
         return self
 
     def copy(self): return deepcopy(self)
@@ -243,6 +250,18 @@ class StockFactor:
         else:
             return self._blk
         
+    @classmethod
+    def Load(cls , factor_name : str , date : int):
+        df = PATH.factor_load(factor_name , date).assign(date = date)
+        return cls(df)
+
+    @classmethod
+    def Loads(cls , factor_name : str , start : int | None = None , end : int | None = None):
+        if start is None: start = 0
+        if end is None:   end = 99991231
+        df = PATH.factor_load_multi(factor_name , start_dt=start , end_dt=end)
+        return cls(df)
+        
     def select(self , secid = None , date = None , factor_name = None):
         if self._df is not None:
             df = self._df.reset_index()
@@ -279,55 +298,73 @@ class StockFactor:
 
     def eval_ic(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                 ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
-        factors = self.factor_names
-        df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
-        ic = df.groupby(by=['date'], as_index=True).apply(lambda x:x[factors].corrwith(x['ret'], method=ic_type))
-        return ic.rename_axis('factor_name',axis='columns')
+        params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
+        if 'ic' not in self.stats or not param_match(self.stats['ic'][0] , params):
+            factors = self.factor_names
+            df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
+            ic = df.groupby(by=['date'], as_index=True).apply(
+                lambda x:x[factors].corrwith(x['ret'], method=ic_type)).\
+                rename_axis('factor_name',axis='columns')
+            self.stats['ic'] = (params , ic)
+        return self.stats['ic'][1]
     
     def eval_ic_indus(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                       ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
-        with np.errstate(all='ignore'):
-            df = self.frame_with_cols(indus = True , fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
-            ic = df.groupby(['date' , 'industry']).apply(lambda x:x[self.factor_names].corrwith(x['ret'], method=ic_type) , include_groups=False)
-
-        return ic.rename_axis('factor_name',axis='columns')
+        params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
+        if 'ic_indus' not in self.stats or not param_match(self.stats['ic_indus'][0] , params):
+            with np.errstate(all='ignore'):
+                df = self.frame_with_cols(indus = True , fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
+                ic = df.groupby(['date' , 'industry']).apply(
+                    lambda x:x[self.factor_names].corrwith(x['ret'], method=ic_type) , include_groups=False).\
+                    rename_axis('factor_name',axis='columns')
+            self.stats['ic_indus'] = (params , ic)
+        return self.stats['ic_indus'][1]
     
     def eval_group_perf(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 , excess = False , 
                         ret_type : Literal['close' , 'vwap'] = 'close' , trade_date = True) -> pd.DataFrame:
-        df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
-        kwargs = {'x_cols' : self.factor_names , 'y_name' : 'ret' , 'group_num' : group_num , 'excess' : excess}
-        df = df.groupby('date').apply(lambda x:eval_grp_avg(x , **kwargs)) 
-        df = df.melt(var_name='factor_name' , value_name='group_ret' , ignore_index=False).sort_values(['date','factor_name']).reset_index()
-        if trade_date:
-            df['start'] = DATAVENDOR.td_array(df['date'] , lag)
-            df['end']   = DATAVENDOR.td_array(df['date'] , lag + nday - 1)
-        return df
+        params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'excess' : excess , 'ret_type' : ret_type , 'trade_date' : trade_date}
+        if 'group_perf' not in self.stats or not param_match(self.stats['group_perf'][0] , params):
+            df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
+            kwargs = {'x_cols' : self.factor_names , 'y_name' : 'ret' , 'group_num' : group_num , 'excess' : excess}
+            df = df.groupby('date').apply(lambda x:eval_grp_avg(x , **kwargs)) 
+            df = df.melt(var_name='factor_name' , value_name='group_ret' , ignore_index=False).sort_values(['date','factor_name']).reset_index()
+            if trade_date:
+                df['start'] = DATAVENDOR.td_array(df['date'] , lag)
+                df['end']   = DATAVENDOR.td_array(df['date'] , lag + nday - 1)
+            self.stats['group_perf'] = (params , df)
+        return self.stats['group_perf'][1]
     
     def eval_weighted_pnl(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                           ret_type : Literal['close' , 'vwap'] = 'close' , given_direction : Literal[1,0,-1] = 0 ,
                           weight_type_list : list[str] = ['long' , 'long_short' , 'short']) -> pd.DataFrame:
-        df = self.frame_with_cols(fut_ret=True , nday=nday , lag=lag , ret_type=ret_type)
-        direction = given_direction if given_direction else np.sign(df.corr().loc['ret'].drop('ret')) 
+        params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type , 'given_direction' : given_direction , 'weight_type_list' : weight_type_list}
+        if 'weighted_pnl' not in self.stats or not param_match(self.stats['weighted_pnl'][0] , params):
+            df = self.frame_with_cols(fut_ret=True , nday=nday , lag=lag , ret_type=ret_type)
+            direction = given_direction if given_direction else np.sign(df.corr().loc['ret'].drop('ret')) 
 
-        dfs = []
-        for wt in weight_type_list:
-            df_wt = df.groupby('date').apply(lambda x:eval_weighted_pnl(x, wt, direction, group_num)).\
-                reset_index().melt(id_vars=['date'],var_name='factor_name',value_name='ret').assign(weight_type = wt)
-            dfs.append(df_wt)
+            dfs = []
+            for wt in weight_type_list:
+                df_wt = df.groupby('date').apply(lambda x:eval_weighted_pnl(x, wt, direction, group_num)).\
+                    reset_index().melt(id_vars=['date'],var_name='factor_name',value_name='ret').assign(weight_type = wt)
+                dfs.append(df_wt)
 
-        pnl = pd.concat(dfs, axis=0).set_index(['weight_type' , 'date'])
-        pnl = pnl.join(pnl.groupby(['factor_name' , 'weight_type']).cumsum().rename(columns={'ret':'cum_ret'})).reset_index()
-        return pnl
+            pnl = pd.concat(dfs, axis=0).set_index(['weight_type' , 'date'])
+            pnl = pnl.join(pnl.groupby(['factor_name' , 'weight_type']).cumsum().rename(columns={'ret':'cum_ret'})).reset_index()
+            self.stats['weighted_pnl'] = (params , pnl)
+        return self.stats['weighted_pnl'][1]
     
     def coverage(self , benchmark : Optional[Benchmark | str] = None):
-        dates = self.date
-        if isinstance(benchmark , str) or benchmark is None: benchmark = Benchmark(benchmark)
-        factor = self.within(benchmark)
-        benchmark_size = pd.Series(benchmark.sec_num(dates) , index = dates)
-        coverage = factor.frame().groupby('date').apply(lambda x:x.dropna().count(numeric_only=True))
-        for factor_name in coverage:
-            coverage[factor_name] /= benchmark_size
-        return coverage
+        params = {'benchmark' : benchmark.name if isinstance(benchmark,Benchmark) else benchmark}
+        if 'coverage' not in self.stats or not param_match(self.stats['coverage'][0] , params):
+            dates = self.date
+            if isinstance(benchmark , str) or benchmark is None: benchmark = Benchmark(benchmark)
+            factor = self.within(benchmark)
+            benchmark_size = pd.Series(benchmark.sec_num(dates) , index = dates)
+            coverage = factor.frame().groupby('date').apply(lambda x:x.dropna().count(numeric_only=True))
+            for factor_name in coverage:
+                coverage[factor_name] = (coverage[factor_name] / benchmark_size).clip(lower=0 , upper=1)
+            self.stats['coverage'] = (params , coverage)
+        return self.stats['coverage'][1]
     
     def normalize(self , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
                   weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):

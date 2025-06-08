@@ -232,7 +232,8 @@ class BoosterInput:
         return df
 
     @classmethod
-    def from_dataframe(cls , data : pd.DataFrame , weight_param : dict[str,Any] = {}):
+    def from_dataframe(cls , data : pd.DataFrame , weight_param : dict[str,Any] | None = None):
+        weight_param = weight_param or {}
         SECID_COLS = ['SecID','instrument','secid','StockID']
         DATE_COLS  = ['TradeDate','datetime','date']  
         if data.index.name or len(data.index.names) > 1: data = data.reset_index()

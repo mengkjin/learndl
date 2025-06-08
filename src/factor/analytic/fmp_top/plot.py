@@ -39,7 +39,7 @@ def plot_top_perf_curve(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Accumulative Return') as (df , fig):
     
-            if 'topN' not in df.columns: df['topN'] = '~'
+            if 'topN' not in df.columns and 'topN' not in df.index.names: df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
             ax = plot.sns_lineplot(df , x='trade_date' , y='pf' , hue='topN')
@@ -54,7 +54,7 @@ def plot_top_perf_excess(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Accumulative Excess Return') as (df , fig):
     
-            if 'topN' not in df.columns: df['topN'] = '~'
+            if 'topN' not in df.columns and 'topN' not in df.index.names: df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
             ax = plot.sns_lineplot(df , x='trade_date' , y='excess' , hue='topN')
@@ -69,7 +69,7 @@ def plot_top_perf_drawdown(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Drawdown') as (df , fig):
 
-            if 'topN' not in df.columns: df['topN'] = '~'
+            if 'topN' not in df.columns and 'topN' not in df.index.names: df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
 
@@ -99,7 +99,7 @@ def plot_top_perf_excess_drawdown(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Excess Drawdown') as (df , fig):
 
-            if 'topN' not in df.columns: df['topN'] = '~'
+            if 'topN' not in df.columns and 'topN' not in df.index.names: df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
             ax = plot.sns_lineplot(df , x='trade_date' , y='drawdown' , hue='topN')

@@ -542,7 +542,7 @@ def gp_residual(param , tensors , i_iter = 0, device = None ,
     mgr_mem.check(showoff = True)
 
 # %%
-def gp_population(toolbox , pop_num , max_round = 100 , last_gen = [], forbidden = [] , **kwargs):
+def gp_population(toolbox , pop_num , max_round = 100 , last_gen = None , forbidden = None , **kwargs):
     '''
     ------------------------ create gp toolbox ------------------------
     
@@ -556,6 +556,8 @@ def gp_population(toolbox , pop_num , max_round = 100 , last_gen = [], forbidden
     output:
         population:     initialized population of syntax
     '''
+    last_gen = last_gen or []
+    forbidden = forbidden or []
     if last_gen: 
         population = toolbox.indpop_prune(last_gen)
         population = toolbox.deduplicate(population , forbidden = forbidden)

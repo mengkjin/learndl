@@ -18,13 +18,14 @@ class CallbackTimer(BaseCallBack):
         self.recording = self.verbosity >= 10
         self.record_hook_times : dict[str,list]  = {hook:[] for hook in self.possible_hooks()}
         self.record_start_time : dict[str,float] = {}
-    def at_enter(self , hook_name):
+    def at_enter(self , hook_name , verbosity : int = 0):
+        super().at_enter(hook_name , verbosity)
         if self.recording: 
             self.record_start_time[hook_name] = time.time()
-    def at_exit(self, hook_name):
+    def at_exit(self, hook_name , verbosity : int = 0):
         if self.recording: 
             self.record_hook_times[hook_name].append(time.time() - self.record_start_time[hook_name])
-            getattr(self , hook_name)()
+        super().at_exit(hook_name , verbosity)
     def on_summarize_model(self):
         if self.recording: 
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']

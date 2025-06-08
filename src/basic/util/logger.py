@@ -66,7 +66,8 @@ class Logger:
             sys.stdout.log.write(' '.join([str(s) for s in args]) + '\n')
 
 class _LevelFormatter(logging.Formatter):
-    def __init__(self, fmt=None, datefmt=None, level_fmts={}):
+    def __init__(self, fmt=None, datefmt=None, level_fmts=None):
+        level_fmts = level_fmts or {}
         self._level_formatters = {}
         for level, format in level_fmts.items():
             # Could optionally support level names too
@@ -79,13 +80,16 @@ class _LevelFormatter(logging.Formatter):
             return self._level_formatters[record.levelno].format(record)
         return super(_LevelFormatter, self).format(record)
 class _LevelColorFormatter(colorlog.ColoredFormatter):
-    def __init__(self, fmt=None, datefmt=None, log_colors={},level_fmts={},secondary_log_colors={}):
+    def __init__(self, fmt=None, datefmt=None, log_colors=None,level_fmts=None,secondary_log_colors=None):
+        level_fmts = level_fmts or {}
         self._level_formatters = {}
         for level, format in level_fmts.items():
             # Could optionally support level names too
             self._level_formatters[getattr(logging , level)] = colorlog.ColoredFormatter(fmt=format, datefmt=datefmt , log_colors=log_colors , secondary_log_colors=secondary_log_colors)
         # self._fmt will be the default format
-        super(_LevelColorFormatter, self).__init__(fmt=fmt, datefmt=datefmt,log_colors=log_colors,secondary_log_colors=secondary_log_colors)
+        super(_LevelColorFormatter, self).__init__(fmt=fmt, datefmt=datefmt,
+                                                   log_colors=log_colors or {},
+                                                   secondary_log_colors=secondary_log_colors or {})
 
     def format(self, record):
         if record.levelno in self._level_formatters:

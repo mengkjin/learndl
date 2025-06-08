@@ -1,8 +1,9 @@
 import time
+
+from src.basic import MACHINE , RegisteredModel
 from src.model.callback import CallBackManager
 from src.model.data_module import DataModule
 from src.model.util import BaseTrainer
-from src.basic import MACHINE , RegisteredModel
 
 from ..module import get_predictor_module
 
@@ -16,12 +17,19 @@ class ModelTrainer(BaseTrainer):
         self.callback = CallBackManager.setup(self)
 
     @classmethod
-    def initialize(cls , stage = -1 , resume = -1 , checkname = -1 , base_path = None , override = {} , **kwargs):
+    def initialize(cls , stage = -1 , resume = -1 , checkname = -1 , base_path = None , 
+                   override : dict | None = None , 
+                   module = None , short_test = None , verbosity = None ,
+                   **kwargs):
         '''
         state:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
         resume:    [-1,choose] , [0,no]       , [1,yes]
         checkname: [-1,choose] , [0,default]  , [1,yes]
         '''
+        override = override or {}
+        if module     is not None: override['module'] = module
+        if short_test is not None: override['short_test'] = short_test
+        if verbosity  is not None: override['verbosity'] = verbosity
         app = cls(base_path = base_path , override = override , stage = stage , resume = resume , checkname = checkname , **kwargs)
         return app
 
@@ -35,4 +43,3 @@ class ModelTrainer(BaseTrainer):
                 print(f'Start time: {time.strftime("%Y-%m-%d %H:%M:%S")}')
                 cls.initialize(0 , 1 , 0 , model.model_path).go()
                 print(f'End time: {time.strftime("%Y-%m-%d %H:%M:%S")}')
-

@@ -3,7 +3,7 @@ from typing import Optional
 from torch import nn,Tensor
 from torch.distributions import Normal , kl_divergence
 
-from .layer.MLP import MLP
+from src.algo.nn.layer.MLP import MLP
 
 class FactorVAE(nn.Module):
     def __init__(

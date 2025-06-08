@@ -6,6 +6,8 @@ from dataclasses import dataclass , field
 from torch import Tensor
 from typing import Any , Literal , Optional
 
+from src.basic.util.device import Device , send_to
+
 @dataclass(slots=True)
 class BatchData:
     '''custom data component of a batch(x,y,w,i,valid)'''
@@ -19,30 +21,19 @@ class BatchData:
     def __post_init__(self):
         if isinstance(self.x , (list , tuple)) and len(self.x) == 1: self.x = self.x[0]
     def to(self , device = None): 
-        return self.__class__(
-            x = self.send_to(self.x , device) , 
-            y = self.send_to(self.y , device) ,
-            w = self.send_to(self.w , device) ,
-            i = self.send_to(self.i , device) ,
-            valid = self.send_to(self.valid , device) ,
-            kwargs = self.send_to(self.kwargs , device))
+        if device is None: 
+            return self
+        else:
+            if isinstance(device , Device): device = device.device
+            inputs = {name:send_to(getattr(self , name) , device) for name in self.__slots__}
+            return BatchData(**inputs)
+        
     def cpu(self):  return self.to('cpu')
     def cuda(self): return self.to('cuda')
+    def mps(self): return self.to('mps')
     def __len__(self): return len(self.y)
     @property
     def is_empty(self): return len(self.y) == 0
-    @classmethod
-    def send_to(cls , obj , des : Any | Literal['cpu' , 'cuda']) -> Any:
-        if isinstance(obj , Tensor):
-            if des == 'cpu': return obj.cpu()
-            elif des == 'cuda': return obj.cuda()
-            elif callable(des): return des(obj) 
-            else: return obj.to(des)
-        elif isinstance(obj , (list , tuple)):
-            return type(obj)([cls.send_to(o , des) for o in obj])
-        elif isinstance(obj , dict):
-            return {k:cls.send_to(o , des) for k,o in obj.items()}
-        else: return obj
     @property
     def device(self): return self.y.device
     @classmethod
