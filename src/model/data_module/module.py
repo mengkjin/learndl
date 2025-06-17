@@ -60,7 +60,10 @@ class DataModule(BaseDataModule):
         
     def input_seqlens(self , param : dict[str,Any]) -> dict[str,int]:
         if self.input_type == 'data':
-            seqlens : dict = {key:int(param['seqlens'][key]) for key in self.input_keys}
+            seqlens : dict = {key:int(param['seqlens'].get(key,0)) for key in self.input_keys}
+            l0 = min([v for v in seqlens.values() if v > 0])
+            for k,v in seqlens.items(): 
+                if v == 0: seqlens[k] = l0; l0 = v
             seqlens.update({k:int(v) for k,v in param.items() if k.endswith('_seq_len')})
         elif self.input_type in ['hidden' , 'factor']:
             seqlens : dict = {key:1 for key in self.input_keys}

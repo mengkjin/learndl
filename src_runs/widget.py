@@ -95,7 +95,7 @@ class ScriptRunner:
         return func
 
     def button(self):
-        button = widgets.Button(description=caption(self.header['description']), 
+        button = widgets.Button(description=self.header['description'].title(), 
                                 layout=widgets.Layout(width='auto', min_width='200px'), 
                                 style={'button_color': 'lightgrey' , 'font_weight': 'bold'} , 
                                 disabled=self.header.get('disabled' , False))
@@ -136,9 +136,6 @@ def argparse_dict(**kwargs):
     parser.add_argument('--param', type=str, default='', help='Extra parameters for the script')
     args , _ = parser.parse_known_args()
     return kwargs | args.__dict__
-
-def caption(txt : str):
-    return ' '.join([s.capitalize() for s in txt.split(' ')])
 
 def layout_grids(*boxes , max_columns = 3):
     columns = min(len(boxes) , max_columns)
@@ -181,7 +178,7 @@ def folder_title(folder : str | Path , level : int):
         style = title_style(size = 16 , bold = True)
     elif level == 3:
         style = title_style(size = 14 , bold = True)
-    return widgets.HTML(f'<div style="{style}"><em>{caption(text)}</em></div>')
+    return widgets.HTML(f'<div style="{style}"><em>{text.title()}</em></div>')
 
 def get_script_box(script : str | Path , **kwargs):
     boxes = ScriptRunner(script , **kwargs).boxes()

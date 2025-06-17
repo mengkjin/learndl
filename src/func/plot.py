@@ -11,6 +11,7 @@ from packaging import version
 from plottable import Table , ColumnDefinition
 from typing import Any , Callable , Literal , Optional
 
+from . import display
 
 CURRENT_SEABORN_VERSION = version.Version(getattr(sns , '__version__')) > version.Version('0.9.1')
 
@@ -108,7 +109,8 @@ class PlotFactorData:
             full_title = self.full_title if self.full_title else f'{self.title}{self.title_suffix()}'
             plt.suptitle(full_title , fontsize = 14) if self.suptitle else plt.title(full_title , fontsize = 14)
         plt.tight_layout()
-        if not self.show: plt.close()
+        plt.close(self.fig)
+        if self.show: display.plot(self.fig)
 
     def title_suffix(self):
         if self.name_key:
@@ -137,10 +139,10 @@ def plot_table(df : pd.DataFrame , int_cols = None , pct_cols = None , flt_cols 
     if flt_cols: df = df.assign(**df.loc[:,flt_cols].map(lambda x:f'{x:.{flt_ndigit}f}'))
     
     if capitalize:
-        df.index.names = [col.capitalize() if isinstance(col , str) else col for col in df.index.names]
-        df.columns =     [col.capitalize() if isinstance(col , str) else col for col in df.columns]
+        df.index.names = [col.title() if isinstance(col , str) else col for col in df.index.names]
+        df.columns =     [col.title() if isinstance(col , str) else col for col in df.columns]
         for column_definition in column_definitions:
-            column_definition.name = column_definition.name.capitalize()
+            column_definition.name = column_definition.name.title()
 
     column_definitions += [ColumnDefinition(name = df.index.names[0] , width = index_width , 
                                             textprops = {'ha':'left','fontsize':fontsize,'weight':'bold','style':'italic'})]

@@ -9,6 +9,7 @@ from torch.multiprocessing import Pool
 from tqdm import tqdm
 from typing import Literal
 
+from src.basic import torch_load
 from . import gp_math_func as MF
 from . import gp_factor_func as FF
 from .gp_utils import gpHandler , gpTimer , gpContainer , gpFileManager , MemoryManager , gpEliteGroup , gpFitness
@@ -188,7 +189,7 @@ def gp_namespace(gp_params):
         package_require = ['gp_argnames' , 'gp_inputs' , 'size' , 'indus' , 'labels_raw' , 'df_index' , 'df_columns' , 'universe']
 
         load_finished = False
-        package_data = torch.load(package_path) if os.path.exists(package_path) else {}
+        package_data = torch_load(package_path) if os.path.exists(package_path) else {}
 
         if not np.isin(package_require , list(package_data.keys())).all() or not np.isin(gp_space.gp_argnames , package_data['gp_argnames']).all():
             if gp_space.param.verbose: print(f'  --> Exists "{package_path}" but Lack Required Data!')

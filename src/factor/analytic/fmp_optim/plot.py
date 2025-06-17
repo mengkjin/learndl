@@ -104,9 +104,8 @@ def plot_optim_perf_lag(data : pd.DataFrame , show = False):
             [ax1.plot(df.index , df[col], label=col) for col in df.columns if col != 'lag_cost']
             ax1.legend(loc = 'upper left')
 
-            
-
             ax2.plot(df.index, df['lag_cost'], 'r-', )
+
             ax2.fill_between(df.index, df['lag_cost'] , color='r', alpha=0.5 , label='Lag Cost (right)')
             ax2.legend(loc='upper right')  
 
@@ -154,7 +153,7 @@ def plot_optim_exp_style(data : pd.DataFrame , show = False):
                 ax.fill_between(df.index, df[col] , color='b', alpha=0.5)
                 plot.set_yaxis(ax , format='flt' , digits=2 , tick_size= 8  , tick_length=0 , tick_pos = 'left')
                 plot.set_xaxis(ax , df.index , tick_size= 8 , tick_length=0 , grid=False)
-                ax.set_title(col.capitalize())
+                ax.set_title(col.title())
                 ax.tick_params(left=False, right=False, top=False, bottom=False)
 
             fig.autofmt_xdate(rotation = 45)
@@ -173,7 +172,7 @@ def plot_optim_exp_indus(data : pd.DataFrame , show = False):
                 ax.fill_between(df.index, df[col] , color='b', alpha=0.5)
                 plot.set_yaxis(ax , format='pct' , digits=2 , tick_size= 8  , tick_length=0 , tick_pos = 'left')
                 plot.set_xaxis(ax , df.index , tick_size= 8 , tick_length=0 , grid=False)
-                ax.set_title(col.capitalize())
+                ax.set_title(col.title())
                 ax.tick_params(left=False, right=False, top=False, bottom=False)
 
             fig.autofmt_xdate(rotation = 45)

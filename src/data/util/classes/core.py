@@ -7,7 +7,7 @@ from pathlib import Path
 from torch import Tensor
 from typing import Any , ClassVar , Literal , Optional
 
-from src.basic import CALENDAR , PATH , SILENT , Timer
+from src.basic import CALENDAR , PATH , SILENT , Timer , torch_load
 from src.func import index_union , index_intersect , forward_fillna
 
 from . import Stock4DData
@@ -103,7 +103,7 @@ class DataBlock(Stock4DData):
         if file_path.suffix in ['.npz' , '.npy' , '.np']:
             file = np.load(file_path)
         elif file_path.suffix in ['.pt' , '.pth']:
-            file = torch.load(file_path)
+            file = torch_load(file_path)
         else:
             raise Exception(file_path)
         keys = file.keys() if keys is None else np.intersect1d(keys , list(file.keys()))
@@ -391,7 +391,7 @@ class ModuleData:
 
         if y_labels is not None and Path(dataset_path).exists():
             try:
-                data = cls(**torch.load(dataset_path))
+                data = cls(**torch_load(dataset_path))
                 if (np.isin(data_type_list , list(data.x.keys())).all() and
                     np.isin(y_labels , list(data.y.feature)).all()):
                     if not SILENT: print(f'try using {dataset_path} , success!')

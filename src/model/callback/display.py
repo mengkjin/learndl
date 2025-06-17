@@ -46,7 +46,11 @@ class BatchDisplay(BaseCallBack):
     def on_train_batch_end(self):  
         if self.show_info: 
             self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.output.loss_item:.5f}')
-    
+            #self.device.print()
+    def on_train_batch_start(self):
+        if self.show_info: 
+            self.dataloader.display(f'Train Ep#{self.status.epoch:3d} loss : {self.metrics.output.loss_item:.5f}')
+
     def on_validation_batch_end(self):   
         if self.show_info: 
             self.dataloader.display(f'Valid Ep#{self.status.epoch:3d} score : {self.metrics.output.score:.5f}')
@@ -94,7 +98,7 @@ class StatusDisplay(BaseCallBack):
         elif event == 'new_attempt':
             sdout = '{attempt} {epoch} : {status}, Next attempt goes!'.format(**self.record_texts)
         elif event == 'nanloss':
-            sdout = 'Model {model_date}.{model_num} Attempt{attempt}, epoch{epoch} got nanloss!'.format(self.status.as_dict())
+            sdout = 'Model {model_date}.{model_num} Attempt{attempt}, epoch{epoch} got nanloss!'.format(**self.status.as_dict())
         else:
             raise KeyError(event)
         return sdout
@@ -103,14 +107,14 @@ class StatusDisplay(BaseCallBack):
     def toc(self , key : str): return time.time() - self.record_times[key]
     def tic_str(self , key : str):
         self.tic(key)
-        return 'Start Process [{}] at {:s}!'.format(key.capitalize() , time.ctime(self.record_times[key]))
+        return 'Start Process [{}] at {:s}!'.format(key.title() , time.ctime(self.record_times[key]))
     def toc_str(self , key : str , avg = False): 
         toc = self.toc(key)
         if avg and self.record_model_stage * self.record_epoch_stage:
             self.record_texts[key] = 'Finish Process [{}], Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
-                key.capitalize() , toc / 3600 , toc / 60 / self.record_model_stage , toc / self.record_epoch_stage)
+                key.title() , toc / 3600 , toc / 60 / self.record_model_stage , toc / self.record_epoch_stage)
         else:
-            self.record_texts[key] = 'Finish Process [{}], Cost {:.1f} Secs'.format(key.capitalize() , toc)
+            self.record_texts[key] = 'Finish Process [{}], Cost {:.1f} Secs'.format(key.title() , toc)
         return self.record_texts[f'{key}']
 
     # callbacks

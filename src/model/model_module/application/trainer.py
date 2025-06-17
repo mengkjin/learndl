@@ -1,6 +1,8 @@
 import time
 
-from src.basic import MACHINE , RegisteredModel
+from contextlib import nullcontext
+
+from src.basic import MACHINE , RegisteredModel , MessageCapturer
 from src.model.callback import CallBackManager
 from src.model.data_module import DataModule
 from src.model.util import BaseTrainer
@@ -43,3 +45,15 @@ class ModelTrainer(BaseTrainer):
                 print(f'Start time: {time.strftime("%Y-%m-%d %H:%M:%S")}')
                 cls.initialize(0 , 1 , 0 , model.model_path).go()
                 print(f'End time: {time.strftime("%Y-%m-%d %H:%M:%S")}')
+
+    @classmethod
+    def train(cls , module : str | None = None , short_test = None , message_capturer = True, **kwargs):
+        if message_capturer:
+            capture_title = 'Train Model' if not short_test else 'Train Model of Short Test'
+            with MessageCapturer(capture_title , **kwargs) as capture:
+                trainer = cls.initialize(module = module , short_test = short_test , **kwargs)
+                capture.set_export_path(trainer.path_training_output)
+                trainer.go()
+        else:
+            trainer = cls.initialize(module = module , short_test = short_test , **kwargs).go()
+        return trainer

@@ -1,5 +1,5 @@
 from . import (
-    CNN , ModernTCN , PatchTST , PLE , Recurrent , RiskAttGRU , 
-    TSMixer , TRA , TemporalFusionTransformer , FactorVAE ,
+    CNN, TFT , ModernTCN , PatchTST , PLE , Recurrent , RiskAttGRU , 
+    TSMixer , TRA , FactorVAE ,
     Attention ,
 )

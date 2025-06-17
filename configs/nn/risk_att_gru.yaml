@@ -7,4 +7,4 @@ indus_embed:    [False]
 
 hidden_as_factor:    [true]
 
-model.types: [best]
+model.submodels: [best]

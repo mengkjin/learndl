@@ -190,7 +190,7 @@ class PortfolioBuilderGroup:
         elif self.category == 'top':
             return 'Generation'
         else:
-            return self.category.capitalize()
+            return self.category.title()
     
     @property
     def port_name_nchar(self):

@@ -9,7 +9,7 @@ from typing import Any , Literal , Optional
 from src.project_setting import MACHINE
 from src.basic import path as PATH
 from src.basic import conf as CONF
-
+from .version import torch_load
 from .calendar import CALENDAR
 
 class ModelPath:
@@ -176,7 +176,7 @@ class ModelFile:
     def load(self , key : str) -> Any:
         assert key in ModelDict.__slots__ , (key , ModelDict.__slots__)
         path = self.model_path.joinpath(f'{key}.pt')
-        return torch.load(path , map_location='cpu') if path.exists() else None
+        return torch_load(path , map_location='cpu') if path.exists() else None
     def exists(self) -> bool: 
         return any([self.model_path.joinpath(f'{key}.pt').exists() for key in ModelDict.__slots__])
     def model_dict(self):

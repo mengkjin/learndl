@@ -28,7 +28,7 @@ def parse_full_name(full_name : str):
         elements['n_best'] = int(strategy.split('Top')[-1].replace('_',''))
     return elements
 
-def get_prefix(category : Literal['optim' , 'top']): return category.capitalize()
+def get_prefix(category : Literal['optim' , 'top']): return category.title()
     
 def get_factor_name(alpha : AlphaModel | str):
     return alpha.name if isinstance(alpha , AlphaModel) else alpha

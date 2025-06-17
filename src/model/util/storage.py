@@ -6,7 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal
 
-from src.basic import ModelDict , ModelPath
+from src.basic import ModelDict , ModelPath , torch_load
 
 class MemFileStorage:
     '''Interface of mem or disk storage, methods'''
@@ -42,7 +42,7 @@ class MemFileStorage:
             return [self.load(p) for p in path]
         elif isinstance(path , (str | Path)):
             if self.memdisk is None:
-                return torch.load(path) if Path(path).exists() else None
+                return torch_load(path) if Path(path).exists() else None
             else:
                 return self.memdisk.get(str(path))
         else:
@@ -50,7 +50,7 @@ class MemFileStorage:
     
     def is_cuda(self , obj) -> bool:
         if isinstance(obj , (torch.Tensor , torch.nn.Module)):
-            return obj.is_cuda
+            return bool(obj.is_cuda)
         elif isinstance(obj , (list , tuple)):
             for sub in obj:
                 if self.is_cuda(sub): return True

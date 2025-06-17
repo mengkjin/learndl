@@ -22,17 +22,19 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
     @property
     def analytic_tasks(self):
-        if self.trainer.config.resume_training:
+        if self.trainer.config.short_test:
+            return self.ANALYTIC_TASKS[:1]
+        elif self.trainer.config.resume_training:
             return self.ANALYTIC_TASKS[:1]
         else:
             return self.ANALYTIC_TASKS
 
     @property
-    def path_data(self): return str(self.config.model_base_path.rslt('data.xlsx'))
+    def path_data(self): return self.trainer.path_analytical_data
     @property
-    def path_plot(self): return str(self.config.model_base_path.rslt('plot.pdf'))
+    def path_plot(self): return self.trainer.path_analytical_plot
     @property
-    def path_pred(self): return str(self.config.model_base_path.rslt('pred_df.feather'))
+    def path_pred(self): return self.trainer.path_pred_dataframe
 
     def on_test_start(self):     PRED_RECORD.initialize(self.trainer)
     def on_test_batch_end(self): PRED_RECORD.append_batch_pred(self.trainer)
@@ -61,12 +63,20 @@ class DetailedAlphaAnalysis(BaseCallBack):
         if 'optim@frontface' in rslts.keys(): 
             # print(f'FMP test Result:')
             df = rslts['optim@frontface'].copy()
-            for col in ['pf','bm','excess','annualized','mdd','te']:  df[col] = df[col].map(lambda x:f'{x:.2%}')
-            for col in ['ir','calmar','turnover']:  df[col] = df[col].map(lambda x:f'{x:.3f}')
+            #for col in ['pf','bm','excess','annualized','mdd','te']:  df[col] = df[col].map(lambda x:f'{x:.2%}')
+            #for col in ['ir','calmar','turnover']:  df[col] = df[col].map(lambda x:f'{x:.3f}')
+            df = df.assign(**{col:df[col].map(lambda x:f'{x:.2%}') for col in ['pf','bm','excess','annualized','mdd','te']})
+            df = df.assign(**{col:df[col].map(lambda x:f'{x:.3f}') for col in ['ir','calmar','turnover']})
             FUNC.display.data_frame(df)
+
+        for fig_name in ['factor@ic_curve@best.market' , 'factor@group_curve@best.market']:
+            FUNC.display.plot(figs.get(fig_name , None) , raise_error = False)
 
         FUNC.dfs_to_excel(rslts , self.path_data , print_prefix='Analytic datas')
         FUNC.figs_to_pdf(figs , self.path_plot , print_prefix='Analytic plots')
+
+        #with open(self.path_plot.parent.joinpath('plot_names.txt') , 'w') as f:
+        #    f.write('\n'.join(f'{i}:{k}' for i,k in enumerate(figs.keys())))
         
 class GroupReturnAnalysis(BaseCallBack):
     '''record and concat each model to Alpha model instance'''

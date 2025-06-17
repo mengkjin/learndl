@@ -7,7 +7,7 @@ from typing import Any,Optional
 
 from src.algo.nn.optimizer import sam
 
-from .metric import BatchMetric
+from .metrics import BatchMetric
 from .config import TrainConfig
 
 NAN_GRADS_HALT = False

@@ -23,7 +23,7 @@ AVAILABLE_NNS = {
     'factor_vae'        : Model.FactorVAE.FactorVAE,
     'risk_att_gru'      : Model.RiskAttGRU.risk_att_gru,
     'ple_gru'           : Model.PLE.ple_gru,
-    'tft'               : Model.TemporalFusionTransformer.TemporalFusionTransformer
+    'tft'               : Model.TFT.TemporalFusionTransformer
 }
 
 def valid_nn(nn_type : str):

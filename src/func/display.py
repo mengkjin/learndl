@@ -13,6 +13,12 @@ def data_frame(df : pd.DataFrame , text_ahead : str | None = None , text_after :
         display(df)
     if text_after: print(text_after)
 
+def plot(fig , raise_error = True):
+    if fig is None:
+        if raise_error: raise ValueError('No figure to display')
+        return
+    display(fig)
+
 def print_seperator(width = 80 , char = '-'):
     print(char * width)
 

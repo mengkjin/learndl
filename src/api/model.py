@@ -1,6 +1,6 @@
 import shutil
 import src.model.model_module.application as app
-from src.basic import MACHINE , PATH
+from src.basic import MACHINE , PATH , MessageCapturer
 from src.data import DataPreProcessor
 from src.func.display import EnclosedMessage
 
@@ -96,6 +96,17 @@ class ModelAPI:
         DataPreProcessor.main(predict=False , confirm=1)
 
     @classmethod
+    def train_model(cls , module : str | None = None , short_test : bool = False , verbosity : int | None = 2 , 
+                    stage = 0 , resume = 0 , checkname= 1 , 
+                    **kwargs):
+        '''
+        train a model
+        '''
+        return cls.Trainer.train(module = module , short_test = short_test , verbosity = verbosity , 
+                                 stage = stage , resume = resume , checkname = checkname ,
+                                 **kwargs)
+
+    @classmethod
     def short_test(cls , module : str | None = None , verbosity : int | None = 10):
         '''
         Short test a module
@@ -106,9 +117,8 @@ class ModelAPI:
             None: use default verbosity
             int : use the verbosity level , if above 10 will print more details
         '''
-        app = cls.Trainer.initialize(stage = 0 , resume = 0 , checkname= 1 , module= module , short_test=True , verbosity = verbosity)
-        app.go()
-        return app
+        return cls.Trainer.train(module = module , short_test=True , verbosity = verbosity ,
+                                 stage = 0 , resume = 0 , checkname= 1)
     
     @classmethod
     def clear_st_models(cls):

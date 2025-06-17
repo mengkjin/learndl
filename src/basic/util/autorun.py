@@ -36,12 +36,12 @@ class AutoRunTask:
             print(traceback.format_exc())
             self.status = f'Error Occured! {exc_value}'
         else:
-            self.status = ' '.join(['Successful' , *[s.capitalize() for s in self.task_name.split('_')]]) + '!'
+            self.status = 'Successful ' + self.task_name.replace('_' , ' ').title() + '!'
         self.printer.__exit__(exc_type, exc_value, exc_traceback)
 
         if self.forfeit_task:
             return
-
+        
         if self.email or (self.email_if_attachment and Email.ATTACHMENTS): 
             title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')]])
             Email.attach(self.printer.filename)
@@ -57,6 +57,10 @@ class AutoRunTask:
     @property
     def forfeit_task(self):
         return self.already_done and self.source == 'bash'
+    
+    def add_attachments(self , paths : Path | list[Path]):
+        if not isinstance(paths , list): paths = [paths]
+        [Email.attach(p) for p in paths if Path(p).exists()]
 
 DEFAULT_EXCLUDES = ['kernel_interrupt_daemon.py']
 def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py']):

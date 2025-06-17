@@ -9,7 +9,7 @@ from src.basic import Device , Logger , ModelPath , PATH , MACHINE
 from src.func import recur_update
 from src.func.display import EnclosedMessage
 
-from .metric import Metrics
+from .metrics import Metrics
 from .storage import Checkpoint , Deposition
 
 TRAIN_CONFIG_LIST = ['train' , 'env' , 'callbacks' , 'conditional' , 'model']
@@ -158,6 +158,9 @@ class TrainParam:
 
     @property
     def short_test(self): return bool(self.Param['env.short_test'])
+    @short_test.setter
+    def short_test(self , value : bool):
+        self.Param['env.short_test'] = value
     @property
     def verbosity(self): return int(self.Param['env.verbosity'])
     @property
@@ -191,6 +194,9 @@ class TrainParam:
             return str(self.Param['model.data.types']).split('+')
         else:
             return list(self.Param['model.data.types'])
+    @model_data_types.setter
+    def model_data_types(self , value : list[str]):
+        self.Param['model.data.types'] = value
     @property
     def model_data_prenorm(self) -> dict[str,Any]: return self.Param['model.data.prenorm']
     @property
@@ -206,9 +212,21 @@ class TrainParam:
                 return [ff for f in factors for ff in striped_list(f)]
         return striped_list(factors)
     @property
-    def model_train_window(self): return int(self.Param['model.train_window'])
+    def model_train_window(self): 
+        if (train_window := int(self.Param['model.train_window'])) > 0:
+            return train_window
+        elif self.model_module == 'booster':
+            return int(self.Param['model.booster_train_window'])
+        else:
+            return int(self.Param['model.nn_train_window'])
     @property
-    def model_interval(self): return int(self.Param['model.interval'])
+    def model_interval(self): 
+        if (interval := int(self.Param['model.interval'])) > 0:
+            return interval
+        elif self.model_module == 'booster':
+            return int(self.Param['model.booster_interval'])
+        else:
+            return int(self.Param['model.nn_interval'])
     @property
     def model_booster_head(self): return self.Param['model.booster_head']
     @property
@@ -587,6 +605,8 @@ class TrainConfig(TrainParam):
             info_strs.append(f'  -->  Factor Types : {self.model_factor_types}')
         info_strs.append(f'Model Labels : {self.model_labels}')
         info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
+        info_strs.append(f'Interval     : {self.model_interval} days')
+        info_strs.append(f'Train Window : {self.model_train_window} days')
         info_strs.append(f'Sampling     : {self.train_sample_method}')
         info_strs.append(f'Shuffling    : {self.train_shuffle_option}')
         info_strs.append(f'Random Seed  : {self.random_seed}')

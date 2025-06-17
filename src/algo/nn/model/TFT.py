@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple, Optional
+from typing import Any
 import math
 
 from src.basic.conf import RISK_INDUS , RISK_STYLE
@@ -138,23 +138,24 @@ class TemporalFusionTransformer(nn.Module):
     def __init__(
         self,
         input_dim : tuple[int,int] = (6,len(RISK_INDUS)), # aka , known dynamic dim , static dim
-        label_dim: int = 0, # aka , unknown dynamic dim, should be 0 if not used
         hidden_dim: int = 16,
+        label_dim: int = 0, # aka , unknown dynamic dim, should be 0 if not used
         num_heads: int = 4,
         num_layers: int = 2,
-        seq_len: int = 20,
         pred_len: int = 1,
         dropout: float = 0.1,
-        quantiles: List[float] = [0.1, 0.5, 0.9] ,
+        quantiles: list[float] = [0.1, 0.5, 0.9] ,
         indus_dim    = 2**3 ,
         indus_embed  = True , 
+        lstm_layers  = 1,
+        max_len      = 120,
         **kwargs
     ):
         super().__init__()
         self.known_dynamic_dim , self.static_dim = input_dim
         self.unknown_dynamic_dim = label_dim
         self.hidden_dim = hidden_dim
-        self.seq_len = seq_len
+        self.max_len = max_len
         self.pred_len = pred_len
         self.quantiles = quantiles
 
@@ -196,11 +197,11 @@ class TemporalFusionTransformer(nn.Module):
         
         # LSTM编码器
         self.lstm_encoder = nn.LSTM(
-            hidden_dim, hidden_dim, batch_first=True, dropout=dropout
+            hidden_dim, hidden_dim, batch_first=True, dropout=dropout if lstm_layers > 1 else 0, num_layers=lstm_layers
         )
         
         self.lstm_decoder = nn.LSTM(
-            hidden_dim, hidden_dim, batch_first=True, dropout=dropout
+            hidden_dim, hidden_dim, batch_first=True, dropout=dropout if lstm_layers > 1 else 0, num_layers=lstm_layers
         )
         
         # 多头注意力层
@@ -210,8 +211,11 @@ class TemporalFusionTransformer(nn.Module):
         ])
         
         # 位置编码
-        self.position_encoding = nn.Parameter(
-            torch.randn(seq_len + pred_len, hidden_dim)
+        self.position_encoding_encoder = nn.Parameter(
+            torch.randn(max_len, hidden_dim)
+        )
+        self.position_encoding_decoder = nn.Parameter(
+            torch.randn(self.pred_len, hidden_dim)
         )
         
         # 输出层
@@ -221,8 +225,13 @@ class TemporalFusionTransformer(nn.Module):
         
         self.dropout = nn.Dropout(dropout)
     
+
+    def show_shape(self , name : str , x : Any , print_shape : bool = False):
+        if not print_shape: return
+        print(f"{name}: {x.shape}")
+
     def forward(
-        self, x : tuple[torch.Tensor,torch.Tensor,torch.Tensor] | tuple[torch.Tensor,torch.Tensor]
+        self, x : tuple[torch.Tensor,torch.Tensor,torch.Tensor] | tuple[torch.Tensor,torch.Tensor] | Any
     ):
         """
         x:
@@ -235,56 +244,62 @@ class TemporalFusionTransformer(nn.Module):
         else:
             historical_features , static_features = x
             future_features = None
+        seq_len = historical_features.shape[1]
         
         # 1. 静态特征处理
+        if static_features.ndim == historical_features.ndim and static_features.shape[1] > 1:
+            static_features = static_features[:,-1]
+        self.show_shape('static_features' , static_features)
+        static_embed = self.indus_embedding(static_features)
         static_encoded, static_weights = self.static_vsn(
-            static_features.unsqueeze(1).repeat(1, self.seq_len, 1)
+            static_embed.unsqueeze(1).repeat(1, seq_len, 1)
         )
         # static_encoded现在是(batch_size, seq_len, hidden_dim)
         static_context = self.static_encoder(static_encoded.mean(dim=1))  # (batch_size, hidden_dim)
         
-        print(f"static_features: {static_features.shape}")
-        print(f"static_encoded: {static_encoded.shape}")
-        print(f"static_weights: {static_weights.shape}")
-        print(f"static_context: {static_context.shape}")
+        self.show_shape('static_embed' , static_embed)
+        self.show_shape('static_encoded' , static_encoded)
+        self.show_shape('static_weights' , static_weights)
+        self.show_shape('static_context' , static_context)
 
         # 2. 历史特征处理
         historical_encoded, hist_weights = self.historical_vsn(historical_features)
 
-        print(f"historical_features: {historical_features.shape}")
-        print(f"historical_encoded: {historical_encoded.shape}")
-        print(f"hist_weights: {hist_weights.shape}")
+        self.show_shape('historical_features' , historical_features)
+        self.show_shape('historical_encoded' , historical_encoded)
+        self.show_shape('hist_weights' , hist_weights)
         
         # 3. 未来特征处理
         if future_features is not None:
             future_encoded, future_weights = self.future_vsn(future_features)
-            print(f"future_features: {future_features.shape}")
-            print(f"future_encoded: {future_encoded.shape}")
-            print(f"future_weights: {future_weights.shape}")
+            self.show_shape('future_features' , future_features)
+            self.show_shape('future_encoded' , future_encoded)
+            self.show_shape('future_weights' , future_weights)
         else:
             future_encoded = 0.
             future_weights = 0.
 
         # 4. LSTM编码
         lstm_input = historical_encoded + static_encoded
-        lstm_input = lstm_input + self.position_encoding[:self.seq_len].unsqueeze(0)
+        lstm_input = lstm_input + self.position_encoding_encoder[:seq_len].unsqueeze(0)
 
-        print(f"lstm_input: {lstm_input.shape}")
+        self.show_shape('lstm_input' , lstm_input)
         
         encoder_output, (h_n, c_n) = self.lstm_encoder(lstm_input)
 
-        print(f"encoder_output: {encoder_output.shape}")
-        print(f"h_n: {h_n.shape}")
-        print(f"c_n: {c_n.shape}")
+        self.show_shape('encoder_output' , encoder_output)
+        self.show_shape('h_n' , h_n)
+        self.show_shape('c_n' , c_n)
         
         # 5. 解码器
         decoder_input = future_encoded + static_context.unsqueeze(1).repeat(1, self.pred_len, 1)
-        decoder_input = decoder_input + self.position_encoding[self.seq_len:].unsqueeze(0)
+        self.show_shape('decoder_input' , decoder_input)
+
+        decoder_input = decoder_input + self.position_encoding_decoder.unsqueeze(0)
         
         decoder_output, _ = self.lstm_decoder(decoder_input, (h_n, c_n))
 
-        print(f"decoder_input: {decoder_input.shape}")
-        print(f"decoder_output: {decoder_output.shape}")
+        self.show_shape('decoder_output' , decoder_output)
         
         # 6. 注意力机制
         attention_output = decoder_output
@@ -293,7 +308,7 @@ class TemporalFusionTransformer(nn.Module):
                 attention_output, encoder_output, encoder_output
             )
 
-        print(f"attention_output: {attention_output.shape}")
+        self.show_shape('attention_output' , attention_output)
         
         # 7. 分位数预测
         quantile_outputs = []
@@ -303,38 +318,40 @@ class TemporalFusionTransformer(nn.Module):
         
         predictions = torch.cat(quantile_outputs, dim=-1)  # (batch_size, pred_len, num_quantiles)
         
-        print(f"predictions: {predictions.shape}")
+        self.show_shape('predictions' , predictions)
 
-        y_hat = predictions[...,self.quantiles.index(0.5)].mean(-1)
+        y_hat = predictions[...,self.quantiles.index(0.5)][:,:1] # only use the first step as y_hat
         return y_hat , {
             'predictions': predictions,
             'static_weights': static_weights,
             'historical_weights': hist_weights,
             'future_weights': future_weights
         }
-
-class QuantileLoss(nn.Module):
-    """分位数损失函数"""
-    def __init__(self, quantiles: List[float]):
-        super().__init__()
-        self.quantiles = quantiles
     
-    def forward(self, predictions: torch.Tensor, targets: torch.Tensor):
-        """
-        Args:
-            predictions: (batch_size, pred_len, num_quantiles)
-            targets: (batch_size, pred_len, 1)
-        """
+    @staticmethod
+    def loss(label : torch.Tensor , pred : torch.Tensor | None = None , w : torch.Tensor | None = None , dim = None , 
+             quantiles : list[float] = [0.1,0.5,0.9] , predictions : torch.Tensor | None = None , **kwargs):
+        assert predictions is not None , f'predictions should be provided'
+        assert predictions.shape[-1] == len(quantiles) , f'shape of predictions {predictions.shape} should be (...,{len(quantiles)})'
+        if predictions.ndim == label.ndim + 1: predictions = predictions.squeeze(-2)
+        assert predictions.ndim == label.ndim == 2 , f'shape of predictions {predictions.shape} and label {label.shape} should be (...,1)'
+        if w is None:
+            w1 = 1.
+        else:
+            w1 = w / w.sum(dim=dim,keepdim=True) * (w.numel() if dim is None else w.size(dim=dim))
+        
         losses = []
-        targets = targets.expand_as(predictions)
+        label = label.expand_as(predictions)
         
-        for i, q in enumerate(self.quantiles):
-            pred_q = predictions[:, :, i:i+1]
-            error = targets - pred_q
-            loss = torch.max(q * error, (q - 1) * error)
-            losses.append(loss.mean())
+        for i, q in enumerate(quantiles):
+            pred_q = predictions[..., i:i+1]
+            error = label - pred_q
+            valid = ~error.isnan()
+            loss = torch.max(q * error[valid], (q - 1) * error[valid])
+            losses.append((w1 * loss).mean(dim=dim,keepdim=True))
         
-        return sum(losses) / len(losses)
+        v = torch.stack(losses,dim=-1).mean(dim=-1)
+        return v
 
 # 数据生成和预处理函数
 def generate_synthetic_data(
@@ -375,7 +392,7 @@ def generate_synthetic_data(
         'industries': industry_onehot
     }
 
-def create_sequences(data: Dict, seq_len: int = 20, pred_len: int = 5):
+def create_sequences(data: dict[str,Any], seq_len: int = 20, pred_len: int = 5):
     """创建训练序列 - 修复版本"""
     prices = data['prices']
     volumes = data['volumes']

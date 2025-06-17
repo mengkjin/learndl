@@ -4,6 +4,7 @@ import numpy as np
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from inspect import currentframe
+from pathlib import Path
 from torch import Tensor
 from typing import Any , final , Iterator , Literal , Optional
 
@@ -70,7 +71,7 @@ class _FitLoopBreaker:
     def new_loop(self): 
         self.status = []
     def loop_end(self , epoch):
-        if epoch >= self.max_epoch: self.add_status('Max Epoch' , epoch)
+        if epoch >= self.max_epoch - 1: self.add_status('Max Epoch' , epoch)
     def add_status(self , status : str , epoch : int): 
         self.status.append(_EndEpochStamp(status , epoch))
     @property
@@ -328,6 +329,17 @@ class BaseTrainer(ModelStreamLine):
     
     @property
     def batch_output(self): return self.model.batch_output
+    @property
+    def path_training_output(self) -> Path: return self.config.model_base_path.rslt('training_output.html')
+    @property
+    def path_analytical_data(self) -> Path: return self.config.model_base_path.rslt('data.xlsx')
+    @property
+    def path_analytical_plot(self) -> Path: return self.config.model_base_path.rslt('plot.pdf')
+    @property
+    def path_pred_dataframe(self) -> Path:  return self.config.model_base_path.rslt('pred_df.feather')
+    @property
+    def result_package(self) -> list[Path]: 
+        return [self.path_training_output , self.path_analytical_plot]
     
     def main_process(self):
         '''Main stage of data & fit & test'''
@@ -674,7 +686,7 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         kwargs['pred'] = self.batch_output.pred
         kwargs['label'] = self.batch_data.y
         kwargs['weight'] = self.batch_data.w
-        kwargs['multiloss'] = self.multiloss_params()
+        kwargs.update(self.multiloss_params())
         kwargs.update(self.batch_output.other)
         return kwargs
     

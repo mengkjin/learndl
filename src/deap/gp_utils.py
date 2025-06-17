@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from deap import base , creator , tools , gp
 from copy import deepcopy
 from tqdm import tqdm
+
+from src.basic import torch_load
 from . import gp_math_func as MF
 from . import gp_factor_func as FF
 
@@ -494,13 +496,13 @@ class gpFileManager:
                 pattern = r'iter(\d+).pt'
                 matches = [re.match(pattern, file_name) for file_name in os.listdir(getattr(self.dir , key))]
                 i_iter = sorted(list(set([int(match.group(1)) for match in matches if match])))[i_iter]
-            return torch.load(getattr(self.dir , key) + f'/iter{i_iter}.pt').to(device)
+            return torch_load(getattr(self.dir , key) + f'/iter{i_iter}.pt').to(device)
         elif key == 'parquet':
             return pd.read_parquet(f'{self.dir.pqt}/elite_{i_elite}.parquet', engine='fastparquet')
         else:
             path = getattr(self.path , key)
             if key == 'df_axis':
-                self.df_axis = torch.load(path)
+                self.df_axis = torch_load(path)
                 return self.df_axis
             elif key in ['elitelog' , 'hoflog']:
                 df = pd.DataFrame()
@@ -511,7 +513,7 @@ class gpFileManager:
             elif path.endswith('.csv'):
                 return pd.read_csv(path,index_col=0)
             elif path.endswith('.pt'):
-                return torch.load(path)
+                return torch_load(path)
             else:
                 raise Exception(key)
 

@@ -7,7 +7,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from src.func import match_values
+from src.func import match_values , display
 from ..util import BasicBoosterModel , BoosterInput
 
 PLOT_PATH : Path | None = None
@@ -92,7 +92,7 @@ class LgbmPlot:
         if self.plot_path is not None: self.plot_path.mkdir(exist_ok= True)
 
     def training(self , show_plot = True , xlim = None , ylim = None , yscale = None):
-        plt.figure()
+        fig = plt.figure()
         ax = lightgbm.plot_metric(self.lgbm.evals_result, metric='l2')
         plt.scatter(self.lgbm.model.best_iteration,list(self.lgbm.evals_result['valid'].values())\
                     [0][self.lgbm.model.best_iteration],label='best iteration')
@@ -100,7 +100,8 @@ class LgbmPlot:
         if xlim is not None: plt.xlim(xlim)
         if ylim is not None: plt.ylim(ylim)
         if yscale is not None: plt.yscale(yscale)
-        if show_plot: plt.show()
+        plt.close(fig)
+        if show_plot: display.plot(fig)
         if self.plot_path:
             self.plot_path.joinpath('training_process.png')
             plt.savefig(self.plot_path.joinpath('training_process.png'),dpi=1200)
@@ -217,13 +218,13 @@ class LgbmPlot:
                 pdp[i] = np.array(self.lgbm.model.predict(x)).mean()
 
             # plotPDP
-            plt.figure()
+            fig =plt.figure()
             plt.plot(x_range,pdp)
             plt.title(f'PDP of {feature}')
             plt.xlabel(f'{feature}')
             plt.ylabel('y')
             plt.savefig(self.plot_path.joinpath('explainer_pdp' , f'explainer_pdp_{feature}.png'))
-            plt.close()
+            plt.close(fig)
     
 def main():
     dict_df : dict[str,Any] = {

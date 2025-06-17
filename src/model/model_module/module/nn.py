@@ -21,8 +21,7 @@ class NNPredictor(BasePredictorModel):
         self.reset_submodels(*args , **kwargs)
 
         self.model_dict.reset()
-        self.metrics.new_net(self.net)
-        self.metrics.new_model(param)
+        self.metrics.new_model(param , self.net)
         return self
     
     def reset_submodels(self , *args , **kwargs):
