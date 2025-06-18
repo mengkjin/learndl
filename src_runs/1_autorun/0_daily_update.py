@@ -19,7 +19,7 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict(email = 1)
-    with AutoRunTask(f'daily update {CALENDAR.update_to()}' , **params) as runner:
+    with AutoRunTask(f'daily update {CALENDAR.update_to()}' , message_capturer = True , **params) as runner:
         if runner.forfeit_task: return
         DataAPI.update()
         ModelAPI.update()

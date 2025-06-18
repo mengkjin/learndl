@@ -49,11 +49,11 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def train(cls , module : str | None = None , short_test = None , message_capturer = True, **kwargs):
         if message_capturer:
-            capture_title = 'Train Model' if not short_test else 'Train Model of Short Test'
-            with MessageCapturer(capture_title , **kwargs) as capture:
+            with MessageCapturer('Train Model' if not short_test else 'Train Model of Short Test' , **kwargs) as capturer:
                 trainer = cls.initialize(module = module , short_test = short_test , **kwargs)
-                capture.set_export_path(trainer.path_training_output)
+                MessageCapturer.SetExportPath(trainer.path_training_output)
                 trainer.go()
         else:
-            trainer = cls.initialize(module = module , short_test = short_test , **kwargs).go()
+            trainer = cls.initialize(module = module , short_test = short_test , **kwargs)
+            trainer.go()
         return trainer

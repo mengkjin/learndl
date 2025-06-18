@@ -4,18 +4,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 from src.basic import path as PATH
-from .logger import DualPrinter
+from .logger import DualPrinter , MessageCapturer
 from .email import Email
 
 PATH.log_record.joinpath('autorun').mkdir(parents = True , exist_ok = True)
 
 class AutoRunTask:
     def __init__(self , task_name : str , email = True , email_if_attachment = True , 
-                 source = 'not_specified' , **kwargs):
+                 source = 'not_specified' , message_capturer : Path | str | bool = False , **kwargs):
         self.task_name = task_name.replace(' ' , '_')
         self.email = email
         self.email_if_attachment = email_if_attachment
         self.source = source
+        if message_capturer:
+            self.message_capturer = MessageCapturer(task_name , export_path = None if message_capturer is True else message_capturer)
+        else:
+            self.message_capturer = None
 
     def __enter__(self):
         self.already_done = self.record_path.exists()
@@ -25,6 +29,9 @@ class AutoRunTask:
         name = '.'.join([self.task_name , f'{self.date_str}_{self.time_str}' , 'txt'])
         self.printer = DualPrinter(f'{self.task_name}/{name}')
         self.printer.__enter__()
+
+        if self.message_capturer:
+            self.message_capturer.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -42,6 +49,9 @@ class AutoRunTask:
         if self.forfeit_task:
             return
         
+        if self.message_capturer:
+            self.message_capturer.__exit__(exc_type, exc_value, exc_traceback)
+
         if self.email or (self.email_if_attachment and Email.ATTACHMENTS): 
             title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')]])
             Email.attach(self.printer.filename)
@@ -52,7 +62,7 @@ class AutoRunTask:
 
     @property
     def record_path(self):
-        return PATH.log_record.joinpath('autorun' , self.task_name)
+        return PATH.log_record.joinpath('autorun' , f'{self.task_name}.{self.date_str}_{self.time_str}.txt')
     
     @property
     def forfeit_task(self):
