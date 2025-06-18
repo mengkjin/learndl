@@ -22,7 +22,7 @@ from src_runs.widget import argparse_dict
 def main():
     params = argparse_dict()
     module = str(params['param'])
-    with AutoRunTask('train model' , **params) as runner:
+    with AutoRunTask('train model' , message_capturer = True , **params) as runner:
         trainer = ModelAPI.train_model(stage = 0 , resume = 0 , checkname= 1 , module = module if module else None)
         runner.add_attachments(trainer.path_training_output)
 

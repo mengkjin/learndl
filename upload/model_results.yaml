@@ -586,3 +586,77 @@
   gru.0.best: Avg(0.0437)|Sum(2.75)|Std(0.0676)|T(5.13)|IR(3.1686)
   gru.0.swabest: Avg(0.0422)|Sum(2.66)|Std(0.068)|T(4.93)|IR(3.0416)
   gru.0.swalast: Avg(0.0437)|Sum(2.75)|Std(0.0676)|T(5.13)|IR(3.1686)
+0_model: gru_day_ShortTest(x1)
+1_start: Tue Jun 17 23:43:49 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.3 Min/model, 9.7 Sec/Epoch
+7_test: Finish Process [Test], Cost 9.8 Secs
+8_result:
+  gru.0.best: Avg(0.0431)|Sum(2.71)|Std(0.0681)|T(5.02)|IR(3.0964)
+  gru.0.swabest: Avg(0.0506)|Sum(3.19)|Std(0.0608)|T(6.6)|IR(4.0763)
+  gru.0.swalast: Avg(0.0431)|Sum(2.71)|Std(0.0681)|T(5.02)|IR(3.0964)
+0_model: gru_day_ShortTest(x1)
+1_start: Wed Jun 18 00:01:32 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 0.0 Hours, 0.3 Min/model, 9.4 Sec/Epoch
+7_test: Finish Process [Test], Cost 9.6 Secs
+8_result:
+  gru.0.best: Avg(0.0189)|Sum(1.19)|Std(0.0596)|T(2.52)|IR(1.5533)
+  gru.0.swabest: Avg(0.0642)|Sum(4.05)|Std(0.054)|T(9.44)|IR(5.828)
+  gru.0.swalast: Avg(0.0189)|Sum(1.19)|Std(0.0596)|T(2.52)|IR(1.5533)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Wed Jun 18 00:24:23 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.7 Secs
+7_test: Finish Process [Test], Cost 0.6 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Wed Jun 18 00:26:27 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.7 Secs
+7_test: Finish Process [Test], Cost 0.6 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Wed Jun 18 00:31:29 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.8 Secs
+7_test: Finish Process [Test], Cost 0.6 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Wed Jun 18 00:32:40 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.8 Secs
+7_test: Finish Process [Test], Cost 0.6 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Wed Jun 18 00:34:43 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.8 Secs
+7_test: Finish Process [Test], Cost 0.6 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)

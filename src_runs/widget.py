@@ -8,6 +8,8 @@ from IPython.display import display
 def python_path():
     if platform.system() == 'Linux' and os.name == 'posix':
         return 'python3.10'
+    elif platform.system() == 'Darwin':
+        return 'source /Users/mengkjin/workspace/learndl/.venv/bin/activate; python'
     else:
         return 'python'
 
@@ -19,11 +21,17 @@ def terminal_cmd(script : str | Path , params : dict | None = None , close_after
     if platform.system() == 'Linux' and os.name == 'posix':
         if not close_after_run: cmd += '; exec bash'
         cmd = f'gnome-terminal -- bash -c "{cmd}"'
-    else:
+    elif platform.system() == 'Windows':
         # cmd = f'start cmd /k {cmd}'
         if not close_after_run: 
             cmd = f'start cmd /k {cmd}'
         pass
+    elif platform.system() == 'Darwin':
+        if not close_after_run:
+            cmd += '; exec bash'
+        cmd = f'''osascript -e 'tell application "Terminal" to do script "{cmd}"' '''
+    else:
+        raise ValueError(f'Unsupported platform: {platform.system()}')
     return cmd
     
 def run_script(script : str | Path , close_after_run = False , **kwargs):

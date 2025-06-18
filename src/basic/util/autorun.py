@@ -62,7 +62,7 @@ class AutoRunTask:
 
     @property
     def record_path(self):
-        return PATH.log_record.joinpath('autorun' , f'{self.task_name}.{self.date_str}_{self.time_str}.txt')
+        return PATH.log_record.joinpath('autorun' , f'{self.task_name}.txt')
     
     @property
     def forfeit_task(self):

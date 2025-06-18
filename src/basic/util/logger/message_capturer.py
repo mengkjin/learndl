@@ -240,7 +240,7 @@ class MessageCapturer:
     _instance = None
 
     '''capture message from stdout and stderr'''
-    def __init__(self, title: str , export_path: Path | str | bool | None = None , **kwargs):
+    def __init__(self, title: str , export_path: Path | str | None = None , **kwargs):
         self.title = title
         self.outputs: list[TimedOutput] = []
         self.original_stdout = sys.stdout
@@ -259,21 +259,17 @@ class MessageCapturer:
     def get_export_path(self):
         if isinstance(self._export_path, Path):
             path = self._export_path
-        elif not self._export_path:
-            path = None
         elif self.ExportPath:
             path = self.ExportPath
         else:
-            path = self.ExportDIR.joinpath(f'{self.title}.{datetime.now().strftime("%Y%m%d%H%M%S")}.html')
+            path = self.ExportDIR.joinpath(f'{self.title.replace(" " , "_")}.{datetime.now().strftime("%Y%m%d%H%M%S")}.html')
         assert not path or path.suffix == '.html' , f"export_path must be a html file , but got {path}"
         if path: path.parent.mkdir(exist_ok=True,parents=True)
         return path
     
-    def set_export_path(self, value: Path | str | bool | None):
+    def set_export_path(self, value: Path | str | None):
         if value is None:
             self._export_path = None
-        elif isinstance(value, bool):
-            self._export_path = value
         else:
             path = Path(value)
             assert path.suffix == '.html' , f"export_path must be a html file , but got {path}"
@@ -295,10 +291,11 @@ class MessageCapturer:
 
     def __enter__(self):
         if self.is_running: 
-            f"{self._instance} is already running, blocking {self}"
+            critical(f"{self._instance} is already running, blocking {self}")
             self.blocked = True
         else:
-            self._instance = self
+            critical(f"{self} start to capture messages")
+            self.__class__._instance = self
             self.start_time = datetime.now()
             self.redirect_display_functions()
             self.blocked = False
@@ -312,8 +309,8 @@ class MessageCapturer:
         critical(final_output)
         self.export(export_path)    
         self.restore_display_functions()
-        self.ExportPath = None # clear the class ExportPath
-        self._instance = None
+        self.__class__.ExportPath = None # clear the class ExportPath
+        self.__class__._instance = None
 
     def export(self , export_path: Path | None = None):
         if export_path is None: return
@@ -377,7 +374,9 @@ class MessageCapturer:
             self.outputs.append(output)
        
     def _html_head(self):
-        key_width = max(int(max(len(key) for key in list(self.kwargs.keys())) * 5.5) + 10 , 80)
+        key_width = 80
+        if self.kwargs:
+            key_width = max(int(max(len(key) for key in list(self.kwargs.keys())) * 5.5) + 10 , key_width)
         
         infos = {
             'Machine' : socket.gethostname().split('.')[0],
