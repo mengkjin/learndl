@@ -2,8 +2,10 @@ import pandas as pd
 
 from IPython.display import display 
 
-def data_frame(df : pd.DataFrame , text_ahead : str | None = None , text_after : str | None = None):
-    if text_ahead: print(text_ahead)
+def data_frame(df , raise_error = True):
+    if df is None:
+        if raise_error: raise ValueError('No dataframe to display')
+        return
     with pd.option_context(
         'display.max_rows', 100,
         'display.max_columns', None,
@@ -11,7 +13,6 @@ def data_frame(df : pd.DataFrame , text_ahead : str | None = None , text_after :
         'display.precision', 3,
         'display.colheader_justify', 'center'):
         display(df)
-    if text_after: print(text_after)
 
 def plot(fig , raise_error = True):
     if fig is None:
