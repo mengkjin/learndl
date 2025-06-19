@@ -279,9 +279,7 @@ class MessageCapturer:
         return capturer
     
     def get_export_path(self):
-        if isinstance(self._export_path, Path):
-            path = self._export_path
-        elif self.ExportPath:
+        if self.ExportPath:
             path = self.ExportPath
         else:
             path = self.ExportDIR.joinpath(f'{self.title.replace(" " , "_")}.{datetime.now().strftime("%Y%m%d%H%M%S")}.html')
@@ -290,8 +288,7 @@ class MessageCapturer:
     
     def set_attrs(self , title : str | None = None , export_path : Path | str | None = None):
         self.title = title if title else 'message_capturer'
-        self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
-        assert not self._export_path or self._export_path.suffix == '.html' , f"export_path must be a html file , but got {self._export_path}"
+        if export_path: self.SetExportPath(export_path)
         return self
 
     @classmethod
