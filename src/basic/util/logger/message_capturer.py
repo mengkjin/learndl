@@ -198,6 +198,12 @@ class TimedOutput:
                 infos['unique_content'] = str(r0.group(1))
                 if int(r0.group(2)) != 100 or (int(r1.group(1)) != int(r1.group(2))): # not finished
                     valid = False
+        elif output_type == 'stdout':
+            assert isinstance(content, str) , f"content must be a string , but got {type(content)}"
+            if re.search(r"^Figure\((\d+)x(\d+)\)$", content):
+                infos['is_figure_message'] = True
+                valid = False
+
         return cls(output_type, content , infos , valid)
     
     def equivalent(self, other: 'TimedOutput') -> bool:
@@ -237,16 +243,17 @@ class TimedOutput:
 class MessageCapturer:
     ExportDIR = PATH.log_record.joinpath('message_capturer')
     ExportPath = None
-    _instance = None
+    Instance = None
 
     '''capture message from stdout and stderr'''
-    def __init__(self, title: str , export_path: Path | str | None = None , **kwargs):
-        self.title = title
+    def __init__(self, title: str  | None = None, export_path: Path | str | None = None , **kwargs):
+        if title is None: title = 'message_capturer'
+        self._enable_capturer = True
         self.outputs: list[TimedOutput] = []
         self.original_stdout = sys.stdout
         self.original_stderr = sys.stderr
         self.original_display = {}
-        self.set_export_path(export_path)
+        self.set_attrs(title , export_path)
         self.output_count = 0
         self.kwargs = kwargs
         
@@ -255,7 +262,22 @@ class MessageCapturer:
     
     def __repr__(self):
         return f"MessageCapturer(title={self.title})"
-
+    
+    @property
+    def enabled(self):
+        return self._enable_capturer
+    
+    @property
+    def is_running(self):
+        return self.Instance is not None
+    
+    @classmethod
+    def CreateCapturer(cls, message_capturer : Path | str | bool = False , title : str | None = None , **kwargs):
+        export_path = message_capturer if isinstance(message_capturer , (Path , str)) else None
+        capturer = cls(title , export_path = export_path , **kwargs)
+        if not message_capturer: capturer._enable_capturer = False
+        return capturer
+    
     def get_export_path(self):
         if isinstance(self._export_path, Path):
             path = self._export_path
@@ -264,60 +286,65 @@ class MessageCapturer:
         else:
             path = self.ExportDIR.joinpath(f'{self.title.replace(" " , "_")}.{datetime.now().strftime("%Y%m%d%H%M%S")}.html')
         assert not path or path.suffix == '.html' , f"export_path must be a html file , but got {path}"
-        if path: path.parent.mkdir(exist_ok=True,parents=True)
         return path
     
-    def set_export_path(self, value: Path | str | None):
-        if value is None:
-            self._export_path = None
-        else:
-            path = Path(value)
-            assert path.suffix == '.html' , f"export_path must be a html file , but got {path}"
-            path.parent.mkdir(exist_ok=True,parents=True)
-            self._export_path = path
+    def set_attrs(self , title : str | None = None , export_path : Path | str | None = None):
+        self.title = title if title else 'message_capturer'
+        self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
+        assert not self._export_path or self._export_path.suffix == '.html' , f"export_path must be a html file , but got {self._export_path}"
+        return self
 
     @classmethod
     def SetExportPath(cls, value: Path | str | bool | None):
         if isinstance(value, (Path , str)):
             cls.ExportPath = Path(value)
+
+    @classmethod
+    def ClearExportPath(cls):
+        cls.ExportPath = None
+
+    @classmethod
+    def SetInstance(cls , instance):
+        assert cls.Instance is None , f"Instance is already set to {cls.Instance}"
+        assert isinstance(instance, cls) , f"Instance must be a {cls} , but got {type(instance)}"
+        cls.Instance = instance
+
+    @classmethod
+    def ClearInstance(cls):
+        cls.Instance = None
         
     @staticmethod
     def print(message: str):
         sys.stdout.write(message)
 
-    @property
-    def is_running(self):
-        return self._instance is not None
-
     def __enter__(self):
         if self.is_running: 
-            critical(f"{self._instance} is already running, blocking {self}")
-            self.blocked = True
-        else:
-            critical(f"{self} start to capture messages")
-            self.__class__._instance = self
-            self.start_time = datetime.now()
-            self.redirect_display_functions()
-            self.blocked = False
+            critical(f"{self.Instance} is already running, blocking {self}")
+            self._enable_capturer = False
+        if not self.enabled: return self
+        critical(f"{self} start to capture messages")
+        self.start_time = datetime.now()
+        self.redirect_display_functions()
+        self.SetInstance(self)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.blocked: return
-        final_output = f"{self} Finished Capturing"
-        export_path = self.get_export_path()
-        if export_path: final_output += f", saved to {export_path}"
-        critical(final_output)
-        self.export(export_path)    
+        if not self.enabled: return
+        self.export()   
         self.restore_display_functions()
-        self.__class__.ExportPath = None # clear the class ExportPath
-        self.__class__._instance = None
+        self.ClearInstance()
 
     def export(self , export_path: Path | None = None):
-        if export_path is None: return
+        if export_path is None: export_path = self.get_export_path()
+        critical(f"{self} Finished Capturing, saved to {export_path}")
         self.html_content = self.generate_html()
-            
+        export_path.parent.mkdir(exist_ok=True,parents=True)
         with open(export_path, 'w', encoding='utf-8') as f:
             f.write(self.html_content)
+
+        from src.basic.util.email import Email
+        Email.attach(export_path)
+        self.ClearExportPath()
         
     def redirect_display_functions(self):
         """redirect stdout, stderr, and display_module functions to capturer"""

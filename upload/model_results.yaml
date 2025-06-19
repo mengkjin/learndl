@@ -660,3 +660,23 @@
 7_test: Finish Process [Test], Cost 0.6 Secs
 8_result:
   lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Thu Jun 19 00:31:15 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.7 Secs
+7_test: Finish Process [Test], Cost 0.6 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Thu Jun 19 00:51:26 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.6 Secs
+7_test: Finish Process [Test], Cost 0.6 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)

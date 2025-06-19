@@ -16,15 +16,14 @@ path = __file__.removesuffix(__file__.split('learndl')[-1])
 sys.path.append(path)
 
 from src.api import ModelAPI
-from src.basic import AutoRunTask , MessageCapturer , PATH , Email
+from src.basic import AutoRunTask
 from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
     module = str(params['param'])
     with AutoRunTask('train model' , message_capturer = True , **params) as runner:
-        trainer = ModelAPI.train_model(stage = 0 , resume = 0 , checkname= 1 , module = module if module else None)
-        runner.add_attachments(trainer.path_training_output)
-
+        ModelAPI.train_model(stage = 0 , resume = 0 , checkname= 1 , module = module if module else None)
+        
 if __name__ == '__main__':
     main()

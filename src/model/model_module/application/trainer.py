@@ -47,13 +47,9 @@ class ModelTrainer(BaseTrainer):
                 print(f'End time: {time.strftime("%Y-%m-%d %H:%M:%S")}')
 
     @classmethod
-    def train(cls , module : str | None = None , short_test = None , message_capturer = True, **kwargs):
-        if message_capturer:
-            with MessageCapturer('Train Model' if not short_test else 'Train Model of Short Test' , **kwargs) as capturer:
-                trainer = cls.initialize(module = module , short_test = short_test , **kwargs)
-                MessageCapturer.SetExportPath(trainer.path_training_output)
-                trainer.go()
-        else:
-            trainer = cls.initialize(module = module , short_test = short_test , **kwargs)
-            trainer.go()
+    def train(cls , module : str | None = None , short_test = None , message_capturer : bool = True, **kwargs):
+        capturer = MessageCapturer.CreateCapturer(message_capturer)
+        with capturer:
+            trainer = cls.initialize(module = module , short_test = short_test , **kwargs).go()
+            capturer.set_attrs(f'Train Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer

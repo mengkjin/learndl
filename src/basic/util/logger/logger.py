@@ -2,7 +2,6 @@ import colorlog , logging , sys
 
 from src.basic import path as PATH
 from src.basic import conf as CONF
-from .dual_printer import DualPrinter
 
 class Logger:
     '''custom colored log , config at {PATH.conf}/logger.yaml '''
@@ -44,27 +43,29 @@ class Logger:
 
     def debug(self , *args , **kwargs):
         self.log.debug(*args , **kwargs)
-        self.additional_writer(*args)
+        self.dual_printer(*args)
     
     def info(self , *args , **kwargs):
         self.log.info(*args , **kwargs)
-        self.additional_writer(*args)
+        self.dual_printer(*args)
 
     def warning(self , *args , **kwargs):
         self.log.warning(*args , **kwargs)
-        self.additional_writer(*args)
+        self.dual_printer(*args)
 
     def error(self , *args , **kwargs):
         self.log.error(*args , **kwargs)
-        self.additional_writer(*args)   
+        self.dual_printer(*args)   
 
     def critical(self , *args , **kwargs):
         self.log.critical(*args , **kwargs)
-        self.additional_writer(*args)
+        self.dual_printer(*args)
         
-    def additional_writer(self , *args):
-        if isinstance(sys.stdout , DualPrinter):
-            sys.stdout.log.write(' '.join([str(s) for s in args]) + '\n')
+    def dual_printer(self , *args):
+        log = getattr(sys.stdout , 'log' , None)
+        write = getattr(log , 'write' , None)
+        if write:
+            write(' '.join([str(s) for s in args]) + '\n')
 
 
 class _LevelFormatter(logging.Formatter):

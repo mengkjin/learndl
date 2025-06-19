@@ -26,7 +26,6 @@ class TradingPortfolioTracker:
             pd.concat([df for df in updated_ports.values()]).to_csv(path)
             Email.attach(path)
 
-
     @classmethod
     def attachment_path(cls , date : int) -> Path:
         path = PATH.log_update.joinpath('trading_ports',f'trading_ports.{date}.csv')

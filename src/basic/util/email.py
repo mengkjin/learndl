@@ -27,7 +27,9 @@ class Email:
         self.password    = email_conf['password']  
 
     @classmethod
-    def attach(cls , attachment : str | Path):
+    def attach(cls , attachment : str | Path | None = None):
+        if attachment is None: return
+        assert isinstance(attachment , (str , Path)) , f'attachment must be a string or path , got {type(attachment)}'
         cls.ATTACHMENTS.append(Path(attachment))
 
     def recipient(self , recipient : str | None = None):
@@ -43,15 +45,16 @@ class Email:
         message['Subject'] = title
         message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
 
-        for _ in range(len(self.ATTACHMENTS)):
-            attachment = self.ATTACHMENTS.pop()
+        attachments = set(self.ATTACHMENTS)
+        for attachment in attachments:
             with open(attachment, 'rb') as attach_file:
                 part = MIMEBase('application', 'octet-stream')
                 part.set_payload(attach_file.read())
                 encoders.encode_base64(part)
                 part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
                 message.attach(part)
-        assert not self.ATTACHMENTS , 'attachments are not cleared'
+
+        self.ATTACHMENTS.clear()
 
         return message
     

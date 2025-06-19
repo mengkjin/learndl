@@ -2,10 +2,8 @@ import traceback , psutil , fnmatch , platform , subprocess
 
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal , Any
 from src.basic import path as PATH
-from .logger import DualPrinter , MessageCapturer
-from .email import Email
 
 PATH.log_record.joinpath('autorun').mkdir(parents = True , exist_ok = True)
 
@@ -16,22 +14,22 @@ class AutoRunTask:
         self.email = email
         self.email_if_attachment = email_if_attachment
         self.source = source
-        if message_capturer:
-            self.message_capturer = MessageCapturer(task_name , export_path = None if message_capturer is True else message_capturer)
-        else:
-            self.message_capturer = None
+
+        from src.basic.util.email import Email
+        self.emailer = Email()
+
+        from src.basic.util.logger import MessageCapturer , DualPrinter
+        self.capturer = MessageCapturer.CreateCapturer(message_capturer)
+        self.dprinter = DualPrinter()
 
     def __enter__(self):
         self.already_done = self.record_path.exists()
         # change_power_mode('balanced')
-        self.date_str = datetime.now().strftime('%Y%m%d')
-        self.time_str = datetime.now().strftime('%H%M%S')
-        name = '.'.join([self.task_name , f'{self.date_str}_{self.time_str}' , 'txt'])
-        self.printer = DualPrinter(f'{self.task_name}/{name}')
-        self.printer.__enter__()
-
-        if self.message_capturer:
-            self.message_capturer.__enter__()
+        self.time_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+        self.dprinter.set_attrs(f'{self.task_name}/{self.task_name}.{self.time_str}.txt')
+        self.dprinter.__enter__()
+        self.capturer.set_attrs(f'{self.task_name}')
+        self.capturer.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -44,18 +42,12 @@ class AutoRunTask:
             self.status = f'Error Occured! {exc_value}'
         else:
             self.status = 'Successful ' + self.task_name.replace('_' , ' ').title() + '!'
-        self.printer.__exit__(exc_type, exc_value, exc_traceback)
-
-        if self.forfeit_task:
-            return
         
-        if self.message_capturer:
-            self.message_capturer.__exit__(exc_type, exc_value, exc_traceback)
-
-        if self.email or (self.email_if_attachment and Email.ATTACHMENTS): 
-            title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')]])
-            Email.attach(self.printer.filename)
-            Email().send(title = title , body = self.status , confirmation_message='Autorun')
+        self.dprinter.__exit__(exc_type, exc_value, exc_traceback)
+        self.capturer.__exit__(exc_type, exc_value, exc_traceback)
+        
+        if self.forfeit_task: return
+        self.send_email(self.task_name)
         # change_power_mode('power-saver')
 
         self.record_path.touch()
@@ -67,16 +59,17 @@ class AutoRunTask:
     @property
     def forfeit_task(self):
         return self.already_done and self.source == 'bash'
-    
-    def add_attachments(self , paths : Path | list[Path]):
-        if not isinstance(paths , list): paths = [paths]
-        [Email.attach(p) for p in paths if Path(p).exists()]
 
-DEFAULT_EXCLUDES = ['kernel_interrupt_daemon.py']
+    def send_email(self , title : str):
+        if self.email or (self.email_if_attachment and self.emailer.ATTACHMENTS): 
+            title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')]])
+            self.emailer.attach(self.dprinter.filename)
+            self.emailer.send(title = title , body = self.status , confirmation_message='Autorun')
+
 def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py']):
     running_scripts : list[Path] = []
     if isinstance(exclude_scripts , str): exclude_scripts = [exclude_scripts]
-    excludes = [Path(scp).name for scp in (exclude_scripts or []) + DEFAULT_EXCLUDES]
+    excludes = [Path(scp).name for scp in (exclude_scripts or []) + ['kernel_interrupt_daemon.py']]
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             cmdline = proc.info['cmdline']
