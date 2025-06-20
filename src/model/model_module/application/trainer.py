@@ -2,7 +2,7 @@ import time
 
 from contextlib import nullcontext
 
-from src.basic import MACHINE , RegisteredModel , MessageCapturer
+from src.basic import MACHINE , PATH , RegisteredModel , MessageCapturer
 from src.model.callback import CallBackManager
 from src.model.data_module import DataModule
 from src.model.util import BaseTrainer
@@ -47,9 +47,18 @@ class ModelTrainer(BaseTrainer):
                 print(f'End time: {time.strftime("%Y-%m-%d %H:%M:%S")}')
 
     @classmethod
-    def train(cls , module : str | None = None , short_test = None , message_capturer : bool = True, **kwargs):
-        capturer = MessageCapturer.CreateCapturer(message_capturer)
-        with capturer:
+    def train(cls , module : str | None = None , short_test = None , message_capturer : bool = True , **kwargs):
+        with MessageCapturer.CreateCapturer(message_capturer) as capturer:
             trainer = cls.initialize(module = module , short_test = short_test , **kwargs).go()
             capturer.set_attrs(f'Train Model of {trainer.config.model_name}' , trainer.path_training_output)
+        return trainer
+    
+    @classmethod
+    def test(cls , model_name : str | None = None , message_capturer : bool = True , **kwargs):
+        assert model_name, 'model_name is required'
+        available_models = cls.available_models(short_test = False)
+        assert model_name in available_models , f'model_name {model_name} not found in {available_models}'
+        with MessageCapturer.CreateCapturer(message_capturer) as capturer:
+            trainer = cls.initialize(base_path = PATH.model.joinpath(model_name) , **kwargs).go()
+            capturer.set_attrs(f'Test Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer

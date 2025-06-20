@@ -17,6 +17,7 @@ class DualPrinter:
     def set_attrs(self , filename : str | None = None):
         self.filename = filename
         self.initiate()
+        return self
 
     def write(self, message):
         self.terminal.write(message)

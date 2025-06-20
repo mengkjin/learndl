@@ -318,9 +318,8 @@ class MessageCapturer:
  
         if not self.enabled: return self
         self.start_time = datetime.now()
-        
-        critical(f"{self} start to capture messages at {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         self.redirect_display_functions()
+        critical(f"{self} start to capture messages at {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):

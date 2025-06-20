@@ -1,11 +1,11 @@
 #! /usr/bin/env python3.10
 # coding: utf-8
 # author: jinmeng
-# date: 2024-11-27
-# description: Train Model
-# content: 训练某个新模型,模型的参数在configs/train/model.yaml里定义,也可以改变其他configs
+# date: 2025-06-20
+# description: Test Model
+# content: 测试某个已训练的模型
 # param_input: True
-# param_placeholder: module_name
+# param_placeholder: model_name
 # email: True
 # close_after_run: False
 
@@ -21,9 +21,10 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    module = str(params['param'])
-    with AutoRunTask('train model' , message_capturer = True , **params) as runner:
-        ModelAPI.train_model(module = module if module else None)
+    model_name = str(params['param'])
+    assert model_name , f'Please input model name'
+    with AutoRunTask('test model' , message_capturer = True , **params) as runner:
+        ModelAPI.test_model(model_name = model_name)
         
 if __name__ == '__main__':
     main()

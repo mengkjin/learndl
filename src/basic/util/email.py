@@ -38,11 +38,12 @@ class Email:
         assert '@' in recipient , f'recipient address must contain @ , got {recipient}'
         return recipient
     
-    def message(self , title : str  , body : str | None = None , recipient : str | None = None):
+    def message(self , title : str  , body : str | None = None , recipient : str | None = None , 
+                title_prefix : str | None = 'Learndl:'):
         message = MIMEMultipart()
         message['From'] = self.sender
         message['To'] = self.recipient(recipient)
-        message['Subject'] = title
+        message['Subject'] = title_prefix + title if title_prefix else title
         message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
 
         attachments = set(self.ATTACHMENTS)

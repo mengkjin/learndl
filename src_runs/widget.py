@@ -136,7 +136,6 @@ class ScriptRunner:
         if input_area is not None: boxes.append(input_area)
         return boxes
 
-
 def argparse_dict(**kwargs):
     parser = argparse.ArgumentParser(description='Run daily update script.')
     parser.add_argument('--source', type=str, default='', help='Source of the script call')

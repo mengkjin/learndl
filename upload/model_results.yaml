@@ -700,3 +700,18 @@
 7_test: Finish Process [Test], Cost 0.6 Secs
 8_result:
   lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: gru_day(x2)
+1_start: Fri Jun 20 06:57:05 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10
+5_dates: 20170101-20170228
+6_fit: null
+7_test: Finish Process [Test], Cost 14.5 Secs
+8_result:
+  gru.0.best: Avg(0.1043)|Sum(3.65)|Std(0.0544)|T(11.35)|IR(9.3983)
+  gru.0.swabest: Avg(0.1043)|Sum(3.65)|Std(0.0544)|T(11.33)|IR(9.384)
+  gru.0.swalast: Avg(0.1048)|Sum(3.67)|Std(0.0548)|T(11.31)|IR(9.3633)
+  gru.1.best: Avg(0.1086)|Sum(3.8)|Std(0.048)|T(13.39)|IR(11.0919)
+  gru.1.swabest: Avg(0.1088)|Sum(3.81)|Std(0.0507)|T(12.7)|IR(10.5135)
+  gru.1.swalast: Avg(0.107)|Sum(3.74)|Std(0.0488)|T(12.98)|IR(10.7468)

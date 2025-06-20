@@ -97,13 +97,12 @@ class ModelAPI:
 
     @classmethod
     def train_model(cls , module : str | None = None , short_test : bool = False , verbosity : int | None = 2 , 
-                    stage = 0 , resume = 0 , checkname= 1 , 
                     **kwargs):
         '''
         train a model
         '''
         return cls.Trainer.train(module = module , short_test = short_test , verbosity = verbosity , 
-                                 stage = stage , resume = resume , checkname = checkname ,
+                                 stage = 0 , resume = 0 , checkname = 1 ,
                                  **kwargs)
 
     @classmethod
@@ -121,9 +120,24 @@ class ModelAPI:
                                  stage = 0 , resume = 0 , checkname= 1)
     
     @classmethod
+    def test_model(cls , model_name : str | None = None , verbosity : int | None = 2 , 
+                   **kwargs):
+        '''
+        test a existing model
+        model_name :
+            None: use default model
+            str : use the model name , must be in ModelAPI.Trainer.available_models(short_test = False)
+        verbosity :
+            None: use default verbosity
+            int : use the verbosity level , if above 10 will print more details
+        '''
+        return cls.Trainer.test(model_name = model_name , verbosity = verbosity ,
+                                stage = 2 , resume = 1 , checkname = 1 , **kwargs)
+    
+    @classmethod
     def clear_st_models(cls):
         '''
         Clear short test models in model folder
         '''
-        bases = [model.name for model in PATH.model.iterdir() if model.name.endswith('ShortTest')]
+        bases = cls.Trainer.available_models(short_test = True)
         PATH.deltrees(PATH.model , bases , verbose = True)

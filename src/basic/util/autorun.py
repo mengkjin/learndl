@@ -26,10 +26,8 @@ class AutoRunTask:
         self.already_done = self.record_path.exists()
         # change_power_mode('balanced')
         self.time_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.dprinter.set_attrs(f'{self.task_name}/{self.task_name}.{self.time_str}.txt')
-        self.dprinter.__enter__()
-        self.capturer.set_attrs(f'{self.task_name}')
-        self.capturer.__enter__()
+        self.dprinter.set_attrs(f'{self.task_name}/{self.task_name}.{self.time_str}.txt').__enter__()
+        self.capturer.set_attrs(f'{self.task_name}').__enter__()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):

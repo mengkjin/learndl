@@ -85,7 +85,7 @@ def get_system_info():
         info["last_shutdown_status"] = "abnormal shutdown"
         # 5. if abnormal shutdown, try to analyze the reason
         # -p 3 means 'err' level and higher (crit, alert, emerg)
-        error_logs = run_command("journalctl -b -1 -p err --no-pager -n 10") # get last 10 error logs
+        error_logs = run_command("journalctl -b -1 -p err --no-pager -n 25") # get last 25 error logs
         if error_logs:
             info["abnormal_shutdown_reason"] = f"system log found error, last related error info:\n---\n{error_logs}\n---"
         else:

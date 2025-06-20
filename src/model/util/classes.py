@@ -9,7 +9,7 @@ from torch import Tensor
 from typing import Any , final , Iterator , Literal , Optional
 
 from src.algo import getter
-from src.basic import ModelDict , BigTimer , INSTANCE_RECORD
+from src.basic import ModelDict , BigTimer , INSTANCE_RECORD , PATH
 from src.func import Filtered
 from src.data import ModuleData
 
@@ -510,6 +510,15 @@ class BaseTrainer(ModelStreamLine):
     @staticmethod
     def available_modules(module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
         return getter.available_modules(module_type)
+    @staticmethod
+    def available_models(short_test : bool | Literal['both'] = 'both'):
+        bases = [model.name for model in PATH.model.iterdir() if model.is_dir() and not model.name.startswith('.')]
+        if short_test == 'both':
+            return bases
+        elif short_test:
+            return [model for model in bases if model.endswith('ShortTest')]
+        else:
+            return [model for model in bases if not model.endswith('ShortTest')]
 
 class ModelStreamLineWithTrainer(ModelStreamLine):
     def bound_with_trainer(self , trainer): 
