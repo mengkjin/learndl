@@ -4,10 +4,14 @@
 # date: 2024-11-27
 # description: Update Factors
 # content: 更新前num(默认100)组level , date的因子数据
-# param_input: True
-# param_placeholder: 100
 # email: False
 # close_after_run: False
+# param_inputs:
+#   num : 
+#       type : int
+#       desc : update group num
+#       default : 100
+#       required : True
 
 import sys
 
@@ -21,8 +25,7 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    num = str(params['param'])
-    num = int(num) if num.isdigit() else 100
+    num = int(params['num'])
     with AutoRunTask('update factors' , **params) as runner:
         FactorCalculatorAPI.update(groups_in_one_update=num)
 

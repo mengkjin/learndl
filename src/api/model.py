@@ -96,7 +96,7 @@ class ModelAPI:
         DataPreProcessor.main(predict=False , confirm=1)
 
     @classmethod
-    def train_model(cls , module : str | None = None , short_test : bool = False , verbosity : int | None = 2 , 
+    def train_model(cls , module : str | None = None , short_test : bool | None = None , verbosity : int | None = 2 , 
                     **kwargs):
         '''
         train a model
@@ -120,7 +120,7 @@ class ModelAPI:
                                  stage = 0 , resume = 0 , checkname= 1)
     
     @classmethod
-    def test_model(cls , model_name : str | None = None , verbosity : int | None = 2 , 
+    def test_model(cls , model_name : str | None = None , short_test : bool | None = None , verbosity : int | None = 2 , 
                    **kwargs):
         '''
         test a existing model
@@ -131,7 +131,7 @@ class ModelAPI:
             None: use default verbosity
             int : use the verbosity level , if above 10 will print more details
         '''
-        return cls.Trainer.test(model_name = model_name , verbosity = verbosity ,
+        return cls.Trainer.test(model_name = model_name , short_test = short_test , verbosity = verbosity ,
                                 stage = 2 , resume = 1 , checkname = 1 , **kwargs)
     
     @classmethod

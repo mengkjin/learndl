@@ -206,6 +206,9 @@ class TimedOutput:
                 infos['unique_content'] = str(r0.group(1))
                 if int(r0.group(2)) != 100 or (int(r1.group(1)) != int(r1.group(2))): # not finished
                     valid = False
+        elif output_type == 'stdout':
+            assert isinstance(content, str) , f"content must be a string , but got {type(content)}"
+            if content == '...': valid = False
 
         return cls(output_type, content , infos , valid)
     

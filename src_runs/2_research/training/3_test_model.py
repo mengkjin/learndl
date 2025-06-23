@@ -4,10 +4,17 @@
 # date: 2025-06-20
 # description: Test Model
 # content: 测试某个已训练的模型
-# param_input: True
-# param_placeholder: model_name
 # email: True
 # close_after_run: False
+# param_inputs:
+#   model_name : 
+#       enum : [gru_day , gru_avg]
+#       desc : existing model name
+#       prefix : "model/"
+#   short_test : 
+#       enum : [null , True , False]
+#       desc : short test
+#       prefix : "short_test/"
 
 import sys
 
@@ -21,10 +28,10 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    model_name = str(params['param'])
-    assert model_name , f'Please input model name'
+    model_name = params['model_name']
+    short_test = eval(params['short_test'])
     with AutoRunTask('test model' , message_capturer = True , **params) as runner:
-        ModelAPI.test_model(model_name = model_name)
+        ModelAPI.test_model(model_name = model_name , short_test = short_test)
         
 if __name__ == '__main__':
     main()

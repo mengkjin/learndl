@@ -63,7 +63,7 @@ class TrainParam:
         if 'verbosity'  in override: override['env.verbosity']  = override.pop('verbosity')
         if 'short_test' in override: override['env.short_test'] = override.pop('short_test')
         if 'module'     in override: override['model.module']   = override.pop('module')
-        if not MACHINE.server: override['env.short_test'] = True
+        if 'env.short_test' not in override and not MACHINE.server: override['env.short_test'] = True
         for override_key in override:
             assert override_key in self.Param.keys() , override_key
         self.Param.update(override)
@@ -385,7 +385,7 @@ class TrainConfig(TrainParam):
 
         self.Train = TrainParam(base_path , override)
         self.Model = self.Train.generate_model_param()
-
+        
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
         
     def resume_old(self , old_path : Path | ModelPath):
@@ -406,7 +406,7 @@ class TrainConfig(TrainParam):
              override = None , makedir = True , **kwargs):
         '''load config yaml to get default/giving params'''
         config = cls(base_path , override)
-        if do_parser: config.process_parser(cls.parser_args(**kwargs))
+        if do_parser: config.process_parser(config.parser_args(**kwargs))
 
         model_path = ModelPath(config.model_name)
         if config.resume_training:

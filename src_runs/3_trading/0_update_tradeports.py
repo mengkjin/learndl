@@ -19,7 +19,7 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    with AutoRunTask('update trading portfolios' , **params , email_if_attachment = True) as runner:
+    with AutoRunTask('update trading portfolios' , **params , email_if_attachment = True , message_capturer=True) as runner:
         TradingAPI.update()
 
 if __name__ == '__main__':

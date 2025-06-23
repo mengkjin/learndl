@@ -1,7 +1,7 @@
-import os , argparse , subprocess , platform
+import os , argparse , subprocess , platform , yaml , re
 import ipywidgets as widgets
 
-from typing import Any
+from typing import Any , Literal
 from pathlib import Path
 from IPython.display import display
 
@@ -45,6 +45,166 @@ def run_script(script : str | Path , close_after_run = False , **kwargs):
     #else:
     #    process.wait()
 
+class OutOfRange(Exception): pass
+class Unspecified(Exception): pass
+class PopupWindow:
+    def __init__(self , title : str = 'Input Error'):
+        self.title = widgets.HTML(f'<div style="font-weight: 900; color: #0078D7; padding: 0px 5px 0px 5px ; background: #f0f0f0;">{title}</div>')
+        self.close = widgets.Button(description='X', layout={'width': 'auto' , 'background': 'solid #d3d3d3'})
+        self.content = widgets.HTML(layout={'margin': '0 5px'})
+
+        self.window = widgets.VBox([
+            widgets.HBox([self.title , self.close], layout={'justify_content': 'space-between', 'align_items': 'center'}),
+            self.content
+        ], layout={
+            'border': '2px solid #d3d3d3',
+            'width': 'auto' , 'min_width' : '200px' ,
+            'display': 'none',
+        })
+        self.close.on_click(lambda b: setattr(self.window.layout , 'display' , 'none'))
+        self.window.layout.display = 'none'
+
+    def popup(self , message : str):
+        self.content.value = f'<div style="font-size: 11px; line-height: 1.5; margin-top: 0px; padding: 0px 10px 0px 10px; font-weight: 700; color: red;">{message}</div>'
+        self.window.layout.display = 'block'
+
+class InputArea:
+    Layout = {'width' : 'auto' , 'min_width' : '200px' , 'height' : '28px'}
+    Style = {'font_size': '11px' , 'font_weight': '400'}
+    BooleanWidget : Literal['toggle' , 'checkbox'] = 'toggle'
+
+    def __init__(self , name : str , type : type | list , **kwargs):
+        self.pname = name
+        self.ptype = type
+        self.layout = self.Layout | (kwargs.get('layout' , {}))
+        self.style = self.Style | (kwargs.get('style' , {}))
+        self.kwargs = kwargs
+
+        self.widget = self.get_widget()
+
+    @classmethod
+    def create(cls , pname : str , pcomponents : dict[str , Any]):
+        assert isinstance(pcomponents , dict) , f'param components must be a dict, got {type(pcomponents)}' 
+        ptype = pcomponents.pop("type") if "type" in pcomponents else pcomponents.pop("enum")
+        assert ptype is not None and isinstance(ptype , (str , list , tuple)) , f'param type must be str, list, or tuple, got {ptype}'
+        if isinstance(ptype , str):
+            ptype = eval(ptype)
+            assert ptype in [str , int , float , bool] , f'param type must be str, int, float, or bool , but got {ptype}'
+        else:
+            ptype = list(ptype)
+
+        return cls(pname , ptype , **pcomponents)
+    
+    @property
+    def enum(self):
+        return [f'{self.prefix}{e}' for e in self.ptype] if isinstance(self.ptype , list) else []
+    
+    @property
+    def prefix(self):
+        return self.kwargs.get('prefix' , '')
+    
+    @property
+    def placeholder(self):
+        placeholder = self.kwargs.get('desc' , self.pname)
+        if self.ptype in [str , int , float]:
+            if self.kwargs.get('required'): placeholder = f'(*){placeholder}'
+        return placeholder
+        
+    @property
+    def widget_kwargs(self):
+        return self.kwargs | {
+            'name' : self.pname , 
+            'enum' : self.enum ,
+            'type' : self.ptype ,
+            'placeholder' : self.placeholder ,
+            'layout' : self.layout , 
+            'style' : self.style ,
+        }
+
+    def get_widget(self):
+        if isinstance(self.ptype , list):
+            return self._dropdown(**self.widget_kwargs)
+        elif self.ptype == bool:
+            if self.BooleanWidget == 'toggle':
+                return self._toggle(**self.widget_kwargs)
+            else:
+                return self._checkbox(**self.widget_kwargs)
+        elif self.ptype in [str , int , float]:
+            return self._text(**self.widget_kwargs)
+        else:
+            raise ValueError(f'Unsupported param type: {self.ptype}')
+        
+    def get_value(self):
+        pvalue = self.widget.value
+        if pvalue in self.enum: pvalue = self.enum_to_value(pvalue)
+        if isinstance(self.widget , widgets.Dropdown) and pvalue == self.placeholder:
+            raise Unspecified(f'PLEASE SELECT A VALID VALUE! "{pvalue}" is only a placeholder')
+        if self.kwargs.get('required') and (pvalue is None or pvalue == ''):
+            raise Unspecified(f'PLEASE INPUT A VALID VALUE! [{self.pname}] is required')
+        if (pmin := self.kwargs.get('min')) is not None:
+            if type(pmin)(pvalue) < pmin: raise OutOfRange(f'TOO SMALL! [{self.pname}] should be >= {pmin} , got {pvalue}')
+        if (pmax := self.kwargs.get('max')) is not None:
+            if type(pmax)(pvalue) > pmax: raise OutOfRange(f'TOO LARGE! [{self.pname}] should be <= {pmax} , got {pvalue}')
+        return pvalue
+    
+    def enum_to_value(self , enum_value : str | Any):
+        index = self.enum.index(enum_value)
+        assert isinstance(self.ptype , list) , f'param type must be list, got {type(self.ptype)}'
+        return self.ptype[index]
+
+    @classmethod
+    def _text(cls , type , placeholder , layout , style , default = None , required = False , **kwargs):
+        assert type in [str , int , float] , f'param type must be str, int, float, got {type}'
+        if default is not None: default = str(default)
+        style = style | {'background' : 'lightyellow'}
+        widget = widgets.Textarea(value=default, placeholder=placeholder, layout=layout, style=style)
+        if required: 
+            widget.observe(lambda change: cls._text_change_color(widget , change), names='value')
+            if default is None: widget.style.background = '#ffcccb'
+        return widget
+    
+    @staticmethod
+    def _text_change_color(text_area : widgets.Textarea | Any , change : dict):
+        if change['new'] == '':
+            text_area.style.background = '#ffcccb'
+        else:
+            text_area.style.background = 'lightyellow'
+    
+    @classmethod
+    def _toggle(cls , type , desc , layout = None , style = None , default = None , **kwargs):
+        assert type == bool , f'param type must be bool, got {type}'
+        default = bool(eval(default)) if default is not None else False
+        icon = 'toggle-on' if default else 'toggle-off'
+        widget = widgets.ToggleButton(value=default, description=desc, icon=icon, layout=layout, style=style)
+        widget.observe(lambda change: cls._toggle_change_icon(widget , change), names='value')
+        return widget
+        
+    @staticmethod
+    def _toggle_change_icon(toggle_button : widgets.ToggleButton | Any , change : dict):
+        if change['new']:
+            toggle_button.icon = 'toggle-on'
+        else:
+            toggle_button.icon = 'toggle-off'
+
+    @classmethod
+    def _checkbox(cls , type , desc , layout , style , default = None , **kwargs):
+        assert type == bool , f'param type must be bool, got {type}'
+        default = bool(eval(default)) if default is not None else False
+        layout = layout | {'border': '1px solid #ddd', 'align_content': 'center', 'justify_content': 'center'}
+        widget = widgets.Checkbox(value=default, description=desc, indent=False, layout=layout, style=style)
+        return widget
+
+    @classmethod
+    def _dropdown(cls , enum , placeholder , layout , style , default = None , **kwargs):
+        assert isinstance(enum , list) , f'param enum must be list, got {enum}'
+        default = str(default) if default is not None else placeholder
+        options = [placeholder] + enum
+        style = style | {'description_width' : '5px' , 'padding' : '0px' , 
+                         'dropdown': {'background': '#f0f8ff'}}
+        layout = layout | {'background': '#f0f8ff'}
+        widget = widgets.Dropdown(options=options, value=default, description='-',layout=layout,style=style)
+        return widget
+    
 class ScriptRunner:
     def __init__(self , script : Path | str , **kwargs):
         self.script = Path(script).absolute()
@@ -55,33 +215,40 @@ class ScriptRunner:
     def __repr__(self):
         return f'ScriptRunner(script_path={self.script} , kwargs={self.kwargs})'
 
-    def script_header(self , verbose = False):
+    def script_header(self , verbose = False , include_starter = '#' , exit_starter = '' , ignore_starters = ('#!' , '# coding:')):
         header_dict = {}
+        yaml_lines : list[str] = []
         try:
-            header_char = '#'
             with open(self.script, 'r', encoding='utf-8') as file:
                 for line in file:
                     stripped_line = line.strip()
-                    if stripped_line.startswith('#!'): continue
-                    if stripped_line.startswith(header_char):
-                        components = [s.strip() for s in stripped_line.removeprefix(header_char).strip().split(':')]
-                        assert len(components) <= 2 , f'header format error : {stripped_line}'
-                        header_dict[components[0]] = components[1] if len(components) == 2 else ''
-                    else:
+                    if stripped_line.startswith(ignore_starters): 
+                        continue
+                    elif stripped_line.startswith(include_starter):
+                        yaml_lines.append(stripped_line)
+                    elif stripped_line.startswith(exit_starter):
                         break
-            if 'description' not in header_dict:
-                header_dict['description'] = self.script
+
+            yaml_str = '\n'.join(line.removeprefix(include_starter) for line in yaml_lines)
+            header_dict = yaml.safe_load(yaml_str)
         except FileNotFoundError:
             header_dict['disabled'] = True
             header_dict['description'] = 'file not found'
             header_dict['content'] = f'file not found : {self.script}'
             if verbose: print(f'file not found : {self.script}')
+        except yaml.YAMLError as e:
+            header_dict['disabled'] = True
+            header_dict['description'] = 'YAML parsing error'
+            header_dict['content'] = f'error info : {e}'
+            if verbose: print(f'YAML parsing error : {e}')
         except Exception as e:
             header_dict['disabled'] = True
             header_dict['description'] = 'read file error'
             header_dict['content'] = f'error info : {e}'
             if verbose: print(f'read file error : {e}')
 
+        if 'description' not in header_dict:
+            header_dict['description'] = self.script
         return header_dict
 
     def __getitem__(self , key):
@@ -90,16 +257,18 @@ class ScriptRunner:
     def get(self , key , default = None):
         return self.header.get(key , default)
 
-    def get_func(self , text_area : widgets.Textarea | None = None , text_key = 'param'):
-        params = {'email' : int(eval(self.get('email' , '0'))) , 
-                  'close_after_run' : bool(eval(self.get('close_after_run' , 'False')))}
+    def get_func(self , input_areas : list[InputArea] | None = None , popup : PopupWindow | Any = None):
+        params = {'email' : int(self.get('email' , 0)) , 
+                  'close_after_run' : bool(self.get('close_after_run' , False))}
         params.update(self.kwargs)
-
+        input_areas = input_areas or []
         def func(b):
-            if text_area is not None:
-                params[text_key] = text_area.value.strip().replace(' ' , '_')
-            run_script(self.script, **params)
-
+            try:
+                params.update({input_area.pname : input_area.get_value() for input_area in input_areas})
+                run_script(self.script, **params)
+            except (OutOfRange , Unspecified) as e:
+                popup.popup(str(e))
+                return
         return func
 
     def button(self):
@@ -113,36 +282,49 @@ class ScriptRunner:
         infos =  '<br>'.join([self.get(key) for key in ['content' , 'TODO'] if key in self.header])
         style = 'font-size: 12px; text-align: left; margin: 0.2px; padding: 0px; line-height: 1.5;'
         desc = widgets.HTML(value=f'<p style="{style}"><em>{infos}</em></p>' ,
-                            layout=widgets.Layout(width='auto', min_width='300px' , border_top = '2px solid grey'))
+                            layout=widgets.Layout(width='auto', min_width='200px' , border_top = '2px solid grey'))
         return desc
     
-    def input_area(self):
-        if self.header.get('param_input' , False):
-            input_area = widgets.Textarea(
-                placeholder=self.header.get('param_placeholder' , 'type parameters here...'),
-                layout=widgets.Layout(width='auto', min_width='300px', height='28px')
-            )
-        else:
-            input_area = None
-        return input_area
-    
+    def input_areas(self):
+        if param_inputs := self.header.get('param_inputs' , None):
+            input_areas = [InputArea.create(pname , pcomponents) for pname , pcomponents in param_inputs.items()]
+            return input_areas
+
     def boxes(self):
         button = self.button()
         desc = self.desc()
-        input_area = self.input_area()
-
-        button.on_click(self.get_func(input_area))
+        input_areas = self.input_areas()
+        popup = PopupWindow() if input_areas else None
+        button.on_click(self.get_func(input_areas , popup))
         boxes = [button , desc]
-        if input_area is not None: boxes.append(input_area)
+        if input_areas: [boxes.append(input_area.widget) for input_area in input_areas]
+        if popup: boxes.append(popup.window)
         return boxes
 
 def argparse_dict(**kwargs):
     parser = argparse.ArgumentParser(description='Run daily update script.')
     parser.add_argument('--source', type=str, default='', help='Source of the script call')
     parser.add_argument('--email', type=int, default=0, help='Send email or not')
-    parser.add_argument('--param', type=str, default='', help='Extra parameters for the script')
-    args , _ = parser.parse_known_args()
-    return kwargs | args.__dict__
+    args , unknown = parser.parse_known_args()
+    return kwargs | args.__dict__ | unknown_args(unknown)
+
+def unknown_args(unknown):
+    args = {}
+    for ua in unknown:
+        if ua.startswith('--'):
+            key = ua[2:]
+            if key not in args:
+                args[key] = None
+            else:
+                raise ValueError(f'Duplicate argument: {key}')
+        else:
+            if args[key] is None:
+                args[key] = ua
+            elif isinstance(args[key] , tuple):
+                args[key] = args[key] + (ua,)
+            else:
+                args[key] = (args[key] , ua)
+    return args
 
 def layout_grids(*boxes , max_columns = 3):
     columns = min(len(boxes) , max_columns)

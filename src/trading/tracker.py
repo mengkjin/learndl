@@ -16,14 +16,21 @@ class TradingPortfolioTracker:
             f'expect all reset ports in port_list , got {reset_ports}'
             
         updated_ports = {k:TradingPort(k , **v).build(date , k in reset_ports) for k,v in ports.items()}
-        updated_ports = {k:v for k,v in updated_ports.items() if not v.empty}
+        updated_ports = {k:v for k,v in updated_ports.items() if not v.new_ports[date].empty}
+
+        new_ports = {k:v.new_ports[date] for k,v in updated_ports.items()}
+        last_ports = {k:v.get_last_port(date).to_dataframe() for k,v in updated_ports.items()}
             
         if len(updated_ports) == 0: 
             print(f'No trading portfolios updated on {date}')
         else:
-            print(f'Trading portfolios updated on {date}: {list(updated_ports.keys())}')
+            print(f'Trading portfolios updated on {date}: {list(new_ports.keys())}')
+            for k in new_ports:
+                in_count = (~new_ports[k]['secid'].isin(last_ports[k]['secid'])).sum()
+                out_count = (~last_ports[k]['secid'].isin(new_ports[k]['secid'])).sum()
+                print(f'    Port {k} : total {len(new_ports[k])} , in {in_count} , out {out_count}')
             path = cls.attachment_path(date)
-            pd.concat([df for df in updated_ports.values()]).to_csv(path)
+            pd.concat([df for df in new_ports.values()]).to_csv(path)
             Email.attach(path)
 
     @classmethod
@@ -31,3 +38,9 @@ class TradingPortfolioTracker:
         path = PATH.log_update.joinpath('trading_ports',f'trading_ports.{date}.csv')
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
+
+    @classmethod
+    def analyze(cls , port_name : str , start : int = -1 , end : int = 99991231 , **kwargs): 
+        tp = TradingPort.load(port_name)
+        tp.analyze(start = start , end = end , **kwargs)
+        return tp

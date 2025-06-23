@@ -1,24 +1,22 @@
 #! /usr/bin/env python3.10
 # coding: utf-8
 # author: jinmeng
-# date: 2024-11-27
-# description: Update Factors Within
-# content: 更新区间内所有未更新的因子数据
+# date: 2025-06-22
+# description: Analyze Trading Portfolios
+# content: 分析交易组合
 # email: False
 # close_after_run: False
 # param_inputs:
+#   port_name : 
+#       type : str
+#       desc : trade port name
+#       required : True
 #   start : 
 #       type : int
-#       desc : start yyyymmdd
-#       min : 20250101
-#       max : 99991231
-#       required : True
+#       desc : start yyyymmdd (or -1)
 #   end : 
 #       type : int
 #       desc : end yyyymmdd
-#       min : 20250101
-#       max : 99991231
-#       required : True
 
 import sys
 
@@ -26,16 +24,17 @@ assert 'learndl' in __file__ , f'learndl path not found , do not know where to f
 path = __file__.removesuffix(__file__.split('learndl')[-1])
 sys.path.append(path)
 
-from src.factor.api import FactorCalculatorAPI
+from src.api import TradingAPI
 from src.basic import AutoRunTask
 from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    start = int(params['start'])
-    end = int(params['end'])
-    with AutoRunTask('update factors' , **params) as runner:
-        FactorCalculatorAPI.update(start = start , end = end , groups_in_one_update = None)
+    port_name = params['port_name']
+    start = int(params.get('start' , -1))
+    end = int(params.get('end' , 99991231))
+    with AutoRunTask(f'analyze trading portfolio [{port_name}]' , message_capturer=True , **params) as runner:
+        TradingAPI.Analyze(port_name = port_name , start = start , end = end)
 
 if __name__ == '__main__':
     main()

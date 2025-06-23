@@ -2,13 +2,13 @@ import pandas as pd
 import numpy as np
 
 from dataclasses import dataclass , field
-from IPython.display import display as disp
 from pathlib import Path
 from typing import Literal , Type , Any
 
 from src.basic import CALENDAR , RegisteredModel , PATH , CONF
 from src.data import DATAVENDOR
-from src.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Port , PortfolioAccountant
+from src.func import display as disp
+from src.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Port
 from src.factor.fmp import PortfolioBuilder
 from src.factor.analytic.fmp_top.api import Calc
 from src.func import dfs_to_excel , figs_to_pdf
@@ -75,6 +75,9 @@ class TradingPort:
         self.Alpha = Alpha(self.alpha , self.components , self.weights)
         self.Universe = Universe(self.universe)
 
+        self.new_ports : dict[int , pd.DataFrame] = {}
+        self.last_ports : dict[int , pd.DataFrame] = {}
+
     @classmethod
     def portfolio_dict(cls) -> dict[str , dict]:
         return CONF.trade('portfolio_dict')
@@ -136,22 +139,28 @@ class TradingPort:
             return pd.DataFrame()
 
     def get_last_port(self , date : int , reset_port = False) -> Portfolio:
-        if not reset_port and (last_date := self.last_date(date)) > 0:
-            df = self.load_port(last_date)
-            port = Portfolio.from_dataframe(df)
-        else:
-            if reset_port:
-                print(f'Beware: reset port for new build! {self.name}')
+        if reset_port:
+            print(f'Beware: reset port for new build! {self.name}')
             port = Portfolio(self.name)
+        else:
+            if date in self.last_ports:
+                port = Portfolio.from_dataframe(self.last_ports[date])
+            else:
+                if (last_date := self.last_date(date)) > 0:
+                    df = self.load_port(last_date)
+                    self.last_ports[last_date] = df
+                    port = Portfolio.from_dataframe(df)
+                else:
+                    port = Portfolio(self.name)
         return port
     
-    def build(self , date : int , reset = False , export = True) -> pd.DataFrame:
+    def build(self , date : int , reset = False , export = True):
         if self.backtest:
             df = self.build_backward(date , reset_port = reset , export = export)
         else:
             df = self.build_portfolio(date , reset_port = reset , export = export)
-
-        return df
+        self.new_ports[date] = df
+        return self
     
     def build_portfolio(self , date : int , reset_port = False , export = True , last_port = None) -> pd.DataFrame:
         alpha = self.Alpha.get(date)
@@ -215,9 +224,6 @@ class TradingPort:
             'benchmark'   : benchmark.name ,
             'strategy'    : f'top{self.top_num}' ,
         }
-        #acc = PortfolioAccountant(port)
-        #acc.accounting(benchmark , start , end , analytic , attribution , trade_engine)
-        #return acc.add_index(**default_index)
         portfolio.accounting(benchmark , start , end , analytic , attribution , trade_engine)
         self.portfolio = portfolio
         return portfolio.account_with_index(default_index)
@@ -244,7 +250,7 @@ class TradingPort:
             figs_to_pdf(figs   , self.result_dir().joinpath('plot.pdf')  , print_prefix=f'Analytic Test of TradingPort {self.name} plots')
 
         if display:
-            [disp(fig) for fig in figs.values()]
+            [disp.plot(fig) for fig in figs.values()]
 
         self.analyze_results = rslts
         self.analyze_figs = figs

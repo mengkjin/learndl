@@ -4,10 +4,13 @@
 # date: 2024-11-27
 # description: Fix Factors
 # content: 修正某些因子
-# param_input: True
-# param_placeholder: factor_names
 # email: False
 # close_after_run: False
+# param_inputs:
+#   factor_names : 
+#       type : str
+#       desc : factor names by ","
+#       required : True
 
 import sys
 
@@ -21,10 +24,7 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    if params['param'] and ',' in params['param']:
-        factors = [s.strip() for s in str(params['param']).split(',')]
-    else:
-        factors = []
+    factors = [s.strip() for s in params['factor_names'].split(',')]
     with AutoRunTask('fix factors' , **params) as runner:
         FactorCalculatorAPI.fix(factors = factors)
 

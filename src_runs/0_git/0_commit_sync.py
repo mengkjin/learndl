@@ -5,9 +5,11 @@
 # description: commit and sync
 # content: 自动提交所有修改,并同步(rebase+push)
 # email: False
-# param_input: True
-# param_placeholder: additional message
 # close_after_run: False
+# param_inputs:
+#   additional_message : 
+#       type : str
+#       desc : additional message
 
 import sys 
 
@@ -19,11 +21,9 @@ import subprocess ,  socket
 from datetime import datetime
 from src_runs.widget import argparse_dict
 
-
-
 if __name__ == '__main__':
     params = argparse_dict()
-    additional_message = str(params['param']).strip()
+    additional_message = params['additional_message']
     prefixes = [socket.gethostname() , datetime.now().strftime('%Y%m%d')]
     if isinstance(additional_message , str): additional_message = [additional_message]
     commit_message = ','.join([msg for msg in prefixes + additional_message if msg])

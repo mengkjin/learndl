@@ -3,12 +3,12 @@ import pandas as pd
 import numpy as np
 
 from abc import ABC , abstractmethod
-from IPython.display import display
 from matplotlib.figure import Figure
 from typing import Any , Callable , Literal , Type
 
 from src.basic import PATH
 from src.func import dfs_to_excel , figs_to_pdf
+from src.func import display as disp
 from src.data import DataBlock
 from src.factor.util import Benchmark , StockFactor
 
@@ -121,7 +121,7 @@ class BaseTestManager(ABC):
         return {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
     
     def display_figs(self):
-        [display(fig) for fig in self.get_figs().values()]
+        [disp.plot(fig) for fig in self.get_figs().values()]
     
     def write_down(self):
         rslts , figs = self.get_rslts() , self.get_figs()
