@@ -23,7 +23,7 @@ from src_runs.widget import argparse_dict
 
 if __name__ == '__main__':
     params = argparse_dict()
-    additional_message = params['additional_message']
+    additional_message = params.get('additional_message' , '')
     prefixes = [socket.gethostname() , datetime.now().strftime('%Y%m%d')]
     if isinstance(additional_message , str): additional_message = [additional_message]
     commit_message = ','.join([msg for msg in prefixes + additional_message if msg])

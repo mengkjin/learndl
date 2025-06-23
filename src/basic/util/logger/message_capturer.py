@@ -12,7 +12,7 @@ class_mapping = {
     'stdout' : 'stdout',
     'stderr' : 'stderr',
     'data_frame' : 'dataframe',
-    'plot' : 'image',
+    'figure' : 'image',
 }
 
 def critical(message: str):
@@ -177,7 +177,7 @@ class TimedOutput:
             return 'STDOUT'
         elif self.type == 'data_frame':
             return 'TABLE'
-        elif self.type == 'plot':
+        elif self.type == 'figure':
             return 'IMAGE'
 
     @property
@@ -229,7 +229,7 @@ class TimedOutput:
             text = _str_to_html(self.content)
         elif self.type == 'data_frame':
             text = _dataframe_to_html(self.content)
-        elif self.type == 'plot':
+        elif self.type == 'figure':
             text = _figure_to_html(self.content)
         else:
             raise ValueError(f"Unknown output type: {self.type}")
@@ -355,7 +355,7 @@ class MessageCapturer:
             critical(f"Cannot Import src.func.display: {e}")
             return
         else:
-            for display_type in ['data_frame' , 'plot']:
+            for display_type in ['data_frame' , 'figure']:
                 original = getattr(display_module , display_type)
                 captured = self.display_wrapper(display_type , original)
                 self.display_original[display_type] = original
@@ -369,10 +369,10 @@ class MessageCapturer:
         
         import src.func.display as display_module
         for key, value in self.original_display.items():
-            setattr(display_module , key, value)
+            setattr(display_module , key , value)
 
     def display_wrapper(self, display_type: str, original_func: Callable):
-        assert display_type in ['data_frame' , 'plot'] , f"Unknown display function: {display_type}"        
+        assert display_type in ['data_frame' , 'figure'] , f"Unknown display function: {display_type}"        
         def wrapper(obj , *args, **kwargs):
             self.add_output(display_type, obj)
             with NoCapture():
