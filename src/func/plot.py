@@ -110,7 +110,7 @@ class PlotFactorData:
             plt.suptitle(full_title , fontsize = 14) if self.suptitle else plt.title(full_title , fontsize = 14)
         plt.tight_layout()
         plt.close(self.fig)
-        if self.show: display.plot(self.fig)
+        if self.show: display.display(self.fig)
 
     def title_suffix(self):
         if self.name_key:

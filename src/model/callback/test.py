@@ -67,10 +67,10 @@ class DetailedAlphaAnalysis(BaseCallBack):
             #for col in ['ir','calmar','turnover']:  df[col] = df[col].map(lambda x:f'{x:.3f}')
             df = df.assign(**{col:df[col].map(lambda x:f'{x:.2%}') for col in ['pf','bm','excess','annualized','mdd','te']})
             df = df.assign(**{col:df[col].map(lambda x:f'{x:.3f}') for col in ['ir','calmar','turnover']})
-            FUNC.display.data_frame(df)
+            FUNC.display.display(df)
 
         for fig_name in ['factor@ic_curve@best.market' , 'factor@group_curve@best.market']:
-            FUNC.display.plot(figs.get(fig_name , None) , raise_error = False)
+            FUNC.display.display(figs.get(fig_name , None) , raise_error = False)
 
         FUNC.dfs_to_excel(rslts , self.path_data , print_prefix='Analytic datas')
         FUNC.figs_to_pdf(figs , self.path_plot , print_prefix='Analytic plots')
@@ -108,5 +108,5 @@ class GroupReturnAnalysis(BaseCallBack):
         grp : pd.DataFrame = rslt['market']
         grp.index.names = [col.replace('model_','') for col in grp.index.names]
         print('Table: Grouped Return Results:')
-        FUNC.display.data_frame(grp)
+        FUNC.display.display(grp)
         print(f'Grouped Return Results are saved to {self.path_grp}')

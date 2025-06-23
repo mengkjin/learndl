@@ -101,7 +101,7 @@ class LgbmPlot:
         if ylim is not None: plt.ylim(ylim)
         if yscale is not None: plt.yscale(yscale)
         plt.close(fig)
-        if show_plot: display.plot(fig)
+        if show_plot: display.display(fig)
         if self.plot_path:
             self.plot_path.joinpath('training_process.png')
             plt.savefig(self.plot_path.joinpath('training_process.png'),dpi=1200)

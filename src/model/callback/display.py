@@ -32,7 +32,7 @@ class CallbackTimer(BaseCallBack):
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_times.items() if v]
             df = pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(5)
             print('Table:Callback Time costs:')
-            FUNC.display.data_frame(df)
+            FUNC.display.display(df)
 
 class BatchDisplay(BaseCallBack):
     '''display batch progress bar'''
@@ -242,7 +242,7 @@ class StatusDisplay(BaseCallBack):
         df_display = self.summary_df
         if len(df_display) > 100: df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]
         print('Table: Test Summary:')
-        FUNC.display.data_frame(df_display)
+        FUNC.display.display(df_display)
         print(f'Test results are saved to {self.path_test}')
 
         # export excel
