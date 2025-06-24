@@ -113,7 +113,7 @@ def plot_top_perf_year(data : pd.DataFrame , show = False):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data ,drop = [] , show = show and i == 0,  
-                            title = 'TopPort Year Performance') as (df , fig):
+                                 title = 'TopPort Year Performance') as (df , fig):
             plot.plot_table(df.set_index('year') , 
                 pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                 flt_cols = ['ir','calmar'] , 

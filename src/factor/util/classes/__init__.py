@@ -7,3 +7,5 @@ from .portfolio import Portfolio
 from .benchmark import Benchmark
 
 from .stock_factor import StockFactor
+
+from .universe import Universe

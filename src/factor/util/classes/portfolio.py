@@ -120,6 +120,11 @@ class Portfolio:
         else:
             self.ports[port.date] = port
         return self
+    
+    def rename(self , new_name : str):
+        self.name = new_name
+        for port in self.ports.values(): port.rename(new_name)
+        return self
 
     @classmethod
     def from_ports(cls , *ports : Port , name : str | None = None):

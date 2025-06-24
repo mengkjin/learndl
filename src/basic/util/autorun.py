@@ -41,14 +41,13 @@ class AutoRunTask:
         else:
             self.status = 'Successful ' + self.task_name.replace('_' , ' ').title() + '!'
         
-        self.dprinter.__exit__(exc_type, exc_value, exc_traceback)
-        self.capturer.__exit__(exc_type, exc_value, exc_traceback)
-        
-        if self.forfeit_task: return
-        self.send_email(self.task_name)
+        if not self.forfeit_task:
+            self.send_email(self.task_name)
+            self.record_path.touch()
         # change_power_mode('power-saver')
 
-        self.record_path.touch()
+        self.capturer.__exit__(exc_type, exc_value, exc_traceback)
+        self.dprinter.__exit__(exc_type, exc_value, exc_traceback)
 
     @property
     def record_path(self):

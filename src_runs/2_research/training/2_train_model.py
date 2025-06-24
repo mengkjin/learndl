@@ -12,7 +12,7 @@
 #       desc : module to train
 #       required : True
 #   short_test : 
-#       type : [null , True , False]
+#       type : [True , False]
 #       desc : short test
 #       prefix : "short_test/"
 
@@ -29,7 +29,7 @@ from src_runs.widget import argparse_dict
 def main():
     params = argparse_dict()
     module = params['module_name']
-    short_test = eval(params['short_test'])
+    short_test = eval(params.get('short_test' , 'None'))
     with AutoRunTask('train model' , message_capturer = True , **params) as runner:
         ModelAPI.train_model(module = module if module else None , short_test = short_test)
         

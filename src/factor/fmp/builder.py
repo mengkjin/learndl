@@ -149,6 +149,7 @@ class PortfolioBuilderGroup:
                  daily : bool = False ,
                  analytic : bool = True ,
                  attribution : bool = True ,
+                 trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
                  verbosity : int = 1 ,
                  **kwargs):
         self.builders : list[PortfolioBuilder] = []
@@ -166,7 +167,7 @@ class PortfolioBuilderGroup:
             self.param_groups = {key:(kwargs | kwg) for key,kwg in param_groups.items()}
         else:
             self.param_groups = {'default':kwargs}
-        self.acc_kwargs : dict[str,Any] = {'daily' : daily , 'analytic' : analytic , 'attribution' : attribution}
+        self.acc_kwargs : dict[str,Any] = {'daily' : daily , 'analytic' : analytic , 'attribution' : attribution , 'trade_engine' : trade_engine}
 
         self.verbosity = verbosity
 

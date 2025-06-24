@@ -205,7 +205,8 @@ class PortfolioAccountant:
         df = pd.concat(accounts)
         old_index = list(df.index.names)
         df = df.reset_index().sort_values('model_date')
-        df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.CATEGORIES_BENCHMARKS , ordered=True) 
+        new_bm = np.setdiff1d(df['benchmark'] , CONF.CATEGORIES_BENCHMARKS).tolist()
+        df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.CATEGORIES_BENCHMARKS + new_bm , ordered=True) 
 
         df = df.set_index(old_index).sort_index()
         INSTANCE_RECORD.update_account(df)    

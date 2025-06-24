@@ -4,7 +4,7 @@ import pandas as pd
 from dataclasses import dataclass , field
 from datetime import datetime
 from matplotlib.figure import Figure
-from typing import Any , Callable
+from typing import Any , Callable , Literal
 from pathlib import Path
 from src.basic import path as PATH
 
@@ -124,7 +124,7 @@ def _figure_to_html(fig: Figure | Any):
 
 class TeeOutput:
     """double output stream: output to console and recorder"""
-    def __init__(self, original_stream, output_recorder : 'MessageCapturer' , output_type):
+    def __init__(self, original_stream, output_recorder : 'MessageCapturer' , output_type : Literal['stdout' , 'stderr']):
         self.original = original_stream
         self.recorder = output_recorder
         self.output_type = output_type
@@ -135,7 +135,7 @@ class TeeOutput:
         self.original.flush()
         # record to time ordered list
         if text := text.strip():  # only record non-empty content
-            self.recorder.add_output(self.output_type, text)
+            self.recorder.add_output(text , self.output_type)
         
     def flush(self):
         self.original.flush()
@@ -193,9 +193,14 @@ class TimedOutput:
         return datetime.fromtimestamp(self._time).strftime('%H:%M:%S.%f')[:-3]
     
     @classmethod
-    def create(cls, output_type: str, content: str | pd.DataFrame | pd.Series | Figure | None | Any):
+    def create(cls, content: str | pd.DataFrame | pd.Series | Figure | None | Any , output_type: str | None = None):
         infos = {}
         valid = True
+        if output_type is None:
+            if isinstance(content , Figure): output_type = 'figure'
+            elif isinstance(content , pd.DataFrame): output_type = 'data_frame'
+            else: 
+                raise ValueError(f"Unknown output type: {type(content)}")
         if output_type == 'stderr':
             assert isinstance(content, str) , f"content must be a string , but got {type(content)}"
             r0 = re.search(r"^(.*?)(\d{1,3})%\|", content) # capture text before XX%|
@@ -251,19 +256,23 @@ class MessageCapturer:
     Instance : 'MessageCapturer | None' = None
     InstanceList : list['MessageCapturer'] = []
     Capturing : bool = True
+    DisplayModule : Any = None
 
     '''capture message from stdout and stderr'''
     def __init__(self, title: str  | None = None, export_path: Path | str | None = None , **kwargs):
         if title is None: title = 'message_capturer'
         self._enable_capturer = True
         self.outputs: list[TimedOutput] = []
-        self.original_stdout = sys.stdout
-        self.original_stderr = sys.stderr
-        self.original_display = {}
         self.title = title if title else 'message_capturer'
         self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
         self.kwargs = kwargs
         self.__class__.InstanceList.append(self)
+
+        try:
+            import src.func.display as display_module
+            self.__class__.DisplayModule = display_module
+        except ImportError as e:
+            raise ImportError(f"Cannot Import src.func.display: {e}")
         
     def __bool__(self):
         return True
@@ -309,6 +318,7 @@ class MessageCapturer:
             self._enable_capturer = False
         else:
             self.__class__.Instance = self
+
         return self
 
     def ClearInstance(self):
@@ -321,14 +331,14 @@ class MessageCapturer:
  
         if not self.enabled: return self
         self.start_time = datetime.now()
-        self.redirect_display_functions()
+        self.redirect_display_function()
         critical(f"{self} start to capture messages at {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.enabled: return
         self.export()   
-        self.restore_display_functions()
+        self.restore_display_function()
 
         self.ClearInstance()
 
@@ -342,39 +352,26 @@ class MessageCapturer:
         from src.basic.util.email import Email
         Email.attach(export_path)
         
-    def redirect_display_functions(self):
+    def redirect_display_function(self):
         """redirect stdout, stderr, and display_module functions to capturer"""
+        self.original_stdout = sys.stdout
         sys.stdout = TeeOutput(self.original_stdout, self, 'stdout')
+        
+        self.original_stderr = sys.stderr
         sys.stderr = TeeOutput(self.original_stderr, self, 'stderr')
 
-        self.display_original = {}
-        self.display_captured = {}
-        try:
-            import src.func.display as display_module
-        except ImportError as e:
-            critical(f"Cannot Import src.func.display: {e}")
-            return
-        else:
-            for display_type in ['data_frame' , 'figure']:
-                original = getattr(display_module , display_type)
-                captured = self.display_wrapper(display_type , original)
-                self.display_original[display_type] = original
-                self.display_captured[display_type] = captured
-                setattr(display_module , display_type , captured)
+        self.original_display = self.DisplayModule.display
+        self.DisplayModule.display = self.display_wrapper(self.DisplayModule.display)
 
-    def restore_display_functions(self):
+    def restore_display_function(self):
         """restore stdout, stderr, and display_module functions"""
         sys.stdout = self.original_stdout
         sys.stderr = self.original_stderr
-        
-        import src.func.display as display_module
-        for key, value in self.original_display.items():
-            setattr(display_module , key , value)
+        self.DisplayModule.display = self.original_display
 
-    def display_wrapper(self, display_type: str, original_func: Callable):
-        assert display_type in ['data_frame' , 'figure'] , f"Unknown display function: {display_type}"        
+    def display_wrapper(self, original_func: Callable):
         def wrapper(obj , *args, **kwargs):
-            self.add_output(display_type, obj)
+            self.add_output(obj)
             with NoCapture():
                 display_result = original_func(obj , *args, **kwargs)
             return display_result
@@ -392,10 +389,10 @@ class MessageCapturer:
 
         return ''.join([self._html_head() , *html_segments , self._html_tail()])
  
-    def add_output(self, type: str, content: str | pd.DataFrame | pd.Series | Figure):
+    def add_output(self, content: str | pd.DataFrame | pd.Series | Figure | Any , output_type: str | None = None):
         """add output to time ordered list"""
         if not self.Capturing: return
-        output = TimedOutput.create(type , content)
+        output = TimedOutput.create(content , output_type)
         if not self.outputs or (output and not output.equivalent(self.outputs[-1])): 
             self.outputs.append(output)
        

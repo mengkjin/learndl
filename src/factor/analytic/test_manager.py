@@ -12,8 +12,8 @@ from src.func import display as disp
 from src.data import DataBlock
 from src.factor.util import Benchmark , StockFactor
 
-TASK_TYPES = ['optim' , 'top' , 'factor']
-TYPE_of_TASK = Literal['optim' , 'top' , 'factor']
+TASK_TYPES = ['optim' , 'top' , 'factor' , 't50']
+TYPE_of_TASK = Literal['optim' , 'top' , 'factor' , 't50']
 
 class BaseCalculator(ABC):
     TASK_TYPE : TYPE_of_TASK

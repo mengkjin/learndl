@@ -163,7 +163,8 @@ class Benchmark(Portfolio):
 
     @staticmethod
     def as_category(bm : Any):
-        return pd.Categorical(bm , categories = CATEGORIES_BENCHMARKS , ordered=True) 
+        new_bm = np.setdiff1d(bm , CATEGORIES_BENCHMARKS).tolist()
+        return pd.Categorical(bm , categories = CATEGORIES_BENCHMARKS + new_bm , ordered=True) 
     
     def accounting(self , **kwargs):
         '''Benchmark cannot be accounted'''

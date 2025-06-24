@@ -14,11 +14,14 @@ path = __file__.removesuffix(__file__.split('learndl')[-1])
 sys.path.append(path)
 
 from src.api import DataAPI , ModelAPI , TradingAPI , NotificationAPI
-from src.basic import AutoRunTask , CALENDAR
+from src.basic import MACHINE , AutoRunTask , CALENDAR
 from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict(email = 1)
+    if not MACHINE.updateable:
+        print(f'{MACHINE.name} is not updateable, skip daily update')
+        return
     with AutoRunTask(f'daily update {CALENDAR.update_to()}' , message_capturer = True , **params) as runner:
         if runner.forfeit_task: return
         DataAPI.update()

@@ -10,24 +10,24 @@ from src.basic import PATH
 PRED_RECORD = PredRecorder()
 
 class DetailedAlphaAnalysis(BaseCallBack):
-    ANALYTIC_TASKS : list[TYPE_of_TASK] = ['factor' , 'top' , 'optim']
+    DISPLAY_TABLES = ['optim@frontface']
+    DISPLAY_FIGURES = ['factor@ic_curve@best.market' , 'factor@group_curve@best.market' , 't50@perf_drawdown@best.univ']
     '''record and concat each model to Alpha model instance'''
-    def __init__(self , trainer , use_num : Literal['avg' , 'first'] = 'avg' , **kwargs) -> None:
+    def __init__(self , trainer , use_num : Literal['avg' , 'first'] = 'avg' , tasks : list[TYPE_of_TASK] = ['factor' , 't50'] , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         self.print_info()
         assert use_num in ['first' , 'avg'] , use_num
         self.use_num = use_num
-        assert all(task in FactorTestAPI.TASK_TYPES for task in self.ANALYTIC_TASKS) , \
-            f'ANALYTIC_TASKS must be a list of valid tasks: {FactorTestAPI.TASK_TYPES} , but got {self.ANALYTIC_TASKS}'
+        assert all(task in FactorTestAPI.TASK_TYPES for task in tasks) , \
+            f'ANALYTIC_TASKS must be a list of valid tasks: {FactorTestAPI.TASK_TYPES} , but got {tasks}'
+        self.tasks = tasks
 
     @property
-    def analytic_tasks(self):
+    def analytic_tasks(self) -> list[TYPE_of_TASK]:
         if self.trainer.config.short_test:
-            return self.ANALYTIC_TASKS[:1]
-        elif self.trainer.config.resume_training:
-            return self.ANALYTIC_TASKS[:1]
+            return [task for task in self.tasks if task in ['factor' , 't50']]
         else:
-            return self.ANALYTIC_TASKS
+            return self.tasks
 
     @property
     def path_data(self): return self.trainer.path_analytical_data
@@ -48,7 +48,6 @@ class DetailedAlphaAnalysis(BaseCallBack):
         PATH.save_df(df , self.path_pred , overwrite = True)
 
         df = df.rename(columns={'submodel':'factor_name'}).pivot_table('values',['secid','date'],'factor_name')
-        #self.logger.warning(f'Performing Factor and FMP test!')
         
         self.df = df
 
@@ -60,23 +59,30 @@ class DetailedAlphaAnalysis(BaseCallBack):
         rslts = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_rslts().items()}
         figs  = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_figs().items()}
 
-        if 'optim@frontface' in rslts.keys(): 
-            # print(f'FMP test Result:')
-            df = rslts['optim@frontface'].copy()
-            #for col in ['pf','bm','excess','annualized','mdd','te']:  df[col] = df[col].map(lambda x:f'{x:.2%}')
-            #for col in ['ir','calmar','turnover']:  df[col] = df[col].map(lambda x:f'{x:.3f}')
-            df = df.assign(**{col:df[col].map(lambda x:f'{x:.2%}') for col in ['pf','bm','excess','annualized','mdd','te']})
-            df = df.assign(**{col:df[col].map(lambda x:f'{x:.3f}') for col in ['ir','calmar','turnover']})
-            FUNC.display.display(df)
-
-        for fig_name in ['factor@ic_curve@best.market' , 'factor@group_curve@best.market']:
-            FUNC.display.display(figs.get(fig_name , None) , raise_error = False)
+        self.display_dfs(rslts)
+        self.display_figs(figs)
 
         FUNC.dfs_to_excel(rslts , self.path_data , print_prefix='Analytic datas')
         FUNC.figs_to_pdf(figs , self.path_plot , print_prefix='Analytic plots')
 
-        #with open(self.path_plot.parent.joinpath('plot_names.txt') , 'w') as f:
-        #    f.write('\n'.join(f'{i}:{k}' for i,k in enumerate(figs.keys())))
+    @classmethod
+    def display_dfs(cls , dfs : dict[str , pd.DataFrame]):
+        col_pct = ['pf','bm','excess','annualized','mdd','te']
+        col_flt = ['ir','calmar','turnover']
+        for name in cls.DISPLAY_TABLES:
+            if name not in dfs: continue
+            df = dfs[name].copy()
+            for col in df.columns.intersection(col_pct): df[col] = df[col].map(lambda x:f'{x:.2%}')
+            for col in df.columns.intersection(col_flt): df[col] = df[col].map(lambda x:f'{x:.3f}')
+            print(f'Table: {name}:')
+            FUNC.display.display(df)
+
+    @classmethod
+    def display_figs(cls , figs : dict[str , Any]):
+        for name in cls.DISPLAY_FIGURES:
+            if name not in figs: continue
+            print(f'Figure: {name}:')
+            FUNC.display.display(figs[name])
         
 class GroupReturnAnalysis(BaseCallBack):
     '''record and concat each model to Alpha model instance'''

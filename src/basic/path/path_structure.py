@@ -4,7 +4,7 @@ from pathlib import Path
 from src.project_setting import MACHINE
 
 # variables
-main        = Path(MACHINE.path)
+main        = Path(MACHINE.project_path)
 
 # data folder and subfolders
 data        = main.joinpath('data')

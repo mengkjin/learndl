@@ -106,9 +106,12 @@ class InputArea:
     @property
     def placeholder(self):
         placeholder = self.kwargs.get('desc' , self.pname)
-        if self.ptype in [str , int , float]:
-            if self.kwargs.get('required'): placeholder = f'(*){placeholder}'
+        if self.required: placeholder = f'**{placeholder}'
         return placeholder
+    
+    @property
+    def required(self):
+        return self.kwargs.get('required' , False)
         
     @property
     def widget_kwargs(self):
@@ -119,6 +122,7 @@ class InputArea:
             'placeholder' : self.placeholder ,
             'layout' : self.layout , 
             'style' : self.style ,
+            'required' : self.required ,
         }
 
     def get_widget(self):
@@ -138,13 +142,19 @@ class InputArea:
         pvalue = self.widget.value
         if pvalue in self.enum: pvalue = self.enum_to_value(pvalue)
         if isinstance(self.widget , widgets.Dropdown) and pvalue == self.placeholder:
-            raise Unspecified(f'PLEASE SELECT A VALID VALUE! "{pvalue}" is only a placeholder')
-        if self.kwargs.get('required') and (pvalue is None or pvalue == ''):
-            raise Unspecified(f'PLEASE INPUT A VALID VALUE! [{self.pname}] is required')
-        if (pmin := self.kwargs.get('min')) is not None:
-            if type(pmin)(pvalue) < pmin: raise OutOfRange(f'TOO SMALL! [{self.pname}] should be >= {pmin} , got {pvalue}')
-        if (pmax := self.kwargs.get('max')) is not None:
-            if type(pmax)(pvalue) > pmax: raise OutOfRange(f'TOO LARGE! [{self.pname}] should be <= {pmax} , got {pvalue}')
+            if self.required:
+                raise Unspecified(f'PLEASE SELECT A VALID VALUE! "{pvalue}" is only a placeholder')
+            else:
+                pvalue = None
+        elif isinstance(self.widget , widgets.Textarea) and (pvalue == '' or pvalue is None):
+            if self.required:
+                raise Unspecified(f'PLEASE INPUT A VALID VALUE! "{pvalue}" is only a placeholder')
+            else:
+                pvalue = None
+        if (pmin := self.kwargs.get('min')) is not None and type(pmin)(pvalue) < pmin: 
+            raise OutOfRange(f'TOO SMALL! [{self.pname}] should be >= {pmin} , got {pvalue}')
+        if (pmax := self.kwargs.get('max')) is not None and type(pmax)(pvalue) > pmax: 
+            raise OutOfRange(f'TOO LARGE! [{self.pname}] should be <= {pmax} , got {pvalue}')
         return pvalue
     
     def enum_to_value(self , enum_value : str | Any):

@@ -31,8 +31,8 @@ def email_to_fanghan(test = False):
     with TempFile(attachments) as temp_file:
         df1 = PATH.pred_load('gru_day_V1' , use_date)
 
-        from src.trading.util import Alpha
-        df2 = Alpha('use_daily' , [
+        from src.trading.util import CompositeAlpha
+        df2 = CompositeAlpha('use_daily' , [
             'sellside@huatai.master_combined@master_combined' ,
             'sellside@dongfang.scores_v0@avg' ,
             'gru_day_V1'

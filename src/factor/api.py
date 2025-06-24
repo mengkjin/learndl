@@ -3,7 +3,7 @@ from typing import Any , Literal
 from src.basic import PATH , MACHINE
 from src.factor.util import StockFactor
 
-from src.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager
+from src.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager
 from src.factor.calculator import UPDATE_JOBS , TuShareCNE5_Calculator , StockFactorHierarchy
 
 class FactorModelUpdater:
@@ -33,6 +33,8 @@ class FactorTestAPI:
             return FmpOptimManager
         elif test_type == 'top':
             return FmpTopManager
+        elif test_type == 't50':
+            return FmpT50Manager
         else:
             raise ValueError(f'Invalid test type: {test_type}')
         
@@ -45,7 +47,7 @@ class FactorTestAPI:
         print(f'Running {test_type} test for {n_factor} factors in {benchmark_str}, write_down={write_down}, display_figs={display_figs}')
 
     @classmethod
-    def run_test(cls , test_type : Literal['factor' , 'optim' , 'top'] , 
+    def run_test(cls , test_type : TYPE_of_TASK , 
                  factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
                  write_down = False , display_figs = False , verbosity = 1 , 
                  project_name : str | None = None , **kwargs):
