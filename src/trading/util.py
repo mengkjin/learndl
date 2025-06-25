@@ -47,6 +47,9 @@ class TradingPort:
     test_start  : int = 20190101 # -1 for no backtest
     test_end    : int = -1
     benchmark   : str = 'csi500'
+    buffer_zone : float = 0.8
+    no_zone     : float = 0.5
+    indus_control : float = 0.1
 
     def __post_init__(self):
         assert isinstance(self.freq , int) or self.freq in ['d' , 'w' , 'm'] , f'str freq must be d, w, or m : {self.freq}'
@@ -63,9 +66,6 @@ class TradingPort:
             self.turn_control = 0.5
         else:
             self.turn_control = 1.0
-        self.buffer_zone = 0.8
-        self.no_zone = 0.5
-        self.indus_control = 0.1
 
         assert not self.backtest or self.test_start > 0 , f'test_start must be positive when backtest is True: {self.test_start}'
         self.test_start = max(self.test_start , 20170101) if self.test_start > 0 else -1

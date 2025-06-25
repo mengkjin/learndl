@@ -63,14 +63,15 @@ class PortfolioGenerator(PortCreator):
         pool['buffered'] = ((pool['rankpct'] >= self.conf.buffer_zone) + (pool['selected'].cumsum() <= self.conf.stay_num) *
                             (pool['rankpct'] >= self.conf.no_zone))
 
-        stay = pool[pool['selected'] & pool['buffered']][['secid' , 'indus']]
+        stay = pool[pool['selected'] & pool['buffered']]
         stay_ind_count = stay.groupby('indus')['secid'].count().rename('count')
 
         new_pool = pool[~pool['secid'].isin(stay['secid'])].merge(stay_ind_count , on = 'indus' , how = 'left')
         selectable = new_pool['ind_rank'] < (self.conf.indus_slots - new_pool['count'].fillna(0))
-        entry = new_pool[selectable].sort_values('alpha' , ascending = False).head(self.conf.n_best - stay.shape[0])[['secid','indus']]
+        entry = new_pool[selectable].sort_values('alpha' , ascending = False).head(self.conf.n_best - stay.shape[0])
 
-        df = pd.concat([stay , entry]).drop_duplicates(subset=['secid']).assign(weight = 1)[['secid' , 'weight']]
+        df = pd.concat([stay[['secid' , 'indus']] , entry[['secid' , 'indus']]])
+        df = df.drop_duplicates(subset=['secid']).assign(weight = 1)[['secid' , 'weight']]
         port = Port(df , date = self.model_date , name = self.name , value = self.value).rescale()
         self.create_result = PortCreateResult(port , len(df) == self.conf.n_best)
 

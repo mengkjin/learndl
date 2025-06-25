@@ -36,6 +36,40 @@ use_daily.backtest:
     backtest: True
     test_start: 20190101
 
+use_daily.backtest2:
+    alpha: big_combine
+    components:
+        - sellside@huatai.master_combined@master_combined
+        - sellside@dongfang.scores_v0@avg
+        - gru_day_V1
+    weights:
+        - 1.0
+        - 1.0
+        - 1.0
+    universe: top-1000
+    top_num: 50
+    freq: 1
+    backtest: True
+    test_start: 20190101
+    buffer_zone: 0.9
+
+use_daily.backtest3:
+    alpha: big_combine
+    components:
+        - sellside@huatai.master_combined@master_combined
+        - sellside@dongfang.scores_v0@avg
+        - gru_day_V1
+    weights:
+        - 1.0
+        - 1.0
+        - 1.0
+    universe: top-1000
+    top_num: 50
+    freq: 1
+    backtest: True
+    test_start: 20190101
+    buffer_zone: 0.95
+
 master_daily:
     alpha: sellside@huatai.master_combined@master_combined
     universe: top-1000
