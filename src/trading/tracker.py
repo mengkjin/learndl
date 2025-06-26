@@ -35,7 +35,7 @@ class TradingPortfolioTracker:
 
     @classmethod
     def attachment_path(cls , date : int) -> Path:
-        path = PATH.log_update.joinpath('trading_ports',f'trading_ports.{date}.csv')
+        path = PATH.log_record.joinpath('trading_ports',f'trading_ports.{date}.csv')
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 

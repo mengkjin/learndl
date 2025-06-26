@@ -5,16 +5,13 @@ from pathlib import Path
 from typing import Literal , Any
 from src.basic import path as PATH
 
-PATH.log_record.joinpath('autorun').mkdir(parents = True , exist_ok = True)
-
 class AutoRunTask:
-    def __init__(self , task_name : str , email = True , email_if_attachment = True , 
-                 source = 'not_specified' , message_capturer : Path | str | bool = True , **kwargs):
+    def __init__(self , task_name : str , email = True , message_capturer : bool = True , 
+                 source = 'not_specified' , **kwargs):
         self.task_name = task_name.replace(' ' , '_')
         self.email = email
-        self.email_if_attachment = email_if_attachment
         self.source = source
-
+        
         self.init_time = datetime.now()
         self.time_str = self.init_time.strftime('%Y%m%d%H%M%S')
 
@@ -22,7 +19,8 @@ class AutoRunTask:
         self.emailer = Email()
 
         from src.basic.util.logger import MessageCapturer , LogWriter
-        self.capturer = MessageCapturer.CreateCapturer(message_capturer , self.task_name , self.init_time)
+        self.capturer = MessageCapturer.CreateCapturer(self.message_capturer_path if message_capturer else False , 
+                                                       self.task_name , self.init_time)
         self.dprinter = LogWriter(self.log_filename)
 
     def __enter__(self):
@@ -61,10 +59,14 @@ class AutoRunTask:
     
     @property
     def log_filename(self):
-        return f'{self.task_name}/{self.task_name}.{self.time_str}.txt'
+        return PATH.log_autorun.joinpath('log_txt' , f'{self.task_name}.{self.time_str}.txt')
+    
+    @property
+    def message_capturer_path(self):
+        return PATH.log_autorun.joinpath('message_capturer' , f'{self.task_name}.{self.time_str}.html')
 
     def send_email(self , title : str):
-        if self.email or (self.email_if_attachment and self.emailer.ATTACHMENTS): 
+        if self.email or self.emailer.ATTACHMENTS: 
             title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')]])
             self.emailer.attach(self.dprinter.filename)
             self.emailer.send(title = title , body = self.status , confirmation_message='Autorun')

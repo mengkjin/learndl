@@ -1,5 +1,7 @@
 import colorlog , logging , sys
 
+from pathlib import Path
+
 from src.basic import path as PATH
 from src.basic import conf as CONF
 
@@ -101,39 +103,44 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
 
 
 class LogWriter:
+    class TeeOutput:
+        """double output stream: output to console and file"""
+        def __init__(self, original_stream, log_file):
+            self.original = original_stream
+            self.log_file = log_file
+            
+        def write(self, message):
+            self.original.write(message)
+            self.original.flush()
+            self.log_file.write(message)
+            
+        def flush(self):
+            self.original.flush()
+    
+
     '''change print target to both terminal and file'''
-    def __init__(self, filename : str | None = None):
+    def __init__(self, filename : str | Path | None = None):
         self.set_attrs(filename)
 
-    def initiate(self):
+    def set_attrs(self , filename : str | Path | None = None):
+        if isinstance(filename , str): filename = Path(filename)
+        self.filename = filename
         if self.filename is None: return
-        self.filename = PATH.log_update.joinpath(self.filename)
         self.filename.parent.mkdir(exist_ok=True,parents=True)
         self.log = open(self.filename, "w")
-
-    def set_attrs(self , filename : str | None = None):
-        self.filename = filename
-        self.initiate()
         return self
-
-    def write(self, message):
-        self.terminal.write(message)
-        self.log.write(message)
-
-    def flush(self):
-        # This flush method is needed for Python 3 compatibility.
-        # This handles the flush command by doing nothing.
-        # You might want to specify some extra behavior here.
-        pass
 
     def __enter__(self):
         assert self.filename is not None , 'filename is not set'
-        self.terminal = sys.stdout
-        sys.stdout = self
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
+        sys.stdout = self.TeeOutput(self.original_stdout , self.log)
+        sys.stderr = self.TeeOutput(self.original_stderr , self.log)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        sys.stdout = self.terminal
+        sys.stdout = self.original_stdout
+        sys.stderr = self.original_stderr
         self.log.close()
 
     def contents(self):

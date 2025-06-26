@@ -9,6 +9,7 @@ import datetime
 import logging
 import os
 
+# get SMTP config from environment variables
 SMTP_CONFIG = {
     "server": os.environ.get("SMTP_SERVER","smtp.163.com"),  
     "port": int(os.environ.get("SMTP_PORT" , 25)),                
@@ -17,7 +18,10 @@ SMTP_CONFIG = {
     "password": os.environ.get("SMTP_PASSWORD","TSkYh33f3pesHP2S") 
 }
 
-ADDITIONAL_CMD = os.environ.get("ADDITIONAL_CMD", "")
+# some additional cmds to run after email sent
+ADDITIONAL_CMDS = [
+    '/home/mengkjin/workspace/learndl/runs/daily_update.sh'
+]
 
 # log file path
 LOG_FILE = "/var/log/startup_notifier.log"
@@ -134,30 +138,31 @@ def send_email(subject, body, config):
             server.quit()
             logging.info("SMTP connection closed.")
 
-def run_additional_cmd(cmd):
-   
-    try:
-       
-        logging.info(f"run: {cmd}")
+def run_additional_cmds():
+    '''run additional cmds'''
+    for cmd in ADDITIONAL_CMDS:
+        try:
         
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-        )
-        
-        if result.returncode == 0:
-            logging.info(f"run cmd success")
-        else:
-            logging.error(f"run cmd failed (Exitcode: {result.returncode}): {cmd}")
-            if result.stderr.strip():
-                logging.error(f"ERR: {result.stderr.strip()}")
-            if result.stdout.strip():
-                logging.info(f"OUT: {result.stdout.strip()}")
-    except subprocess.TimeoutExpired:
-        logging.error(f"Time out: {cmd}")
-    except Exception as e:
-        logging.error(e)
+            logging.info(f"run: {cmd}")
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+            )
+            
+            if result.returncode == 0:
+                logging.info(f"run cmd success")
+            else:
+                logging.error(f"run cmd failed (Exitcode: {result.returncode}): {cmd}")
+                if result.stderr.strip():
+                    logging.error(f"ERR: {result.stderr.strip()}")
+                if result.stdout.strip():
+                    logging.info(f"OUT: {result.stdout.strip()}")
+        except subprocess.TimeoutExpired:
+            logging.error(f"Time out: {cmd}")
+        except Exception as e:
+            logging.error(e)
 
 def main():
     """main function"""
@@ -170,7 +175,7 @@ def main():
     system_info = get_system_info()
     
     hostname = run_command("hostname") or "unknown host"
-    subject = f"host startup notification: {hostname}"
+    subject = f"Learndl: host startup notification: {hostname}"
     
     body = f"""
 hello,
@@ -192,7 +197,7 @@ this email is sent by startup notifier script automatically.
     email_success = send_email(subject, body.strip(), SMTP_CONFIG)
     if email_success:
         logging.info("Send mail success , run additional cmd")
-        run_additional_cmd(ADDITIONAL_CMD)
+        run_additional_cmds()
     else:
         logging.error("Send mail failed!")
     logging.info("script executed.")

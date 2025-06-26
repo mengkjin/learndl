@@ -252,7 +252,7 @@ class TimedOutput:
         return text
 
 class MessageCapturer:
-    ExportDIR = PATH.log_record.joinpath('message_capturer')
+    ExportDIR = PATH.log_autorun.joinpath('message_capturer')
     Instance : 'MessageCapturer | None' = None
     InstanceList : list['MessageCapturer'] = []
     Capturing : bool = True
