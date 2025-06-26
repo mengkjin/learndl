@@ -9,25 +9,27 @@ PATH.log_record.joinpath('autorun').mkdir(parents = True , exist_ok = True)
 
 class AutoRunTask:
     def __init__(self , task_name : str , email = True , email_if_attachment = True , 
-                 source = 'not_specified' , message_capturer : Path | str | bool = False , **kwargs):
+                 source = 'not_specified' , message_capturer : Path | str | bool = True , **kwargs):
         self.task_name = task_name.replace(' ' , '_')
         self.email = email
         self.email_if_attachment = email_if_attachment
         self.source = source
 
+        self.init_time = datetime.now()
+        self.time_str = self.init_time.strftime('%Y%m%d%H%M%S')
+
         from src.basic.util.email import Email
         self.emailer = Email()
 
-        from src.basic.util.logger import MessageCapturer , DualPrinter
-        self.capturer = MessageCapturer.CreateCapturer(message_capturer)
-        self.dprinter = DualPrinter()
+        from src.basic.util.logger import MessageCapturer , LogWriter
+        self.capturer = MessageCapturer.CreateCapturer(message_capturer , self.task_name , self.init_time)
+        self.dprinter = LogWriter(self.log_filename)
 
     def __enter__(self):
         self.already_done = self.record_path.exists()
         # change_power_mode('balanced')
-        self.time_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-        self.dprinter.set_attrs(f'{self.task_name}/{self.task_name}.{self.time_str}.txt').__enter__()
-        self.capturer.set_attrs(f'{self.task_name}').__enter__()
+        self.dprinter.__enter__()
+        self.capturer.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -41,14 +43,14 @@ class AutoRunTask:
         else:
             self.status = 'Successful ' + self.task_name.replace('_' , ' ').title() + '!'
         
+        self.capturer.__exit__(exc_type, exc_value, exc_traceback)
+        self.dprinter.__exit__(exc_type, exc_value, exc_traceback)
+
         if not self.forfeit_task:
             self.send_email(self.task_name)
             self.record_path.touch()
         # change_power_mode('power-saver')
-
-        self.capturer.__exit__(exc_type, exc_value, exc_traceback)
-        self.dprinter.__exit__(exc_type, exc_value, exc_traceback)
-
+        
     @property
     def record_path(self):
         return PATH.log_record.joinpath('autorun' , f'{self.task_name}.txt')
@@ -56,6 +58,10 @@ class AutoRunTask:
     @property
     def forfeit_task(self):
         return self.already_done and self.source == 'bash'
+    
+    @property
+    def log_filename(self):
+        return f'{self.task_name}/{self.task_name}.{self.time_str}.txt'
 
     def send_email(self , title : str):
         if self.email or (self.email_if_attachment and self.emailer.ATTACHMENTS): 

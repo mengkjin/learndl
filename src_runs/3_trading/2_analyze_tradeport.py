@@ -30,10 +30,10 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    port_name = params['port_name']
-    start = int(params.get('start' , -1))
-    end = int(params.get('end' , 99991231))
-    with AutoRunTask(f'analyze trading portfolio [{port_name}]' , message_capturer=True , **params) as runner:
+    port_name = params.pop('port_name')
+    start = int(params.pop('start' , -1))
+    end = int(params.pop('end' , 99991231))
+    with AutoRunTask(f'analyze trading portfolio [{port_name}]' , **params) as runner:
         TradingAPI.Analyze(port_name = port_name , start = start , end = end)
 
 if __name__ == '__main__':

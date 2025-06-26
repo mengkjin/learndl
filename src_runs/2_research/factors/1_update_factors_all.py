@@ -32,8 +32,8 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    start = int(params['start'])
-    end = int(params['end'])
+    start = int(params.pop('start'))
+    end = int(params.pop('end'))
     with AutoRunTask('update factors' , **params) as runner:
         FactorCalculatorAPI.update(start = start , end = end , groups_in_one_update = None)
 

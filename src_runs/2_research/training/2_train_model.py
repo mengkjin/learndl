@@ -28,9 +28,9 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    module = params['module_name']
-    short_test = eval(params.get('short_test' , 'None'))
-    with AutoRunTask('train model' , message_capturer = True , **params) as runner:
+    module = params.pop('module_name')
+    short_test = eval(params.pop('short_test' , 'None'))
+    with AutoRunTask('train model' , **params) as runner:
         ModelAPI.train_model(module = module if module else None , short_test = short_test)
         
 if __name__ == '__main__':

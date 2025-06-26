@@ -18,7 +18,8 @@ from src.basic import AutoRunTask
 from src_runs.widget import argparse_dict
 
 def main():
-    with AutoRunTask('update models' , **argparse_dict()) as runner:
+    param = argparse_dict()
+    with AutoRunTask('update models' , **param) as runner:
         ModelAPI.update_models()
 
 if __name__ == '__main__':

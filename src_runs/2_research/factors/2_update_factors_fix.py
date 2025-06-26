@@ -24,7 +24,7 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    factors = [s.strip() for s in params['factor_names'].split(',')]
+    factors = [s.strip() for s in params.pop('factor_names').split(',')]
     with AutoRunTask('fix factors' , **params) as runner:
         FactorCalculatorAPI.fix(factors = factors)
 

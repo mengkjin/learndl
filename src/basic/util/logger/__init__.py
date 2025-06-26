@@ -1,3 +1,2 @@
-from .logger import Logger
+from .logger import Logger , LogWriter
 from .message_capturer import MessageCapturer
-from .dual_printer import DualPrinter

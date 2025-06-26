@@ -259,11 +259,12 @@ class MessageCapturer:
     DisplayModule : Any = None
 
     '''capture message from stdout and stderr'''
-    def __init__(self, title: str  | None = None, export_path: Path | str | None = None , **kwargs):
+    def __init__(self, title: str  | None = None, export_path: Path | str | None = None , time: datetime | None = None , **kwargs):
         if title is None: title = 'message_capturer'
         self._enable_capturer = True
         self.outputs: list[TimedOutput] = []
         self.title = title if title else 'message_capturer'
+        self.time = time if time else datetime.now()
         self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
         self.kwargs = kwargs
         self.__class__.InstanceList.append(self)
@@ -289,9 +290,9 @@ class MessageCapturer:
         return self.Instance is not None
     
     @classmethod
-    def CreateCapturer(cls, message_capturer : Path | str | bool = False , title : str | None = None , **kwargs):
+    def CreateCapturer(cls, message_capturer : Path | str | bool = False , title : str | None = None , time : datetime | None = None , **kwargs):
         export_path = message_capturer if isinstance(message_capturer , (Path , str)) else None
-        capturer = cls(title , export_path = export_path , **kwargs)
+        capturer = cls(title , export_path = export_path , time = time , **kwargs)
         if not message_capturer: capturer._enable_capturer = False
         return capturer
     
@@ -299,14 +300,17 @@ class MessageCapturer:
         if isinstance(self._export_path, Path):
             path = self._export_path
         else:
-            path = self.ExportDIR.joinpath(f'{self.title.replace(" " , "_")}.{datetime.now().strftime("%Y%m%d%H%M%S")}.html')
+            title = self.title.replace(" " , "_")
+            time_str = self.time.strftime('%Y%m%d%H%M%S')
+            path = self.ExportDIR.joinpath(title , f'{title}.{time_str}.html')
         assert not path or path.suffix == '.html' , f"export_path must be a html file , but got {path}"
         return path
     
-    def set_attrs(self , title : str | None = None , export_path : Path | str | None = None):
+    def set_attrs(self , title : str | None = None , export_path : Path | str | None = None , time : datetime | None = None):
         if self.Instance is None or self.Instance is self:
-            self.title = title if title else 'message_capturer'
-            self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
+            if title: self.title = title
+            if time: self.time = time
+            if export_path: self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
             assert not self._export_path or self._export_path.suffix == '.html' , f"export_path must be a html file , but got {self._export_path}"
         else:
             self.Instance.set_attrs(title , export_path)

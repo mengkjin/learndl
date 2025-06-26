@@ -115,6 +115,7 @@ def run_script(script: str | Path, close_after_run=False, **kwargs):
     
     # 添加到运行队列
     queue_item = add_to_queue(script_name, cmd)
+    st.info(f"✅ 已添加到队列: {queue_item['id']}")
     
     try:
         # 启动进程
@@ -127,16 +128,21 @@ def run_script(script: str | Path, close_after_run=False, **kwargs):
             'start_time': time.time()
         })
         
-        st.success(f'脚本已启动！PID: {process.pid}')
-        st.info('请查看页面顶部的运行队列监控进度')
+        st.success(f'✅ 脚本已启动！PID: {process.pid}')
+        st.info('📊 请点击上方队列区域的"🔄 刷新"按钮查看最新状态')
+        
+        # 显示命令信息
+        with st.expander("🔧 执行命令详情", expanded=False):
+            st.code(cmd)
         
     except Exception as e:
         # 更新队列状态为失败
         update_queue_item(queue_item['id'], {
             'status': 'failed',
-            'error': str(e)
+            'error': str(e),
+            'end_time': time.time()
         })
-        st.error(f'脚本启动失败: {str(e)}')
+        st.error(f'❌ 脚本启动失败: {str(e)}')
 
 class OutOfRange(Exception): 
     pass
@@ -314,12 +320,20 @@ class StreamlitScriptRunner:
         st.subheader("参数设置")
         params = {}
         
-        # 创建3列布局
+        # 创建3列布局 - 所有参数同时显示
         param_items = list(param_inputs.items())
-        param_cols = st.columns(3)
+        num_cols = min(3, len(param_items))
+        param_cols = st.columns(num_cols)
         
+        # 先收集所有参数，避免依赖关系导致的逐步显示
+        all_widgets = []
         for i, (pname, pdef) in enumerate(param_items):
-            with param_cols[i % 3]:
+            col_idx = i % num_cols
+            all_widgets.append((col_idx, pname, pdef))
+        
+        # 同时渲染所有参数
+        for col_idx, pname, pdef in all_widgets:
+            with param_cols[col_idx]:
                 try:
                     # 解析参数定义
                     ptype = pdef.get("type") or pdef.get("enum")
@@ -495,13 +509,23 @@ def show_folder(folder_path: Path | str, level: int = 0):
 def show_run_queue():
     """显示运行队列"""
     queue = load_queue()
-    if not queue:
-        return
     
-    st.subheader("🔄 运行队列")
+    # 队列标题和刷新按钮
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        st.subheader("🔄 运行队列")
+    with col2:
+        if st.button("🔄 刷新", key="refresh_queue"):
+            st.rerun()
+    
+    if not queue:
+        st.info("🈳 队列为空，点击下方脚本运行后会在此显示进度")
+        return
     
     # 更新队列状态
     updated_queue = []
+    status_changed = False
+    
     for item in queue:
         if item.get('pid') and item['status'] == 'running':
             if check_process_status(item['pid']):
@@ -509,13 +533,24 @@ def show_run_queue():
                 item['status'] = 'running'
             else:
                 # 进程已结束
+                old_status = item['status']
                 item['status'] = 'completed'
                 item['end_time'] = time.time()
+                if old_status != 'completed':
+                    status_changed = True
         updated_queue.append(item)
     
-    if updated_queue != queue:
+    if status_changed:
         save_queue(updated_queue)
         queue = updated_queue
+    
+    # 显示队列统计信息
+    running_count = len([item for item in queue if item['status'] == 'running'])
+    completed_count = len([item for item in queue if item['status'] == 'completed'])
+    failed_count = len([item for item in queue if item['status'] == 'failed'])
+    
+    if running_count > 0 or completed_count > 0 or failed_count > 0:
+        st.caption(f"📊 运行中: {running_count} | 已完成: {completed_count} | 失败: {failed_count}")
     
     # 显示队列项
     for item in queue:
@@ -554,10 +589,12 @@ def show_run_queue():
                 if st.button("❌", key=f"remove_{item['id']}", help="移除/终止"):
                     if item.get('pid') and item['status'] == 'running':
                         if kill_process(item['pid']):
-                            st.success(f"已终止进程 {item['pid']}")
+                            st.success(f"✅ 已终止进程 {item['pid']}")
                         else:
-                            st.warning("终止进程失败")
+                            st.warning("⚠️ 终止进程失败")
                     remove_from_queue(item['id'])
+                    st.success(f"✅ 已从队列移除: {item['script_name']}")
+                    time.sleep(0.5)  # 短暂延迟确保状态更新
                     st.rerun()
             
             st.markdown("---")
@@ -572,7 +609,7 @@ def show_script(script_file: Path):
     
     runner = StreamlitScriptRunner(script_file)
     
-    # 脚本标题行（紧凑布局）
+    # 脚本标题行（紧凑布局，垂直居中）
     col1, col2 = st.columns([5, 1])
     with col1:
         script_name = script_file.stem.replace('_', ' ').title()
@@ -581,24 +618,30 @@ def show_script(script_file: Path):
         is_current = st.session_state.current_script == script_key
         button_text = f"{'🔽' if is_current else '▶️'} 🐍 {script_name}"
         
-        # 使用更紧凑的按钮样式
+        # 使用水平布局，确保垂直居中
         button_col, desc_col = st.columns([2, 3])
         with button_col:
-            # 添加缩进
-            st.markdown("　", unsafe_allow_html=True)  # 全角空格作为缩进
-            if st.button(button_text, key=f"toggle_{script_key}"):
-                # 切换脚本展开状态
-                if st.session_state.current_script == script_key:
-                    st.session_state.current_script = None
-                else:
-                    st.session_state.current_script = script_key
-                    st.rerun()
+            # 使用container确保对齐
+            with st.container():
+                # 添加缩进
+                st.markdown('<div style="display: inline-block; width: 20px;"></div>', 
+                           unsafe_allow_html=True)
+                if st.button(button_text, key=f"toggle_{script_key}"):
+                    # 切换脚本展开状态
+                    if st.session_state.current_script == script_key:
+                        st.session_state.current_script = None
+                    else:
+                        st.session_state.current_script = script_key
+                        st.rerun()
         
         with desc_col:
-            # 描述在按钮右侧
-            content = runner.header.get('content', '')
-            if content and len(content) > 0:
-                st.caption(f"💬 {content[:80]}..." if len(content) > 80 else content)
+            # 描述在按钮右侧，使用相同高度的容器
+            with st.container():
+                content = runner.header.get('content', '')
+                if content and len(content) > 0:
+                    st.markdown(f'<div style="display: flex; align-items: center; height: 28px; font-size: 11px; color: #666;">'
+                               f'💬 {content[:80]}{"..." if len(content) > 80 else ""}</div>', 
+                               unsafe_allow_html=True)
     
     with col2:
         # 显示脚本状态
@@ -625,44 +668,55 @@ def main():
     st.markdown("""
     <style>
     .stButton > button {
-        height: 32px;
-        padding: 2px 8px;
-        font-size: 13px;
-        margin-bottom: 2px;
+        height: 28px;
+        padding: 1px 6px;
+        font-size: 12px;
+        margin-bottom: 1px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
     .stSelectbox > div > div {
-        height: 32px;
-        font-size: 13px;
+        height: 28px;
+        font-size: 12px;
     }
     .stTextInput > div > div > input {
-        height: 32px;
-        font-size: 13px;
+        height: 28px;
+        font-size: 12px;
     }
     .stNumberInput > div > div > input {
-        height: 32px;
-        font-size: 13px;
+        height: 28px;
+        font-size: 12px;
     }
     .element-container {
-        margin-bottom: 4px;
+        margin-bottom: 2px;
+        display: flex;
+        align-items: center;
     }
     .stMarkdown {
-        margin-bottom: 2px;
-        line-height: 1.2;
+        margin-bottom: 1px;
+        line-height: 1.1;
+        display: flex;
+        align-items: center;
     }
     .stMarkdown p {
         margin-top: 0px;
-        margin-bottom: 2px;
-        line-height: 1.2;
+        margin-bottom: 1px;
+        line-height: 1.1;
     }
     .stMetric {
         background-color: #f0f2f6;
-        padding: 6px;
-        border-radius: 5px;
-        margin: 1px;
+        padding: 4px;
+        border-radius: 3px;
+        margin: 0px;
     }
     .stContainer {
         padding-top: 0px;
         padding-bottom: 0px;
+    }
+    div[data-testid="column"] {
+        display: flex;
+        align-items: center;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -696,6 +750,16 @@ def main():
         st.success("✅ 脚本互斥展开")
         st.success("✅ 运行报告生成")
         st.success("✅ 文件预览功能")
+        
+        st.markdown("### 🐛 调试信息")
+        if st.button("查看队列文件", key="debug_queue"):
+            queue_file = "run_queue.json"
+            if os.path.exists(queue_file):
+                with open(queue_file, 'r') as f:
+                    queue_content = f.read()
+                st.code(queue_content, language='json')
+            else:
+                st.info("队列文件不存在")
     
     # 主内容区域
     src_runs_path = Path("src_runs")

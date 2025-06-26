@@ -29,8 +29,8 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    model_name = params['model_name']
-    short_test = eval(params.get('short_test' , 'None'))
+    model_name = params.pop('model_name')
+    short_test = eval(params.pop('short_test' , 'None'))
     with AutoRunTask('test model' , message_capturer = True , **params) as runner:
         ModelAPI.test_model(model_name = model_name , short_test = short_test)
         

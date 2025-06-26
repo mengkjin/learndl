@@ -22,7 +22,7 @@ def main():
     if not MACHINE.updateable:
         print(f'{MACHINE.name} is not updateable, skip daily update')
         return
-    with AutoRunTask(f'daily update {CALENDAR.update_to()}' , message_capturer = True , **params) as runner:
+    with AutoRunTask(f'daily update {CALENDAR.update_to()}' , **params) as runner:
         if runner.forfeit_task: return
         DataAPI.update()
         ModelAPI.update()

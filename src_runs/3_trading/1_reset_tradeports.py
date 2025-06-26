@@ -24,8 +24,8 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    reset_ports = [s.strip() for s in params['port_names'].split(',')]
-    with AutoRunTask('reset trading portfolios' , **params , email_if_attachment = True , message_capturer=True) as runner:
+    reset_ports = [s.strip() for s in params.pop('reset_ports').split(',')]
+    with AutoRunTask('reset trading portfolios' , **params) as runner:
         TradingAPI.update(reset_ports = reset_ports)
 
 if __name__ == '__main__':

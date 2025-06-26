@@ -25,7 +25,7 @@ from src_runs.widget import argparse_dict
 
 def main():
     params = argparse_dict()
-    num = int(params['num'])
+    num = int(params.pop('num'))
     with AutoRunTask('update factors' , **params) as runner:
         FactorCalculatorAPI.update(groups_in_one_update=num)
 

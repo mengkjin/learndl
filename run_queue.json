@@ -1,0 +1,12 @@
+[
+  {
+    "id": "3_test_model_1750825140",
+    "script_name": "3_test_model",
+    "cmd": "osascript -e 'tell application \"Terminal\" to do script \"source /Users/mengkjin/workspace/learndl/.venv/bin/activate; python /Users/mengkjin/workspace/learndl/src_runs/2_research/training/3_test_model.py --email 1 --model_name gru_day --short_test True; exec bash\"' ",
+    "status": "completed",
+    "created_time": 1750825140.658466,
+    "pid": 22655,
+    "start_time": 1750825140.660915,
+    "end_time": 1750825452.1272142
+  }
+]
