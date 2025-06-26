@@ -10,12 +10,14 @@ import logging
 import os
 
 SMTP_CONFIG = {
-    "server": os.environ.get("SMTP_SERVER"),  
-    "port": int(os.environ.get("SMTP_PORT" , 0)),                
-    "sender_email": os.environ.get("SMTP_SENDER"), 
-    "receiver_email": os.environ.get("SMTP_RECEIVER"), 
-    "password": os.environ.get("SMTP_PASSWORD") 
+    "server": os.environ.get("SMTP_SERVER","smtp.163.com"),  
+    "port": int(os.environ.get("SMTP_PORT" , 25)),                
+    "sender_email": os.environ.get("SMTP_SENDER","mengkjin@163.com"), 
+    "receiver_email": os.environ.get("SMTP_RECEIVER","mengkjin@163.com"), 
+    "password": os.environ.get("SMTP_PASSWORD","TSkYh33f3pesHP2S") 
 }
+
+ADDITIONAL_CMD = os.environ.get("ADDITIONAL_CMD", "")
 
 # log file path
 LOG_FILE = "/var/log/startup_notifier.log"
@@ -116,17 +118,46 @@ def send_email(subject, body, config):
         text = msg.as_string()
         server.sendmail(config["sender_email"], config["receiver_email"], text)
         logging.info(f"email sent to {config['receiver_email']}")
-        
+        return True
+
     except smtplib.SMTPAuthenticationError as e:
         logging.error(f"email send failed: SMTP authentication error. please check sender email and password/app password. error: {e}")
+        return False
     except ConnectionRefusedError:
         logging.error(f"email send failed: connection refused. please check SMTP server address and port.")
+        return False
     except Exception as e:
         logging.error(f"email send failed: unknown error. error: {e}")
+        return False
     finally:
         if 'server' in locals() and server:
             server.quit()
             logging.info("SMTP connection closed.")
+
+def run_additional_cmd(cmd):
+   
+    try:
+       
+        logging.info(f"run: {cmd}")
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+        )
+        
+        if result.returncode == 0:
+            logging.info(f"run cmd success")
+        else:
+            logging.error(f"run cmd failed (Exitcode: {result.returncode}): {cmd}")
+            if result.stderr.strip():
+                logging.error(f"ERR: {result.stderr.strip()}")
+            if result.stdout.strip():
+                logging.info(f"OUT: {result.stdout.strip()}")
+    except subprocess.TimeoutExpired:
+        logging.error(f"Time out: {cmd}")
+    except Exception as e:
+        logging.error(e)
 
 def main():
     """main function"""
@@ -158,7 +189,12 @@ this email is sent by startup notifier script automatically.
 """
     
     logging.info("system info collected, preparing to send email.")
-    send_email(subject, body.strip(), SMTP_CONFIG)
+    email_success = send_email(subject, body.strip(), SMTP_CONFIG)
+    if email_success:
+        logging.info("Send mail success , run additional cmd")
+        run_additional_cmd(ADDITIONAL_CMD)
+    else:
+        logging.error("Send mail failed!")
     logging.info("script executed.")
 
 if __name__ == "__main__":

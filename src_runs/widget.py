@@ -257,6 +257,9 @@ class ScriptRunner:
             header_dict['content'] = f'error info : {e}'
             if verbose: print(f'read file error : {e}')
 
+        if header_dict is None:
+            print(self.script)
+            print(yaml_str)
         if 'description' not in header_dict:
             header_dict['description'] = self.script
         return header_dict
@@ -383,18 +386,17 @@ def get_script_box(script : str | Path , **kwargs):
     boxes = ScriptRunner(script , **kwargs).boxes()
     return layout_vertical(*boxes , border = '2px solid grey')
 
-def get_folder_box(folder : str | Path , level : int , exclude_self = True):
+def get_folder_box(folder : str | Path , level : int , exclude_scripts = ['widget.py' , 'streamlit.py']):
     dir_boxes , file_boxes = [] , []
-    self_path = Path(__file__).absolute() if exclude_self else None
     
     if level > 0: dir_boxes.append(folder_title(folder , min(level , 3)))
 
     for path in sorted(Path(folder).iterdir(), key=lambda x: x.name):
         if path.name.startswith(('.' , '_')): continue
         if path.is_dir(): 
-            dir_boxes.append(get_folder_box(path , level + 1 , exclude_self = exclude_self))
+            dir_boxes.append(get_folder_box(path , level + 1))
         else:
-            if self_path is not None and path.absolute() == self_path: continue
+            if path.name in exclude_scripts: continue
             file_boxes.append(get_script_box(str(path)))
 
     if file_boxes: dir_boxes.append(layout_grids(*file_boxes))

@@ -964,3 +964,18 @@
   gru.1.best: Avg(0.1086)|Sum(3.8)|Std(0.048)|T(13.39)|IR(11.0919)
   gru.1.swabest: Avg(0.1088)|Sum(3.81)|Std(0.0507)|T(12.7)|IR(10.5135)
   gru.1.swalast: Avg(0.107)|Sum(3.74)|Std(0.0488)|T(12.98)|IR(10.7468)
+0_model: gru_day(x2)
+1_start: Thu Jun 26 10:53:05 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10
+5_dates: 20170101-20170228
+6_fit: null
+7_test: Finish Process [Test], Cost 2.1 Secs
+8_result:
+  gru.0.best: Avg(0.1041)|Sum(3.64)|Std(0.0546)|T(11.28)|IR(9.3367)
+  gru.0.swabest: Avg(0.104)|Sum(3.64)|Std(0.0546)|T(11.26)|IR(9.3252)
+  gru.0.swalast: Avg(0.1045)|Sum(3.66)|Std(0.055)|T(11.23)|IR(9.3026)
+  gru.1.best: Avg(0.1084)|Sum(3.79)|Std(0.0481)|T(13.32)|IR(11.0328)
+  gru.1.swabest: Avg(0.1086)|Sum(3.8)|Std(0.0508)|T(12.63)|IR(10.4626)
+  gru.1.swalast: Avg(0.1067)|Sum(3.74)|Std(0.0489)|T(12.92)|IR(10.6987)
