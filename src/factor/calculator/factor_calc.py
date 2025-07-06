@@ -117,7 +117,10 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
                 raise TypeError(f'calc_factor must return a Series , but got {type(df)} for factor {cls.factor_name}')
             
             if df.empty: df = pd.Series()
-            else: df = df.rename(cls.factor_name).replace([np.inf , -np.inf] , np.nan).reindex(DATAVENDOR.secid(date))
+            else: 
+                df = df.rename(cls.factor_name).replace([np.inf , -np.inf] , np.nan)
+                df = df[~df.index.duplicated(keep = 'first')]
+                df = df.reindex(DATAVENDOR.secid(date))
 
             return df
         return new_calc_factor

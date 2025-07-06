@@ -4,9 +4,8 @@ import pandas as pd
 
 from typing import Literal
 
-from src.basic import PATH , CALENDAR
+from src.basic import PATH , CALENDAR , Logger
 from src.data.util.basic import secid_adjust , trade_min_reform
-from src.func.display import print_seperator
 
 START_DATE = 20401231
 BAO_PATH = PATH.miscel.joinpath('Baostock')
@@ -114,8 +113,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
                 bs.logout()
                 break
             
-            print(f'{start_dt} - {end_dt} : {len(downloaded)} already downloaded , {len(task_codes)} codes to download :' , end = '\n')
-            print('')
+            Logger.info(f'{start_dt} - {end_dt} : {len(downloaded)} already downloaded , {len(task_codes)} codes to download :')
             for i , code in enumerate(task_codes):
                 rs = bs.query_history_k_data_plus(code, 'date,time,code,open,high,low,close,volume,amount,adjustflag',
                                                   start_date=start_date_str,end_date=end_date_str,frequency='5', adjustflag='3')
@@ -124,11 +122,11 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
                     result.to_feather(tmp_file_path(start_dt , end_dt , code))
 
                 if i % 100 == 0:
-                    print(f'{i + 1}/{len(task_codes)} {start_dt} - {end_dt} : {code}...' , end = '\r')
+                    Logger.print(f'{i + 1}/{len(task_codes)} {start_dt} - {end_dt} : {code}...' , end = '\r')
 
         except Exception as e:
             bs.logout()
-            print(f'{retry} retry {e}')
+            Logger.info(f'{retry} retry {e}')
             retry += 1
         else:
             break
@@ -173,17 +171,17 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
-                print(f'{last_dt} - {dt} failed')
+                Logger.info(f'{last_dt} - {dt} failed')
             else:
-                print(f'{last_dt} - {dt} success')
+                Logger.info(f'{last_dt} - {dt} success')
 
     for dt in x_mins_update_dates(date):
         
-        print(f'process other min bars at {dt} from source baostock')
+        Logger.info(f'process other min bars at {dt} from source baostock')
         for x_min in x_mins_to_update(dt):
             five_min_df = PATH.db_load('trade_ts' , '5min' , dt)
             x_min_df = trade_min_reform(five_min_df , x_min , 5)
             PATH.db_save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , verbose = True)
-        print_seperator()
+        Logger.separator()
 
     return True

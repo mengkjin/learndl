@@ -1,13 +1,14 @@
 import colorlog , logging , sys
-
+import logging.handlers
+from typing import Any , Type
 from pathlib import Path
 
 from src.basic import path as PATH
 from src.basic import conf as CONF
 
 class Logger:
-    '''custom colored log , config at {PATH.conf}/logger.yaml '''
-    _instance = None
+    '''custom colored log (Only one instance) , config at {PATH.conf}/logger.yaml '''
+    _instance : 'Logger | Any' = None
     def __new__(cls, *args , **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -19,20 +20,22 @@ class Logger:
         config_logger['file']['param']['filename'] = str(new_path)
         new_path.parent.mkdir(exist_ok=True)
         log = logging.getLogger(config_logger['name'])
-        exec("log.setLevel(logging."+config_logger['level']+")")
+        log.setLevel(getattr(logging , config_logger['level']))
 
         while log.handlers:
             log.handlers[-1].close()
             log.removeHandler(log.handlers[-1])
 
         for hdname in config_logger['handlers']:
-            exec(hdname+"_hdargs=config_logger[hdname]['param']")
-            exec(hdname+"_handler="+config_logger[hdname]['class']+"(**"+hdname+"_hdargs)")
-            exec(hdname+"_fmtargs=config_logger['formatters'][config_logger[hdname]['formatter']]")
-            exec(hdname+"_formatter="+config_logger[hdname]['formatter_class']+"(datefmt=config_logger['datefmt'],**"+hdname+"_fmtargs)")
-            exec(hdname+"_handler.setLevel(logging."+config_logger[hdname]['level']+")")
-            exec(hdname+"_handler.setFormatter("+hdname+"_formatter)")
-            exec("log.addHandler("+hdname+"_handler)")
+            hdargs = config_logger[hdname]['param']
+            hdclass : Type[logging.Handler] = eval(config_logger[hdname]['class'])
+            handler = hdclass(**hdargs)
+            handler.setLevel(config_logger[hdname]['level'])
+            hdformatter = eval(config_logger[hdname]['formatter_class'])(datefmt=config_logger['datefmt'],
+                                                                         **config_logger['formatters'][config_logger[hdname]['formatter']])
+            handler.setFormatter(hdformatter)
+            log.addHandler(handler)
+
         
         if test_output:
             log.debug('This is the DEBUG    message...')
@@ -43,31 +46,71 @@ class Logger:
 
         self.log = log
 
-    def debug(self , *args , **kwargs):
-        self.log.debug(*args , **kwargs)
-        self.dual_printer(*args)
+    @classmethod
+    def init_logger(cls):
+        cls._instance = cls()
     
-    def info(self , *args , **kwargs):
-        self.log.info(*args , **kwargs)
-        self.dual_printer(*args)
+    @classmethod
+    def get_logger(cls):
+        if cls._instance is None:
+            cls.init_logger()
+        return cls._instance
+    
+    @classmethod
+    def print(cls , *args , **kwargs):
+        print(*args , **kwargs)
 
-    def warning(self , *args , **kwargs):
-        self.log.warning(*args , **kwargs)
-        self.dual_printer(*args)
+    @classmethod
+    def debug(cls , *args , **kwargs):
+        cls._instance.log.debug(*args , **kwargs)
+        cls._instance.dump_to_logwriter(*args)
+    
+    @classmethod
+    def info(cls , *args , **kwargs):
+        cls._instance.log.info(*args , **kwargs)
+        cls._instance.dump_to_logwriter(*args)
 
-    def error(self , *args , **kwargs):
-        self.log.error(*args , **kwargs)
-        self.dual_printer(*args)   
+    @classmethod
+    def warning(cls , *args , **kwargs):
+        cls._instance.log.warning(*args , **kwargs)
+        cls._instance.dump_to_logwriter(*args)
 
-    def critical(self , *args , **kwargs):
-        self.log.critical(*args , **kwargs)
-        self.dual_printer(*args)
+    @classmethod
+    def error(cls , *args , **kwargs):
+        cls._instance.log.error(*args , **kwargs)
+        cls._instance.dump_to_logwriter(*args)   
+
+    @classmethod
+    def critical(cls , *args , **kwargs):
+        cls._instance.log.critical(*args , **kwargs)
+        cls._instance.dump_to_logwriter(*args)
+
+    @classmethod
+    def separator(cls , width = 80 , char = '-'):
+        cls._instance.log.info(char * width)
         
-    def dual_printer(self , *args):
+    @classmethod
+    def dump_to_logwriter(cls , *args):
         log = getattr(sys.stdout , 'log' , None)
         write = getattr(log , 'write' , None)
         if write:
             write(' '.join([str(s) for s in args]) + '\n')
+
+    class EnclosedMessage:
+        def __init__(self , title : str , width = 80):
+            self.title = title
+            self.width = width
+
+        def __enter__(self):
+            Logger.separator(self.width)
+            if len(self.title) >= self.width:
+                Logger.info(self.title.upper())
+            else:
+                padding = '*' * ((self.width - len(self.title)) // 2)
+                Logger.info(padding + self.title.upper() + padding)
+
+        def __exit__(self , exc_type , exc_value , traceback):
+            Logger.separator(self.width)
 
 
 class _LevelFormatter(logging.Formatter):
@@ -147,3 +190,5 @@ class LogWriter:
         assert self.filename is not None , 'filename is not set'
         with open(self.filename , 'r') as f:
             return f.read()
+        
+Logger.init_logger()

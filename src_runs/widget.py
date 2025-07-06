@@ -1,3 +1,9 @@
+import sys , pathlib
+file_path = str(pathlib.Path(__file__).absolute())
+assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
+path = file_path.removesuffix(file_path.split('learndl')[-1])
+if not path in sys.path: sys.path.append(path)
+
 import os , argparse , subprocess , platform , yaml , re
 import ipywidgets as widgets
 
@@ -5,48 +11,16 @@ from typing import Any , Literal
 from pathlib import Path
 from IPython.display import display
 
-def python_path():
-    if platform.system() == 'Linux' and os.name == 'posix':
-        return 'python3.10'
-    elif platform.system() == 'Darwin':
-        return 'source /Users/mengkjin/workspace/learndl/.venv/bin/activate; python'
-    else:
-        return 'python'
+from src_runs.util import terminal_cmd
+from src_runs.util.exception import OutOfRange , Unspecified
 
-def terminal_cmd(script : str | Path , params : dict | None = None , close_after_run = False):
-    params = params or {}
-    if isinstance(script , Path): script = str(script.absolute())
-    args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in params.items() if v != ''])
-    cmd = f'{python_path()} {script} {args}'
-    if platform.system() == 'Linux' and os.name == 'posix':
-        if not close_after_run: cmd += '; exec bash'
-        cmd = f'gnome-terminal -- bash -c "{cmd}"'
-    elif platform.system() == 'Windows':
-        # cmd = f'start cmd /k {cmd}'
-        if not close_after_run: 
-            cmd = f'start cmd /k {cmd}'
-        pass
-    elif platform.system() == 'Darwin':
-        if not close_after_run:
-            cmd += '; exec bash'
-        cmd = f'''osascript -e 'tell application "Terminal" to do script "{cmd}"' '''
-    else:
-        raise ValueError(f'Unsupported platform: {platform.system()}')
-    return cmd
-    
 def run_script(script : str | Path , close_after_run = False , **kwargs):
     cmd = terminal_cmd(script , kwargs , close_after_run = close_after_run)
     print(f'Script cmd : {cmd}')
     
     process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
     process.communicate()
-    #if close_after_run:
-    #    process.communicate()
-    #else:
-    #    process.wait()
 
-class OutOfRange(Exception): pass
-class Unspecified(Exception): pass
 class PopupWindow:
     def __init__(self , title : str = 'Input Error'):
         self.title = widgets.HTML(f'<div style="font-weight: 900; color: #0078D7; padding: 0px 5px 0px 5px ; background: #f0f0f0;">{title}</div>')
@@ -278,7 +252,11 @@ class ScriptRunner:
         def func(b):
             try:
                 params.update({input_area.pname : input_area.get_value() for input_area in input_areas})
-                run_script(self.script, **params)
+                cmd = terminal_cmd(self.script , params)
+                print(f'Script cmd : {cmd}')
+                
+                process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
+                process.communicate()
             except (OutOfRange , Unspecified) as e:
                 popup.popup(str(e))
                 return
@@ -313,31 +291,6 @@ class ScriptRunner:
         if input_areas: [boxes.append(input_area.widget) for input_area in input_areas]
         if popup: boxes.append(popup.window)
         return boxes
-
-def argparse_dict(**kwargs):
-    parser = argparse.ArgumentParser(description='Run daily update script.')
-    parser.add_argument('--source', type=str, default='', help='Source of the script call')
-    parser.add_argument('--email', type=int, default=0, help='Send email or not')
-    args , unknown = parser.parse_known_args()
-    return kwargs | args.__dict__ | unknown_args(unknown)
-
-def unknown_args(unknown):
-    args = {}
-    for ua in unknown:
-        if ua.startswith('--'):
-            key = ua[2:]
-            if key not in args:
-                args[key] = None
-            else:
-                raise ValueError(f'Duplicate argument: {key}')
-        else:
-            if args[key] is None:
-                args[key] = ua
-            elif isinstance(args[key] , tuple):
-                args[key] = args[key] + (ua,)
-            else:
-                args[key] = (args[key] , ua)
-    return args
 
 def layout_grids(*boxes , max_columns = 3):
     columns = min(len(boxes) , max_columns)
@@ -386,18 +339,20 @@ def get_script_box(script : str | Path , **kwargs):
     boxes = ScriptRunner(script , **kwargs).boxes()
     return layout_vertical(*boxes , border = '2px solid grey')
 
-def get_folder_box(folder : str | Path , level : int , exclude_scripts = ['widget.py' , 'streamlit.py']):
+def get_folder_box(folder : str | Path , level : int , use_script_levels = [1,2] , ignore_starters = ('.' , '_' , 'util')):
     dir_boxes , file_boxes = [] , []
     
     if level > 0: dir_boxes.append(folder_title(folder , min(level , 3)))
 
     for path in sorted(Path(folder).iterdir(), key=lambda x: x.name):
-        if path.name.startswith(('.' , '_')): continue
-        if path.is_dir(): 
-            dir_boxes.append(get_folder_box(path , level + 1))
-        else:
-            if path.name in exclude_scripts: continue
+        if path.name.startswith(ignore_starters): 
+            continue
+        elif path.is_dir(): 
+            dir_boxes.append(get_folder_box(path , level + 1 , use_script_levels , ignore_starters))
+        elif level in use_script_levels:
             file_boxes.append(get_script_box(str(path)))
+        else:
+            continue
 
     if file_boxes: dir_boxes.append(layout_grids(*file_boxes))
     return layout_vertical(*dir_boxes)

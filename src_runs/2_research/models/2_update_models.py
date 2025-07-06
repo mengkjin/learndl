@@ -15,7 +15,7 @@ sys.path.append(path)
 
 from src.api import ModelAPI
 from src.basic import AutoRunTask
-from src_runs.widget import argparse_dict
+from src_runs.util import argparse_dict
 
 def main():
     param = argparse_dict()

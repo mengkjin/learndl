@@ -5,9 +5,8 @@ import numpy as np
 from rqdatac.share.errors import QuotaExceeded
 from typing import Literal , Type
 
-from src.basic import PATH , CALENDAR , CONF , MACHINE
+from src.basic import PATH , CALENDAR , CONF , MACHINE , Logger
 from src.data.util.basic import secid_adjust , trade_min_reform
-from src.func.display import print_seperator
 
 RC_PATH = PATH.miscel.joinpath('Rcquant')
 DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'cb']
@@ -55,7 +54,7 @@ def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
 
 def rcquant_license_check():
     if 'rcquant.yaml' not in [p.name for p in PATH.conf.joinpath('confidential').rglob('*.yaml')]:
-        print(f'rcquant login info not found, please check configs/confidential/rcquant.yaml')
+        Logger.info(f'rcquant login info not found, please check configs/confidential/rcquant.yaml')
         return False
     return True
 
@@ -65,7 +64,7 @@ def rcquant_init():
         try:
             rqdatac.init(uri = rcquant_uri)
         except QuotaExceeded as e:
-            print(f'rcquant init failed: {e}')
+            Logger.warning(f'rcquant init failed: {e}')
             return False
     return True
 
@@ -187,18 +186,18 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
     for dt in target_dates(data_type , date):
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
-            print(f'rcquant {data_type} bar min {dt} failed')
+            Logger.warning(f'rcquant {data_type} bar min {dt} failed')
         else:
-            print(f'rcquant {data_type} bar min {dt} success')
+            Logger.info(f'rcquant {data_type} bar min {dt} success')
 
     for dt in x_mins_target_dates(data_type , date):
-        print(f'process other {data_type} min bars at {dt} from source rcquant')
+        Logger.info(f'process other {data_type} min bars at {dt} from source rcquant')
         for x_min in x_mins_to_update(dt , data_type = data_type):
             min_df = PATH.db_load('trade_ts' , src_key(data_type) , dt)
             assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
             x_min_df = trade_min_reform(min_df , x_min , 1)
             PATH.db_save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , verbose = True)
-        print_seperator()
+        Logger.separator()
     return True
 
 def rcquant_proceed(date : int | None = None , first_n : int = -1):
@@ -209,7 +208,7 @@ def rcquant_proceed(date : int | None = None , first_n : int = -1):
         try:
             rcquant_download(date , data_type , first_n)
         except Exception as e:
-            print(f'rcquant download {data_type} minbar failed: {e}')
+            Logger.warning(f'rcquant download {data_type} minbar failed: {e}')
             return False
     
     return True

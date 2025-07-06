@@ -14,7 +14,7 @@ path = __file__.removesuffix(__file__.split('learndl')[-1])
 sys.path.append(path)
 
 from pathlib import Path
-from src_runs._abc import change_power_mode , get_running_scripts
+from src_runs.util.abc import change_power_mode , get_running_scripts
 
 def main():
     #running_scripts = get_running_scripts(__file__)

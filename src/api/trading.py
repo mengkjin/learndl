@@ -1,4 +1,4 @@
-from src.func.display import EnclosedMessage
+from src.basic import Logger
 from src.trading import TradingPortfolioTracker
 
 class TradingAPI:
@@ -8,9 +8,9 @@ class TradingAPI:
         '''
         Update trading portfolios for both laptop and server:
         '''
-        with EnclosedMessage(' update trading portfolios '):
+        with Logger.EnclosedMessage(' update trading portfolios '):
             TradingPortfolioTracker.update(reset_ports = reset_ports)
 
     @staticmethod
-    def Analyze(port_name : str , start : int = -1 , end : int = 99991231 , **kwargs): 
+    def Analyze(port_name : str , start : int | None = None , end : int | None = None , **kwargs): 
         return TradingPortfolioTracker.analyze(port_name , start , end , **kwargs)

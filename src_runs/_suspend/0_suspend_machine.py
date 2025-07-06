@@ -13,7 +13,7 @@ sys.path.append(path)
 
 import datetime , platform , subprocess
 from pathlib import Path
-from src_runs._abc import get_running_scripts
+from src_runs.util.abc import get_running_scripts
 
 default_log_path = Path(__file__.removesuffix(__file__.split('learndl')[-1])).joinpath('logs','suspend','suspend_check.log')
 

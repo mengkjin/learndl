@@ -1,7 +1,7 @@
 from typing import Any , Optional
 
 from src.model.util import BaseCallBack , BaseTrainer 
-from src.func.display import EnclosedMessage
+from src.basic import Logger
 
 from . import display, fit, test , nnspecific
 
@@ -20,7 +20,7 @@ class CallBackManager(BaseCallBack):
 
     @classmethod
     def setup(cls , trainer : BaseTrainer):
-        with EnclosedMessage(' setup callbacks '):
+        with Logger.EnclosedMessage(' setup callbacks '):
             cb_configs = trainer.config.callbacks
             for cb in trainer.model.COMPULSARY_CALLBACKS:
                 if cb not in cb_configs: cb_configs.update({cb:{}})

@@ -5,9 +5,8 @@ from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from typing import Any , Iterator , Literal , Optional
 
-from src.basic import CONF , Timer , CALENDAR
+from src.basic import CONF , Timer , CALENDAR , Logger
 from src.func.primas import neutralize_2d , process_factor
-from src.func.display import print_seperator
 from src.func.classproperty import classproperty_str
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorLoader
@@ -59,21 +58,21 @@ class DataPreProcessor:
             parser.add_argument("--confirm", type=str, default = confirm)
             args , _ = parser.parse_known_args()
         if not predict and not args.confirm and \
-            not input('Confirm update data? print "yes" to confirm!').lower()[0] == 'y' : return
+            not input('Confirm update data? type "yes" to confirm!').lower()[0] == 'y' : return
         t1 = time.time()
-        print(f'predict is {predict} , Data Processing start!')
+        Logger.info(f'predict is {predict} , Data Processing start!')
         
         if data_types is None:
             blocks = PREDICT_DATASET if predict else TRAIN_DATASET
         else:
             blocks = data_types
         processor = cls(predict , blocks = blocks)
-        print(f'{len(processor.blocks)} datas : {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
+        Logger.info(f'{len(processor.blocks)} datas : {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
         # return processor
         for key , proc in processor.processors():
             modified_time = DataBlock.last_modified_time(key , predict)
             if CALENDAR.is_updated_today(modified_time):
-                print(f'{key} is up to {modified_time} already!')
+                Logger.info(f'{key} is up to {modified_time} already!')
                 continue
             tt1 = time.time()
 
@@ -89,10 +88,10 @@ class DataPreProcessor:
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             del data_block
             gc.collect()
-            print(f'{key} finished! Cost {time.time() - tt1:.2f} Seconds')
-            print_seperator()
+            Logger.info(f'{key} finished! Cost {time.time() - tt1:.2f} Seconds')
+            Logger.separator()
 
-        print(f'Data Processing Finished! Cost {time.time() - t1:.2f} Seconds')
+        Logger.info(f'Data Processing Finished! Cost {time.time() - t1:.2f} Seconds')
 
 class TypePreProcessor(ABC):
     TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']

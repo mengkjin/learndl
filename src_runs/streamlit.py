@@ -1,3 +1,9 @@
+import sys , pathlib
+file_path = str(pathlib.Path(__file__).absolute())
+assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
+path = file_path.removesuffix(file_path.split('learndl')[-1])
+if not path in sys.path: sys.path.append(path)
+
 import os, platform, subprocess, yaml, re, time, base64, glob, json, signal
 import streamlit as st
 import streamlit.components.v1 as components
@@ -6,35 +12,7 @@ from typing import Any, Literal
 from pathlib import Path
 from datetime import datetime
 
-def python_path():
-    if platform.system() == 'Linux' and os.name == 'posix':
-        return 'python3.10'
-    elif platform.system() == 'Darwin':
-        return 'source /Users/mengkjin/workspace/learndl/.venv/bin/activate; python'
-    else:
-        return 'python'
-
-def terminal_cmd(script: str | Path, params: dict | None = None, close_after_run=False):
-    params = params or {}
-    if isinstance(script, Path): 
-        script = str(script.absolute())
-    args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k, v in params.items() if v != ''])
-    cmd = f'{python_path()} {script} {args}'
-    
-    if platform.system() == 'Linux' and os.name == 'posix':
-        if not close_after_run: 
-            cmd += '; exec bash'
-        cmd = f'gnome-terminal -- bash -c "{cmd}"'
-    elif platform.system() == 'Windows':
-        if not close_after_run: 
-            cmd = f'start cmd /k {cmd}'
-    elif platform.system() == 'Darwin':
-        if not close_after_run:
-            cmd += '; exec bash'
-        cmd = f'''osascript -e 'tell application "Terminal" to do script "{cmd}"' '''
-    else:
-        raise ValueError(f'Unsupported platform: {platform.system()}')
-    return cmd
+from src_runs.util import terminal_cmd
 
 def load_queue():
     """加载运行队列"""
@@ -108,47 +86,6 @@ def kill_process(pid):
     except:
         pass
     return False
-
-def run_script(script: str | Path, close_after_run=False, **kwargs):
-    cmd = terminal_cmd(script, kwargs, close_after_run=close_after_run)
-    script_name = Path(script).stem
-    
-    # 添加到运行队列
-    queue_item = add_to_queue(script_name, cmd)
-    st.info(f"✅ 已添加到队列: {queue_item['id']}")
-    
-    try:
-        # 启动进程
-        process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
-        
-        # 更新队列状态
-        update_queue_item(queue_item['id'], {
-            'pid': process.pid,
-            'status': 'running',
-            'start_time': time.time()
-        })
-        
-        st.success(f'✅ 脚本已启动！PID: {process.pid}')
-        st.info('📊 请点击上方队列区域的"🔄 刷新"按钮查看最新状态')
-        
-        # 显示命令信息
-        with st.expander("🔧 执行命令详情", expanded=False):
-            st.code(cmd)
-        
-    except Exception as e:
-        # 更新队列状态为失败
-        update_queue_item(queue_item['id'], {
-            'status': 'failed',
-            'error': str(e),
-            'end_time': time.time()
-        })
-        st.error(f'❌ 脚本启动失败: {str(e)}')
-
-class OutOfRange(Exception): 
-    pass
-
-class Unspecified(Exception): 
-    pass
 
 def load_output_manifest(script_name):
     """加载脚本输出文件清单"""
@@ -469,7 +406,43 @@ class StreamlitScriptRunner:
             run_params.update({k: v for k, v in params.items() if v is not None})
             
             # 运行脚本
-            run_script(self.script, **run_params)
+            self.run_script(**run_params)
+
+    @staticmethod
+    def run_script(script : str | Path , close_after_run = False , **kwargs):
+        cmd = terminal_cmd(script, kwargs, close_after_run=close_after_run)
+        script_name = Path(script).stem
+        
+        # 添加到运行队列
+        queue_item = add_to_queue(script_name, cmd)
+        st.info(f"✅ 已添加到队列: {queue_item['id']}")
+        
+        try:
+            # 启动进程
+            process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
+            
+            # 更新队列状态
+            update_queue_item(queue_item['id'], {
+                'pid': process.pid,
+                'status': 'running',
+                'start_time': time.time()
+            })
+            
+            st.success(f'✅ 脚本已启动！PID: {process.pid}')
+            st.info('📊 请点击上方队列区域的"🔄 刷新"按钮查看最新状态')
+            
+            # 显示命令信息
+            with st.expander("🔧 执行命令详情", expanded=False):
+                st.code(cmd)
+            
+        except Exception as e:
+            # 更新队列状态为失败
+            update_queue_item(queue_item['id'], {
+                'status': 'failed',
+                'error': str(e),
+                'end_time': time.time()
+            })
+            st.error(f'❌ 脚本启动失败: {str(e)}')
 
 def show_folder(folder_path: Path | str, level: int = 0):
     """递归展示文件夹内容"""

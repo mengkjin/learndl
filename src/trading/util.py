@@ -227,13 +227,14 @@ class TradingPort:
         self.portfolio = portfolio
         return portfolio.account_with_index(default_index)
 
-    def analyze(self , start : int = -1 , end : int = 99991231 , 
+    def analyze(self , start : int | None = None , end : int | None = None , 
                 verbosity = 1 , write_down = False , display = True , 
                 trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' , **kwargs):
         if not write_down and not display:
             print('write_down and display cannot be both False')
             return self
-
+        start = start if start is not None else -1
+        end = end if end is not None else 99991231
         account = self.portfolio_account(start = start , end = end , trade_engine=trade_engine)
         candidates = {task.task_name():task for task in TASK_LIST}
         self.tasks = {k:v(**kwargs) for k,v in candidates.items()}

@@ -7,7 +7,6 @@ from typing import Any , Literal , Optional
 from src.algo import getter
 from src.basic import Device , Logger , ModelPath , PATH , MACHINE
 from src.func import recur_update
-from src.func.display import EnclosedMessage
 
 from .metrics import Metrics
 from .storage import Checkpoint , Deposition
@@ -94,7 +93,7 @@ class TrainParam:
     
     def check_validity(self):
         if not MACHINE.server and not self.short_test:
-            print(f'Beware! Should be at server or short_test, but short_test is False now!')
+            Logger.warning('Beware! Should be at server or short_test, but short_test is False now!')
 
         nn_category = getter.nn_category(self.model_module)
         nn_datatype = getter.nn_datatype(self.model_module)
@@ -381,7 +380,7 @@ class TrainConfig(TrainParam):
         self.stage_queue: list      = []
 
         self.device     = Device()
-        self.logger     = Logger()
+        self.logger     = Logger.get_logger()
 
         self.Train = TrainParam(base_path , override)
         self.Model = self.Train.generate_model_param()
@@ -496,14 +495,14 @@ class TrainConfig(TrainParam):
 
     def parser_stage(self , value = -1):
         if value < 0:
-            print(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
+            Logger.info(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
             value = int(input(f'[0,fit+test] , [1,fit] , [2,test]'))
         stage_queue = ['data' , 'fit' , 'test']
         if value > 0:
             stage_queue = ['data' , stage_queue[value]]
         elif value < 0:
             raise Exception(f'Error input : {value}')
-        print('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))))
+        Logger.info('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))))
         self.stage_queue = stage_queue
 
     def parser_resume(self , value = -1):
@@ -513,11 +512,11 @@ class TrainConfig(TrainParam):
         candidate_name = sorted([m.name for m in PATH.model.iterdir() if m.name.split('.')[0] == model_name])
         if len(candidate_name) > 0 and 'fit' in self.stage_queue:
             if value < 0:
-                print(f'--Multiple model path of {model_name} exists, input [yes] to resume training, or start a new one!')
+                Logger.info(f'--Multiple model path of {model_name} exists, input [yes] to resume training, or start a new one!')
                 user_input = input(f'Confirm resume training [{model_name}]? [yes/no] : ')
                 value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
             self.resume_training = value > 0 
-            print(f'--Confirm Resume Training!' if self.resume_training else '--Start Training New!')
+            Logger.info(f'--Confirm Resume Training!' if self.resume_training else '--Start Training New!')
         else:
             self.resume_training = False
 
@@ -543,13 +542,13 @@ class TrainConfig(TrainParam):
                 model_name = candidate_name[0]
             elif self.resume_training:
                 if value < 0:
-                    print(f'--Attempting to resume but multiple models exist, input number to choose')
-                    [print(f'{i} : {PATH.model}/{model}') for i , model in enumerate(candidate_name)]
+                    Logger.info(f'--Attempting to resume but multiple models exist, input number to choose')
+                    [Logger.info(f'{i} : {PATH.model}/{model}') for i , model in enumerate(candidate_name)]
                     value = int(input('which one to use? '))
                 model_name = candidate_name[value]
             else:
                 if value < 0:
-                    print(f'--Model dirs of {model_name} exists, input [yes] to add a new directory!')
+                    Logger.info(f'--Model dirs of {model_name} exists, input [yes] to add a new directory!')
                     user_input = input(f'Add a new folder of [{model_name}]? [yes/no] : ').lower()
                     value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
                 if value == 0: raise Exception(f'--Model dirs of [{model_name}] exists!')
@@ -561,17 +560,17 @@ class TrainConfig(TrainParam):
                 model_name = candidate_name[0]
             else:
                 if value < 0:
-                    print(f'--Attempting to test while multiple models exists, input number to choose')
-                    [print(f'{i} : {PATH.model}/{model}') for i , model in enumerate(candidate_name)]
+                    Logger.info(f'--Attempting to test while multiple models exists, input number to choose')
+                    [Logger.info(f'{i} : {PATH.model}/{model}') for i , model in enumerate(candidate_name)]
                     value = int(input('which one to use? '))
                 model_name = candidate_name[value]
 
-        print(f'--Model_name is set to {model_name}!')  
+        Logger.info(f'--Model_name is set to {model_name}!')  
         self.Train.model_name = model_name
 
     def process_parser(self , par_args = None):
         par_args = par_args or {}
-        with EnclosedMessage(' parser training args '):
+        with Logger.EnclosedMessage(' parser training args '):
             self.parser_stage(getattr(par_args , 'stage' , -1))
             self.parser_resume(getattr(par_args , 'resume' , -1))
             self.parser_select(getattr(par_args , 'checkname' , -1)) 
@@ -611,5 +610,5 @@ class TrainConfig(TrainParam):
         info_strs.append(f'Shuffling    : {self.train_shuffle_option}')
         info_strs.append(f'Random Seed  : {self.random_seed}')
 
-        with EnclosedMessage(' model info '): 
-            print('\n'.join(info_strs))
+        with Logger.EnclosedMessage(' model info '): 
+            Logger.print('\n'.join(info_strs))

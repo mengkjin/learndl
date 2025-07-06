@@ -1,8 +1,7 @@
 import shutil
 import src.model.model_module.application as app
-from src.basic import MACHINE , PATH , MessageCapturer
+from src.basic import MACHINE , PATH , MessageCapturer , Logger
 from src.data import DataPreProcessor
-from src.func.display import EnclosedMessage
 
 class ModelAPI:
     Trainer    = app.ModelTrainer
@@ -16,16 +15,16 @@ class ModelAPI:
         '''
         Update prediction interims and results periodically:
         '''
-        with EnclosedMessage(' prepare predict data '):
+        with Logger.EnclosedMessage(' prepare predict data '):
             cls.prepare_predict_data()
 
-        with EnclosedMessage(' update hidden '):
+        with Logger.EnclosedMessage(' update hidden '):
             cls.Extractor.update()
 
-        with EnclosedMessage(' update predictors '):
+        with Logger.EnclosedMessage(' update predictors '):
             cls.Predictor.update()
 
-        with EnclosedMessage(' update predictor portfolios '):
+        with Logger.EnclosedMessage(' update predictor portfolios '):
             cls.FmpBuilder.update()
 
     
@@ -37,24 +36,24 @@ class ModelAPI:
         b. for server, continue training registered models in model'
         '''
         if MACHINE.server:
-            with EnclosedMessage(' reconstruct train data '):
+            with Logger.EnclosedMessage(' reconstruct train data '):
                 cls.reconstruct_train_data()
 
-            with EnclosedMessage(' update models '):
+            with Logger.EnclosedMessage(' update models '):
                 cls.Trainer.update_models()
         else:
-            with EnclosedMessage(' update models '):
-                print('This is not a server with cuda, skip this process')
+            with Logger.EnclosedMessage(' update models '):
+                Logger.warning('This is not a server with cuda, skip this process')
 
     @classmethod
     def update_hidden(cls):
         '''
         Update hidden features for hidden feature models for both laptop and server:
         '''
-        with EnclosedMessage(' prepare predict data '):
+        with Logger.EnclosedMessage(' prepare predict data '):
             cls.prepare_predict_data()
 
-        with EnclosedMessage(' update hidden '):
+        with Logger.EnclosedMessage(' update hidden '):
             cls.Extractor.update()
     
     @classmethod
@@ -62,10 +61,10 @@ class ModelAPI:
         '''
         Update factors for prediction models (registered models) for both laptop and server:
         '''
-        with EnclosedMessage(' prepare predict data '):
+        with Logger.EnclosedMessage(' prepare predict data '):
             cls.prepare_predict_data()
 
-        with EnclosedMessage(' update factors '):
+        with Logger.EnclosedMessage(' update factors '):
             cls.Predictor.update()
     
     @classmethod

@@ -40,7 +40,7 @@ class TradingPortfolioTracker:
         return path
 
     @classmethod
-    def analyze(cls , port_name : str , start : int = -1 , end : int = 99991231 , **kwargs): 
+    def analyze(cls , port_name : str , start : int | None = None , end : int | None = None , **kwargs): 
         tp = TradingPort.load(port_name)
         tp.analyze(start = start , end = end , **kwargs)
         return tp

@@ -15,7 +15,7 @@ sys.path.append(path)
 
 from datetime import datetime
 from pathlib import Path
-from src_runs._abc import change_power_mode , get_running_scripts
+from src_runs.util.abc import change_power_mode , get_running_scripts
 
 def main():
     running_scripts = get_running_scripts(__file__)

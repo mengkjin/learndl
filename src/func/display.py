@@ -2,7 +2,7 @@ import pandas as pd
 from matplotlib.figure import Figure
 from IPython.display import display as raw_display
 
-__all__ = ['display' , 'EnclosedMessage' , 'print_seperator']
+__all__ = ['display']
 
 def display(obj , raise_error = True):
     if isinstance(obj , Figure):
@@ -29,23 +29,3 @@ def figure(fig , raise_error = True):
         if raise_error: raise ValueError('No figure to display')
         return
     raw_display(fig)
-
-def print_seperator(width = 80 , char = '-'):
-    print(char * width)
-
-class EnclosedMessage:
-    def __init__(self , title : str , width = 80):
-        self.title = title
-        self.width = width
-
-    def __enter__(self):
-        print_seperator(self.width)
-        if len(self.title) >= self.width:
-            print(self.title.upper())
-        else:
-            padding = '*' * ((self.width - len(self.title)) // 2)
-            print(padding + self.title.upper() + padding)
-
-    def __exit__(self , exc_type , exc_value , traceback):
-        print_seperator(self.width)
-

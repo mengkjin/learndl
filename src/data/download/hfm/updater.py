@@ -5,8 +5,7 @@ import pandas as pd
 from functools import reduce
 from pathlib import Path
 
-from src.basic import PATH , MACHINE
-from src.func.display import print_seperator
+from src.basic import PATH , MACHINE , Logger
 
 from .task import JSFetcher , JSDownloader
 from .minute_transform import main as minute_transform    
@@ -44,7 +43,7 @@ class JSDataUpdater():
             paths += [p for p in sdir.iterdir() if p.name.startswith(cls.UPDATER_TITLE + '.') and p.name.endswith('.tar')]
         paths.sort()
         if del_after_dumping and paths:
-            print_seperator()
+            Logger.separator()
             print(f'Delete {len(paths)} updaters after completion')
             print(paths)
             # del_after_dumping = input(f'''Delete {len(paths)} updaters after completion? (press yes/y) : {paths}''')[0].lower() == 'y'

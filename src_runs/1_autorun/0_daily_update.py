@@ -7,15 +7,15 @@
 # email: True
 # close_after_run: False
 
-import sys 
-
-assert 'learndl' in __file__ , f'learndl path not found , do not know where to find src file : {__file__}'
-path = __file__.removesuffix(__file__.split('learndl')[-1])
-sys.path.append(path)
+import sys , pathlib
+file_path = str(pathlib.Path(__file__).absolute())
+assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
+path = file_path.removesuffix(file_path.split('learndl')[-1])
+if not path in sys.path: sys.path.append(path)
 
 from src.api import DataAPI , ModelAPI , TradingAPI , NotificationAPI
 from src.basic import MACHINE , AutoRunTask , CALENDAR
-from src_runs.widget import argparse_dict
+from src_runs.util import argparse_dict
 
 def main():
     params = argparse_dict(email = 1)
