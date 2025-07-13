@@ -160,7 +160,60 @@ class BaseConditioner(ABC):
         else:
             return False
         
-    @classmethod
+    @staticmethod
+    def drawdown_rebound_condition(accessor : AccountAccessor , stop_threshold : float = 0.1 , rebounce_threshold : float = 0.25) -> pd.Series:
+        '''
+        the basic drawdown rebound condition
+            stop_threshold : the threshold of the stop to change the condition to 0
+            rebounce_threshold : the threshold of the rebounce from bottom to change the condition to 1
+        '''
+        ret = accessor.pf
+        drawdown = eval_drawdown(ret , how = 'exp')
+        umd = eval_uncovered_max_drawdown(drawdown) # uncovered max drawdown
+        rebounce = drawdown - umd.fillna(1)
+        condition = ret * 0 + 1
+        for i , (dd , uu , rb) in enumerate(zip(drawdown.values , umd.values , rebounce.values)):
+            if uu < -stop_threshold and rb < rebounce_threshold:
+                condition.iloc[i] = 0       
+        return condition
+    
+    @staticmethod
+    def progressive_condition(
+            accessor : AccountAccessor , 
+            stop_threshold : float = 0.1 , 
+            rebounce_threshold : float = 0.25 ,
+            progressive_add_stop : float | None = None ,
+        ) -> pd.Series:
+        '''
+        the progressive condition
+            stop_threshold : the threshold of the stop to change the condition to 0
+            rebounce_threshold : the threshold of the rebounce from bottom to change the condition to 1
+            progressive_add_stop : additive stop to change the stop_threshold every rebounce , 
+                    if None, will use the rebounce_threshold to change the stop_threshold
+        '''
+        ret = accessor.pf
+        drawdown = eval_drawdown(ret , how = 'exp')
+        umd = eval_uncovered_max_drawdown(drawdown) # uncovered max drawdown
+        recover_ratio = (1 - drawdown / umd.fillna(1))
+        condition = ret * 0 + 1
+        init_stop = stop_threshold
+        stopped = False
+        for i , (dd , uu , rr) in enumerate(zip(drawdown.values , umd.values , recover_ratio.values)):      
+            if uu < -init_stop:
+                if rr < rebounce_threshold:
+                    stopped = True
+                    condition.iloc[i] = 0
+                elif stopped:
+                    stopped = False
+                    if progressive_add_stop is not None:
+                        init_stop += progressive_add_stop
+                    else:
+                        init_stop += init_stop * rebounce_threshold
+            if dd >= 0:
+                init_stop = stop_threshold          
+        return condition
+    
+    @classmethod    
     def conditioner_name(cls):
         assert cls.CONDITIONER_NAME is not None , 'CONDITIONER_NAME must be set'
         return cls.CONDITIONER_NAME if isinstance(cls.CONDITIONER_NAME , str) else cls.CONDITIONER_NAME[0]
@@ -232,17 +285,6 @@ class BaseConditioner(ABC):
     def __call__(self) -> Portfolio:
         assert self.portfolio is not None , 'portfolio is not set'
         return self.adjusted_portfolio(self.portfolio)
-  
-def drawdown_rebound_condition(accessor : AccountAccessor , stop_threshold : float = 0.1 , rebounce_threshold : float = 0.25) -> pd.Series:
-    ret = accessor.pf
-    drawdown = eval_drawdown(ret , how = 'exp')
-    umd = eval_uncovered_max_drawdown(drawdown) # uncovered max drawdown
-    rebounce = drawdown - umd.fillna(1)
-    condition = ret * 0 + 1
-    for i , (dd , uu , rb) in enumerate(zip(drawdown.values , umd.values , rebounce.values)):
-        if uu < -stop_threshold and rb < rebounce_threshold:
-            condition.iloc[i] = 0       
-    return condition
 
 class BalanceOptimisticConditioner(BaseConditioner):
     '''
@@ -250,47 +292,47 @@ class BalanceOptimisticConditioner(BaseConditioner):
     '''
     CONDITIONER_NAME = ['balance', 'balance_optimistic']
     def conditions(self , accessor : AccountAccessor) -> pd.Series | Any:
-        return drawdown_rebound_condition(accessor , stop_threshold = 0.1 , rebounce_threshold = 0.025)
+        return self.drawdown_rebound_condition(accessor , stop_threshold = 0.1 , rebounce_threshold = 0.025)
     
 class BalanceNeutralConditioner(BaseConditioner):
     CONDITIONER_NAME = 'balance_neutral'
     def conditions(self , accessor : AccountAccessor) -> pd.Series | Any:
-        return drawdown_rebound_condition(accessor , stop_threshold = 0.1 , rebounce_threshold = 0.0375)
+        return self.drawdown_rebound_condition(accessor , stop_threshold = 0.1 , rebounce_threshold = 0.0375)
     
 class BalancePessimisticConditioner(BaseConditioner):
     CONDITIONER_NAME = 'balance_pessimistic'
     def conditions(self , accessor : AccountAccessor) -> pd.Series | Any:
-        return drawdown_rebound_condition(accessor , stop_threshold = 0.1 , rebounce_threshold = 0.05)
+        return self.drawdown_rebound_condition(accessor , stop_threshold = 0.1 , rebounce_threshold = 0.05)
     
 class ConservativeOptimisticConditioner(BaseConditioner):
     CONDITIONER_NAME = ['conservative', 'conservative_optimistic']
     def conditions(self , accessor : AccountAccessor) -> pd.Series | Any:
-        return drawdown_rebound_condition(accessor , stop_threshold = 0.05 , rebounce_threshold = 0.0125)
+        return self.drawdown_rebound_condition(accessor , stop_threshold = 0.05 , rebounce_threshold = 0.0125)
     
 class ConservativeNeutralConditioner(BaseConditioner):
     CONDITIONER_NAME = 'conservative_neutral'
     def conditions(self , accessor : AccountAccessor) -> pd.Series | Any:
-        return drawdown_rebound_condition(accessor , stop_threshold = 0.05 , rebounce_threshold = 0.01875)
+        return self.drawdown_rebound_condition(accessor , stop_threshold = 0.05 , rebounce_threshold = 0.01875)
     
 class ConservativePessimisticConditioner(BaseConditioner):
     CONDITIONER_NAME = 'conservative_pessimistic'
     def conditions(self , accessor : AccountAccessor) -> pd.Series | Any:
-        return drawdown_rebound_condition(accessor , stop_threshold = 0.05 , rebounce_threshold = 0.025)
+        return self.drawdown_rebound_condition(accessor , stop_threshold = 0.05 , rebounce_threshold = 0.025)
     
 class RadicalOptimisticConditioner(BaseConditioner):
     CONDITIONER_NAME = ['radical', 'radical_optimistic']
     def conditions(self , accessor : AccountAccessor) -> pd.Series | Any:
-        return drawdown_rebound_condition(accessor , stop_threshold = 0.2 , rebounce_threshold = 0.05)
+        return self.drawdown_rebound_condition(accessor , stop_threshold = 0.2 , rebounce_threshold = 0.05)
     
 class RadicalNeutralConditioner(BaseConditioner):
     CONDITIONER_NAME = 'radical_neutral'
     def conditions(self , accessor : AccountAccessor) -> pd.Series | Any:
-        return drawdown_rebound_condition(accessor , stop_threshold = 0.2 , rebounce_threshold = 0.075)
+        return self.drawdown_rebound_condition(accessor , stop_threshold = 0.2 , rebounce_threshold = 0.075)
     
 class RadicalPessimisticConditioner(BaseConditioner):
     CONDITIONER_NAME = 'radical_pessimistic'
     def conditions(self , accessor : AccountAccessor) -> pd.Series | Any:
-        return drawdown_rebound_condition(accessor , stop_threshold = 0.2 , rebounce_threshold = 0.1)
+        return self.drawdown_rebound_condition(accessor , stop_threshold = 0.2 , rebounce_threshold = 0.1)
 
     
 class ProgressiveConditioner(BaseConditioner):

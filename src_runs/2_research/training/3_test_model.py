@@ -25,13 +25,13 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import ModelAPI
 from src.basic import AutoRunTask
-from src_runs.util import argparse_dict
+from src_runs.util import BackendTaskManager
 
-def main():
-    params = argparse_dict()
-    model_name = params.pop('model_name')
-    short_test = eval(params.pop('short_test' , 'None'))
-    with AutoRunTask('test model' , message_capturer = True , **params) as runner:
+@BackendTaskManager.manage()
+def main(**kwargs):
+    model_name = kwargs.pop('model_name')
+    short_test = eval(kwargs.pop('short_test' , 'None'))
+    with AutoRunTask('test model' , message_capturer = True , **kwargs) as runner:
         ModelAPI.test_model(model_name = model_name , short_test = short_test)
         
 if __name__ == '__main__':

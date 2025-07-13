@@ -21,13 +21,12 @@ if not path in sys.path: sys.path.append(path)
 
 from src.factor.api import FactorCalculatorAPI
 from src.basic import AutoRunTask
-from src_runs.util import argparse_dict
+from src_runs.util import BackendTaskManager
 
-def main():
-    params = argparse_dict()
-    num = int(params.pop('num'))
-    with AutoRunTask('update factors' , **params) as runner:
-        FactorCalculatorAPI.update(groups_in_one_update=num)
+@BackendTaskManager.manage()
+def main(**kwargs):
+    with AutoRunTask('update factors' , **kwargs) as runner:
+        FactorCalculatorAPI.update(groups_in_one_update=int(kwargs.pop('num')))
 
 if __name__ == '__main__':
     main()

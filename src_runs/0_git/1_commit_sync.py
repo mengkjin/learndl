@@ -19,11 +19,10 @@ if not path in sys.path: sys.path.append(path)
 
 import subprocess ,  socket
 from datetime import datetime
-from src_runs.util import argparse_dict
+from src_runs.util import BackendTaskManager
 
-if __name__ == '__main__':
-    params = argparse_dict()
-    additional_message = params.get('additional_message' , '')
+@BackendTaskManager.manage()
+def main(additional_message : str | list[str] = '' , **kwargs):
     prefixes = [socket.gethostname() , datetime.now().strftime('%Y%m%d')]
     if isinstance(additional_message , str): additional_message = [additional_message]
     commit_message = ','.join([msg for msg in prefixes + additional_message if msg])
@@ -32,3 +31,8 @@ if __name__ == '__main__':
     subprocess.run(f"git commit -m '{commit_message}'", shell=True, check=True)
     subprocess.run("git pull --rebase", shell=True, check=True)
     subprocess.run("git push", shell=True, check=True)
+
+    return f'Finish commit and sync: {commit_message}'
+
+if __name__ == '__main__':
+    main()

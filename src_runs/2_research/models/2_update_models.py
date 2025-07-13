@@ -15,11 +15,11 @@ sys.path.append(path)
 
 from src.api import ModelAPI
 from src.basic import AutoRunTask
-from src_runs.util import argparse_dict
+from src_runs.util import BackendTaskManager
 
-def main():
-    param = argparse_dict()
-    with AutoRunTask('update models' , **param) as runner:
+@BackendTaskManager.manage()
+def main(**kwargs):
+    with AutoRunTask('update models' , **kwargs) as runner:
         ModelAPI.update_models()
 
 if __name__ == '__main__':

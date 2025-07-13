@@ -48,15 +48,16 @@ path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
 from src.basic.util import Logger
-from src_runs.util import argparse_dict , ExitMessenger
+from src_runs.util import BackendTaskManager
 
-def main():
-    params = argparse_dict()
-    time.sleep(1)  # small delay to ensure status update
-                
-    Logger.info("Hello, World!")
+@BackendTaskManager.manage(txt = 'Bye, World!')
+def main(txt : str = 'Hello, World!' , **kwargs):
+    Logger.info(txt)
     pathlib.Path('test.txt').touch()
-    ExitMessenger.update(params.get('task_id') , files = ['test.txt'], code = 0, message = 'Hello, World!')
+    return BackendTaskManager.ExitMessage(
+        txt ,
+        files = ['test.txt' , 'training_output.html' , 'plot.pdf'], 
+    )
         
 if __name__ == '__main__':
     main()

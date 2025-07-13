@@ -15,19 +15,19 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import DataAPI , ModelAPI , TradingAPI , NotificationAPI
 from src.basic import MACHINE , AutoRunTask , CALENDAR
-from src_runs.util import argparse_dict
+from src_runs.util import BackendTaskManager
 
-def main():
-    params = argparse_dict(email = 1)
-    if not MACHINE.updateable:
+@BackendTaskManager.manage(email = 1)
+def main(**kwargs):
+    if MACHINE.updateable:
+        with AutoRunTask(f'daily update {CALENDAR.update_to()}' , **kwargs) as runner:
+            if runner.forfeit_task: return
+            DataAPI.update()
+            ModelAPI.update()
+            TradingAPI.update()
+            NotificationAPI.proceed()
+    else:
         print(f'{MACHINE.name} is not updateable, skip daily update')
-        return
-    with AutoRunTask(f'daily update {CALENDAR.update_to()}' , **params) as runner:
-        if runner.forfeit_task: return
-        DataAPI.update()
-        ModelAPI.update()
-        TradingAPI.update()
-        NotificationAPI.proceed()
         
 if __name__ == '__main__':
     main()

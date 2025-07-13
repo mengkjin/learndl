@@ -14,9 +14,10 @@ path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
 from pathlib import Path
-from src_runs.util.abc import edit_file
+from src_runs.util import BackendTaskManager , edit_file
 
-def main():
+@BackendTaskManager.manage()
+def main(**kwargs):
     edit_path = Path(path).joinpath('configs' , 'train' , 'model.yaml')
     print(f'Editing file : {edit_path}')
     edit_file(edit_path)

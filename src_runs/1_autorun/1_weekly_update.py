@@ -15,16 +15,17 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import ModelAPI
 from src.basic import MACHINE , AutoRunTask , CALENDAR
-from src_runs.util import argparse_dict
+from src_runs.util import BackendTaskManager
 
-def main():
-    params = argparse_dict(email = 1)
-    if not MACHINE.server:
+@BackendTaskManager.manage(email = 1)
+def main(**kwargs):
+    if MACHINE.server:
+        with AutoRunTask(f'weekly update {CALENDAR.update_to()}' , **kwargs) as runner:
+            if runner.forfeit_task: return
+            ModelAPI.update_models()
+    else:
         print(f'{MACHINE.name} is not a server, skip weekly update')
-        return
-    with AutoRunTask(f'weekly update {CALENDAR.update_to()}' , **params) as runner:
-        if runner.forfeit_task: return
-        ModelAPI.update_models()
+            
 
 if __name__ == '__main__':
     main()

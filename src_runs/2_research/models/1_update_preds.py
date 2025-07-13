@@ -15,11 +15,11 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import ModelAPI
 from src.basic import AutoRunTask
-from src_runs.util import argparse_dict
+from src_runs.util import BackendTaskManager
 
-def main():
-    param = argparse_dict()
-    with AutoRunTask('update preds' , **param) as runner:
+@BackendTaskManager.manage()
+def main(**kwargs):
+    with AutoRunTask('update preds' , **kwargs) as runner:
         ModelAPI.update_preds()
 
 if __name__ == '__main__':

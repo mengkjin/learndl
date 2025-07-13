@@ -28,14 +28,14 @@ if not path in sys.path: sys.path.append(path)
 
 from src.factor.api import FactorCalculatorAPI
 from src.basic import AutoRunTask
-from src_runs.util import argparse_dict
+from src_runs.util import BackendTaskManager
 
-def main():
-    params = argparse_dict()
-    start = int(params.pop('start'))
-    end = int(params.pop('end'))
-    with AutoRunTask('update factors' , **params) as runner:
-        FactorCalculatorAPI.update(start = start , end = end , groups_in_one_update = None)
+@BackendTaskManager.manage()
+def main(**kwargs):
+    with AutoRunTask('update factors' , **kwargs) as runner:
+        FactorCalculatorAPI.update(start = int(kwargs.pop('start')) , 
+                                    end = int(kwargs.pop('end')) , 
+                                    groups_in_one_update = None)
 
 if __name__ == '__main__':
     main()

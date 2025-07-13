@@ -209,9 +209,13 @@ def time_weight(length : int , halflife : int = 0):
 
 def descriptor(v : pd.Series , whiten_weight , fillna : Literal['min','max','median'] | float , group = None) -> pd.Series:
     v = whiten(winsorize(v) , whiten_weight)
-    fillv = getattr(np , f'nan{fillna}')(v) if fillna in ['max' , 'min' , 'median'] else fillna
-    if group is not None:
-        fillv = v.to_frame(name='value').join(group).groupby('indus').transform('min').fillna(fillv)['value']
+    if fillna in ['max' , 'min' , 'median' , 'mean']:
+        if group is not None:
+            fillv = v.to_frame(name='value').join(group).groupby('indus').transform(fillna)['value']
+        else:
+            fillv = getattr(np , f'nan{fillna}')(v)
+    else:
+        fillv = fillna
     return v.where(~v.isna() , fillv)
 
 def apply_ols(x : np.ndarray | pd.DataFrame | pd.Series , y : np.ndarray | pd.DataFrame | pd.Series , 

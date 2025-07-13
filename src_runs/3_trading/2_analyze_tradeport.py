@@ -26,15 +26,16 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import TradingAPI
 from src.basic import AutoRunTask
-from src_runs.util import argparse_dict
+from src_runs.util import BackendTaskManager
 
-def main():
-    params = argparse_dict()
-    port_name = params.pop('port_name')
-    start = int(params.pop('start' , -1))
-    end = int(params.pop('end' , 99991231))
-    with AutoRunTask(f'analyze trading portfolio [{port_name}]' , **params) as runner:
+@BackendTaskManager.manage()
+def main(**kwargs):
+    port_name = kwargs.pop('port_name')
+    start = int(kwargs.pop('start' , -1))
+    end = int(kwargs.pop('end' , 99991231))
+    with AutoRunTask(f'analyze trading portfolio [{port_name}]' , **kwargs) as runner:
         TradingAPI.Analyze(port_name = port_name , start = start , end = end)
+    return runner.email_attachments
 
 if __name__ == '__main__':
     main()

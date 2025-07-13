@@ -23,6 +23,8 @@ class AutoRunTask:
                                                        self.task_name , self.init_time)
         self.dprinter = LogWriter(self.log_filename)
 
+        self.email_attachments = []
+
     def __enter__(self):
         self.already_done = self.record_path.exists()
         # change_power_mode('balanced')
@@ -44,6 +46,7 @@ class AutoRunTask:
         self.capturer.__exit__(exc_type, exc_value, exc_traceback)
         self.dprinter.__exit__(exc_type, exc_value, exc_traceback)
 
+        self.email_attachments = [Path(a) for a in self.emailer.ATTACHMENTS]
         if not self.forfeit_task:
             self.send_email(self.task_name)
             self.record_path.touch()

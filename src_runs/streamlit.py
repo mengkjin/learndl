@@ -1,745 +1,1049 @@
+__version__ = '0.1.3'
+
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())
 assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
 path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
-import os, platform, subprocess, yaml, re, time, base64, glob, json, signal
+import platform, re, time, base64, torch , json
 import streamlit as st
 import streamlit.components.v1 as components
 import psutil
-from typing import Any, Literal
+from dataclasses import dataclass , field
+from streamlit_autorefresh import st_autorefresh
+
+from typing import Any, Literal, Callable
 from pathlib import Path
 from datetime import datetime
 
-from src_runs.util import terminal_cmd
+from src_runs.st.backend import (
+    BASE_DIR , 
+    PathItem , TaskItem , TaskQueue , ScriptRunner , ScriptParamInput
+)
 
-def load_queue():
-    """加载运行队列"""
-    queue_file = "run_queue.json"
-    if os.path.exists(queue_file):
-        try:
-            with open(queue_file, 'r') as f:
-                return json.load(f)
-        except:
-            return []
-    return []
+from src_runs.st.frontend import (
+    CustomCSS , FilePreviewer , ActionLogger , YAMLFileEditor , YAMLFileEditorState
+)
 
-def save_queue(queue):
-    """保存运行队列"""
-    queue_file = "run_queue.json"
-    with open(queue_file, 'w') as f:
-        json.dump(queue, f, indent=2)
+if AUTO_REFRESH_INTERVAL := 0:
+    st_autorefresh(interval=AUTO_REFRESH_INTERVAL, key="autorefresh-example")
 
-def add_to_queue(script_name, cmd):
-    """添加到运行队列"""
-    queue = load_queue()
-    queue_item = {
-        'id': f"{script_name}_{int(time.time())}",
-        'script_name': script_name,
-        'cmd': cmd,
-        'status': 'starting',
-        'created_time': time.time(),
-        'pid': None,
-        'start_time': None,
-        'end_time': None
-    }
-    queue.append(queue_item)
-    save_queue(queue)
-    return queue_item
+PENDING_FEATURES = [
+    'script files return' , 
+    'uvx' , 
+]
 
-def update_queue_item(item_id, updates):
-    """更新队列项状态"""
-    queue = load_queue()
-    for item in queue:
-        if item['id'] == item_id:
-            item.update(updates)
-            break
-    save_queue(queue)
-
-def remove_from_queue(item_id):
-    """从队列中移除项目"""
-    queue = load_queue()
-    queue = [item for item in queue if item['id'] != item_id]
-    save_queue(queue)
-
-def check_process_status(pid):
-    """检查进程状态"""
-    try:
-        if psutil.pid_exists(pid):
-            proc = psutil.Process(pid)
-            return proc.status() in [psutil.STATUS_RUNNING, psutil.STATUS_SLEEPING]
-        return False
-    except:
-        return False
-
-def kill_process(pid):
-    """终止进程"""
-    try:
-        if psutil.pid_exists(pid):
-            proc = psutil.Process(pid)
-            proc.terminate()
-            time.sleep(2)
-            if proc.is_running():
-                proc.kill()
-            return True
-    except:
-        pass
-    return False
-
-def load_output_manifest(script_name):
-    """加载脚本输出文件清单"""
-    manifest_file = "output_manifest.json"
-    if os.path.exists(manifest_file):
-        try:
-            with open(manifest_file, 'r') as f:
-                data = json.load(f)
-                if data.get('script') == script_name:
-                    return data.get('files', [])
-        except:
-            pass
-    return []
-
-def show_run_report(queue_item):
-    """显示运行报告"""
-    if queue_item['status'] != 'completed':
-        st.warning("脚本还未完成，无法生成完整报告")
-        return
-    
-    duration = queue_item.get('end_time', 0) - queue_item.get('start_time', 0)
-    
-    st.subheader("📊 运行报告")
-    
-    # 基本信息
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("运行时间", f"{duration:.2f}秒")
-    with col2:
-        st.metric("脚本名称", queue_item['script_name'])
-    with col3:
-        start_time_str = datetime.fromtimestamp(queue_item['start_time']).strftime('%H:%M:%S')
-        st.metric("开始时间", start_time_str)
-    
-    # 检查脚本输出的文件清单
-    output_files = load_output_manifest(queue_item['script_name'])
-    
-    # 显示生成的文件
-    if output_files:
-        st.subheader("📁 生成的文件")
-        for file_path in output_files:
-            if os.path.exists(file_path):
-                col1, col2, col3 = st.columns([3, 1, 1])
-                with col1:
-                    st.write(f"📄 {file_path}")
-                with col2:
-                    if file_path.endswith('.html'):
-                        if st.button("预览", key=f"preview_{file_path}_{queue_item['id']}"):
-                            preview_html_file(file_path)
-                    elif file_path.endswith('.pdf'):
-                        if st.button("预览", key=f"preview_{file_path}_{queue_item['id']}"):
-                            preview_pdf_file(file_path)
-                with col3:
-                    try:
-                        with open(file_path, 'rb') as f:
-                            st.download_button(
-                                "下载", 
-                                data=f.read(),
-                                file_name=os.path.basename(file_path),
-                                key=f"download_{file_path}_{queue_item['id']}"
-                            )
-                    except:
-                        st.error("文件读取失败")
-            else:
-                st.warning(f"⚠️ 文件不存在: {file_path}")
-    else:
-        st.info("💡 **提示**: 脚本可以通过创建 `output_manifest.json` 文件来报告生成的文件")
-        with st.expander("📖 如何在脚本中输出文件清单", expanded=False):
-            st.code('''
-import json
-from datetime import datetime
-
-# 在脚本结束前添加以下代码：
-output_files = ["output1.html", "output2.pdf"]  # 您的输出文件列表
-
-manifest = {
-    "script": "your_script_name",
-    "files": output_files,
-    "timestamp": datetime.now().isoformat()
-}
-
-with open("output_manifest.json", "w") as f:
-    json.dump(manifest, f, indent=2)
-            ''', language='python')
-
-def preview_html_file(file_path):
-    """预览HTML文件"""
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            html_content = f.read()
-        st.subheader(f"📄 {os.path.basename(file_path)}")
-        components.html(html_content, height=600, scrolling=True)
-    except Exception as e:
-        st.error(f"无法预览HTML文件: {str(e)}")
-
-def preview_pdf_file(file_path):
-    """预览PDF文件"""
-    try:
-        with open(file_path, 'rb') as f:
-            pdf_data = f.read()
-        
-        # 使用base64编码PDF
-        pdf_base64 = base64.b64encode(pdf_data).decode('utf-8')
-        pdf_display = f'''
-        <iframe src="data:application/pdf;base64,{pdf_base64}" 
-                width="100%" height="600px" type="application/pdf">
-        </iframe>
-        '''
-        st.subheader(f"📄 {os.path.basename(file_path)}")
-        st.markdown(pdf_display, unsafe_allow_html=True)
-    except Exception as e:
-        st.error(f"无法预览PDF文件: {str(e)}")
-        st.info("您可以下载文件后查看")
-
-class StreamlitScriptRunner:
-    def __init__(self, script_path: Path | str):
-        self.script = Path(script_path).absolute()
-        self.header = self.parse_script_header()
-        
-    def parse_script_header(self, verbose=False, include_starter='#', exit_starter='', 
-                          ignore_starters=('#!', '# coding:')):
-        header_dict = {}
-        yaml_lines: list[str] = []
-        
-        try:
-            with open(self.script, 'r', encoding='utf-8') as file:
-                for line in file:
-                    stripped_line = line.strip()
-                    if stripped_line.startswith(ignore_starters): 
-                        continue
-                    elif stripped_line.startswith(include_starter):
-                        yaml_lines.append(stripped_line)
-                    elif stripped_line.startswith(exit_starter):
-                        break
-
-            yaml_str = '\n'.join(line.removeprefix(include_starter) for line in yaml_lines)
-            header_dict = yaml.safe_load(yaml_str) or {}
-            
-        except FileNotFoundError:
-            header_dict = {
-                'disabled': True,
-                'description': '文件未找到',
-                'content': f'文件未找到: {self.script}'
-            }
-        except yaml.YAMLError as e:
-            header_dict = {
-                'disabled': True,
-                'description': 'YAML解析错误',
-                'content': f'错误信息: {e}'
-            }
-        except Exception as e:
-            header_dict = {
-                'disabled': True,
-                'description': '文件读取错误',
-                'content': f'错误信息: {e}'
-            }
-
-        if 'description' not in header_dict:
-            header_dict['description'] = self.script.name
-            
-        return header_dict
-
-    def get_param_inputs(self):
-        """生成参数输入控件并返回参数值"""
-        param_inputs = self.header.get('param_inputs', {})
-        if not param_inputs:
-            return {}
-            
-        st.subheader("参数设置")
-        params = {}
-        
-        # 创建3列布局 - 所有参数同时显示
-        param_items = list(param_inputs.items())
-        num_cols = min(3, len(param_items))
-        param_cols = st.columns(num_cols)
-        
-        # 先收集所有参数，避免依赖关系导致的逐步显示
-        all_widgets = []
-        for i, (pname, pdef) in enumerate(param_items):
-            col_idx = i % num_cols
-            all_widgets.append((col_idx, pname, pdef))
-        
-        # 同时渲染所有参数
-        for col_idx, pname, pdef in all_widgets:
-            with param_cols[col_idx]:
-                try:
-                    # 解析参数定义
-                    ptype = pdef.get("type") or pdef.get("enum")
-                    if isinstance(ptype, str):
-                        ptype = eval(ptype)
-                    elif isinstance(ptype, (list, tuple)):
-                        ptype = list(ptype)
-                        
-                    required = pdef.get('required', False)
-                    default = pdef.get('default')
-                    desc = pdef.get('desc', pname)
-                    prefix = pdef.get('prefix', '')
-                    
-                    # 生成唯一key
-                    key = f"{self.script.name}_{pname}"
-                    
-                    # 创建输入控件
-                    if isinstance(ptype, list):
-                        # 下拉选择
-                        options = [f'{prefix}{e}' for e in ptype]
-                        placeholder = f"请选择{desc}" if required else f"可选: {desc}"
-                        
-                        if default is not None:
-                            default_idx = ptype.index(default) if default in ptype else 0
-                            value = st.selectbox(
-                                f"**{desc}**" if required else desc,
-                                options,
-                                index=default_idx,
-                                key=key
-                            )
-                        else:
-                            value = st.selectbox(
-                                f"**{desc}**" if required else desc,
-                                [placeholder] + options,
-                                key=key
-                            )
-                        
-                        # 处理选择结果
-                        if value == placeholder:
-                            if required:
-                                st.error(f"请为 [{desc}] 选择一个有效值！")
-                                return None
-                            else:
-                                params[pname] = None
-                        else:
-                            # 去除prefix并找到原始值
-                            enum_idx = options.index(value)
-                            params[pname] = ptype[enum_idx]
-                            
-                    elif ptype == bool:
-                        # 布尔开关
-                        default_val = bool(eval(str(default))) if default is not None else False
-                        value = st.toggle(
-                            f"**{desc}**" if required else desc,
-                            value=default_val,
-                            key=key
-                        )
-                        params[pname] = value
-                        
-                    elif ptype in [str, int, float]:
-                        # 文本/数字输入
-                        placeholder = f"请输入{desc}" if required else f"可选: {desc}"
-                        
-                        if ptype == str:
-                            value = st.text_input(
-                                f"**{desc}**" if required else desc,
-                                value=str(default) if default is not None else "",
-                                placeholder=placeholder,
-                                key=key
-                            )
-                            if required and (not value or value.strip() == ""):
-                                st.error(f"请为 [{desc}] 输入一个有效值！")
-                                return None
-                            params[pname] = value if value.strip() else None
-                            
-                        elif ptype in [int, float]:
-                            min_val = pdef.get('min')
-                            max_val = pdef.get('max')
-                            
-                            if ptype == int:
-                                value = st.number_input(
-                                    f"**{desc}**" if required else desc,
-                                    value=int(default) if default is not None else (min_val or 0),
-                                    min_value=min_val,
-                                    max_value=max_val,
-                                    step=1,
-                                    key=key
-                                )
-                            else:  # float
-                                value = st.number_input(
-                                    f"**{desc}**" if required else desc,
-                                    value=float(default) if default is not None else (min_val or 0.0),
-                                    min_value=min_val,
-                                    max_value=max_val,
-                                    step=0.1,
-                                    key=key
-                                )
-                            params[pname] = value
-                            
-                except Exception as e:
-                    st.error(f"参数 [{pname}] 配置错误: {str(e)}")
-                    return None
-                
-        return params
-
-    def render(self):
-        """渲染脚本界面（保持兼容性）"""
-        self.render_details()
-    
-    def render_details(self):
-        """渲染脚本详细界面"""
-        # TODO信息
-        if todo := self.header.get('TODO'):
-            st.info(f"📝 TODO: {todo}")
-            
-        # 检查是否禁用
-        if self.header.get('disabled', False):
-            st.error("该脚本已禁用")
-            return
-            
-        # 获取参数输入
-        params = self.get_param_inputs()
-        if params is None:  # 参数验证失败
-            return
-            
-        # 运行按钮
-        if st.button("🚀 运行脚本", key=f"run_{self.script.name}", type="primary", use_container_width=True):
-            # 添加默认参数
-            run_params = {
-                'email': int(self.header.get('email', 0)),
-                'close_after_run': bool(self.header.get('close_after_run', False))
-            }
-            run_params.update({k: v for k, v in params.items() if v is not None})
-            
-            # 运行脚本
-            self.run_script(**run_params)
-
-    @staticmethod
-    def run_script(script : str | Path , close_after_run = False , **kwargs):
-        cmd = terminal_cmd(script, kwargs, close_after_run=close_after_run)
-        script_name = Path(script).stem
-        
-        # 添加到运行队列
-        queue_item = add_to_queue(script_name, cmd)
-        st.info(f"✅ 已添加到队列: {queue_item['id']}")
-        
-        try:
-            # 启动进程
-            process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
-            
-            # 更新队列状态
-            update_queue_item(queue_item['id'], {
-                'pid': process.pid,
-                'status': 'running',
-                'start_time': time.time()
-            })
-            
-            st.success(f'✅ 脚本已启动！PID: {process.pid}')
-            st.info('📊 请点击上方队列区域的"🔄 刷新"按钮查看最新状态')
-            
-            # 显示命令信息
-            with st.expander("🔧 执行命令详情", expanded=False):
-                st.code(cmd)
-            
-        except Exception as e:
-            # 更新队列状态为失败
-            update_queue_item(queue_item['id'], {
-                'status': 'failed',
-                'error': str(e),
-                'end_time': time.time()
-            })
-            st.error(f'❌ 脚本启动失败: {str(e)}')
-
-def show_folder(folder_path: Path | str, level: int = 0):
-    """递归展示文件夹内容"""
-    folder_path = Path(folder_path)
-    if not folder_path.exists():
-        st.error(f"文件夹不存在: {folder_path}")
-        return
-        
-    # 获取所有项目并排序
-    items = []
-    for item in folder_path.iterdir():
-        if item.name.startswith(('.', '_')):
-            continue
-        items.append(item)
-    
-    items.sort(key=lambda x: (x.is_file(), x.name))
-    
-    # 显示文件夹标题（更紧凑的样式）
-    if level > 0:
-        folder_name = folder_path.name.replace('_', ' ').title()
-        st.markdown(f"**📁 {folder_name}**")
-    
-    # 处理子文件夹和文件
-    folders = [item for item in items if item.is_dir()]
-    files = [item for item in items if item.is_file() and item.suffix == '.py']
-    
-    # 显示子文件夹（默认展开）
-    for folder in folders:
-        if level < 3:  # 限制递归深度
-            show_folder(folder, level + 1)
-    
-    # 显示Python脚本（紧凑模式）
-    if files:
-        for script_file in files:
-            show_script(script_file)
-
-def show_run_queue():
-    """显示运行队列"""
-    queue = load_queue()
-    
-    # 队列标题和刷新按钮
-    col1, col2 = st.columns([4, 1])
-    with col1:
-        st.subheader("🔄 运行队列")
-    with col2:
-        if st.button("🔄 刷新", key="refresh_queue"):
-            st.rerun()
-    
-    if not queue:
-        st.info("🈳 队列为空，点击下方脚本运行后会在此显示进度")
-        return
-    
-    # 更新队列状态
-    updated_queue = []
-    status_changed = False
-    
-    for item in queue:
-        if item.get('pid') and item['status'] == 'running':
-            if check_process_status(item['pid']):
-                # 进程还在运行
-                item['status'] = 'running'
-            else:
-                # 进程已结束
-                old_status = item['status']
-                item['status'] = 'completed'
-                item['end_time'] = time.time()
-                if old_status != 'completed':
-                    status_changed = True
-        updated_queue.append(item)
-    
-    if status_changed:
-        save_queue(updated_queue)
-        queue = updated_queue
-    
-    # 显示队列统计信息
-    running_count = len([item for item in queue if item['status'] == 'running'])
-    completed_count = len([item for item in queue if item['status'] == 'completed'])
-    failed_count = len([item for item in queue if item['status'] == 'failed'])
-    
-    if running_count > 0 or completed_count > 0 or failed_count > 0:
-        st.caption(f"📊 运行中: {running_count} | 已完成: {completed_count} | 失败: {failed_count}")
-    
-    # 显示队列项
-    for item in queue:
-        with st.container():
-            col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
-            
-            with col1:
-                status_icon = {
-                    'starting': '🟡',
-                    'running': '🟢', 
-                    'completed': '✅',
-                    'failed': '❌'
-                }.get(item['status'], '❓')
-                
-                st.markdown(f"**{status_icon} {item['script_name']}**")
-                
-            with col2:
-                if item['status'] == 'running' and item.get('start_time'):
-                    duration = time.time() - item['start_time']
-                    st.write(f"⏱️ {duration:.0f}秒")
-                elif item['status'] == 'completed' and item.get('end_time') and item.get('start_time'):
-                    duration = item['end_time'] - item['start_time']
-                    st.write(f"✅ {duration:.1f}秒")
-                else:
-                    st.write(f"📊 {item['status']}")
-                    
-            with col3:
-                if item['status'] == 'completed':
-                    if st.button("📊 查看报告", key=f"report_{item['id']}", use_container_width=True):
-                        with st.expander(f"📊 {item['script_name']} 运行报告", expanded=True):
-                            show_run_report(item)
-                elif item['status'] in ['running', 'starting'] and item.get('pid'):
-                    st.write(f"PID: {item['pid']}")
-                    
-            with col4:
-                if st.button("❌", key=f"remove_{item['id']}", help="移除/终止"):
-                    if item.get('pid') and item['status'] == 'running':
-                        if kill_process(item['pid']):
-                            st.success(f"✅ 已终止进程 {item['pid']}")
-                        else:
-                            st.warning("⚠️ 终止进程失败")
-                    remove_from_queue(item['id'])
-                    st.success(f"✅ 已从队列移除: {item['script_name']}")
-                    time.sleep(0.5)  # 短暂延迟确保状态更新
-                    st.rerun()
-            
-            st.markdown("---")
-
-def show_script(script_file: Path):
-    """显示单个脚本（紧凑模式，支持互斥展开）"""
-    script_key = str(script_file.absolute())
-    
-    # 初始化session state
-    if 'current_script' not in st.session_state:
-        st.session_state.current_script = None
-    
-    runner = StreamlitScriptRunner(script_file)
-    
-    # 脚本标题行（紧凑布局，垂直居中）
-    col1, col2 = st.columns([5, 1])
-    with col1:
-        script_name = script_file.stem.replace('_', ' ').title()
-        
-        # 检查是否是当前展开的脚本
-        is_current = st.session_state.current_script == script_key
-        button_text = f"{'🔽' if is_current else '▶️'} 🐍 {script_name}"
-        
-        # 使用水平布局，确保垂直居中
-        button_col, desc_col = st.columns([2, 3])
-        with button_col:
-            # 使用container确保对齐
-            with st.container():
-                # 添加缩进
-                st.markdown('<div style="display: inline-block; width: 20px;"></div>', 
-                           unsafe_allow_html=True)
-                if st.button(button_text, key=f"toggle_{script_key}"):
-                    # 切换脚本展开状态
-                    if st.session_state.current_script == script_key:
-                        st.session_state.current_script = None
-                    else:
-                        st.session_state.current_script = script_key
-                        st.rerun()
-        
-        with desc_col:
-            # 描述在按钮右侧，使用相同高度的容器
-            with st.container():
-                content = runner.header.get('content', '')
-                if content and len(content) > 0:
-                    st.markdown(f'<div style="display: flex; align-items: center; height: 28px; font-size: 11px; color: #666;">'
-                               f'💬 {content[:80]}{"..." if len(content) > 80 else ""}</div>', 
-                               unsafe_allow_html=True)
-    
-    with col2:
-        # 显示脚本状态
-        if runner.header.get('disabled', False):
-            st.markdown("🚫")
+def system_info():
+    if torch.cuda.is_available():
+        gpu_info = f"**GPU Memory:** {torch.cuda.memory_summary(0)}"
+    elif torch.backends.mps.is_available():
+        if torch.__version__ >= '2.3.0':
+            gpu_info = f"**MPS Memory:** {torch.mps.current_allocated_memory()/1024**3:.1f} / {torch.mps.recommended_max_memory()/1024**3:.1f} GB"
         else:
-            st.markdown("✅")
-    
-    # 只有当前脚本才显示详细内容
-    if st.session_state.current_script == script_key:
-        st.markdown("---")
-        runner.render_details()
+            gpu_info = f"**MPS Memory:** {torch.mps.current_allocated_memory()/1024**3:.1f} GB"
+    else:
+        gpu_info = "**GPU Memory:** No GPU"
+    options = [
+        f":material/keyboard_command_key: **OS:** {platform.system()}" , 
+        f":material/memory: **Memory:** {psutil.virtual_memory().percent:.1f}%" , 
+        f":material/memory_alt: {gpu_info}" , 
+        f":material/select_all: **CPU:** {psutil.cpu_percent():.1f}%" , 
+        f":material/commit: **Python:** {sys.version.split('(')[0]}" , 
+        f":material/commit: **Streamlit:** {st.__version__}" 
+    ]
+    return options
 
-def main():
-    """主函数"""
+@dataclass
+class SessionControl:
+    """session control"""
+    current_script_runner : str | None = None
+    current_task_item : str | None = None
+
+    task_queue : TaskQueue | Any = None
+    queue_last_action : tuple[str, bool] | None = None
+    
+    running_report_queue : str | None = None
+    running_report_main : str | None = None
+    running_report_main_cleared : bool = False
+
+    running_report_file_previewer : Path | None = None
+
+    script_params_cache : dict[str, dict[str, dict[str , Any]]] = field(default_factory=dict)
+    config_editor_state : YAMLFileEditorState | None = None
+    
+    def __new__(cls):
+        if 'session_control' not in st.session_state:
+            st.session_state.session_control = super().__new__(cls)
+        return st.session_state.session_control
+    
+    def __post_init__(self):
+        self.task_queue = TaskQueue('script_runner_main' , 100)
+        self.path_items = PathItem.iter_folder(BASE_DIR, min_level = 0, max_level = 2)
+
+    def filter_task_queue(self):
+        """filter task queue"""
+        status_filter = st.session_state.get('queue-filter-status')
+        folder_filter = st.session_state.get('queue-filter-path-folder')
+        file_filter = st.session_state.get('queue-filter-path-file')
+        filtered_queue = self.task_queue.filter(status = status_filter,
+                                                folder = folder_filter,
+                                                file = file_filter)
+        return filtered_queue
+
+    def ready_to_go(self , obj : ScriptRunner):
+        return all(self.script_params_cache.get(obj.script_key, {}).get('valid', {}).values())
+    
+    @ActionLogger.log_action()
+    def click_queue_item(self , item : TaskItem):
+        """click queue item"""
+        if self.running_report_queue is not None and self.running_report_queue == item.id:
+            self.running_report_queue = None
+        else:
+            self.running_report_queue = item.id
+        self.queue_last_action = None
+
+    @ActionLogger.log_action()
+    def click_queue_clear(self):
+        """click task queue clear"""
+        self.task_queue.clear()
+        self.queue_last_action = f"Queue Clear Success" , True
+    
+    @ActionLogger.log_action()
+    @st.dialog("Are You Sure about Clearing Queue?")
+    def click_queue_clear_confirmation(self):
+        """click task queue refresh confirmation"""
+        col1 , col2 = st.columns(2 , gap = 'small')
+        if col1.button("**Confirm**" , icon = ":material/check_circle:" , key = "confirm-clear-confirm-queue"):
+            self.task_queue.clear()
+            self.queue_last_action = f"Queue Clear Success" , True
+            st.rerun()
+        if col2.button("**Abort**" , icon = ":material/cancel:" , key = "confirm-clear-abort-queue"):
+            self.queue_last_action = f"Queue Clear Aborted" , False
+            st.rerun()
+
+    @ActionLogger.log_action()
+    def click_queue_filter_status(self):
+        """click task queue filter status"""
+        self.queue_last_action = f"Queue Filter Status: {st.session_state.get('queue-filter-status')}" , True
+
+    @ActionLogger.log_action()
+    def click_queue_filter_path_folder(self):
+        """click task queue filter path folder"""
+        folder_options = st.session_state.get('queue-filter-path-folder')
+        if folder_options is not None:
+            folder_options = [str(item.relative_to(BASE_DIR)) for item in folder_options]
+        self.queue_last_action = f"Queue Filter Path Folder: {folder_options}" , True
+        
+    @ActionLogger.log_action()
+    def click_queue_filter_path_file(self):
+        """click task queue filter path file"""
+        file_options = st.session_state.get('queue-filter-path-file')
+        if file_options is not None:
+            file_options = [str(item.relative_to(BASE_DIR)) for item in file_options]
+        self.queue_last_action = f"Queue Filter Path File: {file_options}" , True
+
+    @st.dialog("Are You Sure about Clearing Logs?")
+    def click_log_clear_confirmation(self):
+        """click log clear confirmation"""
+        col1 , col2 = st.columns(2 , gap = 'small')
+        if col1.button("**Confirm**" , icon = ":material/check_circle:" , key = "confirm-clear-confirm-log"):
+            ActionLogger.clear_log()
+            self.queue_last_action = f"Log Clear Success" , True
+            st.rerun()
+        if col2.button("**Abort**" , icon = ":material/cancel:" , key = "confirm-clear-abort-log"):
+            self.queue_last_action = f"Log Clear Aborted" , False
+            st.rerun()
+        
+    @ActionLogger.log_action()
+    def click_queue_refresh(self):
+        """click task queue refresh"""
+        self.task_queue.refresh()
+        self.queue_last_action = f"Queue Manually Refreshed at {datetime.now().strftime('%H:%M:%S')}" , True
+
+    @ActionLogger.log_action()
+    def click_queue_remove_item(self , item : TaskItem):
+        """click task queue remove item"""
+        if item.kill():
+            self.queue_last_action = f"Remove Success: {item.id}" , True
+        else:
+            self.queue_last_action = f"Remove Failed: {item.id}" , False
+        self.task_queue.remove(item)
+        self.task_queue.save()
+
+    @ActionLogger.log_action()
+    def click_script_runner_expand(self , runner : ScriptRunner):
+        """click script runner expand"""
+        if self.current_script_runner is not None and self.current_script_runner == runner.script_key:
+            self.current_script_runner = None
+        else:
+            self.current_script_runner = runner.script_key
+
+    @ActionLogger.log_action()
+    def click_script_runner_run(self , runner : ScriptRunner , params : dict[str, Any]):
+        """click run button"""
+        run_params = {
+            'email': int(runner.header.email),
+            'close_after_run': bool(runner.header.close_after_run)
+        }
+        run_params.update(params)
+        item = runner.run_script(queue = self.task_queue , **run_params)
+        self.current_task_item = item.id
+        self.queue_last_action = f"Add to Queue: {item.id}" , True
+        self.task_queue.refresh()
+        if self.running_report_main != item.id:
+            self.running_report_main = item.id
+            self.running_report_main_cleared = False
+
+    @ActionLogger.log_action()
+    def click_file_preview(self , path : Path):
+        """click file previewer"""
+        self.running_report_file_previewer = path   
+
+    @ActionLogger.log_action()
+    def click_file_download(self , path : Path):
+        """click file previewer"""
+        # TODO: things to do before download
+
+    @ActionLogger.log_action()
+    def click_show_complete_report(self , item : TaskItem):
+        """click show complete report"""
+        self.current_script_runner = item.runner_script_key
+        self.current_task_item = item.id
+        self.running_report_main = item.id
+        self.running_report_main_cleared = False
+        self.running_report_file_previewer = None
+    
+    @staticmethod
+    def wait_for_complete(item : TaskItem , running_timeout : int = 20):
+        """wait for complete"""
+        while True:
+            item.refresh()
+            if item.status in ['complete' , 'error']:
+                return True
+            if item.status == 'starting':
+                running_timeout -= 1
+            if running_timeout <= 0:
+                raise RuntimeError(f'Script {item.script} running timeout! Still starting')
+            time.sleep(1)
+        return False
+    
+SC = SessionControl()
+
+def page_config():
     st.set_page_config(
-        page_title="脚本运行器",
-        page_icon="🚀",
-        layout="wide",
+        page_title="Script Runner",
+        page_icon=":material/rocket_launch:",
+        layout=None,
         initial_sidebar_state="expanded"
     )
-    
-    # 添加紧凑的CSS样式
-    st.markdown("""
-    <style>
-    .stButton > button {
-        height: 28px;
-        padding: 1px 6px;
-        font-size: 12px;
-        margin-bottom: 1px;
+    st.title(f":rainbow[:material/rocket_launch: Script Runner (_v{__version__}_)]")
+      
+def page_css():
+    css = CustomCSS(add_css = ['basic' , 'special_expander' , 'classic_remover' , 'multi_select'])
+    css.add("""
+    [class*="developer-info"] button {
+        min-width: 100px !important;
+        height: 20px !important;
+        padding: 10px 10px !important;
+        border: 1px solid lightgray !important;
+        border-radius: 10px !important;
+        background-color: lightgray !important;
+        font-weight: bold !important;
+    }
+    [class*="task-queue-refresh"] button {
+        height: 36px !important;
+        width: 36px !important;
+        margin-left: 0px !important;
+        margin-right: 20px !important;
+        padding: 0px !important;
+    }
+    [class*="task-queue-clear"] button {
+        height: 36px !important;
+        width: 36px !important;
+        margin-left: 0px !important;
+        margin-right: 20px !important;
+        padding: 0px !important;
+    }
+    [class*="confirm-clear"] button {
+        height: 36px !important;
+        width: 200px !important;
+        border-radius: 10px !important;
+        font-size: 24px !important;
+        font-weight: bold !important;
+        color: white !important;
+        border: none !important;
+    }
+    [class*="confirm-clear"] button > div {
+        font-size: 20px !important;
+    }
+    [class*="confirm-clear-confirm"] button {
+        background-color: green !important;
+    }
+    [class*="confirm-clear-abort"] button {
+        background-color: red !important;
+    }
+    [class*="confirm-clear-confirm"] button:hover {
+        background-color: darkgreen !important;
+    }
+    [class*="confirm-clear-abort"] button:hover {
+        background-color: darkred !important;
+    }
+    [class*="queue-filter-container"] p {
+        font-size: 12px !important;
+    }
+    [class*="queue-filter-container"] summary p {
+        font-size: 16px !important;
+        font-weight: bold !important;
+    }
+    [class*="queue-item-container"] {
+        margin-bottom: -10px !important;
+        padding-right: 20px !important;
+    }
+    [class*="queue-item"] button p {
+        font-size: 16px !important;
+    }
+    [class*="queue-item-content"] button {
+        justify-content: flex-start !important;
+        text-align: left !important;
+        padding-left: 6px !important;
+    }
+    [class*="script-container"] div[class="stMarkdown"] > div {
+        margin: 0px !important;
+    }
+    [class*="script-container"] {
+        margin: 0px !important;
+    }
+    [class*="script-container"] button {
+        margin-top: 10px !important;
+        margin-bottom: -10px !important;
+    }
+    [class*="script-container"] p {
+        margin-top: 0px !important;
+    }
+    [class*="script-container-1"] {
+        margin-left: 30px !important;
+    }
+    [class*="script-container-2"] {
+        margin-left: 60px !important;
+    }
+    [class*="script-container-3"] {
+        margin-left: 90px !important;
+    }
+    [class*="script-runner-expand"] button {
+        min-width: 250px !important;
+        font-weight: bold !important;
+        justify-content: flex-start !important;
+        margin: 0 !important;
+    }       
+    [class*="script-runner-expand"] p {
+        font-size: 16px !important;
+        font-weight: bold !important;
+    }
+    [class*="script-setting-container"] {
+        margin: 0px !important;
+        padding-bottom: 10px !important;
+    }
+    [class*="script-runner-run"] button {
+        min-width: 50px !important;
+        height: 50px !important;
+        width: 50px !important;
+        background-color: green !important;
+        color: white !important;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
         display: flex;
-        align-items: center;
-        justify-content: center;
+        margin: 20px !important;
     }
-    .stSelectbox > div > div {
-        height: 28px;
-        font-size: 12px;
+    [class*="script-runner-run"] button:hover {
+        background-color: darkgreen !important;
     }
-    .stTextInput > div > div > input {
-        height: 28px;
-        font-size: 12px;
+    [class*="script-runner-run"] p {
+        font-size: 36px !important;
+        font-weight: bold !important;
     }
-    .stNumberInput > div > div > input {
-        height: 28px;
-        font-size: 12px;
+    [class*="script-runner-run-disabled"] button {
+        background-color: lightgray !important;
+        color: white !important;
+        border: 1px solid lightgray !important;
     }
-    .element-container {
-        margin-bottom: 2px;
-        display: flex;
-        align-items: center;
+    [class*="script-runner-run-disabled"] button:hover {
+        background-color: lightgray !important;
     }
-    .stMarkdown {
-        margin-bottom: 1px;
-        line-height: 1.1;
-        display: flex;
-        align-items: center;
+    [class*="file-preview"] button {
+        margin: 0px !important;
     }
-    .stMarkdown p {
-        margin-top: 0px;
-        margin-bottom: 1px;
-        line-height: 1.1;
+    [class*="download"] button {
+        margin: 0px !important;
     }
-    .stMetric {
-        background-color: #f0f2f6;
-        padding: 4px;
-        border-radius: 3px;
-        margin: 0px;
+    [class*="show-complete-report"] button {
+        width: 32px !important;
+        height: 32px !important;
+        align-self: flex-end !important;
+        justify-self: flex-end !important;
+        margin-top: 0px !important;
+        margin-bottom: 0px !important;
+        border: none !important;
+        border-radius: 10px !important;
+    }       
+    [class*="show-complete-report"] p {
+        line-height: 32px !important;
+        font-weight: bold !important;
+        border-radius: 10px !important;
     }
-    .stContainer {
-        padding-top: 0px;
-        padding-bottom: 0px;
+    [class*="show-complete-report"] span {
+        font-size: 24px !important;
     }
-    div[data-testid="column"] {
-        display: flex;
-        align-items: center;
+    [class*="script-setting-classic-remover"] div {
+        align-items: flex-start !important;
+        justify-content: flex-end !important;        
     }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    st.title("🚀 项目脚本运行器")
-    
-    # 显示运行队列
-    show_run_queue()
-    
-    st.markdown("---")
-    
-    # 侧边栏信息
+    [class*="script-setting-classic-remover"] button {
+        margin: 0px !important;
+    }
+    """)
+    css.apply()
+
+def show_sidebar():
     with st.sidebar:
-        st.markdown("### 📋 使用说明")
+        st.header(":material/book: Manual" , divider = 'grey')
         st.markdown("""
-        1. 📁 文件夹已自动展开，无需点击
-        2. ▶️ 点击脚本按钮展开参数设置
-        3. 📝 填写必要参数后点击运行
-        4. 📊 查看运行报告和生成的文件
-        5. 👁️ 可预览生成的HTML/PDF文件
+        1. :blue[:material/settings:] Click the script button to expand the parameter settings
+        2. :green[:material/mode_off_on:] Fill in the necessary parameters and click Run
+        3. :rainbow[:material/bar_chart:] View the running report and generated files
+        4. :gray[:material/file_present:] Preview the generated HTML/PDF files
         """)
         
-        st.markdown("### 🔧 系统信息")
-        st.info(f"**操作系统:** {platform.system()}")
-        st.info(f"**内存:** {psutil.virtual_memory().percent:.1f}%")
-        st.info(f"**CPU:** {psutil.cpu_percent():.1f}%")
-        
-        st.markdown("### 🎯 新功能")
-        st.success("✅ 文件夹默认展开")
-        st.success("✅ 紧凑界面设计") 
-        st.success("✅ 脚本互斥展开")
-        st.success("✅ 运行报告生成")
-        st.success("✅ 文件预览功能")
-        
-        st.markdown("### 🐛 调试信息")
-        if st.button("查看队列文件", key="debug_queue"):
-            queue_file = "run_queue.json"
-            if os.path.exists(queue_file):
-                with open(queue_file, 'r') as f:
-                    queue_content = f.read()
-                st.code(queue_content, language='json')
-            else:
-                st.info("队列文件不存在")
+        st.header(":material/computer: System Info" , divider = 'grey')
+        options = system_info()
+        st.pills("Informations" , options , key = "system-info-pills" , 
+                 format_func=lambda x: f':blue[{x}]', label_visibility="collapsed")
+            
+        st.header(":material/pending_actions: Pending Features" , divider = 'grey')
+        for feature in PENDING_FEATURES:
+            st.warning(feature , icon = ":material/schedule:")
+
+    show_queue_in_sidebar()
+
+def show_queue_in_sidebar():
+    # queue title and refresh button
+    with st.sidebar:
     
-    # 主内容区域
-    src_runs_path = Path("src_runs")
-    if src_runs_path.exists():
-        show_folder(src_runs_path)
-    else:
-        st.error("src_runs 文件夹不存在！")
+        header_col, button_col = st.columns([7, 2] , vertical_alignment = "center")
+        
+        with header_col: 
+            st.header(":material/event_list: Running Queue" , divider = 'grey')
+        with button_col:
+            col1 , col2 = st.columns([1, 1] , gap = "small" , vertical_alignment = "center")
+            with col1:  
+                st.button("", key="task-queue-refresh", icon = ":material/directory_sync:" , 
+                         help = "Refresh Queue" + (f" (every {AUTO_REFRESH_INTERVAL/1000} seconds)" if AUTO_REFRESH_INTERVAL else "") ,
+                         on_click = SC.click_queue_refresh)
+                
+            with col2:
+                st.button("", key="task-queue-clear", icon = ":material/delete:" , 
+                          help = "Clear All Tasks" ,
+                          on_click = SC.click_queue_clear_confirmation)
+            
+        if SC.queue_last_action:
+            if SC.queue_last_action[1]:
+                st.success(SC.queue_last_action[0] , icon = ":material/check_circle:")
+            else:
+                st.error(SC.queue_last_action[0] , icon = ":material/error:")
+         
+        if SC.task_queue.empty():
+            st.info("Queue is empty, click the script below to run and it will be displayed here" , icon = ":material/queue_play_next:")
+            return
+
+        st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.status_message()}")
+        st.markdown("")
+        # show queue filters
+
+        with st.container(key="queue-filter-container").expander("Queue Filters" , expanded = False , icon = ":material/filter_list:"):
+            status_options = ["All" , "Running" , "Complete" , "Error"]
+            folder_options = [item.path for item in SC.path_items if item.is_dir]
+            file_options = [item.path for item in SC.path_items if item.is_file]
+            st.radio(":gray-badge[**Running Status**]" , status_options , key = "queue-filter-status", horizontal = True ,
+                     on_change = SC.click_queue_filter_status)
+            st.multiselect(":gray-badge[**Script Folder**]" , folder_options , key = "queue-filter-path-folder" ,
+                           format_func = lambda x: str(x.relative_to(BASE_DIR)) ,
+                           on_change = SC.click_queue_filter_path_folder)
+            st.multiselect(":gray-badge[**Script File**]" , file_options , key = "queue-filter-path-file" ,
+                           format_func = lambda x: x.name ,
+                           on_change = SC.click_queue_filter_path_file)
+            
+        queue = SC.filter_task_queue()
+        for item in queue.values():
+            placeholder = st.empty()
+            container = placeholder.container(key = f"queue-item-container-{item.id}")
+            with container:
+                content_col , remove_col = st.columns([9, 1] , gap = "small" , vertical_alignment = "center")
+                    
+                with content_col:
+                    help_text = '|'.join([f"Status: {item.status}" , f"Duration: {item.duration_str} Secs", f"PID: {item.pid}"])
+                    st.button(f"{item.icon} {item.button_str}",  help=help_text , key=f"queue-item-content-{item.id}" , 
+                            use_container_width=True , on_click = SC.click_queue_item , args = (item,))
+                
+                with remove_col:
+                    st.button(":material/close:", key=f"queue-item-classic-remover-{item.id}", help="Remove/Terminate", type="secondary",
+                              on_click = SC.click_queue_remove_item , args = (item,))
+                
+                if SC.running_report_queue is None or SC.running_report_queue != item.id:
+                    continue
+            
+                status_text = f'Running Report {item.status_state.title()}'
+                status = st.status(status_text , state = item.status_state , expanded = True)
+
+                with status:
+                    col_config = {
+                        'Item': st.column_config.TextColumn(width=None, help='Key of the item'),
+                        'Value': st.column_config.TextColumn(width="large", help='Value of the item')
+                    }
+
+                    st.dataframe(item.dataframe() , row_height = 20 , column_config = col_config)
+                    SC.wait_for_complete(item)
+                    col1 , col2 = st.columns([7, 1] , gap = "small" , vertical_alignment = "center")
+                    if item.status == 'complete':
+                        col1.success(f'Script Completed' , icon = ":material/add_task:")
+                    elif item.status == 'error':
+                        col1.error(f'Script Failed' , icon = ":material/error:")
+                    col2.button(f":{'green' if item.status == 'complete' else 'red'}-badge[:material/slideshow:]", key=f"show-complete-report-{item.id}" ,
+                                help = "Show complete report in main page" ,
+                                on_click = SC.click_show_complete_report , args = (item,) , type="tertiary")
+                
+def show_developer_info():
+    """show developer info"""
+    container = st.container(key = "developer-info-special-expander")
+    with container.expander("**Developer Info**" , expanded = False , icon = ":material/bug_report:"):
+        with st.expander("Session State" , expanded = False , icon = ":material/star:").container(height = 500):
+                st.write(st.session_state)
+        
+        with st.expander("Session Control" , expanded = False , icon = ":material/settings:").container(height = 500):
+                st.write(SC)
+
+        SC.task_queue.refresh()     
+        with st.expander("View queue file", expanded=False , icon = ":material/file_json:").container(height = 500):
+            try:
+                st.json(SC.task_queue.full_queue_dict() , expanded = 1)
+            except Exception as e:
+                st.error(f"Error loading queue: {e}")
+
+        with st.expander("View action log", expanded=False , icon = ":material/format_list_numbered:"):
+            st.code(ActionLogger.get_action_log(), language='log' , height = 500)
+
+        with st.expander("View error log", expanded=False , icon = ":material/error:"):
+            st.code(ActionLogger.get_error_log(), language='log' , height = 500)
+
+        cols = st.columns(5) # 5 buttons in a row
+        with cols[0]:
+            st.button("Queue" , icon = ":material/directory_sync:" , key = "queue-refresh-developer" , 
+                      help = "Refresh Queue" ,
+                      on_click = SC.click_queue_refresh)
+        with cols[1]:
+            st.button("Queue" , icon = ":material/delete:" , key = "queue-clear-developer" , 
+                      help = "Clear All Tasks in Queue" ,
+                      on_click = SC.click_queue_clear_confirmation)
+        with cols[2]:
+            st.button("Log" , icon = ":material/delete:" , key = "clear-log-developer" , 
+                      help = "Clear Both Action and Error Logs" ,
+                      on_click = SC.click_log_clear_confirmation)
+    
+def show_config_editor():
+    """show config yaml editor"""
+    config_dir = BASE_DIR.parent.joinpath("configs")
+    files = [f for sub in ["train" , "trade" , "nn" , "boost"] for f in config_dir.joinpath(sub).glob("*.yaml")]
+    default_file = config_dir.joinpath("train/model.yaml")
+
+    container = st.container(key="special-expander-editor")
+    with container.expander("**YAML Editor**", expanded=False, icon=":material/edit_document:"):
+        st.info(f"This File Editor is for editing selected config files", icon=":material/info:")
+        st.info(f"For other config files, please use the file explorer", icon=":material/info:")
+        
+        config_editor = YAMLFileEditor('config-editor', file_root=config_dir)
+        SC.config_editor_state = config_editor.state
+        config_editor.show_yaml_editor(files, default_file=default_file)
+    
+def show_folder():
+    """show folder content recursively"""
+    items = SC.path_items
+    for item in items:
+        if item.is_dir:
+            folder_name = re.sub(r'^\d+_', '', item.name).replace('_', ' ').title()
+            body = f"""
+            <hr style="
+                height: 1px;
+                border-width: 0;
+                background-color: lightgrey;
+                padding: {4 / (item.level+2)}px {400-item.level*15}px;
+                margin-top: 0px;
+                margin-bottom: 0px;
+                margin-left: {(item.level-1)*30}px;
+            ">
+            <div class="custom-gray-line">   </div>
+            <div style="
+                font-size: 20px;
+                font-weight: bold;
+                margin-top: 10px;
+                margin-bottom: 10px;
+                margin-left: {(item.level-1)*30}px;
+            ">📂 {folder_name}</div>
+            """       
+            st.markdown(body , unsafe_allow_html=True)
+ 
+        elif item.level > 0:
+            show_script_runner(item.script_runner())
+
+def show_script_runner(runner: ScriptRunner):
+    """show single script runner"""
+    with st.container(key = f"script-container-{runner.level}-{runner.script_key}"):
+        button_col, content_col = st.columns([1, 1] , gap = 'large' , vertical_alignment = "center")
+        is_current = SC.current_script_runner is not None and runner.script_key == SC.current_script_runner
+        with button_col:
+            _status = ':no_entry:' if runner.header.disabled else ':arrow_forward:'
+            button_text = ' '.join([':arrow_down_small:' if is_current else _status, ':snake:', runner.desc])
+            st.button(f"**{button_text}**" , key=f"script-runner-expand-{runner.script_key}" , help = str(runner.script) ,
+                       on_click = SC.click_script_runner_expand , args = (runner,))
+
+        with content_col:
+            body = f"""
+            <div style="
+                font-size:13px;
+                line-height:1.5;
+                margin-left:{-(runner.level-1)*30}px;
+                margin-top:0px;
+                margin-bottom:0px;
+                align-self: flex-start;
+            ">💬 {runner.content}</div>
+            """
+            st.caption(body , help = runner.todo , unsafe_allow_html=True)
+
+        if is_current:
+            show_script_details(runner)
+
+def show_script_details(runner: ScriptRunner):
+    """show script details"""
+    if todo := runner.header.todo:
+        st.info(f":material/pending_actions: {todo}")
+    if runner.disabled:
+        st.error(f":material/disabled_by_default: This script is disabled")
+        return
+    
+    with st.container(key = f"script-setting-container-{runner.script_key}" , border = True):
+        param_inputs = runner.header.get_param_inputs()
+        settings_col , collapse_col = st.columns([1, 1] , vertical_alignment = "center")
+        with settings_col:
+            if not param_inputs:
+                st.info("**No parameter settings**" , icon = ":material/settings:")
+            else:
+                st.info("**Parameter Settings**" , icon = ":material/settings:")
+
+        with collapse_col:
+            st.button(":material/close:", key=f"script-setting-classic-remover-{runner.script_key}", help="Collapse", type="secondary" ,
+                      on_click = SC.click_script_runner_expand , args = (runner,))                
+        
+        params = ParamInputsForm(runner).init_param_inputs('customized').param_values
+        if SC.ready_to_go(runner):
+            help_text = f"Parameters valid, run {runner.script_key}"
+            button_key = f"script-runner-run-enabled-{runner.script_key}"
+        else:
+            help_text = f"Parameters invalid, please check required ones"
+            button_key = f"script-runner-run-disabled-{runner.script_key}"
+        st.button(":material/mode_off_on:", key=button_key , 
+                  help = help_text , disabled = not SC.ready_to_go(runner) , 
+                  on_click = SC.click_script_runner_run , args = (runner,params))
+        show_report_main(runner)
+
+class ParamInputsForm:
+    def __init__(self , runner : ScriptRunner):
+        self.runner = runner
+        self.param_list = [self.WidgetParamInput(runner, p) for p in runner.header.get_param_inputs()]
+        self.errors = []
+
+    def init_param_inputs(self , type : Literal['customized', 'form'] = 'customized'):
+        if type == 'customized':
+            self.init_customized_container()
+        elif type == 'form':
+            self.init_form()
+        else:
+            raise ValueError(f"Invalid param inputs type: {type}")
+        return self
+
+    class WidgetParamInput(ScriptParamInput):
+        def __init__(self , runner : ScriptRunner , param : ScriptParamInput):
+            super().__init__(**param.as_dict())
+            self._runner = runner
+            self._param = param
+            self.widget_key = self.get_widget_key(runner, param)
+            self.transform = self.value_transform(param)
+
+        @property
+        def script_key(self):
+            return self._runner.script_key
+
+        @property
+        def raw_value(self) -> Any:
+            return st.session_state[self.widget_key]
+        
+        @property
+        def param_value(self):
+            return self.transform(self.raw_value)
+        
+        def is_valid(self):
+            return self._param.is_valid(self.param_value)
+        
+        def error_message(self):
+            return self._param.error_message(self.param_value)
+        
+        @classmethod
+        def get_widget_key(cls , runner : ScriptRunner , param : ScriptParamInput):
+            return f"script-param-{runner.script_key}-{param.name}"
+        
+        @classmethod
+        def value_transform(cls , param : ScriptParamInput):
+            ptype = param.ptype
+            if isinstance(ptype, list):
+                options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
+                return cls.raw_option([None] + ptype, options)
+            elif ptype == str:
+                return lambda x: (x.strip() if x is not None else None)
+            elif ptype == bool:
+                return lambda x: None if x is None or x == 'Choose an option' else bool(x)
+            elif ptype == int:
+                return lambda x: None if x is None else int(x)
+            elif ptype == float:
+                return lambda x: None if x is None else float(x)
+            else:
+                raise ValueError(f"Unsupported param type: {ptype}")
+
+        @classmethod
+        def raw_option(cls , raw_values : list[Any], alt_values : list[Any]):
+            def wrapper(alt : Any):
+                """get index of value in options"""
+                raw = raw_values[alt_values.index(alt)] if alt is not None else None
+                return raw
+            return wrapper
+        
+        def on_change(self):
+            if self.script_key not in SC.script_params_cache:
+                SC.script_params_cache[self.script_key] = {
+                    'raw': {},
+                    'value': {},
+                    'valid': {}
+                }
+            SC.script_params_cache[self.script_key]['raw'][self.name] = self.raw_value
+            SC.script_params_cache[self.script_key]['value'][self.name] = self.param_value
+            SC.script_params_cache[self.script_key]['valid'][self.name] = self.is_valid()
+
+    def init_customized_container(self , num_cols : int = 3):
+        num_cols = min(num_cols, len(self.param_list))
+        
+        for i, wp in enumerate(self.param_list):
+            if i % num_cols == 0:
+                param_cols = st.columns(num_cols)
+            with param_cols[i % num_cols]:
+                self.get_widget(
+                    runner=self.runner, param=wp, 
+                    on_change=self.on_widget_change, args=(wp,))
+                self.on_widget_change(wp)
+                if err_msg := wp.error_message():
+                    st.error(err_msg , icon = ":material/error:")
+        return self
+    
+    def init_form(self):
+        with st.form(f"ParamInputsForm-{self.runner.script_key}" , clear_on_submit = False):
+            for param in self.param_list:
+                self.get_widget(self.runner, param)
+
+            if st.form_submit_button(
+                "Submit" ,
+                help = "Submit Parameters to Run Script" ,
+            ):
+                self.submit()
+
+        return self
+
+    @property
+    def param_values(self):
+        return {wp.name: wp.param_value for wp in self.param_list}
+
+    def validate(self):
+        self.errors = []
+        for wp in self.param_list:
+            if err_msg := wp.error_message():
+                self.errors.append(err_msg)
+                
+        return len(self.errors) == 0
+
+    def submit(self):
+        for wp in self.param_list: wp.on_change()
+            
+        if not self.validate():
+            for err_msg in self.errors:
+                st.error(err_msg , icon = ":material/error:")
+    
+    def process(self):
+        ...
+
+    @classmethod
+    def get_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
+                   on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+        ptype = param.ptype
+        
+        if isinstance(ptype, list):
+            func = cls.list_widget
+        elif ptype == str:
+            func = cls.text_widget
+        elif ptype == bool:
+            func = cls.bool_widget
+        elif ptype == int:
+            func = cls.int_widget
+        elif ptype == float:
+            func = cls.float_widget
+        else:
+            raise ValueError(f"Unsupported param type: {ptype}")
+        
+        return func(runner, param, on_change, args, kwargs)
+
+    @classmethod
+    def value_transform(cls , param : ScriptParamInput):
+        ptype = param.ptype
+        if isinstance(ptype, list):
+            options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
+            return cls.raw_option([None] + ptype, options)
+        elif ptype == str:
+            return lambda x: (x.strip() if x is not None else None)
+        elif ptype == bool:
+            return lambda x: None if x is None or x == 'Choose an option' else bool(x)
+        elif ptype == int:
+            return lambda x: None if x is None else int(x)
+        elif ptype == float:
+            return lambda x: None if x is None else float(x)
+        else:
+            raise ValueError(f"Unsupported param type: {ptype}")
+
+    @classmethod
+    def raw_option(cls , raw_values : list[Any], alt_values : list[Any]):
+        def wrapper(alt : Any):
+            """get index of value in options"""
+            raw = raw_values[alt_values.index(alt)] if alt is not None else None
+            return raw
+        return wrapper
+    
+    @classmethod
+    def get_title(cls , param : ScriptParamInput):
+        return f':red[:material/asterisk: **{param.title}**]' if param.required else f'**{param.title}**'
+    
+    @classmethod
+    def get_widget_key(cls , runner : ScriptRunner , param : ScriptParamInput):
+        return f"script-param-{runner.script_key}-{param.name}"
+
+    @classmethod
+    def get_default_value(cls , runner : ScriptRunner , param : ScriptParamInput):
+        widget_key = cls.get_widget_key(runner, param)
+        default_value = SC.script_params_cache.get(runner.script_key, {}).get('raw', {}).get(param.name, param.default)
+        if default_value is None:
+            default_value = st.session_state[widget_key] if widget_key in st.session_state else param.default
+        return default_value
+    
+    @classmethod
+    def get_widget_value(cls , runner : ScriptRunner , param : ScriptParamInput):
+        widget_key = cls.get_widget_key(runner, param)
+        return st.session_state[widget_key]
+
+    @classmethod
+    def list_widget(cls , runner : ScriptRunner , param : ScriptParamInput , 
+                    on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+        ptype = param.ptype
+        assert isinstance(ptype, list) , f"Param {param.name} is not a list"
+        
+        widget_key = cls.get_widget_key(runner, param)
+        default_value = cls.get_default_value(runner, param)
+        title = cls.get_title(param)
+        options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
+        return st.selectbox(
+            title,
+            options,
+            index=0 if default_value is None else options.index(default_value),
+            key=widget_key ,
+            on_change = on_change ,
+            args = args ,
+            kwargs = kwargs
+        )
+    
+    @classmethod
+    def text_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
+                    on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+        ptype = param.ptype
+        assert ptype == str , f"Param {param.name} is not a string"
+        widget_key = cls.get_widget_key(runner, param)
+        default_value = cls.get_default_value(runner, param)
+        title = cls.get_title(param)
+        return st.text_input(
+            title,
+            value=None if default_value is None else str(default_value),
+            placeholder=param.placeholder ,
+            key=widget_key ,
+            on_change = on_change ,
+            args = args ,
+            kwargs = kwargs
+        )
+    
+    @classmethod
+    def bool_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
+                    on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+        ptype = param.ptype
+        assert ptype == bool , f"Param {param.name} is not a boolean"
+        widget_key = cls.get_widget_key(runner, param)
+        title = cls.get_title(param)
+        default_value = cls.get_default_value(runner, param)
+        return st.selectbox(
+            title,
+            ['Choose an option', True, False],
+            index=0 if default_value is None else 2-bool(default_value),    
+            key=widget_key ,
+            on_change = on_change ,
+            args = args ,
+            kwargs = kwargs
+        )
+    
+    @classmethod
+    def int_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
+                   on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+        ptype = param.ptype
+        assert ptype == int , f"Param {param.name} is not an integer"
+        widget_key = cls.get_widget_key(runner, param)
+        title = cls.get_title(param)
+        default_value = cls.get_default_value(runner, param)
+        return st.number_input(
+            title,
+            value=None if default_value is None else int(default_value),
+            min_value=param.min,
+            max_value=param.max,
+            placeholder=param.placeholder,
+            key=widget_key ,
+            on_change = on_change ,
+            args = args ,
+            kwargs = kwargs
+        )
+    
+    @classmethod
+    def float_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
+                    on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+        ptype = param.ptype
+        assert ptype == float , f"Param {param.name} is not a float"
+        widget_key = cls.get_widget_key(runner, param)
+        title = cls.get_title(param)
+        default_value = cls.get_default_value(runner, param)
+        return st.number_input(
+            title,
+            value=None if default_value is None else float(default_value),
+            min_value=param.min,
+            max_value=param.max,
+            step=0.1,
+            placeholder=param.placeholder,
+            key=widget_key ,
+            on_change = on_change ,
+            args = args ,
+            kwargs = kwargs
+        )
+
+    @classmethod
+    def get_form_errors(cls):
+        return st.session_state.form_errors
+    
+    @classmethod
+    def on_widget_change(cls , wp : WidgetParamInput):
+        wp.on_change()
+        
+def show_report_main(runner : ScriptRunner):
+    """show complete report"""
+    item = SC.task_queue.get(SC.current_task_item)
+    if item is None: return
+    if not item.belong_to(runner): return
+
+    status_text = f'Running Report {item.status_state.title()}'
+    status_placeholder = st.empty()
+    status = status_placeholder.status(status_text , state = item.status_state , expanded = True)
+       
+    with status_placeholder:
+        if not SC.running_report_main_cleared:
+            st.write('')
+            SC.running_report_main_cleared = True
+            st.rerun()
+
+        with status:
+            with st.expander(":rainbow[:material/build:] **Command Details**", expanded=False):
+                st.code(item.cmd , wrap_lines=True)
+
+            script_str = f"Script [{item.format_path}] ({item.time_str()}) (PID: {item.pid})"
+            st.success(f'{script_str} started' , icon = ":material/add_task:")
+
+            df_placeholder = st.empty()
+            col_config = {
+                'Item': st.column_config.TextColumn(width=None, help='Key of the item'),
+                'Value': st.column_config.TextColumn(width="large", help='Value of the item')
+            }
+            with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
+                st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
+
+            SC.wait_for_complete(item)
+            SC.task_queue.refresh()
+            with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
+                st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
+
+            if item.status == 'error':
+                st.error(f'{script_str} has error' , icon = ":material/error:")
+            else:
+                st.success(f'{script_str} Completed' , icon = ":material/trophy:")
+
+            exit_info_list = item.info_list(info_type = 'exit')
+            
+            with st.expander(f":rainbow[:material/fact_check:] **Exit Information**", expanded=True):
+                for name , value in exit_info_list:
+                    st.badge(f"**{name}**" , color = "blue")
+                    st.write(f":blue[{value}]")
+
+            if item.exit_files:
+                with st.expander(f":rainbow[:material/file_present:] **File Previewer**", expanded=True):
+                    for file in list(set(item.exit_files)):
+                        path = Path(file).absolute()
+                        preview_key = f"file-preview-{path}"
+                        col1, col2 = st.columns([4, 1] , vertical_alignment = "center")
+                        with col1:
+                            st.button(path.name, key=preview_key , icon = ":material/file_present:" , help = f"Preview {path}" ,
+                                      on_click = SC.click_file_preview , args = (path,))
+
+                        with col2:
+                            with open(file_path, 'rb') as f:
+                                if st.download_button(
+                                    ':material/download:', 
+                                    data=f.read(),
+                                    file_name=str(path),
+                                    key = f"download-{path}",
+                                    help = f"Download {path}",
+                                    on_click=SC.click_file_download , args = (path,)
+                                ):
+                                    pass
+
+                    if SC.running_report_file_previewer is None:
+                        pass
+                    else:
+                        previewer = FilePreviewer(SC.running_report_file_previewer)
+                        previewer.preview()
+            
+
+def preview_not_supported(file_path):
+    """preview not supported file"""
+    st.error(f"Cannot preview file: {file_path}")
+
+def main():
+    page_config()
+    page_css()
+    show_sidebar()
+    show_developer_info()
+    show_config_editor()
+    show_folder()   
 
 if __name__ == '__main__':
     main() 

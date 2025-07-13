@@ -1,7 +1,10 @@
-import os , fnmatch , platform , psutil , subprocess , time , argparse
+import os , fnmatch , platform , psutil , subprocess , time , argparse , traceback
+from dataclasses import dataclass , field
 from datetime import datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal , Callable , Any
+
+from src_runs.util import update_exit_message
 
 DEFAULT_EXCLUDES = ['kernel_interrupt_daemon.py']
 
@@ -130,7 +133,8 @@ def find_python_process_by_name(name : str , task_id : str  | None = None , try_
     for _ in range(try_times):
         python_process = [proc for proc in psutil.process_iter(['pid', 'name', 'cmdline']) if 'python' in proc.info['name'].lower()]
         target_process = [proc for proc in python_process if name in ' '.join(proc.info['cmdline'] or []) and (task_id is None or task_id in proc.info['cmdline'])]
-        if target_process: return target_process[-1].info['pid']
+        if target_process: 
+            return target_process[-1].info['pid']
         time.sleep(0.5)
     raise ValueError(f'No python process found for name: {name}')
     
@@ -158,3 +162,95 @@ def unknown_args(unknown):
             else:
                 args[key] = (args[key] , ua)
     return args
+
+class BackendTaskManager:
+    '''
+    kwargs: additional param arguments to be passed to the task
+    '''
+    def __init__(self , **kwargs):
+        self.params = argparse_dict(**kwargs)
+        self.exit_msg = {
+            'pid': os.getpid(),
+            'end_time': None,
+            'status': None,
+            'exit_code': None,
+            'exit_error': None,
+            'exit_message': None,
+            'exit_files': None,
+        }
+
+    def __enter__(self):
+        self.task_id = self.params.get('task_id')
+        return self
+
+    def __exit__(self , exc_type , exc_value , exc_traceback):
+        self.exit_msg['end_time'] = time.time()
+        if exc_type is None:
+            self.exit_msg['status'] = 'complete'
+            self.exit_msg['exit_code'] = 0
+        else:
+            self.exit_msg['status'] = 'error'
+            self.exit_msg['exit_code'] = 1
+            self.exit_msg['exit_message'] = str(exc_value)
+            self.exit_msg['exit_error'] = traceback.format_exc()
+        update_exit_message(self.task_id, **self.exit_msg)
+
+    @dataclass(slots = True)
+    class ExitMessage:
+        message : str | None = None
+        files : list[str] | None = None
+        code : int = 0
+        error : str | None = None
+
+        @classmethod
+        def from_return(cls , ret : Any):
+            if isinstance(ret , cls):
+                return ret
+            elif isinstance(ret , str):
+                return cls(message = ret)
+            elif isinstance(ret , Path):
+                return cls(files = [str(ret)])
+            elif isinstance(ret , tuple):
+                message = []
+                files = []
+                for x in ret:
+                    if isinstance(x , Path):
+                        files.append(str(x))
+                    else:
+                        message.append(str(x))
+                return cls(message = '\n'.join(message) , files = files)
+            elif isinstance(ret , list) and ret:
+                if isinstance(ret[0] , Path):
+                    return cls(files = [str(x) for x in ret])
+                else:
+                    return cls(message = '\n'.join(ret))
+            elif isinstance(ret , dict):
+                return cls(**{k:v for k,v in ret.items() if k in cls.__slots__})
+            else:
+                return cls(message = str(ret))
+
+    def exit_message(self , exit_msg : ExitMessage):
+        if not self.task_id: return
+        if exit_msg.message: self.exit_msg['exit_message'] = exit_msg.message
+        if exit_msg.files:   self.exit_msg['exit_files'] = exit_msg.files
+        
+    @classmethod
+    def manage(cls , **params):
+        '''
+        use BackendTaskManager to manage task, take acceptable return as exit message
+        params will be passed to the warpped function as kwargs
+        example:
+        @BackendTaskManager.manage(x = 1)
+        def test(x : int , **kwargs):
+            return 'yes' , Path('test.txt') , Path('test.csv')
+            # return BackendTaskManager.ExitMessage(message = 'yes' , files = ['test.txt' , 'test.csv'])
+            # return {'message' : 'yes' , 'files' : ['test.txt' , 'test.csv']}
+        '''
+        def inner(func : Callable):
+            def wrapper(*args , **kwargs):
+                with cls(**params) as bm:
+                    ret = func(*args , **kwargs , **bm.params)
+                    bm.exit_message(cls.ExitMessage.from_return(ret))
+                return ret
+            return wrapper
+        return inner

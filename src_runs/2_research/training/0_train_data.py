@@ -15,11 +15,11 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import DataAPI
 from src.basic import AutoRunTask
-from src_runs.util import argparse_dict
+from src_runs.util import BackendTaskManager
 
-def main():
-    params = argparse_dict()
-    with AutoRunTask('reconstruct train data' , **params) as runner:
+@BackendTaskManager.manage()
+def main(**kwargs):
+    with AutoRunTask('reconstruct train data' , **kwargs) as runner:
         DataAPI.reconstruct_train_data(confirm = 1)
 
 if __name__ == '__main__':

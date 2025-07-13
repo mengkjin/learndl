@@ -14,5 +14,13 @@ path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
 import subprocess 
-if __name__ == '__main__':
+from src_runs.util import BackendTaskManager
+
+@BackendTaskManager.manage()
+def main(**kwargs):
     subprocess.run("git pull", shell=True, check=True)
+
+    return 'Finish pull'
+
+if __name__ == '__main__':
+    main()

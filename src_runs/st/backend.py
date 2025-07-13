@@ -1,25 +1,14 @@
 from pathlib import Path
-from typing import Literal , Any
-import re , yaml , json , time , os , subprocess , logging
+from typing import Literal , Any , Sequence , ClassVar
+import re , yaml , json , time , os , subprocess , shutil
 import pandas as pd
+from copy import deepcopy
 from datetime import datetime
 from dataclasses import dataclass , asdict , field
-import streamlit as st
 
-from .abc import check_process_status , kill_process , terminal_cmd , get_real_pid
-
-BASE_DIR = Path(__file__).parent.parent
-assert BASE_DIR.name == 'src_runs' , f'BASE_DIR {BASE_DIR} not right'
-
-backend_dir = BASE_DIR / '_backend'
-backend_dir.mkdir(parents=True, exist_ok=True)
-
-log_file = backend_dir / 'st_backend.log'
-log_file.parent.mkdir(parents=True, exist_ok=True)
-logging.basicConfig(filename=log_file, level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-logger.info(f"st_backend.py loaded")
-
+from src_runs.util.abc import check_process_status , kill_process , terminal_cmd , get_real_pid
+from src_runs.util.st_file import BASE_DIR , queue_json_file , exit_message_file
+    
 @dataclass
 class PathItem:
     path: Path
@@ -46,7 +35,9 @@ class PathItem:
         return self.path.absolute()
     
     @classmethod
-    def iter_folder(cls, folder_path: Path | str = BASE_DIR, level: int = 0 , ignore_starters = ('.', '_' , 'util') ,
+    def iter_folder(cls, folder_path: Path | str = BASE_DIR, level: int = 0 , 
+                    ignore_starters = ('.', '_') ,
+                    ignore_files = ('widget.py', 'streamlit.py' , 'util' , 'st') ,
                     min_level: int = 0 , max_level: int = 2):
         '''get all valid items from folder recursively'''
         items : list[cls] = []
@@ -55,10 +46,10 @@ class PathItem:
         assert folder_path.is_dir() , f'{folder_path} is not a folder'
             
         for item in folder_path.iterdir():
-            if item.name.startswith(ignore_starters): continue
+            if item.name.startswith(ignore_starters) or item.name in ignore_files: continue
             items.append(cls(item , level))
             if item.is_dir(): 
-                items.extend(cls.iter_folder(item , level + 1 , ignore_starters , min_level , max_level))
+                items.extend(cls.iter_folder(item , level + 1 , ignore_starters , ignore_files, min_level , max_level))
         
         items.sort(key=lambda x: (x.path))
         return items
@@ -248,162 +239,169 @@ class ScriptRunner:
             
         return header
 
-    def run_script(self , close_after_run = False , **kwargs):
+    def run_script(self , queue : 'TaskQueue | None' = None , close_after_run = False , **kwargs) -> 'TaskItem':
         '''run script and return exit code (0: error, 1: success)'''
-        item = TaskItem.create(self.script)
+        item = TaskItem.create(self.script , queue)
         item.cmd = terminal_cmd(self.script, kwargs | {'task_id': item.id}, close_after_run=close_after_run)
         
         try:
             process = subprocess.Popen(item.cmd, shell=True, encoding='utf-8')
             pid = get_real_pid(process , item.cmd)
             item.update(pid = pid, status = 'running', start_time = time.time())
-            
         except Exception as e:
             # update queue status to error
             item.update(status = 'error', error = str(e), end_time = time.time())
             raise e
-            
-        TaskQueue.refresh()
+        finally:
+            if queue is not None: queue.save()
         return item
 
 class TaskQueue:
-    '''TaskQueue is a class that represents a queue of tasks'''
-    _queue_file = backend_dir / 'task_queue.json'
-    _exit_message_file = backend_dir / 'exit_message.json'
-    _queue : dict[str, 'TaskItem'] = {}
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+    _instances : ClassVar[dict[str, 'TaskQueue']] = {}
     
-    def __init__(self):
+    def __init__(self , queue_name : str = 'default' , max_queue_size : int | None = 100):
+        assert max_queue_size is None or max_queue_size > 0 , 'max_queue_size must be None or greater than 0'
+        self.queue_name = queue_name
+        self.queue_file = queue_json_file(queue_name)
+        self.max_queue_size = max_queue_size
+        self.queue : dict[str, 'TaskItem'] = {}
         self.load()
+        self._instances[self.queue_name] = self
     
     def __iter__(self):
-        return iter(self._queue.keys())
+        return iter(self.queue.keys())
     
-    @classmethod
-    def get(cls, task_id : str | None = None):
+    def __len__(self):
+        return len(self.queue)
+    
+    def __repr__(self):
+        return f"TaskQueue(queue_name={self.queue_name},max_queue_size={self.max_queue_size},length={len(self)})"
+    
+    def __contains__(self, item : 'TaskItem'):
+        return item in self.queue.values()
+    
+    def get(self, task_id : str | None = None):
         if task_id is None: return None
-        return cls._queue.get(task_id)
+        return self.queue.get(task_id)
 
-    @classmethod
-    def keys(cls):
-        return cls._queue.keys()
+    def keys(self):
+        return self.queue.keys()
     
-    @classmethod
-    def values(cls):
-        return cls._queue.values()
+    def values(self):
+        return self.queue.values()
     
-    @classmethod
-    def items(cls):
-        return cls._queue.items()
+    def items(self):
+        return self.queue.items()
     
-    @classmethod
-    def empty(cls):
-        return not cls._queue
+    def empty(self):
+        return not self.queue
 
-    @classmethod
-    def load(cls):
-        content = cls.full_content()
-        cls._queue = {key: TaskItem.load(value) for key, value in content.items()}
-        cls._exit_message_file.unlink(missing_ok=True)
-
-    @classmethod
-    def exit_message_content(cls):
-        if cls._exit_message_file.exists():
-            with open(cls._exit_message_file, 'r') as f:
-                _exit_message = f.read() or "{}"
+    def load(self):
+        content = self.full_queue_dict()
+        task_ids = list(content.keys())
+        if self.max_queue_size:
+            task_ids = task_ids[-self.max_queue_size:]
+        for item_id in task_ids:
+            if item_id in self.queue:
+                self.queue[item_id].update(**content.get(item_id , {}))
+            else:
+                self.add(TaskItem.load(content[item_id]))
+        
+    def queue_content(self):
+        if self.queue_file.exists():
+            with open(self.queue_file, 'r') as f:
+                content = f.read() or "{}"
         else:
-            _exit_message = "{}"
-        return _exit_message
+            content = "{}"
+        return content
     
-    @classmethod
-    def queue_content(cls):
-        if cls._queue_file.exists():
-            with open(cls._queue_file, 'r') as f:
-                _queue_content = f.read() or "{}"
-        else:
-            _queue_content = "{}"
-        return _queue_content
+    def queue_dict(self) -> dict[str, Any]:
+        return json.loads(self.queue_content())
     
-    @classmethod
-    def full_content(cls):
-        _queue : dict[str , Any] = json.loads(cls.queue_content())
-        _exit_message : dict[str, Any] = json.loads(cls.exit_message_content())
-        if not _exit_message: 
-            return _queue
-        else:
-            _queue = {k: v | _exit_message.get(k , {}) for k, v in _queue.items()}
-            cls.save(_queue)
-            cls._exit_message_file.unlink()
-        return _queue
+    def merge_exit_message(self):
+        exit_message = self.exit_message_dict(self.queue , True)
+        for task_id in self.queue:
+            self.queue[task_id].update(**exit_message.get(task_id , {}))
+        self.save()
 
-    @classmethod
-    def save(cls , content : dict[str, Any] | None = None):
+    def exit_message_dict(self , task_ids : Sequence | dict , delete_after_load : bool = True) -> dict[str, Any]:
+        exit_message = {}
+        for task_id in task_ids:
+            file = exit_message_file(task_id)
+            if not file.exists(): continue
+            with open(file, 'r') as f:
+                exit_message.update(json.load(f))
+            if delete_after_load: file.unlink()
+        return exit_message
+    
+    def full_queue_dict(self):
+        queue : dict[str , Any] = json.loads(self.queue_content())
+        task_ids = list(queue.keys())
+        exit_message : dict[str, Any] = self.exit_message_dict(task_ids)
+        full_queue = {k : queue[k] | exit_message.get(k , {}) for k in task_ids}
+        self.save(full_queue)
+        return full_queue
+
+    def save(self , content : dict[str, Any] | None = None):
         if content is None:
-            content = {k: v.to_dict() for k, v in cls._queue.items()}
-        with open(cls._queue_file, 'w') as f:
-            json.dump(content, f , indent=2)
+            content = {k: v.to_dict() for k, v in self.queue.items()}
+        with open(self.queue_file, 'w') as f:
+            json.dump(content, f, indent=2)
 
-    @classmethod
-    def add(cls, item : 'TaskItem'):
-        cls.load()
-        cls._queue[item.id] = item
-        cls.save()
+    def add(self, item : 'TaskItem'):
+        assert item.id not in self.queue , f'TaskItem {item.id} already exists'
+        self.queue[item.id] = item
+        if self.max_queue_size and len(self.queue) > self.max_queue_size:
+            self.queue.pop(list(self.queue.keys())[0])
+        self.save()
 
-    @classmethod
-    def remove(cls, item : 'TaskItem'):
-        cls.load()
-        if item.id in cls._queue:
-            del cls._queue[item.id]
-            cls.save()
+    def create_item(self, script : Path | str):
+        item = TaskItem.create(script , self)
+        return item
 
-    @classmethod
-    def clear(cls):
-        cls.load()
-        for key in list(cls._queue.keys()):
-            if cls._queue[key].status != 'running': cls._queue.pop(key)
-        cls.save()
+    def remove(self, item : 'TaskItem'):
+        if item.id in self.queue:
+            self.queue.pop(item.id)
+            self.save()
 
-    @classmethod
-    def count(cls, status : Literal['starting', 'running', 'complete', 'error']):
-        return [item.status for item in cls._queue.values()].count(status)
+    def clear(self):
+        for key in list(self.queue.keys()):
+            if self.queue[key].status != 'running': self.queue.pop(key)
+        self.save()
+
+    def count(self, status : Literal['starting', 'running', 'complete', 'error']):
+        return [item.status for item in self.queue.values()].count(status)
     
-    @classmethod
-    def refresh(cls):
+    def refresh(self):
         status_changed = False
-        cls.load()
-        for item in cls._queue.values():
+        for item in self.queue.values():
             changed = item.refresh()
             if changed: status_changed = True
-        if status_changed: cls.save()
+        if status_changed: self.save()
 
-    @classmethod
-    def status_message(cls):
-        status = [item.status for item in cls._queue.values()]
+    def status_message(self):
+        status = [item.status for item in self.queue.values()]
         return f"Running: {status.count('running')} | Complete: {status.count('complete')} | Error: {status.count('error')}"
 
-    @classmethod
-    def update_exit_message(cls , task_id : str | None , files : list[str] | None = None , code : int | None = None , message : str | None = None):
-        if not task_id: return
-        if not (files or code or message): return
-        if not cls._exit_message_file.exists():
-            cls._exit_message_file.touch()
-        with open(cls._exit_message_file, 'r+') as f:
-            old_exit_message = f.read() or "{}"
-            old_exit_message = json.loads(old_exit_message)
-            old_exit_message[task_id] = {
-                'exit_files': files,
-                'exit_code': code,
-                'exit_message': message
-            }
-            f.seek(0)
-            f.write(json.dumps(old_exit_message, indent=2))
-            f.truncate()
-            print(f.read())
+
+    def filter(self, status : Literal['all' , 'starting', 'running', 'complete', 'error'] | None = None,
+               folder : list[Path] | None = None,
+               file : list[Path] | None = None):
+        filtered_queue = self.queue.copy()
+        print(filtered_queue)
+        if status and status.lower() != 'all':
+            print(status)
+            filtered_queue = {k: v for k, v in filtered_queue.items() if v.status == status.lower()}
+            print(filtered_queue)
+        if folder:
+            print(folder)
+            filtered_queue = {k: v for k, v in filtered_queue.items() if any(v.path.is_relative_to(f) for f in folder)}
+        if file:
+            print(file)
+            print([v.path for v in filtered_queue.values()])
+            filtered_queue = {k: v for k, v in filtered_queue.items() if v.path in file}
+        print(filtered_queue)
+        return filtered_queue
 
 @dataclass
 class TaskItem:
@@ -418,13 +416,13 @@ class TaskItem:
     exit_code : int | None = None
     exit_message : str | None = None
     exit_files : list[str] | None = None
-    error : str | None = None
-
+    exit_error : str | None = None
+    
     def __post_init__(self):
         assert isinstance(self.script, str) , f'script must be a string, but got {type(self.script)}'
         assert ' ' not in self.script , f'script must not contain space, but got {self.script}'
         assert '@' not in self.script , f'script must not contain @, but got {self.script}'
-
+        
     def __eq__(self, other):
         if isinstance(other, TaskItem):
             return self.id == other.id
@@ -477,26 +475,34 @@ class TaskItem:
         if time is None: return 'N/A'
         return datetime.fromtimestamp(time).strftime('%H:%M:%S')
 
+    @property
+    def runner_script_key(self):
+        return str(self.relative)
+
     @classmethod
     def load(cls, item : dict[str, Any]):
         return cls(**item)
     
     @classmethod
-    def create(cls, script : Path | str):
+    def create(cls, script : Path | str , queue : 'TaskQueue | None' = None):
         item = cls(str(script))
-        TaskQueue.add(item)
+        if queue is not None: queue.add(item)
         return item
     
     def refresh(self):
-        if self.pid and self.status != 'complete':
+        '''refresh task item status , return True if status changed'''
+        changed = False
+        if self.pid and self.status not in ['complete', 'error']:
             status = check_process_status(self.pid)
             if status not in ['running', 'complete']:
                 raise ValueError(f"Process {self.pid} is {status}")
             if status == 'complete':
                 self.status = 'complete'
                 self.end_time = time.time()
-                return True
-        return False
+                changed = True
+        if self.load_exit_message():
+            changed = True
+        return changed
     
     def to_dict(self):
         return {k: v for k, v in asdict(self).items() if v is not None}
@@ -504,7 +510,6 @@ class TaskItem:
     def update(self, **updates):
         if updates:
             [setattr(self, k, v) for k, v in updates.items()]
-            TaskQueue.save()
 
     def kill(self):
         if self.pid and self.status == 'running':
@@ -521,7 +526,6 @@ class TaskItem:
         elif self.status == 'complete':  return ':green-badge[:material/check:]'
         elif self.status == 'error': return ':red-badge[:material/close:]'
         else: raise ValueError(f"Invalid status: {self.status}")
-    
 
     @property
     def duration(self):
@@ -545,48 +549,46 @@ class TaskItem:
         elif self.status == 'complete':  return 'complete'
         elif self.status == 'error': return 'error'
         else: raise ValueError(f"Invalid status: {self.status}")
+
+    def load_exit_message(self):
+        file = exit_message_file(self.id)
+        if not file.exists(): return False
+        with open(file, 'r') as f:
+            exit_message = json.load(f)
+        self.update(**exit_message.get(self.id , {}))
+        return True
     
-    def info_list(self , include_exit_info : bool = True):
-        data_list = [
-            ['Script Path', str(self.relative)],
-            ['PID', str(self.pid) if self.pid else 'N/A'],
-            ['Create Time', self.time_str('create')],
-            ['Start Time', self.time_str('start')],
-            ['End Time', self.time_str('end')], 
-            ['Duration', self.duration_str],
-            ['Status', self.status],
-        ]
-        if include_exit_info: data_list.extend(self.exit_info_list())
-        return data_list
-    
-    def exit_info_list(self):
-        data_list = []
-        if self.exit_code is not None:
-            data_list.append(['Exit Code', f'{self.exit_code}'])
-        if self.exit_message:
-            data_list.append(['Exit Message', f'{self.exit_message}'])
-        if self.exit_files:
-            for i , file in enumerate(self.exit_files):
-                path = Path(file).absolute()
-                if path.is_relative_to(BASE_DIR):
-                    path = path.relative_to(BASE_DIR)
-                data_list.append([f'Exit File ({i})', f'{path}'])
-        return data_list
+    def info_list(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all'):
+        self.load_exit_message()
+        enter_info , exit_info = [] , []
+        if info_type in ['all' , 'enter']:
+            enter_info.extend([
+                ['Item ID', self.id],
+                ['Script Path', str(self.absolute)],
+                ['PID', str(self.pid) if self.pid else 'N/A'],
+                ['Create Time', self.time_str('create')],
+                ['Start Time', self.time_str('start')],
+                ['End Time', self.time_str('end')], 
+                ['Duration', self.duration_str],
+                ['Status', self.status],
+            ])
+        if info_type in ['all' , 'exit']:
+            if self.exit_code is not None:
+                exit_info.append(['Exit Code', f'{self.exit_code}'])
+            if self.exit_error is not None:
+                exit_info.append(['Exit Error', f'{self.exit_error}'])
+            if self.exit_message:
+                exit_info.append(['Exit Message', f'{self.exit_message}'])
+            if self.exit_files:
+                for i , file in enumerate(self.exit_files):
+                    path = Path(file).absolute()
+                    if path.is_relative_to(BASE_DIR):
+                        path = path.relative_to(BASE_DIR)
+                    exit_info.append([f'Exit File ({i})', f'{path}'])
+        return enter_info + exit_info
         
-    def dataframe(self , include_exit_info : bool = True):
-        data_list = self.info_list(include_exit_info = include_exit_info)
+    def dataframe(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all'):
+        data_list = self.info_list(info_type = info_type)
         df = pd.DataFrame(data_list , columns = ['Item', 'Value'])
         return df
-
-class ExitMessenger:
-    '''
-    ExitMessenger is a class that manages the exit message of a task
-    can pass files , exit_code , message to the task
-    '''
-        
-    @classmethod
-    def update(cls , task_id : str | None , files : list[str] | None = None , code : int | None = None , message : str | None = None):
-        if not task_id: return
-        TaskQueue.update_exit_message(task_id, files, code, message)
-        
     
