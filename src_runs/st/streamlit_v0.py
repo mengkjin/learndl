@@ -23,15 +23,16 @@ from src_runs.st.backend import (
 )
 
 from src_runs.st.frontend import (
-    CustomCSS , FilePreviewer , ActionLogger , YAMLFileEditor , YAMLFileEditorState
+    CustomCSS , FilePreviewer , ActionLogger , YAMLFileEditor , YAMLFileEditorState , ColoredText
 )
 
 if AUTO_REFRESH_INTERVAL := 0:
     st_autorefresh(interval=AUTO_REFRESH_INTERVAL, key="autorefresh-example")
 
 PENDING_FEATURES = [
-    'script files return' , 
     'uvx' , 
+    'open file directly button' ,
+    'show main report outside expander'
 ]
 
 def system_info():
@@ -198,7 +199,10 @@ class SessionControl:
     @ActionLogger.log_action()
     def click_file_preview(self , path : Path):
         """click file previewer"""
-        self.running_report_file_previewer = path   
+        if self.running_report_file_previewer == path:
+            self.running_report_file_previewer = None
+        else:   
+            self.running_report_file_previewer = path   
 
     @ActionLogger.log_action()
     def click_file_download(self , path : Path):
@@ -234,7 +238,7 @@ def page_config():
     st.set_page_config(
         page_title="Script Runner",
         page_icon=":material/rocket_launch:",
-        layout=None,
+        layout='centered',
         initial_sidebar_state="expanded"
     )
     st.title(f":rainbow[:material/rocket_launch: Script Runner (_v{__version__}_)]")
@@ -380,8 +384,6 @@ def page_css():
     [class*="show-complete-report"] button {
         width: 32px !important;
         height: 32px !important;
-        align-self: flex-end !important;
-        justify-self: flex-end !important;
         margin-top: 0px !important;
         margin-bottom: 0px !important;
         border: none !important;
@@ -394,6 +396,13 @@ def page_css():
     }
     [class*="show-complete-report"] span {
         font-size: 24px !important;
+    }
+    [class*="queue-item-classic-remover"] {
+        width: 32px !important;
+        height: 32px !important;
+        border: none !important;
+        border-radius: 10px !important;
+        background-color: red !important;
     }
     [class*="script-setting-classic-remover"] div {
         align-items: flex-start !important;
@@ -478,16 +487,20 @@ def show_queue_in_sidebar():
             placeholder = st.empty()
             container = placeholder.container(key = f"queue-item-container-{item.id}")
             with container:
-                content_col , remove_col = st.columns([9, 1] , gap = "small" , vertical_alignment = "center")
+                cols = st.columns([9, 1 , 1] , gap = "small" , vertical_alignment = "center")
                     
-                with content_col:
-                    help_text = '|'.join([f"Status: {item.status}" , f"Duration: {item.duration_str} Secs", f"PID: {item.pid}"])
-                    st.button(f"{item.icon} {item.button_str}",  help=help_text , key=f"queue-item-content-{item.id}" , 
-                            use_container_width=True , on_click = SC.click_queue_item , args = (item,))
+                help_text = '|'.join([f"Status: {item.status}" , f"Duration: {item.duration_str} Secs", f"PID: {item.pid}"])
+                cols[0].button(f"{item.icon} {item.button_str}",  help=help_text , key=f"queue-item-content-{item.id}" , 
+                               use_container_width=True , on_click = SC.click_queue_item , args = (item,))
                 
-                with remove_col:
-                    st.button(":material/close:", key=f"queue-item-classic-remover-{item.id}", help="Remove/Terminate", type="secondary",
-                              on_click = SC.click_queue_remove_item , args = (item,))
+                cols[1].button(":material/close:", key=f"queue-item-classic-remover-{item.id}", help="Remove/Terminate", type="secondary",
+                               on_click = SC.click_queue_remove_item , args = (item,))
+                
+                cols[2].button(
+                    f":{'green' if item.status == 'complete' else 'red'}-badge[:material/slideshow:]", 
+                    key=f"show-complete-report-{item.id}" ,
+                    help = "Show complete report in main page" ,
+                    on_click = SC.click_show_complete_report , args = (item,) , type="tertiary")
                 
                 if SC.running_report_queue is None or SC.running_report_queue != item.id:
                     continue
@@ -503,15 +516,11 @@ def show_queue_in_sidebar():
 
                     st.dataframe(item.dataframe() , row_height = 20 , column_config = col_config)
                     SC.wait_for_complete(item)
-                    col1 , col2 = st.columns([7, 1] , gap = "small" , vertical_alignment = "center")
                     if item.status == 'complete':
-                        col1.success(f'Script Completed' , icon = ":material/add_task:")
+                        st.success(f'Script Completed' , icon = ":material/add_task:")
                     elif item.status == 'error':
-                        col1.error(f'Script Failed' , icon = ":material/error:")
-                    col2.button(f":{'green' if item.status == 'complete' else 'red'}-badge[:material/slideshow:]", key=f"show-complete-report-{item.id}" ,
-                                help = "Show complete report in main page" ,
-                                on_click = SC.click_show_complete_report , args = (item,) , type="tertiary")
-                
+                        st.error(f'Script Failed' , icon = ":material/error:")
+                    
 def show_developer_info():
     """show developer info"""
     container = st.container(key = "developer-info-special-expander")
@@ -970,6 +979,7 @@ def show_report_main(runner : ScriptRunner):
         if not SC.running_report_main_cleared:
             st.write('')
             SC.running_report_main_cleared = True
+            SC.running_report_file_previewer = None
             st.rerun()
 
         with status:
@@ -1002,7 +1012,9 @@ def show_report_main(runner : ScriptRunner):
             with st.expander(f":rainbow[:material/fact_check:] **Exit Information**", expanded=True):
                 for name , value in exit_info_list:
                     st.badge(f"**{name}**" , color = "blue")
-                    st.write(f":blue[{value}]")
+                    for s in value.split('\n'):
+                        st.write(ColoredText(s))
+                    st.markdown('')
 
             if item.exit_files:
                 with st.expander(f":rainbow[:material/file_present:] **File Previewer**", expanded=True):
@@ -1026,12 +1038,8 @@ def show_report_main(runner : ScriptRunner):
                                 ):
                                     pass
 
-                    if SC.running_report_file_previewer is None:
-                        pass
-                    else:
-                        previewer = FilePreviewer(SC.running_report_file_previewer)
-                        previewer.preview()
-            
+                    previewer = FilePreviewer(SC.running_report_file_previewer)
+                    previewer.preview()
 
 def preview_not_supported(file_path):
     """preview not supported file"""
@@ -1044,6 +1052,6 @@ def main():
     show_developer_info()
     show_config_editor()
     show_folder()   
-
+    
 if __name__ == '__main__':
     main() 

@@ -339,7 +339,7 @@ class BaseTrainer(ModelStreamLine):
     def path_pred_dataframe(self) -> Path:  return self.config.model_base_path.rslt('pred_df.feather')
     @property
     def result_package(self) -> list[Path]: 
-        return [self.path_training_output , self.path_analytical_plot]
+        return [self.path_training_output , self.path_analytical_plot , self.path_analytical_data]
     
     def main_process(self):
         '''Main stage of data & fit & test'''

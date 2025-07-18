@@ -157,11 +157,12 @@ class TradingPort:
         if self.backtest:
             df = self.build_backward(date , reset_port = reset , export = export)
         else:
-            df = self.build_portfolio(date , reset_port = reset , export = export)
+            df = self.build_portfolio(date , reset_port = reset , export = export , alpha_details = True)
         self.new_ports[date] = df
         return self
     
-    def build_portfolio(self , date : int , reset_port = False , export = True , last_port = None) -> pd.DataFrame:
+    def build_portfolio(self , date : int , reset_port = False , export = True , last_port = None ,
+                        alpha_details = False) -> pd.DataFrame:
         alpha = self.Alpha.get(date)
         universe = self.Universe.get(date)
         if last_port is None:
@@ -183,6 +184,12 @@ class TradingPort:
             path.parent.mkdir(parents=True, exist_ok=True)
             pf.loc[:,['secid' , 'weight' , 'value']].to_feather(path)
 
+
+        # add columns to include alpha and universe
+        if alpha_details:
+            alpha_model = alpha.item()
+            pf['alpha'] = alpha_model.alpha_of(pf['secid'])
+            pf['alpha_rank'] = alpha_model.alpha_of(pf['secid'] , rank = True)
         return pf
     
     def build_backward(self , date : int , reset_port = False , export = True) -> pd.DataFrame:

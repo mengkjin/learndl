@@ -124,18 +124,21 @@ def _figure_to_html(fig: Figure | Any):
 
 class TeeOutput:
     """double output stream: output to console and recorder"""
-    def __init__(self, original_stream, output_recorder : 'MessageCapturer' , output_type : Literal['stdout' , 'stderr']):
+    def __init__(self, original_stream, log : 'MessageCapturer' , type : Literal['stdout' , 'stderr']):
         self.original = original_stream
-        self.recorder = output_recorder
-        self.output_type = output_type
-        
+        self.log = log
+        self.type = type
+
+    def __repr__(self):
+        return f'original: {self.original} log: {self.log} type: {self.type}'
+            
     def write(self, text : str | Any):
         # output to console
         self.original.write(text)
         self.original.flush()
         # record to time ordered list
         if text := text.strip():  # only record non-empty content
-            self.recorder.add_output(text , self.output_type)
+            self.log.add_output(text , self.type)
         
     def flush(self):
         self.original.flush()
@@ -352,7 +355,7 @@ class MessageCapturer:
         export_path.parent.mkdir(exist_ok=True,parents=True)
         with open(export_path, 'w', encoding='utf-8') as f:
             f.write(self.generate_html())
-
+        
         from src.basic.util.email import Email
         Email.attach(export_path)
         

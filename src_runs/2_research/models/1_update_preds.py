@@ -20,7 +20,10 @@ from src_runs.util import BackendTaskManager
 @BackendTaskManager.manage()
 def main(**kwargs):
     with AutoRunTask('update preds' , **kwargs) as runner:
-        ModelAPI.update_preds()
+        ModelAPI.update_preds() 
+        runner.critical(f'Update preds at {runner.update_to} completed')
+
+    return runner
 
 if __name__ == '__main__':
     main()

@@ -979,3 +979,73 @@
   gru.1.best: Avg(0.1084)|Sum(3.79)|Std(0.0481)|T(13.32)|IR(11.0328)
   gru.1.swabest: Avg(0.1086)|Sum(3.8)|Std(0.0508)|T(12.63)|IR(10.4626)
   gru.1.swalast: Avg(0.1067)|Sum(3.74)|Std(0.0489)|T(12.92)|IR(10.6987)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Sun Jul 13 00:33:45 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.8 Secs
+7_test: Finish Process [Test], Cost 0.7 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Sun Jul 13 23:34:44 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.7 Secs
+7_test: Finish Process [Test], Cost 0.6 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Sun Jul 13 23:44:59 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.7 Secs
+7_test: Finish Process [Test], Cost 0.7 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Sun Jul 13 23:57:09 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.7 Secs
+7_test: Finish Process [Test], Cost 0.6 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Mon Jul 14 00:00:12 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.7 Secs
+7_test: Finish Process [Test], Cost 0.7 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Tue Jul 15 00:05:48 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.8 Secs
+7_test: Finish Process [Test], Cost 0.7 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)
+0_model: lgbm_day_ShortTest(x1)
+1_start: Thu Jul 17 05:41:05 2025
+2_basic: short
+3_datas: '[''day'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20240701-20240930
+6_fit: Finish Process [Fit], Cost 1.7 Secs
+7_test: Finish Process [Test], Cost 0.6 Secs
+8_result:
+  lgbm.0.best: Avg(0.0867)|Sum(5.46)|Std(0.0818)|T(8.41)|IR(5.1893)

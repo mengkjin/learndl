@@ -24,10 +24,8 @@ def id_to_stem(task_id : str):
     return re.sub(r"[/@*?]", "_", task_id)
 
 def update_exit_message(task_id : str | None , **kwargs):
-    if not task_id: 
-        raise ValueError('task_id is required')
-    if not kwargs:
-        raise ValueError(f'No exit message to update for {task_id}')
+    if not task_id or not kwargs:
+        return
     content = {task_id: {k: v for k, v in kwargs.items() if v is not None}}
     with open(exit_message_file(task_id), 'w') as f:
         json.dump(content, f, indent=2)

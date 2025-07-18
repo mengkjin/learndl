@@ -31,11 +31,10 @@ from src_runs.util import BackendTaskManager
 @BackendTaskManager.manage()
 def main(**kwargs):
     port_name = kwargs.pop('port_name')
-    start = int(kwargs.pop('start' , -1))
-    end = int(kwargs.pop('end' , 99991231))
     with AutoRunTask(f'analyze trading portfolio [{port_name}]' , **kwargs) as runner:
-        TradingAPI.Analyze(port_name = port_name , start = start , end = end)
-    return runner.email_attachments
+        TradingAPI.Analyze(port_name = port_name, start = runner.get('start') , end = runner.get('end'))
+        runner.critical(f'Analyze trading portfolio [{port_name}] at {runner.update_to} completed')
+    return runner
 
 if __name__ == '__main__':
     main()

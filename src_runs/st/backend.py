@@ -47,6 +47,7 @@ class PathItem:
             
         for item in folder_path.iterdir():
             if item.name.startswith(ignore_starters) or item.name in ignore_files: continue
+            if item.is_dir() and not list(item.iterdir()): continue
             items.append(cls(item , level))
             if item.is_dir(): 
                 items.extend(cls.iter_folder(item , level + 1 , ignore_starters , ignore_files, min_level , max_level))
@@ -388,19 +389,12 @@ class TaskQueue:
                folder : list[Path] | None = None,
                file : list[Path] | None = None):
         filtered_queue = self.queue.copy()
-        print(filtered_queue)
         if status and status.lower() != 'all':
-            print(status)
             filtered_queue = {k: v for k, v in filtered_queue.items() if v.status == status.lower()}
-            print(filtered_queue)
         if folder:
-            print(folder)
             filtered_queue = {k: v for k, v in filtered_queue.items() if any(v.path.is_relative_to(f) for f in folder)}
         if file:
-            print(file)
-            print([v.path for v in filtered_queue.values()])
             filtered_queue = {k: v for k, v in filtered_queue.items() if v.path in file}
-        print(filtered_queue)
         return filtered_queue
 
 @dataclass
@@ -460,7 +454,7 @@ class TaskItem:
 
     @property
     def button_str(self):
-        return f":material/terminal: {self.format_path} ({self.time_str()})"
+        return f"{self.format_path} ({self.time_str()})"
     
     def belong_to(self , runner : ScriptRunner):
         return self.script == str(runner.script)
@@ -520,12 +514,24 @@ class TaskItem:
                 return False
         return True
 
+    @classmethod
+    def status_icon(cls , status : Literal['running', 'starting', 'complete', 'error'] , tag : bool = False):
+        if status in ['running', 'starting']: 
+            icon , color = ':material/arrow_forward_ios:' , 'green'
+        elif status == 'complete': 
+            icon , color = ':material/check:' , 'green'
+        elif status == 'error': 
+            icon , color = ':material/close:' , 'red'
+        else: raise ValueError(f"Invalid status: {status}")
+        return f":{color}-badge[{icon}]" if tag else icon
+
     @property
     def icon(self):
-        if self.status in ['running', 'starting']: return ':green-badge[:material/arrow_forward_ios:]'
-        elif self.status == 'complete':  return ':green-badge[:material/check:]'
-        elif self.status == 'error': return ':red-badge[:material/close:]'
-        else: raise ValueError(f"Invalid status: {self.status}")
+        return self.status_icon(self.status)
+    
+    @property
+    def tag_icon(self):
+        return self.status_icon(self.status , tag = True)
 
     @property
     def duration(self):

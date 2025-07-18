@@ -48,6 +48,13 @@ class Amodel:
         new = self if inplace else self.copy()
         new.alpha = zscore(winsorize_by_dist(fill_na_as_const(new.alpha) , winsor_rng=0.5))
         return new
+    def alpha_of(self , secid : np.ndarray | Any = None , nan = 0. , rank = False):
+        value = self.alpha if not rank else pd.Series(self.alpha).rank(pct=True).values
+        if secid is None: return value
+        value = np.full(len(secid) , nan , dtype=float)
+        _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
+        value[p0s] = self.alpha[p1s]
+        return value
 
     def to_dataframe(self , indus = False , na_indus_as : Any = None):
         df = pd.DataFrame({'secid' : self.secid , 'alpha' : self.alpha})

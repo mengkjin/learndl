@@ -12,9 +12,9 @@ class Logger:
     def __new__(cls, *args , **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-        return cls._instance
+        return cls._instance.init_logger()
 
-    def __init__(self , test_output = False):
+    def init_logger(self , test_output = False):
         config_logger = CONF.glob('logger')
         new_path = PATH.log_main.joinpath(config_logger['file']['param']['filename'])
         config_logger['file']['param']['filename'] = str(new_path)
@@ -45,16 +45,7 @@ class Logger:
             log.critical('This is the CRITICAL message...')
 
         self.log = log
-
-    @classmethod
-    def init_logger(cls):
-        cls._instance = cls()
-    
-    @classmethod
-    def get_logger(cls):
-        if cls._instance is None:
-            cls.init_logger()
-        return cls._instance
+        return self
     
     @classmethod
     def print(cls , *args , **kwargs):
@@ -62,35 +53,35 @@ class Logger:
 
     @classmethod
     def debug(cls , *args , **kwargs):
-        cls._instance.log.debug(*args , **kwargs)
-        cls._instance.dump_to_logwriter(*args)
+        cls().log.debug(*args , **kwargs)
+        cls.dump_to_logwriter(*args)
     
     @classmethod
     def info(cls , *args , **kwargs):
-        cls._instance.log.info(*args , **kwargs)
-        cls._instance.dump_to_logwriter(*args)
+        cls().log.info(*args , **kwargs)
+        cls.dump_to_logwriter(*args)
 
     @classmethod
     def warning(cls , *args , **kwargs):
-        cls._instance.log.warning(*args , **kwargs)
-        cls._instance.dump_to_logwriter(*args)
+        cls().log.warning(*args , **kwargs)
+        cls.dump_to_logwriter(*args)
 
     @classmethod
     def error(cls , *args , **kwargs):
-        cls._instance.log.error(*args , **kwargs)
-        cls._instance.dump_to_logwriter(*args)   
+        cls().log.error(*args , **kwargs)
+        cls.dump_to_logwriter(*args)   
 
     @classmethod
     def critical(cls , *args , **kwargs):
-        cls._instance.log.critical(*args , **kwargs)
-        cls._instance.dump_to_logwriter(*args)
+        cls().log.critical(*args , **kwargs)
+        cls.dump_to_logwriter(*args)
 
     @classmethod
     def separator(cls , width = 80 , char = '-'):
-        cls._instance.log.info(char * width)
+        cls().log.info(char * width)
         
-    @classmethod
-    def dump_to_logwriter(cls , *args):
+    @staticmethod
+    def dump_to_logwriter(*args):
         log = getattr(sys.stdout , 'log' , None)
         write = getattr(log , 'write' , None)
         if write:
@@ -148,14 +139,17 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
 class LogWriter:
     class TeeOutput:
         """double output stream: output to console and file"""
-        def __init__(self, original_stream, log_file):
+        def __init__(self, original_stream, log):
             self.original = original_stream
-            self.log_file = log_file
+            self.log = log
+
+        def __repr__(self):
+            return f'original: {self.original} log: {self.log}'
             
         def write(self, message):
             self.original.write(message)
             self.original.flush()
-            self.log_file.write(message)
+            self.log.write(message)
             
         def flush(self):
             self.original.flush()
@@ -190,5 +184,3 @@ class LogWriter:
         assert self.filename is not None , 'filename is not set'
         with open(self.filename , 'r') as f:
             return f.read()
-        
-Logger.init_logger()

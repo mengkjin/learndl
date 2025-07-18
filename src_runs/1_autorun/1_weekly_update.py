@@ -19,13 +19,16 @@ from src_runs.util import BackendTaskManager
 
 @BackendTaskManager.manage(email = 1)
 def main(**kwargs):
-    if MACHINE.server:
-        with AutoRunTask(f'weekly update {CALENDAR.update_to()}' , **kwargs) as runner:
-            if runner.forfeit_task: return
+    with AutoRunTask(f'weekly update {CALENDAR.update_to()}' , **kwargs) as runner:
+        if not MACHINE.server:
+            runner.error(f'{MACHINE.name} is not a server, skip weekly update')
+        elif runner.forfeit_task:
+            runner.error(f'task is forfeit, most likely due to finished autoupdate, skip weekly update')
+        else:
             ModelAPI.update_models()
-    else:
-        print(f'{MACHINE.name} is not a server, skip weekly update')
-            
+            runner.critical(f'Weekly update of {runner.update_to} completed')
+
+    return runner
 
 if __name__ == '__main__':
     main()

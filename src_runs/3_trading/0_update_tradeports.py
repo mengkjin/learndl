@@ -21,6 +21,8 @@ from src_runs.util import BackendTaskManager
 def main(**kwargs):
     with AutoRunTask('update trading portfolios' , **kwargs) as runner:
         TradingAPI.update()
+        runner.critical(f'Update trading portfolios at {runner.update_to} completed')
+    return runner
 
 if __name__ == '__main__':
     main()

@@ -3,6 +3,7 @@ from typing import Literal , Any , Callable , Sequence
 import streamlit as st
 import base64 , yaml , time , traceback
 import streamlit.components.v1 as components
+import pandas as pd
 from streamlit_ace import st_ace
 from datetime import datetime
 from dataclasses import dataclass
@@ -32,7 +33,16 @@ class CustomCSS:
             font-size: 48px !important;
             font-weight: 900 !important;
             padding: 10px !important;
+            letter-spacing: 5px !important;
             border-bottom: 2px solid #1E90FF !important;
+        }
+        h3 {
+            font-size: 24px !important;
+            font-weight: 900 !important;
+            padding: 0px !important;
+            border-bottom: 1px solid #1E90FF !important;
+            letter-spacing: 3px !important;
+            white-space: nowrap !important;
         }
         button {
             align-items: center;
@@ -77,29 +87,23 @@ class CustomCSS:
             width: 100%;
         }
         .stNumberInput > div > div {
-            height: 28px;
+            height: inherit;
             align-self: center !important;
         }
         .stNumberInput button {
             width: 20px !important;
-            height: 170% !important;
             align-self: flex-end !important;
             margin-top: 0px !important;
         }
         .element-container {
             margin-bottom: 0px;
             display: flex;
-            align-items: center;
         }
         .stMarkdown {
             line-height: 1.0 !important;
             display: flex;
-            align-items: center;
-            justify-content: center;
         }
         .stMarkdown p {
-            margin-top: 0px;
-            margin-bottom: 0px;
             line-height: 1.0 !important;
         }
         .stMetric div {
@@ -138,7 +142,12 @@ class CustomCSS:
         }
         .stColumn {
             display: flex;
-            align-items: center;
+        }
+        .stExpander {
+            summary p {
+                font-size: 16px !important;
+                font-weight: bold !important;
+            }
         }
         '''
 
@@ -187,12 +196,15 @@ class CustomCSS:
         }
         '''
     
-    def multi_select(self , label_size = 14 , item_size = 12 , popover_size = 10):
+    def multi_select(self , label_size = 16 , item_size = 16 , popover_size = 14):
         return f"""
         [data-baseweb="popover"] li {{
             font-size: {popover_size}px !important;
             line-height: 1.0 !important;
             min-height: 10px !important;
+        }}
+        .stRadio label span {{
+            font-size: {label_size}px !important;
         }}
         .stMultiSelect {{
             width: 100% !important;
@@ -205,6 +217,19 @@ class CustomCSS:
             min-height: 20px !important;
         }}
         .stMultiSelect > div span  {{
+            font-size: {item_size}px !important;
+        }}
+        .stSelectbox{{
+            width: 100% !important;
+        }}
+        .stSelectbox span {{
+            font-size: {label_size}px !important;
+        }}
+        .stSelectbox > div div  {{
+            font-size: {item_size}px !important;
+            min-height: 20px !important;
+        }}
+        .stSelectbox > div span  {{
             font-size: {item_size}px !important;
         }}
         """
@@ -312,10 +337,12 @@ class ActionLogger:
         return cls.error_log.read_text()
     
 class FilePreviewer:
-    def __init__(self , path : Path):
+    def __init__(self , path : Path | None = None):
         self.path = path
 
     def preview(self):
+        if self.path is None or not self.path.exists():
+            return
         with st.container(height = 600):
             st.info(f"Previewing file: {self.path}" , icon = ":material/file_present:" , width = "stretch")
             suffix = self.path.suffix
@@ -332,6 +359,8 @@ class FilePreviewer:
                 self.preview_html_file(self.path)
             elif suffix == '.pdf':
                 self.preview_pdf_file(self.path)
+            elif suffix in ['.xlsx' , '.xls']:
+                self.preview_xlsx_file(self.path)
             else:
                 self.preview_not_supported(self.path)
 
@@ -377,9 +406,20 @@ class FilePreviewer:
             st.error(f"Cannot preview PDF file: {str(e)}")
 
     @staticmethod
+    def preview_xlsx_file(file_path):
+        """preview XLSX file"""
+        try:
+            sheet_names = pd.ExcelFile(file_path).sheet_names
+            sheet_name = st.selectbox("**Select sheet** :material/table_rows:", sheet_names)
+            df = pd.read_excel(file_path, sheet_name=sheet_name)
+            st.dataframe(df)
+        except Exception as e:
+            st.error(f"Cannot preview XLSX file: {str(e)}")
+
+    @staticmethod
     def preview_not_supported(file_path : Path):
         """preview not supported file"""
-        st.error(f"Cannot preview file: {file_path}")
+        st.error(f"Not supported to preview {file_path.suffix} file: {file_path}")
 
 @dataclass
 class YAMLFileEditorState:
@@ -614,6 +654,32 @@ class YAMLFileEditor:
         self.save_file()
 
 
-    
+class ColoredText(str):
+    def __init__(self , text : str):
+        self.text = text
+        self.color = self.auto_color(self.text)
 
+    def __str__(self):
+        if self.color is None:
+            return self.text
+        else:
+            if self.color in ['violet' , 'red']:
+                return f":{self.color}[**{self.text}**]"
+            else:
+                return f":{self.color}[{self.text}]"
+
+    @staticmethod
+    def auto_color(message : str):
+        if message.lower().startswith('error'):
+            return 'violet'
+        elif message.lower().startswith('warning'):
+            return 'blue'
+        elif message.lower().startswith('info'):
+            return 'green'
+        elif message.lower().startswith('debug'):
+            return 'gray'
+        elif message.lower().startswith('critical'):
+            return 'red'
+        else:
+            return None
         

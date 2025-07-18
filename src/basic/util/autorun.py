@@ -6,24 +6,32 @@ from typing import Literal , Any
 from src.basic import path as PATH
 
 class AutoRunTask:
+
     def __init__(self , task_name : str , email = True , message_capturer : bool = True , 
                  source = 'not_specified' , **kwargs):
         self.task_name = task_name.replace(' ' , '_')
         self.email = email
         self.source = source
+        self.kwargs = kwargs
         
         self.init_time = datetime.now()
         self.time_str = self.init_time.strftime('%Y%m%d%H%M%S')
-
-        from src.basic.util.email import Email
-        self.emailer = Email()
-
-        from src.basic.util.logger import MessageCapturer , LogWriter
+        
+        self.streamlit_files = []
+        self.exit_messages = {level : [] for level in ['info' , 'warning' , 'error' , 'critical' , 'debug']}
+        self.logged_messages = []
+        self.error_messages = []
+        from src.basic.util import CALENDAR , MessageCapturer , LogWriter , Logger , Email
         self.capturer = MessageCapturer.CreateCapturer(self.message_capturer_path if message_capturer else False , 
                                                        self.task_name , self.init_time)
         self.dprinter = LogWriter(self.log_filename)
+        self.update_to = CALENDAR.update_to()
 
-        self.email_attachments = []
+        self.emailer = Email()
+        self.logger = Logger()
+
+    def __repr__(self):
+        return f'AutoRunTask(task_name = {self.task_name} , email = {self.email} , source = {self.source} , time = {self.time_str})'
 
     def __enter__(self):
         self.already_done = self.record_path.exists()
@@ -33,6 +41,10 @@ class AutoRunTask:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
+        for level , msgs in self.exit_messages.items():
+            for msg in msgs:
+                getattr(self.logger , level)(msg)
+
         if exc_type is not None:
             print(f'Error Occured! Info : ' + '-' * 20)
             print(exc_value)
@@ -46,11 +58,24 @@ class AutoRunTask:
         self.capturer.__exit__(exc_type, exc_value, exc_traceback)
         self.dprinter.__exit__(exc_type, exc_value, exc_traceback)
 
-        self.email_attachments = [Path(a) for a in self.emailer.ATTACHMENTS]
+        # self.emailer.attach(self.dprinter.filename)
+        
+        self.attach(self.emailer.ATTACHMENTS , streamlit = True , email = False)
         if not self.forfeit_task:
             self.send_email(self.task_name)
             self.record_path.touch()
         # change_power_mode('power-saver')
+
+    def get(self , key : str , default : Any = None) -> Any:
+        raw = self.kwargs.get(key , default)
+        try:
+            if isinstance(raw , str): raw = eval(raw)
+        except:
+            pass
+        return raw
+    
+    def __getitem__(self , key : str):
+        return self.kwargs[key]
         
     @property
     def record_path(self):
@@ -68,12 +93,60 @@ class AutoRunTask:
     def message_capturer_path(self):
         return PATH.log_autorun.joinpath('message_capturer' , f'{self.task_name}.{self.time_str}.html')
 
+    def today(self , format : str = '%Y%m%d'):
+        return self.init_time.strftime(format)
+
     def send_email(self , title : str):
         if self.email or self.emailer.ATTACHMENTS: 
             title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')]])
-            self.emailer.attach(self.dprinter.filename)
             self.emailer.send(title = title , body = self.status , confirmation_message='Autorun')
 
+    def info(self , message : str , at_exit = False):
+        if at_exit:
+            self.exit_messages['info'].append(message)
+        else:
+            self.logger.info(message)
+        self.logged_messages.append(f'INFO : {message}')
+    
+    def error(self , message : str , at_exit = False):
+        if at_exit:
+            self.exit_messages['error'].append(message)
+        else:
+            self.logger.error(message)
+        self.logged_messages.append(f'ERROR : {message}')
+        self.error_messages.append(message)
+
+    def warning(self , message : str , at_exit = False):
+        if at_exit:
+            self.exit_messages['warning'].append(message)
+        else:
+            self.logger.warning(message)
+        self.logged_messages.append(f'WARNING : {message}')
+
+    def debug(self , message : str , at_exit = False):
+        if at_exit:
+            self.exit_messages['debug'].append(message)
+        else:
+            self.logger.debug(message)
+        self.logged_messages.append(f'DEBUG : {message}')
+
+    def critical(self , message : str , at_exit = False):
+        if at_exit:
+            self.exit_messages['critical'].append(message)
+        else:
+            self.logger.critical(message)
+        self.logged_messages.append(f'CRITICAL : {message}')
+
+    def attach(self , file : Path | str | list[Path] | list[str] , streamlit = True , email = False):
+        if not isinstance(file , list): file = [Path(file)]
+        if streamlit: self.streamlit_files.extend([Path(f) for f in file if f not in self.streamlit_files])
+        if email: self.emailer.attach([Path(f) for f in file if f not in self.emailer.ATTACHMENTS])
+        
+    @property
+    def final_message(self):
+        return '\n'.join(self.logged_messages)
+    
+    
 def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py']):
     running_scripts : list[Path] = []
     if isinstance(exclude_scripts , str): exclude_scripts = [exclude_scripts]

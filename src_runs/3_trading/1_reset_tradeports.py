@@ -24,9 +24,11 @@ from src_runs.util import BackendTaskManager
 
 @BackendTaskManager.manage()
 def main(**kwargs):
-    reset_ports = [s.strip() for s in kwargs.pop('reset_ports').split(',')]
     with AutoRunTask('reset trading portfolios' , **kwargs) as runner:
-        TradingAPI.update(reset_ports = reset_ports)
+        TradingAPI.update(reset_ports = [s.strip() for s in runner['reset_ports'].split(',')])
+        runner.critical(f'Reset trading portfolios at {runner.update_to} completed')
+
+    return runner
 
 if __name__ == '__main__':
     main()

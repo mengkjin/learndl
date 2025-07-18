@@ -19,15 +19,19 @@ from src_runs.util import BackendTaskManager
 
 @BackendTaskManager.manage(email = 1)
 def main(**kwargs):
-    if MACHINE.updateable:
-        with AutoRunTask(f'daily update {CALENDAR.update_to()}' , **kwargs) as runner:
-            if runner.forfeit_task: return
+    with AutoRunTask(f'daily update {CALENDAR.update_to()}' , **kwargs) as runner:
+        if not MACHINE.updateable:
+            runner.error(f'{MACHINE.name} is not updateable, skip daily update')
+        elif runner.forfeit_task: 
+            runner.error(f'task is forfeit, most likely due to finished autoupdate, skip daily update')
+        else:
             DataAPI.update()
             ModelAPI.update()
             TradingAPI.update()
             NotificationAPI.proceed()
-    else:
-        print(f'{MACHINE.name} is not updateable, skip daily update')
+            runner.critical(f'Daily update of {runner.update_to} completed')
+
+    return runner
         
 if __name__ == '__main__':
     main()

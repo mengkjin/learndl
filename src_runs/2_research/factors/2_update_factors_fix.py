@@ -24,9 +24,11 @@ from src_runs.util import BackendTaskManager
 
 @BackendTaskManager.manage()
 def main(**kwargs):
-    factors = [s.strip() for s in kwargs.pop('factor_names').split(',')]
     with AutoRunTask('fix factors' , **kwargs) as runner:
-        FactorCalculatorAPI.fix(factors = factors)
+        FactorCalculatorAPI.fix(factors = [s.strip() for s in runner['factor_names'].split(',')])
+        runner.critical(f'Fix factors at {runner.update_to} completed')
+
+    return runner
 
 if __name__ == '__main__':
     main()

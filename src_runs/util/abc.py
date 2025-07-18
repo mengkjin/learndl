@@ -165,7 +165,27 @@ def unknown_args(unknown):
 
 class BackendTaskManager:
     '''
-    kwargs: additional param arguments to be passed to the task
+    convert script main function to one that can be used as a task in streamlit project
+    example:
+        @BackendTaskManager.manage(x = 1)
+        def test(x : int , **kwargs):
+            return 'yes' , [Path('test.txt') , Path('test.csv')]
+            # return BackendTaskManager.ExitMessage(message = 'yes' , files = ['test.txt' , 'test.csv'])
+            # return {'message' : 'yes' , 'files' : ['test.txt' , 'test.csv']}
+    manage params:
+        will passed to the task as kwargs
+    return:
+        will be used as exit message of the task
+        - None
+        - ExitMessage 
+        - str
+        - Path
+        - tuple of 2 elements (message , list of files)
+        - tuple of n elements (str as message , Path as file)
+        - list of str (as message) or Path (as file)
+        - dict of key-value pairs (message , files , code , error)
+        - AutoRunTask object
+        - any other type (converted to str)
     '''
     def __init__(self , **kwargs):
         self.params = argparse_dict(**kwargs)
@@ -186,8 +206,7 @@ class BackendTaskManager:
     def __exit__(self , exc_type , exc_value , exc_traceback):
         self.exit_msg['end_time'] = time.time()
         if exc_type is None:
-            self.exit_msg['status'] = 'complete'
-            self.exit_msg['exit_code'] = 0
+            self.exit_msg['status'] = 'error' if self.exit_msg['exit_code'] else 'complete'
         else:
             self.exit_msg['status'] = 'error'
             self.exit_msg['exit_code'] = 1
@@ -197,8 +216,12 @@ class BackendTaskManager:
 
     @dataclass(slots = True)
     class ExitMessage:
+        '''
+        can use ExitMessage.from_return(ret) to convert return to ExitMessage
+        ret can be of variaous form
+        '''
         message : str | None = None
-        files : list[str] | None = None
+        files : list[Any] | None = None
         code : int = 0
         error : str | None = None
 
@@ -211,28 +234,38 @@ class BackendTaskManager:
             elif isinstance(ret , Path):
                 return cls(files = [str(ret)])
             elif isinstance(ret , tuple):
-                message = []
-                files = []
-                for x in ret:
-                    if isinstance(x , Path):
-                        files.append(str(x))
-                    else:
-                        message.append(str(x))
-                return cls(message = '\n'.join(message) , files = files)
-            elif isinstance(ret , list) and ret:
-                if isinstance(ret[0] , Path):
+                if len(ret) == 2 and isinstance(ret[0] , str) and isinstance(ret[1] , list):
+                    return cls(message = ret[0] , files = [str(x) for x in ret[1]])
+                else:
+                    message = []
+                    files = []
+                    for x in ret:
+                        if isinstance(x , Path):
+                            files.append(str(x))
+                        else:
+                            message.append(str(x))
+                    return cls(message = '\n'.join(message) , files = files)
+            elif isinstance(ret , list):
+                if not ret:
+                    return cls()
+                elif isinstance(ret[0] , Path):
                     return cls(files = [str(x) for x in ret])
                 else:
                     return cls(message = '\n'.join(ret))
             elif isinstance(ret , dict):
                 return cls(**{k:v for k,v in ret.items() if k in cls.__slots__})
+            elif ret.__class__.__name__ == 'AutoRunTask':
+                return cls(message = ret.final_message , files = ret.streamlit_files , 
+                           code = len(ret.error_messages) , error = '\n'.join(ret.error_messages))
             else:
                 return cls(message = str(ret))
 
     def exit_message(self , exit_msg : ExitMessage):
         if not self.task_id: return
         if exit_msg.message: self.exit_msg['exit_message'] = exit_msg.message
-        if exit_msg.files:   self.exit_msg['exit_files'] = exit_msg.files
+        if exit_msg.files:   self.exit_msg['exit_files'] = [str(f) for f in exit_msg.files]
+        if exit_msg.code:    self.exit_msg['exit_code'] = exit_msg.code
+        if exit_msg.error:   self.exit_msg['exit_error'] = exit_msg.error
         
     @classmethod
     def manage(cls , **params):

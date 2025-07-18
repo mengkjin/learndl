@@ -47,17 +47,19 @@ assert 'learndl' in file_path , f'learndl path not found , do not know where to 
 path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
-from src.basic.util import Logger
+from src.basic import AutoRunTask , Logger
 from src_runs.util import BackendTaskManager
 
 @BackendTaskManager.manage(txt = 'Bye, World!')
 def main(txt : str = 'Hello, World!' , **kwargs):
-    Logger.info(txt)
-    pathlib.Path('test.txt').touch()
-    return BackendTaskManager.ExitMessage(
-        txt ,
-        files = ['test.txt' , 'training_output.html' , 'plot.pdf'], 
-    )
+    with AutoRunTask(f'test streamlit' , **kwargs) as runner:
+        runner.info(f'info:{txt}')
+        runner.error(f'error:{txt}')
+        runner.warning(f'warning:{txt}')
+        runner.debug(f'debug:{txt}')
+        runner.critical(f'critical:{txt}')
+
+    return runner
         
 if __name__ == '__main__':
     main()

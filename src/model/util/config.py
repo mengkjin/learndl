@@ -380,7 +380,7 @@ class TrainConfig(TrainParam):
         self.stage_queue: list      = []
 
         self.device     = Device()
-        self.logger     = Logger.get_logger()
+        self.logger     = Logger()
 
         self.Train = TrainParam(base_path , override)
         self.Model = self.Train.generate_model_param()

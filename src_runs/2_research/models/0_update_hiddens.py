@@ -21,6 +21,9 @@ from src_runs.util import BackendTaskManager
 def main(**kwargs):
     with AutoRunTask('update hiddens' , **kwargs) as runner:
         ModelAPI.update_hidden()
+        runner.critical(f'Update hiddens at {runner.update_to} completed')
+
+    return runner
 
 if __name__ == '__main__':
     main()

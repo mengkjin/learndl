@@ -27,10 +27,10 @@ class Email:
         self.password    = email_conf['password']  
 
     @classmethod
-    def attach(cls , attachment : str | Path | None = None):
+    def attach(cls , attachment : str | Path | list[str] | list[Path] | None = None):
         if attachment is None: return
-        assert isinstance(attachment , (str , Path)) , f'attachment must be a string or path , got {type(attachment)}'
-        cls.ATTACHMENTS.append(Path(attachment))
+        if not isinstance(attachment , list): attachment = [Path(attachment)]
+        cls.ATTACHMENTS.extend([Path(f) for f in attachment])
 
     def recipient(self , recipient : str | None = None):
         if recipient is None: recipient = str(self.sender)

@@ -21,6 +21,9 @@ from src_runs.util import BackendTaskManager
 def main(**kwargs):
     with AutoRunTask('reconstruct train data' , **kwargs) as runner:
         DataAPI.reconstruct_train_data(confirm = 1)
+        runner.critical(f'Reconstruct train data at {runner.update_to} completed')
+
+    return runner
 
 if __name__ == '__main__':
     main()

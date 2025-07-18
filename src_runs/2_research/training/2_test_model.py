@@ -1,15 +1,16 @@
 #! /usr/bin/env python3.10
 # coding: utf-8
 # author: jinmeng
-# date: 2024-11-27
-# description: Train Model
-# content: 训练某个新模型,模型的参数在configs/train/model.yaml里定义,也可以改变其他configs
+# date: 2025-06-20
+# description: Test Model
+# content: 测试某个已训练的模型
 # email: True
 # close_after_run: False
 # param_inputs:
-#   module_name : 
-#       type : str
-#       desc : module to train
+#   model_name : 
+#       type : [gru_day , gru_avg]
+#       desc : choose a model
+#       prefix : "model/"
 #       required : True
 #   short_test : 
 #       type : [True , False]
@@ -28,10 +29,11 @@ from src_runs.util import BackendTaskManager
 
 @BackendTaskManager.manage()
 def main(**kwargs):
-    module = kwargs.pop('module_name')
-    short_test = eval(kwargs.pop('short_test' , 'None'))
-    with AutoRunTask('train model' , **kwargs) as runner:
-        ModelAPI.train_model(module = module if module else None , short_test = short_test)
+    with AutoRunTask('test model' , message_capturer = True , **kwargs) as runner:
+        ModelAPI.test_model(model_name = runner['model_name'] , short_test = runner.get('short_test'))
+        runner.critical(f'Test model at {runner.update_to} completed')
+
+    return runner
         
 if __name__ == '__main__':
     main()
