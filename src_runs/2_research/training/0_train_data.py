@@ -17,7 +17,7 @@ from src.api import DataAPI
 from src.basic import AutoRunTask
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage()
+@BackendTaskManager()
 def main(**kwargs):
     with AutoRunTask('reconstruct train data' , **kwargs) as runner:
         DataAPI.reconstruct_train_data(confirm = 1)

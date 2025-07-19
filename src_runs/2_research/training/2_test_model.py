@@ -27,7 +27,7 @@ from src.api import ModelAPI
 from src.basic import AutoRunTask
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage()
+@BackendTaskManager()
 def main(**kwargs):
     with AutoRunTask('test model' , message_capturer = True , **kwargs) as runner:
         ModelAPI.test_model(model_name = runner['model_name'] , short_test = runner.get('short_test'))

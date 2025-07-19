@@ -17,7 +17,7 @@ from src.api import ModelAPI
 from src.basic import MACHINE , AutoRunTask , CALENDAR
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage(email = 1)
+@BackendTaskManager(email = 1)
 def main(**kwargs):
     with AutoRunTask(f'weekly update {CALENDAR.update_to()}' , **kwargs) as runner:
         if not MACHINE.server:

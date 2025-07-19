@@ -28,7 +28,7 @@ from src.api import TradingAPI
 from src.basic import AutoRunTask
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage()
+@BackendTaskManager()
 def main(**kwargs):
     port_name = kwargs.pop('port_name')
     with AutoRunTask(f'analyze trading portfolio [{port_name}]' , **kwargs) as runner:

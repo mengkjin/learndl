@@ -17,7 +17,7 @@ from src.api import DataAPI , ModelAPI , TradingAPI , NotificationAPI
 from src.basic import MACHINE , AutoRunTask , CALENDAR
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage(email = 1)
+@BackendTaskManager(email = 1)
 def main(**kwargs):
     with AutoRunTask(f'daily update {CALENDAR.update_to()}' , **kwargs) as runner:
         if not MACHINE.updateable:

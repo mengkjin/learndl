@@ -17,7 +17,7 @@ from src.api import ModelAPI
 from src.basic import AutoRunTask
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage()
+@BackendTaskManager()
 def main(**kwargs):
     with AutoRunTask('update preds' , **kwargs) as runner:
         ModelAPI.update_preds() 

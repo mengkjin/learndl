@@ -1,4 +1,4 @@
-__version__ = '0.1.4'
+__version__ = '0.1.5'
 
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())
@@ -552,7 +552,7 @@ def show_queue_in_sidebar():
                            on_change = SC.click_queue_filter_path_file)
             
         queue = SC.filter_task_queue()
-        with st.container(height = 400 , border = False):
+        with st.container():
             for item in queue.values():
                 placeholder = st.empty()
                 container = placeholder.container(key = f"queue-item-container-{item.id}")
@@ -703,9 +703,7 @@ def show_script_details(runner : ScriptRunner | None):
                     st.button(":material/cancel:", key = f"choose-item-remover-button-{item.id}",
                               help="Remove/Terminate", type="tertiary" ,
                               on_click = SC.click_item_choose_remove , args = (item,))
-            #if SC.detail_item_expander_expanded:
-            #    SC.detail_item_expander_expanded = False
-            #    st.rerun()
+
     if SC.choose_task_item:
         st.success(f"Task Item {SC.choose_task_item} chosen" , icon = ":material/check_circle:")
 

@@ -21,7 +21,7 @@ import subprocess ,  socket
 from datetime import datetime
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage()
+@BackendTaskManager()
 def main(additional_message : str | list[str] = '' , **kwargs):
     prefixes = [socket.gethostname() , datetime.now().strftime('%Y%m%d')]
     if isinstance(additional_message , str): additional_message = [additional_message]

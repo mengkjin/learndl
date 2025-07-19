@@ -16,7 +16,7 @@ if not path in sys.path: sys.path.append(path)
 import subprocess 
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage()
+@BackendTaskManager()
 def main(**kwargs):
     subprocess.run("git pull", shell=True, check=True)
 

@@ -166,14 +166,19 @@ def unknown_args(unknown):
 class BackendTaskManager:
     '''
     convert script main function to one that can be used as a task in streamlit project
-    example:
-        @BackendTaskManager.manage(x = 1)
-        def test(x : int , **kwargs):
-            return 'yes' , [Path('test.txt') , Path('test.csv')]
-            # return BackendTaskManager.ExitMessage(message = 'yes' , files = ['test.txt' , 'test.csv'])
-            # return {'message' : 'yes' , 'files' : ['test.txt' , 'test.csv']}
-    manage params:
-        will passed to the task as kwargs
+    use BackendTaskManager to manage task, take acceptable return as exit message
+    params will be passed to the warpped function as kwargs, example:
+    @BackendTaskManager(x = 1)
+    def test(x : int , **kwargs):
+        return 'yes' , Path('test.txt') , Path('test.csv')
+        # return BackendTaskManager.ExitMessage(message = 'yes' , files = ['test.txt' , 'test.csv'])
+        # return {'message' : 'yes' , 'files' : ['test.txt' , 'test.csv']}
+    kwargs params:
+        will passed to the task as kwargs , except for task_id and running_status (will be used by the manager)
+        task_id:
+            will be used to identify the task
+        running_status:
+            pid , status , end_time , exit_code , exit_error , exit_message , exit_files
     return:
         will be used as exit message of the task
         - None
@@ -188,22 +193,51 @@ class BackendTaskManager:
         - any other type (converted to str)
     '''
     def __init__(self , **kwargs):
-        self.params = argparse_dict(**kwargs)
-        self.exit_msg = {
-            'pid': os.getpid(),
-            'end_time': None,
-            'status': None,
-            'exit_code': None,
-            'exit_error': None,
-            'exit_message': None,
-            'exit_files': None,
-        }
+        self.init_attributes(**argparse_dict(**kwargs))
+
+    def __repr__(self):
+        return f'BackendTaskManager(task_id = {self.task_id})'
+    
+    def __call__(self , func : Callable):
+        def wrapper(*args , **kwargs):
+            with self:
+                ret = func(*args , **kwargs , **self.params)
+                self.func_return(ret)
+            return ret
+        return wrapper
+
+    def __getitem__(self , key : str):
+        if key == 'task_id':
+            return self.task_id
+        elif key in self.exit_msg:
+            return self.exit_msg[key]
+        else:
+            return self.params[key]
+        
+    def __setitem__(self , key : str , value : Any):
+        if key == 'task_id':
+            raise ValueError('task_id is read only')
+        elif key in self.exit_msg:
+            self.exit_msg[key] = value
+        else:
+            self.params[key] = value
+        
+    def init_attributes(self , task_id : str | None = None , **kwargs):
+        self._task_id = task_id
+        self.exit_msg : dict[str , Any] = {'pid': kwargs.pop('pid' , os.getpid())}
+        for key in ['end_time' , 'status' , 'exit_code' , 'exit_error' , 'exit_message' , 'exit_files']:
+            self.exit_msg[key] = kwargs.pop(key , None)
+        self.params = kwargs
+
+    @property
+    def task_id(self):
+        return self._task_id
 
     def __enter__(self):
-        self.task_id = self.params.get('task_id')
         return self
 
     def __exit__(self , exc_type , exc_value , exc_traceback):
+        if self.task_id is None: return
         self.exit_msg['end_time'] = time.time()
         if exc_type is None:
             self.exit_msg['status'] = 'error' if self.exit_msg['exit_code'] else 'complete'
@@ -260,30 +294,10 @@ class BackendTaskManager:
             else:
                 return cls(message = str(ret))
 
-    def exit_message(self , exit_msg : ExitMessage):
-        if not self.task_id: return
+    def func_return(self , func_return : Any | None = None):
+        if not self.task_id or func_return is None: return
+        exit_msg = self.ExitMessage.from_return(func_return)
         if exit_msg.message: self.exit_msg['exit_message'] = exit_msg.message
         if exit_msg.files:   self.exit_msg['exit_files'] = [str(f) for f in exit_msg.files]
         if exit_msg.code:    self.exit_msg['exit_code'] = exit_msg.code
         if exit_msg.error:   self.exit_msg['exit_error'] = exit_msg.error
-        
-    @classmethod
-    def manage(cls , **params):
-        '''
-        use BackendTaskManager to manage task, take acceptable return as exit message
-        params will be passed to the warpped function as kwargs
-        example:
-        @BackendTaskManager.manage(x = 1)
-        def test(x : int , **kwargs):
-            return 'yes' , Path('test.txt') , Path('test.csv')
-            # return BackendTaskManager.ExitMessage(message = 'yes' , files = ['test.txt' , 'test.csv'])
-            # return {'message' : 'yes' , 'files' : ['test.txt' , 'test.csv']}
-        '''
-        def inner(func : Callable):
-            def wrapper(*args , **kwargs):
-                with cls(**params) as bm:
-                    ret = func(*args , **kwargs , **bm.params)
-                    bm.exit_message(cls.ExitMessage.from_return(ret))
-                return ret
-            return wrapper
-        return inner

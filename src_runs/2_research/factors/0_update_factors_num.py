@@ -23,7 +23,7 @@ from src.factor.api import FactorCalculatorAPI
 from src.basic import AutoRunTask
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage()
+@BackendTaskManager()
 def main(**kwargs):
     with AutoRunTask('update factors' , **kwargs) as runner:
         FactorCalculatorAPI.update(groups_in_one_update=int(kwargs.pop('num')))

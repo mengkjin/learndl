@@ -17,7 +17,7 @@ from src.api import TradingAPI
 from src.basic import AutoRunTask
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage()
+@BackendTaskManager()
 def main(**kwargs):
     with AutoRunTask('update trading portfolios' , **kwargs) as runner:
         TradingAPI.update()

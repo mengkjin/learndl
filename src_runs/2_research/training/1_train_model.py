@@ -26,7 +26,7 @@ from src.api import ModelAPI
 from src.basic import AutoRunTask
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage()
+@BackendTaskManager()
 def main(**kwargs):
     with AutoRunTask('train model' , **kwargs) as runner:
         trainer = ModelAPI.train_model(module = runner.get('module_name') , short_test = runner.get('short_test'))

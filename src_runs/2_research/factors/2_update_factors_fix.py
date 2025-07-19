@@ -22,7 +22,7 @@ from src.factor.api import FactorCalculatorAPI
 from src.basic import AutoRunTask
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager.manage()
+@BackendTaskManager()
 def main(**kwargs):
     with AutoRunTask('fix factors' , **kwargs) as runner:
         FactorCalculatorAPI.fix(factors = [s.strip() for s in runner['factor_names'].split(',')])
