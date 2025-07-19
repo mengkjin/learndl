@@ -1,4 +1,5 @@
-__version__ = '0.1.5'
+__version__ = '0.1.6'
+__recommeded_explorer__ = 'chrome'
 
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())
