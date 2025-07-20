@@ -45,12 +45,16 @@ def page_config():
       
 def system_info():
     if torch.cuda.is_available():
-        gpu_info = f"**GPU Memory:** {torch.cuda.memory_summary(0)}"
+        used = torch.cuda.memory_allocated() / 1024**3
+        total = torch.cuda.get_device_properties(0).total_memory / 1024**3
+        gpu_info = f"**GPU Memory:** {used:.1f} / {total:.1f} GB"
     elif torch.backends.mps.is_available():
+        used = torch.mps.current_allocated_memory() / 1024**3
         if torch.__version__ >= '2.3.0':
-            gpu_info = f"**MPS Memory:** {torch.mps.current_allocated_memory()/1024**3:.1f} / {torch.mps.recommended_max_memory()/1024**3:.1f} GB"
+            recommend = torch.mps.recommended_max_memory() / 1024**3 # type:ignore
+            gpu_info = f"**MPS Memory:** {used:.1f} / {recommend:.1f} GB"
         else:
-            gpu_info = f"**MPS Memory:** {torch.mps.current_allocated_memory()/1024**3:.1f} GB"
+            gpu_info = f"**MPS Memory:** {used:.1f} GB"
     else:
         gpu_info = "**GPU Memory:** No GPU"
     options = [
@@ -78,7 +82,7 @@ class SessionControl:
     
     running_report_queue : str | None = None
     running_report_main : str | None = None
-    running_report_main_cleared : bool = False
+    running_report_main_cleared : bool = True
 
     running_report_file_previewer : Path | None = None
 
@@ -211,9 +215,11 @@ class SessionControl:
         self.current_task_item = item.id
         self.queue_last_action = f"Add to Queue: {item.id}" , True
         self.task_queue.refresh()
+        
         if self.running_report_main != item.id:
             self.running_report_main = item.id
             self.running_report_main_cleared = False
+        
 
     @ActionLogger.log_action()
     def click_file_preview(self , path : Path):

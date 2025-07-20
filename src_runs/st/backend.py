@@ -488,9 +488,9 @@ class TaskItem:
         changed = False
         if self.pid and self.status not in ['complete', 'error']:
             status = check_process_status(self.pid)
-            if status not in ['running', 'complete']:
+            if status not in ['running', 'complete' , 'disk-sleep' , 'sleeping']:
                 raise ValueError(f"Process {self.pid} is {status}")
-            if status == 'complete':
+            if status in ['complete' , 'disk-sleep' , 'sleeping']:
                 self.status = 'complete'
                 self.end_time = time.time()
                 changed = True

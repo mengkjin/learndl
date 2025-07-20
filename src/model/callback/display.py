@@ -5,7 +5,7 @@ import pandas as pd
 from typing import Any , ClassVar
 
 from src import func as FUNC
-from src.basic import PATH
+from src.basic import PATH , MACHINE
 from src.model.data_module import BatchDataLoader
 from src.model.util import BaseCallBack
 
@@ -125,6 +125,7 @@ class StatusDisplay(BaseCallBack):
     def on_summarize_model(self):
         if not self.test_summarized: self.summarize_test_result()
         if self.summary_df.empty: return
+        if not MACHINE.server: return
         test_scores = {
             '{}.{}'.format(*col):'|'.join([f'{k}({round(self.summary_df[col][k],v)})' for k,v in self.SUMMARY_NDIGITS.items() 
                                            if k in self.summary_df[col].index]) for col in self.summary_df.columns}

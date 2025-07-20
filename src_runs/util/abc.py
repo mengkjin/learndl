@@ -115,17 +115,15 @@ def terminal_cmd(script : str | Path , params : dict | None = None , close_after
     return cmd
 
 def get_real_pid(process : subprocess.Popen , cmd : str):
-    if platform.system() == 'Linux' and os.name == 'posix':
-        return process.pid
-    elif platform.system() == 'Windows':
-        return process.pid
-    elif platform.system() == 'Darwin':
+    if (platform.system() == 'Linux' and os.name == 'posix') or (platform.system() == 'Darwin'):
         name = cmd.split('.py')[0].split('/')[-1] + '.py'
         if 'task_id=' in cmd:
             task_id = cmd.split('task_id=')[1].split(' ')[0]
         else:
             task_id = None
         return find_python_process_by_name(name , task_id = task_id)
+    elif platform.system() == 'Windows':
+        return process.pid
     else:
         raise ValueError(f'Unsupported platform: {platform.system()}')
     
@@ -143,7 +141,7 @@ def argparse_dict(**kwargs):
     parser.add_argument('--source', type=str, default='', help='Source of the script call')
     parser.add_argument('--email', type=int, default=0, help='Send email or not')
     args , unknown = parser.parse_known_args()
-    return kwargs | args.__dict__ | unknown_args(unknown)
+    return args.__dict__ | unknown_args(unknown) | kwargs
 
 def unknown_args(unknown):
     args = {}

@@ -50,9 +50,10 @@ if not path in sys.path: sys.path.append(path)
 from src.basic import AutoRunTask , Logger
 from src_runs.util import BackendTaskManager
 
-@BackendTaskManager(txt = 'Bye, World!')
+@BackendTaskManager(txt = 'Bye, World!' , email = 0)
 def main(txt : str = 'Hello, World!' , **kwargs):
     with AutoRunTask(f'test streamlit' , **kwargs) as runner:
+        runner.info(str(kwargs))
         runner.info(f'info:{txt}')
         runner.error(f'error:{txt}')
         runner.warning(f'warning:{txt}')

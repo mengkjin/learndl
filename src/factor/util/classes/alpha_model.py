@@ -51,10 +51,10 @@ class Amodel:
     def alpha_of(self , secid : np.ndarray | Any = None , nan = 0. , rank = False):
         value = self.alpha if not rank else pd.Series(self.alpha).rank(pct=True).values
         if secid is None: return value
-        value = np.full(len(secid) , nan , dtype=float)
+        new_value = np.full(len(secid) , nan , dtype=float)
         _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
-        value[p0s] = self.alpha[p1s]
-        return value
+        new_value[p0s] = value[p1s]
+        return new_value
 
     def to_dataframe(self , indus = False , na_indus_as : Any = None):
         df = pd.DataFrame({'secid' : self.secid , 'alpha' : self.alpha})

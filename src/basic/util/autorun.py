@@ -97,7 +97,7 @@ class AutoRunTask:
         return self.init_time.strftime(format)
 
     def send_email(self , title : str):
-        if self.email or self.emailer.ATTACHMENTS: 
+        if self.email: 
             title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')]])
             self.emailer.send(title = title , body = self.status , confirmation_message='Autorun')
 
