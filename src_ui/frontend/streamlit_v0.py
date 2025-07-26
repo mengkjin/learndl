@@ -17,12 +17,12 @@ from typing import Any, Literal, Callable
 from pathlib import Path
 from datetime import datetime
 
-from src_runs.st.backend import (
+from src_runs.util.backend import (
     BASE_DIR , 
     PathItem , TaskItem , TaskQueue , ScriptRunner , ScriptParamInput
 )
 
-from src_runs.st.frontend import (
+from src_runs.util.frontend.frontend import (
     CustomCSS , FilePreviewer , ActionLogger , YAMLFileEditor , YAMLFileEditorState , ColoredText
 )
 
@@ -170,7 +170,7 @@ class SessionControl:
         else:
             self.queue_last_action = f"Remove Failed: {item.id}" , False
         self.task_queue.remove(item)
-        self.task_queue.save()
+        self.task_queue.dump()
 
     @ActionLogger.log_action()
     def click_script_runner_expand(self , runner : ScriptRunner):

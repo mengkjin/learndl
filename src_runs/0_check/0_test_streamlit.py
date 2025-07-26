@@ -41,24 +41,27 @@
 #       default : 42.
 
 
-import sys , pathlib , time
+import sys , pathlib , time , random
 file_path = str(pathlib.Path(__file__).absolute())
 assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
 path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
 from src.basic import AutoRunTask , Logger
-from src_runs.util import BackendTaskManager
+from src_ui import BackendTaskManager
 
 @BackendTaskManager(txt = 'Bye, World!' , email = 0)
 def main(txt : str = 'Hello, World!' , **kwargs):
     with AutoRunTask(f'test streamlit' , **kwargs) as runner:
         runner.info(str(kwargs))
         runner.info(f'info:{txt}')
-        runner.error(f'error:{txt}')
         runner.warning(f'warning:{txt}')
         runner.debug(f'debug:{txt}')
         runner.critical(f'critical:{txt}')
+        if (rnd := random.random()) < 0.5:
+            runner.error(f'error:{rnd}')
+        else:
+            runner.info(f'info:{rnd}')
 
     return runner
         

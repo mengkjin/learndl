@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-
+import torch
 from datetime import datetime
 from src.basic import send_email , PATH , CALENDAR , MACHINE
 
@@ -16,6 +16,25 @@ class TempFile:
             os.remove(self.file_name)
         except:
             pass
+
+def check_cuda_status():
+    if not MACHINE.server or torch.cuda.is_available(): return
+    
+    title = f'Learndl: Server CUDA Failed'
+    body = f"""Server {MACHINE.name} CUDA Failed , please check the cuda status, possible solution: 
+    sudo apt purge nvidia-*
+    sudo apt install nvidia-driver-535
+    sudo reboot
+
+    lsmod | grep nvidia
+    nvidia-smi
+    """
+    recipient = 'mengkjin@163.com'
+    
+    try:
+        send_email(title , body , recipient , confirmation_message='CUDA Status')
+    except:
+        pass
 
 
 def email_to_fanghan(test = False):
@@ -40,7 +59,7 @@ def email_to_fanghan(test = False):
         df = pd.merge(df1 , df2 , on='secid' , how='left')
         df.to_csv(temp_file)
         try:
-            send_email(title , body , attachments , recipient , confirmation_message='Fanghan')
+            send_email(title , body , recipient , attachments , confirmation_message='Fanghan')
         except:
             print(f'发送邮件给方晗失败!')
 
@@ -54,6 +73,7 @@ class NotificationAPI:
         if not MACHINE.server:
             print('not in my server , skip sending email')
             return
+        check_cuda_status()
         email_to_fanghan()
 
 

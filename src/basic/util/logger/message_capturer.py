@@ -357,7 +357,7 @@ class MessageCapturer:
             f.write(self.generate_html())
         
         from src.basic.util.email import Email
-        Email.attach(export_path)
+        Email.Attach(export_path)
         
     def redirect_display_function(self):
         """redirect stdout, stderr, and display_module functions to capturer"""

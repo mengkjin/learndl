@@ -26,6 +26,7 @@ class Rmodel:
 
     def __post_init__(self):
         comfac = self.common_factors
+        self.F.fillna(0 , inplace=True)
         self.C = self.C.loc[comfac , comfac]
         self.S.fillna(self.S.quantile(0.95) , inplace=True)
         self.regressed : int | Any = None

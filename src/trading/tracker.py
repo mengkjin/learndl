@@ -31,7 +31,7 @@ class TradingPortfolioTracker:
                 print(f'    Port {k} : total {len(new_ports[k])} , in {in_count} , out {out_count}')
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)
-            Email.attach(path)
+            Email.Attach(path)
 
     @classmethod
     def attachment_path(cls , date : int) -> Path:

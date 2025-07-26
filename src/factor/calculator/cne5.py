@@ -120,6 +120,7 @@ class TuShareCNE5_Calculator:
         assert name in CONF.RISK_STYLE , name
         df = self.style.get(date , name)
         if df is None or df.empty: df = getattr(self , f'calc_{name}')(date)
+        df = df.fillna(0)
         return df
     
     def get_coef(self , date : int , read = False):
@@ -345,6 +346,13 @@ class TuShareCNE5_Calculator:
         wgt : Any = exp['weight']
         mkt = (exp['estuniv'] * exp['market']).rename('market')
         rsk = exp.drop(columns=['estuniv','weight','market'])
+        
+        mask = rsk.notna().any(axis = 1) * 1.0
+        wgt = wgt * mask
+        rsk = rsk.loc[mask]
+
+        # rsk = rsk.fillna(rsk.mean())
+
         mkt_model = sm.WLS(ret[['ret']] , mkt , weights = wgt).fit()
         rsk_model = sm.WLS(mkt_model.resid , rsk , weights = wgt).fit()
 

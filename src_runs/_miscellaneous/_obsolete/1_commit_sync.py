@@ -19,7 +19,7 @@ if not path in sys.path: sys.path.append(path)
 
 import subprocess ,  socket
 from datetime import datetime
-from src_runs.util import BackendTaskManager
+from src_ui import BackendTaskManager
 
 @BackendTaskManager()
 def main(additional_message : str | list[str] = '' , **kwargs):

@@ -4,11 +4,12 @@ import streamlit as st
 import base64 , yaml , time , traceback
 import streamlit.components.v1 as components
 import pandas as pd
-from streamlit_ace import st_ace
+
 from datetime import datetime
 from dataclasses import dataclass
 
-from src_runs.util.st_file import BASE_DIR , st_log_file
+from src_ui.db import BASE_DIR , st_log_file
+from src_ui.backend import TaskItem , ScriptRunner , ScriptParamInput
 
 class CustomCSS:
     def __init__(self , add_css = ['basic' , 'special_expander' , 'classic_remover' , 'multi_select']) -> None:
@@ -431,22 +432,23 @@ class YAMLFileEditorState:
     load_status : str = 'success'
     save_status : str = 'success'
     reload_timestamp : float = 0.
+    initialized : bool = False
 
     def __post_init__(self):
+        self.load_content : str | None = None
+        self.edit_content : str | None = None
+
+    def initialize(self):
         if f'yaml_file_editor_states' not in st.session_state:
             st.session_state.yaml_file_editor_states = {}
         if self.key not in st.session_state.yaml_file_editor_states:
             st.session_state.yaml_file_editor_states[self.key] = self
-        self.load_content : str | None = None
-        self.edit_content : str | None = None
-
+        self.initialized = True
+        return self
+    
     @classmethod
     def get_state(cls , key : str) -> 'YAMLFileEditorState':
-        if f'yaml_file_editor_states' not in st.session_state:
-            st.session_state.yaml_file_editor_states = {}
-        if key not in st.session_state.yaml_file_editor_states:
-            st.session_state.yaml_file_editor_states[key] = cls(key)
-        return st.session_state.yaml_file_editor_states[key]
+        return cls(key).initialize()
 
 class YAMLFileEditor:
     _instances = {}
@@ -455,11 +457,10 @@ class YAMLFileEditor:
             cls._instances[key] = super().__new__(cls)
         return cls._instances[key]
     
-    def __init__(self , key : str = 'yaml_file_editor' , file_root : Path | str = BASE_DIR.parent):
+    def __init__(self , key : str = 'yaml_file_editor' , file_root : Path | str = BASE_DIR):
         self.key = key
         self.file_root = file_root
         self.init_session_state()
-        self.set_file_root()
 
     def __repr__(self):
         return f"YAMLFileEditor(key={self.key},root={self.file_root})"
@@ -467,14 +468,12 @@ class YAMLFileEditor:
     def init_session_state(self):
         state = YAMLFileEditorState.get_state(key = self.key)
         self.state = state
-        return self
-
-    def set_file_root(self):
         if isinstance(self.file_root , str):
             self.file_root = Path(self.file_root)
         assert self.file_root.exists() , f"File root does not exist: {self.file_root}"
         assert self.file_root.is_dir() , f"File root is not a directory: {self.file_root}"
         self.state.root = self.file_root
+        return self
 
     def get_file_root(self):
         return self.state.root
@@ -581,6 +580,7 @@ class YAMLFileEditor:
 
     @st.fragment
     def show_yaml_editor(self , file_path : Path | str | Sequence[Path | str] | None = None , default_file : Path | str | None = None):
+        from streamlit_ace import st_ace
         self.init_session_state()
         self.init_path_input(file_path , default_file)
         self.load_file()
@@ -682,4 +682,3 @@ class ColoredText(str):
             return 'red'
         else:
             return None
-        

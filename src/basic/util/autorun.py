@@ -6,7 +6,6 @@ from typing import Literal , Any
 from src.basic import path as PATH
 
 class AutoRunTask:
-
     def __init__(self , task_name : str , email = True , message_capturer : bool = True , 
                  source = 'not_specified' , **kwargs):
         self.task_name = task_name.replace(' ' , '_')
@@ -52,17 +51,19 @@ class AutoRunTask:
             print('Traceback : ' + '-' * 20)
             print(traceback.format_exc())
             self.status = f'Error Occured! {exc_value}'
+            title = f'Error - {self.task_name} - {self.time_str}'
         else:
             self.status = 'Successful ' + self.task_name.replace('_' , ' ').title() + '!'
+            title = f'Success - {self.task_name} - {self.time_str}'
         
         self.capturer.__exit__(exc_type, exc_value, exc_traceback)
         self.dprinter.__exit__(exc_type, exc_value, exc_traceback)
 
         # self.emailer.attach(self.dprinter.filename)
         
-        self.attach(self.emailer.ATTACHMENTS , streamlit = True , email = False)
+        self.attach(self.emailer.Attachments.get('default' , []) , streamlit = True , email = False)
         if not self.forfeit_task:
-            self.send_email(self.task_name)
+            self.send_email(title)
             self.record_path.touch()
         # change_power_mode('power-saver')
 
@@ -99,7 +100,8 @@ class AutoRunTask:
     def send_email(self , title : str):
         if self.email: 
             title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')]])
-            self.emailer.send(title = title , body = self.status , confirmation_message='Autorun')
+            self.emailer.send(title = title , body = self.status , confirmation_message='Autorun' , 
+                              attachment_group = ['default' , 'autorun'])
 
     def info(self , message : str , at_exit = False):
         if at_exit:
@@ -137,10 +139,11 @@ class AutoRunTask:
             self.logger.critical(message)
         self.logged_messages.append(f'CRITICAL : {message}')
 
-    def attach(self , file : Path | str | list[Path] | list[str] , streamlit = True , email = False):
+    def attach(self , file : Path | str | list[Path] | list[str] , streamlit = True , email = True):
         if not isinstance(file , list): file = [Path(file)]
-        if streamlit: self.streamlit_files.extend([Path(f) for f in file if f not in self.streamlit_files])
-        if email: self.emailer.attach([Path(f) for f in file if f not in self.emailer.ATTACHMENTS])
+        file = [Path(f) for f in file]
+        if streamlit: self.streamlit_files.extend([f for f in file if f not in self.streamlit_files])
+        if email: self.emailer.Attach(file , group = 'autorun')
         
     @property
     def final_message(self):

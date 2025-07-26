@@ -14,7 +14,7 @@ path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
 import subprocess 
-from src_runs.util import BackendTaskManager
+from src_ui import BackendTaskManager
 
 @BackendTaskManager()
 def main(**kwargs):

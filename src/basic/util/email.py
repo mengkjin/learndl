@@ -11,7 +11,7 @@ from src.project_setting import MACHINE
 from src.basic import conf as CONF
 
 class Email:
-    ATTACHMENTS : list[Path] = []
+    Attachments : dict[str , list[Path]] = {}
     _instance = None
 
     def __new__(cls , *args , **kwargs):
@@ -27,10 +27,14 @@ class Email:
         self.password    = email_conf['password']  
 
     @classmethod
-    def attach(cls , attachment : str | Path | list[str] | list[Path] | None = None):
+    def Attach(cls , attachment : str | Path | list[str] | list[Path] | None = None , group : str = 'default'):
         if attachment is None: return
         if not isinstance(attachment , list): attachment = [Path(attachment)]
-        cls.ATTACHMENTS.extend([Path(f) for f in attachment])
+        if group not in cls.Attachments:
+            cls.Attachments[group] = []
+        for f in attachment:
+            if Path(f) not in cls.Attachments[group]:
+                cls.Attachments[group].append(Path(f))
 
     def recipient(self , recipient : str | None = None):
         if recipient is None: recipient = str(self.sender)
@@ -39,6 +43,8 @@ class Email:
         return recipient
     
     def message(self , title : str  , body : str | None = None , recipient : str | None = None , 
+                attachment_group : str | list[str] = 'default' , 
+                clear_attachments : bool = True ,
                 title_prefix : str | None = 'Learndl:'):
         message = MIMEMultipart()
         message['From'] = self.sender
@@ -46,16 +52,17 @@ class Email:
         message['Subject'] = title_prefix + title if title_prefix else title
         message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
 
-        attachments = set(self.ATTACHMENTS)
-        for attachment in attachments:
-            with open(attachment, 'rb') as attach_file:
-                part = MIMEBase('application', 'octet-stream')
-                part.set_payload(attach_file.read())
-                encoders.encode_base64(part)
-                part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
-                message.attach(part)
+        if not isinstance(attachment_group , list): attachment_group = [attachment_group]
+        for group in attachment_group:
+            for attachment in self.Attachments[group]:
+                with open(attachment, 'rb') as attach_file:
+                    part = MIMEBase('application', 'octet-stream')
+                    part.set_payload(attach_file.read())
+                    encoders.encode_base64(part)
+                    part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
+                    message.attach(part)
 
-        self.ATTACHMENTS.clear()
+            if clear_attachments: self.Attachments[group].clear()
 
         return message
     
@@ -65,13 +72,13 @@ class Email:
     def send(self , title : str  , 
              body : str = 'This is test! Hello, World!' ,
              recipient : str | None = None , 
-             confirmation_message = ''):
+             confirmation_message = '' , attachment_group : str | list[str] = 'default'):
         
         if not MACHINE.server:
             print('not in my server , skip sending email')
             return
 
-        message = self.message(title , body , recipient)
+        message = self.message(title , body , recipient , attachment_group = attachment_group)
 
         try:
             with self.connection() as smtp:
@@ -84,8 +91,8 @@ class Email:
 
 def send_email(title : str  , 
                body : str = 'This is test! Hello, World!' ,
-               attachments : str | Path | list[str | Path] | None = None,
                recipient : str | None = None,
+               attachments : str | Path | list[str | Path] | None = None,
                server : Literal['netease'] = 'netease' , 
                confirmation_message : str = ''):
     if not MACHINE.server:

@@ -11,8 +11,10 @@ from typing import Any , Literal
 from pathlib import Path
 from IPython.display import display
 
-from src_runs.util import terminal_cmd
-from src_runs.util.exception import OutOfRange , Unspecified
+from src_ui.abc import terminal_cmd
+
+class OutOfRange(Exception): pass
+class Unspecified(Exception): pass
 
 def run_script(script : str | Path , close_after_run = False , **kwargs):
     cmd = terminal_cmd(script , kwargs , close_after_run = close_after_run)

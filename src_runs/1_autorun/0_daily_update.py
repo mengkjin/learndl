@@ -15,7 +15,7 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import DataAPI , ModelAPI , TradingAPI , NotificationAPI
 from src.basic import MACHINE , AutoRunTask , CALENDAR
-from src_runs.util import BackendTaskManager
+from src_ui import BackendTaskManager
 
 @BackendTaskManager(email = 1)
 def main(**kwargs):

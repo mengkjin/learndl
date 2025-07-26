@@ -1,5 +1,5 @@
 # please check this path before running the code
-import sys , socket , torch , yaml
+import sys , socket , torch
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -13,11 +13,13 @@ class MachineSetting:
         self.name = socket.gethostname()
         assert self.project_path , f'main_path not set for {self.name}'
         assert Path(self.project_path).exists() , f'MAIN_PATH not exists: {self.project_path}'
-        assert (not self.server) or torch.cuda.is_available() , f'server should have cuda'
         assert Path(__file__).is_relative_to(Path(self.project_path)) , f'{__file__} is not in {self.project_path}'
         sys.path.append(self.project_path)
         print(f'main path: {self.project_path}')
-        if torch.cuda.is_available(): print(f'Use device name: ' + torch.cuda.get_device_name(0))
+        if torch.cuda.is_available():
+            print(f'Use device name: ' + torch.cuda.get_device_name(0))
+        elif self.server:
+            print('server should have cuda , please check the cuda status')
         return self
     
     @classmethod

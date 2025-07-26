@@ -1,4 +1,4 @@
-from src_runs.st import main
+from src_ui.frontend import st_main
 
 if __name__ == '__main__':
-    main()
+    st_main()

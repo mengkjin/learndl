@@ -1,4 +1,4 @@
-__version__ = '0.1.6'
+__version__ = '0.2.0'
 __recommeded_explorer__ = 'chrome'
 
 import sys , pathlib
@@ -9,30 +9,34 @@ if not path in sys.path: sys.path.append(path)
 
 import platform, re, time, torch
 import streamlit as st
-import streamlit.components.v1 as components
 import psutil
 from dataclasses import dataclass , field
-from streamlit_autorefresh import st_autorefresh
 
 from typing import Any, Literal, Callable
 from pathlib import Path
 from datetime import datetime
 
-from src_runs.st.backend import (
-    BASE_DIR , 
-    PathItem , TaskItem , TaskQueue , ScriptRunner , ScriptParamInput
+from src_ui.db import RUNS_DIR , CONF_DIR
+
+from src_ui.backend import (
+    PathItem , TaskItem , TaskQueue , ScriptRunner , ScriptParamInput , TaskDatabase
 )
 
-from src_runs.st.frontend import (
+from src_ui.frontend.frontend import (
     CustomCSS , FilePreviewer , ActionLogger , YAMLFileEditor , YAMLFileEditorState , ColoredText
 )
 
-if AUTO_REFRESH_INTERVAL := 0:
-    st_autorefresh(interval=AUTO_REFRESH_INTERVAL, key="autorefresh-example")
-
+AUTO_REFRESH_INTERVAL = 0
 PENDING_FEATURES = [
     'uvx'
+    'sqlite3 replace json'
+    'create taskitem even if no task id'
 ]
+
+@st.cache_resource
+def get_cached_task_db() -> TaskDatabase:
+    """get cached task database manager"""
+    return TaskDatabase()
 
 def page_config():
     st.set_page_config(
@@ -74,7 +78,6 @@ class SessionControl:
     current_script_runner : str | None = None
     current_task_item : str | None = None
     script_runner_trigger_item : str | None = None
-    # detail_item_expander_expanded : bool = False
     choose_task_item : str | None = None
 
     task_queue : TaskQueue | Any = None
@@ -88,18 +91,24 @@ class SessionControl:
 
     script_params_cache : dict[str, dict[str, dict[str , Any]]] = field(default_factory=dict)
     config_editor_state : YAMLFileEditorState | None = None
-    
-    def __new__(cls):
-        if 'session_control' not in st.session_state:
-            st.session_state.session_control = super().__new__(cls)
-        return st.session_state.session_control
+
+    initialized : bool = False
     
     def __post_init__(self):
-        self.task_queue = TaskQueue('script_runner_main' , 100)
-        self.path_items = PathItem.iter_folder(BASE_DIR, min_level = 0, max_level = 2)
+        self.task_db = get_cached_task_db()
+        self.task_queue = TaskQueue('script_runner_main' , 100 , self.task_db)
+        self.path_items = PathItem.iter_folder(RUNS_DIR, min_level = 0, max_level = 2)
 
+    def initialize(self):
+        if 'session_control' not in st.session_state:
+            st.session_state.session_control = self
+        self.config_editor_state = YAMLFileEditorState.get_state('config_editor')
+        self.initialized = True
+        return self
+    
     def filter_task_queue(self):
         """filter task queue"""
+        assert self.initialized , 'SessionControl is not initialized'
         status_filter = st.session_state.get('queue-filter-status')
         folder_filter = st.session_state.get('queue-filter-path-folder')
         file_filter = st.session_state.get('queue-filter-path-file')
@@ -107,8 +116,12 @@ class SessionControl:
                                                 folder = folder_filter,
                                                 file = file_filter)
         return filtered_queue
+    
+    def latest_task_queue(self , num : int = 10):
+        return self.task_queue.latest(num)
 
     def ready_to_go(self , obj : ScriptRunner):
+        assert self.initialized , 'SessionControl is not initialized'
         return all(self.script_params_cache.get(obj.script_key, {}).get('valid', {}).values())
     
     @ActionLogger.log_action()
@@ -149,7 +162,7 @@ class SessionControl:
         """click task queue filter path folder"""
         folder_options = st.session_state.get('queue-filter-path-folder')
         if folder_options is not None:
-            folder_options = [str(item.relative_to(BASE_DIR)) for item in folder_options]
+            folder_options = [str(item.relative_to(RUNS_DIR)) for item in folder_options]
         self.queue_last_action = f"Queue Filter Path Folder: {folder_options}" , True
         
     @ActionLogger.log_action()
@@ -157,7 +170,7 @@ class SessionControl:
         """click task queue filter path file"""
         file_options = st.session_state.get('queue-filter-path-file')
         if file_options is not None:
-            file_options = [str(item.relative_to(BASE_DIR)) for item in file_options]
+            file_options = [str(item.relative_to(RUNS_DIR)) for item in file_options]
         self.queue_last_action = f"Queue Filter Path File: {file_options}" , True
 
     @st.dialog("Are You Sure about Clearing Logs?")
@@ -171,7 +184,13 @@ class SessionControl:
         if col2.button("**Abort**" , icon = ":material/cancel:" , key = "confirm-clear-abort-log"):
             self.queue_last_action = f"Log Clear Aborted" , False
             st.rerun()
-        
+
+    @ActionLogger.log_action()
+    def click_queue_sync(self):
+        """click task queue sync"""
+        self.task_queue.sync()
+        self.queue_last_action = f"Queue Manually Synced at {datetime.now().strftime('%H:%M:%S')}" , True
+   
     @ActionLogger.log_action()
     def click_queue_refresh(self):
         """click task queue refresh"""
@@ -186,7 +205,6 @@ class SessionControl:
         else:
             self.queue_last_action = f"Remove Failed: {item.id}" , False
         self.task_queue.remove(item)
-        self.task_queue.save()
 
     @ActionLogger.log_action()
     def click_script_runner_expand(self , runner : ScriptRunner):
@@ -211,10 +229,9 @@ class SessionControl:
             'close_after_run': bool(runner.header.close_after_run)
         }
         run_params.update(params)
-        item = runner.run_script(queue = self.task_queue , **run_params)
+        item = runner.run_script(self.task_queue , **run_params)
         self.current_task_item = item.id
         self.queue_last_action = f"Add to Queue: {item.id}" , True
-        self.task_queue.refresh()
         
         if self.running_report_main != item.id:
             self.running_report_main = item.id
@@ -256,13 +273,29 @@ class SessionControl:
         self.choose_task_item = new_id
         self.running_report_main_cleared = False
         self.running_report_file_previewer = None
-        #self.detail_item_expander_expanded = True
+
+    @ActionLogger.log_action()
+    def click_choose_item_selectbox(self):
+        """click choose task item"""
+        item_id = st.session_state['choose-item-selectbox']
+        item = self.task_queue.get(item_id)
+        if item is None:
+            return
+        
+        self.current_script_runner = item.runner_script_key
+        new_id = item.id if self.choose_task_item != item.id else None
+        
+        self.current_task_item = new_id
+        self.script_runner_trigger_item = new_id
+        self.running_report_main = new_id
+        self.choose_task_item = new_id
+        self.running_report_main_cleared = False
+        self.running_report_file_previewer = None
 
     @ActionLogger.log_action()
     def click_item_choose_remove(self , item : TaskItem):
         """click remove task item"""
         self.task_queue.remove(item)
-        self.task_queue.save()
         self.running_report_main = None
         self.running_report_main_cleared = False
         self.running_report_file_previewer = None
@@ -286,8 +319,8 @@ SC = SessionControl()
 def page_css():
     css = CustomCSS(add_css = ['basic' , 'special_expander' , 'classic_remover' , 'multi_select'])
     css.add("""
-    .stElementContainer[class*="task-queue"] {
-        div {justify-content: flex-end !important;}
+    .stVerticalBlock[class*="queue-header-buttons"] {
+        div {justify-content: flex-start !important;}
         * {
             font-weight: bold !important;
             font-size: 24px !important;
@@ -296,14 +329,21 @@ def page_css():
             width: 36px !important;
             height: 36px !important; 
         }
-        &[class*="-refresh"] button {
+        [class*="-sync"] button {
             color: #1E88E5 !important;
             &:hover {
                 background-color: #1E88E5 !important;
                 color: white !important;
             }
-        }  
-        &[class*="-clear"] button {
+        } 
+        [class*="-refresh"] button {
+            color: green !important;
+            &:hover {
+                background-color: green !important;
+                color: white !important;
+            }
+        }   
+        [class*="-clear"] button {
             color: red !important;
             &:hover {
                 background-color: red !important;
@@ -333,7 +373,6 @@ def page_css():
     }
     .stVerticalBlock[class*="queue-item-container"] {
         margin-bottom: -10px !important;
-        padding-right: 20px !important;
         
         [class*="-queue-item"] button {
             justify-content: flex-start !important;
@@ -347,27 +386,20 @@ def page_css():
                 border-radius: 10px !important;
                 line-height: 32px !important;
                 font-weight: bold !important;
-                font-size: 24px !important;
+                font-size: 20px !important;
             }     
             button {
+                justify-content: center !important;
+                padding: 0 !important;
                 width: 32px !important;
                 height: 32px !important;
-                color: red !important;
-                &:hover {
-                    color: white !important;
-                    background-color: red !important;
-                }
             }
         }
-        .stElementContainer[class*="show-complete-report"] {
-            &[class*="-success"] button {
-                color: green !important;
-                &:hover {
-                    color: white !important;
-                    background-color: green !important;
-                }
+        .stElementContainer[class*="queue-item-remover"] {
+            button:hover {
+                background-color: #ff8080 !important;
             }
-        }     
+        } 
     }
     .stVerticalBlock[class*="developer-info"] {
         button {
@@ -511,26 +543,32 @@ def show_sidebar():
 
     show_queue_in_sidebar()
 
-def show_queue_in_sidebar():
-    # queue title and refresh button
+def show_queue_in_sidebar(queue_type : Literal['full' , 'filter' , 'latest'] = 'latest'):
     with st.sidebar:
-    
-        header_col, button_col = st.columns([7, 2] , vertical_alignment = "center")
-        
-        with header_col: 
-            st.header(":material/event_list: Running Queue" , divider = 'grey')
-        with button_col:
-            col1 , col2 = st.columns([1, 1] , gap = "small" , vertical_alignment = "center")
-            with col1:  
-                st.button(":material/directory_sync:", key="task-queue-refresh",  
-                         help = "Refresh Queue" + (f" (every {AUTO_REFRESH_INTERVAL/1000} seconds)" if AUTO_REFRESH_INTERVAL else "") ,
-                         on_click = SC.click_queue_refresh)
+        show_queue_header()
+        if queue_type == 'filter':
+            show_queue_filters()
+        show_queue_item_list(queue_type)
+
+def show_queue_header():
+    with st.container(key = "queue-header-container"):
+        st.header(":material/event_list: Running Queue" , divider = 'grey')
+        with st.container(key = "queue-header-buttons"):
+            cols = st.columns([1, 1 , 1 , 5] , gap = "small" , vertical_alignment = "center")
+            with cols[0]:  
+                st.button(":material/directory_sync:", key="task-queue-sync",  
+                            help = "Sync Historical Tasks into Current Queue" ,
+                            on_click = SC.click_queue_sync)
+            with cols[1]:  
+                st.button(":material/refresh:", key="task-queue-refresh",  
+                            help = "Refresh Queue" ,
+                            on_click = SC.click_queue_refresh)
                 
-            with col2:
+            with cols[2]:
                 st.button(":material/delete:", key="task-queue-clear", 
-                          help = "Clear All Tasks" ,
-                          on_click = SC.click_queue_clear_confirmation)
-            
+                            help = "Clear Queue" ,
+                            on_click = SC.click_queue_clear_confirmation)
+                
         if SC.queue_last_action:
             if SC.queue_last_action[1]:
                 st.success(SC.queue_last_action[0] , icon = ":material/check_circle:")
@@ -542,63 +580,74 @@ def show_queue_in_sidebar():
             return
 
         st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.status_message()}")
-        st.markdown("")
-        # show queue filters
-
-        with st.container(key="queue-filter-container").expander("Queue Filters" , expanded = False , icon = ":material/filter_list:"):
-            status_options = ["All" , "Running" , "Complete" , "Error"]
-            folder_options = [item.path for item in SC.path_items if item.is_dir]
-            file_options = [item.path for item in SC.path_items if item.is_file]
-            st.radio(":gray-badge[**Running Status**]" , status_options , key = "queue-filter-status", horizontal = True ,
-                     on_change = SC.click_queue_filter_status)
-            st.multiselect(":gray-badge[**Script Folder**]" , folder_options , key = "queue-filter-path-folder" ,
-                           format_func = lambda x: str(x.relative_to(BASE_DIR)) ,
-                           on_change = SC.click_queue_filter_path_folder)
-            st.multiselect(":gray-badge[**Script File**]" , file_options , key = "queue-filter-path-file" ,
-                           format_func = lambda x: x.name ,
-                           on_change = SC.click_queue_filter_path_file)
-            
+        
+def show_queue_filters():
+    with st.container(key="queue-filter-container").expander("Queue Filters" , expanded = False , icon = ":material/filter_list:"):
+        status_options = ["All" , "Running" , "Complete" , "Error"]
+        folder_options = [item.path for item in SC.path_items if item.is_dir]
+        file_options = [item.path for item in SC.path_items if item.is_file]
+        st.radio(":gray-badge[**Running Status**]" , status_options , key = "queue-filter-status", horizontal = True ,
+                    on_change = SC.click_queue_filter_status)
+        st.multiselect(":gray-badge[**Script Folder**]" , folder_options , key = "queue-filter-path-folder" ,
+                        format_func = lambda x: str(x.relative_to(RUNS_DIR)) ,
+                        on_change = SC.click_queue_filter_path_folder)
+        st.multiselect(":gray-badge[**Script File**]" , file_options , key = "queue-filter-path-file" ,
+                        format_func = lambda x: x.name ,
+                        on_change = SC.click_queue_filter_path_file)
+        
+def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'latest'):
+    if queue_type == 'full':
+        queue = SC.task_queue
+        container_height = 500
+    elif queue_type == 'filter':
         queue = SC.filter_task_queue()
-        with st.container():
-            for item in queue.values():
-                placeholder = st.empty()
-                container = placeholder.container(key = f"queue-item-container-{item.id}")
-                with container:
-                    cols = st.columns([12, 1 , 1] , gap = "small" , vertical_alignment = "center")
-                        
-                    help_text = '|'.join([f"Status: {item.status}" , f"Dur: {item.duration_str}", f"PID: {item.pid}"])
-                    cols[0].button(f"{item.tag_icon} {item.button_str}",  help=help_text , key=f"queue-item-content-{item.id}" , 
-                                use_container_width=True , on_click = SC.click_queue_item , args = (item,))
+        container_height = None
+    elif queue_type == 'latest':
+        queue = SC.latest_task_queue()
+        container_height = None
+        st.info(f"Showing latest {len(queue)} tasks" , icon = ":material/info:")
+
+    with st.container(height = container_height , key = f"queue-item-list-container"):
+        for item in queue.values():
+            placeholder = st.empty()
+            container = placeholder.container(key = f"queue-item-container-{item.id}")
+            with container:
+                cols = st.columns([12, 1 , 1] , gap = "small" , vertical_alignment = "center")
                     
-                    cols[1].button(":material/cancel:", 
-                                   key=f"queue-item-remover-{item.id}", help="Remove/Terminate", type="tertiary",
-                                   on_click = SC.click_queue_remove_item , args = (item,))
-                    
-                    cols[2].button(
-                        ":material/slideshow:", 
-                        key=f"show-complete-report-{'success' if item.status == 'complete' else 'error'}-{item.id}" ,
-                        help = "Show complete report in main page" ,
-                        on_click = SC.click_show_complete_report , args = (item,) , type="tertiary")
-                    
-                    if SC.running_report_queue is None or SC.running_report_queue != item.id:
-                        continue
+                help_text = '|'.join([f"Status: {item.status}" , f"Dur: {item.duration_str}", f"PID: {item.pid}"])
+                cols[0].button(f"{item.tag_icon} {item.button_str}",  help=help_text , key=f"queue-item-content-{item.id}" , 
+                            use_container_width=True , on_click = SC.click_queue_item , args = (item,))
                 
-                    status_text = f'Running Report {item.status_state.title()}'
-                    status = st.status(status_text , state = item.status_state , expanded = True)
+                cols[1].button(":red-badge[:material/cancel:]", 
+                            key=f"queue-item-remover-{item.id}", help="Remove/Terminate", 
+                            on_click = SC.click_queue_remove_item , args = (item,))
+                
+                cols[2].button(
+                    ":blue-badge[:material/slideshow:]", 
+                    key=f"show-complete-report-{item.id}" ,
+                    help = "Show complete report in main page" ,
+                    on_click = SC.click_show_complete_report , args = (item,))
+                
+                if SC.running_report_queue is None or SC.running_report_queue != item.id:
+                    continue
+            
+                status_text = f'Running Report {item.status_state.title()}'
+                status = st.status(status_text , state = item.status_state , expanded = True)
 
-                    with status:
-                        col_config = {
-                            'Item': st.column_config.TextColumn(width=None, help='Key of the item'),
-                            'Value': st.column_config.TextColumn(width="large", help='Value of the item')
-                        }
+                with status:
+                    col_config = {
+                        'Item': st.column_config.TextColumn(width=None, help='Key of the item'),
+                        'Value': st.column_config.TextColumn(width="large", help='Value of the item')
+                    }
 
-                        st.dataframe(item.dataframe() , row_height = 20 , column_config = col_config)
-                        SC.wait_for_complete(item)
-                        if item.status == 'complete':
-                            st.success(f'Script Completed' , icon = ":material/add_task:")
-                        elif item.status == 'error':
-                            st.error(f'Script Failed' , icon = ":material/error:")
-                        
+                    st.dataframe(item.dataframe() , row_height = 20 , column_config = col_config)
+                    SC.wait_for_complete(item)
+                    if item.status == 'complete':
+                        st.success(f'Script Completed' , icon = ":material/add_task:")
+                    elif item.status == 'error':
+                        st.error(f'Script Failed' , icon = ":material/error:")
+    
+
 def show_developer_info():
     """show developer info"""
     container = st.container(key = "developer-info-special-expander")
@@ -612,7 +661,7 @@ def show_developer_info():
         SC.task_queue.refresh()     
         with st.expander("View queue file", expanded=False , icon = ":material/file_json:").container(height = 500):
             try:
-                st.json(SC.task_queue.full_queue_dict() , expanded = 1)
+                st.json(SC.task_queue.queue_content() , expanded = 1)
             except Exception as e:
                 st.error(f"Error loading queue: {e}")
 
@@ -638,16 +687,15 @@ def show_developer_info():
     
 def show_config_editor():
     """show config yaml editor"""
-    config_dir = BASE_DIR.parent.joinpath("configs")
-    files = [f for sub in ["train" , "trade" , "nn" , "boost"] for f in config_dir.joinpath(sub).glob("*.yaml")]
-    default_file = config_dir.joinpath("train/model.yaml")
+    files = [f for sub in ["train" , "trade" , "nn" , "boost"] for f in CONF_DIR.joinpath(sub).glob("*.yaml")]
+    default_file = CONF_DIR.joinpath("train/model.yaml")
 
     container = st.container(key="special-expander-editor")
     with container.expander("**YAML Editor**", expanded=False, icon=":material/edit_document:"):
         st.info(f"This File Editor is for editing selected config files", icon=":material/info:")
         st.info(f"For other config files, please use the file explorer", icon=":material/info:")
         
-        config_editor = YAMLFileEditor('config-editor', file_root=config_dir)
+        config_editor = YAMLFileEditor('config-editor', file_root=CONF_DIR)
         SC.config_editor_state = config_editor.state
         config_editor.show_yaml_editor(files, default_file=default_file)
     
@@ -684,40 +732,60 @@ def show_script_runner(runner: ScriptRunner):
 
 def show_script_details(runner : ScriptRunner | None):
     """show script details"""
-    if runner is None:
-        return
+    if runner is None: return
+    show_script_task_selector(runner)
+    show_param_settings(runner)
+    show_report_main(runner)
+
+def show_script_task_selector(runner : ScriptRunner , selector_type : Literal['dropdown' , 'expander'] = 'dropdown'):
     if todo := runner.header.todo:
         st.info(f":material/pending_actions: {todo}")
-    # st.button("Filter Script Tasks", icon = ":material/filter_list:", 
-    #          key = f"script-runner-filter-{runner.script_key}", 
-    #          help = f":material/info: **Click to filter all tasks of this script**" ,
-    #          on_click = SC.click_script_runner_filter , args = (runner,))
+
     queue = SC.task_queue.filter(file = [runner.path.path])
-    if queue:
-        expander = st.expander("Choose Task Item from Queue", 
-                               expanded = False , #SC.detail_item_expander_expanded , 
-                               icon = ":material/checklist:")
+    if not queue: return
+    item_ids = list(queue.keys())
+    
+    if selector_type == 'dropdown':
+        options = {item.id : " ".join([item.plain_icon, "." ,
+                             item.button_str, 
+                             f"--ID" , str(item.time_id), 
+                             f"--Status" , item.status.title(), 
+                             f"--Dur" , str(item.duration_str)]) 
+                   for item in queue.values()}
+        if SC.choose_task_item is not None and SC.choose_task_item in item_ids:
+            index = item_ids.index(SC.choose_task_item)
+        else:
+            index = None
+        st.selectbox("Choose Task Item from Queue", 
+                     options = item_ids, 
+                     index = index,
+                     format_func = lambda x: options[x],
+                     key = f"choose-item-selectbox" , 
+                     help = "Choose a Task Item from Filtered Queue" ,
+                     on_change = SC.click_choose_item_selectbox)
+    elif selector_type == 'expander':
+        expander = st.expander("Choose Task Item from Queue", expanded = False , icon = ":material/checklist:")
         with expander:
-            for item in SC.task_queue.filter(file = [runner.path.path]).values():
+            for item in queue.values():
                 col0 , col1 = expander.columns([14, 1] , gap = "small" , vertical_alignment = "center")
                 with col0:
                     button_key = f"choose-item-select-{item.id}" if SC.choose_task_item != item.id else f"choose-item-selected-{item.id}"
                     info_text = f"--ID {item.time_id} --Status {item.status.title()} --Dur {item.duration_str}"
                     st.button(f"{item.icon} {item.button_str} {info_text}", 
-                              key=button_key , 
-                              use_container_width=True , on_click = SC.click_item_choose_select , args = (item,))
+                                key=button_key , 
+                                use_container_width=True , on_click = SC.click_item_choose_select , args = (item,))
                 with col1.container(key = f"choose-item-remover-{item.id}"):
                     st.button(":material/cancel:", key = f"choose-item-remover-button-{item.id}",
-                              help="Remove/Terminate", type="tertiary" ,
-                              on_click = SC.click_item_choose_remove , args = (item,))
+                                help="Remove/Terminate", 
+                                on_click = SC.click_item_choose_remove , args = (item,))
 
     if SC.choose_task_item:
         st.success(f"Task Item {SC.choose_task_item} chosen" , icon = ":material/check_circle:")
 
+def show_param_settings(runner : ScriptRunner):
     if runner.disabled:
         st.error(f":material/disabled_by_default: This script is disabled")
         return
-    
     with st.container(key = f"script-setting-container-{runner.script_key}"):
         param_inputs = runner.header.get_param_inputs()
         settings_col , collapse_col = st.columns([1, 1] , vertical_alignment = "center")
@@ -742,7 +810,6 @@ def show_script_details(runner : ScriptRunner | None):
     st.button(":material/mode_off_on:", key=button_key , 
             help = help_text , disabled = not SC.ready_to_go(runner) , 
             on_click = SC.click_script_runner_run , args = (runner,params))
-    show_report_main(runner)
 
 class ParamInputsForm:
     def __init__(self , runner : ScriptRunner):
@@ -750,17 +817,16 @@ class ParamInputsForm:
         self.param_list = [self.WidgetParamInput(runner, p) for p in runner.header.get_param_inputs()]
         self.errors = []
 
-    def init_param_inputs(self , type : Literal['customized', 'form'] = 'customized' , 
-                          trigger_item : TaskItem | None = None):
+    def init_param_inputs(self , type : Literal['customized', 'form'] = 'customized'):
         trigger_item = SC.task_queue.get(SC.script_runner_trigger_item)
         cmd = trigger_item.cmd if trigger_item is not None else ''
-        SC.script_runner_trigger_item = None
         if type == 'customized':
             self.init_customized_container(cmd)
         elif type == 'form':
             self.init_form(cmd)
         else:
             raise ValueError(f"Invalid param inputs type: {type}")
+        SC.script_runner_trigger_item = None
         return self
 
     class WidgetParamInput(ScriptParamInput):
@@ -1082,7 +1148,8 @@ def show_report_main(runner : ScriptRunner):
     status_text = f'Running Report {item.status_state.title()}'
     status_placeholder = st.empty()
     status = status_placeholder.status(status_text , state = item.status_state , expanded = True)
-       
+    
+    start_as_unfinished = item.status not in ['complete' , 'error']
     with status_placeholder:
         if not SC.running_report_main_cleared:
             st.write('')
@@ -1106,7 +1173,7 @@ def show_report_main(runner : ScriptRunner):
                 st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 
             SC.wait_for_complete(item)
-            SC.task_queue.refresh()
+            item.refresh()
             with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
                 st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 
@@ -1150,6 +1217,9 @@ def show_report_main(runner : ScriptRunner):
                     previewer = FilePreviewer(SC.running_report_file_previewer)
                     previewer.preview()
 
+    if start_as_unfinished:
+        st.rerun()
+
 def show_main_part():
     """show main part"""
     col_folder , col_details = st.columns([1, 3] , gap = 'small')
@@ -1191,12 +1261,18 @@ def no_wrap_info(text : str , color : str = 'gray' , icon : str = '💬'):
     st.markdown(content, unsafe_allow_html = True)
 
 def main():
+    SC.initialize()
+    if 'refresh_counter' not in st.session_state:
+        st.session_state.refresh_counter = 0
     page_config()
     page_css()
     show_sidebar()
     show_developer_info()
     show_config_editor()
     show_main_part()
-    
+    st.session_state.refresh_counter += 1
+   
+    st.write("Page Refresh Count:", st.session_state.refresh_counter)
+
 if __name__ == '__main__':
     main() 

@@ -3,7 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
-from src.basic import CONF
+from src.basic import CONF , Logger
 STOCK_LB , STOCK_UB = CONF.SYMBOL_STOCK_LB , CONF.SYMBOL_STOCK_UB
 
 @dataclass
@@ -190,6 +190,9 @@ class GeneralBound:
     
     def export(self , wb : np.ndarray | Any = None):
         assert wb is None or isinstance(wb , np.ndarray) , f'Only stock weight can be export , risk style/indus cannot'
+        if np.isnan(wb).any():
+            Logger.warning(f'GeneralBound {self.key} when export has nan of wb : {np.isnan(wb).sum()} / {np.size(wb)}')
+            wb = np.nan_to_num(wb)
         if self.key == 'abs': 
             lb , ub = self.lb , self.ub
         else:
@@ -206,6 +209,12 @@ class GeneralBound:
     def export_lin(self , A : np.ndarray , wb : np.ndarray | Any = None , 
                    others : list['GeneralBound'] | None = None) -> tuple:
         others = others or []
+        if np.isnan(A).any():
+            Logger.warning(f'GeneralBound {self.key} when export_lin has nan of A : {np.isnan(A).sum()} / {np.size(A)}')
+            A = np.nan_to_num(A)
+        if np.isnan(wb).any():
+            Logger.warning(f'GeneralBound {self.key} when export_lin has nan of wb : {np.isnan(wb).sum()} / {np.size(wb)}')
+            wb = np.nan_to_num(wb)
         #assert not isinstance(self.lb , np.ndarray) , self.lb
         #assert not isinstance(self.ub , np.ndarray) , self.ub
         if A.ndim == 1: A = A.reshape(1,-1)
