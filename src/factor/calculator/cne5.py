@@ -347,10 +347,9 @@ class TuShareCNE5_Calculator:
         mkt = (exp['estuniv'] * exp['market']).rename('market')
         rsk = exp.drop(columns=['estuniv','weight','market'])
         
-        mask = rsk.notna().any(axis = 1) * 1.0
-        wgt = wgt * mask
-        rsk = rsk.loc[mask]
-
+        mask = rsk.notna().any(axis = 1)
+        wgt[~mask] = 0
+        rsk[~mask] = 0
         rsk = rsk.fillna(rsk.mean())
 
         mkt_model = sm.WLS(ret[['ret']] , mkt , weights = wgt).fit()
