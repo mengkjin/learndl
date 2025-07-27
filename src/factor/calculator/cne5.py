@@ -351,7 +351,7 @@ class TuShareCNE5_Calculator:
         wgt = wgt * mask
         rsk = rsk.loc[mask]
 
-        # rsk = rsk.fillna(rsk.mean())
+        rsk = rsk.fillna(rsk.mean())
 
         mkt_model = sm.WLS(ret[['ret']] , mkt , weights = wgt).fit()
         rsk_model = sm.WLS(mkt_model.resid , rsk , weights = wgt).fit()
