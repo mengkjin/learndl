@@ -111,19 +111,33 @@ def terminal_cmd(script : str | Path , params : dict | None = None , close_after
         raise ValueError(f'Unsupported platform: {platform.system()}')
     return cmd
 
+def get_task_id_from_cmd(cmd : str):
+    return cmd.split('task_id=')[1].split(' ')[0] if 'task_id=' in cmd else None
+
 def get_real_pid(process : subprocess.Popen , cmd : str):
+    task_id = get_task_id_from_cmd(cmd)
+    script_name = cmd.split('.py')[0].split('/')[-1] + '.py'
     if (platform.system() == 'Linux' and os.name == 'posix') or (platform.system() == 'Darwin'):
-        name = cmd.split('.py')[0].split('/')[-1] + '.py'
-        if 'task_id=' in cmd:
-            task_id = cmd.split('task_id=')[1].split(' ')[0]
-        else:
-            task_id = None
-        return find_python_process_by_name(name , task_id = task_id)
+        return find_python_process_by_name(script_name , task_id = task_id)
     elif platform.system() == 'Windows':
-        return process.pid
+        if (python_pid := find_child_python_process_by_name(process.pid, script_name)) is not None:
+            return python_pid
+        else:
+            return find_python_process_by_name(script_name, task_id=task_id)
     else:
         raise ValueError(f'Unsupported platform: {platform.system()}')
     
+def find_child_python_process_by_name(parent_pid: int, name: str):
+    """find child python process in Windows"""
+    try:
+        children = psutil.Process(parent_pid).children(recursive=True)
+        for child in children:
+            if 'python' in child.name().lower() and name in ' '.join(child.cmdline()):
+                return child.pid
+        return None
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return None
+
 def find_python_process_by_name(name : str , task_id : str  | None = None , try_times : int = 20):
     for _ in range(try_times):
         python_process = [proc for proc in psutil.process_iter(['pid', 'name', 'cmdline']) if 'python' in proc.info['name'].lower()]

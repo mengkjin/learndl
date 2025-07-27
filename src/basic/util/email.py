@@ -20,7 +20,9 @@ class Email:
         return cls._instance
 
     def __init__(self , server : Literal['netease'] = 'netease'):
-        email_conf = CONF.confidential('email')[server]
+        email_conf : dict[str , Any] = CONF.confidential('email')[server]
+        if MACHINE.name in email_conf:
+            email_conf.update(email_conf[MACHINE.name])
         self.smtp_server = email_conf['smtp_server']
         self.smtp_port   = email_conf['smtp_port']
         self.sender      = email_conf['sender']  
@@ -45,11 +47,16 @@ class Email:
     def message(self , title : str  , body : str | None = None , recipient : str | None = None , 
                 attachment_group : str | list[str] = 'default' , 
                 clear_attachments : bool = True ,
-                title_prefix : str | None = 'Learndl:'):
+                title_prefix : str | None = 'Learndl:' ,
+                title_machine_name : bool = True):
         message = MIMEMultipart()
         message['From'] = self.sender
         message['To'] = self.recipient(recipient)
-        message['Subject'] = title_prefix + title if title_prefix else title
+        subject = ''
+        if title_prefix: subject += title_prefix
+        if title_machine_name: subject += MACHINE.name
+        if title: subject += title
+        message['Subject'] = subject
         message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
 
         if not isinstance(attachment_group , list): attachment_group = [attachment_group]

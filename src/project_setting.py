@@ -1,16 +1,28 @@
 # please check this path before running the code
 import sys , socket , torch
 from pathlib import Path
-from dataclasses import dataclass
 
-@dataclass
+
 class MachineSetting:
-    server : bool
-    project_path: str
-    updateable : bool = True
+    MACHINE_DICT = {
+        # machine name :    (is_server , project_path , updateable)
+        'mengkjin-server':  (True , '/home/mengkjin/workspace/learndl'),
+        'longcl-server':    (True , '/home/longcl/workspace/learndl'),
+        'zhuhy-server':     (True , '/home/zhuhy/workspace/learndl'),
+        'HNO-JINMENG01':    (False , 'D:/Coding/learndl/learndl'),
+        'HPO-LONGCL05':     (False , ''),
+        'HPO-ZHUHY01':      (False , ''),
+        'HST-jinmeng':      (False , 'E:/workspace/learndl'),
+        'Mathews-Mac':      (False , '/Users/mengkjin/workspace/learndl' , False),
+    }
+
+    def __init__(self , server : bool , project_path : str , updateable : bool = True):
+        self.server = server
+        self.project_path = project_path
+        self.updateable = updateable
+        self.initialize()
 
     def initialize(self):
-        self.name = socket.gethostname()
         assert self.project_path , f'main_path not set for {self.name}'
         assert Path(self.project_path).exists() , f'MAIN_PATH not exists: {self.project_path}'
         assert Path(__file__).is_relative_to(Path(self.project_path)) , f'{__file__} is not in {self.project_path}'
@@ -22,25 +34,20 @@ class MachineSetting:
             print('server should have cuda , please check the cuda status')
         return self
     
-    @classmethod
-    def MachineDict(cls):
-        return {
-            'mengkjin-server':  cls(True , '/home/mengkjin/workspace/learndl'),
-            'longcl-server':    cls(True , '/home/longcl/workspace/learndl'),
-            'zhuhy-server':     cls(True , '/home/zhuhy/workspace/learndl'),
-            'HNO-JINMENG01':    cls(False , 'D:/Coding/learndl/learndl'),
-            'HPO-LONGCL05':     cls(False , ''),
-            'HPO-ZHUHY01':      cls(False , ''),
-            'HST-jinmeng':      cls(False , 'E:/workspace/learndl'),
-            'Mathews-Mac':      cls(False , '/Users/mengkjin/workspace/learndl' , False),
-        }
+    @property
+    def name(self):
+        return self.get_machine_name()
     
     @classmethod
     def select_machine(cls):
-        machine_name = socket.gethostname().split('.')[0]
-        machine_dict = cls.MachineDict()
-        assert machine_name in machine_dict , f'unidentified machine: {machine_name} , please check the MachineDict method'
-        return machine_dict[machine_name].initialize()
+        machine_name = cls.get_machine_name()
+        assert machine_name in cls.MACHINE_DICT , f'unidentified machine: {machine_name} , please check the MACHINE_DICT attribute'
+        machine = cls(*cls.MACHINE_DICT[machine_name])
+        return machine
+    
+    @classmethod
+    def get_machine_name(cls):
+        return socket.gethostname().split('.')[0]
     
     @property
     def belong_to_hfm(self):
