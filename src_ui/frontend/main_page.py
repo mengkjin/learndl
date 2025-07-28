@@ -1,4 +1,4 @@
-__version__ = '0.2.0'
+__version__ = '0.2.1'
 __recommeded_explorer__ = 'chrome'
 
 import sys , pathlib
@@ -27,11 +27,7 @@ from src_ui.frontend.frontend import (
 )
 
 AUTO_REFRESH_INTERVAL = 0
-PENDING_FEATURES = [
-    'uvx'
-    'sqlite3 replace json'
-    'create taskitem even if no task id'
-]
+PENDING_FEATURES = []
 
 @st.cache_resource
 def get_cached_task_db() -> TaskDatabase:
@@ -99,6 +95,9 @@ class SessionControl:
         self.task_queue = TaskQueue('script_runner_main' , 100 , self.task_db)
         self.path_items = PathItem.iter_folder(RUNS_DIR, min_level = 0, max_level = 2)
 
+    def __str__(self):
+        return f"SessionControl()"
+
     def initialize(self):
         if 'session_control' not in st.session_state:
             st.session_state.session_control = self
@@ -124,7 +123,26 @@ class SessionControl:
         assert self.initialized , 'SessionControl is not initialized'
         return all(self.script_params_cache.get(obj.script_key, {}).get('valid', {}).values())
     
-    @ActionLogger.log_action()
+    def click_developer_info_all(self):
+        """click developer info all"""
+        if st.session_state['developer-info-all']:
+            st.session_state['developer-info-none'] = False
+            st.session_state['developer-info-session-control'] = True
+            st.session_state['developer-info-session-states'] = True
+            st.session_state['developer-info-task-queue'] = True
+            st.session_state['developer-info-action-logs'] = True
+            st.session_state['developer-info-error-logs'] = True
+    
+    def click_developer_info_none(self):
+        """click developer info none"""
+        if st.session_state['developer-info-none']:
+            st.session_state['developer-info-all'] = False
+            st.session_state['developer-info-session-control'] = False
+            st.session_state['developer-info-session-states'] = False
+            st.session_state['developer-info-task-queue'] = False
+            st.session_state['developer-info-action-logs'] = False
+            st.session_state['developer-info-error-logs'] = False
+    
     def click_queue_item(self , item : TaskItem):
         """click queue item"""
         if self.running_report_queue is not None and self.running_report_queue == item.id:
@@ -152,12 +170,10 @@ class SessionControl:
             self.queue_last_action = f"Queue Clear Aborted" , False
             st.rerun()
 
-    @ActionLogger.log_action()
     def click_queue_filter_status(self):
         """click task queue filter status"""
         self.queue_last_action = f"Queue Filter Status: {st.session_state.get('queue-filter-status')}" , True
 
-    @ActionLogger.log_action()
     def click_queue_filter_path_folder(self):
         """click task queue filter path folder"""
         folder_options = st.session_state.get('queue-filter-path-folder')
@@ -165,7 +181,6 @@ class SessionControl:
             folder_options = [str(item.relative_to(RUNS_DIR)) for item in folder_options]
         self.queue_last_action = f"Queue Filter Path Folder: {folder_options}" , True
         
-    @ActionLogger.log_action()
     def click_queue_filter_path_file(self):
         """click task queue filter path file"""
         file_options = st.session_state.get('queue-filter-path-file')
@@ -214,7 +229,6 @@ class SessionControl:
         else:
             self.current_script_runner = runner.script_key
 
-    @ActionLogger.log_action()
     def click_script_runner_filter(self , runner : ScriptRunner):
         """click script runner filter"""
         st.session_state['queue-filter-status'] = 'All'
@@ -403,14 +417,36 @@ def page_css():
     }
     .stVerticalBlock[class*="developer-info"] {
         button {
-            min-width: 100px !important;
-            height: 20px !important;
-            padding: 10px 10px !important;
-            border: 1px solid lightgray !important;
             border-radius: 10px !important;
-            background-color: lightgray !important;
-            font-weight: bold !important;
+            border: 1px solid lightgray !important;
+            min-width: 100px !important;
+            height: 36px !important; 
+            p {
+                font-weight: 900 !important;
+            }
         }
+        [class*="-sync"] button {
+            color: #1E88E5 !important;
+            &:hover {
+                background-color: #1E88E5 !important;
+                color: white !important;
+            }
+        } 
+        [class*="-refresh"] button {
+            color: green !important;
+            &:hover {
+                background-color: green !important;
+                color: white !important;
+            }
+        }   
+        [class*="-clear"] button {
+            color: red !important;
+            &:hover {
+                background-color: red !important;
+                color: white !important;
+            }
+        }
+    }
     }
     .stElementContainer[class*="choose-item-select"] {
         button {
@@ -514,6 +550,15 @@ def page_css():
         button {
             min-width: 500px !important;
             justify-content: flex-start !important;
+        }
+        &[class*="-selected"] {
+            button {
+                background-color: #1E88E5 !important;
+                color: white !important;
+            }
+            p {
+                font-weight: bold !important;
+            }
         }
     }
     .stVerticalBlock[class*="file-download"] {
@@ -648,40 +693,71 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
                         st.error(f'Script Failed' , icon = ":material/error:")
     
 
-def show_developer_info():
+def show_developer_info(H = 500):
     """show developer info"""
     container = st.container(key = "developer-info-special-expander")
     with container.expander("**Developer Info**" , expanded = False , icon = ":material/bug_report:"):
-        with st.expander("Session State" , expanded = False , icon = ":material/star:").container(height = 500):
+        st.info("This is for developer only , Check boxes to select what information to show" , icon = ":material/info:")
+        cols = st.columns(7 , gap = "small")
+        with cols[0]:
+            st.checkbox("All" , key = f"developer-info-all" , 
+                        help = "Show Everything" , label_visibility = "visible" , 
+                        value = False , on_change = SC.click_developer_info_all)
+        with cols[1]:
+            st.checkbox("None" , key = f"developer-info-none" , 
+                        help = "Show Nothing" , label_visibility = "visible" , 
+                        value = False , on_change = SC.click_developer_info_none)
+                
+        options = [
+            ("Session Control" , True , "Show Custom Session Control") ,
+            ("Session States" , False , "Show Streamlit Session States") ,
+            ("Task Queue" , False , "Show Task Queue (JSON representation)") ,
+            ("Action Logs" , False , "Show Action Logs (Log file)") ,
+            ("Error Logs" , False , "Show Error Logs (Log file)") ,    
+        ]
+        for col , option in zip(cols[2:], options):
+            with col:
+                st.checkbox(option[0] , key = f"developer-info-{option[0].lower().replace(' ', '-')}" , 
+                            help = option[2] , label_visibility = "visible" , value = option[1])
+
+        if getattr(st.session_state, 'developer-info-session-control', False):
+            with st.expander("Session Control" , expanded = False , icon = ":material/settings:").container(height = H):
+                st.write(SC) 
+            
+        if getattr(st.session_state, 'developer-info-session-states', True):
+            with st.expander("Session States" , expanded = False , icon = ":material/star:").container(height = H):
                 st.write(st.session_state)
         
-        with st.expander("Session Control" , expanded = False , icon = ":material/settings:").container(height = 500):
-                st.write(SC)
-
-        SC.task_queue.refresh()     
-        with st.expander("View queue file", expanded=False , icon = ":material/file_json:").container(height = 500):
-            try:
+        if getattr(st.session_state, 'developer-info-task-queue', False):
+            with st.expander("Task Queue" , expanded = False , icon = ":material/directory_sync:").container(height = H):
+                SC.task_queue.refresh()     
                 st.json(SC.task_queue.queue_content() , expanded = 1)
-            except Exception as e:
-                st.error(f"Error loading queue: {e}")
+        
+        if getattr(st.session_state, 'developer-info-action-logs', False):
+            with st.expander("Action Logs" , expanded = False , icon = ":material/format_list_numbered:"):
+                st.code(ActionLogger.get_action_log(), language='log' , height = H , wrap_lines = True)
+        
+        if getattr(st.session_state, 'developer-info-error-logs', False):
+            with st.expander("Error Logs" , expanded = False , icon = ":material/error:"):
+                st.code(ActionLogger.get_error_log(), language='log' , height = H , wrap_lines = True)
 
-        with st.expander("View action log", expanded=False , icon = ":material/format_list_numbered:"):
-            st.code(ActionLogger.get_action_log(), language='log' , height = 500)
-
-        with st.expander("View error log", expanded=False , icon = ":material/error:"):
-            st.code(ActionLogger.get_error_log(), language='log' , height = 500)
-
-        cols = st.columns(5) # 5 buttons in a row
-        with cols[0]:
-            st.button("Queue" , icon = ":material/directory_sync:" , key = "queue-refresh-developer" , 
+        cols = st.columns(7) # 7 buttons in a row
+            
+        with cols[0]:  
+            st.button("Sync" , icon = ":material/directory_sync:" , key="developer-queue-sync",  
+                      help = "Sync Historical Tasks into Current Queue" ,
+                      on_click = SC.click_queue_sync)
+        with cols[1]:  
+            st.button("Refresh" , icon = ":material/refresh:" , key="developer-queue-refresh",  
                       help = "Refresh Queue" ,
                       on_click = SC.click_queue_refresh)
-        with cols[1]:
-            st.button("Queue" , icon = ":material/delete:" , key = "queue-clear-developer" , 
+                
+        with cols[2]:
+            st.button("Queue" , icon = ":material/delete:" , key = "developer-queue-clear" , 
                       help = "Clear All Tasks in Queue" ,
                       on_click = SC.click_queue_clear_confirmation)
-        with cols[2]:
-            st.button("Log" , icon = ":material/delete:" , key = "clear-log-developer" , 
+        with cols[3]:
+            st.button("Log" , icon = ":material/delete:" , key = "developer-log-clear" , 
                       help = "Clear Both Action and Error Logs" ,
                       on_click = SC.click_log_clear_confirmation)
     
@@ -691,7 +767,7 @@ def show_config_editor():
     default_file = CONF_DIR.joinpath("train/model.yaml")
 
     container = st.container(key="special-expander-editor")
-    with container.expander("**YAML Editor**", expanded=False, icon=":material/edit_document:"):
+    with container.expander("**Config File Editor**", expanded=False, icon=":material/edit_document:"):
         st.info(f"This File Editor is for editing selected config files", icon=":material/info:")
         st.info(f"For other config files, please use the file explorer", icon=":material/info:")
         
@@ -1195,7 +1271,7 @@ def show_report_main(runner : ScriptRunner):
                 with st.expander(f":rainbow[:material/file_present:] **File Previewer**", expanded=True):
                     for file in item.exit_files:
                         path = Path(file).absolute()
-                        preview_key = f"file-preview-{path}"
+                        preview_key = f"file-preview-{path}" if SC.running_report_file_previewer != path else f"file-preview-selected-{path}"
                         col1, col2 = st.columns([4, 1] , vertical_alignment = "center")
                         with col1:
                             st.button(path.name, key=preview_key , icon = ":material/file_present:" , 

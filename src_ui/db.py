@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Literal
-import json , re
+import socket
 
 BASE_DIR = Path(__file__).parent.parent
 assert BASE_DIR.name == 'learndl' , f'BASE_DIR {BASE_DIR} not right , should be learndl'
@@ -8,16 +8,16 @@ assert BASE_DIR.name == 'learndl' , f'BASE_DIR {BASE_DIR} not right , should be 
 RUNS_DIR = BASE_DIR.joinpath("src_runs")
 CONF_DIR = BASE_DIR.joinpath("configs")
 
-runs_db_dir = Path(__file__).with_name('.db')
-runs_db_dir.mkdir(parents=True, exist_ok=True)
+_machine_name = socket.gethostname().split('.')[0]
 
-runs_db_path = runs_db_dir / 'task_manager.db'
+_db_dir = Path(__file__).with_name('.db') / _machine_name
+_db_dir.mkdir(parents=True, exist_ok=True)
 
-log_dir = runs_db_dir / 'logs'
-log_dir.mkdir(parents=True, exist_ok=True)
+def get_task_db_path():
+    return _db_dir / 'task_manager.db'
 
-def st_log_file(log_type : Literal['action' , 'error']):
-    file_path = log_dir / f'{log_type}.log'
+def get_st_log_path(log_type : Literal['action' , 'error']):
+    file_path = _db_dir / f'page_{log_type}.log'
     file_path.touch(exist_ok=True)
     return file_path
 

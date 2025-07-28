@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
-from src_ui.db import RUNS_DIR , runs_db_path , runs_db_dir
+from src_ui.db import RUNS_DIR , get_task_db_path
 from src_ui.abc import check_process_status , kill_process
 
 class DBConnHandler:
@@ -39,10 +39,9 @@ class DBConnHandler:
 
 class TaskDatabase:
     def __init__(self , db_name: str | Path | None = None):
-        if db_name is None:
-            self.db_path = runs_db_path
-        else:
-            self.db_path = runs_db_dir / f'{db_name}.db'
+        self.db_path = get_task_db_path()
+        if db_name is not None:
+            self.db_path = self.db_path.with_name(f'{db_name}.db')
         self.db_name = self.db_path.stem
         self.conn_handler = DBConnHandler(self.db_path)
         self.initialize_database()

@@ -8,8 +8,7 @@ import pandas as pd
 from datetime import datetime
 from dataclasses import dataclass
 
-from src_ui.db import BASE_DIR , st_log_file
-from src_ui.backend import TaskItem , ScriptRunner , ScriptParamInput
+from src_ui.db import BASE_DIR , get_st_log_path
 
 class CustomCSS:
     def __init__(self , add_css = ['basic' , 'special_expander' , 'classic_remover' , 'multi_select']) -> None:
@@ -236,8 +235,8 @@ class CustomCSS:
         """
 
 class ActionLogger:
-    action_log = st_log_file('action')
-    error_log = st_log_file('error')
+    action_log = get_st_log_path('action')
+    error_log  = get_st_log_path('error')
     _instance = None
     _ignores = None
 
@@ -345,7 +344,7 @@ class FilePreviewer:
         if self.path is None or not self.path.exists():
             return
         with st.container(height = 600):
-            st.info(f"Previewing file: {self.path}" , icon = ":material/file_present:" , width = "stretch")
+            # st.info(f"Previewing file: {self.path}" , icon = ":material/file_present:" , width = "stretch")
             suffix = self.path.suffix
             if suffix in ['.txt', '.csv', '.json' , '.log' , '.py']:
                 language = {
@@ -432,23 +431,18 @@ class YAMLFileEditorState:
     load_status : str = 'success'
     save_status : str = 'success'
     reload_timestamp : float = 0.
-    initialized : bool = False
 
     def __post_init__(self):
         self.load_content : str | None = None
         self.edit_content : str | None = None
-
-    def initialize(self):
-        if f'yaml_file_editor_states' not in st.session_state:
-            st.session_state.yaml_file_editor_states = {}
-        if self.key not in st.session_state.yaml_file_editor_states:
-            st.session_state.yaml_file_editor_states[self.key] = self
-        self.initialized = True
-        return self
     
     @classmethod
     def get_state(cls , key : str) -> 'YAMLFileEditorState':
-        return cls(key).initialize()
+        if f'yaml_file_editor_states' not in st.session_state:
+            st.session_state.yaml_file_editor_states = {}
+        if key not in st.session_state.yaml_file_editor_states:
+            st.session_state.yaml_file_editor_states[key] = cls(key)
+        return st.session_state.yaml_file_editor_states[key]
 
 class YAMLFileEditor:
     _instances = {}
@@ -548,7 +542,6 @@ class YAMLFileEditor:
     def init_path_input(self , file_path : Path | str | Sequence[Path | str] | None = None , default_file : Path | str | None = None):
         if file_path is None and default_file is not None:
             file_path = default_file
-        
         if file_path is None or isinstance(file_path , (Path , str)):
             if not self.state.path and file_path is not None: 
                 self.state.path = str(file_path)
@@ -562,19 +555,17 @@ class YAMLFileEditor:
         elif isinstance(file_path , Sequence):
             root = self.get_file_root()
             options = [Path(path).absolute().relative_to(root) for path in file_path]
-            if default_file is None:
+            if not self.state.path and default_file is not None: 
+                self.state.path = str(Path(default_file).absolute().relative_to(root))
+            if not self.state.path:
                 index = None
+            elif Path(self.state.path) in options:
+                index = options.index(Path(self.state.path))
             else:
-                default = Path(default_file).absolute().relative_to(root)
-                if default in options:
-                    index = options.index(default)
-                    if not self.state.path:
-                        self.state.path = str(default)
-                else:
-                    raise ValueError(f"Default file is not in options: {default_file} , options: {options}")
+                raise ValueError(f"Default file is not in options: {self.state.path} , options: {options}")
             st.selectbox(f":blue-badge[:material/edit_document: **Select File Path : {self.state.root}/**]", options ,
                         key=f"{self.key}-file-select" , index = index ,
-                         on_change = self.selectbox_on_change , help = "Select the YAML file" )
+                        on_change = self.selectbox_on_change , help = "Select the YAML file" )
         else:
             raise ValueError(f"Invalid file path: {file_path}")
 
@@ -631,8 +622,10 @@ class YAMLFileEditor:
 
     def path_input_on_change(self , st_widget_key : str):
         self.set_file_path(st.session_state[st_widget_key])
-        self.load_file()
+        # self.load_file()
+        print(f"path_input_on_change 1: {self.state.path}")
         self.refresh_file_editor()
+        print(f"path_input_on_change 2: {self.state.reload_timestamp}")
 
     def text_input_on_change(self):
         self.path_input_on_change(f"{self.key}-file-input")

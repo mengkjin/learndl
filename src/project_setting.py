@@ -2,7 +2,6 @@
 import sys , socket , torch
 from pathlib import Path
 
-
 class MachineSetting:
     MACHINE_DICT = {
         # machine name :    (is_server , project_path , updateable)
