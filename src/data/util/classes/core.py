@@ -156,7 +156,7 @@ class DataBlock(Stock4DData):
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , use_alt = True):
         dates = CALENDAR.td_within(start_dt , end_dt)
         main_dates = np.intersect1d(dates , PATH.db_dates(db_src , db_key , use_alt=use_alt))
-        df = PATH.db_load_multi(db_src , db_key , main_dates , use_alt=use_alt , date_colname = 'date')
+        df = PATH.db_load_multi(db_src , db_key , main_dates , use_alt=use_alt)
 
         if len(df) == 0: return cls()
         if len(df.index.names) > 1 or df.index.name: df = df.reset_index()

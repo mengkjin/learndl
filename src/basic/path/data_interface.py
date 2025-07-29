@@ -1,11 +1,15 @@
 import os , platform , re
+import dask
+import dask.dataframe
+from dask.delayed import delayed
+from dask.base import compute
 import numpy as np
 import pandas as pd
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from datetime import datetime , timedelta
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any , Literal , Callable
 
 from src.project_setting import MACHINE
 
@@ -27,7 +31,9 @@ DB_ALTERNATIVES : dict[str , str] = {
     'trade_ts' : 'trade_js' ,
     'benchmark_ts' : 'benchmark_js'
 }
-LOAD_PARALLEL : Literal['thread' , 'process'] | None = 'thread' if MACHINE.server else None
+LOAD_PARALLEL : Literal['thread' , 'process' , 'dask' , 'none'] = 'thread'
+# in Mac-Matthew , thread > dask > none > process
+
 LOAD_MAX_WORKERS : int | Any = 40 if MACHINE.server else os.cpu_count()
 
 deprecated_db_by_name  : list[str] = ['information_js']
@@ -102,15 +108,14 @@ def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , pr
         if printing_prefix: print(f'{printing_prefix} already exists')
         return False
 
-def load_df(path : Path | str , raise_if_not_exist = False):
-    path = Path(path)
+def load_df(path : Path , raise_if_not_exist = False):
     if not path.exists():
         if raise_if_not_exist: raise FileNotFoundError(path)
         else: return pd.DataFrame()
     if SAVE_OPT_DB == 'feather':
         df = pd.read_feather(path)
     else:
-        df = pd.read_parquet(path , engine='fastparquet')
+        df = pd.read_parquet(path)
     df = load_df_mapper(df)
     return df
 
@@ -121,28 +126,35 @@ def load_df_mapper(df : pd.DataFrame):
     if old_index is not None: df = df.set_index(old_index)
     return df
 
-def load_df_multi(paths : dict , raise_if_not_exist = False):
-    if LOAD_PARALLEL is None:
-        dfs = {d:load_df(p , raise_if_not_exist=raise_if_not_exist) for d,p in paths.items()}
+def load_df_multi(paths : dict , date_colname : str = 'date' , 
+                  parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread'):
+    if parallel is None: parallel = LOAD_PARALLEL
+    reader : Any = pd.read_feather if SAVE_OPT_DB == 'feather' else pd.read_parquet
+    paths = {d:p for d,p in paths.items() if p.exists()}
+    if parallel is None or parallel == 'none':
+        dfs = [reader(p).assign(**{date_colname:d}) for d,p in paths.items()]
+    elif parallel == 'dask':
+        #ddf = dask.dataframe.from_delayed([delayed(reader)(p).assign(**{date_colname:d}) for d,p in paths.items()])
+        #df = ddf.compute()
+        #return load_df_mapper(df)
+        ddfs = [delayed(reader)(p).assign(**{date_colname:d}) for d,p in paths.items()]
+        dfs = compute(ddfs)[0]
     else:
-        assert LOAD_PARALLEL == 'thread' or platform.system() != 'Windows' , (LOAD_PARALLEL , platform.system())
+        assert parallel == 'thread' or platform.system() != 'Windows' , (parallel , platform.system())
         max_workers = min(LOAD_MAX_WORKERS , max(len(paths) // 5 , 1))
-        PoolExecutor = ThreadPoolExecutor if LOAD_PARALLEL == 'thread' else ProcessPoolExecutor
+        PoolExecutor = ThreadPoolExecutor if parallel == 'thread' else ProcessPoolExecutor
         with PoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(load_df, p , raise_if_not_exist=raise_if_not_exist):d for d,p in paths.items()}
-            dfs = {futures[future]:future.result() for future in as_completed(futures)}
-    return dfs
+            futures = {pool.submit(reader , p):d for d,p in paths.items()}
+            dfs = [future.result().assign(**{date_colname:futures[future]}) for future in as_completed(futures)]
 
-def process_df(raw_df : pd.DataFrame | dict[int , pd.DataFrame] , date = None, date_colname = None , check_na_cols = False , 
+    if not dfs: return pd.DataFrame()
+    df = pd.concat(dfs)
+    df = load_df_mapper(df)
+    return df
+
+def process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_cols = False , 
                df_syntax : str | None = 'some df' , reset_index = True , ignored_fields = []):
-    if isinstance(raw_df , dict):
-        if not raw_df: return pd.DataFrame()
-        assert date_colname is not None , 'date_colname must be provided if raw_df is a dict'
-        for d , ddf in raw_df.items(): ddf[date_colname] = d
-        df = pd.concat(raw_df.values())
-    else:
-        if date_colname and date is not None: raw_df[date_colname] = date
-        df = raw_df
+    if date_colname and date is not None: df[date_colname] = date
 
     if df_syntax:
         if df.empty:
@@ -242,15 +254,17 @@ def db_load(db_src , db_key , date = None , date_colname = None , verbose = True
     return df
 
 # @db_src_deprecated(0)
-def db_load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None , date_colname = None , 
-                  verbose = True , use_alt = False , raise_if_not_exist = False , **kwargs):
+def db_load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None , 
+                  date_colname = 'date' , 
+                  verbose = True , use_alt = False , 
+                  parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , **kwargs):
     if dates is None:
         assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
         dates = db_dates(db_src , db_key , start_dt , end_dt , use_alt = use_alt)
     paths : dict[int , Path] = {int(date):db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
     df_syntax = f'{db_src}/{db_key}/multi-dates' if verbose else None
-    dfs = load_df_multi(paths , raise_if_not_exist=raise_if_not_exist)
-    df = process_df(dfs , date_colname = date_colname , df_syntax = df_syntax , **kwargs)
+    df = load_df_multi(paths , date_colname , parallel)
+    df = process_df(df , df_syntax = df_syntax , **kwargs)
     return df
 
 def db_rename(db_src , db_key , new_db_key):
@@ -287,14 +301,19 @@ def pred_save(df : pd.DataFrame | None , model_name : str , date : int | Any , o
 
 def pred_load(model_name : str , date : int | Any , date_colname = None , verbose = True , **kwargs):
     df = load_df(pred_path(model_name , date))
-    return process_df(df , date , date_colname , df_syntax = f'pred/{model_name}/{date}' if verbose else None , **kwargs)
+    df_syntax = f'pred/{model_name}/{date}' if verbose else None
+    return process_df(df , date , date_colname , df_syntax = df_syntax , **kwargs)
 
-def pred_load_multi(model_name : str , dates = None , start_dt = None , end_dt = None , date_colname = 'date' , verbose = True , **kwargs):
+def pred_load_multi(model_name : str , dates = None , start_dt = None , end_dt = None , 
+                    date_colname = 'date' , verbose = True , 
+                    parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , **kwargs):
     if dates is None:
         assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
         dates = pred_dates(model_name , start_dt , end_dt)
-    dfs = load_df_multi({date:pred_path(model_name , date) for date in dates})
-    return process_df(dfs , date_colname = date_colname , df_syntax = f'pred/{model_name}/multi-dates' if verbose else None , **kwargs)
+    paths = {date:pred_path(model_name , date) for date in dates}
+    df = load_df_multi(paths , date_colname , parallel)
+    df_syntax = f'pred/{model_name}/multi-dates' if verbose else None
+    return process_df(df , df_syntax = df_syntax , **kwargs)
 
 def factor_path(factor_name : str , date : int | Any):
     return PATH.factor.joinpath(factor_name , str(date // 10000) , f'{factor_name}.{date}.feather')
@@ -313,14 +332,19 @@ def factor_save(df : pd.DataFrame | None , factor_name : str , date : int | Any 
 
 def factor_load(factor_name : str , date : int | Any , date_colname = None , verbose = True , **kwargs):
     df = load_df(factor_path(factor_name , date))
-    return process_df(df , date , date_colname , df_syntax = f'factor/{factor_name}/{date}' if verbose else None , **kwargs)
+    df_syntax = f'factor/{factor_name}/{date}' if verbose else None
+    return process_df(df , date , date_colname , df_syntax = df_syntax , **kwargs)
 
-def factor_load_multi(factor_name : str , dates = None , start_dt = None , end_dt = None , date_colname = 'date' , verbose = True , **kwargs):
+def factor_load_multi(factor_name : str , dates = None , start_dt = None , end_dt = None , 
+                      date_colname = 'date' , verbose = True , 
+                      parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , **kwargs):
     if dates is None:
         assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
         dates = factor_dates(factor_name , start_dt , end_dt)
-    dfs = load_df_multi({date:factor_path(factor_name , date) for date in dates})
-    return process_df(dfs , date_colname = date_colname , df_syntax = f'factor/{factor_name}/multi-dates' if verbose else None , **kwargs)
+    paths = {date:factor_path(factor_name , date) for date in dates}
+    df = load_df_multi(paths , date_colname , parallel)
+    df_syntax = f'factor/{factor_name}/multi-dates' if verbose else None
+    return process_df(df , df_syntax = df_syntax , **kwargs)
 
 @laptop_func_deprecated
 def get_source_dates(db_src , db_key):

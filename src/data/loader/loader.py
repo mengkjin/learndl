@@ -52,8 +52,7 @@ class FrameLoader:
         return self.load_frame(start_dt , end_dt)
 
     def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
-        df = PATH.db_load_multi(self.db_src , self.db_key , start_dt=start_dt , end_dt=end_dt , 
-                                date_colname = 'date' , use_alt = self.use_alt)
+        df = PATH.db_load_multi(self.db_src , self.db_key , start_dt=start_dt , end_dt=end_dt , use_alt = self.use_alt)
         return df
     
 @dataclass
