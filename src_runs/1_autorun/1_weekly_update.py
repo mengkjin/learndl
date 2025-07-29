@@ -15,9 +15,9 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import ModelAPI
 from src.basic import MACHINE , AutoRunTask , CALENDAR
-from src_ui import BackendTaskManager
+from src_ui import BackendTaskRecorder
 
-@BackendTaskManager(email = 1)
+@BackendTaskRecorder(email = 1)
 def main(**kwargs):
     with AutoRunTask(f'weekly update {CALENDAR.update_to()}' , **kwargs) as runner:
         if not MACHINE.server:

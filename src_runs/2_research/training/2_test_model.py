@@ -25,9 +25,9 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import ModelAPI
 from src.basic import AutoRunTask
-from src_ui import BackendTaskManager
+from src_ui import BackendTaskRecorder
 
-@BackendTaskManager()
+@BackendTaskRecorder()
 def main(**kwargs):
     with AutoRunTask('test model' , message_capturer = True , **kwargs) as runner:
         ModelAPI.test_model(model_name = runner['model_name'] , short_test = runner.get('short_test'))

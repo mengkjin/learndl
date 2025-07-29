@@ -47,10 +47,10 @@ assert 'learndl' in file_path , f'learndl path not found , do not know where to 
 path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
-from src.basic import AutoRunTask , Logger
-from src_ui import BackendTaskManager
+from src.basic import AutoRunTask
+from src_ui import BackendTaskRecorder
 
-@BackendTaskManager(txt = 'Bye, World!' , email = 0)
+@BackendTaskRecorder(txt = 'Bye, World!' , email = 0)
 def main(txt : str = 'Hello, World!' , **kwargs):
     with AutoRunTask(f'test streamlit' , **kwargs) as runner:
         runner.info(str(kwargs))

@@ -47,21 +47,16 @@ class Email:
     def message(self , title : str  , body : str | None = None , recipient : str | None = None , 
                 attachment_group : str | list[str] = 'default' , 
                 clear_attachments : bool = True ,
-                title_prefix : str | None = 'Learndl:' ,
-                title_machine_name : bool = True):
+                title_prefix : str | None = 'Learndl:'):
         message = MIMEMultipart()
         message['From'] = self.sender
         message['To'] = self.recipient(recipient)
-        subject = ''
-        if title_prefix: subject += title_prefix
-        if title_machine_name: subject += MACHINE.name
-        if title: subject += title
-        message['Subject'] = subject
+        message['Subject'] = f'{title_prefix} {title}'
         message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
 
         if not isinstance(attachment_group , list): attachment_group = [attachment_group]
         for group in attachment_group:
-            for attachment in self.Attachments[group]:
+            for attachment in self.Attachments.get(group , []):
                 with open(attachment, 'rb') as attach_file:
                     part = MIMEBase('application', 'octet-stream')
                     part.set_payload(attach_file.read())
@@ -69,7 +64,7 @@ class Email:
                     part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
                     message.attach(part)
 
-            if clear_attachments: self.Attachments[group].clear()
+            if clear_attachments: self.Attachments[group] = []
 
         return message
     

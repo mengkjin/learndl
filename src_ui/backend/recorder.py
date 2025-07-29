@@ -6,22 +6,22 @@ import os , time , traceback
 from src_ui.abc import argparse_dict
 from .task import TaskItem , TaskDatabase
 
-class BackendTaskManager:
+class BackendTaskRecorder:
     '''
     convert script main function to one that can be used as a task in streamlit project
-    use BackendTaskManager to manage task, take acceptable return as exit message
+    use BackendTaskRecorder to record task, take acceptable return as exit message
     params will be passed to the warpped function as kwargs, example:
-        @BackendTaskManager(x = 1)
+        @BackendTaskRecorder(x = 1)
         def test(x : int , **kwargs):
             return 'yes' , Path('test.txt') , Path('test.csv')
-            # return BackendTaskManager.ExitMessage(message = 'yes' , files = ['test.txt' , 'test.csv'])
+            # return BackendTaskRecorder.ExitMessage(message = 'yes' , files = ['test.txt' , 'test.csv'])
             # return {'message' : 'yes' , 'files' : ['test.txt' , 'test.csv']}
 
     track:
         if True, will track the task and update the task status in the _page_files anyway
         if False, will only track the task if task_id is passed through the kwargs or argparse
     kwargs params:
-        will passed to the task as kwargs , except for task_id and running_status (will be used by the manager)
+        will passed to the task as kwargs , except for task_id and running_status (will be used by the recorder)
         task_id:
             will be used to identify the task
         running_status:
@@ -43,7 +43,7 @@ class BackendTaskManager:
         self.init_attributes(**argparse_dict(**kwargs))
 
     def __repr__(self):
-        return f'BackendTaskManager(task_id = {self.task_id})'
+        return f'BackendTaskRecorder(task_id = {self.task_id})'
     
     def __call__(self , func : Callable):
         def wrapper(*args , **kwargs):
@@ -151,16 +151,3 @@ class BackendTaskManager:
         if exit_msg.code:    self.update_msg['exit_code'] = exit_msg.code
         if exit_msg.error:   self.update_msg['exit_error'] = exit_msg.error
 
-class BackendAutoRunTask(BackendTaskManager):
-    def __init__(self , task_id : str | None = None , **kwargs):
-        super().__init__(**kwargs)
-    
-    def __call__(self , func : Callable):
-        from src.basic import AutoRunTask
-        def wrapper(*args , **kwargs):
-            with self:
-                with AutoRunTask(*args , **kwargs) as runner:
-                    func(*args , **kwargs , **self.params)
-                self.func_return(runner)
-            return runner
-        return wrapper

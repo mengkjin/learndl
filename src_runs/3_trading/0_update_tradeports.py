@@ -15,9 +15,9 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import TradingAPI
 from src.basic import AutoRunTask
-from src_ui import BackendTaskManager
+from src_ui import BackendTaskRecorder
 
-@BackendTaskManager()
+@BackendTaskRecorder()
 def main(**kwargs):
     with AutoRunTask('update trading portfolios' , **kwargs) as runner:
         TradingAPI.update()

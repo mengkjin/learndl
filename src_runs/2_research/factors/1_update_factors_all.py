@@ -28,9 +28,9 @@ if not path in sys.path: sys.path.append(path)
 
 from src.factor.api import FactorCalculatorAPI
 from src.basic import AutoRunTask
-from src_ui import BackendTaskManager
+from src_ui import BackendTaskRecorder
 
-@BackendTaskManager()
+@BackendTaskRecorder()
 def main(**kwargs):
     with AutoRunTask('update factors' , **kwargs) as runner:
         FactorCalculatorAPI.update(start = int(kwargs.pop('start')) , 

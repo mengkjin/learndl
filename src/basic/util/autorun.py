@@ -3,6 +3,8 @@ import traceback , psutil , fnmatch , platform , subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Literal , Any
+
+from src.project_setting import MACHINE
 from src.basic import path as PATH
 
 class AutoRunTask:
@@ -40,21 +42,19 @@ class AutoRunTask:
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.end_time = datetime.now()
         for level , msgs in self.exit_messages.items():
             for msg in msgs:
                 getattr(self.logger , level)(msg)
-
         if exc_type is not None:
             print(f'Error Occured! Info : ' + '-' * 20)
             print(exc_value)
 
             print('Traceback : ' + '-' * 20)
             print(traceback.format_exc())
-            self.status = f'Error Occured! {exc_value}'
-            title = f'Error - {self.task_name} - {self.time_str}'
+            self.status = 'Error'
         else:
-            self.status = 'Successful ' + self.task_name.replace('_' , ' ').title() + '!'
-            title = f'Success - {self.task_name} - {self.time_str}'
+            self.status = 'Success'
         
         self.capturer.__exit__(exc_type, exc_value, exc_traceback)
         self.dprinter.__exit__(exc_type, exc_value, exc_traceback)
@@ -63,7 +63,7 @@ class AutoRunTask:
         
         self.attach(self.emailer.Attachments.get('default' , []) , streamlit = True , email = False)
         if not self.forfeit_task:
-            self.send_email(title)
+            self.send_email()
             self.record_path.touch()
         # change_power_mode('power-saver')
 
@@ -93,14 +93,32 @@ class AutoRunTask:
     @property
     def message_capturer_path(self):
         return PATH.log_autorun.joinpath('message_capturer' , f'{self.task_name}.{self.time_str}.html')
+    
+    @property
+    def execution_status(self):
+        return 'Success' if not self.error_messages else 'Error'
 
     def today(self , format : str = '%Y%m%d'):
         return self.init_time.strftime(format)
 
-    def send_email(self , title : str):
+    def send_email(self):
         if self.email: 
-            title = ' '.join([*[s.capitalize() for s in self.task_name.split('_')]])
-            self.emailer.send(title = title , body = self.status , confirmation_message='Autorun' , 
+            title = f'{self.status} - {self.task_name.replace('_' , ' ').title()} - {self.time_str}'
+            bodies = [
+                f'Machine : {MACHINE.name}' ,
+                f'Source : {self.source}' ,
+                f'Task name : {self.task_name}' ,
+                f'Start time : {self.init_time.strftime("%Y-%m-%d %H:%M:%S")}' ,
+                f'End time : {self.end_time.strftime("%Y-%m-%d %H:%M:%S")}' ,
+                f'AutoRun Status : {self.status}' ,
+                f'Excution Status : {self.execution_status}' ,
+                f'Error Messages : ' + '-' * 20 ,
+                self.error_message ,
+                f'Final Messages : ' + '-' * 20 ,
+                self.final_message ,
+            ]
+
+            self.emailer.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , 
                               attachment_group = ['default' , 'autorun'])
 
     def info(self , message : str , at_exit = False):
@@ -149,6 +167,9 @@ class AutoRunTask:
     def final_message(self):
         return '\n'.join(self.logged_messages)
     
+    @property
+    def error_message(self):
+        return '\n'.join(self.error_messages)
     
 def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py']):
     running_scripts : list[Path] = []

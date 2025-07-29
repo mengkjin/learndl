@@ -14,9 +14,9 @@ path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
 import subprocess 
-from src_ui import BackendTaskManager
+from src_ui import BackendTaskRecorder
 
-@BackendTaskManager()
+@BackendTaskRecorder()
 def main(**kwargs):
     subprocess.run("git pull", shell=True, check=True)
 

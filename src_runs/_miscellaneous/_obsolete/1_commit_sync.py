@@ -19,9 +19,9 @@ if not path in sys.path: sys.path.append(path)
 
 import subprocess ,  socket
 from datetime import datetime
-from src_ui import BackendTaskManager
+from src_ui import BackendTaskRecorder
 
-@BackendTaskManager()
+@BackendTaskRecorder()
 def main(additional_message : str | list[str] = '' , **kwargs):
     prefixes = [socket.gethostname() , datetime.now().strftime('%Y%m%d')]
     if isinstance(additional_message , str): additional_message = [additional_message]

@@ -15,9 +15,9 @@ sys.path.append(path)
 
 from src.api import ModelAPI
 from src.basic import AutoRunTask
-from src_ui import BackendTaskManager
+from src_ui import BackendTaskRecorder
 
-@BackendTaskManager()
+@BackendTaskRecorder()
 def main(**kwargs):
     with AutoRunTask('update models' , **kwargs) as runner:
         ModelAPI.update_models()

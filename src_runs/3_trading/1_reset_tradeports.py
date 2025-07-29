@@ -20,9 +20,9 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import TradingAPI
 from src.basic import AutoRunTask
-from src_ui import BackendTaskManager
+from src_ui import BackendTaskRecorder
 
-@BackendTaskManager()
+@BackendTaskRecorder()
 def main(**kwargs):
     with AutoRunTask('reset trading portfolios' , **kwargs) as runner:
         TradingAPI.update(reset_ports = [s.strip() for s in runner['reset_ports'].split(',')])
