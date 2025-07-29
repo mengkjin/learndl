@@ -103,7 +103,7 @@ class AutoRunTask:
 
     def send_email(self):
         if self.email: 
-            title = f'{self.status} - {self.task_name.replace('_' , ' ').title()} - {self.time_str}'
+            title = f'{self.status} - {self.task_name.replace("_", " ").title()} - {self.time_str}'
             bodies = [
                 f'Machine : {MACHINE.name}' ,
                 f'Source : {self.source}' ,

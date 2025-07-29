@@ -362,8 +362,8 @@ class TaskQueue:
         if self.max_queue_size and len(self.queue) > self.max_queue_size:
             self.queue.pop(list(self.queue.keys())[0])
 
-    def create_item(self , script : Path | str | None):
-        item = TaskItem.create(script , self.task_db)
+    def create_item(self , script : Path | str | None , source : str | None = None):
+        item = TaskItem.create(script , self.task_db , source = source)
         self.add(item)
         return item
         
@@ -508,17 +508,19 @@ class TaskItem:
         return str(self.relative)
     
     @classmethod
-    def create(cls, script : Path | str | None , task_db : TaskDatabase | None = None):
+    def create(cls, script : Path | str | None , task_db : TaskDatabase | None = None , source : str | None = None , 
+               queue : TaskQueue | None = None):
         if script is None:
             script = sys.modules['__main__'].__file__
             assert script , 'script is not found'
             script = os.path.abspath(script)
             cmd = ' '.join(sys.argv)
-            item = cls(str(script), cmd = cmd , status = 'running' , start_time = time.time())
+            item = cls(str(script), cmd = cmd , status = 'running' , start_time = time.time() , source = source)
         else:
-            item = cls(str(script))
+            item = cls(str(script) , source = source)
         item.set_task_db(task_db)
         item.dump()
+        if queue is not None: queue.add(item)
         return item
     
     @classmethod

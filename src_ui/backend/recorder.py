@@ -73,7 +73,7 @@ class BackendTaskRecorder:
         if task_id:
             self._task_id = task_id
         else:
-            task_item = TaskItem.create(None)
+            task_item = TaskItem.create(None , source=kwargs.get('source' , None))
             self._task_id = task_item.id
         self.update_msg : dict[str , Any] = {'pid': os.getpid()}
         self.params = kwargs
