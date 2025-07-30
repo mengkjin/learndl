@@ -6,7 +6,7 @@ from dataclasses import dataclass , field
 from torch import Tensor
 from typing import Any , Literal , Optional
 
-from src.basic.util.device import Device , send_to
+from src.basic.util.device import Device , send_to , get_device
 
 def _object_shape(obj : Any) -> Any:
     if obj is None: return None
@@ -214,4 +214,7 @@ class BatchOutput:
     @classmethod
     def nn_module(cls , module : nn.Module , inputs : Any | BatchData , **kwargs):
         if isinstance(inputs , BatchData): inputs = inputs.x
+        device0 = get_device(module)
+        device1 = get_device(inputs)
+        assert device0 == device1 , (device0 , device1)
         return cls(module(inputs ,  **kwargs))

@@ -1,5 +1,5 @@
 from .version import torch_load
-from .device import Device
+from .device import Device , get_device
 from .logger import Logger , LogWriter , MessageCapturer
 from .model import *
 from .silence import SILENT

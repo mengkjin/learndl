@@ -29,6 +29,22 @@ def send_to(x : Any , device = None) -> Any:
         return x.to(device)
     else:
         return x
+    
+def get_device(obj : Module | Tensor | list | tuple | dict | Any):
+    if isinstance(obj , Tensor):
+        return obj.device
+    elif isinstance(obj , Module):
+        return next(obj.parameters()).device
+    elif isinstance(obj , (list,tuple)):
+        return get_device(obj[0])
+    elif isinstance(obj , dict):
+        return get_device(list(obj.values()))
+    elif obj.__class__.__name__ == 'BatchData':
+        return obj.device
+    elif obj.__class__.__name__ == 'BatchOutput':
+        return get_device(obj.pred)
+    else:
+        raise ValueError(f'{obj.__class__.__name__} is not a valid object')
 
 class Device:
     '''cpu / cuda / mps device , callable'''

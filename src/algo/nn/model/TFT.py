@@ -137,7 +137,7 @@ class TemporalFusionTransformer(nn.Module):
     """Temporal Fusion Transformer模型"""
     def __init__(
         self,
-        input_dim : tuple[int,int] = (6,len(RISK_INDUS)), # aka , known dynamic dim , static dim
+        input_dim : tuple[int,int] | tuple[int,int,int] = (6 , len(RISK_STYLE),len(RISK_INDUS)), # aka , known dynamic dim , static dim
         hidden_dim: int = 16,
         label_dim: int = 0, # aka , unknown dynamic dim, should be 0 if not used
         num_heads: int = 4,
@@ -152,7 +152,15 @@ class TemporalFusionTransformer(nn.Module):
         **kwargs
     ):
         super().__init__()
-        self.known_dynamic_dim , self.static_dim = input_dim
+        self.input_dim = input_dim
+        if len(input_dim) == 2:
+            self.known_dynamic_dim , self.static_dim = input_dim
+        elif len(input_dim) == 3:
+            _d0 , _d1 , self.static_dim = input_dim
+            self.known_dynamic_dim = _d0 + _d1
+        else:
+            raise ValueError(f'input_dim should be a tuple of length 2 or 3, but got {len(input_dim)}')
+        
         self.unknown_dynamic_dim = label_dim
         self.hidden_dim = hidden_dim
         self.max_len = max_len
@@ -231,7 +239,7 @@ class TemporalFusionTransformer(nn.Module):
         print(f"{name}: {x.shape}")
 
     def forward(
-        self, x : tuple[torch.Tensor,torch.Tensor,torch.Tensor] | tuple[torch.Tensor,torch.Tensor] | Any
+        self, x : tuple[torch.Tensor,...] | Any
     ):
         """
         x:
@@ -239,11 +247,21 @@ class TemporalFusionTransformer(nn.Module):
             static_features: (batch_size, static_dim) 静态特征
             future_features: (batch_size, pred_len, known_dim) 未来知特征
         """
-        if len(x) == 3:
-            historical_features , static_features , future_features = x
-        else:
-            historical_features , static_features = x
-            future_features = None
+        assert len(x) in [len(self.input_dim) , len(self.input_dim) + 1] , f'x should be a tuple of length {len(self.input_dim)} or {len(self.input_dim) + 1}, but got {len(x)}'
+        if len(self.input_dim) == 2:
+            if len(x) == len(self.input_dim):
+                historical_features , static_features = x
+                future_features = None
+            else:
+                historical_features , static_features , future_features = x
+        elif len(self.input_dim) == 3:
+            if len(x) == len(self.input_dim):
+                historical_features , additional_features , static_features = x
+                future_features = None
+            else:
+                historical_features , additional_features , static_features , future_features = x
+            historical_features = torch.cat([historical_features , additional_features], dim=-1)
+
         seq_len = historical_features.shape[1]
         
         # 1. 静态特征处理
@@ -352,135 +370,6 @@ class TemporalFusionTransformer(nn.Module):
         
         v = torch.stack(losses,dim=-1).mean(dim=-1)
         return v
-
-# 数据生成和预处理函数
-def generate_synthetic_data(
-    num_stocks: int = 50,
-    num_days: int = 200,
-    seq_len: int = 20,
-    pred_len: int = 5,
-    num_industries: int = 10
-):
-    """生成合成股票数据"""
-    np.random.seed(42)
-    
-    # 生成行业标签
-    industries = np.random.randint(0, num_industries, num_stocks)
-    industry_onehot = np.eye(num_industries)[industries]  # (num_stocks, num_industries)
-    
-    # 生成价格和成交量数据
-    prices = np.random.randn(num_stocks, num_days) * 0.02 + 1.0
-    prices = np.cumprod(1 + prices, axis=1) * 100  # 累积收益率转价格
-    
-    volumes = np.random.lognormal(10, 1, (num_stocks, num_days))
-    
-    # 计算日收益率
-    returns = np.diff(prices, axis=1) / prices[:, :-1]  # (num_stocks, num_days-1)
-    
-    # 计算未来m日收益率 - 简化版本
-    future_returns = []
-    for i in range(num_days - pred_len):
-        future_ret = (prices[:, i + pred_len] - prices[:, i]) / prices[:, i]
-        future_returns.append(future_ret)
-    future_returns = np.array(future_returns).T  # (num_stocks, num_days - pred_len)
-    
-    return {
-        'prices': prices,
-        'volumes': volumes,
-        'returns': returns,
-        'future_returns': future_returns,
-        'industries': industry_onehot
-    }
-
-def create_sequences(data: dict[str,Any], seq_len: int = 20, pred_len: int = 5):
-    """创建训练序列 - 修复版本"""
-    prices = data['prices']
-    volumes = data['volumes']
-    returns = data['returns']
-    future_returns = data['future_returns']
-    industries = data['industries']
-    
-    num_stocks, num_days = prices.shape
-    
-    sequences = []
-    
-    for stock_idx in range(num_stocks):
-        # 确保有足够的数据进行序列创建
-        start_idx = seq_len
-        end_idx = min(num_days - pred_len, future_returns.shape[1])
-        
-        for day_idx in range(start_idx, end_idx):
-            # 静态特征：行业
-            static_feat = industries[stock_idx]
-            
-            # 历史特征：价格、成交量、历史日收益率
-            hist_prices = prices[stock_idx, day_idx - seq_len:day_idx]
-            hist_volumes = volumes[stock_idx, day_idx - seq_len:day_idx]
-            
-            # 使用日收益率作为历史特征，而不是未来收益率
-            if day_idx - seq_len > 0:
-                hist_returns = returns[stock_idx, day_idx - seq_len:day_idx]
-            else:
-                # 如果没有足够的历史收益率，用零填充
-                available_returns = returns[stock_idx, :day_idx]
-                padding_length = seq_len - len(available_returns)
-                hist_returns = np.concatenate([np.zeros(padding_length), available_returns])
-            
-            # 标准化
-            hist_prices = (hist_prices - hist_prices.mean()) / (hist_prices.std() + 1e-8)
-            hist_volumes = (hist_volumes - hist_volumes.mean()) / (hist_volumes.std() + 1e-8)
-            hist_returns = (hist_returns - hist_returns.mean()) / (hist_returns.std() + 1e-8)
-            
-            historical_features = np.column_stack([hist_prices, hist_volumes, hist_returns])
-            
-            # 未来已知特征：未来价格、成交量
-            future_prices = prices[stock_idx, day_idx:day_idx + pred_len]
-            future_volumes = volumes[stock_idx, day_idx:day_idx + pred_len]
-            
-            # 标准化
-            future_prices = (future_prices - future_prices.mean()) / (future_prices.std() + 1e-8)
-            future_volumes = (future_volumes - future_volumes.mean()) / (future_volumes.std() + 1e-8)
-            
-            future_features = np.column_stack([future_prices, future_volumes])
-            
-            # 目标：未来收益率
-            if day_idx < future_returns.shape[1]:
-                target = future_returns[stock_idx, day_idx:day_idx + pred_len]
-                
-                # 确保target长度正确
-                if len(target) == pred_len:
-                    sequences.append({
-                        'static': static_feat,
-                        'historical': historical_features,
-                        'future': future_features,
-                        'target': target
-                    })
-    
-    return sequences
-
-def evaluate_predictions(predictions, targets, quantiles=[0.1, 0.5, 0.9]):
-    """评估预测结果"""
-    # 计算各分位数的准确率
-    results = {}
-    
-    for i, q in enumerate(quantiles):
-        pred_q = predictions[:, i]
-        
-        if q == 0.5:  # 中位数预测的MAE和RMSE
-            mae = np.mean(np.abs(pred_q - targets))
-            rmse = np.sqrt(np.mean((pred_q - targets) ** 2))
-            results[f'MAE_q{q}'] = mae
-            results[f'RMSE_q{q}'] = rmse
-        
-        # 分位数覆盖率
-        if q < 0.5:
-            coverage = np.mean(targets >= pred_q)
-        else:
-            coverage = np.mean(targets <= pred_q)
-        
-        results[f'Coverage_q{q}'] = coverage
-    
-    return results 
 
 
 if __name__ == '__main__' :

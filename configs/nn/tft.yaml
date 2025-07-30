@@ -1,11 +1,11 @@
-hidden_dim:     [16] #  2**5
-seqlens:        [{'day': 30 , 'indus': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
+hidden_dim:     [16 , 16 , 32] #  2**5
+seqlens:        [{'day': 30 , 'style': 30 , 'indus': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
 dropout:        [0.1]
 ffn_dim:        [32]
-num_heads:      [4]
+num_heads:      [4 , 4 , 8]
 pred_len:       [1]
 encoder_layers: [2]
 
 model.submodels: [best]
 model.input_type: data
-model.data.types: day+indus
+model.data.types: day+style+indus

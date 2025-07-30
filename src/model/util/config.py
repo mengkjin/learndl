@@ -116,7 +116,8 @@ class TrainParam:
     def generate_model_param(self , update_inplace = True , **kwargs):
         module = self.model_module if self.module_type == 'nn' else self.model_booster_type
         assert isinstance(module , str) , (self.model_module , module)
-        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , **kwargs).expand()
+        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , 
+                                 1 if self.short_test else -1 , **kwargs).expand()
         if update_inplace: self.update_model_param(model_param)
         return model_param
     
@@ -595,6 +596,7 @@ class TrainConfig(TrainParam):
             info_strs.append(f'  -->  Model Params :')
             for k , v in self.Model.Param.items():
                 info_strs.append(f'    -->  {k} : {v}')
+        info_strs.append(f'Model Num    : {self.Model.n_model}')
         info_strs.append(f'Model Inputs : {self.model_input_type}')
         if self.model_input_type == 'data':
             info_strs.append(f'  -->  Data Types : {self.model_data_types}')

@@ -47,12 +47,13 @@ class AutoRunTask:
             for msg in msgs:
                 getattr(self.logger , level)(msg)
         if exc_type is not None:
-            print(f'Error Occured! Info : ' + '-' * 20)
-            print(exc_value)
+            # print(f'Error Occured! Info : ' + '-' * 20)
+            # print(exc_value)
 
-            print('Traceback : ' + '-' * 20)
-            print(traceback.format_exc())
+            # print('Traceback : ' + '-' * 20)
+            # print(traceback.format_exc())
             self.status = 'Error'
+            self.error_messages.append('\n'.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
         else:
             self.status = 'Success'
         

@@ -405,7 +405,7 @@ class TaskQueue:
         return filtered_queue   
     
     def latest(self , num : int = 10):
-        return {item.id: item for item in list(self.queue.values())[-num:]}
+        return {item.id: item for item in sorted(self.queue.values(), key=lambda x: x.create_time, reverse=True)[:num]}
     
 @dataclass
 class TaskItem:

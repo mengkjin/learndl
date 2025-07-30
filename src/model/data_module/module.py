@@ -7,7 +7,7 @@ from torch import Tensor
 from torch.utils.data import BatchSampler
 from typing import Any , Literal , Optional
 
-from src.basic import CONF , PATH , SILENT , HiddenPath
+from src.basic import CONF , PATH , SILENT , HiddenPath , Logger
 from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
 from src.func import tensor_standardize_and_weight , match_values , index_intersect
 from src.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig , MemFileStorage , StoredFileLoader
@@ -145,7 +145,6 @@ class DataModule(BaseDataModule):
 
     def setup_data_prepare(self) -> None:
         seqlens = self.loader_param.seqlens
-
         x_keys = self.input_keys
         y_keys = [k for k in seqlens.keys() if k not in x_keys]
         self.seqs = {k:1 for k in x_keys} | seqlens
@@ -284,7 +283,7 @@ class DataModule(BaseDataModule):
                 'divlast' : method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST) ,
                 'histnorm': method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM) ,
             }
-            if not SILENT: print(f'Pre-Norming method of [{mdt}] : {new_method}')
+            if not SILENT: Logger.info(f'Pre-Norming method of [{mdt}] : {new_method}')
             self.prenorm_divlast[mdt]  = new_method['divlast']
             self.prenorm_histnorm[mdt] = new_method['histnorm']
 
