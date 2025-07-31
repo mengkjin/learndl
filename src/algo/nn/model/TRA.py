@@ -137,6 +137,7 @@ def sinkhorn(Q, n_iters=3, epsilon=0.01):
     return Q
 
 class tra(nn.Module):
+    _default_category = 'tra'
     def __init__(self , input_dim , hidden_dim , rnn_type = 'lstm' , rnn_layers = 2 , 
                  num_states=1, hist_loss_seq_len = 60 , hist_loss_horizon = 20 , **kwargs):
         super().__init__()

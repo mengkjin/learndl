@@ -8,6 +8,8 @@ import src.algo.nn.layer as Layer
 __all__ = ['risk_att_gru']
 
 class risk_att_gru(nn.Module):
+    _default_data_type = 'day+style+indus'
+    
     def __init__(
             self, 
             input_dim    = (6,len(RISK_STYLE),len(RISK_INDUS)),

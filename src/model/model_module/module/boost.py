@@ -1,7 +1,7 @@
 from torch import Tensor
 from typing import Any , Optional
 
-from src.algo import getter
+from src.algo import AlgoModule
 from src.model.util import BasePredictorModel , BatchData
 from src.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
 
@@ -20,8 +20,8 @@ class BoostPredictor(BasePredictorModel):
         cuda = self.device.is_cuda     if self.config else None
         seed = self.config.random_seed if self.config else None
 
-        self.booster = getter.boost(module , param , cuda , seed , given_name = self.model_full_name ,
-                                    optuna = self.config.model_booster_optuna , n_trials = self.config.model_booster_optuna_n_trials)
+        self.booster = AlgoModule.get_booster(module , param , cuda , seed , given_name = self.model_full_name ,
+                                        optuna = self.config.model_booster_optuna , n_trials = self.config.model_booster_optuna_n_trials)
 
         self.model_dict.reset()
         self.metrics.new_model(param)

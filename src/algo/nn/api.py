@@ -26,22 +26,25 @@ AVAILABLE_NNS = {
     'tft'               : Model.TFT.TemporalFusionTransformer
 }
 
-def valid_nn(nn_type : str):
-    return nn_type in AVAILABLE_NNS
-
 def get_nn_module(module_name : str) -> nn.Module:
     return AVAILABLE_NNS[module_name]
 
-def get_nn_category(module_name : str) -> Literal['vae' , 'tra' , '']:
-    if module_name == 'factor_vae':
+def get_nn_category(module_name : str) -> str | None:
+    default_category = getattr(AVAILABLE_NNS.get(module_name , None) , '_default_category' , None)
+    if default_category:
+        return default_category
+    elif module_name == 'factor_vae':
         return 'vae'
     elif module_name == 'tra':
-        return 'tra'
+        return 'tra' 
     else:
-        return ''
+        return None
     
 def get_nn_datatype(module_name : str) -> str | None:
-    if module_name == 'risk_att_gru':
+    default_data_type = getattr(AVAILABLE_NNS.get(module_name , None) , '_default_data_type' , None)
+    if default_data_type:
+        return default_data_type
+    elif module_name == 'risk_att_gru':
         return 'day+style+indus'
     else:
         return None

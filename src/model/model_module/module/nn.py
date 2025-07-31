@@ -1,7 +1,7 @@
 from torch import Tensor , set_grad_enabled
 from typing import Any , Optional
 
-from src.algo import getter
+from src.algo import AlgoModule
 from src.model.util import BasePredictorModel , BatchData , Optimizer
 from src.model.model_module.util.swa import choose_swa_method
 
@@ -17,7 +17,7 @@ class NNPredictor(BasePredictorModel):
 
         device = self.config.device if self.config else None
 
-        self.net = getter.nn(module , param , device)
+        self.net = AlgoModule.get_nn(module , param , device)
         self.reset_submodels(*args , **kwargs)
 
         self.model_dict.reset()
@@ -52,7 +52,7 @@ class NNPredictor(BasePredictorModel):
         self.net.load_state_dict(model_file['state_dict'])
         return self
     
-    def multiloss_params(self): return getter.multiloss_params(self.net)
+    def multiloss_params(self): return AlgoModule.multiloss_params(self.net)
     
     def forward(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''

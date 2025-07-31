@@ -4,7 +4,7 @@ import numpy as np
 from pathlib import Path
 from typing import Any , Literal , Optional
 
-from src.algo import getter
+from src.algo import AlgoModule
 from src.basic import Device , Logger , ModelPath , PATH , MACHINE
 from src.func import recur_update
 
@@ -31,7 +31,7 @@ def conf_copy(source : Path , target : Path , overwrite = False):
         shutil.copyfile(source , target)
 
 def conf_mod_type(module : str):
-    return getter.module_type(module)
+    return AlgoModule.module_type(module)
 
 class TrainParam:
     def __init__(self , base_path : ModelPath | Path | None , override = None):
@@ -95,14 +95,14 @@ class TrainParam:
         if not MACHINE.server and not self.short_test:
             Logger.warning('Beware! Should be at server or short_test, but short_test is False now!')
 
-        nn_category = getter.nn_category(self.model_module)
-        nn_datatype = getter.nn_datatype(self.model_module)
-        
+        nn_category = AlgoModule.nn_category(self.model_module)
         if nn_category == 'tra': assert self.train_sample_method != 'total_shuffle' , self.train_sample_method
         if nn_category == 'vae': assert self.train_sample_method == 'sequential'    , self.train_sample_method
 
-        if nn_datatype:              
-            self.Param['model.data.types'] = nn_datatype
+        nn_datatype = AlgoModule.nn_datatype(self.model_module)
+        if nn_datatype:  self.Param['model.data.types'] = nn_datatype
+
+
         if self.module_type != 'nn' or self.model_booster_head: 
             self.Param['model.submodels'] = ['best']
         if 'best' not in self.model_submodels: 
@@ -149,7 +149,7 @@ class TrainParam:
     @property
     def module_type(self): return conf_mod_type(self.model_module)
     @property
-    def nn_category(self): return getter.nn_category(self.model_module)
+    def nn_category(self): return AlgoModule.nn_category(self.model_module)
     @property
     def resumeable(self): 
         assert self.model_name
@@ -232,9 +232,9 @@ class TrainParam:
     @property
     def model_booster_type(self):
         if self.model_module in ['booster' , 'hidden_aggregator']:
-            assert getter.valid_booster(self.Param['model.booster_type']) , self.Param['model.booster_type']
+            assert AlgoModule.is_valid(self.Param['model.booster_type'] , 'booster') , self.Param['model.booster_type']
             return self.Param['model.booster_type']
-        elif getter.valid_booster(self.model_module):
+        elif AlgoModule.is_valid(self.model_module, 'booster'):
             return self.model_module
         else:
             return 'not_a_booster'
@@ -325,7 +325,7 @@ class ModelParam:
             assert 'hist_loss_horizon' in self.Param
 
         if self.booster_head:
-            assert getter.valid_booster(self.booster_head) , self.booster_head
+            assert AlgoModule.is_valid(self.booster_head , 'booster') , self.booster_head
             self.booster_head_param = ModelParam(self.base_path , self.booster_head , False , self.verbosity , 1 , **self.override)
         return self
     

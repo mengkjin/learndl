@@ -8,7 +8,7 @@ from pathlib import Path
 from torch import Tensor
 from typing import Any , final , Iterator , Literal , Optional
 
-from src.algo import getter
+from src.algo import AlgoModule
 from src.basic import ModelDict , BigTimer , INSTANCE_RECORD , PATH
 from src.func import Filtered
 from src.data import ModuleData
@@ -509,7 +509,7 @@ class BaseTrainer(ModelStreamLine):
     def assert_equity(a , b): assert a == b , (a , b)
     @staticmethod
     def available_modules(module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
-        return getter.available_modules(module_type)
+        return AlgoModule.available_modules(module_type)
     @staticmethod
     def available_models(short_test : bool | Literal['both'] = 'both'):
         bases = [model.name for model in PATH.model.iterdir() if model.is_dir() and not model.name.startswith('.')]

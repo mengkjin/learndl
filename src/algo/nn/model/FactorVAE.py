@@ -6,6 +6,8 @@ from torch.distributions import Normal , kl_divergence
 from src.algo.nn.layer.MLP import MLP
 
 class FactorVAE(nn.Module):
+    _default_category = 'vae'
+    
     def __init__(
         self,
         input_dim : int = 6 ,

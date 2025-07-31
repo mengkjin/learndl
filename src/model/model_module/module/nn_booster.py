@@ -1,7 +1,7 @@
 from torch import Tensor , set_grad_enabled
 from typing import Any , Optional
 
-from src.algo import getter
+from src.algo import AlgoModule
 from src.model.util import BasePredictorModel , BatchData , BatchOutput , Optimizer
 from src.model.model_module.util.swa import choose_swa_method
 from src.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat
@@ -32,9 +32,9 @@ class NNBooster(BasePredictorModel):
         cuda   = self.device.is_cuda     if self.config else None
         seed   = self.config.random_seed if self.config else None
 
-        self.net = getter.nn(nn_module , nn_param , device)
+        self.net = AlgoModule.get_nn(nn_module , nn_param , device)
         self.reset_submodels(*args , **kwargs)
-        self.booster = getter.boost(boost_module , boost_param, cuda , seed , given_name = self.model_full_name)
+        self.booster = AlgoModule.get_booster(boost_module , boost_param, cuda , seed , given_name = self.model_full_name)
 
         self.model_dict.reset()
         self.metrics.new_model(nn_param | boost_param)
@@ -70,7 +70,7 @@ class NNBooster(BasePredictorModel):
         self.booster.load_dict(model_file['booster_head'])
         return self
 
-    def multiloss_params(self): return getter.multiloss_params(self.net)
+    def multiloss_params(self): return AlgoModule.multiloss_params(self.net)
 
     def forward(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
         return self.forward_full(batch_data , *args , **kwargs)

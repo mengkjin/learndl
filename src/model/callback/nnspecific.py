@@ -1,12 +1,12 @@
 import torch
 from typing import Any , Optional
 
-from src.algo import getter
+from src.algo import AlgoModule
 from src.data import BlockLoader
 from src.model.util import BaseCallBack
 
 def specific_cb(module_name : str) -> Optional[Any]:
-    nn_category = getter.nn_category(module_name)
+    nn_category = AlgoModule.nn_category(module_name)
     if module_name == 'gru_dsize':
         return SpecCB_DSize
     elif nn_category == 'vae':
@@ -26,12 +26,12 @@ class SpecCB_TRA(BaseCallBack):
         self.i1 = self.batch_data.i[:,1].cpu()
         y = self.batch_data.y
         hl = self.data.buffer['hist_loss']
-        rw = self.net.hist_loss_seq_len
+        rw = getattr(self.net , 'hist_loss_seq_len')
         hist_loss = torch.stack([hl[self.i0 , self.i1 + j + 1 - rw] for j in range(rw)],dim=-2)
         self.batch_data.kwargs = {'y': y , 'hist_loss' : hist_loss.to(y.device)}
     def init_buffer(self):
         hist_loss_shape = list(self.data.y.shape)
-        hist_loss_shape[2] = self.net.num_states
+        hist_loss_shape[2] = getattr(self.net , 'num_states')
         self.data.buffer['hist_preds'] = torch.randn(hist_loss_shape)
         self.data.buffer['hist_loss']  = (self.data.buffer['hist_preds'] - self.data.y.nan_to_num(0)).square()
     def update_buffer(self):
@@ -69,7 +69,7 @@ class SpecCB_VAE(BaseCallBack):
     def on_train_batch_start(self):
         y = self.batch_data.y
         self.batch_data.kwargs = {
-            'y': y , 'alpha_noise' : self.reparameterize(y) , 'factor_noise' : self.reparameterize(y , self.net.factor_num) ,
+            'y': y , 'alpha_noise' : self.reparameterize(y) , 'factor_noise' : self.reparameterize(y , getattr(self.net , 'factor_num')) ,
         }
 
 class SpecCB_DSize(BaseCallBack):

@@ -5,7 +5,7 @@ from dataclasses import dataclass , field
 from torch import nn , Tensor
 from typing import Any , Literal , Optional
 
-from src.algo import MetricsCalculator
+from src.algo.nn.util import MetricsCalculator
 from .batch import BatchMetric
 
 @dataclass(slots=True)
@@ -26,7 +26,7 @@ class Metrics:
     VAL_METRIC  : Literal['loss' ,'score'] = 'score'
     
     def __init__(self , 
-                 module_type = 'nn' , nn_category = '' ,
+                 module_type = 'nn' , nn_category = None ,
                  loss_type : Literal['mse', 'pearson', 'ccc'] = 'ccc' , 
                  score_type : Literal['mse', 'pearson', 'ccc', 'spearman'] = 'spearman',
                  penalty_kwargs : dict = {} ,

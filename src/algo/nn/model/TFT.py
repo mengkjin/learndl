@@ -135,6 +135,8 @@ class MultiHeadAttention(nn.Module):
 
 class TemporalFusionTransformer(nn.Module):
     """Temporal Fusion Transformer模型"""
+    _default_data_type = 'day+style+indus'
+    
     def __init__(
         self,
         input_dim : tuple[int,int] | tuple[int,int,int] = (6 , len(RISK_STYLE),len(RISK_INDUS)), # aka , known dynamic dim , static dim
