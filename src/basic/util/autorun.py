@@ -31,6 +31,8 @@ class AutoRunTask:
         self.emailer = Email()
         self.logger = Logger()
 
+        self.status = 'Starting'
+
     def __repr__(self):
         return f'AutoRunTask(task_name = {self.task_name} , email = {self.email} , source = {self.source} , time = {self.time_str})'
 
@@ -39,6 +41,7 @@ class AutoRunTask:
         # change_power_mode('balanced')
         self.dprinter.__enter__()
         self.capturer.__enter__()
+        self.status = 'Running'
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -65,8 +68,12 @@ class AutoRunTask:
         self.attach(self.emailer.Attachments.get('default' , []) , streamlit = True , email = False)
         if not self.forfeit_task:
             self.send_email()
-            self.record_path.touch()
+            if self.status == 'Success': self.record_path.touch()
         # change_power_mode('power-saver')
+
+    @property
+    def success(self):
+        return self.status == 'Success'
 
     def get(self , key : str , default : Any = None) -> Any:
         raw = self.kwargs.get(key , default)
