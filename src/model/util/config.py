@@ -232,9 +232,9 @@ class TrainParam:
     @property
     def model_booster_type(self):
         if self.model_module in ['booster' , 'hidden_aggregator']:
-            assert AlgoModule.is_valid(self.Param['model.booster_type'] , 'booster') , self.Param['model.booster_type']
+            assert AlgoModule.is_valid(self.Param['model.booster_type'] , 'boost') , self.Param['model.booster_type']
             return self.Param['model.booster_type']
-        elif AlgoModule.is_valid(self.model_module, 'booster'):
+        elif AlgoModule.is_valid(self.model_module, 'boost'):
             return self.model_module
         else:
             return 'not_a_booster'
@@ -325,7 +325,7 @@ class ModelParam:
             assert 'hist_loss_horizon' in self.Param
 
         if self.booster_head:
-            assert AlgoModule.is_valid(self.booster_head , 'booster') , self.booster_head
+            assert AlgoModule.is_valid(self.booster_head , 'boost') , self.booster_head
             self.booster_head_param = ModelParam(self.base_path , self.booster_head , False , self.verbosity , 1 , **self.override)
         return self
     

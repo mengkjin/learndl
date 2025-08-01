@@ -55,16 +55,20 @@ class Email:
         message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
 
         if not isinstance(attachment_group , list): attachment_group = [attachment_group]
+        attachments = []
         for group in attachment_group:
-            for attachment in self.Attachments.get(group , []):
-                with open(attachment, 'rb') as attach_file:
-                    part = MIMEBase('application', 'octet-stream')
-                    part.set_payload(attach_file.read())
-                    encoders.encode_base64(part)
-                    part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
-                    message.attach(part)
+            if group in self.Attachments:
+                attachments.extend(self.Attachments[group])
+                if clear_attachments: self.Attachments[group] = []
+        attachments = list(set(attachments))
 
-            if clear_attachments: self.Attachments[group] = []
+        for attachment in attachments:
+            with open(attachment, 'rb') as attach_file:
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(attach_file.read())
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
+                message.attach(part)
 
         return message
     

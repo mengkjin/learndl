@@ -437,11 +437,13 @@ class YAMLFileEditorState:
         self.edit_content : str | None = None
     
     @classmethod
-    def get_state(cls , key : str) -> 'YAMLFileEditorState':
+    def get_state(cls , key : str , root : Path | str | None = None) -> 'YAMLFileEditorState':
         if f'yaml_file_editor_states' not in st.session_state:
             st.session_state.yaml_file_editor_states = {}
         if key not in st.session_state.yaml_file_editor_states:
             st.session_state.yaml_file_editor_states[key] = cls(key)
+        if root is not None:
+            st.session_state.yaml_file_editor_states[key].root = Path(root)
         return st.session_state.yaml_file_editor_states[key]
 
 class YAMLFileEditor:
@@ -451,22 +453,24 @@ class YAMLFileEditor:
             cls._instances[key] = super().__new__(cls)
         return cls._instances[key]
     
-    def __init__(self , key : str = 'yaml_file_editor' , file_root : Path | str = BASE_DIR):
+    def __init__(self , key : str = 'yaml_file_editor' , file_root : Path | str = BASE_DIR , 
+                 file_input = True):
         self.key = key
-        self.file_root = file_root
+        self.file_root = Path(file_root)
+        self.file_input = file_input
+        if not file_input:
+            # assert self.file_root.is_file() , f"File root is not a file: {self.file_root}"
+            pass
+        else:
+            assert self.file_root.exists() , f"File root does not exist: {self.file_root}"
+            assert self.file_root.is_dir() , f"File root is not a directory: {self.file_root}"
         self.init_session_state()
 
     def __repr__(self):
         return f"YAMLFileEditor(key={self.key},root={self.file_root})"
         
     def init_session_state(self):
-        state = YAMLFileEditorState.get_state(key = self.key)
-        self.state = state
-        if isinstance(self.file_root , str):
-            self.file_root = Path(self.file_root)
-        assert self.file_root.exists() , f"File root does not exist: {self.file_root}"
-        assert self.file_root.is_dir() , f"File root is not a directory: {self.file_root}"
-        self.state.root = self.file_root
+        self.state = YAMLFileEditorState.get_state(key = self.key , root = self.file_root)
         return self
 
     def get_file_root(self):
@@ -477,7 +481,9 @@ class YAMLFileEditor:
 
     def get_file_path(self , file_path : Path | str | None = None) -> Path:
         root = self.get_file_root()
-        if file_path is None:
+        if root.is_file():
+            file_path = root
+        elif file_path is None:
             file_path = root.joinpath(self.state.path)
         else:
             file_path = root.joinpath(file_path)
@@ -573,9 +579,9 @@ class YAMLFileEditor:
     def show_yaml_editor(self , file_path : Path | str | Sequence[Path | str] | None = None , default_file : Path | str | None = None):
         from streamlit_ace import st_ace
         self.init_session_state()
-        self.init_path_input(file_path , default_file)
-        self.load_file()
-        editor_key = f"yaml_editor_{self.get_file_path().name}_{self.state.reload_timestamp}"
+        if self.file_input: self.init_path_input(file_path , default_file)
+        if not self.load_file(): return
+        editor_key = f"{self.key}_{self.get_file_path().name}_{self.state.reload_timestamp}"
         self.state.edit_content = st_ace(
             value=self.state.load_content or '',
             height = 500 ,
@@ -587,10 +593,12 @@ class YAMLFileEditor:
 
         cols = st.columns(3 , gap = 'small')
         with cols[0]:
-            if st.button("Reload", on_click=self.on_reload_file , help = "Reload the YAML file"):
+            if st.button("Reload", key = f"yaml-file-editor-{self.key}-reload" ,
+                         on_click=self.on_reload_file , help = "Reload the YAML file"):
                 st.rerun()
         with cols[1]:
-            if st.button("Validate" , on_click = self.on_validate_content , help = "Validate the YAML file"):
+            if st.button("Validate" , key = f"yaml-file-editor-{self.key}-validate" ,
+                         on_click = self.on_validate_content , help = "Validate the YAML file"):
                 if self.state.path_status == 'success':
                     st.success("YAML file path is valid")
                 else:
@@ -610,7 +618,8 @@ class YAMLFileEditor:
                 disabled , help = False , "Save the YAML file"
             else:
                 disabled , help = True , self.state.save_status
-            st.button("Save", on_click=self.on_save_file , disabled = disabled , help = help)
+            st.button("Save", key = f"yaml-file-editor-{self.key}-save" ,
+                      on_click=self.on_save_file , disabled = disabled , help = help)
         
         with st.expander("YAML preview"):
             try:

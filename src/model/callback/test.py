@@ -37,7 +37,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def path_pred(self): return self.trainer.path_pred_dataframe
 
     def on_test_start(self):     PRED_RECORD.initialize(self.trainer)
-    def on_test_batch_end(self): PRED_RECORD.append_batch_pred(self.trainer)
+    def on_test_batch_end(self): PRED_RECORD.append_batch_pred()
     def on_test_end(self):  
         if (df := PRED_RECORD.all_preds).empty: return
         if self.use_num == 'first':
@@ -95,7 +95,7 @@ class GroupReturnAnalysis(BaseCallBack):
     def path_grp(self): return str(self.config.model_base_path.rslt('group.xlsx'))
 
     def on_test_start(self):     PRED_RECORD.initialize(self.trainer)
-    def on_test_batch_end(self): PRED_RECORD.append_batch_pred(self.trainer)
+    def on_test_batch_end(self): PRED_RECORD.append_batch_pred()
     def on_test_end(self):       
         if (df := PRED_RECORD.all_preds).empty: return
         df['factor_name'] = df['model_num'].astype(str) + '.' + df['submodel']

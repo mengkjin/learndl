@@ -8,7 +8,7 @@
 # close_after_run: False
 # param_inputs:
 #   model_name : 
-#       type : [gru_day , gru_avg]
+#       type : "[p.name for p in Path('models').iterdir() if not p.name.endswith('_ShortTest') and not p.name.startswith('.')]"
 #       desc : choose a model
 #       prefix : "model/"
 #       required : True

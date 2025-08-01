@@ -1,4 +1,4 @@
-__version__ = '0.2.1'
+__version__ = '0.2.2'
 __recommeded_explorer__ = 'chrome'
 
 import sys , pathlib
@@ -877,6 +877,11 @@ def show_param_settings(runner : ScriptRunner):
                       on_click = SC.click_script_runner_expand , args = (runner,))                
         
     params = ParamInputsForm(runner).init_param_inputs('customized').param_values
+    if runner.header.file_editor:
+        file_editor = YAMLFileEditor('param-settings-file-editor', 
+                                     file_root=runner.header.file_editor['path'].format(**params) ,
+                                     file_input=False)
+        file_editor.show_yaml_editor()
     if SC.ready_to_go(runner):
         help_text = f"Parameters valid, run {runner.script_key}"
         button_key = f"script-runner-run-enabled-{runner.script_key}"

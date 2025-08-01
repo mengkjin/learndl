@@ -68,6 +68,7 @@ class ScriptHeader:
     email: bool = False
     close_after_run: bool = False
     param_inputs: dict[str, Any] = field(default_factory=dict)
+    file_editor: dict[str, Any] = field(default_factory=dict)
     disabled: bool = False
 
     def get_param_inputs(self):
@@ -107,7 +108,11 @@ class ScriptParamInput:
                 assert self.enum , f'enum is required for {self.type}'
                 ptype = list(self.enum)
             else:
-                raise ValueError(f'Invalid type: {self.type}')
+                try:
+                    ptype = eval(self.type)
+                except Exception as e:
+                    print(f'Invalid type: {self.type} , using str as default')
+                    ptype = str
         elif isinstance(self.type, (list, tuple)):
             ptype = list(self.type)
         else:

@@ -3,6 +3,7 @@ import torch
 from torch import Tensor
 from typing import Any , Optional , Literal
 
+from src.project_setting import MACHINE
 from .nn.api import get_nn_module , get_multiloss_params , get_nn_category , get_nn_datatype , AVAILABLE_NNS
 from .boost.api import AVAILABLE_BOOSTERS , OptunaBooster , GeneralBooster
 
@@ -23,11 +24,27 @@ class AlgoModule:
             raise ValueError(f'{module_type} is not a valid module type')
         
     @classmethod
-    def is_valid(cls , model_module : str , type : Literal['nn' , 'booster' , 'all'] = 'all'): 
+    def available_modules_str(cls , module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
+        if module_type == 'all':
+            return '\n'.join([cls.available_modules_str('nn') , cls.available_modules_str('boost')])
+        elif module_type == 'nn':
+            return '\n'.join([f'nn/{module}' for module in cls.AVAILABLE_NNS.keys()])
+        elif module_type == 'boost':
+            return '\n'.join([f'boost/{module}' for module in cls.AVAILABLE_BOOSTERS.keys()])
+        else:
+            raise ValueError(f'{module_type} is not a valid module type')
+        
+    @classmethod
+    def export_available_modules(cls):
+        with open(f'{MACHINE.project_path}/available_modules.txt' , 'w') as f:
+            f.write(cls.available_modules_str())
+        
+    @classmethod
+    def is_valid(cls , model_module : str , type : Literal['nn' , 'boost' , 'all'] = 'all'): 
         if type == 'all': return model_module in cls.AVAILABLE_MODULES
         elif type == 'nn': return model_module in cls.AVAILABLE_NNS
-        elif type == 'booster': return model_module in cls.AVAILABLE_BOOSTERS
-        else: raise ValueError(f'{type} is not a valid booster type')
+        elif type == 'boost': return model_module in cls.AVAILABLE_BOOSTERS
+        else: raise ValueError(f'{type} is not a valid boost type')
 
     @classmethod
     def module_type(cls , module_name : str):
@@ -63,3 +80,5 @@ class AlgoModule:
 
     @classmethod
     def multiloss_params(cls , module : torch.nn.Module | Any): return get_multiloss_params(module)
+
+AlgoModule.export_available_modules()
