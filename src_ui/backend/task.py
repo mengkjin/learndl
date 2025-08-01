@@ -117,6 +117,7 @@ class TaskDatabase:
             cursor.execute('DELETE FROM task_exit_files')
             cursor.execute('DELETE FROM queue_records')
             cursor.execute('DELETE FROM task_queues')
+            cursor.execute('DELETE FROM task_backend_updated')
         self.initialize_database()
     
     def new_task(self, task: 'TaskItem' , overwrite: bool = False):
@@ -303,7 +304,8 @@ class TaskDatabase:
         if suffix is None:
             suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_name = f"{self.db_name}_{suffix}.db"
-        backup_path = self.db_path.with_name(backup_name)
+        backup_path = self.db_path.parent.joinpath('backup', backup_name)
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(self.db_path, backup_path)
         return backup_path
     
@@ -342,7 +344,7 @@ class TaskQueue:
     def items(self):
         return self.queue.items()
     
-    def empty(self):
+    def is_empty(self):
         return not self.queue
 
     def reload(self):
@@ -372,10 +374,15 @@ class TaskQueue:
             self.queue.pop(item.id)
         self.task_db.del_queue_task(self.queue_id, item.id)
 
-    def clear(self):
+    def empty(self):
         for key in list(self.queue.keys()):
             if self.queue[key].status != 'running': self.queue.pop(key)
         self.task_db.clear_queue(self.queue_id)
+
+    def clear(self):
+        for key in list(self.queue.keys()):
+            if self.queue[key].status != 'running': self.queue.pop(key)
+        self.task_db.clear_database()
 
     def count(self, status : Literal['starting', 'running', 'complete', 'error']):
         return [item.status for item in self.queue.values()].count(status)

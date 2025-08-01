@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal , Any , Callable , Sequence
 import streamlit as st
-import base64 , yaml , time , traceback
+import base64 , yaml , time , traceback , shutil
 import streamlit.components.v1 as components
 import pandas as pd
 
@@ -317,12 +317,16 @@ class ActionLogger:
             f.write(export_str + '\n')
 
     @classmethod
-    def clear_log(cls):
-        cls.action_log.unlink(missing_ok=True)
-        cls.error_log.unlink(missing_ok=True)
-        
-        cls.action_log.touch()
-        cls.error_log.touch()
+    def clear_log(cls , suffix : str | None = None):
+        if suffix is None: suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        for log in [cls.action_log , cls.error_log]:
+            if log.exists():
+                backup_path = log.parent.joinpath('backup', f'{log.name}_{suffix}.log')
+                backup_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(log , backup_path)
+                log.unlink(missing_ok=True)
+            log.touch()
 
     @classmethod
     def get_action_log(cls):
@@ -454,10 +458,11 @@ class YAMLFileEditor:
         return cls._instances[key]
     
     def __init__(self , key : str = 'yaml_file_editor' , file_root : Path | str = BASE_DIR , 
-                 file_input = True):
+                 file_input = True , height : int | None = 500):
         self.key = key
         self.file_root = Path(file_root)
         self.file_input = file_input
+        self.height = height
         if not file_input:
             # assert self.file_root.is_file() , f"File root is not a file: {self.file_root}"
             pass
@@ -584,7 +589,7 @@ class YAMLFileEditor:
         editor_key = f"{self.key}_{self.get_file_path().name}_{self.state.reload_timestamp}"
         self.state.edit_content = st_ace(
             value=self.state.load_content or '',
-            height = 500 ,
+            height = self.height ,
             language="yaml",
             theme="chrome",
             font_size=14,

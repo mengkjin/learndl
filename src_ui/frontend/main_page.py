@@ -1,4 +1,4 @@
-__version__ = '0.2.2'
+__version__ = '0.2.3'
 __recommeded_explorer__ = 'chrome'
 
 import sys , pathlib
@@ -213,6 +213,12 @@ class SessionControl:
         self.queue_last_action = f"Queue Manually Refreshed at {datetime.now().strftime('%H:%M:%S')}" , True
 
     @ActionLogger.log_action()
+    def click_queue_empty(self):
+        """click task queue empty"""
+        self.task_queue.empty()
+        self.queue_last_action = f"Queue Emptied" , True
+
+    @ActionLogger.log_action()
     def click_queue_remove_item(self , item : TaskItem):
         """click task queue remove item"""
         if item.kill():
@@ -357,6 +363,13 @@ def page_css():
                 color: white !important;
             }
         }   
+        [class*="-empty"] button {
+            color: lightcoral !important;
+            &:hover {
+                background-color: lightcoral !important;
+                color: white !important;
+            }
+        }
         [class*="-clear"] button {
             color: red !important;
             &:hover {
@@ -439,6 +452,13 @@ def page_css():
                 color: white !important;
             }
         }   
+        [class*="-empty"] button {
+            color: lightcoral !important;
+            &:hover {
+                background-color: lightcoral !important;
+                color: white !important;
+            }
+        }
         [class*="-clear"] button {
             color: red !important;
             &:hover {
@@ -610,7 +630,12 @@ def show_queue_header():
                             on_click = SC.click_queue_refresh)
                 
             with cols[2]:
-                st.button(":material/delete:", key="task-queue-clear", 
+                st.button(":material/delete:", key="task-queue-empty", 
+                            help = "Empty Queue" ,
+                            on_click = SC.click_queue_empty)
+                
+            with cols[3]:
+                st.button(":material/delete_forever:", key="task-queue-clear", 
                             help = "Clear Queue" ,
                             on_click = SC.click_queue_clear_confirmation)
                 
@@ -620,7 +645,7 @@ def show_queue_header():
             else:
                 st.error(SC.queue_last_action[0] , icon = ":material/error:")
          
-        if SC.task_queue.empty():
+        if SC.task_queue.is_empty():
             st.info("Queue is empty, click the script below to run and it will be displayed here" , icon = ":material/queue_play_next:")
             return
 
@@ -751,13 +776,18 @@ def show_developer_info(H = 500):
             st.button("Refresh" , icon = ":material/refresh:" , key="developer-queue-refresh",  
                       help = "Refresh Queue" ,
                       on_click = SC.click_queue_refresh)
-                
+            
         with cols[2]:
-            st.button("Queue" , icon = ":material/delete:" , key = "developer-queue-clear" , 
+            st.button("Empty" , icon = ":material/delete:" , key = "developer-queue-empty" , 
+                      help = "Empty Queue" ,
+                      on_click = SC.click_queue_empty)
+                
+        with cols[3]:
+            st.button("Clear" , icon = ":material/delete_forever:" , key = "developer-queue-clear" , 
                       help = "Clear All Tasks in Queue" ,
                       on_click = SC.click_queue_clear_confirmation)
-        with cols[3]:
-            st.button("Log" , icon = ":material/delete:" , key = "developer-log-clear" , 
+        with cols[4]:
+            st.button("Log" , icon = ":material/delete_forever:" , key = "developer-log-clear" , 
                       help = "Clear Both Action and Error Logs" ,
                       on_click = SC.click_log_clear_confirmation)
     
@@ -881,7 +911,7 @@ def show_param_settings(runner : ScriptRunner):
         with st.expander("Model Config File Editor" , expanded = False , icon = ":material/edit_document:"):
             file_editor = YAMLFileEditor('param-settings-file-editor', 
                                         file_root=runner.header.file_editor['path'].format(**params) ,
-                                        file_input=False)
+                                        file_input=False , height = 300)
             file_editor.show_yaml_editor()
     if SC.ready_to_go(runner):
         help_text = f"Parameters valid, run {runner.script_key}"
