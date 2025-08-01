@@ -375,7 +375,7 @@ class FilePreviewer:
             else:
                 st.code(text_content , language=language , width = "stretch")
         except Exception as e:
-            st.error(f"Cannot preview text file: {str(e)}")
+            st.error(f"Cannot preview text file: {str(e)}" , icon = ":material/error:")
 
     @staticmethod
     def preview_html_file(file_path : Path):
@@ -385,7 +385,7 @@ class FilePreviewer:
                 html_content = f.read()
             components.html(html_content , height = 600 , scrolling=True)   
         except Exception as e:
-            st.error(f"Cannot preview HTML file: {str(e)}")
+            st.error(f"Cannot preview HTML file: {str(e)}" , icon = ":material/error:")
 
     @staticmethod
     def preview_pdf_file(file_path):
@@ -403,7 +403,7 @@ class FilePreviewer:
             '''
             st.markdown(pdf_display, unsafe_allow_html=True)
         except Exception as e:
-            st.error(f"Cannot preview PDF file: {str(e)}")
+            st.error(f"Cannot preview PDF file: {str(e)}" , icon = ":material/error:")
 
     @staticmethod
     def preview_xlsx_file(file_path):
@@ -414,12 +414,12 @@ class FilePreviewer:
             df = pd.read_excel(file_path, sheet_name=sheet_name)
             st.dataframe(df)
         except Exception as e:
-            st.error(f"Cannot preview XLSX file: {str(e)}")
+            st.error(f"Cannot preview XLSX file: {str(e)}" , icon = ":material/error:")
 
     @staticmethod
     def preview_not_supported(file_path : Path):
         """preview not supported file"""
-        st.error(f"Not supported to preview {file_path.suffix} file: {file_path}")
+        st.error(f"Not supported to preview {file_path.suffix} file: {file_path}" , icon = ":material/error:")
 
 @dataclass
 class YAMLFileEditorState:
@@ -513,7 +513,7 @@ class YAMLFileEditor:
     def load_file(self , file_path : Path | str | None = None):
         self.validate_file(file_path)
         if self.state.path_status != 'success':
-            st.error(self.state.path_status)
+            st.error(self.state.path_status , icon = ":material/error:")
             return ''
         file_path = self.get_file_path(file_path)
         try:
@@ -602,16 +602,16 @@ class YAMLFileEditor:
                 if self.state.path_status == 'success':
                     st.success("YAML file path is valid")
                 else:
-                    st.error(self.state.path_status)
+                    st.error(self.state.path_status , icon = ":material/error:")
                 
                 if self.state.load_status == 'success':
                     st.success("YAML file loaded successfully")
                 else:
-                    st.error(self.state.load_status)
+                    st.error(self.state.load_status , icon = ":material/error:")
                 if self.state.content_status == 'success':
                     st.success("YAML syntax is valid")
                 else:
-                    st.error(self.state.content_status)
+                    st.error(self.state.content_status , icon = ":material/error:")
                 
         with cols[2]:
             if self.state.save_status == 'success':

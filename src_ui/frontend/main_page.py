@@ -878,10 +878,11 @@ def show_param_settings(runner : ScriptRunner):
         
     params = ParamInputsForm(runner).init_param_inputs('customized').param_values
     if runner.header.file_editor:
-        file_editor = YAMLFileEditor('param-settings-file-editor', 
-                                     file_root=runner.header.file_editor['path'].format(**params) ,
-                                     file_input=False)
-        file_editor.show_yaml_editor()
+        with st.expander("Model Config File Editor" , expanded = False , icon = ":material/edit_document:"):
+            file_editor = YAMLFileEditor('param-settings-file-editor', 
+                                        file_root=runner.header.file_editor['path'].format(**params) ,
+                                        file_input=False)
+            file_editor.show_yaml_editor()
     if SC.ready_to_go(runner):
         help_text = f"Parameters valid, run {runner.script_key}"
         button_key = f"script-runner-run-enabled-{runner.script_key}"
@@ -961,6 +962,7 @@ class ParamInputsForm:
         def raw_option(cls , raw_values : list[Any], alt_values : list[Any]):
             def wrapper(alt : Any):
                 """get index of value in options"""
+                assert alt in alt_values , f"Invalid option '{alt}' in list {alt_values}"
                 raw = raw_values[alt_values.index(alt)] if alt is not None else None
                 return raw
             return wrapper
@@ -1062,32 +1064,11 @@ class ParamInputsForm:
         else:
             raise ValueError(f"Unsupported param type: {ptype}")
         
-        return func(runner, param, value, on_change, args, kwargs)
+        return func(runner, param, value, on_change = on_change, args = args, kwargs = kwargs)
 
     @classmethod
     def value_transform(cls , param : ScriptParamInput):
-        ptype = param.ptype
-        if isinstance(ptype, list):
-            options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
-            return cls.raw_option([None] + ptype, options)
-        elif ptype == str:
-            return lambda x: (x.strip() if x is not None else None)
-        elif ptype == bool:
-            return lambda x: None if x is None or x == 'Choose an option' else bool(x)
-        elif ptype == int:
-            return lambda x: None if x is None else int(x)
-        elif ptype == float:
-            return lambda x: None if x is None else float(x)
-        else:
-            raise ValueError(f"Unsupported param type: {ptype}")
-
-    @classmethod
-    def raw_option(cls , raw_values : list[Any], alt_values : list[Any]):
-        def wrapper(alt : Any):
-            """get index of value in options"""
-            raw = raw_values[alt_values.index(alt)] if alt is not None else None
-            return raw
-        return wrapper
+        return cls.WidgetParamInput.value_transform(param)
     
     @classmethod
     def get_title(cls , param : ScriptParamInput):
@@ -1112,8 +1093,7 @@ class ParamInputsForm:
 
     @classmethod
     def list_widget(cls , runner : ScriptRunner , param : ScriptParamInput , 
-                    value : Any | None = None ,
-                    on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+                    value : Any | None = None , **kwargs):
         ptype = param.ptype
         assert isinstance(ptype, list) , f"Param {param.name} is not a list"
         
@@ -1121,20 +1101,26 @@ class ParamInputsForm:
         default_value = str(value) if value is not None else cls.get_default_value(runner, param)
         title = cls.get_title(param)
         options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
-        return st.selectbox(
-            title,
-            options,
-            index=0 if default_value is None else options.index(default_value),
-            key=widget_key ,
-            on_change = on_change ,
-            args = args ,
-            kwargs = kwargs
-        )
+        if default_value is not None and default_value not in options:
+            return st.text_input(
+                title,
+                value=None if default_value is None else str(default_value),
+                placeholder=param.placeholder ,
+                key=widget_key ,
+                **kwargs
+            )
+        else:
+            return st.selectbox(
+                title,
+                options,
+                index=0 if default_value is None else options.index(default_value),
+                key=widget_key ,
+                **kwargs
+            )
     
     @classmethod
     def text_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
-                    value : Any | None = None ,
-                    on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+                    value : Any | None = None , **kwargs):
         ptype = param.ptype
         assert ptype == str , f"Param {param.name} is not a string"
         widget_key = cls.get_widget_key(runner, param)
@@ -1145,15 +1131,12 @@ class ParamInputsForm:
             value=None if default_value is None else str(default_value),
             placeholder=param.placeholder ,
             key=widget_key ,
-            on_change = on_change ,
-            args = args ,
-            kwargs = kwargs
+            **kwargs
         )
     
     @classmethod
     def bool_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
-                    value : Any | None = None ,
-                    on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+                    value : Any | None = None , **kwargs):
         ptype = param.ptype
         assert ptype == bool , f"Param {param.name} is not a boolean"
         widget_key = cls.get_widget_key(runner, param)
@@ -1164,15 +1147,12 @@ class ParamInputsForm:
             ['Choose an option', True, False],
             index=0 if default_value is None else 2-bool(default_value),    
             key=widget_key ,
-            on_change = on_change ,
-            args = args ,
-            kwargs = kwargs
+            **kwargs
         )
     
     @classmethod
     def int_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
-                   value : Any | None = None ,
-                   on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+                   value : Any | None = None , **kwargs):
         ptype = param.ptype
         assert ptype == int , f"Param {param.name} is not an integer"
         widget_key = cls.get_widget_key(runner, param)
@@ -1185,15 +1165,12 @@ class ParamInputsForm:
             max_value=param.max,
             placeholder=param.placeholder,
             key=widget_key ,
-            on_change = on_change ,
-            args = args ,
-            kwargs = kwargs
+            **kwargs
         )
     
     @classmethod
     def float_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
-                     value : Any | None = None ,
-                     on_change : Callable | None = None , args : tuple | None = None , kwargs : dict | None = None):
+                     value : Any | None = None , **kwargs):
         ptype = param.ptype
         assert ptype == float , f"Param {param.name} is not a float"
         widget_key = cls.get_widget_key(runner, param)
@@ -1207,9 +1184,7 @@ class ParamInputsForm:
             step=0.1,
             placeholder=param.placeholder,
             key=widget_key ,
-            on_change = on_change ,
-            args = args ,
-            kwargs = kwargs
+            **kwargs
         )
 
     @classmethod

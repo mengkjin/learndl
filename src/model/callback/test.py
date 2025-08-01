@@ -1,10 +1,11 @@
 import pandas as pd
-
+import numpy as np
 from typing import Any , Literal
 
 from src import func as FUNC
 from src.factor.util import StockFactor
 from src.factor.api import FactorTestAPI , TYPE_of_TASK
+from src.factor.analytic.test_manager import BaseTestManager
 from src.model.util import BaseCallBack , PredRecorder
 from src.basic import PATH
 PRED_RECORD = PredRecorder()
@@ -13,7 +14,8 @@ class DetailedAlphaAnalysis(BaseCallBack):
     DISPLAY_TABLES = ['optim@frontface']
     DISPLAY_FIGURES = ['factor@ic_curve@best.market' , 'factor@group_curve@best.market' , 't50@perf_drawdown@best.univ']
     '''record and concat each model to Alpha model instance'''
-    def __init__(self , trainer , use_num : Literal['avg' , 'first'] = 'avg' , tasks : list[TYPE_of_TASK] = ['factor' , 't50'] , **kwargs) -> None:
+    def __init__(self , trainer , use_num : Literal['avg' , 'first'] = 'avg' , 
+                 tasks : list[TYPE_of_TASK] = ['factor' , 't50'] , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         self.print_info()
         assert use_num in ['first' , 'avg'] , use_num
@@ -39,22 +41,25 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def on_test_start(self):     PRED_RECORD.initialize(self.trainer)
     def on_test_batch_end(self): PRED_RECORD.append_batch_pred()
     def on_test_end(self):  
-        if (df := PRED_RECORD.all_preds).empty: return
+        if PRED_RECORD.is_empty: return
+        df = PRED_RECORD.all_preds()
         if self.use_num == 'first':
             df = df[df['model_num'] == 0]
         else:
             df = df.groupby(['date','secid','submodel'])['values'].mean().reset_index()
-        df.set_index(['secid','date'])
+        df = df.set_index(['secid','date'])
         PATH.save_df(df , self.path_pred , overwrite = True)
-
         df = df.rename(columns={'submodel':'factor_name'}).pivot_table('values',['secid','date'],'factor_name')
-        
-        self.df = df
-
-        self.test_results = {
-            task:FactorTestAPI.run_test(task , StockFactor(df) , verbosity = 1 , write_down=False , display_figs=False)
-            for task in self.analytic_tasks
-        }
+            
+        factors : dict[int , StockFactor] = {}
+        self.test_results : dict[TYPE_of_TASK , BaseTestManager] = {}
+        for task in self.analytic_tasks:
+            interval = 1 if task == 't50' else 5
+            if interval not in factors.keys():
+                dates = PRED_RECORD.dates[::interval]
+                factors[interval] = StockFactor(df.reset_index().query('date in @dates').set_index(['secid','date']))
+            factor = factors[interval]
+            self.test_results[task] = FactorTestAPI.run_test(task , factor , verbosity = 1 , write_down=False , display_figs=False)
 
         rslts = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_rslts().items()}
         figs  = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_figs().items()}
@@ -96,8 +101,10 @@ class GroupReturnAnalysis(BaseCallBack):
 
     def on_test_start(self):     PRED_RECORD.initialize(self.trainer)
     def on_test_batch_end(self): PRED_RECORD.append_batch_pred()
-    def on_test_end(self):       
-        if (df := PRED_RECORD.all_preds).empty: return
+    def on_test_end(self):  
+        if PRED_RECORD.is_empty: return
+        df = PRED_RECORD.all_preds(5)
+             
         df['factor_name'] = df['model_num'].astype(str) + '.' + df['submodel']
             
         factor = StockFactor(df.pivot_table('values',['secid','date'],'factor_name'))

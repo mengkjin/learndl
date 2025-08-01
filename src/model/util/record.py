@@ -2,10 +2,9 @@ import pandas as pd
 from .classes import BaseTrainer
 
 class PredRecorder:
-    def __init__(self , every_n_days : int = 1) -> None:
-        self.every_n_days = every_n_days
+    def __init__(self) -> None:
         self.initialized = False
-
+        
     def initialize(self , trainer : BaseTrainer):
         if self.initialized:
             if self.trainer == trainer: 
@@ -14,13 +13,26 @@ class PredRecorder:
                 self.trainer.logger.critical(f'PredRecorder initialize with {trainer}, but already initialized with another trainer {self.trainer}')
         self.trainer = trainer
         self.preds : dict[str,pd.DataFrame] = {}
-        self.dates = trainer.data.test_full_dates[::self.every_n_days]
+        self.dates = trainer.data.test_full_dates
         self.initialized = True
 
     @property
     def pred_idx(self):
         return f'{self.trainer.model_num}.{self.trainer.model_submodel}.{self.trainer.model_date}.{self.trainer.batch_idx}'
 
+    @property
+    def is_empty(self):
+        return len(self.preds) == 0
+    
+    def all_preds(self , interval : int = 1):
+        if self.is_empty: return pd.DataFrame()
+        elif interval == 1:
+            return pd.concat(self.preds.values())
+        else:
+            dates = self.dates[::interval]
+            seq = [pred.loc[pred['date'].isin(dates),:] for pred in self.preds.values()]
+            return pd.concat(seq)
+    
     def append_batch_pred(self):
         if self.pred_idx in self.preds.keys(): return
         if self.trainer.batch_idx < self.trainer.batch_warm_up: return
@@ -45,6 +57,4 @@ class PredRecorder:
 
         self.preds[self.pred_idx] = df
 
-    @property
-    def all_preds(self):
-        return pd.concat(list(self.preds.values())) if self.preds else pd.DataFrame()
+    
