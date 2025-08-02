@@ -993,6 +993,7 @@ class ParamInputsForm:
         def raw_option(cls , raw_values : list[Any], alt_values : list[Any]):
             def wrapper(alt : Any):
                 """get index of value in options"""
+                if alt is None or alt == '': alt = 'Choose an option'
                 assert alt in alt_values , f"Invalid option '{alt}' in list {alt_values}"
                 raw = raw_values[alt_values.index(alt)] if alt is not None else None
                 return raw
@@ -1110,9 +1111,12 @@ class ParamInputsForm:
         return f"script-param-{runner.script_key}-{param.name}"
 
     @classmethod
-    def get_default_value(cls , runner : ScriptRunner , param : ScriptParamInput):
+    def get_default_value(cls , runner : ScriptRunner , param : ScriptParamInput , value : Any | None = None):
         widget_key = cls.get_widget_key(runner, param)
-        default_value = SC.script_params_cache.get(runner.script_key, {}).get('raw', {}).get(param.name, param.default)
+        if value is not None:
+            default_value = f'{param.prefix}{value}'
+        else:
+            default_value = SC.script_params_cache.get(runner.script_key, {}).get('raw', {}).get(param.name, param.default)
         if default_value is None:
             default_value = st.session_state[widget_key] if widget_key in st.session_state else param.default
         return default_value
@@ -1129,7 +1133,7 @@ class ParamInputsForm:
         assert isinstance(ptype, list) , f"Param {param.name} is not a list"
         
         widget_key = cls.get_widget_key(runner, param)
-        default_value = str(value) if value is not None else cls.get_default_value(runner, param)
+        default_value = cls.get_default_value(runner, param , value)
         title = cls.get_title(param)
         options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
         if default_value is not None and default_value not in options:
@@ -1155,7 +1159,7 @@ class ParamInputsForm:
         ptype = param.ptype
         assert ptype == str , f"Param {param.name} is not a string"
         widget_key = cls.get_widget_key(runner, param)
-        default_value = str(value) if value is not None else cls.get_default_value(runner, param)
+        default_value = cls.get_default_value(runner, param , value)
         title = cls.get_title(param)
         return st.text_input(
             title,
@@ -1172,7 +1176,7 @@ class ParamInputsForm:
         assert ptype == bool , f"Param {param.name} is not a boolean"
         widget_key = cls.get_widget_key(runner, param)
         title = cls.get_title(param)
-        default_value = value if value is not None else cls.get_default_value(runner, param)
+        default_value = cls.get_default_value(runner, param , value)
         return st.selectbox(
             title,
             ['Choose an option', True, False],
@@ -1188,7 +1192,7 @@ class ParamInputsForm:
         assert ptype == int , f"Param {param.name} is not an integer"
         widget_key = cls.get_widget_key(runner, param)
         title = cls.get_title(param)
-        default_value = value if value is not None else cls.get_default_value(runner, param)
+        default_value = cls.get_default_value(runner, param , value)
         return st.number_input(
             title,
             value=None if default_value is None else int(default_value),
@@ -1206,7 +1210,7 @@ class ParamInputsForm:
         assert ptype == float , f"Param {param.name} is not a float"
         widget_key = cls.get_widget_key(runner, param)
         title = cls.get_title(param)
-        default_value = value if value is not None else cls.get_default_value(runner, param)
+        default_value = cls.get_default_value(runner, param , value)
         return st.number_input(
             title,
             value=None if default_value is None else float(default_value),
