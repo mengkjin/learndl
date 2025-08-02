@@ -111,6 +111,7 @@ class ScriptParamInput:
                 try:
                     ptype = eval(self.type)
                 except Exception as e:
+                    print(e)
                     print(f'Invalid type: {self.type} , using str as default')
                     ptype = str
         elif isinstance(self.type, (list, tuple)):

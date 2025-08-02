@@ -535,7 +535,8 @@ class TrainConfig(TrainParam):
         '''
         model_name = self.model_name
         assert model_name is not None
-        candidate_name = sorted([m.name for m in PATH.model.iterdir() if m.name.split('.')[0] == model_name])
+        candidate_name = sorted([m.name for m in PATH.model.iterdir() 
+                                 if m.name == model_name or m.name.startswith(f'{model_name}.')])
         if self.short_test:
             ...
         elif 'fit' in self.stage_queue and candidate_name:

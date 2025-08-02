@@ -1,11 +1,12 @@
-__version__ = '0.2.3'
+__version__ = '0.2.4'
 __recommeded_explorer__ = 'chrome'
 
-import sys , pathlib
+import sys , pathlib , os
 file_path = str(pathlib.Path(__file__).absolute())
 assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
 path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
+assert os.getcwd() == path , f'current working directory is not {path} , do not know where to find src file'
 
 import platform, re, time, torch
 import streamlit as st
