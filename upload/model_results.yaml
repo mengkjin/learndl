@@ -1137,3 +1137,15 @@
 7_test: Finish Process [Test], Cost 25.9 Secs
 8_result:
   lgbm.0.best: Avg(0.0887)|Sum(182.94)|Std(0.0712)|T(56.71)|IR(6.1015)
+0_model: tft_day.1(x3)
+1_start: Thu Jul 31 05:28:26 2025
+2_basic: full
+3_datas: '[''day'', ''style'', ''indus'']'
+4_label: std_lag1_10,rtn_lag1_10
+5_dates: 20170103-99991231
+6_fit: Finish Process [Fit], Cost 25.9 Hours, 28.8 Min/model, 26.2 Sec/Epoch
+7_test: Finish Process [Test], Cost 187.1 Secs
+8_result:
+  tft.0.best: Avg(0.1044)|Sum(216.97)|Std(0.0881)|T(54.03)|IR(5.8064)
+  tft.1.best: Avg(0.1029)|Sum(213.86)|Std(0.0868)|T(54.05)|IR(5.8091)
+  tft.2.best: Avg(0.1018)|Sum(211.44)|Std(0.0886)|T(52.35)|IR(5.6256)
