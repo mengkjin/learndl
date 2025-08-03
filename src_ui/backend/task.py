@@ -1,5 +1,5 @@
 import sqlite3 , time , os , sys , re , shutil
-from typing import Any , Literal
+from typing import Any , Literal , Sequence
 from dataclasses import dataclass , field , asdict
 from datetime import datetime
 from pathlib import Path
@@ -409,10 +409,16 @@ class TaskQueue:
             filtered_queue = {k: v for k, v in filtered_queue.items() if any(v.path.is_relative_to(f) for f in folder)}
         if file:
             filtered_queue = {k: v for k, v in filtered_queue.items() if v.path in file}
-        return filtered_queue   
+        return {item.id: item for item in self.sort(filtered_queue)}   
     
     def latest(self , num : int = 10):
-        return {item.id: item for item in sorted(self.queue.values(), key=lambda x: x.create_time, reverse=True)[:num]}
+        return {item.id: item for item in self.sort(self.queue)[:num]}
+    
+    @classmethod
+    def sort(cls , task_items : dict[str, 'TaskItem'] | list['TaskItem'] | Sequence['TaskItem'], key : str = 'create_time' , reverse : bool = True):
+        if isinstance(task_items, dict):
+            task_items = list(task_items.values())
+        return sorted(task_items, key=lambda x: getattr(x, key), reverse=reverse)
     
 @dataclass
 class TaskItem:
@@ -491,7 +497,7 @@ class TaskItem:
     
     @property
     def format_path(self):
-        return ' > '.join(re.sub(r'^\d+ ', '', p).title() for p in str(self.relative).removesuffix('.py').replace('_', ' ').split('/'))
+        return ' > '.join(re.sub(r'^\d+ ', '', p).title() for p in self.runner_script_key.removesuffix('.py').replace('_', ' ').split('/'))
 
     @property
     def button_str(self):

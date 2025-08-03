@@ -56,6 +56,15 @@ class PathItem:
     
     def script_runner(self):
         return ScriptRunner(self)
+    
+    @property
+    def script_key(self):
+        return str(self.relative)
+    
+    @property
+    def format_path(self):
+        return ' > '.join(re.sub(r'^\d+ ', '', p).title() for p in self.script_key.removesuffix('.py').replace('_', ' ').split('/'))
+
 
 @dataclass
 class ScriptHeader:
@@ -178,6 +187,11 @@ class ScriptRunner:
     @property
     def script_key(self):
         return str(self.path.relative)
+    
+    @property
+    def format_path(self):
+        return ' > '.join(re.sub(r'^\d+ ', '', p).title() for p in self.script_key.removesuffix('.py').replace('_', ' ').split('/'))
+
     
     @property
     def path_parts(self):

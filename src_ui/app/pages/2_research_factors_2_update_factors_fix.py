@@ -1,0 +1,11 @@
+
+from menu import starter
+from control import SC
+from script_detail import show_script_detail    
+
+def main():
+    starter()
+    show_script_detail('2_research/factors/2_update_factors_fix.py') 
+
+if __name__ == '__main__':
+    main()
