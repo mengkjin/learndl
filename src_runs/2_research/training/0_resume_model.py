@@ -1,9 +1,9 @@
 #! /usr/bin/env python3.10
 # coding: utf-8
 # author: jinmeng
-# date: 2025-06-20
-# description: Test Model
-# content: 测试某个已训练的模型
+# date: 2025-08-03
+# description: Resume Model
+# content: 恢复某个已训练的模型继续训练
 # email: True
 # close_after_run: False
 # param_inputs:
@@ -12,10 +12,6 @@
 #       desc : choose a model
 #       prefix : "model/"
 #       required : True
-#   short_test : 
-#       type : [True , False]
-#       desc : short test
-#       prefix : "short_test/"
 # file_previewer:
 #   name : "Model Output File Previewer"
 #   path: "models/{model_name}/detailed_analysis/training_output.html"
@@ -33,9 +29,9 @@ from src_app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
-    with AutoRunTask('test model' , message_capturer = True , **kwargs) as runner:
-        ModelAPI.test_model(model_name = runner['model_name'] , short_test = runner.get('short_test'))
-        runner.critical(f'Test model at {runner.update_to} completed')
+    with AutoRunTask('resume model' , **kwargs) as runner:
+        ModelAPI.resume_model(model_name = runner['model_name'])
+        runner.critical(f'Resume model at {runner.update_to} completed')
 
     return runner
         

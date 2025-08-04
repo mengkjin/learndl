@@ -48,7 +48,7 @@ path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
 from src.basic import AutoRunTask
-from src_ui import BackendTaskRecorder
+from src_app import BackendTaskRecorder
 
 @BackendTaskRecorder(txt = 'Bye, World!' , email = 0)
 def main(txt : str = 'Hello, World!' , **kwargs):

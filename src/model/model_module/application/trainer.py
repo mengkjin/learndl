@@ -54,11 +54,23 @@ class ModelTrainer(BaseTrainer):
         return trainer
     
     @classmethod
-    def test(cls , model_name : str | None = None , short_test : bool | None = None , message_capturer : bool = True , **kwargs):
+    def resume(cls , model_name : str | None = None , message_capturer : bool = True , 
+               stage = 0 , resume = 1 , checkname = 1 , **kwargs):
         assert model_name, 'model_name is required'
         available_models = cls.available_models(short_test = False)
         assert model_name in available_models , f'model_name {model_name} not found in {available_models}'
         with MessageCapturer.CreateCapturer(message_capturer) as capturer:
-            trainer = cls.initialize(base_path = PATH.model.joinpath(model_name) , short_test = short_test , **kwargs).go()
+            trainer = cls.initialize(base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , checkname = checkname , **kwargs).go()
+            capturer.set_attrs(f'Resume Model of {trainer.config.model_name}' , trainer.path_training_output)
+        return trainer
+    
+    @classmethod
+    def test(cls , model_name : str | None = None , short_test : bool | None = None , message_capturer : bool = True , 
+             stage = 2 , resume = 1 , checkname = 1 , **kwargs):
+        assert model_name, 'model_name is required'
+        available_models = cls.available_models(short_test = False)
+        assert model_name in available_models , f'model_name {model_name} not found in {available_models}'
+        with MessageCapturer.CreateCapturer(message_capturer) as capturer:
+            trainer = cls.initialize(base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , checkname = checkname , **kwargs).go()
             capturer.set_attrs(f'Test Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer

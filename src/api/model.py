@@ -105,6 +105,13 @@ class ModelAPI:
                                  **kwargs)
 
     @classmethod
+    def resume_model(cls , model_name : str):
+        '''
+        resume a model
+        '''
+        return cls.Trainer.resume(model_name = model_name)
+
+    @classmethod
     def short_test(cls , module : str | None = None , verbosity : int | None = 10):
         '''
         Short test a module
@@ -130,8 +137,7 @@ class ModelAPI:
             None: use default verbosity
             int : use the verbosity level , if above 10 will print more details
         '''
-        return cls.Trainer.test(model_name = model_name , short_test = short_test , verbosity = verbosity ,
-                                stage = 2 , resume = 1 , checkname = 1 , **kwargs)
+        return cls.Trainer.test(model_name = model_name , short_test = short_test , verbosity = verbosity , **kwargs)
     
     @classmethod
     def clear_st_models(cls):

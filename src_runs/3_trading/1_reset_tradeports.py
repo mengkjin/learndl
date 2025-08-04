@@ -20,7 +20,7 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import TradingAPI
 from src.basic import AutoRunTask
-from src_ui import BackendTaskRecorder
+from src_app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):

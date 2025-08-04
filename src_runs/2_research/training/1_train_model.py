@@ -16,7 +16,9 @@
 #       desc : short test
 #       prefix : "short_test/"
 # file_editor:
+#   name : "Model Config File Editor"
 #   path: "configs/{module_name}.yaml"
+#   height : 300 # optional
 
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())
@@ -26,7 +28,7 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import ModelAPI
 from src.basic import AutoRunTask
-from src_ui import BackendTaskRecorder
+from src_app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):

@@ -1,0 +1,1 @@
+from .util import __version__ , __recommended_explorer__

@@ -28,7 +28,7 @@ if not path in sys.path: sys.path.append(path)
 
 from src.factor.api import FactorCalculatorAPI
 from src.basic import AutoRunTask
-from src_ui import BackendTaskRecorder
+from src_app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):

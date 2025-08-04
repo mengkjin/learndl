@@ -17,8 +17,6 @@ __old_version__/
 /logs
 /models
 /results
-/src/project_setting.yaml
-/src_ui/.db
 
 .vs/
 /configs/confidential
