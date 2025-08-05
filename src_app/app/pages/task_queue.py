@@ -6,47 +6,49 @@ from src_app.db import RUNS_DIR
 from util import starter , SC  
 
 def show_task_queue(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter'):
-    SC.initialize()
-    show_queue_header()
-    if queue_type == 'filter':
-        show_queue_filters()
-    show_queue_item_list(queue_type)
+    container = st.container(key="task-queue-special-expander")
+    with container:
+        st.header(":material/event_list: Running Queue" , divider = 'grey')
+        st.info("Shows the entire running queue" , icon = ":material/info:")
+        st.info("Tailor filters to show exact tasks" , icon = ":material/info:")
+        
+        show_queue_header()
+        if queue_type == 'filter': show_queue_filters()
+        show_queue_item_list(queue_type)
 
 def show_queue_header():
-    with st.container(key = "queue-header-container"):
-        st.header(":material/event_list: Running Queue" , divider = 'grey')
-        with st.container(key = "queue-header-buttons"):
-            cols = st.columns([1, 1 , 1 , 5] , gap = "small" , vertical_alignment = "center")
-            with cols[0]:  
-                st.button(":material/directory_sync:", key="task-queue-sync",  
-                            help = "Sync Historical Tasks into Current Queue" ,
-                            on_click = SC.click_queue_sync)
-            with cols[1]:  
-                st.button(":material/refresh:", key="task-queue-refresh",  
-                            help = "Refresh Queue" ,
-                            on_click = SC.click_queue_refresh)
-                
-            with cols[2]:
-                st.button(":material/delete:", key="task-queue-empty", 
-                            help = "Empty Queue" ,
-                            on_click = SC.click_queue_empty)
-                
-            with cols[3]:
-                st.button(":material/delete_forever:", key="task-queue-clear", 
-                            help = "Clear Queue" ,
-                            on_click = SC.click_queue_clear_confirmation)
-                
-        if SC.queue_last_action:
-            if SC.queue_last_action[1]:
-                st.success(SC.queue_last_action[0] , icon = ":material/check_circle:")
-            else:
-                st.error(SC.queue_last_action[0] , icon = ":material/error:")
-         
-        if SC.task_queue.is_empty():
-            st.info("Queue is empty, click the script below to run and it will be displayed here" , icon = ":material/queue_play_next:")
-            return
+    with st.container(key = "queue-header-buttons"):
+        cols = st.columns([1, 1 , 1 , 5] , gap = "small" , vertical_alignment = "center")
+        with cols[0]:  
+            st.button(":material/directory_sync:", key="task-queue-sync",  
+                        help = "Sync Historical Tasks into Current Queue" ,
+                        on_click = SC.click_queue_sync)
+        with cols[1]:  
+            st.button(":material/refresh:", key="task-queue-refresh",  
+                        help = "Refresh Queue" ,
+                        on_click = SC.click_queue_refresh)
+            
+        with cols[2]:
+            st.button(":material/delete:", key="task-queue-empty", 
+                        help = "Empty Queue" ,
+                        on_click = SC.click_queue_empty)
+            
+        with cols[3]:
+            st.button(":material/delete_forever:", key="task-queue-clear", 
+                        help = "Clear Queue" ,
+                        on_click = SC.click_queue_clear_confirmation)
+            
+    if SC.queue_last_action:
+        if SC.queue_last_action[1]:
+            st.success(SC.queue_last_action[0] , icon = ":material/check_circle:")
+        else:
+            st.error(SC.queue_last_action[0] , icon = ":material/error:")
+        
+    if SC.task_queue.is_empty():
+        st.info("Queue is empty, click the script below to run and it will be displayed here" , icon = ":material/queue_play_next:")
+        return
 
-        st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.status_message()}")
+    st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.status_message()}")
         
 def show_queue_filters():
     with st.container(key="queue-filter-container").expander("Queue Filters" , expanded = True , icon = ":material/filter_list:"):

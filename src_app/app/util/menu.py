@@ -1,9 +1,8 @@
 import streamlit as st
-import re
-from pathlib import Path
-from src_app.backend import ScriptRunner , PathItem
+
+from src_app.backend import ScriptRunner
 from .control import SC
-from .basic import __version__ , __recommended_explorer__
+from .basic import __version__ , __recommended_explorer__ , __page_title__
 from .style import style
 
 def menu():
@@ -46,5 +45,5 @@ def starter():
     with st.sidebar:
         menu()
         script_menu()
-    st.title(f":rainbow[:material/rocket_launch: Script Runner (_v{__version__}_)]")
+    st.title(f":rainbow[:material/rocket_launch: {__page_title__} (_v{__version__}_)]")
     

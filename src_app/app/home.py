@@ -9,12 +9,12 @@ assert os.getcwd() == path , f'current working directory is not {path} , do not 
 
 import streamlit as st
 
-from util import starter , basic_info , __version__ , __recommended_explorer__
+from util import starter , basic_info , __page_title__
 
 st.set_option('client.showSidebarNavigation', False)
 def page_config():
     st.set_page_config(
-        page_title="Script Runner",
+        page_title=__page_title__,
         page_icon=":material/rocket_launch:",
         layout='wide',
         initial_sidebar_state="expanded"

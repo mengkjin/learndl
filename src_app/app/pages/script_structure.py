@@ -6,25 +6,30 @@ from src_app.backend import ScriptRunner
 
 def show_script_structure():
     """show folder content recursively"""  
-    st.header(":blue[:material/folder_open: Script Structure]" , divider = 'grey')
-    items = SC.path_items
-    for item in items:
-        if item.is_dir:
-            folder_name = re.sub(r'^\d+_', '', item.name).replace('_', ' ').title()
-            body = f"""
-            <div style="
-                font-size: 18px;
-                font-weight: bold;
-                margin-top: 5px;
-                margin-bottom: 5px;
-                letter-spacing: 3px;
-                margin-left: {(item.level)*45}px;
-            ">📂 {folder_name}</div>
-            """       
-            st.markdown(body , unsafe_allow_html=True)
- 
-        elif item.level > 0:
-            show_script_runner(item.script_runner())
+    container = st.container(key="script-structure-special-expander")
+    with container:
+        st.header(":blue[:material/folder_open: Script Structure]" , divider = 'grey')
+        st.info("The script structure of project runs" , icon = ":material/info:")
+        st.info("Click the script button to switch to page of the script" , icon = ":material/info:")
+        
+        items = SC.path_items
+        for item in items:
+            if item.is_dir:
+                folder_name = re.sub(r'^\d+_', '', item.name).replace('_', ' ').title()
+                body = f"""
+                <div style="
+                    font-size: 18px;
+                    font-weight: bold;
+                    margin-top: 5px;
+                    margin-bottom: 5px;
+                    letter-spacing: 3px;
+                    margin-left: {(item.level)*45}px;
+                ">📂 {folder_name}</div>
+                """       
+                st.markdown(body , unsafe_allow_html=True)
+
+            elif item.level > 0:
+                show_script_runner(item.script_runner())
 
 def show_script_runner(runner: ScriptRunner):
     """show single script runner"""
