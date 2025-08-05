@@ -35,7 +35,7 @@ def show_script_runner(runner: ScriptRunner):
         # st.button(runner.desc , key=widget_key ,  icon = ':material/code:' ,
         #           help = f":material/info: **{runner.content}** \n*{str(runner.script)}*" ,
         #           on_click = SC.click_script_runner_expand , args = (runner,) , type = 'tertiary')
-        st.page_link(f'pages/{runner.script_key.replace("/", "_")}' , 
+        st.page_link(f'pages/{runner.script_key.replace("/", "_").replace("\\", "_")}' , 
                      label = runner.format_path ,
                      icon = ':material/code:' ,
                      help = f":material/info: **{runner.content}** \n*{str(runner.script)}*")

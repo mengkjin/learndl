@@ -54,7 +54,7 @@ class SessionControl:
     def make_script_detail_file(item : PathItem):
         """make script detail file"""
         if item.is_dir: return
-        app_path = PAGE_DIR.joinpath(item.script_key.replace("/", "_"))
+        app_path = PAGE_DIR.joinpath(item.script_key.replace("/", "_").replace("\\", "_"))
         with open(app_path, 'w') as f:
             f.write(f"""
 from util import starter , show_script_detail    

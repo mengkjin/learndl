@@ -44,7 +44,7 @@ def show_script_runner(runner: ScriptRunner):
             if st.button(f"**{button_text}**" , key=widget_key , 
                         help = f"*{str(runner.script)}*" ,
                         on_click = SC.click_script_runner_expand , args = (runner,)):
-                st.switch_page(f'pages/{runner.script_key.replace("/", "_")}')
+                st.switch_page(f'pages/{runner.script_key.replace("/", "_").replace("\\", "_")}')
         with cols[1]:
             st.info(f"**{runner.content}**" , icon = ":material/info:")
 
