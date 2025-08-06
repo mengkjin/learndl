@@ -17,6 +17,7 @@ __old_version__/
 /logs
 /models
 /results
+/src_app/pages/script_*.py
 
 .vs/
 /configs/confidential

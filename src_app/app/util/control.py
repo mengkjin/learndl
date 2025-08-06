@@ -12,6 +12,15 @@ from src_app.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner ,
 from src_app.frontend import YAMLFileEditorState , ActionLogger
 
 PAGE_DIR = Path(__file__).parent.parent.joinpath('pages')
+assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
+
+def runs_page_url(script_key : str):
+    """get runs page url"""
+    return "pages/script_" + re.sub(r'[/\\]', '_', script_key)
+
+def runs_page_path(script_key : str):
+    """get runs page path"""
+    return PAGE_DIR.joinpath(runs_page_url(script_key).split('/')[-1])
 
 @st.cache_resource
 def get_cached_task_db() -> TaskDatabase:
@@ -46,6 +55,10 @@ class SessionControl:
         self.task_queue = TaskQueue('script_runner_main' , 100 , self.task_db)
         self.path_items = PathItem.iter_folder(RUNS_DIR, min_level = 0, max_level = 2)
 
+        # delete all script detail files
+        [page_path.unlink()  for page_path in PAGE_DIR.glob('script_*.py')]
+
+        # make script detail file
         [self.make_script_detail_file(item) for item in self.path_items if not item.is_dir]
 
     def __str__(self):
@@ -55,14 +68,13 @@ class SessionControl:
     def make_script_detail_file(item : PathItem):
         """make script detail file"""
         if item.is_dir: return
-        app_path = PAGE_DIR.joinpath(re.sub(r'[/\\]', '_', item.script_key))
-        with open(app_path, 'w') as f:
+        with open(runs_page_path(item.script_key), 'w') as f:
             f.write(f"""
 from util import starter , show_script_detail    
 
 def main():
     starter()
-    show_script_detail('{item.script_key}') 
+    show_script_detail('{repr(item.script_key)}') 
 
 if __name__ == '__main__':
     main()

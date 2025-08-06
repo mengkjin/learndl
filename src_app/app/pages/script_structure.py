@@ -1,7 +1,7 @@
 import streamlit as st
 import re
 
-from util import starter , SC 
+from util import starter , SC , runs_page_url
 from src_app.backend import ScriptRunner
 
 def show_script_structure():
@@ -44,7 +44,7 @@ def show_script_runner(runner: ScriptRunner):
             if st.button(f"**{button_text}**" , key=widget_key , 
                         help = f"*{str(runner.script)}*" ,
                         on_click = SC.click_script_runner_expand , args = (runner,)):
-                st.switch_page("pages/" + re.sub(r'[/\\]', '_', runner.script_key))
+                st.switch_page(runs_page_url(runner.script_key))
         with cols[1]:
             st.info(f"**{runner.content}**" , icon = ":material/info:")
 
