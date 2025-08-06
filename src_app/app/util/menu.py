@@ -2,7 +2,7 @@ import streamlit as st
 import re
 
 from src_app.backend import ScriptRunner
-from .control import SC , runs_page_url
+from .control import SC , runs_page_url , runs_page_path
 from .basic import __version__ , __recommended_explorer__ , __page_title__
 from .style import style
 
@@ -28,7 +28,6 @@ def script_menu():
 def show_script_runner(runner: ScriptRunner):
     """show single script runner"""
     if runner.header.disabled: return
-    SC.initialize()
     SC.script_runners[runner.script_key] = runner
     with st.container(key = f"script-container-level-{runner.level}-{runner.script_key}"):
         selected = SC.current_script_runner is not None and SC.current_script_runner == runner.script_key
@@ -36,12 +35,15 @@ def show_script_runner(runner: ScriptRunner):
         # st.button(runner.desc , key=widget_key ,  icon = ':material/code:' ,
         #           help = f":material/info: **{runner.content}** \n*{str(runner.script)}*" ,
         #           on_click = SC.click_script_runner_expand , args = (runner,) , type = 'tertiary')
+        assert runs_page_path(runner.script_key).exists() , f"Script detail page {runs_page_path(runner.script_key)} does not exist"
+        assert SC.initialized , "SC is not initialized"
         st.page_link(runs_page_url(runner.script_key) , 
                      label = runner.format_path ,
                      icon = ':material/code:' ,
                      help = f":material/info: **{runner.content}** \n*{str(runner.script)}*")
         
 def starter():
+    SC.initialize()
     style()
     with st.sidebar:
         menu()

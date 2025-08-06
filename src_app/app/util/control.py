@@ -22,6 +22,22 @@ def runs_page_path(script_key : str):
     """get runs page path"""
     return PAGE_DIR.joinpath(runs_page_url(script_key).split('/')[-1])
 
+def make_script_detail_file(item : PathItem):
+    """make script detail file"""
+    if item.is_dir: return
+    with open(runs_page_path(item.script_key), 'w') as f:
+        f.write(f"""
+from util import starter , show_script_detail    
+
+def main():
+    starter()
+    show_script_detail({repr(item.script_key)}) 
+
+if __name__ == '__main__':
+    main()
+""")
+
+
 @st.cache_resource
 def get_cached_task_db() -> TaskDatabase:
     """get cached task database manager"""
@@ -55,37 +71,18 @@ class SessionControl:
         self.task_queue = TaskQueue('script_runner_main' , 100 , self.task_db)
         self.path_items = PathItem.iter_folder(RUNS_DIR, min_level = 0, max_level = 2)
 
-        # delete all script detail files
-        [page_path.unlink()  for page_path in PAGE_DIR.glob('_*.py')]
-
         # make script detail file
-        [self.make_script_detail_file(item) for item in self.path_items if not item.is_dir]
+        [make_script_detail_file(item) for item in self.path_items if not item.is_dir]
 
     def __str__(self):
         return f"SessionControl()"
-    
-    @staticmethod
-    def make_script_detail_file(item : PathItem):
-        """make script detail file"""
-        if item.is_dir: return
-        with open(runs_page_path(item.script_key), 'w') as f:
-            f.write(f"""
-from util import starter , show_script_detail    
-
-def main():
-    starter()
-    show_script_detail('{repr(item.script_key)}') 
-
-if __name__ == '__main__':
-    main()
-""")
 
     def initialize(self):
+        if self.initialized: return self
         if 'session_control' not in st.session_state:
             st.session_state.session_control = self
         self.config_editor_state = YAMLFileEditorState.get_state('config_editor')
         self.initialized = True
-        return self
     
     def filter_task_queue(self):
         """filter task queue"""
@@ -296,4 +293,5 @@ if __name__ == '__main__':
             time.sleep(1)
         return False
    
-SC = SessionControl().initialize()
+SC = SessionControl()
+SC.initialize()
