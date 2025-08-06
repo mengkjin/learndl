@@ -97,7 +97,7 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
                     key=f"show-complete-report-{item.id}" ,
                     help = "Show complete report in main page" ,
                     on_click = SC.click_show_complete_report , args = (item,)):
-                    st.switch_page(f"pages/{re.sub(r'[/\\]', '_', str(item.relative))}")
+                    st.switch_page("pages/" + re.sub(r'[/\\]', '_', str(item.relative)))
                 
                 if SC.running_report_queue is None or SC.running_report_queue != item.id:
                     continue
