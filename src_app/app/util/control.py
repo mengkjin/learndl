@@ -5,6 +5,7 @@ from typing import Any
 from pathlib import Path
 from datetime import datetime
 import time
+import re
 
 from src_app.db import RUNS_DIR
 from src_app.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
@@ -54,7 +55,7 @@ class SessionControl:
     def make_script_detail_file(item : PathItem):
         """make script detail file"""
         if item.is_dir: return
-        app_path = PAGE_DIR.joinpath(item.script_key.replace("/", "_").replace("\\", "_"))
+        app_path = PAGE_DIR.joinpath(re.sub(r'[/\\]', '_', item.script_key))
         with open(app_path, 'w') as f:
             f.write(f"""
 from util import starter , show_script_detail    
