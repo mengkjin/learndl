@@ -16,7 +16,7 @@ assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
 
 def runs_page_url(script_key : str):
     """get runs page url"""
-    return "pages/script_" + re.sub(r'[/\\]', '_', script_key)
+    return "pages/_" + re.sub(r'[/\\]', '_', script_key)
 
 def runs_page_path(script_key : str):
     """get runs page path"""
@@ -56,7 +56,7 @@ class SessionControl:
         self.path_items = PathItem.iter_folder(RUNS_DIR, min_level = 0, max_level = 2)
 
         # delete all script detail files
-        [page_path.unlink()  for page_path in PAGE_DIR.glob('script_*.py')]
+        [page_path.unlink()  for page_path in PAGE_DIR.glob('_*.py')]
 
         # make script detail file
         [self.make_script_detail_file(item) for item in self.path_items if not item.is_dir]
