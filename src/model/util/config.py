@@ -35,10 +35,10 @@ def conf_mod_type(module : str):
 
 class TrainParam:
     def __init__(self , base_path : ModelPath | Path | None , override = None):
-        override = override or {}
         self.base_path = ModelPath(base_path)
+        self.override = override or {}
         self.model_name = self.base_path.name
-        self.load_param().special_adjustment(override).make_model_name().check_validity()
+        self.load_param().special_adjustment().make_model_name().check_validity()
 
     def __bool__(self): return True
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
@@ -57,22 +57,21 @@ class TrainParam:
             self.train_param.update({f'{cfg}.{k}':v for k,v in self.load_config(cfg).items()})
         return self
 
-    def special_adjustment(self , override : dict | None = None):
-        override = override or {}
-        if 'verbosity'  in override: override['env.verbosity']  = override.pop('verbosity')
-        if 'short_test' in override: override['env.short_test'] = override.pop('short_test')
-        if 'module'     in override: override['model.module']   = override.pop('module')
-        if 'env.short_test' not in override and not MACHINE.server: override['env.short_test'] = True
-        for override_key in override:
+    def special_adjustment(self):
+        if 'verbosity'  in self.override: self.override['env.verbosity']  = self.override.pop('verbosity')
+        if 'short_test' in self.override: self.override['env.short_test'] = self.override.pop('short_test')
+        if 'module'     in self.override: self.override['model.module']   = self.override.pop('module')
+        if (not self.base_path) and ('env.short_test' not in self.override) and (not MACHINE.server): self.override['env.short_test'] = True
+        for override_key in self.override:
             assert override_key in self.Param.keys() , override_key
-        self.Param.update(override)
+        self.Param.update(self.override)
 
         if self.short_test:
-            new_dict = {k:v for k,v in self.Param.get('conditional.short_test' , {}).items() if k not in override}
+            new_dict = {k:v for k,v in self.Param.get('conditional.short_test' , {}).items() if k not in self.override}
             recur_update(self.Param , new_dict)
 
         if self.model_module == 'transformer':
-            new_dict = {k:v for k,v in self.Param.get('conditional.transformer' , {}).items() if k not in override}
+            new_dict = {k:v for k,v in self.Param.get('conditional.transformer' , {}).items() if k not in self.override}
             recur_update(self.Param , new_dict)
         return self
     
@@ -116,8 +115,7 @@ class TrainParam:
     def generate_model_param(self , update_inplace = True , **kwargs):
         module = self.model_module if self.module_type == 'nn' else self.model_booster_type
         assert isinstance(module , str) , (self.model_module , module)
-        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , 
-                                 1 if self.short_test else -1 , **kwargs).expand()
+        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , self.short_test , **kwargs).expand()
         if update_inplace: self.update_model_param(model_param)
         return model_param
     
@@ -285,13 +283,13 @@ class TrainParam:
         
 class ModelParam:
     def __init__(self , base_path : Optional[Path | ModelPath] , module : str , 
-                 booster_head : Any = False , verbosity = 2 , clip_n : int = -1 , **kwargs):
+                 booster_head : Any = False , verbosity = 2 , short_test : bool | None = None , **kwargs):
         self.base_path = ModelPath(base_path)
         self.model_name = self.base_path.name
    
         self.module = module.lower()
         self.booster_head = booster_head
-        self.clip_n = clip_n
+        self.short_test = short_test
         self.verbosity = verbosity
         self.override = kwargs
         self.load_param().check_validity()
@@ -317,7 +315,7 @@ class ModelParam:
 
         lens = [len(v) for v in self.Param.values() if isinstance(v , (list,tuple))]
         self.n_model = max(lens) if lens else 1
-        if self.clip_n > 0: self.n_model = min(self.clip_n , self.n_model)
+        if self.short_test: self.n_model = min(1 , self.n_model)
         assert self.n_model <= 5 , self.n_model
         
         if self.module == 'tra':
@@ -326,7 +324,7 @@ class ModelParam:
 
         if self.booster_head:
             assert AlgoModule.is_valid(self.booster_head , 'boost') , self.booster_head
-            self.booster_head_param = ModelParam(self.base_path , self.booster_head , False , self.verbosity , 1 , **self.override)
+            self.booster_head_param = ModelParam(self.base_path , self.booster_head , False , self.verbosity , **self.override)
         return self
     
     def get(self , key : str , default = None):

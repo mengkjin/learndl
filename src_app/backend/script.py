@@ -271,6 +271,6 @@ class ScriptRunner:
             item.update({'pid': pid, 'status': 'running', 'start_time': time.time()} , write_to_db = True)
         except Exception as e:
             # update queue status to error
-            item.update({'status': 'error', 'error': str(e), 'end_time': time.time()} , write_to_db = True)
+            item.update({'status': 'error', 'exit_error': str(e), 'end_time': time.time()} , write_to_db = True)
             raise e
         return item
