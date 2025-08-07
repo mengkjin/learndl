@@ -56,12 +56,16 @@ class TrainParam:
         for cfg in TRAIN_CONFIG_LIST:
             self.train_param.update({f'{cfg}.{k}':v for k,v in self.load_config(cfg).items()})
         return self
+    
+    @property
+    def should_be_short_test(self):
+        return not self.base_path and not MACHINE.server
 
     def special_adjustment(self):
         if 'verbosity'  in self.override: self.override['env.verbosity']  = self.override.pop('verbosity')
         if 'short_test' in self.override: self.override['env.short_test'] = self.override.pop('short_test')
         if 'module'     in self.override: self.override['model.module']   = self.override.pop('module')
-        if (not self.base_path) and ('env.short_test' not in self.override) and (not MACHINE.server): self.override['env.short_test'] = True
+        if self.should_be_short_test and ('env.short_test' not in self.override): self.override['env.short_test'] = True
         for override_key in self.override:
             assert override_key in self.Param.keys() , override_key
         self.Param.update(self.override)
@@ -91,7 +95,7 @@ class TrainParam:
         return self
     
     def check_validity(self):
-        if not MACHINE.server and not self.short_test:
+        if self.should_be_short_test and not self.short_test:
             Logger.warning('Beware! Should be at server or short_test, but short_test is False now!')
 
         nn_category = AlgoModule.nn_category(self.model_module)
