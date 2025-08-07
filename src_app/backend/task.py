@@ -269,7 +269,11 @@ class TaskDatabase:
         '''get the last queue in table queue_records'''
         with self.conn_handler as (conn, cursor):
             cursor.execute('SELECT queue_id FROM queue_records ORDER BY create_time DESC LIMIT 1')
-            return cursor.fetchone()['queue_id']
+            queue = cursor.fetchone()
+            if queue: 
+                return queue['queue_id']
+            else:
+                return 'default'
     
     def del_task(self, task_id: str , verbose: bool = False):
         """Delete task and related output files"""
@@ -317,7 +321,7 @@ class TaskQueue:
         self.queue_id = queue_id or self.task_db.active_queue()
         self.task_db.new_queue(self.queue_id , exist_ok = True)
         self.max_queue_size = max_queue_size
-        self.reload()
+        self.refresh()
     
     def __iter__(self):
         return iter(self.queue.keys())
@@ -388,12 +392,14 @@ class TaskQueue:
         return [item.status for item in self.queue.values()].count(status)
     
     def refresh(self):
-        return any(item.refresh() for item in self.queue.values())
+        self.reload()
+        changed = [item.refresh() for item in self.queue.values()]
+        return any(changed)
     
     def sync(self):
         '''sync tasks in record into current queue'''
         self.task_db.sync_queue(self.queue_id)
-        self.reload()
+        self.refresh()
             
     def status_message(self):
         status = [item.status for item in self.queue.values()]
@@ -522,7 +528,7 @@ class TaskItem:
     
     @classmethod
     def create(cls, script : Path | str | None , task_db : TaskDatabase | None = None , source : str | None = None , 
-               queue : TaskQueue | None = None):
+               queue : TaskQueue | bool | None = None):
         if script is None:
             script = sys.modules['__main__'].__file__
             assert script , 'script is not found'
@@ -533,7 +539,10 @@ class TaskItem:
             item = cls(str(script) , source = source)
         item.set_task_db(task_db)
         item.dump()
-        if queue is not None: queue.add(item)
+        if isinstance(queue, TaskQueue):
+            queue.add(item)
+        elif queue:
+            item.task_db.add_queue_task(item.task_db.active_queue() , item.id)
         return item
     
     @classmethod

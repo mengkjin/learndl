@@ -346,7 +346,8 @@ class FilePreviewer:
         self.height = height or 600
 
     def preview(self):
-        if self.path is None or not self.path.exists():
+        if self.path is None: return
+        elif not self.path.exists():
             st.error(f"File {self.path} not found" , icon = ":material/error:")
             return
         with st.container(height = self.height):

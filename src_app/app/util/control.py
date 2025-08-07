@@ -68,7 +68,7 @@ class SessionControl:
     
     def __post_init__(self):
         self.task_db = get_cached_task_db()
-        self.task_queue = TaskQueue('script_runner_main' , 100 , self.task_db)
+        self.task_queue = TaskQueue(task_db = self.task_db)
         self.path_items = PathItem.iter_folder(RUNS_DIR, min_level = 0, max_level = 2)
 
         # make script detail file
