@@ -149,7 +149,7 @@ def find_python_process_by_name(name : str , task_id : str  | None = None , try_
     
 def argparse_dict(**kwargs):
     parser = argparse.ArgumentParser(description='Run daily update script.')
-    parser.add_argument('--source', type=str, default='', help='Source of the script call')
+    parser.add_argument('--source', type=str, default='py', help='Source of the script call')
     parser.add_argument('--email', type=int, default=0, help='Send email or not')
     args , unknown = parser.parse_known_args()
     return args.__dict__ | unknown_args(unknown) | kwargs

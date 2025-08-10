@@ -1,1 +1,1 @@
-from .util import __version__ , __recommended_explorer__
+from .util import __version__ , __page_title__ , __recommended_explorer__

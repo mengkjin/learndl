@@ -1,13 +1,7 @@
+from util import PENDING_FEATURES , set_current_page , show_run_button_sidebar
 import platform, torch , sys
 import streamlit as st
 import psutil
-
-PENDING_FEATURES = []
-
-def basic_info():
-    show_tutorial()
-    show_system_info()
-    show_pending_features()
 
 def show_tutorial():
     st.header(":material/school: Tutorial" , divider = 'grey')
@@ -51,9 +45,20 @@ def show_system_info():
     for label , value in options.items():
         st.metric(f":blue[{label}]" , value)
         
-def show_pending_features():
+def show_pending_features(pending_features : list[str] | None = None):
     st.header(":material/pending_actions: Pending Features" , divider = 'grey')
-    for feature in PENDING_FEATURES:
+    if pending_features is None:
+        st.warning("No pending features" , icon = ":material/schedule:")
+        return
+    for feature in pending_features:
         st.warning(feature , icon = ":material/schedule:")
 
+def main():
+    set_current_page("home")
+    show_tutorial()
+    show_system_info()
+    show_pending_features(PENDING_FEATURES)
+    show_run_button_sidebar()
     
+if __name__ == '__main__':
+    main() 

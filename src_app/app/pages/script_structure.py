@@ -1,14 +1,14 @@
 import streamlit as st
 import re
 
-from util import starter , SC , runs_page_url
+from util import SC , set_current_page , show_run_button_sidebar
 from src_app.backend import ScriptRunner
 
 def show_script_structure():
     """show folder content recursively"""  
     container = st.container(key="script-structure-special-expander")
     with container:
-        st.header(":blue[:material/folder_open: Script Structure]" , divider = 'grey')
+        st.header(":material/folder_open: Script Structure" , divider = 'grey')
         st.info("The script structure of project runs" , icon = ":material/info:")
         st.info("Click the script button to switch to page of the script" , icon = ":material/info:")
         
@@ -33,21 +33,24 @@ def show_script_structure():
 
 def show_script_runner(runner: ScriptRunner):
     """show single script runner"""
-    SC.script_runners[runner.script_key] = runner
+    if runner.script_key not in SC.script_runners: SC.script_runners[runner.script_key] = runner
     with st.container(key = f"script-structure-level-{runner.level}-{runner.script_key}"):
         cols = st.columns([1, 1] , gap = "small" , vertical_alignment = "center")
         
         with cols[0]:
             button_text = ':no_entry:' if runner.header.disabled else ':snake:' + ' ' + runner.desc
-            selected = SC.current_script_runner is not None and SC.current_script_runner == runner.script_key
-            widget_key = f"script-runner-expand-{runner.script_key}" if not selected else f"script-runner-expand-selected-{runner.script_key}"
+            widget_key = f"script-runner-expand-{runner.script_key}"
             if st.button(f"**{button_text}**" , key=widget_key , 
-                        help = f"*{str(runner.script)}*" ,
-                        on_click = SC.click_script_runner_expand , args = (runner,)):
-                st.switch_page(runs_page_url(runner.script_key))
+                        help = f"*{str(runner.script)}*"):
+                assert SC.script_pages is not None , "SC.script_pages is not initialized"
+                st.switch_page(SC.script_pages[runner.script_key]['page'])
         with cols[1]:
             st.info(f"**{runner.content}**" , icon = ":material/info:")
 
-if __name__ == '__main__':
-    starter()
+def main():
+    set_current_page("script_structure")
     show_script_structure() 
+    show_run_button_sidebar()
+
+if __name__ == '__main__':
+    main() 

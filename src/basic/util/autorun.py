@@ -8,13 +8,11 @@ from src.project_setting import MACHINE
 from src.basic import path as PATH
 
 class AutoRunTask:
-    def __init__(self , task_name : str , email = True , message_capturer : bool = True , 
-                 source = 'not_specified' , **kwargs):
+    def __init__(self , task_name : str , email = True , message_capturer : bool = True , source = 'py' , **kwargs):
         self.task_name = task_name.replace(' ' , '_')
         self.email = email
-        self.source = source
         self.kwargs = kwargs
-        
+        self.source = source
         self.init_time = datetime.now()
         self.time_str = self.init_time.strftime('%Y%m%d%H%M%S')
         

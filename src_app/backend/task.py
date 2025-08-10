@@ -19,7 +19,7 @@ class DBConnHandler:
     @staticmethod
     def get_connection(db_path: str | Path , check_same_thread: bool = True):
         """Get database connection(using Streamlit cache)"""
-        conn = sqlite3.connect(db_path, check_same_thread=check_same_thread)
+        conn = sqlite3.connect(str(db_path), check_same_thread=check_same_thread)
         conn.row_factory = sqlite3.Row  # allow to access rows as dictionaries
         return conn
     
@@ -108,6 +108,31 @@ class TaskDatabase:
                     FOREIGN KEY (task_id) REFERENCES task_records(task_id)
                 )
                 ''')
+            
+    def is_empty(self):
+        """Check if database is empty"""
+        with self.conn_handler as (conn, cursor):
+            cursor.execute('SELECT * FROM task_records')
+            return cursor.fetchone() is None
+        
+    @classmethod
+    def backup_stats(cls , backup_path : Path | str):
+        """Get task count from backup database"""
+        with DBConnHandler(backup_path) as (conn, cursor):
+            cursor.execute('SELECT COUNT(*) FROM task_records')
+            task_count = cursor.fetchone()[0]
+            cursor.execute('SELECT COUNT(*) FROM queue_records')
+            queue_count = cursor.fetchone()[0]
+            return {
+                'task_count': task_count,
+                'queue_count': queue_count,
+            }
+
+    def task_count(self):
+        """Get task count"""
+        with self.conn_handler as (conn, cursor):
+            cursor.execute('SELECT COUNT(*) FROM task_records')
+            return cursor.fetchone()[0]
             
     def clear_database(self):
         """Clear database , will backup the database before clearing"""
@@ -275,10 +300,18 @@ class TaskDatabase:
             else:
                 return 'default'
     
-    def del_task(self, task_id: str , verbose: bool = False):
+    def del_task(self, task_id: str , verbose: bool = False , check = True , force = False):
         """Delete task and related output files"""
-        assert False , 'not implemented'
         with self.conn_handler as (conn, cursor):
+            if check:
+                cursor.execute('SELECT * FROM task_records WHERE task_id = ?', (task_id,))
+                task = cursor.fetchone()
+                if task is not None and task['status'] != 'error':
+                    print(task)
+                    if not force:
+                        raise ValueError(f"Task ID {task_id} is not an error task , cannot be deleted")
+                    else:
+                        print(f"Task ID {task_id} is not an error task , but force is True , so it will be deleted")
             cursor.execute("DELETE FROM task_exit_files WHERE task_id = ?", (task_id,))
             cursor.execute("DELETE FROM task_records WHERE task_id = ?", (task_id,))
             if verbose:
@@ -305,14 +338,33 @@ class TaskDatabase:
         :param suffix: backup suffix, if not specified, use timestamp
         :return: new database path
         """
+        if self.is_empty():
+            return None
         if suffix is None:
-            suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
+            with self.conn_handler as (conn, cursor):
+                cursor.execute('SELECT * FROM task_records ORDER BY create_time DESC LIMIT 1')
+                task_end_time = cursor.fetchone()['create_time']
+            suffix = datetime.fromtimestamp(task_end_time).strftime('%Y%m%d_%H%M%S')
         backup_name = f"{self.db_name}_{suffix}.db"
         backup_path = self.db_path.parent.joinpath('backup', backup_name)
         backup_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(self.db_path, backup_path)
         return backup_path
     
+    def get_backup_paths(self):
+        return list(self.db_path.parent.glob('backup/*.db'))
+    
+    def restore_backup(self , backup_path : Path | str):
+        self.clear_database()
+        assert Path(backup_path).exists() , f'Backup file {backup_path} does not exist'
+        with self.conn_handler as (conn, cursor):
+            cursor.execute('ATTACH DATABASE ? AS backup', (str(backup_path),))
+            cursor.execute('INSERT INTO task_records SELECT * FROM backup.task_records')
+            cursor.execute('INSERT INTO task_queues SELECT * FROM backup.task_queues')
+            cursor.execute('INSERT INTO queue_records SELECT * FROM backup.queue_records')
+            cursor.execute('INSERT INTO task_backend_updated SELECT * FROM backup.task_backend_updated')    
+            cursor.execute('INSERT INTO task_exit_files SELECT * FROM backup.task_exit_files')
+        Path(backup_path).unlink()
 
 class TaskQueue:
     def __init__(self , queue_id : str | None = None , max_queue_size : int | None = 100 , task_db : TaskDatabase | None = None):
@@ -372,11 +424,17 @@ class TaskQueue:
         item = TaskItem.create(script , self.task_db , source = source)
         self.add(item)
         return item
-        
-    def remove(self, item : 'TaskItem'):
+    
+    def delist(self, item : 'TaskItem'):
         if item.id in self.queue:
             self.queue.pop(item.id)
         self.task_db.del_queue_task(self.queue_id, item.id)
+        
+    def remove(self, item : 'TaskItem' , force : bool = False):
+        if item.id in self.queue:
+            self.queue.pop(item.id)
+        self.task_db.del_queue_task(self.queue_id, item.id)
+        self.task_db.del_task(item.id , check = True , force = force)
 
     def empty(self):
         for key in list(self.queue.keys()):
@@ -401,21 +459,52 @@ class TaskQueue:
         self.task_db.sync_queue(self.queue_id)
         self.refresh()
             
-    def status_message(self):
+    def status_message(self , queue : dict[str, 'TaskItem'] | None = None):
+        if queue is None: queue = self.queue
         status = [item.status for item in self.queue.values()]
-        return f"Running: {status.count('running')} | Complete: {status.count('complete')} | Error: {status.count('error')}"
+        counts = {
+            'running': status.count('running'),
+            'complete': status.count('complete'),
+            'error': status.count('error')
+        }
+        msg = ' | '.join([f"{k.title()}: {v}" for k, v in counts.items()])
+        return msg
+    
+    def source_message(self , queue : dict[str, 'TaskItem'] | None = None):
+        if queue is None: queue = self.queue
+        source = [item.source for item in queue.values()]
+        counts = {
+            'py': source.count('py'),
+            'app': source.count('app'),
+            'bash': source.count('bash')
+        }
+        msg = ' | '.join([f"{k.title()}: {v}" for k, v in counts.items()])
+        msg += f' | Other: {len(source) - sum(counts.values())}'
+        return msg
 
-    def filter(self, status : Literal['all' , 'starting', 'running', 'complete', 'error'] | None = None,
+    def filter(self, status : str | None = None,
+               source : str | None = None,
                folder : list[Path] | None = None,
-               file : list[Path] | None = None):
-        filtered_queue = self.queue.copy()
+               file : list[Path] | None = None , 
+               queue : dict[str, 'TaskItem'] | None = None):
+        if queue is None: 
+            queue = self.queue.copy()
+        else:
+            queue = {k: v for k, v in queue.items()}
         if status and status.lower() != 'all':
-            filtered_queue = {k: v for k, v in filtered_queue.items() if v.status == status.lower()}
+            queue = {k: v for k, v in queue.items() if v.status == status.lower()}
+        if source:
+            if source.lower() == 'all':
+                ...
+            elif source.lower() == 'other':
+                queue = {k: v for k, v in queue.items() if v.source not in ['py', 'bash', 'app']}
+            else:
+                queue = {k: v for k, v in queue.items() if v.source == source.lower()}
         if folder:
-            filtered_queue = {k: v for k, v in filtered_queue.items() if any(v.path.is_relative_to(f) for f in folder)}
+            queue = {k: v for k, v in queue.items() if any(v.path.is_relative_to(f) for f in folder)}
         if file:
-            filtered_queue = {k: v for k, v in filtered_queue.items() if v.path in file}
-        return {item.id: item for item in self.sort(filtered_queue)}   
+            queue = {k: v for k, v in queue.items() if v.path in file}
+        return {item.id: item for item in self.sort(queue)}   
     
     def latest(self , num : int = 10):
         return {item.id: item for item in self.sort(self.queue)[:num]}
@@ -433,7 +522,7 @@ class TaskItem:
     cmd : str = ''
     create_time : float = field(default_factory=time.time)
     status : Literal['starting', 'running', 'complete', 'error'] = 'starting'
-    source : str | None = None
+    source : Literal['py', 'bash','app'] | str | Any = None
     pid : int | None = None
     start_time : float | None = None
     end_time : float | None = None
@@ -448,6 +537,7 @@ class TaskItem:
         assert isinstance(self.script, str) , f'script must be a string, but got {type(self.script)}'
         assert ' ' not in self.script , f'script must not contain space, but got {self.script}'
         assert '@' not in self.script , f'script must not contain @, but got {self.script}'
+        self.source = self.source.lower() if self.source else 'py'
         if self.task_id is None:
             self.task_id = self.id
         else:
@@ -527,7 +617,7 @@ class TaskItem:
         return str(self.relative)
     
     @classmethod
-    def create(cls, script : Path | str | None , task_db : TaskDatabase | None = None , source : str | None = None , 
+    def create(cls, script : Path | str | None , task_db : TaskDatabase | None = None , source : Literal['py', 'bash','app'] | str | None = None , 
                queue : TaskQueue | bool | None = None):
         if script is None:
             script = sys.modules['__main__'].__file__
@@ -654,6 +744,7 @@ class TaskItem:
         if info_type in ['all' , 'enter']:
             enter_info.extend([
                 ['Item ID', self.id],
+                ['Source', self.source],
                 ['Script Path', str(self.absolute)],
                 ['PID', str(self.pid) if self.pid else 'N/A'],
                 ['Create Time', self.time_str('create')],

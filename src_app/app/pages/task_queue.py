@@ -4,7 +4,7 @@ from typing import Literal
 
 from src_app.db import RUNS_DIR
 
-from util import starter , SC , runs_page_url
+from util import SC , runs_page_url , set_current_page , show_run_button_sidebar
 
 def show_task_queue(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter'):
     container = st.container(key="task-queue-special-expander")
@@ -14,12 +14,12 @@ def show_task_queue(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter
         st.info("Tailor filters to show exact tasks" , icon = ":material/info:")
         
         show_queue_header()
-        if queue_type == 'filter': show_queue_filters()
+        if queue_type == 'filter': show_task_filters()
         show_queue_item_list(queue_type)
 
 def show_queue_header():
     with st.container(key = "queue-header-buttons"):
-        cols = st.columns([1, 1 , 1 , 5] , gap = "small" , vertical_alignment = "center")
+        cols = st.columns([1, 1 , 1 , 1 , 5] , gap = "small" , vertical_alignment = "center")
         with cols[0]:  
             st.button(":material/directory_sync:", key="task-queue-sync",  
                         help = "Sync Historical Tasks into Current Queue" ,
@@ -30,14 +30,19 @@ def show_queue_header():
                         on_click = SC.click_queue_refresh)
             
         with cols[2]:
-            st.button(":material/delete:", key="task-queue-empty", 
-                        help = "Empty Queue" ,
-                        on_click = SC.click_queue_empty)
+            st.button(":material/clear_all:", key="task-queue-delist-all", 
+                        help = "Delist All Tasks in Queue" ,
+                        on_click = SC.click_queue_delist_all)
             
         with cols[3]:
-            st.button(":material/delete_forever:", key="task-queue-clear", 
-                        help = "Clear Queue" ,
-                        on_click = SC.click_queue_clear_confirmation)
+            st.button(":material/delete_history:", key="task-queue-remove-all", 
+                        help = "Backup and Remove All" ,
+                        on_click = SC.click_queue_remove_all)
+            
+        with cols[4]:
+            st.button(":material/restore:", key="task-queue-restore-all", 
+                        help = "Restore from Backup" ,
+                        on_click = SC.click_queue_restore_all)
             
     if SC.queue_last_action:
         if SC.queue_last_action[1]:
@@ -50,18 +55,22 @@ def show_queue_header():
         return
 
     st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.status_message()}")
+    st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.source_message()}")
         
-def show_queue_filters():
-    with st.container(key="queue-filter-container").expander("Queue Filters" , expanded = True , icon = ":material/filter_list:"):
+def show_task_filters():
+    with st.container(key="task-filter-container").expander("Task Filters" , expanded = True , icon = ":material/filter_list:"):
         status_options = ["All" , "Running" , "Complete" , "Error"]
+        source_options = ["All" , "Py" , "App" ,"Bash" , "Other"]
         folder_options = [item.path for item in SC.path_items if item.is_dir]
         file_options = [item.path for item in SC.path_items if item.is_file]
-        st.radio(":gray-badge[**Running Status**]" , status_options , key = "queue-filter-status", horizontal = True ,
+        st.radio(":gray-badge[**Running Status**]" , status_options , key = "task-filter-status", horizontal = True ,
                     on_change = SC.click_queue_filter_status)
-        st.multiselect(":gray-badge[**Script Folder**]" , folder_options , key = "queue-filter-path-folder" ,
+        st.radio(":gray-badge[**Script Source**]" , source_options , key = "task-filter-source", horizontal = True ,
+                    on_change = SC.click_queue_filter_source)
+        st.multiselect(":gray-badge[**Script Folder**]" , folder_options , key = "task-filter-path-folder" ,
                         format_func = lambda x: str(x.relative_to(RUNS_DIR)) ,
                         on_change = SC.click_queue_filter_path_folder)
-        st.multiselect(":gray-badge[**Script File**]" , file_options , key = "queue-filter-path-file" ,
+        st.multiselect(":gray-badge[**Script File**]" , file_options , key = "task-filter-path-file" ,
                         format_func = lambda x: x.name ,
                         on_change = SC.click_queue_filter_path_file)
         
@@ -82,22 +91,27 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
             placeholder = st.empty()
             container = placeholder.container(key = f"queue-item-container-{item.id}")
             with container:
-                cols = st.columns([18, 1 , 1] , gap = "small" , vertical_alignment = "center")
+                cols = st.columns([18, .5,.5,.5,.5] , gap = "small" , vertical_alignment = "center")
                     
-                help_text = '|'.join([f"Status: {item.status}" , f"Dur: {item.duration_str}", f"PID: {item.pid}"])
-                cols[0].button(f"{item.tag_icon} {item.button_str}",  help=help_text , key=f"queue-item-content-{item.id}" , 
+                help_text = ' | '.join([f"Status: {item.status.title()}" , 
+                                      f"Source: {item.source.title()}" , 
+                                      f"Dur: {item.duration_str}" , 
+                                      f"PID: {item.pid}"])
+                cols[0].button(f"{item.tag_icon} {item.button_str}",  help=help_text , key=f"click-content-{item.id}" , 
                             use_container_width=True , on_click = SC.click_queue_item , args = (item,))
-                
-                cols[1].button(":red-badge[:material/cancel:]", 
-                            key=f"queue-item-remover-{item.id}", help="Remove/Terminate", 
-                            on_click = SC.click_queue_remove_item , args = (item,))
-                
-                if cols[2].button(
+                if cols[1].button(
                     ":blue-badge[:material/slideshow:]", 
-                    key=f"show-complete-report-{item.id}" ,
+                    key=f"queue-item-report-{item.id}" ,
                     help = "Show complete report in main page" ,
                     on_click = SC.click_show_complete_report , args = (item,)):
                     st.switch_page(runs_page_url(str(item.relative)))
+                
+                cols[3].button(":violet-badge[:material/remove:]", 
+                            key=f"queue-item-delist-{item.id}", help="Delist from Queue", 
+                            on_click = SC.click_queue_delist_item , args = (item,))
+                cols[4].button(":red-badge[:material/cancel:]", 
+                            key=f"queue-item-remove-{item.id}", help="Delete from Database (Auto Backup)", 
+                            on_click = SC.click_queue_remove_item , args = (item,))
                 
                 if SC.running_report_queue is None or SC.running_report_queue != item.id:
                     continue
@@ -118,7 +132,11 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
                     elif item.status == 'error':
                         st.error(f'Script Failed' , icon = ":material/error:")
             
-if __name__ == '__main__':
-    starter()
+def main():
+    set_current_page("task_queue")
     show_task_queue() 
+    show_run_button_sidebar()
+
+if __name__ == '__main__':
+    main() 
     

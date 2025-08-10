@@ -190,6 +190,10 @@ class ScriptRunner:
         return str(self.path.relative)
     
     @property
+    def script_group(self):
+        return re.sub(r'^\d+_', '', self.script_key.split('/')[0]).lower()
+    
+    @property
     def format_path(self):
         return ' > '.join(re.sub(r'^\d+ ', '', p).title() for p in self.script_key.removesuffix('.py').replace('_', ' ').split('/'))
     
@@ -262,7 +266,7 @@ class ScriptRunner:
     def run_script(self , queue : TaskQueue | None = None , close_after_run = False , **kwargs) -> 'TaskItem':
         '''run script and return exit code (0: error, 1: success)'''
 
-        item = TaskItem.create(self.script , source = 'script_runner' , queue=queue)
+        item = TaskItem.create(self.script , source = 'app' , queue=queue)
         cmd = terminal_cmd(self.script, kwargs | {'task_id': item.id , 'source': item.source}, close_after_run=close_after_run)
         item.update({'cmd': cmd} , write_to_db = True)
         try:

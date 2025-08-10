@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from src_app.db import BASE_DIR , get_st_log_path
 
 class CustomCSS:
-    def __init__(self , add_css = ['basic' , 'special_expander' , 'classic_remover' , 'multi_select']) -> None:
+    def __init__(self , add_css = ['basic' , 'special_expander' , 'classic_remove' , 'multi_select']) -> None:
         self.css_list : list[str] = []
         for css in add_css:
             self.add(getattr(self , css)())
@@ -184,9 +184,9 @@ class CustomCSS:
         }
         '''
 
-    def classic_remover(self):
+    def classic_remove(self):
         return '''
-        [class*="classic-remover"] button {
+        [class*="classic-remove"] button {
             height: 32px !important;
             width: 32px !important;
             background-color: red !important; 
@@ -692,3 +692,15 @@ class ColoredText(str):
             return 'red'
         else:
             return None
+        
+@st.dialog("Please Confirm Your Action")
+def action_confirmation(on_confirm : Callable[[], None] , on_abort : Callable[[], None] | None = None , 
+                        title : str = "Are You Sure about This?"):
+    st.error(f":material/warning:**{title}**")
+    col1 , col2 = st.columns(2 , gap = 'small')
+    if col1.button("**Confirm**" , icon = ":material/check_circle:" , type = "primary"):
+        on_confirm()
+        st.rerun()
+    if col2.button("**Abort**" , icon = ":material/cancel:" , type = "secondary"):
+        if on_abort is not None: on_abort()
+        st.rerun()

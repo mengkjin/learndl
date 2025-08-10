@@ -11,108 +11,203 @@ from src_app.frontend.frontend import (
     FilePreviewer , YAMLFileEditor , ColoredText
 )
 
-from .control import SC
+from .control import SC , set_current_page
+
+def change_num_per_page():
+    SC.choose_task_item = None
+def on_first_page(max_page : int):
+    if st.session_state.get('choose-task-page') == 1: return
+    #SC.choose_task_item = None
+    st.session_state['choose-task-page'] = 1
+def on_last_page(max_page : int):
+    if st.session_state.get('choose-task-page') == max_page: return
+    #SC.choose_task_item = None
+    st.session_state['choose-task-page'] = max_page
+def on_prev_page(max_page : int):
+    if st.session_state.get('choose-task-page') == 1: return
+    #SC.choose_task_item = None
+    st.session_state['choose-task-page'] = max((st.session_state.get('choose-task-page') or 1) - 1, 1)
+def on_next_page(max_page : int):
+    if st.session_state.get('choose-task-page') == max_page: return
+    #SC.choose_task_item = None
+    st.session_state['choose-task-page'] = (st.session_state.get('choose-task-page') or 1) + 1
 
 def show_script_detail(script_key : str):
     """show main part"""
-    runner = SC.script_runners[script_key] if script_key in SC.script_runners else None
+    set_current_page(script_key)
+    runner = SC.script_runners[script_key] 
+    page = SC.script_pages[script_key]
     if runner is None:
-        st.header(":material/code: No Script Selected")
-        return
-    else:
-        st.header(f":material/code: {runner.script_key}")
-        st.warning(f'Description: {runner.content}' , icon = ":material/info:")   
+        raise ValueError(f"Script {script_key} not found in SC.script_runners")
     
+    header , button = st.columns([18, 2] , gap = "small" , vertical_alignment = "top") 
+    with header:
+        st.header(f"{page['icon']} {runner.script_key}")
+        st.warning(f'**Description: {runner.content.title()}**' , icon = ":material/info:") 
+        if todo := runner.header.todo:
+            st.info(f"**Todo: {todo.title()}**" , icon = ":material/pending_actions:")  
+    
+
     show_script_task_selector(runner)
     show_param_settings(runner)
+    # show_run_button_main()
     show_report_main(runner)
+    with button:
+        show_run_button_main()
+    show_run_button_sidebar()
 
-def show_script_task_selector(runner : ScriptRunner , selector_type : Literal['dropdown' , 'expander'] = 'dropdown'):
-    if todo := runner.header.todo:
-        st.info(f":material/pending_actions: {todo}")
-
-    queue = SC.task_queue.filter(file = [runner.path.path])
-    if not queue: return
-    item_ids = list(queue.keys())
+def show_script_task_selector(runner : ScriptRunner):
+    """show script task selector"""
+    script_queue = SC.task_queue.filter(file = [runner.path.path])
+    if not script_queue: 
+        st.subheader(f":blue[:material/history: No Historical Task]" ,
+                     help = "No historical task for this script")
+        return
+    st.subheader(f":blue[:material/history: Choose Historical Task]" ,
+                 help = "Choose any task item from the expander below")
     
-    if selector_type == 'dropdown':
-        options = {item.id : " ".join([item.plain_icon, "." ,
-                             item.button_str, 
-                             f"--ID" , str(item.time_id), 
-                             f"--Status" , item.status.title(), 
-                             f"--Dur" , str(item.duration_str)]) 
-                   for item in queue.values()}
+    format_dict = {item.id : " ".join([
+        f"{i+1}." ,
+        item.plain_icon, 
+        "." ,
+        item.button_str, 
+        f"--ID {item.time_id : <5}" ,
+        f"--Status {item.status.title() : >10}" ,
+        f"--Source {item.source.title() : >10}" ,
+        f"--Dur {item.duration_str : >10}"
+    ]).strip() for i, item in enumerate(script_queue.values())}
+    with st.expander(":material/checklist: Choose Task Item", expanded = False):
+        status_options = ["All" , "Running" , "Complete" , "Error"]
+        source_options = ["All" , "Py" , "App" ,"Bash" , "Other"]
+        status = st.radio(":gray-badge[**Running Status**]" , status_options , key = "task-filter-status", horizontal = True)
+        source = st.radio(":gray-badge[**Script Source**]" , source_options , key = "task-filter-source", horizontal = True)
+        queue = SC.task_queue.filter(status = status , source = source , queue = script_queue)
+        st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.status_message(queue)}")
+        st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.source_message(queue)}")
+        
+        item_ids = list(queue.keys())
         if SC.choose_task_item is not None and SC.choose_task_item in item_ids:
-            index = item_ids.index(SC.choose_task_item)
+            choose_index = item_ids.index(SC.choose_task_item)
         else:
-            index = None
-        st.selectbox("Choose Task Item from Queue", 
-                     options = item_ids, 
-                     index = index,
-                     format_func = lambda x: options[x],
-                     key = f"choose-item-selectbox" , 
-                     help = "Choose a Task Item from Filtered Queue" ,
-                     on_change = SC.click_choose_item_selectbox)
-    elif selector_type == 'expander':
-        expander = st.expander("Choose Task Item from Queue", expanded = False , icon = ":material/checklist:")
-        with expander:
-            for item in queue.values():
-                col0 , col1 = expander.columns([14, 1] , gap = "small" , vertical_alignment = "center")
-                with col0:
-                    button_key = f"choose-item-select-{item.id}" if SC.choose_task_item != item.id else f"choose-item-selected-{item.id}"
-                    info_text = f"--ID {item.time_id} --Status {item.status.title()} --Dur {item.duration_str}"
-                    st.button(f"{item.icon} {item.button_str} {info_text}", 
-                                key=button_key , 
-                                use_container_width=True , on_click = SC.click_item_choose_select , args = (item,))
-                with col1.container(key = f"choose-item-remover-{item.id}"):
-                    st.button(":material/cancel:", key = f"choose-item-remover-button-{item.id}",
-                                help="Remove/Terminate", 
-                                on_click = SC.click_item_choose_remove , args = (item,))
-
-    if SC.choose_task_item:
-        st.success(f"Task Item {SC.choose_task_item} chosen" , icon = ":material/check_circle:")
+            choose_index = None
+        
+        with st.container(key = f"choose-task-num-per-page-container"):
+            cols = st.columns([1, 1 , 2] , vertical_alignment = "center")
+            cols[0].info('**Select Number of Task Items per Page**')
+            num_per_page = cols[1].selectbox('select num per page', [2 ,10 , 50 , 100], format_func = lambda x: f'{x} Tasks/Page', 
+                                index = 0 , key = f"choose-task-item-num-per-page" , label_visibility = 'collapsed' ,
+                                on_change = change_num_per_page)
+            
+        with st.container(key = f"choose-task-page-container"):
+            max_page = (len(item_ids) - 1) // num_per_page + 1
+            page_options = list(range(1, max_page + 1))
+            index_page = choose_index // num_per_page if choose_index is not None else 0
+            page_cols = st.columns([7, 1, 1, 3, 1, 1 , 14] , vertical_alignment = "center")
+            page_cols[0].info('**Select Page**')
+            page_cols[1].button(":material/first_page:", key = f"choose-task-page-first", on_click = on_first_page , args = (max_page,))
+            page_cols[2].button(":material/chevron_left:", key = f"choose-task-page-prev", on_click = on_prev_page , args = (max_page,))
+            page_cols[3].selectbox('select page', page_options, key = f"choose-task-page" , index = index_page , 
+                                   placeholder = f'Page #',
+                                   format_func = lambda x: f'Page {x}', label_visibility = 'collapsed')
+            page_cols[4].button(":material/chevron_right:", key = f"choose-task-page-next", on_click = on_next_page , args = (max_page,))
+            page_cols[5].button(":material/last_page:", key = f"choose-task-page-last", on_click = on_last_page , args = (max_page,))
+        
+        with st.container(key = f"choose-task-item-container"):
+            current_page = st.session_state.get('choose-task-page') or 1
+            item_options = item_ids[(current_page - 1) * num_per_page : current_page * num_per_page]
+            item_index = (choose_index % num_per_page) if choose_index is not None else None
+            st.info('**Choose Task Item from Queue**')
+            st.selectbox("Choose Task Item from Queue", 
+                        options = item_options, 
+                        index = item_index,
+                        format_func = lambda x: format_dict[x],
+                        key = f"choose-item-selectbox" , 
+                        help = "Choose a Task Item from Filtered Queue" ,
+                        placeholder = "Choose a Task Item from Filtered Queue",
+                        on_change = SC.click_choose_item_selectbox , 
+                        label_visibility = 'collapsed')
+            
+        
+        if SC.choose_task_item:
+            st.success(f"Task Item {SC.choose_task_item} chosen" , icon = ":material/check_circle:")
 
 def show_param_settings(runner : ScriptRunner):
     if runner.disabled:
         st.error(f":material/disabled_by_default: This script is disabled")
         return
-    with st.container(key = f"script-setting-container-{runner.script_key}"):
-        param_inputs = runner.header.get_param_inputs()
-        settings_col , collapse_col = st.columns([1, 1] , vertical_alignment = "center")
-        with settings_col:
-            if not param_inputs:
-                st.info("**No parameter settings**" , icon = ":material/settings:")
-            else:
-                st.info("**Parameter Settings**" , icon = ":material/settings:")
-
-        with collapse_col:
-            st.button(":material/close:", key=f"script-setting-classic-remover-{runner.script_key}", 
-                      help="Collapse", type="secondary" ,
-                      on_click = SC.click_script_runner_expand , args = (runner,))                
-        
-    params = ParamInputsForm(runner).init_param_inputs('customized').param_values
-    if runner.header.file_editor:
-        with st.expander(runner.header.file_editor.get('name', 'File Editor') , expanded = False , icon = ":material/edit_document:"):
-            path = runner.header.file_editor['path'].format(**params)
-            file_editor = YAMLFileEditor('param-settings-file-editor', 
-                                          file_root=path , file_input=False , 
-                                          height = runner.header.file_editor.get('height'))
-            file_editor.show_yaml_editor()
-    if runner.header.file_previewer:
-        with st.expander(runner.header.file_previewer.get('name', 'File Previewer') , expanded = False , icon = ":material/file_present:"):
-            path = runner.header.file_previewer['path'].format(**params)
-            file_previewer = FilePreviewer(path , height = runner.header.file_previewer.get('height'))
-            file_previewer.preview()
-    if SC.ready_to_go(runner):
+    param_inputs = runner.header.get_param_inputs()
+    if not param_inputs:
+        st.subheader(f":blue[:material/settings: No Parameters]" ,
+                     help = "No parameter is required for this script")
+    else:
+        st.subheader(f":blue[:material/settings: Parameter Settings]" ,
+                    help = "Input parameters for this script in the expander below , mind the required ones")
+            
+    with st.expander(":material/settings: Parameter Settings", expanded = True):
+        param_input_form = ParamInputsForm(runner).init_param_inputs('customized')
+        SC.param_inputs_form = param_input_form
+        params = param_input_form.param_values
+        if runner.header.file_editor:
+            with st.expander(runner.header.file_editor.get('name', 'File Editor') , expanded = False , icon = ":material/edit_document:"):
+                path = runner.header.file_editor['path'].format(**params)
+                file_editor = YAMLFileEditor('param-settings-file-editor', 
+                                            file_root=path , file_input=False , 
+                                            height = runner.header.file_editor.get('height'))
+                file_editor.show_yaml_editor()
+        if runner.header.file_previewer:
+            with st.expander(runner.header.file_previewer.get('name', 'File Previewer') , expanded = False , icon = ":material/file_present:"):
+                path = runner.header.file_previewer['path'].format(**params)
+                file_previewer = FilePreviewer(path , height = runner.header.file_previewer.get('height'))
+                file_previewer.preview()
+    
+def run_button_header(sidebar = False):
+    runner = SC.current_script_runner
+    if runner is None:
+        help_text = f"Please Choose a Script to Run First"
+    elif SC.ready_to_go(runner):
         help_text = f"Parameters valid, run {runner.script_key}"
-        button_key = f"script-runner-run-enabled-{runner.script_key}"
     else:
         help_text = f"Parameters invalid, please check required ones"
-        button_key = f"script-runner-run-disabled-{runner.script_key}"
-    st.button(":material/mode_off_on:", key=button_key , 
-            help = help_text , disabled = not SC.ready_to_go(runner) , 
-            on_click = SC.click_script_runner_run , args = (runner,params))
+        
+    st.subheader(f":blue[:material/run_circle: Run Script]" , help = help_text)
 
+def run_button_button(sidebar = False):
+    runner = SC.current_script_runner
+    if runner is None:
+        disabled = True
+        help_text = f"Please Choose a Script to Run First"
+        button_key = f"script-runner-run-disabled-not-selected"
+        params = None
+
+    else:
+        if SC.param_inputs_form is None:
+            raise ValueError("ParamInputsForm is not initialized")
+        params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
+        
+        if SC.ready_to_go(runner):
+            disabled = False
+            help_text = f"Parameters valid, run {runner.script_key}"
+            button_key = f"script-runner-run-enabled-{runner.script_key}"
+        else:
+            disabled = True
+            help_text = f"Parameters invalid, please check required ones"
+            button_key = f"script-runner-run-disabled-{runner.script_key}"
+        
+    if sidebar: button_key += "-sidebar"
+    st.button(":material/mode_off_on:", key=button_key , 
+            help = help_text , disabled = disabled , 
+            on_click = SC.click_script_runner_run , args = (runner, params))
+
+def show_run_button_main():
+    # run_button_header(sidebar = False)
+    run_button_button(sidebar = False)
+
+def show_run_button_sidebar():
+    #if header_placeholder := st.session_state.get('sidebar-runner-header' , None):
+    #    with header_placeholder: run_button_header(sidebar = True)
+    if button_placeholder := st.session_state.get('sidebar-runner-button' , None):
+        with button_placeholder: run_button_button(sidebar = True)
+    
 class ParamInputsForm:
     def __init__(self , runner : ScriptRunner):
         self.runner = runner
@@ -422,10 +517,21 @@ class ParamInputsForm:
 def show_report_main(runner : ScriptRunner):
     """show complete report"""
     item = SC.task_queue.get(SC.current_task_item)
-    if item is None: return
-    if not item.belong_to(runner): return
-
-    status_text = f'Running Report {item.status_state.title()}'
+    if item is None or not item.belong_to(runner): 
+        st.subheader(f":blue[:material/overview: Task Full Report (Empty)]" ,
+                     help = f"No task has been selected for {runner.script_key}")
+        return
+    
+    st.subheader(f":blue[:material/overview: Task Full Report]" ,
+                 help = f"Task report for {item.id}")
+    
+    status_text = f'Status: {item.status_state.title()}'
+    if item.status == 'complete':
+        status_text = f':green[**{status_text}**]'
+    elif item.status == 'error':
+        status_text = f':red[**{status_text}**]'
+    else:
+        status_text = f':orange[**{status_text}**]'
     status_placeholder = st.empty()
     status = status_placeholder.status(status_text , state = item.status_state , expanded = True)
     
@@ -441,7 +547,7 @@ def show_report_main(runner : ScriptRunner):
             with st.expander(":rainbow[:material/build:] **Command Details**", expanded=False):
                 st.code(item.cmd , wrap_lines=True)
 
-            script_str = f"Script [{item.format_path}] ({item.time_str()}) (PID: {item.pid})"
+            script_str = f"Script [{item.format_path}] --Time: {item.time_str()} --ID: {item.time_id} --Source: {item.source.title()} --PID: {item.pid}"
             st.success(f'{script_str} started' , icon = ":material/add_task:")
 
             df_placeholder = st.empty()

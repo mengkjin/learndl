@@ -1,7 +1,7 @@
 import streamlit as st
 
 class CustomCSS:
-    def __init__(self , add_css = ['basic' , 'special_expander' , 'classic_remover' , 'multi_select']) -> None:
+    def __init__(self , add_css = ['basic' , 'special_expander' , 'classic_remove' , 'multi_select']) -> None:
         self.css_list : list[str] = []
         for css in add_css:
             self.add(getattr(self , css)())
@@ -179,9 +179,9 @@ class CustomCSS:
         }
         '''
 
-    def classic_remover(self):
+    def classic_remove(self):
         return '''
-        [class*="classic-remover"] button {
+        [class*="classic-remove"] button {
             height: 32px !important;
             width: 32px !important;
             background-color: red !important; 
@@ -231,7 +231,7 @@ class CustomCSS:
 
 
 def style():
-    css = CustomCSS(add_css = ['basic' , 'special_expander' , 'classic_remover' , 'multi_select'])
+    css = CustomCSS(add_css = ['basic' , 'special_expander' , 'classic_remove' , 'multi_select'])
     css.add("""
     .stVerticalBlock[class*="queue-header-buttons"] {
         div {justify-content: flex-start !important;}
@@ -256,51 +256,32 @@ def style():
                 color: white !important;
             }
         }   
-        [class*="-empty"] button {
-            color: lightcoral !important;
+        [class*="-delist"] button {
+            color: violet !important;
             &:hover {
-                background-color: lightcoral !important;
+                background-color: violet !important;
                 color: white !important;
             }
         }
-        [class*="-clear"] button {
+        [class*="-remove"] button {
             color: red !important;
             &:hover {
                 background-color: red !important;
                 color: white !important;
             }
         }
-    }
-    .stElementContainer[class*="confirm-clear"] {
-        button {
-            height: 36px !important;
-            width: 200px !important;
-            border-radius: 10px !important;
-            font-size: 24px !important;
-            font-weight: bold !important;
-            color: white !important;
-            border: none !important;
-            div {font-size: 20px !important;}
-        }
-        &[class*="-confirm"] button {
-            background-color: green !important;
-            &:hover {background-color: darkgreen !important;}
-        }
-        &[class*="-abort"] button {
-            background-color: red !important;
-            &:hover {background-color: darkred !important;}
+        [class*="-restore"] button {
+            color: darkgreen !important;
+            &:hover {
+                background-color: darkgreen !important;
+                color: white !important;
+            }
         }
     }
     .stVerticalBlock[class*="queue-item-container"] {
         margin-bottom: -10px !important;
         
-        [class*="-queue-item"] button {
-            justify-content: flex-start !important;
-            text-align: left !important;
-            padding-left: 6px !important;
-            p {font-size: 16px !important;}
-        }
-        .stElementContainer[class*="queue-item-remover"] , .stElementContainer[class*="show-complete-report"] {
+        .stElementContainer[class*="queue-item"] {
             * {
                 border: none !important;
                 border-radius: 10px !important;
@@ -317,11 +298,18 @@ def style():
                 height: 32px !important;
             }
         }
-        .stElementContainer[class*="queue-item-remover"] {
-            button:hover {
-                background-color: #ff8080 !important;
-            }
+        .stElementContainer[class*="-remove"] {
+            button:hover {background-color: #ff8080 !important;}
         } 
+        .stElementContainer[class*="-delist"] {
+            button:hover {background-color: #8080ff !important;}
+        }
+        [class*="click-content"] button {
+            justify-content: flex-start !important;
+            text-align: left !important;
+            padding-left: 6px !important;
+            p {font-size: 16px !important;}
+        }
     }
     .stVerticalBlock[class*="developer-info"] {
         button {
@@ -347,14 +335,14 @@ def style():
                 color: white !important;
             }
         }   
-        [class*="-empty"] button {
+        [class*="-delist"] button {
             color: lightcoral !important;
             &:hover {
                 background-color: lightcoral !important;
                 color: white !important;
             }
         }
-        [class*="-clear"] button {
+        [class*="-remove"] button {
             color: red !important;
             &:hover {
                 background-color: red !important;
@@ -379,9 +367,9 @@ def style():
             }
         }
     }
-    .stVerticalBlock[class*="choose-item-remover"] {
+    .stVerticalBlock[class*="choose-item-remove"] {
         .stTooltipIcon {justify-content: flex-end !important;}
-        .stElementContainer[class*="remover-button"] {
+        .stElementContainer[class*="remove-button"] {
             * {
                 border: none !important;
                 border-radius: 10px !important;
@@ -400,10 +388,13 @@ def style():
             }
         }
     }
-    .stVerticalBlock[class*="script-container"] {
-        margin-top: 0px !important;
-        margin-bottom: -10px !important;
-        div[class="stMarkdown"] > div {padding: 0px !important; margin: 0px !important;}
+    .stVerticalBlock[class*="sidebar-script-menu"] {
+        .stPageLink {
+            margin-top: 0px !important;
+            margin-bottom: -10px !important;
+            padding-top: 0px !important;
+            padding-bottom: 0px !important;
+        }
     } 
     .stVerticalBlock[class*="script-structure"] {
         margin-top: 0px !important;
@@ -427,33 +418,22 @@ def style():
             }  
         }
     } 
-    .stVerticalBlock[class*="script-setting-container"] {
-        margin: 0px !important;
-        padding-bottom: 10px !important;
-        .stElementContainer[class*="script-setting-classic-remover"] {
-            div {
-                align-items: flex-start !important;
-                justify-content: flex-end !important; 
-            }
-            button {margin: 0px !important;}
-        }
-    }
     .stElementContainer[class*="script-runner-run"] {
         button {
-            min-width: 50px !important;
-            height: 50px !important;
-            width: 50px !important;
+            min-width: 70px !important;
+            height: 70px !important;
+            width: 70px !important;
             background-color: green !important;
             color: white !important;
             border-radius: 50%;
             border: none;
             cursor: pointer;
             display: flex;
-            margin: 20px !important;
+            margin: 10px !important;
             &:hover {background-color: darkgreen !important;}
         }
         p {
-            font-size: 36px !important;
+            font-size: 48px !important;
             font-weight: bold !important;
         }
         &[class*="-disabled"] button {
@@ -464,6 +444,10 @@ def style():
                 background-color: lightgray !important;
             }
         } 
+        .stTooltipIcon {justify-content: flex-end !important;}
+        &[class*="-sidebar"] .stTooltipIcon {
+            justify-content: center !important;
+        }
     }
     .stElementContainer[class*="file-preview"] {
         button {

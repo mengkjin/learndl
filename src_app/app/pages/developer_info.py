@@ -2,7 +2,7 @@ import streamlit as st
 
 from src_app.frontend.frontend import ActionLogger
 
-from util import starter , SC
+from util import SC , set_current_page , show_run_button_sidebar
 
 def developer_info_selected_change():
     selected = getattr(st.session_state , 'developer-info-selected' , [])
@@ -48,29 +48,15 @@ def show_developer_info(H = 500):
 
         cols = st.columns(7) # 7 buttons in a row
             
-        with cols[0]:  
-            st.button("Sync" , icon = ":material/directory_sync:" , key="developer-queue-sync",  
-                      help = "Sync Historical Tasks into Current Queue" ,
-                      on_click = SC.click_queue_sync)
-        with cols[1]:  
-            st.button("Refresh" , icon = ":material/refresh:" , key="developer-queue-refresh",  
-                      help = "Refresh Queue" ,
-                      on_click = SC.click_queue_refresh)
-            
-        with cols[2]:
-            st.button("Empty" , icon = ":material/delete:" , key = "developer-queue-empty" , 
-                      help = "Empty Queue" ,
-                      on_click = SC.click_queue_empty)
-                
-        with cols[3]:
-            st.button("Clear" , icon = ":material/delete_forever:" , key = "developer-queue-clear" , 
-                      help = "Clear All Tasks in Queue" ,
-                      on_click = SC.click_queue_clear_confirmation)
-        with cols[4]:
+        with cols[0]:
             st.button("Log" , icon = ":material/delete_forever:" , key = "developer-log-clear" , 
                       help = "Clear Both Action and Error Logs" ,
                       on_click = SC.click_log_clear_confirmation)
         
+def main():
+    set_current_page("developer_info")
+    show_developer_info()
+    show_run_button_sidebar()
+        
 if __name__ == '__main__':
-    starter()
-    show_developer_info() 
+    main() 
