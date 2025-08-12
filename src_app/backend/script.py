@@ -1,9 +1,9 @@
 from pathlib import Path
 from typing import Literal , Any
-import re , yaml , time , subprocess
+import re , yaml , time
 from dataclasses import dataclass , asdict , field
 
-from src_app.abc import terminal_cmd , get_real_pid
+from src_app.abc import ScriptCmd
 from src_app.db import RUNS_DIR
 
 from .task import TaskItem , TaskQueue
@@ -65,6 +65,10 @@ class PathItem:
     def format_path(self):
         return ' > '.join(re.sub(r'^\d+ ', '', p).title() for p in self.script_key.removesuffix('.py').replace('_', ' ').split('/'))
 
+    @classmethod
+    def from_key(cls , script_key : str , base_dir = RUNS_DIR):
+        components = script_key.replace('\\' , '/').split('/')
+        return PathItem(base_dir.joinpath(*components) , len(components) - 1)
 
 @dataclass
 class ScriptHeader:
@@ -75,11 +79,15 @@ class ScriptHeader:
     content: str = ''
     todo: str = ''
     email: bool = False
-    close_after_run: bool = False
+    mode: Literal['shell', 'os'] = 'shell'
     param_inputs: dict[str, Any] = field(default_factory=dict)
     file_editor: dict[str, Any] = field(default_factory=dict)
     file_previewer: dict[str, Any] = field(default_factory=dict)
     disabled: bool = False
+
+    def __post_init__(self):
+        if self.mode not in ['shell', 'os']:
+            raise ValueError(f'Invalid mode: {self.mode}')
 
     def get_param_inputs(self):
         return ScriptParamInput.from_dict(self.param_inputs)
@@ -152,15 +160,18 @@ class ScriptParamInput:
         return None
 
 class ScriptRunner:
-    def __init__(self, path_item: PathItem, base_dir: Path | None = None):
+    def __init__(self, path_item: PathItem):
         self.path = path_item
         assert self.script.is_file() and self.script.suffix == '.py', f'{self.script} is not a python script'
         
         self.header = self.parse_header()
-        self.base_dir = base_dir
 
     def __repr__(self):
         return f"ScriptRunner(script={self.script})"
+    
+    @classmethod
+    def from_key(cls , script_key : str):
+        return PathItem.from_key(script_key).script_runner()
 
     @property
     def id(self):
@@ -263,18 +274,21 @@ class ScriptRunner:
             
         return header
 
-    def run_script(self , queue : TaskQueue | None = None , close_after_run = False , **kwargs) -> 'TaskItem':
+    def run_script(self , queue : TaskQueue | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> 'TaskItem':
         '''run script and return exit code (0: error, 1: success)'''
 
         item = TaskItem.create(self.script , source = 'app' , queue=queue)
-        cmd = terminal_cmd(self.script, kwargs | {'task_id': item.id , 'source': item.source}, close_after_run=close_after_run)
-        item.update({'cmd': cmd} , write_to_db = True)
+        params = kwargs | {'task_id': item.id , 'source': item.source}
+        cmd = ScriptCmd(self.script, params, mode)
+        item.update({'cmd': str(cmd)} , write_to_db = True)
         try:
-            process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
-            pid = get_real_pid(process , item.cmd)
-            item.update({'pid': pid, 'status': 'running', 'start_time': time.time()} , write_to_db = True)
+            process = cmd.run()
+            item.update({'pid': process.real_pid, 'status': 'running', 'start_time': time.time()} , write_to_db = True)
         except Exception as e:
-            # update queue status to error
             item.update({'status': 'error', 'exit_error': str(e), 'end_time': time.time()} , write_to_db = True)
             raise e
         return item
+    
+    def preview_cmd(self , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> str:
+        '''run script and return exit code (0: error, 1: success)'''
+        return TaskItem.preview_cmd(self.script , 'app' , mode , **kwargs)

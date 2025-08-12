@@ -5,7 +5,7 @@
 # description: Reconstruct Train Data
 # content: 重建历史训练数据, 用于模型从2017年开始训练
 # email: False
-# close_after_run: False
+# mode: shell
 
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())

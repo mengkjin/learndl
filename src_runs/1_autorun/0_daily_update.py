@@ -5,7 +5,7 @@
 # description: Run Daily Update
 # content: 每日更新数据,因子,模型隐变量,模型推理
 # email: True
-# close_after_run: False
+# mode: shell
 
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())

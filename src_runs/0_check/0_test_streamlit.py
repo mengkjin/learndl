@@ -5,7 +5,7 @@
 # description: test me
 # content: very short script to test streamlit
 # email: True
-# close_after_run: True
+# mode: shell
 # param_inputs:
 #   port_name : 
 #       type : [a , b , c]

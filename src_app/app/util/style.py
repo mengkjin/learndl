@@ -25,6 +25,7 @@ class CustomCSS:
             padding: 10px !important;
             letter-spacing: 5px !important;
             border-bottom: 2px solid #1E90FF !important;
+            margin-bottom: 20px !important;
         }
         h2 {
             font-size: 36px !important;
@@ -101,7 +102,7 @@ class CustomCSS:
         }
         .stMetric div {
             font-size: 18px !important;
-            color: #1E3A8A !important;
+            /* color: #1E3A8A !important; */
         }
         .stMetric > label > div > div {
             font-size: 20px !important;
@@ -233,6 +234,7 @@ class CustomCSS:
 def style():
     css = CustomCSS(add_css = ['basic' , 'special_expander' , 'classic_remove' , 'multi_select'])
     css.add("""
+    
     .stVerticalBlock[class*="queue-header-buttons"] {
         div {justify-content: flex-start !important;}
         * {
@@ -240,7 +242,12 @@ def style():
             font-size: 24px !important;
         }
         button {
-            height: 36px !important; 
+            min-width: 60px !important;
+            height: 60px !important;
+            width: 60px !important;
+            span {
+                font-size: 36px !important;
+            }
         }
         [class*="-sync"] button {
             color: #1E88E5 !important;
@@ -256,6 +263,13 @@ def style():
                 color: white !important;
             }
         }   
+        [class*="-clean"] button {
+            color: lightblue !important;
+            &:hover {
+                background-color: lightblue !important;
+                color: white !important;
+            }
+        }  
         [class*="-delist"] button {
             color: violet !important;
             &:hover {
@@ -321,35 +335,13 @@ def style():
                 font-weight: 900 !important;
             }
         }
-        [class*="-sync"] button {
-            color: #1E88E5 !important;
-            &:hover {
-                background-color: #1E88E5 !important;
-                color: white !important;
-            }
-        } 
-        [class*="-refresh"] button {
-            color: green !important;
-            &:hover {
-                background-color: green !important;
-                color: white !important;
-            }
-        }   
-        [class*="-delist"] button {
-            color: lightcoral !important;
-            &:hover {
-                background-color: lightcoral !important;
-                color: white !important;
-            }
-        }
-        [class*="-remove"] button {
+        [class*="-clear"] button {
             color: red !important;
             &:hover {
                 background-color: red !important;
                 color: white !important;
             }
         }
-    }
     }
     .stElementContainer[class*="choose-item-select"] {
         button {
@@ -388,14 +380,6 @@ def style():
             }
         }
     }
-    .stVerticalBlock[class*="sidebar-script-menu"] {
-        .stPageLink {
-            margin-top: 0px !important;
-            margin-bottom: -10px !important;
-            padding-top: 0px !important;
-            padding-bottom: 0px !important;
-        }
-    } 
     .stVerticalBlock[class*="script-structure"] {
         margin-top: 0px !important;
         margin-bottom: -10px !important;
@@ -420,12 +404,12 @@ def style():
     } 
     .stElementContainer[class*="script-runner-run"] {
         button {
-            min-width: 70px !important;
-            height: 70px !important;
-            width: 70px !important;
+            min-width: 60px !important;
+            height: 60px !important;
+            width: 60px !important;
             background-color: green !important;
             color: white !important;
-            border-radius: 50%;
+            border-radius: 25%;
             border: none;
             cursor: pointer;
             display: flex;
@@ -445,8 +429,16 @@ def style():
             }
         } 
         .stTooltipIcon {justify-content: flex-end !important;}
-        &[class*="-sidebar"] .stTooltipIcon {
-            justify-content: center !important;
+        &[class*="-sidebar"] {
+            .stTooltipIcon {
+                justify-content: center !important;
+            }
+            button {
+                margin-top: 0px !important;
+                margin-bottom: 0px !important;
+                padding-top: 0px !important;
+                padding-bottom: 0px !important;
+            }
         }
     }
     .stElementContainer[class*="file-preview"] {
@@ -467,5 +459,126 @@ def style():
     .stVerticalBlock[class*="file-download"] {
         .stElementContainer {justify-content: flex-end !important;}
     }  
+    div[data-testid*="stSidebarHeader"] {
+        padding-bottom: 0px !important;
+        margin-top: 0px !important;
+        margin-bottom: 0px !important;
+    }
+    div[data-testid*="stSidebarUserContent"] {
+        h3 {
+            margin-top: 0px !important;
+            margin-bottom: 0px !important;
+            padding-bottom: 5px !important;
+        }
+        .stVerticalBlock[class*="sidebar-global-settings"] {
+            .stColumn {
+                margin-top: 0px !important;
+                margin-bottom: 0px !important;
+                padding-top: 0px !important;
+                padding-bottom: 0px !important;
+                padding-left: 10px !important;
+                height: 16px !important;
+                .stButtonGroup button {
+                    margin-top: 0px !important;
+                    margin-bottom: 0px !important;
+                    padding-top: 0px !important;
+                    padding-bottom: 0px !important;
+                    height: 28px !important;
+                    font-size: 12px !important;
+                }
+            }
+        }
+        .stVerticalBlock[class*="sidebar-intro-links"] {
+            button {
+                height: 40px !important;
+                width: 40px !important;
+                border-radius: 25% !important;
+                border: none !important;
+                span {
+                    font-size: 28px !important;
+                    font-weight: bold !important;
+                    justify-content: center !important;
+                }
+            }
+            div[class*="-home"] button {
+                background-color: lightgray !important; /* lightgray */
+                color: white !important;
+                &:hover {background-color: gray !important;}
+            }
+            div[class*="-developer"] button {
+                background-color: #87CEEB !important; /* lightblue */
+                color: white !important;
+                &:hover {background-color: #1E88E5 !important;}
+            }
+            div[class*="-config"] button {
+                background-color: #ff8080 !important; /* lightred */
+                color: white !important;
+                &:hover {background-color: #ff4040 !important;} /* darker red */
+            }
+            div[class*="-task"] button {
+                background-color: #90EE90 !important; /* lightgreen */
+                color: white !important;
+                &:hover {background-color: #008000 !important;} /* darkergreen */
+            }
+            div[class*="-script"] button {
+                background-color: #EE82EE !important; /* lightviolet */
+                color: white !important;
+                &:hover {background-color: #8B008B !important;} /* darkerviolet */
+            }
+        } 
+        .stVerticalBlock[class*="sidebar-script-links"] {
+            .stPageLink {
+                margin-top: 0px !important;
+                margin-bottom: -10px !important;
+                padding-top: 0px !important;
+                padding-bottom: 0px !important;
+                padding-left: 10px !important;
+            }
+        } 
+    }
+    .stVerticalBlock[class*="home-intro-pages"] {
+        button {
+            height: 88px !important;
+            width: 100% !important;
+            p {
+                font-size: 20px !important;
+                font-weight: bold !important;
+            }            
+        }
+        div[class*="-developer"] button {
+            background-color: #87CEEB !important; /* lightblue */
+            color: white !important;
+            &:hover {background-color: #1E88E5 !important;}
+        }
+        div[class*="-config"] button {
+            background-color: #ff8080 !important; /* lightred */
+            color: white !important;
+            &:hover {background-color: #ff4040 !important;} /* darker red */
+        }
+        div[class*="-task"] button {
+            background-color: #90EE90 !important; /* lightgreen */
+            color: white !important;
+            &:hover {background-color: #008000 !important;} /* darkergreen */
+        }
+        div[class*="-script"] button {
+            background-color: #EE82EE !important; /* lightviolet */
+            color: white !important;
+            &:hover {background-color: #8B008B !important;} /* darkerviolet */
+        }
+    }
+    .stElementContainer[class*="go-home-button"] {
+        align-self: flex-end !important;
+        button {
+            height: 60px !important;
+            width: 60px !important;
+            border-radius: 25% !important;
+            border: 2px solid lightgray !important;
+            span {
+                font-size: 40px !important;
+                font-weight: bold !important;
+                justify-content: center !important;
+            }
+        }
+    }
     """)
     css.apply()

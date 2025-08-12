@@ -5,7 +5,7 @@
 # description: Test Model
 # content: 测试某个已训练的模型
 # email: True
-# close_after_run: False
+# mode: shell
 # param_inputs:
 #   model_name : 
 #       type : "[p.name for p in Path('models').iterdir() if not p.name.endswith('_ShortTest') and not p.name.startswith('.')]"

@@ -1,93 +1,93 @@
 import streamlit as st
 from pathlib import Path
+from typing import Literal
 import re
-from src_app.backend import ScriptRunner , PathItem
+from src_app.backend import PathItem
 from .control import SC
 from .basic import __version__ , __page_title__
 
 PAGE_DIR = Path(__file__).parent.parent.joinpath('pages')
 assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
-    
-def menu_pages():
-    if not SC.menu_pages: 
-        SC.menu_pages = {
-            'home': home_page() ,
-            'dev_info': developer_info_page() ,
-            'config_editor': config_editor_page() ,
-            'task_queue': task_queue_page() ,
-            'scripts': script_structure_page() ,
+
+INTRO_PAGES = ['home' , 'developer_info' , 'config_editor' , 'task_queue' , 'script_structure']
+
+PAGE_TITLES = {
+    'home' : f":rainbow[:material/rocket_launch: {__page_title__} (_v{__version__}_)]"
+}
+
+PAGE_ICONS = {
+    'home' : ':material/home:' ,
+    'developer_info' : ':material/bug_report:' ,
+    'config_editor' : ':material/edit_document:' ,
+    'task_queue' : ':material/event_list:' ,
+    'script_structure' : ':material/account_tree:' ,
+}
+
+PAGE_HELPS = {
+    'home' : f"Tutorial and System Information." ,
+    'developer_info' : f"This is for developer only. Check boxes to select what information to show." ,
+    'config_editor' : 'This File Editor is for editing selected config files. For other config files, please use the file explorer.' ,
+    'task_queue' : f"Shows the entire task queue. Adjust filter to show more specific tasks." ,
+    'script_structure' : f"The script structure of project runs. Click the script button to switch to script page." ,
+}
+
+SCRIPT_ICONS = {
+    'check' : ':material/question_mark:' ,
+    'autorun' : ':material/schedule:' ,
+    'research' : ':material/experiment:' ,
+    'trading' : ':material/payments:',
+}
+
+def intro_pages():
+    return {page:get_intro_page(page) for page in INTRO_PAGES}
+
+def get_intro_page(page_name : str):
+    assert page_name in INTRO_PAGES , f"Page {page_name} not a valid intro page"
+    if 'app_intro_pages' not in st.session_state: st.session_state['app_intro_pages'] = {}
+    if page_name not in st.session_state['app_intro_pages']:
+        icon = PAGE_ICONS[page_name]
+        help = PAGE_HELPS[page_name]
+        st.session_state['app_intro_pages'][page_name] = {
+            'page' : st.Page(f'pages/{page_name}.py' , title = page_name , icon = icon) ,
+            'label' : page_name.replace('_', ' ').title() ,
+            'head' : page_name.replace('_', ' ').title() ,
+            'icon' : icon ,
+            'help' : help ,
         }
-    return SC.menu_pages
+    return st.session_state['app_intro_pages'][page_name]
 
 def script_pages():
-    if not SC.script_pages: 
-        pages = {}
-        items = SC.path_items
-        for item in items:
-            if not item.is_dir and item.level > 0:
-                runner = item.script_runner()
-                make_script_detail_file(item)
-                pages[runner.script_key] = get_script_page(runner)
-        SC.script_pages = pages
-    return SC.script_pages
+    pages = {}
+    items = SC.path_items
+    for item in items:
+        if not item.is_dir and item.level > 0:
+            make_script_detail_file(item)
+            pages[item.script_key] = get_script_page(item.script_key)
+    return pages
 
-def home_page():
-    return {
-        'page' : st.Page('pages/home.py' , title = 'Home' , icon = ':material/home:') ,
-        'label' : 'Home' ,
-        'icon' : ':material/home:' ,
-        'help' : f":material/info: **{__page_title__}** \n*{__version__}*" ,
-    }
-def developer_info_page():
-    return {
-        'page' : st.Page('pages/developer_info.py' , title = 'Developer Info' , icon = ':material/bug_report:') ,
-        'label' : 'Developer Info' ,
-        'icon' : ':material/bug_report:' ,
-        'help' : f":material/info: **Developer Info**" ,
-    }
-def config_editor_page():
-    return {
-        'page' : st.Page('pages/config_editor.py' , title = 'Config Editor' , icon = ':material/edit_document:') ,
-        'label' : 'Config Editor' ,
-        'icon' : ':material/edit_document:' ,
-        'help' : f":material/info: **Config Editor**" ,
-    }
-def task_queue_page():
-    return {
-        'page' : st.Page('pages/task_queue.py' , title = 'Task Queue' , icon = ':material/event_list:') ,
-        'label' : 'Task Queue' ,
-        'icon' : ':material/event_list:' ,
-        'help' : f":material/info: **Task Queue**" ,
-    }
-def script_structure_page():
-    return {
-        'page' : st.Page('pages/script_structure.py' , title = 'Script Structure' , icon = ':material/folder_open:') ,
-        'label' : 'Script Structure' ,
-        'icon' : ':material/folder_open:' ,
-        'help' : f":material/info: **Script Structure**" ,
-    }
-def get_script_page(runner: ScriptRunner):
+def get_script_page(script_key: str):
+    runner = SC.get_runner(script_key)
     if runner.header.disabled: 
-        print(f'{runner.script_key} is disabled')
+        st.error(f"Script {script_key} is disabled!")
         return
-    if runner.script_key not in SC.script_runners:
-        SC.script_runners[runner.script_key] = runner
-    assert SC.script_runners , "script runners are not initialized"
+    if 'app_script_pages' not in st.session_state: st.session_state['app_script_pages'] = {}
     
-    assert runs_page_path(runner.script_key).exists() , f"Script detail page {runs_page_path(runner.script_key)} does not exist"
-    icon = {
-        'check' : ':material/question_mark:' ,
-        'autorun' : ':material/schedule:' ,
-        'research' : ':material/experiment:' ,
-        'trading' : ':material/payments:',
-    }[runner.script_group]
-    return {
-        'page' : st.Page(runs_page_url(runner.script_key) , title = runner.format_path , icon = icon) ,
-        'group' : runner.script_group ,
-        'label' : runner.format_path ,
-        'icon' : icon ,
-        'help' : f":material/info: **{runner.content}** \n*{str(runner.script)}*" ,
+    if runner.script_key not in st.session_state['app_script_pages']:
+        if runner.script_key not in SC.script_runners: SC.script_runners[runner.script_key] = runner
+        
+        assert runs_page_path(runner.script_key).exists() , f"Script detail page {runs_page_path(runner.script_key)} does not exist"
+        icon = SCRIPT_ICONS[runner.script_group]
+        help = f"**Script**: *{str(runner.script)}*\n**Description**: {runner.content}"
+        if runner.todo: help += f"\n**TODO**: {runner.todo}"
+        st.session_state['app_script_pages'][runner.script_key] = {
+            'page' : st.Page(runs_page_url(runner.script_key) , title = runner.format_path , icon = icon) ,
+            'group' : runner.script_group ,
+            'label' : runner.format_path ,
+            'head' : runner.format_path ,
+            'icon' : icon ,
+            'help' : help ,
         }
+    return st.session_state['app_script_pages'][runner.script_key]
 
 def runs_page_url(script_key : str):
     """get runs page url"""
@@ -111,3 +111,20 @@ def main():
 if __name__ == '__main__':
     main()
 """)
+        
+def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'intro'):
+    if type == 'intro':
+        self_page = get_intro_page(page_name) 
+    elif type == 'script':
+        script_key = page_name
+        self_page = get_script_page(script_key)
+        if self_page is None:
+            st.error(f"Script {script_key} not not enabled")
+            return
+    else:
+        raise ValueError(f"type {type} should be 'intro' or 'script'")
+    title = PAGE_TITLES.get(page_name , f":rainbow[{self_page['icon']} {self_page['head']}]")
+    helps = self_page['help'].split('\n')
+    st.session_state['box_title'].title(title)
+    #st.session_state['box_main_button'].write('')
+    for h in helps: st.warning(h , icon = ":material/info:")

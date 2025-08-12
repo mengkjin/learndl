@@ -77,6 +77,9 @@ class BackendTaskRecorder:
             self._task_id = task_item.id
         self.update_msg : dict[str , Any] = {'pid': os.getpid()}
         self.params = kwargs
+        if 'email' in self.params:
+            if isinstance(self.params['email'] , str): self.params['email'] = eval(self.params['email'])
+            self.params['email'] = bool(self.params['email'])
 
     @property
     def task_id(self):

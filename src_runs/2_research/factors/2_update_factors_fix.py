@@ -5,7 +5,7 @@
 # description: Fix Factors
 # content: 修正某些因子
 # email: False
-# close_after_run: False
+# mode: shell
 # param_inputs:
 #   factor_names : 
 #       type : str

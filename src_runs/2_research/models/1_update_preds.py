@@ -5,7 +5,7 @@
 # description: Update Model Predictions
 # content: 更新所有Registered模型的预测结果
 # email: False
-# close_after_run: False
+# mode: shell
 
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())

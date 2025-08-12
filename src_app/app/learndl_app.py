@@ -12,7 +12,7 @@ import streamlit as st
 import streamlit_autorefresh as st_autorefresh
 
 from util import (__page_title__ , __version__ , AUTO_REFRESH_INTERVAL , 
-                  style , menu_pages , script_pages)
+                  style , intro_pages , script_pages , get_intro_page)
 
 st.set_option('client.showSidebarNavigation', False)
 
@@ -23,16 +23,20 @@ def page_config():
     st.set_page_config(
         page_title=__page_title__,
         page_icon=":material/rocket_launch:",
-        layout='wide',
+        layout= 'wide' , # 'centered',
         initial_sidebar_state="expanded"
     )
     style()
-    st.title(f":rainbow[:material/rocket_launch: {__page_title__} (_v{__version__}_)]")
-    
+    cols = st.columns([4,1] , gap = 'small' , vertical_alignment = 'center')
+    with cols[0]: st.session_state['box_title'] = st.empty()
+    with cols[1]: st.session_state['box_main_button'] = st.empty()
+    #st.session_state['box_title'].title(f":rainbow[:material/rocket_launch: {__page_title__} (_v{__version__}_)]")
+    #if cols[1].button(':rainbow[:material/home:]' , key = 'go-home-button' , help = 'Go to Home Page'): 
+    #    st.switch_page(get_intro_page('home')['page'])
 
 def page_navigation():
     pages = {}
-    pages['Introduction'] = [page['page'] for page in menu_pages().values()]
+    pages['Intro'] = [page['page'] for page in intro_pages().values()]
     for page in script_pages().values():
         group_name = page['group'].title() + ' Scripts'
         if group_name not in pages: pages[group_name] = []
@@ -40,27 +44,69 @@ def page_navigation():
     pg = st.navigation(pages = pages , position='top')
     return pg
 
+
 def sidebar_navigation():
     with st.sidebar:
-        #st.session_state['sidebar-runner-header'] = st.empty()
+        st.logo("https://docs.streamlit.io/logo.svg")
+        
         st.session_state['sidebar-runner-button'] = st.empty()
-        st.subheader(":blue[:material/file_present: Script Shortcuts]")
-        with st.container(key = "sidebar-script-menu"):
-            group = ''
-            for page in script_pages().values():
-                if page['group'] != group:
-                    st.write(f"""
-                    <div style="
-                        font-size: 18px;
-                        font-weight: bold;
-                        margin-top: -5px;
-                        margin-bottom: 5px;
-                        padding-left: 10px;
-                    ">{page['group'].upper()} Scripts</div>""", unsafe_allow_html=True)
-                st.page_link(page['page'] , label = page['label'] , icon = page['icon'] , help = page['help'])
-                group = page['group']
-                # st.switch_page(page['page'])
 
+        with st.session_state['sidebar-runner-button']:
+            help_text = f"Please Choose a Script to Run First"
+            button_key = f"script-runner-run-disabled-init-sidebar"
+            st.button(":material/mode_off_on:", key=button_key , 
+                    help = help_text , disabled = True)
+
+        global_settings()
+
+        st.subheader(":blue[:material/link: Quick Links]")
+        with st.container(key = "sidebar-quick-links"):
+            intro_links()
+            script_links()
+            
+def global_settings():
+    with st.container(key = "sidebar-global-settings").expander('Global Settings' , icon = ':material/settings:'):
+        cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
+        cols[0].markdown(":blue-badge[Email Notification]" , 
+                         help="""If email after the script is complete? Not selected will use script header value.""")
+        cols[1].segmented_control('Email' , ['Y' , 'N'] , default = None , 
+                                  key = 'global-settings-email'  , label_visibility = 'collapsed')
+        cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
+        cols[0].markdown(":blue-badge[Run Mode]" , 
+                         help='''Which mode should the script be running in?
+                           :blue[**shell**] will start a commend terminal to run;
+                           :blue[**os**] will run in backend.
+                           Not selected will use script header value.''')
+        cols[1].segmented_control('Mode' , ['shell' , 'os'] , default = None , 
+                                  key = 'global-settings-mode' , label_visibility = 'collapsed')
+
+def intro_links():
+    pages = intro_pages()
+    with st.container(key = "sidebar-intro-links"):
+        cols = st.columns(len(pages))
+        for col , (name , page) in zip(cols , pages.items()):
+            if col.button('' , icon = page['icon'] , key = f"sidebar-intro-link-{name}" ,
+                          help = f""":blue[**{page['label'].title()}**] - {page['help']}"""):
+                st.switch_page(page['page'])
+
+def script_links():
+    with st.container(key = "sidebar-script-links"):
+        subsubheader = lambda x: st.write(f"""
+                <div style="
+                    font-size: 16px;
+                    font-weight: bold;
+                    margin-top: 0px;
+                    margin-bottom: 5px;
+                    padding-left: 10px;
+                ">{x}</div>""", unsafe_allow_html=True)
+        
+        group = ''
+        for page in script_pages().values():
+            if page['group'] != group:
+                subsubheader(page['group'].upper() + ' Scripts')
+            st.page_link(page['page'] , label = page['label'] , icon = page['icon'] , help = page['help'])
+            group = page['group']
+  
 def main():
     page_config()
     pg = page_navigation()

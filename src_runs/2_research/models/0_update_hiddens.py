@@ -5,7 +5,7 @@
 # description: Update Hiddens Extraction
 # content: 更新模型隐变量,用于做其他模型的输入
 # email: False
-# close_after_run: False
+# mode: shell
 
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())

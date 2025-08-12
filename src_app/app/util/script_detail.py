@@ -12,6 +12,7 @@ from src_app.frontend.frontend import (
 )
 
 from .control import SC , set_current_page
+from .page import get_script_page , print_page_header
 
 def change_num_per_page():
     SC.choose_task_item = None
@@ -35,36 +36,26 @@ def on_next_page(max_page : int):
 def show_script_detail(script_key : str):
     """show main part"""
     set_current_page(script_key)
-    runner = SC.script_runners[script_key] 
-    page = SC.script_pages[script_key]
-    if runner is None:
-        raise ValueError(f"Script {script_key} not found in SC.script_runners")
+    runner = SC.get_runner(script_key)
+    page = get_script_page(script_key)
+    if page is None: return
     
-    header , button = st.columns([18, 2] , gap = "small" , vertical_alignment = "top") 
-    with header:
-        st.header(f"{page['icon']} {runner.script_key}")
-        st.warning(f'**Description: {runner.content.title()}**' , icon = ":material/info:") 
-        if todo := runner.header.todo:
-            st.info(f"**Todo: {todo.title()}**" , icon = ":material/pending_actions:")  
-    
-
+    print_page_header(script_key , 'script')  
     show_script_task_selector(runner)
     show_param_settings(runner)
-    # show_run_button_main()
+    show_run_button_main(runner)
+    show_run_button_sidebar(runner)
     show_report_main(runner)
-    with button:
-        show_run_button_main()
-    show_run_button_sidebar()
 
 def show_script_task_selector(runner : ScriptRunner):
     """show script task selector"""
     script_queue = SC.task_queue.filter(file = [runner.path.path])
     if not script_queue: 
         st.subheader(f":blue[:material/history: No Historical Task]" ,
-                     help = "No historical task for this script")
+                     help = "No historical task for this script" , divider='gray')
         return
     st.subheader(f":blue[:material/history: Choose Historical Task]" ,
-                 help = "Choose any task item from the expander below")
+                 help = "Choose any task item from the expander below" , divider='gray')
     
     format_dict = {item.id : " ".join([
         f"{i+1}." ,
@@ -94,7 +85,7 @@ def show_script_task_selector(runner : ScriptRunner):
         with st.container(key = f"choose-task-num-per-page-container"):
             cols = st.columns([1, 1 , 2] , vertical_alignment = "center")
             cols[0].info('**Select Number of Task Items per Page**')
-            num_per_page = cols[1].selectbox('select num per page', [2 ,10 , 50 , 100], format_func = lambda x: f'{x} Tasks/Page', 
+            num_per_page = cols[1].selectbox('select num per page', [20 , 50 , 100 , 500], format_func = lambda x: f'{x} Tasks/Page', 
                                 index = 0 , key = f"choose-task-item-num-per-page" , label_visibility = 'collapsed' ,
                                 on_change = change_num_per_page)
             
@@ -138,10 +129,11 @@ def show_param_settings(runner : ScriptRunner):
     param_inputs = runner.header.get_param_inputs()
     if not param_inputs:
         st.subheader(f":blue[:material/settings: No Parameters]" ,
-                     help = "No parameter is required for this script")
+                     help = "No parameter is required for this script" , divider='gray')
     else:
         st.subheader(f":blue[:material/settings: Parameter Settings]" ,
-                    help = "Input parameters for this script in the expander below , mind the required ones")
+                    help = "Input parameters for this script in the expander below , mind the required ones" ,
+                    divider='gray')
             
     with st.expander(":material/settings: Parameter Settings", expanded = True):
         param_input_form = ParamInputsForm(runner).init_param_inputs('customized')
@@ -159,26 +151,13 @@ def show_param_settings(runner : ScriptRunner):
                 path = runner.header.file_previewer['path'].format(**params)
                 file_previewer = FilePreviewer(path , height = runner.header.file_previewer.get('height'))
                 file_previewer.preview()
-    
-def run_button_header(sidebar = False):
-    runner = SC.current_script_runner
-    if runner is None:
-        help_text = f"Please Choose a Script to Run First"
-    elif SC.ready_to_go(runner):
-        help_text = f"Parameters valid, run {runner.script_key}"
-    else:
-        help_text = f"Parameters invalid, please check required ones"
-        
-    st.subheader(f":blue[:material/run_circle: Run Script]" , help = help_text)
 
-def run_button_button(sidebar = False):
-    runner = SC.current_script_runner
+def run_button_button(runner : ScriptRunner | None , sidebar = False):
     if runner is None:
         disabled = True
         help_text = f"Please Choose a Script to Run First"
         button_key = f"script-runner-run-disabled-not-selected"
         params = None
-
     else:
         if SC.param_inputs_form is None:
             raise ValueError("ParamInputsForm is not initialized")
@@ -194,19 +173,20 @@ def run_button_button(sidebar = False):
             button_key = f"script-runner-run-disabled-{runner.script_key}"
         
     if sidebar: button_key += "-sidebar"
+    preview_cmd = SC.script_runner_run_cmd(runner , params)
+    if preview_cmd: help_text = preview_cmd
+
     st.button(":material/mode_off_on:", key=button_key , 
             help = help_text , disabled = disabled , 
             on_click = SC.click_script_runner_run , args = (runner, params))
 
-def show_run_button_main():
-    # run_button_header(sidebar = False)
-    run_button_button(sidebar = False)
+def show_run_button_main(runner : ScriptRunner):
+    with st.session_state['box_main_button']:
+        run_button_button(runner , sidebar = False)
 
-def show_run_button_sidebar():
-    #if header_placeholder := st.session_state.get('sidebar-runner-header' , None):
-    #    with header_placeholder: run_button_header(sidebar = True)
+def show_run_button_sidebar(runner : ScriptRunner | None = None):
     if button_placeholder := st.session_state.get('sidebar-runner-button' , None):
-        with button_placeholder: run_button_button(sidebar = True)
+        with button_placeholder: run_button_button(runner , sidebar = True)
     
 class ParamInputsForm:
     def __init__(self , runner : ScriptRunner):
@@ -519,11 +499,11 @@ def show_report_main(runner : ScriptRunner):
     item = SC.task_queue.get(SC.current_task_item)
     if item is None or not item.belong_to(runner): 
         st.subheader(f":blue[:material/overview: Task Full Report (Empty)]" ,
-                     help = f"No task has been selected for {runner.script_key}")
+                     help = f"No task has been selected for {runner.script_key}" , divider='gray')
         return
     
     st.subheader(f":blue[:material/overview: Task Full Report]" ,
-                 help = f"Task report for {item.id}")
+                 help = f"Task report for {item.id}" , divider='gray')
     
     status_text = f'Status: {item.status_state.title()}'
     if item.status == 'complete':

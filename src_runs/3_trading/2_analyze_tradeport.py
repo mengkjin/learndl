@@ -5,7 +5,7 @@
 # description: Analyze Trading Portfolios
 # content: 分析交易组合
 # email: False
-# close_after_run: False
+# mode: shell
 # param_inputs:
 #   port_name : 
 #       type : str

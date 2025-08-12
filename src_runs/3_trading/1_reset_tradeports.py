@@ -5,7 +5,7 @@
 # description: Reset Trading Portfolios
 # content: 更新指定组合, 输入参数为重置组合
 # email: True
-# close_after_run: False
+# mode: shell
 # param_inputs:
 #   reset_ports : 
 #       type : str

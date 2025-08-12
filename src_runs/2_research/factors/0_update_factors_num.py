@@ -5,7 +5,7 @@
 # description: Update Factors
 # content: 更新前num(默认100)组level , date的因子数据
 # email: False
-# close_after_run: False
+# mode: shell
 # param_inputs:
 #   num : 
 #       type : int

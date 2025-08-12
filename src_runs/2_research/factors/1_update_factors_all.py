@@ -5,7 +5,7 @@
 # description: Update Factors Within
 # content: 更新区间内所有未更新的因子数据
 # email: False
-# close_after_run: False
+# mode: shell
 # param_inputs:
 #   start : 
 #       type : int

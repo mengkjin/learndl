@@ -1,18 +1,17 @@
-import os , fnmatch , platform , psutil , subprocess , time , argparse
+import os , fnmatch , platform , psutil , subprocess , time , argparse , shlex
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
 DEFAULT_EXCLUDES = ['kernel_interrupt_daemon.py']
 
-def edit_file(file_path : Path | str):
-    path = Path(file_path).absolute()
-    if os.name == 'nt':  # Windows
-        editor_command = f'notepad {str(path)}'
-    elif os.name == 'posix':  # Linux
-        editor_command = f'nano {str(path)}'
-    process = subprocess.Popen(editor_command, shell=True)
-    process.communicate()
+def python_path():
+    if platform.system() == 'Linux' and os.name == 'posix':
+        return 'python3.10'
+    elif platform.system() == 'Darwin':
+        return '/Users/mengkjin/workspace/learndl/.venv/bin/python'
+    else:
+        return 'python'
 
 def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py']):
     running_scripts : list[Path] = []
@@ -49,7 +48,6 @@ def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance']
         with open(log_path, 'a') as log_file:
             log_file.write(main_str)
 
-
 def check_process_status(pid):
     """check process status"""
     if psutil.pid_exists(pid):
@@ -79,16 +77,70 @@ def kill_process(pid):
     except:
         pass
     return False
+    
+class ScriptCmd:
+    def __init__(self , script : str | Path , params : dict | None = None , mode: Literal['shell', 'os'] = 'shell'):
+        self.script = str(script.absolute()) if isinstance(script , Path) else script
+        self.params = params or {}
+        assert mode in ['shell', 'os'] , f'Invalid mode: {mode}'
+        self.mode = mode
 
-def python_path():
-    if platform.system() == 'Linux' and os.name == 'posix':
-        return 'python3.10'
-    elif platform.system() == 'Darwin':
-        return 'source /Users/mengkjin/workspace/learndl/.venv/bin/activate; python'
-    else:
-        return 'python'
+        args_str = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in self.params.items() if v != ''])
+        py_cmd = f'{python_path()} {self.script} {args_str}'
+        self.py_cmd = py_cmd
+        self.os_cmd = shlex.split(py_cmd)
+        if platform.system() == 'Linux' and os.name == 'posix':
+            cmd = f'gnome-terminal -- bash -c "{py_cmd}; exec bash"'
+        elif platform.system() == 'Windows':
+            cmd = f'start cmd /k {py_cmd}'
+        elif platform.system() == 'Darwin':
+            cmd = f'''osascript -e 'tell application "Terminal" to do script "{py_cmd}; exec bash"' '''
+        else:
+            raise ValueError(f'Unsupported platform: {platform.system()}')
+        self.shell_cmd = cmd
 
-def terminal_cmd(script : str | Path , params : dict | None = None , close_after_run = False):
+    def __repr__(self):
+        return f'TerminalCmd(script={self.script}, params={self.params}, mode={self.mode})'
+
+    @property
+    def cmd(self):
+        return str(self)
+    
+    @property
+    def shell(self):
+        return self.mode == 'shell'
+    
+    @property
+    def use_cmd(self):
+        if self.mode == 'shell':
+            return self.shell_cmd
+        elif self.mode == 'os':
+            return self.os_cmd
+        else:
+            raise ValueError(f'Invalid mode: {self.mode}')
+        
+    def __str__(self):
+        if self.mode == 'shell':
+            return self.shell_cmd
+        elif self.mode == 'os':
+            return self.py_cmd
+        else:
+            raise ValueError(f'Invalid mode: {self.mode}')
+        
+    def run(self):
+        self.process = subprocess.Popen(self.use_cmd, shell=self.shell , encoding='utf-8')
+        return self
+    
+    @property
+    def pid(self):
+        return self.process.pid
+    
+    @property
+    def real_pid(self):
+        return get_real_pid(self.process , self.cmd)
+
+def terminal_cmd_old(script : str | Path , params : dict | None = None , close_after_run = False ,
+                mode: Literal['shell', 'os'] = 'shell'):
     params = params or {}
     if isinstance(script , Path): script = str(script.absolute())
     args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in params.items() if v != ''])
@@ -150,7 +202,7 @@ def find_python_process_by_name(name : str , task_id : str  | None = None , try_
 def argparse_dict(**kwargs):
     parser = argparse.ArgumentParser(description='Run daily update script.')
     parser.add_argument('--source', type=str, default='py', help='Source of the script call')
-    parser.add_argument('--email', type=int, default=0, help='Send email or not')
+    parser.add_argument('--email', type=str, default='0', help='Send email or not')
     args , unknown = parser.parse_known_args()
     return args.__dict__ | unknown_args(unknown) | kwargs
 

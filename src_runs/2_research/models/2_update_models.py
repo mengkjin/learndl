@@ -5,7 +5,7 @@
 # description: Update AI Models
 # content: 更新训练所有Registered模型
 # email: False
-# close_after_run: False
+# mode: shell
 
 import sys
 

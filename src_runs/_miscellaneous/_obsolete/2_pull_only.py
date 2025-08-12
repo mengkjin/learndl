@@ -5,7 +5,7 @@
 # description: pull only
 # content: 自动拉取最新代码
 # email: False
-# close_after_run: False
+# mode: shell
 
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())

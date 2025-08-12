@@ -5,7 +5,7 @@
 # description: Change Power Saver
 # content: 在Ubuntu系统中修改电源管理策略至"节能"
 # email: False
-# close_after_run: True
+# mode: os
 
 import sys
 
@@ -15,7 +15,7 @@ sys.path.append(path)
 
 from datetime import datetime
 from pathlib import Path
-from src_runs.util.abc import change_power_mode , get_running_scripts
+from src_app.abc import change_power_mode , get_running_scripts
 
 def main():
     running_scripts = get_running_scripts(__file__)

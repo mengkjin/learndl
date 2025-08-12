@@ -11,17 +11,17 @@ from typing import Any , Literal
 from pathlib import Path
 from IPython.display import display
 
-from src_app.abc import terminal_cmd
+from src_app.abc import ScriptCmd
 
 class OutOfRange(Exception): pass
 class Unspecified(Exception): pass
 
 def run_script(script : str | Path , close_after_run = False , **kwargs):
-    cmd = terminal_cmd(script , kwargs , close_after_run = close_after_run)
+    cmd = ScriptCmd(script , kwargs , mode = 'os' if close_after_run else 'shell')
     print(f'Script cmd : {cmd}')
     
-    process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
-    process.communicate()
+    cmd.run()
+    cmd.process.communicate()
 
 class PopupWindow:
     def __init__(self , title : str = 'Input Error'):
@@ -254,11 +254,10 @@ class ScriptRunner:
         def func(b):
             try:
                 params.update({input_area.pname : input_area.get_value() for input_area in input_areas})
-                cmd = terminal_cmd(self.script , params)
+                cmd = ScriptCmd(self.script , params , mode='os' if params.get('close_after_run' , False) else 'shell')
                 print(f'Script cmd : {cmd}')
-                
-                process = subprocess.Popen(cmd, shell=True, encoding='utf-8')
-                process.communicate()
+                cmd.run()
+                cmd.process.communicate()
             except (OutOfRange , Unspecified) as e:
                 popup.popup(str(e))
                 return

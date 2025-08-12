@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from src_app.db import RUNS_DIR , get_task_db_path
-from src_app.abc import check_process_status , kill_process
+from src_app.abc import check_process_status , kill_process , ScriptCmd
 
 class DBConnHandler:
     def __init__(self, db_path: str | Path):
@@ -306,7 +306,7 @@ class TaskDatabase:
             if check:
                 cursor.execute('SELECT * FROM task_records WHERE task_id = ?', (task_id,))
                 task = cursor.fetchone()
-                if task is not None and task['status'] != 'error':
+                if task is not None and task['status'] not in ['error' , 'killed']:
                     print(task)
                     if not force:
                         raise ValueError(f"Task ID {task_id} is not an error task , cannot be deleted")
@@ -446,7 +446,7 @@ class TaskQueue:
             if self.queue[key].status != 'running': self.queue.pop(key)
         self.task_db.clear_database()
 
-    def count(self, status : Literal['starting', 'running', 'complete', 'error']):
+    def count(self, status : Literal['starting', 'running', 'complete', 'error' , 'killed']):
         return [item.status for item in self.queue.values()].count(status)
     
     def refresh(self):
@@ -521,7 +521,7 @@ class TaskItem:
     script : str
     cmd : str = ''
     create_time : float = field(default_factory=time.time)
-    status : Literal['starting', 'running', 'complete', 'error'] = 'starting'
+    status : Literal['starting', 'running', 'complete', 'error' , 'killed'] = 'starting'
     source : Literal['py', 'bash','app'] | str | Any = None
     pid : int | None = None
     start_time : float | None = None
@@ -636,6 +636,16 @@ class TaskItem:
         return item
     
     @classmethod
+    def preview_cmd(cls , script : Path | str | None , 
+                    source : Literal['py', 'bash','app'] | str | None = None , 
+                    mode: Literal['shell', 'os'] = 'shell' , 
+                    **kwargs):
+        item = cls(str(script) , source = source)
+        params = kwargs | {'task_id': item.id , 'source': item.source}
+        cmd = ScriptCmd(item.script, params, mode)
+        return str(cmd)
+    
+    @classmethod
     def load(cls , task_id: str , task_db : TaskDatabase | None = None):
         task_db = task_db or TaskDatabase()
         item = task_db.get_task(task_id)
@@ -648,10 +658,9 @@ class TaskItem:
         changed = False
         if self.pid and self.status not in ['complete', 'error']:
             status = check_process_status(self.pid)
-            if status not in ['running', 'complete' , 'disk-sleep' , 'sleeping']:
+            if status not in ['running', 'complete' , 'disk-sleep' , 'sleeping' , 'zombie']:
                 raise ValueError(f"Process {self.pid} is {status}")
-            if status in ['complete' , 'disk-sleep' , 'sleeping']:
-                self.update({'status': 'complete', 'end_time': time.time()} , write_to_db = True)
+            if status in ['complete' , 'disk-sleep' , 'sleeping' , 'zombie']:
                 changed = True
         if self.task_db.is_backend_updated(self.id):
             self.reload()
@@ -677,31 +686,43 @@ class TaskItem:
             self.task_db.update_task(self.id , **updates)
 
     def kill(self):
-        if self.pid and self.status == 'running':
+        if self.pid and self.status not in ['complete' , 'error']:
             if kill_process(self.pid):
-                self.update({'status': 'complete', 'end_time': time.time()} , write_to_db = True)
+                self.update({'status': 'killed', 'end_time': time.time()} , write_to_db = True)
                 return True
             else:
                 return False
         return True
 
     @classmethod
-    def status_icon(cls , status : Literal['running', 'starting', 'complete', 'error'] , tag : bool = False):
+    def status_icon(cls , status : Literal['running', 'starting', 'complete', 'error' , 'killed'] , tag : bool = False):
         if status in ['running', 'starting']: 
             icon , color = ':material/arrow_forward_ios:' , 'green'
         elif status == 'complete': 
             icon , color = ':material/check:' , 'green'
-        elif status == 'error': 
+        elif status in ['error' , 'killed']: 
             icon , color = ':material/close:' , 'red'
         else: raise ValueError(f"Invalid status: {status}")
         return f":{color}-badge[{icon}]" if tag else icon
     
     @property
     def status_state(self):
-        if self.status in ['running', 'starting']: return 'running'
-        elif self.status == 'complete':  return 'complete'
-        elif self.status == 'error': return 'error'
+        if self.is_running: return 'running'
+        elif self.is_complete:  return 'complete'
+        elif self.is_error: return 'error'
         else: raise ValueError(f"Invalid status: {self.status}")
+
+    @property
+    def is_complete(self):
+        return self.status == 'complete'
+
+    @property
+    def is_error(self):
+        return self.status in ['error' , 'killed']
+    
+    @property
+    def is_running(self):
+        return self.status in ['running', 'starting']
 
     @property
     def plain_icon(self):
@@ -709,7 +730,7 @@ class TaskItem:
             icon = '🟡'
         elif self.status == 'complete': 
             icon = '✅'
-        elif self.status == 'error': 
+        elif self.status in ['error' , 'killed']: 
             icon = '❌'
         else: raise ValueError(f"Invalid status: {self.status}")
         return icon

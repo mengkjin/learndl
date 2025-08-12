@@ -23,9 +23,6 @@ def get_cached_task_db() -> TaskDatabase:
 @dataclass
 class SessionControl:
     """session control"""
-    menu_pages : dict[str, dict] = field(default_factory=dict)
-    script_pages : dict[str, dict] = field(default_factory=dict)
-
     script_runners : dict[str, ScriptRunner] = field(default_factory=dict)
     current_task_item : str | None = None
     script_runner_trigger_item : str | None = None
@@ -55,6 +52,14 @@ class SessionControl:
 
     def __str__(self):
         return f"SessionControl()"
+    
+    def get_runner(self , script_key : str) -> ScriptRunner:
+        if script_key not in self.script_runners: 
+            self.script_runners[script_key] = ScriptRunner.from_key(script_key)
+        runner = self.script_runners[script_key]
+        if runner is None:
+            raise ValueError(f"Script {script_key} not found in SC.script_runners")
+        return runner
     
     @property
     def current_script_runner(self):
@@ -118,7 +123,6 @@ class SessionControl:
             file_options = [item.script_key for item in file_options]
         self.queue_last_action = f"Task Filter Path File: {file_options}" , True
 
-    @st.dialog("Are You Sure about Clearing Logs?")
     def click_log_clear_confirmation(self):
         """click log clear confirmation"""
         def on_confirm():
@@ -139,6 +143,13 @@ class SessionControl:
         """click task queue refresh"""
         self.task_queue.refresh()
         self.queue_last_action = f"Queue Manually Refreshed at {datetime.now().strftime('%H:%M:%S')}" , True
+
+    @ActionLogger.log_action()
+    def click_queue_clean(self):
+        """click task queue refresh confirmation"""
+        items = [item for item in self.task_queue.values() if item.is_error]
+        [self.task_queue.remove(item) for item in items]
+        self.queue_last_action = f"Queue Cleaned All Error Tasks at {datetime.now().strftime('%H:%M:%S')}" , True
 
     @ActionLogger.log_action()
     def click_queue_delist_all(self):
@@ -212,14 +223,38 @@ class SessionControl:
         st.session_state['task-filter-source'] = 'All'
         st.session_state['task-filter-path-folder'] = []
         st.session_state['task-filter-path-file'] = [runner.path.path]
+
+    def global_setting(self):
+        setting = {}
+        email = st.session_state.get('global-settings-email' , None)
+        if email is None: pass
+        elif email.lower()[0] == 'y': setting['email'] = 1
+        elif email.lower()[0] == 'n': setting['email'] = 0
+        else: raise ValueError(f"Invalid email: {email}")
+
+        mode = st.session_state.get('global-settings-mode' , None)
+        if mode is None: pass
+        elif mode == 'shell': setting['mode'] = 'shell'
+        elif mode == 'os': setting['mode'] = 'os'
+        else: raise ValueError(f"Invalid mode: {mode}")
+        
+        return setting
+
+    def script_runner_run_cmd(self , runner : ScriptRunner | None , params : dict[str, Any] | None):
+        """preview runner cmd"""
+        if runner is None: return None
+        run_params = self.global_setting()
+        if 'email' not in run_params: run_params['email'] = runner.header.email
+        if 'mode'  not in run_params: run_params['mode']  = runner.header.mode
+        if params: run_params.update(params)
+        return runner.preview_cmd(**run_params)
         
     @ActionLogger.log_action()
     def click_script_runner_run(self , runner : ScriptRunner , params : dict[str, Any] | None):
         """click run button"""
-        run_params = {
-            'email': int(runner.header.email),
-            'close_after_run': bool(runner.header.close_after_run)
-        }
+        run_params = self.global_setting()
+        if 'email' not in run_params: run_params['email'] = runner.header.email
+        if 'mode'  not in run_params: run_params['mode']  = runner.header.mode
         if params: run_params.update(params)
         item = runner.run_script(self.task_queue , **run_params)
         self.current_task_item = item.id

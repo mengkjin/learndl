@@ -5,7 +5,7 @@
 # description: Run Weekly Update
 # content: 每周更新模型(只在服务器上)
 # email: True
-# close_after_run: False
+# mode: shell
 
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())

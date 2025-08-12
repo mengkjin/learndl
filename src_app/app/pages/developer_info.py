@@ -2,7 +2,9 @@ import streamlit as st
 
 from src_app.frontend.frontend import ActionLogger
 
-from util import SC , set_current_page , show_run_button_sidebar
+from util import SC , set_current_page , show_run_button_sidebar , print_page_header
+
+PAGE_NAME = 'developer_info'
 
 def developer_info_selected_change():
     selected = getattr(st.session_state , 'developer-info-selected' , [])
@@ -14,10 +16,7 @@ def developer_info_selected_change():
 
 def show_developer_info(H = 500):
     """show developer info"""
-    container = st.container(key = "developer-info-special-expander")
-    with container:
-        st.header(":material/bug_report: Developer Info" , divider = 'grey')
-        st.info("This is for developer only , Check boxes to select what information to show" , icon = ":material/info:")
+    with st.container(key = "developer-info-special-expander"):
         st.segmented_control('developer-info-selected' , 
                                 options = ["All" , "None" , "Session Control" , "Session States" , "Task Queue" , "Action Logs" , "Error Logs"] , 
                                 key = "developer-info-selected" , 
@@ -54,7 +53,8 @@ def show_developer_info(H = 500):
                       on_click = SC.click_log_clear_confirmation)
         
 def main():
-    set_current_page("developer_info")
+    set_current_page(PAGE_NAME)
+    print_page_header(PAGE_NAME)
     show_developer_info()
     show_run_button_sidebar()
         
