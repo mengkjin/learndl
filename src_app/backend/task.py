@@ -409,6 +409,7 @@ class TaskQueue:
             task.set_task_db(self.task_db)
 
     def queue_content(self):
+        self.refresh()
         return {task.id: task.to_dict() for task in self.queue.values()}
 
     def add(self, item : 'TaskItem'):
@@ -543,6 +544,7 @@ class TaskItem:
         else:
             assert self.task_id == self.id , f'task_id must be the same as id, but got {self.task_id} and {self.id}'
         self._task_db = None
+        self._script_cmd = None
 
     def __eq__(self, other):
         if isinstance(other, TaskItem):
@@ -556,6 +558,11 @@ class TaskItem:
             self._task_db = task_db
         elif self._task_db is None:
             self._task_db = TaskDatabase()
+        return self
+    
+    def set_script_cmd(self , script_cmd : ScriptCmd):
+        self._script_cmd = script_cmd
+        self.update({'cmd': str(script_cmd)} , write_to_db = True)
         return self
 
     @property
@@ -759,6 +766,16 @@ class TaskItem:
         else:
             return f"{int(duration / 3600)} Hr {int(duration%3600 / 60)} Min {int(duration%60)} Secs"
     
+    @property
+    def button_str_long(self):
+        return  " ".join([
+            self.button_str, 
+            f"--ID {self.time_id : <5}" ,
+            f"--Status {self.status.title() : >10}" ,
+            f"--Source {self.source.title() : >10}" ,
+            f"--Dur {self.duration_str : >10}"
+        ])
+
     def info_list(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all'):
         self.reload()
         enter_info , exit_info = [] , []
@@ -793,6 +810,17 @@ class TaskItem:
         data_list = self.info_list(info_type = info_type)
         df = pd.DataFrame(data_list , columns = ['Item', 'Value'])
         return df
+    
+    def run_script(self):
+        cmd = self._script_cmd
+        assert cmd is not None , 'script cmd is not set'
+        try:
+            process = cmd.run()
+            self.update({'pid': process.real_pid, 'status': 'running', 'start_time': time.time()} , write_to_db = True)
+        except Exception as e:
+            self.update({'status': 'error', 'exit_error': str(e), 'end_time': time.time()} , write_to_db = True)
+            raise e
+        return self
 
 if __name__ == '__main__':
     db = TaskDatabase()

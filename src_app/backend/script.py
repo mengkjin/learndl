@@ -274,19 +274,13 @@ class ScriptRunner:
             
         return header
 
-    def run_script(self , queue : TaskQueue | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> 'TaskItem':
+    def build_task(self , queue : TaskQueue | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> 'TaskItem':
         '''run script and return exit code (0: error, 1: success)'''
 
         item = TaskItem.create(self.script , source = 'app' , queue=queue)
         params = kwargs | {'task_id': item.id , 'source': item.source}
         cmd = ScriptCmd(self.script, params, mode)
-        item.update({'cmd': str(cmd)} , write_to_db = True)
-        try:
-            process = cmd.run()
-            item.update({'pid': process.real_pid, 'status': 'running', 'start_time': time.time()} , write_to_db = True)
-        except Exception as e:
-            item.update({'status': 'error', 'exit_error': str(e), 'end_time': time.time()} , write_to_db = True)
-            raise e
+        item.set_script_cmd(cmd)
         return item
     
     def preview_cmd(self , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> str:

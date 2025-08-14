@@ -4,33 +4,27 @@ from typing import Any, Literal, Callable
 from pathlib import Path
 
 from src_app.backend import (
-    ScriptRunner , ScriptParamInput
+    ScriptRunner , ScriptParamInput , TaskItem
 )
 
 from src_app.frontend.frontend import (
-    FilePreviewer , YAMLFileEditor , ColoredText
+    FilePreviewer , YAMLFileEditor , ColoredText , expander_subheader
 )
 
 from .control import SC , set_current_page
 from .page import get_script_page , print_page_header
 
-def change_num_per_page():
-    SC.choose_task_item = None
 def on_first_page(max_page : int):
     if st.session_state.get('choose-task-page') == 1: return
-    #SC.choose_task_item = None
     st.session_state['choose-task-page'] = 1
 def on_last_page(max_page : int):
     if st.session_state.get('choose-task-page') == max_page: return
-    #SC.choose_task_item = None
     st.session_state['choose-task-page'] = max_page
 def on_prev_page(max_page : int):
     if st.session_state.get('choose-task-page') == 1: return
-    #SC.choose_task_item = None
     st.session_state['choose-task-page'] = max((st.session_state.get('choose-task-page') or 1) - 1, 1)
 def on_next_page(max_page : int):
     if st.session_state.get('choose-task-page') == max_page: return
-    #SC.choose_task_item = None
     st.session_state['choose-task-page'] = (st.session_state.get('choose-task-page') or 1) + 1
 
 def show_script_detail(script_key : str):
@@ -50,50 +44,48 @@ def show_script_detail(script_key : str):
 def show_script_task_selector(runner : ScriptRunner):
     """show script task selector"""
     script_queue = SC.task_queue.filter(file = [runner.path.path])
-    if not script_queue: 
-        st.subheader(f":blue[:material/history: No Historical Task]" ,
-                     help = "No historical task for this script" , divider='gray')
-        return
-    st.subheader(f":blue[:material/history: Choose Historical Task]" ,
-                 help = "Choose any task item from the expander below" , divider='gray')
-    
-    format_dict = {item.id : " ".join([
-        f"{i+1}." ,
-        item.plain_icon, 
-        "." ,
-        item.button_str, 
-        f"--ID {item.time_id : <5}" ,
-        f"--Status {item.status.title() : >10}" ,
-        f"--Source {item.source.title() : >10}" ,
-        f"--Dur {item.duration_str : >10}"
-    ]).strip() for i, item in enumerate(script_queue.values())}
-    with st.expander(":material/checklist: Choose Task Item", expanded = False):
+    is_empty = not script_queue
+    wkey = 'script-task-selector'
+    header = 'Historical Tasks'
+    icon = ':material/history:'
+    subheader = expander_subheader(wkey , header , icon , False)
+
+    with subheader:
+        if is_empty: 
+            st.warning("Empty. No past task item is recorded" , icon = ":material/info:")
+            return
+        else:
+            st.warning("Choose any task item from the expander below" , icon = ":material/info:")
+        
+        format_dict = {item.id : " ".join([f"{i+1}." , item.plain_icon, "." ,item.button_str_long]).strip() 
+                       for i, item in enumerate(script_queue.values())}
         status_options = ["All" , "Running" , "Complete" , "Error"]
         source_options = ["All" , "Py" , "App" ,"Bash" , "Other"]
-        status = st.radio(":gray-badge[**Running Status**]" , status_options , key = "task-filter-status", horizontal = True)
-        source = st.radio(":gray-badge[**Script Source**]" , source_options , key = "task-filter-source", horizontal = True)
+        status = st.radio(":blue-badge[**Running Status**]" , status_options , key = "task-filter-status", horizontal = True)
+        source = st.radio(":blue-badge[**Script Source**]" , source_options , key = "task-filter-source", horizontal = True)
         queue = SC.task_queue.filter(status = status , source = source , queue = script_queue)
         st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.status_message(queue)}")
         st.caption(f":rainbow[:material/bar_chart:] {SC.task_queue.source_message(queue)}")
         
         item_ids = list(queue.keys())
-        if SC.choose_task_item is not None and SC.choose_task_item in item_ids:
-            choose_index = item_ids.index(SC.choose_task_item)
+        if SC.current_task_item is not None and SC.current_task_item in item_ids:
+            choose_index = item_ids.index(SC.current_task_item)
         else:
             choose_index = None
         
-        with st.container(key = f"choose-task-num-per-page-container"):
-            cols = st.columns([1, 1 , 2] , vertical_alignment = "center")
-            cols[0].info('**Select Number of Task Items per Page**')
+        page_option_cols = st.columns(2)
+
+        with page_option_cols[0].container(key = f"choose-task-num-per-page-container"):
+            cols = st.columns(2 , vertical_alignment = "center")
+            cols[0].info('**Tasks per Page**')
             num_per_page = cols[1].selectbox('select num per page', [20 , 50 , 100 , 500], format_func = lambda x: f'{x} Tasks/Page', 
-                                index = 0 , key = f"choose-task-item-num-per-page" , label_visibility = 'collapsed' ,
-                                on_change = change_num_per_page)
+                                index = 0 , key = f"choose-task-item-num-per-page" , label_visibility = 'collapsed')
             
-        with st.container(key = f"choose-task-page-container"):
+        with page_option_cols[1].container(key = f"choose-task-page-container"):
             max_page = (len(item_ids) - 1) // num_per_page + 1
             page_options = list(range(1, max_page + 1))
             index_page = choose_index // num_per_page if choose_index is not None else 0
-            page_cols = st.columns([7, 1, 1, 3, 1, 1 , 14] , vertical_alignment = "center")
+            page_cols = st.columns([7, 1, 1, 3, 1, 1] , vertical_alignment = "center")
             page_cols[0].info('**Select Page**')
             page_cols[1].button(":material/first_page:", key = f"choose-task-page-first", on_click = on_first_page , args = (max_page,))
             page_cols[2].button(":material/chevron_left:", key = f"choose-task-page-prev", on_click = on_prev_page , args = (max_page,))
@@ -105,40 +97,78 @@ def show_script_task_selector(runner : ScriptRunner):
         
         with st.container(key = f"choose-task-item-container"):
             current_page = st.session_state.get('choose-task-page') or 1
-            item_options = item_ids[(current_page - 1) * num_per_page : current_page * num_per_page]
-            item_index = (choose_index % num_per_page) if choose_index is not None else None
-            st.info('**Choose Task Item from Queue**')
-            st.selectbox("Choose Task Item from Queue", 
-                        options = item_options, 
-                        index = item_index,
-                        format_func = lambda x: format_dict[x],
-                        key = f"choose-item-selectbox" , 
-                        help = "Choose a Task Item from Filtered Queue" ,
-                        placeholder = "Choose a Task Item from Filtered Queue",
-                        on_change = SC.click_choose_item_selectbox , 
-                        label_visibility = 'collapsed')
-            
+            options = item_ids[(current_page - 1) * num_per_page : current_page * num_per_page]
+            default_index = (choose_index % num_per_page) if choose_index is not None else None
+            show_queue_item_list(script_queue , options , default_index , type = 'buttons')
         
-        if SC.choose_task_item:
-            st.success(f"Task Item {SC.choose_task_item} chosen" , icon = ":material/check_circle:")
+        if SC.current_task_item:
+            st.success(f"Task Item {SC.current_task_item} chosen" , icon = ":material/check_circle:")
+
+
+def show_queue_item_list(queue : dict[str, TaskItem] , options : list[str] , default_index : int | None = None ,
+                         type : Literal['multiselect' , 'buttons'] = 'multiselect'):
+    """show queue item list"""
+    if type == 'multiselect':
+        format_dict = {item.id : " ".join([f"{i+1}." , item.plain_icon, "." ,item.button_str_long]).strip() 
+                       for i, item in enumerate(queue.values())}
+        st.selectbox("Choose Task Item from Queue", 
+                    options = options, 
+                    index = default_index,
+                    format_func = lambda x: format_dict[x],
+                    key = f"choose-item-selectbox" , 
+                    help = "Choose a Task Item from Filtered Queue" ,
+                    placeholder = "Choose a Task Item from Filtered Queue",
+                    on_change = SC.click_choose_item_selectbox , 
+                    label_visibility = 'collapsed')
+    elif type == 'buttons':
+        format_dict = {item.id : f"{item.tag_icon} {i + 1: <2}. {item.button_str_long}" for i, item in enumerate(queue.values())}
+        help_dict = {item.id : ' | '.join([f"Status: {item.status.title()}" , 
+                                        f"Source: {item.source.title()}" , 
+                                        f"Dur: {item.duration_str}" , 
+                                        f"PID: {item.pid}"])
+                       for i, item in enumerate(queue.values())}
+        
+        for item_id in options:
+            placeholder = st.empty()
+            container = placeholder.container(key = f"script-queue-item-container-{item_id}")
+            with container:
+                cols = st.columns([18, .5,.5,.5,.5] , gap = "small" , vertical_alignment = "center")
+                key = f"script-click-content-{item_id}"
+                if item_id == SC.current_task_item: key += "-selected"
+                cols[0].button(format_dict[item_id],  help=help_dict[item_id] , key=key , 
+                                use_container_width=True , on_click = SC.click_choose_item_selectbox , args = (item_id,))
+                
+                cols[3].button(":violet-badge[:material/remove:]", 
+                            key=f"script-queue-item-delist-{item_id}", help="Delist from Queue", 
+                            on_click = SC.click_queue_delist_item , args = (queue[item_id],))
+                cols[4].button(":red-badge[:material/cancel:]", 
+                            key=f"script-queue-item-remove-{item_id}", help="Delete from Database (Irreversible)", 
+                            on_click = SC.click_queue_remove_item , args = (queue[item_id],))
+
+    else:
+        raise ValueError(f"Invalid type: {type}")
 
 def show_param_settings(runner : ScriptRunner):
     if runner.disabled:
         st.error(f":material/disabled_by_default: This script is disabled")
         return
     param_inputs = runner.header.get_param_inputs()
-    if not param_inputs:
-        st.subheader(f":blue[:material/settings: No Parameters]" ,
-                     help = "No parameter is required for this script" , divider='gray')
-    else:
-        st.subheader(f":blue[:material/settings: Parameter Settings]" ,
-                    help = "Input parameters for this script in the expander below , mind the required ones" ,
-                    divider='gray')
-            
-    with st.expander(":material/settings: Parameter Settings", expanded = True):
-        param_input_form = ParamInputsForm(runner).init_param_inputs('customized')
-        SC.param_inputs_form = param_input_form
-        params = param_input_form.param_values
+    
+    is_empty = not param_inputs
+    wkey = 'script-param-setting'
+    header = 'Parameters Setting'
+    icon = ':material/settings:'
+    subheader = expander_subheader(wkey , header , icon , True)
+
+    with subheader:
+        if is_empty: 
+            st.warning("Empty.No parameter is required for this script" , icon = ":material/info:")
+        else:
+            st.warning("Input parameters for this script in the expander below , mind the required ones" , icon = ":material/info:")
+        SC.param_inputs_form = ParamInputsForm(runner).init_param_inputs('customized')
+        if is_empty: return
+
+        params = SC.param_inputs_form.param_values
         if runner.header.file_editor:
             with st.expander(runner.header.file_editor.get('name', 'File Editor') , expanded = False , icon = ":material/edit_document:"):
                 path = runner.header.file_editor['path'].format(**params)
@@ -195,7 +225,7 @@ class ParamInputsForm:
         self.errors = []
 
     def init_param_inputs(self , type : Literal['customized', 'form'] = 'customized'):
-        trigger_item = SC.task_queue.get(SC.script_runner_trigger_item)
+        trigger_item = SC.get_task_item(SC.current_task_item)
         cmd = trigger_item.cmd if trigger_item is not None else ''
         if type == 'customized':
             self.init_customized_container(cmd)
@@ -203,7 +233,6 @@ class ParamInputsForm:
             self.init_form(cmd)
         else:
             raise ValueError(f"Invalid param inputs type: {type}")
-        SC.script_runner_trigger_item = None
         return self
 
     class WidgetParamInput(ScriptParamInput):
@@ -496,92 +525,97 @@ class ParamInputsForm:
         
 def show_report_main(runner : ScriptRunner):
     """show complete report"""
-    item = SC.task_queue.get(SC.current_task_item)
-    if item is None or not item.belong_to(runner): 
-        st.subheader(f":blue[:material/overview: Task Full Report (Empty)]" ,
-                     help = f"No task has been selected for {runner.script_key}" , divider='gray')
-        return
+    item = SC.get_task_item(SC.current_task_item)
+    is_empty = item is None or not item.belong_to(runner) 
+    wkey = 'script-task-report'
+    header = 'Task Report'
+    icon = ':material/overview:'
+    subheader = expander_subheader(wkey , header , icon , True)
+
+    with subheader:
+        if is_empty: 
+            st.warning(f"Empty. Task report not selected for this script" , icon = ":material/info:")
+            return
+        assert item is not None
+        st.warning(f"Task report for {item.id}" , icon = ":material/check_circle:")
     
-    st.subheader(f":blue[:material/overview: Task Full Report]" ,
-                 help = f"Task report for {item.id}" , divider='gray')
-    
-    status_text = f'Status: {item.status_state.title()}'
-    if item.status == 'complete':
-        status_text = f':green[**{status_text}**]'
-    elif item.status == 'error':
-        status_text = f':red[**{status_text}**]'
-    else:
-        status_text = f':orange[**{status_text}**]'
-    status_placeholder = st.empty()
-    status = status_placeholder.status(status_text , state = item.status_state , expanded = True)
-    
-    start_as_unfinished = item.status not in ['complete' , 'error']
-    with status_placeholder:
-        if not SC.running_report_main_cleared:
-            st.write('')
-            SC.running_report_main_cleared = True
-            SC.running_report_file_previewer = None
-            st.rerun()
+        status_text = f'Status: {item.status_state.title()}'
+        if item.status_state == 'complete':
+            status_text = f':green[**{status_text}**]'
+        elif item.status_state == 'error':
+            status_text = f':red[**{status_text}**]'
+        else:
+            status_text = f':orange[**{status_text}**]'
+        status_placeholder = st.empty()
+        status = status_placeholder.status(status_text , state = item.status_state , expanded = True)
+        
+        start_as_unfinished = item.status_state == 'running'
+        with status_placeholder:
+            if not SC.running_report_main_cleared:
+                st.write('')
+                SC.running_report_main_cleared = True
+                SC.running_report_file_previewer = None
+                st.rerun()
 
-        with status:
-            with st.expander(":rainbow[:material/build:] **Command Details**", expanded=False):
-                st.code(item.cmd , wrap_lines=True)
+            with status:
+                with st.expander(":rainbow[:material/build:] **Command Details**", expanded=False):
+                    st.code(item.cmd , wrap_lines=True)
 
-            script_str = f"Script [{item.format_path}] --Time: {item.time_str()} --ID: {item.time_id} --Source: {item.source.title()} --PID: {item.pid}"
-            st.success(f'{script_str} started' , icon = ":material/add_task:")
+                script_str = f"Script [{item.format_path}] --Time: {item.time_str()} --ID: {item.time_id} --Source: {item.source.title()} --PID: {item.pid}"
+                st.success(f'{script_str} started' , icon = ":material/add_task:")
 
-            df_placeholder = st.empty()
-            col_config = {
-                'Item': st.column_config.TextColumn(width=None, help='Key of the item'),
-                'Value': st.column_config.TextColumn(width="large", help='Value of the item')
-            }
-            with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
-                st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
+                df_placeholder = st.empty()
+                col_config = {
+                    'Item': st.column_config.TextColumn(width=None, help='Key of the item'),
+                    'Value': st.column_config.TextColumn(width="large", help='Value of the item')
+                }
+                with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
+                    st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 
-            SC.wait_for_complete(item)
-            item.refresh()
-            with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
-                st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
+                SC.wait_for_complete(item)
+                item.refresh()
+                with df_placeholder.expander(":rainbow[:material/data_table:] **Running Information**", expanded=True):
+                    st.dataframe(item.dataframe(info_type = 'enter') , row_height = 20 , column_config = col_config)
 
-            if item.status == 'error':
-                st.error(f'{script_str} has error' , icon = ":material/error:")
-            else:
-                st.success(f'{script_str} Completed' , icon = ":material/trophy:")
+                if item.status == 'error':
+                    st.error(f'{script_str} has error' , icon = ":material/error:")
+                else:
+                    st.success(f'{script_str} Completed' , icon = ":material/trophy:")
 
-            exit_info_list = item.info_list(info_type = 'exit')
-            
-            with st.expander(f":rainbow[:material/fact_check:] **Exit Information**", expanded=True):
-                for name , value in exit_info_list:
-                    st.badge(f"**{name}**" , color = "blue")
-                    for s in value.split('\n'):
-                        st.write(ColoredText(s))
-                    st.markdown('')
+                exit_info_list = item.info_list(info_type = 'exit')
+                
+                with st.expander(f":rainbow[:material/fact_check:] **Exit Information**", expanded=True):
+                    for name , value in exit_info_list:
+                        st.badge(f"**{name}**" , color = "blue")
+                        for s in value.split('\n'):
+                            st.write(ColoredText(s))
+                        st.markdown('')
 
-            if item.exit_files:
-                with st.expander(f":rainbow[:material/file_present:] **File Previewer**", expanded=True):
-                    for file in item.exit_files:
-                        path = Path(file).absolute()
-                        preview_key = f"file-preview-{path}" if SC.running_report_file_previewer != path else f"file-preview-selected-{path}"
-                        col1, col2 = st.columns([4, 1] , vertical_alignment = "center")
-                        with col1:
-                            st.button(path.name, key=preview_key , icon = ":material/file_present:" , 
-                                      help = f"Preview {path}" ,
-                                      on_click = SC.click_file_preview , args = (path,))
+                if item.exit_files:
+                    with st.expander(f":rainbow[:material/file_present:] **File Previewer**", expanded=True):
+                        for file in item.exit_files:
+                            path = Path(file).absolute()
+                            preview_key = f"file-preview-{path}" if SC.running_report_file_previewer != path else f"file-preview-selected-{path}"
+                            col1, col2 = st.columns([4, 1] , vertical_alignment = "center")
+                            with col1:
+                                st.button(path.name, key=preview_key , icon = ":material/file_present:" , 
+                                        help = f"Preview {path}" ,
+                                        on_click = SC.click_file_preview , args = (path,))
 
-                        with col2.container(key = f"file-download-{path}"):
-                            with open(path, 'rb') as f:
-                                if st.download_button(
-                                    ':material/download:', 
-                                    data=f.read(),
-                                    file_name=str(path),
-                                    key = f"download-{path}",
-                                    help = f"Download {path}",
-                                    on_click=SC.click_file_download , args = (path,)
-                                ):
-                                    pass
+                            with col2.container(key = f"file-download-{path}"):
+                                with open(path, 'rb') as f:
+                                    if st.download_button(
+                                        ':material/download:', 
+                                        data=f.read(),
+                                        file_name=str(path),
+                                        key = f"download-{path}",
+                                        help = f"Download {path}",
+                                        on_click=SC.click_file_download , args = (path,)
+                                    ):
+                                        pass
 
-                    previewer = FilePreviewer(SC.running_report_file_previewer)
-                    previewer.preview()
+                        previewer = FilePreviewer(SC.running_report_file_previewer)
+                        previewer.preview()
 
     if start_as_unfinished:
         st.rerun()

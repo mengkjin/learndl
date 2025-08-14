@@ -9,7 +9,7 @@ from .basic import __version__ , __page_title__
 PAGE_DIR = Path(__file__).parent.parent.joinpath('pages')
 assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
 
-INTRO_PAGES = ['home' , 'developer_info' , 'config_editor' , 'task_queue' , 'script_structure']
+INTRO_PAGES = ['home' , 'developer_info' , 'config_editor' , 'task_queue']
 
 PAGE_TITLES = {
     'home' : f":rainbow[:material/rocket_launch: {__page_title__} (_v{__version__}_)]"
@@ -24,7 +24,7 @@ PAGE_ICONS = {
 }
 
 PAGE_HELPS = {
-    'home' : f"Tutorial and System Information." ,
+    'home' : f"Tutorial , System Info and Links." ,
     'developer_info' : f"This is for developer only. Check boxes to select what information to show." ,
     'config_editor' : 'This File Editor is for editing selected config files. For other config files, please use the file explorer.' ,
     'task_queue' : f"Shows the entire task queue. Adjust filter to show more specific tasks." ,
@@ -45,12 +45,13 @@ def get_intro_page(page_name : str):
     assert page_name in INTRO_PAGES , f"Page {page_name} not a valid intro page"
     if 'app_intro_pages' not in st.session_state: st.session_state['app_intro_pages'] = {}
     if page_name not in st.session_state['app_intro_pages']:
+        label = page_name.replace('_', ' ').title()
         icon = PAGE_ICONS[page_name]
         help = PAGE_HELPS[page_name]
         st.session_state['app_intro_pages'][page_name] = {
-            'page' : st.Page(f'pages/{page_name}.py' , title = page_name , icon = icon) ,
-            'label' : page_name.replace('_', ' ').title() ,
-            'head' : page_name.replace('_', ' ').title() ,
+            'page' : st.Page(f'pages/{page_name}.py' , title = label , icon = icon) ,
+            'label' : label ,
+            'head' : label ,
             'icon' : icon ,
             'help' : help ,
         }

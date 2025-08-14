@@ -10,19 +10,15 @@ PAGE_NAME = 'task_queue'
 
 def on_first_page(max_page : int):
     if st.session_state.get('choose-task-page') == 1: return
-    #SC.choose_task_item = None
     st.session_state['choose-task-page'] = 1
 def on_last_page(max_page : int):
     if st.session_state.get('choose-task-page') == max_page: return
-    #SC.choose_task_item = None
     st.session_state['choose-task-page'] = max_page
 def on_prev_page(max_page : int):
     if st.session_state.get('choose-task-page') == 1: return
-    #SC.choose_task_item = None
     st.session_state['choose-task-page'] = max((st.session_state.get('choose-task-page') or 1) - 1, 1)
 def on_next_page(max_page : int):
     if st.session_state.get('choose-task-page') == max_page: return
-    #SC.choose_task_item = None
     st.session_state['choose-task-page'] = (st.session_state.get('choose-task-page') or 1) + 1
 
 
@@ -90,14 +86,14 @@ def show_task_filters():
         source_options = ["All" , "Py" , "App" ,"Bash" , "Other"]
         folder_options = [item.path for item in SC.path_items if item.is_dir]
         file_options = [item.path for item in SC.path_items if item.is_file]
-        st.radio(":gray-badge[**Running Status**]" , status_options , key = "task-filter-status", horizontal = True ,
-                    on_change = SC.click_queue_filter_status)
-        st.radio(":gray-badge[**Script Source**]" , source_options , key = "task-filter-source", horizontal = True ,
+        st.radio(":blue-badge[**Running Status**]" , status_options , key = "task-filter-status", horizontal = True ,
+                 on_change = SC.click_queue_filter_status)
+        st.radio(":blue-badge[**Script Source**]" , source_options , key = "task-filter-source", horizontal = True ,
                     on_change = SC.click_queue_filter_source)
-        st.multiselect(":gray-badge[**Script Folder**]" , folder_options , key = "task-filter-path-folder" ,
+        st.multiselect(":blue-badge[**Script Folder**]" , folder_options , key = "task-filter-path-folder" ,
                         format_func = lambda x: str(x.relative_to(RUNS_DIR)) ,
                         on_change = SC.click_queue_filter_path_folder)
-        st.multiselect(":gray-badge[**Script File**]" , file_options , key = "task-filter-path-file" ,
+        st.multiselect(":blue-badge[**Script File**]" , file_options , key = "task-filter-path-file" ,
                         format_func = lambda x: x.name ,
                         on_change = SC.click_queue_filter_path_file)
         
@@ -119,17 +115,19 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
     else:
         choose_index = None
 
-    with st.container(key = f"choose-task-num-per-page-container"):
-        cols = st.columns([1, 1 , 2] , vertical_alignment = "center")
-        cols[0].info('**Select Number of Task Items per Page**')
+    page_option_cols = st.columns(2)
+
+    with page_option_cols[0].container(key = f"choose-task-num-per-page-container"):
+        cols = st.columns(2 , vertical_alignment = "center")
+        cols[0].info('**Tasks per Page**')
         num_per_page = cols[1].selectbox('select num per page', [20 , 50 , 100 , 500], format_func = lambda x: f'{x} Tasks/Page', 
                             index = 0 , key = f"choose-task-item-num-per-page" , label_visibility = 'collapsed')
         
-    with st.container(key = f"choose-task-page-container"):
+    with page_option_cols[1].container(key = f"choose-task-page-container"):
         max_page = (len(item_ids) - 1) // num_per_page + 1
         page_options = list(range(1, max_page + 1))
         index_page = choose_index // num_per_page if choose_index is not None else 0
-        page_cols = st.columns([7, 1, 1, 3, 1, 1 , 14] , vertical_alignment = "center")
+        page_cols = st.columns([7, 1, 1, 3, 1, 1] , vertical_alignment = "center")
         page_cols[0].info('**Select Page**')
         page_cols[1].button(":material/first_page:", key = f"choose-task-page-first", on_click = on_first_page , args = (max_page,))
         page_cols[2].button(":material/chevron_left:", key = f"choose-task-page-prev", on_click = on_prev_page , args = (max_page,))
@@ -139,15 +137,13 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
         page_cols[4].button(":material/chevron_right:", key = f"choose-task-page-next", on_click = on_next_page , args = (max_page,))
         page_cols[5].button(":material/last_page:", key = f"choose-task-page-last", on_click = on_last_page , args = (max_page,))
         
-    with st.container(key = f"choose-task-item-container"):
+    with st.container(height = container_height , key = f"queue-item-list-container"):
         current_page = st.session_state.get('choose-task-page') or 1
         item_options = item_ids[(current_page - 1) * num_per_page : current_page * num_per_page]
-        st.info('**Choose Task Item from Queue**')
-
-    with st.container(height = container_height , key = f"queue-item-list-container"):
+        
         for i , item_id in enumerate(item_options):
             item = queue[item_id]
-            index = (current_page - 1) * num_per_page + i
+            index = (current_page - 1) * num_per_page + i + 1
             placeholder = st.empty()
             container = placeholder.container(key = f"queue-item-container-{item.id}")
             with container:
@@ -157,7 +153,7 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
                                       f"Source: {item.source.title()}" , 
                                       f"Dur: {item.duration_str}" , 
                                       f"PID: {item.pid}"])
-                cols[0].button(f"{item.tag_icon} {index: <2}. {item.button_str}",  help=help_text , key=f"click-content-{item.id}" , 
+                cols[0].button(f"{item.tag_icon} {index: <2}. {item.button_str_long}",  help=help_text , key=f"click-content-{item.id}" , 
                                use_container_width=True , on_click = SC.click_queue_item , args = (item,))
                 if cols[1].button(
                     ":blue-badge[:material/slideshow:]", 

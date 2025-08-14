@@ -704,3 +704,9 @@ def action_confirmation(on_confirm : Callable[[], None] , on_abort : Callable[[]
     if col2.button("**Abort**" , icon = ":material/cancel:" , type = "secondary"):
         if on_abort is not None: on_abort()
         st.rerun()
+
+def expander_subheader(key : str , label : str , icon : str | None = None , expanded = False , height : int | None = None):
+    container_key = f'{key.replace(" " , "-").lower()}-special-expander-subheader'
+    container = st.container(key = container_key)
+    full_label = label if icon is None else f'{icon} {label}'
+    return container.expander(f":blue[{full_label}]" , expanded = expanded).container(height = height)

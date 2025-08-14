@@ -11,8 +11,8 @@ assert os.getcwd() == path , \
 import streamlit as st
 import streamlit_autorefresh as st_autorefresh
 
-from util import (__page_title__ , __version__ , AUTO_REFRESH_INTERVAL , 
-                  style , intro_pages , script_pages , get_intro_page)
+from util import (__page_title__ , __version__ , SC , AUTO_REFRESH_INTERVAL , 
+                  style , intro_pages , script_pages , runs_page_url)
 
 st.set_option('client.showSidebarNavigation', False)
 
@@ -47,22 +47,44 @@ def page_navigation():
 
 def sidebar_navigation():
     with st.sidebar:
-        st.logo("https://docs.streamlit.io/logo.svg")
+        st.logo(pathlib.Path(file_path).parent / "images/image.png" ,
+                icon_image=pathlib.Path(file_path).parent / "images/icon_image.png")
         
-        st.session_state['sidebar-runner-button'] = st.empty()
-
-        with st.session_state['sidebar-runner-button']:
-            help_text = f"Please Choose a Script to Run First"
-            button_key = f"script-runner-run-disabled-init-sidebar"
-            st.button(":material/mode_off_on:", key=button_key , 
-                    help = help_text , disabled = True)
-
+        global_button()
         global_settings()
 
         st.subheader(":blue[:material/link: Quick Links]")
         with st.container(key = "sidebar-quick-links"):
             intro_links()
             script_links()
+
+def global_button():
+    _ , col0 , col1 , _ = st.columns([0.5,1,1,0.5] , gap = 'small' , vertical_alignment = 'center')
+    with col0:
+        key = 'sidebar-runner-button'
+        if key not in st.session_state:
+            st.session_state[key] = st.empty()
+        with st.session_state[key]:
+            help_text = f"Please Choose a Script to Run First"
+            button_key = f"script-runner-run-disabled-init-sidebar"
+            st.button(":material/mode_off_on:", key=button_key , 
+                    help = help_text , disabled = True)
+            
+    with col1:
+        key = 'sidebar-latest-task-button'
+        if key not in st.session_state:
+            st.session_state[key] = st.empty()
+        with st.session_state[key]:
+            item = SC.get_latest_task_item()
+            if item is None:
+                st.button(":material/slideshow:", key=f"script-latest-task-disabled-init" , 
+                        help = "Please Run a Task First" , disabled = True)
+            else:
+                if st.button(":material/slideshow:", key=f"script-latest-task-enable-{item.id}" , 
+                            help = f"Show Task {item.id}" , 
+                            on_click = SC.click_show_complete_report , args = (item,) ,
+                            disabled = False):
+                    st.switch_page(runs_page_url(str(item.relative)))
             
 def global_settings():
     with st.container(key = "sidebar-global-settings").expander('Global Settings' , icon = ':material/settings:'):

@@ -51,7 +51,6 @@ class CustomCSS:
             box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15) !important;
             background-color: lightblue !important;
             border: none !important;
-            color: white !important;
         }
         .stCaptionContainer {
             margin: -10px !important;
@@ -115,7 +114,7 @@ class CustomCSS:
             padding-bottom: 0px;
         } 
         .stExpander .stElementContainer {
-            margin-bottom: -10px !important;
+            margin-bottom: 0px !important;
             padding-bottom: 0px !important;
         }
         .stExpander summary {
@@ -156,24 +155,28 @@ class CustomCSS:
         [class*="special-expander"] > div > [data-testid="stExpander"] > details > div {
             border: 1px solid #D1D5DB !important;
             border-radius: 12px !important;
-            margin-top: -1px !important;
             margin-bottom: 10px !important;
             padding-top: 20px !important;
             padding-bottom: 20px !important;
         }       
         [class*="special-expander"] > div > [data-testid="stExpander"] > details > summary {
-            font-size: 16px !important;
-            font-weight: 900 !important;
-            color: #1E3A8A !important;
-            background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%) !important;
+            background: linear-gradient(75deg, lightblue -2%, white 1%, lightblue 200%) !important;
             border-radius: 12px !important;
             padding: 14px 18px !important;
-            border: 2px solid #D1D5DB !important;
-            letter-spacing: 1px !important;
+            border: 2px dash #D1D5DB !important;
             text-transform: uppercase !important;
+            span {
+                font-size: 24px !important;
+                font-weight: 900 !important;
+                letter-spacing: 3px !important;
+                white-space: nowrap !important;
+                &[class*="stMarkdownColoredText"] {
+                    border-bottom: 2px solid lightgray !important;
+                }
+            }   
         }
         [class*="special-expander"] > div > [data-testid="stExpander"] > details > summary:hover {
-            background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%) !important;
+            background: linear-gradient(75deg, darkblue -2%, white 1%, darkblue 200%) !important;
             border-color: #1E3A8A !important;
             transform: translateY(-1px) !important;
             box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15) !important;
@@ -318,11 +321,17 @@ def style():
         .stElementContainer[class*="-delist"] {
             button:hover {background-color: #8080ff !important;}
         }
-        [class*="click-content"] button {
-            justify-content: flex-start !important;
-            text-align: left !important;
-            padding-left: 6px !important;
-            p {font-size: 16px !important;}
+        [class*="click-content"] {
+            button {
+                justify-content: flex-start !important;
+                text-align: left !important;
+                padding-left: 6px !important;
+                p {font-size: 16px !important;}
+            }
+            &[class*="-selected"] button {
+                background-color: #1E88E5 !important;
+                color: white !important;
+            }
         }
     }
     .stVerticalBlock[class*="developer-info"] {
@@ -391,6 +400,11 @@ def style():
                 min-width: 400px !important;
                 justify-content: flex-start !important;
                 padding-left: 20px !important;
+                background: linear-gradient(to right, #87CEEB -2%, white 1%, #87CEEB 200%) !important;
+                &:hover {
+                    background: linear-gradient(to right, #1E88E5 -2%, white 1%, #1E88E5 200%) !important;
+                    color: black !important;
+                }
             }       
             p {
                 font-size: 16px !important;
@@ -411,7 +425,6 @@ def style():
             color: white !important;
             border-radius: 25%;
             border: none;
-            cursor: pointer;
             display: flex;
             margin: 10px !important;
             &:hover {background-color: darkgreen !important;}
@@ -439,6 +452,38 @@ def style():
                 padding-top: 0px !important;
                 padding-bottom: 0px !important;
             }
+        }
+    }
+    .stElementContainer[class*="script-latest-task"] {
+        button {
+            min-width: 60px !important;
+            height: 60px !important;
+            width: 60px !important;
+            background-color: lightblue !important;
+            color: white !important;
+            border-radius: 25%;
+            border: none;
+            display: flex;
+            margin-top: 0px !important;
+            margin-bottom: 0px !important;
+            padding-top: 0px !important;
+            padding-bottom: 0px !important;
+            &:hover {background-color: blue !important;}
+        }
+        p {
+            font-size: 48px !important;
+            font-weight: bold !important;
+        }
+        &[class*="-disabled"] button {
+            background-color: lightgray !important;
+            color: white !important;
+            border: 1px solid lightgray !important;
+            &:hover {
+                background-color: lightgray !important;
+            }
+        } 
+        .stTooltipIcon {
+            justify-content: center !important;
         }
     }
     .stElementContainer[class*="file-preview"] {
@@ -489,6 +534,10 @@ def style():
             }
         }
         .stVerticalBlock[class*="sidebar-intro-links"] {
+            padding-top: 10px !important;
+            .stTooltipIcon {
+                justify-content: center !important;
+            }
             button {
                 height: 40px !important;
                 width: 40px !important;
@@ -538,32 +587,31 @@ def style():
     }
     .stVerticalBlock[class*="home-intro-pages"] {
         button {
-            height: 88px !important;
-            width: 100% !important;
+            height: 60px !important;
+            width: 88% !important;
+            color: white !important;
+            border-radius: 12px !important;
             p {
                 font-size: 20px !important;
                 font-weight: bold !important;
             }            
         }
         div[class*="-developer"] button {
-            background-color: #87CEEB !important; /* lightblue */
-            color: white !important;
-            &:hover {background-color: #1E88E5 !important;}
+            /* background: radial-gradient(ellipse at center, #87CEEB 0%, white 90%) !important; */
+            background: #87CEEB !important;
+            &:hover {background: #1E88E5 !important;}
         }
         div[class*="-config"] button {
-            background-color: #ff8080 !important; /* lightred */
-            color: white !important;
-            &:hover {background-color: #ff4040 !important;} /* darker red */
+            background: #ff8080 !important; /* lightred */
+            &:hover {background: #ff4040 !important;} /* darker red */
         }
         div[class*="-task"] button {
-            background-color: #90EE90 !important; /* lightgreen */
-            color: white !important;
-            &:hover {background-color: #008000 !important;} /* darkergreen */
+            background: #90EE90 !important; /* lightgreen */
+            &:hover {background: #008000 !important;} /* darkergreen */
         }
         div[class*="-script"] button {
-            background-color: #EE82EE !important; /* lightviolet */
-            color: white !important;
-            &:hover {background-color: #8B008B !important;} /* darkerviolet */
+            background: #EE82EE !important; /* lightviolet */
+            &:hover {background: #8B008B !important;} /* darkerviolet */
         }
     }
     .stElementContainer[class*="go-home-button"] {

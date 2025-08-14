@@ -1,8 +1,5 @@
 [client]
 showSidebarNavigation = false
 
-[theme]
-base = "dark"
-
 [server]
 runOnSave = true

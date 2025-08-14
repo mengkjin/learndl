@@ -25,14 +25,11 @@ class SessionControl:
     """session control"""
     script_runners : dict[str, ScriptRunner] = field(default_factory=dict)
     current_task_item : str | None = None
-    script_runner_trigger_item : str | None = None
-    choose_task_item : str | None = None
-
+    
     task_queue : TaskQueue | Any = None
     queue_last_action : tuple[str, bool] | None = None
     
     running_report_queue : str | None = None
-    running_report_main : str | None = None
     running_report_main_cleared : bool = True
 
     running_report_file_previewer : Path | None = None
@@ -60,6 +57,17 @@ class SessionControl:
         if runner is None:
             raise ValueError(f"Script {script_key} not found in SC.script_runners")
         return runner
+    
+    def get_task_item(self , task_id : str | None = None) -> TaskItem | None:
+        if self.task_queue is None or task_id is None:
+            return None
+        return self.task_queue.get(task_id)
+    
+    def get_latest_task_item(self) -> TaskItem | None:
+        if self.task_queue is None or len(self.task_queue) == 0:
+            return None
+        for item in self.task_queue.latest(1).values():
+            return item
     
     @property
     def current_script_runner(self):
@@ -256,14 +264,17 @@ class SessionControl:
         if 'email' not in run_params: run_params['email'] = runner.header.email
         if 'mode'  not in run_params: run_params['mode']  = runner.header.mode
         if params: run_params.update(params)
-        item = runner.run_script(self.task_queue , **run_params)
+        
+        item = runner.build_task(self.task_queue , **run_params)
+        
         self.current_task_item = item.id
         self.queue_last_action = f"Add to Queue: {item.id}" , True
         
-        if self.running_report_main != item.id:
-            self.running_report_main = item.id
+        if self.current_task_item != item.id:
+            self.current_task_item = item.id
             self.running_report_main_cleared = False
-        
+
+        item.run_script()
 
     @ActionLogger.log_action()
     def click_file_preview(self , path : Path):
@@ -282,37 +293,29 @@ class SessionControl:
     def click_show_complete_report(self , item : TaskItem):
         """click show complete report"""
         self.current_task_item = item.id
-        self.script_runner_trigger_item = item.id
-        self.running_report_main = item.id
         self.running_report_main_cleared = False
         self.running_report_file_previewer = None
 
     @ActionLogger.log_action()
     def click_item_choose_select(self , item : TaskItem):
         """click choose task item"""
-        new_id = item.id if self.choose_task_item != item.id else None
+        new_id = item.id if self.current_task_item != item.id else None
         
         self.current_task_item = new_id
-        self.script_runner_trigger_item = new_id
-        self.running_report_main = new_id
-        self.choose_task_item = new_id
         self.running_report_main_cleared = False
         self.running_report_file_previewer = None
 
     @ActionLogger.log_action()
-    def click_choose_item_selectbox(self):
+    def click_choose_item_selectbox(self , item_id : str | None = None):
         """click choose task item"""
-        item_id = st.session_state['choose-item-selectbox']
+        if item_id is None: item_id = st.session_state['choose-item-selectbox']
         item = self.task_queue.get(item_id)
         if item is None:
             return
         
-        new_id = item.id if self.choose_task_item != item.id else None
+        new_id = item.id if self.current_task_item != item.id else None
         
         self.current_task_item = new_id
-        self.script_runner_trigger_item = new_id
-        self.running_report_main = new_id
-        self.choose_task_item = new_id
         self.running_report_main_cleared = False
         self.running_report_file_previewer = None
 
@@ -320,7 +323,7 @@ class SessionControl:
     def click_item_choose_remove(self , item : TaskItem):
         """click remove task item"""
         self.task_queue.remove(item)
-        self.running_report_main = None
+        self.current_task_item = None
         self.running_report_main_cleared = False
         self.running_report_file_previewer = None
     
