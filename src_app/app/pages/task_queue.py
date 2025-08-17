@@ -102,10 +102,10 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
         queue = SC.task_queue.queue
         container_height = 500
     elif queue_type == 'filter':
-        queue = SC.filter_task_queue()
+        queue = SC.get_filtered_queue()
         container_height = None
     elif queue_type == 'latest':
-        queue = SC.latest_task_queue()
+        queue = SC.get_latest_queue()
         container_height = None
         st.info(f"Showing latest {len(queue)} tasks" , icon = ":material/info:")
 
@@ -128,7 +128,7 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
         page_options = list(range(1, max_page + 1))
         index_page = choose_index // num_per_page if choose_index is not None else 0
         page_cols = st.columns([7, 1, 1, 3, 1, 1] , vertical_alignment = "center")
-        page_cols[0].info('**Select Page**')
+        page_cols[0].info(f'**Select Page (1 ~ {max_page})**')
         page_cols[1].button(":material/first_page:", key = f"choose-task-page-first", on_click = on_first_page , args = (max_page,))
         page_cols[2].button(":material/chevron_left:", key = f"choose-task-page-prev", on_click = on_prev_page , args = (max_page,))
         page_cols[3].selectbox('select page', page_options, key = f"choose-task-page" , index = index_page , 
@@ -161,7 +161,7 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
                     help = "Show complete report in main page" ,
                     on_click = SC.click_show_complete_report , args = (item,)):
                     st.switch_page(runs_page_url(str(item.relative)))
-                
+                    
                 cols[3].button(":violet-badge[:material/remove:]", 
                             key=f"queue-item-delist-{item.id}", help="Delist from Queue", 
                             on_click = SC.click_queue_delist_item , args = (item,))
@@ -182,7 +182,7 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
                     }
 
                     st.dataframe(item.dataframe() , row_height = 20 , column_config = col_config)
-                    SC.wait_for_complete(item)
+                    SC.wait_until_completion(item)
                     if item.status == 'complete':
                         st.success(f'Script Completed' , icon = ":material/add_task:")
                     elif item.status == 'error':

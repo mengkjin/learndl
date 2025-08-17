@@ -705,8 +705,39 @@ def action_confirmation(on_confirm : Callable[[], None] , on_abort : Callable[[]
         if on_abort is not None: on_abort()
         st.rerun()
 
-def expander_subheader(key : str , label : str , icon : str | None = None , expanded = False , height : int | None = None):
-    container_key = f'{key.replace(" " , "-").lower()}-special-expander-subheader'
-    container = st.container(key = container_key)
-    full_label = label if icon is None else f'{icon} {label}'
-    return container.expander(f":blue[{full_label}]" , expanded = expanded).container(height = height)
+
+
+def expander_subheader(key : str , label : str , icon : str | None = None , expanded = False , 
+                       height : int | None = None , help : str | None = None , status = False , color = 'blue'):
+    
+    container_key = f'{key.replace(" " , "-").lower()}-special-expander-' + ('status' if status else 'expander')
+    with st.container():
+        if help is not None:
+            help_icon = """<span role="img" aria-label="mode_off_on icon" translate="no" style="display: inline-block; 
+                            font-family: &quot;Material Symbols Rounded&quot;; 
+                            user-select: none; 
+                            vertical-align: bottom; 
+                            overflow-wrap: normal;">help</span>"""
+            margin_left = 10
+            if icon is not None: margin_left += 34
+            if status:           margin_left += 28
+            margin_left += label.count(' ') * 8.2
+            margin_left += (len(label) - label.count(' ')) * 16.4
+            st.markdown(f"""
+            <div class="expander-help-container">
+                <div class="help-tooltip">
+                    {help}
+                </div>
+                <span class="help-icon" style="margin-left: {margin_left}px;">
+                    {help_icon}
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+        container = st.container(key = container_key)
+        full_label = label if icon is None else f'{icon} {label}'
+        if status:
+            exp_container = container.status(f" :{color}[{full_label}]" , expanded = expanded)
+        else:
+            exp_container = container.expander(f":{color}[{full_label}]" , expanded = expanded).container(height = height)
+        
+    return exp_container

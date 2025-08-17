@@ -4,7 +4,7 @@ from typing import Literal
 import re
 from src_app.backend import PathItem
 from .control import SC
-from .basic import __version__ , __page_title__
+from .basic import VERSION , PAGE_TITLE
 
 PAGE_DIR = Path(__file__).parent.parent.joinpath('pages')
 assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
@@ -12,7 +12,7 @@ assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
 INTRO_PAGES = ['home' , 'developer_info' , 'config_editor' , 'task_queue']
 
 PAGE_TITLES = {
-    'home' : f":rainbow[:material/rocket_launch: {__page_title__} (_v{__version__}_)]"
+    'home' : f":rainbow[:material/rocket_launch: {PAGE_TITLE} (_v{VERSION}_)]"
 }
 
 PAGE_ICONS = {
@@ -67,7 +67,7 @@ def script_pages():
     return pages
 
 def get_script_page(script_key: str):
-    runner = SC.get_runner(script_key)
+    runner = SC.get_script_runner(script_key)
     if runner.header.disabled: 
         st.error(f"Script {script_key} is disabled!")
         return
@@ -126,6 +126,6 @@ def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'in
         raise ValueError(f"type {type} should be 'intro' or 'script'")
     title = PAGE_TITLES.get(page_name , f":rainbow[{self_page['icon']} {self_page['head']}]")
     helps = self_page['help'].split('\n')
-    st.session_state['box_title'].title(title)
-    #st.session_state['box_main_button'].write('')
+    st.session_state['box-title'].title(title)
+    # st.session_state['box-main-button'].write('')
     for h in helps: st.warning(h , icon = ":material/info:")

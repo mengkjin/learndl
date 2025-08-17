@@ -8,7 +8,8 @@
 # mode: shell
 # param_inputs:
 #   port_name : 
-#       type : str
+#       type : "[p.name for p in Path('data/export/trading_portfolio').iterdir() if not p.name.startswith('.')]"
+#       prefix : "tradeport/"
 #       desc : trade port name
 #       required : True
 #   start : 

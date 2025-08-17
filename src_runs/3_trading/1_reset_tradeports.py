@@ -7,8 +7,9 @@
 # email: True
 # mode: shell
 # param_inputs:
-#   reset_ports : 
-#       type : str
+#   reset_port_name : 
+#       type : "[p.name for p in Path('data/export/trading_portfolio').iterdir() if not p.name.startswith('.')]"
+#       prefix : "tradeport/"
 #       desc : port names by ","
 #       required : True
 
@@ -25,7 +26,7 @@ from src_app import BackendTaskRecorder
 @BackendTaskRecorder()
 def main(**kwargs):
     with AutoRunTask('reset trading portfolios' , **kwargs) as runner:
-        TradingAPI.update(reset_ports = [s.strip() for s in runner['reset_ports'].split(',')])
+        TradingAPI.update(reset_ports = [runner['reset_port_name']])
         runner.critical(f'Reset trading portfolios at {runner.update_to} completed')
 
     return runner

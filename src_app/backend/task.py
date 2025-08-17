@@ -271,8 +271,19 @@ class TaskDatabase:
             placeholders = ','.join(['?'] * len(task_ids))
             query = f'SELECT * FROM task_records WHERE task_id IN ({placeholders})'
             cursor.execute(query, task_ids)
-            tasks = [TaskItem(**dict(row)) for row in cursor.fetchall()]
-        return tasks
+            tasks = {row['task_id']: TaskItem(**dict(row)) for row in cursor.fetchall()}
+
+            query = f'SELECT * FROM task_exit_files WHERE task_id IN ({placeholders})'
+            cursor.execute(query, task_ids)
+            exit_files : dict[str, list[str]] = {}
+            for row in cursor.fetchall():
+                if row['task_id'] not in exit_files:
+                    exit_files[row['task_id']] = []
+                exit_files[row['task_id']].append(row['file_path'])
+            for task_id, files in exit_files.items():
+                tasks[task_id].exit_files = files or None
+
+        return list(tasks.values())
     
     def add_queue_task(self, queue_id: str , task_id: str):
         with self.conn_handler as (conn, cursor):
@@ -405,8 +416,6 @@ class TaskQueue:
 
     def reload(self):
         self.queue = {task.id: task.set_task_db(self.task_db) for task in self.task_db.get_queue_tasks(self.queue_id, self.max_queue_size)}
-        for task in self.queue.values():
-            task.set_task_db(self.task_db)
 
     def queue_content(self):
         self.refresh()
@@ -462,7 +471,7 @@ class TaskQueue:
             
     def status_message(self , queue : dict[str, 'TaskItem'] | None = None):
         if queue is None: queue = self.queue
-        status = [item.status for item in self.queue.values()]
+        status = [item.status for item in queue.values()]
         counts = {
             'running': status.count('running'),
             'complete': status.count('complete'),
@@ -776,34 +785,37 @@ class TaskItem:
             f"--Dur {self.duration_str : >10}"
         ])
 
-    def info_list(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all'):
+    def info_list(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all' ,
+                  sep_exit_files : bool = True) -> list[tuple[str, str]]:
         self.reload()
-        enter_info , exit_info = [] , []
+        enter_info : list[tuple[str, str]] = []
         if info_type in ['all' , 'enter']:
-            enter_info.extend([
-                ['Item ID', self.id],
-                ['Source', self.source],
-                ['Script Path', str(self.absolute)],
-                ['PID', str(self.pid) if self.pid else 'N/A'],
-                ['Create Time', self.time_str('create')],
-                ['Start Time', self.time_str('start')],
-                ['End Time', self.time_str('end')], 
-                ['Duration', self.duration_str],
-                ['Status', self.status],
-            ])
+            enter_info.append(('Item ID', self.id))
+            enter_info.append(('Source', self.source))
+            enter_info.append(('Script Path', str(self.absolute)))
+            enter_info.append(('PID', str(self.pid) if self.pid else 'N/A'))
+            enter_info.append(('Create Time', self.time_str('create')))
+            enter_info.append(('Start Time', self.time_str('start')))
+            enter_info.append(('End Time', self.time_str('end')))
+            enter_info.append(('Duration', self.duration_str))
+            enter_info.append(('Status', self.status))
+        exit_info : list[tuple[str, str]] = []
         if info_type in ['all' , 'exit']:
             if self.exit_code is not None:
-                exit_info.append(['Exit Code', f'{self.exit_code}'])
+                exit_info.append(('Exit Code', f'{self.exit_code}'))
             if self.exit_error is not None:
-                exit_info.append(['Exit Error', f'{self.exit_error}'])
+                exit_info.append(('Exit Error', f'{self.exit_error}'))
             if self.exit_message:
-                exit_info.append(['Exit Message', f'{self.exit_message}'])
+                exit_info.append(('Exit Message', f'{self.exit_message}'))
             if self.exit_files:
-                for i , file in enumerate(self.exit_files):
-                    path = Path(file).absolute()
-                    if path.is_relative_to(RUNS_DIR):
-                        path = path.relative_to(RUNS_DIR)
-                    exit_info.append([f'Exit File ({i})', f'{path}'])
+                if sep_exit_files:
+                    for i , file in enumerate(self.exit_files):
+                        path = Path(file).absolute()
+                        if path.is_relative_to(RUNS_DIR):
+                            path = path.relative_to(RUNS_DIR)
+                        exit_info.append((f'Exit File ({i})', f'{path}'))
+                else:
+                    exit_info.append(('Exit Files', '\n'.join(self.exit_files)))
         return enter_info + exit_info
         
     def dataframe(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all'):

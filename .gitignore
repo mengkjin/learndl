@@ -31,7 +31,6 @@ __old_version__/
 *.feather
 *.parquet
 *.tar
-*.png
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

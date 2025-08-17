@@ -23,19 +23,22 @@ def get_cached_task_db() -> TaskDatabase:
 @dataclass
 class SessionControl:
     """session control"""
+    # universal
     script_runners : dict[str, ScriptRunner] = field(default_factory=dict)
-    current_task_item : str | None = None
-    
     task_queue : TaskQueue | Any = None
+    current_task_item : str | None = None
+
+    # for task queue page
     queue_last_action : tuple[str, bool] | None = None
-    
     running_report_queue : str | None = None
-    running_report_main_cleared : bool = True
 
+    # for task detail page
+    running_report_init : bool = True
     running_report_file_previewer : Path | None = None
-
     param_inputs_form : Any = None
     script_params_cache : dict[str, dict[str, dict[str , Any]]] = field(default_factory=dict)
+
+    # for config editor page
     config_editor_state : YAMLFileEditorState | None = None
 
     initialized : bool = False
@@ -50,7 +53,15 @@ class SessionControl:
     def __str__(self):
         return f"SessionControl()"
     
-    def get_runner(self , script_key : str) -> ScriptRunner:
+    def initialize(self):
+        self.task_queue.refresh()
+        if self.initialized: return
+        if 'session_control' not in st.session_state:
+            st.session_state.session_control = self
+        self.config_editor_state = YAMLFileEditorState.get_state('config_editor')
+        self.initialized = True
+    
+    def get_script_runner(self , script_key : str) -> ScriptRunner:
         if script_key not in self.script_runners: 
             self.script_runners[script_key] = ScriptRunner.from_key(script_key)
         runner = self.script_runners[script_key]
@@ -68,20 +79,19 @@ class SessionControl:
             return None
         for item in self.task_queue.latest(1).values():
             return item
-    
-    @property
-    def current_script_runner(self):
-        return self.script_runners.get(st.session_state.get("current_page" , "") , None)
+        
+    def clear_report_placeholder(self):
+        if 'task_report_placeholder' in st.session_state:
+            with st.session_state['task_report_placeholder']:
+                st.write('')
 
-    def initialize(self):
-        self.task_queue.refresh()
-        if self.initialized: return
-        if 'session_control' not in st.session_state:
-            st.session_state.session_control = self
-        self.config_editor_state = YAMLFileEditorState.get_state('config_editor')
-        self.initialized = True
+    def call_report_placeholder(self):
+        placeholder = st.empty()
+        if 'task_report_placeholder' not in st.session_state:
+            st.session_state['task_report_placeholder'] = placeholder
+        return placeholder
     
-    def filter_task_queue(self):
+    def get_filtered_queue(self):
         """filter task queue"""
         assert self.initialized , 'SessionControl is not initialized'
         status_filter = st.session_state.get('task-filter-status')
@@ -94,10 +104,40 @@ class SessionControl:
                                                 file = file_filter)
         return filtered_queue
     
-    def latest_task_queue(self , num : int = 10):
+    def get_latest_queue(self , num : int = 10):
         return self.task_queue.latest(num)
+    
+    def get_global_settings(self):
+        setting = {}
+        email = st.session_state.get('global-settings-email' , None)
+        if email is None: pass
+        elif email.lower()[0] == 'y': setting['email'] = 1
+        elif email.lower()[0] == 'n': setting['email'] = 0
+        else: raise ValueError(f"Invalid email: {email}")
 
-    def ready_to_go(self , obj : ScriptRunner):
+        mode = st.session_state.get('global-settings-mode' , None)
+        if mode is None: pass
+        elif mode == 'shell': setting['mode'] = 'shell'
+        elif mode == 'os': setting['mode'] = 'os'
+        else: raise ValueError(f"Invalid mode: {mode}")
+        
+        return setting
+
+    def get_script_runner_cmd(self , runner : ScriptRunner | None , params : dict[str, Any] | None , 
+                              operation_txt = True):
+        """preview runner cmd"""
+        if runner is None: return None
+        run_params = self.get_global_settings()
+        if 'email' not in run_params: run_params['email'] = runner.header.email
+        if 'mode'  not in run_params: run_params['mode']  = runner.header.mode
+        if params: run_params.update(params)
+        cmd = runner.preview_cmd(**run_params)
+        if operation_txt:
+            run_text = 'run' if 'mode' not in run_params else f'{run_params["mode"]} run'
+            cmd = f":blue[**{run_text.title()}**]: {cmd}"
+        return cmd
+    
+    def get_script_runner_validity(self , obj : ScriptRunner):
         assert self.initialized , 'SessionControl is not initialized'
         return all(self.script_params_cache.get(obj.script_key, {}).get('valid', {}).values())
     
@@ -232,53 +272,30 @@ class SessionControl:
         st.session_state['task-filter-path-folder'] = []
         st.session_state['task-filter-path-file'] = [runner.path.path]
 
-    def global_setting(self):
-        setting = {}
-        email = st.session_state.get('global-settings-email' , None)
-        if email is None: pass
-        elif email.lower()[0] == 'y': setting['email'] = 1
-        elif email.lower()[0] == 'n': setting['email'] = 0
-        else: raise ValueError(f"Invalid email: {email}")
 
-        mode = st.session_state.get('global-settings-mode' , None)
-        if mode is None: pass
-        elif mode == 'shell': setting['mode'] = 'shell'
-        elif mode == 'os': setting['mode'] = 'os'
-        else: raise ValueError(f"Invalid mode: {mode}")
-        
-        return setting
-
-    def script_runner_run_cmd(self , runner : ScriptRunner | None , params : dict[str, Any] | None):
-        """preview runner cmd"""
-        if runner is None: return None
-        run_params = self.global_setting()
-        if 'email' not in run_params: run_params['email'] = runner.header.email
-        if 'mode'  not in run_params: run_params['mode']  = runner.header.mode
-        if params: run_params.update(params)
-        return runner.preview_cmd(**run_params)
         
     @ActionLogger.log_action()
     def click_script_runner_run(self , runner : ScriptRunner , params : dict[str, Any] | None):
         """click run button"""
-        run_params = self.global_setting()
+        run_params = self.get_global_settings()
         if 'email' not in run_params: run_params['email'] = runner.header.email
         if 'mode'  not in run_params: run_params['mode']  = runner.header.mode
         if params: run_params.update(params)
         
         item = runner.build_task(self.task_queue , **run_params)
-        
-        self.current_task_item = item.id
+
         self.queue_last_action = f"Add to Queue: {item.id}" , True
-        
-        if self.current_task_item != item.id:
-            self.current_task_item = item.id
-            self.running_report_main_cleared = False
+        self.current_task_item = item.id
+        self.clear_report_placeholder()
+        self.running_report_init = True
+        self.running_report_file_previewer = None
 
         item.run_script()
 
     @ActionLogger.log_action()
     def click_file_preview(self , path : Path):
         """click file previewer"""
+        print('click file previewer')
         if self.running_report_file_previewer == path:
             self.running_report_file_previewer = None
         else:   
@@ -293,7 +310,8 @@ class SessionControl:
     def click_show_complete_report(self , item : TaskItem):
         """click show complete report"""
         self.current_task_item = item.id
-        self.running_report_main_cleared = False
+        self.clear_report_placeholder()
+        self.running_report_init = True
         self.running_report_file_previewer = None
 
     @ActionLogger.log_action()
@@ -302,7 +320,8 @@ class SessionControl:
         new_id = item.id if self.current_task_item != item.id else None
         
         self.current_task_item = new_id
-        self.running_report_main_cleared = False
+        self.clear_report_placeholder()
+        self.running_report_init = True
         self.running_report_file_previewer = None
 
     @ActionLogger.log_action()
@@ -316,19 +335,12 @@ class SessionControl:
         new_id = item.id if self.current_task_item != item.id else None
         
         self.current_task_item = new_id
-        self.running_report_main_cleared = False
-        self.running_report_file_previewer = None
-
-    @ActionLogger.log_action()
-    def click_item_choose_remove(self , item : TaskItem):
-        """click remove task item"""
-        self.task_queue.remove(item)
-        self.current_task_item = None
-        self.running_report_main_cleared = False
+        self.clear_report_placeholder()
+        self.running_report_init = True
         self.running_report_file_previewer = None
     
     @staticmethod
-    def wait_for_complete(item : TaskItem , running_timeout : int = 20):
+    def wait_until_completion(item : TaskItem , running_timeout : int = 20):
         """wait for complete"""
         while True:
             item.refresh()

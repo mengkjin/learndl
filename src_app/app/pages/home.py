@@ -9,8 +9,53 @@ from util import SC , set_current_page , show_run_button_sidebar , get_script_pa
 
 PAGE_NAME = 'home'
 
+def estimate_text_width(text, font_size=24):
+    chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
+    english_chars = len(text) - chinese_chars
+    
+    char_width = font_size * 0.66
+    chinese_width = font_size * 1.32
+    
+    estimated_width = chinese_chars * chinese_width + english_chars * char_width
+    return int(estimated_width)
+
+def expander_subheader(key : str , label : str , icon : str | None = None , expanded = False , 
+                       height : int | None = None , help : str | None = None , status = False , color = 'blue'):
+    
+    container_key = f'{key.replace(" " , "-").lower()}-special-expander-' + ('status' if status else 'expander')
+    with st.container():
+        if help is not None:
+            help_icon = """<span role="img" aria-label="mode_off_on icon" translate="no" style="display: inline-block; 
+                            font-family: &quot;Material Symbols Rounded&quot;; 
+                            user-select: none; 
+                            vertical-align: bottom; 
+                            overflow-wrap: normal;">help</span>"""
+            margin_left = 10
+            if icon is not None: margin_left += 34
+            if status:           margin_left += 28
+            margin_left += estimate_text_width(label.upper())
+            st.markdown(f"""
+            <div class="expander-help-container">
+                <div class="help-tooltip">
+                    {help}
+                </div>
+                <span class="help-icon" style="margin-left: {margin_left}px;">
+                    {help_icon}
+                </span>
+            </div>
+            """, unsafe_allow_html=True)
+        container = st.container(key = container_key)
+        full_label = label if icon is None else f'{icon} {label}'
+        if status:
+            exp_container = container.status(f" :{color}[{full_label}]" , expanded = expanded)
+        else:
+            exp_container = container.expander(f":{color}[{full_label}]" , expanded = expanded).container(height = height)
+        
+    return exp_container
+
 def show_tutorial():
-    with expander_subheader('home-tutorial' , 'Tutorial' , ':material/school:' , True):
+    with expander_subheader('home-tutorial' , 'Tutorial' , ':material/school:' , True ,
+                            help = 'Basic Tutorial for the Project.'):
         st.markdown("""
         1. :blue[:material/settings:] Click the script button to expand the parameter settings
         2. :green[:material/mode_off_on:] Fill in the necessary parameters and click Run
@@ -48,7 +93,8 @@ def show_system_info():
     # streamlit
     options[':material/commit: **Streamlit Version**'] = f"{st.__version__}"
     
-    with expander_subheader('home-system-info' , 'System Info' , ':material/computer:' , True):
+    with expander_subheader('home-system-info' , 'System Info' , ':material/computer:' , True ,
+                            help = 'System Info , includes OS, memory, GPU, CPU, Python, and Streamlit version.'):
         cols = st.columns(len(options))
         for i , (label , value) in enumerate(options.items()):
             cols[i].metric(f"{label}" , value)
@@ -60,7 +106,8 @@ def show_pending_features():
             st.warning(feature , icon = ":material/schedule:")
 
 def show_intro_pages():
-    with expander_subheader('home-intro-pages' , 'Other Intro Pages' , ':material/outdoor_garden:' , True):
+    with expander_subheader('home-intro-pages' , 'Other Intro Pages' , ':material/outdoor_garden:' , True , 
+                            help = 'Click to Switch to Other Intro Pages.'):
         pages = {k:v for k,v in intro_pages().items() if k != PAGE_NAME}
         cols = st.columns(len(pages))
         for col , (name , page) in zip(cols , pages.items()):
@@ -70,7 +117,8 @@ def show_intro_pages():
 
 def show_script_structure():
     """show folder content recursively"""  
-    with expander_subheader('home-script-structure' , 'Script Structure' , ':material/account_tree:' , True):
+    with expander_subheader('home-script-structure' , 'Script Structure' , ':material/account_tree:' , True , 
+                            help = 'Script Structure of the Project, Click to Switch to Detailed Script Page.'):
         items = SC.path_items
         for item in items:
             if item.is_dir:

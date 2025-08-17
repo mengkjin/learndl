@@ -120,6 +120,13 @@ class CustomCSS:
         .stExpander summary {
             padding-top: 4px !important;
             padding-bottom: 4px !important;
+            span[data-testid="stExpanderIconCheck"] {
+                color: green !important;
+            }
+            span[data-testid="stExpanderIconError"] {
+                color: red !important;
+            }
+        }
         }
         .stCode code {
             font-size: 12px !important;
@@ -148,38 +155,89 @@ class CustomCSS:
 
     def special_expander(self):
         return '''
-        [class*="special-expander"] > div > [data-testid="stExpander"] > details {
+        .stVerticalBlock[class*="special-expander"] > div > [data-testid="stExpander"] > details {
             background: transparent !important;
             border: none !important;
-        }
-        [class*="special-expander"] > div > [data-testid="stExpander"] > details > div {
-            border: 1px solid #D1D5DB !important;
-            border-radius: 12px !important;
-            margin-bottom: 10px !important;
-            padding-top: 20px !important;
-            padding-bottom: 20px !important;
-        }       
-        [class*="special-expander"] > div > [data-testid="stExpander"] > details > summary {
-            background: linear-gradient(75deg, lightblue -2%, white 1%, lightblue 200%) !important;
-            border-radius: 12px !important;
-            padding: 14px 18px !important;
-            border: 2px dash #D1D5DB !important;
-            text-transform: uppercase !important;
-            span {
-                font-size: 24px !important;
-                font-weight: 900 !important;
-                letter-spacing: 3px !important;
-                white-space: nowrap !important;
-                &[class*="stMarkdownColoredText"] {
-                    border-bottom: 2px solid lightgray !important;
+            > div {
+                border: 1px solid #D1D5DB !important;
+                border-radius: 12px !important;
+                margin-bottom: 10px !important;
+                padding-top: 20px !important;
+                padding-bottom: 20px !important;
+            }
+            > summary {
+                background: linear-gradient(75deg, lightblue -2%, white 1%, lightblue 200%) !important;
+                border-radius: 12px !important;
+                padding: 14px 18px !important;
+                border: 2px dash #D1D5DB !important;
+                text-transform: uppercase !important;
+                span {
+                    font-size: 24px !important;
+                    font-weight: 900 !important;
+                    letter-spacing: 3px !important;
+                    white-space: nowrap !important;
+                    &[class*="stMarkdownColoredText"] {
+                        border-bottom: 2px solid lightgray !important;
+                    }
                 }
-            }   
+            }
+            > summary:hover {
+                background: linear-gradient(75deg, darkblue -2%, white 1%, darkblue 200%) !important;
+                border-color: #1E3A8A !important;
+                transform: translateY(-1px) !important;
+                box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15) !important;
+            }
         }
-        [class*="special-expander"] > div > [data-testid="stExpander"] > details > summary:hover {
-            background: linear-gradient(75deg, darkblue -2%, white 1%, darkblue 200%) !important;
-            border-color: #1E3A8A !important;
-            transform: translateY(-1px) !important;
-            box-shadow: 0 4px 12px rgba(30, 58, 138, 0.15) !important;
+        .expander-help-container {
+            position: relative;
+            margin: 10px 0;
+        }
+        .expander-help-container .help-tooltip {
+            position: absolute;
+            top: -30px;
+            left: 0;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-style: italic;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+            pointer-events: none;
+            text-align: left;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .help-icon {
+            position: absolute;
+            top: 5px;
+            left: 0px;
+            color: gray !important;
+            background-color: transparent !important;
+            font-size: 24px !important;
+            font-weight: 900 !important;
+            letter-spacing: 3px !important;
+            white-space: nowrap !important;
+            padding: 14px 18px !important;
+            width: 100% !important;
+            cursor: help;
+            z-index: 1000 !important;
+            border: 1px solid lightgray !important;
+        }
+
+        .expander-help-container:hover .help-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .expander-help-container .help-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 20px;
+            border: 5px solid transparent;
+            border-top-color: #333;
         }
         '''
 
@@ -400,6 +458,7 @@ def style():
                 min-width: 400px !important;
                 justify-content: flex-start !important;
                 padding-left: 20px !important;
+                color: black !important;
                 background: linear-gradient(to right, #87CEEB -2%, white 1%, #87CEEB 200%) !important;
                 &:hover {
                     background: linear-gradient(to right, #1E88E5 -2%, white 1%, #1E88E5 200%) !important;
@@ -491,9 +550,9 @@ def style():
             min-width: 500px !important;
             justify-content: flex-start !important;
         }
-        &[class*="-selected"] {
+        &[class*="-select"] {
             button {
-                background-color: #1E88E5 !important;
+                background: #1E88E5 !important;
                 color: white !important;
             }
             p {
@@ -626,6 +685,14 @@ def style():
                 font-weight: bold !important;
                 justify-content: center !important;
             }
+        }
+    }
+    .stVerticalBlock[class*="detail-exit-info-container"] {
+        p {
+            margin-top: 0px !important;
+            margin-bottom: 0px !important;
+            padding-top: 0px !important;
+            padding-bottom: 0px !important;
         }
     }
     """)

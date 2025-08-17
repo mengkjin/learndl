@@ -11,8 +11,8 @@ assert os.getcwd() == path , \
 import streamlit as st
 import streamlit_autorefresh as st_autorefresh
 
-from util import (__page_title__ , __version__ , SC , AUTO_REFRESH_INTERVAL , 
-                  style , intro_pages , script_pages , runs_page_url)
+from util import (PAGE_TITLE , VERSION , SC , AUTO_REFRESH_INTERVAL , 
+                  style , intro_pages , script_pages , runs_page_url , get_logo)
 
 st.set_option('client.showSidebarNavigation', False)
 
@@ -21,16 +21,16 @@ if AUTO_REFRESH_INTERVAL > 0:
 
 def page_config():
     st.set_page_config(
-        page_title=__page_title__,
+        page_title=PAGE_TITLE,
         page_icon=":material/rocket_launch:",
         layout= 'wide' , # 'centered',
         initial_sidebar_state="expanded"
     )
     style()
     cols = st.columns([4,1] , gap = 'small' , vertical_alignment = 'center')
-    with cols[0]: st.session_state['box_title'] = st.empty()
-    with cols[1]: st.session_state['box_main_button'] = st.empty()
-    #st.session_state['box_title'].title(f":rainbow[:material/rocket_launch: {__page_title__} (_v{__version__}_)]")
+    with cols[0]: st.session_state['box-title'] = st.container(key = 'box-title')
+    with cols[1]: st.session_state['box-main-button'] = st.container(key = 'box-main-button')
+    #st.session_state['box-title'].title(f":rainbow[:material/rocket_launch: {__page_title__} (_v{__version__}_)]")
     #if cols[1].button(':rainbow[:material/home:]' , key = 'go-home-button' , help = 'Go to Home Page'): 
     #    st.switch_page(get_intro_page('home')['page'])
 
@@ -47,9 +47,7 @@ def page_navigation():
 
 def sidebar_navigation():
     with st.sidebar:
-        st.logo(pathlib.Path(file_path).parent / "images/image.png" ,
-                icon_image=pathlib.Path(file_path).parent / "images/icon_image.png")
-        
+        st.logo(**get_logo() , link = 'https://github.com/mengkjin/learndl' , size='large')
         global_button()
         global_settings()
 
@@ -81,7 +79,7 @@ def global_button():
                         help = "Please Run a Task First" , disabled = True)
             else:
                 if st.button(":material/slideshow:", key=f"script-latest-task-enable-{item.id}" , 
-                            help = f"Show Task {item.id}" , 
+                            help = f":blue[**Show Latest Task**]: {item.id}" , 
                             on_click = SC.click_show_complete_report , args = (item,) ,
                             disabled = False):
                     st.switch_page(runs_page_url(str(item.relative)))
