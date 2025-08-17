@@ -223,7 +223,6 @@ class CustomCSS:
             width: 100% !important;
             cursor: help;
             z-index: 1000 !important;
-            border: 1px solid lightgray !important;
         }
 
         .expander-help-container:hover .help-tooltip {
