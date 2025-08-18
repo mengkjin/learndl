@@ -1,11 +1,10 @@
 import streamlit as st
 
 from dataclasses import dataclass , field
-from typing import Any , Callable , ClassVar , Self
+from typing import Any , ClassVar
 from pathlib import Path
 from datetime import datetime
 import time
-import re
 
 from src_app.db import RUNS_DIR
 from src_app.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
@@ -41,25 +40,19 @@ class SessionControl:
     # for config editor page
     config_editor_state : YAMLFileEditorState | None = None
 
-    initialized : bool = False
-
-    _instance : ClassVar[Self | None] = None
+    _instance : 'ClassVar[SessionControl | None]' = None
     
     def __post_init__(self):
         self.task_db = get_cached_task_db()
         self.task_queue = TaskQueue(task_db = self.task_db)
         self.path_items = PathItem.iter_folder(RUNS_DIR, min_level = 0, max_level = 2)
-
-    def __str__(self):
-        return f"SessionControl()"
-    
-    def initialize(self):
         self.task_queue.refresh()
-        if self.initialized: return
         if 'session_control' not in st.session_state:
             st.session_state.session_control = self
         self.config_editor_state = YAMLFileEditorState.get_state('config_editor')
-        self.initialized = True
+
+    def __str__(self):
+        return f"SessionControl()"
     
     def get_script_runner(self , script_key : str) -> ScriptRunner:
         if script_key not in self.script_runners: 
@@ -93,7 +86,6 @@ class SessionControl:
     
     def get_filtered_queue(self):
         """filter task queue"""
-        assert self.initialized , 'SessionControl is not initialized'
         status_filter = st.session_state.get('task-filter-status')
         source_filter = st.session_state.get('task-filter-source')
         folder_filter = st.session_state.get('task-filter-path-folder')
@@ -138,7 +130,6 @@ class SessionControl:
         return cmd
     
     def get_script_runner_validity(self , obj : ScriptRunner):
-        assert self.initialized , 'SessionControl is not initialized'
         return all(self.script_params_cache.get(obj.script_key, {}).get('valid', {}).values())
     
     def click_queue_item(self , item : TaskItem):
@@ -354,4 +345,3 @@ class SessionControl:
         return False
    
 SC = SessionControl()
-SC.initialize()
