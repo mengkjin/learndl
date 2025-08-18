@@ -89,3 +89,5 @@ class DailyCloseAuction(DateFetcher):
         auc = code_to_secid(auc).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return auc
 """
+
+
