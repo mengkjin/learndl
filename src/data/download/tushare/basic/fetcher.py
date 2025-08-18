@@ -7,6 +7,8 @@ from abc import abstractmethod , ABC
 from src.basic import PATH , CALENDAR , Timer
 from .func import updatable , dates_to_update
 
+tushare_exception_dates = [20250818]
+
 class TushareFetcher(ABC):
     START_DATE  : int = 19970101
     DB_TYPE     : Literal['info' , 'date' , 'fina' , 'rolling' , 'fundport'] = 'info'
@@ -53,6 +55,9 @@ class TushareFetcher(ABC):
             return PATH.file_modified_date(self.target_path() , self.START_DATE)
 
     def update(self , timeout_wait_seconds = 20 , timeout_max_retries = 20):
+        if CALENDAR.today() in tushare_exception_dates:
+            print(f'{self.__class__.__name__} is not updated because of tushare exception')
+            return
         update_func = self.update_with_try_except(self.update_with_dates , timeout_wait_seconds , timeout_max_retries)
         return update_func()
 
