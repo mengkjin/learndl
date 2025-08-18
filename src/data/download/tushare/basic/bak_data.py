@@ -10,6 +10,9 @@ class TSBackUpDataTransform():
     BACKUP_DIR = PATH.main.joinpath('bak_data')
     BACKUP_RECORD_DIR = PATH.main.joinpath('bak_data_record')
     REQUIRED_KEYS = ['adj_factor' , 'daily' , 'daily_basic' , 'moneyflow' , 'stk_limit']
+    
+    BACKUP_DIR.mkdir(parents=True , exist_ok=True)
+    BACKUP_RECORD_DIR.mkdir(parents=True , exist_ok=True)
 
     def get_bak_data(self , date : int , key : Literal['adj_factor' , 'daily' , 'daily_basic' , 'moneyflow' , 'stk_limit']):
         date_str = str(date)
@@ -75,24 +78,30 @@ class TSBackUpDataTransform():
         day_val = self.day_val(date)
         day_moneyflow = self.day_moneyflow(date)
         day_limit = self.day_limit(date)
-        self.BACKUP_RECORD_DIR.mkdir(parents=True , exist_ok=True)
-        self.BACKUP_RECORD_DIR.joinpath(f'{date}.backed').touch()
+        self.path_record(date).touch()
         PATH.db_save(day , db_src , 'day' , date)
         PATH.db_save(day_val , db_src , 'day_val' , date)
         PATH.db_save(day_moneyflow , db_src , 'day_moneyflow' , date)
         PATH.db_save(day_limit , db_src , 'day_limit' , date)
 
     def clear_day(self , date : int):
-        if self.BACKUP_RECORD_DIR.joinpath(f'{date}.backed').exists():
+        if self.path_record(date).exists():
             db_src = 'trade_ts'
-            PATH.db_path(db_src , 'day' , date).unlink(missing_ok=True)
-            PATH.db_path(db_src , 'day_val' , date).unlink(missing_ok=True)
-            PATH.db_path(db_src , 'day_moneyflow' , date).unlink(missing_ok=True)
-            PATH.db_path(db_src , 'day_limit' , date).unlink(missing_ok=True)
-            self.BACKUP_RECORD_DIR.joinpath(f'{date}.backed').unlink()
+            for db_key in ['day' , 'day_val' , 'day_moneyflow' , 'day_limit']:
+                path = PATH.db_path(db_src , db_key , date)
+                new_path = path.with_name(f'.{path.name}.bak')
+                if path.exists():
+                    if not new_path.exists():
+                        path.rename(new_path)
+                    else:
+                        path.unlink()
+            self.path_record(date).unlink()
+
+    def path_record(self , date : int):
+        return self.BACKUP_RECORD_DIR.joinpath(f'{date}.backed')
 
     def get_baked_dates(self):
-        return [int(file.stem.split('_')[1]) for file in self.BACKUP_RECORD_DIR.glob('*.backed')]
+        return [int(file.stem) for file in self.BACKUP_RECORD_DIR.glob('*.backed')]
 
     def get_bakable_dates(self):
         dates = CALENDAR.td_within(start_dt = CALENDAR.td(CALENDAR.updated() , 1) , end_dt = CALENDAR.update_to())
