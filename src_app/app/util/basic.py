@@ -1,4 +1,4 @@
-VERSION = '0.4.2'
+VERSION = '0.4.3'
 RECOMMENDED_EXPLORER = 'chrome'
 PAGE_TITLE = 'Learndl'
 
