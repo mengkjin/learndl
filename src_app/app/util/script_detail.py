@@ -543,7 +543,7 @@ def show_report_main(runner : ScriptRunner):
         if item is None or not item.belong_to(runner) : 
             return
         status_text = f'{header}: {item.status_state.title()}'
-        status_color = 'green' if item.status_state == 'complete' else 'red' if item.status_state == 'error' else 'orange'
+        status_color = 'green' if item.status_state == 'complete' else 'red' if item.status_state == 'error' else 'blue'
         with expander_subheader(wkey , status_text , icon , True , help = help , status = True , color = status_color):
             if item is None or not item.belong_to(runner): return
             

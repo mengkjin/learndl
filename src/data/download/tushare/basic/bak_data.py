@@ -59,7 +59,7 @@ class TSBackUpDataTransform():
         return trade
     
     def day_val(self , date : int):
-        val = self.get_bak_data(date , 'daily_basic').loc[:,['ts_code','trade_date' , 'total_share','float_share','free_share','total_mv','circ_mv']]
+        val = self.get_bak_data(date , 'daily_basic')
         val.loc[:,['total_share','float_share','free_share','total_mv','circ_mv']] *= 1e4
         val = ts_code_to_secid(val).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return val

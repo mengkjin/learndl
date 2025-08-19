@@ -96,9 +96,16 @@ class ParamInputsForm:
         main_str = [s for s in cmd.split(";") if str(self.runner.path.path) in s][0]
         param_str = ''.join(main_str.split(str(self.runner.path.path))[1:]).strip()
         
-        for param_str in param_str.split('--'):
-            if not param_str: continue
-            param_name , param_value = param_str.split(' ' , 1)
+        for pstr in param_str.split('--'):
+            if not pstr: continue
+            try:
+                param_name , param_value = pstr.replace('=' , ' ').split(' ' , 1)
+            except Exception as e:
+                print(cmd)
+                print(pstr)
+                print(f"Error parsing param: {pstr} - {e}")
+                raise e
+
             value = param_value.strip()
             if value == 'True': value = True
             elif value == 'False': value = False

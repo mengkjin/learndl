@@ -711,7 +711,7 @@ class TaskItem:
     @classmethod
     def status_icon(cls , status : Literal['running', 'starting', 'complete', 'error' , 'killed'] , tag : bool = False):
         if status in ['running', 'starting']: 
-            icon , color = ':material/arrow_forward_ios:' , 'green'
+            icon , color = ':material/arrow_forward_ios:' , 'blue'
         elif status == 'complete': 
             icon , color = ':material/check:' , 'green'
         elif status in ['error' , 'killed']: 
@@ -728,7 +728,7 @@ class TaskItem:
 
     @property
     def status_color(self):
-        if self.is_running: return 'yellow'
+        if self.is_running: return 'blue'
         elif self.is_complete:  return 'green'
         elif self.is_error: return 'red'
         else: raise ValueError(f"Invalid status: {self.status}")
@@ -748,7 +748,7 @@ class TaskItem:
     @property
     def plain_icon(self):
         if self.status in ['running', 'starting']: 
-            icon = '🟡'
+            icon = '🔵'
         elif self.status == 'complete': 
             icon = '✅'
         elif self.status in ['error' , 'killed']: 
@@ -782,16 +782,12 @@ class TaskItem:
         
     @property
     def running_str(self):
-        return f"Script ***{self.format_path} @{self.time_id}*** :blue-badge[Create {self.time_str()}] :orange-badge[Source {self.source.title()}] :violet-badge[PID {self.pid}]"
+        return f"Script ***{self.format_path} @{self.time_id}*** :gray-badge[Create {self.time_str()}] :orange-badge[Source {self.source.title()}] :violet-badge[PID {self.pid}]"
     
     def button_str_short(self):
         return f"{self.format_path} ({self.time_str(format = '%H:%M:%S')})"
     
     def button_str_long(self , index : int | None = None , plain_text : bool = False):
-        infos = [f"{self.format_path}" , 
-                   f"--Create {self.time_str('create')}" ,
-                   f"--Status {self.status.title() : >10}" ,
-                   f"--Source {self.source.title() : >10}"]
         if plain_text:
             if index is not None:
                 s = [f"{index}." , self.plain_icon, "."]
@@ -805,7 +801,7 @@ class TaskItem:
             s = [f"{self.tag_icon}"]
             if index is not None: s += [f"{index: <2}."]
             s.append(f"{self.format_path}")
-            s.append(f":blue-badge[Create {self.time_str()}]")
+            s.append(f":gray-badge[Create {self.time_str()}]")
             s.append(f":{self.status_color}-badge[Status {self.status.title()}]")
             s.append(f":orange-badge[Source {self.source.title()}]")
         return " ".join(s)
