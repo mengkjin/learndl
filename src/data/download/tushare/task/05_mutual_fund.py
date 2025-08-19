@@ -30,8 +30,11 @@ class FundPortfolioFetcher(TushareFetcher):
     DATA_FREQ = 'q'
     CONSIDER_FUTURE = False
 
-    def update_dates(self):
+    def update_dates(self , rollback_date : int | None = None):
         update_to , last_date , last_update_date = CALENDAR.update_to() , self.last_date() , self.last_update_date()
+        if rollback_date is not None: 
+            last_date = min(last_date , rollback_date)
+            last_update_date = min(last_update_date , rollback_date)
 
         update = updatable(update_to , last_update_date , self.UPDATE_FREQ)
         dates = CALENDAR.qe_trailing(update_to , n_past = 1 , another_date=last_date)

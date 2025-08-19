@@ -22,3 +22,10 @@ class TushareDataDownloader:
         assert rollback_date >= CALENDAR.earliest_rollback_date() , \
             f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
         TSBackUpDataTransform.rollback(rollback_date)
+        for name , fetcher in dynamic_members(getattr(task , '__path__')[0] , subclass_of=TushareFetcher):
+            try:
+                fet : TushareFetcher = fetcher()
+                fet.update_rollback(rollback_date)
+            except Exception as e:
+                print(f'{name} failed: {e}')
+                continue

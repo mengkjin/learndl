@@ -30,7 +30,7 @@ class TushareFetcher(ABC):
     def get_data(self , date : int | Any = None , date2 : int | Any = None) -> pd.DataFrame: 
         '''get required dataframe at date''' 
     @abstractmethod
-    def update_dates(self) -> list[int]: ...
+    def update_dates(self , rollback_date : int | None = None) -> list[int]: ...
     
     def target_path(self , date : int | Any = None):
         if self.use_date_type:  assert date is not None
@@ -42,6 +42,7 @@ class TushareFetcher(ABC):
         PATH.db_save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
 
     def last_date(self):
+        '''last date that has data of the database'''
         if self.use_date_type:
             dates = PATH.db_dates(self.DB_SRC , self.DB_KEY)
             return max(dates) if len(dates) else self.START_DATE
@@ -49,6 +50,7 @@ class TushareFetcher(ABC):
             return PATH.file_modified_date(self.target_path() , self.START_DATE)
             
     def last_update_date(self):
+        '''last modified / updated date of the database'''
         if self.use_date_type:
             return PATH.file_modified_date(self.target_path(self.last_date()) , self.START_DATE)
         else:
@@ -60,14 +62,21 @@ class TushareFetcher(ABC):
             return
         update_func = self.update_with_try_except(self.update_with_dates , timeout_wait_seconds , timeout_max_retries)
         return update_func()
+    
+    def update_rollback(self , rollback_date : int , timeout_wait_seconds = 20 , timeout_max_retries = 20):
+        assert rollback_date >= CALENDAR.earliest_rollback_date() , \
+            f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
+        update_func = self.update_with_try_except(self.update_with_dates , timeout_wait_seconds , timeout_max_retries , rollback_date)
+        return update_func()
 
     def update_with_dates(self , dates):
         for date in dates: self.fetch_and_save(date)
 
-    def update_with_try_except(self , func , timeout_wait_seconds = 20 , timeout_max_retries = 10):
+    def update_with_try_except(self , func , timeout_wait_seconds = 20 , timeout_max_retries = 10 , rollback_date : int | None = None):
         def wrapper(*args , **kwargs):
             retries = 0
-            dates = self.update_dates()
+            dates = self.update_dates(rollback_date)
+
             if len(dates) == 0: 
                 print(f'{self.__class__.__name__} has no dates to update')
                 return
@@ -86,7 +95,8 @@ class TushareFetcher(ABC):
                 else:
                     break
                 retries += 1
-                dates = self.update_dates()
+                dates = self.update_dates(rollback_date)
+
                 if len(dates) == 0: break    
         return wrapper
 
@@ -113,9 +123,10 @@ class InfoFetcher(TushareFetcher):
     UPDATE_FREQ = 'd'
     DB_SRC = 'information_ts'
 
-    def update_dates(self):
+    def update_dates(self , rollback_date : int | None = None):
         update_to = CALENDAR.update_to()
-        last_update_date = self.last_date()
+        last_update_date = self.last_date() 
+        if rollback_date is not None: last_update_date = min(last_update_date , rollback_date)
         if update := updatable(update_to , last_update_date , self.UPDATE_FREQ):
             return [update_to]
         else:
@@ -126,9 +137,10 @@ class DateFetcher(TushareFetcher):
     UPDATE_FREQ = 'd'
     DB_SRC = 'trade_ts'
 
-    def update_dates(self):
+    def update_dates(self , rollback_date : int | None = None):
         update_to = CALENDAR.update_to()
         last_update_date = self.last_date()
+        if rollback_date is not None: last_update_date = min(last_update_date , rollback_date)
         dates = dates_to_update(update_to , last_update_date , self.UPDATE_FREQ) 
         return dates
 
@@ -137,9 +149,10 @@ class WeekFetcher(TushareFetcher):
     UPDATE_FREQ = 'w'
     DB_SRC = 'trade_ts'
 
-    def update_dates(self):
+    def update_dates(self , rollback_date : int | None = None):
         update_to = CALENDAR.update_to()
         last_update_date = self.last_date()
+        if rollback_date is not None: last_update_date = min(last_update_date , rollback_date)
         dates = dates_to_update(update_to , last_update_date , self.UPDATE_FREQ) 
         return dates
 
@@ -148,9 +161,10 @@ class MonthFetcher(TushareFetcher):
     UPDATE_FREQ = 'm'
     DB_SRC = 'trade_ts'
 
-    def update_dates(self):
+    def update_dates(self , rollback_date : int | None = None):
         update_to = CALENDAR.update_to()
         last_update_date = self.last_date()
+        if rollback_date is not None: last_update_date = min(last_update_date , rollback_date)
         dates = dates_to_update(update_to , last_update_date , self.UPDATE_FREQ) 
         return dates
 
@@ -161,8 +175,11 @@ class FinaFetcher(TushareFetcher):
     DATA_FREQ : Literal['y' , 'h' , 'q'] = 'q'
     CONSIDER_FUTURE = False
 
-    def update_dates(self):
+    def update_dates(self , rollback_date : int | None = None):
         update_to , last_date , last_update_date = CALENDAR.update_to() , self.last_date() , self.last_update_date()
+        if rollback_date is not None: 
+            last_date = min(last_date , rollback_date)
+            last_update_date = min(last_update_date , rollback_date)
 
         update = updatable(update_to , last_update_date , self.UPDATE_FREQ)
         dates = CALENDAR.qe_trailing(update_to , n_past = 3 , n_future = 4 if self.CONSIDER_FUTURE else 0 , another_date = last_date)
@@ -182,8 +199,11 @@ class RollingFetcher(TushareFetcher):
     ROLLING_DATE_COL = 'date'
     SAVEING_DATE_COL = True
 
-    def update_dates(self):
+    def update_dates(self , rollback_date : int | None = None):
         update_to , last_date , last_update_date = CALENDAR.update_to() , self.last_date() , self.last_update_date()
+        if rollback_date is not None: 
+            last_date = min(last_date , rollback_date)
+            last_update_date = min(last_update_date , rollback_date)
 
         assert self.ROLLING_BACK_DAYS > 0 , 'ROLLING_BACK_DAYS must be positive'
         assert self.ROLLING_SEP_DAYS > 0 , 'ROLLING_BACK_DAYS must be positive'
