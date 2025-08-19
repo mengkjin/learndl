@@ -102,6 +102,7 @@ class TSBackUpDataTransform():
                 backed_old_path = self.db_path_backed_old(date , db_key)
                 if path.exists():
                     if not backed_path.exists():
+                        backed_path.parent.mkdir(parents=True , exist_ok=True)
                         path.rename(backed_path)
                     else:
                         path.unlink()   

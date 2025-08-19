@@ -93,14 +93,14 @@ def dir_min_date(directory : Path):
     if not years: return 0
     paths = [p for p in directory.joinpath(str(min(years))).iterdir()]
     dates = paths_to_dates(paths)
-    return min(dates) if dates else 0
+    return min(dates) if len(dates) else 0
 
 def dir_max_date(directory : Path):
     years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
     if not years: return 99991231
     paths = [p for p in directory.joinpath(str(max(years))).iterdir()]
     dates = paths_to_dates(paths)
-    return max(dates) if dates else 99991231
+    return max(dates) if len(dates) else 99991231
 
 def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , printing_prefix = None):
     path = Path(path)
