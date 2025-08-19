@@ -1,3 +1,4 @@
+from src.basic import CALENDAR
 from src.func.dynamic_import import dynamic_members
 
 from .basic import pro , TushareFetcher , TSBackUpDataTransform
@@ -15,3 +16,9 @@ class TushareDataDownloader:
                 print(f'{name} failed: {e}')
                 continue
         TSBackUpDataTransform.update()
+
+    @classmethod
+    def update_rollback(cls , rollback_date : int):
+        assert rollback_date >= CALENDAR.earliest_rollback_date() , \
+            f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
+        TSBackUpDataTransform.rollback(rollback_date)

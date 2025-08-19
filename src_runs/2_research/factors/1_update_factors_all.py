@@ -6,7 +6,7 @@
 # content: 更新区间内所有未更新的因子数据
 # email: False
 # mode: shell
-# param_inputs:
+# parameters:
 #   start : 
 #       type : int
 #       desc : start yyyymmdd

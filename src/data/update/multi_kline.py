@@ -22,6 +22,17 @@ class MultiKlineUpdater:
             for date in update_dates: cls.update_one(date , n_day , label_name)
 
     @classmethod
+    def update_rollback(cls , rollback_date : int):
+        assert rollback_date >= CALENDAR.earliest_rollback_date() , \
+            f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
+        for n_day in cls.DAYS:
+            label_name = f'{n_day}day'
+            start_date = CALENDAR.td(rollback_date)
+            end_date = PATH.db_dates(DB_SRC , 'day').max()
+            update_dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
+            for date in update_dates: cls.update_one(date , n_day , label_name)
+
+    @classmethod
     def update_one(cls , date : int , n_day : int , label_name : str):
         PATH.db_save(nday_kline(date , n_day) , DB_SRC , label_name , date , verbose = True)
 

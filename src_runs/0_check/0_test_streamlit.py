@@ -6,7 +6,7 @@
 # content: very short script to test streamlit
 # email: True
 # mode: shell
-# param_inputs:
+# parameters:
 #   port_name : 
 #       type : [a , b , c]
 #       desc : trade port name

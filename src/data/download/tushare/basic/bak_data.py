@@ -10,11 +10,13 @@ class TSBackUpDataTransform():
     BACKUP_DIR = PATH.main.joinpath('bak_data')
     BACKUP_RECORD_DIR = PATH.main.joinpath('bak_data_record')
     REQUIRED_KEYS = ['adj_factor' , 'daily' , 'daily_basic' , 'moneyflow' , 'stk_limit']
+    DB_KEYS = ['day' , 'day_val' , 'day_moneyflow' , 'day_limit']
     
     BACKUP_DIR.mkdir(parents=True , exist_ok=True)
     BACKUP_RECORD_DIR.mkdir(parents=True , exist_ok=True)
 
-    def get_bak_data(self , date : int , key : Literal['adj_factor' , 'daily' , 'daily_basic' , 'moneyflow' , 'stk_limit']):
+    def get_bak_data(self , date : int , key : str):
+        assert key in self.REQUIRED_KEYS , f'{key} is not in {self.REQUIRED_KEYS}'
         date_str = str(date)
         record_file = self.BACKUP_DIR.joinpath(f'{key}_{date_str}.csv')
         df = pd.read_csv(record_file)
@@ -74,28 +76,47 @@ class TSBackUpDataTransform():
     
     def transform(self , date : int):
         db_src = 'trade_ts'
-        day = self.day(date)
-        day_val = self.day_val(date)
-        day_moneyflow = self.day_moneyflow(date)
-        day_limit = self.day_limit(date)
         self.path_record(date).touch()
-        PATH.db_save(day , db_src , 'day' , date)
-        PATH.db_save(day_val , db_src , 'day_val' , date)
-        PATH.db_save(day_moneyflow , db_src , 'day_moneyflow' , date)
-        PATH.db_save(day_limit , db_src , 'day_limit' , date)
+        for db_key in self.DB_KEYS:
+            data = getattr(self , db_key)(date)
+            PATH.db_save(data , db_src , db_key , date)
+
+    def db_path(self , date : int , db_key : str):
+        assert db_key in self.DB_KEYS , f'{db_key} is not in {self.DB_KEYS}'
+        return PATH.db_path('trade_ts' , db_key , date)
+
+    def db_path_backed(self , date : int , db_key : str):
+        assert db_key in self.DB_KEYS , f'{db_key} is not in {self.DB_KEYS}'
+        return PATH.db_path('trade_ts' , f'{db_key}.backed' , date)
+    
+    def db_path_backed_old(self , date : int , db_key : str):
+        assert db_key in self.DB_KEYS , f'{db_key} is not in {self.DB_KEYS}'
+        path = self.db_path(date , db_key)
+        return path.with_name(f'.{path.name}.bak')
 
     def clear_day(self , date : int):
         if self.path_record(date).exists():
-            db_src = 'trade_ts'
-            for db_key in ['day' , 'day_val' , 'day_moneyflow' , 'day_limit']:
-                path = PATH.db_path(db_src , db_key , date)
-                new_path = path.with_name(f'.{path.name}.bak')
+            for db_key in self.DB_KEYS:
+                path = self.db_path(date , db_key)
+                backed_path = self.db_path_backed(date , db_key)
+                backed_old_path = self.db_path_backed_old(date , db_key)
                 if path.exists():
-                    if not new_path.exists():
-                        path.rename(new_path)
+                    if not backed_path.exists():
+                        path.rename(backed_path)
                     else:
-                        path.unlink()
+                        path.unlink()   
+                if backed_old_path.exists():
+                    backed_old_path.unlink()
             self.path_record(date).unlink()
+
+    def clear_backed(self , date : int):
+        for db_key in self.DB_KEYS:
+            backed_path = self.db_path_backed(date , db_key)
+            backed_old_path = self.db_path_backed_old(date , db_key)
+            if backed_path.exists():
+                backed_path.unlink()
+            if backed_old_path.exists():
+                backed_old_path.unlink()
 
     def path_record(self , date : int):
         return self.BACKUP_RECORD_DIR.joinpath(f'{date}.backed')
@@ -123,3 +144,14 @@ class TSBackUpDataTransform():
         transformer = cls()
         for date in transformer.get_baked_dates():
             transformer.clear_day(date)
+
+    @classmethod
+    def rollback(cls , rollback_date : int):
+        transformer = cls()
+        start_date = CALENDAR.td(rollback_date)
+        end_date = CALENDAR.td(CALENDAR.update_to())
+        dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
+        dates = np.intersect1d(dates , transformer.get_baked_dates())
+        for date in dates:
+            transformer.clear_day(date)
+            transformer.clear_backed(date)

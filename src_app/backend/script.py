@@ -80,7 +80,7 @@ class ScriptHeader:
     todo: str = ''
     email: bool = False
     mode: Literal['shell', 'os'] = 'shell'
-    param_inputs: dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
     file_editor: dict[str, Any] = field(default_factory=dict)
     file_previewer: dict[str, Any] = field(default_factory=dict)
     disabled: bool = False
@@ -90,7 +90,7 @@ class ScriptHeader:
             raise ValueError(f'Invalid mode: {self.mode}')
 
     def get_param_inputs(self):
-        return ScriptParamInput.from_dict(self.param_inputs)
+        return ScriptParamInput.from_dict(self.parameters)
 
 @dataclass
 class ScriptParamInput:

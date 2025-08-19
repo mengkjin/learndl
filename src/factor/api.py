@@ -1,6 +1,6 @@
 from typing import Any , Literal
 
-from src.basic import PATH , MACHINE
+from src.basic import PATH , MACHINE , CALENDAR
 from src.factor.util import StockFactor
 
 from src.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager
@@ -11,10 +11,20 @@ class FactorModelUpdater:
     def update(cls):
         TuShareCNE5_Calculator.update()
 
+    @classmethod
+    def update_rollback(cls , rollback_date : int):
+        TuShareCNE5_Calculator.update_rollback(rollback_date)
+
 class FactorCalculatorAPI:
     @classmethod
     def update(cls , **kwargs):
         UPDATE_JOBS.update(**kwargs)
+        if MACHINE.server:
+            StockFactorHierarchy().factor_df().to_csv(PATH.main.joinpath('faclist.csv'))
+
+    @classmethod
+    def update_rollback(cls , rollback_date : int , **kwargs):
+        UPDATE_JOBS.update_rollback(rollback_date , **kwargs)
         if MACHINE.server:
             StockFactorHierarchy().factor_df().to_csv(PATH.main.joinpath('faclist.csv'))
 

@@ -6,7 +6,7 @@
 # content: 训练某个新模型,模型的参数在configs/train/model.yaml里定义,也可以改变其他configs
 # email: True
 # mode: shell
-# param_inputs:
+# parameters:
 #   module_name : 
 #       type : "Path('available_modules.txt').read_text().splitlines()"
 #       desc : module to train

@@ -6,7 +6,7 @@
 # content: 自动提交所有修改,并同步(rebase+push)
 # email: False
 # mode: shell
-# param_inputs:
+# parameters:
 #   additional_message : 
 #       type : str
 #       desc : additional message

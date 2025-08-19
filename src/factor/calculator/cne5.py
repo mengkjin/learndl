@@ -442,3 +442,17 @@ class TuShareCNE5_Calculator:
         for date in task.updatable_dates('risk'): 
             task.update_date(date , 'risk')
         return task
+    
+    @classmethod
+    def update_rollback(cls , rollback_date : int):
+        assert rollback_date >= CALENDAR.earliest_rollback_date() , \
+            f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
+        task = cls()
+        start_date = CALENDAR.td(rollback_date)
+        end_date = np.min([PATH.db_dates('trade_ts' , 'day').max(), PATH.db_dates('trade_ts' , 'day_val').max()])
+        dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
+        for date in dates:
+            task.update_date(date , 'exposure')
+        for date in task.updatable_dates('risk'): 
+            task.update_date(date , 'risk')
+        return task

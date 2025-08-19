@@ -350,7 +350,7 @@ class FilePreviewer:
         elif not self.path.exists():
             st.error(f"File {self.path} not found" , icon = ":material/error:")
             return
-        with st.container(height = self.height):
+        with st.container(height = self.height , border = False):
             # st.info(f"Previewing file: {self.path}" , icon = ":material/file_present:" , width = "stretch")
             suffix = self.path.suffix
             if suffix in ['.txt', '.csv', '.json' , '.log' , '.py']:

@@ -6,7 +6,7 @@
 # content: 分析交易组合
 # email: False
 # mode: shell
-# param_inputs:
+# parameters:
 #   port_name : 
 #       type : "[p.name for p in Path('data/export/trading_portfolio').iterdir() if not p.name.startswith('.')]"
 #       prefix : "tradeport/"

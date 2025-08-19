@@ -180,6 +180,14 @@ class FactorUpdateJobManager:
         self.process_jobs(verbosity)
 
     @classmethod
+    def update_rollback(cls , rollback_date : int , verbosity : int = 1 , groups_in_one_update : int | None = 100):
+        assert rollback_date >= CALENDAR.earliest_rollback_date() , \
+            f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
+        self = cls()
+        self.collect_jobs(start = rollback_date , overwrite = True , all_factors = True , groups_in_one_update = groups_in_one_update)
+        self.process_jobs(verbosity , overwrite = True)
+
+    @classmethod
     def update_fix(cls , factors : list[str] | None = None , verbosity : int = 1 , start : int | None = None , end : int | None = None):
         factors = factors or []
         self = cls()

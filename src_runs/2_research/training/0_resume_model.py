@@ -6,7 +6,7 @@
 # content: 恢复某个已训练的模型继续训练
 # email: True
 # mode: shell
-# param_inputs:
+# parameters:
 #   model_name : 
 #       type : "[p.name for p in Path('models').iterdir() if not p.name.endswith('_ShortTest') and not p.name.startswith('.')]"
 #       desc : choose a model

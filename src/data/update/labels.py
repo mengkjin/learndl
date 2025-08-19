@@ -25,6 +25,19 @@ class ClassicLabelsUpdater:
                     cls.update_one(date , days , lag1 , label_name)
 
     @classmethod
+    def update_rollback(cls , rollback_date : int):
+        assert rollback_date >= CALENDAR.earliest_rollback_date() , \
+            f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
+        for days in cls.DAYS:
+            for lag1 in cls.LAGS:
+                label_name = f'ret{days}' + ('_lag' if lag1 else '')
+                start_date = CALENDAR.td(rollback_date , - days - lag1)
+                end_date = CALENDAR.td(CALENDAR.updated() , - days - lag1)
+                update_dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
+                for date in update_dates:
+                    cls.update_one(date , days , lag1 , label_name)
+
+    @classmethod
     def update_one(cls , date : int , days : int , lag1 : bool , label_name : str):
         PATH.db_save(calc_classic_labels(date , days , lag1) , cls.DB_SRC , label_name , date , verbose = True)
 

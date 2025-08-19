@@ -6,7 +6,7 @@
 # content: 更新前num(默认100)组level , date的因子数据
 # email: False
 # mode: shell
-# param_inputs:
+# parameters:
 #   num : 
 #       type : int
 #       desc : update group num

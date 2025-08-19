@@ -69,12 +69,20 @@ def list_files(directory : str | Path , fullname = False , recur = False):
     else:
         paths = [p for p in directory.iterdir()]
     paths = [p.absolute() for p in paths] if fullname else [p.relative_to(directory) for p in paths]
+    paths = filter_paths(paths)
     return paths
 
-def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
-    stems = [Path(file).stem[-8:] for _ , _ , files in os.walk(directory) for file in files]
-    dates = [int(s) for s in stems if s.isdigit()]
+def filter_paths(paths : list[Path] , ignore_prefix = ('.' , '~')):
+    return [p for p in paths if not p.name.startswith(ignore_prefix)]
+
+def paths_to_dates(paths : list[Path]):
+    dates = [int(p.stem[-8:]) for p in paths if p.stem[-8:].isdigit()]
     dates = np.array(sorted(dates) , dtype=int)
+    return dates
+
+def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
+    paths = [Path(file) for _ , _ , files in os.walk(directory) for file in files]
+    dates = paths_to_dates(paths)
     if end_dt   is not None: dates = dates[dates <= (end_dt   if end_dt   > 0 else today(end_dt))]
     if start_dt is not None: dates = dates[dates >= (start_dt if start_dt > 0 else today(start_dt))]
     if year is not None:     dates = dates[dates // 10000 == year]
@@ -82,15 +90,17 @@ def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
 
 def dir_min_date(directory : Path):
     years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
-    stems = [p.stem[-8:] for p in directory.joinpath(str(min(years))).iterdir()]
-    dates = [int(s) for s in stems if s.isdigit()]
-    return min(dates)
+    if not years: return 0
+    paths = [p for p in directory.joinpath(str(min(years))).iterdir()]
+    dates = paths_to_dates(paths)
+    return min(dates) if dates else 0
 
 def dir_max_date(directory : Path):
     years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
-    stems = [p.stem[-8:] for p in directory.joinpath(str(max(years))).iterdir()]
-    dates = [int(s) for s in stems if s.isdigit()]
-    return max(dates)
+    if not years: return 99991231
+    paths = [p for p in directory.joinpath(str(max(years))).iterdir()]
+    dates = paths_to_dates(paths)
+    return max(dates) if dates else 99991231
 
 def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , printing_prefix = None):
     path = Path(path)

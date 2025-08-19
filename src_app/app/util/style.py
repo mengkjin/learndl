@@ -151,6 +151,15 @@ class CustomCSS:
                 font-weight: bold !important;
             }
         }
+        label[data-testid="stWidgetLabel"] > div:not([data-testid="stMarkdownContainer"]) {
+            justify-content: flex-start !important;
+            padding-left: 10px !important;
+        }
+        .stVerticalBlock[class*="task-stats"] .stMarkdown {
+            margin-bottom: 0px !important;
+            margin-top: -10px !important;
+            padding-left: 15px !important;
+        }
         '''
 
     def special_expander(self):

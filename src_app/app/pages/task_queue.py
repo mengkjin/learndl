@@ -95,9 +95,9 @@ def show_task_filters():
                         on_change = SC.click_queue_filter_path_folder)
         st.multiselect(":blue-badge[**Script File**]" , file_options , key = "task-filter-path-file" ,
                         format_func = lambda x: x.name ,
-                        on_change = SC.click_queue_filter_path_file)
+                        on_change = SC.click_queue_filter_path_file)    
         
-def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'latest'):
+def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter'):
     if queue_type == 'full':
         queue = SC.task_queue.queue
         container_height = 500
@@ -108,6 +108,17 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
         queue = SC.get_latest_queue()
         container_height = None
         st.info(f"Showing latest {len(queue)} tasks" , icon = ":material/info:")
+    cols = st.columns(2)
+    with cols[0].container(key = f"task-stats-unfiltered-container"):
+        st.info(f"**:material/bar_chart: Stats: All Tasks**")
+        st.caption(f":blue-badge[:material/update: Status] {SC.task_queue.status_message()}")
+        st.caption(f":blue-badge[:material/distance: Source] {SC.task_queue.source_message()}")
+        
+    with cols[1].container(key = f"task-stats-filtered-stats-container"):
+        st.info(f"**:material/bar_chart: Stats: Filtered Tasks**")
+        st.caption(f":blue-badge[:material/update: Status] {SC.task_queue.status_message(queue)}")
+        st.caption(f":blue-badge[:material/distance: Source] {SC.task_queue.source_message(queue)}")
+    
 
     item_ids = list(queue.keys())
     if SC.running_report_queue is not None and SC.running_report_queue in item_ids:
@@ -148,12 +159,7 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'l
             container = placeholder.container(key = f"queue-item-container-{item.id}")
             with container:
                 cols = st.columns([18, .5,.5,.5,.5] , gap = "small" , vertical_alignment = "center")
-                    
-                help_text = ' | '.join([f"Status: {item.status.title()}" , 
-                                      f"Source: {item.source.title()}" , 
-                                      f"Dur: {item.duration_str}" , 
-                                      f"PID: {item.pid}"])
-                cols[0].button(f"{item.tag_icon} {index: <2}. {item.button_str_long}",  help=help_text , key=f"click-content-{item.id}" , 
+                cols[0].button(item.button_str_long(index),  help=item.button_help_text() , key=f"click-content-{item.id}" , 
                                use_container_width=True , on_click = SC.click_queue_item , args = (item,))
                 if cols[1].button(
                     ":blue-badge[:material/slideshow:]", 

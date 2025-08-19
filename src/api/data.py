@@ -32,6 +32,17 @@ class DataAPI:
         # update stock factor
         with Logger.EnclosedMessage(' update stock factors '):
             FactorCalculatorAPI.update()
+
+    @staticmethod
+    def update_rollback(rollback_date : int):
+        with Logger.EnclosedMessage(f' download core data , rollback to {rollback_date}'):
+            CoreDataUpdater.update_rollback(rollback_date)
+        with Logger.EnclosedMessage(f' update other datas , rollback to {rollback_date}'): 
+            OtherDataUpdater.update_rollback(rollback_date)
+        with Logger.EnclosedMessage(f' update factor models , rollback to {rollback_date}'):
+            FactorModelUpdater.update_rollback(rollback_date)
+        with Logger.EnclosedMessage(f' update stock factors , rollback to {rollback_date}'):
+            FactorCalculatorAPI.update_rollback(rollback_date)
         
     @staticmethod
     def prepare_predict_data(): 

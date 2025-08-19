@@ -473,6 +473,7 @@ class TaskQueue:
         if queue is None: queue = self.queue
         status = [item.status for item in queue.values()]
         counts = {
+            'total': len(status),
             'running': status.count('running'),
             'complete': status.count('complete'),
             'error': status.count('error')
@@ -484,12 +485,13 @@ class TaskQueue:
         if queue is None: queue = self.queue
         source = [item.source for item in queue.values()]
         counts = {
+            'total': len(source),
             'py': source.count('py'),
             'app': source.count('app'),
             'bash': source.count('bash')
         }
+        counts['other'] = 2 * len(source) - sum(counts.values())
         msg = ' | '.join([f"{k.title()}: {v}" for k, v in counts.items()])
-        msg += f' | Other: {len(source) - sum(counts.values())}'
         return msg
 
     def filter(self, status : str | None = None,
@@ -611,14 +613,10 @@ class TaskItem:
     def format_path(self):
         return ' > '.join(re.sub(r'^\d+ ', '', p).title() for p in self.runner_script_key.removesuffix('.py').replace('_', ' ').split('/'))
 
-    @property
-    def button_str(self):
-        return f"{self.format_path} ({self.time_str()})"
-    
     def belong_to(self , script_runner):
         return self.script == str(script_runner.script)
     
-    def time_str(self , time_type : Literal['create', 'start', 'end'] = 'create'):
+    def time_str(self , time_type : Literal['create', 'start', 'end'] = 'create' , format : str = '%Y/%m/%d %H:%M:%S'):
         if time_type == 'create':
             time = self.create_time
         elif time_type == 'start':
@@ -626,7 +624,7 @@ class TaskItem:
         elif time_type == 'end':
             time = self.end_time
         if time is None: return 'N/A'
-        return datetime.fromtimestamp(time).strftime('%H:%M:%S')
+        return datetime.fromtimestamp(time).strftime(format)
 
     @property
     def runner_script_key(self):
@@ -729,6 +727,13 @@ class TaskItem:
         else: raise ValueError(f"Invalid status: {self.status}")
 
     @property
+    def status_color(self):
+        if self.is_running: return 'yellow'
+        elif self.is_complete:  return 'green'
+        elif self.is_error: return 'red'
+        else: raise ValueError(f"Invalid status: {self.status}")
+
+    @property
     def is_complete(self):
         return self.status == 'complete'
 
@@ -774,16 +779,44 @@ class TaskItem:
             return f"{int(duration / 60)} Min {int(duration%60)} Secs"
         else:
             return f"{int(duration / 3600)} Hr {int(duration%3600 / 60)} Min {int(duration%60)} Secs"
-    
+        
     @property
-    def button_str_long(self):
-        return  " ".join([
-            self.button_str, 
-            f"--ID {self.time_id : <5}" ,
-            f"--Status {self.status.title() : >10}" ,
-            f"--Source {self.source.title() : >10}" ,
-            f"--Dur {self.duration_str : >10}"
-        ])
+    def running_str(self):
+        return f"Script ***{self.format_path} @{self.time_id}*** :blue-badge[Create {self.time_str()}] :orange-badge[Source {self.source.title()}] :violet-badge[PID {self.pid}]"
+    
+    def button_str_short(self):
+        return f"{self.format_path} ({self.time_str(format = '%H:%M:%S')})"
+    
+    def button_str_long(self , index : int | None = None , plain_text : bool = False):
+        infos = [f"{self.format_path}" , 
+                   f"--Create {self.time_str('create')}" ,
+                   f"--Status {self.status.title() : >10}" ,
+                   f"--Source {self.source.title() : >10}"]
+        if plain_text:
+            if index is not None:
+                s = [f"{index}." , self.plain_icon, "."]
+            else:
+                s = [self.plain_icon, "."]
+            s += [f"{self.format_path}" , 
+                  f"--Create {self.time_str()}" ,
+                  f"--Status {self.status.title()}" ,
+                  f"--Source {self.source.title()}"]
+        else:
+            s = [f"{self.tag_icon}"]
+            if index is not None: s += [f"{index: <2}."]
+            s.append(f"{self.format_path}")
+            s.append(f":blue-badge[Create {self.time_str()}]")
+            s.append(f":{self.status_color}-badge[Status {self.status.title()}]")
+            s.append(f":orange-badge[Source {self.source.title()}]")
+        return " ".join(s)
+    
+    def button_help_text(self):
+        return ' | '.join([f"ID: {self.id}" , 
+                           f"PID: {self.pid}" , 
+                           f"Beg: {self.time_str('start')}" , 
+                           f"End: {self.time_str('end')}" , 
+                           f"Dur: {self.duration_str}" ,
+                           f"Exit Code: {self.exit_code}"])
 
     def info_list(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all' ,
                   sep_exit_files : bool = True) -> list[tuple[str, str]]:

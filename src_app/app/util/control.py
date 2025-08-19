@@ -152,14 +152,14 @@ class SessionControl:
         """click task queue filter path folder"""
         folder_options = st.session_state.get('task-filter-path-folder')
         if folder_options is not None:
-            folder_options = [item.script_key for item in folder_options]
+            folder_options = [item.name for item in folder_options]
         self.queue_last_action = f"Task Filter Path Folder: {folder_options}" , True
         
     def click_queue_filter_path_file(self):
         """click task queue filter path file"""
         file_options = st.session_state.get('task-filter-path-file')
         if file_options is not None:
-            file_options = [item.script_key for item in file_options]
+            file_options = [item.name for item in file_options]
         self.queue_last_action = f"Task Filter Path File: {file_options}" , True
 
     def click_log_clear_confirmation(self):
@@ -262,8 +262,6 @@ class SessionControl:
         st.session_state['task-filter-source'] = 'All'
         st.session_state['task-filter-path-folder'] = []
         st.session_state['task-filter-path-file'] = [runner.path.path]
-
-
         
     @ActionLogger.log_action()
     def click_script_runner_run(self , runner : ScriptRunner , params : dict[str, Any] | None):

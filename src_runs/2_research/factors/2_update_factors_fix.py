@@ -6,7 +6,7 @@
 # content: 修正某些因子
 # email: False
 # mode: shell
-# param_inputs:
+# parameters:
 #   factor_names : 
 #       type : str
 #       desc : factor names by ","

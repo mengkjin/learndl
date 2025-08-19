@@ -6,7 +6,7 @@
 # content: 更新指定组合, 输入参数为重置组合
 # email: True
 # mode: shell
-# param_inputs:
+# parameters:
 #   reset_port_name : 
 #       type : "[p.name for p in Path('data/export/trading_portfolio').iterdir() if not p.name.startswith('.')]"
 #       prefix : "tradeport/"

@@ -347,5 +347,9 @@ class TradeCalendar:
     def qe_interpolate(cls , incomplete_qtr_ends : Sequence | Any):
         if len(incomplete_qtr_ends) == 0: return np.array([]).astype(int)
         return cls.qe_within(min(incomplete_qtr_ends) , max(incomplete_qtr_ends))
+    
+    @classmethod
+    def earliest_rollback_date(cls):
+        return cls.td(cls.updated() , -10)
 
 CALENDAR = TradeCalendar()

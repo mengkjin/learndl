@@ -47,7 +47,7 @@ def page_navigation():
 
 def sidebar_navigation():
     with st.sidebar:
-        st.logo(**get_logo() , link = 'https://github.com/mengkjin/learndl' , size='large')
+        st.logo(**get_logo() , link = 'https://github.com/mengkjin/learndl')
         global_button()
         global_settings()
 
