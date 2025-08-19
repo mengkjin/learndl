@@ -7,7 +7,7 @@ from abc import abstractmethod , ABC
 from src.basic import PATH , CALENDAR , Timer
 from .func import updatable , dates_to_update
 
-tushare_exception_dates = [20250818]
+tushare_exception_dates = [20250818 , 20250819 , 20250820]
 
 class TushareFetcher(ABC):
     START_DATE  : int = 19970101
