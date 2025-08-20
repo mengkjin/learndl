@@ -70,7 +70,7 @@ def get_script_page(script_key: str):
     runner = SC.get_script_runner(script_key)
     if runner.header.disabled: 
         st.error(f"Script {script_key} is disabled!")
-        return
+        return {}
     if 'app_script_pages' not in st.session_state: st.session_state['app_script_pages'] = {}
     
     if runner.script_key not in st.session_state['app_script_pages']:

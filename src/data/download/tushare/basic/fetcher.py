@@ -4,10 +4,8 @@ import pandas as pd
 from typing import Any , Literal
 from abc import abstractmethod , ABC
 
-from src.basic import PATH , CALENDAR , Timer
+from src.basic import PATH , CALENDAR , Timer , Logger
 from .func import updatable , dates_to_update
-
-tushare_exception_dates = [20250818 , 20250819 , 20250820]
 
 class TushareFetcher(ABC):
     START_DATE  : int = 19970101
@@ -15,6 +13,21 @@ class TushareFetcher(ABC):
     UPDATE_FREQ : Literal['d' , 'w' , 'm'] = 'd'
     DB_SRC      : str = ''
     DB_KEY      : str = ''
+
+    TUSHARE_SERVER_DOWN : bool = False
+
+    @staticmethod
+    def set_tushare_server_down(value : bool):
+        TushareFetcher.TUSHARE_SERVER_DOWN = value
+
+    @classmethod
+    def is_tushare_server_down(cls):
+        if TushareFetcher.TUSHARE_SERVER_DOWN:
+            if not getattr(cls , '_print_server_down_message' , False):
+                print(f'{cls.__name__} will not update because Tushare server is down')
+                setattr(cls , '_print_server_down_message' , True)
+            return True
+        return False 
 
     def __init__(self) -> None:
         if self.DB_TYPE == 'info':
@@ -57,9 +70,6 @@ class TushareFetcher(ABC):
             return PATH.file_modified_date(self.target_path() , self.START_DATE)
 
     def update(self , timeout_wait_seconds = 20 , timeout_max_retries = 20):
-        if CALENDAR.today() in tushare_exception_dates:
-            print(f'{self.__class__.__name__} is not updated because of tushare exception')
-            return
         update_func = self.update_with_try_except(self.update_with_dates , timeout_wait_seconds , timeout_max_retries)
         return update_func()
     
@@ -70,6 +80,7 @@ class TushareFetcher(ABC):
         return update_func()
 
     def update_with_dates(self , dates):
+        if self.is_tushare_server_down(): return
         for date in dates: self.fetch_and_save(date)
 
     def update_with_try_except(self , func , timeout_wait_seconds = 20 , timeout_max_retries = 10 , rollback_date : int | None = None):
@@ -90,13 +101,18 @@ class TushareFetcher(ABC):
                         if retries > timeout_max_retries: raise e
                         print(f'{e} , wait {timeout_wait_seconds} seconds')
                         time.sleep(timeout_wait_seconds)
+                    elif 'Connection to api.waditu.com timed out' in str(e):
+                        Logger.warning(e)
+                        Logger.warning('Tushare server is down, skip today\'s update')
+                        self.set_tushare_server_down(True)
+                        return
                     else: 
                         raise e
                 else:
                     break
                 retries += 1
                 dates = self.update_dates(rollback_date)
-
+                
                 if len(dates) == 0: break    
         return wrapper
 

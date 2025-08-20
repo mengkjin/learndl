@@ -21,9 +21,10 @@ if not path in sys.path: sys.path.append(path)
 
 from src.api import DataAPI
 from src.basic import MACHINE , AutoRunTask , CALENDAR
-from src_app import BackendTaskRecorder
+from src_app import BackendTaskRecorder , ScriptLock
 
 @BackendTaskRecorder(email = 1)
+@ScriptLock('rollback_update' , timeout = 1 , wait_time = 60)
 def main(**kwargs):
     rollback_date = int(kwargs.pop('rollback_date'))
     with AutoRunTask(f'rollback update from {rollback_date}' , **kwargs) as runner:

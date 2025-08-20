@@ -48,9 +48,10 @@ path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
 from src.basic import AutoRunTask
-from src_app import BackendTaskRecorder
+from src_app import BackendTaskRecorder , ScriptLock
 
 @BackendTaskRecorder(txt = 'Bye, World!' , email = 0)
+@ScriptLock('test_streamlit' , timeout = 10)
 def main(txt : str = 'Hello, World!' , **kwargs):
     with AutoRunTask(f'test streamlit' , **kwargs) as runner:
         runner.info(str(kwargs))
@@ -62,6 +63,7 @@ def main(txt : str = 'Hello, World!' , **kwargs):
             runner.error(f'error:{rnd}')
         else:
             runner.info(f'info:{rnd}')
+        time.sleep(5)
 
     return runner
         

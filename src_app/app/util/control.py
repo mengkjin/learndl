@@ -327,6 +327,7 @@ class SessionControl:
         self.clear_report_placeholder()
         self.running_report_init = True
         self.running_report_file_previewer = None
+        st.session_state['script-task-selector-placeholder'].write('')
     
     @staticmethod
     def wait_until_completion(item : TaskItem , running_timeout : int = 20):
