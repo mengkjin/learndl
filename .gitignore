@@ -17,6 +17,7 @@ __old_version__/
 /logs
 /models
 /results
+/runtime
 /src_app/app/pages/_*.py
 
 .vs/
