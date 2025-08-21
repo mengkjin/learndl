@@ -343,7 +343,7 @@ class TuShareCNE5_Calculator:
         ret = DATAVENDOR.TRADE.get_trd(date , ['secid','pctchange']).set_index('secid') / 100
         ret = ret.reindex(exp.index).fillna(0).rename(columns={'pctchange':'ret'})
 
-        wgt : Any = exp['weight']
+        wgt : Any = exp['weight'].copy()
         mkt = (exp['estuniv'] * exp['market']).rename('market')
         rsk = exp.drop(columns=['estuniv','weight','market'])
         
@@ -445,8 +445,7 @@ class TuShareCNE5_Calculator:
     
     @classmethod
     def update_rollback(cls , rollback_date : int):
-        assert rollback_date >= CALENDAR.earliest_rollback_date() , \
-            f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
+        CALENDAR.check_rollback_date(rollback_date)
         task = cls()
         start_date = CALENDAR.td(rollback_date)
         end_date = np.min([PATH.db_dates('trade_ts' , 'day').max(), PATH.db_dates('trade_ts' , 'day_val').max()])

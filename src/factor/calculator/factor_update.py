@@ -181,8 +181,7 @@ class FactorUpdateJobManager:
 
     @classmethod
     def update_rollback(cls , rollback_date : int , verbosity : int = 1 , groups_in_one_update : int | None = 100):
-        assert rollback_date >= CALENDAR.earliest_rollback_date() , \
-            f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
+        CALENDAR.check_rollback_date(rollback_date)
         self = cls()
         self.collect_jobs(start = rollback_date , overwrite = True , all_factors = True , groups_in_one_update = groups_in_one_update)
         self.process_jobs(verbosity , overwrite = True)

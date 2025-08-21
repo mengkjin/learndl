@@ -23,8 +23,7 @@ class MultiKlineUpdater:
 
     @classmethod
     def update_rollback(cls , rollback_date : int):
-        assert rollback_date >= CALENDAR.earliest_rollback_date() , \
-            f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
+        CALENDAR.check_rollback_date(rollback_date)
         for n_day in cls.DAYS:
             label_name = f'{n_day}day'
             start_date = CALENDAR.td(rollback_date)

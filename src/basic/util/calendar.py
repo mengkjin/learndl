@@ -351,5 +351,10 @@ class TradeCalendar:
     @classmethod
     def earliest_rollback_date(cls):
         return cls.td(cls.updated() , -10)
+    
+    @classmethod
+    def check_rollback_date(cls , rollback_date : int):
+        assert rollback_date >= cls.earliest_rollback_date() , \
+            f'rollback_date {rollback_date} is too early, must be at least {cls.earliest_rollback_date()}'
 
 CALENDAR = TradeCalendar()

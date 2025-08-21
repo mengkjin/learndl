@@ -16,22 +16,24 @@ def ts_code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , drop_old = True 
     if valid is not None: df['secid'] = df['secid'].where(valid , -1)
     return df
 
-def updatable(date , last_date , freq : Literal['d' , 'w' , 'm']):
+def updatable(last_date , freq : Literal['d' , 'w' , 'm'] , update_to : int | None = None):
+    update_to = update_to or CALENDAR.update_to()
     if freq == 'd':
-        return date > last_date
+        return update_to > last_date
     elif freq == 'w':
-        return date > CALENDAR.cd(last_date , 6)
+        return update_to > CALENDAR.cd(last_date , 6)
     elif freq == 'm':
-        return ((date // 100) % 100) != ((last_date // 100) % 100)
+        return ((update_to // 100) % 100) != ((last_date // 100) % 100)
     
-def dates_to_update(date , last_date , freq : Literal['d' , 'w' , 'm']):
-    if last_date >= date: return np.array([])
+def dates_to_update(last_date , freq : Literal['d' , 'w' , 'm'] , update_to : int | None = None):
+    update_to = update_to or CALENDAR.update_to()
+    if last_date >= update_to: return np.array([])
     if freq == 'd':
-        date_list = pd.date_range(str(last_date) , str(date)).strftime('%Y%m%d').astype(int).to_numpy()[1:]
+        date_list = pd.date_range(str(last_date) , str(update_to)).strftime('%Y%m%d').astype(int).to_numpy()[1:]
     elif freq == 'w':
-        date_list = pd.date_range(str(last_date) , str(date)).strftime('%Y%m%d').astype(int).to_numpy()[::7][1:]
+        date_list = pd.date_range(str(last_date) , str(update_to)).strftime('%Y%m%d').astype(int).to_numpy()[::7][1:]
     elif freq == 'm':
-        date_list = pd.date_range(str(last_date) , str(date) , freq='ME').strftime('%Y%m%d').astype(int).to_numpy()
+        date_list = pd.date_range(str(last_date) , str(update_to) , freq='ME').strftime('%Y%m%d').astype(int).to_numpy()
         if last_date in date_list: date_list = date_list[1:]
     return np.sort(date_list)
 

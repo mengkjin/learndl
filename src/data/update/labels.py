@@ -26,8 +26,7 @@ class ClassicLabelsUpdater:
 
     @classmethod
     def update_rollback(cls , rollback_date : int):
-        assert rollback_date >= CALENDAR.earliest_rollback_date() , \
-            f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
+        CALENDAR.check_rollback_date(rollback_date)
         for days in cls.DAYS:
             for lag1 in cls.LAGS:
                 label_name = f'ret{days}' + ('_lag' if lag1 else '')

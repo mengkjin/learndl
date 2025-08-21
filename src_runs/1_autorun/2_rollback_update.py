@@ -28,8 +28,7 @@ from src_app import BackendTaskRecorder , ScriptLock
 def main(**kwargs):
     rollback_date = int(kwargs.pop('rollback_date'))
     with AutoRunTask(f'rollback update from {rollback_date}' , **kwargs) as runner:
-        assert rollback_date >= CALENDAR.earliest_rollback_date() , \
-            f'rollback_date {rollback_date} is too early, must be at least {CALENDAR.earliest_rollback_date()}'
+        CALENDAR.check_rollback_date(rollback_date)
         if not MACHINE.updateable:
             runner.error(f'{MACHINE.name} is not updateable, skip rollback update')
         else:
