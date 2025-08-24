@@ -96,20 +96,19 @@ def show_script_task_selector(runner : ScriptRunner):
         with page_option_cols[0].container(key = f"choose-task-num-per-page-container"):
             cols = st.columns(2 , vertical_alignment = "center")
             cols[0].info('**Tasks per Page**')
-            num_per_page = cols[1].selectbox('select num per page', [20 , 50 , 100 , 500], format_func = lambda x: f'{x} Tasks/Page', 
-                                index = 0 , key = f"choose-task-item-num-per-page" , label_visibility = 'collapsed')
+            num_per_page = cols[1].selectbox('select num per page', [5 , 20 , 50 , 100 , 500], format_func = lambda x: f'{x} Tasks/Page', 
+                                index = 1 , key = f"choose-task-item-num-per-page" , label_visibility = 'collapsed')
             
         with page_option_cols[1].container(key = f"choose-task-page-container"):
             max_page = (len(item_ids) - 1) // num_per_page + 1
             page_options = list(range(1, max_page + 1))
             index_page = choose_index // num_per_page if choose_index is not None else 0
-            page_cols = st.columns([7, 1, 1, 3, 1, 1] , vertical_alignment = "center")
+            page_cols = st.columns([7, 1, 1, 3, 1, 1] , gap = None , vertical_alignment = "center")
             page_cols[0].info(f'**Select Page (1 ~ {max_page})**')
             page_cols[1].button(":material/first_page:", key = f"choose-task-page-first", on_click = on_first_page , args = (max_page,))
             page_cols[2].button(":material/chevron_left:", key = f"choose-task-page-prev", on_click = on_prev_page , args = (max_page,))
             page_cols[3].selectbox('select page', page_options, key = f"choose-task-page" , index = index_page , 
-                                   placeholder = f'Page #',
-                                   format_func = lambda x: f'Page {x}', label_visibility = 'collapsed')
+                                   placeholder = f'Page', label_visibility = 'collapsed')
             page_cols[4].button(":material/chevron_right:", key = f"choose-task-page-next", on_click = on_next_page , args = (max_page,))
             page_cols[5].button(":material/last_page:", key = f"choose-task-page-last", on_click = on_last_page , args = (max_page,))
         
@@ -145,7 +144,7 @@ def show_queue_item_list(runner : ScriptRunner , queue : dict[str, TaskItem] , o
             placeholder = st.empty()
             container = placeholder.container(key = f"script-queue-item-container-{item_id}")
             with container:
-                cols = st.columns([18, .5,.5,.5,.5] , gap = "small" , vertical_alignment = "center")
+                cols = st.columns([18, .5,.5,.5,.5] , gap = None, vertical_alignment = "center")
                 key = f"script-click-content-{item_id}"
                 if item_id == SC.current_task_item: key += "-selected"
                 with cols[0]:

@@ -681,6 +681,15 @@ def style():
             &:hover {background: #8B008B !important;} /* darkerviolet */
         }
     }
+    .stVerticalBlock[class*="choose-task-page"] {
+        button {
+            width: 100% !important;
+            min-width: 1px !important;
+        }
+                .stSelectbox {
+            width: 100% !important;
+        }
+    }
     .stElementContainer[class*="go-home-button"] {
         align-self: flex-end !important;
         button {
