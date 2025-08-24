@@ -33,16 +33,20 @@ class Email:
         self.password    = email_conf['password']  
 
     @classmethod
-    def Attach(cls , attachment : str | Path | list[str] | list[Path] | None = None , group : str = 'default'):
+    def Attach(cls , attachment : str | Path | list[str] | list[Path] | None = None , 
+               group : str = 'default' , copy = False):
         if attachment is None: return
         if not isinstance(attachment , list): attachment = [Path(attachment)]
         if group not in cls.Attachments:
             cls.Attachments[group] = []
         for f in attachment:
             old_path = Path(f)
-            new_path = cls.Attachment_dir.joinpath(old_path.name)
-            if old_path not in cls.Attachments[group]:
+            if copy:
+                new_path = cls.Attachment_dir.joinpath(old_path.name)
                 shutil.copy(old_path , new_path)
+            else:
+                new_path = old_path
+            if new_path not in cls.Attachments[group]:
                 cls.Attachments[group].append(new_path)
 
     def recipient(self , recipient : str | None = None):
@@ -77,7 +81,6 @@ class Email:
                 part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
                 message.attach(part)
 
-        self.clear_unused_attachments()
         return message
     
     def clear_unused_attachments(self):

@@ -32,11 +32,10 @@ class TradingPortfolioTracker:
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)
             Email.Attach(path)
-            path.unlink()
 
     @classmethod
     def attachment_path(cls , date : int) -> Path:
-        path = PATH.rslt_trade.joinpath('daily_trading_ports' , f'trading_ports.{date}.csv')
+        path = PATH.rslt_trade.joinpath('trading_ports' , f'trading_ports.{date}.csv')
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
