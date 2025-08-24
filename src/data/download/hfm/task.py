@@ -396,7 +396,7 @@ def kline_download(verbose = True):
     import pandas as pd
     from pathlib import Path
 
-    with open('configs/confidential/aws.yaml' , 'r') as f:
+    with open(PATH.local_settings.joinpath('aws.yaml') , 'r') as f:
         aws_info = yaml.load(f , Loader=yaml.FullLoader)
         aws_access_key_id = aws_info['aws_access_key_id']
         aws_secret_access_key = aws_info['aws_secret_access_key']

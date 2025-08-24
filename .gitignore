@@ -1,6 +1,5 @@
 # Project Specific
-faclist.csv
-available_modules.txt
+
 
 # Windows:
 Thumbs.db
@@ -12,16 +11,17 @@ Desktop.ini
 
 # folder structure
 __old_version__/
+/.local_resources
+/.local_settings
 /data
-/figures
 /logs
 /models
 /results
-/runtime
+
+# temporary created files
 /src_app/app/pages/_*.py
 
 .vs/
-/configs/confidential
 
 # Data
 *.h5

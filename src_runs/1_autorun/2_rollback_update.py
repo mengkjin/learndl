@@ -9,9 +9,9 @@
 # parameters:
 #   rollback_date : 
 #       type : int
-#       desc : from which date to rollback
+#       desc : from which date to rollback and update subsequent data (update start at +1 date)
 #       required : True
-#       default : 20250815
+#       default : 20250814
 
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())

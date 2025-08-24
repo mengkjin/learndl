@@ -1,4 +1,4 @@
-import smtplib
+import smtplib , shutil
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -8,10 +8,14 @@ from pathlib import Path
 from typing import Literal , Any
 
 from src.project_setting import MACHINE
-from src.basic import conf as CONF
+from src.basic import PATH
+
+def email_settings():
+    return PATH.read_yaml(PATH.local_settings.joinpath('email.yaml'))
 
 class Email:
     Attachments : dict[str , list[Path]] = {}
+    Attachment_dir = PATH.local_resources.joinpath('email' , 'attachments')
     _instance = None
 
     def __new__(cls , *args , **kwargs):
@@ -20,7 +24,7 @@ class Email:
         return cls._instance
 
     def __init__(self , server : Literal['netease'] = 'netease'):
-        email_conf : dict[str , Any] = CONF.confidential('email')[server]
+        email_conf : dict[str , Any] = email_settings()[server]
         if MACHINE.name in email_conf:
             email_conf.update(email_conf[MACHINE.name])
         self.smtp_server = email_conf['smtp_server']
@@ -35,8 +39,11 @@ class Email:
         if group not in cls.Attachments:
             cls.Attachments[group] = []
         for f in attachment:
-            if Path(f) not in cls.Attachments[group]:
-                cls.Attachments[group].append(Path(f))
+            old_path = Path(f)
+            new_path = cls.Attachment_dir.joinpath(old_path.name)
+            if old_path not in cls.Attachments[group]:
+                shutil.copy(old_path , new_path)
+                cls.Attachments[group].append(new_path)
 
     def recipient(self , recipient : str | None = None):
         if recipient is None: recipient = str(self.sender)
@@ -70,7 +77,13 @@ class Email:
                 part.add_header('Content-Disposition', f'attachment; filename={attachment.name}')
                 message.attach(part)
 
+        self.clear_unused_attachments()
         return message
+    
+    def clear_unused_attachments(self):
+        attachments = [f for group in self.Attachments.values() for f in group]
+        for f in self.Attachment_dir.iterdir():
+            if f not in attachments: f.unlink()
     
     def connection(self):
         return smtplib.SMTP(self.smtp_server, self.smtp_port)
@@ -105,7 +118,7 @@ def send_email(title : str  ,
         print('not in my server , skip sending email')
         return
     
-    email_conf = CONF.confidential('email')[server]
+    email_conf = email_settings()[server]
     smtp_server = email_conf['smtp_server']
     smtp_port   = email_conf['smtp_port']
     sender      = email_conf['sender']  

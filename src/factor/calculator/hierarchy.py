@@ -3,7 +3,7 @@ import pandas as pd
 from itertools import combinations
 from typing import Any , Literal , Type
 
-from src.basic import PATH 
+from src.basic import PATH , MACHINE
 from src.func.dynamic_import import dynamic_members
 from src.func.parallel import parallel
 
@@ -34,6 +34,12 @@ class StockFactorHierarchy:
     def __getitem__(self , key : str):
         '''return a list of factor classes in a given level / or a factor class by factor_name'''
         return self.pool[key] if key in self.pool else self.hier[key]
+    
+    @classmethod
+    def export_factor_list(cls):
+        if MACHINE.server:
+            df = cls().factor_df()
+            df.to_csv(PATH.rslt_factor.joinpath('factor_list.csv'))
     
     @classmethod
     def validate_category(cls , category0 : str , category1 : str):

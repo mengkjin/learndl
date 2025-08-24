@@ -26,7 +26,7 @@ class MultiKlineUpdater:
         CALENDAR.check_rollback_date(rollback_date)
         for n_day in cls.DAYS:
             label_name = f'{n_day}day'
-            start_date = CALENDAR.td(rollback_date)
+            start_date = CALENDAR.td(rollback_date , 1)
             end_date = PATH.db_dates(DB_SRC , 'day').max()
             update_dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
             for date in update_dates: cls.update_one(date , n_day , label_name)

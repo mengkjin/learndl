@@ -58,9 +58,12 @@ def rcquant_license_check():
         return False
     return True
 
+def rcquant_settings():
+    return PATH.read_yaml(PATH.local_settings.joinpath('rcquant.yaml'))
+
 def rcquant_init():
     if not rqdatac.initialized(): 
-        rcquant_uri = CONF.confidential('rcquant')['uri']
+        rcquant_uri = rcquant_settings()['uri']
         try:
             rqdatac.init(uri = rcquant_uri)
         except QuotaExceeded as e:

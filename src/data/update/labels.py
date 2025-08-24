@@ -30,7 +30,7 @@ class ClassicLabelsUpdater:
         for days in cls.DAYS:
             for lag1 in cls.LAGS:
                 label_name = f'ret{days}' + ('_lag' if lag1 else '')
-                start_date = CALENDAR.td(rollback_date , - days - lag1)
+                start_date = CALENDAR.td(rollback_date , - days - lag1 + 1)
                 end_date = CALENDAR.td(CALENDAR.updated() , - days - lag1)
                 update_dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
                 for date in update_dates:

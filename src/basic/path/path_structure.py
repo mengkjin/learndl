@@ -32,10 +32,7 @@ conf        = main.joinpath('configs')
 # logs folder and subfolders
 logs        = main.joinpath('logs')
 log_main    = logs.joinpath('main')
-log_optuna  = logs.joinpath('optuna')
 log_update  = logs.joinpath('update')
-log_tensor  = logs.joinpath('tensorboard')
-log_record  = logs.joinpath('record')
 log_autorun = logs.joinpath('autorun')
 
 # models folder and subfolders
@@ -43,15 +40,26 @@ model       = main.joinpath('models')
 
 # results folder and subfolders
 result      = main.joinpath('results')
+rslt_train  = result.joinpath('train')
 rslt_factor = result.joinpath('test').joinpath('perf')
 rslt_optim  = result.joinpath('test').joinpath('optim')
 rslt_top    = result.joinpath('test').joinpath('top')
 rslt_trade  = result.joinpath('trade')
 
-monitor     = result.joinpath('monitor')
+# resouces folder (for update)
+resource   = main.joinpath('resources')
+bak_data   = resource.joinpath('tushare_bak_data')
+bak_record = resource.joinpath('tushare_bak_data_record')
 
-# some records to upload
-upload      = main.joinpath('upload')
+# local_resources folder
+local_resources = main.joinpath('.local_resources')
+optuna        = local_resources.joinpath('optuna')
+monitor       = local_resources.joinpath('monitor')
+tensorboard   = local_resources.joinpath('tensorboard')
+
+# local_settings folder
+local_settings = main.joinpath('.local_settings')
+
 
 def read_yaml(yaml_file : str | Path , **kwargs):
     if isinstance(yaml_file , str):

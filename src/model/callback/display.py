@@ -1,4 +1,4 @@
-import time
+import time , datetime , json
 import numpy as np
 import pandas as pd
 
@@ -63,7 +63,7 @@ class BatchDisplay(BaseCallBack):
             
 class StatusDisplay(BaseCallBack):
     '''display epoch and event information'''
-    RESULT_PATH = PATH.upload.joinpath('model_results.yaml')
+    RESULT_PATH = PATH.rslt_train.joinpath('model_results.json')
     SUMMARY_NDIGITS : ClassVar[dict[str,int]] = {'Avg':4,'Sum':2,'Std':4,'T':2,'IR':4}
 
     def __init__(self , trainer , **kwargs) -> None:
@@ -130,6 +130,7 @@ class StatusDisplay(BaseCallBack):
             '{}.{}'.format(*col):'|'.join([f'{k}({round(self.summary_df[col][k],v)})' for k,v in self.SUMMARY_NDIGITS.items() 
                                            if k in self.summary_df[col].index]) for col in self.summary_df.columns}
     
+        test_name = f'{self.config.model_name}(x{len(self.config.model_num_list)})_at_{datetime.datetime.fromtimestamp(self.record_init_time).strftime("%Y%m%d%H%M%S")}'
         result = {
             '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
             '1_start' : time.ctime(self.record_init_time) ,
@@ -141,7 +142,9 @@ class StatusDisplay(BaseCallBack):
             '7_test'  : self.record_texts.get('test'),
             '8_result': test_scores,
         }
-        PATH.dump_yaml(result , self.RESULT_PATH)
+        assert self.RESULT_PATH.suffix == '.json', 'RESULT_PATH must be a json file'
+        with open(self.RESULT_PATH, 'a') as f:
+            json.dump({test_name:result}, f, indent=4)
 
     def on_data_start(self):    self.logger.critical(self.tic_str('data'))
     def on_data_end(self):      self.logger.critical(self.toc_str('data'))

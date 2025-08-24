@@ -19,14 +19,12 @@ class FactorCalculatorAPI:
     @classmethod
     def update(cls , **kwargs):
         UPDATE_JOBS.update(**kwargs)
-        if MACHINE.server:
-            StockFactorHierarchy().factor_df().to_csv(PATH.main.joinpath('faclist.csv'))
+        StockFactorHierarchy.export_factor_list()
 
     @classmethod
     def update_rollback(cls , rollback_date : int , **kwargs):
         UPDATE_JOBS.update_rollback(rollback_date , **kwargs)
-        if MACHINE.server:
-            StockFactorHierarchy().factor_df().to_csv(PATH.main.joinpath('faclist.csv'))
+        StockFactorHierarchy.export_factor_list()
 
     @classmethod
     def fix(cls , factors : list[str] | None = None , **kwargs):

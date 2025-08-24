@@ -35,7 +35,7 @@ class AutoRunTask:
         return f'AutoRunTask(task_name = {self.task_name} , email = {self.email} , source = {self.source} , time = {self.time_str})'
 
     def __enter__(self):
-        self.already_done = self.record_path.exists()
+        self.already_done = self.completion_record_path.exists()
         # change_power_mode('balanced')
         self.dprinter.__enter__()
         self.capturer.__enter__()
@@ -66,7 +66,9 @@ class AutoRunTask:
         self.attach(self.emailer.Attachments.get('default' , []) , streamlit = True , email = False)
         if not self.forfeit_task:
             self.send_email()
-            if self.status == 'Success': self.record_path.touch()
+            if self.status == 'Success': 
+                self.completion_record_path.parent.mkdir(parents = True , exist_ok = True)
+                self.completion_record_path.touch()
         # change_power_mode('power-saver')
 
     @property
@@ -85,8 +87,8 @@ class AutoRunTask:
         return self.kwargs[key]
         
     @property
-    def record_path(self):
-        return PATH.log_record.joinpath('autorun' , f'{self.task_name}.txt')
+    def completion_record_path(self):
+        return PATH.local_resources.joinpath('runtime' , 'completed_autorun' , f'{self.task_name}.txt')
     
     @property
     def forfeit_task(self):

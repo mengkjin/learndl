@@ -10,7 +10,7 @@ CONF_DIR = BASE_DIR.joinpath("configs")
 
 _machine_name = socket.gethostname().split('.')[0]
 
-_db_dir = BASE_DIR / 'logs' / 'app' / _machine_name
+_db_dir = BASE_DIR / '.local_resources' / 'app' / _machine_name
 _db_dir.mkdir(parents=True, exist_ok=True)
 
 def get_task_db_path():

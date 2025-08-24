@@ -7,18 +7,14 @@ from .func import ts_code_to_secid
 
 class TSBackUpDataTransform():
     '''Daily Quote'''
-    BACKUP_DIR = PATH.main.joinpath('bak_data')
-    BACKUP_RECORD_DIR = PATH.main.joinpath('bak_data_record')
     REQUIRED_KEYS = ['adj_factor' , 'daily' , 'daily_basic' , 'moneyflow' , 'stk_limit']
     DB_KEYS = ['day' , 'day_val' , 'day_moneyflow' , 'day_limit']
     
-    BACKUP_DIR.mkdir(parents=True , exist_ok=True)
-    BACKUP_RECORD_DIR.mkdir(parents=True , exist_ok=True)
-
+    
     def get_bak_data(self , date : int , key : str):
         assert key in self.REQUIRED_KEYS , f'{key} is not in {self.REQUIRED_KEYS}'
         date_str = str(date)
-        record_file = self.BACKUP_DIR.joinpath(f'{key}_{date_str}.csv')
+        record_file = PATH.bak_data.joinpath(f'{key}_{date_str}.csv')
         df = pd.read_csv(record_file)
         df.columns = df.columns.str.lower()
         return df
@@ -120,10 +116,10 @@ class TSBackUpDataTransform():
                 backed_old_path.unlink()
 
     def path_record(self , date : int):
-        return self.BACKUP_RECORD_DIR.joinpath(f'{date}.backed')
+        return PATH.bak_record.joinpath(f'{date}.backed')
 
     def get_baked_dates(self):
-        return [int(file.stem) for file in self.BACKUP_RECORD_DIR.glob('*.backed')]
+        return [int(file.stem) for file in PATH.bak_record.glob('*.backed')]
 
     def get_bakable_dates(self):
         dates = CALENDAR.td_within(start_dt = CALENDAR.td(CALENDAR.updated() , 1) , end_dt = CALENDAR.update_to())
@@ -131,7 +127,7 @@ class TSBackUpDataTransform():
         return dates
     
     def bakable_date(self , date : int):
-        paths = [self.BACKUP_DIR.joinpath(f'{key}_{date}.csv') for key in self.REQUIRED_KEYS]
+        paths = [PATH.bak_data.joinpath(f'{key}_{date}.csv') for key in self.REQUIRED_KEYS]
         return all([path.exists() for path in paths])
     
     @classmethod

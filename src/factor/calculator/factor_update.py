@@ -183,7 +183,7 @@ class FactorUpdateJobManager:
     def update_rollback(cls , rollback_date : int , verbosity : int = 1 , groups_in_one_update : int | None = 100):
         CALENDAR.check_rollback_date(rollback_date)
         self = cls()
-        self.collect_jobs(start = rollback_date , overwrite = True , all_factors = True , groups_in_one_update = groups_in_one_update)
+        self.collect_jobs(start = CALENDAR.td(rollback_date , 1) , overwrite = True , all_factors = True , groups_in_one_update = groups_in_one_update)
         self.process_jobs(verbosity , overwrite = True)
 
     @classmethod
