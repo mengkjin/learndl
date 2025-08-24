@@ -38,22 +38,27 @@ class TushareFetcher(ABC):
         return f'{self.__class__.__name__}Fetcher(type={self.DB_TYPE},db={self.DB_SRC}/{self.DB_KEY},start={self.START_DATE},freq={self.UPDATE_FREQ})'
     
     def __str__(self) -> str:
-        return f'{self.__class__.__name__}Fetcher'
+        if self.__class__.__name__.lower().endswith('fetcher'):
+            name = self.__class__.__name__
+        else:
+            name = self.__class__.__name__ + 'Fetcher'
+        return f'{name}()'
 
     @abstractmethod
     def get_data(self , date : int | Any = None , date2 : int | Any = None) -> pd.DataFrame: 
         '''get required dataframe at date''' 
     @abstractmethod
-    def update_dates(self) -> list[int] | np.ndarray: ...
+    def get_update_dates(self) -> list[int] | np.ndarray: ...
 
-    def _single_update_dates(self):
+    def _info_fetcher_update_date(self):
         update_to = CALENDAR.update_to()    
         return [update_to] if updatable(self.last_date() , self.UPDATE_FREQ , update_to) else []
 
-    def _period_update_dates(self):
+
+    def _date_fetcher_update_dates(self):
         return dates_to_update(self.last_date() , self.UPDATE_FREQ) 
     
-    def _quarterly_update_dates(self , data_freq : Literal['y' , 'h' , 'q'] = 'q' , consider_future : bool = False):
+    def _fina_fetcher_update_dates(self , data_freq : Literal['y' , 'h' , 'q'] = 'q' , consider_future : bool = False):
         update_to = CALENDAR.update_to()
         update = updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
         if not update: return []
@@ -74,6 +79,7 @@ class TushareFetcher(ABC):
         PATH.db_save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
 
     def set_rollback_date(self , rollback_date : int | None = None):
+        CALENDAR.check_rollback_date(rollback_date)
         assert not hasattr(self , '_rollback_date') , 'rollback_date has been set'
         self._rollback_date = rollback_date
 
@@ -100,55 +106,59 @@ class TushareFetcher(ABC):
         if self.rollback_date: ldate = min(ldate , self.rollback_date)
         return ldate
 
-    def update(self , timeout_wait_seconds = 20 , timeout_max_retries = 20):
-        update_func = self.update_with_try_except(self.update_with_dates , timeout_wait_seconds , timeout_max_retries)
-        return update_func()
+    def update(self):
+        try:
+            self.set_rollback_date(None)
+            self.update_with_retries()
+        except Exception as e:
+            Logger.error(f'{self.__class__.__name__} update failed: {e}')
     
-    def update_rollback(self , rollback_date : int , timeout_wait_seconds = 20 , timeout_max_retries = 20):
-        CALENDAR.check_rollback_date(rollback_date)
-        self.set_rollback_date(rollback_date)
-        update_func = self.update_with_try_except(self.update_with_dates , timeout_wait_seconds , timeout_max_retries)
-        return update_func()
+    def update_rollback(self , rollback_date : int):
+        try:
+            self.set_rollback_date(rollback_date)
+            self.update_with_retries()
+        except Exception as e:
+            Logger.error(f'{self.__class__.__name__} update rollback failed: {e}')
 
-    def update_with_dates(self , dates):
+    def check_server_down(self):
         if is_tushare_server_down():
             if not getattr(self , '_print_server_down_message' , False):
                 Logger.warning(f'{self.__class__.__name__} will not update because Tushare server is down')
                 setattr(self , '_print_server_down_message' , True)
-            return
+            return True
+        return False
+
+    def update_dates(self , dates):
+        if self.check_server_down(): return
         for date in dates: self.fetch_and_save(date)
 
-    def update_with_try_except(self , func , timeout_wait_seconds = 20 , timeout_max_retries = 10):
-        def wrapper(*args , **kwargs):
-            retries = 0
-            dates = self.update_dates()
+    def update_with_retries(self , timeout_wait_seconds = 20 , timeout_max_retries = 10):
+        dates = self.get_update_dates()
 
-            if len(dates) == 0: 
-                print(f'{str(self)} has no dates to update')
+        if len(dates) == 0: 
+            print(f'{str(self)} has no dates to update')
+            return
+        
+        print(f'{str(self)} update dates {dates[0]} ~ {dates[-1]}')
+        while timeout_max_retries >= 0:
+            try:
+                self.update_dates(dates)
+            except Exception as e:
+                if '最多访问' in str(e):
+                    if timeout_max_retries <= 0: raise e
+                    Logger.warning(f'{e} , wait {timeout_wait_seconds} seconds')
+                    time.sleep(timeout_wait_seconds)
+                elif 'Connection to api.waditu.com timed out' in str(e):
+                    Logger.warning(e)
+                    set_tushare_server_down(True)
+                    self.check_server_down()
+                    raise Exception('Tushare server is down, skip today\'s update')
+                else: 
+                    raise e
             else:
-                print(f'{str(self)} update dates {dates[0]} ~ {dates[-1]}')
-            while len(dates) > 0 and retries < timeout_max_retries:
-                try:
-                    func(dates)
-                except Exception as e:
-                    if '最多访问' in str(e):
-                        if retries > timeout_max_retries: raise e
-                        Logger.warning(f'{e} , wait {timeout_wait_seconds} seconds')
-                        time.sleep(timeout_wait_seconds)
-                    elif 'Connection to api.waditu.com timed out' in str(e):
-                        Logger.warning(e)
-                        Logger.warning('Tushare server is down, skip today\'s update')
-                        setattr(self , '_print_server_down_message' , True)
-                        set_tushare_server_down(True)
-                        return
-                    else: 
-                        raise e
-                else:
-                    break
-                retries += 1
-                dates = self.update_dates()
-
-        return wrapper
+                break
+            timeout_max_retries -= 1
+            dates = self.get_update_dates()
 
     def iterate_fetch(self , fetch_func , limit = 2000 , max_fetch_times = 200 , **kwargs):
         dfs : list[pd.DataFrame] = []
@@ -173,32 +183,21 @@ class InfoFetcher(TushareFetcher):
     UPDATE_FREQ = 'd'
     DB_SRC = 'information_ts'
 
-    def update_dates(self):
-        return self._single_update_dates()
+    def get_update_dates(self):
+        return self._info_fetcher_update_date()
 
 class DateFetcher(TushareFetcher):
     DB_TYPE = 'date'
     UPDATE_FREQ = 'd'
     DB_SRC = 'trade_ts'
 
-    def update_dates(self):
-        return self._period_update_dates()
+    def get_update_dates(self): return self._date_fetcher_update_dates()
 
-class WeekFetcher(TushareFetcher):
-    DB_TYPE = 'date'
+class WeekFetcher(DateFetcher):
     UPDATE_FREQ = 'w'
-    DB_SRC = 'trade_ts'
 
-    def update_dates(self):
-        return self._period_update_dates()
-
-class MonthFetcher(TushareFetcher):
-    DB_TYPE = 'date'
+class MonthFetcher(DateFetcher):
     UPDATE_FREQ = 'm'
-    DB_SRC = 'trade_ts'
-
-    def update_dates(self):
-        return self._period_update_dates()
 
 class FinaFetcher(TushareFetcher):
     DB_TYPE = 'fina'
@@ -207,8 +206,8 @@ class FinaFetcher(TushareFetcher):
     DATA_FREQ : Literal['y' , 'h' , 'q'] = 'q'
     CONSIDER_FUTURE = False
 
-    def update_dates(self):
-        return self._quarterly_update_dates(self.DATA_FREQ , self.CONSIDER_FUTURE)
+    def get_update_dates(self):
+        return self._fina_fetcher_update_dates(self.DATA_FREQ , self.CONSIDER_FUTURE)
 
 class RollingFetcher(TushareFetcher):
     DB_TYPE = 'rolling'
@@ -224,7 +223,7 @@ class RollingFetcher(TushareFetcher):
         assert self.ROLLING_BACK_DAYS > 0 , 'ROLLING_BACK_DAYS must be positive'
         assert self.ROLLING_SEP_DAYS > 0 , 'ROLLING_BACK_DAYS must be positive'
 
-    def update_dates(self):
+    def get_update_dates(self):
         update_to = CALENDAR.update_to()
         update = updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
         if not update: return []
@@ -238,16 +237,15 @@ class RollingFetcher(TushareFetcher):
             if d >= update_to: break
         return dates
 
-    def update_with_dates(self , dates):
-        '''override TushareFetcher.update_with_dates because rolling fetcher needs to aggregate data'''
+    def update_dates(self , dates):
+        '''override TushareFetcher.update_with_dates because rolling fetcher needs get data by ROLLING_SEP_DAYS intervals'''
+        assert self.DB_TYPE == 'rolling' , f'{self.__class__.__name__} is not a rolling fetcher'
         for i in range(len(dates) - 1):
             start_dt , end_dt = CALENDAR.cd(dates[i] , 1) , dates[i+1]
-            assert self.DB_TYPE == 'rolling' , f'{self.__class__.__name__} is not a rolling fetcher'
             df = self.get_data(start_dt , end_dt)
             if df.empty: continue
             assert self.ROLLING_DATE_COL in df.columns , f'{self.ROLLING_DATE_COL} not in {df.columns}'
-            with Timer(f'DataBase object [{self.DB_SRC}],[{self.DB_KEY}],[{start_dt} to {end_dt}]'):
-                for date in df[self.ROLLING_DATE_COL].unique():
-                    subdf = df[df[self.ROLLING_DATE_COL] == date].copy()
-                    if not self.SAVEING_DATE_COL: subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
-                    PATH.db_save(subdf , self.DB_SRC , self.DB_KEY , date = date , verbose = False)
+            for date in df[self.ROLLING_DATE_COL].unique():
+                subdf = df[df[self.ROLLING_DATE_COL] == date].copy()
+                if not self.SAVEING_DATE_COL: subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
+                PATH.db_save(subdf , self.DB_SRC , self.DB_KEY , date = date , verbose = False)

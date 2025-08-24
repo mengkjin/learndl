@@ -349,12 +349,10 @@ class TradeCalendar:
         return cls.qe_within(min(incomplete_qtr_ends) , max(incomplete_qtr_ends))
     
     @classmethod
-    def earliest_rollback_date(cls):
-        return cls.td(cls.updated() , -10)
-    
-    @classmethod
-    def check_rollback_date(cls , rollback_date : int):
-        assert rollback_date >= cls.earliest_rollback_date() , \
-            f'rollback_date {rollback_date} is too early, must be at least {cls.earliest_rollback_date()}'
+    def check_rollback_date(cls , rollback_date : int | None , max_rollback_days : int = 10):
+        if rollback_date is None: return
+        earliest_rollback_date = cls.td(cls.updated() , -max_rollback_days)
+        assert rollback_date >= earliest_rollback_date , \
+            f'rollback_date {rollback_date} is too early, must be at least {earliest_rollback_date}'
 
 CALENDAR = TradeCalendar()
