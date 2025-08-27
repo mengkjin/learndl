@@ -1,5 +1,6 @@
-# Project Specific
-
+/.streamlit
+/.vscode
+/~
 
 # Windows:
 Thumbs.db
@@ -19,7 +20,7 @@ __old_version__/
 /results
 
 # temporary created files
-/src_app/app/pages/_*.py
+/src/app/main/pages/_*.py
 
 .vs/
 

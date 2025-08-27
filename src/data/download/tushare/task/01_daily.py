@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from src.data.download.tushare.basic import DateFetcher , pro , ts_code_to_secid
+from ..basic import DateFetcher , pro , ts_code_to_secid
 
 class DailyQuote(DateFetcher):
     '''Daily Quote'''

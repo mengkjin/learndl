@@ -1,9 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from typing import Any
 from src.basic import MACHINE
-from src.data.download.tushare.basic import pro , ts_code_to_secid , CALENDAR , InfoFetcher , TushareFetcher , updatable , DateFetcher
+from ..basic import pro , ts_code_to_secid , InfoFetcher , TushareFetcher , DateFetcher
 
 class FundInfo(InfoFetcher):
     DB_KEY = 'mutual_fund_info'

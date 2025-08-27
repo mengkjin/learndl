@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Any
 
-from src.data.download.tushare.basic import InfoFetcher , pro , ts_code_to_secid
+from ..basic import InfoFetcher , pro , ts_code_to_secid
  
 class Calendar(InfoFetcher):
     DB_KEY = 'calendar'

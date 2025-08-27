@@ -17,7 +17,7 @@ class InstanceRecord:
         return f'{self.__class__.__name__}({attrs})'
     
     def update_trainer(self , trainer):
-        from src.model.util.classes import BaseTrainer
+        from src.res.model.util.classes import BaseTrainer
         assert isinstance(trainer , BaseTrainer) , f'trainer is not a BaseTrainer instance: {trainer}'
         self.trainer = trainer
 
@@ -26,7 +26,7 @@ class InstanceRecord:
         self.account = account
 
     def update_factor(self , factor):
-        from src.factor.util import StockFactor
+        from src.res.factor.util import StockFactor
         assert isinstance(factor , StockFactor) , f'factor is not a StockFactor instance: {factor}'
         self.factor = factor
 

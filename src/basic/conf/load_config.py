@@ -1,5 +1,5 @@
 from typing import Literal
-from src.basic import path as PATH
+from .. import path as PATH
 
 def load(conf_type : Literal['glob' , 'schedule' , 'factor' , 'boost' , 'nn' , 'train' , 'trade'] , name : str , **kwargs):
     p = PATH.conf.joinpath(conf_type , f'{name}.yaml')

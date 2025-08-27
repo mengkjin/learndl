@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Generator
 
 from src.func.dynamic_import import dynamic_members
-from src.data.download.tushare.basic import TushareFetcher , TSBackUpDataTransform
+from ..basic import TushareFetcher , TSBackUpDataTransform
 
 class TushareDataDownloader:
     @classmethod

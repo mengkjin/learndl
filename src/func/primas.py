@@ -308,7 +308,7 @@ def neutralize_2d(y , x , dim = 1 , method = 'np' , device = None , inplace = Fa
         for i , (y_ , x_ , j_ , k_) in enumerate(zip(y , x , finite_ij , nonzero_ik)):
             if j_.sum() < 10: continue
             betas = betas_func(x_[:,k_][j_] , y_[j_])
-            y[i] -= x_[:,k_] @ betas
+            y[i] -= x_[:,k_] @ betas # type: ignore
         if isinstance(y , np.ndarray): y = torch.FloatTensor(y)
     if dim == 0: y = y.permute(1,0,2)
     y = zscore_inplace(y.squeeze_(-1) , dim = dim).to(old_device)

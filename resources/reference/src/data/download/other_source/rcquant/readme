@@ -1,0 +1,38 @@
+【量化大侦探-A 股 1 分钟频数据库使用说明】
+第一步， 安装 API
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple rqsdk
+整个安装过程持续约 5 分钟（取决于机器配置和网络状况）。如果您在 Windows 下的
+cmd 窗口运行上述命令，请在安装程序运行的时候不要用鼠标点击 cmd 窗口内，这样会
+导致程序运行暂停。如果不慎点击了，可以按一次回车键来继续运行程序。
+第二步， 安装完毕后直接在窗口中输入 rqsdk 命令，如果安装成功会输出下列内容：
+第三步， 配置许可证， 输入 rqsdk license， 然后复制粘贴以下内容：
+Yw0JuxNVTQxg2SeG2AqCZbzwRv0bA1POnhdGSwchH5QO083THg4rOCUNYd0B1EBoAssJn6QIgioFPq5HQtCHG1kXY7u7p_k1MRhtoWpoMamSV8Kjf987xLaXOOpjU-SGtqd0ByYP1dSaOJgTYhaAjmIR-UIJuD7EnLI25HqB8Po=XOVMOBxLLTDhykcQmCeO8InwqY1ujZiXLBCOEv6XFXTC4_8vp5G7KiH2oS2UqbKk13UNsmSFqy3p_3fvff7zVTdCYIwelXkEvkEuP1S_yfYAkDW5z0nsM9aYEDl8-VzB5Jgug0j4dBgGhBXYC4VWWW2L2tK78AvmyLAkMZQAX8Q=
+第四步， 安装 API 必须的程序包， 输入 rqsdk install rqdatac 到命令行， 完成安装。
+通过以上步骤即可完成 API 的安装。 因为每日提取数据量有限， 请您参考以下代码， 按日来
+提取分钟数据。 尽量同一天不要提取超过 20 个交易日， 否则会导致当天无法提取数据。
+【DEMO-按日提取分钟数据】
+import rqdatac
+rqdatac.init()
+date = '20241106'
+def code_map(x):
+x = x.split('.')[0]
+if x[:1] in ['3', '0']:y = x+'.SZ'
+elif x[:1] in ['6']:
+y = x+'.SH'
+else:
+y = x
+return y
+stock_list = rqdatac.all_instruments(type='CS', date=date)
+stock_list = sorted(set(stock_list.loc[stock_list['status']=='Active', 'order_book_id']))
+data = rqdatac.get_price(stock_list, start_date=date, end_date=date, frequency='1m',
+expect_df=True).reset_index()
+cols_map = {'order_book_id':'证券代码', 'datetime':'日期', 'open':'开盘价', 'high':'最高价',
+'low':'最低价',
+'close':' 收 盘 价 ', 'volume':' 成 交 量 ', 'total_turnover':' 成 交 金 额 ',
+'num_trades':'成交笔数'}
+data.columns = data.columns.map(cols_map)
+data['证券代码'] = data['证券代码'].map(code_map)
+data['时间'] = data['日期'].map(lambda x: x.strftime('%H:%M:%S'))
+data['日期'] = data['日期'].map(lambda x: x.strftime('%Y%m%d'))
+data = data.loc[:, ['证券代码', '日期', '时间', '开盘价', '最高价', '最低价', '收盘价', '成交量', '
+成交金额', '成交笔数']]

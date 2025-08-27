@@ -64,7 +64,7 @@ class ModelPath:
     def model_submodels(self):
         return self.sub_dirs(self.archive(self.model_nums[-1] , self.model_dates[-1]) , as_int = False)
     def load_config(self):
-        from src.model.util.config import TrainConfig
+        from src.res.model.util.config import TrainConfig
         return TrainConfig.load(self.base)
     def next_model_date(self):
         from src.basic.util.calendar import CALENDAR

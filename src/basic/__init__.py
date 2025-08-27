@@ -1,5 +1,5 @@
 from pathlib import Path
-from src.project_setting import *
+from ..project_setting import *
 
 from . import path as PATH
 from . import conf as CONF

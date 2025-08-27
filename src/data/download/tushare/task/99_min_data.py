@@ -1,6 +1,6 @@
 import tushare as ts
 
-from src.data.download.tushare.basic import pro
+from ..basic import pro
 
 if __name__ == '__main__':
     df = ts.pro_bar(ts_code='600000.SH', api = pro , freq='1min', 

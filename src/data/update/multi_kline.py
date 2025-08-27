@@ -1,8 +1,6 @@
 import pandas as pd
 import numpy as np
 
-from typing import Any
-
 from src.basic import PATH , CALENDAR
 
 DB_SRC = 'trade_ts'

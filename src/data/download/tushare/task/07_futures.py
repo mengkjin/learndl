@@ -1,10 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from typing import Any
 
 from src.basic import MACHINE
-from src.data.download.tushare.basic import pro , InfoFetcher , DateFetcher
+from ..basic import pro , InfoFetcher , DateFetcher
 
 class FuturesCalendar(InfoFetcher):
     DB_KEY = 'futures_calendar'

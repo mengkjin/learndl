@@ -1,9 +1,4 @@
-import numpy as np
-import pandas as pd
-
-from typing import Any
-
-from src.data.download.tushare.basic import RollingFetcher , pro , ts_code_to_secid
+from ..basic import RollingFetcher , pro , ts_code_to_secid
 
 class AnalystReport(RollingFetcher):
     '''analyst report'''

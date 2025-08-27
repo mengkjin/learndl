@@ -1,7 +1,6 @@
 import pandas as pd
-import numpy as np
 
-from typing import Any , Literal , Optional
+from typing import Optional
 
 from src.basic import PATH , CALENDAR
 from src.data.loader import TRADE , RISK

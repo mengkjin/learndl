@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal , Any
 
 from src.project_setting import MACHINE
-from src.basic import PATH
+from src.basic import path as PATH
 
 def email_settings():
     return PATH.read_yaml(PATH.local_settings.joinpath('email.yaml'))

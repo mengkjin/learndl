@@ -1,0 +1,26 @@
+#! /usr/bin/env python3.10
+# coding: utf-8
+# author: jinmeng
+# date: 2025-01-02
+# description: pull only
+# content: 自动拉取最新代码
+# email: False
+# mode: shell
+
+import sys , pathlib
+file_path = str(pathlib.Path(__file__).absolute())
+assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
+path = file_path.removesuffix(file_path.split('learndl')[-1])
+if not path in sys.path: sys.path.append(path)
+
+import subprocess 
+from src.app import BackendTaskRecorder
+
+@BackendTaskRecorder()
+def main(**kwargs):
+    subprocess.run("git pull", shell=True, check=True)
+
+    return 'Finish pull'
+
+if __name__ == '__main__':
+    main()

@@ -61,7 +61,7 @@ class FactorLoader:
     category1  : str
 
     def __post_init__(self):
-        from src.factor.calculator import StockFactorHierarchy
+        from src.res.factor.calculator import StockFactorHierarchy
         self.hier = StockFactorHierarchy()
         self.hier.validate_category(self.category0 , self.category1)
     

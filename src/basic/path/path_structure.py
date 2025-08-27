@@ -60,6 +60,7 @@ tensorboard   = local_resources.joinpath('tensorboard')
 # local_settings folder
 local_settings = main.joinpath('.local_settings')
 
+factor_definition = main.joinpath('src' , 'res' , 'facdef')
 
 def read_yaml(yaml_file : str | Path , **kwargs):
     if isinstance(yaml_file , str):
