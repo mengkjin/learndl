@@ -53,7 +53,7 @@ def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     df.to_feather(path)
 
 def rcquant_license_check():
-    if 'rcquant.yaml' not in [p.name for p in PATH.conf.joinpath('confidential').rglob('*.yaml')]:
+    if 'rcquant.yaml' not in [p.name for p in PATH.local_settings.rglob('*.yaml')]:
         Logger.info(f'rcquant login info not found, please check configs/confidential/rcquant.yaml')
         return False
     return True
