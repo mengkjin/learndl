@@ -125,8 +125,9 @@ class ModelPortfolioBuilder:
         last_model_dates = self.account_last_model_dates(update_fmp_names)
         account_dates = [date for date in self.reg_model.fmp_dates if date >= min(list(last_model_dates.values()))]
         if len(account_dates) == 0: return
-
+        print(account_dates)
         all_fmp_dfs = pd.concat([self.reg_model.load_fmp(date) for date in account_dates])
+        print(all_fmp_dfs)
         alpha_model = self.alpha_model(account_dates)
 
         for fmp_name in update_fmp_names:

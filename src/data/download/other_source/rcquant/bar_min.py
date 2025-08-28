@@ -52,20 +52,17 @@ def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path.parent.mkdir(exist_ok=True , parents=True)
     df.to_feather(path)
 
-def rcquant_license_check():
-    if 'rcquant.yaml' not in [p.name for p in PATH.local_settings.rglob('*.yaml')]:
-        Logger.info(f'rcquant login info not found, please check configs/confidential/rcquant.yaml')
-        return False
-    return True
-
-def rcquant_settings():
-    return PATH.read_yaml(PATH.local_settings.joinpath('rcquant.yaml'))
+def rcquant_license_path():
+    return PATH.local_settings.joinpath('rcquant.yaml')
 
 def rcquant_init():
     if not rqdatac.initialized(): 
-        rcquant_uri = rcquant_settings()['uri']
         try:
+            rcquant_uri = PATH.read_yaml(rcquant_license_path())['uri']
             rqdatac.init(uri = rcquant_uri)
+        except FileNotFoundError as e:
+            Logger.error(f'rcquant login info not found, please check .local_settings/rcquant.yaml')
+            return False
         except QuotaExceeded as e:
             Logger.warning(f'rcquant init failed: {e}')
             return False
@@ -132,9 +129,7 @@ def rcquant_trading_dates(start_date, end_date):
     if not rcquant_init(): return []
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
 
-def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
-    if not rcquant_license_check(): return False
-    
+def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):    
     def code_map(x : str):
         if data_type != 'sec': return x
         x = x.split('.')[0]
@@ -204,7 +199,6 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
     return True
 
 def rcquant_proceed(date : int | None = None , first_n : int = -1):
-    if not rcquant_license_check(): return False
 
     data_types : list[DATA_TYPES] = ['sec' , 'etf' , 'fut' , 'cb']
     for data_type in data_types:

@@ -89,6 +89,9 @@ class PortfolioAccountant:
     
     def setup(self):
         assert self.config is not None , 'config is not set'
+        if len(self.port_dates) == 0:
+            raise ValueError('No portfolio dates to account!')
+        
         port_min , port_max = self.port_dates.min() , self.port_dates.max()
         start = np.max([port_min , self.config.start])
         end   = np.min([DATAVENDOR.td(port_max,5).td , self.config.end , DATAVENDOR.td(DATAVENDOR.last_quote_dt,-1).td])
