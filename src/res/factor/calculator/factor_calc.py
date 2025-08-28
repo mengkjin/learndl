@@ -3,6 +3,7 @@ import pandas as pd
 
 from abc import abstractmethod
 from typing import Any , Literal
+from pathlib import Path
 
 from ..util import StockFactor
 
@@ -138,12 +139,12 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     @classproperty_str
     def level(cls) -> str:
         '''level of the factor'''
-        return 'level' + cls.__module__.replace('\\' , '/').split('/level')[-1].split('/')[0]
+        return 'level' + Path(cls.__module__.split('level')[-1]).parts[0]
     
     @classproperty_str
     def file_name(cls) -> str:
         '''file name of the factor'''
-        return '/'.join(cls.__module__.replace('\\' , '/').split('level')[-1].split('/')[1:]).removesuffix('.py')
+        return '/'.join(Path(cls.__module__.split('level')[-1]).parts[1:]).removesuffix('.py')
     
     @classproperty_str
     def factor_string(cls):

@@ -3,17 +3,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-DEFAULT_EXCLUDES = ['kernel_interrupt_daemon.py']
+from src.project_setting import MACHINE
 
-def python_path():
-    if platform.system() == 'Linux' and os.name == 'posix':
-        return 'python3.10'
-    elif platform.system() == 'Darwin':
-        return '/Users/mengkjin/workspace/learndl/.venv/bin/python'
-    elif platform.system() == 'Windows':
-        return 'E:/workspace/learndl/.venv/Scripts/python.exe'
-    else:
-        return 'python'
+DEFAULT_EXCLUDES = ['kernel_interrupt_daemon.py']
 
 def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py']):
     running_scripts : list[Path] = []
@@ -88,7 +80,7 @@ class ScriptCmd:
         self.mode = mode
 
         args_str = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in self.params.items() if v != ''])
-        py_cmd = f'{python_path()} {self.script} {args_str}'
+        py_cmd = f'{MACHINE.python_path} {self.script} {args_str}'
         self.py_cmd = py_cmd
         self.os_cmd = shlex.split(py_cmd)
         if platform.system() == 'Linux' and os.name == 'posix':
@@ -146,7 +138,7 @@ def terminal_cmd_old(script : str | Path , params : dict | None = None , close_a
     params = params or {}
     if isinstance(script , Path): script = str(script.absolute())
     args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in params.items() if v != ''])
-    cmd = f'{python_path()} {script} {args}'
+    cmd = f'{MACHINE.python_path} {script} {args}'
     if platform.system() == 'Linux' and os.name == 'posix':
         if not close_after_run: cmd += '; exec bash'
         cmd = f'gnome-terminal -- bash -c "{cmd}"'
@@ -170,7 +162,7 @@ def get_task_id_from_cmd(cmd : str):
 
 def get_real_pid(process : subprocess.Popen , cmd : str):
     task_id = get_task_id_from_cmd(cmd)
-    script_name = cmd.split('.py')[0].replace('\\', '/').split('/')[-1] + '.py'
+    script_name = os.path.basename(cmd.split('.py')[0].split(' ')[-1]) + '.py'
     if (platform.system() == 'Linux' and os.name == 'posix') or (platform.system() == 'Darwin'):
         return find_python_process_by_name(script_name , task_id = task_id)
     elif platform.system() == 'Windows':

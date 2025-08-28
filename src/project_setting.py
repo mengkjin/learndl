@@ -1,5 +1,5 @@
 # please check this path before running the code
-import sys , socket , torch
+import sys , socket
 from pathlib import Path
 
 class MachineSetting:
@@ -26,11 +26,6 @@ class MachineSetting:
         assert Path(self.project_path).exists() , f'MAIN_PATH not exists: {self.project_path}'
         assert Path(__file__).is_relative_to(Path(self.project_path)) , f'{__file__} is not in {self.project_path}'
         sys.path.append(self.project_path)
-        print(f'main path: {self.project_path}')
-        if torch.cuda.is_available():
-            print(f'Use device name: ' + torch.cuda.get_device_name(0))
-        elif self.server:
-            print('server should have cuda , please check the cuda status')
         return self
     
     @property
@@ -59,5 +54,14 @@ class MachineSetting:
     @property
     def hfm_factor_dir(self): # perform rcode transfer
         return Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha') if self.belong_to_hfm else None
+    
+    @property
+    def python_path(self):
+        if self.name in ['Mathews-Mac' , 'HST-jinmeng']:
+            return self.project_path + '/.venv/bin/python'
+        elif self.name in ['mengkjin-server']:
+            return 'python3.10'
+        else:
+            return 'python'
 
 MACHINE = MachineSetting.select_machine()

@@ -64,12 +64,12 @@ class PathItem:
     @property
     def format_path(self):
         return ' > '.join(re.sub(r'^\d+ ', '', p).title() 
-                          for p in self.script_key.removesuffix('.py').replace('_', ' ').replace('\\', '/').split('/'))
+                          for p in Path(self.script_key.replace('_', ' ')).with_suffix('').parts)
 
     @classmethod
     def from_key(cls , script_key : str , base_dir = SCPT_DIR):
-        components = script_key.replace('\\' , '/').split('/')
-        return PathItem(base_dir.joinpath(*components) , len(components) - 1)
+        parts = Path(script_key).parts
+        return PathItem(base_dir.joinpath(*parts) , len(parts) - 1)
 
 @dataclass
 class ScriptHeader:
@@ -203,12 +203,12 @@ class ScriptRunner:
     
     @property
     def script_group(self):
-        return re.sub(r'^\d+_', '', self.script_key.replace('\\', '/').split('/')[0]).lower()
+        return re.sub(r'^\d+_', '', Path(self.script_key).parts[0]).lower()
     
     @property
     def format_path(self):
         return ' > '.join(re.sub(r'^\d+ ', '', p).title() 
-                          for p in self.script_key.removesuffix('.py').replace('_', ' ').replace('\\', '/').split('/'))
+                          for p in Path(self.script_key.replace('_', ' ')).with_suffix('').parts)
     
     @property
     def path_parts(self):

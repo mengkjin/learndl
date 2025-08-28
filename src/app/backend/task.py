@@ -623,7 +623,7 @@ class TaskItem:
     @property
     def format_path(self):
         return ' > '.join(re.sub(r'^\d+ ', '', p).title() 
-                          for p in self.script_key.removesuffix('.py').replace('_', ' ').replace('\\', '/').split('/'))
+                          for p in Path(self.script_key.replace('_', ' ')).with_suffix('').parts)
 
     def belong_to(self , script_runner):
         return self.script == str(script_runner.script)

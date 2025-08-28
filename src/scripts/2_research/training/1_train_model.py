@@ -33,7 +33,7 @@ from src.app import BackendTaskRecorder
 @BackendTaskRecorder()
 def main(**kwargs):
     with AutoRunTask('train model' , **kwargs) as runner:
-        module = runner.get('module_name').replace('\\', '/').split('/')[-1]
+        module = pathlib.Path(runner.get('module_name')).parts[-1]
         trainer = ModelAPI.train_model(module = module , short_test = runner.get('short_test'))
         runner.attach(trainer.result_package)
         runner.critical(f'Train model at {runner.update_to} completed')

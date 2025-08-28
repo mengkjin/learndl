@@ -96,7 +96,7 @@ def runs_page_url(script_key : str):
 
 def runs_page_path(script_key : str):
     """get runs page path"""
-    return PAGE_DIR.joinpath(runs_page_url(script_key).replace('\\', '/').split('/')[-1])
+    return PAGE_DIR.joinpath(Path(runs_page_url(script_key)).parts[-1])
 
 def make_script_detail_file(item : PathItem):
     """make script detail file"""
