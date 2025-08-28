@@ -1,8 +1,9 @@
+# do not use relative import in this file because it will be running in top-level directory
 import numpy as np
 import pandas as pd
 
 from src.basic import MACHINE
-from ..basic import pro , ts_code_to_secid , InfoFetcher , TushareFetcher , DateFetcher
+from src.data.download.tushare.basic import pro , ts_code_to_secid , InfoFetcher , TushareFetcher , DateFetcher
 
 class FundInfo(InfoFetcher):
     DB_KEY = 'mutual_fund_info'

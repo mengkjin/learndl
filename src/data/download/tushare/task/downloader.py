@@ -1,8 +1,9 @@
+# do not use relative import in this file because it will be running in top-level directory
 from pathlib import Path
 from typing import Generator
 
 from src.func.dynamic_import import dynamic_members
-from ..basic import TushareFetcher , TSBackUpDataTransform
+from src.data.download.tushare.basic import TushareFetcher , TSBackUpDataTransform
 
 class TushareDataDownloader:
     @classmethod

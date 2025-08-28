@@ -258,7 +258,12 @@ class PortfolioAccountManager:
         return self
     
     def load_dir(self , append = True):
-        [self.load_single(path , append = append) for path in self.account_dir.iterdir() if path.suffix == '.pkl']
+        try:
+            [self.load_single(path , append = append) for path in self.account_dir.iterdir() if path.suffix == '.pkl']
+        except ModuleNotFoundError as e:
+            print(f'ModuleNotFoundError loading accounts: {e}')
+            print('Most likely you have changed the package folder structure. Clear the accounts folder and try again.')
+            [path.unlink() for path in self.account_dir.iterdir() if path.suffix == '.pkl']
         return self
     
     def deploy(self , fmp_names : list[str] | None = None , overwrite = False):

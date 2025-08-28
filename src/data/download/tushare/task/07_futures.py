@@ -1,9 +1,9 @@
+# do not use relative import in this file because it will be running in top-level directory
 import numpy as np
 import pandas as pd
 
-
 from src.basic import MACHINE
-from ..basic import pro , InfoFetcher , DateFetcher
+from src.data.download.tushare.basic import pro , InfoFetcher , DateFetcher
 
 class FuturesCalendar(InfoFetcher):
     DB_KEY = 'futures_calendar'

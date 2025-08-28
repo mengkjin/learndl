@@ -10,7 +10,9 @@ class DailyQuote(DateFetcher):
         date_str = str(date)
         adj = pro.query('adj_factor',  trade_date=date_str).rename(columns={'adj_factor':'adjfactor'})
 
-        quote = pro.daily(trade_date=date_str).rename(columns={'pct_chg':'pctchange','pre_close':'preclose','vol':'volume'})
+        quote = pro.daily(trade_date=date_str)
+        if quote.empty: return quote
+        quote = quote.rename(columns={'pct_chg':'pctchange','pre_close':'preclose','vol':'volume'})
         quote['volume'] = quote['volume'] / 10. # to 10^3
         quote['vwap'] = np.where(quote['volume'] == 0 , quote['close'] , quote['amount'] / quote['volume'])
 

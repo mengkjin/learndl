@@ -13,7 +13,7 @@ from src.res.factor.fmp import PortfolioBuilder
 class ModelPortfolioBuilder:
     FMP_TYPES  = ['top' , 'optim']
     SUB_TYPES  = ['indep' , 'conti'] # independent and continuous portfolios
-    N_BESTS    = [-1 , 20 , 30 , 50 , 100]
+    N_BESTS    = [-1 , 50]
     BENCHMARKS = Benchmark.DEFAULTS
 
     def __init__(self , reg_model : RegisteredModel):

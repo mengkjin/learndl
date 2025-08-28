@@ -1,9 +1,10 @@
+# do not use relative import in this file because it will be running in top-level directory
 import numpy as np
 import pandas as pd
 
 from typing import Any
 
-from ..basic import InfoFetcher , pro , ts_code_to_secid
+from src.data.download.tushare.basic import InfoFetcher , pro , ts_code_to_secid
  
 class Calendar(InfoFetcher):
     DB_KEY = 'calendar'

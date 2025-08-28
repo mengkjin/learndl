@@ -10,6 +10,8 @@ def python_path():
         return 'python3.10'
     elif platform.system() == 'Darwin':
         return '/Users/mengkjin/workspace/learndl/.venv/bin/python'
+    elif platform.system() == 'Windows':
+        return 'E:/workspace/learndl/.venv/Scripts/python.exe'
     else:
         return 'python'
 
@@ -168,7 +170,7 @@ def get_task_id_from_cmd(cmd : str):
 
 def get_real_pid(process : subprocess.Popen , cmd : str):
     task_id = get_task_id_from_cmd(cmd)
-    script_name = cmd.split('.py')[0].split('/')[-1] + '.py'
+    script_name = cmd.split('.py')[0].replace('\\', '/').split('/')[-1] + '.py'
     if (platform.system() == 'Linux' and os.name == 'posix') or (platform.system() == 'Darwin'):
         return find_python_process_by_name(script_name , task_id = task_id)
     elif platform.system() == 'Windows':

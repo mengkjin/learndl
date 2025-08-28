@@ -1,5 +1,6 @@
+# do not use relative import in this file because it will be running in top-level directory
 from src.basic import MACHINE
-from ..basic import pro , InfoFetcher , DateFetcher
+from src.data.download.tushare.basic import pro , InfoFetcher , DateFetcher
 
 class ConvertibleBasic(InfoFetcher):
     DB_KEY = 'cb_basic'

@@ -63,7 +63,8 @@ class PathItem:
     
     @property
     def format_path(self):
-        return ' > '.join(re.sub(r'^\d+ ', '', p).title() for p in self.script_key.removesuffix('.py').replace('_', ' ').split('/'))
+        return ' > '.join(re.sub(r'^\d+ ', '', p).title() 
+                          for p in self.script_key.removesuffix('.py').replace('_', ' ').replace('\\', '/').split('/'))
 
     @classmethod
     def from_key(cls , script_key : str , base_dir = SCPT_DIR):
@@ -202,11 +203,12 @@ class ScriptRunner:
     
     @property
     def script_group(self):
-        return re.sub(r'^\d+_', '', self.script_key.split('/')[0]).lower()
+        return re.sub(r'^\d+_', '', self.script_key.replace('\\', '/').split('/')[0]).lower()
     
     @property
     def format_path(self):
-        return ' > '.join(re.sub(r'^\d+ ', '', p).title() for p in self.script_key.removesuffix('.py').replace('_', ' ').split('/'))
+        return ' > '.join(re.sub(r'^\d+ ', '', p).title() 
+                          for p in self.script_key.removesuffix('.py').replace('_', ' ').replace('\\', '/').split('/'))
     
     @property
     def path_parts(self):

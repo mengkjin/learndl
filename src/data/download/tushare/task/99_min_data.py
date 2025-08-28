@@ -1,6 +1,7 @@
+# do not use relative import in this file because it will be running in top-level directory
 import tushare as ts
 
-from ..basic import pro
+from src.data.download.tushare.basic import pro
 
 if __name__ == '__main__':
     df = ts.pro_bar(ts_code='600000.SH', api = pro , freq='1min', 

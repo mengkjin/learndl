@@ -84,7 +84,7 @@ class JSFetcher:
     def basic_info(cls , key = None , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get basic info data from R environment , basic_info('concepts')'''
         if key is None: raise KeyError(key) 
-        key = key.split('/')[-1]
+        key = key.replace('\\', '/').split('/')[-1]
         d_entrm = {'entry_dt'  : {'fillna' : -1 , 'astype' : int} , 
                    'remove_dt' : {'fillna' : 99991231 , 'astype' : int}}
         params = {

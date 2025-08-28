@@ -1,4 +1,5 @@
-from ..basic import RollingFetcher , pro , ts_code_to_secid
+# do not use relative import in this file because it will be running in top-level directory
+from src.data.download.tushare.basic import RollingFetcher , pro , ts_code_to_secid
 
 class AnalystReport(RollingFetcher):
     '''analyst report'''

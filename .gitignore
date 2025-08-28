@@ -1,6 +1,7 @@
 /.streamlit
 /.vscode
 /~
+.python-version
 
 # Windows:
 Thumbs.db
@@ -34,6 +35,7 @@ __old_version__/
 *.parquet
 *.tar
 *.backed
+*.lock
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

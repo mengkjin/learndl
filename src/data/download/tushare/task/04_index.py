@@ -1,6 +1,7 @@
+# do not use relative import in this file because it will be running in top-level directory
 import pandas as pd
 
-from ..basic import InfoFetcher , DateFetcher , MonthFetcher , RollingFetcher , pro , ts_code_to_secid
+from src.data.download.tushare.basic import InfoFetcher , DateFetcher , MonthFetcher , RollingFetcher , pro , ts_code_to_secid
 
 def index_weight_get_data(self : RollingFetcher , index_code , start_dt , end_dt , limit = 4000):
     assert start_dt is not None and end_dt is not None , 'start_dt and end_dt must be provided'
