@@ -75,7 +75,7 @@ class PortfolioBuilder:
     @classmethod
     def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Optional[Portfolio] = None , verbosity : int = 1 , **kwargs):
         elements = parse_full_name(full_name)
-        assert alpha.name == elements['factor_name'] , f'Alpha name mismatch: {alpha.name} != {elements["factor_name"]}'
+        assert alpha.name.lower() == elements['factor_name'].lower() , f'Alpha name mismatch: {alpha.name} != {elements["factor_name"]}'
         return cls(alpha = alpha , build_on = build_on , verbosity = verbosity , **elements , **kwargs)
     
     @staticmethod

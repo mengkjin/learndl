@@ -24,7 +24,8 @@ def get_method(method , max_workers : int = MAX_WORKERS) -> int:
         raise ValueError(f'method should be int or str , but got {type(method)}')
 
 def parallel(func : Callable , args : Iterable , keys : Optional[Iterable] = None , 
-             method : str | int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , max_workers = MAX_WORKERS , ignore_error = False):
+             method : str | int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , 
+             max_workers = MAX_WORKERS , ignore_error = False):
     method = get_method(method , max_workers)
     result : dict[Any , Any] = {}
     iterance = enumerate(args) if keys is None else zip(keys , args)

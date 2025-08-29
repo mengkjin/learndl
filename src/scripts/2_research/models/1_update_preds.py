@@ -19,7 +19,7 @@ from src.app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
-    with AutoRunTask('update preds' , **kwargs) as runner:
+    with AutoRunTask('update_preds' , **kwargs) as runner:
         ModelAPI.update_preds() 
         runner.critical(f'Update preds at {runner.update_to} completed')
 

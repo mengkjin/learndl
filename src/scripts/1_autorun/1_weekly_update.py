@@ -20,7 +20,7 @@ from src.app import BackendTaskRecorder , ScriptLock
 @BackendTaskRecorder(email = 1)
 @ScriptLock('weekly_update' , timeout = 1 , wait_time = 60)
 def main(**kwargs):
-    with AutoRunTask(f'weekly update {CALENDAR.update_to()}' , **kwargs) as runner:
+    with AutoRunTask('weekly_update' , CALENDAR.update_to() , **kwargs) as runner:
         if not MACHINE.server:
             runner.error(f'{MACHINE.name} is not a server, skip weekly update')
         elif runner.forfeit_task:

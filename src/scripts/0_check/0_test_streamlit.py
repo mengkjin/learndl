@@ -53,7 +53,8 @@ from src.app import BackendTaskRecorder , ScriptLock
 @BackendTaskRecorder(txt = 'Bye, World!' , email = 0)
 @ScriptLock('test_streamlit' , timeout = 10)
 def main(txt : str = 'Hello, World!' , **kwargs):
-    with AutoRunTask(f'test streamlit' , **kwargs) as runner:
+    port_name = kwargs.pop('port_name')
+    with AutoRunTask('test_streamlit' , port_name , **kwargs) as runner:
         runner.info(str(kwargs))
         runner.info(f'info:{txt}')
         runner.warning(f'warning:{txt}')

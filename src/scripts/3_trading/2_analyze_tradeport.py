@@ -32,7 +32,7 @@ from src.app import BackendTaskRecorder
 @BackendTaskRecorder()
 def main(**kwargs):
     port_name = kwargs.pop('port_name')
-    with AutoRunTask(f'analyze trading portfolio [{port_name}]' , **kwargs) as runner:
+    with AutoRunTask(f'analyze_tradeport' , port_name , **kwargs) as runner:
         TradingAPI.Analyze(port_name = port_name, start = runner.get('start') , end = runner.get('end'))
         runner.critical(f'Analyze trading portfolio [{port_name}] at {runner.update_to} completed')
     return runner

@@ -25,7 +25,7 @@ from src.app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
-    with AutoRunTask('update factors' , **kwargs) as runner:
+    with AutoRunTask('update_factors' , **kwargs) as runner:
         FactorCalculatorAPI.update(groups_in_one_update=int(kwargs.pop('num')))
         runner.critical(f'Update factors at {runner.update_to} completed')
 

@@ -19,7 +19,7 @@ from src.app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
-    with AutoRunTask('update trading portfolios' , **kwargs) as runner:
+    with AutoRunTask('update_tradeports' , **kwargs) as runner:
         TradingAPI.update()
         runner.critical(f'Update trading portfolios at {runner.update_to} completed')
     return runner

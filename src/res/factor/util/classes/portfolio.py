@@ -13,7 +13,7 @@ class Portfolio:
     '''
 
     def __init__(self , name : str | Any = None) -> None:
-        self.name = self.get_object_name(name)
+        self._name = self.get_object_name(name)
         self.ports : dict[int,Port] = {}
         self.is_default = name is None
         self.weight_block_completed = False
@@ -27,6 +27,8 @@ class Portfolio:
         assert date == port.date , (date , port.date)
         self.append(port , True)
     def copy(self): return deepcopy(self)
+    @property
+    def name(self): return self._name.lower()
 
     @property
     def port_date(self): return np.array(list(self.ports.keys()))
@@ -47,7 +49,7 @@ class Portfolio:
         return self.weight
         
     def append(self , port : Port , override = False , ignore_name = False):
-        assert ignore_name or port.name in ['none' , 'empty'] or str(self.name).lower() == str(port.name).lower() , (self.name , port.name)
+        assert ignore_name or port.name in ['none' , 'empty'] or self.name == port.name , (self.name , port.name)
         assert override or (port.date not in self.ports.keys()) , (port.name , port.date)
         if port.is_emtpy(): return
         self.ports[port.date] = port
@@ -76,7 +78,7 @@ class Portfolio:
     def get_object_name(cls , obj : str | Any | None) -> str:
         if obj is None: return 'none'
         elif isinstance(obj , cls): return obj.name
-        elif isinstance(obj , str): return obj.lower()
+        elif isinstance(obj , str): return obj
         else: raise TypeError(obj)
 
     @classmethod
@@ -86,12 +88,15 @@ class Portfolio:
         assert all(col in df.columns for col in ['name' , 'date' , 'secid' , 'weight']) , \
             f'expect columns: name , date , secid , weight , got {df.columns.tolist()}'
         if 'value' not in df.columns: df['value'] = 1
+        assert df['name'].str.lower().nunique() == df['name'].nunique() , \
+            f'duplicate names in dataframe considering case: {df["name"].unique()}'
+        df['name'] = df['name'].str.lower()
 
-        if name is None: 
+        if name is None:
             assert df['name'].nunique() == 1 , f'all ports must have the same name , got multiple names: {df["name"].unique()}'
             name = df['name'].iloc[0]
         else:
-            df = df[df['name'] == name]
+            df = df[df['name'] == name.lower()]
         
         portfolio = cls(name)
         for date , subdf in df.groupby('date'):
@@ -122,7 +127,7 @@ class Portfolio:
         return self
     
     def rename(self , new_name : str):
-        self.name = new_name
+        self._name = new_name
         for port in self.ports.values(): port.rename(new_name)
         return self
 

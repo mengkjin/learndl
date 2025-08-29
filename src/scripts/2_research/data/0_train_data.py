@@ -19,7 +19,7 @@ from src.app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
-    with AutoRunTask('reconstruct train data' , **kwargs) as runner:
+    with AutoRunTask('reconstruct_train_data' , **kwargs) as runner:
         DataAPI.reconstruct_train_data(confirm = 1)
         runner.critical(f'Reconstruct train data at {runner.update_to} completed')
 

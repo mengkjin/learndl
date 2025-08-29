@@ -19,7 +19,7 @@ class Port:
             port = port.groupby('secid')['weight'].sum().reset_index()
         self.port = port[port['weight'] != 0]
         self.date = date
-        self.name = name
+        self._name = name
         self.value = value
         self.sort()
     def __len__(self): return len(self.port)
@@ -31,9 +31,11 @@ class Port:
     def __rmul__(self , other):  return self.rescale(other)
     def __truediv__(self , other): return self.rescale(1 / other)
     def __sub__(self , other): return self.merge(other * -1.)
+    @property
+    def name(self): return self._name.lower()
 
     def with_name(self , name : str):
-        self.name = name
+        self._name = name
         return self
 
     @property
@@ -152,7 +154,7 @@ class Port:
     def short_position(self): return -self.port[self.port['weight'] < 0]['weight'].sum()
     def copy(self): return deepcopy(self)
     def rename(self , new_name : str):
-        self.name = new_name
+        self._name = new_name
         return self
     def rescale(self , scale = 1. , inplace = False): 
         new = self if inplace else self.copy()
@@ -167,7 +169,7 @@ class Port:
     def merge(self , another , name = None , inplace = False):
         assert isinstance(another , Port) , another
         new = self if inplace else self.copy()
-        if name is not None: new.name = name
+        if name is not None: new.with_name(name)
         if not new.is_emtpy() and not another.is_emtpy():
             combined = pd.concat([new.port, another.port], ignore_index=True).groupby('secid', as_index=False)['weight'].sum()
         elif new.is_emtpy():

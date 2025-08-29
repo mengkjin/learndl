@@ -7,7 +7,7 @@ from src.app.backend.task import TaskItem
 class ParamInputsForm:
     def __init__(self , runner : ScriptRunner , target : dict[str, Any] , item : TaskItem | None = None):
         self.runner = runner
-        self.param_list = [self.WidgetParamInput(runner, p) for p in runner.header.get_param_inputs()]
+        self.param_dict = {p.name:self.WidgetParamInput(runner, p) for p in runner.header.get_param_inputs()}
         self.errors = []
         self.trigger_item = item
         self.target = target
@@ -114,9 +114,9 @@ class ParamInputsForm:
         return param_values
 
     def init_customized_container(self , cmd : str = '' , num_cols : int = 4):
-        num_cols = min(num_cols, len(self.param_list))
+        num_cols = min(num_cols, len(self.param_dict))
         cmd_param_values = self.cmd_to_param_values(cmd)
-        for i, wp in enumerate(self.param_list):
+        for i, wp in enumerate(self.param_dict.values()):
             if i % num_cols == 0:
                 param_cols = st.columns(num_cols)
             with param_cols[i % num_cols]:
@@ -132,7 +132,7 @@ class ParamInputsForm:
     def init_form(self , cmd : str):
         cmd_param_values = self.cmd_to_param_values(cmd)
         with st.form(f"ParamInputsForm-{self.runner.script_key}" , clear_on_submit = False):
-            for param in self.param_list:
+            for param in self.param_dict.values():
                 self.get_widget(self.runner, param, target=self.target, value = cmd_param_values.get(param.name))
 
             if st.form_submit_button(
@@ -145,18 +145,18 @@ class ParamInputsForm:
 
     @property
     def param_values(self):
-        return {wp.name: wp.param_value for wp in self.param_list}
+        return {wp.name: wp.param_value for wp in self.param_dict.values()}
 
     def validate(self):
         self.errors = []
-        for wp in self.param_list:
+        for wp in self.param_dict.values():
             if err_msg := wp.error_message():
                 self.errors.append(err_msg)
                 
         return len(self.errors) == 0
 
     def submit(self):
-        for wp in self.param_list: wp.on_change(self.target)
+        for wp in self.param_dict.values(): wp.on_change(self.target)
             
         if not self.validate():
             for err_msg in self.errors:

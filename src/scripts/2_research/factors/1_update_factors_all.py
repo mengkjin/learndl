@@ -32,7 +32,7 @@ from src.app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
-    with AutoRunTask('update factors' , **kwargs) as runner:
+    with AutoRunTask('update_factors' , **kwargs) as runner:
         FactorCalculatorAPI.update(start = int(kwargs.pop('start')) , 
                                     end = int(kwargs.pop('end')) , 
                                     groups_in_one_update = None)

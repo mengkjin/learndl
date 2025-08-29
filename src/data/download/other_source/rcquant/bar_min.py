@@ -1,11 +1,11 @@
-import rqdatac
+import rqdatac , re
 import pandas as pd
 import numpy as np
 
 from rqdatac.share.errors import QuotaExceeded
-from typing import Literal , Type
+from typing import Literal
 
-from src.basic import PATH , CALENDAR , CONF , MACHINE , Logger
+from src.basic import PATH , CALENDAR , MACHINE , Logger , OutputCapturer
 from src.data.util.basic import secid_adjust , trade_min_reform
 
 RC_PATH = PATH.miscel.joinpath('Rcquant')
@@ -58,8 +58,18 @@ def rcquant_license_path():
 def rcquant_init():
     if not rqdatac.initialized(): 
         try:
-            rcquant_uri = PATH.read_yaml(rcquant_license_path())['uri']
-            rqdatac.init(uri = rcquant_uri)
+            with OutputCapturer() as capturer:
+                rcquant_uri = PATH.read_yaml(rcquant_license_path())['uri']
+                rqdatac.init(uri = rcquant_uri)
+            output = capturer.get_output()
+            if _print := output['stdout']:
+                print(_print)
+            if _error := output['stderr']:
+                key_info = re.search(r'Your account will be expired after  (\d+) days', _error)
+                if key_info:
+                    Logger.warning(f'RcQuant Warning : {key_info.group(0)}')
+                else:
+                    Logger.error(f'RcQuant Error : {_error}')
         except FileNotFoundError as e:
             Logger.error(f'rcquant login info not found, please check .local_settings/rcquant.yaml')
             return False

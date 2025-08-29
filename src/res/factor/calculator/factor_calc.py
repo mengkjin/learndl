@@ -233,7 +233,7 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         '''return list of target dates of factor data'''
         start = start if start is not None else cls.init_date
         end   = end   if end   is not None else 99991231
-        dates = CALENDAR.slice(cls.FACTOR_CALENDAR if force else cls.FACTOR_TARGET_DATES , start , min(end , CALENDAR.updated()))
+        dates = CALENDAR.slice(cls.FACTOR_CALENDAR if force else cls.FACTOR_TARGET_DATES , start , end)
         if not overwrite: dates = CALENDAR.diffs(dates , cls.stored_dates())
         return dates
     

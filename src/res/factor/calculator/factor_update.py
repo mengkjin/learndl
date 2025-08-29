@@ -1,6 +1,7 @@
 import time , traceback
 import numpy as np
 import pandas as pd
+import polars as pl
 
 from dataclasses import dataclass
 from threading import Lock
@@ -13,7 +14,7 @@ from src.data import DATAVENDOR
 from src.func.singleton import singleton
 from src.func.parallel import parallel
 
-CATCH_ERRORS = (ValueError , TypeError)
+CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 
 @dataclass  
 class FactorUpdateJob:
@@ -22,8 +23,6 @@ class FactorUpdateJob:
 
     def __post_init__(self):
         self.done = False
-        if self.date not in StockFactorCalculator.FACTOR_TARGET_DATES:
-            print(f'Warning: {self.calc.factor_string} at date {self.date} is not in StockFactorCalculator.FACTOR_TARGET_DATES')
         
     @property
     def level(self): return self.calc.level
@@ -32,6 +31,8 @@ class FactorUpdateJob:
     @property
     def sort_key(self): return (self.level , self.date , self.factor_name)
     def do(self , show_success : bool = False , overwrite = False):
+        if self.date not in StockFactorCalculator.FACTOR_TARGET_DATES:
+            print(f'Warning: {self.calc.factor_string} at date {self.date} is not in StockFactorCalculator.FACTOR_TARGET_DATES')
         prefix = f'{self.calc.factor_string} at date {self.date}'
         try:
             self.done = self.calc.calc_and_deploy(self.date , overwrite = overwrite)
@@ -131,7 +132,7 @@ class FactorUpdateJobManager:
 
         for (level , date) , jobs in self.grouped_jobs():
             DATAVENDOR.data_storage_control()
-            parallel(do_job , jobs , method = self.multi_thread)
+            parallel(do_job , jobs , keys = [job.factor_name for job in jobs] , method = self.multi_thread)
             failed_jobs = [job for job in jobs if not job.done]
             if verbosity > 0:
                 print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Factors of {level} at {date} done: {len(jobs) - len(failed_jobs)} / {len(jobs)}')

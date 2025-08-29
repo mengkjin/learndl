@@ -9,7 +9,7 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from datetime import datetime , timedelta
 from pathlib import Path
-from typing import Any , Literal , Callable
+from typing import Any , Literal , Callable , Generator
 
 from src.project_setting import MACHINE
 
@@ -75,13 +75,14 @@ def list_files(directory : str | Path , fullname = False , recur = False):
 def filter_paths(paths : list[Path] , ignore_prefix = ('.' , '~')):
     return [p for p in paths if not p.name.startswith(ignore_prefix)]
 
-def paths_to_dates(paths : list[Path]):
-    dates = [int(p.stem[-8:]) for p in paths if p.stem[-8:].isdigit()]
-    dates = np.array(sorted(dates) , dtype=int)
+def paths_to_dates(paths : list[Path] | Generator[Path, None, None]):
+    datestrs = [p.stem[-8:] for p in paths]
+    dates = np.array([ds for ds in datestrs if ds.isdigit()]).astype(int)
+    dates.sort()
     return dates
 
 def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
-    paths = [Path(file) for _ , _ , files in os.walk(directory) for file in files]
+    paths = directory.rglob('*')
     dates = paths_to_dates(paths)
     if end_dt   is not None: dates = dates[dates <= (end_dt   if end_dt   > 0 else today(end_dt))]
     if start_dt is not None: dates = dates[dates >= (start_dt if start_dt > 0 else today(start_dt))]
@@ -204,11 +205,31 @@ def db_dates(db_src , db_key , start_dt = None , end_dt = None , year = None , u
         dates = np.concatenate([alt_dates , dates])
     return dates
 
-def db_min_date(db_src , db_key):
-    return min(db_dates(db_src , db_key))
+def db_min_date(db_src , db_key , fast = True):
+    if fast:
+        # will not use alternative db
+        path = PATH.database.joinpath(f'DB_{db_src}' , db_key)
+        years = sorted([int(y.stem) for y in path.iterdir() if y.is_dir()])
+        for year in years:
+            dates = dir_dates(path.joinpath(str(year)))
+            if len(dates): return min(dates)
+        return 99991231
+    else:
+        dates = db_dates(db_src , db_key)
+        return min(dates) if len(dates) else 99991231
 
-def db_max_date(db_src , db_key):
-    return max(db_dates(db_src , db_key))
+def db_max_date(db_src , db_key , fast = True):
+    if fast:
+        # will not use alternative db
+        path = PATH.database.joinpath(f'DB_{db_src}' , db_key)
+        years = sorted([int(y.stem) for y in path.iterdir() if y.is_dir()])
+        for year in years[::-1]:
+            dates = dir_dates(path.joinpath(str(year)))
+            if len(dates): return max(dates)
+        return -1
+    else:
+        dates = db_dates(db_src , db_key)
+        return max(dates) if len(dates) else -1
 
 # @db_src_deprecated(1)
 def db_save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True):

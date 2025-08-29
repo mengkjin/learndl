@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import torch
 from datetime import datetime
-from src.basic import send_email , PATH , CALENDAR , MACHINE
+from src.basic import send_email , PATH , CALENDAR , MACHINE , TaskRecorder
 
 class TempFile:
     def __init__(self, file_name: str):
@@ -39,6 +39,11 @@ def check_cuda_status():
 
 def email_to_fanghan(test = False):
     today = CALENDAR.updated()
+    task_recorder = TaskRecorder('notification' , 'email_to_fanghan' , str(today))
+    if task_recorder.is_finished():
+        print(f'email_to_fanghan at {today} is already done')
+        return
+    
     pred_dates = PATH.pred_dates('gru_day_V1')
     use_date = pred_dates[pred_dates <= today].max()
 
@@ -60,6 +65,7 @@ def email_to_fanghan(test = False):
         df.to_csv(temp_file)
         try:
             send_email(title , body , recipient , attachments , confirmation_message='Fanghan')
+            task_recorder.mark_finished(success = True)
         except:
             print(f'发送邮件给方晗失败!')
 

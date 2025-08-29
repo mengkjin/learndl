@@ -27,7 +27,7 @@ from src.app import BackendTaskRecorder , ScriptLock
 @ScriptLock('rollback_update' , timeout = 1 , wait_time = 60)
 def main(**kwargs):
     rollback_date = int(kwargs.pop('rollback_date'))
-    with AutoRunTask(f'rollback update from {rollback_date}' , **kwargs) as runner:
+    with AutoRunTask('rollback_update' , rollback_date , **kwargs) as runner:
         CALENDAR.check_rollback_date(rollback_date)
         if not MACHINE.updateable:
             runner.error(f'{MACHINE.name} is not updateable, skip rollback update')

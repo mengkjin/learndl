@@ -403,7 +403,7 @@ class TuShareCNE5_Calculator:
         
     @classmethod
     def updatable_dates(cls , job : Literal['exposure' , 'risk']):
-        end_date = np.min([PATH.db_dates('trade_ts' , 'day').max(), PATH.db_dates('trade_ts' , 'day_val').max()])
+        end_date = np.min([PATH.db_max_date('trade_ts' , 'day'), PATH.db_max_date('trade_ts' , 'day_val')])
         dates = CALENDAR.diffs(cls.START_DATE , end_date , cls.updated_dates(job))
         return dates
 
@@ -448,7 +448,7 @@ class TuShareCNE5_Calculator:
         CALENDAR.check_rollback_date(rollback_date)
         task = cls()
         start_date = CALENDAR.td(rollback_date , 1)
-        end_date = np.min([PATH.db_dates('trade_ts' , 'day').max(), PATH.db_dates('trade_ts' , 'day_val').max()])
+        end_date = np.min([PATH.db_max_date('trade_ts' , 'day'), PATH.db_max_date('trade_ts' , 'day_val')])
         dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
         for date in dates:
             task.update_date(date , 'exposure')

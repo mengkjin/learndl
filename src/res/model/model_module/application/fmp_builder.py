@@ -20,6 +20,8 @@ class ModelPortfolioBuilder:
         self.reg_model = reg_model
         self.fmp_tables : dict[int , pd.DataFrame] = {}
         self.accountant = PortfolioAccountManager(reg_model.account_dir)
+        self._update_fmps_record = []
+        self._update_account_record = []
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.reg_model})'
@@ -125,13 +127,11 @@ class ModelPortfolioBuilder:
         last_model_dates = self.account_last_model_dates(update_fmp_names)
         account_dates = [date for date in self.reg_model.fmp_dates if date >= min(list(last_model_dates.values()))]
         if len(account_dates) == 0: return
-        print(account_dates)
         all_fmp_dfs = pd.concat([self.reg_model.load_fmp(date) for date in account_dates])
-        print(all_fmp_dfs)
         alpha_model = self.alpha_model(account_dates)
 
         for fmp_name in update_fmp_names:
-            portfolio = Portfolio.from_dataframe(all_fmp_dfs[all_fmp_dfs['name'] == fmp_name])
+            portfolio = Portfolio.from_dataframe(all_fmp_dfs , name = fmp_name)
             builder   = PortfolioBuilder.from_full_name(fmp_name , alpha_model , portfolio)
             builder.accounting(last_model_dates[fmp_name])
             self.accountant.append_accounts(**{fmp_name : builder.account})

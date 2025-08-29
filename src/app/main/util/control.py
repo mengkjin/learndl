@@ -126,8 +126,12 @@ class SessionControl:
             cmd = f":blue[**{run_text.title()}**]: {cmd}"
         return cmd
     
-    def get_script_runner_validity(self , obj : ScriptRunner):
-        return all(self.script_params_cache.get(obj.script_key, {}).get('valid', {}).values())
+    def get_script_runner_validity(self , params : dict[str, Any] | None):
+        params = params or {}
+        for pname , pvalue in self.param_inputs_form.param_dict.items():
+            if pvalue.required and params.get(pname) is None:
+                return False
+        return True
     
     def click_queue_item(self , item : TaskItem):
         """click queue item"""

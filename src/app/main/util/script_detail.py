@@ -209,9 +209,13 @@ def run_button_button(runner : ScriptRunner | None , sidebar = False):
             raise ValueError("ParamInputsForm is not initialized")
         params = SC.param_inputs_form.param_values if SC.param_inputs_form is not None else None
         
-        if SC.get_script_runner_validity(runner):
+        if SC.get_script_runner_validity(params):
             disabled = False
-            help_text = f"Parameters valid, run {runner.script_key}"
+            preview_cmd = SC.get_script_runner_cmd(runner , params)
+            if preview_cmd: 
+                help_text = preview_cmd
+            else:
+                help_text = f"Parameters valid, run {runner.script_key}"
             button_key = f"script-runner-run-enabled-{runner.script_key}"
         else:
             disabled = True
@@ -219,8 +223,6 @@ def run_button_button(runner : ScriptRunner | None , sidebar = False):
             button_key = f"script-runner-run-disabled-{runner.script_key}"
         
     if sidebar: button_key += "-sidebar"
-    preview_cmd = SC.get_script_runner_cmd(runner , params)
-    if preview_cmd: help_text = preview_cmd
     return st.button(":material/mode_off_on:", key=button_key , 
                     help = help_text , disabled = disabled , 
                     on_click = SC.click_script_runner_run , args = (runner, params))

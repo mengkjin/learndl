@@ -1,10 +1,10 @@
 from src.basic import PATH , CALENDAR
 import argparse
-import jsdata , datetime
+import jsdata , datetime # type: ignore
 import pandas as pd
+from typing import Any
 
-
-def download_jsdata(date : int , limit = 5000 , api = None):
+def download_jsdata(date : int , limit = 5000 , api : Any = None):
     offset = 0
     dfs = []
     while True:

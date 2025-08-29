@@ -139,7 +139,7 @@ class TradeCalendar:
         return today(-1 if datetime.now().time() <= time(19, 59, 0) else 0)
     @staticmethod
     def updated():
-        return PATH.db_dates('trade_ts' , 'day').max()
+        return PATH.db_max_date('trade_ts' , 'day')
     @staticmethod
     def _date_convert_to_index(date):
         if isinstance(date , TradeDate): date = [date.td]

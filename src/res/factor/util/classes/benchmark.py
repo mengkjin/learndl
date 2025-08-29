@@ -140,7 +140,7 @@ class Benchmark(Portfolio):
                     sub_bm = cls.day_port(key , model_date)
                 port = sub_bm * value if i == 0 else port + sub_bm * value
             assert isinstance(port , Port) , port
-            port.name = name
+            port.with_name(name)
             return port
         else:
             raise TypeError(bm)

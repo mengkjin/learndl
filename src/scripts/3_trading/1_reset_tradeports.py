@@ -25,8 +25,9 @@ from src.app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
-    with AutoRunTask('reset trading portfolios' , **kwargs) as runner:
-        TradingAPI.update(reset_ports = [runner['reset_port_name']])
+    reset_port_name = kwargs.pop('reset_port_name')
+    with AutoRunTask('reset_tradeports' , reset_port_name , **kwargs) as runner:
+        TradingAPI.update(reset_ports = [reset_port_name])
         runner.critical(f'Reset trading portfolios at {runner.update_to} completed')
 
     return runner

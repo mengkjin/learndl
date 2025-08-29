@@ -29,8 +29,9 @@ from src.app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
-    with AutoRunTask('resume model' , **kwargs) as runner:
-        ModelAPI.resume_model(model_name = runner['model_name'])
+    model_name = kwargs.pop('model_name')
+    with AutoRunTask('resume_model' , model_name , **kwargs) as runner:
+        ModelAPI.resume_model(model_name = model_name)
         runner.critical(f'Resume model at {runner.update_to} completed')
 
     return runner

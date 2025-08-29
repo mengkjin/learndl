@@ -140,7 +140,7 @@ class BackendTaskRecorder:
             elif isinstance(ret , dict):
                 return cls(**{k:v for k,v in ret.items() if k in cls.__slots__})
             elif ret.__class__.__name__ == 'AutoRunTask':
-                return cls(message = ret.final_message , files = ret.streamlit_files , 
+                return cls(message = ret.final_message , files = ret.exit_files , 
                            code = len(ret.error_messages) , error = '\n'.join(ret.error_messages))
             else:
                 return cls(message = str(ret))

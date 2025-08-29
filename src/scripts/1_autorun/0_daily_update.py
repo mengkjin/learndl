@@ -20,7 +20,7 @@ from src.app import BackendTaskRecorder , ScriptLock
 @BackendTaskRecorder(email = 1)
 @ScriptLock('daily_update' , wait_time = 60)
 def main(**kwargs):
-    with AutoRunTask(f'daily update {CALENDAR.update_to()}' , **kwargs) as runner:
+    with AutoRunTask('daily_update' , CALENDAR.update_to() , **kwargs) as runner:
         if not MACHINE.updateable:
             runner.error(f'{MACHINE.name} is not updateable, skip daily update')
         elif runner.forfeit_task: 

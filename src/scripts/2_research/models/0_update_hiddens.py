@@ -19,7 +19,7 @@ from src.app import BackendTaskRecorder
 
 @BackendTaskRecorder()
 def main(**kwargs):
-    with AutoRunTask('update hiddens' , **kwargs) as runner:
+    with AutoRunTask('update_hiddens' , **kwargs) as runner:
         ModelAPI.update_hidden()
         runner.critical(f'Update hiddens at {runner.update_to} completed')
 
