@@ -9,7 +9,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any , Literal , Optional
 
-from src.basic import path as PATH
+from src.proj import PATH
+from src.basic import DB
 from src.func import ic_2d , rankic_2d
 
 from .io import BoosterInput , BoosterOutput
@@ -197,7 +198,7 @@ class BasicBoosterModel(ABC):
 def load_xingye_data():
     factor_data = pd.read_feather(f'{PATH.miscel}/CombStdByZXMkt_All_TrainLabel.feather') # 训练集，带Label
     factor_data['date'] = factor_data['date'].astype(str).str.replace('-','').astype(int)
-    factor_data['secid'] = PATH.code_to_secid(factor_data['StockID'])
+    factor_data['secid'] = DB.code_to_secid(factor_data['StockID'])
 
     index_list = ['date','secid']
     label_list = ['nextRtnM']

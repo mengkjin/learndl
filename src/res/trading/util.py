@@ -5,7 +5,8 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Literal , Type , Any
 
-from src.basic import CALENDAR , RegisteredModel , PATH , CONF
+from src.proj import PATH
+from src.basic import CALENDAR , RegisteredModel , CONF , DB
 from src.func import dfs_to_excel , figs_to_pdf
 from src.func import display as disp
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Universe
@@ -97,7 +98,7 @@ class TradingPort:
         return PATH.rslt_trade.joinpath(self.name)
     
     def existing_dates(self , min_date : int | None = None , max_date : int | None = None) -> np.ndarray:
-        dates = PATH.dir_dates(self.port_dir())
+        dates = DB.dir_dates(self.port_dir())
         if min_date is not None: dates = dates[dates >= min_date]
         if max_date is not None: dates = dates[dates <= max_date]
         return dates
@@ -297,8 +298,8 @@ class CompositeAlpha:
         elif '@' in alpha_name:
             exprs = alpha_name.split('@')
             if exprs[0] == 'sellside':
-                dates = PATH.db_dates('sellside' , exprs[1])
-                df = PATH.db_load('sellside' , exprs[1] , dates[dates <= date].max() , verbose = False).loc[:,['secid' , exprs[2]]]
+                dates = DB.db_dates('sellside' , exprs[1])
+                df = DB.db_load('sellside' , exprs[1] , dates[dates <= date].max() , verbose = False).loc[:,['secid' , exprs[2]]]
             else:
                 raise Exception(f'{alpha_name} is not a valid alpha')
         else:

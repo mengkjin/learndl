@@ -1,6 +1,7 @@
 from typing import Any , Literal
 
-from src.basic import PATH , CALENDAR , TradeDate
+from src.proj import PATH
+from src.basic import CALENDAR , TradeDate , DB
 from src.func.singleton import singleton
 from src.data.util import INFO
 
@@ -14,14 +15,14 @@ class TradeDataAccess(DateDataAccess):
     
     def data_loader(self , date , data_type):
         if data_type in db_key_dict: 
-            df = PATH.db_load('trade_ts' , db_key_dict[data_type] , date , verbose = False)
+            df = DB.db_load('trade_ts' , db_key_dict[data_type] , date , verbose = False)
         else:
             raise KeyError(data_type)
         return df
     
     def latest_date(self , data_type : str , date : int | None = None):
         if data_type in db_key_dict:
-            dates = PATH.db_dates('trade_ts' , db_key_dict[data_type])
+            dates = DB.db_dates('trade_ts' , db_key_dict[data_type])
             if date: dates = dates[dates <= date]
             return dates.max()
         else:

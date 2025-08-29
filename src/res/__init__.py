@@ -1,5 +1,5 @@
 '''import all modules , order matters'''
-from ..basic import INSTANCE_RECORD , CALENDAR , PATH , CONF
+from ..basic import INSTANCE_RECORD , CALENDAR , CONF
 
 from . import algo , deap
 from . import factor

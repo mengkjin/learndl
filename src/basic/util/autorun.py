@@ -4,8 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal , Any
 
-from src.project_setting import MACHINE
-from src.basic import path as PATH
+from src.proj import MACHINE , PATH
 
 class AutoRunTask:
     def __init__(self , task_name : str , task_key : str | Any | None = None , email = True , message_capturer : bool = True , source = 'py' , **kwargs):
@@ -64,8 +63,6 @@ class AutoRunTask:
         self.capturer.__exit__(exc_type, exc_value, exc_traceback)
         self.dprinter.__exit__(exc_type, exc_value, exc_traceback)
 
-        # self.emailer.attach(self.dprinter.filename)
-        
         self.attach(self.emailer.Attachments.get('default' , []) , streamlit = True , email = False)
         if not self.forfeit_task:
             self.send_email()
@@ -73,8 +70,6 @@ class AutoRunTask:
                 self.task_recorder.mark_finished(
                     remark = ' | '.join([f'source: {self.source}' , 
                                        f'exit_code: {len(self.error_messages)}']))
-                # self.completion_record_path.parent.mkdir(parents = True , exist_ok = True)
-                # self.completion_record_path.touch()
         # change_power_mode('power-saver')
 
     @property
@@ -92,10 +87,6 @@ class AutoRunTask:
     def __getitem__(self , key : str):
         return self.kwargs[key]
         
-    # @property
-    # def completion_record_path(self):
-    #     return PATH.local_resources.joinpath('runtime' , 'completed_autorun' , f'{self.task_name}.txt')
-    
     @property
     def forfeit_task(self):
         return self.already_done and self.source == 'bash'

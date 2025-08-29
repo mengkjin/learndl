@@ -5,8 +5,9 @@ import pandas as pd
 from typing import Literal
 from pathlib import Path
 
+from src.proj import PATH , MACHINE
 from src.data.util import trade_min_fillna
-from src.basic import PATH , MACHINE
+from src.basic import DB
 
 zip_path = PATH.miscel.joinpath('JSMinute')
 
@@ -128,7 +129,7 @@ def perform_extraction_and_transform(date : int):
         if sec_type == 'sec':
             sec_df = transform_sec(df)
         src_key = f'min' if sec_type == 'sec' else f'{sec_type}_min'
-        PATH.db_save(sec_df , 'trade_js' , src_key , date , verbose = True)
+        DB.db_save(sec_df , 'trade_js' , src_key , date , verbose = True)
     
 if __name__ == '__main__' and MACHINE.server:
     args = argparse.ArgumentParser()

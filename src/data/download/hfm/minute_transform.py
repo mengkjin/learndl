@@ -6,7 +6,8 @@ from typing import Literal
 from pathlib import Path
 
 from src.data.util import trade_min_fillna
-from src.basic import PATH , MACHINE
+from src.proj import PATH , MACHINE
+from src.basic import DB
 
 sec_min_path = PATH.miscel.joinpath('JSMinute')
 fut_min_path = PATH.miscel.joinpath('JSFutMinute')
@@ -126,9 +127,9 @@ def process_sec_min_files():
     # if not MACHINE.server: return
 
     target_dates = np.array([int(p.name.split('.')[-2][-8:]) for p in sec_min_path.iterdir() if not p.is_dir()])
-    stored_dates_sec = PATH.db_dates('trade_js' , 'min')
-    stored_dates_etf = PATH.db_dates('trade_js' , 'etf_min')
-    stored_dates_cb  = PATH.db_dates('trade_js' , 'cb_min')
+    stored_dates_sec = DB.db_dates('trade_js' , 'min')
+    stored_dates_etf = DB.db_dates('trade_js' , 'etf_min')
+    stored_dates_cb  = DB.db_dates('trade_js' , 'cb_min')
     dates = target_dates[~np.isin(target_dates , stored_dates_sec) | 
                          ~np.isin(target_dates , stored_dates_etf) | 
                          ~np.isin(target_dates , stored_dates_cb)]
@@ -141,7 +142,7 @@ def process_sec_min_files():
             if sec_type == 'sec':
                 sec_df = transform_sec(df)
             src_key = f'min' if sec_type == 'sec' else f'{sec_type}_min'
-            PATH.db_save(sec_df , 'trade_js' , src_key , date , verbose = True)
+            DB.db_save(sec_df , 'trade_js' , src_key , date , verbose = True)
 
 def process_fut_min_files():
 
@@ -154,11 +155,11 @@ def process_fut_min_files():
                     assert date_str.isdigit() , date_str
                     date = int(date_str)
 
-                    if PATH.db_path('trade_js', 'fut_min', date).exists(): continue
+                    if DB.db_path('trade_js', 'fut_min', date).exists(): continue
                     with zip_ref.open(file_name) as file:
                         df = pd.read_csv(file)
                         df.columns = df.columns.str.lower()
-                    PATH.db_save(df, 'trade_js', 'fut_min', date, verbose=True)
+                    DB.db_save(df, 'trade_js', 'fut_min', date, verbose=True)
     
 def main():
     process_sec_min_files()

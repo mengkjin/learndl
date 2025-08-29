@@ -4,7 +4,8 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Literal , Optional
 
-from src.basic import CALENDAR , PATH , Timer
+from src.proj import PATH
+from src.basic import Timer , DB
 from src.data.util import DataBlock
 
 @dataclass(slots=True)
@@ -52,7 +53,7 @@ class FrameLoader:
         return self.load_frame(start_dt , end_dt)
 
     def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
-        df = PATH.db_load_multi(self.db_src , self.db_key , start_dt=start_dt , end_dt=end_dt , use_alt = self.use_alt)
+        df = DB.db_load_multi(self.db_src , self.db_key , start_dt=start_dt , end_dt=end_dt , use_alt = self.use_alt)
         return df
     
 @dataclass

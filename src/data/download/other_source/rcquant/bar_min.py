@@ -5,7 +5,8 @@ import numpy as np
 from rqdatac.share.errors import QuotaExceeded
 from typing import Literal
 
-from src.basic import PATH , CALENDAR , MACHINE , Logger , OutputCapturer
+from src.proj import PATH , MACHINE
+from src.basic import CALENDAR , Logger , OutputCapturer , DB
 from src.data.util.basic import secid_adjust , trade_min_reform
 
 RC_PATH = PATH.miscel.joinpath('Rcquant')
@@ -88,7 +89,7 @@ def stored_dates(data_type : DATA_TYPES , x_min : int = 1):
     assert x_min in [1 , 5 , 10 , 15 , 30 , 60] , f'only support 1min , 5min , 10min , 15min , 30min , 60min : {x_min}'
     if x_min != 1:
         assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
-    return PATH.db_dates('trade_ts' , src_key(data_type , x_min) , use_alt = False)
+    return DB.db_dates('trade_ts' , src_key(data_type , x_min) , use_alt = False)
 
 def last_date(data_type : DATA_TYPES , offset : int = 0 , x_min : int = 1):
     dates = stored_dates(data_type , x_min)
@@ -105,8 +106,8 @@ def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> li
     if data_type != 'sec': return []
     all_dates = np.array([])
     for x_min in [5 , 10 , 15 , 30 , 60]:
-        source_dates = PATH.db_dates('trade_ts' , src_key(data_type , 1))
-        stored_dates = PATH.db_dates('trade_ts' , src_key(data_type , x_min))
+        source_dates = DB.db_dates('trade_ts' , src_key(data_type , 1))
+        stored_dates = DB.db_dates('trade_ts' , src_key(data_type , x_min))
         target_dates = CALENDAR.diffs(source_dates , stored_dates)
         dates = target_dates[target_dates >= src_start_date(data_type)]
         all_dates = np.concatenate([all_dates , dates])
@@ -118,7 +119,7 @@ def x_mins_to_update(date , data_type : DATA_TYPES):
     if data_type != 'sec': return []
     x_mins : list[int]= []
     for x_min in [5 , 10 , 15 , 30 , 60]:
-        path = PATH.db_path('trade_ts' , src_key(data_type , x_min) , date)
+        path = DB.db_path('trade_ts' , src_key(data_type , x_min) , date)
         if not path.exists(): x_mins.append(x_min)
     return x_mins
 
@@ -153,7 +154,7 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
 
     if (sec_min := load_min(date , data_type)) is not None: 
         df = rcquant_min_to_normal_min(sec_min , data_type)
-        PATH.db_save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
+        DB.db_save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
         return True
 
     if not rcquant_init(): return False
@@ -172,7 +173,7 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
         write_min(data , date , data_type)
 
         df = rcquant_min_to_normal_min(data , data_type)
-        PATH.db_save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
+        DB.db_save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
         return True
     else:
         return False
@@ -201,10 +202,10 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
     for dt in x_mins_target_dates(data_type , date):
         Logger.info(f'process other {data_type} min bars at {dt} from source rcquant')
         for x_min in x_mins_to_update(dt , data_type = data_type):
-            min_df = PATH.db_load('trade_ts' , src_key(data_type) , dt)
+            min_df = DB.db_load('trade_ts' , src_key(data_type) , dt)
             assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
             x_min_df = trade_min_reform(min_df , x_min , 1)
-            PATH.db_save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , verbose = True)
+            DB.db_save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , verbose = True)
         Logger.separator()
     return True
 

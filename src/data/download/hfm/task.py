@@ -6,7 +6,8 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Any , Callable , Literal , Optional
 
-from src.basic import PATH , CALENDAR
+from src.proj import PATH
+from src.basic import CALENDAR , DB
 from src.data.util import secid_adjust , col_reform , row_filter , adjust_precision , trade_min_reform , trade_min_fillna
 
 @dataclass
@@ -50,20 +51,20 @@ class JSFetcher:
 
     def eval(self , date = None , **kwargs) -> Any:
         assert callable(self.fetcher)
-        if self.db_src in PATH.DB_BY_NAME:
+        if self.db_src in DB.DB_BY_NAME:
             v = self.fetcher(self.db_key , *self.args , **kwargs)
-        elif self.db_src in PATH.DB_BY_DATE:
+        elif self.db_src in DB.DB_BY_DATE:
             v = self.fetcher(date , *self.args , **kwargs)  
         return v
     
     def target_path(self , date = None):
-        return PATH.db_path(self.db_src , self.db_key , date)
+        return DB.db_path(self.db_src , self.db_key , date)
     
     def source_dates(self):
-        return PATH.get_source_dates(self.db_src , self.db_key)
+        return DB.get_source_dates(self.db_src , self.db_key)
     
     def target_dates(self):
-        return PATH.db_dates(self.db_src , self.db_key)
+        return DB.db_dates(self.db_src , self.db_key)
     
     def get_update_dates(self , start_dt = None , end_dt = None , trace = 0 , incremental = True , force = False):
         source_dates = self.source_dates()
@@ -299,7 +300,7 @@ class JSFetcher:
 
         _files = {k:PATH.list_files(v) for k , v in path_param.items()}
         for v in _files.values(): v.sort()
-        _dates = {k:PATH.file_dates(v) for k , v in _files.items()}
+        _dates = {k:DB.file_dates(v) for k , v in _files.items()}
 
         pos = list(_dates['id']).index(date)
         if pos + lag1 + days >= len(_dates['id']):  return None

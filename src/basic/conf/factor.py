@@ -2,7 +2,7 @@
 basic variables in factor package
 '''
 
-from src.project_setting import MACHINE
+from src.proj import MACHINE
 from . import load_config
 
 UPDATE_START = 20110101 if MACHINE.server else 20241101

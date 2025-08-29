@@ -14,7 +14,8 @@ path = file_path.removesuffix(file_path.split('learndl')[-1])
 if not path in sys.path: sys.path.append(path)
 
 from src.res.api import DataAPI , ModelAPI , TradingAPI , NotificationAPI
-from src.basic import MACHINE , AutoRunTask , CALENDAR
+from src.proj import MACHINE
+from src.basic import AutoRunTask , CALENDAR
 from src.app import BackendTaskRecorder , ScriptLock
 
 @BackendTaskRecorder(email = 1)

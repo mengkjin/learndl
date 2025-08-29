@@ -5,7 +5,7 @@ import pandas as pd
 from typing import Any , ClassVar
 
 from src import func as FUNC
-from src.basic import PATH , MACHINE
+from src.proj import PATH , MACHINE
 from src.res.model.data_module import BatchDataLoader
 from src.res.model.util import BaseCallBack
 

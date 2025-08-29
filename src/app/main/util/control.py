@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime
 import time
 
-from src.app.db import SCPT_DIR
+from src.proj import PATH
 from src.app.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
 from src.app.frontend import YAMLFileEditorState , ActionLogger , action_confirmation
 
@@ -45,7 +45,7 @@ class SessionControl:
     def __post_init__(self):
         self.task_db = get_cached_task_db()
         self.task_queue = TaskQueue(task_db = self.task_db)
-        self.path_items = PathItem.iter_folder(SCPT_DIR, min_level = 0, max_level = 2)
+        self.path_items = PathItem.iter_folder(PATH.scpt, min_level = 0, max_level = 2)
         self.task_queue.refresh()
         if 'session_control' not in st.session_state:
             st.session_state.session_control = self

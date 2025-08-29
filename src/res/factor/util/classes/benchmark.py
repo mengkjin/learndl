@@ -3,7 +3,7 @@ import pandas as pd
 
 from typing import Any
 
-from src.basic import PATH
+from src.basic import DB
 from src.basic.conf import AVAIL_BENCHMARKS , DEFAULT_BENCHMARKS , CATEGORIES_BENCHMARKS
 from src.data import DataBlock , DATAVENDOR
 
@@ -39,7 +39,7 @@ class Benchmark(Portfolio):
         if name in self.NONE:
             self.benchmark_available_dates = []
         else:
-            self.benchmark_available_dates = PATH.db_dates('benchmark_ts' , self.name , use_alt = True)
+            self.benchmark_available_dates = DB.db_dates('benchmark_ts' , self.name , use_alt = True)
         self.benchmark_attempted_dates = []
 
     def __call__(self, input : Any):
@@ -66,7 +66,7 @@ class Benchmark(Portfolio):
         if use_date in self.ports:
             port = self.ports[use_date].evolve_to_date(date)
         elif use_date in self.available_dates():
-            port = Port(PATH.db_load('benchmark_ts' , self.name , use_date , use_alt = True) , use_date , self.name)
+            port = Port(DB.db_load('benchmark_ts' , self.name , use_date , use_alt = True) , use_date , self.name)
             if use_date != date: self.append(port)
             self.benchmark_attempted_dates.append(use_date)
         else:

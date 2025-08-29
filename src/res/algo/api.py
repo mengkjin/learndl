@@ -3,7 +3,7 @@ import torch
 from torch import Tensor
 from typing import Any , Optional , Literal
 
-from src.basic import path as PATH
+from src.proj import PATH
 from .nn.api import get_nn_module , get_multiloss_params , get_nn_category , get_nn_datatype , AVAILABLE_NNS
 from .boost.api import AVAILABLE_BOOSTERS , OptunaBooster , GeneralBooster
 
@@ -36,7 +36,7 @@ class AlgoModule:
         
     @classmethod
     def export_available_modules(cls):
-        path = PATH.local_resources.joinpath('app' , 'temp' , 'available_modules.txt')
+        path = PATH.temp.joinpath('available_modules.txt')
         path.parent.mkdir(parents = True , exist_ok = True)
         with open(path , 'w') as f:
             f.write(cls.available_modules_str())

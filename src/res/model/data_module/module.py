@@ -7,7 +7,8 @@ from torch import Tensor
 from torch.utils.data import BatchSampler
 from typing import Any , Literal , Optional
 
-from src.basic import CONF , PATH , SILENT , HiddenPath , Logger
+from src.proj import PATH
+from src.basic import SILENT , HiddenPath , Logger
 from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
 from src.func import tensor_standardize_and_weight , match_values , index_intersect
 from src.res.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig , MemFileStorage , StoredFileLoader

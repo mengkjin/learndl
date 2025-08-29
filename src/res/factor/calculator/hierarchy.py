@@ -5,7 +5,7 @@ from typing import Any , Literal , Type
 
 from .factor_calc import StockFactorCalculator
 
-from src.basic import PATH , MACHINE
+from src.proj import PATH , MACHINE
 from src.func.dynamic_import import dynamic_members
 from src.func.parallel import parallel
 
@@ -19,7 +19,7 @@ class StockFactorHierarchy:
         return cls._instance
     
     def __init__(self):
-        assert PATH.factor_definition.exists() , f'{PATH.factor_definition} does not exist'
+        assert PATH.fac_def.exists() , f'{PATH.fac_def} does not exist'
         self.load()
 
     def __repr__(self):
@@ -61,7 +61,7 @@ class StockFactorHierarchy:
         '''load all factor classes from definition path'''
         self.pool : dict[str , Type[StockFactorCalculator]] = {}   
         self.hier : dict[str , list[Type[StockFactorCalculator]]] = {}
-        for level_path in PATH.factor_definition.iterdir():
+        for level_path in PATH.fac_def.iterdir():
             if not level_path.is_dir(): continue
             level_name = level_path.stem
             if not level_name.startswith('level'): continue

@@ -3,8 +3,8 @@ from typing import Literal , Any
 import re , yaml , time
 from dataclasses import dataclass , asdict , field
 
+from src.proj import PATH
 from src.app.abc import ScriptCmd
-from src.app.db import SCPT_DIR
 
 from .task import TaskItem , TaskQueue
     
@@ -27,14 +27,14 @@ class PathItem:
     
     @property
     def relative(self):
-        return self.path.relative_to(SCPT_DIR)
+        return self.path.relative_to(PATH.scpt)
     
     @property
     def absolute(self):
         return self.path.absolute()
     
     @classmethod
-    def iter_folder(cls, folder_path: Path | str = SCPT_DIR, level: int = 0 , 
+    def iter_folder(cls, folder_path: Path | str = PATH.scpt, level: int = 0 , 
                     ignore_starters = ('.', '_') ,
                     ignore_files = ('db.py' , 'util') ,
                     min_level: int = 0 , max_level: int = 2):
@@ -67,7 +67,7 @@ class PathItem:
                           for p in Path(self.script_key.replace('_', ' ')).with_suffix('').parts)
 
     @classmethod
-    def from_key(cls , script_key : str , base_dir = SCPT_DIR):
+    def from_key(cls , script_key : str , base_dir = PATH.scpt):
         parts = Path(script_key).parts
         return PathItem(base_dir.joinpath(*parts) , len(parts) - 1)
 

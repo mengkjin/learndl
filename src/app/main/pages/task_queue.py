@@ -2,7 +2,7 @@ import streamlit as st
 import re
 from typing import Literal
 
-from src.app.db import SCPT_DIR
+from src.proj import PATH
 
 from util import SC , runs_page_url , set_current_page , show_sidebar_buttons , print_page_header
 
@@ -91,7 +91,7 @@ def show_task_filters():
         st.radio(":blue-badge[**Script Source**]" , source_options , key = "task-filter-source", horizontal = True ,
                     on_change = SC.click_queue_filter_source)
         st.multiselect(":blue-badge[**Script Folder**]" , folder_options , key = "task-filter-path-folder" ,
-                        format_func = lambda x: str(x.relative_to(SCPT_DIR)) ,
+                        format_func = lambda x: str(x.relative_to(PATH.scpt)) ,
                         on_change = SC.click_queue_filter_path_folder)
         st.multiselect(":blue-badge[**Script File**]" , file_options , key = "task-filter-path-file" ,
                         format_func = lambda x: x.name ,

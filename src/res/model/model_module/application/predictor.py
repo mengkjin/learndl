@@ -3,10 +3,10 @@ import numpy as np
 import pandas as pd
 
 from contextlib import nullcontext
-from pathlib import Path
 from typing import Any , ClassVar , Optional
 
-from src.basic import SILENT , CALENDAR , RegisteredModel , MACHINE
+from src.proj import MACHINE
+from src.basic import SILENT , CALENDAR , RegisteredModel
 from src.res.model.util import TrainConfig
 from src.res.model.data_module import DataModule
 from src.res.model.model_module.module import get_predictor_module

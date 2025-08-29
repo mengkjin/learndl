@@ -5,7 +5,8 @@ import pandas as pd
 from datetime import datetime , timedelta , time
 from typing import Any , Literal , Sequence
 
-from src.basic import path as PATH
+from src.proj import PATH
+from src.basic import DB
 
 YEAR_ENDS  = pd.date_range(start='1997-01-01', end='2099-12-31', freq='YE').strftime('%Y%m%d').astype(int).to_numpy()
 QUARTER_ENDS = pd.date_range(start='1997-01-01', end='2099-12-31', freq='QE').strftime('%Y%m%d').astype(int).to_numpy()
@@ -16,7 +17,7 @@ def today(offset = 0):
     return int(d.strftime('%Y%m%d'))
 
 def load_calendar():
-    calendar = PATH.db_load('information_ts' , 'calendar' , raise_if_not_exist = True).loc[:,['calendar' , 'trade']]
+    calendar = DB.db_load('information_ts' , 'calendar' , raise_if_not_exist = True).loc[:,['calendar' , 'trade']]
     if (res_path := PATH.conf.joinpath('glob','reserved_calendar.json')).exists():
         res_calendar = pd.read_json(res_path).loc[:,['calendar' , 'trade']]
         calendar = pd.concat([calendar , res_calendar[res_calendar['calendar'] > calendar['calendar'].max()]]).sort_values('calendar')
@@ -139,7 +140,7 @@ class TradeCalendar:
         return today(-1 if datetime.now().time() <= time(19, 59, 0) else 0)
     @staticmethod
     def updated():
-        return PATH.db_max_date('trade_ts' , 'day')
+        return DB.db_max_date('trade_ts' , 'day')
     @staticmethod
     def _date_convert_to_index(date):
         if isinstance(date , TradeDate): date = [date.td]

@@ -4,7 +4,8 @@ import polars as pl
 
 from typing import Any , Literal
 
-from src.basic import PATH , CALENDAR
+from src.proj import PATH
+from src.basic import CALENDAR , DB
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
 
@@ -13,7 +14,7 @@ from src.data.util import DFCollection
 RawHoldings = DFCollection(40 , 'end_date')
 ActiveFundHoldings = DFCollection(10 , 'end_date')
 ActiveTopHoldings = DFCollection(10 , 'end_date')
-FundInfo = PATH.db_load('information_ts' , 'mutual_fund_info').\
+FundInfo = DB.db_load('information_ts' , 'mutual_fund_info').\
     loc[:,['fund_id' , 'name' , 'fund_type' , 'list_date' , 'delist_date' , 'invest_type' , 'type' , 'market']]
 
 __all__ = [
@@ -52,7 +53,7 @@ def one_quater_ago(date):
 def get_holding(qtr : int):
     if qtr in RawHoldings:
         return RawHoldings.get(qtr)
-    df = PATH.db_load('holding_ts' , 'mutual_fund' , qtr)
+    df = DB.db_load('holding_ts' , 'mutual_fund' , qtr)
     df = df.groupby(['end_date','fund_id','secid','symbol']).sum().reset_index()
     df = df.sort_values(by=['fund_id', 'mkv'], ascending=[True, False])
     df['rank'] = df.groupby('fund_id').cumcount()

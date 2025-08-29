@@ -3,7 +3,7 @@ import optuna , random , string , time
 from contextlib import nullcontext
 from typing import Any , Literal
 
-from src.basic import path as PATH , MACHINE
+from src.proj import PATH , MACHINE
 from .general import GeneralBooster
 
 class OptunaSilent:

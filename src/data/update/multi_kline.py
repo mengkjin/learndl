@@ -1,7 +1,8 @@
 import pandas as pd
 import numpy as np
 
-from src.basic import PATH , CALENDAR
+from src.proj import PATH
+from src.basic import CALENDAR , DB
 
 DB_SRC = 'trade_ts'
 class MultiKlineUpdater:
@@ -14,8 +15,8 @@ class MultiKlineUpdater:
     def update(cls):
         for n_day in cls.DAYS:
             label_name = f'{n_day}day'
-            stored_dates = PATH.db_dates(DB_SRC , label_name)
-            end_date     = PATH.db_dates(DB_SRC , 'day').max()
+            stored_dates = DB.db_dates(DB_SRC , label_name)
+            end_date     = DB.db_dates(DB_SRC , 'day').max()
             update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
             for date in update_dates: cls.update_one(date , n_day , label_name)
 
@@ -25,13 +26,13 @@ class MultiKlineUpdater:
         for n_day in cls.DAYS:
             label_name = f'{n_day}day'
             start_date = CALENDAR.td(rollback_date , 1)
-            end_date = PATH.db_dates(DB_SRC , 'day').max()
+            end_date = DB.db_dates(DB_SRC , 'day').max()
             update_dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
             for date in update_dates: cls.update_one(date , n_day , label_name)
 
     @classmethod
     def update_one(cls , date : int , n_day : int , label_name : str):
-        PATH.db_save(nday_kline(date , n_day) , DB_SRC , label_name , date , verbose = True)
+        DB.db_save(nday_kline(date , n_day) , DB_SRC , label_name , date , verbose = True)
 
 
 def nday_kline(date : int , n_day : int):
@@ -44,7 +45,7 @@ def nday_kline(date : int , n_day : int):
     price_feat  = ['open','close','high','low','vwap']
     volume_feat = ['amount','volume','turn_tt','turn_fl','turn_fr']
 
-    datas = [PATH.db_load(DB_SRC , 'day' , d , date_colname='date') for d in trailing_dates]
+    datas = [DB.db_load(DB_SRC , 'day' , d , date_colname='date') for d in trailing_dates]
     datas = [d for d in datas if not d.empty]
     if not datas: return pd.DataFrame()
     with np.errstate(invalid='ignore' , divide = 'ignore'):

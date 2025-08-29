@@ -7,15 +7,14 @@ from email import encoders
 from pathlib import Path
 from typing import Literal , Any
 
-from src.project_setting import MACHINE
-from src.basic import path as PATH
+from src.proj import MACHINE , PATH
 
 def email_settings():
     return PATH.read_yaml(PATH.local_settings.joinpath('email.yaml'))
 
 class Email:
     Attachments : dict[str , list[Path]] = {}
-    Attachment_dir = PATH.local_resources.joinpath('email' , 'attachments')
+    Attachment_dir = PATH.temp.joinpath('email_attachments')
     _instance = None
 
     def __new__(cls , *args , **kwargs):

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ..util import StockFactor
 
-from src.basic import CONF , PATH , CALENDAR
+from src.basic import CONF , CALENDAR , DB
 from src.data import DATAVENDOR
 from src.func.singleton import SingletonABCMeta
 from src.func.classproperty import classproperty_str
@@ -53,7 +53,7 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     @classmethod
     def Loads(cls , start : int | None = None , end : int | None = None):
         dates = CALENDAR.slice(cls.stored_dates() , start , end)
-        return PATH.factor_load_multi(cls.factor_name , dates)
+        return DB.factor_load_multi(cls.factor_name , dates)
 
     @classmethod
     def Eval(cls , date : int):
@@ -88,7 +88,7 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         '''calculate factor value , must have secid and factor_value / factor_name columns'''
 
     def load_factor(self , date : int):
-        df = PATH.factor_load(self.factor_name , date , verbose = False)
+        df = DB.factor_load(self.factor_name , date , verbose = False)
         df = pd.Series() if df.empty else df.set_index('secid')[self.factor_name]
         return df
 
@@ -152,11 +152,11 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     
     @classproperty_str
     def min_date(cls):
-        return PATH.factor_min_date(cls.factor_name)
+        return DB.factor_min_date(cls.factor_name)
     
     @classproperty_str
     def max_date(cls):
-        return PATH.factor_max_date(cls.factor_name)
+        return DB.factor_max_date(cls.factor_name)
 
     def __repr__(self):
         return f'{self.factor_name}(from{self.init_date},{self.category0},{self.category1})'
@@ -222,10 +222,10 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
 
     def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
         '''store factor data after calculate'''
-        if not overwrite and PATH.factor_path(self.factor_name , date).exists(): return False
+        if not overwrite and DB.factor_path(self.factor_name , date).exists(): return False
         df = self.calc_factor(date)
         df = self.validate_value(df , date , strict = strict_validation)
-        saved = PATH.factor_save(df.rename(self.factor_name).to_frame() , self.factor_name , date , overwrite)
+        saved = DB.factor_save(df.rename(self.factor_name).to_frame() , self.factor_name , date , overwrite)
         return saved
 
     @classmethod
@@ -240,11 +240,11 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     @classmethod
     def stored_dates(cls): 
         '''return list of stored dates of factor data'''
-        return PATH.factor_dates(cls.factor_name)
+        return DB.factor_dates(cls.factor_name)
     
     @classmethod
     def has_date(cls , date : int):
-        return PATH.factor_path(cls.factor_name , date).exists()
+        return DB.factor_path(cls.factor_name , date).exists()
 
     @classmethod
     def collect_jobs(cls , start : int | None = None , end : int | None = None , 

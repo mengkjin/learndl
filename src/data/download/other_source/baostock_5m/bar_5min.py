@@ -4,7 +4,8 @@ import pandas as pd
 
 from typing import Literal
 
-from src.basic import PATH , CALENDAR , Logger
+from src.proj import PATH
+from src.basic import CALENDAR , Logger , DB
 from src.data.util.basic import secid_adjust , trade_min_reform
 
 START_DATE = 20401231
@@ -47,7 +48,7 @@ def baostock_past_dates(file_type : Literal['secdf' , '5min']):
     
 def updated_dates(x_min : int = 5):
     assert x_min in [5 , 10 , 15 , 30 , 60]
-    return PATH.db_dates('trade_ts' , f'{x_min}min')
+    return DB.db_dates('trade_ts' , f'{x_min}min')
 
 def updatable(date , last_date):
     return (len(updated_dates()) == 0) or (date > 0 and date > CALENDAR.cd(last_date , 6))
@@ -55,8 +56,8 @@ def updatable(date , last_date):
 def x_mins_update_dates(date) -> list[int]:
     all_dates = np.array([])
     for x_min in [10 , 15 , 30 , 60]:
-        source_dates = PATH.db_dates('trade_ts' , '5min')
-        stored_dates = PATH.db_dates('trade_ts' , f'{x_min}min')
+        source_dates = DB.db_dates('trade_ts' , '5min')
+        stored_dates = DB.db_dates('trade_ts' , f'{x_min}min')
         dates = CALENDAR.diffs(last_date_x_min(1 , x_min) , max(source_dates) , stored_dates)
         all_dates = np.concatenate([all_dates , dates])
     return np.unique(all_dates).astype(int).tolist()
@@ -64,7 +65,7 @@ def x_mins_update_dates(date) -> list[int]:
 def x_mins_to_update(date):
     x_mins : list[int] = []
     for x_min in [10 , 15 , 30 , 60]:
-        path = PATH.db_path('trade_ts' , f'{x_min}min' , date)
+        path = DB.db_path('trade_ts' , f'{x_min}min' , date)
         if not path.exists(): x_mins.append(x_min)
     return x_mins
 
@@ -142,7 +143,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
         df.to_feather(final_path.joinpath(f'5min_bar_{date}.feather'))
 
         df = baostock_5min_to_normal_5min(df)
-        PATH.db_save(df , 'trade_ts' , '5min' , date = date , verbose = True)
+        DB.db_save(df , 'trade_ts' , '5min' , date = date , verbose = True)
     # del after : No!
     '''
     if first_n <= 0:
@@ -179,9 +180,9 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
         
         Logger.info(f'process other min bars at {dt} from source baostock')
         for x_min in x_mins_to_update(dt):
-            five_min_df = PATH.db_load('trade_ts' , '5min' , dt)
+            five_min_df = DB.db_load('trade_ts' , '5min' , dt)
             x_min_df = trade_min_reform(five_min_df , x_min , 5)
-            PATH.db_save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , verbose = True)
+            DB.db_save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , verbose = True)
         Logger.separator()
 
     return True

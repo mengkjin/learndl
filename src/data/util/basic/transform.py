@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from src.basic import CALENDAR , PATH
+from src.basic import DB
 
 def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code'] , 
                  drop_old = True , decode_first = False , raise_if_no_secid = True):
@@ -16,7 +16,7 @@ def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 
         if raise_if_no_secid: raise ValueError(f'secid not found')
         else: return df
 
-    df['secid'] = PATH.code_to_secid(df[code_cols] , decode_first = decode_first)
+    df['secid'] = DB.code_to_secid(df[code_cols] , decode_first = decode_first)
     if drop_old and (code_cols != 'secid'): df = df.drop(columns=[code_cols])
 
     return df

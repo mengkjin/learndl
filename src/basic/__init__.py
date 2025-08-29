@@ -1,18 +1,13 @@
 import torch
 from pathlib import Path
-from ..project_setting import MACHINE
+from ..proj import MACHINE as machine
 
-from . import path as PATH
+from . import db as DB
 from . import conf as CONF
 from .util import *
 
-for name in dir(PATH):
-    member = getattr(PATH , name)
-    if isinstance(member , Path) and member.is_relative_to(PATH.main):
-        member.mkdir(parents=True , exist_ok=True)
-
-print(f'main path: {MACHINE.project_path}')
+print(f'main path: {machine.project_path}')
 if torch.cuda.is_available():
     print(f'Use device name: ' + torch.cuda.get_device_name(0))
-elif MACHINE.server:
+elif machine.server:
     print('server should have cuda , please check the cuda status')

@@ -3,8 +3,8 @@ import logging.handlers
 from typing import Any , Type
 from pathlib import Path
 
-from src.basic import path as PATH
-from src.basic import conf as CONF
+from src.proj import PATH
+from src.basic import CONF
 
 class Logger:
     '''custom colored log (Only one instance) , config at {PATH.conf}/logger.yaml '''

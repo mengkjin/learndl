@@ -2,7 +2,8 @@ import polars as pl
 
 from typing import Literal
 
-from src.basic import PATH
+from src.proj import PATH
+from src.basic import DB
 from src.func.singleton import singleton
 from src.data.util import INFO
 
@@ -15,7 +16,7 @@ class MinKLineAccess(DateDataAccess):
     
     def data_loader(self , date , data_type):
         if data_type in self.PL_DATA_TYPE_LIST: 
-            df = PATH.db_load('trade_ts' , data_type , date , verbose = False , use_alt = True)
+            df = DB.db_load('trade_ts' , data_type , date , verbose = False , use_alt = True)
             if not df.empty: df = df[df['secid'].isin(INFO.get_secid(date))]
         else:
             raise KeyError(data_type)

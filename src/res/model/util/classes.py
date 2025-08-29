@@ -8,7 +8,8 @@ from pathlib import Path
 from torch import Tensor
 from typing import Any , final , Iterator , Literal , Optional
 
-from src.basic import ModelDict , BigTimer , INSTANCE_RECORD , PATH
+from src.proj import PATH
+from src.basic import ModelDict , BigTimer , INSTANCE_RECORD
 from src.func import Filtered
 from src.res.algo import AlgoModule
 from src.data import ModuleData

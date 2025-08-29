@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from src.project_setting import MACHINE
+from src.proj import MACHINE
 
 DEFAULT_EXCLUDES = ['kernel_interrupt_daemon.py']
 

@@ -2,7 +2,8 @@ import pandas as pd
 import os
 import torch
 from datetime import datetime
-from src.basic import send_email , PATH , CALENDAR , MACHINE , TaskRecorder
+from src.proj import PATH , MACHINE
+from src.basic import send_email , CALENDAR , TaskRecorder , DB
 
 class TempFile:
     def __init__(self, file_name: str):
@@ -44,7 +45,7 @@ def email_to_fanghan(test = False):
         print(f'email_to_fanghan at {today} is already done')
         return
     
-    pred_dates = PATH.pred_dates('gru_day_V1')
+    pred_dates = DB.pred_dates('gru_day_V1')
     use_date = pred_dates[pred_dates <= today].max()
 
     title = f'{today} 因子数据更新'
@@ -53,7 +54,7 @@ def email_to_fanghan(test = False):
     
     attachments = f'gru_score_{datetime.now().strftime("%Y%m%d")}.csv'
     with TempFile(attachments) as temp_file:
-        df1 = PATH.pred_load('gru_day_V1' , use_date)
+        df1 = DB.pred_load('gru_day_V1' , use_date)
 
         from src.res.trading.util import CompositeAlpha
         df2 = CompositeAlpha('use_daily' , [

@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 
-from src.basic import MACHINE
+from src.proj import MACHINE
 from src.data.download.tushare.basic import pro , ts_code_to_secid , InfoFetcher , TushareFetcher , DateFetcher
 
 class FundInfo(InfoFetcher):

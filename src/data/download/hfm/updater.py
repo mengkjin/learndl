@@ -5,7 +5,8 @@ import pandas as pd
 from functools import reduce
 from pathlib import Path
 
-from src.basic import PATH , MACHINE , Logger
+from src.proj import PATH , MACHINE
+from src.basic import DB , Logger
 
 from .task import JSFetcher , JSDownloader
 from .minute_transform import main as minute_transform    
@@ -119,7 +120,7 @@ class JSDataUpdater():
         abs_path = str(target_path.absolute())
         rel_path = str(target_path.relative_to(self.UPDATER_BASE))
         if isinstance(result , pd.DataFrame):
-            PATH.save_df(result , target_path)
+            DB.save_df(result , target_path)
             with tarfile.open(self.Updater, 'a') as tar:  
                 tar.add(abs_path , arcname = rel_path) 
             self.Success.append(target_path)
@@ -166,14 +167,14 @@ class JSDataUpdater():
                 if target_str: print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
         return result
 
-    def fetch_all(self , db_srcs = PATH.DB_BY_NAME + PATH.DB_BY_DATE , start_dt = None , end_dt = None , force = False):
+    def fetch_all(self , db_srcs = DB.DB_BY_NAME + DB.DB_BY_DATE , start_dt = None , end_dt = None , force = False):
         # selected DB is totally refreshed , so delete first
         if not MACHINE.belong_to_jinmeng: return
         if not isinstance(db_srcs , (list,tuple)): db_srcs = [db_srcs]
         for db_src in db_srcs:
-            if db_src in PATH.DB_BY_NAME:
+            if db_src in DB.DB_BY_NAME:
                 self.fetch_by_name(db_src)
-            elif db_src in PATH.DB_BY_DATE:
+            elif db_src in DB.DB_BY_DATE:
                 self.fetch_by_date(db_src , start_dt , end_dt , force = force)
             else:
                 raise Exception(db_src)

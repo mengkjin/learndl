@@ -6,9 +6,8 @@ from pathlib import Path
 from torch import Tensor
 from typing import Any , Literal , Optional
 
-from src.project_setting import MACHINE
-from src.basic import path as PATH
-from src.basic import conf as CONF
+from src.proj import MACHINE , PATH
+from src.basic import CONF , DB
 from .version import torch_load
 from .calendar import CALENDAR
 
@@ -125,11 +124,11 @@ class HiddenPath:
 
     def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int):
         hidden_path = self.target_path(model_date)
-        PATH.save_df(hidden_df , hidden_path , overwrite = True)
+        DB.save_df(hidden_df , hidden_path , overwrite = True)
 
     def get_hidden_df(self , model_date : int , exact = False):
         if not exact: model_date = self.latest_hidden_model_date(model_date)
-        hidden_df = PATH.load_df(self.target_path(model_date))
+        hidden_df = DB.load_df(self.target_path(model_date))
         return model_date , hidden_df
     
     def latest_hidden_model_date(self , model_date):
@@ -222,7 +221,7 @@ class RegisteredModel(ModelPath):
     
     @property
     def pred_dates(self):
-        return PATH.pred_dates(self.pred_name)
+        return DB.pred_dates(self.pred_name)
     
     @property
     def pred_target_dates(self):
@@ -232,17 +231,17 @@ class RegisteredModel(ModelPath):
     
     @property
     def fmp_dates(self):
-        return PATH.dir_dates(PATH.fmp.joinpath(self.pred_name))
+        return DB.dir_dates(PATH.fmp.joinpath(self.pred_name))
     
     @property
     def fmp_target_dates(self):
         return self.pred_target_dates[::self.FMP_STEP]
     
     def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False):
-        PATH.pred_save(df , self.pred_name , date , overwrite)
+        DB.pred_save(df , self.pred_name , date , overwrite)
 
     def load_pred(self , date : int , verbose = True , **kwargs):
-        df = PATH.pred_load(self.pred_name , date , verbose = verbose , **kwargs)
+        df = DB.pred_load(self.pred_name , date , verbose = verbose , **kwargs)
         if df.empty: return df
         if self.pred_name not in df.columns:
             assert self.name in df.columns , f'{self.pred_name} or {self.name} not in df.columns : {df.columns}'
@@ -253,7 +252,7 @@ class RegisteredModel(ModelPath):
     def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False):
         if df.empty: return
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
-        PATH.save_df(df , path , overwrite = overwrite)
+        DB.save_df(df , path , overwrite = overwrite)
 
     def load_fmp(self , date : int , verbose = True , **kwargs):
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')

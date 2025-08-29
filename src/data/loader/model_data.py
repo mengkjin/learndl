@@ -1,5 +1,5 @@
-
-from src.basic import PATH , CALENDAR , TradeDate
+from src.proj import PATH
+from src.basic import CALENDAR , TradeDate , DB
 from src.func.singleton import singleton
 
 from .access import DateDataAccess
@@ -11,7 +11,7 @@ class RiskModelAccess(DateDataAccess):
     
     def data_loader(self , date , data_type):
         if data_type in self.DATA_TYPE_LIST: 
-            df = PATH.db_load('models' , f'tushare_cne5_{data_type}' , date , verbose = False)
+            df = DB.db_load('models' , f'tushare_cne5_{data_type}' , date , verbose = False)
         else:
             raise KeyError(data_type)
         # if df is not None: df = df.reset_index().assign(date = date)

@@ -8,7 +8,8 @@ from pypinyin import lazy_pinyin
 from sqlalchemy import create_engine , exc
 from typing import Any , ClassVar , Literal
 
-from src.basic import PATH , CALENDAR
+from src.proj import PATH
+from src.basic import CALENDAR , DB
 from src.data.util.basic import secid_adjust
 from src.func.time import date_seg
 
@@ -156,7 +157,7 @@ class SellsideSQLDownloader:
         else:
             start_dt = max(self.start_dt , start_dt)
             if option == 'since':
-                old_dates = PATH.db_dates(self.DB_SRC , self.db_key)
+                old_dates = DB.db_dates(self.DB_SRC , self.db_key)
                 if trace > 0 and len(old_dates) > trace: old_dates = old_dates[:-trace]
                 if len(old_dates): 
                     last1_dt = CALENDAR.cd(old_dates[-1],1)
@@ -226,7 +227,7 @@ class SellsideSQLDownloader:
         for d in data.index.unique():
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: continue
-            PATH.db_save(data_at_d , self.DB_SRC , self.db_key , d)
+            DB.db_save(data_at_d , self.DB_SRC , self.db_key , d)
 
     @classmethod
     def convert_id(cls , x):

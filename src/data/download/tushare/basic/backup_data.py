@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 from typing import Literal
 
-from src.basic import PATH , CALENDAR
+from src.proj import PATH
+from src.basic import CALENDAR , DB
 from .func import ts_code_to_secid
 
 class TSBackUpDataTransform():
@@ -75,15 +76,15 @@ class TSBackUpDataTransform():
         self.path_record(date).touch()
         for db_key in self.DB_KEYS:
             data = getattr(self , db_key)(date)
-            PATH.db_save(data , db_src , db_key , date)
+            DB.db_save(data , db_src , db_key , date)
 
     def db_path(self , date : int , db_key : str):
         assert db_key in self.DB_KEYS , f'{db_key} is not in {self.DB_KEYS}'
-        return PATH.db_path('trade_ts' , db_key , date)
+        return DB.db_path('trade_ts' , db_key , date)
 
     def db_path_backed(self , date : int , db_key : str):
         assert db_key in self.DB_KEYS , f'{db_key} is not in {self.DB_KEYS}'
-        return PATH.db_path('trade_ts' , f'{db_key}.backed' , date)
+        return DB.db_path('trade_ts' , f'{db_key}.backed' , date)
     
     def db_path_backed_old(self , date : int , db_key : str):
         assert db_key in self.DB_KEYS , f'{db_key} is not in {self.DB_KEYS}'

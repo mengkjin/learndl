@@ -5,7 +5,8 @@ import pandas as pd
 from typing import Any , Literal
 from abc import abstractmethod , ABC
 
-from src.basic import PATH , CALENDAR , Timer , Logger
+from src.proj import PATH
+from src.basic import DB , CALENDAR , Timer , Logger
 from .func import updatable , dates_to_update
 from .connect import TS_PARAMS
 
@@ -26,10 +27,10 @@ class TushareFetcher(ABC):
 
     def __init__(self) -> None:
         if self.DB_TYPE == 'info':
-            assert self.DB_SRC in PATH.DB_BY_NAME , (self.DB_TYPE , self.DB_SRC , self.DB_KEY)
+            assert self.DB_SRC in DB.DB_BY_NAME , (self.DB_TYPE , self.DB_SRC , self.DB_KEY)
             self.use_date_type = False
         elif self.DB_TYPE in ['date' , 'fina' , 'rolling' , 'fundport']:
-            assert self.DB_SRC in PATH.DB_BY_DATE , (self.DB_TYPE , self.DB_SRC , self.DB_KEY)
+            assert self.DB_SRC in DB.DB_BY_DATE , (self.DB_TYPE , self.DB_SRC , self.DB_KEY)
             self.use_date_type = True
         else:
             raise KeyError(self.DB_TYPE)
@@ -72,11 +73,11 @@ class TushareFetcher(ABC):
     def target_path(self , date : int | Any = None):
         if self.use_date_type:  assert date is not None
         else: date = None
-        return PATH.db_path(self.DB_SRC , self.DB_KEY , date)
+        return DB.db_path(self.DB_SRC , self.DB_KEY , date)
 
     def fetch_and_save(self , date : int | Any = None):
         if self.use_date_type:  assert date is not None
-        PATH.db_save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
+        DB.db_save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
 
     def set_rollback_date(self , rollback_date : int | None = None):
         CALENDAR.check_rollback_date(rollback_date)
@@ -90,7 +91,7 @@ class TushareFetcher(ABC):
     def last_date(self):
         '''last date that has data of the database'''
         if self.use_date_type:
-            dates = PATH.db_dates(self.DB_SRC , self.DB_KEY)
+            dates = DB.db_dates(self.DB_SRC , self.DB_KEY)
             ldate =  max(dates) if len(dates) else self.START_DATE
         else:
             ldate =  PATH.file_modified_date(self.target_path() , self.START_DATE)
@@ -248,4 +249,4 @@ class RollingFetcher(TushareFetcher):
             for date in df[self.ROLLING_DATE_COL].unique():
                 subdf = df[df[self.ROLLING_DATE_COL] == date].copy()
                 if not self.SAVEING_DATE_COL: subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
-                PATH.db_save(subdf , self.DB_SRC , self.DB_KEY , date = date , verbose = False)
+                DB.db_save(subdf , self.DB_SRC , self.DB_KEY , date = date , verbose = False)

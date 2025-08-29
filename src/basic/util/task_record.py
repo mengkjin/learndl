@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional, Any
 from pathlib import Path
 
-from ..path import path_structure as PATH
+from src.proj import PATH
 
 class DBConnHandler:
     def __init__(self, db_path: str | Path):
@@ -36,14 +36,19 @@ class DBConnHandler:
         self.conn.__exit__(exc_type, exc_value, exc_tb)
 
 class TaskRecorder:
-    db_path = PATH.monitor.joinpath('task_record.db')
     def __init__(self , type : str , name : str | None = None , key : str | None = None):
         self._type = type
         self._name = name
         self._key = key
         
+        self.db_path = self.get_db_path()
         self.conn_handler = DBConnHandler(self.db_path)
         self.initialize_database()
+
+    def get_db_path(self):
+        db_path = PATH.app_db / 'task_record.db'
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        return db_path
 
     def task_type(self , type : str | None = None):
         if type is None: return self._type

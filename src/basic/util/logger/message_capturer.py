@@ -6,7 +6,7 @@ from datetime import datetime
 from matplotlib.figure import Figure
 from typing import Any , Callable , Literal
 from pathlib import Path
-from src.basic import path as PATH
+from src.proj import PATH
 
 class_mapping = {
     'stdout' : 'stdout',

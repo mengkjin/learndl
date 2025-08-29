@@ -8,7 +8,7 @@ import pandas as pd
 from datetime import datetime
 from dataclasses import dataclass
 
-from src.app.db import BASE_DIR , get_st_log_path
+from src.proj import PATH
 
 class CustomCSS:
     def __init__(self , add_css = ['basic' , 'special_expander' , 'classic_remove' , 'multi_select']) -> None:
@@ -235,8 +235,14 @@ class CustomCSS:
         """
 
 class ActionLogger:
-    action_log = get_st_log_path('action')
-    error_log  = get_st_log_path('error')
+    @staticmethod
+    def get_log_path(log_type : Literal['action' , 'error']):
+        file_path = PATH.app_db / f'page_{log_type}.log'
+        file_path.touch(exist_ok=True)
+        return file_path
+    
+    action_log = get_log_path('action')
+    error_log  = get_log_path('error')
     _instance = None
     _ignores = None
 
@@ -460,7 +466,7 @@ class YAMLFileEditor:
             cls._instances[key] = super().__new__(cls)
         return cls._instances[key]
     
-    def __init__(self , key : str = 'yaml_file_editor' , file_root : Path | str = BASE_DIR , 
+    def __init__(self , key : str = 'yaml_file_editor' , file_root : Path | str = PATH.main , 
                  file_input = True , height : int | None = 500):
         self.key = key
         self.file_root = Path(file_root)

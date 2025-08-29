@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.basic import CALENDAR , PATH
+from src.basic import CALENDAR , DB
 from src.func.singleton import singleton
 
 from .access import DateDataAccess
@@ -25,7 +25,7 @@ class FDataAccess(DateDataAccess):
 
     def data_loader(self , date , data_type):
         if data_type in self.DATA_TYPE_LIST: 
-            return PATH.db_load('financial_ts' , data_type , date , check_na_cols=False)
+            return DB.db_load('financial_ts' , data_type , date , check_na_cols=False)
         else:
             raise KeyError(data_type)
     

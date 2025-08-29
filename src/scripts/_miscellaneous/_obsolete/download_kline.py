@@ -3,7 +3,7 @@ import zipfile , os , shutil
 import pandas as pd
 from pathlib import Path
 import yaml
-from src.basic import PATH
+from src.proj import PATH
 
 with open(PATH.local_settings.joinpath('aws.yaml') , 'r') as f:
     aws_info = yaml.load(f , Loader=yaml.FullLoader)

@@ -1,10 +1,12 @@
 import os , functools , time , datetime
-from typing import Callable
 import portalocker
-from .db import BASE_DIR
+
+from typing import Callable
+
+from src.proj import PATH
 
 class ScriptLock:
-    LOCK_DIR = BASE_DIR.joinpath('.local_resources' , 'runtime' , 'script_lock')
+    LOCK_DIR = PATH.runtime.joinpath('script_lock')
     LOCK_DIR.mkdir(parents=True, exist_ok=True)
     
     def __init__(self, lock_name: str | None = None, timeout: int | None = None , wait_time: int = 1 , verbose: bool = True):

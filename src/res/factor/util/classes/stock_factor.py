@@ -6,7 +6,7 @@ from copy import deepcopy
 from os import listdir
 from typing import Any , Literal , Optional , Union
 
-from src.basic import INSTANCE_RECORD , PATH
+from src.basic import INSTANCE_RECORD , DB
 from src.func import transform as T
 from src.data import DataBlock , DATAVENDOR
 
@@ -252,14 +252,14 @@ class StockFactor:
         
     @classmethod
     def Load(cls , factor_name : str , date : int):
-        df = PATH.factor_load(factor_name , date).assign(date = date)
+        df = DB.factor_load(factor_name , date).assign(date = date)
         return cls(df)
 
     @classmethod
     def Loads(cls , factor_name : str , start : int | None = None , end : int | None = None):
         if start is None: start = 0
         if end is None:   end = 99991231
-        df = PATH.factor_load_multi(factor_name , start_dt=start , end_dt=end)
+        df = DB.factor_load_multi(factor_name , start_dt=start , end_dt=end)
         return cls(df)
         
     def select(self , secid = None , date = None , factor_name = None):

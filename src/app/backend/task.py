@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
-from src.app.db import get_task_db_path , SCPT_DIR
+from src.proj import PATH
 from src.app.abc import check_process_status , kill_process , ScriptCmd
 
 class DBConnHandler:
@@ -39,12 +39,25 @@ class DBConnHandler:
 
 class TaskDatabase:
     def __init__(self , db_name: str | Path | None = None):
-        self.db_path = get_task_db_path()
+        self.db_path = self.get_db_path()
         if db_name is not None:
             self.db_path = self.db_path.with_name(f'{db_name}.db')
         self.db_name = self.db_path.stem
         self.conn_handler = DBConnHandler(self.db_path)
         self.initialize_database()
+
+    @staticmethod
+    def get_db_path():
+        return PATH.app_db / 'task_manager.db'
+    
+    @staticmethod
+    def get_db_backup_path(suffix : str | None = None):
+        if suffix is None:
+            suffix = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_name = f'task_manager_{suffix}'
+        d = PATH.app_db / 'backup'
+        d.mkdir(parents=True, exist_ok=True)
+        return d / f'{backup_name}.db'
 
     def initialize_database(self):
         """Initialize database and tables"""
@@ -356,9 +369,7 @@ class TaskDatabase:
                 cursor.execute('SELECT * FROM task_records ORDER BY create_time DESC LIMIT 1')
                 task_end_time = cursor.fetchone()['create_time']
             suffix = datetime.fromtimestamp(task_end_time).strftime('%Y%m%d_%H%M%S')
-        backup_name = f"{self.db_name}_{suffix}.db"
-        backup_path = self.db_path.parent.joinpath('backup', backup_name)
-        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        backup_path = self.get_db_backup_path(suffix)
         shutil.copy(self.db_path, backup_path)
         return backup_path
     
@@ -598,15 +609,15 @@ class TaskItem:
 
     @property
     def relative(self):
-        return self.absolute.relative_to(SCPT_DIR)
+        return self.absolute.relative_to(PATH.scpt)
     
     @property
     def absolute(self):
         abs_path = self.path.absolute()
-        if abs_path.is_relative_to(SCPT_DIR):
+        if abs_path.is_relative_to(PATH.scpt):
             return abs_path
         else:
-            return SCPT_DIR.joinpath(str(abs_path).split('src/scripts' , 1)[-1].removeprefix('/'))
+            return PATH.scpt.joinpath(str(abs_path).split('src/scripts' , 1)[-1].removeprefix('/'))
 
     @property
     def stem(self):
@@ -852,8 +863,8 @@ class TaskItem:
                 if sep_exit_files:
                     for i , file in enumerate(self.exit_files):
                         path = Path(file).absolute()
-                        if path.is_relative_to(SCPT_DIR):
-                            path = path.relative_to(SCPT_DIR)
+                        if path.is_relative_to(PATH.scpt):
+                            path = path.relative_to(PATH.scpt)
                         exit_info.append((f'Exit File ({i})', f'{path}'))
                 else:
                     exit_info.append(('Exit Files', '\n'.join(self.exit_files)))

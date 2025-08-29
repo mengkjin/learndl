@@ -2,7 +2,7 @@ import pandas as pd
 from typing import Any , Literal
 
 from src import func as FUNC
-from src.basic import PATH
+from src.basic import DB
 from src.res.factor.util import StockFactor
 from src.res.factor.api import FactorTestAPI , TYPE_of_TASK
 from src.res.factor.analytic.test_manager import BaseTestManager
@@ -48,7 +48,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         else:
             df = df.groupby(['date','secid','submodel'])['values'].mean().reset_index()
         df = df.set_index(['secid','date'])
-        PATH.save_df(df , self.path_pred , overwrite = True)
+        DB.save_df(df , self.path_pred , overwrite = True)
         df = df.rename(columns={'submodel':'factor_name'}).pivot_table('values',['secid','date'],'factor_name')
             
         factors : dict[int , StockFactor] = {}

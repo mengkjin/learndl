@@ -4,7 +4,7 @@ import pandas as pd
 
 from typing import Any , Callable , Literal
 
-from src.basic import PATH , CALENDAR
+from src.basic import CALENDAR , DB
 from src.func.singleton import singleton
 
 from .access import DateDataAccess
@@ -18,7 +18,7 @@ class AnalystDataAccess(DateDataAccess):
     def data_loader(self , date , data_type):
         db_key_dict = {'report' : 'report'}
         if data_type in db_key_dict: 
-            df = PATH.db_load('analyst_ts' , db_key_dict[data_type] , date , verbose = False)
+            df = DB.db_load('analyst_ts' , db_key_dict[data_type] , date , verbose = False)
         else:
             raise KeyError(data_type)
         return df

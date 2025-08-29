@@ -2,7 +2,8 @@ import pandas as pd
 
 from pathlib import Path
 
-from src.basic import CALENDAR , PATH , Email
+from src.proj import PATH
+from src.basic import CALENDAR , Email
 from src.res.trading.util import TradingPort
 
 class TradingPortfolioTracker:

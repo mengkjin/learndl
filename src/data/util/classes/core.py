@@ -7,7 +7,8 @@ from pathlib import Path
 from torch import Tensor
 from typing import Any , ClassVar , Literal , Optional
 
-from src.basic import CALENDAR , PATH , SILENT , Timer , torch_load
+from src.proj import PATH
+from src.basic import CALENDAR , DB , SILENT , Timer , torch_load
 from src.func import index_union , index_intersect , forward_fillna
 
 from . import Stock4DData
@@ -30,21 +31,21 @@ def data_type_alias(key : str):
 def block_file_path(key : str , predict=False, alias_search = True):
     train_mark = '.00' if predict else ''
     if key.lower() in ['y' , 'labels']: 
-        return PATH.block.joinpath(f'Y{train_mark}.{PATH.SAVE_OPT_BLK}')
+        return PATH.block.joinpath(f'Y{train_mark}.{DB.SAVE_OPT_BLK}')
     else:
         alias_list = data_type_alias(key) if alias_search else []
         for new_key in alias_list:
-            path = PATH.block.joinpath(f'X_{new_key}{train_mark}.{PATH.SAVE_OPT_BLK}')
+            path = PATH.block.joinpath(f'X_{new_key}{train_mark}.{DB.SAVE_OPT_BLK}')
             if path.exists(): return path
-        return PATH.block.joinpath(f'X_{key}{train_mark}.{PATH.SAVE_OPT_BLK}')
+        return PATH.block.joinpath(f'X_{key}{train_mark}.{DB.SAVE_OPT_BLK}')
 
 def norm_file_path(key : str , predict = False, alias_search = True):
-    if key.lower() == 'y': return PATH.norm.joinpath(f'Y.{PATH.SAVE_OPT_NORM}')
+    if key.lower() == 'y': return PATH.norm.joinpath(f'Y.{DB.SAVE_OPT_NORM}')
     alias_list = data_type_alias(key) if alias_search else []
     for new_key in alias_list:
-        path = PATH.norm.joinpath(f'X_{new_key}.{PATH.SAVE_OPT_BLK}')
+        path = PATH.norm.joinpath(f'X_{new_key}.{DB.SAVE_OPT_BLK}')
         if path.exists(): return path
-    return PATH.norm.joinpath(f'X_{key}.{PATH.SAVE_OPT_BLK}')
+    return PATH.norm.joinpath(f'X_{key}.{DB.SAVE_OPT_BLK}')
 
 class DataBlock(Stock4DData):
     DEFAULT_INDEX = ['secid','date','minute','factor_name']
@@ -155,8 +156,8 @@ class DataBlock(Stock4DData):
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , use_alt = True):
         dates = CALENDAR.td_within(start_dt , end_dt)
-        main_dates = np.intersect1d(dates , PATH.db_dates(db_src , db_key , use_alt=use_alt))
-        df = PATH.db_load_multi(db_src , db_key , main_dates , use_alt=use_alt)
+        main_dates = np.intersect1d(dates , DB.db_dates(db_src , db_key , use_alt=use_alt))
+        df = DB.db_load_multi(db_src , db_key , main_dates , use_alt=use_alt)
 
         if len(df) == 0: return cls()
         if len(df.index.names) > 1 or df.index.name: df = df.reset_index()

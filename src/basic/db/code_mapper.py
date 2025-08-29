@@ -1,10 +1,10 @@
 import pandas as pd
 
-MAPPER_CODE : dict[str , str] = {
+_MAPPER_CODE : dict[str , str] = {
     'T00018.SH' : '600018.SH'
 }
 
-MAPPER_SECID : dict[int , int] = {
+_MAPPER_SECID : dict[int , int] = {
     839729 : 920729 , 
     839167 : 920167 , 
     838163 : 920163 , 
@@ -259,7 +259,7 @@ MAPPER_SECID : dict[int , int] = {
 def code_to_secid(s : pd.Series , decode_first = False):
     code = code_to_code(s , decode_first)
     secid = code.str.replace('[-.@a-zA-Z]','',regex=True)
-    secid = secid.where(secid.str.isdigit() , '-1').astype(int).replace(MAPPER_SECID)
+    secid = secid.where(secid.str.isdigit() , '-1').astype(int).replace(_MAPPER_SECID)
     secid = secid_to_secid(secid)
     return secid
 
@@ -268,10 +268,10 @@ def code_to_code(s : pd.Series , decode_first = False):
         code = pd.Series([(id.decode('utf-8') if isinstance(id , bytes) else str(id)) for id in s])
     else:
         code = s
-    code = code.astype(str).replace(MAPPER_CODE)
+    code = code.astype(str).replace(_MAPPER_CODE)
     code = code.str.replace('[-.@a-zA-Z]','',regex=True)
     return code
 
 def secid_to_secid(s : pd.Series):
-    return s.replace(MAPPER_SECID)
+    return s.replace(_MAPPER_SECID)
 

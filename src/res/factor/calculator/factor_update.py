@@ -9,7 +9,7 @@ from threading import Lock
 from .factor_calc import StockFactorCalculator
 from .hierarchy import StockFactorHierarchy
 
-from src.basic import CONF , CALENDAR , PATH
+from src.basic import CONF , CALENDAR , DB
 from src.data import DATAVENDOR
 from src.func.singleton import singleton
 from src.func.parallel import parallel
@@ -152,7 +152,7 @@ class FactorUpdateJobManager:
 
         removed_factors = []
         for calc in cls.iter_calculators(all_factors = True):
-            path = PATH.factor_path(calc.factor_name , date)
+            path = DB.factor_path(calc.factor_name , date)
             if path.exists():
                 path.unlink()
                 removed_factors.append(calc.factor_name)
