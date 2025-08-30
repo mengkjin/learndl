@@ -7,14 +7,17 @@ from .silence import SILENT
 
 class Timer:
     '''simple timer to print out time'''
-    def __init__(self , *args , newline = False): 
+    def __init__(self , *args , newline = False , exit_only = True): 
         self.newline = newline
+        self.exit_only = exit_only
         self.key = '/'.join(args)
     def __enter__(self):
         self.start_time = time.time()
-        if not SILENT: print(self.key , end=' start!\n' if self.newline else '...')
+        if not SILENT and not self.exit_only: 
+            print(self.key , end=' start!\n' if self.newline else '...')
     def __exit__(self, type, value, trace):
-        if not SILENT: print(self.key if self.newline else '...' , f'finished! Cost {time.time()-self.start_time:.2f} secs')
+        if not SILENT:
+            print(self.key if self.newline or not self.exit_only else '...' , f'finished! Cost {time.time()-self.start_time:.2f} secs')
 
 class PTimer:
     '''process timer , call to record and .summarize() to print out summary'''

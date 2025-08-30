@@ -76,7 +76,7 @@ class DataPreProcessor:
                 continue
             tt1 = time.time()
 
-            with Timer(f'{key} blocks loading' , newline=True):
+            with Timer(f'{key} blocks loading'):
                 block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt)
             with Timer(f'{key} blocks process'):
                 data_block = proc.process_blocks(block_dict)
@@ -89,7 +89,7 @@ class DataPreProcessor:
             del data_block
             gc.collect()
             Logger.info(f'{key} finished! Cost {time.time() - tt1:.2f} Seconds')
-            Logger.separator()
+            Logger.divider()
 
         Logger.info(f'Data Processing Finished! Cost {time.time() - t1:.2f} Seconds')
 

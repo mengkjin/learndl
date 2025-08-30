@@ -17,9 +17,9 @@ class DataAPI:
         with Logger.EnclosedMessage(' download sellside data '):
             SellsideDataUpdater.update()
 
-        # update data from js updaters
-        with Logger.EnclosedMessage(' fetch js data '):
-            JSDataUpdater.update()
+        ## update data from js updaters
+        #with Logger.EnclosedMessage(' fetch js data '):
+        #    JSDataUpdater.update()
 
         # update factor models
         with Logger.EnclosedMessage(' update factor models '):

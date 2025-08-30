@@ -77,8 +77,12 @@ class Logger:
         cls.dump_to_logwriter(*args)
 
     @classmethod
-    def separator(cls , width = 80 , char = '-'):
+    def separator(cls , width = 80 , char = '*'):
         cls().log.info(char * width)
+
+    @classmethod
+    def divider(cls):
+        cls().separator(80 , '=')
         
     @staticmethod
     def dump_to_logwriter(*args):
@@ -93,7 +97,6 @@ class Logger:
             self.width = width
 
         def __enter__(self):
-            Logger.separator(self.width)
             if len(self.title) >= self.width:
                 Logger.info(self.title.upper())
             else:

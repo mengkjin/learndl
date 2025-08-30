@@ -189,7 +189,9 @@ def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : DATA_TYPES):
 
 def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1):
     assert data_type is not None , f'data_type is required'
-    for dt in target_dates(data_type , date):
+    dts = target_dates(data_type , date)
+    if len(dts) == 0: Logger.info(f'rcquant {data_type} bar min has no date to download')
+    for dt in dts:
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
             Logger.warning(f'rcquant {data_type} bar min {dt} failed')
@@ -203,7 +205,7 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
             assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
             x_min_df = trade_min_reform(min_df , x_min , 1)
             DB.db_save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , verbose = True)
-        Logger.separator()
+        Logger.divider()
     return True
 
 def rcquant_proceed(date : int | None = None , first_n : int = -1):

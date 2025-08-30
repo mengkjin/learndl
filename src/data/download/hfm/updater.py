@@ -44,7 +44,7 @@ class JSDataUpdater():
             paths += [p for p in sdir.iterdir() if p.name.startswith(cls.UPDATER_TITLE + '.') and p.name.endswith('.tar')]
         paths.sort()
         if del_after_dumping and paths:
-            Logger.separator()
+            Logger.divider()
             print(f'Delete {len(paths)} updaters after completion')
             print(paths)
             # del_after_dumping = input(f'''Delete {len(paths)} updaters after completion? (press yes/y) : {paths}''')[0].lower() == 'y'
@@ -196,7 +196,7 @@ class JSDataUpdater():
         assert not MACHINE.server , f'must on terminal machine'
         if not MACHINE.belong_to_hfm: return
         start_time = time.time()
-        print(f'Update Files')
+        print(f'Update JSData Update Files')
         Updater = cls()
         Updater.fetch_all()
         Updater.download_all()
@@ -209,7 +209,7 @@ class JSDataUpdater():
         assert MACHINE.server , f'must on server machine'
         start_time = time.time()
 
-        print(f'Unpack Update Files') 
+        print(f'Unpack JSData Update Files') 
         cls.unpack_exist_updaters(del_after_dumping=True)
         cls.transform_datas()
 

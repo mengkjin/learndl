@@ -183,6 +183,6 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
             five_min_df = DB.db_load('trade_ts' , '5min' , dt)
             x_min_df = trade_min_reform(five_min_df , x_min , 5)
             DB.db_save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , verbose = True)
-        Logger.separator()
+        Logger.divider()
 
     return True

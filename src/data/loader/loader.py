@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
-from typing import Literal , Optional
+from typing import Optional
 
 from src.proj import PATH
 from src.basic import Timer , DB

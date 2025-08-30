@@ -6,7 +6,7 @@ from typing import Any , Literal
 from abc import abstractmethod , ABC
 
 from src.proj import PATH
-from src.basic import DB , CALENDAR , Timer , Logger
+from src.basic import DB , CALENDAR , Logger
 from .func import updatable , dates_to_update
 from .connect import TS_PARAMS
 

@@ -127,10 +127,10 @@ class DataBlock(Stock4DData):
         else:
             assert len(paths) == len(fillna) , (len(paths) , len(fillna))
         
-        with Timer(f'Load  {len(paths)} DataBlocks'):
+        with Timer(f'Load {len(paths)} DataBlocks'):
             blocks = [cls.load_path(path) for path in paths]
 
-        with Timer(f'Align {len(paths)} DataBlocks'):
+        with Timer(f'Align DataBlocks'):
             # sligtly faster than .align(secid = secid , date = date)
             newsecid = None
             if intersect_secid:  newsecid = index_intersect([blk.secid for blk in blocks])[0]
