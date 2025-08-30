@@ -66,10 +66,10 @@ def show_tutorial():
 def show_system_info():
     options : dict[str, str] = {}
     # os
-    options[':material/keyboard_command_key: **OS**'] = f"{platform.system()} {platform.release()} ({platform.machine()})"
+    options[':material/keyboard_command_key: OS'] = f"{platform.system()} {platform.release()} ({platform.machine()})"
     # memory
     mem = psutil.virtual_memory()
-    options[':material/memory: **Memory Usage**'] = \
+    options[':material/memory: Memory Usage'] = \
         f"{(mem.total - mem.available) / 1024**3:.1f} GB / {mem.total / 1024**3:.1f} GB ({mem.percent:.1f}%)"
     # gpu
     if torch.cuda.is_available():
@@ -80,24 +80,25 @@ def show_system_info():
         used = torch.mps.current_allocated_memory() / 1024**3
         if torch.__version__ >= '2.3.0':
             recommend = torch.mps.recommended_max_memory() / 1024**3 # type:ignore
-            gpu_info = "**GPU Usage (MPS)**" , f"{used:.1f} / {recommend:.1f} GB ({used / recommend * 100:.1f}%)"
+            gpu_info = "GPU Usage (MPS)" , f"{used:.1f} / {recommend:.1f} GB ({used / recommend * 100:.1f}%)"
         else:
-            gpu_info = "**GPU Usage (MPS)**" , f"{used:.1f} GB Used"
+            gpu_info = "GPU Usage (MPS)" , f"{used:.1f} GB Used"
     else:
-        gpu_info = "**GPU Usage (None)**" , "No GPU"
-    options[f':material/memory_alt: **{gpu_info[0]}**'] = f"{gpu_info[1]}"
+        gpu_info = "GPU Usage (None)" , "No GPU"
+    options[f':material/memory_alt: {gpu_info[0]}'] = f"{gpu_info[1]}"
     # cpu
-    options[':material/select_all: **CPU Usage**'] = f"{psutil.cpu_percent():.1f}%"
+    options[':material/select_all: CPU Usage'] = f"{psutil.cpu_percent():.1f}%"
     # python
-    options[':material/commit: **Python Version**'] = f"{sys.version.split(' ')[0]}"
+    options[':material/commit: Python Version'] = f"{sys.version.split(' ')[0]}"
     # streamlit
-    options[':material/commit: **Streamlit Version**'] = f"{st.__version__}"
+    options[':material/commit: Streamlit Version'] = f"{st.__version__}"
     
     with expander_subheader('home-system-info' , 'System Info' , ':material/computer:' , True ,
                             help = 'System Info , includes OS, memory, GPU, CPU, Python, and Streamlit version.'):
-        cols = st.columns(len(options))
         for i , (label , value) in enumerate(options.items()):
-            cols[i].metric(f"{label}" , value)
+            cols = st.columns([1,4])
+            cols[0].markdown(f"***{label}***")
+            cols[1].markdown(f":blue-badge[*{value}*]")
         
 def show_pending_features():
     if not PENDING_FEATURES: return

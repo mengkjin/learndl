@@ -98,17 +98,13 @@ class SessionControl:
     
     def get_global_settings(self):
         setting = {}
-        email = st.session_state.get('global-settings-email' , None)
-        if email is None: pass
-        elif email.lower()[0] == 'y': setting['email'] = 1
-        elif email.lower()[0] == 'n': setting['email'] = 0
-        else: raise ValueError(f"Invalid email: {email}")
+        email = st.session_state.get('global-settings-email' , 'none').lower()
+        if email != 'none': 
+            setting['email'] = 1 if email == 'y' else 0
 
-        mode = st.session_state.get('global-settings-mode' , None)
-        if mode is None: pass
-        elif mode == 'shell': setting['mode'] = 'shell'
-        elif mode == 'os': setting['mode'] = 'os'
-        else: raise ValueError(f"Invalid mode: {mode}")
+        mode = st.session_state.get('global-settings-mode' , 'none').lower()
+        if mode != 'none': 
+            setting['mode'] = 'shell' if mode == 'shell' else 'os'
         
         return setting
 

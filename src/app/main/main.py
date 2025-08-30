@@ -89,7 +89,7 @@ def global_settings():
         cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
         cols[0].markdown(":blue-badge[Email Notification]" , 
                          help="""If email after the script is complete? Not selected will use script header value.""")
-        cols[1].segmented_control('Email' , ['Y' , 'N'] , default = None , 
+        cols[1].segmented_control('Email' , ['yes' , 'no'] , default = None , 
                                   key = 'global-settings-email'  , label_visibility = 'collapsed')
         cols = st.columns([1,1] , gap = 'small' , vertical_alignment = 'center')
         cols[0].markdown(":blue-badge[Run Mode]" , 

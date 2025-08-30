@@ -586,13 +586,17 @@ def style():
                 height: 16px !important;
                 .stButtonGroup {
                     button {
-                        width: 100% !important;
+                        min-width: 40px !important;
                         margin-top: 0px !important;
                         margin-bottom: 0px !important;
                         padding-top: 0px !important;
                         padding-bottom: 0px !important;
+                        padding-left: 5px !important;
+                        padding-right: 5px !important;
                         height: 28px !important;
-                        font-size: 12px !important;
+                        p {
+                            font-size: 11px !important;
+                        }
                     }
                 }
             }
