@@ -7,6 +7,7 @@
 ```
 runs/
 ├── launch.sh              # 应用启动脚本（使用智能配置）
+├── launch.bat             # 应用启动脚本（Windows version）
 ├── daily_update.sh        # 每日更新脚本
 ├── weekly_update.sh       # 每周更新脚本
 ├── computer_config.sh     # 计算机配置文件（新增）
@@ -125,7 +126,7 @@ $PYTHON_CMD [具体Python脚本路径] [参数]
 - **功能**：自动化执行每周数据更新，支持邮件通知
 - **使用场景**：定时任务、每周维护
 
-### 3. `launch.sh` - 应用启动脚本
+### 3. `launch.sh` `launch.bat` - 应用启动脚本
 **作用**：启动learndl的Streamlit应用
 - **目标**：启动Streamlit Web应用
 - **参数**：`--server.runOnSave=True`

@@ -5,7 +5,7 @@ file_path = str(pathlib.Path(__file__).absolute())
 assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
 path = file_path.removesuffix(file_path.split('learndl' , 1)[-1])
 if not path in sys.path: sys.path.append(path)
-assert os.getcwd() == path , \
+assert os.getcwd().lower() == path.lower() , \
     f'current working directory {os.getcwd()} is not {path} , do not know where to find src file'
 
 import streamlit as st

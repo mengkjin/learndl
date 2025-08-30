@@ -1,0 +1,1 @@
+streamlit run E:\workspace\learndl\src\app\main\learndl_app.py

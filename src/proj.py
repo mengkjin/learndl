@@ -61,8 +61,10 @@ class MachineSetting:
     
     @property
     def python_path(self):
-        if self.name in ['Mathews-Mac' , 'HST-jinmeng']:
+        if self.name in ['Mathews-Mac']:
             return self.project_path + '/.venv/bin/python'
+        elif self.name in ['HST-jinmeng']:
+            return 'E:/workspace/learndl/.venv/Scripts/python.exe'
         elif self.name in ['mengkjin-server']:
             return 'python3.10'
         else:
