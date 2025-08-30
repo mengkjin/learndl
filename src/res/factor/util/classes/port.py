@@ -4,11 +4,12 @@ import pandas as pd
 from copy import deepcopy
 from typing import Any , Literal , Optional
 
-from src.basic.conf import EPS_WEIGHT , ROUNDING_TURNOVER
+from src.basic import CONF
 from src.data import DATAVENDOR
 
 class Port:
     '''portfolio realization of one day'''
+    weight_eps = 1 / 10 ** CONF.ROUNDING['weight']
 
     def __init__(self , port : Optional[pd.DataFrame] , date : int | Any = -1 , 
                  name : str | Any = 'default' , value : float = 1.) -> None:
@@ -112,7 +113,7 @@ class Port:
 
     @classmethod
     def create(cls , secid : np.ndarray | Any , weight : np.ndarray | Any , **kwargs):
-        weight = weight * ((weight >= EPS_WEIGHT) + (weight <= -EPS_WEIGHT))
+        weight = weight * ((weight >= cls.weight_eps) + (weight <= -cls.weight_eps))
         df = pd.DataFrame({'secid':secid , 'weight' : weight})
         df = df[df['weight'] != 0]
         return cls(df , **kwargs)
@@ -182,7 +183,7 @@ class Port:
         if not self or self is another: return 0.
         assert isinstance(another , Port) , another
         turn = (self - another).port['weight'].abs().sum()
-        return np.round(turn , ROUNDING_TURNOVER)
+        return np.round(turn , CONF.ROUNDING['turnover'])
     def exclude(self , secid : np.ndarray | Any | None = None , inplace = False):
         if secid is None: return self
         if not inplace:

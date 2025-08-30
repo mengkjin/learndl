@@ -5,14 +5,17 @@ import statsmodels.api as sm
 from dataclasses import dataclass , field
 from typing import Any , ClassVar , Literal , Optional
 
-from src.basic import SILENT , DB
-from src.basic.conf import RISK_INDUS , RISK_STYLE , RISK_COMMON , ROUNDING_CONTRIBUTION , ROUNDING_EXPOSURE
+from src.basic import SILENT , DB , CONF
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
 
 from .general_model import GeneralModel
 from .port import Port
 
 __all__ = ['RiskModel' , 'RiskProfile' , 'RiskAnalytic' , 'Attribution' , 'RISK_MODEL']
+
+_style = CONF.RISK['style']
+_indus = CONF.RISK['indus']
+_common = CONF.RISK['market'] + CONF.RISK['indus'] + CONF.RISK['style']
 
 @dataclass
 class Rmodel:
@@ -47,9 +50,9 @@ class Rmodel:
         if secid is not None: df = self.loc_secid(df , secid , 0.)
         return df.to_numpy().flatten()
     @property
-    def common_factors(self): return RISK_COMMON
+    def common_factors(self): return _common
     def FCS_aligned(self , secid : np.ndarray | Any = None):
-        F = self.F.loc[: , RISK_COMMON]
+        F = self.F.loc[: , _common]
         C = self.C
         S = self.S
         if secid is not None: 
@@ -57,11 +60,11 @@ class Rmodel:
             S = self.loc_secid(S , secid , 'max')
         return F.values.T , C.values , S.values.flatten()
     def industry(self , secid : np.ndarray | Any = None):
-        df = self.F.loc[: , RISK_INDUS].idxmax(axis=1)
+        df = self.F.loc[: , _indus].idxmax(axis=1)
         if secid is not None: df = self.loc_secid(df , secid , 0.)
         return df.to_numpy()
     def style(self , secid : np.ndarray | Any = None , style : np.ndarray | Any = None):
-        if style is None: style = RISK_STYLE
+        if style is None: style = _style
         df = self.F.loc[: , style]
         if secid is not None: df = self.loc_secid(df , secid , 0.)
         return df
@@ -105,7 +108,7 @@ class Rmodel:
             model = sm.WLS(F['tot'] , F['market'].fillna(0), weights=F['weight']).fit()   # type: ignore
             market_ret , excess_ret = model.params , model.resid.rename('excess')
 
-            model = sm.WLS(excess_ret , F[RISK_INDUS + RISK_STYLE], weights=F['weight']).fit()   # type: ignore
+            model = sm.WLS(excess_ret , F[_indus + _style], weights=F['weight']).fit()   # type: ignore
             self.params = pd.concat([market_ret , model.params])
             self.futret = futret.loc[:,['tot']].join(excess_ret).join(model.resid.rename('specific'))
             self.regressed = target_date
@@ -213,8 +216,8 @@ class RiskAnalytic:
     def append(self , port_type : Literal['portfolio' , 'benchmark' , 'initial' , 'active'] , risk_profile : RiskProfile):
         df = risk_profile.to_dataframe()
         if df is None: return
-        industry = df.loc[RISK_INDUS].rename(columns={'value':port_type}).rename_axis('industry',axis='index')
-        style    = df.loc[RISK_STYLE].rename(columns={'value':port_type}).rename_axis('style',axis='index')
+        industry = df.loc[_indus].rename(columns={'value':port_type}).rename_axis('industry',axis='index')
+        style    = df.loc[_style].rename(columns={'value':port_type}).rename_axis('style',axis='index')
         risk     = df.loc[RiskProfile.variance_measure].rename(columns={'value':port_type}).rename_axis('measure',axis='index')
         
         if self:
@@ -227,9 +230,9 @@ class RiskAnalytic:
             self.risk     = risk
 
     def rounding(self):
-        if self.industry is not None: self.industry = self.industry.round(ROUNDING_EXPOSURE)
-        if self.style    is not None: self.style    = self.style.round(ROUNDING_EXPOSURE)
-        if self.risk     is not None: self.risk     = self.risk.round(ROUNDING_EXPOSURE)
+        if self.industry is not None: self.industry = self.industry.round(CONF.ROUNDING['exposure'])
+        if self.style    is not None: self.style    = self.style.round(CONF.ROUNDING['exposure'])
+        if self.risk     is not None: self.risk     = self.risk.round(CONF.ROUNDING['exposure'])
         return self
 
     def styler(self , which : Literal['industry' , 'style' , 'risk'] = 'style'):
@@ -291,8 +294,8 @@ class Attribution:
         aggregated = pd.concat([aggregated , agg_cost]).rename_axis('source' , axis = 'index')
         aggregated.loc[['tot'],['contribution']] = aggregated.loc[['tot'],['contribution']] - other_cost
         
-        industry = aggregated.loc[RISK_INDUS]
-        style    = aggregated.loc[RISK_STYLE]
+        industry = aggregated.loc[_indus]
+        style    = aggregated.loc[_style]
 
         source   = pd.concat([aggregated.loc[['tot','market','excess','specific','cost']] ,
                               industry.sum().rename('industry').to_frame().T ,
@@ -302,18 +305,18 @@ class Attribution:
         order_list = ['tot','market','industry','style','excess','specific','cost']
         source = source.loc[order_list].rename_axis('source' , axis = 'index')
 
-        specific['industry'] = specific.loc[:,RISK_INDUS].sum(1)
-        specific['style']    = specific.loc[:,RISK_STYLE].sum(1)
-        specific = specific.drop(columns = RISK_INDUS + RISK_STYLE).loc[:,order_list[:-1]]
+        specific['industry'] = specific.loc[:,_indus].sum(1)
+        specific['style']    = specific.loc[:,_style].sum(1)
+        specific = specific.drop(columns = _indus + _style).loc[:,order_list[:-1]]
 
         return cls(risk_model.next_date , risk_model.regressed , source , industry , style , specific , aggregated)
     
     def rounding(self):
         decimals = {
-            'portfolio' : ROUNDING_EXPOSURE , 
-            'benchmark' : ROUNDING_EXPOSURE , 
-            'active'    : ROUNDING_EXPOSURE , 
-            'contribution' : ROUNDING_CONTRIBUTION}
+            'portfolio' : CONF.ROUNDING['exposure'] , 
+            'benchmark' : CONF.ROUNDING['exposure'] , 
+            'active'    : CONF.ROUNDING['exposure'] , 
+            'contribution' : CONF.ROUNDING['contribution']}
         if self.source is not None:     self.source   = self.source.round(decimals)
         if self.industry is not None:   self.industry = self.industry.round(decimals)
         if self.style    is not None:   self.style    = self.style.round(decimals)

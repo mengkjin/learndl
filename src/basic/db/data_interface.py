@@ -1,6 +1,4 @@
 import os , platform , re
-import dask
-import dask.dataframe
 from dask.delayed import delayed
 from dask.base import compute
 import numpy as np
@@ -9,7 +7,7 @@ import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from datetime import datetime , timedelta
 from pathlib import Path
-from typing import Any , Literal , Callable , Generator
+from typing import Any , Literal , Generator
 
 from src.proj import MACHINE as _machine , PATH as _path
 from .code_mapper import secid_to_secid
@@ -128,9 +126,6 @@ def load_df_multi(paths : dict , date_colname : str = 'date' ,
     if parallel is None or parallel == 'none':
         dfs = [reader(p).assign(**{date_colname:d}) for d,p in paths.items()]
     elif parallel == 'dask':
-        #ddf = dask.dataframe.from_delayed([delayed(reader)(p).assign(**{date_colname:d}) for d,p in paths.items()])
-        #df = ddf.compute()
-        #return load_df_mapper(df)
         ddfs = [delayed(reader)(p).assign(**{date_colname:d}) for d,p in paths.items()]
         dfs = compute(ddfs)[0]
     else:

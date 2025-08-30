@@ -1,8 +1,7 @@
 from typing import Literal , Any , Callable
 import streamlit as st
 
-from src.app.backend.script import ScriptRunner , ScriptParamInput
-from src.app.backend.task import TaskItem
+from src.app.backend import ScriptRunner , ScriptParamInput , TaskItem
 
 class ParamInputsForm:
     def __init__(self , runner : ScriptRunner , target : dict[str, Any] , item : TaskItem | None = None):

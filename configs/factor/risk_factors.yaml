@@ -1,0 +1,52 @@
+market:
+  - market
+
+style:
+  - size
+  - beta
+  - momentum
+  - residual_volatility
+  - non_linear_size
+  - book_to_price
+  - liquidity
+  - earnings_yield
+  - growth
+  - leverage
+
+indus:
+  - petro
+  - coal
+  - nonferrous
+  - utility
+  - public
+  - steel
+  - chemical
+  - construct
+  - cement
+  - material
+  - light
+  - machine
+  - power
+  - defense
+  - auto
+  - retail
+  - leisure
+  - appliance
+  - textile
+  - health
+  - liqor
+  - food
+  - agro
+  - bank
+  - financial
+  - estate
+  - transport
+  - marine
+  - airline
+  - electronic
+  - telecom
+  - hardware
+  - software
+  - media
+  - complex
+    

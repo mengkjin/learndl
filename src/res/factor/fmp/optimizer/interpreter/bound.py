@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
 from src.basic import CONF , Logger
-STOCK_LB , STOCK_UB = CONF.SYMBOL_STOCK_LB , CONF.SYMBOL_STOCK_UB
+
+STOCK_LB , STOCK_UB = -1. , +1.
 
 @dataclass
 class StockBound:

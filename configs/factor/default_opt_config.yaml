@@ -25,10 +25,14 @@ pool:
   shortable:    null
 
 range:
+  ffmv.abs:     [null, null]
   ffmv.pct:     [0.1 , null]
   cp.abs:       [null, null]
+  cp.pct:       [null, null]
+  #amt.abs:      [null, null]
   #amt.pct:      [0.1 , null]
-  #bv.pct:       [0.1 , null]
+  #bv.abs:       [null, null]
+  #bv.pct:       [0.1 , null]  
 
 induspool:
   no_buy:       null

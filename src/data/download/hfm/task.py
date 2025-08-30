@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any , Callable , Literal , Optional
 
 from src.proj import PATH
-from src.basic import CALENDAR , DB
+from src.basic import CALENDAR , DB , CONF
 from src.data.util import secid_adjust , col_reform , row_filter , adjust_precision , trade_min_reform , trade_min_fillna
 
 @dataclass
@@ -397,10 +397,9 @@ def kline_download(verbose = True):
     import pandas as pd
     from pathlib import Path
 
-    with open(PATH.local_settings.joinpath('aws.yaml') , 'r') as f:
-        aws_info = yaml.load(f , Loader=yaml.FullLoader)
-        aws_access_key_id = aws_info['aws_access_key_id']
-        aws_secret_access_key = aws_info['aws_secret_access_key']
+    conf = CONF.local('aws')
+    aws_access_key_id = conf['aws_access_key_id']
+    aws_secret_access_key = conf['aws_secret_access_key']
 
     session = boto3.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, region_name='cn-north-1')
     s3 = session.resource('s3')

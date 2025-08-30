@@ -44,11 +44,11 @@ class AccountConfig:
     @property
     def trade_cost(self): 
         if self.trade_engine == 'default':
-            return CONF.TRADE_COST
+            return CONF.TRADE['cost']['default']
         elif self.trade_engine == 'harvest':
-            return CONF.TRADE_COST_HARVEST
+            return CONF.TRADE['cost']['harvest']
         elif self.trade_engine == 'yale':
-            return CONF.TRADE_COST_YALE
+            return CONF.TRADE['cost']['yale']
         else:
             raise ValueError(f'Unknown trade engine: {self.trade_engine}')
 
@@ -133,7 +133,7 @@ class PortfolioAccountant:
             rets = self.get_rets(port_old , port_new , bench , ed)
             turn = port_new.turnover(port_old)
             self.account.loc[date , ['pf' , 'bm' , 'overnight' , 'turn']] = \
-                np.round([rets['pf'] , rets['bm'] , rets['overnight'] , turn] , CONF.ROUNDING_RETURN)
+                np.round([rets['pf'] , rets['bm'] , rets['overnight'] , turn] , CONF.ROUNDING['return'])
             
             if self.config.analytic: 
                 self.account.loc[date , 'analytic']    = RISK_MODEL.get(date).analyze(port_new , bench , port_old) #type:ignore
@@ -208,8 +208,8 @@ class PortfolioAccountant:
         df = pd.concat(accounts)
         old_index = list(df.index.names)
         df = df.reset_index().sort_values('model_date')
-        new_bm = np.setdiff1d(df['benchmark'] , CONF.CATEGORIES_BENCHMARKS).tolist()
-        df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.CATEGORIES_BENCHMARKS + new_bm , ordered=True) 
+        new_bm = np.setdiff1d(df['benchmark'] , CONF.BENCH['categories']).tolist()
+        df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.BENCH['categories'] + new_bm , ordered=True) 
 
         df = df.set_index(old_index).sort_index()
         INSTANCE_RECORD.update_account(df)    

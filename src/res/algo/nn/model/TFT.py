@@ -6,8 +6,7 @@ import pandas as pd
 from typing import Any
 import math
 
-from src.basic.conf import RISK_INDUS , RISK_STYLE
-
+from src.basic import CONF
 class GatedResidualNetwork(nn.Module):
     """门控残差网络"""
     def __init__(self, input_dim: int, hidden_dim: int, output_dim: int, dropout: float = 0.1):
@@ -139,7 +138,8 @@ class TemporalFusionTransformer(nn.Module):
     
     def __init__(
         self,
-        input_dim : tuple[int,int] | tuple[int,int,int] = (6 , len(RISK_STYLE),len(RISK_INDUS)), # aka , known dynamic dim , static dim
+        input_dim : tuple[int,int] | tuple[int,int,int] = \
+            (6 , len(CONF.RISK['style']),len(CONF.RISK['indus'])), # aka , known dynamic dim , static dim
         hidden_dim: int = 16,
         label_dim: int = 0, # aka , unknown dynamic dim, should be 0 if not used
         num_heads: int = 4,
@@ -172,7 +172,7 @@ class TemporalFusionTransformer(nn.Module):
         self.indus_dim = indus_dim
         self.indus_embed = indus_embed
 
-        assert self.static_dim == len(RISK_INDUS) , (input_dim , len(RISK_INDUS))
+        assert self.static_dim == len(CONF.RISK['indus']) , (input_dim , len(CONF.RISK['indus']))
         
         if indus_embed:
             self.indus_embedding = nn.Linear(self.static_dim , indus_dim)

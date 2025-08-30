@@ -1,14 +1,13 @@
-import boto3 , re , datetime , argparse # type: ignore
-import zipfile , os , shutil
+import boto3 , re , argparse # type: ignore
+import zipfile , os
 import pandas as pd
 from pathlib import Path
-import yaml
-from src.proj import PATH
 
-with open(PATH.local_settings.joinpath('aws.yaml') , 'r') as f:
-    aws_info = yaml.load(f , Loader=yaml.FullLoader)
-    aws_access_key_id = aws_info['aws_access_key_id']
-    aws_secret_access_key = aws_info['aws_secret_access_key']
+from src.basic import CONF
+
+aws_info = CONF.local('aws')
+aws_access_key_id = aws_info['aws_access_key_id']
+aws_secret_access_key = aws_info['aws_secret_access_key']
 
 session = boto3.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, region_name='cn-north-1')
 s3 = session.resource('s3')

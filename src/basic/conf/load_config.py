@@ -21,3 +21,7 @@ def schedule(name : str):
 def trade(name : str):
     return load('trade' , name)
 
+def local(name : str):
+    p = PATH.local_settings.joinpath(f'{name}.yaml')
+    assert p.exists() , p
+    return PATH.read_yaml(p)

@@ -1,0 +1,12 @@
+trade:
+  cost:
+    default: 0.00035
+    harvest: 0.002
+    yale: 0.00035
+
+rounding:
+  weight: 6
+  exposure: 6
+  contribution: 8
+  return: 8
+  turnover: 8

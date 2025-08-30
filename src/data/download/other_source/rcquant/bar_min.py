@@ -6,7 +6,7 @@ from rqdatac.share.errors import QuotaExceeded
 from typing import Literal
 
 from src.proj import PATH , MACHINE
-from src.basic import CALENDAR , Logger , OutputCapturer , DB
+from src.basic import CALENDAR , Logger , OutputCapturer , DB , CONF
 from src.data.util.basic import secid_adjust , trade_min_reform
 
 RC_PATH = PATH.miscel.joinpath('Rcquant')
@@ -53,14 +53,11 @@ def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
     path.parent.mkdir(exist_ok=True , parents=True)
     df.to_feather(path)
 
-def rcquant_license_path():
-    return PATH.local_settings.joinpath('rcquant.yaml')
-
 def rcquant_init():
     if not rqdatac.initialized(): 
         try:
             with OutputCapturer() as capturer:
-                rcquant_uri = PATH.read_yaml(rcquant_license_path())['uri']
+                rcquant_uri = CONF.local('rcquant')['uri']
                 rqdatac.init(uri = rcquant_uri)
             output = capturer.get_output()
             if _print := output['stdout']:

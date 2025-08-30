@@ -19,4 +19,4 @@ else
 fi
 
 cd "$BASE_PATH"
-$PYTHON_CMD -m streamlit run src/app/main/learndl_app.py --server.runOnSave=True
+$PYTHON_CMD -m streamlit run src/app/main/main.py --server.runOnSave=True

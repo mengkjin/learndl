@@ -10,7 +10,7 @@ class InstanceRecord:
         return cls._instance
     
     def __init__(self):
-        print(f'src.INSTANCE_RECORD can be accessed to check {self._slots}')
+        print(f'src.basic.INSTANCE_RECORD can be accessed to check {self._slots}')
     
     def __repr__(self):
         attrs = {name:type(getattr(self , name)) for name in self._slots if hasattr(self , name)}

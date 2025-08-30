@@ -106,7 +106,7 @@ def parse_config_industry(config : dict):
     rslt : dict[str,list[GeneralBound]] = {}
     overall_bnds = [GeneralBound(bnd_key , *config[bnd_key]) for bnd_key in ['abs' , 'rel' , 'por'] if bnd_key in config]
     overall_bnds = [bnd for bnd in overall_bnds if bnd]
-    for name in CONF.RISK_INDUS:
+    for name in CONF.RISK['indus']:
         sub_config = {key:val for key , val in config.items() if key.startswith(name)}
         if sub_config:
             bnds = [GeneralBound(default_bnd_key if key == name else key.split('.')[1] , *val) for key , val in sub_config.items()]
@@ -126,7 +126,7 @@ def parse_config_style(config : dict):
     rslt : dict[str,list[GeneralBound]] = {}
     overall_bnds = [GeneralBound(bnd_key , *config[bnd_key]) for bnd_key in ['abs' , 'rel' , 'por'] if bnd_key in config]
     overall_bnds = [bnd for bnd in overall_bnds if bnd]
-    for name in CONF.RISK_STYLE:
+    for name in CONF.RISK['style']:
         sub_config = {key:val for key , val in config.items() if key.startswith(name)}
         if sub_config:
             bnds = [GeneralBound(default_bnd_key if key == name else key.split('.')[1] , *val) for key , val in sub_config.items()]

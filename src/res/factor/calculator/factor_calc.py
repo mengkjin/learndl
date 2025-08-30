@@ -33,8 +33,8 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         'money_flow' : ['holding' , 'trading'] ,
         'alternative' : None
     }
-    FACTOR_CALENDAR = CALENDAR.td_within(INIT_DATE , step = CONF.UPDATE_STEP)
-    FACTOR_TARGET_DATES = CALENDAR.slice(FACTOR_CALENDAR , CONF.UPDATE_START , CONF.UPDATE_END)
+    FACTOR_CALENDAR = CALENDAR.td_within(INIT_DATE , step = CONF.UPDATE['step'])
+    FACTOR_TARGET_DATES = CALENDAR.slice(FACTOR_CALENDAR , CONF.UPDATE['start'] , CONF.UPDATE['end'])
     UPDATE_MIN_VALID_COUNT_RELAX  = 20
     UPDATE_MIN_VALID_COUNT_STRICT = 100
     UPDATE_RELAX_DATES : list[int] = []
@@ -64,9 +64,9 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
                fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
                weighted_whiten = False , order = ['fillna' , 'whiten' , 'winsor'] ,
                multi_thread = True , ignore_error = True , verbose = False):
-        assert step % CONF.UPDATE_STEP == 0 , f'step {step} should be a multiple of {CONF.UPDATE_STEP}'
+        assert step % CONF.UPDATE['step'] == 0 , f'step {step} should be a multiple of {CONF.UPDATE["step"]}'
         dates = CALENDAR.slice(cls.FACTOR_CALENDAR , start , end)
-        dates = dates[dates <= CALENDAR.updated()][::int(step/CONF.UPDATE_STEP)]
+        dates = dates[dates <= CALENDAR.updated()][::int(step/CONF.UPDATE['step'])]
         if len(dates) == 0: return StockFactor(pd.DataFrame())
         calc = cls()
         def calculate_factor(date):

@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Literal , Any
 
 from src.proj import MACHINE , PATH
+from src.basic import CONF
 
 def email_settings():
-    return PATH.read_yaml(PATH.local_settings.joinpath('email.yaml'))
+    return CONF.local('email')
 
 class Email:
     Attachments : dict[str , list[Path]] = {}

@@ -3,8 +3,7 @@ import pandas as pd
 
 from typing import Any
 
-from src.basic import DB
-from src.basic.conf import AVAIL_BENCHMARKS , DEFAULT_BENCHMARKS , CATEGORIES_BENCHMARKS
+from src.basic import DB , CONF
 from src.data import DataBlock , DATAVENDOR
 
 from .portfolio import Port , Portfolio
@@ -17,9 +16,9 @@ class Benchmark(Portfolio):
     '''
     _instance_dict = {}
     
-    AVAILABLES = AVAIL_BENCHMARKS
-    DEFAULTS   = DEFAULT_BENCHMARKS
-    CATEGORIES = CATEGORIES_BENCHMARKS
+    AVAILABLES = CONF.BENCH['availables']
+    DEFAULTS   = CONF.BENCH['defaults']
+    CATEGORIES = CONF.BENCH['categories']
     NONE       = ['none' , 'default' , 'market']
     
     def __new__(cls , name : str | Any | None , *args , **kwargs):
@@ -161,10 +160,10 @@ class Benchmark(Portfolio):
     @classmethod
     def defaults(cls): return [cls(bm) for bm in cls.DEFAULTS]
 
-    @staticmethod
-    def as_category(bm : Any):
-        new_bm = np.setdiff1d(bm , CATEGORIES_BENCHMARKS).tolist()
-        return pd.Categorical(bm , categories = CATEGORIES_BENCHMARKS + new_bm , ordered=True) 
+    @classmethod
+    def as_category(cls , bm : Any):
+        new_bm = np.setdiff1d(bm , cls.CATEGORIES).tolist()
+        return pd.Categorical(bm , categories = cls.CATEGORIES + new_bm , ordered=True) 
     
     def accounting(self , **kwargs):
         '''Benchmark cannot be accounted'''
