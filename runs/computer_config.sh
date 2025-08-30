@@ -17,8 +17,8 @@ get_computer_config() {
         "linux-gnu"*)
             case "$SHORT_HOSTNAME" in
                 "mengkjin-server")
-                    # echo "/home/mengkjin/workspace/learndl|/home/mengkjin/workspace/learndl/.venv/bin/python"
-                    echo "/home/mengkjin/workspace/learndl|python3.10"
+                    echo "/home/mengkjin/workspace/learndl|/home/mengkjin/workspace/learndl/.venv/bin/python"
+                    # echo "/home/mengkjin/workspace/learndl|python3.10"
                     ;;
             esac
             ;;

@@ -66,7 +66,7 @@ class MachineSetting:
         elif self.name in ['HST-jinmeng']:
             return 'E:/workspace/learndl/.venv/Scripts/python.exe'
         elif self.name in ['mengkjin-server']:
-            return 'python3.10'
+            return self.project_path + '/.venv/bin/python' #'python3.10'
         else:
             return 'python'
 
