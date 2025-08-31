@@ -17,7 +17,7 @@ class Timer:
             print(self.key , end=' start!\n' if self.newline else '...')
     def __exit__(self, type, value, trace):
         if not SILENT:
-            print(self.key if self.newline or not self.exit_only else '...' , f'finished! Cost {time.time()-self.start_time:.2f} secs')
+            print(self.key if (self.newline or self.exit_only) else '...' , f'finished! Cost {time.time()-self.start_time:.2f} secs')
 
 class PTimer:
     '''process timer , call to record and .summarize() to print out summary'''
