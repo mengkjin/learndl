@@ -35,7 +35,7 @@ class ParamInputsForm:
 
         @property
         def raw_value(self) -> Any:
-            return st.session_state[self.widget_key]
+            return st.session_state.get(self.widget_key, None)
         
         @property
         def param_value(self):

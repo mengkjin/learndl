@@ -1,1 +1,1 @@
-streamlit run E:\workspace\learndl\src\app\main\main.py
+streamlit run E:\workspace\learndl\src\app\main\launch.py
