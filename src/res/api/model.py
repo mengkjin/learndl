@@ -145,7 +145,7 @@ class ModelAPI:
         Train a schedule model in config/schedule folder
         '''
         return cls.Trainer.schedule(schedule_name = schedule_name , short_test = short_test , verbosity = verbosity , 
-                                    stage = 0 , resume = 0 , checkname = 1 , **kwargs)
+                                    stage = 0 , resume = 1 , checkname = 1 , **kwargs)
     
     @classmethod
     def clear_st_models(cls):

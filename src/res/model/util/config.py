@@ -47,8 +47,8 @@ def schedule_config(base_path : ModelPath | Path | None , name : str | None):
     base_path = ModelPath(base_path)
     if base_path:
         schedules = list(base_path.conf('schedule').glob('*.yaml'))
-        assert len(schedules) == 1 , f'multiple schedules found: {schedules}'
-        name = schedules[0].stem
+        assert len(schedules) <= 1 , f'multiple schedules found: {schedules}'
+        name = schedules[0].stem if schedules else None
     p : dict[str,Any] = {}
     if name: p.update(PATH.read_yaml(conf_path(base_path , 'schedule', name)))
     return p

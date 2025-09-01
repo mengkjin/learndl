@@ -234,7 +234,7 @@ class PortfolioBuilderGroup:
                 self.opt_count = 0
             elif where == 'loop':
                 if self.verbosity > 1 or (self.verbosity > 0 and (self.opt_count % 50 == 0)): 
-                    time_cost = {k:np.round(v*1000,2) for k,v in self._builder.creations[-1].time.items()}
+                    time_cost = {k:float(np.round(v*1000,2)) for k,v in self._builder.creations[-1].time.items()}
                     print(f'{self.category_title} of {self.opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
                           f' Finished at {self._date} , time cost (ms) : {time_cost}')
                 self.opt_count += 1
