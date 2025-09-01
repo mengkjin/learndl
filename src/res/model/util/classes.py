@@ -404,8 +404,8 @@ class BaseTrainer(ModelStreamLine):
                         break
                 model_iter = Filtered(model_iter , ~models_trained)
                 
-            elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:
-                model_iter = []
+            #elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:
+            #    model_iter = []
         return model_iter
 
     def iter_model_submodels(self):
