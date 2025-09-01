@@ -15,9 +15,10 @@ if not path in sys.path: sys.path.append(path)
 
 from src.res.api import DataAPI
 from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder
+from src.app import BackendTaskRecorder , ScriptLock
 
 @BackendTaskRecorder()
+@ScriptLock('reconstruct_train_data' , timeout = 10)
 def main(**kwargs):
     with AutoRunTask('reconstruct_train_data' , **kwargs) as runner:
         DataAPI.reconstruct_train_data(confirm = 1)

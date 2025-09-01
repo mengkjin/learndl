@@ -8,31 +8,21 @@ from .nn.api import get_nn_module , get_multiloss_params , get_nn_category , get
 from .boost.api import AVAILABLE_BOOSTERS , OptunaBooster , GeneralBooster
 
 class AlgoModule:
-    AVAILABLE_BOOSTERS = AVAILABLE_BOOSTERS
-    AVAILABLE_NNS      = AVAILABLE_NNS
-    AVAILABLE_MODULES  = {**AVAILABLE_NNS , **AVAILABLE_BOOSTERS}
+    _availables = {'booster' : AVAILABLE_BOOSTERS , 'nn' : AVAILABLE_NNS}
     
     @classmethod
-    def available_modules(cls , module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
+    def available_modules(cls , module_type : Literal['nn' , 'booster' , 'all'] = 'all'):
         if module_type == 'all':
-            return cls.AVAILABLE_MODULES
-        elif module_type == 'nn':
-            return cls.AVAILABLE_NNS
-        elif module_type == 'boost':
-            return cls.AVAILABLE_BOOSTERS
+            return {k:v for mod_type, mods in cls._availables.items() for k,v in mods.items()}
         else:
-            raise ValueError(f'{module_type} is not a valid module type')
+            return cls._availables[module_type]
         
     @classmethod
-    def available_modules_str(cls , module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
+    def available_modules_str(cls , module_type : Literal['nn' , 'booster' , 'all'] = 'all'):
         if module_type == 'all':
-            return '\n'.join([cls.available_modules_str('nn') , cls.available_modules_str('boost')])
-        elif module_type == 'nn':
-            return '\n'.join([f'nn/{module}' for module in cls.AVAILABLE_NNS.keys()])
-        elif module_type == 'boost':
-            return '\n'.join([f'boost/{module}' for module in cls.AVAILABLE_BOOSTERS.keys()])
+            return '\n'.join([cls.available_modules_str('nn') , cls.available_modules_str('booster')])
         else:
-            raise ValueError(f'{module_type} is not a valid module type')
+            return '\n'.join([f'{module_type}/{module}' for module in cls._availables[module_type].keys()])
         
     @classmethod
     def export_available_modules(cls):
@@ -42,16 +32,16 @@ class AlgoModule:
             f.write(cls.available_modules_str())
         
     @classmethod
-    def is_valid(cls , model_module : str , type : Literal['nn' , 'boost' , 'all'] = 'all'): 
-        if type == 'all': return model_module in cls.AVAILABLE_MODULES
-        elif type == 'nn': return model_module in cls.AVAILABLE_NNS
-        elif type == 'boost': return model_module in cls.AVAILABLE_BOOSTERS
-        else: raise ValueError(f'{type} is not a valid boost type')
+    def is_valid(cls , model_module : str , module_type : Literal['nn' , 'booster' , 'all'] = 'all'): 
+        if module_type == 'all': 
+            return cls.is_valid(model_module , 'nn') or cls.is_valid(model_module , 'booster')
+        else: 
+            return model_module in cls._availables[module_type]
 
     @classmethod
     def module_type(cls , module_name : str):
-        if module_name in ['booster' , 'hidden_aggregator'] or module_name in cls.AVAILABLE_BOOSTERS: return 'boost'
-        if module_name in cls.AVAILABLE_NNS: return 'nn'
+        if module_name in ['booster' , 'hidden_aggregator'] or module_name in cls._availables['booster']: return 'booster'
+        if module_name in cls._availables['nn']: return 'nn'
         raise ValueError(f'{module_name} is not a valid module')
     
     @classmethod

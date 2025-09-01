@@ -4,13 +4,16 @@ module        : tft  # any of [nn defined in src/algo/nn/api.py] or ['booster' ,
 submodels     : [best , swalast , swabest] # subset of ['best' , 'swalast' , 'swabest'] , but for booster , only use best
 beg_date      : 20170103 # model start date
 end_date      : 99991231 # model end date
-interval      : 0       # model update interval in days , nn is prefered to be 120 , booster is prefered to be 20 , but is up to you
-train_window  : 0       # train window in days , nn is prefered to be 2400 , booster is prefered to be 240 , but is up to you
 
-nn_interval: 120
-booster_interval: 20
-nn_train_window: 2400
-booster_train_window: 240
+# model update interval in days , nn is prefered to be 120 , booster is prefered to be 20 , but is up to you
+# interval         : 0       
+interval.nn      : 120
+interval.booster : 20
+
+# train window in days , nn is prefered to be 2400 , booster is prefered to be 240 , but is up to you
+# train_window         : 0       
+train_window.nn      : 2400
+train_window.booster : 240
 
 # if module is a neural network ----------------------------------------------------------------
 booster_head            : null # [null , lgbm , ada , xgboost , catboost] , if not null the last layer of the nn is a booster

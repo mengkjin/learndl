@@ -14,16 +14,24 @@ from .storage import Checkpoint , Deposition
 
 TRAIN_CONFIG_LIST = ['train' , 'env' , 'callbacks' , 'conditional' , 'model']
 
+
+
+def conf_dir(base_path : ModelPath | Path | None , *args):
+    base_path = ModelPath(base_path)
+    f = base_path.conf if base_path else PATH.conf.joinpath
+    path = f(*args)
+    return path
+
 def conf_path(base_path : ModelPath | Path | None , *args):
     base_path = ModelPath(base_path)
     f = base_path.conf if base_path else PATH.conf.joinpath
-    return f(*args)
+    path = f(*args).with_suffix('.yaml')
+    return path
 
 def conf_copy(source : Path , target : Path , overwrite = False):
     if source.is_dir():
         if not overwrite: 
             assert not target.exists() or len([v for v in target.iterdir()]) == 0 , target
-
         shutil.copytree(source , target , dirs_exist_ok = True)
     else:
         if not overwrite: 
@@ -34,12 +42,24 @@ def conf_copy(source : Path , target : Path , overwrite = False):
 def conf_mod_type(module : str):
     return AlgoModule.module_type(module)
 
+def schedule_config(base_path : ModelPath | Path | None , name : str | None):
+    # schedule configs are used to override the train config
+    base_path = ModelPath(base_path)
+    if base_path:
+        schedules = list(base_path.conf('schedule').glob('*.yaml'))
+        assert len(schedules) == 1 , f'multiple schedules found: {schedules}'
+        name = schedules[0].stem
+    p : dict[str,Any] = {}
+    if name: p.update(PATH.read_yaml(conf_path(base_path , 'schedule', name)))
+    return p
+
 class TrainParam:
-    def __init__(self , base_path : ModelPath | Path | None , override = None):
+    def __init__(self , base_path : ModelPath | Path | None , override = None , schedule_name : str | None = None):
         self.base_path = ModelPath(base_path)
         self.override = override or {}
         self.model_name = self.base_path.name
-        self.load_param().special_adjustment().make_model_name().check_validity()
+        self.schedule_name = schedule_name
+        self.load_param().check_validity()
 
     def __bool__(self): return True
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
@@ -55,7 +75,18 @@ class TrainParam:
     def load_param(self):
         self.train_param : dict[str,Any] = {}
         for cfg in TRAIN_CONFIG_LIST:
-            self.train_param.update({f'{cfg}.{k}':v for k,v in self.load_config(cfg).items()})
+            p : dict[str,Any] = PATH.read_yaml(conf_path(self.base_path , 'train', cfg))
+            self.train_param.update({f'{cfg}.{k}':v for k,v in p.items()})
+
+        self.update_schedule_param()
+        self.special_adjustment()
+        self.make_model_name()
+        return self
+    
+    def update_schedule_param(self):
+        schedule_conf : dict[str,Any] = schedule_config(self.base_path , self.schedule_name).get('train' , {})
+        for cfg in TRAIN_CONFIG_LIST:
+            self.train_param.update({f'{cfg}.{k}':v for k,v in schedule_conf.get(cfg , {}).items()})
         return self
     
     @property
@@ -120,7 +151,7 @@ class TrainParam:
     def generate_model_param(self , update_inplace = True , **kwargs):
         module = self.model_module if self.module_type == 'nn' else self.model_booster_type
         assert isinstance(module , str) , (self.model_module , module)
-        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , self.short_test , **kwargs).expand()
+        model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , self.short_test , self.schedule_name , **kwargs).expand()
         if update_inplace: self.update_model_param(model_param)
         return model_param
     
@@ -133,17 +164,20 @@ class TrainParam:
         if self.base_path: raise Exception(f'Only copy TrainParam with from None base_path: {self.base_path.base}')
         target_dir = ModelPath(target_dir)
 
-        source , target = conf_path(None , 'train') , conf_path(target_dir , 'train')
+        source = conf_dir(None , 'train')
+        target = conf_dir(target_dir , 'train')
         conf_copy(source , target , override)
 
         self.base_path , self.model_name = target_dir , target_dir.name
 
-    def load_config(self , key : str) -> dict:
-        return PATH.read_yaml(conf_path(self.base_path , 'train', f'{key}.yaml'))
-    
+        if self.schedule_name:
+            source = conf_path(None , 'schedule' , self.schedule_name) 
+            target = conf_path(target_dir , 'schedule' , self.schedule_name)
+            conf_copy(source , target , override)
+
     @classmethod
     def guess_module(cls , base_path : Path | ModelPath | None):
-        return str(PATH.read_yaml(conf_path(base_path , 'train', 'model.yaml'))['module']).lower()
+        return str(PATH.read_yaml(conf_path(base_path , 'train', 'model'))['module']).lower()
     
     @staticmethod
     def get_module_type(module : str):
@@ -216,28 +250,24 @@ class TrainParam:
         return striped_list(factors)
     @property
     def model_train_window(self): 
-        if (train_window := int(self.Param['model.train_window'])) > 0:
+        if (train_window := int(self.Param.get('model.train_window', 0))) > 0:
             return train_window
-        elif self.model_module == 'booster':
-            return int(self.Param['model.booster_train_window'])
         else:
-            return int(self.Param['model.nn_train_window'])
+            return int(self.Param[f'model.train_window.{self.module_type}'])
     @property
     def model_interval(self): 
-        if (interval := int(self.Param['model.interval'])) > 0:
+        if (interval := int(self.Param.get('model.interval', 0))) > 0:
             return interval
-        elif self.model_module == 'booster':
-            return int(self.Param['model.booster_interval'])
         else:
-            return int(self.Param['model.nn_interval'])
+            return int(self.Param[f'model.interval.{self.module_type}'])
     @property
     def model_booster_head(self): return self.Param['model.booster_head']
     @property
     def model_booster_type(self):
         if self.model_module in ['booster' , 'hidden_aggregator']:
-            assert AlgoModule.is_valid(self.Param['model.booster_type'] , 'boost') , self.Param['model.booster_type']
+            assert AlgoModule.is_valid(self.Param['model.booster_type'] , 'booster') , self.Param['model.booster_type']
             return self.Param['model.booster_type']
-        elif AlgoModule.is_valid(self.model_module, 'boost'):
+        elif AlgoModule.is_valid(self.model_module, 'booster'):
             return self.model_module
         else:
             return 'not_a_booster'
@@ -288,7 +318,9 @@ class TrainParam:
         
 class ModelParam:
     def __init__(self , base_path : Optional[Path | ModelPath] , module : str , 
-                 booster_head : Any = False , verbosity = 2 , short_test : bool | None = None , **kwargs):
+                 booster_head : Any = False , verbosity = 2 , short_test : bool | None = None , 
+                 schedule_name : str | None = None,
+                 **kwargs):
         self.base_path = ModelPath(base_path)
         self.model_name = self.base_path.name
    
@@ -296,8 +328,10 @@ class ModelParam:
         self.booster_head = booster_head
         self.short_test = short_test
         self.verbosity = verbosity
+        self.schedule_name = schedule_name
         self.override = kwargs
         self.load_param().check_validity()
+
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
 
     @property
@@ -308,15 +342,37 @@ class ModelParam:
     @property
     def Param(self) -> dict[str,Any]: return self.model_param
 
+    @property
+    def module_type(self): return conf_mod_type(self.module)
+
+    @property
+    def mod_type_dir(self):
+        return 'boost' if self.module_type == 'booster' else self.module_type
+
+    def conf_file(self , base : Path | ModelPath | None | Literal['self'] = 'self'):
+        if base == 'self': base = self.base_path
+        return conf_path(base , self.mod_type_dir , self.module)
+
     def load_param(self):
-        path = conf_path(self.base_path , conf_mod_type(self.module) , f'{self.module}.yaml')
-        self.model_param : dict[str,Any] = PATH.read_yaml(path)
+        self.model_param : dict[str,Any] = {}
+        p : dict[str,Any] = PATH.read_yaml(self.conf_file())
+        self.model_param.update(p)
+        self.update_schedule_param()
+        self.special_adjustment()
+        return self
+    
+    def update_schedule_param(self):
+        schedule_conf : dict[str,Any] = schedule_config(self.base_path , self.schedule_name).get(self.mod_type_dir , {})
+        self.model_param.update(schedule_conf.get(self.module , {}))
+        return self
+    
+    def special_adjustment(self):
         self.model_param['verbosity'] = self.verbosity
         self.model_param.update(self.override)
         return self
 
     def check_validity(self):
-        assert conf_mod_type(self.module) == 'nn' or not self.booster_head , f'{self.module} is not a valid module'
+        assert self.module_type == 'nn' or not self.booster_head , f'{self.module} is not a valid module'
 
         lens = [len(v) for v in self.Param.values() if isinstance(v , (list,tuple))]
         self.n_model = max(lens) if lens else 1
@@ -328,7 +384,7 @@ class ModelParam:
             assert 'hist_loss_horizon' in self.Param
 
         if self.booster_head:
-            assert AlgoModule.is_valid(self.booster_head , 'boost') , self.booster_head
+            assert AlgoModule.is_valid(self.booster_head , 'booster') , self.booster_head
             self.booster_head_param = ModelParam(self.base_path , self.booster_head , False , self.verbosity , **self.override)
         return self
     
@@ -339,8 +395,8 @@ class ModelParam:
         if self.base_path: raise Exception(f'Only copy TrainParam with from None base_path: {self.base_path.base}')
 
         target_dir = ModelPath(target_dir)
-        source = conf_path(None       , conf_mod_type(self.module) , f'{self.module}.yaml')
-        target = conf_path(target_dir , conf_mod_type(self.module) , f'{self.module}.yaml')
+        source = self.conf_file(None)
+        target = self.conf_file(target_dir)
         conf_copy(source , target , override)
 
         self.base_path , self.model_name = target_dir , target_dir.name
@@ -379,14 +435,14 @@ class ModelParam:
     def max_num_output(self): return max(self.Param.get('num_output' , [1]))
 
 class TrainConfig(TrainParam):
-    def __init__(self , base_path : Path | ModelPath | None , override = None):
+    def __init__(self , base_path : Path | ModelPath | None , override = None, schedule_name : str | None = None):
         self.resume_training: bool  = False
         self.stage_queue: list      = []
 
         self.device     = Device()
         self.logger     = Logger()
 
-        self.Train = TrainParam(base_path , override)
+        self.Train = TrainParam(base_path , override, schedule_name)
         self.Model = self.Train.generate_model_param()
         
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
@@ -406,9 +462,9 @@ class TrainConfig(TrainParam):
 
     @classmethod
     def load(cls , base_path : Optional[Path] = None , do_parser = False , 
-             override = None , makedir = True , **kwargs):
+             override = None , schedule_name = None , makedir = True , **kwargs):
         '''load config yaml to get default/giving params'''
-        config = cls(base_path , override)
+        config = cls(base_path , override, schedule_name)
         if do_parser: config.process_parser(config.parser_args(**kwargs))
 
         model_path = ModelPath(config.model_name)
@@ -585,7 +641,7 @@ class TrainConfig(TrainParam):
         info_strs = []
         info_strs.append(f'Model Name   : {self.model_name}')
         info_strs.append(f'Model Module : {self.model_module}')
-        if self.module_type == 'boost':
+        if self.module_type == 'booster':
             if self.model_module != self.model_booster_type:
                 info_strs.append(f'  -->  Booster Type   : {self.model_booster_type}')
             if self.model_booster_optuna:

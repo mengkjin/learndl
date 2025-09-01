@@ -25,9 +25,10 @@ if not path in sys.path: sys.path.append(path)
 
 from src.res.api import ModelAPI
 from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder
+from src.app import BackendTaskRecorder , ScriptLock
 
 @BackendTaskRecorder()
+@ScriptLock('resume_model' , timeout = 10)
 def main(**kwargs):
     model_name = kwargs.pop('model_name')
     with AutoRunTask('resume_model' , model_name , **kwargs) as runner:

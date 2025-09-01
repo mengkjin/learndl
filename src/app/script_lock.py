@@ -1,4 +1,4 @@
-import os , functools , time , datetime
+import functools , time , datetime , logging
 import portalocker
 
 from typing import Callable
@@ -28,17 +28,17 @@ class ScriptLock:
         """print out message"""
         if self.verbose:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] {message}")
+            logging.info(f"[{timestamp}] {message}")
 
     def _log_get_lock(self , start_time: float | None = None):
         if start_time is not None and time.time() - start_time > 1:
-            self._log(f"Wait {time.time() - start_time:.1f} seconds to get lock, continue to run.")
+            self._log(f"Wait {time.time() - start_time:.1f} seconds to get lock of {self.lock_name}, continue to run.")
         else:
-            self._log("Get lock, continue to run.")
+            self._log(f"Get lock of {self.lock_name}, continue to run.")
 
     def _log_wait_lock(self):
         if not self._has_wait_message:
-            self._log("Other instance is running, wait for lock to be released...")
+            self._log(f"Other instance of {self.lock_name} is running, wait for lock to be released...")
             self._has_wait_message = True
     
     def _get_lock_path(self):

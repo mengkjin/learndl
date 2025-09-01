@@ -235,7 +235,7 @@ class StatusDisplay(BaseCallBack):
         df = pd.concat([self.test_df_model.rename(columns={'model_date':'stat'}) , stat_df])
 
         base_name = self.config.model_module
-        if self.config.module_type == 'boost' and self.config.model_booster_optuna: base_name += '.optuna'
+        if self.config.module_type == 'booster' and self.config.model_booster_optuna: base_name += '.optuna'
         df['model_num'] = df['model_num'].map(lambda x: f'{base_name}.{x}')
         df['submodel']  = pd.Categorical(df['submodel'] , categories = cat_subm, ordered=True) 
         df['stat']      = pd.Categorical(df['stat']     , categories = cat_stat, ordered=True) 

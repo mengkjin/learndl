@@ -1,0 +1,23 @@
+train:
+  model:
+    # main model configs ----------------------------------------------------------------
+    name          : test # any name or null
+    module        : lgbm  # any of [nn defined in src/algo/nn/api.py] or ['booster' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
+    submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for booster , only use best
+
+    # labels specification ------------------------------------------------------------
+    # rtn : raw return | std : standardized return | res : risk model residual
+    # if module is nn , use multiloss combination of the labels
+    # if module is booster , only use the first label
+    labels: 
+      - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
+      - rtn_lag1_10 
+
+    # input specification ----------------------------------------------------------------
+    input_type: data # [data , hidden , factor] , specify below
+
+    data.types: day # ['day+30m' , 30m , day , ...] , use if input_type is data
+
+boost:
+  lgbm:
+    seqlens: [{day: 9}]

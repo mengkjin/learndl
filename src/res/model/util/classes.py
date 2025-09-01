@@ -246,8 +246,8 @@ class BaseTrainer(ModelStreamLine):
         return f'{self.__class__.__name__}(path={self.config.model_base_path.base})'
     
     @final
-    def __init__(self , base_path = None , override : dict | None = None , **kwargs):
-        self.init_config(base_path = base_path , override = override , **kwargs)
+    def __init__(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs):
+        self.init_config(base_path = base_path , override = override , schedule_name = schedule_name , **kwargs)
         self.init_data(**kwargs)
         self.init_model(**kwargs)
         self.init_callbacks(**kwargs)
@@ -255,9 +255,9 @@ class BaseTrainer(ModelStreamLine):
         INSTANCE_RECORD.update_trainer(self)
         
     @final
-    def init_config(self , base_path = None , override : dict | None = None , **kwargs) -> None:
+    def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:
         '''initialized configuration'''
-        self.config = TrainConfig.load(base_path , do_parser = True , override = override , **kwargs)
+        self.config = TrainConfig.load(base_path , do_parser = True , override = override , schedule_name = schedule_name , **kwargs)
         self.status = TrainerStatus(self.config.train_max_epoch)
 
     def wrap_callbacks(self):
@@ -509,7 +509,7 @@ class BaseTrainer(ModelStreamLine):
     @staticmethod
     def assert_equity(a , b): assert a == b , (a , b)
     @staticmethod
-    def available_modules(module_type : Literal['nn' , 'boost' , 'all'] = 'all'):
+    def available_modules(module_type : Literal['nn' , 'booster' , 'all'] = 'all'):
         return AlgoModule.available_modules(module_type)
     @staticmethod
     def available_models(short_test : bool | Literal['both'] = 'both'):

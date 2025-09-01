@@ -12,6 +12,8 @@ from src.app.frontend import (
     FilePreviewer , YAMLFileEditor , ColoredText , expander_subheader , ParamInputsForm
 )
 
+from src.proj import PATH
+
 from .control import SC , set_current_page
 from .page import get_script_page , print_page_header , runs_page_url
 
@@ -187,7 +189,7 @@ def show_param_settings(runner : ScriptRunner):
         params = SC.param_inputs_form.param_values
         if runner.header.file_editor:
             with st.expander(runner.header.file_editor.get('name', 'File Editor') , expanded = False , icon = ":material/edit_document:"):
-                path = runner.header.file_editor['path'].format(**params)
+                path = PATH.main.joinpath(runner.header.file_editor['path'].format(**params))
                 file_editor = YAMLFileEditor('param-settings-file-editor', 
                                             file_root=path , file_input=False , 
                                             height = runner.header.file_editor.get('height'))

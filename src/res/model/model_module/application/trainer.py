@@ -21,7 +21,7 @@ class ModelTrainer(BaseTrainer):
 
     @classmethod
     def initialize(cls , stage = -1 , resume = -1 , checkname = -1 , base_path = None , 
-                   override : dict | None = None , 
+                   override : dict | None = None , schedule_name = None ,
                    module = None , short_test = None , verbosity = None ,
                    **kwargs):
         '''
@@ -33,7 +33,7 @@ class ModelTrainer(BaseTrainer):
         if module     is not None: override['module'] = module
         if short_test is not None: override['short_test'] = short_test
         if verbosity  is not None: override['verbosity'] = verbosity
-        app = cls(base_path = base_path , override = override , stage = stage , resume = resume , checkname = checkname , **kwargs)
+        app = cls(base_path = base_path , override = override , stage = stage , resume = resume , checkname = checkname , schedule_name = schedule_name , **kwargs)
         return app
 
     @classmethod
@@ -74,4 +74,12 @@ class ModelTrainer(BaseTrainer):
         with MessageCapturer.CreateCapturer(message_capturer) as capturer:
             trainer = cls.initialize(base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , checkname = checkname , **kwargs).go()
             capturer.set_attrs(f'Test Model of {trainer.config.model_name}' , trainer.path_training_output)
+        return trainer
+    
+    @classmethod
+    def schedule(cls , schedule_name : str | None = None , short_test : bool | None = None , message_capturer : bool = True , **kwargs):
+        assert schedule_name, 'schedule_name is required'
+        with MessageCapturer.CreateCapturer(message_capturer) as capturer:
+            trainer = cls.initialize(schedule_name = schedule_name , short_test = short_test , **kwargs).go()
+            capturer.set_attrs(f'Schedule Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer

@@ -15,9 +15,10 @@ if not path in sys.path: sys.path.append(path)
 
 from src.res.api import ModelAPI
 from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder
+from src.app import BackendTaskRecorder , ScriptLock
 
 @BackendTaskRecorder()
+@ScriptLock('update_preds' , timeout = 10)
 def main(**kwargs):
     with AutoRunTask('update_preds' , **kwargs) as runner:
         ModelAPI.update_preds() 

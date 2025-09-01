@@ -140,6 +140,14 @@ class ModelAPI:
         return cls.Trainer.test(model_name = model_name , short_test = short_test , verbosity = verbosity , **kwargs)
     
     @classmethod
+    def schedule_model(cls , schedule_name : str | None = None , short_test : bool | None = None , verbosity : int | None = 2 , **kwargs):
+        '''
+        Train a schedule model in config/schedule folder
+        '''
+        return cls.Trainer.schedule(schedule_name = schedule_name , short_test = short_test , verbosity = verbosity , 
+                                    stage = 0 , resume = 0 , checkname = 1 , **kwargs)
+    
+    @classmethod
     def clear_st_models(cls):
         '''
         Clear short test models in model folder

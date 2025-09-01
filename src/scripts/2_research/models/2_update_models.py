@@ -15,9 +15,10 @@ sys.path.append(path)
 
 from src.res.api import ModelAPI
 from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder
+from src.app import BackendTaskRecorder , ScriptLock
 
 @BackendTaskRecorder()
+@ScriptLock('update_models' , timeout = 10)
 def main(**kwargs):
     with AutoRunTask('update_models' , **kwargs) as runner:
         ModelAPI.update_models()

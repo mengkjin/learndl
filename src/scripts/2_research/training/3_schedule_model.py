@@ -7,17 +7,17 @@
 # email: True
 # mode: shell
 # parameters:
-#   module_name : 
-#       type : "Path('.local_resources/temp/available_modules.txt').read_text().splitlines()"
-#       desc : module to train
+#   schedule_name : 
+#       type : "[p.stem for p in Path('configs/schedule').glob('*.yaml')]"
+#       desc : schedule config file to train
 #       required : True
 #   short_test : 
 #       type : [True , False]
 #       desc : short test
 #       prefix : "short_test/"
 # file_editor:
-#   name : "Model Config File Editor"
-#   path: "configs/{module_name}.yaml"
+#   name : "Schedule Config File Editor"
+#   path: "configs/schedule/{schedule_name}.yaml"
 #   height : 300 # optional
 
 import sys , pathlib
@@ -31,14 +31,14 @@ from src.basic import AutoRunTask
 from src.app import BackendTaskRecorder , ScriptLock
 
 @BackendTaskRecorder()
-@ScriptLock('train_model' , timeout = 10)
+@ScriptLock('schedule_model' , timeout = 10)
 def main(**kwargs):
-    module_name = kwargs.pop('module_name')
-    module = pathlib.Path(module_name).parts[-1]
-    with AutoRunTask('train_model' , module , **kwargs) as runner:
-        trainer = ModelAPI.train_model(module = module , short_test = runner.get('short_test'))
+    schedule_name = kwargs.pop('schedule_name')
+    schedule_name = pathlib.Path(schedule_name).parts[-1]
+    with AutoRunTask('train_schedule_model' , schedule_name , **kwargs) as runner:
+        trainer = ModelAPI.schedule_model(schedule_name = schedule_name , short_test = runner.get('short_test'))
         runner.attach(trainer.result_package)
-        runner.critical(f'Train model at {runner.update_to} completed')
+        runner.critical(f'Train schedule model at {runner.update_to} completed')
     return runner
         
 if __name__ == '__main__':
