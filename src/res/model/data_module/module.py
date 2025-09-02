@@ -7,8 +7,8 @@ from torch import Tensor
 from torch.utils.data import BatchSampler
 from typing import Any , Literal , Optional
 
-from src.proj import PATH
-from src.basic import SILENT , HiddenPath , Logger
+from src.proj import PATH , Logger
+from src.basic import SILENT , HiddenPath
 from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
 from src.func import tensor_standardize_and_weight , match_values , index_intersect
 from src.res.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig , MemFileStorage , StoredFileLoader
@@ -176,10 +176,13 @@ class DataModule(BaseDataModule):
             
             test_dates = np.concatenate([self.early_test_dates , self.model_test_dates])
             
-            d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - self.seqx + 1 , 0)
-            d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
+            if test_dates.size == 0:
+                d0 = len(self.datas.date) - self.seqx
+                d1 = len(self.datas.date) - 1
+            else:
+                d0 = max(np.where(self.datas.date == test_dates[0])[0][0] - self.seqx + 1 , 0)
+                d1 = np.where(self.datas.date == test_dates[-1])[0][0] + 1
             test_dates = self.datas.date[d0 + self.seqx - 1:d1]
-
         elif stage == 'extract':
             model_date_col = (self.datas.date < model_date).sum()
             data_step = 1
@@ -189,6 +192,10 @@ class DataModule(BaseDataModule):
             raise KeyError(stage)
 
         self.day_len  = d1 - d0
+        if self.day_len == 0:
+            self.empty_dataloader()
+            return
+        
         self.step_len = (self.day_len - self.seqx + 1) // data_step
         if stage in ['predict' , 'test']: assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
         self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * data_step , [0])
@@ -311,9 +318,17 @@ class DataModule(BaseDataModule):
         if self.config.module_type == 'nn':
             batch = batch.to(self.device if device is None else device)
         return batch
-        
+    
+    def empty_dataloader(self) -> None:
+        stage = self.loader_param.stage
+        if stage == 'fit':
+            self.loader_dict['train'] = StoredFileLoader(self.storage , [] , 'static')
+            self.loader_dict['valid'] = StoredFileLoader(self.storage , [] , 'static')
+        else:
+            self.loader_dict[stage] = StoredFileLoader(self.storage , [] , 'static')
+       
     def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid : Optional[Tensor]) -> None:
-        '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''
+        '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''   
         if valid is None: valid = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
         index0, index1 = torch.arange(len(valid)) , self.step_idx
         sample_index = self.split_sample(valid , index0 , index1 , self.config.train_sample_method , 

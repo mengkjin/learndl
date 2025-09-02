@@ -64,11 +64,7 @@ class Port:
         rslt = self if inplace else self.copy()
         if date == rslt.date: return rslt
 
-        try:
-            old_date = DATAVENDOR.td(self.date).td
-        except Exception as e:
-            print('self.date' , self.date)
-            print('date' , date)
+        old_date = DATAVENDOR.td(self.date).td
         new_date = DATAVENDOR.td(date).td
         if old_date == new_date: 
             rslt.date = date

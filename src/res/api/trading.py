@@ -1,4 +1,4 @@
-from src.basic import Logger
+from src.proj import Logger
 from src.res.trading import TradingPortfolioTracker
 
 class TradingAPI:

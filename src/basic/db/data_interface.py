@@ -58,7 +58,7 @@ def _today(offset = 0 , astype : Any = int):
 
 def _paths_to_dates(paths : list[Path] | Generator[Path, None, None]):
     datestrs = [p.stem[-8:] for p in paths]
-    dates = np.array([ds for ds in datestrs if ds.isdigit()]).astype(int)
+    dates = np.array([ds for ds in datestrs if ds.isdigit() and len(ds) == 8]).astype(int)
     dates.sort()
     return dates
 

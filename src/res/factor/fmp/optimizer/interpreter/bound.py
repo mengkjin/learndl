@@ -3,7 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
-from src.basic import CONF , Logger
+from src.proj import Logger
 
 STOCK_LB , STOCK_UB = -1. , +1.
 

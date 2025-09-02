@@ -2,8 +2,8 @@ import time
 
 from contextlib import nullcontext
 
-from src.proj import PATH , MACHINE
-from src.basic import RegisteredModel , MessageCapturer
+from src.proj import PATH , MACHINE , MessageCapturer
+from src.basic import RegisteredModel
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
 from src.res.model.util import BaseTrainer

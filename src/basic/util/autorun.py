@@ -4,7 +4,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import MACHINE , PATH
+from src.proj import MACHINE , PATH , Logger , LogWriter , MessageCapturer
+from .calendar import CALENDAR
+from .task_record import TaskRecorder
+from .email import Email
 
 class AutoRunTask:
     def __init__(self , task_name : str , task_key : str | Any | None = None , email = True , message_capturer : bool = True , source = 'py' , **kwargs):
@@ -22,14 +25,13 @@ class AutoRunTask:
         self.logged_messages = []
         self.error_messages = []
 
-        import src.basic.util as U
-        self.capturer = U.MessageCapturer.CreateCapturer(self.message_capturer_path if message_capturer else False , 
+        self.capturer = MessageCapturer.CreateCapturer(self.message_capturer_path if message_capturer else False , 
                                                          self.task_full_name , self.init_time)
-        self.dprinter = U.LogWriter(self.log_filename)
-        self.update_to = U.CALENDAR.update_to()
-        self.task_recorder = U.TaskRecorder('autorun' , self.task_name , self.task_key or '')
-        self.emailer = U.Email()
-        self.logger = U.Logger()
+        self.dprinter = LogWriter(self.log_filename)
+        self.update_to = CALENDAR.update_to()
+        self.task_recorder = TaskRecorder('autorun' , self.task_name , self.task_key or '')
+        self.emailer = Email()
+        self.logger = Logger()
 
         self.status = 'Starting'
 

@@ -4,8 +4,8 @@ import numpy as np
 from pathlib import Path
 from typing import Any , Literal , Optional
 
-from src.proj import PATH , MACHINE
-from src.basic import Device , Logger , ModelPath
+from src.proj import PATH , MACHINE , Logger
+from src.basic import Device , ModelPath
 from src.func import recur_update
 from src.res.algo import AlgoModule
 
@@ -447,8 +447,8 @@ class TrainConfig(TrainParam):
         
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
         
-    def resume_old(self , old_path : Path | ModelPath):
-        self.Train = TrainParam(old_path)
+    def resume_old(self , old_path : Path | ModelPath , override = None):
+        self.Train = TrainParam(old_path , override)
         self.Model = self.Train.generate_model_param()
 
     def start_new(self , new_path : Path | ModelPath):
@@ -469,7 +469,7 @@ class TrainConfig(TrainParam):
 
         model_path = ModelPath(config.model_name)
         if config.resume_training:
-            config.resume_old(model_path)
+            config.resume_old(model_path , override)
         elif 'fit' in config.stage_queue and makedir:
             config.start_new(model_path)
             

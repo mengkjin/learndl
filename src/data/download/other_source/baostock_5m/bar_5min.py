@@ -4,8 +4,8 @@ import pandas as pd
 
 from typing import Literal
 
-from src.proj import PATH
-from src.basic import CALENDAR , Logger , DB
+from src.proj import PATH , Logger
+from src.basic import CALENDAR , DB
 from src.data.util.basic import secid_adjust , trade_min_reform
 
 START_DATE = 20401231

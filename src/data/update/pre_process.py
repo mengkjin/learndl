@@ -5,7 +5,8 @@ from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from typing import Any , Iterator , Literal , Optional
 
-from src.basic import CONF , Timer , CALENDAR , Logger
+from src.proj import Logger
+from src.basic import CONF , Timer , CALENDAR
 from src.func.primas import neutralize_2d , process_factor
 from src.func.classproperty import classproperty_str
 from src.data.util import DataBlock

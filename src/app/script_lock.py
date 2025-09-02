@@ -1,9 +1,9 @@
-import functools , time , datetime , logging
+import functools , time , datetime
 import portalocker
 
 from typing import Callable
 
-from src.proj import PATH
+from src.proj import PATH , Logger
 
 class ScriptLock:
     LOCK_DIR = PATH.runtime.joinpath('script_lock')
@@ -28,7 +28,7 @@ class ScriptLock:
         """print out message"""
         if self.verbose:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            logging.info(f"[{timestamp}] {message}")
+            Logger.info(f"[{timestamp}] {message}")
 
     def _log_get_lock(self , start_time: float | None = None):
         if start_time is not None and time.time() - start_time > 1:

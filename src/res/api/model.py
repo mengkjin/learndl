@@ -1,6 +1,5 @@
 import src.res.model.model_module.application as app
-from src.proj import PATH , MACHINE
-from src.basic import MessageCapturer , Logger
+from src.proj import PATH , MACHINE , Logger
 from src.data import DataPreProcessor
 
 class ModelAPI:

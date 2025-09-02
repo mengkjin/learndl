@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import warnings
 
 from collections.abc import Iterable
 from copy import deepcopy
@@ -312,7 +313,8 @@ class StockFactor:
                       ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
         if 'ic_indus' not in self.stats or not param_match(self.stats['ic_indus'][0] , params):
-            with np.errstate(all='ignore'):
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', message='.*correlation coefficient is not defined.*')
                 df = self.frame_with_cols(indus = True , fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
                 ic = df.groupby(['date' , 'industry']).apply(
                     lambda x:x[self.factor_names].corrwith(x['ret'], method=ic_type) , include_groups=False).\

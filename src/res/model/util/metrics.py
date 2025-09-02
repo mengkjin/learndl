@@ -17,7 +17,7 @@ class MetricList:
     def __post_init__(self): assert self.type in ['loss' , 'score']
     def record(self , metrics): self.values.append(metrics.loss_item if self.type == 'loss' else metrics.score)
     def last(self): self.values[-1]
-    def mean(self): return np.mean(self.values)
+    def mean(self): return 0 if len(self.values) == 0 else np.mean(self.values)
     def any_nan(self): return np.isnan(self.values).any()
 
 class Metrics:
@@ -168,7 +168,7 @@ class MetricsAggregator:
     @property
     def nanloss(self): return self._record['loss'].any_nan()
     @property
-    def loss(self):  return self._record['loss'].mean()
+    def loss(self): return self._record['loss'].mean()
     @property
     def score(self): return self._record['score'].mean()
     @property

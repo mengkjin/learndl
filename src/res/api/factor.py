@@ -1,8 +1,8 @@
 import datetime
 from typing import Any , Literal
 
+from src.proj import Logger
 from src.data import DATAVENDOR
-from src.basic import Logger
 from src.res.factor.util import StockFactor
 from src.res.factor.api import FactorModelUpdater , FactorCalculatorAPI , FactorTestAPI
 from src.res.factor.calculator import StockFactorHierarchy

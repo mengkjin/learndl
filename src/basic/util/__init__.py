@@ -1,6 +1,6 @@
 from .version import torch_load
 from .device import Device , get_device
-from .logger import Logger , LogWriter , MessageCapturer , OutputCapturer
+from .logger import Logger
 from .model import *
 from .silence import SILENT
 from .timer import Timer , BigTimer , PTimer

@@ -1,8 +1,7 @@
 from typing import Any , Optional
 
+from src.proj import Logger
 from src.res.model.util import BaseCallBack , BaseTrainer 
-from src.basic import Logger
-
 from . import display, fit, test , nnspecific
 
 SEARCH_MODS = [fit , display , test]

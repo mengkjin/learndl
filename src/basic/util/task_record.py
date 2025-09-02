@@ -6,6 +6,19 @@ from pathlib import Path
 
 from src.proj import PATH
 
+# custom datetime adapter and converter to solve Python 3.12 deprecation warning
+def adapt_datetime(dt):
+    """Convert datetime to ISO format string for SQLite storage"""
+    return dt.isoformat()
+
+def convert_datetime(s):
+    """Convert ISO format string back to datetime object"""
+    return datetime.fromisoformat(s.decode())
+
+# register custom adapter and converter
+sqlite3.register_adapter(datetime, adapt_datetime)
+sqlite3.register_converter("TIMESTAMP", convert_datetime)
+
 class DBConnHandler:
     def __init__(self, db_path: str | Path):
         self.db_path = db_path
@@ -17,7 +30,11 @@ class DBConnHandler:
     @staticmethod
     def get_connection(db_path: str | Path , check_same_thread: bool = True):
         """Get database connection(using Streamlit cache)"""
-        conn = sqlite3.connect(str(db_path), check_same_thread=check_same_thread)
+        conn = sqlite3.connect(
+            str(db_path), 
+            check_same_thread=check_same_thread,
+            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
+        )
         conn.row_factory = sqlite3.Row  # allow to access rows as dictionaries
         return conn
     

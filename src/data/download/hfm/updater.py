@@ -5,8 +5,8 @@ import pandas as pd
 from functools import reduce
 from pathlib import Path
 
-from src.proj import PATH , MACHINE
-from src.basic import DB , Logger
+from src.proj import PATH , MACHINE , Logger
+from src.basic import DB
 
 from .task import JSFetcher , JSDownloader
 from .minute_transform import main as minute_transform    
