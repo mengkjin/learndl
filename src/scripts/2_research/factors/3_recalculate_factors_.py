@@ -13,12 +13,14 @@
 #       min : 20250101
 #       max : 99991231
 #       required : True
+#       default : 20250904
 #   end : 
 #       type : int
 #       desc : end yyyymmdd
 #       min : 20250101
 #       max : 99991231
 #       required : True
+#       default : 20250904
 
 import sys , pathlib
 file_path = str(pathlib.Path(__file__).absolute())

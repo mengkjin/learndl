@@ -5,7 +5,7 @@ import numpy as np
 from rqdatac.share.errors import QuotaExceeded
 from typing import Literal
 
-from src.proj import PATH , MACHINE , Logger , OutputCapturer
+from src.proj import PATH , MACHINE , Logger , IOCatcher
 from src.basic import CALENDAR , DB , CONF
 from src.data.util.basic import secid_adjust , trade_min_reform
 
@@ -56,10 +56,10 @@ def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
 def rcquant_init():
     if not rqdatac.initialized(): 
         try:
-            with OutputCapturer() as capturer:
+            with IOCatcher() as catcher:
                 rcquant_uri = CONF.local('rcquant')['uri']
                 rqdatac.init(uri = rcquant_uri)
-            output = capturer.get_output()
+            output = catcher.contents
             if _print := output['stdout']:
                 print(_print)
             if _error := output['stderr']:

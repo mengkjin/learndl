@@ -36,7 +36,8 @@ def show_developer_info(H = 500):
         "Error Logs" : {
             'icon' : ':material/error:' ,
             'operation' : lambda : st.code(ActionLogger.get_error_log(), language='log' , height = H , wrap_lines = True)
-        }}
+        } ,
+    }
     
     with st.container(key = "developer-info-special-expander"):
         col_name , col_widget = st.columns([1,3])

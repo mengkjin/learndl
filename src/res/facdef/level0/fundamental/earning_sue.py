@@ -23,13 +23,13 @@ def sue(expression: str , date: int , **kwargs):
     return (grp.last() - grp.mean()) / grp.std()
 
 def sue_reg(expression: str , date: int , n_last : int = 8 , **kwargs):
-    def _last_resid(args) -> pl.Series:
+    def _last_resid(args) -> float:
         y = args[0].to_numpy()
         x = np.arange(1, len(y) + 1)
         try:
-            return pl.Series(sm.OLS(y, sm.add_constant(x)).fit().resid[-1:], dtype=pl.Float64)
+            return sm.OLS(y, sm.add_constant(x)).fit().resid[-1]
         except Exception as e:
-            return pl.Series([np.nan], dtype=pl.Float64)
+            return np.nan
     
     y_var = DATAVENDOR.get_fin_hist(expression , date , n_last , pivot = False ,**kwargs).iloc[:,0]
     y_name = str(y_var.name)
@@ -41,7 +41,8 @@ def sue_reg(expression: str , date: int , n_last : int = 8 , **kwargs):
     ).drop_nulls()
 
     df = df.sort(['secid','end_date']).group_by('secid', maintain_order=True).\
-        agg(pl.map_groups(exprs=[y_name], function=_last_resid)).to_pandas().set_index('secid').iloc[:,0]
+        agg(pl.map_groups(exprs=[y_name], function=_last_resid, return_dtype=pl.Float64 , returns_scalar=True)).\
+            to_pandas().set_index('secid').iloc[:,0]
     return df
 
 class sue_gp(StockFactorCalculator):

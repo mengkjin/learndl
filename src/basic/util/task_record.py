@@ -1,56 +1,9 @@
-import sqlite3
-from datetime import datetime
 
-from typing import Optional, Any
+from datetime import datetime
+from typing import Optional
 from pathlib import Path
 
-from src.proj import PATH
-
-# custom datetime adapter and converter to solve Python 3.12 deprecation warning
-def adapt_datetime(dt):
-    """Convert datetime to ISO format string for SQLite storage"""
-    return dt.isoformat()
-
-def convert_datetime(s):
-    """Convert ISO format string back to datetime object"""
-    return datetime.fromisoformat(s.decode())
-
-# register custom adapter and converter
-sqlite3.register_adapter(datetime, adapt_datetime)
-sqlite3.register_converter("TIMESTAMP", convert_datetime)
-
-class DBConnHandler:
-    def __init__(self, db_path: str | Path):
-        self.db_path = db_path
-        self.reset()
-
-    def reset(self):
-        self.check_same_thread = False
-        
-    @staticmethod
-    def get_connection(db_path: str | Path , check_same_thread: bool = True):
-        """Get database connection(using Streamlit cache)"""
-        conn = sqlite3.connect(
-            str(db_path), 
-            check_same_thread=check_same_thread,
-            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES
-        )
-        conn.row_factory = sqlite3.Row  # allow to access rows as dictionaries
-        return conn
-    
-    def __call__(self , check_same_thread = False):
-        self.check_same_thread = check_same_thread
-        return self
-        
-    def __enter__(self):
-        self.conn = self.get_connection(self.db_path , check_same_thread = bool(self.check_same_thread))
-        self.conn.__enter__()
-        self.cursor = self.conn.cursor()
-        return self.conn , self.cursor
-    
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        self.reset()
-        self.conn.__exit__(exc_type, exc_value, exc_tb)
+from src.proj import PATH , DBConnHandler
 
 class TaskRecorder:
     def __init__(self , type : str , name : str | None = None , key : str | None = None):
@@ -183,7 +136,6 @@ class TaskRecorder:
             ''', (self.task_name(name),))
             return True
     
-    
     def get_finished_tasks(self, name: str | None = None, type : str | None = None):
         """get finished tasks"""
         if not self.check_task_type(type): return []
@@ -203,6 +155,21 @@ class TaskRecorder:
                 DELETE FROM {self.task_type(type)} 
                 WHERE task_name = ? AND task_key = ?
             ''', (self.task_name(name), self.task_key(key)))
+
+    def clear_database(self):
+        """Clear database , will backup the database before clearing"""
+        self.conn_handler.backup()
+        with self.conn_handler as (conn, cursor):
+            for table in cursor.execute('SELECT name FROM sqlite_master WHERE type = "table"'):
+                cursor.execute(f'DELETE FROM {table}')
+        self.initialize_database()
+
+    def get_backup_paths(self):
+        return self.conn_handler.all_backup_paths()
+    
+    def restore_backup(self , backup_path : Path | str):
+        self.clear_database()
+        self.conn_handler.restore(backup_path , delete_backup = True)
     
 # 使用示例
 if __name__ == "__main__":

@@ -69,5 +69,15 @@ class MachineSetting:
             return self.project_path + '/.venv/bin/python' #'python3.10'
         else:
             return 'python'
+        
+    def local_settings(self , name : str):
+        from src.proj import PATH
+        p = PATH.local_settings.joinpath(f'{name}.yaml')
+        assert p.exists() , f'{p} does not exist , .local_settings folder only has {[p.stem for p in PATH.list_files(PATH.local_settings)]}'
+        return PATH.read_yaml(p)
+    
+    @property
+    def share_folder_path(self):
+        return Path(self.local_settings('share_folder')[self.name])
 
 MACHINE = MachineSetting.select_machine()

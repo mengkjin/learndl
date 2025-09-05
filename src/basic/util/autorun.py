@@ -1,16 +1,16 @@
-import traceback , psutil , fnmatch , platform , subprocess
+import traceback
 
 from datetime import datetime
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import MACHINE , PATH , Logger , LogWriter , MessageCapturer
+from src.proj import MACHINE , PATH , Logger , HtmlCatcher , MarkdownCatcher
 from .calendar import CALENDAR
 from .task_record import TaskRecorder
 from .email import Email
 
 class AutoRunTask:
-    def __init__(self , task_name : str , task_key : str | Any | None = None , email = True , message_capturer : bool = True , source = 'py' , **kwargs):
+    def __init__(self , task_name : str , task_key : str | Any | None = None , email = True , message_catcher : bool = True , source = 'py' , **kwargs):
         self.task_name = task_name.replace(' ' , '_').lower()
         self.task_key = str(task_key).lower() if task_key is not None else None
         self.task_full_name = task_name if task_key is None else f'{task_name}_{task_key}'
@@ -25,9 +25,10 @@ class AutoRunTask:
         self.logged_messages = []
         self.error_messages = []
 
-        self.capturer = MessageCapturer.CreateCapturer(self.message_capturer_path if message_capturer else False , 
+        self.html_catcher = HtmlCatcher.CreateCatcher(self.message_catcher_path if message_catcher else False , 
                                                          self.task_full_name , self.init_time)
-        self.dprinter = LogWriter(self.log_filename)
+        self.md_catcher = MarkdownCatcher(self.task_full_name , to_share_folder=True , add_time_to_title=False)
+        
         self.update_to = CALENDAR.update_to()
         self.task_recorder = TaskRecorder('autorun' , self.task_name , self.task_key or '')
         self.emailer = Email()
@@ -41,8 +42,8 @@ class AutoRunTask:
     def __enter__(self):
         self.already_done = self.task_recorder.is_finished()
         # change_power_mode('balanced')
-        self.dprinter.__enter__()
-        self.capturer.__enter__()
+        self.html_catcher.__enter__()
+        self.md_catcher.__enter__()
         self.status = 'Running'
         return self
 
@@ -62,9 +63,9 @@ class AutoRunTask:
         else:
             self.status = 'Success'
         
-        self.capturer.__exit__(exc_type, exc_value, exc_traceback)
-        self.dprinter.__exit__(exc_type, exc_value, exc_traceback)
-
+        self.md_catcher.__exit__(exc_type, exc_value, exc_traceback)
+        self.html_catcher.__exit__(exc_type, exc_value, exc_traceback)
+        
         self.attach(self.emailer.Attachments.get('default' , []) , streamlit = True , email = False)
         if not self.forfeit_task:
             self.send_email()
@@ -94,12 +95,8 @@ class AutoRunTask:
         return self.already_done and self.source == 'bash'
     
     @property
-    def log_filename(self):
-        return PATH.log_autorun.joinpath('log_txt' , f'{self.task_full_name}.{self.time_str}.txt')
-    
-    @property
-    def message_capturer_path(self):
-        return PATH.log_autorun.joinpath('message_capturer' , f'{self.task_full_name}.{self.time_str}.html')
+    def message_catcher_path(self):
+        return PATH.log_autorun.joinpath('message_catcher' , f'{self.task_full_name}.{self.time_str}.html')
     
     @property
     def execution_status(self):
@@ -177,52 +174,3 @@ class AutoRunTask:
     @property
     def error_message(self):
         return '\n'.join(self.error_messages)
-    
-def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py']):
-    running_scripts : list[Path] = []
-    if isinstance(exclude_scripts , str): exclude_scripts = [exclude_scripts]
-    excludes = [Path(scp).name for scp in (exclude_scripts or []) + ['kernel_interrupt_daemon.py']]
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-        try:
-            cmdline = proc.info['cmdline']
-            if not cmdline: continue
-            for line in cmdline:
-                if any(fnmatch.fnmatch(line, pattern) for pattern in script_type):
-                    if any(scp in line for scp in excludes): 
-                        pass
-                    else:
-                        running_scripts.append(Path(line))
-                        break
-        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-            pass
-    return running_scripts
-
-def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance'] , 
-                      log_path : Path | None = None ,
-                      verbose = False):
-    # running_scripts = get_running_scripts(exclude_scripts)
-    main_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S') + f' : Power set to {mode}'
-    if platform.system() == 'Windows':
-        main_str += f' aborted due windows platform\n'
-    else:
-        main_str += f' applied\n'
-        subprocess.run(['powerprofilesctl', 'set', mode])
-    if verbose: print(main_str , end = '')
-    if log_path is not None:
-        log_path.parent.mkdir(parents = True , exist_ok = True)
-        with open(log_path, 'a') as log_file:
-            log_file.write(main_str)
-
-def suspend_this_machine(log_path : Path | None = PATH.logs.joinpath('suspend','suspend.log') , verbose = False):
-    main_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    if platform.system() == 'Windows':
-        main_str += f' : Suspension aborted due windows platform\n'
-    else:
-        main_str += f' : Suspension applied\n'
-    if verbose: print(main_str , end = '')
-    if log_path is not None:
-        log_path.parent.mkdir(parents = True , exist_ok = True)
-        with open(log_path, 'a') as log_file:
-            log_file.write(main_str)
-    if platform.system() != 'Windows':
-        subprocess.run(['systemctl', 'suspend'])

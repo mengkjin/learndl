@@ -14,8 +14,8 @@ from src.app.frontend import (
 
 from src.proj import PATH
 
-from .control import SC , set_current_page
-from .page import get_script_page , print_page_header , runs_page_url
+from util.control import SC , set_current_page
+from util.page import get_script_page , print_page_header , runs_page_url
 
 def on_first_page(max_page : int):
     if st.session_state.get('choose-task-page') == 1: return

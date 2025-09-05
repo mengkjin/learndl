@@ -3,8 +3,8 @@ from pathlib import Path
 from typing import Literal
 import re
 from src.app.backend import PathItem
+from src.app.basic import VERSION , PAGE_TITLE
 from .control import SC
-from .basic import VERSION , PAGE_TITLE
 
 PAGE_DIR = Path(__file__).parent.parent.joinpath('pages')
 assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"

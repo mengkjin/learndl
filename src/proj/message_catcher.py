@@ -1,13 +1,17 @@
-import io , sys , re , html , time , base64 , platform , socket
+import io , sys , re , html , time , base64 , platform 
 import pandas as pd
             
 from dataclasses import dataclass , field
-from datetime import datetime
+from datetime import datetime , timedelta
 from matplotlib.figure import Figure
 from typing import Any , Callable , Literal
 from pathlib import Path
 
+from .machine import MACHINE
 from .path import PATH
+from .output_catcher import OutputDeflector , OutputCatcher
+
+__all__ = ['HtmlCatcher' , 'MarkdownCatcher']
 
 class_mapping = {
     'stdout' : 'stdout',
@@ -17,7 +21,7 @@ class_mapping = {
 }
 
 def critical(message: str):
-    sys.stderr.write(f"\033[41m\033[1m{message}\033[0m\n")
+    sys.stderr.write(f"\u001b[41m\u001b[1m{message}\u001b[0m\n")
 
 def _str_to_html(text: str | Any):
     """capture string"""
@@ -78,6 +82,7 @@ def _figure_to_base64(fig : Figure | Any):
 @staticmethod
 def _ansi_to_css(ansi_string: str) -> str:
     mapping =  {
+        #'\u001b[0m': '</span>',  # reset
         '\u001b[0m': '</span>',  # reset
         '\u001b[1m': '<span style="font-weight: bold;">',  # bold
         '\u001b[31m': '<span style="color: red;">',  # red
@@ -94,6 +99,12 @@ def _ansi_to_css(ansi_string: str) -> str:
         '\u001b[45m': '<span style="background-color: magenta; color: white;">',  # magenta background
         '\u001b[46m': '<span style="background-color: cyan; color: black;">',  # cyan background
         '\u001b[47m': '<span style="background-color: white; color: black;">',  # white background
+        '\u001b[91m': '<span style="color: lightred">', # 亮红色
+        '\u001b[92m': '<span style="color: lightgreen">', # 亮绿色
+        '\u001b[93m': '<span style="color: lightyellow">', # 亮黄色
+        '\u001b[94m': '<span style="color: lightblue">', # 亮蓝色
+        '\u001b[95m': '<span style="color: lightmagenta">', # 亮洋红色
+        '\u001b[96m': '<span style="color: lightcyan">', # 亮青色
     }
     for ansi_code, html_code in mapping.items():
         ansi_string = ansi_string.replace(ansi_code, html_code)
@@ -123,38 +134,40 @@ def _figure_to_html(fig: Figure | Any):
         critical(f"Error capturing matplotlib figure: {e}")
     return content
 
-class TeeOutput:
-    """double output stream: output to console and recorder"""
-    def __init__(self, original_stream, log : 'MessageCapturer' , type : Literal['stdout' , 'stderr']):
-        self.original = original_stream
-        self.log = log
-        self.type = type
+def _strf_delta(tdelta : timedelta):
+    """
+    Custom function to format a timedelta object.
+    
+    Args:
+        tdelta (timedelta): The timedelta object to format.
+        fmt (str): The format string, using placeholders like {D}, {H}, {M}, {S}.
+    """
+    # Extract total seconds, including days.
+    assert tdelta.seconds >= 0 , f"tdelta must be a positive timedelta , but got {tdelta}"
+    total_seconds = int(tdelta.total_seconds())
 
-    def __repr__(self):
-        return f'original: {self.original} log: {self.log} type: {self.type}'
-            
-    def write(self, text : str | Any):
-        # output to console
-        self.original.write(text)
-        self.original.flush()
-        # record to time ordered list
-        if text := text.strip():  # only record non-empty content
-            self.log.add_output(text , self.type)
-        
-    def flush(self):
-        self.original.flush()
+    # Handle negative timedeltas
+    total_seconds = abs(total_seconds)
+
+    # Calculate time components
+    days, remainder = divmod(total_seconds, 86400) # 86400 seconds in a day
+    hours, remainder = divmod(remainder, 3600)    # 3600 seconds in an hour
+    minutes, seconds = divmod(remainder, 60)      # 60 seconds in a minute
     
-    def __getattr__(self, name):
-        return getattr(self.original, name)
-    
-class NoCapture:
-    def __enter__(self):
-        MessageCapturer.Capturing = False
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        MessageCapturer.Capturing = True
-    
+    # Store components in a dictionary for f-string formatting
+    fmtstr = ''
+    if days:
+        fmtstr += f'{days} Days '
+    if hours:
+        fmtstr += f'{hours} Hours '
+    if minutes:
+        fmtstr += f'{minutes} Minutes '
+    if seconds:
+        fmtstr += f'{seconds} Seconds'
+    if not fmtstr:
+        fmtstr = '<1 Seconds'
+    return fmtstr
+
 @dataclass
 class TimedOutput:
     """time ordered output item"""
@@ -255,19 +268,26 @@ class TimedOutput:
 """
         return text
 
-class MessageCapturer:
-    ExportDIR = PATH.log_autorun.joinpath('message_capturer')
-    Instance : 'MessageCapturer | None' = None
-    InstanceList : list['MessageCapturer'] = []
+class HtmlCatcher(OutputCatcher):
+    ExportDIR = PATH.log_autorun.joinpath('html_catcher')
+    Instance : 'HtmlCatcher | None' = None
+    InstanceList : list['HtmlCatcher'] = []
     Capturing : bool = True
     DisplayModule : Any = None
 
-    '''capture message from stdout and stderr'''
+    class NoCapture:
+        def __enter__(self):
+            HtmlCatcher.Capturing = False
+            return self
+        
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            HtmlCatcher.Capturing = True
+
+    '''catch message from stdout and stderr, and display module'''
     def __init__(self, title: str  | None = None, export_path: Path | str | None = None , time: datetime | None = None , **kwargs):
-        if title is None: title = 'message_capturer'
-        self._enable_capturer = True
+        self._enable_catcher = True
         self.outputs: list[TimedOutput] = []
-        self.title = title if title else 'message_capturer'
+        self.title = title if title else 'html_catcher'
         self.time = time if time else datetime.now()
         self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
         self.kwargs = kwargs
@@ -287,18 +307,18 @@ class MessageCapturer:
     
     @property
     def enabled(self):
-        return self._enable_capturer
+        return self._enable_catcher
     
     @property
     def is_running(self):
         return self.Instance is not None
     
     @classmethod
-    def CreateCapturer(cls, message_capturer : Path | str | bool = False , title : str | None = None , time : datetime | None = None , **kwargs):
-        export_path = message_capturer if isinstance(message_capturer , (Path , str)) else None
-        capturer = cls(title , export_path = export_path , time = time , **kwargs)
-        if not message_capturer: capturer._enable_capturer = False
-        return capturer
+    def CreateCatcher(cls, message_catcher : Path | str | bool = False , title : str | None = None , time : datetime | None = None , **kwargs):
+        export_path = message_catcher if isinstance(message_catcher , (Path , str)) else None
+        catcher = cls(title , export_path = export_path , time = time , **kwargs)
+        if not message_catcher: catcher._enable_catcher = False
+        return catcher
     
     def get_export_path(self):
         if isinstance(self._export_path, Path):
@@ -323,7 +343,7 @@ class MessageCapturer:
     def SetInstance(self):
         if self.Instance is not None:
             critical(f"{self.Instance} is already running, blocking {self}")
-            self._enable_capturer = False
+            self._enable_catcher = False
         else:
             self.__class__.Instance = self
 
@@ -361,26 +381,25 @@ class MessageCapturer:
         Email.Attach(export_path)
         
     def redirect_display_function(self):
-        """redirect stdout, stderr, and display_module functions to capturer"""
-        self.original_stdout = sys.stdout
-        sys.stdout = TeeOutput(self.original_stdout, self, 'stdout')
-        
-        self.original_stderr = sys.stderr
-        sys.stderr = TeeOutput(self.original_stderr, self, 'stderr')
+        """redirect stdout, stderr, and display_module functions to catcher"""
+        self.stdout_deflector = OutputDeflector('stdout', self , self.keep_original , 'write_stdout')
+        self.stderr_deflector = OutputDeflector('stderr', self , self.keep_original , 'write_stderr')
+        self.stdout_deflector.start_catching()
+        self.stderr_deflector.start_catching()
 
         self.original_display = self.DisplayModule.display
         self.DisplayModule.display = self.display_wrapper(self.DisplayModule.display)
 
     def restore_display_function(self):
         """restore stdout, stderr, and display_module functions"""
-        sys.stdout = self.original_stdout
-        sys.stderr = self.original_stderr
+        self.stdout_deflector.end_catching()
+        self.stderr_deflector.end_catching()
         self.DisplayModule.display = self.original_display
 
     def display_wrapper(self, original_func: Callable):
         def wrapper(obj , *args, **kwargs):
             self.add_output(obj)
-            with NoCapture():
+            with self.NoCapture():
                 display_result = original_func(obj , *args, **kwargs)
             return display_result
         return wrapper
@@ -400,20 +419,34 @@ class MessageCapturer:
     def add_output(self, content: str | pd.DataFrame | pd.Series | Figure | Any , output_type: str | None = None):
         """add output to time ordered list"""
         if not self.Capturing: return
+        
         output = TimedOutput.create(content , output_type)
         if not self.outputs or (output and not output.equivalent(self.outputs[-1])): 
             self.outputs.append(output)
+
+    def write_stdout(self, text: str):
+        if text := text.strip():
+            self.add_output(text, 'stdout')
+
+    def write_stderr(self, text: str):
+        if text := text.strip():
+            self.add_output(text, 'stderr')
+
+    def get_contents(self):
+        return self.generate_html()
        
     def _html_head(self):
         key_width = 80
         if self.kwargs:
             key_width = max(int(max(len(key) for key in list(self.kwargs.keys())) * 5.5) + 10 , key_width)
-        
+        finish_time = datetime.now()
+        duration = _strf_delta(finish_time - self.start_time)
         infos = {
-            'Machine' : socket.gethostname().split('.')[0],
+            'Machine' : MACHINE.name,
             'Python' : f"{platform.python_version()}-{platform.machine()}",
             'Start at' : self.start_time.strftime('%Y-%m-%d %H:%M:%S'),
-            'Finished at' : datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'Finish at' : finish_time.strftime('%Y-%m-%d %H:%M:%S'),
+            'Duration' : duration,
             'Outputs Num' : len(self.outputs)
         }
         infos_block = '\n'.join([f'<div class="add-infos"><span class="add-key">{key}</span><span class="add-seperator">:</span><span class="add-value">{value}</span></div>' 
@@ -664,4 +697,128 @@ class MessageCapturer:
 """
         return tail
     
+class MarkdownCatcher(OutputCatcher):
+    ExportDIR = PATH.log_autorun.joinpath('markdown_catcher')
+    ExportDIR.mkdir(exist_ok=True,parents=True)
+
+    def __init__(self, title: str  | None = None, 
+                 to_share_folder: bool = False ,
+                 seperating_by: Literal['min' , 'hour'  , 'day'] | None = 'min',
+                 add_time_to_title: bool = True,
+                 given_export_path: Path | str | None = None , 
+                 **kwargs):
+        self.title = title if title else 'markdown_catcher'
+        self.start_time = datetime.now()
+        if given_export_path is None:
+            if add_time_to_title:
+                filename = f'{self.title}.{self.start_time.strftime("%Y%m%d%H%M%S")}.md'
+            else:
+                filename = f'{self.title}.md'
+            self.filename = self.ExportDIR.joinpath(filename)
+        else:
+            self.filename = Path(given_export_path)
+        if to_share_folder:
+            self.filename = MACHINE.share_folder_path.joinpath('markdown_catcher' , self.filename.name)
+        
+        self.kwargs = kwargs
+        self.last_seperator = None
+        self.seperating_by = seperating_by
+        if seperating_by is None:
+            self._seperator_time_str = lambda x: ''
+            self._prefix_time_str = lambda x: x.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+        elif seperating_by == 'min':
+            self._seperator_time_str = lambda x: x.strftime('%Y-%m-%d %H:%M')
+            self._prefix_time_str = lambda x: x.strftime('%H:%M:%S.%f')[:-3]
+        elif seperating_by == 'hour':
+            self._seperator_time_str = lambda x: x.strftime('%Y-%m-%d %H')
+            self._prefix_time_str = lambda x: x.strftime('%H:%M:%S.%f')[:-3]
+        elif seperating_by == 'day':
+            self._seperator_time_str = lambda x: x.strftime('%Y-%m-%d')
+            self._prefix_time_str = lambda x: x.strftime('%H:%M:%S.%f')[:-3]
+        else:
+            raise ValueError(f"Invalid SeperatingBy: {seperating_by}")
+        self.is_catching = False
+
+    def __enter__(self):
+        if not self.filename.parent.exists():
+            return self
+        
+        self.stats = {
+            'stdout_lines' : 0,
+            'stderr_lines' : 0,
+        }
+        self.markdown_file = open(self.filename, 'w', encoding='utf-8')
+        self.print_header()
+        self.stdout_deflector = OutputDeflector('stdout', self, True , 'write_stdout').start_catching()
+        self.stderr_deflector = OutputDeflector('stderr', self, True , 'write_stderr').start_catching()
+        self.is_catching = True
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.is_catching: return
+        self.print_footer()
+        self.markdown_file.flush()
+        self.stdout_deflector.end_catching()
+        self.stderr_deflector.end_catching()
+        print(f"Markdown saved to {self.filename.absolute()}")
+        return False
     
+    def print_header(self):
+        self.markdown_file.write(f"# {self.title.title()}\n")
+        self.markdown_file.write(f"## Log Start \n")
+        self.markdown_file.write(f"- *Machine: {MACHINE.name}*  \n")
+        self.markdown_file.write(f"- *Python: {platform.python_version()}-{platform.machine()}*  \n")
+        self.markdown_file.write(f"- *Start at: {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}*  \n")
+        self.markdown_file.write(f"## Log Main \n")
+
+    def print_footer(self):
+        finish_time = datetime.now()
+        duration = _strf_delta(finish_time - self.start_time)
+        self.markdown_file.write(f"## Log End \n")
+        self.markdown_file.write(f"- *Finish at: {finish_time.strftime('%Y-%m-%d %H:%M:%S')}*  \n")
+        self.markdown_file.write(f"- *Duration: {duration}*  \n")
+        self.markdown_file.write(f"- *Stdout Lines: {self.stats['stdout_lines']}*  \n")
+        self.markdown_file.write(f"- *Stderr Lines: {self.stats['stderr_lines']}*  \n")
+        self.markdown_file.write(f"***\n")
+        self.markdown_file.flush()
+
+    def print_seperator(self):
+        if self.seperating_by is None: return
+        seperator = self._seperator_time_str(self.last_time)
+        if seperator != self.last_seperator:
+            self.markdown_file.write(f"### {seperator} \n")
+            self.last_seperator = seperator
+            self.markdown_file.flush()
+    
+    def formatted_text(self, text : str , prefix='- ' , suffix='  \n' , type: Literal['stdout' , 'stderr'] = 'stdout'):
+        """replace ANSI color codes with HTML span tags"""
+        text = text.strip('\n')
+        text = _ansi_to_css(text)
+        if type == 'stderr':
+            text = f'<u>{text}</u>'
+        text = prefix + text + suffix
+        return text
+    
+    def write_std(self , text: str , type: Literal['stdout' , 'stderr']):
+        if self.is_catching and (text := text.strip()):
+            self.last_time = datetime.now()
+            self.stats[f'{type}_lines'] += 1
+            text = f'{self._prefix_time_str(self.last_time)} {text}'
+            text = self.formatted_text(text , type = type)
+            self.print_seperator()
+            self.markdown_file.write(text)
+            self.markdown_file.flush()
+    
+    def write_stdout(self, text):
+        self.write_std(text , 'stdout')
+
+    def write_stderr(self, text):
+        self.write_std(text , 'stderr')
+
+    def get_contents(self):
+        if not self.filename.exists(): return ''
+        with open(self.filename , 'r') as f:
+            return f.read()
+        
+    def close(self):
+        self.markdown_file.close()

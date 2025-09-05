@@ -1,11 +1,11 @@
-from util import PENDING_FEATURES , set_current_page , show_sidebar_buttons , intro_pages , print_page_header
 import platform, torch , sys , re
 import streamlit as st
 import psutil
 
 from src.app.frontend.frontend import expander_subheader
 from src.app.backend import ScriptRunner
-from util import SC , set_current_page , show_sidebar_buttons , get_script_page , print_page_header
+from src.app.basic import PENDING_FEATURES
+from util import SC , set_current_page , show_sidebar_buttons , get_script_page , print_page_header , intro_pages
 
 PAGE_NAME = 'home'
 

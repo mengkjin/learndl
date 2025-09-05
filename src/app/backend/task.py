@@ -1,41 +1,12 @@
-import sqlite3 , time , os , sys , re , shutil
+import time , os , sys , re
 from typing import Any , Literal , Sequence
 from dataclasses import dataclass , field , asdict
 from datetime import datetime
 from pathlib import Path
 import pandas as pd
 
-from src.proj import PATH
+from src.proj import PATH , DBConnHandler
 from src.app.abc import check_process_status , kill_process , ScriptCmd
-
-class DBConnHandler:
-    def __init__(self, db_path: str | Path):
-        self.db_path = db_path
-        self.reset()
-
-    def reset(self):
-        self.check_same_thread = False
-        
-    @staticmethod
-    def get_connection(db_path: str | Path , check_same_thread: bool = True):
-        """Get database connection(using Streamlit cache)"""
-        conn = sqlite3.connect(str(db_path), check_same_thread=check_same_thread)
-        conn.row_factory = sqlite3.Row  # allow to access rows as dictionaries
-        return conn
-    
-    def __call__(self , check_same_thread = False):
-        self.check_same_thread = check_same_thread
-        return self
-        
-    def __enter__(self):
-        self.conn = self.get_connection(self.db_path , check_same_thread = bool(self.check_same_thread))
-        self.conn.__enter__()
-        self.cursor = self.conn.cursor()
-        return self.conn , self.cursor
-    
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        self.reset()
-        self.conn.__exit__(exc_type, exc_value, exc_tb)
 
 class TaskDatabase:
     def __init__(self , db_name: str | Path | None = None):
@@ -49,15 +20,6 @@ class TaskDatabase:
     @staticmethod
     def get_db_path():
         return PATH.app_db / 'task_manager.db'
-    
-    @staticmethod
-    def get_db_backup_path(suffix : str | None = None):
-        if suffix is None:
-            suffix = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_name = f'task_manager_{suffix}'
-        d = PATH.app_db / 'backup'
-        d.mkdir(parents=True, exist_ok=True)
-        return d / f'{backup_name}.db'
 
     def initialize_database(self):
         """Initialize database and tables"""
@@ -149,7 +111,7 @@ class TaskDatabase:
             
     def clear_database(self):
         """Clear database , will backup the database before clearing"""
-        self.backup()
+        self.conn_handler.backup()
         with self.conn_handler as (conn, cursor):
             cursor.execute('DELETE FROM task_records')
             cursor.execute('DELETE FROM task_exit_files')
@@ -356,37 +318,12 @@ class TaskDatabase:
                 else:
                     print(f"Queue ID {queue_id} successfully deleted")
     
-    def backup(self, suffix: str | None = None):
-        """
-        Backup database and rename the original database
-        :param suffix: backup suffix, if not specified, use timestamp
-        :return: new database path
-        """
-        if self.is_empty():
-            return None
-        if suffix is None:
-            with self.conn_handler as (conn, cursor):
-                cursor.execute('SELECT * FROM task_records ORDER BY create_time DESC LIMIT 1')
-                task_end_time = cursor.fetchone()['create_time']
-            suffix = datetime.fromtimestamp(task_end_time).strftime('%Y%m%d_%H%M%S')
-        backup_path = self.get_db_backup_path(suffix)
-        shutil.copy(self.db_path, backup_path)
-        return backup_path
-    
     def get_backup_paths(self):
-        return list(self.db_path.parent.glob('backup/*.db'))
+        return self.conn_handler.all_backup_paths()
     
     def restore_backup(self , backup_path : Path | str):
         self.clear_database()
-        assert Path(backup_path).exists() , f'Backup file {backup_path} does not exist'
-        with self.conn_handler as (conn, cursor):
-            cursor.execute('ATTACH DATABASE ? AS backup', (str(backup_path),))
-            cursor.execute('INSERT INTO task_records SELECT * FROM backup.task_records')
-            cursor.execute('INSERT INTO task_queues SELECT * FROM backup.task_queues')
-            cursor.execute('INSERT INTO queue_records SELECT * FROM backup.queue_records')
-            cursor.execute('INSERT INTO task_backend_updated SELECT * FROM backup.task_backend_updated')    
-            cursor.execute('INSERT INTO task_exit_files SELECT * FROM backup.task_exit_files')
-        Path(backup_path).unlink()
+        self.conn_handler.restore(backup_path , delete_backup = True)
 
 class TaskQueue:
     def __init__(self , queue_id : str | None = None , max_queue_size : int | None = 100 , task_db : TaskDatabase | None = None):
@@ -900,7 +837,7 @@ if __name__ == '__main__':
         end_time = 1752898671.069558,
         exit_code = 1,
         exit_message = "INFO : info:Bye, World!\nERROR : error:Bye, World!\nWARNING : warning:Bye, World!\nDEBUG : debug:Bye, World!\nCRITICAL : critical:Bye, World!",
-        exit_files = ["logs/autorun/message_capturer/test_streamlit.20250719001751.html"],
+        exit_files = ["logs/autorun/message_catcher/test_streamlit.20250719001751.html"],
         exit_error = "error:Bye, World!"
     )
 

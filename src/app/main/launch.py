@@ -11,8 +11,8 @@ assert os.getcwd().lower() == path.lower() , \
 import streamlit as st
 import streamlit_autorefresh as st_autorefresh
 
-from util import (PAGE_TITLE , VERSION , SC , AUTO_REFRESH_INTERVAL , 
-                  style , intro_pages , script_pages , runs_page_url , get_logo)
+from src.app.basic import PAGE_TITLE , AUTO_REFRESH_INTERVAL
+from util import (SC , style , intro_pages , script_pages , runs_page_url , get_logo)
 
 st.set_option('client.showSidebarNavigation', False)
 

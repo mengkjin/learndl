@@ -35,7 +35,7 @@ from src.app import BackendTaskRecorder , ScriptLock
 @ScriptLock('test_model' , timeout = 10)
 def main(**kwargs):
     model_name = kwargs.pop('model_name')
-    with AutoRunTask('test_model' , model_name , message_capturer = True , **kwargs) as runner:
+    with AutoRunTask('test_model' , model_name , **kwargs) as runner:
         ModelAPI.test_model(model_name = model_name , short_test = runner.get('short_test'))
         runner.critical(f'Test model at {runner.update_to} completed')
 

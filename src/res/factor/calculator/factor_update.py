@@ -181,6 +181,20 @@ class FactorUpdateJobManager:
         self.process_jobs(verbosity)
 
     @classmethod
+    def recalculate(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None):
+        '''update factor data according'''
+        self = cls()
+        self.collect_jobs(start = start , end = end , all_factors = True , overwrite = True)
+        self.process_jobs(verbosity , overwrite = True)
+
+    @classmethod
+    def update_overwrite(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None):
+        '''update factor data according'''
+        self = cls()
+        self.collect_jobs(start = start , end = end , all_factors = True , overwrite = True)
+        self.process_jobs(verbosity)
+
+    @classmethod
     def update_rollback(cls , rollback_date : int , verbosity : int = 1 , groups_in_one_update : int | None = 100):
         CALENDAR.check_rollback_date(rollback_date)
         self = cls()

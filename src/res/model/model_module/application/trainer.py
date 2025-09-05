@@ -2,7 +2,7 @@ import time
 
 from contextlib import nullcontext
 
-from src.proj import PATH , MACHINE , MessageCapturer
+from src.proj import PATH , MACHINE , HtmlCatcher
 from src.basic import RegisteredModel
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
@@ -48,38 +48,38 @@ class ModelTrainer(BaseTrainer):
                 print(f'End time: {time.strftime("%Y-%m-%d %H:%M:%S")}')
 
     @classmethod
-    def train(cls , module : str | None = None , short_test : bool | None = None , message_capturer : bool = True , **kwargs):
-        with MessageCapturer.CreateCapturer(message_capturer) as capturer:
+    def train(cls , module : str | None = None , short_test : bool | None = None , message_catcher : bool = True , **kwargs):
+        with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
             trainer = cls.initialize(module = module , short_test = short_test , **kwargs).go()
-            capturer.set_attrs(f'Train Model of {trainer.config.model_name}' , trainer.path_training_output)
+            catcher.set_attrs(f'Train Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer
     
     @classmethod
-    def resume(cls , model_name : str | None = None , message_capturer : bool = True , 
+    def resume(cls , model_name : str | None = None , message_catcher : bool = True , 
                stage = 0 , resume = 1 , checkname = 1 , **kwargs):
         assert model_name, 'model_name is required'
         available_models = cls.available_models(short_test = False)
         assert model_name in available_models , f'model_name {model_name} not found in {available_models}'
-        with MessageCapturer.CreateCapturer(message_capturer) as capturer:
+        with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
             trainer = cls.initialize(base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , checkname = checkname , **kwargs).go()
-            capturer.set_attrs(f'Resume Model of {trainer.config.model_name}' , trainer.path_training_output)
+            catcher.set_attrs(f'Resume Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer
     
     @classmethod
-    def test(cls , model_name : str | None = None , short_test : bool | None = None , message_capturer : bool = True , 
+    def test(cls , model_name : str | None = None , short_test : bool | None = None , message_catcher : bool = True , 
              stage = 2 , resume = 1 , checkname = 1 , **kwargs):
         assert model_name, 'model_name is required'
         available_models = cls.available_models(short_test = False)
         assert model_name in available_models , f'model_name {model_name} not found in {available_models}'
-        with MessageCapturer.CreateCapturer(message_capturer) as capturer:
+        with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
             trainer = cls.initialize(base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , checkname = checkname , **kwargs).go()
-            capturer.set_attrs(f'Test Model of {trainer.config.model_name}' , trainer.path_training_output)
+            catcher.set_attrs(f'Test Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer
     
     @classmethod
-    def schedule(cls , schedule_name : str | None = None , short_test : bool | None = None , message_capturer : bool = True , **kwargs):
+    def schedule(cls , schedule_name : str | None = None , short_test : bool | None = None , message_catcher : bool = True , **kwargs):
         assert schedule_name, 'schedule_name is required'
-        with MessageCapturer.CreateCapturer(message_capturer) as capturer:
+        with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
             trainer = cls.initialize(schedule_name = schedule_name , short_test = short_test , **kwargs).go()
-            capturer.set_attrs(f'Schedule Model of {trainer.config.model_name}' , trainer.path_training_output)
+            catcher.set_attrs(f'Schedule Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer

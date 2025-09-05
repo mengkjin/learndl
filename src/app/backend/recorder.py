@@ -14,8 +14,8 @@ class BackendTaskRecorder:
         @BackendTaskRecorder(x = 1)
         def test(x : int , **kwargs):
             return 'yes' , Path('test.txt') , Path('test.csv')
-            # return BackendTaskRecorder.ExitMessage(message = 'yes' , files = ['test.txt' , 'test.csv'])
-            # return {'message' : 'yes' , 'files' : ['test.txt' , 'test.csv']}
+            return BackendTaskRecorder.ExitMessage(message = 'yes' , files = ['test.txt' , 'test.csv'])
+            return {'message' : 'yes' , 'files' : ['test.txt' , 'test.csv']}
 
     track:
         if True, will track the task and update the task status in the _page_files anyway

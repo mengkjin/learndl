@@ -26,6 +26,11 @@ class FactorCalculatorAPI:
         StockFactorHierarchy.export_factor_list()
 
     @classmethod
+    def recalculate(cls , **kwargs):
+        UPDATE_JOBS.recalculate(**kwargs)
+        StockFactorHierarchy.export_factor_list()
+
+    @classmethod
     def fix(cls , factors : list[str] | None = None , **kwargs):
         factors = factors or []
         UPDATE_JOBS.update_fix(factors , **kwargs)

@@ -14,14 +14,13 @@ __all__ = [
 ]
 
 def calc_trend(data : pd.Series):
-    def _trend(args) -> pl.Series:
+    def _trend(args) -> float:
         y = args[0].to_numpy()
         x = np.arange(1, len(y) + 1)
         try:
-            v = sm.OLS(y, sm.add_constant(x)).fit().params[1] / y.mean()
-            return pl.Series([v], dtype=pl.Float64)
+            return sm.OLS(y, sm.add_constant(x)).fit().params[1] / y.mean()
         except Exception as e:
-            return pl.Series([np.nan], dtype=pl.Float64)
+            return np.nan
     if not data.name: data = data.rename('data')
     y_name = str(data.name)
     df = pl.from_pandas(data.to_frame() , include_index=True)
@@ -30,7 +29,8 @@ def calc_trend(data : pd.Series):
     ).drop_nulls()
 
     df = df.sort(['secid','end_date']).group_by('secid', maintain_order=True).\
-        agg(pl.map_groups(exprs=[y_name], function=_trend)).to_pandas().set_index('secid').iloc[:,0]
+        agg(pl.map_groups(exprs=[y_name], function=_trend, return_dtype=pl.Float64 , returns_scalar=True)).\
+            to_pandas().set_index('secid').iloc[:,0]
     return df
 
 class gp_ta_qoq_trend(StockFactorCalculator):

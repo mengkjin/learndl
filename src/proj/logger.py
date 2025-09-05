@@ -1,7 +1,6 @@
 import colorlog , logging , sys
 import logging.handlers
 from typing import Any , Type
-from pathlib import Path
 
 from .path import PATH
 
@@ -136,53 +135,3 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
         if record.levelno in self._level_formatters:
             return self._level_formatters[record.levelno].format(record)
         return super(_LevelColorFormatter, self).format(record)
-
-
-class LogWriter:
-    class TeeOutput:
-        """double output stream: output to console and file"""
-        def __init__(self, original_stream, log):
-            self.original = original_stream
-            self.log = log
-
-        def __repr__(self):
-            return f'original: {self.original} log: {self.log}'
-            
-        def write(self, message):
-            self.original.write(message)
-            self.original.flush()
-            self.log.write(message)
-            
-        def flush(self):
-            self.original.flush()
-    
-
-    '''change print target to both terminal and file'''
-    def __init__(self, filename : str | Path | None = None):
-        self.set_attrs(filename)
-
-    def set_attrs(self , filename : str | Path | None = None):
-        if isinstance(filename , str): filename = Path(filename)
-        self.filename = filename
-        if self.filename is None: return
-        self.filename.parent.mkdir(exist_ok=True,parents=True)
-        self.log = open(self.filename, "w")
-        return self
-
-    def __enter__(self):
-        assert self.filename is not None , 'filename is not set'
-        self.original_stdout = sys.stdout
-        self.original_stderr = sys.stderr
-        sys.stdout = self.TeeOutput(self.original_stdout , self.log)
-        sys.stderr = self.TeeOutput(self.original_stderr , self.log)
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        sys.stdout = self.original_stdout
-        sys.stderr = self.original_stderr
-        self.log.close()
-
-    def contents(self):
-        assert self.filename is not None , 'filename is not set'
-        with open(self.filename , 'r') as f:
-            return f.read()

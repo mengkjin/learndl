@@ -14,16 +14,16 @@ __all__ = [
 ]
 
 def ts_last_resid_polars(y_var : str | pd.Series , x_vars : list[str | pd.Series] , date : int , n_last : int = 12):
-    def _last_resid(args) -> pl.Series:
+    def _last_resid(args) -> float:
         y = args[0].to_numpy()
         if len(args) > 2:
             x = np.stack([arg.to_numpy() for arg in args[1:]] , axis=-1)
         else:
             x = args[1].to_numpy()
         try:
-            return pl.Series(sm.OLS(y, sm.add_constant(x)).fit().resid[-1:], dtype=pl.Float64)
+            return sm.OLS(y, sm.add_constant(x)).fit().resid[-1]
         except Exception as e:
-            return pl.Series([np.nan], dtype=pl.Float64)
+            return np.nan
     
     if isinstance(y_var , str): y_var = DATAVENDOR.get_fin_hist(y_var , date , n_last).iloc[:,0]
     assert y_var.name , 'y_var must have a name'
@@ -43,7 +43,8 @@ def ts_last_resid_polars(y_var : str | pd.Series , x_vars : list[str | pd.Series
     ).drop_nulls(y_name).fill_null(0).fill_nan(0)
 
     df = df.sort(['secid','end_date']).group_by('secid', maintain_order=True).agg(
-        pl.map_groups(exprs=cols, function=_last_resid)).to_pandas().set_index('secid').iloc[:,0]
+        pl.map_groups(exprs=cols, function=_last_resid, return_dtype=pl.Float64 , returns_scalar=True)).\
+            to_pandas().set_index('secid').iloc[:,0]
 
     return df
 
