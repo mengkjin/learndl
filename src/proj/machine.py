@@ -78,6 +78,9 @@ class MachineSetting:
     
     @property
     def share_folder_path(self):
-        return Path(self.local_settings('share_folder')[self.name])
+        try:
+            return Path(self.local_settings('share_folder')[self.name])
+        except:
+            return None
 
 MACHINE = MachineSetting.select_machine()

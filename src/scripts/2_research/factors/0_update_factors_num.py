@@ -4,7 +4,7 @@
 # date: 2024-11-27
 # description: Update Factors
 # content: 更新前num(默认100)组level , date的因子数据
-# email: False
+# email: True
 # mode: shell
 # parameters:
 #   num : 

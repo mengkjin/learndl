@@ -4,7 +4,7 @@
 # date: 2024-11-27
 # description: Update Factors Within
 # content: 更新区间内所有未更新的因子数据
-# email: False
+# email: True
 # mode: shell
 # parameters:
 #   start : 

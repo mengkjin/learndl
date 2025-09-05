@@ -718,7 +718,10 @@ class MarkdownCatcher(OutputCatcher):
         else:
             self.filename = Path(given_export_path)
         if to_share_folder:
-            self.filename = MACHINE.share_folder_path.joinpath('markdown_catcher' , self.filename.name)
+            if MACHINE.share_folder_path is None:
+                self.filename = None
+            else:
+                self.filename = MACHINE.share_folder_path.joinpath('markdown_catcher' , self.filename.name)
         
         self.kwargs = kwargs
         self.last_seperator = None
@@ -740,7 +743,7 @@ class MarkdownCatcher(OutputCatcher):
         self.is_catching = False
 
     def __enter__(self):
-        if not self.filename.parent.exists():
+        if self.filename is None or not self.filename.parent.exists():
             return self
         
         self.stats = {
@@ -755,7 +758,7 @@ class MarkdownCatcher(OutputCatcher):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if not self.is_catching: return
+        if not self.is_catching or self.filename is None: return
         self.print_footer()
         self.markdown_file.flush()
         self.stdout_deflector.end_catching()
@@ -816,7 +819,7 @@ class MarkdownCatcher(OutputCatcher):
         self.write_std(text , 'stderr')
 
     def get_contents(self):
-        if not self.filename.exists(): return ''
+        if self.filename is None or not self.filename.exists(): return ''
         with open(self.filename , 'r') as f:
             return f.read()
         

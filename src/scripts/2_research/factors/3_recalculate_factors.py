@@ -1,10 +1,10 @@
 #! /usr/bin/env python3.10
 # coding: utf-8
 # author: jinmeng
-# date: 2024-11-27
-# description: Update Factors Within
-# content: 更新区间内所有未更新的因子数据
-# email: False
+# date: 2025-09-05
+# description: Recalculate Factors Within
+# content: 重新计算区间内所有因子数据
+# email: True
 # mode: shell
 # parameters:
 #   start : 
@@ -36,9 +36,8 @@ from src.app import BackendTaskRecorder , ScriptLock
 @ScriptLock('update_factors' , timeout = 10)
 def main(**kwargs):
     with AutoRunTask('update_factors' , **kwargs) as runner:
-        FactorCalculatorAPI.update(start = int(kwargs.pop('start')) , 
-                                   end = int(kwargs.pop('end')) , 
-                                   groups_in_one_update = None)
+        FactorCalculatorAPI.recalculate(start = int(kwargs.pop('start')) , 
+                                        end = int(kwargs.pop('end')))
         runner.critical(f'Update factors at {runner.update_to} completed')
 
     return runner

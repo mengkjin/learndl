@@ -4,7 +4,7 @@
 # date: 2024-11-27
 # description: Fix Factors
 # content: 修正某些因子
-# email: False
+# email: True
 # mode: shell
 # parameters:
 #   factor_names : 
