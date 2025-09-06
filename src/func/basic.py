@@ -274,10 +274,15 @@ def rankic_2d(x : torch.Tensor, y : torch.Tensor , dim = 1 , universe = None , m
 def total_memory(unit = 1e9):
     return psutil.Process(os.getpid()).memory_info().rss / unit
 
-def match_values(values , src_arr , ambiguous = 0):
+def to_numpy(values):
     if not isinstance(values , np.ndarray): 
         if isinstance(values , torch.Tensor): values = values.cpu().numpy()
         else: values = np.asarray(values)
+    return values
+
+def match_values(values , src_arr , ambiguous = 0):
+    values = to_numpy(values)
+    src_arr = to_numpy(src_arr)
     sorter = np.argsort(src_arr)
     index = np.tile(len(src_arr) , values.shape)
     if ambiguous == 0:
