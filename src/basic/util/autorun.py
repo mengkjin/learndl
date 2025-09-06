@@ -4,10 +4,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal , Any
 
-from src.proj import MACHINE , PATH , Logger , HtmlCatcher , MarkdownCatcher
+from src.proj import MACHINE , PATH , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher
 from .calendar import CALENDAR
 from .task_record import TaskRecorder
 from .email import Email
+
+_catch_warnings = ['must accept context and return_scalar arguments']
 
 class AutoRunTask:
     def __init__(self , task_name : str , task_key : str | Any | None = None , email = True , message_catcher : bool = True , source = 'py' , **kwargs):
@@ -28,7 +30,8 @@ class AutoRunTask:
         self.html_catcher = HtmlCatcher.CreateCatcher(self.message_catcher_path if message_catcher else False , 
                                                          self.task_full_name , self.init_time)
         self.md_catcher = MarkdownCatcher(self.task_full_name , to_share_folder=True , add_time_to_title=False)
-        
+        self.warning_catcher = WarningCatcher(_catch_warnings)
+
         self.update_to = CALENDAR.update_to()
         self.task_recorder = TaskRecorder('autorun' , self.task_name , self.task_key or '')
         self.emailer = Email()
@@ -44,6 +47,7 @@ class AutoRunTask:
         # change_power_mode('balanced')
         self.html_catcher.__enter__()
         self.md_catcher.__enter__()
+        self.warning_catcher.__enter__()
         self.status = 'Running'
         return self
 
@@ -53,16 +57,13 @@ class AutoRunTask:
             for msg in msgs:
                 getattr(self.logger , level)(msg)
         if exc_type is not None:
-            # print(f'Error Occured! Info : ' + '-' * 20)
-            # print(exc_value)
-
-            # print('Traceback : ' + '-' * 20)
-            # print(traceback.format_exc())
+            traceback.print_exc()
             self.status = 'Error'
             self.error_messages.append('\n'.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
         else:
             self.status = 'Success'
         
+        self.warning_catcher.__exit__(exc_type, exc_value, exc_traceback)
         self.md_catcher.__exit__(exc_type, exc_value, exc_traceback)
         self.html_catcher.__exit__(exc_type, exc_value, exc_traceback)
         

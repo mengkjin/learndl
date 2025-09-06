@@ -5,8 +5,8 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Literal , Type , Any
 
-from src.proj import PATH
-from src.basic import CALENDAR , RegisteredModel , CONF , DB
+from src.proj import PATH , MACHINE
+from src.basic import CALENDAR , RegisteredModel , DB
 from src.func import dfs_to_excel , figs_to_pdf
 from src.func import display as disp
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Universe
@@ -80,7 +80,7 @@ class TradingPort:
 
     @classmethod
     def portfolio_dict(cls) -> dict[str , dict]:
-        return CONF.trade('portfolio_dict')
+        return MACHINE.configs('trade' , 'portfolio_dict')
     
     @classmethod
     def load(cls , name : str) -> 'TradingPort':

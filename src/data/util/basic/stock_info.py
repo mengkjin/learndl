@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import Any
 
+from src.proj import MACHINE
 from src.basic import CONF , CALENDAR , TradeDate , DB
 from src.func.singleton import singleton
 
@@ -14,7 +15,7 @@ class InfoDataAccess:
         self.cname = DB.db_load('information_ts' , 'change_name') 
         self.cname = self.cname[self.cname['secid'] >= 0].sort_values(['secid','ann_date','start_date']).rename(columns={'ann_date':'ann_dt'})
 
-        self.indus_dict = pd.DataFrame(CONF.glob('tushare_indus'))
+        self.indus_dict = pd.DataFrame(MACHINE.configs('glob' , 'tushare_indus'))
         self.indus_data = DB.db_load('information_ts' , 'industry') 
 
         self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values

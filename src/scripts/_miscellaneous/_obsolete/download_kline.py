@@ -3,9 +3,9 @@ import zipfile , os
 import pandas as pd
 from pathlib import Path
 
-from src.basic import CONF
+from src.proj import MACHINE
 
-aws_info = CONF.local('aws')
+aws_info = MACHINE.local_settings('aws')
 aws_access_key_id = aws_info['aws_access_key_id']
 aws_secret_access_key = aws_info['aws_secret_access_key']
 

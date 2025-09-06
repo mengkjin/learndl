@@ -11,7 +11,7 @@ from src.proj import MACHINE , PATH
 from src.basic import CONF
 
 def email_settings():
-    return CONF.local('email')
+    return MACHINE.local_settings('email')
 
 class Email:
     Attachments : dict[str , list[Path]] = {}

@@ -6,8 +6,8 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Any , Callable , Literal , Optional
 
-from src.proj import PATH
-from src.basic import CALENDAR , DB , CONF
+from src.proj import PATH , MACHINE
+from src.basic import CALENDAR , DB
 from src.data.util import secid_adjust , col_reform , row_filter , adjust_precision , trade_min_reform , trade_min_fillna
 
 @dataclass
@@ -397,7 +397,7 @@ def kline_download(verbose = True):
     import pandas as pd
     from pathlib import Path
 
-    conf = CONF.local('aws')
+    conf = MACHINE.local_settings('aws')
     aws_access_key_id = conf['aws_access_key_id']
     aws_secret_access_key = conf['aws_secret_access_key']
 

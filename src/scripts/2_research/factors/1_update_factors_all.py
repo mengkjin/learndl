@@ -36,7 +36,7 @@ def main(**kwargs):
     with AutoRunTask('update_factors_all' , **kwargs) as runner:
         FactorCalculatorAPI.update(start = int(kwargs.pop('start')) , 
                                    end = int(kwargs.pop('end')) , 
-                                   groups_in_one_update = None)
+                                   groups_in_one_update = None , verbosity = 2)
         runner.critical(f'Update factors at {runner.update_to} completed')
 
     return runner

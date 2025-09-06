@@ -1,6 +1,8 @@
 # please check this path before running the code
-import sys , socket , shutil , yaml , time , os
+import sys , socket
+
 from pathlib import Path
+from typing import Literal
 
 class MachineSetting:
     MACHINE_DICT = {
@@ -70,11 +72,17 @@ class MachineSetting:
         else:
             return 'python'
         
+    @property
+    def PATH(self):
+        if not hasattr(self , '_PATH'):
+            from src.proj import PATH
+            self._PATH = PATH
+        return self._PATH
+
     def local_settings(self , name : str):
-        from src.proj import PATH
-        p = PATH.local_settings.joinpath(f'{name}.yaml')
-        assert p.exists() , f'{p} does not exist , .local_settings folder only has {[p.stem for p in PATH.list_files(PATH.local_settings)]}'
-        return PATH.read_yaml(p)
+        p = self.PATH.local_settings.joinpath(f'{name}.yaml')
+        assert p.exists() , f'{p} does not exist , .local_settings folder only has {[p.stem for p in self.PATH.list_files(self.PATH.local_settings)]}'
+        return self.PATH.read_yaml(p)
     
     @property
     def share_folder_path(self):
@@ -82,5 +90,14 @@ class MachineSetting:
             return Path(self.local_settings('share_folder')[self.name])
         except:
             return None
+        
+    def configs(self , conf_type : Literal['glob' , 'registry' , 'factor' , 'boost' , 'nn' , 'train' , 'trade' , 'schedule'] , name : str):
+        p = self.PATH.conf.joinpath(conf_type , f'{name}.yaml')
+        assert p.exists() , p
+        if conf_type == 'glob' and name == 'tushare_indus': 
+            kwargs = {'encoding' : 'gbk'}
+        else: 
+            kwargs = {}
+        return self.PATH.read_yaml(p , **kwargs)
 
 MACHINE = MachineSetting.select_machine()

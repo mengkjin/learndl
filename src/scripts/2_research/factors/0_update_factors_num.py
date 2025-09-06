@@ -27,7 +27,7 @@ from src.app import BackendTaskRecorder , ScriptLock
 @ScriptLock('update_factors' , timeout = 10)
 def main(**kwargs):
     with AutoRunTask('update_factors_num' , **kwargs) as runner:
-        FactorCalculatorAPI.update(groups_in_one_update=int(kwargs.pop('num')))
+        FactorCalculatorAPI.update(groups_in_one_update=int(kwargs.pop('num')) , verbosity = 2)
         runner.critical(f'Update factors at {runner.update_to} completed')
 
     return runner

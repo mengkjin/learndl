@@ -14,8 +14,6 @@ from .storage import Checkpoint , Deposition
 
 TRAIN_CONFIG_LIST = ['train' , 'env' , 'callbacks' , 'conditional' , 'model']
 
-
-
 def conf_dir(base_path : ModelPath | Path | None , *args):
     base_path = ModelPath(base_path)
     f = base_path.conf if base_path else PATH.conf.joinpath

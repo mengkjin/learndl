@@ -34,7 +34,6 @@ from src.app import BackendTaskRecorder , ScriptLock
 @ScriptLock('schedule_model' , timeout = 10)
 def main(**kwargs):
     schedule_name = kwargs.pop('schedule_name')
-    schedule_name = pathlib.Path(schedule_name).parts[-1]
     with AutoRunTask('train_schedule_model' , schedule_name , **kwargs) as runner:
         trainer = ModelAPI.schedule_model(schedule_name = schedule_name , short_test = runner.get('short_test'))
         runner.attach(trainer.result_package)

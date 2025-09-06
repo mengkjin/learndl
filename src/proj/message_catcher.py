@@ -750,8 +750,10 @@ class MarkdownCatcher(OutputCatcher):
             'stdout_lines' : 0,
             'stderr_lines' : 0,
         }
-        self.markdown_file = open(self.filename, 'w', encoding='utf-8')
-        self.print_header()
+        
+        self._open_markdown_file()
+        
+        self._markdown_header()
         self.stdout_deflector = OutputDeflector('stdout', self, True , 'write_stdout').start_catching()
         self.stderr_deflector = OutputDeflector('stderr', self, True , 'write_stderr').start_catching()
         self.is_catching = True
@@ -759,14 +761,32 @@ class MarkdownCatcher(OutputCatcher):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.is_catching or self.filename is None: return
-        self.print_footer()
+        self._markdown_footer()
         self.markdown_file.flush()
         self.stdout_deflector.end_catching()
         self.stderr_deflector.end_catching()
+        self._close_markdown_file()
         print(f"Markdown saved to {self.filename.absolute()}")
         return False
     
-    def print_header(self):
+    def _open_markdown_file(self):
+        assert self.filename is not None and self.filename.parent.exists() , f"filename must be a valid file path"
+        i = 0
+        running_filename = self.filename.with_suffix('.running.md')
+        while running_filename.exists():
+            running_filename = running_filename.with_suffix(f'.{i}.md')
+        self.running_filename = running_filename
+        self.markdown_file = open(self.running_filename, 'w', encoding='utf-8')
+        
+    def _close_markdown_file(self):
+        self.markdown_file.close()
+        if self.filename is not None:
+            if self.filename.exists(): self.filename.unlink()
+            self.running_filename.rename(self.filename)
+        if self.running_filename.exists(): 
+            self.running_filename.unlink()
+    
+    def _markdown_header(self):
         self.markdown_file.write(f"# {self.title.title()}\n")
         self.markdown_file.write(f"## Log Start \n")
         self.markdown_file.write(f"- *Machine: {MACHINE.name}*  \n")
@@ -774,7 +794,7 @@ class MarkdownCatcher(OutputCatcher):
         self.markdown_file.write(f"- *Start at: {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}*  \n")
         self.markdown_file.write(f"## Log Main \n")
 
-    def print_footer(self):
+    def _markdown_footer(self):
         finish_time = datetime.now()
         duration = _strf_delta(finish_time - self.start_time)
         self.markdown_file.write(f"## Log End \n")
@@ -785,7 +805,7 @@ class MarkdownCatcher(OutputCatcher):
         self.markdown_file.write(f"***\n")
         self.markdown_file.flush()
 
-    def print_seperator(self):
+    def _markdown_seperator(self):
         if self.seperating_by is None: return
         seperator = self._seperator_time_str(self.last_time)
         if seperator != self.last_seperator:
@@ -808,7 +828,7 @@ class MarkdownCatcher(OutputCatcher):
             self.stats[f'{type}_lines'] += 1
             text = f'{self._prefix_time_str(self.last_time)} {text}'
             text = self.formatted_text(text , type = type)
-            self.print_seperator()
+            self._markdown_seperator()
             self.markdown_file.write(text)
             self.markdown_file.flush()
     

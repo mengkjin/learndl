@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any , Literal , Optional
 
-from src.basic import CONF
+from src.proj import MACHINE
 from src.res.factor.util import PortCreator , PortCreateResult , Port
 
 from .interpreter import PortfolioOptimizerInput
@@ -34,7 +34,7 @@ class PortfolioOptimizerConfig:
 
     @property
     def opt_config(self):
-        return CONF.factor(f'{self.optim_config}_opt_config') if self.optim_config else {}
+        return MACHINE.configs('factor' , f'{self.optim_config}_opt_config') if self.optim_config else {}
 
     @property
     def opt_cond(self):

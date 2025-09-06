@@ -230,8 +230,8 @@ class GeneralBound:
             
             lb = STOCK_LB if self.lb is None else a + b * self.lb
             ub = STOCK_UB if self.ub is None else a + b * self.ub
-            if not isinstance(lb , np.ndarray): lb = np.array([lb])
-            if not isinstance(ub , np.ndarray): ub = np.array([ub])
+            if not isinstance(lb , np.ndarray): lb = np.asarray([lb])
+            if not isinstance(ub , np.ndarray): ub = np.asarray([ub])
 
             rslt = [A , lin_type , lb , ub]
 

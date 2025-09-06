@@ -57,7 +57,7 @@ def rcquant_init():
     if not rqdatac.initialized(): 
         try:
             with IOCatcher() as catcher:
-                rcquant_uri = CONF.local('rcquant')['uri']
+                rcquant_uri = MACHINE.local_settings('rcquant')['uri']
                 rqdatac.init(uri = rcquant_uri)
             output = catcher.contents
             if _print := output['stdout']:

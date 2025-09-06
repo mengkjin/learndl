@@ -4,6 +4,7 @@ from .logger import Logger
 from .output_catcher import IOCatcher , LogWriter , OutputCatcher , OutputDeflector
 from .message_catcher import HtmlCatcher , MarkdownCatcher
 from .db import DBConnHandler
+from .warning_catcher import WarningCatcher
 
 def _print_init_info():
     import torch
