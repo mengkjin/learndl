@@ -197,7 +197,7 @@ class BoosterInput:
         if isinstance(pred , torch.Tensor):
             new_pred = pred
         else:
-            new_pred = torch.tensor(np.array(pred))
+            new_pred = torch.from_numpy(np.array(pred , copy=True , dtype=np.float32))
 
         if new_pred.ndim == 2: 
             weight = torch.arange(new_pred.shape[1]).to(new_pred) - (new_pred.shape[1] - 1) / 2
