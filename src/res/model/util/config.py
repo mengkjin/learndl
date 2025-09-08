@@ -84,6 +84,7 @@ class TrainParam:
     def update_schedule_param(self):
         schedule_conf : dict[str,Any] = schedule_config(self.base_path , self.schedule_name).get('train' , {})
         for cfg in TRAIN_CONFIG_LIST:
+            print(schedule_conf.get(cfg , {}))
             self.train_param.update({f'{cfg}.{k}':v for k,v in schedule_conf.get(cfg , {}).items()})
         return self
     
@@ -435,7 +436,7 @@ class ModelParam:
 class TrainConfig(TrainParam):
     def __init__(self , base_path : Path | ModelPath | None , override = None, schedule_name : str | None = None):
         self.resume_training: bool  = False
-        self.stage_queue: list      = []
+        self.stage_queue: list      = ['data' , 'fit' , 'test']
 
         self.device     = Device()
         self.logger     = Logger()
@@ -669,6 +670,8 @@ class TrainConfig(TrainParam):
         info_strs.append(f'Sampling     : {self.train_sample_method}')
         info_strs.append(f'Shuffling    : {self.train_shuffle_option}')
         info_strs.append(f'Random Seed  : {self.random_seed}')
+        info_strs.append(f'Stage Queue     : {self.stage_queue}')
+        info_strs.append(f'Resume Training : {self.resume_training}')
 
         with Logger.EnclosedMessage(' model info '): 
             Logger.print('\n'.join(info_strs))

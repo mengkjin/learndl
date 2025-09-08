@@ -15,6 +15,12 @@
 #       type : [True , False]
 #       desc : short test
 #       prefix : "short_test/"
+#   resume : 
+#       type : [True , False]
+#       prefix : "resume/"
+#       default : "resume/False"
+#       desc : resume training , if change schedule file, set to False
+#       required : True
 # file_editor:
 #   name : "Schedule Config File Editor"
 #   path: "configs/schedule/{schedule_name}.yaml"
@@ -34,8 +40,11 @@ from src.app import BackendTaskRecorder , ScriptLock
 @ScriptLock('schedule_model' , timeout = 10)
 def main(**kwargs):
     schedule_name = kwargs.pop('schedule_name')
+    short_test = kwargs.pop('short_test')
+    resume = kwargs.pop('resume')
+    resume = 1 if resume is None else resume * 1
     with AutoRunTask('train_schedule_model' , schedule_name , **kwargs) as runner:
-        trainer = ModelAPI.schedule_model(schedule_name = schedule_name , short_test = runner.get('short_test'))
+        trainer = ModelAPI.schedule_model(schedule_name = schedule_name , short_test = short_test, resume = resume)
         runner.attach(trainer.result_package)
         runner.critical(f'Train schedule model at {runner.update_to} completed')
     return runner

@@ -246,8 +246,8 @@ class BaseTrainer(ModelStreamLine):
         return f'{self.__class__.__name__}(path={self.config.model_base_path.base})'
     
     @final
-    def __init__(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs):
-        self.init_config(base_path = base_path , override = override , schedule_name = schedule_name , **kwargs)
+    def __init__(self , base_path = None , override : dict | None = None , schedule_name = None , do_parser = True , **kwargs):
+        self.init_config(base_path = base_path , override = override , schedule_name = schedule_name , do_parser = do_parser , **kwargs)
         self.init_data(**kwargs)
         self.init_model(**kwargs)
         self.init_callbacks(**kwargs)
@@ -255,9 +255,9 @@ class BaseTrainer(ModelStreamLine):
         INSTANCE_RECORD.update_trainer(self)
         
     @final
-    def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:
+    def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , do_parser = True , **kwargs) -> None:
         '''initialized configuration'''
-        self.config = TrainConfig.load(base_path , do_parser = True , override = override , schedule_name = schedule_name , **kwargs)
+        self.config = TrainConfig.load(base_path , do_parser = do_parser , override = override , schedule_name = schedule_name , **kwargs)
         self.status = TrainerStatus(self.config.train_max_epoch)
 
     def wrap_callbacks(self):
