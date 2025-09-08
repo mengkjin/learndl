@@ -33,10 +33,10 @@ labels:
 
 # input specification ----------------------------------------------------------------
 input_type: data # [data , hidden , factor] , specify below
+data.prenorm:   # should the day be prenormalized? recommendation : not to change (also apply to hidden and factor)
+  day: {'divlast' : True  , 'histnorm' : True}
 
 data.types: day # ['day+30m' , 30m , day , ...] , use if input_type is data
-data.prenorm:   # should the day be prenormalized? recommendation : not to change
-  day: {'divlast' : True  , 'histnorm' : True}
 
 hidden.types: # list of hidden states , use if input_type is hidden
   - gru_day_V0.0.best

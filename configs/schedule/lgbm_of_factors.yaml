@@ -5,6 +5,8 @@ train:
     module        : lgbm  # any of [nn defined in src/algo/nn/api.py] or ['booster' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
     submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for booster , only use best
 
+
+    train_window  : 480
     # labels specification ------------------------------------------------------------
     # rtn : raw return | std : standardized return | res : risk model residual
     # if module is nn , use multiloss combination of the labels
@@ -25,4 +27,5 @@ train:
 
 boost:
   lgbm:
-    seqlens: [{day: 1}]
+    seqlens:        [{day: 1}]
+    max_depth:      [6 , 8 , 10]
