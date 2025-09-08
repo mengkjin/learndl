@@ -84,7 +84,6 @@ class TrainParam:
     def update_schedule_param(self):
         schedule_conf : dict[str,Any] = schedule_config(self.base_path , self.schedule_name).get('train' , {})
         for cfg in TRAIN_CONFIG_LIST:
-            print(schedule_conf.get(cfg , {}))
             self.train_param.update({f'{cfg}.{k}':v for k,v in schedule_conf.get(cfg , {}).items()})
         return self
     
@@ -460,7 +459,7 @@ class TrainConfig(TrainParam):
         return self
 
     @classmethod
-    def load(cls , base_path : Optional[Path] = None , do_parser = False , 
+    def load(cls , base_path : Optional[Path] = None , do_parser = True , 
              override = None , schedule_name = None , makedir = True , **kwargs):
         '''load config yaml to get default/giving params'''
         config = cls(base_path , override, schedule_name)
@@ -546,9 +545,9 @@ class TrainConfig(TrainParam):
     @classmethod
     def parser_args(cls , stage = -1 , resume = -1 , checkname = -1 , **kwargs):
         parser = argparse.ArgumentParser(description='manual to this script')
-        parser.add_argument(f'--stage', type=int, default = stage)
-        parser.add_argument(f'--resume', type=int, default = resume)
-        parser.add_argument(f'--checkname', type=int, default = checkname)
+        parser.add_argument(f'--stage', type=str, default = str(stage))
+        parser.add_argument(f'--resume', type=str, default = str(resume))
+        parser.add_argument(f'--checkname', type=str, default = str(checkname))
         args , _ = parser.parse_known_args()
         return args
 
@@ -631,9 +630,12 @@ class TrainConfig(TrainParam):
     def process_parser(self , par_args = None):
         par_args = par_args or {}
         with Logger.EnclosedMessage(' parser training args '):
-            self.parser_stage(getattr(par_args , 'stage' , -1))
-            self.parser_resume(getattr(par_args , 'resume' , -1))
-            self.parser_select(getattr(par_args , 'checkname' , -1)) 
+            stage = int(eval(str(getattr(par_args , 'stage' , '-1'))))
+            resume = int(eval(str(getattr(par_args , 'resume' , '-1'))))
+            checkname = int(eval(str(getattr(par_args , 'checkname' , '-1'))))
+            self.parser_stage(stage)
+            self.parser_resume(resume)
+            self.parser_select(checkname) 
         return self
 
     def print_out(self):

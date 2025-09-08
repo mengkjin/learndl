@@ -40,8 +40,8 @@ from src.app import BackendTaskRecorder , ScriptLock
 @ScriptLock('schedule_model' , timeout = 10)
 def main(**kwargs):
     schedule_name = kwargs.pop('schedule_name')
-    short_test = kwargs.pop('short_test')
-    resume = kwargs.pop('resume')
+    short_test = eval(kwargs.pop('short_test'))
+    resume = eval(kwargs.pop('resume'))
     resume = 1 if resume is None else resume * 1
     with AutoRunTask('train_schedule_model' , schedule_name , **kwargs) as runner:
         trainer = ModelAPI.schedule_model(schedule_name = schedule_name , short_test = short_test, resume = resume)

@@ -30,7 +30,8 @@ class CallbackTimer(BaseCallBack):
         if self.recording: 
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_times.items() if v]
-            df = pd.DataFrame(values , columns = columns).sort_values(by=['total_time'],ascending=False).head(5)
+            df = pd.DataFrame(values).sort_values(by=[2],ascending=False).head(5)
+            df.columns = columns
             print('Table:Callback Time costs:')
             FUNC.display.display(df)
 
@@ -127,7 +128,7 @@ class StatusDisplay(BaseCallBack):
         if self.summary_df.empty: return
         if not MACHINE.server: return
         test_scores = {
-            '{}.{}'.format(*col):'|'.join([f'{k}({round(self.summary_df[col][k],v)})' for k,v in self.SUMMARY_NDIGITS.items() 
+            '{}.{}'.format(*col):'|'.join([f'{k}({round(self.summary_df.loc[k,col] , v)})' for k,v in self.SUMMARY_NDIGITS.items() 
                                            if k in self.summary_df[col].index]) for col in self.summary_df.columns}
     
         test_name = f'{self.config.model_name}(x{len(self.config.model_num_list)})_at_{datetime.datetime.fromtimestamp(self.record_init_time).strftime("%Y%m%d%H%M%S")}'
@@ -221,7 +222,7 @@ class StatusDisplay(BaseCallBack):
         cat_stat = [md for md in self.test_df_model['model_date'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
         cat_subm = ['best' , 'swalast' , 'swabest']
 
-        dfs : dict[str,pd.DataFrame|pd.Series] = {}
+        dfs : dict[str,pd.DataFrame|pd.Series|Any] = {}
         dfs['Avg'] = self.test_df_date.groupby(['model_num','submodel'])['value'].mean()
         dfs['Sum'] = self.test_df_date.groupby(['model_num','submodel'])['value'].sum()
         dfs['Std'] = self.test_df_date.groupby(['model_num','submodel'])['value'].std()

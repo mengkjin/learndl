@@ -67,7 +67,7 @@ class DataModule(BaseDataModule):
                 if v == 0: seqlens[k] = l0; l0 = v
             seqlens.update({k:int(v) for k,v in param.items() if k.endswith('_seq_len')})
         elif self.input_type in ['hidden' , 'factor']:
-            seqlens : dict = {key:1 for key in self.input_keys}
+            seqlens = {key:1 for key in self.input_keys}
         else:
             raise KeyError(self.input_type)
         return seqlens
@@ -283,17 +283,16 @@ class DataModule(BaseDataModule):
         return new_x
         
     def parse_prenorm_method(self):
-        self.prenorm_divlast  : dict[str,bool] = {}
-        self.prenorm_histnorm : dict[str,bool] = {}
+        self.prenorm_divlast  : list[str] = []
+        self.prenorm_histnorm : list[str] = []
         for mdt in self.input_keys: 
             method : dict = self.config.model_data_prenorm.get(mdt , {})
-            new_method = {
-                'divlast' : method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST) ,
-                'histnorm': method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM) ,
-            }
-            if not SILENT: Logger.info(f'Pre-Norming method of [{mdt}] : {new_method}')
-            self.prenorm_divlast[mdt]  = new_method['divlast']
-            self.prenorm_histnorm[mdt] = new_method['histnorm']
+            divlast = method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST)
+            histnorm = method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM)
+            if not SILENT and (divlast or histnorm): 
+                Logger.info(f'Pre-Norming method of [{mdt}] : {divlast} {histnorm}')
+            if divlast: self.prenorm_divlast.append(mdt)
+            if histnorm: self.prenorm_histnorm.append(mdt)
 
     def prenorm(self , x : Tensor, key : str) -> Tensor:
         '''
@@ -301,9 +300,9 @@ class DataModule(BaseDataModule):
         1.divlast: divide by the last value, get seq-mormalized x
         2.histnorm: normalized by history avg and std
         '''
-        if self.prenorm_divlast[key] and x.shape[-2] > 1:
+        if key in self.prenorm_divlast and x.shape[-2] > 1:
             x = x / (x.select(-2,-1).unsqueeze(-2) + 1e-6)
-        if self.prenorm_histnorm[key]:
+        if key in self.prenorm_histnorm:
             x = x - self.datas.norms[key].avg[-x.shape[-2]:]
             x = x / (self.datas.norms[key].std[-x.shape[-2]:] + 1e-6)
         return x
