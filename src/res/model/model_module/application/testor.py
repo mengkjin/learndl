@@ -14,7 +14,7 @@ class ModelTestor:
             'model.data.types' : data_types , 
             'model.booster_head' : False
         }
-        self.config = TrainConfig.load(override = override_cfg , makedir = False)
+        self.config = TrainConfig.default(override = override_cfg)
         self.data = DataModule(self.config , 'predict').load_data()
         self.data.setup('predict' , self.config.model_param[0] , self.data.model_date_list[0])   
         

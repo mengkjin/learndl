@@ -2,6 +2,7 @@ import torch
 from copy import deepcopy
 
 from src import func as FUNC
+from src.proj import Logger
 from src.res.model.util import BaseCallBack , Optimizer
 
 class EarlyStoppage(BaseCallBack):
@@ -90,7 +91,7 @@ class NanLossRetrain(BaseCallBack):
         if not self.is_nanloss:
             pass
         elif self.remain_nan_life > 0:
-            self.logger.error(f'Initialize a new model to retrain! Lives remaining {self.remain_nan_life}')
+            Logger.error(f'Initialize a new model to retrain! Lives remaining {self.remain_nan_life}')
             self.remain_nan_life -= 1
 
             self.metrics.new_attempt()

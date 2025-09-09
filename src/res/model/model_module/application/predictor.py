@@ -89,10 +89,10 @@ class ModelPredictor:
         return self
 
     def save_preds(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
-        if df is None: df = self.df
-        if df.empty: return self
+        new_df = df if isinstance(df , pd.DataFrame) else self.df
+        if new_df.empty: return self
         self._current_update_dates = []
-        for date , subdf in df.groupby(date_col):
+        for date , subdf in new_df.groupby(date_col):
             new_df = subdf.drop(columns='date').set_index(secid_col)
             self.reg_model.save_pred(new_df , date , overwrite)
             self._current_update_dates.append(date)
@@ -123,7 +123,8 @@ class ModelPredictor:
         '''prediction correlation of ecent days'''
         if df is None: df = self.df
         if df is None: return NotImplemented
-        dates = np.sort(df[date_col].unique())[-window:]
+        dates : Any = df[date_col].unique()
+        dates = np.sort(dates)[-window:]
         df = df[df[date_col].isin(dates)]
         assert isinstance(df , pd.DataFrame)
         return df.pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()

@@ -5,7 +5,7 @@ import pandas as pd
 from typing import Any , ClassVar
 
 from src import func as FUNC
-from src.proj import PATH , MACHINE
+from src.proj import PATH , MACHINE , Logger
 from src.res.model.data_module import BatchDataLoader
 from src.res.model.util import BaseCallBack
 
@@ -92,7 +92,7 @@ class StatusDisplay(BaseCallBack):
     @property
     def optimizer(self): return getattr(self.trainer.model , 'optimizer')
     def display(self , *args , **kwargs):
-        return self.logger.info(*args , **kwargs) if (self.show_info_step or self.initial_models) else self.logger.debug(*args , **kwargs)
+        return Logger.info(*args , **kwargs) if (self.show_info_step or self.initial_models) else Logger.debug(*args , **kwargs)
     def event_sdout(self , event) -> str:
         if event == 'reset_learn_rate':
             sdout = f'Reset learn rate and scheduler at the end of epoch {self.status.epoch} , effective at epoch {self.status.epoch + 1}'
@@ -121,7 +121,7 @@ class StatusDisplay(BaseCallBack):
 
     # callbacks
     def on_configure_model(self):
-        self.logger.warning('Model Specifics:')
+        Logger.warning('Model Specifics:')
         self.config.print_out()
     def on_summarize_model(self):
         if not self.test_summarized: self.summarize_test_result()
@@ -147,10 +147,10 @@ class StatusDisplay(BaseCallBack):
         with open(self.RESULT_PATH, 'a') as f:
             json.dump({test_name:result}, f, indent=4)
 
-    def on_data_start(self):    self.logger.critical(self.tic_str('data'))
-    def on_data_end(self):      self.logger.critical(self.toc_str('data'))
-    def on_fit_start(self):     self.logger.critical(self.tic_str('fit'))
-    def on_fit_end(self):       self.logger.critical(self.toc_str('fit' , avg=True))
+    def on_data_start(self):    Logger.critical(self.tic_str('data'))
+    def on_data_end(self):      Logger.critical(self.toc_str('data'))
+    def on_fit_start(self):     Logger.critical(self.tic_str('fit'))
+    def on_fit_end(self):       Logger.critical(self.toc_str('fit' , avg=True))
 
     def on_fit_model_start(self):
         self.tic('model')
@@ -186,10 +186,10 @@ class StatusDisplay(BaseCallBack):
         self.record_texts['status'] = f'Train{train_score: .4f} Valid{valid_score: .4f} BestVal{best_score: .4f}'
         self.record_texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
             self.toc('model') / 60 , self.toc('model') / (self.record_epoch_model + 1))
-        self.logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts))
+        Logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts))
     
     def on_test_start(self): 
-        self.logger.critical(self.tic_str('test'))
+        Logger.critical(self.tic_str('test'))
                 
         self.test_df_date = pd.DataFrame()
         self.test_df_model = pd.DataFrame()
@@ -199,9 +199,9 @@ class StatusDisplay(BaseCallBack):
         self.update_test_score()
 
     def on_test_end(self): 
-        self.logger.warning('Testing Mean Score({}):'.format(self.config.train_criterion_score))
+        Logger.warning('Testing Mean Score({}):'.format(self.config.train_criterion_score))
         self.summarize_test_result()
-        self.logger.critical(self.toc_str('test'))
+        Logger.critical(self.toc_str('test'))
 
     def update_test_score(self):
         df_date = pd.DataFrame({

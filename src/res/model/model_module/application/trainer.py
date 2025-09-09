@@ -22,7 +22,7 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def initialize(cls , stage = -1 , resume = -1 , checkname = -1 , base_path = None , 
                    override : dict | None = None , schedule_name = None ,
-                   module = None , short_test = None , verbosity = None , do_parser = True ,
+                   module = None , short_test = None , verbosity = None , 
                    **kwargs):
         '''
         state:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
@@ -34,7 +34,7 @@ class ModelTrainer(BaseTrainer):
         if short_test is not None: override['short_test'] = short_test
         if verbosity  is not None: override['verbosity'] = verbosity
         app = cls(base_path = base_path , override = override , stage = stage , resume = resume , checkname = checkname , 
-                  schedule_name = schedule_name , do_parser = do_parser , **kwargs)
+                  schedule_name = schedule_name , **kwargs)
         return app
 
     @classmethod
@@ -51,42 +51,40 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def train(cls , module : str | None = None , short_test : bool | None = None , message_catcher : bool = True , **kwargs):
         with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
-            trainer = cls.initialize(module = module , short_test = short_test , do_parser = False , **kwargs).go()
+            trainer = cls.initialize(module = module , short_test = short_test , **kwargs).go()
             catcher.set_attrs(f'Train Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer
     
     @classmethod
     def resume(cls , model_name : str | None = None , message_catcher : bool = True , 
-               stage = 0 , resume = 1 , checkname = 1 , **kwargs):
+               stage = 0 , resume = 1 , checkname = -1 , **kwargs):
         assert model_name, 'model_name is required'
         available_models = cls.available_models(short_test = False)
         assert model_name in available_models , f'model_name {model_name} not found in {available_models}'
         with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
             trainer = cls.initialize(
                 base_path = PATH.model.joinpath(model_name) , 
-                stage = stage , resume = resume , checkname = checkname , 
-                do_parser = False , **kwargs).go()
+                stage = stage , resume = resume , checkname = checkname , **kwargs).go()
             catcher.set_attrs(f'Resume Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer
     
     @classmethod
     def test(cls , model_name : str | None = None , short_test : bool | None = None , message_catcher : bool = True , 
-             stage = 2 , resume = 1 , checkname = 1 , **kwargs):
+             stage = 2 , resume = 1 , checkname = -1 , **kwargs):
         assert model_name, 'model_name is required'
         available_models = cls.available_models(short_test = False)
         assert model_name in available_models , f'model_name {model_name} not found in {available_models}'
         with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
             trainer = cls.initialize(
-                base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , checkname = checkname , 
-                do_parser = False , **kwargs).go()
+                base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , checkname = checkname, **kwargs).go()
             catcher.set_attrs(f'Test Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer
     
     @classmethod
-    def schedule(cls , schedule_name : str | None = None , short_test : bool | None = None , message_catcher : bool = True , **kwargs):
+    def schedule(cls , schedule_name : str | None = None , short_test : bool | None = None , message_catcher : bool = True ,
+                 stage = 0 , resume = 0 , checkname = -1 , **kwargs):
         assert schedule_name, 'schedule_name is required'
         with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
-            trainer = cls.initialize(schedule_name = schedule_name , short_test = short_test , 
-                                     do_parser = False , **kwargs).go()
+            trainer = cls.initialize(schedule_name = schedule_name , short_test = short_test , stage = stage , resume = resume , checkname = checkname , **kwargs).go() 
             catcher.set_attrs(f'Schedule Model of {trainer.config.model_name}' , trainer.path_training_output)
         return trainer

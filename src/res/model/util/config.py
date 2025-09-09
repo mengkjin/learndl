@@ -1,3 +1,4 @@
+from sqlalchemy import true
 import argparse , os , random , shutil , torch
 import numpy as np
 
@@ -52,9 +53,9 @@ def schedule_config(base_path : ModelPath | Path | None , name : str | None):
     return p
 
 class TrainParam:
-    def __init__(self , base_path : ModelPath | Path | None , override = None , schedule_name : str | None = None):
+    def __init__(self , base_path : ModelPath | Path | str | None , override = None , schedule_name : str | None = None , **kwargs):
         self.base_path = ModelPath(base_path)
-        self.override = override or {}
+        self.override = (override or {}) | kwargs
         self.model_name = self.base_path.name
         self.schedule_name = schedule_name
         self.load_param().check_validity()
@@ -95,6 +96,8 @@ class TrainParam:
         if 'verbosity'  in self.override: self.override['env.verbosity']  = self.override.pop('verbosity')
         if 'short_test' in self.override: self.override['env.short_test'] = self.override.pop('short_test')
         if 'module'     in self.override: self.override['model.module']   = self.override.pop('module')
+        if '_ShortTest' in self.model_name: self.override['env.short_test'] = True
+        
         if self.should_be_short_test and ('env.short_test' not in self.override): self.override['env.short_test'] = True
         for override_key in self.override:
             assert override_key in self.Param.keys() , override_key
@@ -313,7 +316,7 @@ class TrainParam:
     @property
     def callbacks(self) -> dict[str,dict]: 
         return {k.replace('callbacks.',''):v for k,v in self.Param.items() if k.startswith('callbacks.')}
-        
+
 class ModelParam:
     def __init__(self , base_path : Optional[Path | ModelPath] , module : str , 
                  booster_head : Any = False , verbosity = 2 , short_test : bool | None = None , 
@@ -433,49 +436,45 @@ class ModelParam:
     def max_num_output(self): return max(self.Param.get('num_output' , [1]))
 
 class TrainConfig(TrainParam):
-    def __init__(self , base_path : Path | ModelPath | None , override = None, schedule_name : str | None = None):
-        self.resume_training: bool  = False
-        self.stage_queue: list      = ['data' , 'fit' , 'test']
-
+    def __init__(
+        self , base_path : ModelPath | Path | str | None , override = None, schedule_name : str | None = None ,
+        stage = -1 , resume = -1 , checkname = -1 , makedir = True , **kwargs
+    ):
+        self.stage_queue: list      = []
         self.device     = Device()
-        self.logger     = Logger()
 
-        self.Train = TrainParam(base_path , override, schedule_name)
+        self.Train = TrainParam(base_path , override, schedule_name , **kwargs)
         self.Model = self.Train.generate_model_param()
+        if base_path:
+            self.process_parser(stage, 1 , 0)
+        else:
+            self.process_parser(stage, resume , checkname)
+            new_path = ModelPath(self.model_name)
+            if 'fit' in self.stage_queue:
+                if not self.short_test and self.Train.resumeable and not self.resume_training:
+                    raise Exception(f'{new_path.base} resumeable, retrain has to delete folder manually')
+                if not self.resume_training and makedir:
+                    if new_path.base.exists(): shutil.rmtree(new_path.base)
+                    new_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
+                    self.Train.copy_to(new_path , override = self.short_test)
+                    self.Model.copy_to(new_path , override = self.short_test)
+
+    @classmethod
+    def default(cls , override = None , stage = 0, resume = 0 , checkname = 0 , makedir = False):
+        return cls(None, override , stage = stage,resume=resume , checkname=checkname,makedir=makedir)
         
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
-        
-    def resume_old(self , old_path : Path | ModelPath , override = None):
-        self.Train = TrainParam(old_path , override)
-        self.Model = self.Train.generate_model_param()
-
-    def start_new(self , new_path : Path | ModelPath):
-        new_path = ModelPath(new_path.name)
-        assert not self.Train.resumeable or self.short_test , f'{new_path.base} has to be delete manually'
-
-        new_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
-        self.Train.copy_to(new_path , override = self.short_test)
-        self.Model.copy_to(new_path , override = self.short_test)
-        return self
-
-    @classmethod
-    def load(cls , base_path : Optional[Path] = None , do_parser = True , 
-             override = None , schedule_name = None , makedir = True , **kwargs):
-        '''load config yaml to get default/giving params'''
-        config = cls(base_path , override, schedule_name)
-        if do_parser: config.process_parser(config.parser_args(**kwargs))
-
-        model_path = ModelPath(config.model_name)
-        if config.resume_training:
-            config.resume_old(model_path , override)
-        elif 'fit' in config.stage_queue and makedir:
-            config.start_new(model_path)
-            
-        return config
     
     @classmethod
-    def load_model(cls , model_name : str | ModelPath | Path , override = None):
-        return cls.load(ModelPath(model_name).base , override = override)
+    def load_model(cls , model_name : str | ModelPath | Path , override = None , stage = 0):
+        ''' 
+        load a existing model's config 
+        stage is mostly irrelevant here, because mostly we are loading a model's config to pred
+        '''
+        
+        model_path = ModelPath(model_name)
+        assert model_path.base.exists() , f'{model_path.base} does not exist'
+        return cls(model_path , override = override, stage = stage)
     
     @property
     def Param(self) -> dict[str,Any]: return self.Train.Param
@@ -498,11 +497,6 @@ class TrainConfig(TrainParam):
         update = update or {}
         for k,v in update.items(): setattr(self , k , v)
         for k,v in kwargs.items(): setattr(self , k , v)
-        return self
-
-    def reload(self , base_path : Path | None = None , do_parser = False , override = None , **kwargs):
-        new_config = self.load(base_path,do_parser,override,**kwargs)
-        self.__dict__ = new_config.__dict__
         return self
     
     def get(self , key , default = None):
@@ -541,15 +535,6 @@ class TrainConfig(TrainParam):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
-    
-    @classmethod
-    def parser_args(cls , stage = -1 , resume = -1 , checkname = -1 , **kwargs):
-        parser = argparse.ArgumentParser(description='manual to this script')
-        parser.add_argument(f'--stage', type=str, default = str(stage))
-        parser.add_argument(f'--resume', type=str, default = str(resume))
-        parser.add_argument(f'--checkname', type=str, default = str(checkname))
-        args , _ = parser.parse_known_args()
-        return args
 
     def parser_stage(self , value = -1):
         if value < 0:
@@ -626,13 +611,10 @@ class TrainConfig(TrainParam):
 
         Logger.info(f'--Model_name is set to {model_name}!')  
         self.Train.model_name = model_name
+        self.Train.base_path = ModelPath(model_name)
 
-    def process_parser(self , par_args = None):
-        par_args = par_args or {}
+    def process_parser(self , stage = -1 , resume = -1 , checkname = -1):
         with Logger.EnclosedMessage(' parser training args '):
-            stage = int(eval(str(getattr(par_args , 'stage' , '-1'))))
-            resume = int(eval(str(getattr(par_args , 'resume' , '-1'))))
-            checkname = int(eval(str(getattr(par_args , 'checkname' , '-1'))))
             self.parser_stage(stage)
             self.parser_resume(resume)
             self.parser_select(checkname) 

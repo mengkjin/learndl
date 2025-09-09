@@ -24,7 +24,7 @@ class DataModule(BaseDataModule):
         use_data: 'fit' , 'predict' , 'both' 
             if 'predict' only load recent data
         '''
-        self.config   = TrainConfig.load() if config is None else config
+        self.config   = TrainConfig.default(stage=0) if config is None else config
         self.use_data = use_data
         self.storage  = MemFileStorage(self.config.mem_storage)
         self.buffer   = BaseBuffer(self.device)

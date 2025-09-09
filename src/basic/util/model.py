@@ -18,7 +18,7 @@ class ModelPath:
         if isinstance(model_name , ModelPath):
             name = model_name.name
         elif isinstance(model_name , Path):
-            assert model_name.parent == PATH.model , model_name
+            assert model_name.absolute().parent == PATH.model , model_name
             name = model_name.name
         elif model_name is None:
             name = ''
@@ -66,7 +66,7 @@ class ModelPath:
         return self.sub_dirs(self.archive(self.model_nums[-1] , self.model_dates[-1]) , as_int = False)
     def load_config(self):
         from src.res.model.util.config import TrainConfig
-        return TrainConfig.load(self.base)
+        return TrainConfig(self.base , stage = 0)
     def next_model_date(self):
         from src.basic.util.calendar import CALENDAR
         config = self.load_config()

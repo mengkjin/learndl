@@ -122,7 +122,7 @@ class ModelAPI:
             int : use the verbosity level , if above 10 will print more details
         '''
         return cls.Trainer.train(module = module , short_test=True , verbosity = verbosity ,
-                                 stage = 0 , resume = 0 , checkname= 1)
+                                 stage = 0 , resume = 0 , checkname= -1)
     
     @classmethod
     def test_model(cls , model_name : str | None = None , short_test : bool | None = None , verbosity : int | None = 2 , 
@@ -145,7 +145,7 @@ class ModelAPI:
         Train a schedule model in config/schedule folder
         '''
         return cls.Trainer.schedule(schedule_name = schedule_name , short_test = short_test , verbosity = verbosity , 
-                                    stage = 0 , resume = resume , checkname = 1 , **kwargs)
+                                    stage = 0 , resume = resume , checkname = -1 , **kwargs)
     
     @classmethod
     def clear_st_models(cls):

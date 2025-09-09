@@ -8,7 +8,7 @@ from pathlib import Path
 from torch import Tensor
 from typing import Any , final , Iterator , Literal , Optional
 
-from src.proj import PATH
+from src.proj import PATH , Logger
 from src.basic import ModelDict , BigTimer , INSTANCE_RECORD
 from src.func import Filtered
 from src.res.algo import AlgoModule
@@ -246,8 +246,8 @@ class BaseTrainer(ModelStreamLine):
         return f'{self.__class__.__name__}(path={self.config.model_base_path.base})'
     
     @final
-    def __init__(self , base_path = None , override : dict | None = None , schedule_name = None , do_parser = True , **kwargs):
-        self.init_config(base_path = base_path , override = override , schedule_name = schedule_name , do_parser = do_parser , **kwargs)
+    def __init__(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs):
+        self.init_config(base_path = base_path , override = override , schedule_name = schedule_name , **kwargs)
         self.init_data(**kwargs)
         self.init_model(**kwargs)
         self.init_callbacks(**kwargs)
@@ -255,9 +255,9 @@ class BaseTrainer(ModelStreamLine):
         INSTANCE_RECORD.update_trainer(self)
         
     @final
-    def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , do_parser = True , **kwargs) -> None:
+    def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:
         '''initialized configuration'''
-        self.config = TrainConfig.load(base_path , do_parser = do_parser , override = override , schedule_name = schedule_name , **kwargs)
+        self.config = TrainConfig(base_path , override = override , schedule_name = schedule_name , **kwargs)
         self.status = TrainerStatus(self.config.train_max_epoch)
 
     def wrap_callbacks(self):
@@ -302,9 +302,7 @@ class BaseTrainer(ModelStreamLine):
     @property
     def checkpoint(self): return self.config.checkpoint
     @property
-    def deposition(self): return self.config.deposition
-    @property
-    def logger(self): return self.config.logger    
+    def deposition(self): return self.config.deposition   
     @property
     def stage_queue(self): return self.config.stage_queue
     @property
@@ -344,11 +342,11 @@ class BaseTrainer(ModelStreamLine):
     
     def main_process(self):
         '''Main stage of data & fit & test'''
-        with BigTimer(self.logger.critical , 'Main Process'):
+        with BigTimer(Logger.critical , 'Main Process'):
             self.on_configure_model()
 
             if not self.stage_queue:
-                self.logger.warning("stage_queue is empty , please check src.INSTANCE_RECORD['trainer']")
+                Logger.warning("stage_queue is empty , please check src.INSTANCE_RECORD['trainer']")
                 raise Exception("stage_queue is empty , please check src.INSTANCE_RECORD['trainer']")
 
             if 'data' in self.stage_queue: self.stage_data()
@@ -376,7 +374,7 @@ class BaseTrainer(ModelStreamLine):
         self.on_fit_start()
         for self.status.model_date , self.status.model_num in self.iter_model_num_date():
             if self.status.fit_iter_num == 0:
-                self.logger.warning(f'First Iterance: ({self.status.model_date} , {self.status.model_num})')
+                Logger.warning(f'First Iterance: ({self.status.model_date} , {self.status.model_num})')
             self.on_fit_model_start()
             self.model.fit()
             self.on_fit_model_end()
@@ -530,8 +528,6 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
     def config(self): return self.trainer.config
     @property
     def status(self):  return self.trainer.status
-    @property
-    def logger(self): return self.config.logger
     @property
     def metrics(self):  return self.config.metrics
     @property

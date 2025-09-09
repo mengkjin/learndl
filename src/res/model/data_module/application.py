@@ -13,7 +13,7 @@ def get_realistic_batch_data(model_data_types='day') -> BatchData:
     indus : stock_num x 1 x 35
     ...
     '''
-    model_config = TrainConfig.load().update(short_test=True, model_data_types=model_data_types)
+    model_config = TrainConfig.default().update(short_test=True, model_data_types=model_data_types)
     data = DataModule(model_config , 'predict').load_data()
     data.setup('predict' , model_date = data.datas.y.date[-50])
     return data.predict_dataloader()[0]

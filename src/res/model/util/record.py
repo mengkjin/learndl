@@ -1,4 +1,7 @@
 import pandas as pd
+import numpy as np
+
+from src.proj import Logger
 from .classes import BaseTrainer
 
 class PredRecorder:
@@ -10,7 +13,7 @@ class PredRecorder:
             if self.trainer == trainer: 
                 return
             else:
-                self.trainer.logger.critical(f'PredRecorder initialize with {trainer}, but already initialized with another trainer {self.trainer}')
+                Logger.critical(f'PredRecorder initialize with {trainer}, but already initialized with another trainer {self.trainer}')
         self.trainer = trainer
         self.preds : dict[str,pd.DataFrame] = {}
         self.dates = trainer.data.test_full_dates
@@ -30,7 +33,7 @@ class PredRecorder:
             return pd.concat(self.preds.values())
         else:
             dates = self.dates[::interval]
-            seq = [pred.loc[pred['date'].isin(dates),:] for pred in self.preds.values()]
+            seq = [pred.loc[np.isin(pred['date'],dates),:] for pred in self.preds.values()]
             return pd.concat(seq)
     
     def append_batch_pred(self):
@@ -43,7 +46,7 @@ class PredRecorder:
         date  = self.trainer.data.batch_date(self.trainer.batch_data)
 
         pred = self.trainer.batch_output.pred_df(secid , date).dropna()
-        pred = pred.loc[pred['date'].isin(self.dates),:]
+        pred = pred.loc[np.isin(pred['date'],self.dates),:]
         if len(pred) == 0: return
 
         pred['model_num'] = self.trainer.model_num
