@@ -32,7 +32,7 @@ labels:
   - rtn_lag1_10 
 
 # input specification ----------------------------------------------------------------
-input_type: data # [data , hidden , factor] , specify below
+input_type: data # [data , hidden , factor , combo] , specify below
 data.prenorm:   # should the day be prenormalized? recommendation : not to change (also apply to hidden and factor)
   day: {'divlast' : True  , 'histnorm' : True}
 
@@ -49,3 +49,9 @@ factor.types: # list of factor names , use if input_type is factor
   #behavioral: [momentum , volatility , correlation , liquidity]
   #money_flow: [holding , trading]
   #high_frequency: [hf_momentum , hf_volatility , hf_correlation , hf_liquidity]
+
+combo.types: # list of combo names , use if input_type is combo
+  data: day
+  factor:
+    fundament:  [quality , growth , value , earning]
+    analyst:    [surprise , coverage , forecast , adjustment]

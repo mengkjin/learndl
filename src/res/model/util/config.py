@@ -38,6 +38,13 @@ def conf_copy(source : Path , target : Path , overwrite = False):
         target.parent.mkdir(parents=True,exist_ok=True)
         shutil.copyfile(source , target)
 
+def striped_list(factors : list[str] | dict | str):
+    if isinstance(factors , str): 
+        return [factors.strip()]
+    else:
+        if isinstance(factors , dict): factors = list(factors.values())
+        return [ff for f in factors for ff in striped_list(f)]
+
 def conf_mod_type(module : str):
     return AlgoModule.module_type(module)
 
@@ -130,7 +137,7 @@ class TrainParam:
                 data_str = self.model_input_type
             model_name = '_'.join([s for s in [mod_str , head_str , data_str] if s])
         if self.short_test: model_name += '_ShortTest'
-        self.model_name = self.base_path.name
+        self.model_name = model_name
         return self
     
     def check_validity(self):
@@ -222,8 +229,8 @@ class TrainParam:
     @property
     def model_module(self): return str(self.Param['model.module']).lower()
     @property
-    def model_input_type(self) -> Literal['data' , 'hidden' , 'factor']: 
-        assert self.Param['model.input_type'] in ['data' , 'hidden' , 'factor'] , self.Param['model.input_type']
+    def model_input_type(self) -> Literal['data' , 'hidden' , 'factor' , 'combo']: 
+        assert self.Param['model.input_type'] in ['data' , 'hidden' , 'factor' , 'combo'] , self.Param['model.input_type']
         return self.Param['model.input_type']
     @property
     def model_labels(self) -> list[str]: return self.Param['model.labels']
@@ -243,13 +250,14 @@ class TrainParam:
     @property
     def model_factor_types(self) -> list[str]: 
         factors = self.Param.get('model.factor.types' , [])
-        def striped_list(factors : list[str] | dict | str):
-            if isinstance(factors , str): 
-                return [factors.strip()]
-            else:
-                if isinstance(factors , dict): factors = list(factors.values())
-                return [ff for f in factors for ff in striped_list(f)]
         return striped_list(factors)
+    @property
+    def model_combo_types(self) -> dict[str,list[str]]: 
+        combos = self.Param.get('model.combo.types' , {})
+        if 'factor' in combos: 
+            combos['factor'] = striped_list(combos['factor'])
+        return combos
+
     @property
     def model_train_window(self): 
         if (train_window := int(self.Param.get('model.train_window', 0))) > 0:
@@ -450,11 +458,13 @@ class TrainConfig(TrainParam):
         self.Train = TrainParam(base_path , override, schedule_name , **kwargs)
         self.Model = self.Train.generate_model_param()
 
+        print(self.Train.model_name)
+
         if base_path:
             resume , checkname = 1 , 0
 
         self.process_parser(stage , resume , checkname)
-            
+        assert self.Train.model_base_path , self.Train.model_name
         if not base_path and makedir: 
             self.makedir()
         
@@ -657,6 +667,8 @@ class TrainConfig(TrainParam):
             info_strs.append(f'  -->  Hidden Models : {self.model_hidden_types}')
         elif self.model_input_type == 'factor':
             info_strs.append(f'  -->  Factor Types : {self.model_factor_types}')
+        elif self.model_input_type == 'combo':
+            info_strs.append(f'  -->  Combo Types : {self.model_combo_types}')
         info_strs.append(f'Model Labels : {self.model_labels}')
         info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
         info_strs.append(f'Interval     : {self.model_interval} days')

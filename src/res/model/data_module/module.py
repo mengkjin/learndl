@@ -30,12 +30,12 @@ class DataModule(BaseDataModule):
         self.buffer   = BaseBuffer(self.device)
 
     def __repr__(self): 
-        input_keys = self.input_keys
-        if len(input_keys) >= 5: 
-            input_keys_str = f'[{input_keys[0]},...,{input_keys[-1]}({len(input_keys)})]'
+        keys = self.input_keys
+        if len(keys) >= 5: 
+            keys_str = f'[{keys[0]},...,{keys[-1]}({len(keys)})]'
         else:
-            input_keys_str = str(input_keys)
-        return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={input_keys_str})'
+            keys_str = str(keys)
+        return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={keys_str})'
 
     @staticmethod
     def prepare_data(data_types : Optional[list[str]] = None):
@@ -43,38 +43,63 @@ class DataModule(BaseDataModule):
         DataPreProcessor.main(predict = True , data_types = data_types)
 
     @property
-    def input_type(self) -> Literal['data' , 'hidden' , 'factor']: 
+    def input_type(self) -> Literal['data' , 'hidden' , 'factor' , 'combo']: 
         return self.config.model_input_type
     
     @property
     def input_keys(self) -> list[str]:
-        if self.input_type == 'data':
-            keys = [ModuleData.abbr(data_type) for data_type in self.config.model_data_types]
-        elif self.input_type == 'hidden':
-            keys = self.config.model_hidden_types
-        elif self.input_type == 'factor':
-            keys = self.config.model_factor_types
-        else:
-            raise KeyError(self.input_type)
+        keys = self.input_keys_data + self.input_keys_factor + self.input_keys_hidden
         assert len(keys) > 0 , self.config.Param.get(f'model.{self.input_type}.types')
         return keys
+
+    @property
+    def input_keys_data(self) -> list[str]:
+        if self.input_type == 'data':
+            keys = self.config.model_data_types
+        elif self.input_type == 'combo':
+            keys = self.config.model_combo_types.get('data',[])
+        else:
+            keys = []
+        return [ModuleData.abbr(key) for key in keys]
+
+    @property
+    def input_keys_factor(self) -> list[str]:
+        if self.input_type == 'factor':
+            return self.config.model_factor_types
+        elif self.input_type == 'combo':
+            return self.config.model_combo_types.get('factor',[])
+        else:
+            return []
+
+    @property
+    def input_keys_hidden(self) -> list[str]:
+        if self.input_type == 'hidden':
+            return self.config.model_hidden_types
+        elif self.input_type == 'combo':
+            return self.config.model_combo_types.get('hidden',[])
+        else:
+            return []
         
     def input_seqlens(self , param : dict[str,Any]) -> dict[str,int]:
         if self.input_type == 'data':
-            seqlens : dict = {key:int(param['seqlens'].get(key,0)) for key in self.input_keys}
-            l0 = min([v for v in seqlens.values() if v > 0])
-            for k,v in seqlens.items(): 
-                if v == 0: seqlens[k] = l0; l0 = v
-            seqlens.update({k:int(v) for k,v in param.items() if k.endswith('_seq_len')})
-        elif self.input_type in ['hidden' , 'factor']:
-            seqlens = {key:1 for key in self.input_keys}
+            seqlens = {key:int(param['seqlens'].get(key,-1)) for key in self.input_keys_data}
+        elif self.input_type == 'factor':
+            seqlens = {key:1 for key in self.input_keys_factor}
+        elif self.input_type == 'hidden':
+            seqlens = {key:1 for key in self.input_keys_hidden}
+        elif self.input_type == 'combo':
+            seqlens = {key:int(param['seqlens'].get(key,-1)) for key in self.input_keys_data}
+            seqlens.update({key:1 for key in self.input_keys_factor})
+            seqlens.update({key:1 for key in self.input_keys_hidden})
         else:
             raise KeyError(self.input_type)
+        l0 = min([v for v in seqlens.values() if v > 0]) if seqlens else 0
+        seqlens.update({key:l0 for key,val in seqlens.items() if val <= 0})
+        seqlens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})
         return seqlens
 
     def load_data(self):
-        load_data_types = self.input_keys if self.input_type in ['data' , 'factor'] else []
-        self.datas = ModuleData.load(load_data_types , self.config.model_labels, 
+        self.datas = ModuleData.load(self.input_keys_data + self.input_keys_factor , self.config.model_labels, 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision)
         self.config.update_data_param(self.datas.x)
@@ -92,12 +117,11 @@ class DataModule(BaseDataModule):
         return self
     
     def setup_input_prepare(self):
-        if self.input_type == 'data':
-            self.setup_data_prepare()
-        elif self.input_type == 'hidden':
-            self.setup_hidden_prepare()
-        elif self.input_type == 'factor':
-            self.setup_factor_prepare()
+        self.setup_seqs()
+        if self.input_type == 'data':     self.setup_data_prepare()
+        elif self.input_type == 'hidden': self.setup_hidden_prepare()
+        elif self.input_type == 'factor': self.setup_factor_prepare()
+        elif self.input_type == 'combo':  self.setup_combo_prepare()
         else:
             raise KeyError(self.input_type)
         
@@ -119,32 +143,8 @@ class DataModule(BaseDataModule):
         seqlens = self.input_seqlens(param)
         loader_param = self.LoaderParam(stage , model_date , seqlens , extract_backward_days , extract_forward_days)
         return loader_param
-    
-    def setup_hidden_prepare(self) -> None:
-        model_date = self.loader_param.model_date
-        
-        self.seqs = self.loader_param.seqlens
-        self.seq0 = self.seqx = self.seqy = 1
 
-        hidden_max_date : int | Any = None
-        self.hidden_input : dict[str,tuple[int,pd.DataFrame]] = {}
-        for hidden_key in self.input_keys:
-            hidden_path = HiddenPath.from_key(hidden_key)
-            if hidden_key in self.hidden_input and self.hidden_input[hidden_key][0] == hidden_path.latest_hidden_model_date(model_date):
-                df = self.hidden_input[hidden_key][1]
-            else:
-                hidden_model_date , df = hidden_path.get_hidden_df(model_date , exact=False)
-                self.hidden_input[hidden_key] = (hidden_model_date , df)
-            hidden_max_date = df['date'].max() if hidden_max_date is None else min(hidden_max_date , df['date'].max())
-
-            df = df.drop(columns='dataset' , errors='ignore').set_index(['secid','date'])
-            df.columns = [f'{hidden_key}.{col}' for col in df.columns]
-            self.datas.x[hidden_key] = DataBlock.from_dataframe(df).align_secid_date(self.datas.secid , self.datas.date)
-
-        assert self.datas.date[self.datas.date < self.next_model_date(model_date)][-1] <= hidden_max_date , \
-            (self.next_model_date(model_date) , hidden_max_date)
-
-    def setup_data_prepare(self) -> None:
+    def setup_seqs(self) -> None:
         seqlens = self.loader_param.seqlens
         x_keys = self.input_keys
         y_keys = [k for k in seqlens.keys() if k not in x_keys]
@@ -154,8 +154,37 @@ class DataModule(BaseDataModule):
         self.seqx = max([v for k,v in self.seqs.items() if k in x_keys]) if x_keys else 1
         self.seq0 = self.seqx + self.seqy - 1
 
+    def setup_data_prepare(self) -> None:
+        ...
+
     def setup_factor_prepare(self) -> None:
+        ...
+    
+    def setup_hidden_prepare(self) -> None:
+        model_date = self.loader_param.model_date
+
+        hidden_max_date : int | Any = None
+        hidden_input : dict[str,tuple[int,pd.DataFrame]] = {}
+        for hidden_key in self.input_keys_hidden:
+            hidden_path = HiddenPath.from_key(hidden_key)
+            if hidden_key in hidden_input and hidden_input[hidden_key][0] == hidden_path.latest_hidden_model_date(model_date):
+                df = hidden_input[hidden_key][1]
+            else:
+                hidden_model_date , df = hidden_path.get_hidden_df(model_date , exact=False)
+                hidden_input[hidden_key] = (hidden_model_date , df)
+            hidden_max_date = df['date'].max() if hidden_max_date is None else min(hidden_max_date , df['date'].max())
+
+            df = df.drop(columns='dataset' , errors='ignore').set_index(['secid','date'])
+            df.columns = [f'{hidden_key}.{col}' for col in df.columns]
+            self.datas.x[hidden_key] = DataBlock.from_dataframe(df).align_secid_date(self.datas.secid , self.datas.date)
+
+        assert self.datas.date[self.datas.date < self.next_model_date(model_date)][-1] <= hidden_max_date , \
+            (self.next_model_date(model_date) , hidden_max_date)
+
+    def setup_combo_prepare(self) -> None:
         self.setup_data_prepare()
+        self.setup_factor_prepare()
+        self.setup_hidden_prepare()
 
     def setup_loader_create(self):
         stage , model_date = self.loader_param.stage , self.loader_param.model_date
