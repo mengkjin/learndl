@@ -1,11 +1,9 @@
-import time
 import pandas as pd
 import numpy as np
 
 from collections.abc import Iterable
 from datetime import date , datetime , timedelta
 from typing import Any , Callable
-
 
 def today(offset = 0 , astype : Any = int):
     d = datetime.today() + timedelta(days=offset)
@@ -15,10 +13,11 @@ def this_day(astype : Any = str):
     return astype(date.today().strftime('%Y%m%d'))
 
 def date_offset(date : Any , offset : int = 0 , astype = int):
-    date = pd.DatetimeIndex(np.array(date).astype(str)) if isinstance(date , Iterable) else pd.DatetimeIndex([str(date)])
+    iterable_input = isinstance(date , Iterable)
+    date = pd.DatetimeIndex(np.array(date).astype(str) if iterable_input else [str(date)])
     dseries : pd.DatetimeIndex = (date + pd.DateOffset(n=offset))
     new_date = dseries.strftime('%Y%m%d').astype(astype).to_numpy()
-    return new_date if isinstance(date , Iterable) else new_date[0]
+    return new_date if iterable_input else new_date[0]
 
 def date_diff(date1 : int | str , date2 : int | str):
     return (datetime.strptime(str(date1), '%Y%m%d') - datetime.strptime(str(date2), '%Y%m%d')).days

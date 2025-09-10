@@ -54,7 +54,8 @@ def schedule_config(base_path : ModelPath | Path | None , name : str | None):
 
 class TrainParam:
     def __init__(self , base_path : ModelPath | Path | str | None , override = None , schedule_name : str | None = None , **kwargs):
-        self.set_base_path(base_path)
+        self.base_path = ModelPath(base_path)
+        self.model_name = self.base_path.name
         self.override = (override or {}) | kwargs
         self.schedule_name = schedule_name
         self.load_param().check_validity()
@@ -62,18 +63,15 @@ class TrainParam:
     def __bool__(self): return True
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
 
-    def set_base_path(self , base_path : Path | ModelPath | str | None):
+    def reset_base_path(self , base_path : Path | ModelPath | str | None):
         self.base_path = ModelPath(base_path)
+        self.model_name = self.base_path.name
         return self
 
     @property
     def model_base_path(self):
         # assert self.base_path
         return self.base_path
-
-    @property
-    def model_name(self):
-        return self.base_path.name
 
     @property
     def Param(self) -> dict[str,Any]: return self.train_param
@@ -132,7 +130,7 @@ class TrainParam:
                 data_str = self.model_input_type
             model_name = '_'.join([s for s in [mod_str , head_str , data_str] if s])
         if self.short_test: model_name += '_ShortTest'
-        self.set_base_path(model_name)
+        self.model_name = self.base_path.name
         return self
     
     def check_validity(self):
@@ -325,7 +323,8 @@ class ModelParam:
                  booster_head : Any = False , verbosity = 2 , short_test : bool | None = None , 
                  schedule_name : str | None = None,
                  **kwargs):
-        self.set_base_path(base_path)
+        self.base_path = ModelPath(base_path)
+        self.model_name = self.base_path.name
         self.module = module.lower()
         self.booster_head = booster_head
         self.short_test = short_test
@@ -336,18 +335,15 @@ class ModelParam:
 
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
 
-    def set_base_path(self , base_path : Path | ModelPath | str | None):
-        self.base_path = ModelPath(base_path)
-        return self
-
-    @property
-    def model_name(self):
-        return self.base_path.name
-
     @property
     def model_base_path(self):
         assert self.base_path is not None
         return self.base_path
+
+    def reset_base_path(self , base_path : Path | ModelPath | str | None):
+        self.base_path = ModelPath(base_path)
+        self.model_name = self.base_path.name
+        return self
 
     @property
     def Param(self) -> dict[str,Any]: return self.model_param
@@ -453,19 +449,15 @@ class TrainConfig(TrainParam):
 
         self.Train = TrainParam(base_path , override, schedule_name , **kwargs)
         self.Model = self.Train.generate_model_param()
-        
+
         if base_path:
-            self.process_parser(stage, 1 , 0)
-        else:
-            self.process_parser(stage, resume , checkname)
-            if 'fit' in self.stage_queue:
-                if not self.short_test and self.Train.resumeable and not self.resume_training:
-                    raise Exception(f'{self.model_name} resumeable, re-train has to delete folder manually')
-                if not self.resume_training and makedir:
-                    if self.model_base_path.base.exists(): shutil.rmtree(self.model_base_path.base)
-                    self.model_base_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
-                    self.Train.copy_to(self.model_base_path , overwrite = self.short_test)
-                    self.Model.copy_to(self.model_base_path , overwrite = self.short_test)
+            resume , checkname = 1 , 0
+
+        self.process_parser(stage , resume , checkname)
+            
+        if not base_path and makedir: 
+            self.makedir()
+        
 
     @classmethod
     def default(cls , override = None , stage = 0, resume = 0 , checkname = 0 , makedir = False):
@@ -482,6 +474,17 @@ class TrainConfig(TrainParam):
         model_path = ModelPath(model_name)
         assert model_path.base.exists() , f'{model_path.base} does not exist'
         return cls(model_path , override = override, stage = stage)
+
+    def makedir(self):
+        if 'fit' in self.stage_queue and not self.resume_training:
+            if self.model_base_path.base.exists(): 
+                if not self.short_test and self.Train.resumeable:
+                    raise Exception(f'{self.model_name} resumeable, re-train has to delete folder manually')
+                shutil.rmtree(self.model_base_path.base)
+            self.model_base_path.mkdir(model_nums = self.model_num_list , exist_ok=True)
+            self.Train.copy_to(self.model_base_path , overwrite = self.short_test)
+            self.Model.copy_to(self.model_base_path , overwrite = self.short_test)
+
     
     @property
     def Param(self) -> dict[str,Any]: return self.Train.Param
@@ -617,8 +620,8 @@ class TrainConfig(TrainParam):
                 model_name = candidate_name[value]
 
         Logger.info(f'--Model_name is set to {model_name}!')  
-        self.Train.set_base_path(model_name)
-        self.Model.set_base_path(model_name)
+        self.Train.reset_base_path(model_name)
+        self.Model.reset_base_path(model_name)
 
     def process_parser(self , stage = -1 , resume = -1 , checkname = -1):
         with Logger.EnclosedMessage(' parser training args '):
