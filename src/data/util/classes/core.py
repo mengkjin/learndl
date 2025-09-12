@@ -429,9 +429,13 @@ class ModuleData:
         if predict: 
             dataset_path = 'no_dataset'
         else:
-            last_date = max(DataBlock.load_dict(DataBlock.block_path('y'))['date'])
-            dataset_code = '+'.join(data_type_list)
-            dataset_path = f'{PATH.dataset}/{dataset_code}.{last_date}.pt'
+            try:
+                last_date = max(DataBlock.load_dict(DataBlock.block_path('y'))['date'])
+                dataset_code = '+'.join(data_type_list)
+                dataset_path = f'{PATH.dataset}/{dataset_code}.{last_date}.pt'
+            except ModuleNotFoundError:
+                '''can be caused by different package version'''
+                dataset_path = 'no_dataset'
 
         if y_labels is not None and Path(dataset_path).exists():
             try:
