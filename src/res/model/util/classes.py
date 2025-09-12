@@ -2,7 +2,7 @@ import itertools
 import numpy as np
 
 from abc import ABC , abstractmethod
-from dataclasses import dataclass , field
+from dataclasses import dataclass
 from inspect import currentframe
 from pathlib import Path
 from torch import Tensor
@@ -67,12 +67,15 @@ class _FitLoopBreaker:
     def __init__(self , max_epoch : int = 200):
         self.max_epoch = max_epoch
         self.status : list[_EndEpochStamp] = []
-    def __bool__(self): return len(self.status) > 0
-    def __repr__(self): return f'{self.__class__.__name__}(max_epoch={self.max_epoch},status={self.status})'  
+    def __bool__(self): 
+        return len(self.status) > 0
+    def __repr__(self): 
+        return f'{self.__class__.__name__}(max_epoch={self.max_epoch},status={self.status})'  
     def new_loop(self): 
         self.status = []
     def loop_end(self , epoch):
-        if epoch >= self.max_epoch - 1: self.add_status('Max Epoch' , epoch)
+        if epoch >= self.max_epoch - 1: 
+            self.add_status('Max Epoch' , epoch)
     def add_status(self , status : str , epoch : int): 
         self.status.append(_EndEpochStamp(status , epoch))
     @property
@@ -155,10 +158,12 @@ class TrainerStatus(ModelStreamLine):
         self.epoch_event = []
         self.fit_loop_breaker.new_loop()
         self.add_event(event)
-        if event == 'new_attempt': self.attempt += 1
+        if event == 'new_attempt': 
+            self.attempt += 1
 
     def add_event(self , event : Optional[str]):
-        if event: self.epoch_event.append(event)
+        if event: 
+            self.epoch_event.append(event)
         
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
@@ -269,13 +274,15 @@ class BaseTrainer(ModelStreamLine):
         action_trainer = getattr(trainer , hook)
         action_model   = getattr(trainer.model , hook)
         def wrapper() -> None:
-            if verbosity > 10: print(f'{hook} of stage {trainer.status.stage} start')
+            if verbosity > 10: 
+                print(f'{hook} of stage {trainer.status.stage} start')
             trainer.callback.at_enter(hook , verbosity)
             action_status()
             action_trainer()
             action_model()
             trainer.callback.at_exit(hook , verbosity)
-            if verbosity > 10: print(f'{hook} of stage {trainer.status.stage} end')
+            if verbosity > 10: 
+                print(f'{hook} of stage {trainer.status.stage} end')
         return wrapper
 
     @abstractmethod
@@ -349,11 +356,14 @@ class BaseTrainer(ModelStreamLine):
                 Logger.warning("stage_queue is empty , please check src.INSTANCE_RECORD['trainer']")
                 raise Exception("stage_queue is empty , please check src.INSTANCE_RECORD['trainer']")
 
-            if 'data' in self.stage_queue: self.stage_data()
+            if 'data' in self.stage_queue: 
+                self.stage_data()
 
-            if 'fit' in self.stage_queue:  self.stage_fit()
+            if 'fit' in self.stage_queue:  
+                self.stage_fit()
 
-            if 'test' in self.stage_queue: self.stage_test()
+            if 'test' in self.stage_queue: 
+                self.stage_test()
             
             self.on_summarize_model()
 
@@ -460,7 +470,8 @@ class BaseTrainer(ModelStreamLine):
 
     def save_model(self):
         '''save self to somewhere'''
-        if self.metrics.better_attempt(self.status.best_attempt_metric): self.stack_model()
+        if self.metrics.better_attempt(self.status.best_attempt_metric): 
+            self.stack_model()
         [self.deposition.dump_model(self.model_num , self.model_date , submodel) for submodel in self.model_submodels]
 
     def on_configure_model(self):  
@@ -559,30 +570,37 @@ class BaseCallBack(ModelStreamLineWithTrainer):
 
     def print_info(self , depth = 0 , **kwargs):
         frame = currentframe()
-        for _ in range(depth + 1): frame = getattr(frame , 'f_back')
+        for _ in range(depth + 1): 
+            frame = getattr(frame , 'f_back')
         args = {k:v for k,v in getattr(frame , 'f_locals').items() if k not in ['self','trainer','kwargs'] and not k.startswith('_')}
         args.update(kwargs)
         info = self.__class__.__name__ + '({})'.format(','.join([f'{k}={v}' for k,v in args.items()])) 
-        if self.__class__.__doc__: info += f' , {self.__class__.__doc__}'
+        if self.__class__.__doc__: 
+            info += f' , {self.__class__.__doc__}'
         print(info)
 
     def __enter__(self): 
         self.__hook_stack.append(self.trace_hook_name())
         self.at_enter(self.__hook_stack[-1])
-    def __exit__(self , *args): self.at_exit(self.__hook_stack.pop())
+    def __exit__(self , *args):
+        self.at_exit(self.__hook_stack.pop())
     def at_enter(self , hook : str , verbosity : int = 0):  
-        if verbosity > 10: print(f'{hook} of callback {self.__class__.__name__} start')
+        if verbosity > 10: 
+            print(f'{hook} of callback {self.__class__.__name__} start')
     def at_exit(self , hook : str , verbosity : int = 0): 
         getattr(self , hook)()
-        if verbosity > 10: print(f'{hook} of callback {self.__class__.__name__} end')
+        if verbosity > 10: 
+            print(f'{hook} of callback {self.__class__.__name__} end')
 
     def trace_hook_name(self) -> str:
         env = getattr(currentframe() , 'f_back')
-        while not env.f_code.co_name.startswith('on_'): env = getattr(env , 'f_back')
+        while not env.f_code.co_name.startswith('on_'): 
+            env = getattr(env , 'f_back')
         return env.f_code.co_name
     
     @classmethod
-    def possible_hooks(cls): return possible_hooks()
+    def possible_hooks(cls): 
+        return possible_hooks()
 
     @property
     def model(self): return self.trainer.model
@@ -652,12 +670,18 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     
     def load_model_file(self , model_num = None , model_date = None , submodel = None , *args , **kwargs):
         '''call when fitting/testing new model'''
-        if model_num is not None: self._model_num  = model_num
-        else: model_num = self.model_num
-        if model_date is not None: self._model_date = model_date
-        else: model_date = self.model_date
-        if submodel is not None: self._model_submodel = submodel
-        else: submodel = self.model_submodel
+        if model_num is not None: 
+            self._model_num  = model_num
+        else: 
+            model_num = self.model_num
+        if model_date is not None: 
+            self._model_date = model_date
+        else: 
+            model_date = self.model_date
+        if submodel is not None: 
+            self._model_submodel = submodel
+        else: 
+            submodel = self.model_submodel
         return self.deposition.load_model(model_num , model_date , submodel)
     
     @abstractmethod
@@ -698,19 +722,24 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
     
     def batch_forward(self) -> None: 
         if self.status.dataset == 'test':
-            if self.trainer.batch_idx >= self.trainer.batch_aftermath: return
+            if self.trainer.batch_idx >= self.trainer.batch_aftermath: 
+                return
         self.batch_output = self(self.batch_data)
 
     def batch_metrics(self) -> None:
-        if self.batch_data.is_empty: return
+        if self.batch_data.is_empty: 
+            return
         if self.status.dataset == 'test':
-            if self.trainer.batch_idx < self.trainer.batch_warm_up: return
-            if self.trainer.batch_idx >= self.trainer.batch_aftermath: return
+            if self.trainer.batch_idx < self.trainer.batch_warm_up: 
+                return
+            if self.trainer.batch_idx >= self.trainer.batch_aftermath: 
+                return
         '''if net has multiloss_params , get it and pass to calculate_from_tensor'''
         self.metrics.calculate(self.status.dataset , **self.metric_kwargs()).collect_batch()
 
     def batch_backward(self) -> None:
-        if self.batch_data.is_empty: return
+        if self.batch_data.is_empty: 
+            return
         assert self.status.dataset == 'train' , self.status.dataset
         self.trainer.on_before_backward()
         self.optimizer.backward(self.metrics.output)

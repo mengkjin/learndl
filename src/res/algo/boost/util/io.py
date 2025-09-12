@@ -119,15 +119,18 @@ class BoosterInput:
             self.use_feature = use_feature
 
     def obj_flatten(self , obj : torch.Tensor | np.ndarray | None , dropna = True , date_first = True) -> Any:
-        if obj is None: return obj
+        if obj is None: 
+            return obj
 
         finite = self.finite if dropna else self.finite.fill_(True)
 
         if date_first and obj.ndim > 1:
             obj = obj.transpose(1,0) if isinstance(obj , torch.Tensor) else obj.swapaxes(1,0)
-            if finite.ndim > 1: finite = finite.transpose(1,0)
+            if finite.ndim > 1: 
+                finite = finite.transpose(1,0)
 
-        if obj.ndim == 1: finite = finite.flatten()
+        if obj.ndim == 1:
+            finite = finite.flatten()
         return obj[finite]
 
     def SECID(self , dropna = True):
@@ -236,10 +239,11 @@ class BoosterInput:
         weight_param = weight_param or {}
         SECID_COLS = ['SecID','instrument','secid','StockID']
         DATE_COLS  = ['TradeDate','datetime','date']  
-        if data.index.name or len(data.index.names) > 1: data = data.reset_index()
+        if data.index.name or len(data.index.names) > 1: 
+            data = data.reset_index()
 
-        var_sec  = np.intersect1d(SECID_COLS , data.columns.values)
-        var_date = np.intersect1d(DATE_COLS  , data.columns.values)
+        var_sec  = np.intersect1d(SECID_COLS , data.columns.to_numpy())
+        var_date = np.intersect1d(DATE_COLS  , data.columns.to_numpy())
         assert len(var_sec) == len(var_date) == 1, (var_sec , var_date , data.columns)
         data = data.set_index([var_sec[0] , var_date[0]])
 
@@ -270,12 +274,17 @@ class BoosterInput:
         if y is not None and y.ndim == x.ndim:
             assert y.shape[-1] == 1 , f'Booster Data cannot deal with multilabels, but got {y.shape}'
             y = y[...,0]
-        if y is not None and y.ndim == 1: y = y[:,None]
-        if x.ndim == 2:  x = x[:,None,:]
+        if y is not None and y.ndim == 1: 
+            y = y[:,None]
+        if x.ndim == 2:  
+            x = x[:,None,:]
 
-        if secid is None:  secid = np.arange(x.shape[0])
-        if date  is None : date  = np.arange(x.shape[1])
-        if feature is None : feature = np.array([f'F.{i}' for i in range(x.shape[-1])])
+        if secid is None:  
+            secid = np.arange(x.shape[0])
+        if date  is None : 
+            date  = np.arange(x.shape[1])
+        if feature is None : 
+            feature = np.array([f'F.{i}' for i in range(x.shape[-1])])
         return cls(x , y , w , secid , date , feature , weight_param)
     
     @classmethod
@@ -312,7 +321,8 @@ class BoosterWeightMethod:
     bm_secid : np.ndarray | list | None = None
 
     def calculate_weight(self , y : np.ndarray | torch.Tensor , secid : Any):
-        if y.ndim == 3 and y.shape[-1] == 1: y = y[...,0]
+        if y.ndim == 3 and y.shape[-1] == 1: 
+            y = y[...,0]
         assert y.ndim == 2 , y.shape
         return self.cs_weight(y) * self.ts_weight(y) * self.bm_weight(y , secid)
 

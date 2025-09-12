@@ -22,7 +22,7 @@ def load_calendar():
         res_calendar = pd.read_json(res_path).loc[:,['calendar' , 'trade']]
         calendar = pd.concat([calendar , res_calendar[res_calendar['calendar'] > calendar['calendar'].max()]]).sort_values('calendar')
 
-    trd = calendar[calendar['trade'] == 1].reset_index(drop=True)
+    trd = calendar.query('trade == 1').reset_index(drop=True)
     trd['td'] = trd['calendar']
     trd['pre'] = trd['calendar'].shift(1, fill_value=-1)
     calendar = calendar.merge(trd.drop(columns='trade') , on = 'calendar' , how = 'left').ffill()
@@ -81,7 +81,8 @@ class TradeDate(int):
     @classmethod
     def _cls_offset(cls , td0 , n : int):
         td0 = cls(td0)
-        if n == 0: return cls(td0)
+        if n == 0: 
+            return cls(td0)
         d_index = _CALENDAR['td_index'].loc[td0.td] + n
         d_index = np.maximum(np.minimum(d_index , len(_CALENDAR) - 1) , 0)
         new_date = _CALENDAR[_CALENDAR['td_index'] == d_index].iloc[0]['td']
@@ -89,10 +90,14 @@ class TradeDate(int):
 
     @staticmethod
     def as_numpy(td):
-        if isinstance(td , int): td = np.array([td])
-        elif isinstance(td , pd.Series): td = td.to_numpy()
-        elif isinstance(td , list): td = np.array(td)
-        elif isinstance(td , torch.Tensor): td = td.cpu().numpy()
+        if isinstance(td , int): 
+            td = np.array([td])
+        elif isinstance(td , pd.Series): 
+            td = td.to_numpy()
+        elif isinstance(td , list): 
+            td = np.array(td)
+        elif isinstance(td , torch.Tensor): 
+            td = td.cpu().numpy()
         return td.astype(int)
 
 class TradeCalendar:
@@ -108,11 +113,14 @@ class TradeCalendar:
         return cls._instance
 
     @staticmethod
-    def calendar(): return _CALENDAR
+    def calendar(): 
+        return _CALENDAR
     @staticmethod
-    def cal_cal(): return _CALENDAR_CAL
+    def cal_cal(): 
+        return _CALENDAR_CAL
     @staticmethod
-    def cal_trd(): return _CALENDAR_TRD
+    def cal_trd(): 
+        return _CALENDAR_TRD
     @staticmethod
     def today(offset = 0) -> int: return today(offset)
     @staticmethod
@@ -127,7 +135,8 @@ class TradeCalendar:
         return int(date_time.replace(hour=h, minute=m, second=s).strftime('%Y%m%d%H%M%S'))
     @classmethod
     def is_updated_today(cls , modified_time : int , hour = 20 , minute = 0):
-        if modified_time < 1e8: modified_time = modified_time * 1000000
+        if modified_time < 1e8: 
+            modified_time = modified_time * 1000000
         current_time = datetime.now()
         required_date = 0 if (current_time.hour >= hour and current_time.minute >= minute) else -1
         required_time = CALENDAR.clock(required_date , hour , minute)
@@ -143,8 +152,10 @@ class TradeCalendar:
         return DB.db_max_date('trade_ts' , 'day')
     @staticmethod
     def _date_convert_to_index(date):
-        if isinstance(date , TradeDate): date = [date.td]
-        elif isinstance(date , pd.Series): date = date.to_numpy().astype(int) #.tolist()
+        if isinstance(date , TradeDate): 
+            date = [date.td]
+        elif isinstance(date , pd.Series): 
+            date = date.to_numpy().astype(int) #.tolist()
         return date
     
     @staticmethod
@@ -163,7 +174,8 @@ class TradeCalendar:
     @staticmethod
     def cd(date : int | TradeDate , offset : int = 0):
         d = date.cd if isinstance(date , TradeDate) else date
-        if offset == 0: return d
+        if offset == 0: 
+            return d
         d = datetime.strptime(str(d) , '%Y%m%d') + timedelta(days=offset)
         return int(d.strftime('%Y%m%d'))
     
@@ -171,7 +183,7 @@ class TradeCalendar:
     def cd_array(date , offset : int = 0):
         cd_arr = np.array([d.cd if isinstance(d , TradeDate) else int(d) for d in date])
         if offset != 0: 
-            cd_arr = np.minimum(cd_arr , _CALENDAR.index.max())
+            cd_arr = np.minimum(cd_arr , CALENDAR.calendar_end())
             d_index = _CALENDAR.loc[cd_arr , 'cd_index'] + offset
             d_index = np.maximum(np.minimum(d_index , len(_CALENDAR_CAL) - 1) , 0)
             cd_arr = _CALENDAR_CAL.loc[d_index , 'calendar'].astype(int).to_numpy()
@@ -187,7 +199,7 @@ class TradeCalendar:
     def cd_diff(date1 , date2) -> int | Any:
         try:
             diff = int(_CALENDAR.loc[[date1 , date2] , 'cd_index'].diff().dropna().astype(int).item())
-        except:
+        except Exception:
             diff = (datetime.strptime(str(date1), '%Y%m%d') - datetime.strptime(str(date2), '%Y%m%d')).days
         return diff
     
@@ -214,13 +226,15 @@ class TradeCalendar:
     @staticmethod
     def start_dt(date : int | TradeDate | None) -> int:
         date_dt = 19900101 if date is None else int(date)
-        if date_dt < 0: date_dt = today(date_dt)
+        if date_dt < 0: 
+            date_dt = today(date_dt)
         return date_dt
     
     @staticmethod
     def end_dt(date : int | TradeDate | None) -> int:
         date = 99991231 if date is None else int(date)
-        if date < 0: date = today(date)
+        if date < 0: 
+            date = today(date)
         return date
 
     @classmethod
@@ -228,10 +242,13 @@ class TradeCalendar:
                   end_dt : int | TradeDate | None = None , 
                   step : int = 1 , until_today = True , slice : tuple[Any,Any] | None = None , updated = False):
         dates = cls.slice(_CALENDAR_TRD['calendar'].to_numpy() , start_dt , end_dt)
-        if until_today: dates = dates[dates <= today()]
-        if updated: dates = dates[dates <= cls.updated()]
+        if until_today: 
+            dates = dates[dates <= today()]
+        if updated: 
+            dates = dates[dates <= cls.updated()]
         dates = dates[::step]
-        if slice is not None: dates = cls.slice(dates , slice[0] , slice[1])
+        if slice is not None: 
+            dates = cls.slice(dates , slice[0] , slice[1])
         return dates
 
     @classmethod
@@ -260,15 +277,21 @@ class TradeCalendar:
     def cd_within(cls , start_dt : int | TradeDate | None = None , end_dt : int | TradeDate | None = None , step : int = 1 , 
                   until_today = True , updated = False):    
         dates = cls.slice(_CALENDAR_CAL['calendar'].to_numpy() , start_dt , end_dt)
-        if until_today: dates = dates[dates <= today()]
-        if updated: dates = dates[dates <= cls.updated()]
+        if until_today: 
+            dates = dates[dates <= today()]
+        if updated: 
+            dates = dates[dates <= cls.updated()]
         return dates[::step]
     
     @staticmethod
-    def calendar_start(): return _CALENDAR.index.min()
+    def calendar_start(): 
+        md = np.min(_CALENDAR.index.to_numpy())
+        return int(md)
 
     @staticmethod
-    def calendar_end(): return _CALENDAR.index.max()
+    def calendar_end(): 
+        md = np.max(_CALENDAR.index.to_numpy())
+        return int(md)
 
     @staticmethod
     def td_start_end(reference_date , period_num : int , 
@@ -295,12 +318,14 @@ class TradeCalendar:
     @classmethod
     def slice(cls , dates , start_dt : int | TradeDate | None = None , end_dt : int | TradeDate | None = None , year : int | None = None) -> np.ndarray:
         dates = dates[(dates >= cls.start_dt(start_dt)) & (dates <= cls.end_dt(end_dt))]
-        if year  is not None: dates = dates[(dates // 10000) == year]
+        if year  is not None: 
+            dates = dates[(dates // 10000) == year]
         return dates
 
     @staticmethod
     def format(date : Any , old_fmt = '%Y%m%d' , new_fmt = '%Y%m%d'):
-        if old_fmt == new_fmt: return date
+        if old_fmt == new_fmt: 
+            return date
         return datetime.strptime(str(date), old_fmt).strftime(new_fmt)
 
     @classmethod
@@ -330,7 +355,8 @@ class TradeCalendar:
     @staticmethod
     def qe_trailing(date , n_past = 1 , n_future = 0 , another_date = None , year_only = False):
         assert n_past >= 1 and n_future >= 0 , f'{n_past} and {n_future} must be greater than 1 and 0'
-        if another_date is None: another_date = date
+        if another_date is None: 
+            another_date = date
         dates = YEAR_ENDS if year_only else QUARTER_ENDS
         start = dates[dates <= min(date , another_date)][-n_past:]
         mid   = dates[(dates > min(date , another_date)) & (dates <= max(date , another_date))]
@@ -346,12 +372,14 @@ class TradeCalendar:
 
     @classmethod
     def qe_interpolate(cls , incomplete_qtr_ends : Sequence | Any):
-        if len(incomplete_qtr_ends) == 0: return np.array([]).astype(int)
+        if len(incomplete_qtr_ends) == 0: 
+            return np.array([]).astype(int)
         return cls.qe_within(min(incomplete_qtr_ends) , max(incomplete_qtr_ends))
     
     @classmethod
     def check_rollback_date(cls , rollback_date : int | None , max_rollback_days : int = 10):
-        if rollback_date is None: return
+        if rollback_date is None: 
+            return
         earliest_rollback_date = cls.td(cls.updated() , -max_rollback_days)
         assert rollback_date >= earliest_rollback_date , \
             f'rollback_date {rollback_date} is too early, must be at least {earliest_rollback_date}'

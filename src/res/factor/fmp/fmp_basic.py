@@ -65,7 +65,8 @@ def get_strategy_name(category : Literal['optim' , 'top'] , strategy : str = 'de
 
 def get_suffix(lag : int , suffixes : list[str] | str | None = None): 
     suffixes = suffixes or []
-    if isinstance(suffixes , str): suffixes = [suffixes]
+    if isinstance(suffixes , str): 
+        suffixes = [suffixes]
     return '.'.join([f'lag{lag}' , *suffixes])
 
 def get_full_name(category : Literal['optim' , 'top'] , alpha : AlphaModel | str , 

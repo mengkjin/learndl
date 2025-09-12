@@ -83,7 +83,8 @@ class OutputDeflector:
             
     def write(self, text : str | Any):
         # output to console
-        self.original_write(text)
+        if not self.is_catching or self.keep_original:
+            self.original_write(text)
         if self.is_catching:
             self.catcher_write(text)
         self.flush()

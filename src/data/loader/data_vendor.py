@@ -4,7 +4,6 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.proj import PATH
 from src.basic import CALENDAR , CONF , SILENT , DB
 from src.func.singleton import singleton
 from src.data.util import DataBlock , INFO
@@ -65,9 +64,9 @@ class DataVendor:
             self.all_stocks = self.INFO.get_desc(set_index=False , listed = listed , exchange = exchange)
             self.st_stocks = self.INFO.get_st()
 
-    def secid(self , date : int | None = None): 
+    def secid(self , date : int | None = None) -> np.ndarray: 
         if date is None: 
-            return self.all_stocks['secid'].unique()
+            return np.unique(self.all_stocks['secid'].to_numpy())
         if date not in self.day_secids:
             self.day_secids[date] = self.INFO.get_secid(date)
         return self.day_secids[date]
@@ -86,7 +85,8 @@ class DataVendor:
     @classmethod
     def real_factor(cls , factor_type : Literal['pred' , 'factor'] , names : str | list[str] | np.ndarray , 
                     start_dt = 20240101 , end_dt = 20240531 , step = 5):
-        if isinstance(names , str): names = [names]
+        if isinstance(names , str): 
+            names = [names]
         dates = DATAVENDOR.td_within(start_dt , end_dt , step)
 
         func = DB.pred_load_multi if factor_type == 'pred' else DB.factor_load_multi
@@ -143,13 +143,17 @@ class DataVendor:
 
     def get_named_data_block(self , start_dt : int , end_dt : int , db_src , db_key , data_key):
         td_within = self.td_within(start_dt , end_dt)
-        if len(td_within) == 0: return
+        if len(td_within) == 0: 
+            return
         with SILENT:
             early_dates , late_dates = self.update_dates(data_key , td_within)
             datas : list[DataBlock] = []
-            if len(early_dates): datas.append(BlockLoader(db_src , db_key).load_block(early_dates.min() , early_dates.max()))
-            if len(late_dates):  datas.append(BlockLoader(db_src , db_key).load_block(late_dates.min() , late_dates.max()))
-            if hasattr(self , data_key): datas.append(getattr(self , data_key))
+            if len(early_dates): 
+                datas.append(BlockLoader(db_src , db_key).load_block(early_dates.min() , early_dates.max()))
+            if len(late_dates):  
+                datas.append(BlockLoader(db_src , db_key).load_block(late_dates.min() , late_dates.max()))
+            if hasattr(self , data_key): 
+                datas.append(getattr(self , data_key))
         return DataBlock.merge(datas)
 
     def get_quote(self , start_dt : int , end_dt : int):
@@ -170,8 +174,9 @@ class DataVendor:
         d = date[0] if isinstance(date , np.ndarray) else date
         assert d > 0 , 'Attempt to get unaccessable date'
         if d not in self.day_quotes: 
-            df = DB.db_load('trade_ts' , 'day' , date)[['secid','adjfactor','close','vwap','open']]
-            if df is not None: self.day_quotes[d] = df
+            df : pd.DataFrame | Any = DB.db_load('trade_ts' , 'day' , date)[['secid','adjfactor','close','vwap','open']]
+            if df is not None: 
+                self.day_quotes[d] = df
         return self.day_quotes.get(d , None)
     
     def get_quote_ret(self , date0 , date1 , 
@@ -179,7 +184,8 @@ class DataVendor:
                       price1 : Literal['close' , 'vwap' , 'open'] = 'close'):
         q0 = self.get_quote_df(date0)
         q1 = self.get_quote_df(date1)
-        if q0 is None or q1 is None: return None
+        if q0 is None or q1 is None: 
+            return None
         q = q0.merge(q1 , on = 'secid')
         q['adjfactor_x'] = q['adjfactor_x'].fillna(1)
         q['adjfactor_y'] = q['adjfactor_y'].fillna(1)
@@ -206,10 +212,12 @@ class DataVendor:
         return new_block
     
     def ffmv(self , secid : np.ndarray , date : np.ndarray , prev = True):
-        if prev : date = self.td_array(date , -1)
+        if prev : 
+            date = self.td_array(date , -1)
         self.get_risk_exp(date.min() , date.max())
         block = self.risk_exp.align(secid , date , ['weight'] , inplace=False).as_tensor()
-        if prev : block.date = self.td_array(block.date , 1)
+        if prev : 
+            block.date = self.td_array(block.date , 1)
         return block
     
     def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):
@@ -223,13 +231,15 @@ class DataVendor:
         return block
     
     def get_ffmv(self , secid : np.ndarray , d : int):
-        if not CALENDAR.is_trade_date(d): return None
+        if not CALENDAR.is_trade_date(d): 
+            return None
         self.get_risk_exp(d , d)
         value = self.risk_exp.loc(secid = secid , date = d , feature = 'weight').flatten()
         return value
     
     def get_cp(self , secid : np.ndarray , d : int):
-        if not CALENDAR.is_trade_date(d): return None
+        if not CALENDAR.is_trade_date(d): 
+            return None
         self.get_quote(d , d)
         value = self.daily_quote.loc(secid = secid , date = d , feature = 'close').flatten()
         return value

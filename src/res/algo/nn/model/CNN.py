@@ -39,7 +39,8 @@ class _tcn_block(nn.Module):
 class mod_tcn(nn.Module):
     def __init__(self, input_dim , output_dim , dropout=0.0 , num_layers = 2 , kernel_size = 3):
         super().__init__()
-        if kernel_size is None: kernel_size = 3
+        if kernel_size is None: 
+            kernel_size = 3
         num_layers = max(2 , num_layers)
         layers = []
         for i in range(num_layers):

@@ -4,7 +4,7 @@ import pandas as pd
 
 from collections.abc import Iterable
 from contextlib import nullcontext
-from typing import Any , Literal
+from typing import Any
 
 from src.basic import CALENDAR , RegisteredModel , SILENT
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
@@ -39,7 +39,8 @@ class ModelPortfolioBuilder:
 
     def last_fmp_table(self , date : int):
         fmp_dates = CALENDAR.slice(self.reg_model.fmp_target_dates , None , CALENDAR.cd(date , -1))
-        if len(fmp_dates) == 0: return pd.DataFrame()
+        if len(fmp_dates) == 0: 
+            return pd.DataFrame()
         last_date = fmp_dates.max()
         if last_date not in self.fmp_tables:
             self.fmp_tables[last_date] = self.reg_model.load_fmp(last_date)
@@ -47,8 +48,9 @@ class ModelPortfolioBuilder:
     
     def last_port(self , date : int , port_name : str):
         table = self.last_fmp_table(date)
-        if table.empty: return None
-        table = table[table['name'] == port_name]
+        if table.empty: 
+            return None
+        table = table.query('name == @port_name')
         return Portfolio.from_dataframe(table , name = port_name)
     
     def iter_builder_kwargs(self , date : int | None = None , verbosity : int = 0):
@@ -56,7 +58,8 @@ class ModelPortfolioBuilder:
         iter_args = itertools.product(self.FMP_TYPES , self.SUB_TYPES , self.BENCHMARKS , self.N_BESTS)
         for fmp_type , sub_type , benchmark , n_best in iter_args:
             # check legitimacy
-            if (fmp_type == 'top' and n_best <= 0) or (fmp_type == 'optim' and n_best > 0): continue
+            if (fmp_type == 'top' and n_best <= 0) or (fmp_type == 'optim' and n_best > 0): 
+                continue
             
             kwargs : dict[str , Any] = {
                 'category' : fmp_type , 'alpha' : alpha , 'benchmark' : benchmark , 'lag' : 0 , 
@@ -88,8 +91,10 @@ class ModelPortfolioBuilder:
     def build_fmps(self , dates : list[int] | np.ndarray , deploy = True):
         for date in dates:
             self.fmp_tables[date] = self.build_day(date) 
-            if not SILENT: print(f'Finished build fmps for {self.reg_model} at date {date}')
-            if deploy: self.reg_model.save_fmp(self.fmp_tables[date] , date , False)
+            if not SILENT: 
+                print(f'Finished build fmps for {self.reg_model} at date {date}')
+            if deploy:
+                self.reg_model.save_fmp(self.fmp_tables[date] , date , False)
             self._update_fmps_record.append(date)
     
     def build_day(self , date : int):
@@ -100,33 +105,40 @@ class ModelPortfolioBuilder:
         return df
 
     def load_accounts(self , resume = True , verbose = True):
-        if resume: self.accountant.load_dir()
-        if verbose: print(f'accounts include names: {self.accountant.account_names}')
+        if resume: 
+            self.accountant.load_dir()
+        if verbose: 
+            print(f'accounts include names: {self.accountant.account_names}')
         return self
     
     def account_last_model_dates(self , fmp_names : list[str] | None = None):
         last_dates = self.accountant.account_last_model_dates()
-        if fmp_names is None: fmp_names = list(self.iter_fmp_names())
+        if fmp_names is None: 
+            fmp_names = list(self.iter_fmp_names())
         ret = {name:last_dates.get(name , CALENDAR.td(self.reg_model.start_dt , -1)) for name in fmp_names}
         return ret
     
     def account_last_end_dates(self , fmp_names : list[str] | None = None):
         last_dates = self.accountant.account_last_end_dates()
-        if fmp_names is None: fmp_names = list(self.iter_fmp_names())
+        if fmp_names is None: 
+            fmp_names = list(self.iter_fmp_names())
         ret = {name:last_dates.get(name , self.reg_model.start_dt) for name in fmp_names}
         return ret
     
     def accounting(self , resume = True , deploy = True):
-        if resume: self.load_accounts(verbose = False)
+        if resume: 
+            self.load_accounts(verbose = False)
         self._update_account_record = []
 
         last_end_dates   = self.account_last_end_dates()
         update_fmp_names = [name for name , end_date in last_end_dates.items() if end_date < CALENDAR.updated()]
-        if len(update_fmp_names) == 0: return
+        if len(update_fmp_names) == 0: 
+            return
 
         last_model_dates = self.account_last_model_dates(update_fmp_names)
         account_dates = [date for date in self.reg_model.fmp_dates if date >= min(list(last_model_dates.values()))]
-        if len(account_dates) == 0: return
+        if len(account_dates) == 0: 
+            return
         all_fmp_dfs = pd.concat([self.reg_model.load_fmp(date) for date in account_dates])
         alpha_model = self.alpha_model(account_dates)
 
@@ -145,7 +157,8 @@ class ModelPortfolioBuilder:
     def update(cls , model_name : str | None = None , update = True , overwrite = False , silent = True):
         '''Update pre-registered models' factor model portfolios'''
         models = RegisteredModel.SelectModels(model_name)
-        if model_name is None: print(f'model_name is None, build fmps for all registered models (len={len(models)})')
+        if model_name is None: 
+            print(f'model_name is None, build fmps for all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
             md.update_fmps(update = update , overwrite = overwrite , silent = silent)

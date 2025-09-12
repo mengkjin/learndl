@@ -33,8 +33,10 @@ class MultiheadAttention(nn.Module):
                 key_padding_mask:Optional[Tensor]=None, attn_mask:Optional[Tensor]=None):
 
         bs = Q.size(0)
-        if K is None: K = Q
-        if V is None: V = Q
+        if K is None: 
+            K = Q
+        if V is None: 
+            V = Q
 
         # Linear (+ split in multiple heads)
         q_s = self.W_Q(Q).view(bs, -1, self.n_heads, self.d_k).transpose(1,2)       # q_s    : [bs x n_heads x max_q_len x d_k]
@@ -91,7 +93,8 @@ class ScaledDotProductAttention(nn.Module):
         attn_scores = torch.matmul(q, k) * self.scale      # attn_scores : [bs x n_heads x max_q_len x q_len]
 
         # Add pre-softmax attention scores from the previous layer (optional)
-        if prev is not None: attn_scores = attn_scores + prev
+        if prev is not None: 
+            attn_scores = attn_scores + prev
 
         # Attention mask (optional)
         if attn_mask is not None:                                     # attn_mask with shape [q_len x seq_len] - only used when q_len == seq_len
@@ -111,5 +114,7 @@ class ScaledDotProductAttention(nn.Module):
         # compute the new values given the attention weights
         output = torch.matmul(attn_weights, v)                        # output: [bs x n_heads x max_q_len x d_v]
 
-        if self.res_attention: return output, attn_weights, attn_scores
-        else: return output, attn_weights
+        if self.res_attention: 
+            return output, attn_weights, attn_scores
+        else: 
+            return output, attn_weights

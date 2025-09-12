@@ -91,7 +91,8 @@ def parse_config_board(config : dict):
         s = key.split('.')
         name , bnd_key = (s[0] , default_bnd_key) if len(s) == 1 else s
         if bnd := GeneralBound(bnd_key , *val):
-            if not name in rslt: rslt[name] = []
+            if name not in rslt: 
+                rslt[name] = []
             rslt[name].append(bnd)
     return rslt
 
@@ -148,7 +149,8 @@ def parse_config_component(config : dict):
         s = key.split('.')
         name , bnd_key = (s[0] , default_bnd_key) if len(s) == 1 else s
         if bnd := GeneralBound(bnd_key , *val):
-            if not name in rslt: rslt[name] = []
+            if name not in rslt: 
+                rslt[name] = []
             rslt[name].append(bnd)
     return rslt
 
@@ -161,9 +163,12 @@ def parse_config_turnover(config : dict) -> dict[str,float|None]:
     '''
     config = config['turnover']
     value1 , value2 = config['single'] , config['double']
-    if value1 and value2: value = min(value1 * 2 , value2)
-    elif value1: value = value1 * 2
-    else: value = value2
+    if value1 and value2: 
+        value = min(value1 * 2 , value2)
+    elif value1: 
+        value = value1 * 2
+    else: 
+        value = value2
     return {'double' : value}
 
 def parse_config_short(config : dict) -> dict[str,float|Any]:

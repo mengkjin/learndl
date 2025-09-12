@@ -21,8 +21,10 @@ class TaskRecorder:
         return db_path
 
     def task_type(self , type : str | None = None):
-        if type is None: return self._type
-        else: return type
+        if type is None: 
+            return self._type
+        else: 
+            return type
     
     def task_name(self , name : str | None = None):
         if name is None: 
@@ -98,7 +100,8 @@ class TaskRecorder:
     
     def is_finished(self, name: str | None = None, key: str | None = None, type : str | None = None) -> bool:
         """check if task is finished"""
-        if not self.check_task_type(type): return False
+        if not self.check_task_type(type): 
+            return False
         with self.conn_handler as (conn, cursor):
             cursor.execute(f'''
                 SELECT sum(success) FROM {self.task_type(type)} 
@@ -108,7 +111,8 @@ class TaskRecorder:
     
     def get_task_info(self, name: str | None = None, key: str | None = None, type : str | None = None):
         """get task info"""
-        if not self.check_task_type(type): return None 
+        if not self.check_task_type(type): 
+            return None 
         with self.conn_handler as (conn, cursor):
             cursor.execute(f'''
                 SELECT task_name, task_key, success, complete_time, remark 
@@ -128,7 +132,8 @@ class TaskRecorder:
     
     def clear_task(self, name: str | None = None, type : str | None = None) -> bool:
         """clear task group"""
-        if not self.check_task_type(type): return False
+        if not self.check_task_type(type): 
+            return False
         with self.conn_handler as (conn, cursor):
             cursor.execute(f'''
                 DELETE FROM {self.task_type(type)} 
@@ -138,7 +143,8 @@ class TaskRecorder:
     
     def get_finished_tasks(self, name: str | None = None, type : str | None = None):
         """get finished tasks"""
-        if not self.check_task_type(type): return []
+        if not self.check_task_type(type): 
+            return []
         with self.conn_handler as (conn, cursor):
             cursor.execute(f'''
                 SELECT task_key, success, complete_time, remark 
@@ -149,7 +155,8 @@ class TaskRecorder:
 
     def delete_task(self, name: str | None = None, key: str | None = None, type : str | None = None):
         """delete task"""
-        if not self.check_task_type(type): return
+        if not self.check_task_type(type): 
+            return
         with self.conn_handler as (conn, cursor):
             cursor.execute(f'''
                 DELETE FROM {self.task_type(type)} 

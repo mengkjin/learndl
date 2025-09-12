@@ -11,7 +11,8 @@ class NNPredictor(BasePredictorModel):
                    model_param : Optional[dict] = None , 
                    testor_mode : bool = False ,
                    *args , **kwargs):
-        if testor_mode: self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
+        if testor_mode: 
+            self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
         module = model_module if model_module else self.config.model_module
         param  = model_param  if model_param  else self.model_param 
 
@@ -56,12 +57,14 @@ class NNPredictor(BasePredictorModel):
     
     def forward(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
-        if len(batch_data) == 0: return None
+        if len(batch_data) == 0: 
+            return None
         x = batch_data.x if isinstance(batch_data , BatchData) else batch_data
         return self.net(x , *args , **kwargs)
 
     def fit(self):
-        if self.trainer.verbosity > 10: print('model fit start')
+        if self.trainer.verbosity > 10: 
+            print('model fit start')
 
         self.new_model()
         for _ in self.trainer.iter_fit_epoches():
@@ -74,11 +77,13 @@ class NNPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        if self.trainer.verbosity > 10: print('model fit done')
+        if self.trainer.verbosity > 10: 
+            print('model fit done')
 
     def test(self):
         '''test the model inside'''
-        if self.trainer.verbosity > 10: print('model test start')
+        if self.trainer.verbosity > 10:
+            print('model test start')
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -86,7 +91,8 @@ class NNPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        if self.trainer.verbosity > 10: print('model test done')
+        if self.trainer.verbosity > 10: 
+            print('model test done')
 
     def collect(self , submodel = 'best' , *args):
         net = self.submodels[submodel].collect(self.trainer , *args)
@@ -106,7 +112,8 @@ class NNPredictor(BasePredictorModel):
         set_grad_enabled(False)
     
     def on_validation_epoch_end(self):
-        for submodel in self.submodels.values():  submodel.assess(self.net , self.status.epoch , self.metrics)
+        for submodel in self.submodels.values():  
+            submodel.assess(self.net , self.status.epoch , self.metrics)
 
     def on_test_model_start(self):
         set_grad_enabled(False)

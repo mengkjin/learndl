@@ -40,14 +40,22 @@ class SpecCB_TRA(BaseCallBack):
         vp = vp.detach().to(v0)
         self.data.buffer['hist_preds'][self.i0 , self.i1] = vp
         self.data.buffer['hist_loss'][self.i0 , self.i1] = (vp - v0).square()
-    def on_fit_model_start(self):           self.init_buffer()
-    def on_test_submodel_start(self):     self.init_buffer()
-    def on_train_batch_start(self):         self.fill_batch_data()
-    def on_validation_batch_start(self):    self.fill_batch_data()
-    def on_test_batch_start(self):          self.fill_batch_data()
-    def on_train_batch_end(self):           self.update_buffer()
-    def on_validation_batch_end(self):      self.update_buffer()
-    def on_test_batch_end(self):            self.update_buffer()
+    def on_fit_model_start(self):           
+        self.init_buffer()
+    def on_test_submodel_start(self):     
+        self.init_buffer()
+    def on_train_batch_start(self):         
+        self.fill_batch_data()
+    def on_validation_batch_start(self):    
+        self.fill_batch_data()
+    def on_test_batch_start(self):          
+        self.fill_batch_data()
+    def on_train_batch_end(self):           
+        self.update_buffer()
+    def on_validation_batch_end(self):      
+        self.update_buffer()
+    def on_test_batch_end(self):            
+        self.update_buffer()
 
 class SpecCB_VAE(BaseCallBack):
     '''in VAE fill [y] [alpha_noise] [factor_noise] in batch_data.kwargs'''
@@ -80,7 +88,8 @@ class SpecCB_DSize(BaseCallBack):
         self.size_block = None
 
     def init_buffer(self):
-        if self.size_block is None: self.size_block = BlockLoader('models', 'tushare_cne5_exp', ['size']).load_block().as_tensor()
+        if self.size_block is None: 
+            self.size_block = BlockLoader('models', 'tushare_cne5_exp', ['size']).load_block().as_tensor()
         self.data.buffer['size'] = self.size_block.align(secid = self.data.y_secid , date = self.data.y_date).values.squeeze()
     def fill_batch_data(self):
         i0 = self.batch_data.i[:,0].cpu()
@@ -88,10 +97,15 @@ class SpecCB_DSize(BaseCallBack):
         size = self.data.buffer['size'][i0 , i1].reshape(-1,1).nan_to_num(0).to(self.batch_data.y.device)
         self.batch_data.kwargs = {'size': size}
 
-    def on_fit_model_start(self):           self.init_buffer()
-    def on_test_submodel_start(self):     self.init_buffer()
-    def on_train_batch_start(self):         self.fill_batch_data()
-    def on_validation_batch_start(self):    self.fill_batch_data()
-    def on_test_batch_start(self):          self.fill_batch_data()
+    def on_fit_model_start(self):           
+        self.init_buffer()
+    def on_test_submodel_start(self):     
+        self.init_buffer()
+    def on_train_batch_start(self):         
+        self.fill_batch_data()
+    def on_validation_batch_start(self):    
+        self.fill_batch_data()
+    def on_test_batch_start(self):          
+        self.fill_batch_data()
 
     

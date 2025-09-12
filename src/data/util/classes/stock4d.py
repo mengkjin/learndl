@@ -28,7 +28,8 @@ class Stock4DData:
                 self.feature = np.array(self.feature)
             if isinstance(self.values , (int , float)):
                 self.values = np.full((len(self.secid),len(self.date),1,len(self.feature)),self.values)
-            if self.ndim == 3: self.values = self.values[:,:,None]
+            if self.ndim == 3: 
+                self.values = self.values[:,:,None]
         self.asserted()
 
     def uninitiate(self):
@@ -70,8 +71,10 @@ class Stock4DData:
     @classmethod
     def merge(cls , block_list):
         blocks = [blk for blk in block_list if isinstance(blk , cls) and blk.initiate]
-        if len(blocks) == 0: return cls()
-        elif len(blocks) == 1: return blocks[0]
+        if len(blocks) == 0: 
+            return cls()
+        elif len(blocks) == 1: 
+            return blocks[0]
             
         secid   , p0s , p1s = index_union([blk.secid   for blk in blocks])
         date    , p0d , p1d = index_union([blk.date    for blk in blocks])
@@ -89,16 +92,20 @@ class Stock4DData:
         return new_blk
 
     def merge_others(self , others : list | Any):
-        if not isinstance(others , list): others = [others]
+        if not isinstance(others , list): 
+            others = [others]
         return self.merge([self , *others])
     
     def as_tensor(self , asTensor = True):
-        if asTensor and isinstance(self.values , np.ndarray): self.values = torch.from_numpy(self.values)
+        if asTensor and isinstance(self.values , np.ndarray): 
+            self.values = torch.from_numpy(self.values)
         return self
     
     def as_type(self , dtype = None):
-        if dtype and isinstance(self.values , np.ndarray): self.values = self.values.astype(dtype)
-        if dtype and isinstance(self.values , Tensor): self.values = self.values.to(dtype)
+        if dtype and isinstance(self.values , np.ndarray): 
+            self.values = self.values.astype(dtype)
+        if dtype and isinstance(self.values , Tensor): 
+            self.values = self.values.to(dtype)
         return self
     
     def copy(self): return deepcopy(self)
@@ -111,7 +118,8 @@ class Stock4DData:
 
     def align_secid(self , secid , inplace = True):
         obj = self if inplace else self.copy()
-        if secid is None or len(secid) == 0: return obj
+        if secid is None or len(secid) == 0: 
+            return obj
         asTensor , dtype = isinstance(obj.values , Tensor) , obj.dtype
         values = np.full((len(secid) , *obj.shape[1:]) , np.nan)
         _ , p0s , p1s = np.intersect1d(secid , obj.secid , return_indices=True)
@@ -122,7 +130,8 @@ class Stock4DData:
     
     def align_date(self , date , inplace = True):
         obj = self if inplace else self.copy()
-        if date is None or len(date) == 0: return obj
+        if date is None or len(date) == 0: 
+            return obj
         asTensor , dtype = isinstance(obj.values , Tensor) , obj.dtype
         values = np.full((obj.shape[0] , len(date) , *obj.shape[2:]) , np.nan)
         _ , p0d , p1d = np.intersect1d(date , obj.date , return_indices=True)
@@ -154,7 +163,8 @@ class Stock4DData:
     
     def align_feature(self , feature , inplace = True):
         obj = self if inplace else self.copy()
-        if feature is None or len(feature) == 0: return obj
+        if feature is None or len(feature) == 0: 
+            return obj
         asTensor , dtype = isinstance(obj.values , Tensor) , obj.dtype
         values = np.full((*obj.shape[:-1],len(feature)) , np.nan)
         _ , p0f , p1f = np.intersect1d(feature , obj.feature , return_indices=True)
@@ -171,16 +181,19 @@ class Stock4DData:
         return self
     
     def rename_feature(self , rename_dict : dict):
-        if len(rename_dict) == 0: return self
+        if len(rename_dict) == 0: 
+            return self
         feature = self.feature.astype(object)
-        for k,v in rename_dict.items(): feature[feature == k] = v
+        for k,v in rename_dict.items(): 
+            feature[feature == k] = v
         self.feature = feature.astype(str)
         return self
     
     def loc(self , fillna : Any = None , **kwargs):
         values : np.ndarray | Tensor | Any = self.values
         for k,v in kwargs.items():  
-            if isinstance(v , (str,int,float)): kwargs[k] = [v]
+            if isinstance(v , (str,int,float)): 
+                kwargs[k] = [v]
         if 'feature' in kwargs.keys(): 
             index  = match_values(kwargs['feature'] , self.feature)
             values = values[:,:,:,index]
@@ -194,8 +207,10 @@ class Stock4DData:
             index  = match_values(kwargs['secid'] , self.secid)
             values = values[index,:]
         if fillna is not None: 
-            if isinstance(values , Tensor): values = values.nan_to_num(fillna)
-            else: values[np.isnan(values)] = fillna
+            if isinstance(values , Tensor): 
+                values = values.nan_to_num(fillna)
+            else: 
+                values[np.isnan(values)] = fillna
         return values
 
 
@@ -213,7 +228,8 @@ class Stock4DData:
     
     @classmethod
     def from_dataframe(cls , df : pd.DataFrame | None):
-        if df is None or df.empty: return cls()
+        if df is None or df.empty: 
+            return cls()
         xarr = NdData.from_xarray(xr.Dataset.from_dataframe(df))
         try:
             value = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])

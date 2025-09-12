@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 
 from typing import Any , Literal
 
@@ -9,18 +8,19 @@ from ...util.agency import BaseConditioner
 def filter_account(account : pd.DataFrame , lag0 = True , pos_model_date = False):
     '''drop lag if exists , and select lag0'''
     if lag0:
-        if 'lag' in account.index.names: account = account.reset_index('lag',drop=False)
-        if 'lag' in account.columns: account = account[account['lag']==0].drop(columns=['lag'])
+        if 'lag' in account.index.names: 
+            account = account.reset_index('lag',drop=False)
+        if 'lag' in account.columns: 
+            account = account.query('lag==0').drop(columns=['lag'])
     if pos_model_date:
-        if 'model_date' in account.columns:
-            account = account[account['model_date']>0]
-        elif 'model_date' in account.index.names:
-            account = account[account.index.get_level_values('model_date')>0]
+        account = account.query('model_date>0')
     return account
 
 def calc_optim_frontface(account : pd.DataFrame):
     grouped = account.groupby(account.index.names , observed=True)
-    basic = pd.concat([grouped['start'].min() , grouped['end'].max()] , axis=1)
+    start : pd.Series | Any = grouped['start'].min()
+    end : pd.Series | Any = grouped['end'].max()
+    basic = pd.concat([start , end] , axis=1)
     stats = grouped.apply(eval_pf_stats , include_groups=False).reset_index([None],drop=True)
     df = basic.join(stats).sort_index()
     return df
@@ -61,11 +61,13 @@ def calc_optim_perf_excess_drawdown(account : pd.DataFrame):
     return df
 
 def calc_optim_perf_lag(account : pd.DataFrame):
-    if 'lag' not in account.index.names and 'lag' not in account.columns: return pd.DataFrame()
+    if 'lag' not in account.index.names and 'lag' not in account.columns: 
+        return pd.DataFrame()
     df = account.loc[:,['end','excess']].copy()
     df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
     df = df.set_index('trade_date',append=True).groupby(df.index.names , observed=True)[['excess']].cumsum()
-    if 'suffix' in df.index.names: df = df.reset_index('suffix' , drop=True)
+    if 'suffix' in df.index.names: 
+        df = df.reset_index('suffix' , drop=True)
     df = df.pivot_table('excess',[f for f in df.index.names if f != 'lag'],'lag', observed=True)
     lag_max = max(df.columns.values)
     lag_min = min(df.columns.values)
@@ -141,7 +143,8 @@ def calc_optim_attrib_style(account : pd.DataFrame):
     df = filter_account(account , pos_model_date=True)
     df = df.loc[:,['end','attribution']].set_index('end' , append=True)
     df = df.groupby(df.index.names , observed=True)['attribution'].apply(fetch_attrib_style).reset_index('style')
-    if isinstance(df , pd.Series): df = df.to_frame()
+    if isinstance(df , pd.Series): 
+        df = df.to_frame()
     df = df.pivot_table('contribution' , df.index.names , columns='style' , observed=True).\
         rename_axis(None , axis='columns').sort_index().\
         groupby([col for col in df.index.names if col != 'end'] , observed=True).cumsum()

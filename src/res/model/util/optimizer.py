@@ -36,9 +36,12 @@ class Optimizer:
         self.lr_param  : dict[str,Any] = deepcopy(self.config.train_trainer_learn_rate)
         self.clip_value = self.config.train_trainer_gradient_clip_value
       
-        if add_opt_param: self.opt_param.update(add_opt_param)
-        if add_shd_param: self.shd_param.update(add_shd_param)
-        if add_lr_param:  self.lr_param.update(add_lr_param)
+        if add_opt_param: 
+            self.opt_param.update(add_opt_param)
+        if add_shd_param: 
+            self.shd_param.update(add_shd_param)
+        if add_lr_param:  
+            self.lr_param.update(add_lr_param)
         
         self.optimizer = self.load_optimizer(net , self.opt_param , self.lr_param , transfer , lr_multiplier)
         self.scheduler = self.load_scheduler(self.optimizer , self.shd_param)
@@ -102,7 +105,8 @@ class Optimizer:
         return scheduler
     
     def check_nan_gradients(self , metric : BatchMetric):
-        if not NAN_GRADS_HALT: return
+        if not NAN_GRADS_HALT: 
+            return
         for param in self.net.parameters():
             if param.grad is not None and torch.isnan(param.grad).any():
                 return True
@@ -127,7 +131,8 @@ class Optimizer:
             clip_grad_value_(self.net.parameters(), clip_value = self.clip_value)
         if NAN_GRADS_IGNORE:
             grads = [p.grad for p in self.net.parameters() if p.grad is not None]
-            for grad in grads: grad.nan_to_num_(0.)
+            for grad in grads: 
+                grad.nan_to_num_(0.)
 
 class CosineScheduler:
     def __init__(self , optimizer , warmup_stage = 10 , anneal_stage = 40 , initial_lr_div = 10 , final_lr_div = 1e4):

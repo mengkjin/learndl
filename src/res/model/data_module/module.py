@@ -10,7 +10,7 @@ from typing import Any , Literal , Optional
 from src.proj import PATH , Logger
 from src.basic import SILENT , HiddenPath
 from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
-from src.func import tensor_standardize_and_weight , match_values , index_intersect
+from src.func import tensor_standardize_and_weight , match_values
 from src.res.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig , MemFileStorage , StoredFileLoader
 
 from .loader import BatchDataLoader
@@ -118,10 +118,14 @@ class DataModule(BaseDataModule):
     
     def setup_input_prepare(self):
         self.setup_seqs()
-        if self.input_type == 'data':     self.setup_data_prepare()
-        elif self.input_type == 'hidden': self.setup_hidden_prepare()
-        elif self.input_type == 'factor': self.setup_factor_prepare()
-        elif self.input_type == 'combo':  self.setup_combo_prepare()
+        if self.input_type == 'data':     
+            self.setup_data_prepare()
+        elif self.input_type == 'hidden': 
+            self.setup_hidden_prepare()
+        elif self.input_type == 'factor': 
+            self.setup_factor_prepare()
+        elif self.input_type == 'combo':  
+            self.setup_combo_prepare()
         else:
             raise KeyError(self.input_type)
         
@@ -129,7 +133,8 @@ class DataModule(BaseDataModule):
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
               model_date = -1 , extract_backward_days = 300 , extract_forward_days = 160) -> None:
         loader_param = self.setup_param_parsing(stage , param , model_date , extract_backward_days , extract_forward_days)
-        if self.loader_param == loader_param: return
+        if self.loader_param == loader_param: 
+            return
         self.loader_param = loader_param
 
         self.setup_input_prepare()
@@ -139,7 +144,8 @@ class DataModule(BaseDataModule):
             self , stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
             param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
             model_date = -1 , extract_backward_days = 300 , extract_forward_days = 160):
-        if self.use_data == 'predict': stage = 'predict'
+        if self.use_data == 'predict': 
+            stage = 'predict'
         seqlens = self.input_seqlens(param)
         loader_param = self.LoaderParam(stage , model_date , seqlens , extract_backward_days , extract_forward_days)
         return loader_param
@@ -194,7 +200,8 @@ class DataModule(BaseDataModule):
             d0 = max(0 , model_date_col - self.config.train_skip_horizon - self.config.model_train_window - self.seq0)
             d1 = max(0 , model_date_col - self.config.train_skip_horizon)
         elif stage in ['predict' , 'test']:
-            if stage == 'predict': self.model_date_list = np.array([model_date])
+            if stage == 'predict': 
+                self.model_date_list = np.array([model_date])
             next_model_date = self.next_model_date(model_date)
             data_step  = 1
 
@@ -226,7 +233,8 @@ class DataModule(BaseDataModule):
             return
         
         self.step_len = (self.day_len - self.seqx + 1) // data_step
-        if stage in ['predict' , 'test']: assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
+        if stage in ['predict' , 'test']: 
+            assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
         self.step_idx = torch.flip(self.day_len - 1 - torch.arange(self.step_len) * data_step , [0])
         self.date_idx = d0 + self.step_idx
         self.y_secid , self.y_date = self.datas.y.secid , self.datas.y.date[d0:d1]
@@ -271,8 +279,10 @@ class DataModule(BaseDataModule):
     def valid_sample(data : Tensor , rolling_window : int | None = 1 , index1 : Tensor | None = None , 
                      endpoint_nonzero = False , x_all_valid = True):
         '''return non-nan sample position (with shape of len(index[0]) * step_len) the first 2 dims'''
-        if rolling_window is None: rolling_window = 1
-        if index1 is None: index1 = torch.arange(data.shape[1])
+        if rolling_window is None: 
+            rolling_window = 1
+        if index1 is None: 
+            index1 = torch.arange(data.shape[1])
         assert rolling_window > 0 , rolling_window
         data = torch.cat([torch.zeros_like(data[:,:rolling_window]) , data],dim=1).unsqueeze(2)
         sum_dim = tuple(range(2,data.ndim))
@@ -296,7 +306,8 @@ class DataModule(BaseDataModule):
     def standardize_y(self , y : Tensor , valid : Optional[Tensor] , index1 : Optional[Tensor] , no_weight = False) -> tuple[Tensor , Optional[Tensor]]:
         '''standardize y and weight'''
         y = y[:,index1].clone() if index1 is not None else y.clone()
-        if valid is not None: y.nan_to_num_(0)[~valid] = torch.nan
+        if valid is not None: 
+            y.nan_to_num_(0)[~valid] = torch.nan
         return tensor_standardize_and_weight(y , 0 , self.config.weight_scheme(self.loader_param.stage , no_weight))
 
     @staticmethod
@@ -308,7 +319,8 @@ class DataModule(BaseDataModule):
             new_x = x.unfold(dim , rolling , 1)[index0 , index1 + 1 - rolling].permute(0,3,1,2) # [stock , rolling , inday , feature]
         except MemoryError:
             new_x = torch.stack([x[index0 , index1 + i + 1 - rolling] for i in range(rolling)],dim=dim)
-        if squeeze_out: new_x = new_x.squeeze(-2)
+        if squeeze_out: 
+            new_x = new_x.squeeze(-2)
         return new_x
         
     def parse_prenorm_method(self):
@@ -320,8 +332,10 @@ class DataModule(BaseDataModule):
             histnorm = method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM)
             if not SILENT and (divlast or histnorm): 
                 Logger.info(f'Pre-Norming method of [{mdt}] : {divlast} {histnorm}')
-            if divlast: self.prenorm_divlast.append(mdt)
-            if histnorm: self.prenorm_histnorm.append(mdt)
+            if divlast: 
+                self.prenorm_divlast.append(mdt)
+            if histnorm: 
+                self.prenorm_histnorm.append(mdt)
 
     def prenorm(self , x : Tensor, key : str) -> Tensor:
         '''
@@ -336,11 +350,16 @@ class DataModule(BaseDataModule):
             x = x / (self.datas.norms[key].std[-x.shape[-2]:] + 1e-6)
         return x
 
-    def train_dataloader(self)   -> BatchDataLoader: return BatchDataLoader(self.loader_dict['train'] , self)
-    def val_dataloader(self)     -> BatchDataLoader: return BatchDataLoader(self.loader_dict['valid'] , self)
-    def test_dataloader(self)    -> BatchDataLoader: return BatchDataLoader(self.loader_dict['test'] , self)
-    def predict_dataloader(self) -> BatchDataLoader: return BatchDataLoader(self.loader_dict['predict'] , self , tqdm = False)
-    def extract_dataloader(self) -> BatchDataLoader: return BatchDataLoader(self.loader_dict['extract'] , self)
+    def train_dataloader(self)   -> BatchDataLoader: 
+        return BatchDataLoader(self.loader_dict['train'] , self)
+    def val_dataloader(self)     -> BatchDataLoader: 
+        return BatchDataLoader(self.loader_dict['valid'] , self)
+    def test_dataloader(self)    -> BatchDataLoader: 
+        return BatchDataLoader(self.loader_dict['test'] , self)
+    def predict_dataloader(self) -> BatchDataLoader: 
+        return BatchDataLoader(self.loader_dict['predict'] , self , tqdm = False)
+    def extract_dataloader(self) -> BatchDataLoader: 
+        return BatchDataLoader(self.loader_dict['extract'] , self)
     
     def transfer_batch_to_device(self , batch : BatchData , device = None , dataloader_idx = None):
         if self.config.module_type == 'nn':
@@ -357,7 +376,8 @@ class DataModule(BaseDataModule):
        
     def static_dataloader(self , x : dict[str,Tensor] , y : Tensor , w : Optional[Tensor] , valid : Optional[Tensor]) -> None:
         '''update loader_dict , save batch_data to f'{PATH.model}/{model_name}/{set_name}_batch_data' and later load them'''   
-        if valid is None: valid = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
+        if valid is None: 
+            valid = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
         index0, index1 = torch.arange(len(valid)) , self.step_idx
         sample_index = self.split_sample(valid , index0 , index1 , self.config.train_sample_method , 
                                          self.config.train_train_ratio , self.config.train_batch_size)

@@ -67,8 +67,9 @@ class FDataAccess(DateDataAccess):
     @staticmethod
     def index_interpolate(df : pd.DataFrame , year_only : bool = False):
         old_index = df.dropna().index.to_frame(index=False)
-        index_range = old_index.groupby('secid')['end_date'].min().rename('min').to_frame()
-        index_range = index_range.join(old_index.groupby('secid')['end_date'].max().rename('max'))
+        min_end_date : pd.Series | Any = old_index.groupby('secid')['end_date'].min()
+        max_end_date : pd.Series | Any = old_index.groupby('secid')['end_date'].max()
+        index_range = min_end_date.rename('min').to_frame().join(max_end_date.rename('max'))
         full_index = pd.MultiIndex.from_product([old_index['secid'].unique() , 
                                                 CALENDAR.qe_within(index_range['min'].min(), index_range['max'].max(), year_only = year_only)],
                                                 names = ['secid' , 'end_date'])
@@ -100,9 +101,11 @@ class FDataAccess(DateDataAccess):
                                  lastn = 1 , pivot = False , ffill = False):
         if benchmark_df is not None:
             df = df.reindex(benchmark_df.index).where(~benchmark_df.isna() , np.nan)
-        if ffill: df = df.groupby('secid').ffill()
+        if ffill: 
+            df = df.groupby('secid').ffill()
         df = df.groupby('secid').tail(lastn).replace([np.inf , -np.inf] , np.nan)
-        if pivot: df = df.pivot_table(val , 'end_date' , 'secid').sort_index()
+        if pivot: 
+            df = df.pivot_table(val , 'end_date' , 'secid').sort_index()
         return df
     
     def _get_qtr_method(self , qtr_method : Literal['diff' , 'exact'] | None = None):
@@ -128,7 +131,7 @@ class FDataAccess(DateDataAccess):
         # df_acc = pd.concat([self.get(qe , data_type , field) for qe in q_ends]).dropna(subset = ['ann_date' , 'end_date'])
         df_acc['ann_date'] = df_acc['ann_date'].astype(int)
         df_acc['end_date'] = df_acc['end_date'].astype(int)
-        df_acc = df_acc[(df_acc['ann_date'] <= date) & df_acc['end_date'].isin(dates) & (df_acc['secid'] >= 0)]
+        df_acc = df_acc.query('ann_date <= @date and end_date in @dates and secid >= 0')
         df_acc = df_acc.sort_values('update_flag').drop_duplicates(['secid' , 'end_date'] , keep = 'last')\
             [['secid','end_date',val]].set_index(['secid' , 'end_date']).sort_index()
         df_acc = self.index_interpolate(df_acc , year_only = year_only)
@@ -156,17 +159,21 @@ class FDataAccess(DateDataAccess):
                                                  df_qtr.index.get_level_values('end_date').unique()])
         df_ttm = df_qtr.reindex(full_index).fillna(0)
         grp = df_ttm.groupby('secid')
-        if qtr_method == 'diff': df_ttm = grp.rolling(4).sum()
-        elif qtr_method == 'exact': df_ttm = grp.rolling(5).mean()
+        if qtr_method == 'diff': 
+            df_ttm = grp.rolling(4).sum()
+        elif qtr_method == 'exact': 
+            df_ttm = grp.rolling(5).mean()
         if len(df_ttm.index.names) > 2 and df_ttm.index.names[0] == 'secid' and df_ttm.index.names[1] == 'secid':
             df_ttm = df_ttm.reset_index(level=0, drop=True)
+        assert isinstance(df_ttm , pd.DataFrame) , f'df_ttm must be a DataFrame , got {type(df_ttm)}'
         return self._fin_hist_data_transform(df_ttm , val , df_qtr , lastn , pivot , ffill)
     
     def _get_data_qoq_hist(self , data_type : str , val : str , date : int , lastn = 1 , 
                            pivot = False , ffill = False , 
                            qtr_method : Literal['diff' , 'exact'] | None = None , 
                            qoq_method : Literal['ttm' , 'acc' , 'qtr'] | None = None):
-        if qoq_method is None: qoq_method = self.DEFAULT_QOQ_METHOD
+        if qoq_method is None: 
+            qoq_method = self.DEFAULT_QOQ_METHOD
         if qoq_method == 'qtr':
             df_qtr = self._get_data_qtr_hist(data_type , val , date , lastn + 2 , pivot = False , 
                                              ffill = False , qtr_method = qtr_method)
@@ -184,7 +191,8 @@ class FDataAccess(DateDataAccess):
                            pivot = False , ffill = False , 
                            qtr_method : Literal['diff' , 'exact'] | None = None ,
                            yoy_method : Literal['ttm' , 'acc' , 'qtr'] | None = None):
-        if yoy_method is None: yoy_method = self.DEFAULT_YOY_METHOD
+        if yoy_method is None: 
+            yoy_method = self.DEFAULT_YOY_METHOD
         if yoy_method == 'ttm':
             df_qtr = self._get_data_ttm_hist(data_type , val , date , lastn + 5 , pivot = False , 
                                              ffill = False , qtr_method = qtr_method)
@@ -405,7 +413,8 @@ class FinData:
             assert fstatement in ['is' , 'cf' , 'indi' , 'bs'] , fstatement
             assert ftype in ['ttm' , 'qtr' , 'acc' , 'yoy' , 'qoq'] , ftype
             df = self._f_func(fstatement , ftype , category)(fval , date , **kwgs)
-            if isinstance(df , pd.DataFrame) and df.shape[1] == 1 and isinstance(df.columns[0] , str): df = df.iloc[:,0]
+            if isinstance(df , pd.DataFrame) and df.shape[1] == 1 and isinstance(df.columns[0] , str): 
+                df = df.iloc[:,0]
             dfs.append(df)
 
         python_expression = pattern.sub(lambda x:repls[x.group()], self.expression)
@@ -413,7 +422,8 @@ class FinData:
 
         try:
             result = eval(python_expression)
-            if isinstance(result , pd.Series): result.name = naming_expression
+            if isinstance(result , pd.Series): 
+                result.name = naming_expression
         except Exception as e:
             raise ValueError(f"Invalid expression: {e}")
         
@@ -423,27 +433,37 @@ class FinData:
     def _f_func(cls , fstatement : Literal['is' , 'cf' , 'indi' , 'bs'] | str , 
                 ftype : Literal['ttm' , 'qtr' , 'acc' , 'yoy' , 'qoq'] | str , 
                 category : Literal['latest' , 'hist']):
-        if fstatement == 'is': f_source = IS
-        elif fstatement == 'cf': f_source = CF
-        elif fstatement == 'indi': f_source = INDI
-        elif fstatement == 'bs': f_source = BS
-        else: raise ValueError(f'invalid statement: {fstatement}')
+        if fstatement == 'is': 
+            f_source = IS
+        elif fstatement == 'cf': 
+            f_source = CF
+        elif fstatement == 'indi': 
+            f_source = INDI
+        elif fstatement == 'bs': 
+            f_source = BS
+        else: 
+            raise ValueError(f'invalid statement: {fstatement}')
         if category == 'latest':
             return getattr(f_source , f'{ftype}_latest')
         elif category == 'hist':
             return getattr(f_source , f'{ftype}')
-        else: raise ValueError(f'invalid category: {category}')
+        else: 
+            raise ValueError(f'invalid category: {category}')
 
     def get_latest(self , date : int , new_name : str | None = None) -> pd.Series:
         val = self.parse_and_eval(date , 'latest')
-        if isinstance(val , pd.DataFrame): val = val.iloc[:,0]
+        if isinstance(val , pd.DataFrame): 
+            val = val.iloc[:,0]
         assert isinstance(val , pd.Series) , f'invalid latest value: {val}'
-        if new_name is not None: val.name = new_name
+        if new_name is not None: 
+            val.name = new_name
         return val
     
     def get_hist(self , date : int , lastn : int = 1 , new_name : str | None = None) -> pd.DataFrame:
         val = self.parse_and_eval(date , 'hist' , lastn = lastn)
-        if isinstance(val , pd.Series): val = val.to_frame()
+        if isinstance(val , pd.Series):
+            val = val.to_frame()
         assert isinstance(val , pd.DataFrame) , f'invalid hist value: {val}'
-        if new_name is not None: val.columns = [new_name]
+        if new_name is not None: 
+            val.columns = [new_name]
         return val

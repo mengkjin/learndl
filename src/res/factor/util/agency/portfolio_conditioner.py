@@ -42,7 +42,7 @@ class AccountAccessor:
             df = self.input
         elif isinstance(self.input , pd.Series) or isinstance(self.input , np.ndarray):
             if isinstance(self.input , np.ndarray):
-                df = pd.DataFrame(self.input , columns = ['pf'])
+                df = pd.DataFrame(self.input , columns = pd.Index(['pf']))
             else:
                 df = self.input.rename('pf').to_frame()
             df = df.assign(
@@ -62,23 +62,23 @@ class AccountAccessor:
     
     @property
     def pf(self) -> pd.Series:
-        return self.account['pf']
+        return self.account.pf
     
     @property
     def bm(self) -> pd.Series:
-        return self.account['bm']
+        return self.account.bm
     
     @property
     def turn(self) -> pd.Series:
-        return self.account['turn']
+        return self.account.turn
     
     @property
     def excess(self) -> pd.Series:
-        return self.account['excess']
+        return self.account.excess
     
     @property
     def overnight(self) -> pd.Series:
-        return self.account['overnight']
+        return self.account.overnight
     
     @property
     def intraday(self) -> pd.Series:
@@ -86,19 +86,19 @@ class AccountAccessor:
     
     @property
     def analytic(self) -> pd.Series:
-        return self.account['analytic']
+        return self.account.analytic
     
     @property
     def attribution(self) -> pd.Series:
-        return self.account['attribution']
+        return self.account.attribution
     
     @property
     def start(self) -> pd.Series:
-        return self.account['start']
+        return self.account.start
     
     @property
     def end(self) -> pd.Series:
-        return self.account['end']
+        return self.account.end
     
     @property
     def drawdown(self) -> pd.Series:
@@ -113,15 +113,17 @@ class AccountConditioner:
 
     @property
     def position_end(self) -> pd.Series:
-        return self.conditions.shift(1).fillna(1)
+        pe : pd.Series | Any = self.conditions.shift(1).fillna(1)
+        return pe
     
     @property
     def conditioned_position(self) -> pd.Series:
-        return self.position_end[self.position_end != 1]
+        return self.position_end.query('position_end != 1')
     
     @property
     def position_start(self) -> pd.Series:
-        return self.position_end.shift(1).fillna(1)
+        ps : pd.Series | Any = self.position_end.shift(1).fillna(1)
+        return ps
     
     @property
     def position_change(self) -> pd.Series:
@@ -255,7 +257,8 @@ class BaseConditioner(ABC):
         cum_cond_pf = eval_cum_ret(conditioner.conditioned_pf , 'exp')
         assert isinstance(cum_cond_pf , pd.Series) , 'cum_cond_pf must be pd.Series'
         cum_cond_pf.name = self.conditioner_name()
-        if plot: cum_cond_pf.plot(figsize = (12 , 4))
+        if plot: 
+            cum_cond_pf.plot(figsize = (12 , 4))
 
         return cum_cond_pf
     

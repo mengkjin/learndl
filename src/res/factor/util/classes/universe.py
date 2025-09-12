@@ -19,7 +19,7 @@ class Universe:
         elif self.name.startswith('top'):
             top_num = int(self.name.split('.')[0].removeprefix('top'))
             val = DATAVENDOR.TRADE.get_val(DATAVENDOR.TRADE.latest_date('val' , date)).sort_values('circ_mv' , ascending=False)
-            val = val[val['secid'].isin(candidates)].iloc[:top_num].loc[:,['secid']].\
+            val = val.query('secid in @candidates').iloc[:top_num].loc[:,['secid']].\
                 reset_index().assign(date = date , name = self.name)
             val['weight'] = 1 / len(val)
             pf = Portfolio.from_dataframe(val , name = self.name)

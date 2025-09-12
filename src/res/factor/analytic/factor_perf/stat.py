@@ -9,14 +9,15 @@ from ...util import Benchmark , StockFactor
 
 def eval_stats(x):
     assert isinstance(x , pd.DataFrame) , type(x)
-    x_sum = x.sum().rename('sum')
-    x_avg = x.mean().rename('avg')
-    x_std = x.std().rename('std')
-    x_abs_avg = x.abs().mean().rename('abs_avg')
-    x_ir = (x_avg / x_std).rename('ir')
-    x_cumsum = x.cumsum()
-    x_maxdown = (x_cumsum - x_cumsum.cummax()).min().rename('cum_mdd')
-    return pd.concat([x_sum, x_avg , x_std, x_ir, x_abs_avg , x_maxdown], axis=1, sort=True)
+    stats : dict[str , pd.Series | Any] = {}
+    stats['sum'] = x.sum()
+    stats['avg'] = x.mean()
+    stats['std'] = x.std()
+    stats['abs_avg'] = x.abs().mean()
+    stats['ir'] = (stats['avg'] / stats['std'])
+    cumsum = x.cumsum()
+    stats['cum_mdd'] = (cumsum - cumsum.cummax()).min()
+    return pd.concat([val.rename(key) for key , val in stats.items()], axis=1, sort=True)
 
 def eval_ic_stats(ic_table : pd.DataFrame , nday : int = 5):
     n_periods  = 243 / nday
@@ -29,8 +30,8 @@ def eval_ic_stats(ic_table : pd.DataFrame , nday : int = 5):
     ic_stats['ir']       = ic_stats['ir'] * np.sqrt(n_periods)
 
     melt_table = ic_table.reset_index().melt(id_vars=['date'],var_name='factor_name',value_name='ic').dropna().reset_index()
-    min_date = melt_table.groupby('factor_name')['date'].min()
-    max_date = melt_table.groupby('factor_name')['date'].max()
+    min_date : pd.Series | Any = melt_table.groupby('factor_name')['date'].min()
+    max_date : pd.Series | Any = melt_table.groupby('factor_name')['date'].max()
 
     range_date = pd.concat([min_date.rename('start') , max_date.rename('end')] , axis=1).reset_index()
     range_date['range'] = range_date['start'].astype(str) + '-' + range_date['end'].astype(str)
@@ -39,7 +40,8 @@ def eval_ic_stats(ic_table : pd.DataFrame , nday : int = 5):
     return ic_stats
 
 def eval_qtile_by_day(factor : pd.DataFrame , scaling : bool = True):
-    if scaling: factor = (factor - factor.mean()) / factor.std()
+    if scaling: 
+        factor = (factor - factor.mean()) / factor.std()
     rtn = pd.concat([factor.quantile(q / 100).rename(f'{q}%') for q in (5,25,50,75,95)], axis=1, sort=True)
     return rtn.rename_axis('factor_name', axis='index')
 
@@ -63,10 +65,12 @@ def calc_factor_ic_curve(factor : StockFactor , benchmark : Optional[Benchmark |
         melt(id_vars=['date'],var_name='factor_name',value_name='ic').set_index(['date','factor_name'])
     ic_curve = ic_table.join(ic_table.groupby('factor_name',observed=False).cumsum().rename(columns={'ic':'cum_ic'}))
 
-    if isinstance(ma_windows , int): ma_windows = [ma_windows]
+    if isinstance(ma_windows , int): 
+        ma_windows = [ma_windows]
     grouped = ic_table.reset_index('factor_name').groupby('factor_name',observed=False)
     for ma in ma_windows:
-        ic_curve = ic_curve.join(grouped.rolling(ma).mean().rename(columns={'ic':f'ma_{ma}'}))
+        rolling_mean : pd.DataFrame | Any = grouped.rolling(ma).mean()
+        ic_curve = ic_curve.join(rolling_mean.rename(columns={'ic':f'ma_{ma}'}))
     ic_curve = ic_curve.reset_index()
     return ic_curve
 
@@ -94,7 +98,8 @@ def calc_factor_ic_indus(factor : StockFactor , benchmark : Optional[Benchmark |
     factor = factor.within(benchmark) 
     ic_indus = factor.eval_ic_indus(nday , lag , ic_type , ret_type)
     ic_mean = ic_indus.groupby('industry').mean().stack()
-    ic_std  = ic_indus.groupby('industry').std().stack()
+    ic_std : pd.DataFrame | Any = ic_indus.groupby('industry').std()
+    ic_std = ic_std.stack()
     ic_ir   = ic_mean / (ic_std + 1e-6)
     assert isinstance(ic_mean , pd.Series) and isinstance(ic_ir , pd.Series) , (ic_mean , ic_ir)
     ic_stats = pd.concat([ic_mean.rename('avg') , ic_ir.rename('ir')] , axis=1, sort=True).reset_index()
@@ -125,12 +130,19 @@ def calc_factor_ic_monotony(factor : StockFactor , benchmark : Optional[Benchmar
                             nday : int = 10 , lag_init : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close'):
     factor = factor.within(benchmark)
     grp_perf = factor.eval_group_perf(nday , lag_init , 100 , True , ret_type , trade_date=False)
-    
-    grp_ret_mean = grp_perf.groupby(['factor_name', 'group'],observed=False)['group_ret'].mean() * 243 / nday
-    grp_ret_std  = grp_perf.groupby(['factor_name', 'group'],observed=False)['group_ret'].std() * np.sqrt(243 / nday)
-    grp_ret_ir   = grp_ret_mean / (grp_ret_std + 1e-6)
-    rtn = pd.concat([grp_ret_mean.rename('grp_ret') , grp_ret_ir.rename('grp_ir')], axis=1, sort=True)
-    rtn = pd.DataFrame(rtn.rename_axis('stats_name', axis='columns').stack() , columns=['stats_value']).reset_index()
+    grouped = grp_perf.groupby(['factor_name', 'group'],observed=False)['group_ret']
+
+    ret_mean : pd.Series | Any = grouped.mean()
+    ret_mean = ret_mean.rename('grp_ret') * 243 / nday
+
+    ret_std : pd.Series | Any = grouped.std()
+    ret_std = ret_std.rename('grp_std') * np.sqrt(243 / nday)
+
+    ret_ir : pd.Series | Any = ret_mean / (ret_std + 1e-6)
+    ret_ir = ret_ir.rename('grp_ir')
+
+    rtn = pd.concat([ret_mean, ret_std, ret_ir], axis=1, sort=True)
+    rtn = pd.DataFrame(rtn.rename_axis('stats_name', axis='columns').stack() , columns=pd.Index(['stats_value'])).reset_index()
     return rtn
 
 def calc_factor_pnl_curve(factor : StockFactor , benchmark : Optional[Benchmark | str] = None , 
@@ -157,10 +169,12 @@ def calc_factor_group_curve(factor : StockFactor , benchmark : Optional[Benchmar
                             ret_type : Literal['close' , 'vwap'] = 'close' , trade_date = True) -> pd.DataFrame:
     factor = factor.within(benchmark)
     grp_perf = factor.eval_group_perf(nday , lag , group_num , excess , ret_type , trade_date).set_index(['factor_name','group'])
-    grp_perf0 = (grp_perf.groupby(grp_perf.index.names , observed=False)['date'].min() - 1).to_frame().assign(group_ret = 0.)
-    df = pd.concat([grp_perf0 , grp_perf]).set_index('date' , append=True).sort_values(['group' , 'date']).\
-        groupby(['factor_name','group'] , observed=True)['group_ret'].cumsum().rename('cum_ret').reset_index()
-    return df
+    min_date : pd.DataFrame | Any = grp_perf.groupby(grp_perf.index.names , observed=False)['date'].min()
+    grp_perf0 = (min_date - 1).to_frame().assign(group_ret = 0.)
+    df = pd.concat([grp_perf0 , grp_perf]).set_index('date' , append=True).sort_values(['group' , 'date'])
+    group_ret : pd.Series | Any = df.groupby(['factor_name','group'] , observed=True)['group_ret'].cumsum()
+    group_ret_df : pd.DataFrame | Any = group_ret.rename('cum_ret').reset_index()
+    return group_ret_df
 
 def calc_factor_group_decay(factor : StockFactor , benchmark : Optional[Benchmark | str] = None , 
                             nday : int = 10 , lag_init : int = 2 , group_num : int = 10 ,
@@ -173,11 +187,19 @@ def calc_factor_group_decay(factor : StockFactor , benchmark : Optional[Benchmar
         decay_grp_perf.append(pd.DataFrame({'lag_type':f'lag{lag}',**grp_perf}))
     decay_grp_perf = pd.concat(decay_grp_perf, axis=0).reset_index()
 
-    decay_grp_ret_mean = decay_grp_perf.groupby(['factor_name', 'group', 'lag_type'],observed=False)['group_ret'].mean() * 243 / nday
-    deacy_grp_ret_std  = decay_grp_perf.groupby(['factor_name', 'group', 'lag_type'],observed=False)['group_ret'].std() * np.sqrt(243 / nday)
-    decay_grp_ret_ir   = decay_grp_ret_mean / (deacy_grp_ret_std + 1e-6)
-    rtn = pd.concat([decay_grp_ret_mean.rename('decay_grp_ret'),decay_grp_ret_ir.rename('decay_grp_ir')], axis=1, sort=True)
-    rtn = pd.DataFrame(rtn.rename_axis('stats_name', axis='columns').stack() , columns=['stats_value'])
+    grouped = decay_grp_perf.groupby(['factor_name', 'group', 'lag_type'],observed=False)['group_ret']
+
+    ret_mean : pd.Series | Any = grouped.mean()
+    ret_mean = ret_mean.rename('decay_grp_ret') * 243 / nday
+
+    ret_std : pd.Series | Any = grouped.std()
+    ret_std = ret_std.rename('decay_grp_std') * np.sqrt(243 / nday)
+
+    ret_ir : pd.Series | Any = ret_mean / (ret_std + 1e-6)
+    ret_ir = ret_ir.rename('decay_grp_ir')
+
+    rtn = pd.concat([ret_mean, ret_std, ret_ir], axis=1, sort=True)
+    rtn = pd.DataFrame(rtn.rename_axis('stats_name', axis='columns').stack() , columns=pd.Index(['stats_value']))
     return rtn.reset_index()
 
 def calc_factor_group_year(factor : StockFactor , benchmark : Optional[Benchmark | str] = None ,
@@ -225,7 +247,7 @@ def calc_factor_distrib_curve(factor : StockFactor , benchmark : Optional[Benchm
             factor_sample = factor.select(date = date , factor_name = factor_name).frame().iloc[:,0]
             cnts, bins = np.histogram(factor_sample, bins=hist_bins, density=False)
             hist_dict[date] = (cnts, bins)
-        hist_df = pd.DataFrame(hist_dict, index=['hist_cnts', 'hist_bins']).T
+        hist_df = pd.DataFrame(hist_dict, index=pd.Index(['hist_cnts', 'hist_bins'])).T
         hist_df['factor_name'] = factor_name
         rtn.append(hist_df)
     rtn = pd.concat(rtn, axis=0)

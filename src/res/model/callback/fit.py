@@ -108,10 +108,14 @@ class CudaEmptyCache(BaseCallBack):
         self.batch_interval = batch_interval
         # 2.5s for 86 epochs
     def empty_cache(self):
-        if (self.trainer.batch_idx + 1) % self.batch_interval == 0 : torch.cuda.empty_cache()
-    def on_train_batch_end(self):        self.empty_cache()
-    def on_validation_batch_end(self):   self.empty_cache()
-    def on_test_batch_end(self):         self.empty_cache()
+        if (self.trainer.batch_idx + 1) % self.batch_interval == 0 : 
+            torch.cuda.empty_cache()
+    def on_train_batch_end(self):        
+        self.empty_cache()
+    def on_validation_batch_end(self):   
+        self.empty_cache()
+    def on_test_batch_end(self):         
+        self.empty_cache()
 
 class ResetOptimizer(BaseCallBack):
     '''reset optimizer on some epoch (can speedup scheduler)'''
@@ -134,7 +138,8 @@ class ResetOptimizer(BaseCallBack):
     def halved_param(self , param : dict):
         return {k:((v // 2) if k in self.reset_speedup_param_list else v) for k,v in param.items()}
     def on_train_epoch_end(self):
-        if not self.reset_epoch: return
+        if not self.reset_epoch: 
+            return
 
         # confirm reset : change back optimizor learn rate
         for param_group in self.optimizer.optimizer.param_groups:
@@ -142,7 +147,8 @@ class ResetOptimizer(BaseCallBack):
         
         # confirm reset : reassign scheduler
         shd_param = deepcopy(self.optimizer.shd_param)
-        if self.speedup2x: shd_param = self.halved_param(shd_param)
+        if self.speedup2x: 
+            shd_param = self.halved_param(shd_param)
 
         self.optimizer.scheduler = self.optimizer.load_scheduler(self.optimizer.optimizer , shd_param)
         self.status.add_event('reset_learn_rate')

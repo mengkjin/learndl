@@ -38,7 +38,8 @@ class ModelTestor:
 
     def try_metrics(self):
         '''as name says, try to calculate metrics'''
-        if not hasattr(self , 'outputs'): self.try_forward()
+        if not hasattr(self , 'outputs'): 
+            self.try_forward()
         metrics = self.metrics.calculate('train' , self.batch_data.y , self.output.pred , self.batch_data.w)
         print('metrics : ' , metrics)
         print(f'Test Metrics Success')

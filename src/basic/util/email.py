@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Literal , Any
 
 from src.proj import MACHINE , PATH
-from src.basic import CONF
 
 def email_settings():
     return MACHINE.local_settings('email')
@@ -35,8 +34,10 @@ class Email:
     @classmethod
     def Attach(cls , attachment : str | Path | list[str] | list[Path] | None = None , 
                group : str = 'default' , copy = False):
-        if attachment is None: return
-        if not isinstance(attachment , list): attachment = [Path(attachment)]
+        if attachment is None: 
+            return
+        if not isinstance(attachment , list): 
+            attachment = [Path(attachment)]
         if group not in cls.Attachments:
             cls.Attachments[group] = []
         for f in attachment:
@@ -50,7 +51,8 @@ class Email:
                 cls.Attachments[group].append(new_path)
 
     def recipient(self , recipient : str | None = None):
-        if recipient is None: recipient = str(self.sender)
+        if recipient is None: 
+            recipient = str(self.sender)
         assert recipient , 'recipient is required'
         assert '@' in recipient , f'recipient address must contain @ , got {recipient}'
         return recipient
@@ -65,12 +67,14 @@ class Email:
         message['Subject'] = f'{title_prefix} {title}'
         message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
 
-        if not isinstance(attachment_group , list): attachment_group = [attachment_group]
+        if not isinstance(attachment_group , list): 
+            attachment_group = [attachment_group]
         attachments = []
         for group in attachment_group:
             if group in self.Attachments:
                 attachments.extend(self.Attachments[group])
-                if clear_attachments: self.Attachments[group] = []
+                if clear_attachments: 
+                    self.Attachments[group] = []
         attachments = list(set(attachments))
 
         for attachment in attachments:
@@ -86,7 +90,8 @@ class Email:
     def clear_unused_attachments(self):
         attachments = [f for group in self.Attachments.values() for f in group]
         for f in self.Attachment_dir.iterdir():
-            if f not in attachments: f.unlink()
+            if f not in attachments: 
+                f.unlink()
     
     def connection(self):
         return smtplib.SMTP(self.smtp_server, self.smtp_port)
@@ -127,7 +132,8 @@ def send_email(title : str  ,
     sender      = email_conf['sender']  
     password    = email_conf['password']  
 
-    if recipient is None: recipient = str(sender)
+    if recipient is None: 
+        recipient = str(sender)
     assert recipient , 'recipient is required'
     assert '@' in recipient , f'recipient address must contain @ , got {recipient}'
 

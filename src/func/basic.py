@@ -1,5 +1,6 @@
 import os , pprint , psutil , torch
 import numpy as np
+from typing import Any
 
 from pytimedinput import timedInput
 from scipy import stats
@@ -10,7 +11,8 @@ DIV_TOL = 1e-4
 
 def average_params(params_list : tuple[dict] | list[dict]):
     n = len(params_list)
-    if n == 1: return params_list[0]
+    if n == 1: 
+        return params_list[0]
     new_params = {k:v / n for k,v in params_list[0].items()}
     for i, params in enumerate(params_list[1:]):
         for k, v in params.items():
@@ -33,11 +35,12 @@ def tensor_nancount(x : Tensor , dim=None, keepdim=False):
 def tensor_nanmean(x : Tensor , dim=None, keepdim=False):  
     try:
         return x.nanmean(dim = dim , keepdim = keepdim)
-    except:
+    except Exception:
         return x.nansum(dim = dim , keepdim = keepdim) / tensor_nancount(x , dim = dim , keepdim = keepdim)
 
 def tensor_nanstd(x : Tensor , dim=None, keepdim=False , correction=1):
-    if dim is None: return torch.tensor(np.nanstd(x.flatten()))
+    if dim is None: 
+        return torch.tensor(np.nanstd(x.flatten()))
     nancount = tensor_nancount(x , dim = dim , keepdim = True) - correction
     return ((x - tensor_nanmean(x , dim = dim , keepdim = True)).square() / nancount).nansum(dim = dim , keepdim = keepdim).sqrt()
 
@@ -48,7 +51,8 @@ def tensor_nanmedian(x : Tensor , dim=None, keepdim=False):
         return tensor_nanmedian(x.to(torch.float) , dim , keepdim).to(x.dtype)
         
 def tensor_standardize_and_weight(x : Tensor, dim = None , weight_scheme = None):
-    if x.isnan().all().item(): return (x , None) 
+    if x.isnan().all().item(): 
+        return (x , None) 
     x = (x - tensor_nanmean(x,dim=dim,keepdim=True)) / (tensor_nanstd(x,dim=dim,correction=0,keepdim=True) + DIV_TOL)
     if weight_scheme is None or weight_scheme == 'equal':
         w = None
@@ -56,7 +60,7 @@ def tensor_standardize_and_weight(x : Tensor, dim = None , weight_scheme = None)
         w = torch.ones_like(x)
         try: 
             w[x > tensor_nanmedian(x , dim , True)] = 2
-        except:    
+        except Exception:    
             w[x > tensor_nanmedian(x)] = 2
     else:
         raise KeyError(weight_scheme)
@@ -132,22 +136,26 @@ def nd_rank(x : Tensor , dim = None):
     if dim is None:
         w = tensor_rank(x.flatten()).reshape(x.shape)
     else:
-        if x.numel() == 0: return x
+        if x.numel() == 0: 
+            return x
         w = x.clone().transpose(-1 , dim)
         new_shape = w.shape
         w = w.reshape(-1 , new_shape[-1])
-        for i in range(len(w)): w[i] = tensor_rank(w[i])
+        for i in range(len(w)): 
+            w[i] = tensor_rank(w[i])
         w = w.reshape(*new_shape).transpose(-1 , dim)   
     return w
 def nd_rank_weight(x : Tensor , dim = None):
     if dim is None:
         w = rank_weight(x.flatten()).reshape(x.shape)
     else:
-        if x.numel() == 0: return x
+        if x.numel() == 0: 
+            return x
         w = x.clone().transpose(-1 , dim)
         new_shape = w.shape
         w = w.reshape(-1 , new_shape[-1])
-        for i in range(len(w)): w[i] = rank_weight(w[i])
+        for i in range(len(w)): 
+            w[i] = rank_weight(w[i])
         w = w.reshape(*new_shape).transpose(-1 , dim)   
     return w 
 def nd_minus_mean(x : Tensor, w : Tensor | float, dim = None):
@@ -209,14 +217,14 @@ def np_ic(x : np.ndarray , y : np.ndarray):
     x , y = np_drop_na(x,y)
     try:
         return stats.pearsonr(x,y)[0]
-    except:
+    except Exception:
         return np.nan
     
 def np_rankic(x : np.ndarray , y : np.ndarray):
     x , y = np_drop_na(x,y)
     try:
         return stats.spearmanr(x,y)[0]
-    except:
+    except Exception:
         return np.nan
     
 def np_ic_2d(x : np.ndarray , y : np.ndarray , dim=0):
@@ -262,7 +270,8 @@ def ic_2d(x : torch.Tensor , y : torch.Tensor , dim=0):
 
 def rankic_2d(x : torch.Tensor, y : torch.Tensor , dim = 1 , universe = None , min_coverage = 0.5):
     valid = ~y.isnan()
-    if universe is not None: valid *= universe.nan_to_num(False)
+    if universe is not None: 
+        valid *= universe.nan_to_num(False)
     x = torch.where(valid , x , torch.nan)
 
     coverage = (~x.isnan()).sum(dim=dim)
@@ -276,8 +285,10 @@ def total_memory(unit = 1e9):
 
 def to_numpy(values):
     if not isinstance(values , np.ndarray): 
-        if isinstance(values , torch.Tensor): values = values.cpu().numpy()
-        else: values = np.asarray(values)
+        if isinstance(values , torch.Tensor): 
+            values = values.cpu().numpy()
+        else: 
+            values = np.asarray(values)
     return values
 
 def match_values(values , src_arr , ambiguous = 0):
@@ -313,10 +324,11 @@ def merge_data_2d(data_tuple , row_tuple , col_tuple , row_all = None , col_all 
         data_all[np.repeat(row_index[i],len(col_index[i])),np.tile(col_index[i],len(row_index[i]))] = data[:].flatten()
     return data_all , row_all , col_all
         
-def list_converge(l , n = None , eps = 1e-6):
-    '''Last n element of l has range smaller than eps'''
-    if n is None: return max(l) - min(l) < eps   
-    return len(l) >= n and (max(l[-n:]) - min(l[-n:]) < eps)
+def list_converge(arr , n = None , eps = 1e-6):
+    '''Last n element of arr has range smaller than eps'''
+    if n is None: 
+        return max(arr) - min(arr) < eps   
+    return len(arr) >= n and (max(arr[-n:]) - min(arr[-n:]) < eps)
 
 def pretty_print_dict(dictionary , width = 140 , sort_dicts = False):
     pprint.pprint(dictionary, indent = 1, width = width , sort_dicts = sort_dicts)
@@ -331,7 +343,8 @@ def subset(x , i):
     
 def forward_fillna(arr , axis = 0):
     shape = arr.shape
-    if axis < 0: axis = len(shape) + axis
+    if axis < 0: 
+        axis = len(shape) + axis
     new_axes  = list(range(len(arr.shape)))
     new_axes[0] , new_axes[axis] = axis , 0
     
@@ -347,7 +360,8 @@ def forward_fillna(arr , axis = 0):
 
 def backward_fillna(arr, axis = 0):
     shape = arr.shape
-    if axis < 0: axis = len(shape) + axis
+    if axis < 0: 
+        axis = len(shape) + axis
     new_axes  = list(range(len(arr.shape)))
     new_axes[0] , new_axes[axis] = axis , 0
 
@@ -363,27 +377,33 @@ def backward_fillna(arr, axis = 0):
     return out
 
 def index_intersect(idxs , min_value = None , max_value = None):
+    new_idx : np.ndarray | Any = None
     for i , idx in enumerate(idxs):
         if i == 0 or idx is None or new_idx is None:
             new_idx = new_idx if idx is None else idx
         else:
             new_idx = np.intersect1d(new_idx , idx)
-    if min_value is not None: new_idx = new_idx[new_idx >= min_value]
-    if max_value is not None: new_idx = new_idx[new_idx <= max_value]
+    if min_value is not None: 
+        new_idx = new_idx[new_idx >= min_value]
+    if max_value is not None: 
+        new_idx = new_idx[new_idx <= max_value]
     new_idx = np.sort(new_idx)
     inter   = [np.array([]) if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
     pos_new = tuple(np.array([]) if v is None else v[1] for v in inter)
     pos_old = tuple(np.array([]) if v is None else v[2] for v in inter)
     return new_idx , pos_new , pos_old
 
-def index_union(idxs , min_value = None , max_value = None):
+def index_union(idxs , min_value = None , max_value = None) -> tuple[np.ndarray , tuple[np.ndarray , ...] , tuple[np.ndarray , ...]]:
+    new_idx : np.ndarray | Any = None
     for i , idx in enumerate(idxs):
         if i == 0 or idx is None or new_idx is None:
             new_idx = new_idx if idx is None else idx
         else:
             new_idx = np.union1d(new_idx , idx)
-    if min_value is not None: new_idx = new_idx[new_idx >= min_value]
-    if max_value is not None: new_idx = new_idx[new_idx <= max_value]
+    if min_value is not None: 
+        new_idx = new_idx[new_idx >= min_value]
+    if max_value is not None: 
+        new_idx = new_idx[new_idx <= max_value]
     inter   = [np.array([]) if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
     pos_new = tuple(np.array([]) if v is None else v[1] for v in inter)
     pos_old = tuple(np.array([]) if v is None else v[2] for v in inter)
@@ -404,15 +424,16 @@ def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_con
         if timeout > 0:
             try:
                 userText, timedOut = timedInput(f'{_prompt} (in {timeout} seconds): ' , timeout = timeout)
-            except:
-                ...
+            except Exception:
+                pass
         if userText is None : 
             userText, timedOut = input(f'{_prompt} : ') , False
         (_timeout , _sofar) = ('Time Out! ' , 'so far') if timedOut else ('' , '')
         print_function(f'{_timeout}User-input {_sofar} is : [{userText}].')
         userText_list.append(userText)
         userText_cond.append(proceed_condition(userText))
-        if not userText_cond[-1]: break
+        if not userText_cond[-1]: 
+            break
     return userText_list , userText_cond
 
 def recur_update(old : dict , update : Optional[dict]) -> dict:
@@ -435,4 +456,5 @@ class Filtered:
         while True:
             item = next(self.iterable)
             cond = self.condition(item) if callable(self.condition) else next(self.condition)
-            if cond: return item
+            if cond: 
+                return item

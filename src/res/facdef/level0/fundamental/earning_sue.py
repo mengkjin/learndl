@@ -1,8 +1,6 @@
-import pandas as pd
 import numpy as np
 import statsmodels.api as sm
 import polars as pl
-from typing import Literal
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
@@ -28,7 +26,7 @@ def sue_reg(expression: str , date: int , n_last : int = 8 , **kwargs):
         x = np.arange(1, len(y) + 1)
         try:
             return sm.OLS(y, sm.add_constant(x)).fit().resid[-1]
-        except Exception as e:
+        except Exception:
             return np.nan
     
     y_var = DATAVENDOR.get_fin_hist(expression , date , n_last , pivot = False ,**kwargs).iloc[:,0]

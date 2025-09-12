@@ -12,7 +12,8 @@ def get_method(method , max_workers : int = MAX_WORKERS) -> int:
     1 : thread
     2 : process
     '''
-    if max_workers <= 1: return 0
+    if max_workers <= 1: 
+        return 0
     elif isinstance(method , bool):
         return 1 if method else 0
     elif isinstance(method , int):

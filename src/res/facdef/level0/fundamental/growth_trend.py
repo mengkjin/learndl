@@ -3,8 +3,6 @@ import pandas as pd
 import statsmodels.api as sm
 import polars as pl
 
-from typing import Literal
-
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
 
@@ -19,9 +17,10 @@ def calc_trend(data : pd.Series):
         x = np.arange(1, len(y) + 1)
         try:
             return sm.OLS(y, sm.add_constant(x)).fit().params[1] / y.mean()
-        except Exception as e:
+        except Exception:
             return np.nan
-    if not data.name: data = data.rename('data')
+    if not data.name: 
+        data = data.rename('data')
     y_name = str(data.name)
     df = pl.from_pandas(data.to_frame() , include_index=True)
     df = df.with_columns(

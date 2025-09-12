@@ -11,12 +11,6 @@
 #       type : str
 #       desc : additional message
 
-import sys , pathlib
-file_path = str(pathlib.Path(__file__).absolute())
-assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
-path = file_path.removesuffix(file_path.split('learndl')[-1])
-if not path in sys.path: sys.path.append(path)
-
 import subprocess ,  socket
 from datetime import datetime
 from src.app import BackendTaskRecorder
@@ -24,7 +18,8 @@ from src.app import BackendTaskRecorder
 @BackendTaskRecorder()
 def main(additional_message : str | list[str] = '' , **kwargs):
     prefixes = [socket.gethostname() , datetime.now().strftime('%Y%m%d')]
-    if isinstance(additional_message , str): additional_message = [additional_message]
+    if isinstance(additional_message , str): 
+        additional_message = [additional_message]
     commit_message = ','.join([msg for msg in prefixes + additional_message if msg])
 
     subprocess.run("git add .", shell=True, check=True)

@@ -1,13 +1,9 @@
 import torch
-from typing import Any
-
-import torch
-import matplotlib.pyplot as plt
-import numpy as np
-
 from torch import nn , Tensor
 from typing import Any
 
+import matplotlib.pyplot as plt
+import numpy as np
 
 def add_multiloss_params(module : torch.nn.Module , num_of_heads : int):
     if num_of_heads > 1:
@@ -150,36 +146,36 @@ class MultiHeadLosses:
     @classmethod
     def view_plot(cls , num_head = 2 , multi_type = 'ruw'):
         if multi_type == 'ruw':
-            if num_head > 2 : num_head = 2
+            num_head = min(num_head, 2)
             x,y = torch.rand(100,num_head),torch.rand(100,1)
             ls = (x - y).sqrt().sum(dim = 0)
             alpha = Tensor(np.repeat(np.linspace(0.2, 10, 40),num_head).reshape(-1,num_head))
-            fig,ax = plt.figure(),plt.axes(projection='3d')
+            _,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(alpha[:,0].numpy(), alpha[:,1].numpy())
             ruw = cls.RUW(num_head)
-            l = torch.stack([torch.stack([ruw(ls,{'alpha':Tensor([s1[i,j],s2[i,j]])})[0] for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
-            ax.plot_surface(s1, s2, l, cmap='viridis') #type:ignore
+            loss = torch.stack([torch.stack([ruw(ls,{'alpha':Tensor([s1[i,j],s2[i,j]])})[0] for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
+            ax.plot_surface(s1, s2, loss, cmap='viridis') #type:ignore
             ax.set_xlabel('alpha-1')
             ax.set_ylabel('alpha-2')
             ax.set_zlabel('loss') #type:ignore
             ax.set_title(f'RUW Loss vs alpha ({num_head}-D)')
         elif multi_type == 'gls':
             ls = Tensor(np.repeat(np.linspace(0.2, 10, 40),num_head).reshape(-1,num_head))
-            fig,ax = plt.figure(),plt.axes(projection='3d')
+            _,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(ls[:,0].numpy(), ls[:,1].numpy())
-            l = torch.stack([torch.stack([torch.tensor([s1[i,j],s2[i,j]]).prod().sqrt() for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
-            ax.plot_surface(s1, s2, l, cmap='viridis') #type:ignore
+            loss = torch.stack([torch.stack([torch.tensor([s1[i,j],s2[i,j]]).prod().sqrt() for j in range(s1.shape[1])]) for i in range(s1.shape[0])]).numpy()
+            ax.plot_surface(s1, s2, loss, cmap='viridis') #type:ignore
             ax.set_xlabel('loss-1')
             ax.set_ylabel('loss-2')
             ax.set_zlabel('gls_loss') #type:ignore
             ax.set_title(f'GLS Loss vs sub-Loss ({num_head}-D)')
         elif multi_type == 'rws':
             ls = torch.tensor(np.repeat(np.linspace(0.2, 10, 40),num_head).reshape(-1,num_head))
-            fig,ax = plt.figure(),plt.axes(projection='3d')
+            _,ax = plt.figure(),plt.axes(projection='3d')
             s1, s2 = np.meshgrid(ls[:,0].numpy(), ls[:,1].numpy())
-            l = torch.stack([torch.stack([(torch.tensor([s1[i,j],s2[i,j]])*nn.functional.softmax(torch.rand(num_head),-1)).sum() for j in range(s1.shape[1])]) 
+            loss = torch.stack([torch.stack([(torch.tensor([s1[i,j],s2[i,j]])*nn.functional.softmax(torch.rand(num_head),-1)).sum() for j in range(s1.shape[1])]) 
                              for i in range(s1.shape[0])]).numpy()
-            ax.plot_surface(s1, s2, l, cmap='viridis') #type:ignore
+            ax.plot_surface(s1, s2, loss, cmap='viridis') #type:ignore
             ax.set_xlabel('loss-1')
             ax.set_ylabel('loss-2')
             ax.set_zlabel('rws_loss') #type:ignore
@@ -193,7 +189,7 @@ class MultiHeadLosses:
             w1 = np.exp(np.concatenate((np.array([1,1]),l1[2:]/l1[1:-1]))/tau)
             w2 = np.exp(np.concatenate((np.array([1,1]),l2[2:]/l1[1:-1]))/tau)
             w1 , w2 = num_head * w1 / (w1+w2) , num_head * w2 / (w1+w2)
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+            _, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
             ax1.plot(s, l1, color='blue', label='task1')
             ax1.plot(s, l2, color='red', label='task2')
             ax1.set_xlabel('Epoch')

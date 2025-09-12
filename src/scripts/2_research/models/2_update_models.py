@@ -7,11 +7,6 @@
 # email: False
 # mode: shell
 
-import sys
-
-assert 'learndl' in __file__ , f'learndl path not found , do not know where to find src file : {__file__}'
-path = __file__.removesuffix(__file__.split('learndl')[-1])
-sys.path.append(path)
 
 from src.res.api import ModelAPI
 from src.basic import AutoRunTask

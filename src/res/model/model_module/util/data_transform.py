@@ -2,13 +2,14 @@ import torch
 import numpy as np
 
 from torch import Tensor , nn
-from typing import Any , Iterator , Optional
+from typing import Iterator , Optional
 
 from src.res.algo.boost import BoosterInput
 from src.res.model.util import BatchData , BatchOutput
 
 def tensor_refiller(values : Optional[Tensor] , target_i0 , target_i1 , target_shape : tuple):
-    if values is None: return None
+    if values is None: 
+        return None
     assert len(target_shape) in [2,3] , target_shape
     new_values = torch.full(target_shape , fill_value = np.nan)
     if len(target_shape) == 2 and values.ndim == 2:

@@ -4,7 +4,7 @@ from copy import deepcopy
 from typing import Any , Optional
 
 from src.basic.conf import DEFAULT_OPT_CONFIG
-from src.res.factor.util import AlphaModel , Amodel , Benchmark , Port , Portfolio , RISK_MODEL
+from src.res.factor.util import AlphaModel , Amodel , Benchmark , Port , Portfolio , RISK_MODEL , Rmodel
 
 from .solver_input import SolverInput
 from .parser import (
@@ -48,7 +48,8 @@ class PortfolioOptimizerInput:
     def update_given_config(self , given_config : dict):
         self.config = deepcopy(DEFAULT_OPT_CONFIG)
         for key in self.config:
-            if not (given := given_config.get(key)): continue
+            if not (given := given_config.get(key)): 
+                continue
             assert isinstance(self.config[key] , dict) , self.config[key]
             if not isinstance(given , dict):
                 assert len(self.config[key]) == 1 , f'If given is not dict, config must be of length 1'
@@ -59,8 +60,11 @@ class PortfolioOptimizerInput:
                         benchmark : Optional[Benchmark | Portfolio | Port] = None , init_port : Port | Any = None):
 
         self.model_date = model_date
-        self.risk_model = RISK_MODEL.get_model(model_date)
-        self.alpha_model = alpha_model.get_model(model_date).preprocess()
+        self.risk_model : Rmodel | Any = RISK_MODEL.get_model(model_date)
+        self.alpha_model : Amodel | Any = alpha_model.get_model(model_date)
+        assert self.risk_model is not None , f'risk_model is None at {model_date}'
+        assert self.alpha_model is not None , f'alpha_model is None at {model_date}'
+        self.alpha_model = self.alpha_model.preprocess()
         
         self.initial_port = init_port
         self.secid = self.risk_model.universe

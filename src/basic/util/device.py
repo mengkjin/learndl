@@ -49,7 +49,8 @@ def get_device(obj : Module | Tensor | list | tuple | dict | Any):
 class Device:
     '''cpu / cuda / mps device , callable'''
     def __init__(self , device : torch.device | None = None) -> None:
-        if device is None: device = use_device
+        if device is None: 
+            device = use_device
         self.device = device
     def __repr__(self): return str(self.device)
     def __call__(self, obj): return send_to(obj , self.device)

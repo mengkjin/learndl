@@ -69,7 +69,8 @@ class OptunaBooster(GeneralBooster):
                 'n_bins' :          trial.suggest_int('n_bins', 10, 30, step = 5) , 
                 'max_nan_ratio' :   trial.suggest_float('max_nan_ratio', 0.5, 0.9, step = 0.1) ,
             }
-        else: raise ValueError(f'Invalid booster type: {self.booster_type}')
+        else: 
+            raise ValueError(f'Invalid booster type: {self.booster_type}')
         return params
     
     def fit(self , train = None , valid = None , use_feature = None , silent = False):

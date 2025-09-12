@@ -49,11 +49,13 @@ class ModelPredictor:
             self.deploy()
 
     def predict_dates(self , dates : np.ndarray | list[int]):
-        if len(dates) == 0: return self
+        if len(dates) == 0: 
+            return self
         '''predict recent days'''
         data_module  = DataModule(self.config , 'both' if min(dates) <= CALENDAR.today(-100) else 'predict').load_data() 
         pred_dates = dates[dates <= max(data_module.test_full_dates)]
-        if pred_dates.size == 0: return self
+        if pred_dates.size == 0: 
+            return self
         assert any(self.reg_model.model_dates < pred_dates.min()) , f'no model date before {pred_dates}'
         df_task = pd.DataFrame({'pred_dates' : pred_dates , 
                                 'model_date' : [max(self.reg_model.model_dates[self.reg_model.model_dates < d]) for d in pred_dates] , 
@@ -61,7 +63,7 @@ class ModelPredictor:
         torch.set_grad_enabled(False)
         df_list = []
         
-        for model_date , df_sub in df_task[df_task['calculated'] == 0].groupby('model_date'):
+        for model_date , df_sub in df_task.query('calculated == 0').groupby('model_date'):
             for model_num in self.model_nums:
                 model_param = self.config.model_param[model_num]
                 # print(model_date , 'old' if (data is data_mod_old) else 'new') 
@@ -70,11 +72,12 @@ class ModelPredictor:
                 model = self.model.load_model(model_num , model_date , self.model_submodel , model_param = model_param)
                 
                 tdates = data_module.model_test_dates
-                within = np.isin(tdates , df_sub[df_sub['calculated'] == 0]['pred_dates'])
+                within = np.isin(tdates , df_sub.query('calculated == 0')['pred_dates'])
                 loader = data_module.predict_dataloader()
 
                 for tdate , do_calc , batch_data in zip(tdates , within , loader):
-                    if not do_calc or len(batch_data) == 0: continue
+                    if not do_calc or len(batch_data) == 0: 
+                        continue
                     # secid = data_module.datas.secid[batch_data.i[:,0].cpu().numpy()]
                     secid = data_module.batch_secid(batch_data)
                     df = model(batch_data).pred_df(secid , tdate , colnames = self.model_name , model_num = model_num)
@@ -90,7 +93,8 @@ class ModelPredictor:
 
     def save_preds(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
         new_df = df if isinstance(df , pd.DataFrame) else self.df
-        if new_df.empty: return self
+        if new_df.empty: 
+            return self
         self._current_update_dates = []
         for date , subdf in new_df.groupby(date_col):
             new_df = subdf.drop(columns='date').set_index(secid_col)
@@ -100,7 +104,8 @@ class ModelPredictor:
 
     def deploy(self , overwrite = False):
         '''deploy df by day to class.destination'''
-        if MACHINE.hfm_factor_dir is None: return self
+        if MACHINE.hfm_factor_dir is None: 
+            return self
         try:
             path_deploy = MACHINE.hfm_factor_dir.joinpath(self.reg_model.pred_name)
             path_deploy.parent.mkdir(parents=True,exist_ok=True)
@@ -121,11 +126,13 @@ class ModelPredictor:
     
     def df_corr(self , df = None , window = 30 , secid_col = SECID_COLS , date_col = DATE_COLS):
         '''prediction correlation of ecent days'''
-        if df is None: df = self.df
-        if df is None: return NotImplemented
+        if df is None: 
+            df = self.df
+        if df is None: 
+            return NotImplemented
         dates : Any = df[date_col].unique()
         dates = np.sort(dates)[-window:]
-        df = df[df[date_col].isin(dates)]
+        df = df.query(f'{date_col} in @dates')
         assert isinstance(df , pd.DataFrame)
         return df.pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()
     
@@ -133,7 +140,8 @@ class ModelPredictor:
     def update(cls , model_name : str | None = None , update = True , overwrite = False , silent = True):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         models = RegisteredModel.SelectModels(model_name)
-        if model_name is None: print(f'model_name is None, update all registered models (len={len(models)})')
+        if model_name is None: 
+            print(f'model_name is None, update all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
             md.update_preds(update = update , overwrite = overwrite , silent = silent)

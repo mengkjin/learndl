@@ -44,7 +44,8 @@ class Solver:
         num_S = 0 if not self.conds.short or not self.short_con else num_N
         if (not self.conds.qobj and not self.conds.qcon) or not self.cov_con or self.cov_con.cov_type != 'model':
             num_L = 0
-        else: num_L = len(self.cov_con.F)
+        else: 
+            num_L = len(self.cov_con.F)
 
         self.num_vars = SolveVars(num_N , num_T , num_S , num_L)
         return self
@@ -62,15 +63,15 @@ class Solver:
 
         if self.cov_con:
             if self.num_vars.L:
-                l = cp.Variable(self.num_vars.L)
-                constraints.append(self.cov_con.F @ (x - self.wb) == l)
+                L = cp.Variable(self.num_vars.L)
+                constraints.append(self.cov_con.F @ (x - self.wb) == L)
                 if self.cov_con.lmbd:
                     S_sq = np.sqrt(self.cov_con.S)
                     objective = objective + self.cov_con.lmbd / 2.0 * \
-                        (cp.sum_squares(cp.multiply(x - self.wb , S_sq)) + cp.quad_form(l , self.cov_con.C) )
+                        (cp.sum_squares(cp.multiply(x - self.wb , S_sq)) + cp.quad_form(L , self.cov_con.C) )
                 if self.cov_con.te:
                     constraints.append(cp.sum_squares(cp.multiply(x - self.wb , S_sq)) + 
-                                cp.quad_form(l , self.cov_con.C) <= self.cov_con.te ** 2)
+                                cp.quad_form(L , self.cov_con.C) <= self.cov_con.te ** 2)
             else:
                 if self.cov_con.lmbd:
                     objective = objective + self.cov_con.lmbd / 2.0 * cp.quad_form(x , self.cov_con.cov)
@@ -96,16 +97,20 @@ class Solver:
             constraints.append(x - t <= self.w0)
             constraints.append(-x - t <= -self.w0)
 
-            if self.turn_con.dbl: constraints.append(cp.sum(t) <= self.turn_con.dbl)
-            if self.turn_con.rho: objective = objective + self.turn_con.rho * cp.sum(t)  
+            if self.turn_con.dbl: 
+                constraints.append(cp.sum(t) <= self.turn_con.dbl)
+            if self.turn_con.rho: 
+                objective = objective + self.turn_con.rho * cp.sum(t)  
 
         if self.short_con and self.num_vars.S:
             s = cp.Variable(self.num_vars.S)
             constraints.append(s >= 0)
             constraints.append(x - s >= 0)
 
-            if self.short_con.pos:  constraints.append(cp.sum(s) <= self.short_con.pos)
-            if self.short_con.cost: objective = objective + self.short_con.cost * cp.sum(s)  
+            if self.short_con.pos:  
+                constraints.append(cp.sum(s) <= self.short_con.pos)
+            if self.short_con.cost: 
+                objective = objective + self.short_con.cost * cp.sum(s)  
 
         prob = cp.Problem(cp.Minimize(objective), constraints)
         prob.solve(solver = self.solver_name , **_SOLVER_PARAM.get(self.solver_name , {}))

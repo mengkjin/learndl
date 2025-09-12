@@ -3,7 +3,7 @@ import numpy as np
 
 from dataclasses import dataclass , field
 from pathlib import Path
-from typing import Literal , Type , Any
+from typing import Literal , Type
 
 from src.proj import PATH , MACHINE
 from src.basic import CALENDAR , RegisteredModel , DB
@@ -99,8 +99,10 @@ class TradingPort:
     
     def existing_dates(self , min_date : int | None = None , max_date : int | None = None) -> np.ndarray:
         dates = DB.dir_dates(self.port_dir())
-        if min_date is not None: dates = dates[dates >= min_date]
-        if max_date is not None: dates = dates[dates <= max_date]
+        if min_date is not None: 
+            dates = dates[dates >= min_date]
+        if max_date is not None: 
+            dates = dates[dates <= max_date]
         return dates
     
     def is_first_date(self , date : int) -> bool:
@@ -119,7 +121,8 @@ class TradingPort:
         return dates.max() if len(dates) > 1 else -1
     
     def updatable(self , date : int , force = False) -> bool:
-        if force: return True
+        if force: 
+            return True
         if self.backtest:
             if self.test_end > 0 and date > self.test_end: 
                 return False
@@ -175,7 +178,8 @@ class TradingPort:
                                    indus_control = self.indus_control).setup(0)
 
         pf = builder.build(date).port.to_dataframe()
-        if pf.empty: return pf
+        if pf.empty: 
+            return pf
 
         if self.is_first_date(date):
             pf['value'] = self.init_value
@@ -198,13 +202,15 @@ class TradingPort:
         assert self.test_start > 0 , 'test_start must be positive'
         test_end = min(date , self.test_end)
         
-        if test_end < self.test_start: return pd.DataFrame()
+        if test_end < self.test_start: 
+            return pd.DataFrame()
 
         end_date = self.end_date()
         date_list = CALENDAR.td_within(self.test_start , test_end , self.step)
         if not reset_port:
             date_list = date_list[date_list > end_date]
-        if len(date_list) == 0: return pd.DataFrame()
+        if len(date_list) == 0: 
+            return pd.DataFrame()
         
         print(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days')
         pf = None
@@ -262,7 +268,8 @@ class TradingPort:
 
         self.analyze_results = rslts
         self.analyze_figs = figs
-        if verbosity > 0: print(f'{self.name} analyze Finished!')
+        if verbosity > 0: 
+            print(f'{self.name} analyze Finished!')
         return self
 
 @dataclass

@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 
 from typing import Literal
-from pathlib import Path
 
 from src.proj import PATH , MACHINE
 from src.data.util import trade_min_fillna
@@ -51,7 +50,7 @@ def extract_js_min(date):
         df['ticker'] = df['ticker'].astype(int)
     except Exception as e:
         print(e)
-        df = df.loc[df['ticker'].str.isdigit()]
+        df = df.query('ticker.str.isdigit()')
         df['ticker'] = df['ticker'].astype(int)
     df.to_feather(target_path)
     return df
@@ -91,8 +90,8 @@ def add_sec_type(df : pd.DataFrame):
     }).drop_duplicates()
     df_sec['range'] = df_sec['ticker'] // 1000
     df_sec['sec_type'] = 'notspecified'
-    sz_sec = df_sec.loc[df_sec['exchangecd'] == 'XSHE']
-    sh_sec = df_sec.loc[df_sec['exchangecd'] == 'XSHG']
+    sz_sec = df_sec.query('exchangecd == "XSHE"')
+    sh_sec = df_sec.query('exchangecd == "XSHG"')
 
     # sz
     for (start , end) , sec_type in SZ_types.items():
@@ -109,9 +108,12 @@ def add_sec_type(df : pd.DataFrame):
     df = df.merge(df_sec , on = ['ticker' , 'exchangecd'])
     return df
 
-def filter_sec(df : pd.DataFrame , sec_type : Literal['sec' , 'etf' , 'cb'] | str):
-    sec_type_map = {'sec' : 'A' , 'etf' : 'etf' , 'cb' : 'convertible'}
-    return df.loc[df['sec_type'] == sec_type_map[sec_type]]
+def filter_sec(
+    df : pd.DataFrame , 
+    sec_type : Literal['sec' , 'etf' , 'cb'] | str,
+    sec_type_map : dict[str,str] = {'sec' : 'A' , 'etf' : 'etf' , 'cb' : 'convertible'}
+):
+    return df.query('sec_type == @sec_type_map[@sec_type]')
 
 def transform_sec(df : pd.DataFrame):
     

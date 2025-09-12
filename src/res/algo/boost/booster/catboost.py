@@ -1,6 +1,5 @@
-import json , tempfile , torch , catboost
+import json , tempfile , catboost
 
-from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -37,14 +36,16 @@ class CatBoost(BasicBoosterModel):
         early_stopping  = self.fit_train_param.pop('early_stopping')
         verbose_eval    = self.fit_train_param.pop('verbosity') > 0 and not silent
         num_class       = self.fit_train_param.pop('n_bins' , None)
-        if 'eval_metric' in self.fit_train_param and self.fit_train_param['eval_metric'] is None: del self.fit_train_param['eval_metric']
+        if 'eval_metric' in self.fit_train_param and self.fit_train_param['eval_metric'] is None: 
+            del self.fit_train_param['eval_metric']
 
         self.fit_train_param.update({
             'random_seed':          self.seed , 
             'task_type':            'GPU' if self.use_gpu else 'CPU' , 
             # 'verbose':            0 if silent else 1 ,
             'monotone_constraints': self.mono_constr(self.fit_train_param , self.fit_train_ds.nfeat , as_tuple=True)}) 
-        if self.fit_train_param['objective'] in ['softmax']: self.fit_train_param['num_class'] = num_class
+        if self.fit_train_param['objective'] in ['softmax']: 
+            self.fit_train_param['num_class'] = num_class
                
         self.evals_result = dict()
         self.model : catboost.CatBoost = catboost.train(
@@ -76,14 +77,16 @@ class CatBoost(BasicBoosterModel):
         with tempfile.TemporaryDirectory() as tempdir:
             model_path = Path(tempdir).joinpath('model.json') 
             model.save_model(model_path , format='json')
-            with open(model_path, 'r') as file: model_dict = json.load(file)  
+            with open(model_path, 'r') as file: 
+                model_dict = json.load(file)  
         return model_dict
     
     @staticmethod
     def booster_from_dict(model_dict : dict):
         with tempfile.TemporaryDirectory() as tempdir:
             model_path = Path(tempdir).joinpath('model.json')
-            with open(model_path, 'w') as file: json.dump(model_dict , file, indent=4)
+            with open(model_path, 'w') as file: 
+                json.dump(model_dict , file, indent=4)
             model = catboost.CatBoost()
             model.load_model(model_path , format= 'json')
         return model

@@ -43,7 +43,8 @@ def intro_pages():
 
 def get_intro_page(page_name : str):
     assert page_name in INTRO_PAGES , f"Page {page_name} not a valid intro page"
-    if 'app_intro_pages' not in st.session_state: st.session_state['app_intro_pages'] = {}
+    if 'app_intro_pages' not in st.session_state: 
+        st.session_state['app_intro_pages'] = {}
     if page_name not in st.session_state['app_intro_pages']:
         label = page_name.replace('_', ' ').title()
         icon = PAGE_ICONS[page_name]
@@ -71,15 +72,18 @@ def get_script_page(script_key: str):
     if runner.header.disabled: 
         st.error(f"Script {script_key} is disabled!")
         return {}
-    if 'app_script_pages' not in st.session_state: st.session_state['app_script_pages'] = {}
+    if 'app_script_pages' not in st.session_state: 
+        st.session_state['app_script_pages'] = {}
     
     if runner.script_key not in st.session_state['app_script_pages']:
-        if runner.script_key not in SC.script_runners: SC.script_runners[runner.script_key] = runner
+        if runner.script_key not in SC.script_runners: 
+            SC.script_runners[runner.script_key] = runner
         
         assert runs_page_path(runner.script_key).exists() , f"Script detail page {runs_page_path(runner.script_key)} does not exist"
         icon = SCRIPT_ICONS[runner.script_group]
         help = f"**Script**: *{str(runner.script)}*\n**Description**: {runner.content}"
-        if runner.todo: help += f"\n**TODO**: {runner.todo}"
+        if runner.todo: 
+            help += f"\n**TODO**: {runner.todo}"
         st.session_state['app_script_pages'][runner.script_key] = {
             'page' : st.Page(runs_page_url(runner.script_key) , title = runner.format_path , icon = icon) ,
             'group' : runner.script_group ,
@@ -100,7 +104,8 @@ def runs_page_path(script_key : str):
 
 def make_script_detail_file(item : PathItem):
     """make script detail file"""
-    if item.is_dir: return
+    if item.is_dir: 
+        return
     with open(runs_page_path(item.script_key), 'w') as f:
         f.write(f"""
 from util import show_script_detail , set_current_page
@@ -128,4 +133,5 @@ def print_page_header(page_name : str , type : Literal['intro' , 'script'] = 'in
     helps = self_page['help'].split('\n')
     st.session_state['box-title'].title(title)
     # st.session_state['box-main-button'].write('')
-    for h in helps: st.warning(h , icon = ":material/info:")
+    for h in helps: 
+        st.warning(h , icon = ":material/info:")

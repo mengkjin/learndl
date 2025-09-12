@@ -1,5 +1,4 @@
 import time
-import numpy as np
 
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
@@ -67,15 +66,16 @@ class PortCreateUtility:
         return f'{self.__class__.__name__}(Total Utility=[{self.utility:.4f}],' + \
             ','.join([f'{k}=[{v:.4f}]' for k,v in self.component.items()]) + ')'
     def __mul__(self , other):
-        for key , val in self.component.items(): self.component[key] = val * other
+        for key , val in self.component.items(): 
+            self.component[key] = val * other
         return self
     
     def add(self , **kwargs): self.component.update({k:v for k,v in kwargs.items() if v is not None})
 
     @property
     def utility(self):
-        l = [v for v in self.component.values()]
-        return sum(l) if l else 0
+        utilities = [v for v in self.component.values()]
+        return sum(utilities) if utilities else 0
     
 class PortCreateAccuracy:
     '''record custom optimization accuracy'''
@@ -90,17 +90,21 @@ class PortCreateAccuracy:
     def cond_expr(self , k : str , v): 
         return ('(√)' if self.cond_assess(k , v) else '(X)') + str(v)
     def cond_assess(self , k : str , v):
-        if v is None: return True
+        if v is None: 
+            return True
         return v >= -self.EPS_DICT.get(k , self.EPS)
-    def __bool__(self): return self.accurate
-    def __call__(self, **kwargs): return self.add(**kwargs)
+    def __bool__(self): 
+        return self.accurate
+    def __call__(self, **kwargs): 
+        return self.add(**kwargs)
     def __repr__(self): 
         return (',\n' + ' ' * 10).join([
             f'{self.__class__.__name__}(Is Accurate={bool(self)}' ,
             *[f'{k}={self.cond_expr(k , v)}' for k,v in self.component.items()]
         ])
     def __mul__(self , other):
-        for key , val in self.component.items(): self.component[key] = val * other
+        for key , val in self.component.items(): 
+            self.component[key] = val * other
         return self
     def add(self , **kwargs): self.component.update({k:v for k,v in kwargs.items() if v is not None})
 
@@ -119,8 +123,10 @@ class PortCreateResult:
     time        : dict[str,float] = field(default_factory=dict)
 
     def __post_init__(self):
-        if self.utility is None: self.utility = PortCreateUtility()
-        if self.accuracy is None: self.accuracy = PortCreateAccuracy()
+        if self.utility is None: 
+            self.utility = PortCreateUtility()
+        if self.accuracy is None: 
+            self.accuracy = PortCreateAccuracy()
 
     @property
     def name(self): return self.port.name
@@ -148,7 +154,8 @@ class PortCreateResult:
         return '\n'.join([s for s in info_list if s is not None])
     
     def create_information(self):
-        if not self.status: return None
+        if not self.status: 
+            return None
         return '\n'.join([
             f'Creation Information : ' ,
             f'    is_success = {self.is_success} ,' ,
@@ -156,7 +163,8 @@ class PortCreateResult:
         ])
     
     def create_result(self):
-        if not self.status: return None
+        if not self.status: 
+            return None
         return '\n'.join([
             f'Creation Result : ' ,
             f'    utility    = {self.utility}' ,
@@ -164,12 +172,14 @@ class PortCreateResult:
         ]) 
     
     def port_information(self):
-        if not self.port: return None
+        if not self.port: 
+            return None
         return str(self.port)
     
     def risk_analytic(self):
-        if not self.analytic: return None
+        if not self.analytic: 
+            return None
         return '\n'.join([
             f'Analytic : (Only show style , access industry/risk mannually)' ,
-            self.analytic.styler('style').to_string() ,
+            str(self.analytic.styler('style')) ,
         ])

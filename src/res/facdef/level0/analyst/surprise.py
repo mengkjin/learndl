@@ -1,7 +1,5 @@
 import pandas as pd
 import numpy as np
-import polars as pl
-
 from typing import Any , Literal
 
 from src.data import DATAVENDOR
@@ -28,9 +26,10 @@ def get_title_outperform(date : int , type : Literal['num' , 'pct']):
             rename_axis(index = {'date':'report_date'}).reindex(df.index)
         df = df[ann_cal['anndt'] > 0]
 
-    df['title_outperform'] = (df['report_title'].str.contains('预期') & 
-                              (df['report_title'].str.contains('超') | 
-                               df['report_title'].str.contains('好于')))
+    title : pd.Series | Any = df['report_title']
+    df['title_outperform'] = (title.str.contains('预期') & 
+                              (title.str.contains('超') | 
+                               title.str.contains('好于')))
     if type == 'num':
         df = df.groupby(['secid' , 'org_name']).last().groupby(['secid'])['title_outperform'].sum()
     elif type == 'pct':
@@ -59,11 +58,12 @@ def get_profit_outperform(date : int , val : Literal['tp' , 'npro' , 'sales' , '
     profit.columns = ['profit_1' , 'profit_2']
 
     df = DATAVENDOR.ANALYST.get_trailing_reports(date , 12)
+
     df = df.set_index(['secid']).merge(anndt , on = 'secid').merge(qtr , on = 'secid').merge(profit , on = 'secid')
     df = df[(df['report_date'] >= df['anndt_1']) & (df['report_date'] < df['anndt_2']) & (df['quarter'] == df['target_quarter'])]
 
-    df['est_profit'] = (df[rp_col] * 1e4 - df['profit_1'].where(df['qtr_1'] < 4 , 0)) / (4 - df['qtr_1'].where(df['qtr_1'] < 4 , 0))
-    df['ann_profit'] = df['profit_2'] - df['profit_1'].where(df['qtr_1'] < 4 , 0)
+    df['est_profit'] = (df[rp_col] * 1e4 - np.where(df['qtr_1'] < 4 , df['profit_1'], 0)) / (4 - np.where(df['qtr_1'] < 4 , df['qtr_1'], 0))
+    df['ann_profit'] = df['profit_2'] - np.where(df['qtr_1'] < 4 , df['profit_1'], 0)
 
     df = df.loc[:,['report_date' , 'org_name' , 'quarter' , rp_col , 'qtr_1' , 'qtr_2' , 'profit_1' , 'profit_2' , 'est_profit' , 'ann_profit']]
     df['outperform_pct'] = (df['ann_profit'] - df['est_profit']) / df[rp_col].abs() / 1e4

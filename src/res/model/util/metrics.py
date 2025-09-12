@@ -133,8 +133,10 @@ class Metrics:
         '''Calculate loss(with gradient), penalty , score'''
         assert dataset in ['train','valid','test'] , dataset
         
-        if label.ndim == 1: label = label[:,None]
-        if pred.ndim  == 1: pred  = pred[:,None]
+        if label.ndim == 1: 
+            label = label[:,None]
+        if pred.ndim  == 1: 
+            pred  = pred[:,None]
         label , pred = label[:,:self.num_output] , pred[:,:self.num_output]
         assert label.shape == pred.shape , (label.shape , pred.shape)
 
@@ -163,7 +165,9 @@ class MetricsAggregator:
     def record(self , metrics): 
         [self._record[m].record(metrics) for m in ['loss','score']]
     def collect(self):
-        df = pd.DataFrame([[*self._params , self.loss , self.score]] , columns=['dataset','model_num','model_date','submodel','epoch','loss','score'])
+        df = pd.DataFrame(
+            [[*self._params , self.loss , self.score]] , 
+            columns=pd.Index(['dataset','model_num','model_date','submodel','epoch','loss','score']))
         self.table = df if self.table is None else pd.concat([self.table , df]).reindex()
     @property
     def nanloss(self): return self._record['loss'].any_nan()

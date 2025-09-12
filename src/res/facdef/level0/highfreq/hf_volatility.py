@@ -1,8 +1,6 @@
-import pandas as pd
-import numpy as np
 import polars as pl
 
-from typing import Any , Callable , Literal
+from typing import Callable , Literal
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator

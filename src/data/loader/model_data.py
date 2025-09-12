@@ -1,5 +1,4 @@
-from src.proj import PATH
-from src.basic import CALENDAR , TradeDate , DB
+from src.basic import TradeDate , DB
 from src.func.singleton import singleton
 
 from .access import DateDataAccess

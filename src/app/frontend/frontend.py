@@ -295,16 +295,20 @@ class ActionLogger:
 
     @classmethod
     def get_args_str(cls , args : list[Any] | tuple[Any, ...] , kwargs : dict[str, Any] , ignore : list[str] | None = None):
-        if ignore is None: ignore = []
-        if cls._ignores: ignore.extend(cls._ignores)
-        get_name = lambda x : f"{x.__class__.__name__}({x.id})" if hasattr(x, 'id') else str(x)
+        if ignore is None: 
+            ignore = []
+        if cls._ignores: 
+            ignore.extend(cls._ignores)
+        def get_name(x : Any):
+            return f"{x.__class__.__name__}({x.id})" if hasattr(x, 'id') else str(x)
         args_str = ', '.join([get_name(arg) for arg in args if not cls.ignore_arg(arg , ignore)])
         kwargs_str = ', '.join([f"{k}: {(get_name(v))}" for k, v in kwargs.items() if not cls.ignore_arg(v , ignore , k)])
         return args_str , kwargs_str
     
     @classmethod
     def ignore_arg(cls , obj : Any , ignore : list[str] | None = None , key : str | None = None):
-        if ignore is None: ignore = []
+        if ignore is None: 
+            ignore = []
         arg_in = (
             str(obj) in ignore or
             (hasattr(obj , '__name__') and obj.__name__ in ignore) or
@@ -324,7 +328,8 @@ class ActionLogger:
 
     @classmethod
     def clear_log(cls , suffix : str | None = None):
-        if suffix is None: suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if suffix is None: 
+            suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         for log in [cls.action_log , cls.error_log]:
             if log.exists():
@@ -352,7 +357,8 @@ class FilePreviewer:
         self.height = height or 600
 
     def preview(self):
-        if self.path is None: return
+        if self.path is None: 
+            return
         elif not self.path.exists():
             st.error(f"File {self.path} not found" , icon = ":material/error:")
             return
@@ -593,8 +599,10 @@ class YAMLFileEditor:
     def show_yaml_editor(self , file_path : Path | str | Sequence[Path | str] | None = None , default_file : Path | str | None = None):
         from streamlit_ace import st_ace
         self.init_session_state()
-        if self.file_input: self.init_path_input(file_path , default_file)
-        if not self.load_file(): return
+        if self.file_input: 
+            self.init_path_input(file_path , default_file)
+        if not self.load_file(): 
+            return
         editor_key = f"{self.key}_{self.get_file_path().name}_{self.state.reload_timestamp}"
         self.state.edit_content = st_ace(
             value=self.state.load_content or '',
@@ -640,8 +648,8 @@ class YAMLFileEditor:
                 data = yaml.safe_load(self.state.edit_content or '')
                 with st.container(height = 500):
                     st.json(data)
-            except:
-                st.warning("Cannot parse YAML")
+            except Exception as e:
+                st.warning(f"Cannot parse YAML: {e}")
 
     def path_input_on_change(self , st_widget_key : str):
         self.set_file_path(st.session_state[st_widget_key])
@@ -708,10 +716,19 @@ def action_confirmation(on_confirm : Callable[[], None] , on_abort : Callable[[]
         on_confirm()
         st.rerun()
     if col2.button("**Abort**" , icon = ":material/cancel:" , type = "secondary"):
-        if on_abort is not None: on_abort()
+        if on_abort is not None: 
+            on_abort()
         st.rerun()
 
-
+def estimate_text_width(text, font_size=24):
+    chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
+    english_chars = len(text) - chinese_chars
+    
+    char_width = font_size * 0.66
+    chinese_width = font_size * 1.32
+    
+    estimated_width = chinese_chars * chinese_width + english_chars * char_width
+    return int(estimated_width)
 
 def expander_subheader(key : str , label : str , icon : str | None = None , expanded = False , 
                        height : int | None = None , help : str | None = None , status = False , color = 'blue'):
@@ -725,10 +742,11 @@ def expander_subheader(key : str , label : str , icon : str | None = None , expa
                             vertical-align: bottom; 
                             overflow-wrap: normal;">help</span>"""
             margin_left = 10
-            if icon is not None: margin_left += 34
-            if status:           margin_left += 28
-            margin_left += label.count(' ') * 8.2
-            margin_left += (len(label) - label.count(' ')) * 16.4
+            if icon is not None: 
+                margin_left += 34
+            if status:           
+                margin_left += 28
+            margin_left += estimate_text_width(label.upper())
             st.markdown(f"""
             <div class="expander-help-container">
                 <div class="help-tooltip">

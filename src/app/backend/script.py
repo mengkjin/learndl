@@ -1,11 +1,10 @@
+import re , yaml
 from pathlib import Path
 from typing import Literal , Any
-import re , yaml , time
 from dataclasses import dataclass , asdict , field
 
 from src.proj import PATH
 from src.app.abc import ScriptCmd
-
 from .task import TaskItem , TaskQueue
     
 @dataclass
@@ -39,14 +38,17 @@ class PathItem:
                     ignore_files = ('db.py' , 'util') ,
                     min_level: int = 0 , max_level: int = 2):
         '''get all valid items from folder recursively'''
-        items : list[cls] = []
-        if level < min_level or level > max_level: return items
+        items : list['PathItem'] = []
+        if level < min_level or level > max_level: 
+            return items
         folder_path = Path(folder_path)
         assert folder_path.is_dir() , f'{folder_path} is not a folder'
             
         for item in folder_path.iterdir():
-            if item.name.startswith(ignore_starters) or item.name in ignore_files: continue
-            if item.is_dir() and not list(item.iterdir()): continue
+            if item.name.startswith(ignore_starters) or item.name in ignore_files:
+                 continue
+            if item.is_dir() and not list(item.iterdir()): 
+                continue
             items.append(cls(item , level))
             if item.is_dir(): 
                 items.extend(cls.iter_folder(item , level + 1 , ignore_starters , ignore_files, min_level , max_level))
@@ -272,7 +274,8 @@ class ScriptRunner:
                 description = 'read file error'
             )
 
-        if not header.description: header.description = self.script.name
+        if not header.description: 
+            header.description = self.script.name
             
         return header
 

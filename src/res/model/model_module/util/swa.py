@@ -10,10 +10,14 @@ from src.res.model.util import BaseTrainer , BatchData , Checkpoint , Metrics
 
 def choose_swa_method(submodel : Literal['best' , 'swabest' , 'swalast'] | Any):
     '''get a subclass of _BaseEnsembler'''
-    if submodel == 'best': return EnsembleBestOne
-    elif submodel == 'swabest': return EnsembleSWABest
-    elif submodel == 'swalast': return EnsembleSWALast
-    else: raise KeyError(submodel)
+    if submodel == 'best': 
+        return EnsembleBestOne
+    elif submodel == 'swabest': 
+        return EnsembleSWABest
+    elif submodel == 'swalast': 
+        return EnsembleSWALast
+    else: 
+        raise KeyError(submodel)
 
 class SWAEnsembler(ABC):
     '''abstract class of fittest model, e.g. model with the best score, swa model of best scores or last ones'''
@@ -60,13 +64,17 @@ def update_swa_bn(loader , model : AveragedModel):
         if isinstance(module, nn.modules.batchnorm._BatchNorm):
             module.reset_running_stats()
             momenta[module] = module.momentum
-    if not momenta: return
+    if not momenta: 
+        return
 
     was_training = model.training
     model.train()
-    for module in momenta.keys():  module.momentum = None
-    for x , kwargs in loader: model(x , **kwargs)
-    for bn_module in momenta.keys(): bn_module.momentum = momenta[bn_module]
+    for module in momenta.keys():  
+        module.momentum = None
+    for x , kwargs in loader: 
+        model(x , **kwargs)
+    for bn_module in momenta.keys(): 
+        bn_module.momentum = momenta[bn_module]
     model.train(was_training)
 
 class EnsembleBestOne(SWAEnsembler):
@@ -118,7 +126,8 @@ class EnsembleSWABest(SWAEnsembler):
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
         swa = SWAModel(getattr(trainer.model , 'net'))
-        for epoch in self.candidates: swa.update_sd(self.ckpt.load_epoch(epoch))
+        for epoch in self.candidates: 
+            swa.update_sd(self.ckpt.load_epoch(epoch))
         swa.update_bn(trainer)
         return swa.module.cpu()
     
@@ -143,7 +152,8 @@ class EnsembleSWALast(SWAEnsembler):
 
         candidates = self._full_candidates(epoch)
         [self.ckpt.disjoin(self , candid) for candid in self.candidates if candid < min(candidates)]
-        if epoch in candidates: self.ckpt.join(self , epoch , net)
+        if epoch in candidates: 
+            self.ckpt.join(self , epoch , net)
         self.candidates = candidates[:self.n_last]
 
     def _full_candidates(self , epoch):
@@ -154,6 +164,7 @@ class EnsembleSWALast(SWAEnsembler):
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
         swa = SWAModel(getattr(trainer.model , 'net'))
-        for epoch in self.candidates:  swa.update_sd(self.ckpt.load_epoch(epoch))
+        for epoch in self.candidates:  
+            swa.update_sd(self.ckpt.load_epoch(epoch))
         swa.update_bn(trainer)
         return swa.module.cpu()

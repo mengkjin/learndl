@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 
-from dataclasses import dataclass , field
+from dataclasses import dataclass
 from typing import Any , ClassVar , Literal , Optional
 
 from src.basic import SILENT , DB , CONF
@@ -40,14 +40,17 @@ class Rmodel:
         assert self.S.shape[1] == 1 , self.S.shape
 
     @property
-    def secid(self): return self.F.index.values
+    def secid(self): 
+        return self.F.index.values
     @property
-    def universe(self): return self.F[self.F['estuniv'] == 1].index.values
+    def universe(self): 
+        return self.F.query('estuniv == 1').index.values
     def ffmv(self , secid : np.ndarray | Any = None): 
         return self.weight(secid) * 1e8
     def weight(self , secid : np.ndarray | Any = None): 
         df = self.F.loc[: , 'weight'] * 1e8
-        if secid is not None: df = self.loc_secid(df , secid , 0.)
+        if secid is not None: 
+            df = self.loc_secid(df , secid , 0.)
         return df.to_numpy().flatten()
     @property
     def common_factors(self): return _common
@@ -61,12 +64,15 @@ class Rmodel:
         return F.values.T , C.values , S.values.flatten()
     def industry(self , secid : np.ndarray | Any = None):
         df = self.F.loc[: , _indus].idxmax(axis=1)
-        if secid is not None: df = self.loc_secid(df , secid , 0.)
+        if secid is not None: 
+            df = self.loc_secid(df , secid , 0.)
         return df.to_numpy()
     def style(self , secid : np.ndarray | Any = None , style : np.ndarray | Any = None):
-        if style is None: style = _style
+        if style is None: 
+            style = _style
         df = self.F.loc[: , style]
-        if secid is not None: df = self.loc_secid(df , secid , 0.)
+        if secid is not None: 
+            df = self.loc_secid(df , secid , 0.)
         return df
     def is_pos_def(self):
         return np.all(np.linalg.eigvals(self.C.values) > 0)
@@ -77,7 +83,8 @@ class Rmodel:
         rmodel_s = self.loc_secid(self.S , port.secid).values.flatten()
         return (port.weight * rmodel_s).dot(port.weight)
     def _analysis(self , port : Port | Any = None):
-        if not port: return RiskProfile()
+        if not port: 
+            return RiskProfile()
         common_exp = self._exposure(port)
         variance = common_exp.dot(self.C).dot(common_exp.T) + self._specific_risk(port)
         return RiskProfile(self.common_factors , common_exp , variance)
@@ -95,14 +102,15 @@ class Rmodel:
         return rslt
     def regress_fut_ret(self , target_date : Optional[int] = None):
         '''regress future day return , most likely daily , but can given any target date'''
-        if target_date is None: target_date = self.next_date
+        if target_date is None: 
+            target_date = self.next_date
         futret = DATAVENDOR.get_quote_ret(self.date , target_date)
         if futret is None: 
             self.params : pd.DataFrame | Any = None
             self.futret : pd.DataFrame | Any = None
             self.regressed = None
         else:
-            futret = futret[['ret']].rename(columns={'ret':'tot'}).astype(float)
+            futret = futret.rename(columns={'ret':'tot'})[['tot']].astype(float)
             F = self.F.join(futret).fillna(0)
 
             model = sm.WLS(F['tot'] , F['market'].fillna(0), weights=F['weight']).fit()   # type: ignore
@@ -118,7 +126,7 @@ class Rmodel:
     def loc_secid(df : pd.DataFrame | Any , secid : np.ndarray , fillna : Literal['max','min'] | float | None = None):    
         try:  
             new_df = df.loc[secid]
-        except KeyError as e:  
+        except KeyError:  
             new_df = df.reindex(secid).loc[secid]
         if fillna is not None:
             if fillna == 'max':
@@ -192,7 +200,8 @@ class RiskProfile:
     @property
     def standard_deviation(self): return np.sqrt(self.variance) if self.variance is not None else None
     def to_dataframe(self):
-        if not self: return None
+        if not self: 
+            return None
         df0 = pd.DataFrame({'factor_name':self.factors,'value':self.exposure})
         df1 = pd.DataFrame({'factor_name':self.variance_measure,'value':[self.variance,self.standard_deviation]})
         return pd.concat([df0,df1]).set_index('factor_name')
@@ -209,13 +218,15 @@ class RiskAnalytic:
 
     def __post_init__(self):
         ...
-    def __bool__(self): return bool(self.date > 0)
+    def __bool__(self): 
+        return bool(self.date > 0)
     def __repr__(self):
         return f'{self.__class__.__name__}({self.date})'
 
     def append(self , port_type : Literal['portfolio' , 'benchmark' , 'initial' , 'active'] , risk_profile : RiskProfile):
         df = risk_profile.to_dataframe()
-        if df is None: return
+        if df is None: 
+            return
         industry = df.loc[_indus].rename(columns={'value':port_type}).rename_axis('industry',axis='index')
         style    = df.loc[_style].rename(columns={'value':port_type}).rename_axis('style',axis='index')
         risk     = df.loc[RiskProfile.variance_measure].rename(columns={'value':port_type}).rename_axis('measure',axis='index')
@@ -230,9 +241,12 @@ class RiskAnalytic:
             self.risk     = risk
 
     def rounding(self):
-        if self.industry is not None: self.industry = self.industry.round(CONF.ROUNDING['exposure'])
-        if self.style    is not None: self.style    = self.style.round(CONF.ROUNDING['exposure'])
-        if self.risk     is not None: self.risk     = self.risk.round(CONF.ROUNDING['exposure'])
+        if self.industry is not None: 
+            self.industry = self.industry.round(CONF.ROUNDING['exposure'])
+        if self.style    is not None: 
+            self.style    = self.style.round(CONF.ROUNDING['exposure'])
+        if self.risk     is not None: 
+            self.risk     = self.risk.round(CONF.ROUNDING['exposure'])
         return self
 
     def styler(self , which : Literal['industry' , 'style' , 'risk'] = 'style'):
@@ -265,9 +279,12 @@ class Attribution:
     @classmethod
     def create(cls , risk_model : Rmodel , port : Port , bench : Optional[Port] = None , 
                target_date : Optional[int] = None , other_cost : float = 0.):
-        if target_date is None: target_date = risk_model.next_date
-        if risk_model.regressed != target_date: risk_model = risk_model.regress_fut_ret(target_date)
-        if risk_model.futret is None: return cls(risk_model.next_date , risk_model.regressed)
+        if target_date is None: 
+            target_date = risk_model.next_date
+        if risk_model.regressed != target_date: 
+            risk_model = risk_model.regress_fut_ret(target_date)
+        if risk_model.futret is None: 
+            return cls(risk_model.next_date , risk_model.regressed)
 
         benchport = Port.none_port(risk_model.date).port if bench is None else bench.port
         weight = port.port.merge(benchport , on='secid' , how='outer').set_index('secid').fillna(0)
@@ -290,7 +307,7 @@ class Attribution:
         aggregated.append(specific.sum().rename('contribution'))
         aggregated = pd.concat(aggregated , axis = 1)
     
-        agg_cost = pd.DataFrame([[0,0,0,-other_cost]], columns = aggregated.columns,index=['cost'])
+        agg_cost = pd.DataFrame([[0,0,0,-other_cost]], columns = aggregated.columns,index=pd.Index(['cost']))
         aggregated = pd.concat([aggregated , agg_cost]).rename_axis('source' , axis = 'index')
         aggregated.loc[['tot'],['contribution']] = aggregated.loc[['tot'],['contribution']] - other_cost
         
@@ -312,15 +329,19 @@ class Attribution:
         return cls(risk_model.next_date , risk_model.regressed , source , industry , style , specific , aggregated)
     
     def rounding(self):
-        decimals = {
+        decimals : dict[Any, int] = {
             'portfolio' : CONF.ROUNDING['exposure'] , 
             'benchmark' : CONF.ROUNDING['exposure'] , 
             'active'    : CONF.ROUNDING['exposure'] , 
             'contribution' : CONF.ROUNDING['contribution']}
-        if self.source is not None:     self.source   = self.source.round(decimals)
-        if self.industry is not None:   self.industry = self.industry.round(decimals)
-        if self.style    is not None:   self.style    = self.style.round(decimals)
-        if self.aggregated is not None: self.aggregated = self.aggregated.round(decimals)
+        if self.source is not None:     
+            self.source   = self.source.round(decimals)
+        if self.industry is not None:   
+            self.industry = self.industry.round(decimals)
+        if self.style    is not None:   
+            self.style    = self.style.round(decimals)
+        if self.aggregated is not None: 
+            self.aggregated = self.aggregated.round(decimals)
         return self
 
 RISK_MODEL = RiskModel()

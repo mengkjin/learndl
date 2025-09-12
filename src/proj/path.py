@@ -1,5 +1,5 @@
 # please check this path before running the code
-import sys , socket , shutil , yaml , time , os
+import shutil , yaml , time , os
 from pathlib import Path
 
 from .machine import MachineSetting
@@ -97,7 +97,8 @@ class PathStructure:
     @staticmethod
     def deltrees(dir , bases , verbose = True):
         for base in bases:
-            if verbose: print(f'Deleting {base} in {dir}')
+            if verbose: 
+                print(f'Deleting {base} in {dir}')
             shutil.rmtree(f'{dir}/{base}')
 
     @staticmethod
@@ -124,7 +125,8 @@ class PathStructure:
     @classmethod
     def list_files(cls , directory : str | Path , fullname = False , recur = False):
         '''list all files in directory'''
-        if isinstance(directory , str): directory = Path(directory)
+        if isinstance(directory , str): 
+            directory = Path(directory)
         if recur:
             paths : list[Path] = []
             paths = [Path(dirpath).joinpath(filename) for dirpath, _, filenames in os.walk(directory) for filename in filenames]

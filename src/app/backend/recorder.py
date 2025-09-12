@@ -78,7 +78,8 @@ class BackendTaskRecorder:
         self.update_msg : dict[str , Any] = {'pid': os.getpid()}
         self.params = kwargs
         if 'email' in self.params:
-            if isinstance(self.params['email'] , str): self.params['email'] = eval(self.params['email'])
+            if isinstance(self.params['email'] , str): 
+                self.params['email'] = eval(self.params['email'])
             self.params['email'] = bool(self.params['email'])
 
     @property
@@ -146,11 +147,16 @@ class BackendTaskRecorder:
                 return cls(message = str(ret))
 
     def func_return(self , func_return : Any | None = None):
-        if not self.task_id or func_return is None: return
+        if not self.task_id or func_return is None: 
+            return
         exit_msg = self.ExitMessage.from_return(func_return)
         self.exit_msg = exit_msg
-        if exit_msg.message: self.update_msg['exit_message'] = exit_msg.message
-        if exit_msg.files:   self.update_msg['exit_files'] = [str(f) for f in exit_msg.files]
-        if exit_msg.code:    self.update_msg['exit_code'] = exit_msg.code
-        if exit_msg.error:   self.update_msg['exit_error'] = exit_msg.error
+        if exit_msg.message: 
+            self.update_msg['exit_message'] = exit_msg.message
+        if exit_msg.files:   
+            self.update_msg['exit_files'] = [str(f) for f in exit_msg.files]
+        if exit_msg.code:    
+            self.update_msg['exit_code'] = exit_msg.code
+        if exit_msg.error:   
+            self.update_msg['exit_error'] = exit_msg.error
 

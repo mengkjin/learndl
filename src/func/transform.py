@@ -2,11 +2,14 @@ import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 import warnings
-warnings.filterwarnings('ignore' , category=RuntimeWarning , message='Mean of empty slice')
 
 from typing import Any , Literal , Optional
 from scipy.stats import norm, rankdata
 from scipy.linalg import lstsq
+
+from src.proj import Logger
+
+warnings.filterwarnings('ignore' , category=RuntimeWarning , message='Mean of empty slice')
 
 def fill_na_as_const(x_: np.ndarray, c_ : float = 0.0):
     rtn = x_.copy()
@@ -151,14 +154,18 @@ def patched_by_industry(y_: np.ndarray, ind_risk_: np.ndarray, method_: int=0):
 
 def trim(v , v1 , v2):
     v = v + 0.
-    if v1 is not None: v[v < v1] = np.nan
-    if v2 is not None: v[v > v2] = np.nan
+    if v1 is not None: 
+        v[v < v1] = np.nan
+    if v2 is not None: 
+        v[v > v2] = np.nan
     return v
 
 def winsor(v , v1 , v2):
     v = v + 0.
-    if v1 is not None: v[v < v1] = v1
-    if v2 is not None: v[v > v2] = v2
+    if v1 is not None: 
+        v[v < v1] = v1
+    if v2 is not None: 
+        v[v > v2] = v2
     return v
 
 def weighted_mean(v , weight = None):
@@ -190,9 +197,12 @@ def winsorize(v ,
     c = np.nanmedian(v) if center == 'median' else  np.nanmean(v)
 
     if const is None:
-        if center == 'median' and scale == 'mad' : const = 5.
-        elif center == 'mean' and scale == 'sd' : const = 3.5
-        else: raise KeyError(center , scale)
+        if center == 'median' and scale == 'mad' : 
+            const = 5.
+        elif center == 'mean' and scale == 'sd' : 
+            const = 3.5
+        else: 
+            raise KeyError(center , scale)
 
     v = winsor(v , c - const * s , c + const * s)
     v = winsor(v , np.quantile(v , winsor_pct[0]) , np.quantile(v , winsor_pct[1]))
@@ -218,11 +228,23 @@ def descriptor(v : pd.Series , whiten_weight , fillna : Literal['min','max','med
         fillv = fillna
     return v.where(~v.isna() , fillv)
 
+def _lstsq(x : np.ndarray , y : np.ndarray):
+    try:
+        reg = lstsq(x , y)
+        assert reg is not None , 'lstsq error'
+        return reg[0]
+    except Exception as e:
+        Logger.error(f'lstsq error: {e}')
+        return np.zeros((x.shape[-1],1))
+    
 def apply_ols(x : np.ndarray | pd.DataFrame | pd.Series , y : np.ndarray | pd.DataFrame | pd.Series , 
               time_weight = None , intercept = True , respective = False):
-    if isinstance(x , (pd.Series | pd.DataFrame)): x = x.to_numpy()
-    if isinstance(y , (pd.Series | pd.DataFrame)): y = y.to_numpy()
-    if x.ndim == 1: x = x[:,None]
+    if isinstance(x , (pd.Series | pd.DataFrame)): 
+        x = x.to_numpy()
+    if isinstance(y , (pd.Series | pd.DataFrame)): 
+        y = y.to_numpy()
+    if x.ndim == 1: 
+        x = x[:,None]
     assert x.ndim == 2 and y.ndim == 2 , (x.shape , y.shape)
     assert len(x) == len(y) , (x.shape , y.shape)
     n_vars = y.shape[-1]
@@ -237,11 +259,13 @@ def apply_ols(x : np.ndarray | pd.DataFrame | pd.Series , y : np.ndarray | pd.Da
 
     if respective:
         x_weighted = x_weighted[:,None]
-        if intercept: x_weighted = np.pad(x_weighted , ((0,0),(1,0),(0,0)) , constant_values=1)
-        coef = np.concatenate([lstsq(x_weighted[...,i], y_weighted[:,i][:,None])[0] for i in range(n_vars)] , axis = 1)
+        if intercept: 
+            x_weighted = np.pad(x_weighted , ((0,0),(1,0),(0,0)) , constant_values=1)
+        coef = np.concatenate([_lstsq(x_weighted[...,i], y_weighted[:,i][:,None])[0] for i in range(n_vars)] , axis = 1)
     else:
-        if intercept: x_weighted = np.pad(x_weighted , ((0,0),(1,0)) , constant_values=1)
-        coef = lstsq(x_weighted, y_weighted)[0]
+        if intercept: 
+            x_weighted = np.pad(x_weighted , ((0,0),(1,0)) , constant_values=1)
+        coef = _lstsq(x_weighted, y_weighted)[0]
     coef[:,all_nan] = np.nan
     return coef
 
@@ -272,12 +296,14 @@ def shrink_cov(X : np.ndarray , min_periods : int | None = None , corr = False):
         idx = Q.sum(axis = 0) >= min_periods
         cov[~idx] = np.nan
         cov[:,~idx] = np.nan
-    if corr: cov = cov_to_corr(cov)
+    if corr: 
+        cov = cov_to_corr(cov)
     return(cov)
 
 def normal_cov(X : np.ndarray , min_periods : int | None = None , corr = False):
     cov = pd.DataFrame(X).cov(min_periods=min_periods).values
-    if corr: cov = cov_to_corr(cov)
+    if corr: 
+        cov = cov_to_corr(cov)
     return(cov)
 
 def cov_to_corr(cov : np.ndarray):
@@ -300,7 +326,8 @@ def ewma_cov(ts , nwindow : int = 504 , halflife : Optional[int] = None , shrink
     min_periods=int(nwindow / 4)
     ts = weighted_ts(ts , nwindow , halflife)
     v = normal_cov(ts , min_periods , corr)
-    if shrinkage > 0: v = v * (1 - shrinkage) + shrink_cov(ts , min_periods , corr) * shrinkage
+    if shrinkage > 0: 
+        v = v * (1 - shrinkage) + shrink_cov(ts , min_periods , corr) * shrinkage
     return v
 
 def ewma_sd(ts , nwindow : int = 504 , halflife : Optional[int] = None):

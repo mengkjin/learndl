@@ -6,7 +6,7 @@ from rqdatac.share.errors import QuotaExceeded
 from typing import Literal
 
 from src.proj import PATH , MACHINE , Logger , IOCatcher
-from src.basic import CALENDAR , DB , CONF
+from src.basic import CALENDAR , DB
 from src.data.util.basic import secid_adjust , trade_min_reform
 
 RC_PATH = PATH.miscel.joinpath('Rcquant')
@@ -35,7 +35,8 @@ def src_key(data_type : DATA_TYPES , x_min : int = 1):
 
 def load_list(date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}list').joinpath(f'{date}.feather')
-    if path.exists(): return pd.read_feather(path)
+    if path.exists(): 
+        return pd.read_feather(path)
     return None
 
 def write_list(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
@@ -45,7 +46,8 @@ def write_list(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
 
 def load_min(date : int , data_type : DATA_TYPES):
     path = RC_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
-    if path.exists(): return pd.read_feather(path)
+    if path.exists(): 
+        return pd.read_feather(path)
     return None
 
 def write_min(df : pd.DataFrame , date : int , data_type : DATA_TYPES):
@@ -68,7 +70,7 @@ def rcquant_init():
                     Logger.warning(f'RcQuant Warning : {key_info.group(0)}')
                 else:
                     Logger.error(f'RcQuant Error : {_error}')
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             Logger.error(f'rcquant login info not found, please check .local_settings/rcquant.yaml')
             return False
         except QuotaExceeded as e:
@@ -100,7 +102,8 @@ def target_dates(data_type : DATA_TYPES , date : int | None = None):
     return CALENDAR.diffs(dates , stored_dates(data_type , 1))
 
 def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> list[int]:
-    if data_type != 'sec': return []
+    if data_type != 'sec': 
+        return []
     all_dates = np.array([])
     for x_min in [5 , 10 , 15 , 30 , 60]:
         source_dates = DB.db_dates('trade_ts' , src_key(data_type , 1))
@@ -113,17 +116,21 @@ def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> li
     return all_dates
 
 def x_mins_to_update(date , data_type : DATA_TYPES):
-    if data_type != 'sec': return []
+    if data_type != 'sec': 
+        return []
     x_mins : list[int]= []
     for x_min in [5 , 10 , 15 , 30 , 60]:
         path = DB.db_path('trade_ts' , src_key(data_type , x_min) , date)
-        if not path.exists(): x_mins.append(x_min)
+        if not path.exists(): 
+            x_mins.append(x_min)
     return x_mins
 
 def rcquant_instrument_list(date : int , data_type : DATA_TYPES):
     secdf = load_list(date , data_type)
-    if secdf is not None: return secdf
-    if not rcquant_init(): return pd.DataFrame()
+    if secdf is not None: 
+        return secdf
+    if not rcquant_init(): 
+        return pd.DataFrame()
     secdf = rqdatac.all_instruments(type=instrument_types[data_type], date=str(date))
     secdf = secdf.rename(columns = {'order_book_id':'code'})
     if 'status' in secdf.columns:
@@ -134,12 +141,14 @@ def rcquant_instrument_list(date : int , data_type : DATA_TYPES):
     return secdf
 
 def rcquant_trading_dates(start_date, end_date):
-    if not rcquant_init(): return []
+    if not rcquant_init(): 
+        return []
     return [int(td.strftime('%Y%m%d')) for td in rqdatac.get_trading_dates(start_date, end_date, market='cn')]
 
 def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):    
     def code_map(x : str):
-        if data_type != 'sec': return x
+        if data_type != 'sec': 
+            return x
         x = x.split('.')[0]
         if x[:1] in ['3', '0']:
             y = x+'.SZ'
@@ -154,11 +163,13 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
         DB.db_save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
         return True
 
-    if not rcquant_init(): return False
+    if not rcquant_init(): 
+        return False
 
     instrument_list = rcquant_instrument_list(date , data_type = data_type)
-    instrument_list = instrument_list[instrument_list['is_active']]
-    if first_n > 0: instrument_list = instrument_list.iloc[:first_n]
+    instrument_list = instrument_list.loc[instrument_list['is_active']]
+    if first_n > 0: 
+        instrument_list = instrument_list.iloc[:first_n]
     code_list = instrument_list['code'].to_numpy()
     data = rqdatac.get_price(code_list, start_date=str(date), end_date=str(date), frequency='1m',expect_df=True)
     if isinstance(data , pd.DataFrame) and not data.empty:
@@ -176,7 +187,8 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
         return False
 
 def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : DATA_TYPES):
-    if data_type != 'sec': return df
+    if data_type != 'sec': 
+        return df
     df = df.copy()
     df.loc[:,['open','high','low','close','volume','amount']] = df.loc[:,['open','high','low','close','volume','amount']].astype(float)
     df = secid_adjust(df , ['code'] , drop_old=True)
@@ -190,7 +202,8 @@ def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : DATA_TYPES):
 def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1):
     assert data_type is not None , f'data_type is required'
     dts = target_dates(data_type , date)
-    if len(dts) == 0: Logger.info(f'rcquant {data_type} bar min has no date to download')
+    if len(dts) == 0: 
+        Logger.info(f'rcquant {data_type} bar min has no date to download')
     for dt in dts:
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 

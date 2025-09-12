@@ -3,7 +3,6 @@ import pandas as pd
 import statsmodels.api as sm
 from typing import Any , Literal , Optional
 
-from src.proj import PATH
 from src.basic import CONF , CALENDAR , DB
 from src.data import DATAVENDOR
 from src.func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
@@ -26,7 +25,7 @@ def parse_cov_output(cov : np.ndarray , feat : np.ndarray):
     return pd.DataFrame(cov , index=feat , columns=feat)
 
 def parse_sd_output(sd : np.ndarray , feat : np.ndarray , feat_name = 'sd'):
-    return pd.DataFrame(sd , index=feat , columns=[feat_name])
+    return pd.DataFrame(sd , index=feat , columns=pd.Index([feat_name]))
 
 class DateDfs:
     def __init__(self , max_len = 50) -> None:
@@ -34,16 +33,20 @@ class DateDfs:
         self.D : dict[int , pd.DataFrame] = {}
 
     def trim(self , date : Optional[int] = None):
-        if date and date in self.D: del self.D[date] 
-        if len(self.D) >= self.max_len: del self.D[list(self.D.keys())[0]]
+        if date and date in self.D: 
+            del self.D[date] 
+        if len(self.D) >= self.max_len: 
+            del self.D[list(self.D.keys())[0]]
 
     def add(self , v , date : int):
         self.trim(date)
         self.D[date] = v
 
     def get(self , date : int):
-        if date in self.D: return self.D[date]
-        else: return None
+        if date in self.D: 
+            return self.D[date]
+        else: 
+            return None
 
 class DateSeriesDict:
     def __init__(self , max_len = 50) -> None:
@@ -51,8 +54,10 @@ class DateSeriesDict:
         self.D : dict[int , dict[str , pd.Series]] = {}
 
     def trim(self , date : Optional[int] = None):
-        if len(self.D) >= self.max_len: del self.D[list(self.D.keys())[0]]
-        if date not in self.D and date is not None: self.D[date] = {}
+        if len(self.D) >= self.max_len: 
+            del self.D[list(self.D.keys())[0]]
+        if date not in self.D and date is not None: 
+            self.D[date] = {}
 
     def add(self , v , date : int ,  name : str):
         self.trim(date)
@@ -61,7 +66,8 @@ class DateSeriesDict:
     def get(self , date : int , name : str):
         if date in self.D and name in self.D[date]: 
             return self.D[date][name]
-        else: return None   
+        else: 
+            return None   
 
 class TuShareCNE5_Calculator:
     START_DATE = 20050101
@@ -98,7 +104,8 @@ class TuShareCNE5_Calculator:
         df = self.exposure.get(date)
         if (df is None or df.empty) and read: 
             df = DB.db_load('models' , 'tushare_cne5_exp' , date)
-            if 'secid' in df.columns: df = df.set_index('secid')
+            if 'secid' in df.columns: 
+                df = df.set_index('secid')
         if df is None or df.empty: 
             df = pd.concat([self.get_estuniv(date).loc[:,['estuniv','weight','market']] , 
                             self.get_industry(date) , 
@@ -110,18 +117,21 @@ class TuShareCNE5_Calculator:
 
     def get_estuniv(self , date : int):
         df = self.estuniv.get(date)
-        if df is None or df.empty: df = self.calc_estuniv(date)
+        if df is None or df.empty: 
+            df = self.calc_estuniv(date)
         return df
     
     def get_industry(self , date : int):
         df = self.ind_exp.get(date)
-        if df is None or df.empty: df = self.calc_indus(date)
+        if df is None or df.empty: 
+            df = self.calc_indus(date)
         return df
     
     def get_style(self , date : int , name : str):
         assert name in CONF.RISK['style'] , name
         df = self.style.get(date , name)
-        if df is None or df.empty: df = getattr(self , f'calc_{name}')(date)
+        if df is None or df.empty: 
+            df = getattr(self , f'calc_{name}')(date)
         df = df.fillna(0)
         return df
     
@@ -162,8 +172,9 @@ class TuShareCNE5_Calculator:
             groupby('secid').last().reindex(new_desc.index)
         
         # trading status are 1.0 this day or 1 month ealier
-        rule0 = pd.concat([DATAVENDOR.TRADE.get_trd(d , ['secid','status']) for d in dates]).\
-            groupby('secid')['status'].sum().reindex(new_desc.index) > 0
+        status : pd.Series | Any = pd.concat([DATAVENDOR.TRADE.get_trd(d , ['secid','status']) for d in dates]).\
+            groupby('secid')['status'].sum()
+        rule0 = status.reindex(new_desc.index) > 0
 
         # list date 1 year earlier and not delisted or total mv in the top 20%
         rule1 = ((new_desc['delist_dt'] > date) & (new_list_dt['list_dt'] <= date)) | \
@@ -193,7 +204,8 @@ class TuShareCNE5_Calculator:
         return df
     
     def calc_style(self , date : int):
-        for style_name in CONF.RISK['style']: getattr(self , f'calc_{style_name}')(date)
+        for style_name in CONF.RISK['style']: 
+            getattr(self , f'calc_{style_name}')(date)
     
     def calc_size(self , date : int):
         v = np.log(DATAVENDOR.TRADE.get_val(date).set_index('secid')['total_mv'] / 10**8)
@@ -307,15 +319,15 @@ class TuShareCNE5_Calculator:
         val = 'diluted2_eps'
         df = DATAVENDOR.INDI.acc(val , date , 5 , pivot = False , year_only=True)
         df = df.assign(idx = df.groupby('secid').cumcount()).pivot_table(val , 'idx' , 'secid')
-        df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.values,df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
-        egro = df[df['na'] <= 1].set_index('secid')['value']
+        df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.to_numpy(),df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
+        egro = df.query('na <= 1').set_index('secid')['value']
         egro = self.descriptor(egro.fillna(0) , date , 'egro' , 'median')
 
         val = 'revenue_ps'
         df = DATAVENDOR.INDI.acc(val , date , 5 , pivot = False , year_only=True)
         df = df.assign(idx = df.groupby('secid').cumcount()).pivot_table(val , 'idx' , 'secid')
-        df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.values,df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
-        sgro = df[df['na'] <= 1].set_index('secid')['value']
+        df = pd.DataFrame({'secid':df.columns,'value':apply_ols(df.index.to_numpy(),df.values)[1],'na':np.isnan(df.values).sum(axis=0)})
+        sgro = df.query('na <= 1').set_index('secid')['value']
         sgro = self.descriptor(sgro.fillna(0) , date , 'sgro' , 'median')
 
         v = 0.53 * egro + 0.47 * sgro
@@ -393,7 +405,7 @@ class TuShareCNE5_Calculator:
         dates = dates[dates >= self.START_DATE]
         if len(dates) < (504 // 4): 
             secids = self.get_resid(date,True).index.to_numpy()
-            sd = pd.DataFrame(None , index=secids , columns=['spec_risk']).reset_index().rename(columns={'index':'secid'})
+            sd = pd.DataFrame(None , index=secids , columns=pd.Index(['spec_risk'])).reset_index().rename(columns={'index':'secid'})
             return sd
 
         resids = pd.concat([self.get_resid(d,True).assign(date = d) for d in dates]).reset_index().\

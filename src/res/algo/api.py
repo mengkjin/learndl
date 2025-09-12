@@ -40,18 +40,22 @@ class AlgoModule:
 
     @classmethod
     def module_type(cls , module_name : str):
-        if module_name in ['booster' , 'hidden_aggregator'] or module_name in cls._availables['booster']: return 'booster'
-        if module_name in cls._availables['nn']: return 'nn'
+        if module_name in ['booster' , 'hidden_aggregator'] or module_name in cls._availables['booster']: 
+            return 'booster'
+        if module_name in cls._availables['nn']: 
+            return 'nn'
         raise ValueError(f'{module_name} is not a valid module')
     
     @classmethod
     def get_nn(cls , model_module : str , model_param : dict | None = None , device : Any = None , state_dict : Optional[dict[str,Tensor]] = None , **kwargs):
         model_param = model_param or {}
-        net = get_nn_module(model_module)(**model_param)
+        net : torch.nn.Module | Any = get_nn_module(model_module)(**model_param)
         assert isinstance(net , torch.nn.Module) , net.__class__
-        if state_dict: net.load_state_dict(state_dict)
+        if state_dict: 
+            net.load_state_dict(state_dict)
         net.eval()
-        return device(net) if callable(device) else net.to(device)
+        net = device(net) if callable(device) else net.to(device)
+        return net
     
     @classmethod
     def nn_category(cls , module_name : str): return get_nn_category(module_name)
@@ -67,7 +71,8 @@ class AlgoModule:
         booster = (OptunaBooster if optuna else GeneralBooster)(
             model_module , model_param , cuda = bool(cuda) , seed = seed , given_name = given_name , **kwargs)
 
-        if model_dict is not None: booster.load_dict(model_dict , cuda = bool(cuda) , seed = seed)
+        if model_dict is not None: 
+            booster.load_dict(model_dict , cuda = bool(cuda) , seed = seed)
         return booster
 
     @classmethod

@@ -30,6 +30,7 @@ dependencies = [
     "pytimedinput>=2.0.1",
     "pyyaml>=6.0.2",
     "rqdatac>=3.2.11",
+    "ruff>=0.13.0",
     "scikit-learn==1.7.0",
     "scipy==1.15.3",
     "seaborn>=0.13.2",
@@ -43,3 +44,49 @@ dependencies = [
     "xarray>=2025.8.0",
     "xgboost>=3.0.4",
 ]
+
+[tool.ruff]
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    "resources"
+]
+
+[tool.ruff.lint]
+# 2. Avoid enforcing line-length violations (`E501`)
+ignore = [
+    "E401" , # Multiple imports on one line
+    "F541" , # f-string without any placeholders
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = [
+    "F401" , # unused imports
+    "F403" , # import *
+]
+"required_pkgs.py" = ["F401"]

@@ -33,7 +33,8 @@ class Benchmark(Portfolio):
             raise ValueError(name , cls.AVAILABLES + cls.NONE)
 
     def __init__(self , name : str | Any | None) -> None:
-        if getattr(self , 'ports' , None): return # avoid double initialization
+        if getattr(self , 'ports' , None): 
+            return # avoid double initialization
         super().__init__(name)
         if name in self.NONE:
             self.benchmark_available_dates = []
@@ -47,9 +48,11 @@ class Benchmark(Portfolio):
         else:
             raise TypeError(input)
         
-    def __bool__(self): return self.name not in self.NONE
+    def __bool__(self): 
+        return self.name not in self.NONE
 
-    def available_dates(self): return self.benchmark_available_dates
+    def available_dates(self): 
+        return self.benchmark_available_dates
 
     def clear(self):
         self.ports = {}
@@ -57,16 +60,20 @@ class Benchmark(Portfolio):
         return self
 
     def get(self , date : int , latest = True):
-        if self.name in self.NONE: return Port.none_port(date , self.name)
+        if self.name in self.NONE: 
+            return Port.none_port(date , self.name)
         port = self.ports.get(date , None)
-        if port is not None: return port
-        if not latest: return Port.none_port(date , self.name)
+        if port is not None: 
+            return port
+        if not latest: 
+            return Port.none_port(date , self.name)
         use_date = self.latest_avail_date(date)
         if use_date in self.ports:
             port = self.ports[use_date].evolve_to_date(date)
         elif use_date in self.available_dates():
             port = Port(DB.db_load('benchmark_ts' , self.name , use_date , use_alt = True) , use_date , self.name)
-            if use_date != date: self.append(port)
+            if use_date != date: 
+                self.append(port)
             self.benchmark_attempted_dates.append(use_date)
         else:
             port = Port.none_port(date , self.name)
@@ -95,13 +102,16 @@ class Benchmark(Portfolio):
         return weight
     
     def factor_mask(self , factor_val : DataBlock | pd.DataFrame):
-        if not self: return factor_val
-        if isinstance(factor_val , DataBlock): factor_val = factor_val.to_dataframe()
+        if not self: 
+            return factor_val
+        if isinstance(factor_val , DataBlock): 
+            factor_val = factor_val.to_dataframe()
         factor_list = factor_val.columns.to_list()
-        secid = factor_val.index.get_level_values('secid').unique().values
-        date  = factor_val.index.get_level_values('date').unique().values
+        secid = factor_val.index.get_level_values('secid').unique().to_numpy()
+        date  = factor_val.index.get_level_values('date').unique().to_numpy()
         self.get_dates(date)
-        if not self.ports: return factor_val
+        if not self.ports: 
+            return factor_val
         univ  = self.universe(secid , date).to_dataframe()
         factor_val = factor_val.join(univ)
         factor_val.loc[~factor_val['universe'] , factor_list] = np.nan
@@ -146,15 +156,21 @@ class Benchmark(Portfolio):
         
     @classmethod
     def get_benchmarks(cls , benchmarks : Any):
-        if benchmarks == 'defaults': return cls.defaults()
-        elif not benchmarks or benchmarks == 'none': return [cls(None)]
+        if benchmarks == 'defaults': 
+            return cls.defaults()
+        elif not benchmarks or benchmarks == 'none': 
+            return [cls(None)]
         else:
-            if not isinstance(benchmarks , list): benchmarks = [benchmarks]
+            if not isinstance(benchmarks , list): 
+                benchmarks = [benchmarks]
             benches = []
             for bm in benchmarks:
-                if bm is None or isinstance(bm , str): benches.append(cls(bm))
-                elif isinstance(bm , Portfolio): benches.append(bm)
-                else: raise TypeError(bm)
+                if bm is None or isinstance(bm , str): 
+                    benches.append(cls(bm))
+                elif isinstance(bm , Portfolio): 
+                    benches.append(bm)
+                else: 
+                    raise TypeError(bm)
         return benches
     
     @classmethod

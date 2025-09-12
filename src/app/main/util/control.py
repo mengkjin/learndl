@@ -1,10 +1,10 @@
+import time
 import streamlit as st
 
 from dataclasses import dataclass , field
 from typing import Any , ClassVar
 from pathlib import Path
 from datetime import datetime
-import time
 
 from src.proj import PATH
 from src.app.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
@@ -111,11 +111,15 @@ class SessionControl:
     def get_script_runner_cmd(self , runner : ScriptRunner | None , params : dict[str, Any] | None , 
                               operation_txt = True):
         """preview runner cmd"""
-        if runner is None: return None
+        if runner is None: 
+            return None
         run_params = self.get_global_settings()
-        if 'email' not in run_params: run_params['email'] = runner.header.email
-        if 'mode'  not in run_params: run_params['mode']  = runner.header.mode
-        if params: run_params.update(params)
+        if 'email' not in run_params: 
+            run_params['email'] = runner.header.email
+        if 'mode'  not in run_params: 
+            run_params['mode']  = runner.header.mode
+        if params: 
+            run_params.update(params)
         cmd = runner.preview_cmd(**run_params)
         if operation_txt:
             run_text = 'run' if 'mode' not in run_params else f'{run_params["mode"]} run'
@@ -264,9 +268,12 @@ class SessionControl:
     def click_script_runner_run(self , runner : ScriptRunner , params : dict[str, Any] | None):
         """click run button"""
         run_params = self.get_global_settings()
-        if 'email' not in run_params: run_params['email'] = runner.header.email
-        if 'mode'  not in run_params: run_params['mode']  = runner.header.mode
-        if params: run_params.update(params)
+        if 'email' not in run_params: 
+            run_params['email'] = runner.header.email
+        if 'mode'  not in run_params: 
+            run_params['mode']  = runner.header.mode
+        if params: 
+            run_params.update(params)
         
         item = runner.build_task(self.task_queue , **run_params)
 
@@ -313,7 +320,8 @@ class SessionControl:
     @ActionLogger.log_action()
     def click_choose_item_selectbox(self , item_id : str | None = None):
         """click choose task item"""
-        if item_id is None: item_id = st.session_state['choose-item-selectbox']
+        if item_id is None: 
+            item_id = st.session_state['choose-item-selectbox']
         item = self.task_queue.get(item_id)
         if item is None:
             return

@@ -1,7 +1,6 @@
-import numpy as np
 import pandas as pd
 
-from typing import Any , Literal
+from typing import Literal
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
@@ -35,7 +34,8 @@ def calc_valuation(numerator : pd.DataFrame | pd.Series | float | int , denomina
             numerator = numerator.reindex(index = union_index).ffill().reindex_like(denominator)
     ratio = numerator / denominator
     if isinstance(ratio , pd.DataFrame):
-        if pct: ratio = ratio.rank(pct=True)
+        if pct: 
+            ratio = ratio.rank(pct=True)
         return ratio.tail(1).iloc[-1]
     elif isinstance(ratio , pd.Series):
         if pct: 

@@ -1,10 +1,4 @@
-import sys , pathlib
-file_path = str(pathlib.Path(__file__).absolute())
-assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
-path = file_path.removesuffix(file_path.split('learndl')[-1])
-if not path in sys.path: sys.path.append(path)
-
-import os , argparse , subprocess , platform , yaml , re
+import yaml
 import ipywidgets as widgets
 
 from typing import Any , Literal
@@ -13,8 +7,10 @@ from IPython.display import display
 
 from src.app.abc import ScriptCmd
 
-class OutOfRange(Exception): pass
-class Unspecified(Exception): pass
+class OutOfRange(Exception): 
+    pass
+class Unspecified(Exception): 
+    pass
 
 def run_script(script : str | Path , close_after_run = False , **kwargs):
     cmd = ScriptCmd(script , kwargs , mode = 'os' if close_after_run else 'shell')
@@ -82,7 +78,8 @@ class InputArea:
     @property
     def placeholder(self):
         placeholder = self.kwargs.get('desc' , self.pname)
-        if self.required: placeholder = f'**{placeholder}'
+        if self.required: 
+            placeholder = f'**{placeholder}'
         return placeholder
     
     @property
@@ -104,7 +101,7 @@ class InputArea:
     def get_widget(self):
         if isinstance(self.ptype , list):
             return self._dropdown(**self.widget_kwargs)
-        elif self.ptype == bool:
+        elif self.ptype is bool:
             if self.BooleanWidget == 'toggle':
                 return self._toggle(**self.widget_kwargs)
             else:
@@ -116,7 +113,8 @@ class InputArea:
         
     def get_value(self):
         pvalue = self.widget.value
-        if pvalue in self.enum: pvalue = self.enum_to_value(pvalue)
+        if pvalue in self.enum: 
+            pvalue = self.enum_to_value(pvalue)
         if isinstance(self.widget , widgets.Dropdown) and pvalue == self.placeholder:
             if self.required:
                 raise Unspecified(f'PLEASE SELECT A VALID VALUE! "{pvalue}" is only a placeholder')
@@ -141,12 +139,14 @@ class InputArea:
     @classmethod
     def _text(cls , type , placeholder , layout , style , default = None , required = False , **kwargs):
         assert type in [str , int , float] , f'param type must be str, int, float, got {type}'
-        if default is not None: default = str(default)
+        if default is not None: 
+            default = str(default)
         style = style | {'background' : 'lightyellow'}
         widget = widgets.Textarea(value=default, placeholder=placeholder, layout=layout, style=style)
         if required: 
             widget.observe(lambda change: cls._text_change_color(widget , change), names='value')
-            if default is None: widget.style.background = '#ffcccb'
+            if default is None: 
+                widget.style.background = '#ffcccb'
         return widget
     
     @staticmethod
@@ -158,7 +158,7 @@ class InputArea:
     
     @classmethod
     def _toggle(cls , type , desc , layout = None , style = None , default = None , **kwargs):
-        assert type == bool , f'param type must be bool, got {type}'
+        assert type is bool , f'param type must be bool, got {type}'
         default = bool(eval(default)) if default is not None else False
         icon = 'toggle-on' if default else 'toggle-off'
         widget = widgets.ToggleButton(value=default, description=desc, icon=icon, layout=layout, style=style)
@@ -174,7 +174,7 @@ class InputArea:
 
     @classmethod
     def _checkbox(cls , type , desc , layout , style , default = None , **kwargs):
-        assert type == bool , f'param type must be bool, got {type}'
+        assert type is bool , f'param type must be bool, got {type}'
         default = bool(eval(default)) if default is not None else False
         layout = layout | {'border': '1px solid #ddd', 'align_content': 'center', 'justify_content': 'center'}
         widget = widgets.Checkbox(value=default, description=desc, indent=False, layout=layout, style=style)
@@ -221,17 +221,20 @@ class ScriptRunner:
             header_dict['disabled'] = True
             header_dict['description'] = 'file not found'
             header_dict['content'] = f'file not found : {self.script}'
-            if verbose: print(f'file not found : {self.script}')
+            if verbose: 
+                print(f'file not found : {self.script}')
         except yaml.YAMLError as e:
             header_dict['disabled'] = True
             header_dict['description'] = 'YAML parsing error'
             header_dict['content'] = f'error info : {e}'
-            if verbose: print(f'YAML parsing error : {e}')
+            if verbose: 
+                print(f'YAML parsing error : {e}')
         except Exception as e:
             header_dict['disabled'] = True
             header_dict['description'] = 'read file error'
             header_dict['content'] = f'error info : {e}'
-            if verbose: print(f'read file error : {e}')
+            if verbose: 
+                print(f'read file error : {e}')
 
         if header_dict is None:
             print(self.script)
@@ -243,7 +246,7 @@ class ScriptRunner:
     def __getitem__(self , key):
         return self.header[key]
 
-    def get(self , key , default = None):
+    def get(self , key , default = 0):
         return self.header.get(key , default)
 
     def get_func(self , input_areas : list[InputArea] | None = None , popup : PopupWindow | Any = None):
@@ -289,8 +292,10 @@ class ScriptRunner:
         popup = PopupWindow() if input_areas else None
         button.on_click(self.get_func(input_areas , popup))
         boxes = [button , desc]
-        if input_areas: [boxes.append(input_area.widget) for input_area in input_areas]
-        if popup: boxes.append(popup.window)
+        if input_areas: 
+            [boxes.append(input_area.widget) for input_area in input_areas]
+        if popup: 
+            boxes.append(popup.window)
         return boxes
 
 def layout_grids(*boxes , max_columns = 3):
@@ -319,13 +324,17 @@ def layout_vertical(*boxes , tight_layout = True , border = None):
 def folder_title(folder : str | Path , level : int):
     assert level in [1,2,3] , f'level must be 1,2,3'
     texts = Path(folder).name.strip().replace('_' , ' ').split(' ') + ['scripts']
-    if texts[0].isdigit(): texts.pop(0)
+    if texts[0].isdigit(): 
+        texts.pop(0)
     text = ' '.join(texts)
     def title_style(color : str | None = None , size : int | None = None , bold : bool = False):
         style = ''
-        if color is not None: style += f'color: {color};'
-        if size is not None:  style += f'font-size: {size}px;'
-        if bold:              style += f'font-weight: bold;'
+        if color is not None: 
+            style += f'color: {color};'
+        if size is not None:  
+            style += f'font-size: {size}px;'
+        if bold:              
+            style += f'font-weight: bold;'
         style += 'text-align: center;'
         return style
     if level == 1:
@@ -343,7 +352,8 @@ def get_script_box(script : str | Path , **kwargs):
 def get_folder_box(folder : str | Path , level : int , use_script_levels = [1,2] , ignore_starters = ('.' , '_' , 'util')):
     dir_boxes , file_boxes = [] , []
     
-    if level > 0: dir_boxes.append(folder_title(folder , min(level , 3)))
+    if level > 0: 
+        dir_boxes.append(folder_title(folder , min(level , 3)))
 
     for path in sorted(Path(folder).iterdir(), key=lambda x: x.name):
         if path.name.startswith(ignore_starters): 
@@ -355,7 +365,8 @@ def get_folder_box(folder : str | Path , level : int , use_script_levels = [1,2]
         else:
             continue
 
-    if file_boxes: dir_boxes.append(layout_grids(*file_boxes))
+    if file_boxes: 
+        dir_boxes.append(layout_grids(*file_boxes))
     return layout_vertical(*dir_boxes)
 
 def main():

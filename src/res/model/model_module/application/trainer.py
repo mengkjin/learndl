@@ -1,7 +1,5 @@
 import time
 
-from contextlib import nullcontext
-
 from src.proj import PATH , MACHINE , HtmlCatcher
 from src.basic import RegisteredModel
 from src.res.model.callback import CallBackManager
@@ -30,9 +28,12 @@ class ModelTrainer(BaseTrainer):
         checkname: [-1,choose] , [0,default]  , [1,yes]
         '''
         override = override or {}
-        if module     is not None: override['module'] = module
-        if short_test is not None: override['short_test'] = short_test
-        if verbosity  is not None: override['verbosity'] = verbosity
+        if module     is not None: 
+            override['module'] = module
+        if short_test is not None: 
+            override['short_test'] = short_test
+        if verbosity  is not None: 
+            override['verbosity'] = verbosity
         app = cls(base_path = base_path , override = override , stage = stage , resume = resume , checkname = checkname , 
                   schedule_name = schedule_name , **kwargs)
         return app

@@ -1,8 +1,5 @@
 import pandas as pd
-import numpy as np
 import polars as pl
-
-from typing import Any , Literal
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
@@ -226,6 +223,7 @@ class inday_trend_std(StockFactorCalculator):
         dates = DATAVENDOR.CALENDAR.td_trailing(date , 20)
         mom20 = DATAVENDOR.TRADE.get_returns(min(dates) , date , return_type = 'close' , pivot = False , mask = False)
         mom20 = mom20.groupby('secid')['pctchange'].std()
+        assert isinstance(mom20 , pd.Series) , f'mom20 must be a pandas series, but got {type(mom20)}'
 
         def price_trend(date : int):
             df = DATAVENDOR.MKLINE.get_kline(date)

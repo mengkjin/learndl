@@ -2,7 +2,7 @@ import baostock as bs
 import numpy as np
 import pandas as pd  
 
-from typing import Literal
+from typing import Any , Literal
 
 from src.proj import PATH , Logger
 from src.basic import CALENDAR , DB
@@ -66,7 +66,8 @@ def x_mins_to_update(date):
     x_mins : list[int] = []
     for x_min in [10 , 15 , 30 , 60]:
         path = DB.db_path('trade_ts' , f'{x_min}min' , date)
-        if not path.exists(): x_mins.append(x_min)
+        if not path.exists(): 
+            x_mins.append(x_min)
     return x_mins
 
 def last_date_x_min(offset : int = 0 , x_min : int = 10):
@@ -79,7 +80,8 @@ def last_date(offset : int = 0):
     last_dt = max(dates) if len(dates) > 0 else CALENDAR.cd(START_DATE , -1)
 
     target_last_dt = last_date_x_min(0 , 5)
-    if target_last_dt > last_dt: last_dt = target_last_dt
+    if target_last_dt > last_dt: 
+        last_dt = target_last_dt
     return CALENDAR.cd(last_dt , offset)
 
 def pending_date():
@@ -90,7 +92,8 @@ def pending_date():
 
 def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry_n : int = 10):
     # date = 20240704
-    if end_dt < start_dt: return True
+    if end_dt < start_dt: 
+        return True
     retry = 0
     
     tmp_dir = tmp_file_dir(start_dt , end_dt)
@@ -99,15 +102,16 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
     start_date_str = f'{start_dt // 10000}-{(start_dt // 100) % 100}-{start_dt % 100}'
     end_date_str = f'{end_dt // 10000}-{(end_dt // 100) % 100}-{end_dt % 100}'
     
-    sec_df : pd.DataFrame | None = None
+    sec_df : pd.DataFrame | Any = None
     while True:
-        if retry >= retry_n: return False
+        if retry >= retry_n: 
+            return False
         try:
             bs.login()
             if sec_df is None:
-                sec_df = baostock_secdf(end_dt)
-                sec_df = sec_df[sec_df['is_sec'] == 1]
-                if first_n > 0: sec_df = sec_df.iloc[:first_n]
+                sec_df = baostock_secdf(end_dt).query('is_sec == 1')
+                if first_n > 0: 
+                    sec_df = sec_df.iloc[:first_n]
             downloaded = [d.name for d in tmp_dir.iterdir()]
             task_codes = np.setdiff1d(sec_df['code'].to_numpy() , downloaded)
             if len(task_codes) == 0: 
@@ -118,6 +122,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
             for i , code in enumerate(task_codes):
                 rs = bs.query_history_k_data_plus(code, 'date,time,code,open,high,low,close,volume,amount,adjustflag',
                                                   start_date=start_date_str,end_date=end_date_str,frequency='5', adjustflag='3')
+                assert rs is not None
                 result = rs.get_data()
                 if isinstance(result , pd.DataFrame):
                     result.to_feather(tmp_file_path(start_dt , end_dt , code))
@@ -133,11 +138,12 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
             break
 
     df_list = [pd.read_feather(d) for d in tmp_dir.iterdir()]
-    if len(df_list) == 0: return False
+    if len(df_list) == 0: 
+        return False
     df_all = pd.concat([pd.read_feather(d) for d in tmp_dir.iterdir()])
 
     for date_str in df_all['date'].unique():
-        df : pd.DataFrame = df_all[df_all['date'] == date_str]
+        df : pd.DataFrame = df_all.query('date == @date_str')
         date = int(str(date_str).replace('-', ''))
         df = df.copy().reset_index(drop = True).assign(date = date)
         df.to_feather(final_path.joinpath(f'5min_bar_{date}.feather'))
@@ -166,7 +172,8 @@ def baostock_5min_to_normal_5min(df : pd.DataFrame):
 def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : int = 10):
     pending_dt = pending_date()
     end_dt = CALENDAR.update_to() if date is None else date
-    if pending_dt == end_dt: pending_dt = -1
+    if pending_dt == end_dt: 
+        pending_dt = -1
     for dt in [pending_dt , end_dt]:
         last_dt = last_date(1)
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):

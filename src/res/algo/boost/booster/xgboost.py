@@ -1,6 +1,5 @@
-import json , tempfile , torch , xgboost
+import json , tempfile , xgboost
 
-from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -43,7 +42,8 @@ class XgBoost(BasicBoosterModel):
         early_stopping  = self.fit_train_param.pop('early_stopping')
         verbose_eval    = self.fit_train_param['verbosity']
         num_class       = self.fit_train_param.pop('n_bins' , None)
-        if self.fit_train_param['objective'] in ['softmax']: self.fit_train_param['num_class'] = num_class
+        if self.fit_train_param['objective'] in ['softmax']: 
+            self.fit_train_param['num_class'] = num_class
 
         self.evals_result = dict()
         self.model : xgboost.Booster = xgboost.train(
@@ -77,13 +77,15 @@ class XgBoost(BasicBoosterModel):
         with tempfile.TemporaryDirectory() as tempdir:
             model_path = Path(tempdir).joinpath('model.json') 
             model.save_model(model_path)
-            with open(model_path, 'r') as file: model_dict = json.load(file)  
+            with open(model_path, 'r') as file: 
+                model_dict = json.load(file)  
         return model_dict
     
     @staticmethod
     def booster_from_dict(model_dict : dict):
         with tempfile.TemporaryDirectory() as tempdir:
             model_path = Path(tempdir).joinpath('model.json')
-            with open(model_path, 'w') as file: json.dump(model_dict , file, indent=4)
+            with open(model_path, 'w') as file: 
+                json.dump(model_dict , file, indent=4)
             model = xgboost.Booster(model_file=model_path)
         return model

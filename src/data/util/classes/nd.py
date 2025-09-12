@@ -43,7 +43,7 @@ class NdData:
 
     @classmethod
     def from_dataframe(cls , df : pd.DataFrame):
-        index = [l.values for l in df.index.levels] + [df.columns.values] #type:ignore
+        index = [lvl.values for lvl in df.index.levels] + [df.columns.values] #type:ignore
         if len(df) != len(index[0]) * len(index[1]): 
             return cls.from_xarray(xr.Dataset.from_dataframe(df))
         else:

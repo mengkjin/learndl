@@ -114,7 +114,8 @@ class block_tra(nn.Module):
 
     @property
     def get_probs(self):
-        if self.probs_record is not None: return self.probs_record / self.probs_record.sum(dim=1,keepdim=True)  
+        if self.probs_record is not None: 
+            return self.probs_record / self.probs_record.sum(dim=1,keepdim=True)  
 
 def shoot_infs(inp_tensor):
     """Replaces inf by maximum of tensor"""

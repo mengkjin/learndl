@@ -1,7 +1,7 @@
 import pandas as pd
 
 from itertools import combinations
-from typing import Any , Literal , Type
+from typing import Type
 
 from .factor_calc import StockFactorCalculator
 
@@ -49,7 +49,8 @@ class StockFactorHierarchy:
         '''filter factor by given attributes'''
         conditions : list[bool] = []
         for k , v in kwargs.items():
-            if v is None: continue
+            if v is None: 
+                continue
             attr = getattr(stock_factor_cls , k)
             if isinstance(v , str): 
                 v = v.replace('\\' , '/')
@@ -62,14 +63,17 @@ class StockFactorHierarchy:
         self.pool : dict[str , Type[StockFactorCalculator]] = {}   
         self.hier : dict[str , list[Type[StockFactorCalculator]]] = {}
         for level_path in PATH.fac_def.iterdir():
-            if not level_path.is_dir(): continue
+            if not level_path.is_dir(): 
+                continue
             level_name = level_path.stem
-            if not level_name.startswith('level'): continue
+            if not level_name.startswith('level'): 
+                continue
 
             for name , obj in dynamic_members(level_path , subclass_of = StockFactorCalculator):
                 assert name not in self.pool , f'{name} in module {obj.__module__} is duplicated'                        
                 self.pool[name] = obj
-                if level_name not in self.hier: self.hier[level_name] = []
+                if level_name not in self.hier: 
+                    self.hier[level_name] = []
                 self.hier[level_name].append(obj)
 
         return self
@@ -89,7 +93,7 @@ class StockFactorHierarchy:
         for cls in iterance: 
             attrs = [getattr(cls , a) for a in attr_list]
             df_datas.append(attrs)
-        df = pd.DataFrame(df_datas, columns = attr_list)
+        df = pd.DataFrame(df_datas, columns = pd.Index(attr_list))
         return df
 
     def factor_names(self):
@@ -135,8 +139,6 @@ class StockFactorHierarchy:
         category1 : str | None = None 
         '''
         
-        factor_values : dict[str , pd.Series] = {}
-
         def calculate_factor(obj : StockFactorCalculator):
             factor_value = obj.calc_factor(date)
             valid_ratio = factor_value.dropna().count() / len(factor_value)

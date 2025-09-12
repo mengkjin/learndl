@@ -15,7 +15,7 @@ def exact(x , y):
     return x is y
 
 def same(x , y):
-    if type(x) != type(y):
+    if type(x) is not type(y):
         return False
     else:
         return x.equal(y)
@@ -33,7 +33,8 @@ def process_factor(value , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7
     output:
         value:         processed factor value
     '''
-    if value is None or allna(value , inf_as_na = True): return None
+    if value is None or allna(value , inf_as_na = True): 
+        return None
     
 
     # assert 'inf' in stream or 'trim' in stream or 'winsor' in stream , stream
@@ -85,7 +86,8 @@ class PrimaTools:
         def decorator(func):
             def wrapper(x , *args, **kwargs):
                 legit = cls.legit_checker((x,),**decor_kwargs)
-                if not legit: return None
+                if not legit: 
+                    return None
                 return func(x , *args , **kwargs)
             wrapper.__name__ = func.__name__
             return wrapper
@@ -96,7 +98,8 @@ class PrimaTools:
         def decorator(func):
             def wrapper(x , y ,*args, **kwargs):
                 legit = cls.legit_checker((x,y),**decor_kwargs)
-                if not legit: return None
+                if not legit: 
+                    return None
                 return func(x , y , *args , **kwargs)
             wrapper.__name__ = func.__name__
             return wrapper
@@ -130,10 +133,14 @@ class PrimaTools:
     @staticmethod
     def legit_checker(args,/,check_null=1,check_exact=1,check_allna=0,check_same=0,**decor_kwargs):
         for arg in args: 
-            if check_null  and arg is None: return False
-            if check_allna and allna(arg):  return False
-        if len(args) == 2 and check_exact and exact(args[0],args[1]): return False
-        if len(args) == 2 and check_same  and same(args[0],args[1]):  return False
+            if check_null  and arg is None: 
+                return False
+            if check_allna and allna(arg):  
+                return False
+        if len(args) == 2 and check_exact and exact(args[0],args[1]): 
+            return False
+        if len(args) == 2 and check_same  and same(args[0],args[1]):  
+            return False
         return True
 
 """
@@ -184,7 +191,8 @@ def ts_coroller(nan = NaN , pinf = torch.inf , ninf = -torch.inf):
 @PrimaTools.decor(2,check_exact=0)
 def rankic_2d(x , y , dim = 1 , universe = None , min_coverage = 0.5):
     valid = ~y.isnan()
-    if universe is not None: valid *= universe.nan_to_num(False)
+    if universe is not None: 
+        valid *= universe.nan_to_num(False)
     x = torch.where(valid , x , NaN)
 
     coverage = (~x.isnan()).sum(dim=dim)
@@ -196,7 +204,8 @@ def rankic_2d(x , y , dim = 1 , universe = None , min_coverage = 0.5):
 #%% 中性化函数
 def dummy(x , ex_last = True):
     # will take a huge amount of memory, the suggestion is to use torch.cuda.empty_cache() after neutralization
-    if not isinstance(x , torch.Tensor): x = torch.FloatTensor(x)
+    if not isinstance(x , torch.Tensor): 
+        x = torch.FloatTensor(x)
     xmax = x.nan_to_num().max().int().item() 
     dummy = x.nan_to_num(xmax + 1).to(torch.int64)
     # dummy = torch.where(x.isnan() , m + 1 , x).to(torch.int64)
@@ -205,14 +214,17 @@ def dummy(x , ex_last = True):
     return dummy
 
 def concat_factors(*factors , n_dims = 2 , dim = -1 , device = None):
-    if len(factors) == 0: return None
+    if len(factors) == 0: 
+        return None
     factors = list(factors)
     
     for i in range(len(factors)):
         #if factors[i] is None: factors[i] = None
         if isinstance(factors[i] , torch.Tensor):
-            if factors[i].dim() == n_dims:  factors[i] = factors[i].unsqueeze(dim)
-            if device is not None: factors[i] = factors[i].to(device)
+            if factors[i].dim() == n_dims:  
+                factors[i] = factors[i].unsqueeze(dim)
+            if device is not None: 
+                factors[i] = factors[i].to(device)
 
     factors = [f for f in factors if f is not None]
     factors = factors[0] if len(factors) == 1 else torch.cat(factors , dim = dim)
@@ -221,10 +233,10 @@ def concat_factors(*factors , n_dims = 2 , dim = -1 , device = None):
 def betas_torch(x , y):
     try:
         b = torch.linalg.lstsq(x , y , rcond=None)[0]
-    except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
+    except Exception: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
         try:    
             b = torch.linalg.inv(x.T.mm(x)).mm(x.T).mm(y)
-        except:
+        except Exception:
             print('neutralization error!')
             b = torch.zeros(x.shape[-1],1).to(x)
     return b
@@ -232,10 +244,10 @@ def betas_torch(x , y):
 def betas_np(x , y):
     try:
         b = np.linalg.lstsq(x , y , rcond=None)[0]
-    except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
+    except Exception: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
         try:    
             b = np.linalg.inv(x.T.dot(x)).dot(x.T).dot(y)
-        except:
+        except Exception:
             print('neutralization error!')
             b = np.zeros((x.shape[-1],1))
     return b
@@ -243,7 +255,7 @@ def betas_np(x , y):
 def betas_sk(x , y):
     try:
         b = LinearRegression(fit_intercept=False).fit(x, y).coef_.T
-    except: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
+    except Exception: # 20240215: numpy.linalg.LinAlgError: SVD did not converge in Linear Least Squares
         print('neutralization error!')
         b = np.zeros((x.shape[-1],1))
     return b
@@ -260,8 +272,10 @@ def beta_calculator(method = 'np'):
 
 def neutralize_xdata_2d(factors = None , groups = None):
     # not the most time efficient way, since its is very memory consuming
-    if groups is None: groups  = []
-    if not isinstance(groups , (list , tuple)): groups  = [groups]
+    if groups is None: 
+        groups  = []
+    if not isinstance(groups , (list , tuple)): 
+        groups  = [groups]
     x = concat_factors(factors , n_dims = 2)
     for g in groups: 
         x = concat_factors(x , dummy(g , ex_last=True) , n_dims = 2)
@@ -271,7 +285,8 @@ def neutralize_xdata_2d(factors = None , groups = None):
     return x
 
 def neutralize_2d(y , x , dim = 1 , method = 'np' , device = None , inplace = False):  # [tensor (TS*C), tensor (TS*C)]
-    if x  is None or y is None: return y
+    if x  is None or y is None: 
+        return y
 
     assert isinstance(y , torch.Tensor) and isinstance(x , torch.Tensor)
     assert method in ['sk' , 'np' , 'torch']
@@ -281,7 +296,8 @@ def neutralize_2d(y , x , dim = 1 , method = 'np' , device = None , inplace = Fa
     
     old_device = y.device
     finite_ij  = x[...,0].isfinite()
-    for k in range(1, x.shape[-1]): finite_ij += x[...,k].isfinite()
+    for k in range(1, x.shape[-1]): 
+        finite_ij += x[...,k].isfinite()
     finite_ij *= y.isfinite() 
     x = x.nan_to_num(0,0,0)
     if inplace:
@@ -289,15 +305,17 @@ def neutralize_2d(y , x , dim = 1 , method = 'np' , device = None , inplace = Fa
     else:
         y = y.nan_to_num(NaN , NaN , NaN).unsqueeze(-1)
     nonzero_ik = ~(x == 0).all(dim)
-    if device is not None:  x , y = x.to(device) , y.to(device)
-    if dim == 0: x , y = x.permute(1,0,2) , y.permute(1,0,2)
+    if device is not None:  
+        x , y = x.to(device) , y.to(device)
+    if dim == 0: 
+        x , y = x.permute(1,0,2) , y.permute(1,0,2)
     res = None
     if False and method == 'torch' and finite_ij.all() and nonzero_ik.all():
         # fastest, but cannot deal NaN's which is always the case, so will not enter here
         try:
             model = torch.linalg.lstsq(x , y , rcond=None)
             res = (y - x @ model[0])
-        except:
+        except Exception:
             res = None
     if res is not None:
         y = res
@@ -306,27 +324,34 @@ def neutralize_2d(y , x , dim = 1 , method = 'np' , device = None , inplace = Fa
         if method in ['sk' , 'np']: 
             x , y , finite_ij , nonzero_ik = x.cpu().numpy() , y.cpu().numpy() , finite_ij.cpu().numpy()  , nonzero_ik.cpu().numpy() 
         for i , (y_ , x_ , j_ , k_) in enumerate(zip(y , x , finite_ij , nonzero_ik)):
-            if j_.sum() < 10: continue
+            if j_.sum() < 10: 
+                continue
             betas = betas_func(x_[:,k_][j_] , y_[j_])
-            y[i] -= x_[:,k_] @ betas # type: ignore
-        if isinstance(y , np.ndarray): y = torch.FloatTensor(y)
-    if dim == 0: y = y.permute(1,0,2)
+            y[i] -= (x_[:,k_] @ betas) # type: ignore
+        if isinstance(y , np.ndarray): 
+            y = torch.FloatTensor(y)
+    if dim == 0: 
+        y = y.permute(1,0,2)
     y = zscore_inplace(y.squeeze_(-1) , dim = dim).to(old_device)
     return y
 
 def neutralize_1d(y , x , insample , method = 'torch' , device = None , inplace = False):  # [tensor (TS*C), tensor (TS*C)]
-    if x is None or y is None: return y
+    if x is None or y is None: 
+        return y
 
     assert method in ['sk' , 'np' , 'torch']
     assert y.shape == insample.shape , (y.shape , insample.shape)
     assert y.dim() == 1 , y.dim()
     
-    if x.dim() == 1: x = x.reshape(-1,1)
+    if x.dim() == 1: 
+        x = x.reshape(-1,1)
     old_device = y.device
     finite_i  = x[:,0].isfinite()
-    for k in range(1, x.shape[-1]): finite_i += x[:,k].isfinite()
+    for k in range(1, x.shape[-1]): 
+        finite_i += x[:,k].isfinite()
     finite_i *= y.isfinite() 
-    if finite_i.sum() < 10: return y
+    if finite_i.sum() < 10: 
+        return y
 
     x = x.nan_to_num(0,0,0)
     if inplace:
@@ -334,7 +359,8 @@ def neutralize_1d(y , x , insample , method = 'torch' , device = None , inplace 
     else:
         y = y.nan_to_num(NaN , NaN , NaN).unsqueeze(-1)
     
-    if device is not None:  x , y = x.to(device) , y.to(device)
+    if device is not None:  
+        x , y = x.to(device) , y.to(device)
     betas_func = beta_calculator(method)
     if method in ['sk' , 'np']: 
         x , y , finite_i = x.cpu().numpy() , y.cpu().numpy() , finite_i.cpu().numpy()
@@ -343,7 +369,8 @@ def neutralize_1d(y , x , insample , method = 'torch' , device = None , inplace 
     k_ = ~(x_ == 0).all(0)
     betas = betas_func(x_[f_][:,k_] , y_[f_])
     y -= x[:,k_] @ betas
-    if isinstance(y , np.ndarray): y = torch.Tensor(y)
+    if isinstance(y , np.ndarray): 
+        y = torch.Tensor(y)
     y = zscore_inplace(y.squeeze_(-1) , dim = 0).to(old_device)
     return y
 
@@ -352,7 +379,8 @@ def neutralize_1d(y , x , insample , method = 'torch' , device = None , inplace 
 #@PrimaTools.prima_legit(2,check_exact=0)
 @PrimaTools.decor(2,check_exact=0)
 def corrwith(x,y,dim=None):
-    if same(x , y): return torch.where(x.nansum(dim) > 2 , 1 , NaN)
+    if same(x , y): 
+        return torch.where(x.nansum(dim) > 2 , 1 , NaN)
     x = x + y * 0
     y = y + x * 0
     x_xmean = x - torch.nanmean(x, dim, keepdim=True)  
@@ -376,13 +404,15 @@ def covariance(x,y,dim=None):
 #@PrimaTools.prima_legit(2,check_exact=0)
 @PrimaTools.decor(2,check_exact=0)
 def beta(x,y,dim=None):
-    if same(x , y): return torch.where(x.nansum(dim) > 2 , 1 , NaN)
+    if same(x , y): 
+        return torch.where(x.nansum(dim) > 2 , 1 , NaN)
     return covariance(x,y,dim) / covariance(x,x,dim)
 
 #@PrimaTools.prima_legit(2,check_exact=0)
 @PrimaTools.decor(2,check_exact=0)
 def beta_pos(x,y,dim=None):
-    if same(x , y): return torch.where(x.nansum(dim) > 2 , 1 , NaN)
+    if same(x , y): 
+        return torch.where(x.nansum(dim) > 2 , 1 , NaN)
     y = torch.where(x < 0 , NaN , y)
     x = torch.where(x < 0 , NaN , x)
     return covariance(x,y,dim) / covariance(x,x,dim)
@@ -390,7 +420,8 @@ def beta_pos(x,y,dim=None):
 #@PrimaTools.prima_legit(2,check_exact=0)
 @PrimaTools.decor(2,check_exact=0)
 def beta_neg(x,y,dim=None):
-    if same(x , y): return torch.where(x.nansum(dim) > 2 , 1 , NaN)
+    if same(x , y): 
+        return torch.where(x.nansum(dim) > 2 , 1 , NaN)
     y = torch.where(x > 0 , NaN , y)
     x = torch.where(x > 0 , NaN , x)
     return covariance(x,y,dim) / covariance(x,x,dim)
@@ -406,7 +437,8 @@ def stddev(x , dim = 0 , keepdim = True):
 def zscore(x , dim = 0 , index = None):
     x_xmean  = x - torch.nanmean(x , dim, keepdim=True)  # [TS, C]
     x_stddev = torch.nansum(x_xmean ** 2, dim , keepdim=index is None).sqrt()
-    if index: x_xmean = x_xmean.select(dim,index)
+    if index: 
+        x_xmean = x_xmean.select(dim,index)
     z = x_xmean / (x_stddev + 1e-4 * x_stddev.nanmean())
     return z
 
@@ -569,8 +601,10 @@ def sign(x):
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
 def ts_delay(x, d):
-    if d > x.shape[0]: return None
-    if d < 0: print('Beware! future information used!')
+    if d > x.shape[0]: 
+        return None
+    if d < 0: 
+        print('Beware! future information used!')
     z = x.roll(d, dims=0)
     if d >= 0:
         z[:d,:] = NaN
@@ -581,8 +615,10 @@ def ts_delay(x, d):
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
 def ts_delta(x, d):
-    if d > x.shape[0]: return None
-    if d < 0: print('Beware! future information used!')
+    if d > x.shape[0]: 
+        return None
+    if d < 0: 
+        print('Beware! future information used!')
     z = x - ts_delay(x, d)
     return z
 
@@ -710,10 +746,12 @@ def rlbxy(x, y, d, n, btm, sel_posneg=False):
     groups = [None , None]
     if btm in ['btm' , 'diff']:
         groups[0] = (x <= x.kthvalue(n, dim=-1, keepdim=True)[0])
-        if sel_posneg: groups[0] *= (x < 0)
+        if sel_posneg: 
+            groups[0] *= (x < 0)
     if btm in ['top' , 'diff']:
         groups[1] = (x >= x.kthvalue(d-n+1, dim=-1, keepdim=True)[0])
-        if sel_posneg: groups[1] *= (x > 0)
+        if sel_posneg: 
+            groups[1] *= (x > 0)
         
     z = [torch.where(grp , y , NaN).nanmean(dim=-1) for grp in groups if grp is not None]
     z = pad(z[0] if len(z) == 1 else (z[1] - z[0]) , (0,0,d-1,0) , value = NaN)
@@ -744,10 +782,12 @@ def rlbx(x, d, n, btm, sel_posneg=False):
     groups = [None , None]
     if btm in ['btm' , 'diff']:
         groups[0] = (x <= x.kthvalue(n, dim=-1, keepdim=True)[0])
-        if sel_posneg: groups[0] *= (x < 0)
+        if sel_posneg: 
+            groups[0] *= (x < 0)
     if btm in ['top' , 'diff']:
         groups[1] = (x >= x.kthvalue(d-n+1, dim=-1, keepdim=True)[0])
-        if sel_posneg: groups[1] *= (x > 0)
+        if sel_posneg: 
+            groups[1] *= (x > 0)
         
     z = [torch.where(grp , x , NaN).nanmean(dim=-1) for grp in groups if grp is not None]
     z = pad(z[0] if len(z) == 1 else (z[1] - z[0]) , (0,0,d-1,0) , value = NaN)

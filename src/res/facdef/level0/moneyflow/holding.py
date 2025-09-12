@@ -1,10 +1,5 @@
 import pandas as pd
-import numpy as np
-import polars as pl
 
-from typing import Any , Literal
-
-from src.proj import PATH
 from src.basic import CALENDAR , DB
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
@@ -62,29 +57,28 @@ def get_holding(qtr : int):
 
 def filter_holding(df : pd.DataFrame , ann_date : int | None = None , active = False , top_only = False , ashare_only = True):
     if ann_date:
-        df = df[df['ann_date'] <= ann_date]
+        df = df.query('ann_date <= @ann_date')
     if active:
-        df = df[df['fund_id'].isin(get_fund_info(ann_date , active)['fund_id'])]
+        active_fund_id = get_fund_info(ann_date , active)['fund_id'] # noqa
+        df = df.query('fund_id in @active_fund_id')
     if top_only:
-        df = df[df['rank'] < 10]
+        df = df.query('rank < 10')
     if ashare_only:
-        df = df[df['secid'] >= 0]
+        df = df.query('secid >= 0')
     return df
 
-def get_fund_info(date : int | None = None , active = True):
+def get_fund_info(
+    date : int | None = None , active = True , 
+    fund_type_in = ['混合型','股票型'] , invest_type_out = ['增强指数型', '被动指数型'] , 
+    name_not_contains = ['FOF' , '量化' , '增强']
+):
     finfo : pd.DataFrame = FundInfo
     if date:
-        finfo = finfo[(finfo['list_date'] <= date) & (finfo['delist_date'] > date)]
+        finfo = finfo.query('list_date <= @date & delist_date > @date')
     if active:
-        fund_type_in = ['混合型','股票型']
-        invest_type_out = ['增强指数型', '被动指数型']
-        finfo = finfo[
-            ~finfo['name'].str.contains('FOF') &
-            ~finfo['name'].str.contains('量化') &
-            ~finfo['name'].str.contains('增强') &
-            finfo['fund_type'].isin(fund_type_in) &
-            ~finfo['invest_type'].isin(invest_type_out)
-        ]
+        finfo = finfo.query('fund_type in @fund_type_in & invest_type not in @invest_type_out')
+        for name in name_not_contains:
+            finfo = finfo.query('~name.str.contains(@name)')
     return finfo
 
 def get_active_fund_holding(date : int):
@@ -146,7 +140,9 @@ class holding_mv(StockFactorCalculator):
 
     def calc_factor(self, date: int):
         full_port = get_active_fund_holding(date)
-        return full_port.groupby('secid')['mkv'].sum() / 10**8
+        mv = full_port.groupby('secid')['mkv'].sum()
+        assert isinstance(mv , pd.Series) , f'mv must be a pandas series, but got {type(mv)}'
+        return mv / 10**8
     
 class holding_num(StockFactorCalculator):
     init_date = 20110101
@@ -211,7 +207,9 @@ class holding_top_mv(StockFactorCalculator):
 
     def calc_factor(self, date: int):
         top_port = get_active_top_holding(date)
-        return top_port.groupby('secid')['mkv'].sum() / 10**8
+        mv = top_port.groupby('secid')['mkv'].sum()
+        assert isinstance(mv , pd.Series) , f'mv must be a pandas series, but got {type(mv)}'
+        return mv / 10**8
  
 class holding_top_num(StockFactorCalculator):
     init_date = 20110101
@@ -243,5 +241,9 @@ class holding_top_addmv(StockFactorCalculator):
     def calc_factor(self, date: int):
         top_port = get_active_top_holding(date)
         top_port_0 = get_active_top_holding(one_quater_ago(date))
-        return top_port.groupby('secid')['mkv'].sum() / 10**8 - top_port_0.groupby('secid')['mkv'].sum() / 10**8
+        mv1 = top_port.groupby('secid')['mkv'].sum()
+        mv0 = top_port_0.groupby('secid')['mkv'].sum()
+        assert isinstance(mv1 , pd.Series) , f'mv1 must be a pandas series, but got {type(mv1)}'
+        assert isinstance(mv0 , pd.Series) , f'mv0 must be a pandas series, but got {type(mv0)}'
+        return (mv1 - mv0) / 10**8
     

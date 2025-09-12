@@ -10,7 +10,6 @@ from src.data import DATAVENDOR
 from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
 
 from .general_model import GeneralModel
-from .risk_model import RISK_MODEL
 
 __all__ = ['AlphaModel' , 'Amodel']
 
@@ -25,13 +24,17 @@ class Amodel:
     def __post_init__(self):
         assert self.alpha.ndim == self.secid.ndim == 1 , (self.alpha.shape , self.secid.shape)
         assert self.alpha.shape == self.secid.shape , (self.alpha.shape , self.secid.shape)
-    def __len__(self): return len(self.alpha)
+    def __len__(self): 
+        return len(self.alpha)
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},date={self.date},length={len(self)})'
-    def get_model(self , *args , **kwargs): return self
-    def copy(self): return deepcopy(self)
+    def get_model(self , *args , **kwargs): 
+        return self
+    def copy(self): 
+        return deepcopy(self)
     def align(self , secid : np.ndarray | Any = None , inplace = False , nan = 0.):
-        if secid is None: return self
+        if secid is None: 
+            return self
         new_alpha = self if inplace else self.copy()
         value = np.full(len(secid) , nan , dtype=float)
         _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
@@ -40,8 +43,10 @@ class Amodel:
         new_alpha.secid = secid
         return new_alpha
     def assign(self , date : Optional[int] = None , name : Optional[str] = None):
-        if date is not None: self.date = date
-        if name is not None: self.name = name
+        if date is not None: 
+            self.date = date
+        if name is not None: 
+            self.name = name
         return self
     def preprocess(self , inplace = False):
         # nan_as_num , winsor , normal
@@ -50,7 +55,8 @@ class Amodel:
         return new
     def alpha_of(self , secid : np.ndarray | Any = None , nan = 0. , rank = False):
         value = self.alpha if not rank else pd.Series(self.alpha).rank(pct=True).values
-        if secid is None: return value
+        if secid is None: 
+            return value
         new_value = np.full(len(secid) , nan , dtype=float)
         _ , p0s , p1s = np.intersect1d(secid , self.secid , return_indices=True)
         new_value[p0s] = value[p1s]
@@ -58,13 +64,15 @@ class Amodel:
 
     def to_dataframe(self , indus = False , na_indus_as : Any = None):
         df = pd.DataFrame({'secid' : self.secid , 'alpha' : self.alpha})
-        if indus: df = DATAVENDOR.INFO.add_indus(df , self.date , na_indus_as)
+        if indus: 
+            df = DATAVENDOR.INFO.add_indus(df , self.date , na_indus_as)
         return df
 
     @classmethod
     def create_random(cls , date : int , secid : np.ndarray | list[int] | Any = [1,2,600001]):
         assert secid is not None , 'When create random Amodel, secid must be submitted too!'
-        if isinstance(secid , list): secid = np.array(secid)
+        if isinstance(secid , list): 
+            secid = np.array(secid)
         return cls(date , np.random.randn(len(secid)) , secid , 'random_alpha')
 
     @classmethod
@@ -76,11 +84,13 @@ class Amodel:
     @classmethod
     def from_dataframe(cls , date : int , data : pd.Series | pd.DataFrame , 
                        secid : np.ndarray | Any = None , name : str | Any = None):
-        if isinstance(data , pd.Series): data = data.to_frame()
+        if isinstance(data , pd.Series): 
+            data = data.to_frame()
         if np.isin(['secid' , 'date'] , data.index.names).all():
             data = data.xs(date , level='date')
         else:
-            if not isinstance(data.index , pd.RangeIndex): data = data.reset_index()
+            if not isinstance(data.index , pd.RangeIndex): 
+                data = data.reset_index()
             if 'date' in data.columns: 
                 data = data[data['date'] == date]
                 assert len(data) , f'no data of date {date}!'
@@ -95,7 +105,8 @@ class Amodel:
         
         alpha = data.to_numpy().squeeze()
         secid = data.index.values
-        if name is None: name = data.columns.values[0]
+        if name is None: 
+            name = data.columns.values[0]
         return cls(date , alpha , secid , name)
 
     @classmethod
@@ -115,7 +126,8 @@ class Amodel:
             weights = np.ones(len(alphas)) / len(alphas)
         secid = np.unique(np.concatenate([alpha.secid for alpha in alphas]))
         alpha = np.sum(np.array([alpha.align(secid).alpha for alpha in alphas]) * np.array(weights)[:,None] , axis = 0) / np.sum(weights)
-        if normalize: alpha = zscore(alpha)
+        if normalize: 
+            alpha = zscore(alpha)
         return cls(alphas[0].date , alpha , secid , name)
 
 class AlphaModel(GeneralModel):
@@ -135,8 +147,10 @@ class AlphaModel(GeneralModel):
         return f'{self.__class__.__name__} (name={self.name})({len(self.models)} days loaded)'
     @classmethod
     def from_dataframe(cls , data: pd.DataFrame | pd.Series , name : str | Any = None):
-        if isinstance(data , pd.Series): data = data.to_frame()
-        if not isinstance(data.index , pd.RangeIndex): data = data.reset_index()
+        if isinstance(data , pd.Series): 
+            data = data.to_frame()
+        if not isinstance(data.index , pd.RangeIndex): 
+            data = data.reset_index()
         assert 'secid' in data and 'date' in data , data.columns
         models = [Amodel.from_dataframe(date , data) for date in data['date'].unique()]
         assert models , f'no models created'
@@ -147,24 +161,29 @@ class AlphaModel(GeneralModel):
             assert override or (model.date not in self.models.keys()) , model.date
             self.models[model.date] = model
         elif isinstance(model , list):
-            for am in model: self.append(am , override=override)
+            for am in model: 
+                self.append(am , override=override)
         elif isinstance(model , dict):
-            for am in model.values(): self.append(am , override=override)
+            for am in model.values():
+                self.append(am , override=override)
 
     def get(self , date : int , latest = True , lag : int = 0) -> Amodel | Any:
         if lag:
             assert lag > 0 , lag
             avail_dates = np.sort(self.available_dates())
             avail_dates = avail_dates[avail_dates < date]
-            if len(avail_dates): date = avail_dates[-min(lag , len(avail_dates))]
+            if len(avail_dates): 
+                date = avail_dates[-min(lag , len(avail_dates))]
         model = super().get(date , latest)
         assert model is None or isinstance(model , Amodel)
         return model
     
     def lag_all_models(self , lag_period : int = 0 , inplace = False , rename = True):
         new = self if inplace else self.copy()
-        if rename: new.name = f'{new.name}.lag{lag_period}'
-        if lag_period == 0: return new
+        if rename: 
+            new.name = f'{new.name}.lag{lag_period}'
+        if lag_period == 0: 
+            return new
         dates = np.sort(new.available_dates())[::-1]
         for i , date in enumerate(dates):
             tar_date = dates[min(i+lag_period,len(dates)-1)]

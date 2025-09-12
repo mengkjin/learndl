@@ -29,8 +29,10 @@ class AdaBoost(BasicBoosterModel):
         assert self.weight_param.get('cs_type') in ['ones' , None] , self.weight_param.get('cs_type')
 
     def fit(self , train : BoosterInput | Any = None , valid : BoosterInput | Any = None , silent = False):
-        if train is None: train = self.data['train']
-        if valid is None: valid = self.data['valid']
+        if train is None: 
+            train = self.data['train']
+        if valid is None: 
+            valid = self.data['valid']
 
         device = torch.device('cuda:0' if torch.cuda.is_available() and self.cuda else 'cpu')
         train_data = BoosterInput.concat([train , valid])
@@ -71,7 +73,8 @@ class AdaBoost(BasicBoosterModel):
     @staticmethod
     def tensor_rank(x : torch.Tensor , dim : int = 0 , pct = False):
         rank = x.argsort(dim = dim).argsort(dim = dim).where(~x.isnan() , torch.nan)
-        if pct: rank /= rank.nan_to_num().max(dim = dim , keepdim = True)[0] + 1e-6
+        if pct: 
+            rank /= rank.nan_to_num().max(dim = dim , keepdim = True)[0] + 1e-6
         return rank
     
 class StrongLearner:
@@ -108,7 +111,8 @@ class StrongLearner:
         return pred.cpu().numpy()
     
     def predictions(self, x : np.ndarray | Tensor):
-        if not isinstance(x , Tensor): x = torch.tensor(x)
+        if not isinstance(x , Tensor): 
+            x = torch.tensor(x)
         x = x.nan_to_num(-1).to(torch.int32)
         preds = torch.stack([learner.predict(x).nan_to_num(0) for learner in self.weak_learners] , dim = -1)
         return preds
@@ -139,7 +143,8 @@ class WeakLearner:
         return  f'{self.__class__.__name__}(n_bins={self.n_bins},max_nan_ratio={self.max_nan_ratio})'
 
     def fit(self, X : Tensor , y : Tensor , weight : Tensor | None = None):
-        if weight is None: weight = torch.ones_like(y) / len(y)
+        if weight is None: 
+            weight = torch.ones_like(y) / len(y)
         assert isinstance(X , Tensor) and isinstance(y , Tensor) and isinstance(weight , Tensor) , (X , y , weight)
         assert torch.all(X < self.n_bins) , X.max()
         assert not torch.is_floating_point(X) , X
@@ -181,14 +186,16 @@ class WeakLearner:
         d = {}
         for k in self.SLOTS:
             v = getattr(self , k)
-            if isinstance(v , Tensor): v = v.cpu()
+            if isinstance(v , Tensor): 
+                v = v.cpu()
             d[k] = v
         return d
     
     def load_dict(self , model_dict , cuda = False):
         for k in self.SLOTS:
             v = model_dict[k]
-            if isinstance(v , Tensor) and cuda and torch.cuda.is_available(): v = v.cuda()
+            if isinstance(v , Tensor) and cuda and torch.cuda.is_available(): 
+                v = v.cuda()
             setattr(self , k , v)
         return self
 
@@ -198,7 +205,7 @@ class WeakLearner:
 
 if __name__ == '__main__':
     factor_data = load_xingye_data()
-    MDTs = np.sort(factor_data['date'].unique())
+    MDTs = np.sort(np.unique(factor_data['date'].to_numpy()))
     windows_len = 24 
     
     ic_dfs = []

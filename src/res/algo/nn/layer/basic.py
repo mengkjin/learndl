@@ -11,8 +11,10 @@ class Transpose(nn.Module):
         super().__init__()
         self.dims, self.contiguous = dims, contiguous
     def forward(self, x):        
-        if self.contiguous: return x.transpose(*self.dims).contiguous()
-        else: return x.transpose(*self.dims)
+        if self.contiguous: 
+            return x.transpose(*self.dims).contiguous()
+        else: 
+            return x.transpose(*self.dims)
 
 class EwLinear(nn.Module):
     def __init__(self, dim = -1 , keepdim = True):

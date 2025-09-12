@@ -1,21 +1,28 @@
-import numpy as np
 import pandas as pd
 
 import src.func.plot as plot
 
 from plottable import ColumnDefinition
-from typing import Any , Optional
+from typing import Any
 
 DROP_KEYS  = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 
+def _strategy_name(keys : list[str]):
+    def wrapper(x) -> str:
+        return '.'.join(x[col] for col in keys)
+    return wrapper
+
 def df_strategy(df : pd.DataFrame) -> pd.Series:
     keys = [i for i in MAJOR_KEYS if i in df.columns or i in df.index.names]
-    return df.apply(lambda x:'.'.join(x[col] for col in keys) , axis=1)
+    names = df.apply(_strategy_name(keys) , axis=1)
+    assert isinstance(names , pd.Series) , f'names must be a pandas series, but got {type(names)}'
+    return names
 
 def plot_top_frontface(data : pd.DataFrame , show = False):
     num_per_page : int | Any = 32 // data.groupby('factor_name').size().max()
-    if num_per_page == 0: num_per_page = 1
+    if num_per_page == 0: 
+        num_per_page = 1
     num_groups : int | Any = data.groupby('factor_name').ngroups
     num_pages  : int | Any = num_groups // num_per_page + (1 if num_groups % num_per_page > 0 else 0)
     group_plot = plot.PlotMultipleData(data , group_key = 'factor_name' , max_num = num_per_page)
@@ -39,7 +46,8 @@ def plot_top_perf_curve(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Accumulative Return') as (df , fig):
     
-            if 'topN' not in df.columns and 'topN' not in df.index.names: df['topN'] = '~'
+            if 'topN' not in df.columns and 'topN' not in df.index.names: 
+                df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
             ax = plot.sns_lineplot(df , x='trade_date' , y='pf' , hue='topN')
@@ -54,7 +62,8 @@ def plot_top_perf_excess(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Accumulative Excess Return') as (df , fig):
     
-            if 'topN' not in df.columns and 'topN' not in df.index.names: df['topN'] = '~'
+            if 'topN' not in df.columns and 'topN' not in df.index.names: 
+                df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
             ax = plot.sns_lineplot(df , x='trade_date' , y='excess' , hue='topN')
@@ -69,7 +78,8 @@ def plot_top_perf_drawdown(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Drawdown') as (df , fig):
 
-            if 'topN' not in df.columns and 'topN' not in df.index.names: df['topN'] = '~'
+            if 'topN' not in df.columns and 'topN' not in df.index.names: 
+                df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
 
@@ -99,7 +109,8 @@ def plot_top_perf_excess_drawdown(data : pd.DataFrame , show = False):
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Excess Drawdown') as (df , fig):
 
-            if 'topN' not in df.columns and 'topN' not in df.index.names: df['topN'] = '~'
+            if 'topN' not in df.columns and 'topN' not in df.index.names: 
+                df['topN'] = '~'
             df = df.reset_index().sort_values(['topN' , 'trade_date'])
             df['topN'] = 'Top' + df['topN'].astype(str).str.rjust(3 , fillchar=' ')
             ax = plot.sns_lineplot(df , x='trade_date' , y='drawdown' , hue='topN')
@@ -152,7 +163,8 @@ def plot_top_exp_indus(data : pd.DataFrame , show = False):
         with plot.PlotFactorData(sub_data , drop = [] ,show = show and i == 0, title = 'TopPort Industry Exposure') as (df , fig):
             df = df.groupby(['strategy'] , observed=True).mean().reset_index().\
                 melt(id_vars=['strategy'] , var_name='industry' , value_name='deviation')
-            df_mean = df.groupby(['industry'] , observed=True)['deviation'].mean().rename('mdev')
+            df_mean : pd.Series | Any = df.groupby(['industry'] , observed=True)['deviation'].mean()
+            df_mean = df_mean.rename('mdev')
             df = df.merge(df_mean , on='industry').sort_values(['mdev' , 'strategy'] , ascending=[False , True]).drop(columns=['mdev'])
             ax = plot.sns_barplot(df , x='industry' , y='deviation' , hue='strategy' , legend='upper right')
 
@@ -178,7 +190,7 @@ def plot_top_attrib_style(data : pd.DataFrame , show = False):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = [] , show = show and i == 0 , title = 'TopPort Style Attribution') as (df , fig):
-            df = df.reset_index().set_index('style')[['strategy' , 'contribution']]
+            df = df.reset_index().set_index('style').filter(items=['strategy' , 'contribution'])
             ax = plot.sns_barplot(df , x='style' , y='contribution' , hue='strategy' , legend='upper right')
 
             plot.set_xaxis(ax , df.index , title = 'Style' , num_ticks=len(df.index))

@@ -42,7 +42,8 @@ class DataPreProcessor:
             self.load_start_dt = 20070101
             self.save_start_dt = 20070101
             self.hist_end_dt   = 20161231
-        if not self.mask: self.mask = {'list_dt': 91}
+        if not self.mask: 
+            self.mask = {'list_dt': 91}
 
     def processors(self) -> Iterator[tuple[str , 'TypePreProcessor']]:
         for blk in self.blocks:
@@ -59,7 +60,8 @@ class DataPreProcessor:
             parser.add_argument("--confirm", type=str, default = confirm)
             args , _ = parser.parse_known_args()
         if not predict and not args.confirm and \
-            not input('Confirm update data? type "yes" to confirm!').lower()[0] == 'y' : return
+            not input('Confirm update data? type "yes" to confirm!').lower()[0] == 'y' : 
+            return
         t1 = time.time()
         Logger.info(f'predict is {predict} , Data Processing start!')
         
@@ -140,7 +142,8 @@ class pp_y(TypePreProcessor):
         y_ts = torch.Tensor(data_block.values)[:,:,0]
         for i_feat,lb_name in enumerate(data_block.feature):
             y_pro = process_factor(y_ts[...,i_feat], dim = 0)
-            if not isinstance(y_pro , torch.Tensor): continue
+            if not isinstance(y_pro , torch.Tensor): 
+                continue
             y_pro = y_pro.unsqueeze(-1).numpy()
             data_block.values[...,i_feat] = y_pro
 
@@ -206,7 +209,8 @@ class pp_week(TypePreProcessor):
         return {'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.TRADE_FEAT])}
     def final_feat(self): return self.TRADE_FEAT
     def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , **kwargs):
-        if start_dt is not None and start_dt < 0: start_dt = 2 * start_dt
+        if start_dt is not None and start_dt < 0: 
+            start_dt = 2 * start_dt
         blocks : dict[str,DataBlock] = {}
         for src_key , loader in self.block_loaders().items():
             blocks[src_key] = loader.load_block(start_dt , end_dt , **kwargs).align(secid = secid_align , date = date_align)

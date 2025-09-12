@@ -8,6 +8,9 @@ _ACT = {
 }
 
 def get_activation_fn(activation) -> nn.Module:
-    if callable(activation): return activation()
+    if callable(activation): 
+        act_fn = activation()
+        assert isinstance(act_fn , nn.Module) , act_fn
+        return act_fn
     assert isinstance(activation , str) , activation
     return _ACT[activation.lower()]()

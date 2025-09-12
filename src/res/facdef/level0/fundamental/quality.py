@@ -1,9 +1,3 @@
-
-import pandas as pd
-import numpy as np
-
-from typing import Literal
-
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
 

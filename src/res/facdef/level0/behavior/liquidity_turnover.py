@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 
 from src.data import DATAVENDOR
@@ -69,7 +68,7 @@ class turn_unexpected(StockFactorCalculator):
         x = DATAVENDOR.TRADE.get_market_amount(start_date, end_date) / 1e8
         y = DATAVENDOR.TRADE.get_turnovers(start_date, end_date)
 
-        coef = pd.DataFrame(apply_ols(x , y) , index = ['intercept' , 'slope'] , columns = y.columns)
+        coef = pd.DataFrame(apply_ols(x , y) , index = pd.Index(['intercept' , 'slope']) , columns = y.columns)
 
         start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'm')
         x = DATAVENDOR.TRADE.get_market_amount(start_date, end_date) / 1e8

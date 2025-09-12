@@ -6,9 +6,8 @@ import multiprocessing as mp
 from dataclasses import dataclass
 from pypinyin import lazy_pinyin
 from sqlalchemy import create_engine , exc
-from typing import Any , ClassVar , Literal
+from typing import ClassVar , Literal
 
-from src.proj import PATH
 from src.basic import CALENDAR , DB
 from src.data.util.basic import secid_adjust
 from src.func.time import date_seg
@@ -50,7 +49,8 @@ class Connection:
             port     = self.port,
             database = self.database,
         )
-        if self.driver : connect_url += f'?driver={self.driver}'
+        if self.driver : 
+            connect_url += f'?driver={self.driver}'
         return connect_url
 
     def engine(self):
@@ -62,7 +62,8 @@ class Connection:
         if self.conn is None:
             engine = self.engine()
             conn = engine.connect()
-            if self.stay_connect: self.conn = conn
+            if self.stay_connect: 
+                self.conn = conn
         else:
             conn = self.conn
         return conn
@@ -74,8 +75,9 @@ class Connection:
 
     @classmethod
     def default_connections(cls , keys = None):
-        if isinstance(keys , str): keys = [keys]
-        dft : dict[str,cls] = {
+        if isinstance(keys , str): 
+            keys = [keys]
+        dft : dict[str,'Connection'] = {
             'haitong': cls(
                 dialect='mssql+pyodbc' , 
                 username ='JSJJDataReader' ,
@@ -127,7 +129,8 @@ class Connection:
                 port = 3306 ,
                 database = 'gjquant') ,
         }
-        if keys is None: return dft
+        if keys is None: 
+            return dft
         return {k:dft[k] for k in keys}
 
 @dataclass
@@ -158,14 +161,16 @@ class SellsideSQLDownloader:
             start_dt = max(self.start_dt , start_dt)
             if option == 'since':
                 old_dates = DB.db_dates(self.DB_SRC , self.db_key)
-                if trace > 0 and len(old_dates) > trace: old_dates = old_dates[:-trace]
+                if trace > 0 and len(old_dates) > trace: 
+                    old_dates = old_dates[:-trace]
                 if len(old_dates): 
                     last1_dt = CALENDAR.cd(old_dates[-1],1)
                     start_dt = max(start_dt , last1_dt)
 
             end_dt = CALENDAR.td(min(end_dt , CALENDAR.update_to()))
             date_intervals = date_seg(start_dt , end_dt , self.FREQ , astype=int)
-        if not date_intervals: return 
+        if not date_intervals: 
+            return 
         
         print(f'{time.ctime()} : {self.DB_SRC}/{self.db_key} from ' + 
             f'{date_intervals[0][0]} to {date_intervals[-1][1]}, total {len(date_intervals)} periods')
@@ -201,14 +206,17 @@ class SellsideSQLDownloader:
                 print(f'{self.factor_src} Connection is closed, re-connect')
                 conn = connection.connect(reconnect = True)
             i += 1
-        if not connection.stay_connect: conn.close()
+        if not connection.stay_connect: 
+            conn.close()
         df = self.df_process(df , self.factor_src , self.factor_set)
         return df
 
     def make_query(self , query , connection , start_dt = None , end_dt = None):
         if self.date_fmt is not None:
-            if start_dt: start_dt = CALENDAR.format(start_dt , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
-            if end_dt:   end_dt   = CALENDAR.format(end_dt   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
+            if start_dt: 
+                start_dt = CALENDAR.format(start_dt , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
+            if end_dt:   
+                end_dt   = CALENDAR.format(end_dt   , old_fmt = '%Y%m%d' , new_fmt = self.date_fmt)
         kwargs = {'factor_src' : self.factor_src , 
                   'factor_set' : self.factor_set , 
                   'date_col'   : self.date_col ,
@@ -222,11 +230,13 @@ class SellsideSQLDownloader:
         return df
 
     def save_data(self , data : pd.DataFrame | None):
-        if data is None or data.empty or len(data) == 0: return
+        if data is None or data.empty or len(data) == 0: 
+            return
         data = data.sort_values(['date' , 'secid']).set_index('date')
         for d in data.index.unique():
             data_at_d = data.loc[d]
-            if len(data_at_d) == 0: continue
+            if len(data_at_d) == 0: 
+                continue
             DB.db_save(data_at_d , self.DB_SRC , self.db_key , d)
 
     @classmethod
@@ -240,7 +250,8 @@ class SellsideSQLDownloader:
 
     @classmethod
     def df_process(cls , df , factor_src , factor_set):
-        if df is None: return df
+        if df is None: 
+            return df
         if factor_src == 'haitong':
             assert isinstance(df , pd.DataFrame)
             df.columns = [col.lower() for col in df.columns.values]
@@ -262,7 +273,7 @@ class SellsideSQLDownloader:
             df['date'] = df['date'].astype(str).str.replace('-','').astype(int)
         elif factor_src == 'kaiyuan':
             assert isinstance(df , dict)
-            df0 = pd.DataFrame(columns = ['date','code']).astype(int)
+            df0 = pd.DataFrame(columns = pd.Index(['date','code'])).astype(int)
             for k,subdf in df.items():
                 subdf.rename(columns = {'factor':k})
                 # print(subdf.iloc[:5])
@@ -272,7 +283,7 @@ class SellsideSQLDownloader:
             df = df.set_index(['date','secid']).reset_index()
         elif factor_src == 'huatai':
             assert isinstance(df , dict)
-            df0 = pd.DataFrame(columns = ['date','instrument']).astype(int)
+            df0 = pd.DataFrame(columns = pd.Index(['date','instrument'])).astype(int)
             for k , subdf in df.items():
                 assert 'instrument' in subdf.columns , subdf.columns
                 subdf = subdf.rename(columns = {'datetime':'date','value':k})
@@ -297,8 +308,9 @@ class SellsideSQLDownloader:
 
     @classmethod
     def default_factors(cls , keys = None):
-        if isinstance(keys , str): keys = [keys]
-        dft : dict[str,cls] = {
+        if isinstance(keys , str): 
+            keys = [keys]
+        dft : dict[str,'SellsideSQLDownloader'] = {
             #'haitong.hf_factors' :cls(    
             #    'haitong','hf_factors','trade_dt',20130101,
             #    startdt_query = 'select min(trade_dt) from daily_factor_db.dbo.JSJJHFFactors' ,
@@ -354,7 +366,8 @@ class SellsideSQLDownloader:
                 default_query = ('select * from {factor} where {date_col} >= ' + 
                                 '\'{start_dt}\' and {date_col} <= \'{end_dt}\'')) ,
         }
-        if keys is None: return dft
+        if keys is None: 
+            return dft
         return {k:dft[k] for k in keys}
 
     @classmethod
@@ -376,7 +389,8 @@ class SellsideSQLDownloader:
     @classmethod
     def update_dates(cls , start_dt , end_dt):
         dates = CALENDAR.td_within(start_dt , end_dt)
-        if len(dates) == 0: return NotImplemented
+        if len(dates) == 0: 
+            return NotImplemented
 
         for factor , connection in cls.factors_and_conns():  
             factor.download('dates' , connection , dates=dates)

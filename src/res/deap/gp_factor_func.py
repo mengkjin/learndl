@@ -1,5 +1,4 @@
 from dataclasses import dataclass , field
-from typing import Any
 
 import torch
 import pandas as pd
@@ -43,7 +42,8 @@ def process_factor(value , stream = 'inf_winsor_norm' , dim = 1 , trim_ratio = 7
     output:
         value:         processed factor value
     '''
-    if value is None or MF.allna(value , inf_as_na = True): return None
+    if value is None or MF.allna(value , inf_as_na = True): 
+        return None
 
     # assert 'inf' in stream or 'trim' in stream or 'winsor' in stream , stream
     if 'trim' in stream or 'winsor' in stream:
@@ -82,18 +82,21 @@ def decay_weight(method , max_len , exp_halflife = -1):
     return w
 
 def factor_coef_mean(x , mean_dim = 0, dim = -1 , weight = None):
-    if x is None: return x
+    if x is None:
+        return x
     assert x.shape[dim] > 0
-    if x.shape[dim] == 1: return torch.ones((1,1)).to(x)
+    if x.shape[dim] == 1: 
+        return torch.ones((1,1)).to(x)
     assert mean_dim >= 0 , f'mean_dim must be non-negative : {mean_dim}'
     assert dim >= -1 , f'dim must >= -1 : {dim}'
-    if dim == -1: dim = x.dim() - 1
+    if dim == -1: 
+        dim = x.dim() - 1
     assert mean_dim != dim , f'mean_dim and dim should be different'
     if weight is not None:
         assert len(weight) == x.shape[mean_dim] , f'length of weight and shape[mean_dim] should be the same'
     else:
         weight = torch.ones(x.shape[mean_dim])
-    ij = torch.arange(x.shape[dim])
+    # ij = torch.arange(x.shape[dim])
     new_dim = dim if dim < mean_dim else dim - 1
     coefs = []
     for i in range(x.shape[mean_dim]):
@@ -105,9 +108,11 @@ def factor_coef_mean(x , mean_dim = 0, dim = -1 , weight = None):
     return x
 
 def factor_coef_total(x , dim = -1):
-    if x is None: return x
+    if x is None: 
+        return x
     assert x.shape[dim] > 0
-    if x.shape[dim] == 1: return torch.ones((1,1)).to(x)
+    if x.shape[dim] == 1: 
+        return torch.ones((1,1)).to(x)
     ij = torch.arange(x.shape[dim])
     x = x.transpose(-1 , dim).reshape(-1 , len(ij))
     x = torch.corrcoef(x[~x.isnan().any(-1)].T)
@@ -115,13 +120,16 @@ def factor_coef_total(x , dim = -1):
     return x
 
 def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
-    if x is None: return x
+    if x is None: 
+        return x
     assert corr_dim >= 0 , f'corr_dim must be non-negative : {corr_dim}'
     assert dim >= -1 , f'dim must >= -1 : {dim}'
-    if dim == -1: dim = x.dim() - 1
+    if dim == -1:
+        dim = x.dim() - 1
     assert corr_dim != dim , f'corr_dim and dim should be different'
     assert x.shape[dim] > 0
-    if x.shape[dim] == 1: return torch.ones((1,1)).to(x)
+    if x.shape[dim] == 1: 
+        return torch.ones((1,1)).to(x)
     ij = torch.arange(x.shape[dim])
     new_dim = dim if dim < corr_dim else dim - 1
     try:
@@ -141,7 +149,8 @@ def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
     return x
 
 def svd_factors(mat , raw_factor , top_n = -1 , top_ratio = 0. , dim = -1 , inplace = True):
-    if mat is None or raw_factor is None: return raw_factor
+    if mat is None or raw_factor is None: 
+        return raw_factor
     assert mat.dim() == 2 
     assert mat.shape[0] == mat.shape[1]
     assert mat.shape[0] == raw_factor.shape[dim]
@@ -156,7 +165,8 @@ def svd_factors(mat , raw_factor , top_n = -1 , top_ratio = 0. , dim = -1 , inpl
         raw_factor.nan_to_num_(0,0,0)
     else:
         raw_factor = raw_factor.nan_to_num(0,0,0)
-    for k in range(1, raw_factor.shape[dim]): finite_ij += raw_factor.select(dim,k).isfinite()
+    for k in range(1, raw_factor.shape[dim]): 
+        finite_ij += raw_factor.select(dim,k).isfinite()
     vector = torch.einsum(einsum_formula , svd.U, raw_factor)
     vector[~finite_ij] = torch.nan
     return vector , svd
@@ -167,7 +177,8 @@ def top_svd_factors(mat , raw_factor , top_n = 1 , top_ratio = 0. , dim = -1 , i
     mat2 = factor_coef_total(raw_factor, dim = -1)
     mat3 = factor_coef_with_y(raw_factor , y , corr_dim=1 , dim = -1)
     '''
-    if mat is None or raw_factor is None: return raw_factor
+    if mat is None or raw_factor is None: 
+        return raw_factor
     vector , svd = svd_factors(mat , raw_factor , dim = dim , inplace = inplace)
     where  = svd.S.cumsum(0) / svd.S.sum() <= top_ratio
     where += torch.arange(vector.shape[-1] , device=where.device) < max(top_n , where.sum() + 1)
@@ -211,8 +222,8 @@ class MultiFactor:
     @staticmethod
     def static_decorator(func , relative_weight_cap = 5.):
         def wrapper(data , time_slice = None):
-            if time_slice is not None:
-                if data is not None: data = data[time_slice]
+            if time_slice is not None and data is not None: 
+                data = data[time_slice]
             w = func(data).nan_to_num(torch.nan,torch.nan,torch.nan).reshape(1,1,-1)
             w /= w.abs().sum(-1,keepdim=True)
             w[w > (relative_weight_cap / w.shape[-1])] = relative_weight_cap / w.shape[-1]
@@ -241,7 +252,7 @@ class MultiFactor:
         weight = self.factor_weight(window_type , **kwargs)
         try:
             multi = (factor * weight).nanmean(-1)
-        except torch.cuda.OutOfMemoryError as e:
+        except torch.cuda.OutOfMemoryError:
             print(f'OutOfMemoryError on multi factor calculation')
             multi = (factor.cpu() * weight.cpu()).nanmean(-1).to(factor)
         multi = MF.zscore(multi , -1)

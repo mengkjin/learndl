@@ -5,17 +5,12 @@
 # description: Suspend Machine
 # content: 在Ubuntu系统中挂起系统，如果当前有运行脚本，则不挂起系统
 
-import sys
-
-assert 'learndl' in __file__ , f'learndl path not found , do not know where to find src file : {__file__}'
-path = __file__.removesuffix(__file__.split('learndl')[-1])
-sys.path.append(path)
 
 import datetime , platform , subprocess
-from pathlib import Path
+from src.proj import PATH
 from src.app import get_running_scripts
 
-default_log_path = Path(__file__.removesuffix(__file__.split('learndl')[-1])).joinpath('logs','suspend','suspend_check.log')
+default_log_path = PATH.log_main.joinpath('suspend','suspend_check.log')
 
 def suspend_this_machine(log_path = default_log_path):
     running_scripts = get_running_scripts(__file__)

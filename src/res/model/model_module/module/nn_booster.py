@@ -22,7 +22,8 @@ class NNBooster(BasePredictorModel):
                    model_boost_param : Optional[dict] = None , 
                    testor_mode : bool = False ,
                    *args , **kwargs):
-        if testor_mode: self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
+        if testor_mode: 
+            self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
         nn_module    = model_nn_module    if model_nn_module    else self.config.model_module
         nn_param     = model_nn_param     if model_nn_param     else self.model_param 
         boost_module = model_boost_module if model_boost_module else self.config.model_booster_head
@@ -77,13 +78,15 @@ class NNBooster(BasePredictorModel):
 
     def forward_net(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
-        if len(batch_data) == 0: return None
+        if len(batch_data) == 0: 
+            return None
         x = batch_data.x if isinstance(batch_data , BatchData) else batch_data
         return self.net(x , *args , **kwargs)
     
     def forward_full(self , batch_data : BatchData | Tensor , *args , **kwargs): 
         '''model object that can be called to forward'''
-        if len(batch_data) == 0: return None
+        if len(batch_data) == 0: 
+            return None
         hidden = BatchOutput(self.forward_net(batch_data , *args , **kwargs)).other['hidden']
         pred = self.booster(hidden , *args , **kwargs)
         return pred
@@ -97,7 +100,8 @@ class NNBooster(BasePredictorModel):
         return batch_data_to_boost_input(long_batch , self.data.y_secid , self.data.y_date)
     
     def fit(self):
-        if self.trainer.verbosity > 10: print('model fit start')
+        if self.trainer.verbosity > 10: 
+            print('model fit start')
 
         self.new_model()
 
@@ -116,7 +120,8 @@ class NNBooster(BasePredictorModel):
                 self.batch_forward_net()
                 self.batch_metrics()
 
-            for submodel in self.submodels.values():  submodel.assess(self.net , self.status.epoch , self.metrics)
+            for submodel in self.submodels.values():  
+                submodel.assess(self.net , self.status.epoch , self.metrics)
             self.optimizer.scheduler_step(self.status.epoch)
         self.collect_net()
 
@@ -132,11 +137,13 @@ class NNBooster(BasePredictorModel):
             self.batch_forward()
             self.batch_metrics()
 
-        if self.trainer.verbosity > 10: print('model fit done')
+        if self.trainer.verbosity > 10: 
+            print('model fit done')
 
     def test(self):
         '''test the model inside'''
-        if self.trainer.verbosity > 10: print('model test start')
+        if self.trainer.verbosity > 10: 
+            print('model test start')
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -144,7 +151,8 @@ class NNBooster(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        if self.trainer.verbosity > 10: print('model test done')
+        if self.trainer.verbosity > 10: 
+            print('model test done')
 
     def batch_forward_net(self) -> None: 
         self.batch_output = BatchOutput(self.forward_net(self.batch_data))

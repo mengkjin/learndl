@@ -23,8 +23,10 @@ class mod_transformer(nn.Module):
 class TimeWiseAttention(nn.Module):
     def __init__(self , input_dim, output_dim=None, att_dim = None, dropout = 0.0):
         super().__init__()
-        if output_dim is None: output_dim = input_dim
-        if att_dim is None: att_dim = output_dim
+        if output_dim is None: 
+            output_dim = input_dim
+        if att_dim is None: 
+            att_dim = output_dim
         self.fc_in = nn.Linear(input_dim, att_dim)
         self.att_net = nn.Sequential(nn.Dropout(dropout),nn.Tanh(),nn.Linear(att_dim,1,bias=False),nn.Softmax(dim=0))
         self.fc_out = nn.Linear(2*att_dim,output_dim)
@@ -83,7 +85,8 @@ class SampleWiseTranformer(nn.Module):
         if x.isnan().any():
             pad_mask = self.pad_mask_nan(x) if pad_mask is None else (self.pad_mask_nan(x) + pad_mask) > 0
             x = x.nan_to_num()
-        if x.dim() != 2: x = self.fc_att(x)
+        if x.dim() != 2: 
+            x = self.fc_att(x)
         x = self.trans(x.unsqueeze(0) , src_key_padding_mask = pad_mask)
         return x.squeeze(0)
     def pad_mask_rand(self , x : Tensor , mask_ratio = 0.1) -> Tensor:

@@ -1,9 +1,5 @@
 import numpy as np
 import pandas as pd
-import statsmodels.api as sm
-import polars as pl
-
-from typing import Literal
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
@@ -17,7 +13,8 @@ __all__ = [
 ]
 
 def calc_acce(data : pd.DataFrame | pd.Series):
-    if isinstance(data , pd.Series): data = data.to_frame()
+    if isinstance(data , pd.Series): 
+        data = data.to_frame()
     delta1 = (data - data.groupby('secid').shift(4)) / data.groupby('secid').shift(4).abs()
     delta2 = (data.groupby('secid').shift(1) - data.groupby('secid').shift(5)) / data.groupby('secid').shift(5).abs()
     valid = data.groupby('secid').size() > 6
@@ -25,7 +22,8 @@ def calc_acce(data : pd.DataFrame | pd.Series):
     return df
 
 def calc_accv(data : pd.DataFrame | pd.Series):
-    if isinstance(data , pd.Series): data = data.to_frame()
+    if isinstance(data , pd.Series): 
+        data = data.to_frame()
     data1 = data.groupby('secid').tail(8)
     data2 = data.groupby('secid').shift(1).groupby('secid').tail(8)
     delta1 = (data1 - data1.groupby('secid').shift(4)) / data1.groupby('secid').std()

@@ -2,7 +2,7 @@ import traceback
 
 from datetime import datetime
 from pathlib import Path
-from typing import Literal , Any
+from typing import Any
 
 from src.proj import MACHINE , PATH , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher
 from .calendar import CALENDAR
@@ -83,8 +83,9 @@ class AutoRunTask:
     def get(self , key : str , default : Any = None) -> Any:
         raw = self.kwargs.get(key , default)
         try:
-            if isinstance(raw , str): raw = eval(raw)
-        except:
+            if isinstance(raw , str): 
+                raw = eval(raw)
+        except Exception:
             pass
         return raw
     
@@ -163,10 +164,13 @@ class AutoRunTask:
         self.logged_messages.append(f'CRITICAL : {message}')
 
     def attach(self , file : Path | str | list[Path] | list[str] , streamlit = True , email = True):
-        if not isinstance(file , list): file = [Path(file)]
+        if not isinstance(file , list): 
+            file = [Path(file)]
         file = [Path(f) for f in file]
-        if streamlit: self.exit_files.extend([f for f in file if f not in self.exit_files])
-        if email: self.emailer.Attach(file , group = 'autorun')
+        if streamlit: 
+            self.exit_files.extend([f for f in file if f not in self.exit_files])
+        if email: 
+            self.emailer.Attach(file , group = 'autorun')
         
     @property
     def final_message(self):

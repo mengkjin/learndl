@@ -28,7 +28,8 @@ class PredRecorder:
         return len(self.preds) == 0
     
     def all_preds(self , interval : int = 1):
-        if self.is_empty: return pd.DataFrame()
+        if self.is_empty: 
+            return pd.DataFrame()
         elif interval == 1:
             return pd.concat(self.preds.values())
         else:
@@ -37,8 +38,10 @@ class PredRecorder:
             return pd.concat(seq)
     
     def append_batch_pred(self):
-        if self.pred_idx in self.preds.keys(): return
-        if self.trainer.batch_idx < self.trainer.batch_warm_up: return
+        if self.pred_idx in self.preds.keys(): 
+            return
+        if self.trainer.batch_idx < self.trainer.batch_warm_up: 
+            return
         
         which_output = self.trainer.model_param.get('which_output' , 0)
         
@@ -47,7 +50,8 @@ class PredRecorder:
 
         pred = self.trainer.batch_output.pred_df(secid , date).dropna()
         pred = pred.loc[np.isin(pred['date'],self.dates),:]
-        if len(pred) == 0: return
+        if len(pred) == 0: 
+            return
 
         pred['model_num'] = self.trainer.model_num
         pred['submodel']  = self.trainer.model_submodel

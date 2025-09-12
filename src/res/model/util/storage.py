@@ -13,7 +13,7 @@ class MemFileStorage:
     def __init__(self , mem_storage : bool = False):
         self._mem_storage = mem_storage
         self.memdisk = {} if mem_storage else None
-        self.records = pd.DataFrame(columns = ['path' , 'group'] , dtype = str)
+        self.records = pd.DataFrame(columns = pd.Index(['path' , 'group']) , dtype = str)
 
     @property
     def is_disk(self): return not self.is_disk
@@ -21,19 +21,22 @@ class MemFileStorage:
     def is_mem(self): return self._mem_storage
     
     def exists(self , path):
-        if isinstance(path , str): path = Path(path)
+        if isinstance(path , str): 
+            path = Path(path)
         return path.exists() if self.memdisk is None else (str(path) in self.memdisk.keys())
 
     def save(self , obj , path , group = 'default'):
         if isinstance(path , list):
             [self.save(obj , p , group = group) for p in path]
         elif isinstance(path , (Path , str)):
+            path = str(path)
             if self.memdisk is None:
                 torch.save(obj , path)
             else:
                 self.memdisk[str(path)] = deepcopy(obj)
-            df = pd.DataFrame({'path' : [str(path)] , 'group' : [group]})
-            self.records = pd.concat([self.records[self.records['path'] != str(path)] , df] , axis=0)
+            df = pd.DataFrame({'path' : [path] , 'group' : [group]})
+
+            self.records = pd.concat([self.records.query('path != @path') , df] , axis=0)
         else:
             raise TypeError(type(path))
 
@@ -53,7 +56,8 @@ class MemFileStorage:
             return bool(obj.is_cuda)
         elif isinstance(obj , (list , tuple)):
             for sub in obj:
-                if self.is_cuda(sub): return True
+                if self.is_cuda(sub): 
+                    return True
             else:
                 return False
         elif isinstance(obj , dict):
@@ -70,16 +74,19 @@ class MemFileStorage:
         self.save(obj , path , group)
     
     def del_path(self , path):
-        if isinstance(path , (Path , str)): path = [path]
+        if isinstance(path , (Path , str)): 
+            path = [path]
         if self.memdisk is None:
             [Path(p).unlink() for p in path]
         else:
             [self.memdisk.__delitem__(str(p)) for p in path]
-        self.records = self.records[~self.records['path'].isin([str(p) for p in path])]
+        paths = [str(p) for p in path] # noqa
+        self.records = self.records.query('path not in @paths')
         
     def del_group(self , group):
-        if isinstance(group , str): group = [group]
-        path = self.records['path'][self.records['group'].isin(group)]
+        if isinstance(group , str): 
+            group = [group]
+        path = self.records.query('group in @group')['path']
         self.del_path(path)
         gc.collect()
 
@@ -102,7 +109,8 @@ class StoredFileLoader:
             yield self.storage.load(batch_file)
     def shuf(self , stage : Literal['init' , 'epoch'] , loader):
         '''shuffle at init or each epoch'''
-        if stage == self.shufopt: loader = np.random.permutation(loader)
+        if stage == self.shufopt: 
+            loader = np.random.permutation(loader)
         return loader
     
 class Checkpoint(MemFileStorage):
@@ -124,8 +132,10 @@ class Checkpoint(MemFileStorage):
         self.del_all()
     
     def join(self , src : Any , epoch : int , net):
-        if epoch < 0: return
-        if epoch >= len(self.epoch_queue): self._extend_reliance()
+        if epoch < 0: 
+            return
+        if epoch >= len(self.epoch_queue): 
+            self._extend_reliance()
         record_str = f'JOIN: Epoch {epoch}, from {src.__class__}({id(src)})'
         if src in self.epoch_queue[epoch]: 
             record_str += ', already exists'
@@ -140,7 +150,8 @@ class Checkpoint(MemFileStorage):
         self.join_record.append(record_str)
 
     def disjoin(self , src , epoch : int):
-        if epoch < 0: return
+        if epoch < 0: 
+            return
         record_str = f'DISJOIN: Epoch {epoch}, from {src.__class__}({id(src)})'
         
         if epoch >= len(self.epoch_queue):
@@ -185,7 +196,8 @@ class Deposition:
         for path in model_path.iterdir():
             if path.stem.endswith('.stack'):
                 new_path = path.with_stem(path.stem.replace('.stack',''))
-                if new_path.exists(): new_path.unlink()
+                if new_path.exists(): 
+                    new_path.unlink()
                 path.rename(new_path)
 
     def load_model(self , model_num , model_date , submodel = 'best'):

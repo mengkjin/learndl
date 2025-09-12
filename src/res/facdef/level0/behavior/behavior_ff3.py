@@ -1,6 +1,6 @@
-import numpy as np
 import pandas as pd
 
+from typing import Any
 from dataclasses import dataclass
 
 from src.data import DATAVENDOR
@@ -40,26 +40,26 @@ class FamaFrench3:
             self.fit(self.date)
 
     @staticmethod
-    def group_ret(df : pd.DataFrame):
-        df = df.groupby('date')[['mv_add' , 'mv']].sum()
-        return df['mv_add'] / df['mv']
+    def group_ret(df : pd.DataFrame) -> pd.Series:
+        df_new = df.groupby('date')[['mv_add' , 'mv']].sum()
+        return df_new['mv_add'] / df_new['mv']
 
     @classmethod
     def mkt(cls , df : pd.DataFrame):
         return cls.group_ret(df).rename('mkt')
 
     @classmethod
-    def smb(cls , df : pd.DataFrame):
-        mv_rank = df['mv'].groupby('date').rank(pct = True)
-        ret_B = cls.group_ret(df[mv_rank >= 0.9])
-        ret_S = cls.group_ret(df[mv_rank < 0.5])
+    def smb(cls , df : pd.DataFrame) -> pd.Series:
+        mv_rank : pd.Series | Any = df['mv'].groupby('date').rank(pct = True)
+        ret_B = cls.group_ret(df.loc[mv_rank >= 0.9])
+        ret_S = cls.group_ret(df.loc[mv_rank < 0.5])
         return (ret_S - ret_B).rename('smb')
     
     @classmethod
-    def hml(cls , df : pd.DataFrame):
-        bp_rank = df['bp'].groupby('date').rank(pct = True)
-        ret_H = cls.group_ret(df[bp_rank >= 2/3])
-        ret_L = cls.group_ret(df[bp_rank < 1/3])
+    def hml(cls , df : pd.DataFrame) -> pd.Series:
+        bp_rank : pd.Series | Any = df['bp'].groupby('date').rank(pct = True)
+        ret_H = cls.group_ret(df.loc[bp_rank >= 2/3])
+        ret_L = cls.group_ret(df.loc[bp_rank < 1/3])
         return (ret_H - ret_L).rename('hml')
 
     def fit(self , date , half_life = 0 , min_finite_ratio = 0.25):
@@ -67,7 +67,7 @@ class FamaFrench3:
 
         rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , mask = False , pivot = False).rename(columns={'pctchange':'ret'})
         mv   = DATAVENDOR.TRADE.get_mv(start_date , end_date , mv_type = 'circ_mv' , pivot = False , prev=True).rename(columns={'circ_mv':'mv'})
-        btop = (1 / DATAVENDOR.TRADE.get_val_data(start_date , end_date , 'pb' , pivot = False , prev = True)).rename(columns={'pb':'bp'})
+        btop = 1 / DATAVENDOR.TRADE.get_val_data(start_date , end_date , 'pb' , pivot = False , prev = True).rename(columns={'pb':'bp'})
         rets = rets.merge(mv , on = ['date' , 'secid']).merge(btop , on = ['date' , 'secid'])
         rets['mv_add']= rets['mv'] * rets['ret']
         stk = rets.pivot_table('ret' , 'date' , 'secid')

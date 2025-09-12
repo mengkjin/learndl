@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import polars as pl
 
 from abc import ABC , abstractmethod
 from typing import Any
@@ -33,8 +32,10 @@ class DateDataAccess(ABC):
     def truncate(self , data_type : str | None = None):
         data_type_list = [data_type] if isinstance(data_type , str) else self.DATA_TYPE_LIST + self.PL_DATA_TYPE_LIST
         for data_type in data_type_list:
-            if data_type in self.collections: self.collections[data_type].truncate()
-            if data_type in self.pl_collections: self.pl_collections[data_type].truncate()
+            if data_type in self.collections: 
+                self.collections[data_type].truncate()
+            if data_type in self.pl_collections: 
+                self.pl_collections[data_type].truncate()
 
     def get(self , date: int | TradeDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
         if overwrite or int(date) not in self.collections[data_type]:
@@ -69,15 +70,19 @@ class DateDataAccess(ABC):
             df = df.set_index('date')
         df = df.set_index('secid' , append = True).sort_index()
 
-        if mask:  df = INFO.mask_list_dt(df)
-        if pivot: df = df.pivot_table(field , 'date' , 'secid')
-        if drop_old: self.truncate(data_type)
+        if mask:  
+            df = INFO.mask_list_dt(df)
+        if pivot: 
+            df = df.pivot_table(field , 'date' , 'secid')
+        if drop_old: 
+            self.truncate(data_type)
         
         return df
     
     @staticmethod
     def mask_min_finite(df : pd.DataFrame | Any , min_finite_ratio = 0.25):
-        if min_finite_ratio <= 0: return df
+        if min_finite_ratio <= 0: 
+            return df
         assert min_finite_ratio <= 1 , f'min_finite_ratio must be less than or equal to 1 , got {min_finite_ratio}'
         pivoted = df.columns.name == 'secid' and df.index.name == 'date'
         if pivoted:

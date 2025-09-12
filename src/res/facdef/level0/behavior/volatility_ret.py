@@ -1,10 +1,7 @@
 import numpy as np
-import pandas as pd
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
-
-
 
 def ret_std_classic(date , n_months : int , lag_months : int = 0):
     start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)

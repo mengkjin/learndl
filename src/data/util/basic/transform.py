@@ -1,23 +1,30 @@
 import pandas as pd
 import numpy as np
 
+from typing import Any
 from src.basic import DB
 
 def secid_adjust(df : pd.DataFrame , code_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code'] , 
                  drop_old = True , decode_first = False , raise_if_no_secid = True):
     '''switch various type of codes into secid'''
 
-    if isinstance(code_cols , str): code_cols = [code_cols]
+    if isinstance(code_cols , str): 
+        code_cols = [code_cols]
     code_cols = [col for col in df.columns.values if str(col).lower() in code_cols]
-    if not code_cols: code_cols = ['secid']
-    elif len(code_cols) > 1: raise ValueError(f'Duplicated {code_cols} not supported')
+    if not code_cols: 
+        code_cols = ['secid']
+    elif len(code_cols) > 1: 
+        raise ValueError(f'Duplicated {code_cols} not supported')
     code_cols = code_cols[0]
     if (code_cols not in df.columns): 
-        if raise_if_no_secid: raise ValueError(f'secid not found')
-        else: return df
+        if raise_if_no_secid: 
+            raise ValueError(f'secid not found')
+        else: 
+            return df
 
     df['secid'] = DB.code_to_secid(df[code_cols] , decode_first = decode_first)
-    if drop_old and (code_cols != 'secid'): df = df.drop(columns=[code_cols])
+    if drop_old and (code_cols != 'secid'): 
+        df = df.drop(columns=[code_cols])
 
     return df
 
@@ -27,13 +34,16 @@ def col_reform(df : pd.DataFrame , col : str , rename = None , fillna = None , a
         df[col] = use_func(df[col])
     else:
         x = df[col]
-        if fillna is not None: x = x.fillna(fillna)
-        if astype is not None: x = x.astype(astype)
+        if fillna is not None: 
+            x = x.fillna(fillna)
+        if astype is not None: 
+            x = x.astype(astype)
         df[col] = x 
-    if rename: df = df.rename(columns={col:rename})
+    if rename: 
+        df = df.rename(columns={col:rename})
     return df
 
-def row_filter(df : pd.DataFrame , col : str | list | tuple , cond_func = lambda x:x):
+def row_filter(df : pd.DataFrame | Any , col : str | list | tuple , cond_func = lambda x:x) -> pd.DataFrame | Any:
     '''filter pd.DataFrame rows: cond_func(col)'''
     if isinstance(col , str):
         return df[cond_func(df[col])]
@@ -64,24 +74,29 @@ def trade_min_fillna(df : pd.DataFrame):
 
     # prices to last time price (min != 0)
     for feat in ['open','high','low','vwap','close']: 
-        if df[feat].isna().any():
-            df[feat] = df[feat].where(~df[feat].isna() , df['fix'])
+        df[feat] = df[feat].where(~df[feat].isna() , df['fix'])
     del df['fix']
     return df
 
 def trade_min_reform(df : pd.DataFrame , x_min_new : int , x_min_old = 1):
     '''from minute trade data to xmin trade data'''
     df = trade_min_fillna(df)
-    if x_min_new == x_min_old: return df
+    if x_min_new == x_min_old: 
+        return df
     assert x_min_new % x_min_old == 0 , f'{x_min_new} % {x_min_old} != 0'
     by = x_min_new // x_min_old
     max_nbar = 240 // x_min_old
     assert df['minute'].max() in [max_nbar-1 , max_nbar] , f'{df["minute"].max()} should be {max_nbar-1} or {max_nbar}'
-    if df['minute'].max() == max_nbar: df['minute'] = df['minute'] -1
-    if x_min_new != 1: df = df[df['minute'] >= 0]
+    if df['minute'].max() == max_nbar: 
+        df['minute'] = df['minute'] -1
+    if x_min_new != 1: 
+        df = df.query('minute >= 0')
     df['minute'] = df['minute'].clip(lower=0) // by
     agg_dict = {'open':'first','high':'max','low':'min','close':'last','amount':'sum','volume':'sum'}
-    if 'num_trades' in df.columns: agg_dict['num_trades'] = 'sum'
+    if 'num_trades' in df.columns: 
+        agg_dict['num_trades'] = 'sum'
     data_new = df.groupby(['secid' , 'minute']).agg(agg_dict)
-    if 'vwap' in df.columns: data_new['vwap'] = data_new['amount'] / data_new['volume']
+    assert isinstance(data_new , pd.DataFrame) , f'data_new is not a DataFrame: {data_new}'
+    if 'vwap' in df.columns: 
+        data_new['vwap'] = data_new['amount'] / data_new['volume']
     return data_new.reset_index(drop=False)

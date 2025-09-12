@@ -10,34 +10,44 @@ class BaseBuffer:
         self.register_setup()
         self.register_update()
 
-    def __getitem__(self , key): return self.contents[key]
-    def __setitem__(self , key , value): self.contents[key] = value
+    def __getitem__(self , key): 
+        return self.contents[key]
+    def __setitem__(self , key , value): 
+        self.contents[key] = value
     @staticmethod
-    def none_wrapper(*args, **kwargs): return {}
+    def none_wrapper(*args, **kwargs): 
+        return {}
 
     def update(self , new = None):
         if new is not None: 
-            if self.always and self.device is not None: new = self.device(new)
+            if self.always and self.device is not None: 
+                new = self.device(new)
             self.contents.update(new)
         return self
     
     def get(self , keys , default = None , keep_none = True):
         if hasattr(keys , '__len__'):
             result = {k:self.contents.get(k , default) for k in keys}
-            if not keep_none: result = {k:v for k,v in result.items() if v is not None}
+            if not keep_none: 
+                result = {k:v for k,v in result.items() if v is not None}
         else:
             result = self.contents.get(keys , default)
-        if not self.always and self.device is not None: result = self.device(result)
+        if not self.always and self.device is not None: 
+            result = self.device(result)
         return result
 
     def process(self , stage : Literal['setup' , 'update'] , data_module):
         new = getattr(self , f'{stage}_wrapper')(data_module)
         if new is not None: 
-            if self.always and self.device is not None: new = self.device(new)
+            if self.always and self.device is not None: 
+                new = self.device(new)
             self.contents.update(new)
         return self
     
-    def reset(self): self.contents : dict[str,Any] = {}
+    def reset(self): 
+        self.contents = {}
     
-    def register_setup(self) -> None: ...
-    def register_update(self) -> None: ...
+    def register_setup(self) -> None: 
+        ...
+    def register_update(self) -> None: 
+        ...

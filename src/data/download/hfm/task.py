@@ -34,19 +34,30 @@ class JSFetcher:
     
     @classmethod
     def default_fetcher(cls , db_src , db_key):
-        if db_src == 'information_js': return cls.basic_info
+        if db_src == 'information_js': 
+            return cls.basic_info
         elif db_src == 'models':
-            if db_key == 'risk_exp': return cls.risk_exp
-            elif db_key == 'risk_cov': return cls.risk_cov
-            elif db_key == 'risk_spec': return cls.risk_spec
-            elif db_key == 'longcl_exp': return cls.alpha_longcl
+            if db_key == 'risk_exp': 
+                return cls.risk_exp
+            elif db_key == 'risk_cov': 
+                return cls.risk_cov
+            elif db_key == 'risk_spec': 
+                return cls.risk_spec
+            elif db_key == 'longcl_exp': 
+                return cls.alpha_longcl
         elif db_src == 'trade_js':
-            if db_key == 'day': return cls.trade_day
-            elif db_key == 'min': return cls.trade_min
-            elif re.match(r'^\d+day$' , db_key): return cls.trade_Xday
-            elif re.match(r'^\d+min$' , db_key): return cls.trade_Xmin
-        elif db_src == 'labels_js': return cls.labels
-        elif db_src == 'benchmark_js': return cls.benchmark
+            if db_key == 'day': 
+                return cls.trade_day
+            elif db_key == 'min': 
+                return cls.trade_min
+            elif re.match(r'^\d+day$' , db_key): 
+                return cls.trade_Xday
+            elif re.match(r'^\d+min$' , db_key): 
+                return cls.trade_Xmin
+        elif db_src == 'labels_js': 
+            return cls.labels
+        elif db_src == 'benchmark_js': 
+            return cls.benchmark
         raise Exception('Unknown default_fetcher')
 
     def eval(self , date = None , **kwargs) -> Any:
@@ -76,7 +87,8 @@ class JSFetcher:
         if incremental: 
             if len(target_dates):
                 source_dates = source_dates[source_dates >= min(target_dates)]
-        if trace > 0 and len(target_dates) > 0: target_dates = target_dates[:-trace]
+        if trace > 0 and len(target_dates) > 0: 
+            target_dates = target_dates[:-trace]
         new_dates = CALENDAR.slice(CALENDAR.diffs(source_dates , target_dates) , start_dt , end_dt)
 
         return new_dates   
@@ -84,7 +96,8 @@ class JSFetcher:
     @classmethod
     def basic_info(cls , key = None , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get basic info data from R environment , basic_info('concepts')'''
-        if key is None: raise KeyError(key) 
+        if key is None: 
+            raise KeyError(key) 
         key = Path(key).parts[-1]
         d_entrm = {'entry_dt'  : {'fillna' : -1 , 'astype' : int} , 
                    'remove_dt' : {'fillna' : 99991231 , 'astype' : int}}
@@ -120,12 +133,13 @@ class JSFetcher:
                 col_reform : d_entrm | {'wind_sec_name' : {'rename' : 'concept'}} ,
             },
         }
-        if not Path(params[key]['path']).exists(): return FailedData(key)
+        if not Path(params[key]['path']).exists(): 
+            return FailedData(key)
         df = pd.read_csv(params[key]['path'] , encoding='gbk' , dtype = params[key].get('dtype'))
         if key == 'industry':
             path_dict = f'D:/Coding/ChinaShareModel/ModelParameters/setting/indus_dictionary_sw.csv'
-            ind_dict = pd.read_csv(path_dict , encoding='gbk')
-            ind_dict = ind_dict[ind_dict['version'] == 2021]        
+            ind_dict : pd.DataFrame = pd.read_csv(path_dict , encoding='gbk')
+            ind_dict = ind_dict.query('version == 2021')        
             for i in range(3): 
                 df[f'ind_code_{i+1}'] = df['ind_code'].str.slice(0 , 4 + 2*i)
                 tmp = {
@@ -152,29 +166,34 @@ class JSFetcher:
     def risk_exp(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get risk model from R environment , risk_exp(20240325)'''
         path = Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model/jm2018_model_{date}.csv')
-        if not path.exists(): return FailedData('risk_exp' , date)
+        if not path.exists(): 
+            return FailedData('risk_exp' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.read_csv(path)
             df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=True))
-        if with_date: df['date'] = date
+        if with_date: 
+            df['date'] = date
         return df
     
     @classmethod
     def risk_cov(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get risk model from R environment , risk_cov(20240325)'''
         path = Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/6_factor_return_covariance/jm2018_model/jm2018_model_{date}.Rdata')
-        if not path.exists(): return FailedData('risk_cov' , date)
+        if not path.exists(): 
+            return FailedData('risk_cov' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pyreadr.read_r(path)['data'] * 252
             df = adjust_precision(df.reset_index().rename(columns={'index' :'factor_name'}))
-        if with_date: df['date'] = date
+        if with_date: 
+            df['date'] = date
         return df
     
     @classmethod
     def risk_spec(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get risk model from R environment , risk_spec(20240325)'''
         path = Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model/jm2018_model_{date}.csv')
-        if not path.exists(): return FailedData('risk_spec' , date)
+        if not path.exists(): 
+            return FailedData('risk_spec' , date)
 
         paths = {'wind_id':Path(f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/1_basic_info/wind_id/wind_id_{date}.Rdata') , 
                  'spec_risk':Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/C_specific_risk/jm2018_model/jm2018_model_{date}.Rdata')}
@@ -182,7 +201,8 @@ class JSFetcher:
             df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
             df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=True))
             df['spec_risk'] = df['spec_risk'] * np.sqrt(252)
-        if with_date: df['date'] = date
+        if with_date: 
+            df['date'] = date
         return df
 
     @classmethod
@@ -205,7 +225,7 @@ class JSFetcher:
             'pred_multi'  : 'MultiFactorAll'
         }
         with np.errstate(invalid='ignore' , divide = 'ignore'):
-            df = pd.DataFrame(columns=['secid'] , dtype = int).set_index('secid')
+            df = pd.DataFrame(columns=pd.Index(['secid']) , dtype = int).set_index('secid')
             for k,v in a_names.items():
                 colnames = ['secid',v]
                 path = Path(f'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/{v}/{v}_{date}.txt')
@@ -217,7 +237,8 @@ class JSFetcher:
                 df_new['secid'] = df_new['secid'].astype(int)
                 df = pd.merge(df , df_new.set_index('secid') , how='outer' , on='secid')
             df = adjust_precision(df).reset_index()
-        if with_date: df['date'] = date
+        if with_date: 
+            df['date'] = date
         return df
 
     @classmethod
@@ -250,7 +271,8 @@ class JSFetcher:
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.concat([pyreadr.read_r(paths[k])['data'].rename(columns={'data':k}) for k in paths.keys()] , axis = 1)
             df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=True)).reset_index(drop=True)
-        if with_date: df['date'] = date
+        if with_date: 
+            df['date'] = date
         return df
 
     @classmethod
@@ -280,12 +302,13 @@ class JSFetcher:
             data['pctchange'] = data['pctchange'] / 100 + 1
             data['vwap'] = data['vwap'] * data['volume']
             agg_dict = {'open':'first','high':'max','low':'min','close':'last','pctchange':'prod','vwap':'sum',**{k:'sum' for k in volume_feat},}
-            df = data.groupby('secid').agg(agg_dict)
+            df : pd.DataFrame | Any = data.groupby('secid').agg(agg_dict)
             df['pctchange'] = (df['pctchange'] - 1) * 100
             df['vwap'] /= np.where(df['volume'] == 0 , np.nan , df['volume'])
             df['vwap'] = df['vwap'].where(~df['vwap'].isna() , df['close'])
 
-        if with_date: df['date'] = date
+        if with_date: 
+            df['date'] = date
         return df
 
     @classmethod
@@ -299,18 +322,23 @@ class JSFetcher:
         }
 
         _files = {k:PATH.list_files(v) for k , v in path_param.items()}
-        for v in _files.values(): v.sort()
+        for v in _files.values(): 
+            v.sort()
         _dates = {k:DB.file_dates(v) for k , v in _files.items()}
 
         pos = list(_dates['id']).index(date)
-        if pos + lag1 + days >= len(_dates['id']):  return None
-        if not path_param['res'].joinpath(path_param['res'].name + f'_{date}.Rdata').exists(): return None
+        if pos + lag1 + days >= len(_dates['id']):  
+            return None
+        if not path_param['res'].joinpath(path_param['res'].name + f'_{date}.Rdata').exists(): 
+            return None
 
         d0 , d1 = _dates['id'][pos + lag1] , _dates['id'][pos + lag1 + days] 
         res_pos = list(_dates['res']).index(d0)
-        if res_pos + days > len(_dates['res']): return None
+        if res_pos + days > len(_dates['res']): 
+            return None
 
-        f_read = lambda k,d,p='':pyreadr.read_r(path_param[k].joinpath(f'{path_param[k].name}_{d}.Rdata'))['data'].rename(columns={'data':k+p})
+        def f_read(k,d,p=''):
+            return pyreadr.read_r(path_param[k].joinpath(f'{path_param[k].name}_{d}.Rdata'))['data'].rename(columns={'data':k+p})
         wind_id = f_read('id',date)
 
         cp0 = pd.concat([f_read('id',d0),f_read('cp',d0,'0'),f_read('adj',d0,'0')]  , axis = 1)
@@ -330,7 +358,8 @@ class JSFetcher:
             df = pd.merge(rtn,res,how='left',on='id')
             df.columns = ['wind_id' , f'rtn_lag{int(lag1)}_{days}' , f'res_lag{int(lag1)}_{days}']
             df = adjust_precision(secid_adjust(df , 'wind_id' , drop_old=True)).reset_index(drop=True)
-        if with_date: df['date'] = date
+        if with_date: 
+            df['date'] = date
         return df
 
     @classmethod
@@ -348,37 +377,46 @@ class JSFetcher:
             'vwap'      : 'vwap' , 
         }
         path = Path(f'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin/equity_pricemin_{date}.txt')
-        if not path.exists(): return FailedData('min' , date)
+        if not path.exists(): 
+            return FailedData('min' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.read_csv(path , sep='\t' , low_memory=False)
-            if df['ticker'].dtype in (object,str):  df = df[df['ticker'].str.isdigit()] 
+            if df['ticker'].dtype in (object,str):  
+                df = df.query('ticker.str.isdigit()') 
             df['ticker'] = df['ticker'].astype(int)
-            cond_stock = lambda x,y:((600000<=x)&(x<=699999)&(y=='XSHG'))|((0<=x)&(x<=398999)&(y=='XSHE'))
+            def cond_stock(x,y):
+                return ((600000<=x)&(x<=699999)&(y=='XSHG'))|((0<=x)&(x<=398999)&(y=='XSHE'))
             df = row_filter(df,('ticker','exchangecd'),cond_stock)
             df = df.loc[:,list(data_params.keys())].rename(columns=data_params)
             df['minute'] = (df['minute']/60).astype(int)
             df['minute'] = (df['minute'] - 90) * (df['minute'] <= 240) + (df['minute'] - 180) * (df['minute'] > 240)
             df = df.sort_values(['secid','minute'])
             df = trade_min_fillna(df)
-        if with_date: df['date'] = date
+        if with_date: 
+            df['date'] = date
         return df
 
     @classmethod
     def trade_Xmin(cls , date : int , x : int , df_min : Any = None , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get X minute trade data from R environment , trade_Xmin(20240324 , 5)'''
         df = df_min if df_min is not None else cls.trade_min(date , **kwargs)
-        if df is None or isinstance(df , FailedData): return FailedData(f'{x}min' , date)
+        if df is None or isinstance(df , FailedData): 
+            return FailedData(f'{x}min' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
-            if x != 1: df = trade_min_reform(df , x)
-            if df is None: return df
-        if with_date: df['date'] = date
+            if x != 1: 
+                df = trade_min_reform(df , x)
+            if df is None: 
+                return df
+        if with_date: 
+            df['date'] = date
         return df
     
     @classmethod
     def benchmark(cls , date : int , bm : Literal['csi300' , 'csi500' , 'csi800' , 'csi1000'] , **kwargs) -> Optional[pd.DataFrame | FailedData]:
         '''get risk model from R environment , bm_any('CSI300' , 20240325)'''
         path = Path(f'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/{bm.upper()}/{bm.upper()}_{date}.csv')
-        if not path.exists():  return FailedData(f'bm_{bm.lower()}' , date)
+        if not path.exists():  
+            return FailedData(f'bm_{bm.lower()}' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             df = pd.read_csv(path)
             df = secid_adjust(df , 'wind_id' , drop_old=True)
@@ -393,8 +431,7 @@ class JSDownloader():
         return paths
 
 def kline_download(verbose = True):
-    import boto3 , re , datetime , os , yaml # type: ignore
-    import pandas as pd
+    import boto3 , re , datetime , os    # type: ignore
     from pathlib import Path
 
     conf = MACHINE.local_settings('aws')
@@ -403,7 +440,7 @@ def kline_download(verbose = True):
 
     session = boto3.Session(aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key, region_name='cn-north-1')
     s3 = session.resource('s3')
-    bucket = s3.Bucket('datayes-data') # type: ignore
+    bucket = s3.Bucket('datayes-data')
     download_path = PATH.miscel.joinpath('JSMinute')
 
     os.makedirs(download_path , exist_ok=True)
@@ -412,11 +449,14 @@ def kline_download(verbose = True):
     dates = np.setdiff1d(target_dates , stored_dates)
 
     paths : list[Path] = []
-    if len(dates) == 0: return paths
+    if len(dates) == 0: 
+        return paths
     start , end = dates.min() , dates.max()
 
-    filedate = lambda x:int(re.findall(r'(\d{8})', x.key)[-1])
-    filefilter = lambda x:(x.key.endswith('.zip') and os.path.basename(x.key).startswith('equity_pricemin'))
+    def filedate(x):
+        return int(re.findall(r'(\d{8})', x.key)[-1])
+    def filefilter(x):
+        return x.key.endswith('.zip') and os.path.basename(x.key).startswith('equity_pricemin')
 
     if start <= 20230328 and end <= 20230328:
         file_list = [f for f in bucket.objects.filter(Prefix = 'equity_pricemin/') if filefilter(f)]
@@ -441,7 +481,8 @@ def kline_download(verbose = True):
     def download_wrapper(args):
         date, file = args
         zip_file_path = download_path.joinpath(f'min.{date}.zip')
-        if zip_file_path.exists(): return
+        if zip_file_path.exists(): 
+            return
         bucket.download_file(file.key , zip_file_path)
         return zip_file_path
 
@@ -449,7 +490,9 @@ def kline_download(verbose = True):
         futures = {executor.submit(download_wrapper, (date , file)):date for date , file in files.items()}
         for future in as_completed(futures):
             date = futures[future]
-            if (path := future.result()) is not None: paths.append(path)
-            if verbose: print(f'{datetime.datetime.now()} : {date} minute kline download done!')
+            if (path := future.result()) is not None: 
+                paths.append(path)
+            if verbose: 
+                print(f'{datetime.datetime.now()} : {date} minute kline download done!')
             
     return paths

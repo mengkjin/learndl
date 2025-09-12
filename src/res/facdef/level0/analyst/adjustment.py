@@ -1,8 +1,6 @@
-import pandas as pd
 import numpy as np
-import polars as pl
 
-from typing import Any , Literal
+from typing import Literal
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
@@ -15,12 +13,12 @@ __all__ = [
 
 def get_npro_adjustment(date : int , n_month : int , type : Literal['rec' , 'upnum' , 'uppct'] , 
                         within_ann_days : int | None = None , ):
-    target_quarter = f'{date // 10000}Q4'
-    start_date = DATAVENDOR.CALENDAR.cd(date , -30 * n_month)
+    target_quarter = f'{date // 10000}Q4' # noqa
+    start_date = DATAVENDOR.CALENDAR.cd(date , -30 * n_month) # noqa
 
     df = DATAVENDOR.ANALYST.get_trailing_reports(date , n_month + 6).set_index(['secid','org_name','report_date'])
-    df = df[df['quarter'] == target_quarter].sort_index().groupby(['secid','org_name'])['np'].pct_change().dropna().reset_index()
-    df = df[df['report_date'] >= start_date].set_index(['secid','report_date'])
+    df = df.query('quarter == @target_quarter').sort_index().groupby(['secid','org_name'])['np'].pct_change().dropna().reset_index()
+    df = df.query('report_date >= @start_date').set_index(['secid','report_date'])
 
     if within_ann_days is not None:
         assert within_ann_days > 0 , 'within_ann_days must be positive'

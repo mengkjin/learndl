@@ -65,21 +65,26 @@ def _paths_to_dates(paths : list[Path] | Generator[Path, None, None]):
 def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
     paths = directory.rglob('*')
     dates = _paths_to_dates(paths)
-    if end_dt   is not None: dates = dates[dates <= (end_dt   if end_dt   > 0 else _today(end_dt))]
-    if start_dt is not None: dates = dates[dates >= (start_dt if start_dt > 0 else _today(start_dt))]
-    if year is not None:     dates = dates[dates // 10000 == year]
+    if end_dt   is not None: 
+        dates = dates[dates <= (end_dt   if end_dt   > 0 else _today(end_dt))]
+    if start_dt is not None: 
+        dates = dates[dates >= (start_dt if start_dt > 0 else _today(start_dt))]
+    if year is not None:     
+        dates = dates[dates // 10000 == year]
     return dates
 
 def dir_min_date(directory : Path):
     years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
-    if not years: return 0
+    if not years: 
+        return 0
     paths = [p for p in directory.joinpath(str(min(years))).iterdir()]
     dates = _paths_to_dates(paths)
     return min(dates) if len(dates) else 0
 
 def dir_max_date(directory : Path):
     years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
-    if not years: return 99991231
+    if not years: 
+        return 99991231
     paths = [p for p in directory.joinpath(str(max(years))).iterdir()]
     dates = _paths_to_dates(paths)
     return max(dates) if len(dates) else 99991231
@@ -94,16 +99,20 @@ def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , pr
             df.to_feather(path)
         else:
             df.to_parquet(path , engine='fastparquet')
-        if printing_prefix: print(f'{printing_prefix} save to {path} successfully')
+        if printing_prefix: 
+            print(f'{printing_prefix} save to {path} successfully')
         return True
     else:
-        if printing_prefix: print(f'{printing_prefix} already exists')
+        if printing_prefix: 
+            print(f'{printing_prefix} already exists')
         return False
 
 def load_df(path : Path , raise_if_not_exist = False):
     if not path.exists():
-        if raise_if_not_exist: raise FileNotFoundError(path)
-        else: return pd.DataFrame()
+        if raise_if_not_exist: 
+            raise FileNotFoundError(path)
+        else: 
+            return pd.DataFrame()
     if SAVE_OPT_DB == 'feather':
         df = pd.read_feather(path)
     else:
@@ -113,14 +122,18 @@ def load_df(path : Path , raise_if_not_exist = False):
 
 def _load_df_mapper(df : pd.DataFrame):
     old_index = df.index.names if 'secid' in df.index.names else None
-    if old_index is not None: df = df.reset_index(drop = False)
-    if 'secid' in df.columns:  df['secid'] = secid_to_secid(df['secid'])
-    if old_index is not None: df = df.set_index(old_index)
+    if old_index is not None: 
+        df = df.reset_index(drop = False)
+    if 'secid' in df.columns:  
+        df['secid'] = secid_to_secid(df['secid'])
+    if old_index is not None: 
+        df = df.set_index(old_index)
     return df
 
 def load_df_multi(paths : dict , date_colname : str = 'date' , 
                   parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread'):
-    if parallel is None: parallel = _load_parallel
+    if parallel is None: 
+        parallel = _load_parallel
     reader : Any = pd.read_feather if SAVE_OPT_DB == 'feather' else pd.read_parquet
     paths = {d:p for d,p in paths.items() if p.exists()}
     if parallel is None or parallel == 'none':
@@ -136,25 +149,31 @@ def load_df_multi(paths : dict , date_colname : str = 'date' ,
             futures = {pool.submit(reader , p):d for d,p in paths.items()}
             dfs = [future.result().assign(**{date_colname:futures[future]}) for future in as_completed(futures)]
 
-    if not dfs: return pd.DataFrame()
+    if not dfs: 
+        return pd.DataFrame()
     df = pd.concat(dfs)
     df = _load_df_mapper(df)
     return df
 
 def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_cols = False , 
                df_syntax : str | None = 'some df' , reset_index = True , ignored_fields = []):
-    if date_colname and date is not None: df[date_colname] = date
+    if date_colname and date is not None: 
+        df[date_colname] = date
 
     if df_syntax:
         if df.empty:
             print(f'{df_syntax} is empty')
-        elif df.isna().all().all():
-            print(f'{df_syntax} is all-NA')
-        elif check_na_cols and df.isna().all().any():
-            print(f'{df_syntax} has columns [{str(df.columns.values[df.isna().all()])}] all-NA')
+        else:
+            na_cols : pd.Series | Any = df.isna().all()
+            if na_cols.all():
+                print(f'{df_syntax} is all-NA')
+            elif check_na_cols and na_cols.any():
+                print(f'{df_syntax} has columns [{str(df.columns[na_cols])}] all-NA')
 
-    if reset_index and len(df.index.names) > 1 or df.index.name: df = df.reset_index()
-    if ignored_fields: df = df.drop(columns=ignored_fields , errors='ignore')
+    if reset_index and len(df.index.names) > 1 or df.index.name: 
+        df = df.reset_index()
+    if ignored_fields: 
+        df = df.drop(columns=ignored_fields , errors='ignore')
     return df
 
 def db_path(db_src , db_key , date = None , use_alt = False) -> Path:
@@ -170,7 +189,8 @@ def db_path(db_src , db_key , date = None , use_alt = False) -> Path:
     new_path = parent.joinpath(base)
     if not new_path.exists() and db_src in _db_alternatives and use_alt:
         alt_path = db_path(_db_alternatives[db_src] , db_key , date , use_alt = False)
-        if alt_path.exists(): new_path = alt_path
+        if alt_path.exists(): 
+            new_path = alt_path
     return new_path
 
 def db_dates(db_src , db_key , start_dt = None , end_dt = None , year = None , use_alt = False):
@@ -190,7 +210,8 @@ def db_min_date(db_src , db_key , fast = True):
         years = sorted([int(y.stem) for y in path.iterdir() if y.is_dir()])
         for year in years:
             dates = dir_dates(path.joinpath(str(year)))
-            if len(dates): return min(dates)
+            if len(dates): 
+                return min(dates)
         return 99991231
     else:
         dates = db_dates(db_src , db_key)
@@ -203,7 +224,8 @@ def db_max_date(db_src , db_key , fast = True):
         years = sorted([int(y.stem) for y in path.iterdir() if y.is_dir()])
         for year in years[::-1]:
             dates = dir_dates(path.joinpath(str(year)))
-            if len(dates): return max(dates)
+            if len(dates): 
+                return max(dates)
         return -1
     else:
         dates = db_dates(db_src , db_key)
@@ -225,7 +247,8 @@ def db_save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose =
         date to be saved, if the db is by date, date is required
     '''
     printing_prefix = f'DataBase object [{db_src}],[{db_key}],[{date}]' if verbose else None
-    if df is not None and (len(df.index.names) > 1 or df.index.name): df = df.reset_index()
+    if df is not None and (len(df.index.names) > 1 or df.index.name): 
+        df = df.reset_index()
     mark = save_df(df , db_path(db_src , db_key , date , use_alt = False) , 
                    overwrite = True , printing_prefix = printing_prefix)
     return mark
@@ -365,8 +388,10 @@ def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswi
     if isinstance(path , (list,tuple)):
         return [d[0] for d in [file_dates(p , startswith , endswith) for p in path] if d]
     else:
-        if not path.name.startswith(startswith): return []
-        if not path.name.endswith(endswith): return []
+        if not path.name.startswith(startswith): 
+            return []
+        if not path.name.endswith(endswith): 
+            return []
         s = path.stem[-8:]
         return [int(s)] if s.isdigit() else []
     
@@ -377,7 +402,8 @@ def R_dir_dates(directory):
     
 @_laptop_func_deprecated
 def R_source_dates(db_src , db_key):
-    if db_src != 'benchmark_js': db_key = re.sub(r'\d+', '', db_key)
+    if db_src != 'benchmark_js': 
+        db_key = re.sub(r'\d+', '', db_key)
     source_key = '/'.join([db_src , db_key])
     date_source = {
         'models/risk_exp'   : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model' ,

@@ -1,18 +1,17 @@
 
 
-import sys , pathlib , os , subprocess
-file_path = str(pathlib.Path(__file__).absolute())
-assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
-path = file_path.removesuffix(file_path.split('learndl' , 1)[-1])
-if not path in sys.path: sys.path.append(path)
-assert os.getcwd().lower() == path.lower() , \
-    f'current working directory {os.getcwd()} is not {path} , do not know where to find src file'
-
+import pathlib , os
 import streamlit as st
 import streamlit_autorefresh as st_autorefresh
 
 from src.app.basic import PAGE_TITLE , AUTO_REFRESH_INTERVAL
 from util import (SC , style , intro_pages , script_pages , runs_page_url , get_logo)
+
+file_path = str(pathlib.Path(__file__).absolute())
+path = file_path.removesuffix(file_path.split('learndl' , 1)[-1]).lower()
+
+assert os.getcwd().lower() == path , \
+    f'current working directory {os.getcwd()} is not {path} , do not know where to find src file'
 
 st.set_option('client.showSidebarNavigation', False)
 
@@ -28,8 +27,10 @@ def page_config():
     )
     style()
     cols = st.columns([4,1] , gap = 'small' , vertical_alignment = 'center')
-    with cols[0]: st.session_state['box-title'] = st.container(key = 'box-title')
-    with cols[1]: st.session_state['box-main-button'] = st.container(key = 'box-main-button')
+    with cols[0]: 
+        st.session_state['box-title'] = st.container(key = 'box-title')
+    with cols[1]: 
+        st.session_state['box-main-button'] = st.container(key = 'box-main-button')
     #st.session_state['box-title'].title(f":rainbow[:material/rocket_launch: {__page_title__} (_v{__version__}_)]")
     #if cols[1].button(':rainbow[:material/home:]' , key = 'go-home-button' , help = 'Go to Home Page'): 
     #    st.switch_page(get_intro_page('home')['page'])
@@ -39,7 +40,8 @@ def page_navigation():
     pages['Intro'] = [page['page'] for page in intro_pages().values()]
     for page in script_pages().values():
         group_name = page['group'].title() + ' Scripts'
-        if group_name not in pages: pages[group_name] = []
+        if group_name not in pages: 
+            pages[group_name] = []
         pages[group_name].append(page['page'])
     pg = st.navigation(pages = pages , position='top')
     return pg
@@ -111,7 +113,8 @@ def intro_links():
 
 def script_links():
     with st.container(key = "sidebar-script-links"):
-        subsubheader = lambda x: st.write(f"""
+        def subsubheader(x): 
+            st.write(f"""
                 <div style="
                     font-size: 16px;
                     font-weight: bold;

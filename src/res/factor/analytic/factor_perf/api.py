@@ -5,6 +5,8 @@ from .calculator import BasePerfCalc
 from ..test_manager import BaseTestManager
 from ...util import Benchmark , StockFactor
 
+__all__ = ['Calc' , 'FactorPerfManager' , 'BasePerfCalc' , 'BaseTestManager']
+
 class FactorPerfManager(BaseTestManager):
     '''
     Factor Performance Calculator Manager
@@ -51,6 +53,8 @@ class FactorPerfManager(BaseTestManager):
     ]
 
     def calc(self , factor: StockFactor , benchmarks: Optional[list[Benchmark|Any]] | Any = None , verbosity = 1):
-        for task in self.tasks.values(): task.calc(factor , benchmarks , verbosity = verbosity - 1)
-        if verbosity > 0: print(f'{self.__class__.__name__} calc Finished!')
+        for task in self.tasks.values(): 
+            task.calc(factor , benchmarks , verbosity = verbosity - 1)
+        if verbosity > 0: 
+            print(f'{self.__class__.__name__} calc Finished!')
         return self

@@ -3,7 +3,7 @@ import numpy as np
 
 from collections.abc import Iterable
 from datetime import date , datetime , timedelta
-from typing import Any , Callable
+from typing import Any
 
 def today(offset = 0 , astype : Any = int):
     d = datetime.today() + timedelta(days=offset)
@@ -23,7 +23,8 @@ def date_diff(date1 : int | str , date2 : int | str):
     return (datetime.strptime(str(date1), '%Y%m%d') - datetime.strptime(str(date2), '%Y%m%d')).days
 
 def date_seg(start_dt , end_dt , freq='QE' , astype : Any = int):
-    if start_dt >= end_dt: return []
+    if start_dt >= end_dt: 
+        return []
     dt_list = pd.date_range(str(start_dt) , str(end_dt) , freq=freq).strftime('%Y%m%d').astype(int)
     dt_starts = [date_offset(start_dt) , *date_offset(dt_list[:-1],1)]
     dt_ends = [*dt_list[:-1] , date_offset(end_dt)]

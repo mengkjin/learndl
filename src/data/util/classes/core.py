@@ -5,7 +5,7 @@ import pandas as pd
 from dataclasses import dataclass
 from pathlib import Path
 from torch import Tensor
-from typing import Any , ClassVar , Literal , Optional
+from typing import Any , ClassVar , Optional
 
 from src.proj import PATH
 from src.basic import CALENDAR , DB , SILENT , Timer , torch_load
@@ -36,25 +36,30 @@ def block_file_path(key : str , predict=False, alias_search = True):
         alias_list = data_type_alias(key) if alias_search else []
         for new_key in alias_list:
             path = PATH.block.joinpath(f'X_{new_key}{train_mark}.{DB.SAVE_OPT_BLK}')
-            if path.exists(): return path
+            if path.exists(): 
+                return path
         return PATH.block.joinpath(f'X_{key}{train_mark}.{DB.SAVE_OPT_BLK}')
 
 def norm_file_path(key : str , predict = False, alias_search = True):
-    if key.lower() == 'y': return PATH.norm.joinpath(f'Y.{DB.SAVE_OPT_NORM}')
+    if key.lower() == 'y':
+        return PATH.norm.joinpath(f'Y.{DB.SAVE_OPT_NORM}')
     alias_list = data_type_alias(key) if alias_search else []
     for new_key in alias_list:
         path = PATH.norm.joinpath(f'X_{new_key}.{DB.SAVE_OPT_BLK}')
-        if path.exists(): return path
+        if path.exists():
+            return path
     return PATH.norm.joinpath(f'X_{key}.{DB.SAVE_OPT_BLK}')
 
 class DataBlock(Stock4DData):
     DEFAULT_INDEX = ['secid','date','minute','factor_name']
 
     @staticmethod
-    def data_type_abbr(key : str): return data_type_abbr(key)
+    def data_type_abbr(key : str): 
+        return data_type_abbr(key)
 
     @staticmethod
-    def data_type_alias(key : str): return data_type_alias(key)
+    def data_type_alias(key : str): 
+        return data_type_alias(key)
 
     @classmethod
     def last_modified_date(cls , key , predict):
@@ -76,8 +81,10 @@ class DataBlock(Stock4DData):
         path = self.block_path(key , predict) 
         path.parent.mkdir(exist_ok=True)
         date_slice = np.repeat(True,len(self.date))
-        if start_dt is not None: date_slice[self.date < start_dt] = False
-        if end_dt   is not None: date_slice[self.date > end_dt]   = False
+        if start_dt is not None: 
+            date_slice[self.date < start_dt] = False
+        if end_dt   is not None: 
+            date_slice[self.date > end_dt]   = False
         data = {'values'  : self.values[:,date_slice] , 
                 'date'    : self.date[date_slice].astype(int) ,
                 'secid'   : self.secid.astype(int) , 
@@ -90,7 +97,8 @@ class DataBlock(Stock4DData):
     
     @staticmethod
     def save_dict(data : dict , file_path : Path):
-        if file_path is None: return NotImplemented
+        if file_path is None: 
+            return NotImplemented
         Path(file_path).parent.mkdir(exist_ok=True)
         if file_path.suffix in ['.npz' , '.npy' , '.np']:
             np.savez_compressed(file_path , **data)
@@ -112,13 +120,16 @@ class DataBlock(Stock4DData):
         return data
     
     @classmethod
-    def load_path(cls , path : Path): return cls(**cls.load_dict(path))
+    def load_path(cls , path : Path): 
+        return cls(**cls.load_dict(path))
     
     @classmethod
     def load_paths(cls , paths : Path | list[Path], fillna = 'guess' , intersect_secid = True ,
                    start_dt = None , end_dt = None , dtype = torch.float):
-        if not isinstance(paths , list): paths = [paths]
-        _guess = lambda ls,excl:[Path(x).name.lower().startswith(excl) == 0 for x in ls]
+        if not isinstance(paths , list): 
+            paths = [paths]
+        def _guess(ls,excl):
+            return [Path(x).name.lower().startswith(excl) == 0 for x in ls]
         if fillna == 'guess':
             exclude_list = ('y','x_trade','x_day','x_15m','x_min','x_30m','x_60m','week')
             fillna = np.array(_guess(paths , exclude_list))
@@ -132,14 +143,19 @@ class DataBlock(Stock4DData):
 
         with Timer(f'Align DataBlocks'):
             # sligtly faster than .align(secid = secid , date = date)
-            newsecid = None
-            if intersect_secid:  newsecid = index_intersect([blk.secid for blk in blocks])[0]
-            newdate  = index_union([blk.date for blk in blocks] , start_dt , end_dt)[0]
-            for blk in blocks: newdate = newdate[newdate >= min(blk.date)]
+            if intersect_secid:  
+                newsecid = index_intersect([blk.secid for blk in blocks])[0]
+            else:
+                newsecid = None
+            
+            newdate : np.ndarray | Any = index_union([blk.date for blk in blocks] , start_dt , end_dt)[0]
+            for blk in blocks: 
+                newdate = newdate[newdate >= min(blk.date)]
             
             for i , blk in enumerate(blocks):
                 blk.align_secid_date(newsecid , newdate)
-                if fillna[i]: blk.values = forward_fillna(blk.values , axis = 1)
+                if fillna[i]: 
+                    blk.values = forward_fillna(blk.values , axis = 1)
                 blk.as_tensor().as_type(dtype)
 
         return blocks
@@ -159,33 +175,45 @@ class DataBlock(Stock4DData):
         main_dates = np.intersect1d(dates , DB.db_dates(db_src , db_key , use_alt=use_alt))
         df = DB.db_load_multi(db_src , db_key , main_dates , use_alt=use_alt)
 
-        if len(df) == 0: return cls()
-        if len(df.index.names) > 1 or df.index.name: df = df.reset_index()
+        if len(df) == 0: 
+            return cls()
+        if len(df.index.names) > 1 or df.index.name: 
+            df = df.reset_index()
         use_index = [f for f in cls.DEFAULT_INDEX if f in df.columns]
         assert 2 <= len(use_index) <= 3 , use_index
-        if feature is not None:  df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
+        if feature is not None:  
+            df = df.loc[:,use_index + [f for f in feature if f not in use_index]]
         return cls.from_dataframe(df.set_index(use_index))
     
     @property
-    def price_adjusted(self): return getattr(self , '_price_adjusted' , False)
+    def price_adjusted(self): 
+        return getattr(self , '_price_adjusted' , False)
 
     @property
-    def volume_adjusted(self): return getattr(self , '_volume_adjusted' , False)
+    def volume_adjusted(self): 
+        return getattr(self , '_volume_adjusted' , False)
 
     def adjust_price(self , adjfactor = True , multiply : Any = 1 , divide : Any = 1 , 
                      price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap']):
-        if self.price_adjusted: return self
+        if self.price_adjusted: 
+            return self
         adjfactor = adjfactor and ('adjfactor' in self.feature)
-        if multiply is None and divide is None and (not adjfactor): return self  
+        if multiply is None and divide is None and (not adjfactor): 
+            return self  
 
-        if isinstance(price_feat , (str,)): price_feat = [price_feat]
+        if isinstance(price_feat , (str,)): 
+            price_feat = [price_feat]
         i_price = np.where(np.isin(self.feature , price_feat))[0].astype(int)
-        if len(i_price) == 0: return self
+        if len(i_price) == 0: 
+            return self
         v_price = self.values[...,i_price]
 
-        if adjfactor :  v_price *= self.loc(feature=['adjfactor'] , fillna = 1)
-        if multiply  is not None: v_price *= multiply
-        if divide    is not None: v_price /= divide
+        if adjfactor :  
+            v_price *= self.loc(feature=['adjfactor'] , fillna = 1)
+        if multiply  is not None: 
+            v_price *= multiply
+        if divide    is not None: 
+            v_price /= divide
         self.values[...,i_price] = v_price 
 
         if 'vwap' in self.feature:
@@ -204,21 +232,28 @@ class DataBlock(Stock4DData):
     
     def adjust_volume(self , multiply = None , divide = None , 
                       vol_feat = ['volume' , 'amount', 'turn_tt', 'turn_fl', 'turn_fr']):
-        if self.volume_adjusted: return self
-        if multiply is None and divide is None: return self
+        if self.volume_adjusted: 
+            return self
+        if multiply is None and divide is None: 
+            return self
 
-        if isinstance(vol_feat , (str,)): vol_feat = [vol_feat]
+        if isinstance(vol_feat , (str,)): 
+            vol_feat = [vol_feat]
         i_vol = np.where(np.isin(self.feature , vol_feat))[0]
-        if len(i_vol) == 0: return self
+        if len(i_vol) == 0: 
+            return self
         v_vol = self.values[...,i_vol]
-        if multiply is not None: v_vol *= multiply
-        if divide   is not None: v_vol /= divide
+        if multiply is not None: 
+            v_vol *= multiply
+        if divide   is not None: 
+            v_vol /= divide
         self.values[...,i_vol] = v_vol
         self._volume_adjusted = True
         return self
     
     def mask_values(self , mask : dict , **kwargs):
-        if not mask : return self
+        if not mask: 
+            return self
         mask_pos = np.full(self.shape , fill_value=False , dtype=bool)
         if mask_list_dt := mask.get('list_dt'):
             desc = INFO.get_desc(set_index=False)
@@ -239,7 +274,7 @@ class DataBlock(Stock4DData):
             delist_dt = np.array(desc.loc[secid , 'delist_dt'])
             delist_dt[delist_dt < 0] = 21991231
 
-            tmp = np.stack([(date <= l) + (date >= d) for l,d in zip(list_dt , delist_dt)] , axis = 0)
+            tmp = np.stack([(date <= lst) + (date >= dls) for lst,dls in zip(list_dt , delist_dt)] , axis = 0)
             mask_pos[tmp] = True
 
         assert (~mask_pos).sum() > 0
@@ -270,14 +305,17 @@ class DataBlockNorm:
                   step_day = 5 , **kwargs):
         
         key = data_type_abbr(key)
-        if predict or not (key in cls.HISTNORM): return None
+        if predict or (key not in cls.HISTNORM): 
+            return None
 
         default_maxday = {'day' : 60}
         maxday = default_maxday.get(key , 1)
 
         date_slice = np.repeat(True , len(block.date))
-        if start_dt is not None: date_slice[block.date < start_dt] = False
-        if end_dt   is not None: date_slice[block.date > end_dt]   = False
+        if start_dt is not None: 
+            date_slice[block.date < start_dt] = False
+        if end_dt   is not None: 
+            date_slice[block.date > end_dt]   = False
 
         secid , date , inday , feat = block.secid , block.date , block.shape[2] , block.feature
 
@@ -317,13 +355,15 @@ class DataBlockNorm:
 
     @classmethod
     def load_path(cls , path : Path , dtype = None):
-        if not path.exists(): return None
+        if not path.exists(): 
+            return None
         data = DataBlock.load_dict(path)
         return cls(data['avg'] , data['std'] , dtype)
 
     @classmethod
     def load_paths(cls , paths : Path | list[Path] , dtype = None):
-        if not isinstance(paths , list): paths = [paths]
+        if not isinstance(paths , list): 
+            paths = [paths]
         norms = [cls.load_path(path , dtype) for path in paths]
         return norms
     
@@ -334,7 +374,8 @@ class DataBlockNorm:
 
     @classmethod
     def load_keys(cls , keys : str | list[str] , predict = False , alias_search = True , dtype = None):
-        if not isinstance(keys , list): keys = [keys]
+        if not isinstance(keys , list): 
+            keys = [keys]
         return [cls.load_key(key , predict , alias_search , dtype) for key in keys]
     
     @classmethod
@@ -381,8 +422,10 @@ class ModuleData:
                    predict : bool = False , dtype : Optional[str | Any] = torch.float , 
                    save_upon_loading : bool = True):
         '''if predict is True, only load recent data'''
-        if dtype is None: dtype = torch.float
-        if isinstance(dtype , str): dtype = getattr(torch , dtype)
+        if dtype is None: 
+            dtype = torch.float
+        if isinstance(dtype , str): 
+            dtype = getattr(torch , dtype)
         if predict: 
             dataset_path = 'no_dataset'
         else:
@@ -395,9 +438,11 @@ class ModuleData:
                 data = cls(**torch_load(dataset_path))
                 if (np.isin(data_type_list , list(data.x.keys())).all() and
                     np.isin(y_labels , list(data.y.feature)).all()):
-                    if not SILENT: print(f'try using {dataset_path} , success!')
+                    if not SILENT: 
+                        print(f'try using {dataset_path} , success!')
                 else:
-                    if not SILENT: print(f'try using {dataset_path} , but incompatible, load raw blocks!')
+                    if not SILENT: 
+                        print(f'try using {dataset_path} , but incompatible, load raw blocks!')
                     data = None
             except ModuleNotFoundError:
                 '''can be caused by different package version'''
@@ -430,4 +475,5 @@ class ModuleData:
         return data
     
     @staticmethod
-    def abbr(data_type : str): return data_type_abbr(data_type)
+    def abbr(data_type : str): 
+        return data_type_abbr(data_type)

@@ -1,5 +1,4 @@
 import streamlit as st
-import re
 from typing import Literal
 
 from src.proj import PATH
@@ -9,23 +8,28 @@ from util import SC , runs_page_url , set_current_page , show_sidebar_buttons , 
 PAGE_NAME = 'task_queue'
 
 def on_first_page(max_page : int):
-    if st.session_state.get('choose-task-page') == 1: return
+    if st.session_state.get('choose-task-page') == 1: 
+        return
     st.session_state['choose-task-page'] = 1
 def on_last_page(max_page : int):
-    if st.session_state.get('choose-task-page') == max_page: return
+    if st.session_state.get('choose-task-page') == max_page: 
+        return
     st.session_state['choose-task-page'] = max_page
 def on_prev_page(max_page : int):
-    if st.session_state.get('choose-task-page') == 1: return
+    if st.session_state.get('choose-task-page') == 1: 
+        return
     st.session_state['choose-task-page'] = max((st.session_state.get('choose-task-page') or 1) - 1, 1)
 def on_next_page(max_page : int):
-    if st.session_state.get('choose-task-page') == max_page: return
+    if st.session_state.get('choose-task-page') == max_page: 
+        return
     st.session_state['choose-task-page'] = (st.session_state.get('choose-task-page') or 1) + 1
 
 
 def show_task_queue(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter'):
     with st.container(key="task-queue-special-expander"):
         show_queue_header()
-        if queue_type == 'filter': show_task_filters()
+        if queue_type == 'filter': 
+            show_task_filters()
         show_queue_item_list(queue_type)
 
 def show_queue_header():

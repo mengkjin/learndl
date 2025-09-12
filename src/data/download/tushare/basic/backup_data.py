@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from typing import Literal
 
 from src.proj import PATH
 from src.basic import CALENDAR , DB
@@ -38,7 +37,7 @@ class TSBackUpDataTransform():
             limit['down_limit'] = (limit['close'] * 0.9).round(2)
             limit = limit.drop(columns=['close'])
 
-        susp = pd.DataFrame(columns=['ts_code' , 'trade_date'])
+        susp = pd.DataFrame(columns=pd.Index(['ts_code' , 'trade_date']))
 
         mutual_col = ['ts_code' , 'trade_date']
         trade = quote.merge(adj,on=mutual_col,how='left').\

@@ -1,6 +1,7 @@
 import pandas as pd
 
 from dataclasses import dataclass
+from typing import Any
 
 from ...util import Port , PortCreateResult , PortCreator
 
@@ -28,8 +29,10 @@ class PortfolioGeneratorConfig:
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.__slots__ and v is not None}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if print_info:
-            if use_kwargs : print(f'In initializing {cls.__name__}, used kwargs: {use_kwargs}')
-            if drop_kwargs: print(f'In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}')
+            if use_kwargs : 
+                print(f'In initializing {cls.__name__}, used kwargs: {use_kwargs}')
+            if drop_kwargs: 
+                print(f'In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}')
         return cls(**use_kwargs)
     
     @property
@@ -53,8 +56,12 @@ class PortfolioGenerator(PortCreator):
         return self
 
     def solve(self):
-        pool = self.alpha_model.get_model(self.model_date).to_dataframe(indus=True , na_indus_as = 'unknown')
-        if not self.bench_port.is_emtpy(): pool = pool.loc[pool['secid'].isin(self.bench_port.secid)]
+        amodel = self.alpha_model.get_model(self.model_date)
+        assert amodel is not None , f'alpha_model is not Amodel at {self.model_date}'
+        pool = amodel.to_dataframe(indus=True , na_indus_as = 'unknown')
+        if not self.bench_port.is_emtpy(): 
+            bench_secid = self.bench_port.secid # noqa
+            pool = pool.query('secid in @bench_secid')
         pool['ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool['rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
         
@@ -63,20 +70,24 @@ class PortfolioGenerator(PortCreator):
         pool['buffered'] = ((pool['rankpct'] >= self.conf.buffer_zone) + (pool['selected'].cumsum() <= self.conf.stay_num) *
                             (pool['rankpct'] >= self.conf.no_zone))
 
-        stay = pool[pool['selected'] & pool['buffered']]
-        stay_ind_count = stay.groupby('indus')['secid'].count().rename('count')
+        stay = pool.query('selected & buffered')
+        stay_secid = stay['secid'].to_numpy() # noqa
 
-        new_pool = pool[~pool['secid'].isin(stay['secid'])].merge(stay_ind_count , on = 'indus' , how = 'left')
-        selectable = new_pool['ind_rank'] < (self.conf.indus_slots - new_pool['count'].fillna(0))
-        entry = new_pool[selectable].sort_values('alpha' , ascending = False).head(self.conf.n_best - stay.shape[0])
+        stay_ind_count : pd.Series | Any = stay.groupby('indus')['secid'].count()
+        stay_ind_count = stay_ind_count.rename('count')
+        
+        new_pool = pool.query('secid not in @stay_secid').merge(stay_ind_count , on = 'indus' , how = 'left')
+        max_ind_rank = self.conf.indus_slots - new_pool['count'].fillna(0) # noqa
+        entry = new_pool.query('ind_rank < @max_ind_rank').sort_values('alpha' , ascending = False).head(self.conf.n_best - stay.shape[0])
 
-        df = pd.concat([stay[['secid' , 'indus']] , entry[['secid' , 'indus']]])
-        df = df.drop_duplicates(subset=['secid']).assign(weight = 1)[['secid' , 'weight']]
+        df = pd.concat([stay[['secid' , 'indus']] , entry[['secid' , 'indus']]]).\
+            assign(weight = 1).filter(items=['secid' , 'weight']).drop_duplicates(subset=['secid'])
         port = Port(df , date = self.model_date , name = self.name , value = self.value).rescale()
         self.create_result = PortCreateResult(port , len(df) == self.conf.n_best)
 
         return self
 
     def output(self):
-        if self.detail_infos: self.create_result.analyze(self.bench_port , self.init_port)
+        if self.detail_infos: 
+            self.create_result.analyze(self.bench_port , self.init_port)
         return self

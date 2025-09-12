@@ -7,19 +7,13 @@
 # email: False
 # mode: os
 
-import sys
-
-assert 'learndl' in __file__ , f'learndl path not found , do not know where to find src file : {__file__}'
-path = __file__.removesuffix(__file__.split('learndl')[-1])
-sys.path.append(path)
-
 from datetime import datetime
-from pathlib import Path
+from src.proj import PATH
 from src.app import change_power_mode , get_running_scripts
 
 def main():
     running_scripts = get_running_scripts(__file__)
-    log_path = Path(path).joinpath('logs','suspend','power_check.log')
+    log_path = PATH.log_main.joinpath('suspend','power_check.log')
     log_path.parent.mkdir(parents = True , exist_ok = True)
     if running_scripts:
         main_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' : Power set to saver'

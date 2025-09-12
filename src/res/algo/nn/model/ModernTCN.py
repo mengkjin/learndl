@@ -29,7 +29,8 @@ class ModernTCN(nn.Module):
         assert head_type in ['pretrain', 'prediction'], 'head type should be either pretrain, prediction, or regression'
         self.nvars = nvars
         self.head_type = head_type
-        if stride is None: stride = patch_len // 2
+        if stride is None: 
+            stride = patch_len // 2
         num_patch = max(seq_len + patch_len - stride, 0) // stride - 1
 
         # RevIN

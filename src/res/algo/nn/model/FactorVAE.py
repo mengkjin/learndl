@@ -116,8 +116,10 @@ class PortfolioLayer(nn.Module):
     
 class VAESampling(nn.Module):
     def forward(self , mu : Tensor , sigma : Tensor , noise : Optional[Tensor] = None):
-        if noise is None:  return self.reparameterize(mu , sigma)
-        else: return mu + sigma * noise.reshape(sigma.shape).to(sigma)
+        if noise is None:  
+            return self.reparameterize(mu , sigma)
+        else: 
+            return mu + sigma * noise.reshape(sigma.shape).to(sigma)
 
     def reparameterize(self, mu : Tensor , sigma : Tensor):
         eps = torch.randn_like(sigma)
@@ -131,7 +133,8 @@ class DistributionLayer(nn.Module):
     '''
     def __init__(self, input_dim : int , output_dim : int , hidden_size : Optional[int] = None):
         super().__init__()
-        if hidden_size is None: hidden_size = output_dim
+        if hidden_size is None: 
+            hidden_size = output_dim
         self.norm  = nn.LayerNorm(input_dim)
         self.mu    = MLP(input_dim,output_dim,hidden_size)
         self.sigma = MLP(input_dim,output_dim,hidden_size,out_activation='softplus')

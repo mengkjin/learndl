@@ -90,13 +90,15 @@ class StatusDisplay(BaseCallBack):
         except KeyError:
             return False
     @property
-    def optimizer(self): return getattr(self.trainer.model , 'optimizer')
+    def optimizer(self): 
+        return getattr(self.trainer.model , 'optimizer')
     def display(self , *args , **kwargs):
         return Logger.info(*args , **kwargs) if (self.show_info_step or self.initial_models) else Logger.debug(*args , **kwargs)
     def event_sdout(self , event) -> str:
         if event == 'reset_learn_rate':
             sdout = f'Reset learn rate and scheduler at the end of epoch {self.status.epoch} , effective at epoch {self.status.epoch + 1}'
-            if self.speedup2x: sdout += ', and will speedup2x'
+            if self.speedup2x: 
+                sdout += ', and will speedup2x'
         elif event == 'new_attempt':
             sdout = '{attempt} {epoch} : {status}, Next attempt goes!'.format(**self.record_texts)
         elif event == 'nanloss':
@@ -105,8 +107,10 @@ class StatusDisplay(BaseCallBack):
             raise KeyError(event)
         return sdout
 
-    def tic(self , key : str): self.record_times[key] = time.time()
-    def toc(self , key : str): return time.time() - self.record_times[key]
+    def tic(self , key : str): 
+        self.record_times[key] = time.time()
+    def toc(self , key : str): 
+        return time.time() - self.record_times[key]
     def tic_str(self , key : str):
         self.tic(key)
         return 'Start Process [{}] at {:s}!'.format(key.title() , time.ctime(self.record_times[key]))
@@ -124,9 +128,12 @@ class StatusDisplay(BaseCallBack):
         Logger.warning('Model Specifics:')
         self.config.print_out()
     def on_summarize_model(self):
-        if not self.test_summarized: self.summarize_test_result()
-        if self.summary_df.empty: return
-        if not MACHINE.server: return
+        if not self.test_summarized: 
+            self.summarize_test_result()
+        if self.summary_df.empty: 
+            return
+        if not MACHINE.server: 
+            return
         test_scores = {
             '{}.{}'.format(*col):'|'.join([f'{k}({round(self.summary_df.loc[k,col] , v)})' for k,v in self.SUMMARY_NDIGITS.items() 
                                            if k in self.summary_df[col].index]) for col in self.summary_df.columns}
@@ -167,7 +174,8 @@ class StatusDisplay(BaseCallBack):
         self.record_texts['attempt'] = f'FirstBite' if self.status.attempt == 0 else f'Retrain#{self.status.attempt}'
     
     def on_validation_epoch_end(self):
-        if self.trainer.status.epoch < 0: return
+        if self.trainer.status.epoch < 0: 
+            return
         self.record_texts['status'] = 'loss {: .5f}, train{: .5f}, valid{: .5f}, best{: .4f}, lr{:.1e}'.format(
             self.metrics.latest['train.loss'], self.metrics.latest['train.score'] ,
             self.metrics.latest['valid.score'] , self.metrics.best_metric , 
@@ -176,8 +184,10 @@ class StatusDisplay(BaseCallBack):
             self.display('{attempt} {epoch} : {status}'.format(**self.record_texts))
     
     def on_fit_epoch_end(self):
-        if self.status.fit_loop_breaker: self.record_texts['exit'] = self.status.fit_loop_breaker.trigger_reason
-        while self.status.epoch_event: self.display(self.event_sdout(self.status.epoch_event.pop()))
+        if self.status.fit_loop_breaker: 
+            self.record_texts['exit'] = self.status.fit_loop_breaker.trigger_reason
+        while self.status.epoch_event: 
+            self.display(self.event_sdout(self.status.epoch_event.pop()))
     
     def on_fit_model_end(self):
         train_score = self.metrics.latest.get('train.score' , 0)
@@ -218,7 +228,8 @@ class StatusDisplay(BaseCallBack):
 
     def summarize_test_result(self):
         self.summary_df = pd.DataFrame()
-        if self.test_df_model.empty: return
+        if self.test_df_model.empty: 
+            return
         cat_stat = [md for md in self.test_df_model['model_date'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
         cat_subm = ['best' , 'swalast' , 'swabest']
 
@@ -236,7 +247,8 @@ class StatusDisplay(BaseCallBack):
         df = pd.concat([self.test_df_model.rename(columns={'model_date':'stat'}) , stat_df])
 
         base_name = self.config.model_module
-        if self.config.module_type == 'booster' and self.config.model_booster_optuna: base_name += '.optuna'
+        if self.config.module_type == 'booster' and self.config.model_booster_optuna: 
+            base_name += '.optuna'
         df['model_num'] = df['model_num'].map(lambda x: f'{base_name}.{x}')
         df['submodel']  = pd.Categorical(df['submodel'] , categories = cat_subm, ordered=True) 
         df['stat']      = pd.Categorical(df['stat']     , categories = cat_stat, ordered=True) 
@@ -245,7 +257,8 @@ class StatusDisplay(BaseCallBack):
 
         # more than 100 rows of test_df_model means the cycle is month / day
         df_display = self.summary_df
-        if len(df_display) > 100: df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]
+        if len(df_display) > 100: 
+            df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]
         print('Table: Test Summary:')
         FUNC.display.display(df_display)
         print(f'Test results are saved to {self.path_test}')

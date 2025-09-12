@@ -30,10 +30,12 @@ def show_script_structure():
 
 def show_script_runner(runner: ScriptRunner):
     """show single script runner"""
-    if runner.script_key not in SC.script_runners: SC.script_runners[runner.script_key] = runner
+    if runner.script_key not in SC.script_runners: 
+        SC.script_runners[runner.script_key] = runner
     
     page = get_script_page(runner.script_key)
-    if page is None: return
+    if page is None: 
+        return
     
     with st.container(key = f"script-structure-level-{runner.level}-{runner.script_key}"):
         cols = st.columns([1, 1] , gap = "small" , vertical_alignment = "center")

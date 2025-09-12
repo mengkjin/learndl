@@ -63,7 +63,8 @@ class ModelHiddenExtractor:
         if model_dates is None: 
             model_dates = self.model_dates
         else:
-            if isinstance(model_dates , int): model_dates = [model_dates]
+            if isinstance(model_dates , int): 
+                model_dates = [model_dates]
             model_dates = np.intersect1d(self.model_dates , model_dates)
         if update:
             model_iter = [(model_date , model_num , submodel) for (model_date , model_num , submodel) 
@@ -108,11 +109,14 @@ class ModelHiddenExtractor:
             date  = self.data.batch_date(batch_data)
             secid = self.data.batch_secid(batch_data)
             df = self.model(batch_data).hidden_df(secid , date)
-            if df is not None: hiddens.append(df)
+            if df is not None: 
+                hiddens.append(df)
             loader.display(f'{desc}/{date[0]}')
 
-        if len(hiddens) == 0: return
-        if old_hidden_df is not None:  hiddens.insert(0 , old_hidden_df)
+        if len(hiddens) == 0: 
+            return
+        if old_hidden_df is not None:  
+            hiddens.insert(0 , old_hidden_df)
         hidden_df = pd.concat(hiddens , axis=0).drop_duplicates(['secid','date']).sort_values(['secid','date'])
         self.hidden_df = hidden_df
         hidden_path.save_hidden_df(hidden_df , model_date)
@@ -125,7 +129,8 @@ class ModelHiddenExtractor:
     def update(cls , model_name : str | None = None , update = True , overwrite = False , silent = False):
         
         models = HiddenExtractingModel.SelectModels(model_name)
-        if model_name is None: print(f'model_name is None, update all hidden models (len={len(models)})')
+        if model_name is None: 
+            print(f'model_name is None, update all hidden models (len={len(models)})')
         for model in models:
             extractor = cls(model)
             extractor.extract_hidden(update = update , overwrite = overwrite , silent = silent)

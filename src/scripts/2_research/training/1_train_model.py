@@ -20,12 +20,7 @@
 #   path: "configs/{module_name}.yaml"
 #   height : 300 # optional
 
-import sys , pathlib
-file_path = str(pathlib.Path(__file__).absolute())
-assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
-path = file_path.removesuffix(file_path.split('learndl')[-1])
-if not path in sys.path: sys.path.append(path)
-
+from pathlib import Path
 from src.res.api import ModelAPI
 from src.basic import AutoRunTask
 from src.app import BackendTaskRecorder , ScriptLock
@@ -34,7 +29,7 @@ from src.app import BackendTaskRecorder , ScriptLock
 @ScriptLock('train_model' , timeout = 10)
 def main(**kwargs):
     module_name = kwargs.pop('module_name')
-    module = pathlib.Path(module_name).parts[-1]
+    module = Path(module_name).parts[-1]
     with AutoRunTask('train_model' , module , **kwargs) as runner:
         trainer = ModelAPI.train_model(module = module , short_test = runner.get('short_test'))
         runner.attach(trainer.result_package)

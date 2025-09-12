@@ -53,7 +53,8 @@ class JSDataUpdater():
             with tarfile.open(tar_filename, 'r') as tar:  
                 tar.extractall(path = str(cls.UPDATER_BASE) , filter='data')  
                 
-        if del_after_dumping: [tar_filename.unlink() for tar_filename in paths]
+        if del_after_dumping: 
+            [tar_filename.unlink() for tar_filename in paths]
 
     @classmethod
     def transform_datas(cls):
@@ -136,7 +137,8 @@ class JSDataUpdater():
             self.Failed.append(result)
             target_str = f'Failed ~ {rel_path}'
             
-        if result_dict is not None: result_dict[target_path] = result
+        if result_dict is not None: 
+            result_dict[target_path] = result
         return target_str
 
     def fetch_by_name(self , db_src):
@@ -146,12 +148,14 @@ class JSDataUpdater():
             start_time = time.time()
             df , target_path = param()
             target_str = self.handle_result(df , target_path , result)
-            if target_str: print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
+            if target_str: 
+                print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
         return result
     
     def fetch_by_date(self , db_src , start_dt = None , end_dt = None , force = False):
         params = self.get_db_params(db_src)
-        if not params: return
+        if not params: 
+            return
         result = None # {}
         update_dates = [par.get_update_dates(start_dt=start_dt,end_dt=end_dt,force=force) for par in params]
         full_dates = reduce(np.union1d, update_dates)
@@ -159,18 +163,23 @@ class JSDataUpdater():
         for i , date in enumerate(full_dates):
             temporal = {}
             for cond , param in zip(update_cond[i] , params):
-                if not cond: continue
+                if not cond: 
+                    continue
                 start_time = time.time()
                 df , target_path = param(date , df_min = temporal.get('df_min'))
                 target_str = self.handle_result(df , target_path , result)
-                if param.db_src == 'trade_js' and param.db_key == 'min': temporal['df_min'] = df
-                if target_str: print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
+                if param.db_src == 'trade_js' and param.db_key == 'min': 
+                    temporal['df_min'] = df
+                if target_str: 
+                    print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
         return result
 
     def fetch_all(self , db_srcs = DB.DB_BY_NAME + DB.DB_BY_DATE , start_dt = None , end_dt = None , force = False):
         # selected DB is totally refreshed , so delete first
-        if not MACHINE.belong_to_jinmeng: return
-        if not isinstance(db_srcs , (list,tuple)): db_srcs = [db_srcs]
+        if not MACHINE.belong_to_jinmeng: 
+            return
+        if not isinstance(db_srcs , (list,tuple)): 
+            db_srcs = [db_srcs]
         for db_src in db_srcs:
             if db_src in DB.DB_BY_NAME:
                 self.fetch_by_name(db_src)
@@ -184,7 +193,8 @@ class JSDataUpdater():
         for path in JSDownloader.proceed():
             start_time = time.time()
             target_str = self.handle_result(path , path)
-            if target_str: print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
+            if target_str: 
+                print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
             paths.append(path)
         return paths
 
@@ -194,7 +204,8 @@ class JSDataUpdater():
     @classmethod
     def update_hfm_terminal(cls):
         assert not MACHINE.server , f'must on terminal machine'
-        if not MACHINE.belong_to_hfm: return
+        if not MACHINE.belong_to_hfm: 
+            return
         start_time = time.time()
         print(f'Update JSData Update Files')
         Updater = cls()

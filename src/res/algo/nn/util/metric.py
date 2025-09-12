@@ -109,7 +109,8 @@ class MetricCalculator:
     def __call__(self, label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
                  dim : int = 0 , which_head : Optional[int] = None, **kwargs) -> Tensor:
         '''calculate the resulting metric'''
-        if not self.cond: return torch.Tensor([0.])
+        if not self.cond: 
+            return torch.Tensor([0.])
         args , kwargs = self.slice_inputs(label , pred , weight , dim , which_head , **kwargs)
         v = self.lamb * self.calc(*args , **kwargs)
         self.display()
@@ -148,7 +149,8 @@ class MetricCalculator:
             f'{self.metric_type} function of [{self.criterion}] not found'
         
     def display(self):
-        if self.DISPLAY_LOG.get(f'{self.metric_type}.{self.criterion}' , False): return
+        if self.DISPLAY_LOG.get(f'{self.metric_type}.{self.criterion}' , False): 
+            return
         print(f'{self.metric_type} function of [{self.criterion}] calculated and success!')
         self.DISPLAY_LOG[f'{self.metric_type}.{self.criterion}'] = True
 
@@ -156,14 +158,16 @@ class MetricCalculator:
     def _slice_lpw(cls , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
                    which_head : Optional[int] = None , nan_check : bool = False , training = False) -> tuple[Tensor , Tensor , Optional[Tensor]]:
         '''each element return ith column, if negative then return raw element'''
-        if nan_check: label , pred , weight = cls._slice_nan(label , pred , weight)
+        if nan_check: 
+            label , pred , weight = cls._slice_nan(label , pred , weight)
         label  = cls._slice_col(label , None if training else 0)
         pred   = cls._slice_col(pred  , None if training else which_head)
         weight = cls._slice_col(weight, None if training else which_head)
 
         if pred.ndim > label.ndim:
             pred = pred.nanmean(dim = -1)
-            if weight is not None: weight = weight.nanmean(dim = -1)
+            if weight is not None: 
+                weight = weight.nanmean(dim = -1)
         assert label.shape == pred.shape , (label.shape , pred.shape)
         return label , pred , weight
 
@@ -175,9 +179,11 @@ class MetricCalculator:
     def _slice_nan(*args , print_all_nan = False) -> tuple[Tensor , Tensor , Optional[Tensor]] | Any:
         nanpos = False
         for arg in args:
-            if arg is not None: nanpos += arg.isnan()
+            if arg is not None: 
+                nanpos += arg.isnan()
         if isinstance(nanpos , Tensor) and nanpos.any():
-            if nanpos.ndim > 1: nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
+            if nanpos.ndim > 1:
+                nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
             if print_all_nan and nanpos.all(): 
                 print('Encountered all nan inputs in metric calculation!')
                 [print(arg) for arg in args]
@@ -218,7 +224,8 @@ class LossMetrics:
                  quantiles : list[float] = [0.1,0.5,0.9] , predictions : Tensor | None = None , **kwargs):
         assert predictions is not None , f'predictions should be provided'
         assert predictions.shape[-1] == len(quantiles) , f'shape of predictions {predictions.shape} should be (...,{len(quantiles)})'
-        if predictions.ndim == label.ndim + 1: predictions = predictions.squeeze(-2)
+        if predictions.ndim == label.ndim + 1: 
+            predictions = predictions.squeeze(-2)
         assert predictions.ndim == label.ndim == 2 , f'shape of predictions {predictions.shape} and label {label.shape} should be (...,1)'
         if w is None:
             w1 = 1.
@@ -280,7 +287,8 @@ class PenaltyMetrics:
     @staticmethod
     def hidden_corr(*args , hidden : Tensor | list | tuple , **kwargs) -> Tensor:
         '''if kwargs containse hidden, calculate 2nd-norm of hTh'''
-        if isinstance(hidden,(tuple,list)): hidden = torch.cat(hidden,dim=-1)
+        if isinstance(hidden,(tuple,list)): 
+            hidden = torch.cat(hidden,dim=-1)
         h = (hidden - hidden.mean(dim=0,keepdim=True)) / (hidden.std(dim=0,keepdim=True) + 1e-6)
         # pen = h.T.cov().norm().square() / (h.shape[-1] ** 2)
         pen = h.T.cov().square().mean()

@@ -27,9 +27,12 @@ class SolverInput:
     relax_possible : bool = True
 
     def __post_init__(self):
-        if self.turn_con is None: self.turn_con   = TurnConstraint()
-        if self.cov_con  is None: self.cov_con    = CovConstraint()
-        if self.short_con is None: self.short_con = ShortConstraint()
+        if self.turn_con is None: 
+            self.turn_con   = TurnConstraint()
+        if self.cov_con  is None: 
+            self.cov_con    = CovConstraint()
+        if self.short_con is None: 
+            self.short_con = ShortConstraint()
 
         self.check()
         self.relaxer = Relaxer() if self.relax_possible else None
@@ -42,9 +45,12 @@ class SolverInput:
         N = len(self.alpha)
         self.lin_con.check(N)
         self.bnd_con.check(N)
-        if self.turn_con:  self.turn_con.check(N)
-        if self.cov_con:   self.cov_con.check(N)
-        if self.short_con: self.short_con.check(N)
+        if self.turn_con:  
+            self.turn_con.check(N)
+        if self.cov_con:   
+            self.cov_con.check(N)
+        if self.short_con: 
+            self.short_con.check(N)
         assert self.w0 is None or self.w0.shape == (N , )
         assert self.wb is None or self.wb.shape == (N , )
 
@@ -61,7 +67,8 @@ class SolverInput:
         return new
     
     def relax(self):
-        if self.relaxer : self.relaxer(self)
+        if self.relaxer: 
+            self.relaxer(self)
         return self
     
     def utility(self , w : Optional[np.ndarray] = None , prob_type = 'linprog' , turn = True ,  qobj = True , qcon = True , short = True):
@@ -140,7 +147,8 @@ class Relaxer:
         relaxed = False
         dup_groups = self.get_duplicated_rows(lin_con.A)
         for dup_rows in dup_groups:
-            if lin_con.lb[dup_rows].max() <= lin_con.ub[dup_rows].min(): continue
+            if lin_con.lb[dup_rows].max() <= lin_con.ub[dup_rows].min(): 
+                continue
             print('Deal with conflicted duplicated linear constraints!')
             fx_b = lin_con.lb[dup_rows].max()
             lin_con.lb[dup_rows] = fx_b - 1e-6

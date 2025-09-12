@@ -18,7 +18,7 @@ class Calendar(InfoFetcher):
 
         # process
         df['calendar'] = df['calendar']
-        trd = df[df['trade'] == 1].reset_index(drop=True)
+        trd = df.query('trade == 1').reset_index(drop=True)
         trd['pre'] = trd['calendar'].shift(1, fill_value=-1)
         trd = df.merge(trd.drop(columns='trade') , on = 'calendar' , how = 'left').ffill()
         trd['td_index'] = trd['trade'].cumsum()

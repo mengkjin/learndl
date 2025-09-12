@@ -62,7 +62,8 @@ class ScriptLock:
                     self._log_get_lock(start_time)
                     return self
                 except (portalocker.AlreadyLocked, BlockingIOError):
-                    if self.wait_time > self.timeout: raise BlockingIOError(f"Other instance is running")
+                    if self.wait_time > self.timeout: 
+                        raise BlockingIOError(f"Other instance is running")
                     self._log_wait_lock()
                     time.sleep(self.wait_time)
             # self._log(f"Wait {time.time() - start_time:.1f} seconds to get lock, exceed timeout ({self.timeout} seconds)")

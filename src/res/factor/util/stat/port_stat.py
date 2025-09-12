@@ -8,7 +8,8 @@ from src.data import DATAVENDOR
 def eval_cum_ret(ret : pd.Series | pd.DataFrame | np.ndarray , how : Literal['exp' , 'lin'] = 'lin' , 
             groupby : str | list[str] | None = None):
     assert not isinstance(ret , np.ndarray) or groupby is None , 'groupby is not supported for numpy array'
-    if isinstance(ret , np.ndarray): ret = pd.Series(ret)
+    if isinstance(ret , np.ndarray): 
+        ret = pd.Series(ret)
     ret = ret.fillna(0)
     if groupby is None:
         if how == 'lin':
@@ -69,7 +70,7 @@ def eval_pf_stats(grp : pd.DataFrame , mdd_period = True , **kwargs):
         ex_calmar = ex_ann / ex_mdd
         turn   = np.sum(grp['turn'])
         rslt = pd.DataFrame({'pf':pf_ret , 'bm':bm_ret , 'excess' : excess , 'annualized' : ex_ann , 'mdd' : ex_mdd , 
-                             'te' : te , 'ir' : ex_ir , 'calmar' : ex_calmar , 'turnover' : turn} , index = [0])
+                             'te' : te , 'ir' : ex_ir , 'calmar' : ex_calmar , 'turnover' : turn} , index = pd.Index([0]))
     if mdd_period:
         rslt['mdd_period'] = ['{}-{}'.format(grp['end'].iloc[ex_mdd_st] , grp['end'].iloc[ex_mdd_ed])]
     return rslt.assign(**kwargs)
@@ -95,5 +96,5 @@ def eval_detailed_drawdown(pf : pd.Series , groupby : str | list[str] | None = N
     df['peak'] = eval_cum_peak(df['pf'] , how = 'exp' , groupby = groupby)
     df['drawdown'] = (df['cum_ret'] + 1) / (df['peak'] + 1) - 1
     df['uncovered_max_drawdown'] = eval_uncovered_max_drawdown(df['drawdown'] , groupby = groupby)
-    df['recover_ratio'] = (1 - df['drawdown'] / df['uncovered_max_drawdown']).fillna(1)
+    df['recover_ratio'] = 1 - (df['drawdown'] / df['uncovered_max_drawdown']).fillna(0)
     return df

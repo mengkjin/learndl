@@ -19,39 +19,6 @@ def estimate_text_width(text, font_size=24):
     estimated_width = chinese_chars * chinese_width + english_chars * char_width
     return int(estimated_width)
 
-def expander_subheader(key : str , label : str , icon : str | None = None , expanded = False , 
-                       height : int | None = None , help : str | None = None , status = False , color = 'blue'):
-    
-    container_key = f'{key.replace(" " , "-").lower()}-special-expander-' + ('status' if status else 'expander')
-    with st.container():
-        if help is not None:
-            help_icon = """<span role="img" aria-label="mode_off_on icon" translate="no" style="display: inline-block; 
-                            font-family: &quot;Material Symbols Rounded&quot;; 
-                            user-select: none; 
-                            vertical-align: bottom; 
-                            overflow-wrap: normal;">help</span>"""
-            margin_left = 10
-            if icon is not None: margin_left += 34
-            if status:           margin_left += 28
-            margin_left += estimate_text_width(label.upper())
-            st.markdown(f"""
-            <div class="expander-help-container">
-                <div class="help-tooltip">
-                    {help}
-                </div>
-                <span class="help-icon" style="margin-left: {margin_left}px;">
-                    {help_icon}
-                </span>
-            </div>
-            """, unsafe_allow_html=True)
-        container = st.container(key = container_key)
-        full_label = label if icon is None else f'{icon} {label}'
-        if status:
-            exp_container = container.status(f" :{color}[{full_label}]" , expanded = expanded)
-        else:
-            exp_container = container.expander(f":{color}[{full_label}]" , expanded = expanded).container(height = height)
-        
-    return exp_container
 
 def show_tutorial():
     with expander_subheader('home-tutorial' , 'Tutorial' , ':material/school:' , True ,
@@ -101,7 +68,8 @@ def show_system_info():
             cols[1].markdown(f":blue-badge[*{value}*]")
         
 def show_pending_features():
-    if not PENDING_FEATURES: return
+    if not PENDING_FEATURES: 
+        return
     with expander_subheader('home-pending-features' , 'Pending Features' , ':material/pending_actions:' , True):
         for feature in PENDING_FEATURES:
             st.warning(feature , icon = ":material/schedule:")
@@ -113,7 +81,8 @@ def show_intro_pages():
         cols = st.columns(len(pages))
         for col , (name , page) in zip(cols , pages.items()):
             button = col.button(page['label'] , icon = page['icon'] , key = f"intro-page-{name}")
-            if button: st.switch_page(page['page'])
+            if button: 
+                st.switch_page(page['page'])
 
 
 def show_script_structure():
@@ -141,10 +110,12 @@ def show_script_structure():
 
 def show_script_runner(runner: ScriptRunner):
     """show single script runner"""
-    if runner.script_key not in SC.script_runners: SC.script_runners[runner.script_key] = runner
+    if runner.script_key not in SC.script_runners: 
+        SC.script_runners[runner.script_key] = runner
     
     page = get_script_page(runner.script_key)
-    if page is None: return
+    if page is None: 
+        return
     
     with st.container(key = f"script-structure-level-{runner.level}-{runner.script_key}"):
         cols = st.columns([1, 1] , gap = "small" , vertical_alignment = "center")

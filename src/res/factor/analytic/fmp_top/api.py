@@ -6,6 +6,8 @@ from ..test_manager import BaseTestManager
 from ...util import Benchmark , StockFactor
 from ...fmp import PortfolioBuilderGroup
 
+__all__ = ['Calc' , 'FmpTopManager' , 'BaseTopPortCalc' , 'BaseTestManager' , 'PortfolioBuilderGroup']
+
 class FmpTopManager(BaseTestManager):
     '''
     Factor Model PortfolioPerformance Calculator Manager
@@ -47,8 +49,10 @@ class FmpTopManager(BaseTestManager):
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              n_bests = [20,30,50,100] , verbosity = 1 , **kwargs):
         self.generate(factor , benchmark , n_bests = n_bests , verbosity = verbosity)
-        for task in self.tasks.values():  task.calc(self.account , verbosity = verbosity - 1) 
-        if verbosity > 0: print(f'{self.__class__.__name__} calc Finished!')
+        for task in self.tasks.values():  
+            task.calc(self.account , verbosity = verbosity - 1) 
+        if verbosity > 0: 
+            print(f'{self.__class__.__name__} calc Finished!')
         return self
     
     def update_kwargs(self , n_bests = [20,30,50,100] , **kwargs):

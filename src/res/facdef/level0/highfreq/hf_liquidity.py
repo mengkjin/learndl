@@ -1,8 +1,7 @@
 import pandas as pd
-import numpy as np
 import polars as pl
 
-from typing import Any , Literal , Callable
+from typing import Literal , Callable
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
@@ -211,4 +210,9 @@ class vol_high_std(StockFactorCalculator):
         df = df.to_pandas().set_index('secid')
         day_vols = DATAVENDOR.TRADE.get_volumes(min(dates) , date , pivot = False , mask = False)
         df = df.merge(day_vols , on = ['secid' , 'date'] , how = 'inner')
-        return df[df['flag'] == 1].groupby('secid')['volume'].sum() / df.groupby('secid')['volume'].sum()
+        
+        hvol_v = df.query('flag == 1').groupby('secid')['volume'].sum()
+        all_v = df.groupby('secid')['volume'].sum()
+        assert isinstance(hvol_v , pd.Series) , f'hvol_v must be a pandas series, but got {type(hvol_v)}'
+        assert isinstance(all_v , pd.Series) , f'all_v must be a pandas series, but got {type(all_v)}'
+        return hvol_v / all_v

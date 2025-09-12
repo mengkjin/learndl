@@ -1,15 +1,11 @@
-import numpy as np
-import pandas as pd
-
 from typing import Literal
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
 
-
 def mom_classic(date , n_months : int , lag_months : int = 0 , return_type : Literal['close' , 'overnight' , 'intraday'] = 'close'):
     start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm' , lag_months)
     rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , return_type = return_type , mask = True)
-    mom = (1 + rets).prod() - 1
+    mom = (rets + 1).prod() - 1
     return mom
 
 class mom_1m(StockFactorCalculator):

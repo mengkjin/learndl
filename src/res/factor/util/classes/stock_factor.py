@@ -4,7 +4,6 @@ import warnings
 
 from collections.abc import Iterable
 from copy import deepcopy
-from os import listdir
 from typing import Any , Literal , Optional , Union
 
 from src.basic import INSTANCE_RECORD , DB
@@ -17,8 +16,8 @@ from .benchmark import Benchmark
 __all__ = ['StockFactor']
 
 def append_indus(df : pd.DataFrame):
-    secid = df.index.get_level_values('secid').unique().values
-    date = df.index.get_level_values('date').unique().values
+    secid = df.index.get_level_values('secid').unique().to_numpy()
+    date = df.index.get_level_values('date').unique().to_numpy()
     old_index = df.index.names
     appending = DATAVENDOR.risk_industry_exp(secid , date).to_dataframe().fillna('unknown')
     appending = pd.DataFrame(appending.idxmax(axis=1).rename('industry') , index = appending.index)
@@ -26,16 +25,16 @@ def append_indus(df : pd.DataFrame):
     return df
 
 def append_ffmv(df : pd.DataFrame):
-    secid = df.index.get_level_values('secid').unique().values
-    date = df.index.get_level_values('date').unique().values
+    secid = df.index.get_level_values('secid').unique().to_numpy()
+    date = df.index.get_level_values('date').unique().to_numpy()
     old_index = df.index.names
     appending = DATAVENDOR.ffmv(secid , date).to_dataframe()
     df = df.reset_index().merge(appending , on = ['secid','date']).set_index(old_index)
     return df
 
 def append_fut_ret(df : pd.DataFrame , nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close'):
-    secid = df.index.get_level_values('secid').unique().values
-    date = df.index.get_level_values('date').unique().values
+    secid = df.index.get_level_values('secid').unique().to_numpy()
+    date = df.index.get_level_values('date').unique().to_numpy()
     old_index = df.index.names
     appending = DATAVENDOR.nday_fut_ret(secid , date , nday , lag , ret_type = ret_type).to_dataframe()
     df = df.reset_index().merge(appending , on = ['secid','date']).set_index(old_index)
@@ -62,14 +61,17 @@ def whiten(df : pd.DataFrame | Any, ffmv_weighted = False , pivot = True):
     else:
         df = df.groupby(by=['date' , 'factor_name']).transform(T.whiten)
     # if isinstance(df , pd.Series): df = df.to_frame()
-    if pivot: df = pivot_frame(df)
+    if pivot: 
+        df = pivot_frame(df)
     return df
 
 def winsor(df : pd.DataFrame | Any , pivot = True , **kwargs):
     df = melt_frame(df)
     df = df.groupby(by=['date' , 'factor_name']).transform(T.winsorize , **kwargs)
-    if isinstance(df , pd.Series): df = df.to_frame()
-    if pivot: df = pivot_frame(df)
+    if isinstance(df , pd.Series): 
+        df = df.to_frame()
+    if pivot: 
+        df = pivot_frame(df)
     return df
 
 def fillna(df : pd.DataFrame | Any , 
@@ -95,21 +97,25 @@ def fillna(df : pd.DataFrame | Any ,
         else:
             raise ValueError(f'fill_method {fill_method} not supported')
     df = df.fillna(0)
-    if isinstance(df , pd.Series): df = df.to_frame()
-    if pivot: df = pivot_frame(df)
+    if isinstance(df , pd.Series): 
+        df = df.to_frame()
+    if pivot: 
+        df = pivot_frame(df)
     return df
 
 def neutralize(df : pd.DataFrame | Any , pivot = True , **kwargs):
-    if pivot: df = pivot_frame(df)
+    if pivot: 
+        df = pivot_frame(df)
     return df
 
 def eval_grp_avg(x : pd.DataFrame , x_cols : list, y_name : str = 'ret', group_num : int = 10 , excess = False) -> pd.DataFrame:
-    y = pd.DataFrame(x[y_name], index=x.index, columns=[y_name])
+    y = pd.DataFrame(x[y_name], index=x.index, columns=pd.Index([y_name]))
     rtn = list()
     for col in x_cols:
         bins = x[col].drop_duplicates().quantile(np.linspace(0,1,group_num + 1))
         y['group'] = pd.cut(x[col], bins=bins, labels=[i for i in range(1, group_num + 1)])
-        if excess: y[y_name] -= y[y_name].mean()
+        if excess: 
+            y[y_name] -= y[y_name].mean()
         grp_avg_ret = y.groupby('group' , observed = True)[y_name].mean().rename(col)
         rtn.append(grp_avg_ret)
     rtn = pd.concat(rtn, axis=1, sort=True)
@@ -119,7 +125,8 @@ def pnl_weights(x : pd.DataFrame, weight_type : str, direction : Any = 1 , group
     assert weight_type in ['long_short', 'top100' , 'long', 'short'] , weight_type
     assert np.all(np.sign(direction) != 0) , direction
     x = (x / np.nanstd(x, axis=0)) * np.sign(direction)
-    norm_weight = lambda xx : (xx / np.sum(xx, axis=0))
+    def norm_weight(xx : pd.Series | Any) -> pd.Series | Any:
+        return (xx / np.sum(xx, axis=0))
     eq_wgt = 1 / x.count(numeric_only=True)
     if weight_type == 'top100':
         wgt = norm_weight(x > x.quantile(1 - 100 / x.shape[0])) - eq_wgt
@@ -132,14 +139,15 @@ def pnl_weights(x : pd.DataFrame, weight_type : str, direction : Any = 1 , group
     return wgt
 
 def eval_weighted_pnl(x : pd.DataFrame , weight_type : str , direction : Any , group_num = 10 , y_name = 'ret'):
-    vals = x[x.columns.drop([y_name])]
+    vals = x.drop(columns=[y_name])
     rets = x[[y_name]].to_numpy()
     weights = pnl_weights(vals, weight_type, direction, group_num)
     rtn = (weights * rets).sum(axis = 0)
     return rtn
 
 def param_match(args1 : dict[str,Any] , args2 : dict[str,Any]) -> bool:
-    if len(args1) != len(args2): return False
+    if len(args1) != len(args2): 
+        return False
     matches = [k in args2 and args2[k] == v for k , v in args1.items()]
     return all(matches)
 
@@ -166,9 +174,12 @@ class StockFactor:
         self._blk : DataBlock | Any = None
 
         if isinstance(factor , pd.DataFrame):
-            if 'date' not in factor.index.names: factor = factor.set_index('date' , append=True)
-            if 'secid' not in factor.index.names: factor = factor.set_index('secid' , append=True)
-            if None in factor.index.names: factor = factor.reset_index([None] , drop=True)
+            if 'date' not in factor.index.names: 
+                factor = factor.set_index('date' , append=True)
+            if 'secid' not in factor.index.names: 
+                factor = factor.set_index('secid' , append=True)
+            if None in factor.index.names: 
+                factor = factor.reset_index([None] , drop=True)
             self._df = factor
         else:
             self._blk = factor
@@ -182,7 +193,8 @@ class StockFactor:
     def copy(self): return deepcopy(self)
 
     def rename(self , new_name : str | list[str] | dict[str,str] , inplace = True):
-        if not inplace: self = self.copy()
+        if not inplace: 
+            self = self.copy()
         if isinstance(new_name , str):
             assert self.factor_num == 1 , f'only one factor is supported for using str for renaming : {self.factor_names}'
             mapping = {self.factor_names[0]:new_name}
@@ -191,21 +203,24 @@ class StockFactor:
             mapping = {self.factor_names[i]:new_name[i] for i in range(len(new_name))}
         elif isinstance(new_name , dict):
             mapping = new_name
-        if self._df is not None: self._df.rename(columns=mapping , inplace=True)
-        if self._blk is not None: self._blk.rename_feature(mapping)
+        if self._df is not None: 
+            self._df.rename(columns=mapping , inplace=True)
+        if self._blk is not None: 
+            self._blk.rename_feature(mapping)
         return self
 
     def join(self , *others : 'StockFactor'):
         df = self.frame()
-        for other in others: df = df.join(other.frame() , how = 'outer')
+        for other in others: 
+            df = df.join(other.frame() , how = 'outer')
         return StockFactor(df)
     
     def ew(self):
         if self.factor_num == 1:
             return self
         else:
-            df = self.frame().mean(axis = 1).rename('multifactor_ew')
-            return StockFactor(df)
+            df : pd.Series | Any = self.frame().mean(axis = 1)
+            return StockFactor(df.rename('multifactor_ew'))
 
     def frame(self) -> pd.DataFrame:
         if self._df is None:
@@ -224,14 +239,14 @@ class StockFactor:
         if self._blk is not None: 
             return self._blk.secid
         else:
-            return self._df.index.get_level_values('secid').unique().values
+            return self._df.index.get_level_values('secid').unique().to_numpy()
 
     @property
     def date(self) -> np.ndarray:
         if self._blk is not None: 
             return self._blk.date
         else:
-            return self._df.index.get_level_values('date').unique().values
+            return self._df.index.get_level_values('date').unique().to_numpy()
         
     @property
     def factor_names(self) -> np.ndarray:
@@ -258,26 +273,35 @@ class StockFactor:
 
     @classmethod
     def Loads(cls , factor_name : str , start : int | None = None , end : int | None = None):
-        if start is None: start = 0
-        if end is None:   end = 99991231
+        if start is None: 
+            start = 0
+        if end is None:   
+            end = 99991231
         df = DB.factor_load_multi(factor_name , start_dt=start , end_dt=end)
         return cls(df)
         
     def select(self , secid = None , date = None , factor_name = None):
         if self._df is not None:
             df = self._df.reset_index()
-            if date is not None:  df = df[df['date'].isin(date if isinstance(date , Iterable) else [date])]
-            if secid is not None: df = df[df['secid'].isin(secid if isinstance(secid , Iterable) else [secid])]
+            if date is not None:  
+                date = date if isinstance(date , Iterable) else [date]
+                df = df.query('date in @date')
+            if secid is not None: 
+                secid = secid if isinstance(secid , Iterable) else [secid]
+                df = df.query('secid in @secid')
             df = df.set_index(['date' , 'secid'])
-            if factor_name is not None: df = df[factor_name]
+            if factor_name is not None: 
+                df = df[factor_name]
             return StockFactor(df)
         else:
             return StockFactor(self._blk.align(secid , date , factor_name , inplace = False))
 
     def within(self , benchmark : Optional[Benchmark | str] , recalculate = False) -> 'StockFactor':
         '''use benchmark to mask factor'''
-        if isinstance(benchmark , str): benchmark = Benchmark(benchmark)
-        if not benchmark: return self
+        if isinstance(benchmark , str): 
+            benchmark = Benchmark(benchmark)
+        if not benchmark: 
+            return self
         if benchmark.name not in self.subsets or recalculate:
             self.subsets[benchmark.name] = StockFactor(benchmark(self.prior_input) if benchmark else self.prior_input)
         return self.subsets[benchmark.name]
@@ -292,9 +316,12 @@ class StockFactor:
     def frame_with_cols(self , indus = False , fut_ret = False , ffmv = False ,
                         nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close'):
         df = self.frame()
-        if indus:   df = append_indus(df)
-        if fut_ret: df = append_fut_ret(df , nday , lag , ret_type)
-        if ffmv:    df = append_ffmv(df)
+        if indus:   
+            df = append_indus(df)
+        if fut_ret: 
+            df = append_fut_ret(df , nday , lag , ret_type)
+        if ffmv:    
+            df = append_ffmv(df)
         return df   
 
     def eval_ic(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
@@ -359,7 +386,8 @@ class StockFactor:
         params = {'benchmark' : benchmark.name if isinstance(benchmark,Benchmark) else benchmark}
         if 'coverage' not in self.stats or not param_match(self.stats['coverage'][0] , params):
             dates = self.date
-            if isinstance(benchmark , str) or benchmark is None: benchmark = Benchmark(benchmark)
+            if isinstance(benchmark , str) or benchmark is None: 
+                benchmark = Benchmark(benchmark)
             factor = self.within(benchmark)
             benchmark_size = pd.Series(benchmark.sec_num(dates) , index = dates)
             coverage = factor.frame().groupby('date').apply(lambda x:x.dropna().count(numeric_only=True))
@@ -372,9 +400,12 @@ class StockFactor:
                   weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):
         df = self.frame()
         for step in order:
-            if step == 'fillna':   df = fillna(df , fill_method = fill_method)
-            elif step == 'whiten': df = whiten(df , ffmv_weighted = weighted_whiten)
-            elif step == 'winsor': df = winsor(df)
+            if step == 'fillna':   
+                df = fillna(df , fill_method = fill_method)
+            elif step == 'whiten': 
+                df = whiten(df , ffmv_weighted = weighted_whiten)
+            elif step == 'winsor': 
+                df = winsor(df)
         df = pivot_frame(df)
         if inplace: 
             return self.update(df , normalized = True)
@@ -387,8 +418,10 @@ class StockFactor:
         match_task = [task for task in FactorPerfManager.TASK_LIST if task.match_name(task_name)]
         assert match_task and len(match_task) <= 1 , f'no match or duplicate match tasks : {task_name}'
         task , task_name = match_task[0] , match_task[0].__name__
-        if not hasattr(self , 'analytic_tasks'): self.analytic_tasks : dict[str , BasePerfCalc] = {}
-        if task_name not in self.analytic_tasks: self.analytic_tasks[task_name] = task(**kwargs)
+        if not hasattr(self , 'analytic_tasks'): 
+            self.analytic_tasks : dict[str , BasePerfCalc] = {}
+        if task_name not in self.analytic_tasks: 
+            self.analytic_tasks[task_name] = task(**kwargs)
         return self.analytic_tasks[task_name]
 
     def analyze(self , 
@@ -396,15 +429,18 @@ class StockFactor:
                                     'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
                                     'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',
                                     'Group_Year','Distrib_Curve'] | str , plot = True , display = True , **kwargs):
-        if self.step is not None and 'nday' not in kwargs: kwargs['nday'] = self.step
+        if self.step is not None and 'nday' not in kwargs: 
+            kwargs['nday'] = self.step
         task = self.select_analytic(task_name , **kwargs)
         task.calc(self)
-        if plot: task.plot(show = display)
+        if plot: 
+            task.plot(show = display)
         return self
 
     def fast_analyze(self , task_list = ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr'] , **kwargs):
         '''['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr']'''
-        for task_name in task_list: self.analyze(task_name , **kwargs)
+        for task_name in task_list: 
+            self.analyze(task_name , **kwargs)
         return self
 
     def full_analyze(self , **kwargs):
@@ -412,5 +448,6 @@ class StockFactor:
                      'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
                      'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',
                      'Group_Year','Distrib_Curve']
-        for task_name in task_list: self.analyze(task_name , **kwargs)
+        for task_name in task_list: 
+            self.analyze(task_name , **kwargs)
         return self

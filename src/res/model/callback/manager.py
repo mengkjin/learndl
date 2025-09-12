@@ -22,7 +22,8 @@ class CallBackManager(BaseCallBack):
         with Logger.EnclosedMessage(' setup callbacks '):
             cb_configs = trainer.config.callbacks
             for cb in trainer.model.COMPULSARY_CALLBACKS:
-                if cb not in cb_configs: cb_configs.update({cb:{}})
+                if cb not in cb_configs: 
+                    cb_configs.update({cb:{}})
             
             if avail_cbs := trainer.model.AVAILABLE_CALLBACKS:
                 cb_configs = {k:v for k,v in cb_configs.items() if k in avail_cbs}
@@ -36,6 +37,7 @@ class CallBackManager(BaseCallBack):
     def __get_cb(cb_name : str , param : Any , trainer : BaseTrainer) -> Optional[dict]:
         assert isinstance(param , dict), (cb_name , param)
         for cb_mod in SEARCH_MODS:
-            if hasattr(cb_mod , cb_name): return getattr(cb_mod , cb_name)(trainer , **param)
+            if hasattr(cb_mod , cb_name): 
+                return getattr(cb_mod , cb_name)(trainer , **param)
         else: # on success
             raise KeyError(cb_name)

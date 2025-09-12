@@ -1,5 +1,4 @@
-from sqlalchemy import true
-import argparse , os , random , shutil , torch
+import os , random , shutil , torch
 import numpy as np
 
 from pathlib import Path
@@ -42,7 +41,8 @@ def striped_list(factors : list[str] | dict | str):
     if isinstance(factors , str): 
         return [factors.strip()]
     else:
-        if isinstance(factors , dict): factors = list(factors.values())
+        if isinstance(factors , dict): 
+            factors = list(factors.values())
         return [ff for f in factors for ff in striped_list(f)]
 
 def conf_mod_type(module : str):
@@ -56,7 +56,8 @@ def schedule_config(base_path : ModelPath | Path | None , name : str | None):
         assert len(schedules) <= 1 , f'multiple schedules found: {schedules}'
         name = schedules[0].stem if schedules else None
     p : dict[str,Any] = {}
-    if name: p.update(PATH.read_yaml(conf_path(base_path , 'schedule', name)))
+    if name: 
+        p.update(PATH.read_yaml(conf_path(base_path , 'schedule', name)))
     return p
 
 class TrainParam:
@@ -105,12 +106,17 @@ class TrainParam:
         return not self.base_path and not MACHINE.server
 
     def special_adjustment(self):
-        if 'verbosity'  in self.override: self.override['env.verbosity']  = self.override.pop('verbosity')
-        if 'short_test' in self.override: self.override['env.short_test'] = self.override.pop('short_test')
-        if 'module'     in self.override: self.override['model.module']   = self.override.pop('module')
-        if '_ShortTest' in self.model_name: self.override['env.short_test'] = True
+        if 'verbosity'  in self.override: 
+            self.override['env.verbosity']  = self.override.pop('verbosity')
+        if 'short_test' in self.override: 
+            self.override['env.short_test'] = self.override.pop('short_test')
+        if 'module'     in self.override: 
+            self.override['model.module']   = self.override.pop('module')
+        if '_ShortTest' in self.model_name: 
+            self.override['env.short_test'] = True
         
-        if self.should_be_short_test and ('env.short_test' not in self.override): self.override['env.short_test'] = True
+        if self.should_be_short_test and ('env.short_test' not in self.override): 
+            self.override['env.short_test'] = True
         for override_key in self.override:
             assert override_key in self.Param.keys() , override_key
         self.Param.update(self.override)
@@ -125,7 +131,8 @@ class TrainParam:
         return self
     
     def make_model_name(self):
-        if self.model_name: return self
+        if self.model_name: 
+            return self
         if self.Param['model.name']: 
             model_name = str(self.Param['model.name'])
         else: 
@@ -136,7 +143,8 @@ class TrainParam:
             else:
                 data_str = self.model_input_type
             model_name = '_'.join([s for s in [mod_str , head_str , data_str] if s])
-        if self.short_test: model_name += '_ShortTest'
+        if self.short_test: 
+            model_name += '_ShortTest'
         self.model_name = model_name
         return self
     
@@ -145,11 +153,14 @@ class TrainParam:
             Logger.warning('Beware! Should be at server or short_test, but short_test is False now!')
 
         nn_category = AlgoModule.nn_category(self.model_module)
-        if nn_category == 'tra': assert self.train_sample_method != 'total_shuffle' , self.train_sample_method
-        if nn_category == 'vae': assert self.train_sample_method == 'sequential'    , self.train_sample_method
+        if nn_category == 'tra': 
+            assert self.train_sample_method != 'total_shuffle' , self.train_sample_method
+        if nn_category == 'vae': 
+            assert self.train_sample_method == 'sequential'    , self.train_sample_method
 
         nn_datatype = AlgoModule.nn_datatype(self.model_module)
-        if nn_datatype:  self.Param['model.data.types'] = nn_datatype
+        if nn_datatype:  
+            self.Param['model.data.types'] = nn_datatype
 
 
         if self.module_type != 'nn' or self.model_booster_head: 
@@ -166,7 +177,8 @@ class TrainParam:
         module = self.model_module if self.module_type == 'nn' else self.model_booster_type
         assert isinstance(module , str) , (self.model_module , module)
         model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , self.short_test , self.schedule_name , **kwargs).expand()
-        if update_inplace: self.update_model_param(model_param)
+        if update_inplace: 
+            self.update_model_param(model_param)
         return model_param
     
     def update_model_param(self , model_param : 'ModelParam'):
@@ -354,17 +366,20 @@ class ModelParam:
         return self
 
     @property
-    def Param(self) -> dict[str,Any]: return self.model_param
+    def Param(self) -> dict[str,Any]: 
+        return self.model_param
 
     @property
-    def module_type(self): return conf_mod_type(self.module)
+    def module_type(self): 
+        return conf_mod_type(self.module)
 
     @property
     def mod_type_dir(self):
         return 'boost' if self.module_type == 'booster' else self.module_type
 
     def conf_file(self , base : Path | ModelPath | str | None | Literal['self'] = 'self'):
-        if base == 'self': base = self.base_path
+        if base == 'self': 
+            base = self.base_path
         return conf_path(base , self.mod_type_dir , self.module)
 
     def load_param(self):
@@ -390,7 +405,8 @@ class ModelParam:
 
         lens = [len(v) for v in self.Param.values() if isinstance(v , (list,tuple))]
         self.n_model = max(lens) if lens else 1
-        if self.short_test: self.n_model = min(1 , self.n_model)
+        if self.short_test: 
+            self.n_model = min(1 , self.n_model)
         assert self.n_model <= 5 , self.n_model
         
         if self.module == 'tra':
@@ -423,26 +439,32 @@ class ModelParam:
             par = {k:v[mm % len(v)] if isinstance(v , (list, tuple)) else v for k,v in self.Param.items()}
             self.params.append(par)
 
-        if self.booster_head: self.booster_head_param.expand()
+        if self.booster_head: 
+            self.booster_head_param.expand()
         return self
        
     def update_data_param(self , x_data : dict):
         '''when x_data is know , use it to fill some params(seq_len , input_dim , inday_dim , etc.)'''
-        if not x_data: return self
+        if not x_data: 
+            return self
         keys = list(x_data.keys())
         input_dim = [x_data[mdt].shape[-1] for mdt in keys]
         inday_dim = [x_data[mdt].shape[-2] for mdt in keys]
         for param in self.params:
             self.update_param_dict(param , 'input_dim' , input_dim)
             self.update_param_dict(param , 'inday_dim' , inday_dim)
-            if len(keys) == 1: self.update_param_dict(param , 'seq_len' , param.get('seqlens',{}).get(keys[0]))
+            if len(keys) == 1: 
+                self.update_param_dict(param , 'seq_len' , param.get('seqlens',{}).get(keys[0]))
         return self
     
     @staticmethod
     def update_param_dict(param , key : str , value , delist = True , overwrite = False):
-        if key in param.keys() and not overwrite: return
-        if delist and isinstance(value , (list , tuple)) and len(value) == 1: value = value[0]
-        if value is not None: param.update({key : value})
+        if key in param.keys() and not overwrite: 
+            return
+        if delist and isinstance(value , (list , tuple)) and len(value) == 1: 
+            value = value[0]
+        if value is not None: 
+            param.update({key : value})
     
     @property
     def max_num_output(self): return max(self.Param.get('num_output' , [1]))
@@ -515,8 +537,10 @@ class TrainConfig(TrainParam):
 
     def update(self, update = None , **kwargs):
         update = update or {}
-        for k,v in update.items(): setattr(self , k , v)
-        for k,v in kwargs.items(): setattr(self , k , v)
+        for k,v in update.items(): 
+            setattr(self , k , v)
+        for k,v in kwargs.items(): 
+            setattr(self , k , v)
         return self
     
     def get(self , key , default = None):
@@ -530,7 +554,8 @@ class TrainConfig(TrainParam):
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
     def update_data_param(self , x_data : dict):
-        if self.module_type == 'nn' and x_data: self.Model.update_data_param(x_data)
+        if self.module_type == 'nn' and x_data: 
+            self.Model.update_data_param(x_data)
     
     def weight_scheme(self , stage : str , no_weight = False) -> Optional[str]: 
         stg = stage if stage == 'fit' else 'test'
@@ -546,7 +571,8 @@ class TrainConfig(TrainParam):
 
     @staticmethod
     def set_random_seed(seed = None):
-        if seed is None: return NotImplemented
+        if seed is None: 
+            return NotImplemented
         np.random.seed(seed)
         random.seed(seed)
         os.environ['PYTHONHASHSEED'] = str(seed)
@@ -615,7 +641,8 @@ class TrainConfig(TrainParam):
                     Logger.info(f'--Model dirs of {model_name} exists, input [yes] to add a new directory!')
                     user_input = input(f'Add a new folder of [{model_name}]? [yes/no] : ').lower()
                     value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
-                if value == 0: raise Exception(f'--Model dirs of [{model_name}] exists!')
+                if value == 0: 
+                    raise Exception(f'--Model dirs of [{model_name}] exists!')
                 model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
 
         elif 'fit' not in self.stage_queue and 'test' in self.stage_queue:

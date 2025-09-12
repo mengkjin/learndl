@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 
 from typing import Any , Literal
 
@@ -9,19 +8,20 @@ from ...util.agency import BaseConditioner
 def filter_account(account : pd.DataFrame , lag0 = True , pos_model_date = False):
     '''drop lag if exists , and select lag0'''
     if lag0:
-        if 'lag' in account.index.names: account = account.reset_index('lag',drop=False)
-        if 'lag' in account.columns: account = account[account['lag']==0].drop(columns=['lag'])
+        if 'lag' in account.index.names: 
+            account = account.reset_index('lag',drop=False)
+        if 'lag' in account.columns: 
+            account = account.query('lag==0').drop(columns=['lag'])
     if pos_model_date:
-        if 'model_date' in account.columns:
-            account = account[account['model_date']>0]
-        elif 'model_date' in account.index.names:
-            account = account[account.index.get_level_values('model_date')>0]
+        account = account.query('model_date>0')
     return account
 
 def calc_top_frontface(account : pd.DataFrame):
     df = filter_account(account)
     grouped = df.groupby(df.index.names , observed=True)
-    basic = pd.concat([grouped['start'].min() , grouped['end'].max()] , axis=1)
+    start : pd.Series | Any = grouped['start'].min()
+    end : pd.Series | Any = grouped['end'].max()
+    basic = pd.concat([start , end] , axis=1)
     stats = grouped.apply(eval_pf_stats , include_groups=False).reset_index([None],drop=True)
     df = basic.join(stats).sort_index()
     return df

@@ -32,7 +32,8 @@ class TSMixer(nn.Module):
         self.nvars = nvars
         self.head_type = head_type
         self.mask_fwd = head_type == 'pretrain'
-        if stride is None: stride = patch_len // 2
+        if stride is None: 
+            stride = patch_len // 2
         num_patch = (max(seq_len, patch_len)-patch_len) // stride + 1
 
         # RevIN

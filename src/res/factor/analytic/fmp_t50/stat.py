@@ -1,1 +1,1 @@
-from ..fmp_top.stat import *
+from ..fmp_top.stat import * # noqa

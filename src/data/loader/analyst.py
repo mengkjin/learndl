@@ -1,8 +1,7 @@
-import torch
 import numpy as np
 import pandas as pd
 
-from typing import Any , Callable , Literal
+from typing import Literal
 
 from src.basic import CALENDAR , DB
 from src.func.singleton import singleton
@@ -33,9 +32,10 @@ class AnalystDataAccess(DateDataAccess):
         reports : list[pd.DataFrame] = []
         for date in dates:
             df = self.get_report(date)
-            if df.empty: continue
+            if df.empty: 
+                continue
             for key , value in filter_kwargs.items():
-                df = df[df[key] == value]
+                df = df.query(f'{key} == @value')
             reports.append(df)
         df = pd.concat(reports).reset_index(drop = True)
         df['report_date'] = df['report_date'].astype(int)
@@ -75,7 +75,7 @@ class AnalystDataAccess(DateDataAccess):
     def target_price(self , date : int , n_month : int = 12 , lag_month : int = 0):
         date = CALENDAR.cd(date , -30 * lag_month)
         df = self.get_trailing_reports(date , n_month , latest = True)
-        df = df[df['max_price'].notna() | df['min_price'].notna()]
+        df = df.query('max_price.notna() | min_price.notna()')
         df['target_price'] = df.loc[:,['max_price' , 'min_price']].mean(axis = 1)
         v = df.groupby('secid')['target_price'].mean()
         return v

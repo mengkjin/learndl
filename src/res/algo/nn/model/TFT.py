@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-import pandas as pd
 from typing import Any
 import math
 
@@ -237,7 +235,8 @@ class TemporalFusionTransformer(nn.Module):
     
 
     def show_shape(self , name : str , x : Any , print_shape : bool = False):
-        if not print_shape: return
+        if not print_shape: 
+            return
         print(f"{name}: {x.shape}")
 
     def forward(
@@ -353,7 +352,8 @@ class TemporalFusionTransformer(nn.Module):
              quantiles : list[float] = [0.1,0.5,0.9] , predictions : torch.Tensor | None = None , **kwargs):
         assert predictions is not None , f'predictions should be provided'
         assert predictions.shape[-1] == len(quantiles) , f'shape of predictions {predictions.shape} should be (...,{len(quantiles)})'
-        if predictions.ndim == label.ndim + 1: predictions = predictions.squeeze(-2)
+        if predictions.ndim == label.ndim + 1: 
+            predictions = predictions.squeeze(-2)
         assert predictions.ndim == label.ndim == 2 , f'shape of predictions {predictions.shape} and label {label.shape} should be (...,1)'
         if w is None:
             w1 = 1.

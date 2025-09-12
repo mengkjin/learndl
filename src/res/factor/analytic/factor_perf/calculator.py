@@ -17,7 +17,8 @@ class BasePerfCalc(BaseCalculator):
             rslt = pd.concat([func(factor , bm , **self.params).assign(benchmark = bm.name) for bm in self.use_benchmarks(benchmarks)])
             self.calc_rslt = rslt.assign(benchmark = Benchmark.as_category(rslt['benchmark'])).set_index(['factor_name', 'benchmark']).sort_index()
 
-        if verbosity > 0: print(f'    --->{self.__class__.__name__} calc Finished!')
+        if verbosity > 0: 
+            print(f'    --->{self.__class__.__name__} calc Finished!')
         return self
     
     def use_benchmarks(self , benchmarks : Optional[list[Benchmark|Any]] | Any = None):

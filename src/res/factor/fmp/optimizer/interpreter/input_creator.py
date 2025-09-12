@@ -13,10 +13,14 @@ linear_bound_list : list[LinearConstraint] = []
 
 def create_input_eq(opt_input : Any) -> float | Any:
     config = opt_input.cfg_equity
-    if config['target_position']:  eq = config['target_position']
-    elif config['target_value']:   eq = config['target_value'] / opt_input.initial_value
-    elif config['add_position']:   eq = config['add_position'] + opt_input.initial_position
-    elif config['add_value']:      eq = config['add_value'] / opt_input.initial_value + opt_input.initial_position
+    if config['target_position']:  
+        eq = config['target_position']
+    elif config['target_value']:   
+        eq = config['target_value'] / opt_input.initial_value
+    elif config['add_position']:   
+        eq = config['add_position'] + opt_input.initial_position
+    elif config['add_value']:      
+        eq = config['add_value'] / opt_input.initial_value + opt_input.initial_position
     return eq
 
 def create_input_benchmark(opt_input : Any) -> np.ndarray | Any:
@@ -28,7 +32,8 @@ def create_input_benchmark(opt_input : Any) -> np.ndarray | Any:
 def create_input_initial(opt_input : Any):
     pf : Port | Any = opt_input.initial_port
     w0 = pf.weight_align(opt_input.secid) if isinstance(pf , Port) and not pf.is_emtpy() else np.zeros(len(opt_input.secid))
-    if (w0 == 0).all(): w0 = None
+    if (w0 == 0).all(): 
+        w0 = None
     return w0
 
 def create_input_turn_con(opt_input : Any):
@@ -53,7 +58,8 @@ def create_input_bnd_con(opt_input : Any):
     bound = StockBound.intersect_bounds(stock_bound_list , clear_after=True)
     assert not stock_bound_list , stock_bound_list
 
-    if opt_input.cfg_short['short_position'] is None or opt_input.cfg_short['short_position'] <= 0: bound.update_lb(0)
+    if opt_input.cfg_short['short_position'] is None or opt_input.cfg_short['short_position'] <= 0: 
+        bound.update_lb(0)
 
     bnd_key = np.full(len(opt_input.secid) , 'ra')
     bnd_key[bound.ub == bound.lb] = 'fx'
@@ -107,7 +113,8 @@ def append_bound_limit(opt_input : Any):
 
     if ld := limitation.get('list_days'):
         df = DATAVENDOR.all_stocks
-        pool = df[df['list_dt'] > DATAVENDOR.td(model_date , -ld).td]['secid'].to_numpy()
+        latest_list_dt = DATAVENDOR.td(model_date , -ld).td # noqa
+        pool = df.query('list_dt > @latest_list_dt')['secid'].to_numpy()
         bound_limit.intersect(StockPool.bnd_ub(secid , pool , 0))
 
     if limitation.get('kcb_no_buy'):
@@ -149,7 +156,8 @@ def append_linear_equity(opt_input : Any):
 
 def append_linear_induspool(opt_input : Any):
     induspool : IndustryPool = opt_input.cfg_induspool
-    if not induspool.no_net_buy and not induspool.no_net_sell:  return
+    if not induspool.no_net_buy and not induspool.no_net_sell:  
+        return
 
     industry = RISK_MODEL.get(opt_input.model_date).industry(opt_input.secid)
     w0 = np.zeros(len(industry)) if opt_input.w0 is None else opt_input.w0
@@ -166,11 +174,13 @@ def append_linear_induspool(opt_input : Any):
 
 def append_linear_board(opt_input : Any):
     board_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_board
-    if not board_bounds: return
+    if not board_bounds: 
+        return
     secid : np.ndarray = opt_input.secid
     model_date : int = opt_input.model_date
     for board_name , gen_bounds in board_bounds.items():
-        if not gen_bounds: continue
+        if not gen_bounds: 
+            continue
         if board_name == 'shse':
             where = (secid >= 600000) * (secid <= 689999)
         elif board_name == 'szse':
@@ -191,40 +201,48 @@ def append_linear_board(opt_input : Any):
 
 def append_linear_industry(opt_input : Any):
     indus_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_industry
-    if not indus_bounds: return
+    if not indus_bounds: 
+        return
     industry = RISK_MODEL.get(opt_input.model_date).industry(opt_input.secid)
     for indus_name , gen_bounds in indus_bounds.items():
-        if not gen_bounds: continue
+        if not gen_bounds: 
+            continue
         where = (industry == indus_name)
         A , lin_type , lb , ub = gen_bounds[0].export_lin(1. * where , opt_input.wb , gen_bounds[1:])
         linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
 
 def append_linear_style(opt_input : Any):
     style_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_style
-    if not style_bounds: return
+    if not style_bounds: 
+        return
     df = RISK_MODEL.get(opt_input.model_date).style(opt_input.secid)
     for style_name , gen_bounds in style_bounds.items():
-        if not gen_bounds: continue
+        if not gen_bounds: 
+            continue
         value = df.loc[:,style_name].to_numpy()
         A , lin_type , lb , ub = gen_bounds[0].export_lin(value , opt_input.wb , gen_bounds[1:])
         linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
 
 def append_linear_component(opt_input : Any):
     comp_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_component
-    if not comp_bounds or opt_input.wb is None: return
+    if not comp_bounds or opt_input.wb is None: 
+        return
 
     wb = opt_input.wb
     size = None
     for comp_name , gen_bounds in comp_bounds.items():
-        if not gen_bounds: continue
+        if not gen_bounds: 
+            continue
         if comp_name == 'component':
             value = 1 * (opt_input.wb > 0)
         elif comp_name == 'bsizedev1':
-            if size is None: size = RISK_MODEL.get(opt_input.model_date).style(opt_input.secid , 'size').to_numpy()
+            if size is None: 
+                size = RISK_MODEL.get(opt_input.model_date).style(opt_input.secid , 'size').to_numpy()
             value = np.abs(size - (size * wb / wb.sum()))
             value /= value.std()
         elif comp_name == 'bsizedev2':
-            if size is None: size = RISK_MODEL.get(opt_input.model_date).style(opt_input.secid , 'size').to_numpy()
+            if size is None: 
+                size = RISK_MODEL.get(opt_input.model_date).style(opt_input.secid , 'size').to_numpy()
             value = np.square(size - (size * wb / wb.sum()))
             value /= value.std()
         else:

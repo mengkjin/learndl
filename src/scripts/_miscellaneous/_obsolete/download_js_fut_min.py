@@ -1,6 +1,6 @@
 from src.basic import DB , CALENDAR
 import argparse
-import jsdata , datetime # type: ignore
+import jsdata , datetime # type: ignore 
 import pandas as pd
 from typing import Any
 
@@ -16,7 +16,8 @@ def download_jsdata(date : int , limit = 5000 , api : Any = None):
         "offset" : offset})
         offset += limit
         dfs.append(df)
-        if not isinstance(df , pd.DataFrame) or len(df) < limit: break
+        if not isinstance(df , pd.DataFrame) or len(df) < limit: 
+            break
     df = pd.concat(dfs).reset_index(drop=True)
     df = df.rename(columns={'code':'ts_code'})
     df['trade_time'] = df['trade_time'].str.replace('T',' ')

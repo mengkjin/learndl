@@ -9,12 +9,14 @@ DEFAULT_EXCLUDES = ['kernel_interrupt_daemon.py']
 
 def get_running_scripts(exclude_scripts : list[str] | str | None = None , script_type = ['*.py']):
     running_scripts : list[Path] = []
-    if isinstance(exclude_scripts , str): exclude_scripts = [exclude_scripts]
+    if isinstance(exclude_scripts , str): 
+        exclude_scripts = [exclude_scripts]
     excludes = [Path(scp).name for scp in (exclude_scripts or []) + DEFAULT_EXCLUDES]
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             cmdline = proc.info['cmdline']
-            if not cmdline: continue
+            if not cmdline: 
+                continue
             for line in cmdline:
                 if any(fnmatch.fnmatch(line, pattern) for pattern in script_type):
                     if any(scp in line for scp in excludes): 
@@ -36,7 +38,8 @@ def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance']
     else:
         main_str += f' applied\n'
         subprocess.run(['powerprofilesctl', 'set', mode])
-    if verbose: print(main_str , end = '')
+    if verbose: 
+        print(main_str , end = '')
     if log_path is not None:
         log_path.parent.mkdir(parents = True , exist_ok = True)
         with open(log_path, 'a') as log_file:
@@ -68,7 +71,7 @@ def kill_process(pid):
             if proc.is_running():
                 proc.kill()
             return True
-    except:
+    except Exception:
         pass
     return False
     
@@ -136,11 +139,13 @@ class ScriptCmd:
 def terminal_cmd_old(script : str | Path , params : dict | None = None , close_after_run = False ,
                 mode: Literal['shell', 'os'] = 'shell'):
     params = params or {}
-    if isinstance(script , Path): script = str(script.absolute())
+    if isinstance(script , Path): 
+        script = str(script.absolute())
     args = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in params.items() if v != ''])
     cmd = f'{MACHINE.python_path} {script} {args}'
     if platform.system() == 'Linux' and os.name == 'posix':
-        if not close_after_run: cmd += '; exec bash'
+        if not close_after_run: 
+            cmd += '; exec bash'
         cmd = f'gnome-terminal -- bash -c "{cmd}"'
     elif platform.system() == 'Windows':
         # cmd = f'start cmd /k {cmd}'

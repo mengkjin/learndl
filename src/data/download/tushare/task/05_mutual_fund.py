@@ -15,7 +15,8 @@ class FundInfo(InfoFetcher):
         df2 = self.iterate_fetch(pro.fund_basic , limit = 5000 , market='O')
 
         df = pd.concat([df1 , df2]).rename(columns=renamer)
-        if df.empty: return df
+        if df.empty: 
+            return df
         for col in ['found_date' , 'due_date' , 'list_date' , 'issue_date' , 'delist_date']:
             df[col] = df[col].fillna(99991231).astype(int)
         df = df.reset_index(drop=True)
@@ -32,13 +33,15 @@ class FundPortfolioFetcher(TushareFetcher):
 
     def get_update_dates(self):
         dates = self._fina_fetcher_update_dates(self.DATA_FREQ , self.CONSIDER_FUTURE)
-        if len(dates) <= 2: dates = [] # if a lot of dates are missing, ignore update state to update
+        if len(dates) <= 2: 
+            dates = [] # if a lot of dates are missing, ignore update state to update
         return dates
     
     def get_data(self , date):
         renamer = {'ts_code' : 'fund_id'}
         df = self.iterate_fetch(pro.fund_portfolio , limit = 3000 , period = str(date) , max_fetch_times=500)
-        if df.empty: return df
+        if df.empty: 
+            return df
         df = ts_code_to_secid(df.rename(columns=renamer) , code_col='symbol' , drop_old = False)
         for col in ['ann_date' , 'end_date']: 
             df[col] = df[col].fillna(99991231).astype(int)
@@ -52,7 +55,8 @@ class ETFDailyQuote(DateFetcher):
         date_str = str(date)
         
         quote = self.iterate_fetch(pro.fund_daily , limit = 2000 , trade_date=date_str)
-        if quote.empty: return quote
+        if quote.empty: 
+            return quote
         quote = quote.rename(columns={'pct_change':'pctchange','pre_close':'preclose','vol':'volume'})
         quote['volume'] = quote['volume'] * 1000
         quote['amount'] = quote['amount'] * 10000

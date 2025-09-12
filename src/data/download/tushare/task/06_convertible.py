@@ -17,7 +17,8 @@ class ConvertibleDailyQuote(DateFetcher):
         date_str = str(date)
         
         quote = self.iterate_fetch(pro.cb_daily , limit = 2000 , trade_date=date_str)
-        if quote.empty: return quote
+        if quote.empty: 
+            return quote
         quote = quote.rename(columns={'pre_close':'preclose','vol':'volume' , 'pre_settle':'presettle'})
         quote['amount'] = quote['amount'] * 10000
         

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from abc import ABC , abstractmethod
 from copy import deepcopy
 from pathlib import Path
-from typing import Any , Literal , Optional
+from typing import Any , Optional
 
 from src.proj import PATH
 from src.basic import DB
@@ -39,8 +39,10 @@ class BasicBoosterModel(ABC):
     def update_param(self , train_param , weight_param , **kwargs):
         self.train_param.update(train_param) 
         self.weight_param.update(weight_param)
-        if 'cuda' in kwargs: self.cuda = kwargs.pop('cuda')
-        if 'seed' in kwargs: self.seed = kwargs.pop('seed')
+        if 'cuda' in kwargs: 
+            self.cuda = kwargs.pop('cuda')
+        if 'seed' in kwargs: 
+            self.seed = kwargs.pop('seed')
         self.assert_param()
         return self
     
@@ -49,13 +51,17 @@ class BasicBoosterModel(ABC):
             f'{str([k for k in self.train_param if k not in self.DEFAULT_TRAIN_PARAM])} not in DEFAULT_TRAIN_PARAM'
     
     def import_data(self , train : Any = None , valid : Any = None , test : Any = None):
-        if train is not None: self.data['train'] = self.to_booster_input(train , self.weight_param)
-        if valid is not None: self.data['valid'] = self.to_booster_input(valid , self.weight_param)
-        if test  is not None: self.data['test']  = self.to_booster_input(test , self.weight_param)
+        if train is not None: 
+            self.data['train'] = self.to_booster_input(train , self.weight_param)
+        if valid is not None: 
+            self.data['valid'] = self.to_booster_input(valid , self.weight_param)
+        if test  is not None: 
+            self.data['test']  = self.to_booster_input(test , self.weight_param)
         return self
 
     def update_feature(self , use_feature = None):
-        if use_feature is not None: [bdata.update_feature(use_feature) for bdata in self.data.values()]
+        if use_feature is not None: 
+            [bdata.update_feature(use_feature) for bdata in self.data.values()]
         return self
 
     @abstractmethod
@@ -86,12 +92,15 @@ class BasicBoosterModel(ABC):
         if self.booster_objective_multi:
             if n_bins is None: 
                 n_bins = self.DEFAULT_CATEGORICAL_N_BINS
-                if not self.silent: print(f'n_bins not specified, using default value {self.DEFAULT_CATEGORICAL_N_BINS}')
+                if not self.silent: 
+                    print(f'n_bins not specified, using default value {self.DEFAULT_CATEGORICAL_N_BINS}')
             n_bins = min(n_bins , self.DEFAULT_CATEGORICAL_MAX_BINS)            
         train_param['n_bins'] = n_bins
 
-        if train is None: train = self.data['train']
-        if valid is None: valid = self.data['valid']
+        if train is None: 
+            train = self.data['train']
+        if valid is None: 
+            valid = self.data['valid']
 
         self.fit_train_ds = train.to_categorical(n_bins).Dataset()
         self.fit_valid_ds = valid.to_categorical(n_bins).Dataset()
@@ -130,14 +139,16 @@ class BasicBoosterModel(ABC):
     def test_result(self , test : BoosterInput | Any = None , plot_path : Path | None = None):
         df = self.calc_ic(test)
         plt.figure()
-        df.cumsum().plot(title='average IC/RankIC = {:.4f}/{:.4f}'.format(*df.mean().values))
+        
+        df.cumsum().plot(title='average IC/RankIC = {:.4f}/{:.4f}'.format(df['ic'].mean() , df['rankic'].mean()))
         if plot_path:
             plot_path.mkdir(exist_ok=True)
             plt.savefig(plot_path.joinpath('test_prediction.png'),dpi=1200)
         return df
     
     def calc_ic(self , test : BoosterInput | Any = None):
-        if test is None: test = self.data['test']
+        if test is None: 
+            test = self.data['test']
         label = test.y
         pred  = self.predict(test).to_2d()
         index = test.date
@@ -164,8 +175,9 @@ class BasicBoosterModel(ABC):
     
     @classmethod
     def df_input(cls , factor_data : Optional[pd.DataFrame] = None , idx : int = -1 , windows_len = 24) -> dict[str,Any]:
-        if factor_data is None: factor_data = load_xingye_data()
-        MDTs = np.sort(factor_data['date'].unique())
+        if factor_data is None: 
+            factor_data = load_xingye_data()
+        MDTs = np.sort(np.unique(factor_data['date'].to_numpy()))
 
         idtEnd = MDTs[idx - 1]
         idtStart = MDTs[idx - windows_len]
@@ -189,11 +201,13 @@ class BasicBoosterModel(ABC):
                 mono_constr = raw_mono_constr * (nfeat // len(raw_mono_constr))
         else:
             mono_constr = [raw_mono_constr] * nfeat
-        if as_tuple and mono_constr is not None: mono_constr = tuple(mono_constr)
+        if as_tuple and mono_constr is not None: 
+            mono_constr = tuple(mono_constr)
         return mono_constr
     
     @property
-    def use_gpu(self): return self.cuda and torch.cuda.is_available()
+    def use_gpu(self): 
+        return self.cuda and torch.cuda.is_available()
 
 def load_xingye_data():
     factor_data = pd.read_feather(f'{PATH.miscel}/CombStdByZXMkt_All_TrainLabel.feather') # 训练集，带Label

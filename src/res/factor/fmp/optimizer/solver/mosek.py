@@ -13,11 +13,16 @@ def mosek_bnd_key(bnd_key : str | list | np.ndarray):
     if isinstance(bnd_key , (list , np.ndarray)):
         return [mosek_bnd_key(k) for k in bnd_key]
     elif isinstance(bnd_key , str):
-        if bnd_key == 'fx': return mosek.boundkey.fx
-        elif bnd_key == 'lo': return mosek.boundkey.lo
-        elif bnd_key == 'up': return mosek.boundkey.up
-        elif bnd_key == 'ra': return mosek.boundkey.ra
-        else: raise KeyError(bnd_key)
+        if bnd_key == 'fx': 
+            return mosek.boundkey.fx
+        elif bnd_key == 'lo': 
+            return mosek.boundkey.lo
+        elif bnd_key == 'up': 
+            return mosek.boundkey.up
+        elif bnd_key == 'ra': 
+            return mosek.boundkey.ra
+        else: 
+            raise KeyError(bnd_key)
     else:
         return bnd_key
     
@@ -61,10 +66,12 @@ class Solver:
         num_S = 0 if not self.conds.short or not self.short_con else num_N
         if (not self.conds.qobj and not self.conds.qcon) or not self.cov_con or self.cov_con.cov_type != 'model':
             num_L = 0
-        else: num_L = len(self.cov_con.F)
+        else: 
+            num_L = len(self.cov_con.F)
         if not self.conds.qcon or not self.cov_con or not self.cov_con.te:
             num_Q = 0
-        else: num_Q = 2
+        else: 
+            num_Q = 2
 
         self.num_vars = SolveVars(num_N , num_T , num_S , num_L , num_Q)
         self.start_of = self.num_vars.start_of()
@@ -127,7 +134,8 @@ class Solver:
         return ww , is_success , status
     
     def task_init(self , task : mosek.Task): 
-        for key, val in _SOLVER_PARAM.items() : task.putparam(key, val)
+        for key, val in _SOLVER_PARAM.items(): 
+            task.putparam(key, val)
     
     def task_addvars(self , task : mosek.Task , num : int ,
                      bound_key : np.ndarray | Any , bound_lb : np.ndarray | Any , bound_ub : np.ndarray | Any ,
@@ -136,7 +144,8 @@ class Solver:
         task.appendvars(num)
         for j , (bkx , blx , bux , cj) in var_iter:
             task.putvarbound(j, bkx , blx , bux)
-            if cj: task.putcj(j , cj)
+            if cj: 
+                task.putcj(j , cj)
     
     def task_addlcons(self , task : mosek.Task , num : int ,
                       bound_key : np.ndarray | Any , bound_lb : np.ndarray | Any , bound_ub : np.ndarray | Any ,
@@ -165,7 +174,8 @@ class Solver:
         self.task_addvars(task , self.num_vars.Q , mosek.boundkey.lo , 0.0 , +INF , 0)
 
     def task_add_quad_obj(self , task : mosek.Task):
-        if not self.conds.qobj or not self.cov_con or not self.cov_con.lmbd: return
+        if not self.conds.qobj or not self.cov_con or not self.cov_con.lmbd: 
+            return
         
         if self.cov_con.cov_type == 'normal':
             u       = self.alpha.T + self.cov_con.lmbd * self.wb.dot(self.cov_con.cov)
@@ -193,7 +203,8 @@ class Solver:
         task.putqobj(qosubi, qosubj, qoval)
 
     def task_add_lin_con(self , task : mosek.Task):
-        if not self.input.lin_con: return
+        if not self.input.lin_con: 
+            return
         # lin constraints
         K = len(self.input.lin_con)
         lin_type = mosek_bnd_key(self.input.lin_con.type)
@@ -201,7 +212,8 @@ class Solver:
                            np.arange(self.num_vars.N)[None].repeat(K,0), self.input.lin_con.A)
 
     def task_add_turn_con(self , task : mosek.Task):
-        if not self.num_vars.T or not self.turn_con or not self.turn_con.dbl: return
+        if not self.num_vars.T or not self.turn_con or not self.turn_con.dbl: 
+            return
         # 1 : total turnover constraint
         self.task_addlcons(task , 1 , mosek.boundkey.up , -INF , self.turn_con.dbl , 
                            [self.start_of.T + np.arange(self.num_vars.T)] , [np.ones(self.num_vars.T)])
@@ -215,7 +227,8 @@ class Solver:
         self.task_addlcons(task , self.num_vars.T , mosek.boundkey.up , -INF , -self.w0 , lcon_sub , lcon_vals[1]) # [[-1.,-1.]] * self.num_vars.T
         
     def task_add_short_con(self , task : mosek.Task):
-        if not self.num_vars.S or not self.short_con: return
+        if not self.num_vars.S or not self.short_con: 
+            return
         # 1 : total short constraint
         self.task_addlcons(task , 1 , mosek.boundkey.up , -INF , self.short_con.pos , 
                            [self.start_of.S + np.arange(self.num_vars.S)] , [np.ones(self.num_vars.S)])
@@ -227,7 +240,8 @@ class Solver:
         self.task_addlcons(task , self.num_vars.S , mosek.boundkey.lo , 0. , +INF , lcon_sub , lcon_val)
         
     def task_add_quad_model_con(self , task : mosek.Task):
-        if not self.cov_con or not self.num_vars.L: return
+        if not self.cov_con or not self.num_vars.L: 
+            return
         # num_L factors == self.F[i,:].dot(num_N variables)
         # lcon_sub : [[Range(n)] x L , Pos(L)]      lcon_val :  [F(L,N) , -1.0]
         #   [[0 1 2 ... n (start_of_L+0)]              [[f(a,0) f(a,1) f(a,2) ... f(a,n) -1.]
@@ -240,7 +254,8 @@ class Solver:
         self.task_addlcons(task , self.num_vars.L , mosek.boundkey.fx , 0.0, 0.0 , lcon_sub , lcon_val)
         
     def task_add_quad_te_con(self , task : mosek.Task):
-        if not self.conds.qcon or not self.cov_con or not self.cov_con.te: return
+        if not self.conds.qcon or not self.cov_con or not self.cov_con.te: 
+            return
         te_sq = self.cov_con.te ** 2
         start = task.getnumcon()
 

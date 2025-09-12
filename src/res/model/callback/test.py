@@ -41,10 +41,11 @@ class DetailedAlphaAnalysis(BaseCallBack):
     def on_test_start(self):     PRED_RECORD.initialize(self.trainer)
     def on_test_batch_end(self): PRED_RECORD.append_batch_pred()
     def on_test_end(self):  
-        if PRED_RECORD.is_empty: return
+        if PRED_RECORD.is_empty: 
+            return
         df = PRED_RECORD.all_preds()
         if self.use_num == 'first':
-            df = df[df['model_num'] == 0]
+            df = df.query('model_num == 0')
         else:
             df = df.groupby(['date','secid','submodel'])['values'].mean().reset_index()
         df = df.set_index(['secid','date'])
@@ -56,7 +57,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         for task in self.analytic_tasks:
             interval = 1 if task == 't50' else 5
             if interval not in factors.keys():
-                dates = PRED_RECORD.dates[::interval]
+                dates = PRED_RECORD.dates[::interval] # noqa
                 factors[interval] = StockFactor(df.reset_index().query('date in @dates').set_index(['secid','date']))
             factor = factors[interval]
             self.test_results[task] = FactorTestAPI.run_test(task , factor , verbosity = 1 , write_down=False , display_figs=False)
@@ -75,17 +76,21 @@ class DetailedAlphaAnalysis(BaseCallBack):
         col_pct = ['pf','bm','excess','annualized','mdd','te']
         col_flt = ['ir','calmar','turnover']
         for name in cls.DISPLAY_TABLES:
-            if name not in dfs: continue
+            if name not in dfs: 
+                continue
             df = dfs[name].copy()
-            for col in df.columns.intersection(col_pct): df[col] = df[col].map(lambda x:f'{x:.2%}')
-            for col in df.columns.intersection(col_flt): df[col] = df[col].map(lambda x:f'{x:.3f}')
+            for col in df.columns.intersection(col_pct): 
+                df[col] = df[col].map(lambda x:f'{x:.2%}')
+            for col in df.columns.intersection(col_flt): 
+                df[col] = df[col].map(lambda x:f'{x:.3f}')
             print(f'Table: {name}:')
             FUNC.display.display(df)
 
     @classmethod
     def display_figs(cls , figs : dict[str , Any]):
         for name in cls.DISPLAY_FIGURES:
-            if name not in figs: continue
+            if name not in figs: 
+                continue
             print(f'Figure: {name}:')
             FUNC.display.display(figs[name])
         
@@ -102,7 +107,8 @@ class GroupReturnAnalysis(BaseCallBack):
     def on_test_start(self):     PRED_RECORD.initialize(self.trainer)
     def on_test_batch_end(self): PRED_RECORD.append_batch_pred()
     def on_test_end(self):  
-        if PRED_RECORD.is_empty: return
+        if PRED_RECORD.is_empty: 
+            return
         df = PRED_RECORD.all_preds(5)
              
         df['factor_name'] = df['model_num'].astype(str) + '.' + df['submodel']

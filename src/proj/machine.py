@@ -8,13 +8,13 @@ class MachineSetting:
     MACHINE_DICT = {
         # machine name :    (is_server , project_path , updateable)
         'mengkjin-server':  (True , '/home/mengkjin/workspace/learndl'),
+        'HST-jinmeng':      (False , 'E:/workspace/learndl'),
+        'Mathews-Mac':      (False , '/Users/mengkjin/workspace/learndl' , False),
         'longcl-server':    (True , '/home/longcl/workspace/learndl'),
         'zhuhy-server':     (True , '/home/zhuhy/workspace/learndl'),
         'HNO-JINMENG01':    (False , 'D:/Coding/learndl/learndl'),
         'HPO-LONGCL05':     (False , ''),
         'HPO-ZHUHY01':      (False , ''),
-        'HST-jinmeng':      (False , 'E:/workspace/learndl'),
-        'Mathews-Mac':      (False , '/Users/mengkjin/workspace/learndl' , False),
     }
 
     def __init__(self , server : bool , project_path : str , updateable : bool = True):
@@ -81,14 +81,15 @@ class MachineSetting:
 
     def local_settings(self , name : str):
         p = self.PATH.local_settings.joinpath(f'{name}.yaml')
-        assert p.exists() , f'{p} does not exist , .local_settings folder only has {[p.stem for p in self.PATH.list_files(self.PATH.local_settings)]}'
+        if not p.exists():
+            raise FileNotFoundError(f'{p} does not exist , .local_settings folder only has {[p.stem for p in self.PATH.list_files(self.PATH.local_settings)]}')
         return self.PATH.read_yaml(p)
     
     @property
     def share_folder_path(self):
         try:
             return Path(self.local_settings('share_folder')[self.name])
-        except:
+        except (FileNotFoundError , KeyError):
             return None
         
     def configs(self , conf_type : Literal['glob' , 'registry' , 'factor' , 'boost' , 'nn' , 'train' , 'trade' , 'schedule'] , name : str):

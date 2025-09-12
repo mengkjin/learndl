@@ -2,7 +2,6 @@ import polars as pl
 
 from typing import Literal
 
-from src.proj import PATH
 from src.basic import DB
 from src.func.singleton import singleton
 from src.data.util import INFO
@@ -17,7 +16,9 @@ class MinKLineAccess(DateDataAccess):
     def data_loader(self , date , data_type):
         if data_type in self.PL_DATA_TYPE_LIST: 
             df = DB.db_load('trade_ts' , data_type , date , verbose = False , use_alt = True)
-            if not df.empty: df = df[df['secid'].isin(INFO.get_secid(date))]
+            if not df.empty: 
+                secid = INFO.get_secid(date) # noqa
+                df = df.query('secid in @secid')
         else:
             raise KeyError(data_type)
         return df
@@ -46,7 +47,8 @@ class MinKLineAccess(DateDataAccess):
     
     def get_kline(self , date , with_ret = False):
         df = self.get_1min(date , with_ret)
-        if df.shape[0] == 0: df = self.get_5min(date , with_ret)
+        if df.shape[0] == 0: 
+            df = self.get_5min(date , with_ret)
         return df
 
     def get_inday_corr(self , date : int , 

@@ -57,13 +57,13 @@ class ParamInputsForm:
             if isinstance(ptype, list):
                 options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
                 return cls.raw_option([None] + ptype, options)
-            elif ptype == str:
+            elif ptype is str:
                 return lambda x: (x.strip() if x is not None else None)
-            elif ptype == bool:
+            elif ptype is bool:
                 return lambda x: None if x is None or x == 'Choose an option' else bool(x)
-            elif ptype == int:
+            elif ptype is int:
                 return lambda x: None if x is None else int(x)
-            elif ptype == float:
+            elif ptype is float:
                 return lambda x: None if x is None else float(x)
             else:
                 raise ValueError(f"Unsupported param type: {ptype}")
@@ -72,7 +72,8 @@ class ParamInputsForm:
         def raw_option(cls , raw_values : list[Any], alt_values : list[Any]):
             def wrapper(alt : Any):
                 """get index of value in options"""
-                if alt is None or alt == '': alt = 'Choose an option'
+                if alt is None or alt == '': 
+                    alt = 'Choose an option'
                 assert alt in alt_values , f"Invalid option '{alt}' in list {alt_values}"
                 raw = raw_values[alt_values.index(alt)] if alt is not None else None
                 return raw
@@ -91,12 +92,14 @@ class ParamInputsForm:
 
     def cmd_to_param_values(self , cmd : str = ''):
         param_values = {}
-        if not cmd or not str(self.runner.path.path) in cmd: return param_values
+        if not cmd or str(self.runner.path.path) not in cmd: 
+            return param_values
         main_str = [s for s in cmd.split(";") if str(self.runner.path.path) in s][0]
         param_str = ''.join(main_str.split(str(self.runner.path.path))[1:]).strip()
         
         for pstr in param_str.split('--'):
-            if not pstr: continue
+            if not pstr: 
+                continue
             try:
                 param_name , param_value = pstr.replace('=' , ' ').split(' ' , 1)
             except Exception as e:
@@ -106,9 +109,12 @@ class ParamInputsForm:
                 raise e
 
             value = param_value.strip()
-            if value == 'True': value = True
-            elif value == 'False': value = False
-            elif value == 'None': value = None
+            if value == 'True': 
+                value = True
+            elif value == 'False': 
+                value = False
+            elif value == 'None': 
+                value = None
             param_values[param_name] = value
         return param_values
 
@@ -155,7 +161,8 @@ class ParamInputsForm:
         return len(self.errors) == 0
 
     def submit(self):
-        for wp in self.param_dict.values(): wp.on_change(self.target)
+        for wp in self.param_dict.values(): 
+            wp.on_change(self.target)
             
         if not self.validate():
             for err_msg in self.errors:
@@ -172,13 +179,13 @@ class ParamInputsForm:
         
         if isinstance(ptype, list):
             func = cls.list_widget
-        elif ptype == str:
+        elif ptype is str:
             func = cls.text_widget
-        elif ptype == bool:
+        elif ptype is bool:
             func = cls.bool_widget
-        elif ptype == int:
+        elif ptype is int:
             func = cls.int_widget
-        elif ptype == float:
+        elif ptype is float:
             func = cls.float_widget
         else:
             raise ValueError(f"Unsupported param type: {ptype}")
@@ -196,8 +203,10 @@ class ParamInputsForm:
     @classmethod
     def get_help(cls , param : ScriptParamInput):
         help_texts = []
-        if param.required: help_texts.append(f':red[**Required Parameter!**]')
-        if param.desc: help_texts.append(f'*{param.desc}*')
+        if param.required: 
+            help_texts.append(f':red[**Required Parameter!**]')
+        if param.desc: 
+            help_texts.append(f'*{param.desc}*')
         return '\t'.join(help_texts)
 
     @classmethod
@@ -223,14 +232,13 @@ class ParamInputsForm:
     @classmethod
     def list_widget(cls , runner : ScriptRunner , param : ScriptParamInput , target : dict[str, Any],
                     value : Any | None = None , **kwargs):
-        ptype = param.ptype
-        assert isinstance(ptype, list) , f"Param {param.name} is not a list"
+        assert isinstance(param.ptype, list) , f"Param {param.name} is not a list"
         
         widget_key = cls.get_widget_key(runner, param)
         default_value = cls.get_default_value(runner, param , target , value)
         title = cls.get_title(param)
         help = cls.get_help(param)
-        options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
+        options = ['Choose an option'] + [f'{param.prefix}{e}' for e in param.ptype]
         if default_value is not None and default_value not in options:
             return st.text_input(
                 title,
@@ -254,8 +262,7 @@ class ParamInputsForm:
     def text_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
                     target : dict[str, Any],
                     value : Any | None = None , **kwargs):
-        ptype = param.ptype
-        assert ptype == str , f"Param {param.name} is not a string"
+        assert param.ptype is str , f"Param {param.name} is not a string"
         widget_key = cls.get_widget_key(runner, param)
         default_value = cls.get_default_value(runner, param , target , value)
         title = cls.get_title(param)
@@ -273,8 +280,7 @@ class ParamInputsForm:
     def bool_widget(cls , runner : ScriptRunner , param : ScriptParamInput , 
                     target : dict[str, Any],
                     value : Any | None = None , **kwargs):
-        ptype = param.ptype
-        assert ptype == bool , f"Param {param.name} is not a boolean"
+        assert param.ptype is bool , f"Param {param.name} is not a boolean"
         widget_key = cls.get_widget_key(runner, param)
         title = cls.get_title(param)
         default_value = cls.get_default_value(runner, param , target , value)
@@ -292,8 +298,7 @@ class ParamInputsForm:
     def int_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
                    target : dict[str, Any],
                    value : Any | None = None , **kwargs):
-        ptype = param.ptype
-        assert ptype == int , f"Param {param.name} is not an integer"
+        assert param.ptype is int , f"Param {param.name} is not an integer"
         widget_key = cls.get_widget_key(runner, param)
         title = cls.get_title(param)
         default_value = cls.get_default_value(runner, param , target , value)
@@ -313,8 +318,7 @@ class ParamInputsForm:
     def float_widget(cls , runner : ScriptRunner , param : ScriptParamInput ,
                      target : dict[str, Any],
                      value : Any | None = None , **kwargs):
-        ptype = param.ptype
-        assert ptype == float , f"Param {param.name} is not a float"
+        assert param.ptype is float , f"Param {param.name} is not a float"
         widget_key = cls.get_widget_key(runner, param)
         title = cls.get_title(param)
         default_value = cls.get_default_value(runner, param , target , value)

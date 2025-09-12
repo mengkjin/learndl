@@ -67,14 +67,16 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         assert step % CONF.UPDATE['step'] == 0 , f'step {step} should be a multiple of {CONF.UPDATE["step"]}'
         dates = CALENDAR.slice(cls.FACTOR_CALENDAR , start , end)
         dates = dates[dates <= CALENDAR.updated()][::int(step/CONF.UPDATE['step'])]
-        if len(dates) == 0: return StockFactor(pd.DataFrame())
+        if len(dates) == 0: 
+            return StockFactor(pd.DataFrame())
         calc = cls()
         def calculate_factor(date):
             df = calc.eval_factor(date , verbose = verbose)
             return df
         dfs = parallel(calculate_factor , dates , dates , method = multi_thread , ignore_error = ignore_error)
         factor = StockFactor(dfs , step = step)
-        if normalize: factor.normalize(fill_method , weighted_whiten , order , inplace = True)
+        if normalize: 
+            factor.normalize(fill_method , weighted_whiten , order , inplace = True)
         return factor
 
     @classmethod
@@ -102,7 +104,8 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
             self.calc_and_deploy(date , overwrite = True)
             df = self.load_factor(date)
             assert not df.empty , f'factor {self.factor_name} is not calculated at {date}'
-            if verbose: print(f'{self.factor_name} at {date} recalculated')
+            if verbose: 
+                print(f'{self.factor_name} at {date} recalculated')
         return df
     
     @classmethod
@@ -118,9 +121,10 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
             if not isinstance(df , pd.Series):  
                 raise TypeError(f'calc_factor must return a Series , but got {type(df)} for factor {cls.factor_name}')
             
-            if df.empty: df = pd.Series()
+            if df.empty: 
+                df = pd.Series()
             else: 
-                df = df.rename(cls.factor_name).replace([np.inf , -np.inf] , np.nan)
+                df : pd.Series | Any = df.rename(cls.factor_name).replace([np.inf , -np.inf] , np.nan)
                 df = df[~df.index.duplicated(keep = 'first')]
                 df = df.reindex(DATAVENDOR.secid(date))
 
@@ -222,7 +226,8 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
 
     def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
         '''store factor data after calculate'''
-        if not overwrite and DB.factor_path(self.factor_name , date).exists(): return False
+        if not overwrite and DB.factor_path(self.factor_name , date).exists(): 
+            return False
         df = self.calc_factor(date)
         df = self.validate_value(df , date , strict = strict_validation)
         saved = DB.factor_save(df.rename(self.factor_name).to_frame() , self.factor_name , date , overwrite)
@@ -234,7 +239,8 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         start = start if start is not None else cls.init_date
         end   = end   if end   is not None else 99991231
         dates = CALENDAR.slice(cls.FACTOR_CALENDAR if force else cls.FACTOR_TARGET_DATES , start , end)
-        if not overwrite: dates = CALENDAR.diffs(dates , cls.stored_dates())
+        if not overwrite: 
+            dates = CALENDAR.diffs(dates , cls.stored_dates())
         return dates
     
     @classmethod

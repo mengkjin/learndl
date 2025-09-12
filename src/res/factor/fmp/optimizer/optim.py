@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any , Literal , Optional
+from typing import Literal , Optional
 
 from src.proj import MACHINE
 from src.res.factor.util import PortCreator , PortCreateResult , Port
@@ -28,8 +28,10 @@ class PortfolioOptimizerConfig:
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.__slots__ and v != cls.__dataclass_fields__[k].default}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if print_info:
-            if use_kwargs : print(f'In initializing {cls.__name__}, used kwargs: {use_kwargs}')
-            if drop_kwargs: print(f'In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}')
+            if use_kwargs : 
+                print(f'In initializing {cls.__name__}, used kwargs: {use_kwargs}')
+            if drop_kwargs: 
+                print(f'In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}')
         return cls(**use_kwargs)
 
     @property
@@ -63,7 +65,8 @@ class PortfolioOptimizer(PortCreator):
 
         while True:
             w, is_success, status = self.solver.solve(**self.conf.opt_cond)
-            if is_success or not self.conf.opt_relax or self.solver_input.relaxable: break
+            if is_success or not self.conf.opt_relax or self.solver_input.relaxable: 
+                break
 
         if not is_success and self.conf.opt_relax:
             print(f'Failed optimization at {self.model_date} , status is {status}, even with relax, use w0 instead.')

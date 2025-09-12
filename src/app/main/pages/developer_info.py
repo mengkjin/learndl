@@ -57,7 +57,8 @@ def show_developer_info(H = 500):
                       on_click = SC.click_log_clear_confirmation)
         
         for seg , content in segments.items():
-            if seg not in st.session_state['developer-info-selected']: continue
+            if seg not in st.session_state['developer-info-selected']: 
+                continue
             with expander_subheader(f'developer-info-{seg}' , seg , content['icon'] , height = H):
                 content['operation']()
         

@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
 
-from typing import Any , Literal
-
 from src.data import DATAVENDOR
 from src.func.transform import winsorize , whiten
 
@@ -20,7 +18,9 @@ def btop_augment_range(date : int):
 
     # score = lambda x : x.rank(pct = True)
     heavy_asset = pd.concat([fixed_asset_ratio , capital_intensity , liability_ratio , inventory_turnover] , axis = 1)
-    heavy_asset = heavy_asset.rank(pct = True).mean(axis = 1).rename('heavy_asset').rank(pct = True).reindex(bp_raw.index)
+    heavy_asset = heavy_asset.rank(pct = True).mean(axis = 1)
+    assert isinstance(heavy_asset , pd.Series) , f'heavy_asset must be a pandas series, but got {type(heavy_asset)}'
+    heavy_asset = heavy_asset.rename('heavy_asset').rank(pct = True).reindex(bp_raw.index)
 
     bp_range = (bp_raw < 1 / 0.8) & (heavy_asset >= 0.5)
     return bp_range
@@ -86,7 +86,8 @@ class valuation_augment(StockFactorCalculator):
         bp  = btop_augment.Eval(date) 
         ep  = etop_augment.Eval(date)
         cfp = cfev_augment.Eval(date)
-        if any(f.empty or f.isna().all() for f in [bp , ep , cfp]): return pd.Series()
+        if any(f.empty or f.isna().all() for f in [bp , ep , cfp]): 
+            return pd.Series()
         v = pd.concat([whiten(winsorize(calc)) for calc in [bp , ep , cfp]] , axis = 1).mean(axis = 1)
         return v
     

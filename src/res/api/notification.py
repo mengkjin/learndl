@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import torch
 from datetime import datetime
-from src.proj import PATH , MACHINE
+from src.proj import MACHINE
 from src.basic import send_email , CALENDAR , TaskRecorder , DB
 
 class TempFile:
@@ -15,11 +15,12 @@ class TempFile:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         try:
             os.remove(self.file_name)
-        except:
+        except Exception:
             pass
 
 def check_cuda_status():
-    if not MACHINE.server or torch.cuda.is_available(): return
+    if not MACHINE.server or torch.cuda.is_available(): 
+        return
     
     title = f'Learndl: Server CUDA Failed'
     body = f"""Server {MACHINE.name} CUDA Failed , please check the cuda status, possible solution: 
@@ -34,7 +35,7 @@ def check_cuda_status():
     
     try:
         send_email(title , body , recipient , confirmation_message='CUDA Status')
-    except:
+    except Exception:
         pass
 
 
@@ -67,8 +68,8 @@ def email_to_fanghan(test = False):
         try:
             send_email(title , body , recipient , attachments , confirmation_message='Fanghan')
             task_recorder.mark_finished(success = True)
-        except:
-            print(f'发送邮件给方晗失败!')
+        except Exception as e:
+            print(f'发送邮件给方晗失败! {e}')
 
 class NotificationAPI:
     @classmethod

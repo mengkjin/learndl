@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from copy import deepcopy
-from typing import Any , Literal , Optional , Union
+from typing import Any , Literal , Union
 
 from src.data import DataBlock
 from .port import Port
@@ -19,26 +19,35 @@ class Portfolio:
         self.weight_block_completed = False
         self._last_port : Port | None = None
         
-    def __len__(self): return len(self.available_dates())
-    def __bool__(self): return len(self) > 0
-    def __repr__(self): return f'<{self.name}> : {len(self.ports)} ports'
-    def __getitem__(self , date): return self.get(date)
+    def __len__(self): 
+        return len(self.available_dates())
+    def __bool__(self): 
+        return len(self) > 0
+    def __repr__(self): 
+        return f'<{self.name}> : {len(self.ports)} ports'
+    def __getitem__(self , date): 
+        return self.get(date)
     def __setitem__(self , date , port): 
         assert date == port.date , (date , port.date)
         self.append(port , True)
-    def copy(self): return deepcopy(self)
+    def copy(self): 
+        return deepcopy(self)
     @property
-    def name(self): return self._name.lower()
+    def name(self): 
+        return self._name.lower()
 
     @property
-    def port_date(self): return np.array(list(self.ports.keys()))
+    def port_date(self): 
+        return np.array(list(self.ports.keys()))
     @property
-    def port_secid(self): return np.unique(np.concatenate([port.secid for port in self.ports.values()]))
+    def port_secid(self): 
+        return np.unique(np.concatenate([port.secid for port in self.ports.values()]))
 
     @classmethod
     def random(cls):  
         rand_ps = cls('rand_port')
-        for _ in range(3): rand_ps.append(Port.rand_port() , override = True)
+        for _ in range(3): 
+            rand_ps.append(Port.rand_port() , override = True)
         return rand_ps
 
     def weight_block(self):
@@ -51,16 +60,19 @@ class Portfolio:
     def append(self , port : Port , override = False , ignore_name = False):
         assert ignore_name or port.name in ['none' , 'empty'] or self.name == port.name , (self.name , port.name)
         assert override or (port.date not in self.ports.keys()) , (port.name , port.date)
-        if port.is_emtpy(): return
+        if port.is_emtpy(): 
+            return
         self.ports[port.date] = port
         self.weight_block_completed = False
         self._last_port = port
         
-    def available_dates(self): return self.port_date
+    def available_dates(self): 
+        return self.port_date
 
     def latest_avail_date(self , date : int = 99991231):
         available_dates = self.available_dates()
-        if date in available_dates: return date
+        if date in available_dates: 
+            return date
         tar_dates = available_dates[available_dates < date]
         return max(tar_dates) if len(tar_dates) else -1
     def has(self , date : int):
@@ -76,18 +88,24 @@ class Portfolio:
             return port.evolve_to_date(date)
     @classmethod
     def get_object_name(cls , obj : str | Any | None) -> str:
-        if obj is None: return 'none'
-        elif isinstance(obj , cls): return obj.name
-        elif isinstance(obj , str): return obj
-        else: raise TypeError(obj)
+        if obj is None: 
+            return 'none'
+        elif isinstance(obj , cls): 
+            return obj.name
+        elif isinstance(obj , str): 
+            return obj
+        else: 
+            raise TypeError(obj)
 
     @classmethod
     def from_dataframe(cls , df : pd.DataFrame , name : str | Any = None):
-        if df.empty: return cls(name)
+        if df.empty: 
+            return cls(name)
         df = df.reset_index()
         assert all(col in df.columns for col in ['name' , 'date' , 'secid' , 'weight']) , \
             f'expect columns: name , date , secid , weight , got {df.columns.tolist()}'
-        if 'value' not in df.columns: df['value'] = 1
+        if 'value' not in df.columns: 
+            df['value'] = 1
         assert df['name'].str.lower().nunique() == df['name'].nunique() , \
             f'duplicate names in dataframe considering case: {df["name"].unique()}'
         df['name'] = df['name'].str.lower()
@@ -96,21 +114,23 @@ class Portfolio:
             assert df['name'].nunique() == 1 , f'all ports must have the same name , got multiple names: {df["name"].unique()}'
             name = df['name'].iloc[0]
         else:
-            df = df[df['name'] == name.lower()]
+            df = df.query('name == @name.lower()')
         
         portfolio = cls(name)
         for date , subdf in df.groupby('date'):
-            portfolio.append(Port(subdf[['secid' , 'weight']] , date , name , subdf['value'].iloc[0]))
+            portfolio.append(Port(subdf.filter(items=['secid' , 'weight']) , date , name , subdf['value'].iloc[0]))
         return portfolio
     
-    def to_dataframe(self):
+    def to_dataframe(self) -> pd.DataFrame:
         if len(self.ports) == 0: 
             return pd.DataFrame()
         else:
-            return pd.concat([port.to_dataframe() for port in self.ports.values()] , axis = 0)
+            df : pd.DataFrame | Any = pd.concat([port.to_dataframe() for port in self.ports.values()] , axis = 0)
+            return df
         
     def exclude(self , secid : np.ndarray | Any | None = None , inplace = False):
-        if secid is None: return self
+        if secid is None: 
+            return self
         if not inplace:
             self = self.copy()
         for port in self.ports.values():
@@ -128,7 +148,8 @@ class Portfolio:
     
     def rename(self , new_name : str):
         self._name = new_name
-        for port in self.ports.values(): port.rename(new_name)
+        for port in self.ports.values(): 
+            port.rename(new_name)
         return self
 
     @classmethod
@@ -150,7 +171,8 @@ class Portfolio:
                    analytic = True , attribution = True , 
                    trade_engine : Literal['default' , 'harvest' , 'yale'] | str = 'default' , 
                    daily = False , store = False):
-        if not hasattr(self , 'accountant'): self.activate_accountant()
+        if not hasattr(self , 'accountant'): 
+            self.activate_accountant()
         self.accountant.accounting(benchmark , start , end , analytic , attribution , trade_engine , daily , store)
         return self
     

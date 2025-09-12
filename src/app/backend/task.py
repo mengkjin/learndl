@@ -158,7 +158,8 @@ class TaskDatabase:
         with self.conn_handler as (conn, cursor):
             if exist_ok:
                 cursor.execute('SELECT * FROM queue_records WHERE queue_id = ?', (queue_id,))
-                if cursor.fetchone() is not None: return
+                if cursor.fetchone() is not None: 
+                    return
             cursor.execute('''
             INSERT INTO queue_records (queue_id, create_time)
                 VALUES (?, ?)
@@ -166,7 +167,8 @@ class TaskDatabase:
     
     def update_task(self, task_id: str, backend_updated: bool = False, **kwargs):
         """Update task status and related information"""
-        if not kwargs: return
+        if not kwargs: 
+            return
         with self.conn_handler as (conn, cursor):
             exit_files = kwargs.pop('exit_files' , None)
             query = ' '.join([
@@ -230,7 +232,8 @@ class TaskDatabase:
         with self.conn_handler as (conn, cursor):
             cursor.execute('SELECT * FROM task_records WHERE task_id = ?', (task_id,))
             task = cursor.fetchone()
-            if not task: return None
+            if not task: 
+                return None
 
             cursor.execute('SELECT file_path FROM task_exit_files WHERE task_id = ?', (task_id,))
             files = [row['file_path'] for row in cursor.fetchall()]
@@ -273,7 +276,8 @@ class TaskDatabase:
         with self.conn_handler as (conn, cursor):
             cursor.execute('SELECT task_id FROM task_queues WHERE queue_id = ?', (queue_id,))
             task_ids = [row['task_id'] for row in cursor.fetchall()]
-            if max_queue_size: task_ids = task_ids[-max_queue_size:]
+            if max_queue_size: 
+                task_ids = task_ids[-max_queue_size:]
             return self.get_tasks(task_ids)
     
     def active_queue(self) -> str:
@@ -347,7 +351,8 @@ class TaskQueue:
         return item in self.queue.values()
     
     def get(self, task_id : str | None = None):
-        if task_id is None: return None
+        if task_id is None: 
+            return None
         return self.queue.get(task_id)
 
     def keys(self):
@@ -396,12 +401,14 @@ class TaskQueue:
 
     def empty(self):
         for key in list(self.queue.keys()):
-            if self.queue[key].status != 'running': self.queue.pop(key)
+            if self.queue[key].status != 'running':
+                self.queue.pop(key)
         self.task_db.clear_queue(self.queue_id)
 
     def clear(self):
         for key in list(self.queue.keys()):
-            if self.queue[key].status != 'running': self.queue.pop(key)
+            if self.queue[key].status != 'running': 
+                self.queue.pop(key)
         self.task_db.clear_database()
 
     def count(self, status : Literal['starting', 'running', 'complete', 'error' , 'killed']):
@@ -418,7 +425,8 @@ class TaskQueue:
         self.refresh()
             
     def status_message(self , queue : dict[str, 'TaskItem'] | None = None):
-        if queue is None: queue = self.queue
+        if queue is None: 
+            queue = self.queue
         status = [item.status for item in queue.values()]
         counts = {
             'total': len(status),
@@ -430,7 +438,8 @@ class TaskQueue:
         return msg
     
     def source_message(self , queue : dict[str, 'TaskItem'] | None = None):
-        if queue is None: queue = self.queue
+        if queue is None: 
+            queue = self.queue
         source = [item.source for item in queue.values()]
         counts = {
             'total': len(source),
@@ -583,7 +592,8 @@ class TaskItem:
             time = self.start_time
         elif time_type == 'end':
             time = self.end_time
-        if time is None: return 'N/A'
+        if time is None: 
+            return 'N/A'
         return datetime.fromtimestamp(time).strftime(format)
 
     @property
@@ -654,7 +664,8 @@ class TaskItem:
         self.update(new_task.to_dict())
     
     def update(self, updates : dict[str, Any] | None = None , write_to_db : bool = False):
-        if updates is None: return
+        if updates is None: 
+            return
         [setattr(self, k, v) for k, v in updates.items()]
         if write_to_db:
             self.task_db.update_task(self.id , **updates)
@@ -676,22 +687,31 @@ class TaskItem:
             icon , color = ':material/check:' , 'green'
         elif status in ['error' , 'killed']: 
             icon , color = ':material/close:' , 'red'
-        else: raise ValueError(f"Invalid status: {status}")
+        else: 
+            raise ValueError(f"Invalid status: {status}")
         return f":{color}-badge[{icon}]" if tag else icon
     
     @property
     def status_state(self):
-        if self.is_running: return 'running'
-        elif self.is_complete:  return 'complete'
-        elif self.is_error: return 'error'
-        else: raise ValueError(f"Invalid status: {self.status}")
+        if self.is_running: 
+            return 'running'
+        elif self.is_complete:  
+            return 'complete'
+        elif self.is_error: 
+            return 'error'
+        else: 
+            raise ValueError(f"Invalid status: {self.status}")
 
     @property
     def status_color(self):
-        if self.is_running: return 'blue'
-        elif self.is_complete:  return 'green'
-        elif self.is_error: return 'red'
-        else: raise ValueError(f"Invalid status: {self.status}")
+        if self.is_running: 
+            return 'blue'
+        elif self.is_complete:  
+            return 'green'
+        elif self.is_error: 
+            return 'red'
+        else: 
+            raise ValueError(f"Invalid status: {self.status}")
 
     @property
     def is_complete(self):
@@ -713,7 +733,8 @@ class TaskItem:
             icon = '✅'
         elif self.status in ['error' , 'killed']: 
             icon = '❌'
-        else: raise ValueError(f"Invalid status: {self.status}")
+        else: 
+            raise ValueError(f"Invalid status: {self.status}")
         return icon
         
     @property
@@ -759,7 +780,8 @@ class TaskItem:
                   f"--Source {self.source.title()}"]
         else:
             s = [f"{self.tag_icon}"]
-            if index is not None: s += [f"{index: <2}."]
+            if index is not None: 
+                s += [f"{index: <2}."]
             s.append(f"{self.format_path}")
             s.append(f":gray-badge[Create {self.time_str()}]")
             s.append(f":{self.status_color}-badge[Status {self.status.title()}]")
@@ -809,7 +831,7 @@ class TaskItem:
         
     def dataframe(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all'):
         data_list = self.info_list(info_type = info_type)
-        df = pd.DataFrame(data_list , columns = ['Item', 'Value'])
+        df = pd.DataFrame(data_list , columns = pd.Index(['Item', 'Value']))
         return df
     
     def run_script(self):

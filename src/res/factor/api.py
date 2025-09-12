@@ -63,11 +63,14 @@ class FactorTestAPI:
                  factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
                  write_down = False , display_figs = False , verbosity = 1 , 
                  project_name : str | None = None , **kwargs):
-        if verbosity > 0: cls._print_test_info(test_type , factor , benchmark , write_down , display_figs)
+        if verbosity > 0: 
+            cls._print_test_info(test_type , factor , benchmark , write_down , display_figs)
         test_manager = cls.get_test_manager(test_type)
         pm = test_manager.run_test(factor , benchmark , verbosity=verbosity , project_name = project_name , **kwargs)
-        if write_down:   pm.write_down()
-        if display_figs: pm.display_figs()
+        if write_down:   
+            pm.write_down()
+        if display_figs: 
+            pm.display_figs()
         return pm
 
     @classmethod

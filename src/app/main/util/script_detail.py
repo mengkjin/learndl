@@ -1,11 +1,11 @@
 import streamlit as st
 import os , subprocess
 
-from typing import Any, Literal, Callable
+from typing import Literal, Callable
 from pathlib import Path
 
 from src.app.backend import (
-    ScriptRunner , ScriptParamInput , TaskItem
+    ScriptRunner , TaskItem
 )
 
 from src.app.frontend import (
@@ -18,16 +18,20 @@ from util.control import SC , set_current_page
 from util.page import get_script_page , print_page_header , runs_page_url
 
 def on_first_page(max_page : int):
-    if st.session_state.get('choose-task-page') == 1: return
+    if st.session_state.get('choose-task-page') == 1: 
+        return
     st.session_state['choose-task-page'] = 1
 def on_last_page(max_page : int):
-    if st.session_state.get('choose-task-page') == max_page: return
+    if st.session_state.get('choose-task-page') == max_page: 
+        return
     st.session_state['choose-task-page'] = max_page
 def on_prev_page(max_page : int):
-    if st.session_state.get('choose-task-page') == 1: return
+    if st.session_state.get('choose-task-page') == 1: 
+        return
     st.session_state['choose-task-page'] = max((st.session_state.get('choose-task-page') or 1) - 1, 1)
 def on_next_page(max_page : int):
-    if st.session_state.get('choose-task-page') == max_page: return
+    if st.session_state.get('choose-task-page') == max_page: 
+        return
     st.session_state['choose-task-page'] = (st.session_state.get('choose-task-page') or 1) + 1
 
 def show_script_detail(script_key : str):
@@ -35,7 +39,8 @@ def show_script_detail(script_key : str):
     set_current_page(script_key)
     runner = SC.get_script_runner(script_key)
     page = get_script_page(script_key)
-    if page is None: return
+    if page is None: 
+        return
     
     print_page_header(script_key , 'script')  
     show_script_task_selector(runner)
@@ -48,7 +53,8 @@ def clear_and_show(show_func : Callable):
     name = show_func.__name__.removeprefix('show_').replace('_', '-')
     placeholder_key = f'{name}-placeholder'
     def wrapper(*args , **kwargs):
-        if placeholder_key not in st.session_state: st.session_state[placeholder_key] = st.empty()
+        if placeholder_key not in st.session_state: 
+            st.session_state[placeholder_key] = st.empty()
         with st.session_state[placeholder_key]:
             show_func(*args , **kwargs)
     return wrapper
@@ -149,7 +155,8 @@ def show_queue_item_list(runner : ScriptRunner , queue : dict[str, TaskItem] , o
             with container:
                 cols = st.columns([18, .5,.5,.5,.5] , gap = None, vertical_alignment = "center")
                 key = f"script-click-content-{item_id}"
-                if item_id == SC.current_task_item: key += "-selected"
+                if item_id == SC.current_task_item: 
+                    key += "-selected"
                 with cols[0]:
                     if st.button(item.button_str_long(index + 1),  
                                 help=item.button_help_text() , key=key , 
@@ -184,7 +191,8 @@ def show_param_settings(runner : ScriptRunner):
 
     with subheader:
         SC.param_inputs_form = ParamInputsForm(runner , SC.script_params_cache , SC.get_task_item(SC.current_task_item)).init_param_inputs()
-        if is_empty: return
+        if is_empty: 
+            return
 
         params = SC.param_inputs_form.param_values
         if runner.header.file_editor:
@@ -224,7 +232,8 @@ def run_button_button(runner : ScriptRunner | None , sidebar = False):
             help_text = f"Parameters invalid, please check required ones"
             button_key = f"script-runner-run-disabled-{runner.script_key}"
         
-    if sidebar: button_key += "-sidebar"
+    if sidebar: 
+        button_key += "-sidebar"
     return st.button(":material/mode_off_on:", key=button_key , 
                     help = help_text , disabled = disabled , 
                     on_click = SC.click_script_runner_run , args = (runner, params))
@@ -273,7 +282,8 @@ def show_report_main(runner : ScriptRunner):
         status_text = f'{header}: {item.status_state.title()}'
         status_color = 'green' if item.status_state == 'complete' else 'red' if item.status_state == 'error' else 'blue'
         with expander_subheader(wkey , status_text , icon , True , help = help , status = True , color = status_color):
-            if item is None or not item.belong_to(runner): return
+            if item is None or not item.belong_to(runner): 
+                return
             
             start_as_unfinished = item.status_state == 'running'
             with st.expander(":rainbow[:material/build:] **Command Details**", expanded=False):

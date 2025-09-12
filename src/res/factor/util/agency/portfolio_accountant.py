@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from dataclasses import dataclass , field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Optional , Sequence , Any
 
@@ -123,7 +123,8 @@ class PortfolioAccountant:
     
     def make(self):
         assert self.config is not None , 'config is not set'
-        if self.account.empty: return self
+        if self.account.empty: 
+            return self
             
         port_old = Port.none_port(self.account.index.values[1])
         for date , ed in zip(self.account.index.values[1:] , self.account['end'].values[1:]):
@@ -190,17 +191,20 @@ class PortfolioAccountant:
                 break
         else:
             self.setup().make()
-            if store: self.stored_accounts[self.config] = self.account
+            if store: 
+                self.stored_accounts[self.config] = self.account
         return self
     
     def account_with_index(self , add_index : dict[str,Any] | None = None):
         add_index = add_index or {}
-        if not add_index: return self.account
+        if not add_index: 
+            return self.account
         return self.account.assign(**add_index).set_index(list(add_index.keys())).sort_values('model_date')
     
     @staticmethod
     def total_account(accounts : Sequence[pd.DataFrame] | dict[str,pd.DataFrame]) -> pd.DataFrame:
-        if not accounts: return pd.DataFrame()
+        if not accounts: 
+            return pd.DataFrame()
         
         if isinstance(accounts , dict):
             accounts = list(accounts.values())
@@ -226,9 +230,11 @@ class PortfolioAccountManager:
     
     def append_accounts(self , **accounts : pd.DataFrame):
         for name , df in accounts.items():
-            if df.empty: continue
+            if df.empty: 
+                continue
             if name in self.accounts:
-                old_df = self.accounts[name][self.accounts[name]['model_date'] < df['model_date'].min()]
+                min_date = df['model_date'].min() # noqa
+                old_df = self.accounts[name].query('model_date < @min_date')
                 self.accounts[name] = pd.concat([old_df , df]).sort_values('model_date')
             else:
                 self.accounts[name] = df
@@ -239,15 +245,15 @@ class PortfolioAccountManager:
         return list(self.accounts.keys())
     
     def account_last_model_dates(self):
-        return {name:df['model_date'].max() for name,df in self.accounts.items() if not df.empty}
+        return {name:np.max(df['model_date'].to_numpy()) for name,df in self.accounts.items() if not df.empty}
     
     def account_last_end_dates(self):
-        return {name:df['end'].max() for name,df in self.accounts.items() if not df.empty}
+        return {name:np.max(df['end'].to_numpy()) for name,df in self.accounts.items() if not df.empty}
 
     def load_single(self , path : str | Path , missing_ok = True , append = True):
         path = Path(path)
         assert missing_ok or path.exists() , f'{path} not exist'
-        df = pd.read_pickle(path) 
+        df : pd.DataFrame | Any = pd.read_pickle(path) 
         if path.stem in self.accounts:
             if append:
                 df = pd.concat([df , self.accounts[path.stem]]).drop_duplicates(subset=['model_date'])
@@ -265,7 +271,8 @@ class PortfolioAccountManager:
         return self
     
     def deploy(self , fmp_names : list[str] | None = None , overwrite = False):
-        if fmp_names is None: fmp_names = list(self.accounts.keys())
+        if fmp_names is None: 
+            fmp_names = list(self.accounts.keys())
         fmp_paths = {name:self.account_dir.joinpath(f'{name}.pkl') for name in fmp_names}
         if not overwrite:
             existed = [path for path in fmp_paths.values() if path.exists()]
@@ -281,8 +288,10 @@ class PortfolioAccountManager:
         match_task = [task for task in task_list if task.match_name(task_name)]
         assert match_task and len(match_task) <= 1 , f'no match or duplicate match tasks : {task_name}'
         task , task_name = match_task[0] , match_task[0].__name__
-        if not hasattr(self , 'analytic_tasks'): self.analytic_tasks : dict[str , BaseOptimCalc | BaseTopPortCalc] = {}
-        if task_name not in self.analytic_tasks: self.analytic_tasks[task_name] = task(**kwargs)
+        if not hasattr(self , 'analytic_tasks'): 
+            self.analytic_tasks : dict[str , BaseOptimCalc | BaseTopPortCalc] = {}
+        if task_name not in self.analytic_tasks: 
+            self.analytic_tasks[task_name] = task(**kwargs)
         return self.analytic_tasks[task_name]
     
     def analyze(self , category : Literal['optim' , 'top'] ,
@@ -295,8 +304,10 @@ class PortfolioAccountManager:
             print(f'No {category} accounts to account!')
         account = PortfolioAccountant.total_account(dfs)
         
-        if account.empty: return self
+        if account.empty: 
+            return self
         task = self.select_analytic(category , task_name , **kwargs)
         task.calc(account)
-        if plot: task.plot(show = display)  
+        if plot: 
+            task.plot(show = display)  
         return self      

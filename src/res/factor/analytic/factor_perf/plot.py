@@ -34,7 +34,8 @@ def plot_factor_ic_curve(data : pd.DataFrame , show = False):
             ax1.bar(df.index, df['ic'], color='b', label='IC')
             colors = ['orange','purple','olive','pink','cyan','grey','azure','yellow']
             for col in df.columns.tolist():
-                if col.startswith('ma_'): ax1.plot(df.index, df[col], color=colors.pop(0) , label=col)  
+                if col.startswith('ma_'): 
+                    ax1.plot(df.index, df[col], color=colors.pop(0) , label=col)  
             ax1.legend(loc='upper left')
 
             ax2.plot(df.index, df['cum_ic'], 'r-', label='Cum IC (right)')  
@@ -186,7 +187,7 @@ def plot_factor_group_decay(data : pd.DataFrame , show = False):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = 'Factor Groups Return Decay' , show=show and i==0) as (df , fig):
-            df = df[df['stats_name'] == 'decay_grp_ret']
+            df = df.query('stats_name == "decay_grp_ret"')
 
             ax = plot.sns_barplot(df , x='lag_type' , y='stats_value' , hue='group')
             plot.set_xaxis(ax , title = 'Lag Type')
@@ -198,7 +199,7 @@ def plot_factor_group_ir_decay(data : pd.DataFrame , show = False):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = 'Factor Groups IR Decay' , show=show and i==0) as (df , fig):
-            df = df[df['stats_name'] == 'decay_grp_ir']
+            df = df.query('stats_name == "decay_grp_ir"')
             ax = plot.sns_barplot(df , x='lag_type' , y='stats_value' , hue='group')
 
             plot.set_xaxis(ax , title = 'Lag Type')

@@ -4,6 +4,7 @@ import pandas as pd
 import polars as pl
 
 from dataclasses import dataclass
+from typing import Any
 from threading import Lock
 
 from .factor_calc import StockFactorCalculator
@@ -56,7 +57,10 @@ class FactorUpdateJobManager:
     def groups(self): return sorted(set((job.level , job.date) for job in self.jobs))
     def to_dataframe(self):
         columns = ['level' , 'date' , 'factor']
-        return pd.DataFrame([(job.level , job.date , job.factor_name) for job in self.jobs] , columns=columns).sort_values(by=columns)
+        return pd.DataFrame(
+            [(job.level , job.date , job.factor_name) for job in self.jobs] , 
+            columns=pd.Index(columns)
+        ).sort_values(by=columns)
 
     def clear(self): self.jobs.clear()
     def sort(self): self.jobs.sort(key=lambda x: x.sort_key)
@@ -71,7 +75,8 @@ class FactorUpdateJobManager:
         if date is None: 
             factors = {}
             for date in StockFactorCalculator.FACTOR_TARGET_DATES:
-                if f := self.unfinished_factors(date): factors[date] = f
+                if f := self.unfinished_factors(date): 
+                    factors[date] = f
             return factors
         else:
             if date not in StockFactorCalculator.FACTOR_TARGET_DATES:
@@ -98,8 +103,10 @@ class FactorUpdateJobManager:
         selected_factors = selected_factors or []
         self.clear()
         
-        if not (all_factors or selected_factors or kwargs): return self
-        if end is None: end = min(CALENDAR.updated() , CONF.UPDATE['end'])
+        if not (all_factors or selected_factors or kwargs): 
+            return self
+        if end is None: 
+            end = min(CALENDAR.updated() , CONF.UPDATE['end'])
 
         for calc in self.iter_calculators(all_factors , selected_factors , **kwargs):
             dates = calc.target_dates(start , end , overwrite = overwrite , force = force)
@@ -125,7 +132,8 @@ class FactorUpdateJobManager:
             2 : show all
         overwrite : if True , overwrite existing data
         '''
-        if len(self) == 0: return
+        if len(self) == 0: 
+            return
 
         def do_job(job : FactorUpdateJob): 
             job.do(verbosity > 1 , overwrite)
@@ -136,9 +144,11 @@ class FactorUpdateJobManager:
             failed_jobs = [job for job in jobs if not job.done]
             if verbosity > 0:
                 print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Factors of {level} at {date} done: {len(jobs) - len(failed_jobs)} / {len(jobs)}')
-                if failed_jobs: print(f'Failed factors: {[job.factor_name for job in failed_jobs]}')
+                if failed_jobs: 
+                    print(f'Failed factors: {[job.factor_name for job in failed_jobs]}')
             if auto_retry and failed_jobs:
-                if verbosity > 0: print(f'Auto retry failed factors...')
+                if verbosity > 0: 
+                    print(f'Auto retry failed factors...')
                 parallel(do_job , failed_jobs , method = len(failed_jobs) > 10)
                 failed_again_jobs = [job for job in failed_jobs if not job.done]
                 if failed_again_jobs:
@@ -221,7 +231,8 @@ class FactorUpdateJobManager:
             category1 : str | None = None 
         '''
         selected_factors = selected_factors or []
-        if not (all_factors or selected_factors or kwargs): return pd.DataFrame()
+        if not (all_factors or selected_factors or kwargs): 
+            return pd.DataFrame()
         dfs : list[pd.DataFrame] = []
 
         for calc in cls.iter_calculators(all_factors , selected_factors , **kwargs):
@@ -240,12 +251,13 @@ class FactorUpdateJobManager:
             dfs.extend(list(factor_coverage.values()))
 
         df = pd.concat(dfs)
-        agg = pd.concat([
-            df.groupby(by='factor').mean()['valid_count'].rename('mean') ,
-            df.groupby(by='factor').min()['valid_count'].rename('min') ,
-            df.groupby(by='factor').max()['valid_count'].rename('max') ,
-            df.groupby(by='factor').std()['valid_count'].rename('std') ,
-        ] , axis = 1)
+        grouped = df.groupby(by='factor')
+        stats : dict[str , pd.Series | Any] = {}
+        stats['mean'] = grouped.mean()['valid_count']
+        stats['min'] = grouped.min()['valid_count']
+        stats['max'] = grouped.max()['valid_count']
+        stats['std'] = grouped.std()['valid_count']
+        agg = pd.concat([stats[key].rename(key) for key in stats.keys()], axis = 1)
         df.to_excel('factor_coverage.xlsx' , sheet_name='full coverage')
         agg.to_excel('factor_coverage_agg.xlsx' , sheet_name='coverage_agg_stats')
         return df

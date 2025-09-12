@@ -13,13 +13,20 @@ from . import gp_math_func as MF
 from . import gp_factor_func as FF
 
 # ------------------------ gp terminals ------------------------
-class Fac(torch.Tensor): pass
-class Raw(torch.Tensor): pass
-class int1(int): pass
-class int2(int): pass
-class int3(int): pass
-class int4(int): pass
-class float1(float): pass
+class Fac(torch.Tensor): 
+    pass
+class Raw(torch.Tensor): 
+    pass
+class int1(int): 
+    pass
+class int2(int): 
+    pass
+class int3(int): 
+    pass
+class int4(int): 
+    pass
+class float1(float): 
+    pass
 
 class gpFitness:
     def __init__(self, fitness_weights : dict | None = None , **kwargs) -> None:
@@ -36,7 +43,8 @@ class gpFitness:
         if metrics is None:
             return tuple([0. for i in self._idx])
         else:
-            if as_abs: metrics = abs(metrics)
+            if as_abs: 
+                metrics = abs(metrics)
             return tuple(metrics[self._idx])
     def fitness_weight(self):
         return self._wgts
@@ -46,7 +54,7 @@ class gpHandler:
     ------------------------ gp primatives and terminals ------------------------
     '''
     @staticmethod
-    def I(x): return x
+    def I(x): return x # noqa: E743
     
     @classmethod
     def primatives_identity(cls):
@@ -175,7 +183,8 @@ class gpHandler:
     def str2ind(x , pset_ind , fit_value = None):
         assert fit_value is None or isinstance(fit_value , tuple) , fit_value
         ind = getattr(creator , 'Individual').from_string(x , pset=pset_ind) 
-        if fit_value: ind.fitness.values = fit_value
+        if fit_value: 
+            ind.fitness.values = fit_value
         return ind
         
     @staticmethod
@@ -183,7 +192,8 @@ class gpHandler:
         assert fit_value is None or isinstance(fit_value , tuple) , fit_value
         syx = getattr(creator , 'Syntax').from_string(x , pset=pset_syx) 
         syx.ind_str = ind_str
-        if fit_value: syx.fitness.values = fit_value
+        if fit_value: 
+            syx.fitness.values = fit_value
         return syx
     
     @staticmethod
@@ -275,11 +285,15 @@ class gpHandler:
         str_iter = '_' if i_iter < 0 else f'_{i_iter}'
         [(delattr(gp , n) if hasattr(gp , n) else None) for n in [f'int{i}{str_iter}' for i in range(6)]]
         [(delattr(gp , n) if hasattr(gp , n) else None) for n in [f'float{i}{str_iter}' for i in range(6)]]
-        for v in range(1,2): pset_individual.addTerminal(v, int1)
-        for v in range(2,10): pset_individual.addTerminal(v, int2)
-        for v in [10 , 15 , 20 , 30 , 40]:  pset_individual.addTerminal(v, int3)
+        for v in range(1,2): 
+            pset_individual.addTerminal(v, int1)
+        for v in range(2,10): 
+            pset_individual.addTerminal(v, int2)
+        for v in [10 , 15 , 20 , 30 , 40]:  
+            pset_individual.addTerminal(v, int3)
         #for v in [60 , 120 , 180 , 200 , 240]: pset.addTerminal(v, int4)
-        for v in range(0,101):  pset_individual.addTerminal(round(v*0.02,2), float1)
+        for v in range(0,101):  
+            pset_individual.addTerminal(round(v*0.02,2), float1)
         #pset_individual.addEphemeralConstant(f'int1{str_iter}', lambda: np.random.randint(1,10+1), int1) # random int must > 0
         #pset_individual.addEphemeralConstant(f'int2{str_iter}', lambda: np.random.randint(2,10+1), int2) # random int must > 1
         #pset_individual.addEphemeralConstant(f'float1{str_iter}', lambda: round(np.random.random()*2+1,2), float1) # random int must > 1
@@ -288,7 +302,8 @@ class gpHandler:
         for prim in cls.primatives_all(): 
             baseprim , subprims = cls.sub_primatives(prim)
             pset_syntax.addPrimitive(*baseprim)
-            for subprim in subprims: pset_individual.addPrimitive(*subprim)
+            for subprim in subprims: 
+                pset_individual.addPrimitive(*subprim)
         
         '''创建遗传算法基础模块，以下参数不建议更改，如需更改，可参考deap官方文档'''
         # https://zhuanlan.zhihu.com/p/72130823
@@ -347,12 +362,15 @@ class gpContainer(Namespace):
     __reserved_names__ = ['get' , 'set' , 'update' , 'delete' , 'subset' , 'keys' , 'values' , 'items' , 'copy' , 'apply' , 'map']
     def __init__(self , inherit_from = None , **kwargs) -> None:
         if inherit_from is not None: 
-            for k , v in inherit_from.items(): self.set(k , v)
-        for k , v in kwargs.items(): self.set(k , v)
+            for k , v in inherit_from.items(): 
+                self.set(k , v)
+        for k , v in kwargs.items(): 
+            self.set(k , v)
     def get(self , key , default = None , require = False):
         return getattr(self , key) if hasattr(self , key) else default
     def update(self , **kwargs):
-        for k , v in kwargs.items(): self.set(k , v)
+        for k , v in kwargs.items(): 
+            self.set(k , v)
         return self
     def set(self , key  , v):
         assert key not in type(self).__reserved_names__ , key
@@ -360,7 +378,8 @@ class gpContainer(Namespace):
         return self
     def delete(self , key):
         assert key not in type(self).__reserved_names__ , key
-        if hasattr(self , key): delattr(self, key)
+        if hasattr(self , key): 
+            delattr(self, key)
         return self
     def subset(self , keys , require = False):
         return {key:self.get(key , require = require) for key in keys}
@@ -374,8 +393,10 @@ class gpContainer(Namespace):
         return self.__dict__.__repr__()
     def __add__(self , another):
         new = type(self)()
-        for k , v in self.items(): new.set(k , v)
-        for k , v in another.items(): new.set(k , v)
+        for k , v in self.items(): 
+            new.set(k , v)
+        for k , v in another.items(): 
+            new.set(k , v)
         return new
     def __getitem__(self , key):
         return self.__dict__.__getitem__(key)
@@ -389,7 +410,8 @@ class gpContainer(Namespace):
         self.set(key , func(self.__getitem__(key)))
         return self
     def map(self , keys , func):
-        for key in keys: self.set(key , func(self.__getitem__(key)))
+        for key in keys: 
+            self.set(key , func(self.__getitem__(key)))
         return self
 
 class gpFileManager:
@@ -431,7 +453,8 @@ class gpFileManager:
         return ind
 
     def dump_generation(self , population , halloffame , forbidden , i_iter = 0 , i_gen = 0 , **kwargs):
-        if i_iter < 0: return self
+        if i_iter < 0: 
+            return self
         basename = self.record_basename(i_iter , i_gen)
 
         # input type: population as getattr(creator , 'Individual') , halloffame as creator.Syntax , forbidden as creator.Syntax (most likely)
@@ -508,7 +531,8 @@ class gpFileManager:
                 df = pd.DataFrame()
                 if os.path.exists(path):
                     df = pd.read_csv(path,index_col=0)
-                    if i_iter >= 0: df = df[df.i_iter < i_iter]
+                    if i_iter >= 0: 
+                        df = df[df.i_iter < i_iter]
                 return df
             elif path.endswith('.csv'):
                 return pd.read_csv(path,index_col=0)
@@ -562,7 +586,8 @@ class gpTimer:
             self.print_str = key if print_str is None else print_str
             self.memory_check = memory_check and torch.cuda.is_available()
         def __enter__(self):
-            if self.print: print('-' * 20 + f' {self.key} ' + '-' * 20)
+            if self.print: 
+                print('-' * 20 + f' {self.key} ' + '-' * 20)
             self.start_time = time.time()
             if self.memory_check and torch.cuda.is_available():
                 torch.cuda.empty_cache()
@@ -580,8 +605,10 @@ class gpTimer:
                     mem_info = f', Free CudaMemory {self.gmem_start:.2f}G - > {mem_end:.2f}G' 
                 else:
                     mem_info = ''
-                if self.record: self.append_time(self.target_dict , self.key , time_cost)
-                if self.print: print(f'{self.print_str} Done, Cost {time_cost:.2f} Secs' + mem_info)
+                if self.record: 
+                    self.append_time(self.target_dict , self.key , time_cost)
+                if self.print: 
+                    print(f'{self.print_str} Done, Cost {time_cost:.2f} Secs' + mem_info)
                 return self
         def add_string(self , new_str):
             self.print_str = self.print_str + new_str
@@ -609,7 +636,8 @@ class gpTimer:
             return f'time : {self.time} , count {self.count}'
         def avgtime(self , pop_out = False):
             avg = self.time if self.count == 0 else self.time / self.count
-            if pop_out: self.clear()
+            if pop_out: 
+                self.clear()
             return avg
         def clear(self):
             self.time  = 0.
@@ -624,18 +652,21 @@ class gpTimer:
                 traceback.print_exc()
         
     def __call__(self , key , print = True , df_cols = True , print_str = None , memory_check = False):
-        if df_cols: self.df_cols.update({key:True})
+        if df_cols: 
+            self.df_cols.update({key:True})
         return self.PTimer(key , self.recording , self.recorder , print = print , print_str = print_str , memory_check = memory_check)
     def __repr__(self):
         return self.recorder.__repr__()
     def __bool__(self): 
         return True
     def acc_timer(self , key):
-        if key not in self.recorder.keys(): self.recorder[key] = self.AccTimer(key)
+        if key not in self.recorder.keys(): 
+            self.recorder[key] = self.AccTimer(key)
         assert isinstance(self.recorder[key] , self.AccTimer) , self.recorder[key]
         return self.recorder[key]
     def append_time(self , key , time_cost , df_cols = True):
-        if df_cols: self.df_cols.update({key:True})
+        if df_cols: 
+            self.df_cols.update({key:True})
         self.PTimer.append_time(self.recorder , key , time_cost)
     def time_table(self , columns = None , showoff = False , dtype = float):
         if columns is None:
@@ -655,11 +686,13 @@ class MemoryManager():
         if self.cuda_avail:
             self.device = torch.device(device)
             self.unit = type(self).unit
-            if self.cuda_avail: self.gmem_total = torch.cuda.mem_get_info(self.device)[1] / self.unit
+            if self.cuda_avail: 
+                self.gmem_total = torch.cuda.mem_get_info(self.device)[1] / self.unit
             self.record = {}
 
     def check(self , key = None, showoff = False , critical_ratio = 0.5 , starter = '**'):
-        if not self.cuda_avail: return 0.
+        if not self.cuda_avail: 
+            return 0.
 
         gmem_free = torch.cuda.mem_get_info(self.device)[0] / self.unit
         torch.cuda.empty_cache()
@@ -673,7 +706,8 @@ class MemoryManager():
         gmem_rsrv  = torch.cuda.memory_reserved(self.device) / self.unit
         
         if key is not None:
-            if key not in self.record.keys(): self.record[key] = []
+            if key not in self.record.keys(): 
+                self.record[key] = []
             self.record[key].append(gmem_freed)
         if showoff: 
             print(f'{starter}{time.ctime()}Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
@@ -702,7 +736,8 @@ class MemoryManager():
     
     @classmethod
     def tensor_memory(cls , tensor , cuda_only = True):
-        if cuda_only and not tensor.is_cuda: return 0.
+        if cuda_only and not tensor.is_cuda: 
+            return 0.
         total_memory = tensor.element_size() * tensor.numel()
         return total_memory / cls.unit
     
@@ -728,7 +763,7 @@ class MemoryManager():
         def wrapper(*args , **kwargs):
             try:
                 value = func(*args , **kwargs)
-            except torch.cuda.OutOfMemoryError as e:
+            except torch.cuda.OutOfMemoryError:
                 print(f'OutOfMemoryError on {print_str}')
                 torch.cuda.empty_cache()
                 value = out
@@ -760,14 +795,16 @@ class gpEliteGroup:
     def max_corr_with_me(self , factor , abs_corr_cap = 1.01 , dim = 1 , dim_valids = (None , None) , syntax = None):
         assert isinstance(factor , FF.FactorValue) , type(factor)
         corr_values = torch.zeros((self.i_elite - self.start_i_elite + 1 ,))
-        if isinstance(factor.value , torch.Tensor): corr_values = corr_values.to(factor.value)
+        if isinstance(factor.value , torch.Tensor): 
+            corr_values = corr_values.to(factor.value)
         exit_state  = False
-        l = 0
+        idx = 0
         for block in self.container:
             corrs , exit_state = block.max_corr(factor , abs_corr_cap , dim , dim_valids , syntax = syntax)
-            corr_values[l:l+block.len()] = corrs[:block.len()]
-            l += block.len()
-            if exit_state: break
+            corr_values[idx:idx+block.len()] = corrs[:block.len()]
+            idx += block.len()
+            if exit_state: 
+                break
         return corr_values , exit_state
 
     def append(self , factor , starter = None , **kwargs):
@@ -775,10 +812,12 @@ class gpEliteGroup:
         if len(self.container) and not self.container[-1].full:
             self.container[-1].append(factor , **kwargs)
         else:
-            if len(self.container): self.container[-1].cat2cpu()
+            if len(self.container): 
+                self.container[-1].cat2cpu()
             self.container.append(gpEliteBlock(self.block_len).append(factor , **kwargs))
         self.position.append((len(self.container)-1,self.container[-1].len()-1))
-        if isinstance(starter,str): print(f'{starter}Elite{self.i_elite:_>3d} (' + '|'.join([f'{k}{v:+.2f}' for k,v in kwargs.items()]) + f'): {factor.name}')
+        if isinstance(starter,str): 
+            print(f'{starter}Elite{self.i_elite:_>3d} (' + '|'.join([f'{k}{v:+.2f}' for k,v in kwargs.items()]) + f'): {factor.name}')
         self.i_elite += 1
         return self
     
@@ -790,11 +829,12 @@ class gpEliteGroup:
     def compile_elite_tensor(self , device = None):
         if self.container:
             self.cat_all()
-            if device is None: device = self.device
+            if device is None: 
+                device = self.device
             torch.cuda.empty_cache()
             try:
                 new_tensor = torch.cat([block.data_to_device(device) for block in self.container] , dim = -1)
-            except torch.cuda.OutOfMemoryError as e:
+            except torch.cuda.OutOfMemoryError:
                 print('OutofMemory when compiling elite tensor, try use cpu to concat')
                 new_tensor = torch.cat([block.data_to_device('cpu') for block in self.container] , dim = -1)
                 new_tensor = new_tensor.to(device)
@@ -819,10 +859,11 @@ class gpEliteGroup:
         total = self.total_len()
         corr_mat = torch.eye(total).to(self.device)
         iterator = [(i,*self.position[i],j,*self.position[j]) for i in range(total) for j in range(i+1,total)]
-        iter_df = pd.DataFrame(iterator , columns = ['ii','ib','ik','jj','jb','jk'])
+        iter_df = pd.DataFrame(iterator , columns = pd.Index(['ii','ib','ik','jj','jb','jk']))
         iter_df = iter_df.sort_values(['ib' , 'jb' , 'ik' , 'jk'])
         print(f'Total Correlation Counts : {len(iter_df)}')
-        for (ib , jb) , sub_df in iter_df.groupby(['ib' , 'jb']):
+        for grp , sub_df in iter_df.groupby(['ib' , 'jb']):
+            ib , jb = grp # type: ignore
             Blk_i = self.container[ib].data_to_device(self.device)
             Blk_j = self.container[jb].data_to_device(self.device)
             for _ , (ii,ik,jj,jk) in tqdm(sub_df.loc[:,['ii','ik','jj','jk']].iterrows(),
@@ -847,8 +888,9 @@ class gpEliteBlock:
     def cat2cpu(self):
         if isinstance(self.data , list): 
             try:
-                self.data = MF.concat_factors(*self.data)
-                if isinstance(self.data , torch.Tensor): self.data = self.data.cpu()
+                data = MF.concat_factors(*self.data)
+                if isinstance(data , torch.Tensor): 
+                    self.data = data.cpu()
             except MemoryError:
                 print('OutofMemory when concat gpEliteBlock, try use cpu to concat')
                 gc.collect()
@@ -870,7 +912,8 @@ class gpEliteBlock:
     def max_corr(self , factor , abs_corr_cap = 1.01 , dim = None , dim_valids = (None , None) , syntax = None):
         assert self.data is not None
         
-        if isinstance(factor , FF.FactorValue): factor = factor.value
+        if isinstance(factor , FF.FactorValue): 
+            factor = factor.value
         assert isinstance(factor , torch.Tensor) , factor
         corr_values = torch.zeros((self.len()+1,)).to(factor)
         exit_state  = False
@@ -882,7 +925,8 @@ class gpEliteBlock:
             blk = block[i][:,j][...,k] if isinstance(block , torch.Tensor) else block[k][i][:,j]
             corr = MF.corrwith(value, blk , dim=dim).nanmean() 
             corr_values[k] = corr
-            if exit_state := corr.abs() > abs_corr_cap: break 
+            if exit_state := corr.abs() > abs_corr_cap: 
+                break 
         return corr_values , exit_state
     
     def data_to_device(self , device , inplace = False):
@@ -891,7 +935,8 @@ class gpEliteBlock:
             data = self.data.cpu()
         else:
             data = self.data.to(device)
-        if inplace: self.data = data
+        if inplace: 
+            self.data = data
         return data
     
     def select(self , i):

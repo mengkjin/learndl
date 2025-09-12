@@ -1,6 +1,5 @@
 
 import torch
-import torch.nn.functional as F
 
 from torch import nn , Tensor
 from .. import layer as Layer
@@ -34,7 +33,8 @@ class PatchTST(nn.Module):
         self.nvars = nvars
         self.head_type = head_type
         self.mask_fwd = head_type == 'pretrain'
-        if stride is None: stride = patch_len // 2
+        if stride is None: 
+            stride = patch_len // 2
         num_patch = (max(seq_len, patch_len)-patch_len) // stride + 1
 
         # RevIN
@@ -295,7 +295,8 @@ class TSTEncoder(nn.Module):
         out: [bs x num_patch x d_model]
         '''
         scores = None
-        for mod in self.layers: x, scores = mod(x, prev = scores)
+        for mod in self.layers: 
+            x, scores = mod(x, prev = scores)
         return x
 
 class TSTEncoderLayer(nn.Module):
@@ -346,7 +347,8 @@ class TSTEncoderLayer(nn.Module):
             x2, attn, scores = self.self_attn(x, x, x, prev)
         else:
             x2, attn = self.self_attn(x, x, x)
-        if self.store_attn: self.attn = attn
+        if self.store_attn: 
+            self.attn = attn
 
         ## Add & Norm
         x = x + self.dropout_attn(x2) # Add: residual connection with residual dropout
@@ -358,8 +360,10 @@ class TSTEncoderLayer(nn.Module):
 
         ## Add & Norm
         x = x + self.dropout_ffn(x2) # Add: residual connection with residual dropout
-        if not self.pre_norm: x = self.norm_ffn(x)
-        if not self.res_attention: scores = None
+        if not self.pre_norm: 
+            x = self.norm_ffn(x)
+        if not self.res_attention: 
+            scores = None
         
         return x, scores
     

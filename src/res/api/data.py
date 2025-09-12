@@ -1,5 +1,6 @@
 from src.proj import Logger
-from src.data import CoreDataUpdater , SellsideDataUpdater , JSDataUpdater , OtherDataUpdater , DataPreProcessor
+from src.data import CoreDataUpdater , SellsideDataUpdater , OtherDataUpdater , DataPreProcessor
+# from src.data import JSDataUpdater
 from src.res.factor.api import FactorModelUpdater , FactorCalculatorAPI
 
 class DataAPI:

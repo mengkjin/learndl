@@ -31,14 +31,18 @@ class StockBound:
         
     def intersect(self , other : Any):
         assert isinstance(other , StockBound) , other
-        if other.lb is not None: self.update_lb(other.lb , type = 'intersect')
-        if other.ub is not None: self.update_ub(other.ub , type = 'intersect')
+        if other.lb is not None: 
+            self.update_lb(other.lb , type = 'intersect')
+        if other.ub is not None: 
+            self.update_ub(other.ub , type = 'intersect')
         return self
     
     def union(self , other : Any):
         assert isinstance(other , StockBound) , other
-        if other.lb is not None: self.update_lb(other.lb , type = 'union')
-        if other.ub is not None: self.update_ub(other.ub , type = 'union')
+        if other.lb is not None: 
+            self.update_lb(other.lb , type = 'union')
+        if other.ub is not None: 
+            self.update_ub(other.ub , type = 'union')
         return self
 
     def copy(self): return deepcopy(self)
@@ -49,35 +53,44 @@ class StockBound:
         return self
 
     def update_ub(self , new_val : np.ndarray | float , idx : np.ndarray | Any = None , type = 'intersect'):
-        if self.ub is None: self.ub = STOCK_UB
+        if self.ub is None: 
+            self.ub = STOCK_UB
         update_func = np.minimum if type == 'intersect' else np.maximum
         if idx is None: 
             self.ub = update_func(self.ub , new_val)
         else:
             assert idx.dtype == bool
-            if isinstance(new_val , np.ndarray): new_val = new_val[idx]
-            if not isinstance(self.ub , np.ndarray): self.ub = np.full(len(idx) , self.ub)
+            if isinstance(new_val , np.ndarray): 
+                new_val = new_val[idx]
+            if not isinstance(self.ub , np.ndarray): 
+                self.ub = np.full(len(idx) , self.ub)
             self.ub[idx] = update_func(self.ub[idx] , new_val)
-        if self.lb is not None: self.lb = np.minimum(self.ub , self.lb)
+        if self.lb is not None: 
+            self.lb = np.minimum(self.ub , self.lb)
 
     def update_lb(self , new_val : np.ndarray | float , idx : np.ndarray | Any = None , type = 'intersect'):
-        if self.lb is None: self.lb = STOCK_LB
+        if self.lb is None: 
+            self.lb = STOCK_LB
         update_func = np.maximum if type == 'intersect' else np.minimum
         if idx is None: 
             self.lb = update_func(self.lb , new_val)
         else:
             assert idx.dtype == bool
-            if isinstance(new_val , np.ndarray): new_val = new_val[idx]
-            if not isinstance(self.lb , np.ndarray): self.lb = np.full(len(idx) , self.lb)
+            if isinstance(new_val , np.ndarray):
+                new_val = new_val[idx]
+            if not isinstance(self.lb , np.ndarray): 
+                self.lb = np.full(len(idx) , self.lb)
             self.lb[idx] = update_func(self.lb[idx] , new_val)
-        if self.ub is not None: self.ub = np.maximum(self.ub , self.lb)
+        if self.ub is not None: 
+            self.ub = np.maximum(self.ub , self.lb)
 
     @classmethod
     def intersect_bounds(cls , bounds : list['StockBound'] , clear_after = False) :
         assert bounds , 'must be no less than 1 bound'
         new_bound = bounds[0].copy()
         [new_bound.intersect(bnd) for bnd in bounds[1:]]
-        if clear_after: bounds.clear()
+        if clear_after: 
+            bounds.clear()
         return new_bound
     
     @classmethod
@@ -85,7 +98,8 @@ class StockBound:
         assert bounds , 'must be no less than 1 bound'
         new_bound = bounds[0].copy()
         [new_bound.union(bnd) for bnd in bounds[1:]]
-        if clear_after: bounds.clear()
+        if clear_after: 
+            bounds.clear()
         return new_bound
 
 @dataclass
@@ -120,8 +134,10 @@ class StockPool:
               wb : np.ndarray | Any = None , # benchmark weight
               w0 : np.ndarray | Any = None , # original weight
         ):
-        if wb is None: wb = 0
-        if w0 is None: w0 = 0
+        if wb is None: 
+            wb = 0
+        if w0 is None: 
+            w0 = 0
         allow = self.allow if self.allow else []
         bound = StockBound(np.full(len(secid) , STOCK_LB) , np.full(len(secid) , STOCK_UB))
         
@@ -171,8 +187,10 @@ class IndustryPool:
                 self.no_net_buy is not None)
     
     def export(self , w0 : np.ndarray | Any = None , industry : Optional[np.ndarray] = None):
-        if industry is None: return StockBound()
-        if w0 is None: w0 = 0
+        if industry is None: 
+            return StockBound()
+        if w0 is None: 
+            w0 = 0
         
         lb = None if self.no_sell is None else np.where(np.isin(industry , self.no_sell) , w0 , STOCK_LB)
         ub = None if self.no_buy  is None else np.where(np.isin(industry , self.no_buy)  , w0 , STOCK_UB)
@@ -218,20 +236,26 @@ class GeneralBound:
             wb = np.nan_to_num(wb)
         #assert not isinstance(self.lb , np.ndarray) , self.lb
         #assert not isinstance(self.ub , np.ndarray) , self.ub
-        if A.ndim == 1: A = A.reshape(1,-1)
+        if A.ndim == 1: 
+            A = A.reshape(1,-1)
         if not self or (wb is None and self.key != 'abs'): 
             rslt = [A[:0] , np.array([]) , np.array([]) , np.array([])]
         else:
             lin_type = self.lin_con_type(self.lb , self.ub)
             # new_b = a + b * old_b
-            if self.key == 'abs':   a , b = 0. , 1.
-            elif self.key == 'rel': a , b = A.dot(wb) , 1.
-            elif self.key == 'por': a , b = 0. , A.dot(wb)
+            if self.key == 'abs':   
+                a , b = 0. , 1.
+            elif self.key == 'rel': 
+                a , b = A.dot(wb) , 1.
+            elif self.key == 'por': 
+                a , b = 0. , A.dot(wb)
             
             lb = STOCK_LB if self.lb is None else a + b * self.lb
             ub = STOCK_UB if self.ub is None else a + b * self.ub
-            if not isinstance(lb , np.ndarray): lb = np.asarray([lb])
-            if not isinstance(ub , np.ndarray): ub = np.asarray([ub])
+            if not isinstance(lb , np.ndarray): 
+                lb = np.asarray([lb])
+            if not isinstance(ub , np.ndarray): 
+                ub = np.asarray([ub])
 
             rslt = [A , lin_type , lb , ub]
 
@@ -243,9 +267,12 @@ class GeneralBound:
         return tuple(rslt)
 
     def lin_con_type(self , lb , ub):
-        if lb is None: t = 'up'
-        elif ub is None: t = 'lo'
-        elif lb == self.ub: t = 'fx'
+        if lb is None: 
+            t = 'up'
+        elif ub is None: 
+            t = 'lo'
+        elif lb == self.ub: 
+            t = 'fx'
         else: 
             assert lb < ub , (lb , ub)
             t = 'ra'
@@ -261,10 +288,14 @@ class GeneralBound:
             return tlu_0
         else:
             lb , ub = np.maximum(lb_0 , lb_1) , np.maximum(ub_0 , ub_1)
-            if lin_type_0 == 'fx' or lin_type_1 == 'fx': lin_type = 'fx'
-            elif lin_type_0 == 'lo' and lin_type_1 == 'lo': lin_type = 'lo'
-            elif lin_type_0 == 'up' and lin_type_1 == 'up': lin_type = 'up'
-            else: lin_type = 'ra'
+            if lin_type_0 == 'fx' or lin_type_1 == 'fx': 
+                lin_type = 'fx'
+            elif lin_type_0 == 'lo' and lin_type_1 == 'lo': 
+                lin_type = 'lo'
+            elif lin_type_0 == 'up' and lin_type_1 == 'up': 
+                lin_type = 'up'
+            else: 
+                lin_type = 'ra'
             return np.array([lin_type]) , lb , ub
     
 @dataclass
@@ -274,11 +305,14 @@ class ValidRange:
     lb : Optional[float] = None
     ub : Optional[float] = None
 
-    def __post_init__(self): assert self.key in ['abs' , 'pct'] , self.key
-    def __bool__(self): return self.lb is not None or self.ub is not None
+    def __post_init__(self): 
+        assert self.key in ['abs' , 'pct'] , self.key
+    def __bool__(self): 
+        return self.lb is not None or self.ub is not None
 
     def export(self , value : np.ndarray):
-        if not self: return StockBound()
+        if not self: 
+            return StockBound()
         v_min , v_max= -np.inf , np.inf
         if self.lb is not None:
             v_min = self.lb if self.key == 'abs' else np.quantile(value , self.lb)

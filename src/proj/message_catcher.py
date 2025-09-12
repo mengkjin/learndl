@@ -26,7 +26,8 @@ def critical(message: str):
 def _str_to_html(text: str | Any):
     """capture string"""
     assert isinstance(text, str) , f"text must be a string , but got {type(text)}"
-    if re.match(r"^(?!100%\|)\d{1,2}%\|", text): return None  # skip unfinished progress bar
+    if re.match(r"^(?!100%\|)\d{1,2}%\|", text): 
+        return None  # skip unfinished progress bar
     text = html.escape(text)
     text = re.sub(r'\u001b\[(\d+;)*\d+m', _convert_ansi_sequence, text)
     text = _ansi_to_css(text)
@@ -42,7 +43,8 @@ def _convert_ansi_sequence(match):
     fg_color = None
     
     for code in codes:
-        if not code: continue
+        if not code: 
+            continue
         code = int(code)
         if code == 0:
             return '</span>'
@@ -117,7 +119,7 @@ def _dataframe_to_html(df: pd.DataFrame | pd.Series | Any):
         # get dataframe html representation
         html_table = getattr(df , '_repr_html_')() if hasattr(df, '_repr_html_') else df.to_html(classes='dataframe')
         content = f'<div class="dataframe">{html_table}</div>'
-    except Exception as e:
+    except Exception:
         # downgrade to text format
         content = f'<div class="df-fallback"><pre>{html.escape(df.to_string())}</pre></div>'
     return content
@@ -214,8 +216,10 @@ class TimedOutput:
         infos = {}
         valid = True
         if output_type is None:
-            if isinstance(content , Figure): output_type = 'figure'
-            elif isinstance(content , pd.DataFrame): output_type = 'data_frame'
+            if isinstance(content , Figure): 
+                output_type = 'figure'
+            elif isinstance(content , pd.DataFrame): 
+                output_type = 'data_frame'
             else: 
                 raise ValueError(f"Unknown output type: {type(content)}")
         if output_type == 'stderr':
@@ -230,7 +234,8 @@ class TimedOutput:
                     valid = False
         elif output_type == 'stdout':
             assert isinstance(content, str) , f"content must be a string , but got {type(content)}"
-            if content == '...': valid = False
+            if content == '...': 
+                valid = False
 
         return cls(output_type, content , infos , valid)
     
@@ -246,7 +251,8 @@ class TimedOutput:
         return False
     
     def to_html(self , index: int = 0):
-        if self.content is None: return None
+        if self.content is None: 
+            return None
         if self.type in ['stdout' , 'stderr']:
             text = _str_to_html(self.content)
         elif self.type == 'data_frame':
@@ -255,7 +261,8 @@ class TimedOutput:
             text = _figure_to_html(self.content)
         else:
             raise ValueError(f"Unknown output type: {self.type}")
-        if text is None: return None
+        if text is None: 
+            return None
         text = f"""
                 <tr class="output-row">
                     <td class="index-cell">{index}</td>
@@ -317,7 +324,8 @@ class HtmlCatcher(OutputCatcher):
     def CreateCatcher(cls, message_catcher : Path | str | bool = False , title : str | None = None , time : datetime | None = None , **kwargs):
         export_path = message_catcher if isinstance(message_catcher , (Path , str)) else None
         catcher = cls(title , export_path = export_path , time = time , **kwargs)
-        if not message_catcher: catcher._enable_catcher = False
+        if not message_catcher: 
+            catcher._enable_catcher = False
         return catcher
     
     def get_export_path(self):
@@ -332,9 +340,12 @@ class HtmlCatcher(OutputCatcher):
     
     def set_attrs(self , title : str | None = None , export_path : Path | str | None = None , time : datetime | None = None):
         if self.Instance is None or self.Instance is self:
-            if title: self.title = title
-            if time: self.time = time
-            if export_path: self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
+            if title: 
+                self.title = title
+            if time: 
+                self.time = time
+            if export_path: 
+                self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
             assert not self._export_path or self._export_path.suffix == '.html' , f"export_path must be a html file , but got {self._export_path}"
         else:
             self.Instance.set_attrs(title , export_path)
@@ -357,21 +368,24 @@ class HtmlCatcher(OutputCatcher):
     def __enter__(self):
         self.SetInstance()
  
-        if not self.enabled: return self
+        if not self.enabled: 
+            return self
         self.start_time = datetime.now()
         self.redirect_display_function()
         critical(f"{self} start to capture messages at {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if not self.enabled: return
+        if not self.enabled: 
+            return
         self.export()   
         self.restore_display_function()
 
         self.ClearInstance()
 
     def export(self , export_path: Path | None = None):
-        if export_path is None: export_path = self.get_export_path()
+        if export_path is None: 
+            export_path = self.get_export_path()
         critical(f"{self} Finished Capturing, saved to {export_path}")
         export_path.parent.mkdir(exist_ok=True,parents=True)
         with open(export_path, 'w', encoding='utf-8') as f:
@@ -411,14 +425,16 @@ class HtmlCatcher(OutputCatcher):
         html_segments = []
         for i, output in enumerate(sorted_outputs):
             html_content = output.to_html(i)
-            if html_content is None: continue
+            if html_content is None: 
+                continue
             html_segments.append(html_content)
 
         return ''.join([self._html_head() , *html_segments , self._html_tail()])
  
     def add_output(self, content: str | pd.DataFrame | pd.Series | Figure | Any , output_type: str | None = None):
         """add output to time ordered list"""
-        if not self.Capturing: return
+        if not self.Capturing: 
+            return
         
         output = TimedOutput.create(content , output_type)
         if not self.outputs or (output and not output.equivalent(self.outputs[-1])): 
@@ -760,7 +776,8 @@ class MarkdownCatcher(OutputCatcher):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if not self.is_catching or self.filename is None: return
+        if not self.is_catching or self.filename is None: 
+            return
         self._markdown_footer()
         self.markdown_file.flush()
         self.stdout_deflector.end_catching()
@@ -781,7 +798,8 @@ class MarkdownCatcher(OutputCatcher):
     def _close_markdown_file(self):
         self.markdown_file.close()
         if self.filename is not None:
-            if self.filename.exists(): self.filename.unlink()
+            if self.filename.exists(): 
+                self.filename.unlink()
             self.running_filename.rename(self.filename)
         if self.running_filename.exists(): 
             self.running_filename.unlink()
@@ -806,7 +824,8 @@ class MarkdownCatcher(OutputCatcher):
         self.markdown_file.flush()
 
     def _markdown_seperator(self):
-        if self.seperating_by is None: return
+        if self.seperating_by is None: 
+            return
         seperator = self._seperator_time_str(self.last_time)
         if seperator != self.last_seperator:
             self.markdown_file.write(f"### {seperator} \n")
@@ -839,7 +858,8 @@ class MarkdownCatcher(OutputCatcher):
         self.write_std(text , 'stderr')
 
     def get_contents(self):
-        if self.filename is None or not self.filename.exists(): return ''
+        if self.filename is None or not self.filename.exists(): 
+            return ''
         with open(self.filename , 'r') as f:
             return f.read()
         

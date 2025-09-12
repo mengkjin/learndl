@@ -11,7 +11,8 @@ class BatchDataLoader:
         self.data_module = data_module
         self.device      = data_module.device
         self.verbosity   = data_module.config.verbosity
-        if self.verbosity >= 10 and tqdm: self.enable_tqdm()
+        if self.verbosity >= 10 and tqdm: 
+            self.enable_tqdm()
         self.filter_dates(exclude_dates , include_dates)
 
     def __len__(self):  return len(self.loader)
@@ -21,8 +22,10 @@ class BatchDataLoader:
             assert isinstance(batch_data , BatchData)
             if self.exclude_dates is not None or self.include_dates is not None:
                 batch_date  = self.data_module.batch_date0(batch_data)
-                if self.exclude_dates is not None and np.isin(batch_date , self.exclude_dates): continue
-                if self.include_dates is not None and ~np.isin(batch_date , self.include_dates): continue
+                if self.exclude_dates is not None and np.isin(batch_date , self.exclude_dates): 
+                    continue
+                if self.include_dates is not None and ~np.isin(batch_date , self.include_dates): 
+                    continue
             yield self.process(batch_data , batch_i)        
     
     def process(self , batch_data : BatchData , batch_i : int) -> BatchData:
@@ -32,12 +35,14 @@ class BatchDataLoader:
         return batch_data
 
     def enable_tqdm(self , disable = False):
-        if not isinstance(self.loader , tqdm): self.loader = tqdm(self.loader , total=len(self.loader))
+        if not isinstance(self.loader , tqdm): 
+            self.loader = tqdm(self.loader , total=len(self.loader))
         self.loader.disable = disable or SILENT
         return self
 
     def display(self , text : str):
-        if isinstance(self.loader , tqdm) and not self.loader.disable:  self.loader.set_description(text)
+        if isinstance(self.loader , tqdm) and not self.loader.disable:  
+            self.loader.set_description(text)
 
     def filter_dates(self , exclude_dates = None , include_dates = None):
         if exclude_dates is not None or include_dates is not None:

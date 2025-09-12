@@ -62,21 +62,27 @@ class TushareFetcher(ABC):
     def _fina_fetcher_update_dates(self , data_freq : Literal['y' , 'h' , 'q'] = 'q' , consider_future : bool = False):
         update_to = CALENDAR.update_to()
         update = updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
-        if not update: return []
+        if not update: 
+            return []
 
         dates = CALENDAR.qe_trailing(update_to , n_past = 3 , n_future = 4 if consider_future else 0 , another_date = self.last_date())
-        if data_freq == 'y': dates = [date for date in dates if date % 10000 == 1231]
-        elif data_freq == 'h': dates = [date for date in dates if date % 10000 in [630,1231]]
+        if data_freq == 'y': 
+            dates = [date for date in dates if date % 10000 == 1231]
+        elif data_freq == 'h': 
+            dates = [date for date in dates if date % 10000 in [630,1231]]
 
         return dates
     
     def target_path(self , date : int | Any = None):
-        if self.use_date_type:  assert date is not None
-        else: date = None
+        if self.use_date_type:  
+            assert date is not None
+        else: 
+            date = None
         return DB.db_path(self.DB_SRC , self.DB_KEY , date)
 
     def fetch_and_save(self , date : int | Any = None):
-        if self.use_date_type:  assert date is not None
+        if self.use_date_type:  
+            assert date is not None
         DB.db_save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
 
     def set_rollback_date(self , rollback_date : int | None = None):
@@ -95,7 +101,8 @@ class TushareFetcher(ABC):
             ldate =  max(dates) if len(dates) else self.START_DATE
         else:
             ldate =  PATH.file_modified_date(self.target_path() , self.START_DATE)
-        if self.rollback_date: ldate = min(ldate , self.rollback_date)
+        if self.rollback_date: 
+            ldate = min(ldate , self.rollback_date)
         return ldate
     
     def last_update_date(self):
@@ -104,7 +111,8 @@ class TushareFetcher(ABC):
             ldate = PATH.file_modified_date(self.target_path(self.last_date()) , self.START_DATE)
         else:
             ldate = PATH.file_modified_date(self.target_path() , self.START_DATE)
-        if self.rollback_date: ldate = min(ldate , self.rollback_date)
+        if self.rollback_date: 
+            ldate = min(ldate , self.rollback_date)
         return ldate
 
     def update(self):
@@ -130,8 +138,10 @@ class TushareFetcher(ABC):
         return False
 
     def update_dates(self , dates):
-        if self.check_server_down(): return
-        for date in dates: self.fetch_and_save(date)
+        if self.check_server_down(): 
+            return
+        for date in dates: 
+            self.fetch_and_save(date)
 
     def update_with_retries(self , timeout_wait_seconds = 20 , timeout_max_retries = 10):
         dates = self.get_update_dates()
@@ -146,7 +156,8 @@ class TushareFetcher(ABC):
                 self.update_dates(dates)
             except Exception as e:
                 if '最多访问' in str(e):
-                    if timeout_max_retries <= 0: raise e
+                    if timeout_max_retries <= 0: 
+                        raise e
                     Logger.warning(f'{e} , wait {timeout_wait_seconds} seconds')
                     time.sleep(timeout_wait_seconds)
                 elif 'Connection to api.waditu.com timed out' in str(e):
@@ -166,11 +177,15 @@ class TushareFetcher(ABC):
         offset = 0
         while True:
             df : pd.DataFrame | Any = fetch_func(**kwargs , offset = offset , limit = limit)
-            if not isinstance(df , pd.DataFrame): raise TypeError(f'{fetch_func.__name__} must return a pd.DataFrame')
-            elif df.empty: break
-            elif len(dfs) >= max_fetch_times: raise Exception(f'{self.__class__.__name__} got more than {max_fetch_times} dfs')
+            if not isinstance(df , pd.DataFrame): 
+                raise TypeError(f'{fetch_func.__name__} must return a pd.DataFrame')
+            elif df.empty: 
+                break
+            elif len(dfs) >= max_fetch_times: 
+                raise Exception(f'{self.__class__.__name__} got more than {max_fetch_times} dfs')
             df = df.dropna(axis=1, how='all')
-            if not df.empty: dfs.append(df)
+            if not df.empty: 
+                dfs.append(df)
             offset += limit
         if dfs:
             all_df = pd.concat([df for df in dfs if not df.empty])
@@ -227,7 +242,8 @@ class RollingFetcher(TushareFetcher):
     def get_update_dates(self):
         update_to = CALENDAR.update_to()
         update = updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
-        if not update: return []
+        if not update: 
+            return []
 
         rolling_last_date = max(self.START_DATE , CALENDAR.cd(self.last_date() , -self.ROLLING_BACK_DAYS))
         all_dates = dates_to_update(rolling_last_date , self.UPDATE_FREQ , update_to)
@@ -235,7 +251,8 @@ class RollingFetcher(TushareFetcher):
         while True:
             d = CALENDAR.cd(d , self.ROLLING_SEP_DAYS)
             dates.append(min(d , update_to))
-            if d >= update_to: break
+            if d >= update_to: 
+                break
         return dates
 
     def update_dates(self , dates):
@@ -244,9 +261,11 @@ class RollingFetcher(TushareFetcher):
         for i in range(len(dates) - 1):
             start_dt , end_dt = CALENDAR.cd(dates[i] , 1) , dates[i+1]
             df = self.get_data(start_dt , end_dt)
-            if df.empty: continue
+            if df.empty: 
+                continue
             assert self.ROLLING_DATE_COL in df.columns , f'{self.ROLLING_DATE_COL} not in {df.columns}'
             for date in df[self.ROLLING_DATE_COL].unique():
-                subdf = df[df[self.ROLLING_DATE_COL] == date].copy()
-                if not self.SAVEING_DATE_COL: subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
+                subdf = df.query(f'{self.ROLLING_DATE_COL} == @date').copy()
+                if not self.SAVEING_DATE_COL: 
+                    subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
                 DB.db_save(subdf , self.DB_SRC , self.DB_KEY , date = date , verbose = False)

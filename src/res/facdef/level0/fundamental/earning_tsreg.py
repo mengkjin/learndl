@@ -3,8 +3,6 @@ import numpy as np
 import polars as pl
 import statsmodels.api as sm
 
-from typing import Literal
-
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
 
@@ -22,16 +20,19 @@ def ts_last_resid_polars(y_var : str | pd.Series , x_vars : list[str | pd.Series
             x = args[1].to_numpy()
         try:
             return sm.OLS(y, sm.add_constant(x)).fit().resid[-1]
-        except Exception as e:
+        except Exception:
             return np.nan
     
-    if isinstance(y_var , str): y_var = DATAVENDOR.get_fin_hist(y_var , date , n_last).iloc[:,0]
+    if isinstance(y_var , str): 
+        y_var = DATAVENDOR.get_fin_hist(y_var , date , n_last).iloc[:,0]
+    assert isinstance(y_var , pd.Series) , f'y_var must be a pandas series, but got {type(y_var)}'
     assert y_var.name , 'y_var must have a name'
     y_name = str(y_var.name)
 
     df = pl.from_pandas(y_var.to_frame() , include_index=True)
     for x_var in x_vars:
-        if isinstance(x_var , str): x_var = DATAVENDOR.get_fin_hist(x_var , date , n_last).iloc[:,0]
+        if isinstance(x_var , str): 
+            x_var = DATAVENDOR.get_fin_hist(x_var , date , n_last).iloc[:,0]
         assert x_var.name , 'x_vars must have a name'
         df = df.join(pl.from_pandas(x_var.to_frame() , include_index=True) , on = ['secid' , 'end_date'])
     cols = [col for col in df.columns if col not in ['secid', 'end_date']]

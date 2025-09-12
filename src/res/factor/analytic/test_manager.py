@@ -55,7 +55,8 @@ class BaseCalculator(ABC):
             return self
         figs = self.plotter()(self.calc_rslt , show = show)
         self.figs = {'all':figs} if isinstance(figs , Figure) else figs
-        if verbosity > 0: print(f'    --->{self.__class__.__name__} plot Finished!')
+        if verbosity > 0: 
+            print(f'    --->{self.__class__.__name__} plot Finished!')
         return self
     
 class BaseTestManager(ABC):
@@ -67,7 +68,8 @@ class BaseTestManager(ABC):
         if which == 'all':
             self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         else:
-            if isinstance(which , str): which = [which]
+            if isinstance(which , str): 
+                which = [which]
             illegal = np.setdiff1d(which , list(candidates.keys()))
             assert len(illegal) == 0 , f'Illegal task: {illegal}'
             self.tasks = {k:v(**kwargs) for k,v in candidates.items() if k in which}
@@ -88,8 +90,10 @@ class BaseTestManager(ABC):
 
     @abstractmethod
     def calc(self , factor : StockFactor , *args , verbosity = 1 , **kwargs):
-        for task in self.tasks.values():  task.calc(factor , *args , verbosity = verbosity - 1 , **kwargs) 
-        if verbosity > 0: print(f'{self.__class__.__name__} calc Finished!')
+        for task in self.tasks.values():  
+            task.calc(factor , *args , verbosity = verbosity - 1 , **kwargs) 
+        if verbosity > 0: 
+            print(f'{self.__class__.__name__} calc Finished!')
         return self
 
     def get_project_name(self):
@@ -109,8 +113,10 @@ class BaseTestManager(ABC):
         return rslt_dir.joinpath(self.get_project_name())
 
     def plot(self , show = False , verbosity = 1):
-        for task in self.tasks.values(): task.plot(show = show , verbosity = verbosity - 1)
-        if verbosity > 0: print(f'{self.__class__.__name__} plot Finished!')
+        for task in self.tasks.values(): 
+            task.plot(show = show , verbosity = verbosity - 1)
+        if verbosity > 0: 
+            print(f'{self.__class__.__name__} plot Finished!')
         return self
 
     def get_rslts(self):

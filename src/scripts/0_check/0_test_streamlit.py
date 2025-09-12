@@ -39,15 +39,9 @@
 #       desc : seed
 #       required : False
 #       default : 42.
+import time , random
 
-
-import sys , pathlib , time , random
-file_path = str(pathlib.Path(__file__).absolute())
-assert 'learndl' in file_path , f'learndl path not found , do not know where to find src file : {file_path}'
-path = file_path.removesuffix(file_path.split('learndl')[-1])
-if not path in sys.path: sys.path.append(path)
-
-from src.basic import AutoRunTask
+from src.basic import AutoRunTask , Timer
 from src.app import BackendTaskRecorder , ScriptLock
 
 @BackendTaskRecorder(txt = 'Bye, World!' , email = 0)
@@ -55,15 +49,16 @@ from src.app import BackendTaskRecorder , ScriptLock
 def main(txt : str = 'Hello, World!' , **kwargs):
     port_name = kwargs.pop('port_name')
     with AutoRunTask('test_streamlit' , port_name , **kwargs) as runner:
-        runner.info(str(kwargs))
-        runner.info(f'info:{txt}')
-        runner.warning(f'warning:{txt}')
-        runner.debug(f'debug:{txt}')
-        runner.critical(f'critical:{txt}')
-        if (rnd := random.random()) < 0.5:
-            runner.error(f'error:{rnd}')
-        else:
-            runner.info(f'info:{rnd}')
+        with Timer('abc'):
+            runner.info(str(kwargs))
+            runner.info(f'info:{txt}')
+            runner.warning(f'warning:{txt}')
+            runner.debug(f'debug:{txt}')
+            runner.critical(f'critical:{txt}')
+            if (rnd := random.random()) < 0.5:
+                runner.error(f'error:{rnd}')
+            else:
+                runner.info(f'info:{rnd}')
         time.sleep(5)
 
     return runner

@@ -1,21 +1,28 @@
-import numpy as np
 import pandas as pd
 
 import src.func.plot as plot
 from plottable import ColumnDefinition
-from typing import Any , Optional
+from typing import Any
 
     
 DROP_KEYS  = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 
+def _strategy_name(keys : list[str]):
+    def wrapper(x) -> str:
+        return '.'.join(x[col] for col in keys)
+    return wrapper
+
 def df_strategy(df : pd.DataFrame) -> pd.Series:
     keys = [i for i in MAJOR_KEYS if i in df.columns or i in df.index.names]
-    return df.apply(lambda x:'.'.join(x[col] for col in keys) , axis=1)
+    names = df.apply(_strategy_name(keys) , axis=1)
+    assert isinstance(names , pd.Series) , f'names must be a pandas series, but got {type(names)}'
+    return names
 
 def plot_optim_frontface(data : pd.DataFrame , show = False):
     num_per_page : int | Any = 32 // data.groupby('factor_name').size().max()
-    if num_per_page == 0: num_per_page = 1
+    if num_per_page == 0: 
+        num_per_page = 1
     num_groups : int | Any = data.groupby('factor_name').ngroups
     num_pages  : int | Any = num_groups // num_per_page + (1 if num_groups % num_per_page > 0 else 0)
     group_plot = plot.PlotMultipleData(data , group_key = 'factor_name' , max_num = num_per_page)

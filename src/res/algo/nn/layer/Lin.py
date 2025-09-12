@@ -6,7 +6,8 @@ class HardLinearRegression(nn.Module):
         self.intercept = intercept
     def forward(self, y : Tensor , x : Tensor):
         assert y.ndim == x.ndim , (y.shape , x.shape)
-        if self.intercept:  x = nn.functional.pad(x , (1,0) , value = 1)
+        if self.intercept:  
+            x = nn.functional.pad(x , (1,0) , value = 1)
         residuals = y * 0.
         for i in range(y.shape[-1]):
             beta = linalg.lstsq(y[...,i:i+1] , x).solution

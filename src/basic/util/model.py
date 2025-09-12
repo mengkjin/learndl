@@ -29,15 +29,23 @@ class ModelPath:
     @staticmethod
     def sub_dirs(path : Path , as_int = False):
         arr = [sub.name for sub in path.iterdir() if sub.is_dir()]
-        if as_int: arr = np.array([v for v in arr if v.isdigit()]).astype(int)
+        if as_int: 
+            arr = np.array([v for v in arr if v.isdigit()]).astype(int)
         return np.sort(arr)
-    def __bool__(self):         return bool(self.name)
-    def __repr__(self) -> str:  return f'{self.__class__.__name__}(model_name={self.name})'
-    def __call__(self , *args): return self.base.joinpath(*[str(arg) for arg in args])
-    def archive(self , *args):  return self('archive' , *args)
-    def conf(self , *args):     return self('configs' , *args)
-    def rslt(self , *args):     return self('detailed_analysis' , *args)
-    def snapshot(self , *args): return self('snapshot' , *args)
+    def __bool__(self):         
+        return bool(self.name)
+    def __repr__(self) -> str:  
+        return f'{self.__class__.__name__}(model_name={self.name})'
+    def __call__(self , *args): 
+        return self.base.joinpath(*[str(arg) for arg in args])
+    def archive(self , *args):  
+        return self('archive' , *args)
+    def conf(self , *args):     
+        return self('configs' , *args)
+    def rslt(self , *args):     
+        return self('detailed_analysis' , *args)
+    def snapshot(self , *args): 
+        return self('snapshot' , *args)
     def full_path(self , model_num , model_date , submodel):
         return self('archive', model_num , model_date , submodel)
     def model_file(self , model_num , model_date , submodel):
@@ -47,7 +55,8 @@ class ModelPath:
         return path.exists() and len([s for s in path.iterdir()]) > 0
     def mkdir(self , model_nums = None , exist_ok=False):
         self.archive().mkdir(parents=True,exist_ok=exist_ok)
-        if model_nums is not None: [self.archive(mm).mkdir(exist_ok=exist_ok) for mm in model_nums]
+        if model_nums is not None: 
+            [self.archive(mm).mkdir(exist_ok=exist_ok) for mm in model_nums]
         self.conf().mkdir(exist_ok=exist_ok)
         self.rslt().mkdir(exist_ok=exist_ok)
         self.snapshot().mkdir(exist_ok=exist_ok)
@@ -129,7 +138,8 @@ class HiddenPath:
         DB.save_df(hidden_df , hidden_path , overwrite = True)
 
     def get_hidden_df(self , model_date : int , exact = False):
-        if not exact: model_date = self.latest_hidden_model_date(model_date)
+        if not exact: 
+            model_date = self.latest_hidden_model_date(model_date)
         hidden_df = DB.load_df(self.target_path(model_date))
         return model_date , hidden_df
     
@@ -155,7 +165,8 @@ class ModelDict:
         self.booster_dict = None
 
     def save(self , path : str | Path , stack = False):
-        if isinstance(path , str): path = Path(path)
+        if isinstance(path , str): 
+            path = Path(path)
         path.mkdir(parents=True,exist_ok=True)
         for key in self.__slots__:
             if (value := getattr(self , key)) is not None:
@@ -217,8 +228,10 @@ class RegisteredModel(ModelPath):
     
     @classmethod
     def SelectModels(cls , pred_names : list[str] | str | None = None):
-        if pred_names is None: pred_names = list(cls.MODEL_DICT.keys())
-        if isinstance(pred_names , str): pred_names = [pred_names]
+        if pred_names is None: 
+            pred_names = list(cls.MODEL_DICT.keys())
+        if isinstance(pred_names , str): 
+            pred_names = [pred_names]
         return [cls(key) for key in pred_names]
     
     @property
@@ -244,7 +257,8 @@ class RegisteredModel(ModelPath):
 
     def load_pred(self , date : int , verbose = True , **kwargs):
         df = DB.pred_load(self.pred_name , date , verbose = verbose , **kwargs)
-        if df.empty: return df
+        if df.empty: 
+            return df
         if self.pred_name not in df.columns:
             assert self.name in df.columns , f'{self.pred_name} or {self.name} not in df.columns : {df.columns}'
             df = df.rename(columns={self.name:self.pred_name})
@@ -252,14 +266,16 @@ class RegisteredModel(ModelPath):
         return df
 
     def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False):
-        if df.empty: return
+        if df.empty: 
+            return
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         DB.save_df(df , path , overwrite = overwrite)
 
     def load_fmp(self , date : int , verbose = True , **kwargs):
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 
-            if verbose: print(f'{path} does not exist')
+            if verbose: 
+                print(f'{path} does not exist')
             return pd.DataFrame()
         return pd.read_feather(path , **kwargs)
     
@@ -295,6 +311,8 @@ class HiddenExtractingModel(ModelPath):
 
     @classmethod
     def SelectModels(cls , hidden_names : list[str] | str | None = None):
-        if hidden_names is None: hidden_names = list(cls.MODEL_DICT.keys())
-        if isinstance(hidden_names , str): hidden_names = [hidden_names]
+        if hidden_names is None: 
+            hidden_names = list(cls.MODEL_DICT.keys())
+        if isinstance(hidden_names , str): 
+            hidden_names = [hidden_names]
         return [cls(key) for key in hidden_names]

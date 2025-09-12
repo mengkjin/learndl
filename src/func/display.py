@@ -14,7 +14,8 @@ def display(obj , raise_error = True):
 
 def data_frame(df , raise_error = True):
     if df is None:
-        if raise_error: raise ValueError('No dataframe to display')
+        if raise_error: 
+            raise ValueError('No dataframe to display')
         return
     with pd.option_context(
         'display.max_rows', 100,
@@ -26,6 +27,7 @@ def data_frame(df , raise_error = True):
 
 def figure(fig , raise_error = True):
     if fig is None:
-        if raise_error: raise ValueError('No figure to display')
+        if raise_error: 
+            raise ValueError('No figure to display')
         return
     raw_display(fig)

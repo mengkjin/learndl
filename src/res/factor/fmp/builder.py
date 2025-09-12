@@ -1,5 +1,4 @@
-import itertools , os , time
-import pandas as pd
+import itertools , time
 import numpy as np
 
 from contextlib import nullcontext
@@ -85,7 +84,8 @@ class PortfolioBuilder:
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
     
     def setup(self , verbosity : int | None = None):
-        if verbosity is None: verbosity = self.verbosity
+        if verbosity is None: 
+            verbosity = self.verbosity
         if self.category == 'optim':
             self.creator = PortfolioOptimizer(self.full_name).setup(print_info = verbosity > 0 , **self.kwargs)
         elif self.category == 'top':
@@ -206,7 +206,8 @@ class PortfolioBuilderGroup:
         self.print_in_optimization('start')
         for self._date in self.relevant_dates:
             for self._builder in self.builders:
-                if not self._builder.alpha.has(self._date): continue
+                if not self._builder.alpha.has(self._date): 
+                    continue
                 self._builder.build(self._date)
                 self.print_in_optimization('loop')
         self.print_in_optimization('end')

@@ -16,13 +16,15 @@ download_path = Path('tmp_pydataloader')
 
 def download_one_day(date , file):
     zip_file_path = download_path.joinpath(f'min.{date}.zip')
-    if zip_file_path.exists(): return
+    if zip_file_path.exists(): 
+        return
     bucket.download_file(file.key , zip_file_path)
 
 def transform_one_day(date):
     target_path = download_path.joinpath(f'min/min.{date}.feather')
     target_path.parent.mkdir(parents=True , exist_ok=True)
-    if target_path.exists(): return
+    if target_path.exists(): 
+        return
     zip_file_path = download_path.joinpath(f'min.{date}.zip')
     txt_file_path = f'equity_pricemin{date}.txt'
 
@@ -34,8 +36,10 @@ def transform_one_day(date):
 def kline_download(start = 20100104 , end = 20241226):
     os.makedirs(download_path , exist_ok=True)
 
-    filedate = lambda x:int(re.findall(r'(\d{8})', x.key)[-1])
-    filefilter = lambda x:(x.key.endswith('.zip') and os.path.basename(x.key).startswith('equity_pricemin'))
+    def filedate(x):
+        return int(re.findall(r'(\d{8})', x.key)[-1])
+    def filefilter(x):
+        return x.key.endswith('.zip') and os.path.basename(x.key).startswith('equity_pricemin')
     print(start , end)
     if start <= 20230328 and end <= 20230328:
         file_list = [f for f in bucket.objects.filter(Prefix = 'equity_pricemin/') if filefilter(f)]
@@ -63,7 +67,7 @@ def kline_download(start = 20100104 , end = 20241226):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = {executor.submit(download_wrapper, (date , file)):date for date , file in files.items()}
         for future in as_completed(futures):
-            date = futures[future]
+            _ = futures[future]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

@@ -1,5 +1,5 @@
 import pandas as pd
-
+from typing import Any
 __all__ = ['code_to_secid' , 'code_to_code' , 'secid_to_secid']
 
 _MAPPER_CODE : dict[str , str] = {
@@ -140,7 +140,6 @@ _MAPPER_SECID : dict[int , int] = {
     838670 : 920870 , 
     838402 : 920402 , 
     838262 : 920262 , 
-    838227 : 920227 , 
     838171 : 920271 , 
     838227 : 920227 , 
     837748 : 920748 , 
@@ -258,14 +257,14 @@ _MAPPER_SECID : dict[int , int] = {
     300114 : 302132 ,
 }
 
-def code_to_secid(s : pd.Series , decode_first = False):
+def code_to_secid(s : pd.Series | Any , decode_first = False):
     code = code_to_code(s , decode_first)
     secid = code.str.replace('[-.@a-zA-Z]','',regex=True)
     secid = secid.where(secid.str.isdigit() , '-1').astype(int).replace(_MAPPER_SECID)
     secid = secid_to_secid(secid)
     return secid
 
-def code_to_code(s : pd.Series , decode_first = False):
+def code_to_code(s : pd.Series | Any , decode_first = False):
     if decode_first: 
         code = pd.Series([(id.decode('utf-8') if isinstance(id , bytes) else str(id)) for id in s])
     else:
@@ -274,6 +273,6 @@ def code_to_code(s : pd.Series , decode_first = False):
     code = code.str.replace('[-.@a-zA-Z]','',regex=True)
     return code
 
-def secid_to_secid(s : pd.Series):
+def secid_to_secid(s : pd.Series | Any):
     return s.replace(_MAPPER_SECID)
 

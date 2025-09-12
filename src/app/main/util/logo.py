@@ -1,10 +1,8 @@
-import requests , traceback
+import requests
 import zipfile
-import os
 import shutil
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
-from IPython.display import display
 import numpy as np
 
 FONT_DIR = Path(__file__).parent.parent / "fonts"
@@ -19,7 +17,8 @@ def get_font() -> Path:
     font_path = FONT_DIR / font_file.split("/")[-1]
     temp_dir = FONT_DIR / "temp"
     
-    if font_path.exists(): return font_path
+    if font_path.exists(): 
+        return font_path
     temp_dir.mkdir(exist_ok=True)
     url = "https://dl.dafont.com/dl/?f=anime_ace_bb"
     response = requests.get(url, allow_redirects=True)
@@ -132,7 +131,8 @@ def draw_rocket():
 def create_icon(recreate = False):
     """create an icon"""
     assert not recreate , "recreate must be False"
-    if not recreate and IMAGE_DIR.joinpath("icon.png").exists(): return
+    if not recreate and IMAGE_DIR.joinpath("icon.png").exists(): 
+        return
     image = draw_rocket()
     image.save(IMAGE_DIR / "icon.png")
     return image
@@ -141,7 +141,8 @@ def create_banner(recreate = False):
     """
     generate image with font
     """
-    if not recreate and IMAGE_DIR.joinpath("banner.png").exists(): return
+    if not recreate and IMAGE_DIR.joinpath("banner.png").exists(): 
+        return
 
     # text and font
     text = "Learn  Deep  Learning"
@@ -166,7 +167,7 @@ def create_banner(recreate = False):
     canvas_width :int = int(text_width + padding_x)
     canvas_height :int = int(text_height + padding_y)
     image = Image.new("RGBA", (canvas_width, canvas_height), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
+    ImageDraw.Draw(image)
     
     # rainbow gradient
     colors = [(255, 0, 0), (255, 127, 0), (255, 255, 0),
@@ -206,7 +207,8 @@ def create_logo(icon_path="icon.png", banner_path="banner.png",
     - spacing: spacing between icon and banner
     - alignment: vertical alignment ('top', 'center', 'bottom')
     """
-    if not recreate and IMAGE_DIR.joinpath(output_path).exists(): return
+    if not recreate and IMAGE_DIR.joinpath(output_path).exists(): 
+        return
 
     create_icon(False)
     create_banner(recreate)

@@ -37,7 +37,8 @@ class LinearConstraint:
             assert self.A.shape[1] == N , self.A
 
     def concat(self , other):
-        if not other: return self
+        if not other: 
+            return self
         assert isinstance(other , LinearConstraint) , other
         self.A = np.concatenate([self.A , other.A])
         self.type = np.concatenate([self.type , other.type])
@@ -47,14 +48,16 @@ class LinearConstraint:
     
     @classmethod
     def stack(cls , lin_cons : list['LinearConstraint'] , clear_after = False):
-        if len(lin_cons) <= 1: return lin_cons[0]
+        if len(lin_cons) <= 1: 
+            return lin_cons[0]
         new_con = cls(
             np.concatenate([con.A    for con in lin_cons]) ,
             np.concatenate([con.type for con in lin_cons]) ,
             np.concatenate([con.lb   for con in lin_cons]) ,
             np.concatenate([con.ub   for con in lin_cons]) ,
         )
-        if clear_after: lin_cons.clear()
+        if clear_after: 
+            lin_cons.clear()
         return new_con
     
     @classmethod
@@ -118,13 +121,16 @@ class TurnConstraint:
     def __bool__(self) -> bool: return self.dbl is not None and self.dbl > 0.0
 
     def check(self , N : Optional[int] = None):
-        if self.rho == 0: self.rho = None
-        if self.dbl == 0: self.dbl = None
+        if self.rho == 0: 
+            self.rho = None
+        if self.dbl == 0: 
+            self.dbl = None
         assert self.rho is None or self.rho > 0.0 , self.rho
         assert self.dbl is None or self.dbl > 0.0 , self.dbl
 
     def rescale(self , scaler : float):
-        if self.rho is not None: self.rho = self.rho / scaler
+        if self.rho is not None: 
+            self.rho = self.rho / scaler
         return self
 
     @classmethod
@@ -144,13 +150,16 @@ class ShortConstraint:
     def __bool__(self) -> bool: return bool(self.pos)
 
     def check(self , N : Optional[int] = None):
-        if self.pos == 0  : self.pos  = None
-        if self.cost == 0 : self.cost = None
+        if self.pos == 0  : 
+            self.pos  = None
+        if self.cost == 0 : 
+            self.cost = None
         assert self.cost is None or self.cost >= 0.0 , self.cost
         assert self.pos is None or self.pos >= 0.0 , self.pos
 
     def rescale(self , scaler : float):
-        if self.cost: self.cost = self.cost / scaler
+        if self.cost: 
+            self.cost = self.cost / scaler
         return self
 
     @classmethod
@@ -184,12 +193,15 @@ class CovConstraint:
     def __bool__(self): return self.lmbd is not None or self.te is not None
 
     def check(self , N : Optional[int] = None):
-        if self.lmbd == 0: self.lmbd = None
-        if self.te   == 0: self.te   = None
+        if self.lmbd == 0: 
+            self.lmbd = None
+        if self.te   == 0: 
+            self.te   = None
 
         assert self.lmbd is None or self.lmbd > 0 , self.lmbd
         assert self.te   is None or self.te > 0   , self.te
-        if not self: return
+        if not self: 
+            return
         if N is None:
             if self.cov_type == 'model':
                 assert self.F is None or self.F.ndim == 2 and self.C.ndim == 2 , (self.F , self.C)
@@ -203,14 +215,17 @@ class CovConstraint:
                 assert self.cov is None or self.cov.shape == (N, N)
 
     def rescale(self , scaler : float = 1.):
-        if self.lmbd is not None: self.lmbd = self.lmbd / scaler
+        if self.lmbd is not None: 
+            self.lmbd = self.lmbd / scaler
         return self
 
     def variance(self , w : np.ndarray | Any):
-        if not self: np.array([0.])
+        if not self: 
+            np.array([0.])
         if self.cov_type == 'model':
             quad_term = w.T.dot(self.F.T).dot(self.C).dot(self.F).dot(w) 
-            if self.S is not None: quad_term += (w * self.S).dot(w)
+            if self.S is not None: 
+                quad_term += (w * self.S).dot(w)
         else:
             quad_term = w.T.dot(self.cov).dot(w)
         return quad_term

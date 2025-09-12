@@ -169,7 +169,7 @@ class uni_rnn_encoder(nn.Module):
         else:
             enc_in , enc_in_dim , enc_att = enc_in , enc_in_dim if enc_in_dim else hidden_dim , enc_att
         
-        if enc_in == 'linear' or enc_in == True:
+        if enc_in == 'linear' or enc_in is True:
             self.fc_enc_in = nn.Sequential(nn.Linear(input_dim, enc_in_dim),nn.Tanh())
         elif enc_in == 'resnet':
             res_kwargs = {k:v for k,v in kwargs.items() if k != 'seq_len'}
@@ -179,7 +179,8 @@ class uni_rnn_encoder(nn.Module):
             self.fc_enc_in = nn.Sequential()
 
         rnn_kwargs = {'input_dim':enc_in_dim,'output_dim':hidden_dim,'num_layers':rnn_layers, 'dropout':dropout}
-        if rnn_type == 'tcn': rnn_kwargs['kernel_size'] = kwargs['kernel_size']
+        if rnn_type == 'tcn': 
+            rnn_kwargs['kernel_size'] = kwargs['kernel_size']
         self.fc_rnn = self.mod_rnn(**rnn_kwargs)
 
         if enc_att:
@@ -224,7 +225,8 @@ class uni_rnn_mapping(nn.Module):
     def __init__(self,hidden_dim,hidden_as_factors,output_as_factors,**kwargs):
         super().__init__()
         self.fc_map_out = nn.Sequential(Layer.EwLinear()) if hidden_as_factors else nn.Sequential(nn.Linear(hidden_dim, 1))
-        if output_as_factors: self.fc_map_out.append(nn.BatchNorm1d(1))
+        if output_as_factors: 
+            self.fc_map_out.append(nn.BatchNorm1d(1))
     def forward(self , x : Tensor) -> Tensor:
         '''
         in: [bs x hidden_dim]
@@ -275,7 +277,8 @@ class multi_rnn_mapping(nn.Module):
             self.fc_map_out = nn.Sequential(Layer.EwLinear())
         else:
             self.fc_map_out = nn.Sequential(nn.Linear(hidden_dim, 1))
-        if output_as_factors:  self.fc_map_out.append(nn.BatchNorm1d(1))
+        if output_as_factors:  
+            self.fc_map_out.append(nn.BatchNorm1d(1))
     def forward(self, x : Tensor) -> Tensor:
         '''
         in: [bs x hidden_dim]

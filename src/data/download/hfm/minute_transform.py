@@ -3,10 +3,9 @@ import numpy as np
 import pandas as pd
 
 from typing import Literal
-from pathlib import Path
 
 from src.data.util import trade_min_fillna
-from src.proj import PATH , MACHINE
+from src.proj import PATH
 from src.basic import DB
 
 sec_min_path = PATH.miscel.joinpath('JSMinute')
@@ -38,7 +37,8 @@ def extract_js_min(date):
     with zipfile.ZipFile(zip_file, 'r') as zip_ref: 
         file_list = zip_ref.namelist()
         for file_name in file_list:
-            if not file_name.startswith('equity_pricemin') or not file_name.endswith('.txt'): continue
+            if not file_name.startswith('equity_pricemin') or not file_name.endswith('.txt'): 
+                continue
             date_str = file_name.removesuffix('.txt').replace('-', '')[-8:]
             assert date_str.isdigit() , date_str
             date = int(date_str)
@@ -52,7 +52,7 @@ def extract_js_min(date):
         df['ticker'] = df['ticker'].astype(int)
     except Exception as e:
         print(e)
-        df = df.loc[df['ticker'].str.isdigit()]
+        df = df.query('ticker.str.isdigit()')
         df['ticker'] = df['ticker'].astype(int)
 
     return df
@@ -92,8 +92,8 @@ def add_sec_type(df : pd.DataFrame):
     }).drop_duplicates()
     df_sec['range'] = df_sec['ticker'] // 1000
     df_sec['sec_type'] = 'notspecified'
-    sz_sec = df_sec.loc[df_sec['exchangecd'] == 'XSHE']
-    sh_sec = df_sec.loc[df_sec['exchangecd'] == 'XSHG']
+    sz_sec = df_sec.query('exchangecd == "XSHE"')
+    sh_sec = df_sec.query('exchangecd == "XSHG"')
 
     # sz
     for (start , end) , sec_type in SZ_types.items():
@@ -110,9 +110,12 @@ def add_sec_type(df : pd.DataFrame):
     df = df.merge(df_sec , on = ['ticker' , 'exchangecd'])
     return df
 
-def filter_sec(df : pd.DataFrame , sec_type : Literal['sec' , 'etf' , 'cb'] | str):
-    sec_type_map = {'sec' : 'A' , 'etf' : 'etf' , 'cb' : 'convertible'}
-    return df.loc[df['sec_type'] == sec_type_map[sec_type]]
+def filter_sec(
+    df : pd.DataFrame , 
+    sec_type : Literal['sec' , 'etf' , 'cb'] | str ,
+    sec_type_map : dict[str,str] = {'sec' : 'A' , 'etf' : 'etf' , 'cb' : 'convertible'}
+):
+    return df.query('sec_type == @sec_type_map[@sec_type]')
 
 def transform_sec(df : pd.DataFrame):
     
@@ -155,7 +158,8 @@ def process_fut_min_files():
                     assert date_str.isdigit() , date_str
                     date = int(date_str)
 
-                    if DB.db_path('trade_js', 'fut_min', date).exists(): continue
+                    if DB.db_path('trade_js', 'fut_min', date).exists(): 
+                        continue
                     with zip_ref.open(file_name) as file:
                         df = pd.read_csv(file)
                         df.columns = df.columns.str.lower()

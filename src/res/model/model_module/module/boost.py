@@ -1,5 +1,5 @@
 from torch import Tensor
-from typing import Any , Optional
+from typing import Optional
 
 from src.res.algo import AlgoModule
 from src.res.model.util import BasePredictorModel , BatchData
@@ -14,7 +14,8 @@ class BoostPredictor(BasePredictorModel):
                    model_param : Optional[dict] = None ,
                    testor_mode : bool = False ,
                    *args , **kwargs):
-        if testor_mode: self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
+        if testor_mode: 
+            self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
         module = model_module if model_module else self.config.model_booster_type
         param  = model_param  if model_param  else self.model_param
         cuda = self.device.is_cuda     if self.config else None
@@ -42,7 +43,8 @@ class BoostPredictor(BasePredictorModel):
     
     def forward(self , batch_data : BatchData | Tensor , *args , **kwargs): 
         '''model object that can be called to forward'''
-        if len(batch_data) == 0: return None
+        if len(batch_data) == 0: 
+            return None
         x = batch_data_flatten_x(batch_data) if isinstance(batch_data , BatchData) else batch_data
         pred = self.booster(x , *args , **kwargs)
         return pred
@@ -56,7 +58,8 @@ class BoostPredictor(BasePredictorModel):
         return batch_data_to_boost_input(long_batch , self.data.y_secid , self.data.y_date)
     
     def fit(self):
-        if self.trainer.verbosity > 10: print('model fit start')
+        if self.trainer.verbosity > 10: 
+            print('model fit start')
 
         self.new_model()
 
@@ -70,10 +73,12 @@ class BoostPredictor(BasePredictorModel):
             self.batch_forward()
             self.batch_metrics()
 
-        if self.trainer.verbosity > 10: print('model fit done')
+        if self.trainer.verbosity > 10: 
+            print('model fit done')
 
     def test(self):
-        if self.trainer.verbosity > 10: print('model test start')
+        if self.trainer.verbosity > 10: 
+            print('model test start')
 
         for _ in self.trainer.iter_model_submodels():
             self.load_model(submodel=self.model_submodel)
@@ -81,7 +86,8 @@ class BoostPredictor(BasePredictorModel):
                 self.batch_forward()
                 self.batch_metrics()
 
-        if self.trainer.verbosity > 10: print('model test done')
+        if self.trainer.verbosity > 10: 
+            print('model test done')
 
     def collect(self , submodel = 'best' , *args):
         self.model_dict.booster_dict = self.booster.to_dict()

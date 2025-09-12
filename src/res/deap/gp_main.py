@@ -65,7 +65,8 @@ def gp_job_dir(job_id = None , train = True , continuation = False , test_code =
         gp_params: dict that includes all gp parameters
     '''
     # directory setting and making
-    if job_id is None: job_id = args.job_id
+    if job_id is None: 
+        job_id = args.job_id
     if test_code or job_id == 'bendi':
         test_code = True
         job_dir = f'{defaults.DIR_pop}/bendi'
@@ -154,7 +155,8 @@ def gp_parameters(job_id = None , train = True , continuation = False , test_cod
         '''
         gp_params.update(**yaml.load(f , Loader = yaml.FullLoader))
 
-    if test_code: gp_params.update(**gp_params.test_params)
+    if test_code: 
+        gp_params.update(**gp_params.test_params)
     gp_params.update(**kwargs)
     gp_params.apply('slice_date' , lambda x:pd.to_datetime(x).values)
     return gp_params
@@ -192,13 +194,15 @@ def gp_namespace(gp_params):
         package_data = torch_load(package_path) if os.path.exists(package_path) else {}
 
         if not np.isin(package_require , list(package_data.keys())).all() or not np.isin(gp_space.gp_argnames , package_data['gp_argnames']).all():
-            if gp_space.param.verbose: print(f'  --> Exists "{package_path}" but Lack Required Data!')
+            if gp_space.param.verbose: 
+                print(f'  --> Exists "{package_path}" but Lack Required Data!')
         else:
             assert np.isin(package_require , list(package_data.keys())).all() , np.setdiff1d(package_require , list(package_data.keys()))
             assert np.isin(gp_space.gp_argnames , package_data['gp_argnames']).all() , np.setdiff1d(gp_space.gp_argnames , package_data['gp_argnames'])
             assert package_data['df_index'] is not None
 
-            if gp_space.param.verbose: print(f'  --> Directly load "{package_path}"')
+            if gp_space.param.verbose: 
+                print(f'  --> Directly load "{package_path}"')
             for gp_key in gp_space.gp_argnames:
                 gp_val = package_data['gp_inputs'][package_data['gp_argnames'].index(gp_key)]
                 gp_val = df2ts(gp_val , gp_key , gp_space.device)
@@ -216,13 +220,16 @@ def gp_namespace(gp_params):
             load_finished = True
 
         if not load_finished:
-            if gp_space.param.verbose: print(f'  --> Load from Parquet Files:')
+            if gp_space.param.verbose: 
+                print(f'  --> Load from Parquet Files:')
             gp_filename = gp_filename_converter()
             nrowchar = 0
             for i , gp_key in enumerate(gp_space.gp_argnames):
-                if gp_space.param.verbose and nrowchar == 0: print('  --> ' , end='')
+                if gp_space.param.verbose and nrowchar == 0: 
+                    print('  --> ' , end='')
                 gp_val = read_gp_data(gp_filename(gp_key),gp_space.param.slice_date,gp_space.records.get('df_columns'))
-                if i == 0: gp_space.records.update(df_columns = gp_val.columns.values , df_index = gp_val.index.values)
+                if i == 0: 
+                    gp_space.records.update(df_columns = gp_val.columns.values , df_index = gp_val.index.values)
                 gp_val = df2ts(gp_val , gp_key , gp_space.device)
                 gp_space.gp_inputs.append(gp_val)
                 
@@ -250,7 +257,8 @@ def gp_namespace(gp_params):
                           gp_space.records.subset(['df_index' , 'df_columns'] , require = True) )
             torch.save(saved_data , package_path)
 
-    if gp_space.param.verbose: print(f'  --> {len(gp_space.param.gp_fac_list)} factors, {len(gp_space.param.gp_raw_list)} raw data loaded!')
+    if gp_space.param.verbose: 
+        print(f'  --> {len(gp_space.param.gp_fac_list)} factors, {len(gp_space.param.gp_raw_list)} raw data loaded!')
 
     gp_space.mgr_file.save_state(gp_space.param.__dict__, 'params', i_iter = 0) # useful to assert same index as package data
     gp_space.mgr_file.save_state(gp_space.records.subset(['df_index' , 'df_columns']),'df_axis' , i_iter = 0) # useful to assert same index as package data
@@ -299,7 +307,8 @@ def gp_filename_converter():
         assert gp_key.isupper() or gp_key.islower() , gp_key
 
         rawkey = gp_key.lower()
-        if rawkey in filename_dict.keys(): rawkey = filename_dict[rawkey]
+        if rawkey in filename_dict.keys(): 
+            rawkey = filename_dict[rawkey]
 
         zscore = gp_key.islower() and rawkey not in ['cs_indus_code' , 'size']
 
@@ -327,18 +336,23 @@ def read_gp_data(filename,slice_date=None,df_columns=None,df_index=None,input_fr
     if slice_date is not None: 
         df = df[(slice_date[0] <= df.index.values) & (df.index.values <= slice_date[-1])] # 训练集首日至测试集末日
     # if freq!='D': df = df.groupby([pd.Grouper(level=0, freq=freq)]).last()
-    if df_columns is not None: df = df.loc[:,df_columns]# 选取指定股票
-    if slice_date is None and df_index is not None: df = df.loc[df_index]
+    if df_columns is not None: 
+        df = df.loc[:,df_columns]# 选取指定股票
+    if slice_date is None and df_index is not None: 
+        df = df.loc[df_index]
     return df
 
 def df2ts(x , gp_key = '' , device = None , share_memory = True):
     # additional treatment based by gp_key
-    if isinstance(x , pd.DataFrame): x = torch.FloatTensor(x.values)
+    if isinstance(x , pd.DataFrame): 
+        x = torch.FloatTensor(x.values)
     if gp_key == 'DP': # raw dividend factor , nan means 0
         x.nan_to_num_()
     if isinstance(x , torch.Tensor):
-        if device is not None: x = x.to(device)
-        if share_memory: x.share_memory_() # 执行多进程时使用：将张量移入共享内存
+        if device is not None: 
+            x = x.to(device)
+        if share_memory: 
+            x.share_memory_() # 执行多进程时使用：将张量移入共享内存
     return x
 
 # %%
@@ -359,8 +373,10 @@ def gp_syntax2value(compiler, individual, gp_inputs, param, tensors, i_iter=0,
     output:
         factor_value: 2d tensor
     '''
-    if mgr_mem  is None: mgr_mem  = MemoryManager()
-    if timer    is None: timer    = gpTimer()
+    if mgr_mem  is None: 
+        mgr_mem  = MemoryManager()
+    if timer    is None: 
+        timer    = gpTimer()
 
     #print(individual)
     with timer.acc_timer('compile'):
@@ -386,7 +402,8 @@ def gp_syntax2value(compiler, individual, gp_inputs, param, tensors, i_iter=0,
             factor_value = func(y = factor_value.reshape(-1) , 
                                 x = tensors.neutra.to(factor_value).reshape(-1,tensors.neutra.shape[-1]) , 
                                 insample = tensors.insample_2d.reshape(-1))
-            if isinstance(factor_value , torch.Tensor): factor_value = factor_value.reshape(shape2d)
+            if isinstance(factor_value , torch.Tensor): 
+                factor_value = factor_value.reshape(shape2d)
         elif factor_neut_type == 2:
             func = mgr_mem.except_MemoryError(MF.neutralize_1d, print_str=f'neutralizing {str(individual)}')
             factor_value = func(factor_value , tensors.neutra.to(factor_value))
@@ -417,21 +434,26 @@ def evaluate(individual, pool_skuname, compiler , gp_inputs , param , tensors , 
             rankir:     (insample_res, outsample_res, insample_raw, outsample_raw)
         )
     '''
-    if mgr_file is None: mgr_file = gpFileManager()
-    if mgr_mem  is None: mgr_mem  = MemoryManager()
-    if timer    is None: timer    = gpTimer()
+    if mgr_file is None: 
+        mgr_file = gpFileManager()
+    if mgr_mem  is None: 
+        mgr_mem  = MemoryManager()
+    if timer    is None: 
+        timer    = gpTimer()
 
     mgr_file.update_sku(individual, pool_skuname)
     factor = gp_syntax2value(compiler,individual,gp_inputs,param,tensors,i_iter,timer,**kwargs)
     # mgr_mem.check('factor')
     
     metrics = torch.zeros(8)
-    if isinstance(factor.value , torch.Tensor): metrics = metrics.to(factor.value)
+    if isinstance(factor.value , torch.Tensor): 
+        metrics = metrics.to(factor.value)
     if not factor.isnull(): 
         for i , labels in enumerate([tensors.labels_res , tensors.labels_raw]):
             rankic_full = MF.rankic_2d(factor.value , labels , dim = 1 , universe = tensors.universe , min_coverage = min_coverage)
             for j , sample in enumerate([tensors.insample , tensors.outsample]):
-                if rankic_full is None: continue
+                if rankic_full is None: 
+                    continue
                 rankic = rankic_full[sample]
                 if rankic.isnan().sum() < 0.5 * len(rankic): # if too many nan rank_ic (due to low coverage)
                     rankic_avg  = rankic.nanmean()
@@ -464,14 +486,17 @@ def evaluate_pop(population , toolbox , param , i_iter = 0, i_gen = 0, desc = 'E
     iterator = tuple(zip(changed_pop, pool_skunames))
     if param.pool_num > 1:
         with Pool(processes=param.pool_num) as pool:
-            result = list(tqdm(pool.starmap(toolbox.evaluate, iterator), total=len(iterator) , 
-                               desc=f'Parallel evalute population ({param.pool_num})'))
+            _ = list(tqdm(
+                pool.starmap(toolbox.evaluate, iterator), total=len(iterator) , 
+                desc=f'Parallel evalute population ({param.pool_num})'))
     else:
         def desc0(x):
             return (f'  --> {desc} {str(i_gen)} ' +'MaxIRres{:+.2f}|MaxIRraw{:+.2f}'.format(*x))
         def maxir(ir , ind):
-            if abs(ind.metrics[1]) > abs(ir[0]): ir[0] = ind.metrics[1] 
-            if abs(ind.metrics[5]) > abs(ir[1]): ir[1] = ind.metrics[5]
+            if abs(ind.metrics[1]) > abs(ir[0]): 
+                ir[0] = ind.metrics[1] 
+            if abs(ind.metrics[5]) > abs(ir[1]): 
+                ir[1] = ind.metrics[5]
             return ir
         iterator = tqdm(iterator, total=len(changed_pop))
         ir = [0.,0.]
@@ -485,9 +510,7 @@ def evaluate_pop(population , toolbox , param , i_iter = 0, i_gen = 0, desc = 'E
     assert all([ind.fitness.valid for ind in population])
     return population
 
-
-
-def gp_residual(param , tensors , i_iter = 0, device = None , 
+def gp_residual(param , tensors : gpContainer, i_iter = 0, device = None , 
                 mgr_file=None,mgr_mem=None, **kwargs):
     '''
     ------------------------ create gp toolbox ------------------------
@@ -502,8 +525,10 @@ def gp_residual(param , tensors , i_iter = 0, device = None ,
     assert param.labels_neut_type in ['svd' , 'all'] , param.labels_neut_type #  'all'
     assert param.svd_mat_method in ['coef_ts' , 'total'] , param.svd_mat_method
 
-    if mgr_file is None: mgr_file = gpFileManager()
-    if mgr_mem  is None: mgr_mem  = MemoryManager()
+    if mgr_file is None: 
+        mgr_file = gpFileManager()
+    if mgr_mem  is None: 
+        mgr_mem  = MemoryManager()
 
     tensors.neutra = None
     if i_iter == 0:
@@ -516,6 +541,7 @@ def gp_residual(param , tensors , i_iter = 0, device = None ,
     neutra = elites
 
     if isinstance(elites , torch.Tensor) and param.labels_neut_type == 'svd': 
+        assert isinstance(labels_res , torch.Tensor) , type(labels_res)
         if param.svd_mat_method == 'total':
             elites_mat = FF.factor_coef_total(elites[tensors.insample],dim=-1)
         else:
@@ -533,7 +559,8 @@ def gp_residual(param , tensors , i_iter = 0, device = None ,
 
     if param.factor_neut_type > 0 and param.labels_neut_type == 'svd':
         lastneutra = None if i_iter == 0 else mgr_file.load_state('neu' , i_iter - 1 , device = device)
-        if isinstance(lastneutra , torch.Tensor): lastneutra = lastneutra.cpu()
+        if isinstance(lastneutra , torch.Tensor): 
+            lastneutra = lastneutra.cpu()
         if isinstance(neutra , torch.Tensor): 
             lastneutra = torch.cat([lastneutra , neutra.cpu()] , dim=-1) if isinstance(lastneutra , torch.Tensor) else neutra.cpu()
         mgr_file.save_state(lastneutra , 'neu', i_iter) 
@@ -570,7 +597,8 @@ def gp_population(toolbox , pop_num , max_round = 100 , last_gen = None , forbid
         new_comer  = toolbox.indpop_prune(new_comer)
         new_comer  = toolbox.deduplicate(new_comer , forbidden = population + forbidden) 
         population = population + new_comer[:pop_num - len(population)]
-        if len(population) >= 0.99 * pop_num: break
+        if len(population) >= 0.99 * pop_num: 
+            break
     return population
 
 
@@ -598,12 +626,14 @@ def gp_evolution(toolbox , param , records , i_iter = 0, start_gen=0, forbidden_
     forbidden += records.get('forbidden' , [])
 
     for i_gen in range(start_gen, param.n_gen):
-        if verbose and i_gen > 0: print(f'  --> Survive {len(population)} Offsprings, try Populating to {param.pop_num} ones')
+        if verbose and i_gen > 0: 
+            print(f'  --> Survive {len(population)} Offsprings, try Populating to {param.pop_num} ones')
         population = gp_population(toolbox , param.pop_num , last_gen = population , forbidden = forbidden + [ind for ind in halloffame])
         #print([str(ind) for ind in population[:20]])
         population = toolbox.indpop2syxpop(population)
         #print([str(ind) for ind in population[:20]])
-        if verbose and i_gen == 0: print(f'**A Population({len(population)}) has been Initialized')
+        if verbose and i_gen == 0: 
+            print(f'**A Population({len(population)}) has been Initialized')
 
         # Evaluate the new population
         population = toolbox.evaluate_pop(population , i_iter = i_iter, i_gen = i_gen , pool_num = param.pool_num , **kwargs)
@@ -653,16 +683,20 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
         i_iter:             i of outer loop
     output:
     """
-    if mgr_file is None: mgr_file = gpFileManager()
-    if mgr_mem  is None: mgr_mem  = MemoryManager()
-    if timer    is None: timer    = gpTimer()
+    if mgr_file is None: 
+        mgr_file = gpFileManager()
+    if mgr_mem  is None: 
+        mgr_mem  = MemoryManager()
+    if timer    is None: 
+        timer    = gpTimer()
     
     population , halloffame , forbidden = evolve_result
     elite_log  = mgr_file.load_state('elitelog' , i_iter = i_iter) # 记录精英列表
     hof_log    = mgr_file.load_state('hoflog'   , i_iter = i_iter) # 记录名人堂状态列表
     hof_elites = gpEliteGroup(start_i_elite = len(elite_log) , device=device).assign_logs(hof_log = hof_log , elite_log = elite_log)
-    infos   = pd.DataFrame([[i_iter,-1,gpHandler.ind2str(ind),ind.if_valid,False,0.] for ind in halloffame] , 
-                            columns = ['i_iter','i_elite','syntax','valid','elite','max_corr'])
+    infos   = pd.DataFrame(
+        [[i_iter,-1,gpHandler.ind2str(ind),ind.if_valid,False,0.] for ind in halloffame] , 
+        columns = pd.Index(['i_iter','i_elite','syntax','valid','elite','max_corr']))
     metrics = pd.DataFrame([getattr(ind,'metrics') for ind in halloffame] , columns = param.fitness_wgt.keys()) #.reset_index(drop=True)
     new_log = pd.concat([infos , metrics] , axis = 1)
 
@@ -680,15 +714,18 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
 
     for i , hof in enumerate(halloffame):
         # 若超过了本次循环的精英上限数,则后面的都不算,等到下一个循环再来(避免内存溢出)
-        if hof_elites.i_elite - hof_elites.start_i_elite >= param.elite_num: new_log.loc[i,'elite'] = False 
-        if not new_log.loc[i,'elite']: continue
+        if hof_elites.i_elite - hof_elites.start_i_elite >= param.elite_num: 
+            new_log.loc[i,'elite'] = False 
+        if not new_log.loc[i,'elite']: 
+            continue
 
         # 根据迭代出的因子表达式,计算因子值, 错误则进入下一循环
         factor_value = gp_syntax2value(toolbox.compile,hof,gp_inputs,param,tensors,i_iter,timer,**kwargs)
         mgr_mem.check('factor')
         
         new_log.loc[i,'elite'] = not factor_value.isnull()
-        if not new_log.loc[i,'elite']: continue
+        if not new_log.loc[i,'elite']: 
+            continue
 
         # 与已有的因子库"样本内"做相关性检验,如果相关性大于预设值corr_cap则进入下一循环
         corr_values , exit_state = hof_elites.max_corr_with_me(factor_value, param.corr_cap, dim_valids=(tensors.insample,None), syntax = new_log.syntax[i])
@@ -696,14 +733,15 @@ def gp_selection(toolbox,evolve_result,gp_inputs,param,records,tensors,i_iter=0,
         new_log.loc[i,'elite'] = not exit_state
         mgr_mem.check('corr')
 
-        if not new_log.loc[i,'elite']: continue
+        if not new_log.loc[i,'elite']: 
+            continue
 
         # 通过检验,加入因子库
         new_log.loc[i,'i_elite'] = hof_elites.i_elite
         forbidden.append(halloffame[i])
         hof_elites.append(factor_value , IR = new_log.rankir_in_res[i] , Corr = new_log.max_corr[i] , starter=f'  --> Hof{i:_>3d}/')
         if False and test_code: 
-            mgr_file.save_state(factor.to_dataframe(index = records.df_index , columns = records.df_columns) , 'parquet' , i_iter , i_elite = hof_elites.i_elite)
+            mgr_file.save_state(factor_value.to_dataframe(index = records.df_index , columns = records.df_columns) , 'parquet' , i_iter , i_elite = hof_elites.i_elite)
         mgr_mem.check(showoff = verbose and test_code, starter = '  --> ')
 
     mgr_file.dump_generation(population, halloffame, forbidden , i_iter = i_iter , i_gen = -1)
@@ -737,20 +775,20 @@ def outer_loop(i_iter , gp_space , start_gen = 0):
     gp_space.i_iter = i_iter
 
     '''更新残差标签'''
-    with gp_space.timer('Residual' , print_str = f'**Update Residual Labels' , memory_check = True) as ptimer:
+    with gp_space.timer('Residual' , print_str = f'**Update Residual Labels' , memory_check = True):
         gp_residual(**gp_space)
         
     '''初始化遗传规划Toolbox'''
-    with gp_space.timer('Setting' , print_str = f'**Initialize GP Toolbox') as ptimer:
+    with gp_space.timer('Setting' , print_str = f'**Initialize GP Toolbox'):
         toolbox = gpHandler.Toolbox(eval_func = evaluate , eval_pop = evaluate_pop , **gp_space)
         gp_space.mgr_file.update_toolbox(toolbox)
 
     '''进行进化与变异,生成种群、精英和先祖列表'''
-    with gp_space.timer('Evolution' , print_str = f'**{gp_space.param.n_gen - start_gen} Generations of Evolution' , memory_check = True) as ptimer:
+    with gp_space.timer('Evolution' , print_str = f'**{gp_space.param.n_gen - start_gen} Generations of Evolution' , memory_check = True):
         evolve_result = gp_evolution(toolbox , start_gen = start_gen , **gp_space)  #, start_gen=6   #algorithms.eaSimple
     
     '''衡量精英,筛选出符合所有要求的精英中的精英'''
-    with gp_space.timer('Selection' , print_str = f'**Selection of HallofFame' , memory_check = True) as ptimer:
+    with gp_space.timer('Selection' , print_str = f'**Selection of HallofFame' , memory_check = True):
         gp_selection(toolbox , evolve_result, **gp_space)
             
     gp_space.timer.append_time('AvgVarAnd' , gp_space.timer.acc_timer('varAnd').avgtime(pop_out = True))
@@ -802,12 +840,15 @@ class gpGenerator:
         '''
         Calcuate FactorValue of a syntax
         '''
-        if isinstance(syntax , FF.FactorValue): return syntax
-        if process_key is None: process_key = self.process_key
+        if isinstance(syntax , FF.FactorValue): 
+            return syntax
+        if process_key is None: 
+            process_key = self.process_key
         factor = gp_syntax2value(getattr(self.toolbox , 'compile'),syntax,**self.gp_space)
         if as_df and not factor.isnull():
             factor.value = factor.to_dataframe(index = self.df_axis['df_index'] , columns = self.df_axis['df_columns'])
-        if print_info: print(f'gpGenerator -> process_key : {process_key} , syntax : {syntax}')
+        if print_info: 
+            print(f'gpGenerator -> process_key : {process_key} , syntax : {syntax}')
         return factor
 
     def entire_elites(self , verbose = True , block_len = 50 , process_key = None):
@@ -817,7 +858,8 @@ class gpGenerator:
         elite_log  = self.gp_space.mgr_file.load_state('elitelog' , i_iter = -1) 
         hof_log    = self.gp_space.mgr_file.load_state('hoflog'   , i_iter = -1)
         hof_elites = gpEliteGroup(start_i_elite=0 , device=self.gp_space.device , block_len=block_len).assign_logs(hof_log=hof_log, elite_log=elite_log)
-        for elite in elite_log.syntax: hof_elites.append(self(elite , process_key = process_key , print_info = verbose))
+        for elite in elite_log.syntax: 
+            hof_elites.append(self(elite , process_key = process_key , print_info = verbose))
         hof_elites.cat_all()
         print(f'Load {hof_elites.total_len()} Elites')
         return hof_elites
@@ -839,9 +881,11 @@ class gpGenerator:
             factor = factor_list[0]
         else:
             for i , fac in enumerate(factor_list):
-                if isinstance(fac , str): factor_list[i] = self(fac)
+                if isinstance(fac , str): 
+                    factor_list[i] = self(fac)
             factor = torch.stack(factor_list , dim = -1)
-        if labels is None: labels = self.gp_space.tensors.labels_raw
+        if labels is None: 
+            labels = self.gp_space.tensors.labels_raw
         metrics = self.Ensembler.calculate_icir(factor , labels , **kwargs) # ic,ir
         multi = self.Ensembler.multi_factor(factor , **metrics , **kwargs)
         return multi # multi对象拥有multi,weight,inputs三个自变量

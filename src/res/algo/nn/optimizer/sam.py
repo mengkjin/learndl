@@ -804,7 +804,7 @@ class FriendlySAM(torch.optim.Optimizer):
                 if p.grad is None:
                     continue
                 grad = p.grad.clone()
-                if not "momentum" in self.state[p]:
+                if "momentum" not in self.state[p]:
                     self.state[p]["momentum"] = grad
                 else:
                     p.grad -= self.state[p]["momentum"] * self.sigma

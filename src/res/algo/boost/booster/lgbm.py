@@ -1,4 +1,4 @@
-import lightgbm , torch
+import lightgbm
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -54,7 +54,8 @@ class Lgbm(BasicBoosterModel):
             'device_type':          'gpu' if self.use_gpu else 'cpu' , 
             'verbosity':            -1 if silent else 1 ,
             'monotone_constraints': self.mono_constr(self.fit_train_param , self.fit_train_ds.nfeat)}) 
-        if self.fit_train_param['objective'] in ['softmax']: self.fit_train_param['num_class'] = num_class
+        if self.fit_train_param['objective'] in ['softmax']: 
+            self.fit_train_param['num_class'] = num_class
         
         self.evals_result = dict()
         self.model : lightgbm.Booster = lightgbm.train(
@@ -89,7 +90,8 @@ class LgbmPlot:
     def __init__(self , lgbm : 'Lgbm' , plot_path : Path | None = PLOT_PATH) -> None:
         self.lgbm = lgbm
         self.plot_path = plot_path
-        if self.plot_path is not None: self.plot_path.mkdir(exist_ok= True)
+        if self.plot_path is not None: 
+            self.plot_path.mkdir(exist_ok= True)
 
     def training(self , show_plot = True , xlim = None , ylim = None , yscale = None):
         fig = plt.figure()
@@ -97,11 +99,15 @@ class LgbmPlot:
         plt.scatter(self.lgbm.model.best_iteration,list(self.lgbm.evals_result['valid'].values())\
                     [0][self.lgbm.model.best_iteration],label='best iteration')
         plt.legend()
-        if xlim is not None: plt.xlim(xlim)
-        if ylim is not None: plt.ylim(ylim)
-        if yscale is not None: plt.yscale(yscale)
+        if xlim is not None: 
+            plt.xlim(xlim)
+        if ylim is not None: 
+            plt.ylim(ylim)
+        if yscale is not None: 
+            plt.yscale(yscale)
         plt.close(fig)
-        if show_plot: display.display(fig)
+        if show_plot: 
+            display.display(fig)
         if self.plot_path:
             self.plot_path.joinpath('training_process.png')
             plt.savefig(self.plot_path.joinpath('training_process.png'),dpi=1200)
@@ -150,7 +156,8 @@ class LgbmPlot:
                 plt.savefig(self.plot_path.joinpath(f'explainer_tree_{num_trees}.png'),dpi=1200)
 
     def shap(self , train : BoosterInput | Any = None):
-        if train is None: train = self.lgbm.data['train']
+        if train is None: 
+            train = self.lgbm.data['train']
         if self.plot_path is None:
             print(f'plot path not given, will not proceed')
             return
@@ -176,12 +183,14 @@ class LgbmPlot:
         # 单个特征SHAP点图
         
         for feature , imp in zip(self.lgbm.model.feature_name() , self.lgbm.model.feature_importance()):
-            if imp == 0: continue
+            if imp == 0: 
+                continue
             shap.dependence_plot(feature,shap_values,X_df,interaction_index=None,title=f'SHAP of {feature}',show=False)
             plt.savefig(self.plot_path.joinpath('explainer_shap' , f'explainer_shap_dot_{feature}.png'),dpi=100,bbox_inches='tight')
     
     def sdt(self , train : BoosterInput | Any = None):
-        if train is None: train = self.lgbm.data['train']
+        if train is None: 
+            train = self.lgbm.data['train']
         if self.plot_path is None:
             print(f'plot path not given, will not proceed')
             return
@@ -196,7 +205,8 @@ class LgbmPlot:
         plt.savefig(self.plot_path.joinpath('explainer_sdt.png'),dpi=1200)
 
     def pdp(self , train : BoosterInput | Any = None):
-        if train is None: train = self.lgbm.data['train']
+        if train is None: 
+            train = self.lgbm.data['train']
         if self.plot_path is None:
             print(f'plot path not given, will not proceed')
             return
@@ -204,9 +214,11 @@ class LgbmPlot:
         [file.unlink() for file in self.plot_path.joinpath('explainer_pdp').iterdir()]
 
         for feature , imp in zip(self.lgbm.model.feature_name() , self.lgbm.model.feature_importance()):
-            if imp == 0: continue
+            if imp == 0: 
+                continue
             x = deepcopy(train.X()).cpu().numpy()
-            if isinstance(x , pd.DataFrame): x = x.values
+            if isinstance(x , pd.DataFrame): 
+                x = x.values
             ifeat = match_values(feature , train.feature)
             # when calculating PDP，factor range is -5:0.2:5
             x_range = np.arange(np.floor(min(x[:,ifeat])), np.ceil(max(x[:,ifeat])), 0.2)
@@ -254,7 +266,7 @@ def main():
     a.plot.tree()
     a.plot.sdt()
     a.plot.pdp()
-    if a.train_param['linear_tree']==False:
+    if a.train_param['linear_tree'] is False:
         a.plot.shap() # Error now due to Numpy >= 1.24 and shap from pip not compatible
 # %%
 if __name__ == '__main__':
