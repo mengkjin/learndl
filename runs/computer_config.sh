@@ -63,3 +63,8 @@ export -f get_short_name
 export -f get_computer_config
 export -f show_computer_info
 export -f list_known_computers
+if [ "$OSTYPE" = "linux-gnu" ]; then
+    export PYTHONPATH="/home/mengkjin/workspace/learndl":$PYTHONPATH
+elif [ "$OSTYPE" = "darwin" ]; then
+    export PYTHONPATH="/Users/mengkjin/workspace/learndl":$PYTHONPATH
+fi
