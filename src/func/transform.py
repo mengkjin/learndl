@@ -228,14 +228,12 @@ def descriptor(v : pd.Series , whiten_weight , fillna : Literal['min','max','med
         fillv = fillna
     return v.where(~v.isna() , fillv)
 
-def _lstsq(x : np.ndarray , y : np.ndarray):
-    try:
-        reg = lstsq(x , y)
-        assert reg is not None , 'lstsq error'
-        return reg[0]
-    except Exception as e:
-        Logger.error(f'lstsq error: {e}')
+def _lstsq_rst(x : np.ndarray , y : np.ndarray):
+    lstsq_result = lstsq(x, y)
+    if lstsq_result is None:
+        Logger.error(f'lstsq error! x : {x} , y : {y}')
         return np.zeros((x.shape[-1],1))
+    return lstsq_result[0]
     
 def apply_ols(x : np.ndarray | pd.DataFrame | pd.Series , y : np.ndarray | pd.DataFrame | pd.Series , 
               time_weight = None , intercept = True , respective = False):
@@ -261,11 +259,11 @@ def apply_ols(x : np.ndarray | pd.DataFrame | pd.Series , y : np.ndarray | pd.Da
         x_weighted = x_weighted[:,None]
         if intercept: 
             x_weighted = np.pad(x_weighted , ((0,0),(1,0),(0,0)) , constant_values=1)
-        coef = np.concatenate([_lstsq(x_weighted[...,i], y_weighted[:,i][:,None])[0] for i in range(n_vars)] , axis = 1)
+        coef = np.concatenate([_lstsq_rst(x_weighted[...,i], y_weighted[:,i][:,None]) for i in range(n_vars)] , axis = 1)
     else:
         if intercept: 
             x_weighted = np.pad(x_weighted , ((0,0),(1,0)) , constant_values=1)
-        coef = _lstsq(x_weighted, y_weighted)[0]
+        coef = _lstsq_rst(x_weighted, y_weighted)
     coef[:,all_nan] = np.nan
     return coef
 
