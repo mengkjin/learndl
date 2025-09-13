@@ -60,15 +60,16 @@ class PortfolioGenerator(PortCreator):
         assert amodel is not None , f'alpha_model is not Amodel at {self.model_date}'
         pool = amodel.to_dataframe(indus=True , na_indus_as = 'unknown')
         if not self.bench_port.is_emtpy(): 
-            bench_secid = self.bench_port.secid # noqa
-            pool = pool.query('secid in @bench_secid')
-        pool['ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
-        pool['rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
+            pool = pool.query('secid in @self.bench_port.secid')
+        pool = pool.copy()
+        pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
+        pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
         
         pool = pool.merge(self.init_port.port , on = 'secid' , how = 'left').sort_values('alpha' , ascending = False)
-        pool['selected'] = pool['weight'].fillna(0) > 0
-        pool['buffered'] = ((pool['rankpct'] >= self.conf.buffer_zone) + (pool['selected'].cumsum() <= self.conf.stay_num) *
-                            (pool['rankpct'] >= self.conf.no_zone))
+        pool.loc[:, 'selected'] = pool['weight'].fillna(0) > 0
+        pool.loc[:, 'buffered'] = (
+            (pool['rankpct'] >= self.conf.buffer_zone) + (pool['selected'].cumsum() <= self.conf.stay_num) *
+             (pool['rankpct'] >= self.conf.no_zone))
 
         stay = pool.query('selected & buffered')
         stay_secid = stay['secid'].to_numpy() # noqa

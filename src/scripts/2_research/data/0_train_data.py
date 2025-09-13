@@ -4,7 +4,7 @@
 # date: 2024-12-24
 # description: Reconstruct Train Data
 # content: 重建历史训练数据, 用于模型从2017年开始训练
-# email: False
+# email: True
 # mode: shell
 
 from src.res.api import DataAPI

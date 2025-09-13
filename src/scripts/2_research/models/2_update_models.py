@@ -4,7 +4,7 @@
 # date: 2024-11-27
 # description: Update AI Models
 # content: 更新训练所有Registered模型
-# email: False
+# email: True
 # mode: shell
 
 

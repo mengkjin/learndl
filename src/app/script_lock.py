@@ -1,4 +1,4 @@
-import functools , time , datetime
+import functools , time , datetime , random
 import portalocker
 
 from typing import Callable
@@ -92,3 +92,140 @@ class ScriptLock:
             with self:
                 return func(*args, **kwargs)
         return wrapper
+
+class ScriptLockMultiple:
+    LOCK_DIR = PATH.runtime.joinpath('script_lock_multiple')
+    LOCK_DIR.mkdir(parents=True, exist_ok=True)
+    
+    def __init__(self, lock_name: str, lock_num: int = 1, timeout: int | None = None, 
+                 wait_time: int = 1, verbose: bool = True):
+        """
+        initialize multiple lock manager
+        Args:
+            lock_name: base name of locks
+            lock_num: maximum number of instances allowed to run simultaneously
+            timeout: timeout seconds, None means infinite wait
+            wait_time: wait time seconds between each check
+            verbose: whether to output detailed logs
+        """
+        self.lock_name = lock_name
+        self.lock_num = lock_num
+        self.timeout = timeout
+        self.wait_time = wait_time
+        self.verbose = verbose
+        self.acquired_locks = []  # 存储已获取的锁文件
+        self._has_wait_message = False
+
+    @property
+    def lock_dir(self):
+        return self.LOCK_DIR.joinpath(f"{self.lock_name}")
+
+    def _log(self, message: str):
+        """print out message"""
+        if self.verbose:
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            Logger.info(f"[{timestamp}] {message}")
+
+    def _log_get_lock(self, lock_id: int, start_time: float | None = None):
+        """record the log of getting lock"""
+        if start_time is not None and time.time() - start_time > 1:
+            self._log(f"Wait {time.time() - start_time:.1f} seconds to get lock {lock_id} of {self.lock_name}, continue to run.")
+        else:
+            self._log(f"Get lock {lock_id} of {self.lock_name}, continue to run.")
+
+    def _log_wait_lock(self):
+        """record the log of waiting lock"""
+        if not self._has_wait_message:
+            self._log(f"All {self.lock_num} instances of {self.lock_name} are running, wait for a lock to be released...")
+            self._has_wait_message = True
+
+    def _get_lock_paths(self):
+        """get all lock file paths"""
+        return [self.lock_dir.joinpath(f"instance_{i}.lock") for i in range(self.lock_num)]
+
+    def _try_acquire_any_lock(self):
+        """try to acquire any available lock"""
+        lock_paths = self._get_lock_paths()
+        random.shuffle(lock_paths)  # shuffle the order to avoid always trying the same lock
+        
+        for i, lock_path in enumerate(lock_paths):
+            try:
+                lock_file = open(lock_path, 'w')
+                portalocker.lock(lock_file, portalocker.LOCK_EX | portalocker.LOCK_NB)
+                self.acquired_locks.append(lock_file)
+                return i  # return the index of the lock
+            except (portalocker.AlreadyLocked, BlockingIOError):
+                if 'lock_file' in locals():
+                    lock_file.close()
+                continue
+        return None
+
+    def __enter__(self):
+        """enter context to get lock"""
+        if self.lock_num <= 0:
+            return self
+            
+        start_time = time.time()
+        self._has_wait_message = False
+        
+        if self.timeout:
+            # there is timeout
+            while time.time() - start_time < self.timeout:
+                lock_id = self._try_acquire_any_lock()
+                if lock_id is not None:
+                    self._log_get_lock(lock_id, start_time)
+                    return self
+                
+                if self.wait_time > self.timeout:
+                    raise BlockingIOError(f"All {self.lock_num} instances are running")
+                
+                self._log_wait_lock()
+                time.sleep(self.wait_time)
+            
+            raise TimeoutError(f"Get lock timeout ({self.timeout} seconds) for {self.lock_name}")
+        else:
+            # there is no timeout
+            while True:
+                lock_id = self._try_acquire_any_lock()
+                if lock_id is not None:
+                    self._log_get_lock(lock_id)
+                    return self
+                
+                self._log_wait_lock()
+                time.sleep(self.wait_time)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """exit context to release lock"""
+        for lock_file in self.acquired_locks:
+            try:
+                portalocker.unlock(lock_file)
+                lock_file.close()
+            except Exception as e:
+                self._log(f"Error releasing lock: {e}")
+        self.acquired_locks.clear()
+
+    def __call__(self, func: Callable) -> Callable:
+        """decorator usage"""
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            with self:
+                return func(*args, **kwargs)
+        return wrapper
+
+    @classmethod
+    def get_available_count(cls, lock_name: str) -> int:
+        """get the number of available locks"""
+        lock_dir = cls.LOCK_DIR
+        if not lock_dir.exists():
+            return 0
+        
+        available = 0
+        for lock_file in lock_dir.glob(f"{lock_name}_*.lock"):
+            try:
+                with open(lock_file, 'r') as f:
+                    portalocker.lock(f, portalocker.LOCK_EX | portalocker.LOCK_NB)
+                    available += 1
+                    portalocker.unlock(f)
+            except (portalocker.AlreadyLocked, BlockingIOError):
+                continue
+        return available

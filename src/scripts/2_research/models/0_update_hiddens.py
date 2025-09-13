@@ -4,7 +4,7 @@
 # date: 2024-11-27
 # description: Update Hiddens Extraction
 # content: 更新模型隐变量,用于做其他模型的输入
-# email: False
+# email: True
 # mode: shell
 
 from src.res.api import ModelAPI
