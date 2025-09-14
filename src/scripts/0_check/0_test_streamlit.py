@@ -42,10 +42,11 @@
 import time , random
 
 from src.basic import AutoRunTask , Timer
-from src.app import BackendTaskRecorder , ScriptLock
+from src.app import BackendTaskRecorder , ScriptLock , ScriptLockMultiple
 
 @BackendTaskRecorder(txt = 'Bye, World!' , email = 0)
-@ScriptLock('test_streamlit' , timeout = 10)
+# @ScriptLock('test_streamlit' , timeout = 10)
+@ScriptLockMultiple('test_streamlit' , lock_num = 2 , timeout = 2)
 def main(txt : str = 'Hello, World!' , **kwargs):
     port_name = kwargs.pop('port_name')
     with AutoRunTask('test_streamlit' , port_name , **kwargs) as runner:
@@ -59,7 +60,7 @@ def main(txt : str = 'Hello, World!' , **kwargs):
                 runner.error(f'error:{rnd}')
             else:
                 runner.info(f'info:{rnd}')
-        time.sleep(5)
+        time.sleep(10)
 
     return runner
         

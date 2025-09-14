@@ -7,7 +7,6 @@ from src.proj import PATH , Logger
 
 class ScriptLock:
     LOCK_DIR = PATH.runtime.joinpath('script_lock')
-    LOCK_DIR.mkdir(parents=True, exist_ok=True)
     
     def __init__(self, lock_name: str | None = None, timeout: int | None = None , wait_time: int = 1 , verbose: bool = True):
         """
@@ -23,6 +22,7 @@ class ScriptLock:
         self.wait_time = wait_time
         self.lock_file = None
         self.verbose = verbose
+        self.LOCK_DIR.mkdir(parents=True, exist_ok=True)
 
     def _log(self, message: str):
         """print out message"""
@@ -95,7 +95,6 @@ class ScriptLock:
 
 class ScriptLockMultiple:
     LOCK_DIR = PATH.runtime.joinpath('script_lock_multiple')
-    LOCK_DIR.mkdir(parents=True, exist_ok=True)
     
     def __init__(self, lock_name: str, lock_num: int = 1, timeout: int | None = None, 
                  wait_time: int = 1, verbose: bool = True):
@@ -115,6 +114,7 @@ class ScriptLockMultiple:
         self.verbose = verbose
         self.acquired_locks = []  # 存储已获取的锁文件
         self._has_wait_message = False
+        self.lock_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def lock_dir(self):
@@ -141,19 +141,19 @@ class ScriptLockMultiple:
 
     def _get_lock_paths(self):
         """get all lock file paths"""
-        return [self.lock_dir.joinpath(f"instance_{i}.lock") for i in range(self.lock_num)]
+        return [self.lock_dir.joinpath(f"instance.{i}.lock") for i in range(self.lock_num)]
 
     def _try_acquire_any_lock(self):
         """try to acquire any available lock"""
         lock_paths = self._get_lock_paths()
         random.shuffle(lock_paths)  # shuffle the order to avoid always trying the same lock
         
-        for i, lock_path in enumerate(lock_paths):
+        for lock_path in lock_paths:
             try:
                 lock_file = open(lock_path, 'w')
                 portalocker.lock(lock_file, portalocker.LOCK_EX | portalocker.LOCK_NB)
                 self.acquired_locks.append(lock_file)
-                return i  # return the index of the lock
+                return int(lock_path.stem.split('.')[-1])  # return the index of the lock
             except (portalocker.AlreadyLocked, BlockingIOError):
                 if 'lock_file' in locals():
                     lock_file.close()

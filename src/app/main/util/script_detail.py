@@ -45,9 +45,10 @@ def show_script_detail(script_key : str):
     print_page_header(script_key , 'script')  
     show_script_task_selector(runner)
     show_param_settings(runner)
-    show_report_main(runner)
     show_main_buttons(runner)
     show_sidebar_buttons(runner)
+    show_report_main(runner)
+    
 
 def clear_and_show(show_func : Callable):
     name = show_func.__name__.removeprefix('show_').replace('_', '-')

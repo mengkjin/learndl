@@ -481,9 +481,6 @@ class TrainConfig(TrainParam):
         self.Train = TrainParam(base_path , override, schedule_name , **kwargs)
         self.Model = self.Train.generate_model_param()
 
-        if base_path:
-            resume , checkname = 1 , 0
-
         self.process_parser(stage , resume , checkname)
         assert self.Train.model_base_path , self.Train.model_name
         if not base_path and makedir: 
@@ -663,7 +660,7 @@ class TrainConfig(TrainParam):
         self.Model.reset_base_path(model_name)
 
     def process_parser(self , stage = -1 , resume = -1 , checkname = -1 , verbose = True):
-        if self.base_path:
+        if self.model_base_path:
             if resume == -1 or resume == -1:
                 resume = 1
             else:

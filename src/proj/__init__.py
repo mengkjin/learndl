@@ -6,7 +6,7 @@ from .message_catcher import HtmlCatcher , MarkdownCatcher
 from .db import DBConnHandler
 from .warning_catcher import WarningCatcher
 
-def _print_init_info():
+def print_project_info():
     import torch
     print(f'main path: {MACHINE.project_path}')
     if torch.cuda.is_available():
@@ -18,4 +18,5 @@ def _print_init_info():
     else:
         print('Use CPU as default device')
 
-_print_init_info()
+if __name__ == '__main__':
+    print_project_info()
