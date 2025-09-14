@@ -163,9 +163,9 @@ def trim(v , v1 , v2):
 def winsor(v , v1 , v2):
     v = v + 0.
     if v1 is not None: 
-        v[v < v1] = v1
+        v[v < v1] = np.float32(v1)
     if v2 is not None: 
-        v[v > v2] = v2
+        v[v > v2] = np.float32(v2)
     return v
 
 def weighted_mean(v , weight = None):
@@ -183,7 +183,7 @@ def whiten(v : pd.DataFrame | pd.Series | np.ndarray , weight = None) -> Any:
 def winsorize(v , 
               center : Literal['median' , 'mean'] = 'median', 
               scale : Literal['mad' , 'sd'] = 'mad', 
-              const : Optional[float] = None , 
+              const : Optional[float | np.floating] = None , 
               trim_val : tuple[Optional[float],Optional[float]] = (None , None) , 
               winsor_val : tuple[Optional[float],Optional[float]] = (None , None) , 
               winsor_pct : tuple[float,float] = (0. , 1.)):

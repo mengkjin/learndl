@@ -1,6 +1,7 @@
 import os , random , shutil , torch
 import numpy as np
 
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any , Literal , Optional
 
@@ -480,8 +481,6 @@ class TrainConfig(TrainParam):
         self.Train = TrainParam(base_path , override, schedule_name , **kwargs)
         self.Model = self.Train.generate_model_param()
 
-        print(self.Train.model_name)
-
         if base_path:
             resume , checkname = 1 , 0
 
@@ -582,7 +581,7 @@ class TrainConfig(TrainParam):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
 
-    def parser_stage(self , value = -1):
+    def parser_stage(self , value = -1 , verbose = True):
         if value < 0:
             Logger.info(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
             value = int(input(f'[0,fit+test] , [1,fit] , [2,test]'))
@@ -591,10 +590,11 @@ class TrainConfig(TrainParam):
             stage_queue = ['data' , stage_queue[value]]
         elif value < 0:
             raise Exception(f'Error input : {value}')
-        Logger.info('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))))
+        if verbose:
+            Logger.info('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))))
         self.stage_queue = stage_queue
 
-    def parser_resume(self , value = -1):
+    def parser_resume(self , value = -1 , verbose = True):
         '''ask if resume training when candidate names exists'''
         model_name = self.model_name
         assert model_name is not None
@@ -605,11 +605,12 @@ class TrainConfig(TrainParam):
                 user_input = input(f'Confirm resume training [{model_name}]? [yes/no] : ')
                 value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
             self.resume_training = value > 0 
-            Logger.info(f'--Confirm Resume Training!' if self.resume_training else '--Start Training New!')
+            if verbose:
+                Logger.info(f'--Confirm Resume Training!' if self.resume_training else '--Start Training New!')
         else:
             self.resume_training = False
 
-    def parser_select(self , value = -1):
+    def parser_select(self , value = -1 , verbose = True):
         '''
         checkname confirmation
         Confirm the model_name if multifple model_name dirs exists.
@@ -656,15 +657,26 @@ class TrainConfig(TrainParam):
                     value = int(input('which one to use? '))
                 model_name = candidate_name[value]
 
-        Logger.info(f'--Model_name is set to {model_name}!')  
+        if verbose:
+            Logger.info(f'--Model_name is set to {model_name}!')  
         self.Train.reset_base_path(model_name)
         self.Model.reset_base_path(model_name)
 
-    def process_parser(self , stage = -1 , resume = -1 , checkname = -1):
-        with Logger.EnclosedMessage(' parser training args '):
-            self.parser_stage(stage)
-            self.parser_resume(resume)
-            self.parser_select(checkname) 
+    def process_parser(self , stage = -1 , resume = -1 , checkname = -1 , verbose = True):
+        if self.base_path:
+            if resume == -1 or resume == -1:
+                resume = 1
+            else:
+                raise ValueError(f'resume must be -1 or 1 when base_path is not None , got {resume}')
+            if checkname == -1 or checkname == 0:
+                checkname = 0
+            else:
+                raise ValueError(f'checkname must be -1 or 0 when base_path is not None , got {checkname}')
+            verbose = False
+        with Logger.EnclosedMessage(' parser training args ') if verbose else nullcontext():
+            self.parser_stage(stage , verbose)
+            self.parser_resume(resume , verbose)
+            self.parser_select(checkname , verbose) 
         return self
 
     def print_out(self):
