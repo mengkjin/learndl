@@ -3,7 +3,7 @@ import math , torch
 from copy import deepcopy
 from torch import nn , optim
 from torch.nn.utils.clip_grad import clip_grad_value_
-from typing import Any,Optional
+from typing import Any
 
 from src.res.algo.nn.optimizer import sam
 
@@ -23,9 +23,9 @@ class Optimizer:
             config : TrainConfig , 
             transfer : bool = False , 
             lr_multiplier : float = 1. , 
-            add_opt_param : Optional[dict] = None , 
-            add_lr_param : Optional[dict] = None , 
-            add_shd_param : Optional[dict] = None ,
+            add_opt_param : dict | None = None , 
+            add_lr_param : dict | None = None , 
+            add_shd_param : dict | None = None ,
             trainer = None) -> None:
         self.net = net
         self.config = config

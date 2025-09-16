@@ -4,7 +4,7 @@ import pandas as pd
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from src.data import DATAVENDOR
 from src.func.transform import fill_na_as_const , winsorize_by_dist , zscore
@@ -42,7 +42,7 @@ class Amodel:
         new_alpha.alpha = value
         new_alpha.secid = secid
         return new_alpha
-    def assign(self , date : Optional[int] = None , name : Optional[str] = None):
+    def assign(self , date : int | None = None , name : str | None = None):
         if date is not None: 
             self.date = date
         if name is not None: 

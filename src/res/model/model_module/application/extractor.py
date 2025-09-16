@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 
 from itertools import product
-from typing import Optional
 
 from src.basic import CALENDAR , HiddenPath , HiddenExtractingModel
 from src.res.model.util import TrainConfig
@@ -59,7 +58,7 @@ class ModelHiddenExtractor:
             self.data = DataModule(self.config , 'both').load_data()
             self.data_loaded = True
 
-    def model_iter(self , model_dates : Optional[list | np.ndarray | int] = None , update = True):
+    def model_iter(self , model_dates : list | np.ndarray | int | None = None , update = True):
         if model_dates is None: 
             model_dates = self.model_dates
         else:
@@ -75,7 +74,7 @@ class ModelHiddenExtractor:
             model_iter = list(product(model_dates , self.model_nums , self.model_submodels))
         return model_iter
 
-    def extract_hidden(self , model_dates : Optional[list | np.ndarray | int] = None ,
+    def extract_hidden(self , model_dates : list | np.ndarray | int | None = None ,
                        update = True , overwrite = False , silent = False):
         model_iter = self.model_iter(model_dates , update)
         self._current_update_dates = []
@@ -100,7 +99,8 @@ class ModelHiddenExtractor:
             if len(old_hidden_df):
                 exclude_dates = old_hidden_df['date'].unique()
 
-        self.data.setup('extract' ,  self.config.model_param[model_num] , model_date , self.backward_days , self.forward_days)
+        self.data.setup('extract' ,  self.config.model_param[model_num] , model_date , 
+                        extract_backward_days = self.backward_days , extract_forward_days = self.forward_days)
         loader = self.data.extract_dataloader().filter_dates(exclude_dates=exclude_dates).enable_tqdm(disable = silent)      
         # something wrong here , exclude_dates is not working
         desc = f'Extract {self.hidden_name}/{model_num}/{model_date}/{submodel}'

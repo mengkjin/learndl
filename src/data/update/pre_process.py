@@ -3,7 +3,7 @@ import numpy as np
 
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
-from typing import Any , Iterator , Literal , Optional
+from typing import Any , Iterator , Literal
 
 from src.proj import Logger
 from src.basic import CONF , Timer , CALENDAR
@@ -27,12 +27,12 @@ class DataPreProcessor:
     predict         : bool 
     blocks          : list[str] = field(default_factory=list)
     mask            : dict[str,Any] = field(default_factory=dict)
-    load_start_dt   : Optional[int] = None
-    load_end_dt     : Optional[int] = None
-    save_start_dt   : Optional[int] = None
-    save_end_dt     : Optional[int] = None
-    hist_start_dt   : Optional[int] = None
-    hist_end_dt     : Optional[int] = None    
+    load_start_dt   : int | None = None
+    load_end_dt     : int | None = None
+    save_start_dt   : int | None = None
+    save_end_dt     : int | None = None
+    hist_start_dt   : int | None = None
+    hist_end_dt     : int | None = None    
 
     def __post_init__(self):
         self.blocks = [DataBlock.data_type_abbr(blk) for blk in self.blocks]
@@ -54,7 +54,7 @@ class DataPreProcessor:
         return cls.main(predict = True)
 
     @classmethod
-    def main(cls , predict = False, confirm = 0 , parser = None , data_types : Optional[list[str]] = None):
+    def main(cls , predict = False, confirm = 0 , parser = None , data_types : list[str] | None = None):
         if parser is None:
             parser = argparse.ArgumentParser(description = 'manual to this script')
             parser.add_argument("--confirm", type=str, default = confirm)
@@ -102,7 +102,7 @@ class TypePreProcessor(ABC):
     @abstractmethod
     def block_loaders(self) -> dict[str,BlockLoader]: ... 
     @abstractmethod
-    def final_feat(self) -> Optional[list]: ... 
+    def final_feat(self) -> list | None: ... 
     @abstractmethod
     def process(self, blocks : dict[str,DataBlock]) -> DataBlock: ...
         

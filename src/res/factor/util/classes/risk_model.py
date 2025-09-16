@@ -3,7 +3,7 @@ import pandas as pd
 import statsmodels.api as sm
 
 from dataclasses import dataclass
-from typing import Any , ClassVar , Literal , Optional
+from typing import Any , ClassVar , Literal
 
 from src.basic import SILENT , DB , CONF
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
@@ -96,11 +96,11 @@ class Rmodel:
         rslt.append('benchmark' , self._analysis(bench))
         rslt.append('active'    , self._analysis(None if bench is None else port - bench))
         return rslt
-    def attribute(self , port : Port , bench : Port | Any = None , target_date : Optional[int] = None , other_cost : float = 0.):
+    def attribute(self , port : Port , bench : Port | Any = None , target_date : int | None = None , other_cost : float = 0.):
         '''Attribute the portfolio of the next day (trading day)'''
         rslt = Attribution.create(self , port , bench , target_date=target_date , other_cost = other_cost)
         return rslt
-    def regress_fut_ret(self , target_date : Optional[int] = None):
+    def regress_fut_ret(self , target_date : int | None = None):
         '''regress future day return , most likely daily , but can given any target date'''
         if target_date is None: 
             target_date = self.next_date
@@ -190,9 +190,9 @@ class RiskProfile:
     '''
     basic risk profile of a portfolio / benchmark / active , i.e. risk exposure / standard deviation / variance
     '''
-    factors  : Optional[np.ndarray | list] = None
-    exposure : Optional[np.ndarray] = None
-    variance : Optional[float] = None
+    factors  : list | np.ndarray | None = None
+    exposure : np.ndarray | None = None
+    variance : float | None = None
 
     variance_measure : ClassVar[list[str]] = ['variance','std_dev']
 
@@ -277,8 +277,8 @@ class Attribution:
         return f'{self.__class__.__name__}({self.start}-{self.end})'
 
     @classmethod
-    def create(cls , risk_model : Rmodel , port : Port , bench : Optional[Port] = None , 
-               target_date : Optional[int] = None , other_cost : float = 0.):
+    def create(cls , risk_model : Rmodel , port : Port , bench : Port | None = None , 
+               target_date : int | None = None , other_cost : float = 0.):
         if target_date is None: 
             target_date = risk_model.next_date
         if risk_model.regressed != target_date: 

@@ -2,7 +2,7 @@ import itertools , time
 import numpy as np
 
 from contextlib import nullcontext
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from src.basic import Timer
 
@@ -20,13 +20,13 @@ class PortfolioBuilder:
     lag : int , lag periods (not days)
     strategy : str
     suffixes : list[str] | str
-    build_on : Optional[Portfolio]
+    build_on : Portfolio | None
 
     optim accepted kwargs:
         prob_type : PROB_TYPE = 'quadprog'
         engine_type : ENGINE_TYPE = 'mosek'
         cvxpy_solver : CVXPY_SOLVER = 'mosek'
-        config_path : Optional[str] = None
+        config_path : str | None = None
         opt_relax : bool = True
         opt_turn  : bool = True
         opt_qobj  : bool = True
@@ -40,9 +40,9 @@ class PortfolioBuilder:
         indus_control : float = 0.1
     '''
     def __init__(self , category : Literal['optim' , 'top'] | Any , 
-                 alpha : AlphaModel , benchmark : Optional[Portfolio | Benchmark | str] = None, lag : int = 0 ,
+                 alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , 
-                 build_on : Optional[Portfolio] = None , verbosity : int = 1 , **kwargs):
+                 build_on : Portfolio | None = None , verbosity : int = 1 , **kwargs):
         self.category  = category
         self.alpha     = alpha
         self.benchmark = get_benchmark(benchmark)
@@ -72,14 +72,14 @@ class PortfolioBuilder:
         return get_port_index(self.full_name)
     
     @classmethod
-    def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Optional[Portfolio] = None , verbosity : int = 1 , **kwargs):
+    def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , verbosity : int = 1 , **kwargs):
         elements = parse_full_name(full_name)
         assert alpha.name.lower() == elements['factor_name'].lower() , f'Alpha name mismatch: {alpha.name} != {elements["factor_name"]}'
         return cls(alpha = alpha , build_on = build_on , verbosity = verbosity , **elements , **kwargs)
     
     @staticmethod
     def get_full_name(category : Literal['optim' , 'top'] , alpha : AlphaModel | str , 
-                      benchmark : Optional[Portfolio | Benchmark | str] = None , 
+                      benchmark : Portfolio | Benchmark | str | None = None , 
                       strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
     
@@ -124,7 +124,7 @@ class PortfolioBuilderGroup:
             prob_type : PROB_TYPE = 'quadprog'
             engine_type : ENGINE_TYPE = 'mosek'
             cvxpy_solver : CVXPY_SOLVER = 'mosek'
-            config_path : Optional[str] = None
+            config_path : str | None = None
             opt_relax : bool = True
             opt_turn  : bool = True
             opt_qobj  : bool = True

@@ -33,7 +33,7 @@ class MemFileStorage:
             if self.memdisk is None:
                 torch.save(obj , path)
             else:
-                self.memdisk[str(path)] = deepcopy(obj)
+                self.memdisk[path] = deepcopy(obj)
             df = pd.DataFrame({'path' : [path] , 'group' : [group]})
 
             self.records = pd.concat([self.records.query('path != @path') , df] , axis=0)
@@ -43,7 +43,7 @@ class MemFileStorage:
     def load(self , path) -> Any:
         if isinstance(path , list):
             return [self.load(p) for p in path]
-        elif isinstance(path , (str | Path)):
+        elif isinstance(path , (str , Path)):
             if self.memdisk is None:
                 return torch_load(path) if Path(path).exists() else None
             else:

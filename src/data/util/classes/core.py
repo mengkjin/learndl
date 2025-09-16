@@ -1,13 +1,12 @@
-import torch
+import torch , json
 import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
 from pathlib import Path
-from torch import Tensor
-from typing import Any , ClassVar , Optional
+from typing import Any , ClassVar
 
-from src.proj import PATH
+from src.proj import PATH , Logger
 from src.basic import CALENDAR , DB , SILENT , Timer , torch_load
 from src.func import index_union , index_intersect , forward_fillna
 
@@ -76,6 +75,14 @@ class DataBlock(Stock4DData):
     @staticmethod
     def norm_path(key : str , predict = False, alias_search = True):
         return norm_file_path(key , predict , alias_search)
+
+    @classmethod
+    def last_data_date(cls , key : str = 'y' , predict = False):
+        try:
+            return max(DataBlock.load_dict(DataBlock.block_path(key , predict))['date'])
+        except ModuleNotFoundError as e:
+            Logger.warning(f'last_data_date({key , predict}) error: ModuleNotFoundError: {e}')
+            return None
 
     def save(self , key : str , predict=False , start_dt = None , end_dt = None):
         path = self.block_path(key , predict) 
@@ -167,7 +174,7 @@ class DataBlock(Stock4DData):
     @classmethod
     def load_keys(cls , keys : list[str] , predict = False , alias_search = True , **kwargs):
         paths = [cls.block_path(key , predict , alias_search) for key in keys]
-        return cls.load_paths(paths , **kwargs)
+        return {key:val for key,val in zip(keys , cls.load_paths(paths , **kwargs))}
     
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , use_alt = True):
@@ -218,7 +225,7 @@ class DataBlock(Stock4DData):
 
         if 'vwap' in self.feature:
             i_vp = np.where(self.feature == 'vwap')[0].astype(int)
-            nan_idx = self.values[...,i_vp].isnan() if isinstance(self.values , Tensor) else np.isnan(self.values[...,i_vp])
+            nan_idx = self.values[...,i_vp].isnan() if isinstance(self.values , torch.Tensor) else np.isnan(self.values[...,i_vp])
             nan_idx = nan_idx.squeeze(-1)
             pcols = [col for col in ['close', 'high', 'low', 'open' , 'preclose'] if col in self.feature]
             if pcols: 
@@ -282,14 +289,14 @@ class DataBlock(Stock4DData):
         return self
     
     def hist_norm(self , key : str , predict = False ,
-                  start_dt : Optional[int] = None , end_dt : Optional[int]  = 20161231 , 
+                  start_dt : int | None = None , end_dt : int | None  = 20161231 , 
                   step_day = 5 , **kwargs):
         return DataBlockNorm.calculate(self , key , predict , start_dt , end_dt , step_day , **kwargs)
 
 @dataclass(slots=True)
 class DataBlockNorm:
-    avg : Tensor
-    std : Tensor
+    avg : torch.Tensor
+    std : torch.Tensor
     dtype : Any = None
 
     DIVLAST  : ClassVar[list[str]] = ['day']
@@ -301,7 +308,7 @@ class DataBlockNorm:
 
     @classmethod
     def calculate(cls , block : DataBlock , key : str , predict = False ,
-                  start_dt : Optional[int] = None , end_dt : Optional[int]  = 20161231 , 
+                  start_dt : int | None = None , end_dt : int | None  = 20161231 , 
                   step_day = 5 , **kwargs):
         
         key = data_type_abbr(key)
@@ -376,7 +383,7 @@ class DataBlockNorm:
     def load_keys(cls , keys : str | list[str] , predict = False , alias_search = True , dtype = None):
         if not isinstance(keys , list): 
             keys = [keys]
-        return [cls.load_key(key , predict , alias_search , dtype) for key in keys]
+        return {key:cls.load_key(key , predict , alias_search , dtype) for key in keys}
     
     @classmethod
     def norm_path(cls , key : str , predict = False, alias_search = True):
@@ -395,9 +402,9 @@ class ModuleData:
         return self.date[(self.date >= start) & (self.date <= end)][::interval]
     
     @classmethod
-    def load(cls , data_type_list : list[str] , y_labels : Optional[list[str]] = None , 
+    def load(cls , data_type_list : list[str] , y_labels : list[str] | None = None , 
              fit : bool = True , predict : bool = False , 
-             dtype : Optional[str | Any] = torch.float , 
+             dtype : str | Any = torch.float , 
              save_upon_loading : bool = True):
         
         assert fit or predict , (fit , predict)
@@ -418,21 +425,22 @@ class ModuleData:
             return hist_data
 
     @classmethod
-    def load_datas(cls , data_type_list : list[str] , y_labels : Optional[list[str]] = None , 
-                   predict : bool = False , dtype : Optional[str | Any] = torch.float , 
+    def load_datas_old(cls , data_type_list : list[str] , y_labels : list[str] | None = None , 
+                   predict : bool = False , dtype : str | Any = torch.float , 
                    save_upon_loading : bool = True):
         '''if predict is True, only load recent data'''
         if dtype is None: 
             dtype = torch.float
         if isinstance(dtype , str): 
             dtype = getattr(torch , dtype)
+
         if predict: 
             dataset_path = 'no_dataset'
         else:
             try:
-                last_date = max(DataBlock.load_dict(DataBlock.block_path('y'))['date'])
+                last_date = DataBlock.last_data_date('y' , False)
                 dataset_code = '+'.join(data_type_list)
-                dataset_path = f'{PATH.dataset}/{dataset_code}.{last_date}.pt'
+                dataset_path = f'{PATH.datacache}/{dataset_code}.{last_date}.pt'
             except ModuleNotFoundError:
                 '''can be caused by different package version'''
                 dataset_path = 'no_dataset'
@@ -463,9 +471,9 @@ class ModuleData:
             blocks = DataBlock.load_keys(data_type_list, predict , alias_search=True,dtype = dtype)
             norms  = DataBlockNorm.load_keys(data_type_list, predict , alias_search=True,dtype = dtype)
 
-            y : DataBlock = blocks[0]
-            x : dict[str,DataBlock] = {cls.abbr(key):blocks[i] for i,key in enumerate(data_type_list) if i != 0}
-            norms = {cls.abbr(key):val for key,val in zip(data_type_list , norms) if val is not None}
+            y : DataBlock = blocks['y']
+            x : dict[str,DataBlock] = {cls.abbr(key):val for key , val in blocks.items() if key != 'y'}
+            norms = {cls.abbr(key):val for key,val in norms.items() if val is not None and key != 'y'}
             secid , date = y.secid , y.date
 
             assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
@@ -477,7 +485,124 @@ class ModuleData:
 
         data.y.align_feature(y_labels)
         return data
+
+    @classmethod
+    def load_datas(cls , data_type_list : list[str] , y_labels : list[str] | None = None , 
+                       predict : bool = False , dtype : str | Any = torch.float , 
+                       save_upon_loading : bool = True):
+        '''
+        load all x/y data if input_type is data or factor
+        if predict is True, only load recent data
+        '''
+        if dtype is None: 
+            dtype = torch.float
+        if isinstance(dtype , str): 
+            dtype = getattr(torch , dtype)
+
+        if predict: 
+            data = None
+        else:
+            last_date = DataBlock.last_data_date()
+            data = cls.datacache_load(last_date , data_type_list , y_labels)
+
+        if data is None:
+            blocks = DataBlock.load_keys(['y' , *data_type_list], predict , dtype = dtype)
+            norms  = DataBlockNorm.load_keys(['y' , *data_type_list], predict , dtype = dtype)
+
+            y : DataBlock = blocks['y']
+            x : dict[str,DataBlock] = {cls.abbr(key):val for key,val in blocks.items() if key != 'y'}
+            norms = {cls.abbr(key):val for key,val in norms.items() if val is not None and key != 'y'}
+            secid , date = y.secid , y.date
+
+            assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
+
+            data = {'x' : x , 'y' : y , 'norms' : norms , 'secid' : secid , 'date' : date}
+            if not predict and save_upon_loading: 
+                cls.datacache_save(data , last_date or y.date[-1] , data_type_list)
+            data = cls(**data)
+
+        data.y.align_feature(y_labels)
+        return data
     
     @staticmethod
     def abbr(data_type : str): 
         return data_type_abbr(data_type)
+
+    @classmethod
+    def datacache_key(cls , data_type_list : list[str]) -> str:
+        if not data_type_list:
+            return 'ds_y_only'
+        cache_key_json_file = PATH.datacache.joinpath('cache_key.json')
+        cache_key_json_file.touch(exist_ok=True)
+        with open(cache_key_json_file , 'r') as f:
+            try:
+                cache_key_dict = json.load(f)
+            except json.JSONDecodeError as e:
+                print(f'cache_key.json is corrupted, reset it: {e}')
+                cache_key_dict = {}
+        for key , value in cache_key_dict.items():
+            if value['type'] != 'dataset':
+                continue
+            if sorted(value['content']) == sorted(data_type_list):
+                return key
+
+        if len(data_type_list) < 5:
+            new_key = 'ds_' + '+'.join(data_type_list)
+        else:
+            i = 0
+            while True:
+                new_key = f'ds_{len(data_type_list)}datas_{i:02d}'
+                if new_key not in cache_key_dict:
+                    break
+                i += 1
+        cache_key_dict.update({new_key : {'type' : 'dataset' , 'content' : data_type_list}})
+        with open(cache_key_json_file , 'w') as f:
+            json.dump(cache_key_dict , f)
+        return new_key
+
+    @classmethod
+    def datacache_path(cls , date : int , data_type_list : list[str]) -> Path:
+        data_cache_key = cls.datacache_key(data_type_list)
+        return PATH.datacache.joinpath(data_cache_key , f'{date}.pt')
+
+    @classmethod
+    def datacache_load(cls , date : int | None , data_type_list : list[str] , y_labels : list[str] | None = None):
+        if date is None:
+            return None
+        path = cls.datacache_path(date , data_type_list)
+        if path is None or not path.exists():
+            return None
+        try:
+            data = cls(**torch_load(path))
+            if (np.isin(data_type_list , list(data.x.keys())).all() and
+                (y_labels is None or np.isin(y_labels , list(data.y.feature)).all())):
+                if not SILENT: 
+                    Logger.info(f'try using {path} , success!')
+            else:
+                if not SILENT: 
+                    Logger.warning(f'try using {path} , but incompatible, load raw blocks!')
+                data = None
+        except ModuleNotFoundError:
+            '''can be caused by different package version'''
+            Logger.warning(f'try using {path} , but incompatible, load raw blocks!')
+            data = None
+        except Exception as e:
+            raise e
+
+        return data
+    
+    @classmethod
+    def datacache_save(cls , data : dict , date : int , data_type_list : list[str]):
+        if not data_type_list:
+            return
+        path = cls.datacache_path(date , data_type_list)
+        path.parent.mkdir(exist_ok=True)
+        torch.save(data , path , pickle_protocol = 4)
+
+    @classmethod
+    def datacache_purge_old(cls , data_type_list : list[str] , date : int):
+        data_cache_key = cls.datacache_key(data_type_list)
+        folder = PATH.datacache.joinpath(data_cache_key)
+        for path in folder.iterdir():
+            if path.is_file() and int(path.stem) < date:
+                path.unlink()

@@ -15,6 +15,10 @@ interval.booster : 20
 train_window.nn      : 2400
 train_window.booster : 240
 
+# sequence lens ----------------------------------------------------------------
+sequence.lens: {day: 30, style: 30, indus: 30 , factor: 1, hidden: 1} # others will be 1
+sequence.steps: {day: 1, data: 1, factor: 1, hidden: 1} # others will be 1
+
 # if module is a neural network ----------------------------------------------------------------
 booster_head            : null # [null , lgbm , ada , xgboost , catboost] , if not null the last layer of the nn is a booster
 
@@ -50,8 +54,6 @@ factor.types: # list of factor names , use if input_type is factor
   #money_flow: [holding , trading]
   #high_frequency: [hf_momentum , hf_volatility , hf_correlation , hf_liquidity]
 
-combo.types: # list of combo names , use if input_type is combo
-  data: day
-  factor:
-    fundament:  [quality , growth , value , earning]
-    analyst:    [surprise , coverage , forecast , adjustment]
+combo.types: # list of input type in combo mode , use if input_type is combo
+  - data
+  - factor

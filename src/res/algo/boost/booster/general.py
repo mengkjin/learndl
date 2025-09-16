@@ -1,6 +1,6 @@
 import torch
 
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from . import ada , catboost , lgbm , xgboost
 from ..util import BasicBoosterModel , BoosterInput , BoosterWeightMethod
@@ -19,7 +19,7 @@ class GeneralBooster:
                  train : Any = None , 
                  valid : Any = None ,
                  test  : Any = None , 
-                 cuda = True , seed = None , given_name : Optional[str] = None , **kwargs):
+                 cuda = True , seed = None , given_name : str | None = None , **kwargs):
         assert booster_type in AVAILABLE_BOOSTERS , f'{booster_type} is not a valid booster type'
         self.booster_type = booster_type
         self.booster : BasicBoosterModel = AVAILABLE_BOOSTERS[self.booster_type]()

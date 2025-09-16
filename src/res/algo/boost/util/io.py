@@ -6,7 +6,7 @@ import xarray as xr
 
 from copy import deepcopy
 from dataclasses import dataclass , field
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from src.func import match_values , index_union , rankic_2d , ic_2d
 
@@ -288,7 +288,7 @@ class BoosterInput:
         return cls(x , y , w , secid , date , feature , weight_param)
     
     @classmethod
-    def concat(cls , datas : list[Optional['BoosterInput']]):
+    def concat(cls , datas : 'list[BoosterInput | None]'):
         blocks = [data for data in datas if data is not None and data.complete]
         
         secid   , p0s , p1s = index_union([blk.secid   for blk in blocks])

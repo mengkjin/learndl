@@ -1,4 +1,4 @@
-from typing import Any , Optional
+from typing import Any
 
 from src.proj import Logger
 from src.res.model.util import BaseCallBack , BaseTrainer 
@@ -34,7 +34,7 @@ class CallBackManager(BaseCallBack):
         return cls(trainer , *callbacks)
     
     @staticmethod
-    def __get_cb(cb_name : str , param : Any , trainer : BaseTrainer) -> Optional[dict]:
+    def __get_cb(cb_name : str , param : Any , trainer : BaseTrainer) -> dict | None:
         assert isinstance(param , dict), (cb_name , param)
         for cb_mod in SEARCH_MODS:
             if hasattr(cb_mod , cb_name): 

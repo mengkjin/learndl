@@ -1,7 +1,6 @@
 import torch
 
-from torch import Tensor
-from typing import Any , Optional , Literal
+from typing import Any , Literal
 
 from src.proj import PATH
 from .nn.api import get_nn_module , get_multiloss_params , get_nn_category , get_nn_datatype , AVAILABLE_NNS
@@ -47,7 +46,7 @@ class AlgoModule:
         raise ValueError(f'{module_name} is not a valid module')
     
     @classmethod
-    def get_nn(cls , model_module : str , model_param : dict | None = None , device : Any = None , state_dict : Optional[dict[str,Tensor]] = None , **kwargs):
+    def get_nn(cls , model_module : str , model_param : dict | None = None , device : Any = None , state_dict : dict[str,torch.Tensor] | None = None , **kwargs):
         model_param = model_param or {}
         net : torch.nn.Module | Any = get_nn_module(model_module)(**model_param)
         assert isinstance(net , torch.nn.Module) , net.__class__
@@ -58,15 +57,19 @@ class AlgoModule:
         return net
     
     @classmethod
-    def nn_category(cls , module_name : str): return get_nn_category(module_name)
+    def nn_category(cls , module_name : str): 
+        return get_nn_category(module_name)
     
     @classmethod
-    def nn_datatype(cls , module_name : str): return get_nn_datatype(module_name)
+    def nn_datatype(cls , module_name : str): 
+        return get_nn_datatype(module_name)
 
-    
     @classmethod
-    def get_booster(cls , model_module : str , model_param : dict | None = None , cuda = None , seed = None , model_dict : Optional[dict] = None , 
-          given_name : Optional[str] = None , optuna : bool = False , **kwargs):
+    def get_booster(
+        cls , model_module : str , model_param : dict | None = None , 
+        cuda = None , seed = None , model_dict : dict | None = None , 
+        given_name : str | None = None , optuna : bool = False , **kwargs
+    ):
         model_param = model_param or {}
         booster = (OptunaBooster if optuna else GeneralBooster)(
             model_module , model_param , cuda = bool(cuda) , seed = seed , given_name = given_name , **kwargs)

@@ -1,12 +1,12 @@
 import itertools
 import numpy as np
+import torch
 
 from abc import ABC , abstractmethod
 from dataclasses import dataclass
 from inspect import currentframe
 from pathlib import Path
-from torch import Tensor
-from typing import Any , final , Iterator , Literal , Optional
+from typing import Any , final , Iterator , Literal
 
 from src.proj import PATH , Logger
 from src.basic import ModelDict , BigTimer , INSTANCE_RECORD
@@ -161,14 +161,14 @@ class TrainerStatus(ModelStreamLine):
         if event == 'new_attempt': 
             self.attempt += 1
 
-    def add_event(self , event : Optional[str]):
+    def add_event(self , event : str | None):
         if event: 
             self.epoch_event.append(event)
         
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
     @abstractmethod
-    def __init__(self , config : Optional[TrainConfig] = None , use_data : Literal['fit','predict','both'] = 'fit'):
+    def __init__(self , config : TrainConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit'):
         self.config   : TrainConfig
         self.use_data : Literal['fit','predict','both'] 
         self.storage  : MemFileStorage
@@ -177,16 +177,16 @@ class BaseDataModule(ABC):
     def prepare_data() -> None: '''prepare all data in advance of training'''
     @abstractmethod
     def load_data(self) -> None: 
-        '''load prepared data at training begin'''
+        '''load prepared data at training begin , only load data once in a fitting'''
         self.model_date_list : np.ndarray
         self.test_full_dates : np.ndarray
         self.datas : ModuleData
     @abstractmethod
     def setup(self , *args , **kwargs) -> None: 
-        '''create train / valid / test dataloaders'''
-        self.y : Tensor
-        self.y_secid : Any
-        self.y_date : Any
+        '''create train / valid / test dataloaders , perform in every different model_date / model_num'''
+        self.d0 : int
+        self.d1 : int
+        self.y_std : torch.Tensor
         self.early_test_dates : np.ndarray
         self.model_test_dates : np.ndarray
     @abstractmethod
@@ -223,7 +223,35 @@ class BaseDataModule(ABC):
         batch_date = self.batch_date(batch_data)
         assert (batch_date == batch_date[0]).all() , batch_date
         return batch_date[0]
-        
+
+    @property
+    def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract']:
+        return self.loader_param.stage
+
+    @property
+    def model_date(self) -> int:
+        return self.loader_param.model_date
+
+    @property
+    def seq_lens(self) -> dict[str,int]:
+        return self.loader_param.seqlens
+
+    @property
+    def y_secid(self) -> np.ndarray:
+        return self.datas.y.secid
+
+    @property
+    def y_date(self) -> np.ndarray:
+        return self.datas.y.date[self.d0:self.d1]
+
+    @property
+    def day_len(self) -> int:
+        return self.d1 - self.d0
+
+    @property
+    def data_step(self) -> int:
+        return self.config.train_data_step if self.stage in ['fit'] else 1
+
     @dataclass
     class LoaderParam:
         stage : Literal['fit' , 'test' , 'predict' , 'extract'] | Any = None
@@ -614,7 +642,7 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         self.reset()
         self.model_dict = ModelDict()
 
-    def __call__(self , input : BatchData | Tensor | Any , *args , **kwargs):
+    def __call__(self , input : BatchData | torch.Tensor | Any , *args , **kwargs):
         if input is None or len(input) == 0:
             output = None
         else:
@@ -694,7 +722,7 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         '''call when testing new model'''
         return self
     @abstractmethod
-    def forward(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
+    def forward(self , batch_data : BatchData | torch.Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
     @abstractmethod
     def fit(self) -> None:

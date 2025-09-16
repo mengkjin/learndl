@@ -1,7 +1,7 @@
 import os
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-from typing import Any , Callable , Literal , Optional
+from typing import Any , Callable , Literal
 
 cpu_count = os.cpu_count()
 MAX_WORKERS : int = min(40 , cpu_count) if cpu_count is not None else 1
@@ -24,7 +24,7 @@ def get_method(method , max_workers : int = MAX_WORKERS) -> int:
     else:
         raise ValueError(f'method should be int or str , but got {type(method)}')
 
-def parallel(func : Callable , args : Iterable , keys : Optional[Iterable] = None , 
+def parallel(func : Callable , args : Iterable , keys : Iterable | None = None , 
              method : str | int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , 
              max_workers = MAX_WORKERS , ignore_error = False):
     method = get_method(method , max_workers)

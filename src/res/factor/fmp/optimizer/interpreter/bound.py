@@ -1,7 +1,7 @@
 import numpy as np
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any , ClassVar , Literal , Optional
+from typing import Any , ClassVar , Literal
 
 from src.proj import Logger
 
@@ -104,16 +104,16 @@ class StockBound:
 
 @dataclass
 class StockPool:
-    basic    : Optional[list | np.ndarray] = None
-    allow    : Optional[list | np.ndarray] = None # additional basic pool , and exempted from prohibit
-    ignore   : Optional[list | np.ndarray] = None # deal for opposite trades , similar as halt
-    no_sell  : Optional[list | np.ndarray] = None # not for sell
-    no_buy   : Optional[list | np.ndarray] = None # not for buy
-    prohibit : Optional[list | np.ndarray] = None # will sell if can , will not buy
-    warning  : Optional[list | np.ndarray] = None # will buy up to 0.5%
-    no_ldev  : Optional[list | np.ndarray] = None # not for under bought
-    no_udev  : Optional[list | np.ndarray] = None # not for over bought
-    shortable: Optional[list | np.ndarray] = None # shortable stocks
+    basic    : list | np.ndarray | None = None
+    allow    : list | np.ndarray | None = None # additional basic pool , and exempted from prohibit
+    ignore   : list | np.ndarray | None = None # deal for opposite trades , similar as halt
+    no_sell  : list | np.ndarray | None = None # not for sell
+    no_buy   : list | np.ndarray | None = None # not for buy
+    prohibit : list | np.ndarray | None = None # will sell if can , will not buy
+    warning  : list | np.ndarray | None = None # will buy up to 0.5%
+    no_ldev  : list | np.ndarray | None = None # not for under bought
+    no_udev  : list | np.ndarray | None = None # not for over bought
+    shortable: list | np.ndarray | None = None # shortable stocks
 
     warning_ub : ClassVar[float] = 0.005
 
@@ -175,10 +175,10 @@ class StockPool:
     
 @dataclass
 class IndustryPool:
-    no_sell  : Optional[list | np.ndarray] = None # not for sell
-    no_buy   : Optional[list | np.ndarray] = None # not for buy
-    no_net_sell : Optional[list | np.ndarray] = None # not for net sell
-    no_net_buy  : Optional[list | np.ndarray] = None # not for net bought
+    no_sell  : list | np.ndarray | None = None # not for sell
+    no_buy   : list | np.ndarray | None = None # not for buy
+    no_net_sell : list | np.ndarray | None = None # not for net sell
+    no_net_buy  : list | np.ndarray | None = None # not for net bought
 
     def __bool__(self): 
         return (self.no_sell is not None or 
@@ -186,7 +186,7 @@ class IndustryPool:
                 self.no_net_sell is not None or 
                 self.no_net_buy is not None)
     
-    def export(self , w0 : np.ndarray | Any = None , industry : Optional[np.ndarray] = None):
+    def export(self , w0 : np.ndarray | Any = None , industry : np.ndarray | None = None):
         if industry is None: 
             return StockBound()
         if w0 is None: 
@@ -201,8 +201,8 @@ class IndustryPool:
 class GeneralBound:
     '''one of abs , rel , por bound'''
     key : str | Literal[f'abs' , 'rel' , 'por']
-    lb : Optional[float | np.ndarray] = None
-    ub : Optional[float | np.ndarray] = None
+    lb : float | np.ndarray | None = None
+    ub : float | np.ndarray | None = None
 
     def __post_init__(self): assert self.key in ['abs' , 'rel' , 'por'] , self.key
     def __bool__(self): return self.lb is not None or self.ub is not None
@@ -302,8 +302,8 @@ class GeneralBound:
 class ValidRange:
     '''one of abs , rel , por bound'''
     key : str
-    lb : Optional[float] = None
-    ub : Optional[float] = None
+    lb : float | None = None
+    ub : float | None = None
 
     def __post_init__(self): 
         assert self.key in ['abs' , 'pct'] , self.key

@@ -1,5 +1,4 @@
 import psutil , torch
-from torch import Tensor
 from torch.nn import Module
 from typing import Any
 
@@ -19,7 +18,7 @@ if use_device.type == 'mps':
     torch.mps.set_per_process_memory_fraction(0.7)  # 使用60%的GPU内存
 
 def send_to(x : Any , device = None) -> Any:
-    if isinstance(x , Tensor | Module):
+    if isinstance(x , torch.Tensor | Module):
         return x.to(device)
     if isinstance(x , (list,tuple)):
         return type(x)(send_to(v , device) for v in x)
@@ -30,8 +29,8 @@ def send_to(x : Any , device = None) -> Any:
     else:
         return x
     
-def get_device(obj : Module | Tensor | list | tuple | dict | Any):
-    if isinstance(obj , Tensor):
+def get_device(obj : Module | torch.Tensor | list | tuple | dict | Any):
+    if isinstance(obj , torch.Tensor):
         return obj.device
     elif isinstance(obj , Module):
         return next(obj.parameters()).device

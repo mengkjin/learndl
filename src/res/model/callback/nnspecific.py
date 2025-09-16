@@ -1,11 +1,11 @@
 import torch
-from typing import Any , Optional
+from typing import Any
 
 from src.res.algo import AlgoModule
 from src.data import BlockLoader
 from src.res.model.util import BaseCallBack
 
-def specific_cb(module_name : str) -> Optional[Any]:
+def specific_cb(module_name : str) -> Any:
     nn_category = AlgoModule.nn_category(module_name)
     if module_name == 'gru_dsize':
         return SpecCB_DSize
@@ -30,10 +30,10 @@ class SpecCB_TRA(BaseCallBack):
         hist_loss = torch.stack([hl[self.i0 , self.i1 + j + 1 - rw] for j in range(rw)],dim=-2)
         self.batch_data.kwargs = {'y': y , 'hist_loss' : hist_loss.to(y.device)}
     def init_buffer(self):
-        hist_loss_shape = list(self.data.y.shape)
+        hist_loss_shape = list(self.data.y_std.shape)
         hist_loss_shape[2] = getattr(self.net , 'num_states')
         self.data.buffer['hist_preds'] = torch.randn(hist_loss_shape)
-        self.data.buffer['hist_loss']  = (self.data.buffer['hist_preds'] - self.data.y.nan_to_num(0)).square()
+        self.data.buffer['hist_loss']  = (self.data.buffer['hist_preds'] - self.data.y_std.nan_to_num(0)).square()
     def update_buffer(self):
         v0 : torch.Tensor = self.data.buffer['hist_preds'][self.i0 , self.i1]
         vp : torch.Tensor = self.model.batch_output.other['preds']
@@ -68,7 +68,7 @@ class SpecCB_VAE(BaseCallBack):
     @property
     def net(self) -> torch.nn.Module: return getattr(self.trainer.model , 'net')
     
-    def reparameterize(self , object_tensor : torch.Tensor , numel : Optional[int] = None):
+    def reparameterize(self , object_tensor : torch.Tensor , numel : int | None = None):
         if numel is None:
             return torch.randn_like(object_tensor)
         else:

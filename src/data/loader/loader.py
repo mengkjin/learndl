@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
-from typing import Optional
 
 from src.proj import PATH
 from src.basic import Timer , DB
@@ -12,7 +11,7 @@ from src.data.util import DataBlock
 class BlockLoader:
     db_src  : str
     db_key  : str | list
-    feature : Optional[list] = None
+    feature : list | None = None
     use_alt : bool = True
 
     def __post_init__(self):
@@ -20,10 +19,10 @@ class BlockLoader:
         assert src_path.exists() , f'{src_path} not exists'
         assert np.isin(self.db_key , [p.name for p in src_path.iterdir()]).all() , f'{self.db_key} not all in {src_path}'
 
-    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
+    def load(self , start_dt : int | None = None , end_dt : int | None = None):
         return self.load_block(start_dt , end_dt)
     
-    def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
+    def load_block(self , start_dt : int | None = None , end_dt : int | None = None):
         sub_blocks = []
         db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
         for db_key in db_keys:
@@ -42,17 +41,17 @@ class BlockLoader:
 class FrameLoader:
     db_src  : str
     db_key  : str
-    reserved_src : Optional[list[str]] = None
+    reserved_src : list[str] | None = None
     use_alt : bool = True
 
     def __post_init__(self):
         assert PATH.database.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
             f'{PATH.database}/{self.db_src}/{self.db_key} not exists'
     
-    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
+    def load(self , start_dt : int | None = None , end_dt : int | None = None):
         return self.load_frame(start_dt , end_dt)
 
-    def load_frame(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
+    def load_frame(self , start_dt : int | None = None , end_dt : int | None = None):
         df = DB.db_load_multi(self.db_src , self.db_key , start_dt=start_dt , end_dt=end_dt , use_alt = self.use_alt)
         return df
     
@@ -66,10 +65,10 @@ class FactorLoader:
         self.hier = StockFactorHierarchy()
         self.hier.validate_category(self.category0 , self.category1)
     
-    def load(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
+    def load(self , start_dt : int | None = None , end_dt : int | None = None):
         return self.load_block(start_dt , end_dt)
 
-    def load_block(self , start_dt : Optional[int] = None , end_dt : Optional[int] = None):
+    def load_block(self , start_dt : int | None = None , end_dt : int | None = None):
         factors : list[pd.DataFrame] = []
         with Timer(f' --> factor blocks reading [{self.category0} , {self.category1}]'):
             for calc in self.hier.iter_instance(category0 = self.category0 , category1 = self.category1):

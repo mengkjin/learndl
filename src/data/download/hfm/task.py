@@ -4,7 +4,7 @@ import numpy as np
 
 from dataclasses import dataclass , field
 from pathlib import Path
-from typing import Any , Callable , Literal , Optional
+from typing import Any , Callable , Literal
 
 from src.proj import PATH , MACHINE
 from src.basic import CALENDAR , DB
@@ -13,7 +13,7 @@ from src.data.util import secid_adjust , col_reform , row_filter , adjust_precis
 @dataclass
 class FailedData:
     type: str
-    date: Optional[int] = None
+    date: int | None = None
     def add_attr(self , key , value): 
         self.__dict__[key] = value
         return self
@@ -94,7 +94,7 @@ class JSFetcher:
         return new_dates   
 
     @classmethod
-    def basic_info(cls , key = None , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def basic_info(cls , key = None , **kwargs) -> pd.DataFrame | FailedData | None:
         '''get basic info data from R environment , basic_info('concepts')'''
         if key is None: 
             raise KeyError(key) 
@@ -163,7 +163,7 @@ class JSFetcher:
         return df
 
     @classmethod
-    def risk_exp(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def risk_exp(cls , date : int , with_date = False , **kwargs) -> pd.DataFrame | FailedData | None:
         '''get risk model from R environment , risk_exp(20240325)'''
         path = Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model/jm2018_model_{date}.csv')
         if not path.exists(): 
@@ -176,7 +176,7 @@ class JSFetcher:
         return df
     
     @classmethod
-    def risk_cov(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def risk_cov(cls , date : int , with_date = False , **kwargs) -> pd.DataFrame | FailedData | None:
         '''get risk model from R environment , risk_cov(20240325)'''
         path = Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/6_factor_return_covariance/jm2018_model/jm2018_model_{date}.Rdata')
         if not path.exists(): 
@@ -189,7 +189,7 @@ class JSFetcher:
         return df
     
     @classmethod
-    def risk_spec(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def risk_spec(cls , date : int , with_date = False , **kwargs) -> pd.DataFrame | FailedData | None:
         '''get risk model from R environment , risk_spec(20240325)'''
         path = Path(f'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model/jm2018_model_{date}.csv')
         if not path.exists(): 
@@ -206,7 +206,7 @@ class JSFetcher:
         return df
 
     @classmethod
-    def alpha_longcl(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def alpha_longcl(cls , date : int , with_date = False , **kwargs) -> pd.DataFrame | FailedData | None:
         '''get alpha longcl model from R environment , alpha_longcl(20240325)'''
         a_names = {
             'value'       : 'A7_Value' ,
@@ -242,7 +242,7 @@ class JSFetcher:
         return df
 
     @classmethod
-    def trade_day(cls , date : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def trade_day(cls , date : int , with_date = False , **kwargs) -> pd.DataFrame | FailedData | None:
         '''get basic info data from R environment , trade_day(20240324)'''        
         data_params = {
             'wind_id'   : ['1_basic_info'  , 'wind_id'] ,
@@ -276,7 +276,7 @@ class JSFetcher:
         return df
 
     @classmethod
-    def trade_Xday(cls , date : int , x : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def trade_Xday(cls , date : int , x : int , with_date = False , **kwargs) -> pd.DataFrame | FailedData | None:
         '''get consecutive x_day trade data from R environment , trade_Xday(20240324 , 5) '''
         # read calendar
         calendar = cls.basic_info('calendar')
@@ -312,7 +312,7 @@ class JSFetcher:
         return df
 
     @classmethod
-    def labels(cls , date : int , days : int , lag1 : int , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def labels(cls , date : int , days : int , lag1 : int , with_date = False , **kwargs) -> pd.DataFrame | FailedData | None:
         '''get raw and res labels'''
         path_param = {
             'id'  : Path(f'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/1_basic_info/wind_id') ,
@@ -363,7 +363,7 @@ class JSFetcher:
         return df
 
     @classmethod
-    def trade_min(cls , date : int , with_date = False , dtank_first = True , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def trade_min(cls , date : int , with_date = False , dtank_first = True , **kwargs) -> pd.DataFrame | FailedData | None:
         '''get minute trade data from R environment , trade_min(20240324)'''
         data_params = {
             'ticker'    : 'secid'  ,
@@ -397,7 +397,7 @@ class JSFetcher:
         return df
 
     @classmethod
-    def trade_Xmin(cls , date : int , x : int , df_min : Any = None , with_date = False , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def trade_Xmin(cls , date : int , x : int , df_min : Any = None , with_date = False , **kwargs) -> pd.DataFrame | FailedData | None:
         '''get X minute trade data from R environment , trade_Xmin(20240324 , 5)'''
         df = df_min if df_min is not None else cls.trade_min(date , **kwargs)
         if df is None or isinstance(df , FailedData): 
@@ -412,7 +412,7 @@ class JSFetcher:
         return df
     
     @classmethod
-    def benchmark(cls , date : int , bm : Literal['csi300' , 'csi500' , 'csi800' , 'csi1000'] , **kwargs) -> Optional[pd.DataFrame | FailedData]:
+    def benchmark(cls , date : int , bm : Literal['csi300' , 'csi500' , 'csi800' , 'csi1000'] , **kwargs) -> pd.DataFrame | FailedData | None:
         '''get risk model from R environment , bm_any('CSI300' , 20240325)'''
         path = Path(f'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/{bm.upper()}/{bm.upper()}_{date}.csv')
         if not path.exists():  

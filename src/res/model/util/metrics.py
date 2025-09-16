@@ -3,7 +3,7 @@ import pandas as pd
 
 from dataclasses import dataclass , field
 from torch import nn , Tensor
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from src.res.algo.nn.util import MetricsCalculator
 from .batch import BatchMetric
@@ -129,7 +129,7 @@ class Metrics:
         else:
             return self.best_metric < old_best_attempt
 
-    def calculate(self , dataset , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , **kwargs):
+    def calculate(self , dataset , label : Tensor , pred : Tensor , weight : Tensor | None = None , **kwargs):
         '''Calculate loss(with gradient), penalty , score'''
         assert dataset in ['train','valid','test'] , dataset
         
@@ -156,7 +156,7 @@ class Metrics:
 class MetricsAggregator:
     '''record a list of batch metric and perform agg operations, usually used in an epoch'''
     def __init__(self) -> None:
-        self.table : Optional[pd.DataFrame] = None
+        self.table : pd.DataFrame | None = None
         self.new('init',0,0)
     def __len__(self):  return len(self._record['loss'].values)
     def new(self , dataset , model_num , model_date , epoch = 0 , submodel = 'best'):

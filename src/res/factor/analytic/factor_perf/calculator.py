@@ -1,6 +1,6 @@
 import pandas as pd
 
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from . import stat as Stat
 from . import plot as Plot
@@ -11,7 +11,7 @@ class BasePerfCalc(BaseCalculator):
     TASK_TYPE = 'factor'
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
     COMPULSORY_BENCHMARKS : Any = None
-    def calc(self , factor : StockFactor, benchmarks : Optional[list[Benchmark|Any]] | Any = None , verbosity = 0):
+    def calc(self , factor : StockFactor, benchmarks : list[Benchmark|Any] | Any = None , verbosity = 0):
         with self.suppress_warnings():
             func = self.calculator()
             rslt = pd.concat([func(factor , bm , **self.params).assign(benchmark = bm.name) for bm in self.use_benchmarks(benchmarks)])
@@ -21,7 +21,7 @@ class BasePerfCalc(BaseCalculator):
             print(f'    --->{self.__class__.__name__} calc Finished!')
         return self
     
-    def use_benchmarks(self , benchmarks : Optional[list[Benchmark|Any]] | Any = None):
+    def use_benchmarks(self , benchmarks : list[Benchmark|Any] | Any = None):
         if self.COMPULSORY_BENCHMARKS is None:
             benchmarks = Benchmark.get_benchmarks(benchmarks if benchmarks is not None else self.DEFAULT_BENCHMARKS)
         else:

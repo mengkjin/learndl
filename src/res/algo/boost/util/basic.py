@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from abc import ABC , abstractmethod
 from copy import deepcopy
 from pathlib import Path
-from typing import Any , Optional
+from typing import Any
 
 from src.proj import PATH
 from src.basic import DB
@@ -174,7 +174,7 @@ class BasicBoosterModel(ABC):
         return data
     
     @classmethod
-    def df_input(cls , factor_data : Optional[pd.DataFrame] = None , idx : int = -1 , windows_len = 24) -> dict[str,Any]:
+    def df_input(cls , factor_data : pd.DataFrame | None = None , idx : int = -1 , windows_len = 24) -> dict[str,Any]:
         if factor_data is None: 
             factor_data = load_xingye_data()
         MDTs = np.sort(np.unique(factor_data['date'].to_numpy()))

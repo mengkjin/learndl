@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from copy import deepcopy
-from typing import Any , Literal , Union
+from typing import Any , Literal
 
 from src.data import DataBlock
 from .port import Port
@@ -137,7 +137,7 @@ class Portfolio:
             port.exclude(secid , True)
         return self
     
-    def replace(self , port : Union[Port, 'Portfolio'] , inplace = False):
+    def replace(self , port : 'Port|Portfolio' , inplace = False):
         if not inplace:
             self = self.copy()
         if isinstance(port , Portfolio):

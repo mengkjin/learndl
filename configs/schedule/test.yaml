@@ -14,10 +14,18 @@ train:
       - rtn_lag1_10 
 
     # input specification ----------------------------------------------------------------
-    input_type: data # [data , hidden , factor] , specify below
+    input_type: combo # [data , hidden , factor] , specify below
+
+    combo.types: [data , factor]
 
     data.types: day # ['day+30m' , 30m , day , ...] , use if input_type is data
 
+    factor.types: # list of factor names , use if input_type is factor
+      fundament:  [quality , growth , value , earning]
+
+    sequence.lens: {day: 2, factor: 1}
+    sequence.steps: {day: 10, factor: 1}
+
 boost:
   lgbm:
-    seqlens: [{day: 9}]
+    seqlens: [{day: 2, factor: 1}]

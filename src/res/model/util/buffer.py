@@ -1,8 +1,8 @@
-from typing import Any , Callable , Literal , Optional
+from typing import Any , Callable , Literal
 
 class BaseBuffer:
     '''dynamic buffer space for some module to use (tra), can be updated at each batch / epoch '''
-    def __init__(self , device : Optional[Callable] = None , always_on_device = False) -> None:
+    def __init__(self , device : Callable | None = None , always_on_device = False) -> None:
         self.device = device
         self.always = always_on_device
         self.contents : dict[str,Any] = {}

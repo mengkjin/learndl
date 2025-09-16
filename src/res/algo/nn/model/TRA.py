@@ -1,6 +1,5 @@
 import torch
 from torch import nn , Tensor
-from typing import Optional
 
 from .Recurrent import get_rnn_mod
 
@@ -29,7 +28,7 @@ class block_tra(nn.Module):
             self.fc = nn.Linear(hidden_dim + tra_dim, num_states)
         self.predictors = nn.Linear(hidden_dim, num_states)
     
-    def forward(self , x : Tensor , hist_loss : Optional[Tensor] = None , y : Optional[Tensor] = None) -> tuple[Tensor , dict]:
+    def forward(self , x : Tensor , hist_loss : Tensor | None = None , y : Tensor | None = None) -> tuple[Tensor , dict]:
         if self.num_states > 1:
             assert hist_loss is not None and y is not None
 

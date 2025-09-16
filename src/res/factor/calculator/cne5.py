@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from src.basic import CONF , CALENDAR , DB
 from src.data import DATAVENDOR
@@ -32,7 +32,7 @@ class DateDfs:
         self.max_len = max_len
         self.D : dict[int , pd.DataFrame] = {}
 
-    def trim(self , date : Optional[int] = None):
+    def trim(self , date : int | None = None):
         if date and date in self.D: 
             del self.D[date] 
         if len(self.D) >= self.max_len: 
@@ -53,7 +53,7 @@ class DateSeriesDict:
         self.max_len = max_len
         self.D : dict[int , dict[str , pd.Series]] = {}
 
-    def trim(self , date : Optional[int] = None):
+    def trim(self , date : int | None = None):
         if len(self.D) >= self.max_len: 
             del self.D[list(self.D.keys())[0]]
         if date not in self.D and date is not None: 

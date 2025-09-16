@@ -1,4 +1,4 @@
-from typing import Any , Optional , Type
+from typing import Any , Type
 
 from . import calculator as Calc
 from .calculator import BaseTopPortCalc
@@ -38,7 +38,7 @@ class FmpTopManager(BaseTestManager):
         Calc.Top_Attrib_Style ,
     ]
 
-    def generate(self , factor: StockFactor , benchmarks: Optional[list[Benchmark|Any]] | Any = 'defaults' , 
+    def generate(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
                  n_bests = [20,30,50,100] , verbosity = 2):
         alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)

@@ -3,8 +3,7 @@ import numpy as np
 import pandas as pd
 
 from pathlib import Path
-from torch import Tensor
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from src.proj import MACHINE , PATH
 from src.basic import DB
@@ -150,9 +149,9 @@ class HiddenPath:
 class ModelDict:
     __slots__ = ['state_dict' , 'booster_head' , 'booster_dict']
     def __init__(self ,
-                 state_dict  : Optional[dict[str,Tensor]] = None , 
-                 booster_head : Optional[dict[str,Any]] = None ,
-                 booster_dict : Optional[dict[str,Any]] = None) -> None:
+                 state_dict  : dict[str,torch.Tensor] | None = None , 
+                 booster_head : dict[str,Any] | None = None ,
+                 booster_dict : dict[str,Any] | None = None) -> None:
         self.state_dict = state_dict
         self.booster_head = booster_head
         self.booster_dict = booster_dict
@@ -290,8 +289,8 @@ class HiddenExtractingModel(ModelPath):
     '''
     MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('registry' , 'hidden_models')
     def __init__(self , hidden_name : str , name: str | Any = None , 
-                 submodels : Optional[list | np.ndarray | Literal['best' , 'swalast' , 'swabest']] = None ,
-                 nums : Optional[list | np.ndarray | int] = None , assertion = True):
+                 submodels : list | np.ndarray | Literal['best' , 'swalast' , 'swabest'] | None = None ,
+                 nums : list | np.ndarray | int | None = None , assertion = True):
         if assertion:
             assert hidden_name in self.MODEL_DICT , f'{hidden_name} is not a registered model'
         if hidden_name in self.MODEL_DICT:

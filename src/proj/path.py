@@ -20,7 +20,7 @@ class PathStructure:
 
     block       = interim.joinpath('DataBlock')
     batch       = interim.joinpath('MiniBatch')
-    dataset     = interim.joinpath('DataSet')
+    datacache   = interim.joinpath('DataCache')
     norm        = interim.joinpath('HistNorm')
 
     hidden      = export.joinpath('hidden_feature')

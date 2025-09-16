@@ -1,6 +1,5 @@
 
 from datetime import datetime
-from typing import Optional
 from pathlib import Path
 
 from src.proj import PATH , DBConnHandler
@@ -83,7 +82,7 @@ class TaskRecorder:
             cursor.execute('SELECT * FROM task_meta WHERE task_type = ?', (self.task_type(type),))
             return cursor.fetchone() is not None
     
-    def mark_finished(self, name: str | None = None, key: str | None = None, success: bool = True, remark: Optional[str] = None, type : str | None = None):
+    def mark_finished(self, name: str | None = None, key: str | None = None, success: bool = True, remark: str | None = None, type : str | None = None):
         """mark task finished"""
         self.ensure_task_type(type)
         with self.conn_handler as (conn, cursor):   

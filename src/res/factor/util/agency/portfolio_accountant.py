@@ -3,7 +3,7 @@ import numpy as np
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal , Optional , Sequence , Any
+from typing import Literal , Sequence , Any
 
 from src.basic import INSTANCE_RECORD , CONF
 from src.data import DATAVENDOR
@@ -22,7 +22,7 @@ class AccountConfig:
     daily : bool = False
     
     @staticmethod
-    def get_benchmark(benchmark : Optional[Portfolio | Benchmark | str] = None) -> Portfolio: 
+    def get_benchmark(benchmark : Portfolio | Benchmark | str | None = None) -> Portfolio: 
         if benchmark is None:
             benchmark = Portfolio()
         elif isinstance(benchmark , str):

@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import pandas as pd
 
-from torch import Tensor
 from typing import Any
 
 from src.res.algo.boost.util import BasicBoosterModel , BoosterInput , load_xingye_data
@@ -88,11 +87,11 @@ class StrongLearner:
         return f'{self.__class__.__name__}(n_learner={self.n_learner},n_bins={self.n_bins},max_nan_ratio={self.max_nan_ratio})'
     def __getitem__(self , i): return self.weak_learners[i]
 
-    def update_weight(self , weight : Tensor , y : Tensor , y_pred : Tensor):
+    def update_weight(self , weight : torch.Tensor , y : torch.Tensor , y_pred : torch.Tensor):
         weight = torch.exp(-y * y_pred.nan_to_num(0)) * weight
         return weight / weight.sum()
 
-    def fit(self , x : Tensor , y : Tensor , w : Tensor , silent = False , feature = None):
+    def fit(self , x : torch.Tensor , y : torch.Tensor , w : torch.Tensor , silent = False , feature = None):
         for i , learner in enumerate(self.weak_learners):  
             y_pred = learner.fit(x , y , w).predict(x)
             w = self.update_weight(w , y , y_pred)
@@ -105,13 +104,13 @@ class StrongLearner:
                 print(txt)
         return self
     
-    def predict(self , x : np.ndarray | Tensor):
+    def predict(self , x : np.ndarray | torch.Tensor):
         pred = self.predictions(x).mean(dim = -1)
         pred = pred / pred.std()
         return pred.cpu().numpy()
     
-    def predictions(self, x : np.ndarray | Tensor):
-        if not isinstance(x , Tensor): 
+    def predictions(self, x : np.ndarray | torch.Tensor):
+        if not isinstance(x , torch.Tensor): 
             x = torch.tensor(x)
         x = x.nan_to_num(-1).to(torch.int32)
         preds = torch.stack([learner.predict(x).nan_to_num(0) for learner in self.weak_learners] , dim = -1)
@@ -142,10 +141,10 @@ class WeakLearner:
     def __repr__(self) -> str: 
         return  f'{self.__class__.__name__}(n_bins={self.n_bins},max_nan_ratio={self.max_nan_ratio})'
 
-    def fit(self, X : Tensor , y : Tensor , weight : Tensor | None = None):
+    def fit(self, X : torch.Tensor , y : torch.Tensor , weight : torch.Tensor | None = None):
         if weight is None: 
             weight = torch.ones_like(y) / len(y)
-        assert isinstance(X , Tensor) and isinstance(y , Tensor) and isinstance(weight , Tensor) , (X , y , weight)
+        assert isinstance(X , torch.Tensor) and isinstance(y , torch.Tensor) and isinstance(weight , torch.Tensor) , (X , y , weight)
         assert torch.all(X < self.n_bins) , X.max()
         assert not torch.is_floating_point(X) , X
         self.n_feat = X.shape[-1]
@@ -171,9 +170,9 @@ class WeakLearner:
     @property
     def min_feat_loss(self): return self.feat_losses[self.feat_idx]
 
-    def predict(self, X : Tensor):
+    def predict(self, X : torch.Tensor):
         assert X.shape[-1] == self.n_feat , (X.shape , self.n_feat)
-        assert isinstance(X , Tensor) , X
+        assert isinstance(X , torch.Tensor) , X
         assert not torch.is_floating_point(X) , X
         group = X[:, self.feat_idx]
         return self.bin_predictions[group].where(group >= 0 ,torch.nan)
@@ -186,7 +185,7 @@ class WeakLearner:
         d = {}
         for k in self.SLOTS:
             v = getattr(self , k)
-            if isinstance(v , Tensor): 
+            if isinstance(v , torch.Tensor): 
                 v = v.cpu()
             d[k] = v
         return d
@@ -194,7 +193,7 @@ class WeakLearner:
     def load_dict(self , model_dict , cuda = False):
         for k in self.SLOTS:
             v = model_dict[k]
-            if isinstance(v , Tensor) and cuda and torch.cuda.is_available(): 
+            if isinstance(v , torch.Tensor) and cuda and torch.cuda.is_available(): 
                 v = v.cuda()
             setattr(self , k , v)
         return self

@@ -1,4 +1,4 @@
-from typing import Any , Optional , Type
+from typing import Any , Type
 
 from . import calculator as Calc
 from .calculator import BasePerfCalc
@@ -52,7 +52,7 @@ class FactorPerfManager(BaseTestManager):
         # Calc.Factor_Distrib_Qtile ,
     ]
 
-    def calc(self , factor: StockFactor , benchmarks: Optional[list[Benchmark|Any]] | Any = None , verbosity = 1):
+    def calc(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = None , verbosity = 1):
         for task in self.tasks.values(): 
             task.calc(factor , benchmarks , verbosity = verbosity - 1)
         if verbosity > 0: 

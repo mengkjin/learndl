@@ -1,13 +1,13 @@
 import torch
+import torch.nn as nn
 import numpy as np
 
-from torch import Tensor , nn
-from typing import Iterator , Optional
+from typing import Iterator
 
 from src.res.algo.boost import BoosterInput
 from src.res.model.util import BatchData , BatchOutput
 
-def tensor_refiller(values : Optional[Tensor] , target_i0 , target_i1 , target_shape : tuple):
+def tensor_refiller(values : torch.Tensor | None , target_i0 , target_i1 , target_shape : tuple):
     if values is None: 
         return None
     assert len(target_shape) in [2,3] , target_shape
@@ -19,18 +19,18 @@ def tensor_refiller(values : Optional[Tensor] , target_i0 , target_i1 , target_s
     return new_values
 
 def batch_data_flatten_x(batch_data : BatchData):
-    if isinstance(batch_data.x , Tensor):
+    if isinstance(batch_data.x , torch.Tensor):
         x = batch_data.x.flatten(1)
     else:
         x = torch.concat([x.flatten(1) for x in batch_data.x] , -1)
     return x
 
 def batch_data_to_boost_input(batch_data : BatchData , 
-                              secid : Optional[np.ndarray] = None ,
-                              date : Optional[np.ndarray] = None , 
-                              nn_to_calculate_hidden : Optional[nn.Module] = None):
+                              secid : np.ndarray | None = None ,
+                              date : np.ndarray | None = None , 
+                              nn_to_calculate_hidden : nn.Module | None = None):
     if nn_to_calculate_hidden is not None:
-        hidden : Tensor = BatchOutput(nn_to_calculate_hidden(batch_data.x)).other['hidden']
+        hidden : torch.Tensor = BatchOutput(nn_to_calculate_hidden(batch_data.x)).other['hidden']
         assert hidden is not None , f'hidden must not be none when using BoosterModel'
         xx = hidden.detach().cpu()
     else:
@@ -50,17 +50,17 @@ def batch_data_to_boost_input(batch_data : BatchData ,
 
     return BoosterInput.from_tensor(xx_values , yy_values , ww_values , secid , date)
 
-def batch_x(batch_data : BatchData , nn_to_calculate_hidden : Optional[nn.Module] = None):
+def batch_x(batch_data : BatchData , nn_to_calculate_hidden : nn.Module | None = None):
     if nn_to_calculate_hidden is not None:
         nn_to_calculate_hidden.eval()
         with torch.no_grad():
-            hidden : Tensor = BatchOutput(nn_to_calculate_hidden(batch_data.x)).other['hidden']
+            hidden : torch.Tensor = BatchOutput(nn_to_calculate_hidden(batch_data.x)).other['hidden']
             assert hidden is not None , f'hidden must not be none when using BoosterModel'
         return hidden.detach()
     else:
         return batch_data.x
     
-def batch_loader_concat(batch_loader : Iterator[BatchData] , nn_to_calculate_hidden : Optional[nn.Module] = None):
+def batch_loader_concat(batch_loader : Iterator[BatchData] , nn_to_calculate_hidden : nn.Module | None = None):
     new_batchs : list[BatchData] = []
     for b in batch_loader:
         new_batch_data = BatchData(batch_x(b , nn_to_calculate_hidden) , b.y , b.w , b.i , b.valid)
@@ -68,8 +68,8 @@ def batch_loader_concat(batch_loader : Iterator[BatchData] , nn_to_calculate_hid
     return BatchData.concat(*new_batchs)
 
 def batch_loader_to_boost_input(batch_loader : Iterator[BatchData] , 
-                                secid : Optional[np.ndarray] = None ,
-                                date : Optional[np.ndarray] = None , 
-                                nn_to_calculate_hidden : Optional[nn.Module] = None):
+                                secid : np.ndarray | None = None ,
+                                date : np.ndarray | None = None , 
+                                nn_to_calculate_hidden : nn.Module | None = None):
     large_batch = batch_loader_concat(batch_loader , nn_to_calculate_hidden)
     return batch_data_to_boost_input(large_batch , secid , date)

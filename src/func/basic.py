@@ -4,8 +4,6 @@ from typing import Any
 
 from pytimedinput import timedInput
 from scipy import stats
-from torch import Tensor
-from typing import Optional
 
 DIV_TOL = 1e-4
 
@@ -29,28 +27,28 @@ def emphasize_header(header=''):
     print('{:*^100}'.format(''))
     print('{: ^100}'.format(''))
         
-def tensor_nancount(x : Tensor , dim=None, keepdim=False):  
+def tensor_nancount(x : torch.Tensor , dim=None, keepdim=False):  
     return x.isfinite().sum(dim = dim , keepdim = keepdim)
 
-def tensor_nanmean(x : Tensor , dim=None, keepdim=False):  
+def tensor_nanmean(x : torch.Tensor , dim=None, keepdim=False):  
     try:
         return x.nanmean(dim = dim , keepdim = keepdim)
     except Exception:
         return x.nansum(dim = dim , keepdim = keepdim) / tensor_nancount(x , dim = dim , keepdim = keepdim)
 
-def tensor_nanstd(x : Tensor , dim=None, keepdim=False , correction=1):
+def tensor_nanstd(x : torch.Tensor , dim=None, keepdim=False , correction=1):
     if dim is None: 
         return torch.tensor(np.nanstd(x.flatten()))
     nancount = tensor_nancount(x , dim = dim , keepdim = True) - correction
     return ((x - tensor_nanmean(x , dim = dim , keepdim = True)).square() / nancount).nansum(dim = dim , keepdim = keepdim).sqrt()
 
-def tensor_nanmedian(x : Tensor , dim=None, keepdim=False):
+def tensor_nanmedian(x : torch.Tensor , dim=None, keepdim=False):
     if x.is_floating_point():
         return x.nanmedian() if dim is None else x.nanmedian(dim = dim , keepdim = keepdim).values
     else:
         return tensor_nanmedian(x.to(torch.float) , dim , keepdim).to(x.dtype)
         
-def tensor_standardize_and_weight(x : Tensor, dim = None , weight_scheme = None):
+def tensor_standardize_and_weight(x : torch.Tensor, dim = None , weight_scheme = None):
     if x.isnan().all().item(): 
         return (x , None) 
     x = (x - tensor_nanmean(x,dim=dim,keepdim=True)) / (tensor_nanstd(x,dim=dim,correction=0,keepdim=True) + DIV_TOL)
@@ -99,7 +97,7 @@ def standardize_and_weight(x : np.ndarray , dim=None):
         w = w.reshape(*[x.shape[j] for j in tran_dim]).transpose(*tran_dim)
     return x , w
 
-def multi_bin_label(x : np.ndarray | Tensor , n = 10):
+def multi_bin_label(x : np.ndarray | torch.Tensor , n = 10):
     y , w = np.zeros_like(x) , np.zeros_like(x)
     for i in range(n):
         low , high = np.quantile(x, i/n) , np.quantile(x, (i+1)/n)
@@ -113,13 +111,13 @@ def multi_bin_label(x : np.ndarray | Tensor , n = 10):
     return y, w
 
 
-def bin_label(x : np.ndarray | Tensor):
+def bin_label(x : np.ndarray | torch.Tensor):
     y , w = np.zeros_like(x) , np.zeros_like(x)
     y[x >= np.nanmedian(x)] = 1
     w[:] = y + 1
     return y, w
 
-def tensor_rank(x : Tensor):    
+def tensor_rank(x : torch.Tensor):    
     assert x.dim() == 1 , x.dim()
     # faster than x.argsort().argsort().to(x) for longer x
     # return torch.zeros_like(x).index_copy_(0,x.argsort(),torch.arange(len(x)).to(x))
@@ -127,12 +125,12 @@ def tensor_rank(x : Tensor):
     y[x.argsort()] = torch.arange(len(x)).to(x)
     return y
 
-def rank_weight(x : Tensor):    
+def rank_weight(x : torch.Tensor):    
     r = tensor_rank(x)
     w = torch.pow(0.5,((r.numel() - 1 - r) * 2 / (r.numel() - 1)))
     return w / w.sum()
 
-def nd_rank(x : Tensor , dim = None):
+def nd_rank(x : torch.Tensor , dim = None):
     if dim is None:
         w = tensor_rank(x.flatten()).reshape(x.shape)
     else:
@@ -145,7 +143,7 @@ def nd_rank(x : Tensor , dim = None):
             w[i] = tensor_rank(w[i])
         w = w.reshape(*new_shape).transpose(-1 , dim)   
     return w
-def nd_rank_weight(x : Tensor , dim = None):
+def nd_rank_weight(x : torch.Tensor , dim = None):
     if dim is None:
         w = rank_weight(x.flatten()).reshape(x.shape)
     else:
@@ -158,52 +156,52 @@ def nd_rank_weight(x : Tensor , dim = None):
             w[i] = rank_weight(w[i])
         w = w.reshape(*new_shape).transpose(-1 , dim)   
     return w 
-def nd_minus_mean(x : Tensor, w : Tensor | float, dim = None):
+def nd_minus_mean(x : torch.Tensor, w : torch.Tensor | float, dim = None):
     return x - (w * x).mean(dim=dim,keepdim=True)
 
-def pearson(x : Tensor, y : Tensor , w = None, dim = None , **kwargs):
+def pearson(x : torch.Tensor, y : torch.Tensor , w = None, dim = None , **kwargs):
     w = 1. if w is None else w / w.sum(dim=dim,keepdim=True) * (w.numel() if dim is None else w.size(dim=dim))
     x1 , y1 = nd_minus_mean(x , w , dim) , nd_minus_mean(y , w , dim)
     return (w * x1 * y1).mean(dim = dim) / ((w * x1.square()).mean(dim=dim).sqrt() + DIV_TOL) / ((w * y1.square()).mean(dim=dim).sqrt() + DIV_TOL)
 
-def ccc(x : Tensor , y : Tensor , w = None, dim = None , **kwargs):
+def ccc(x : torch.Tensor , y : torch.Tensor , w = None, dim = None , **kwargs):
     w = 1. if w is None else w / w.sum(dim=dim,keepdim=True) * (w.numel() if dim is None else w.size(dim=dim))
     x1 , y1 = nd_minus_mean(x , w , dim) , nd_minus_mean(y , w , dim)
     cov_xy = (w * x1 * y1).mean(dim=dim)
     mse_xy = (w * (x1 - y1).square()).mean(dim=dim)
     return (2 * cov_xy) / (mse_xy + 2 * cov_xy + DIV_TOL)
 
-def mse(x : Tensor , y : Tensor , w = None, dim = None , reduction='mean' , **kwargs):
+def mse(x : torch.Tensor , y : torch.Tensor , w = None, dim = None , reduction='mean' , **kwargs):
     w = 1. if w is None else w / w.sum(dim=dim,keepdim=True) * (w.numel() if dim is None else w.size(dim=dim))
     f = torch.mean if reduction == 'mean' else torch.sum
     return f(w * (x - y).square() , dim=dim)
 
-def spearman(x : Tensor , y : Tensor , w = None , dim = None , **kwargs):
+def spearman(x : torch.Tensor , y : torch.Tensor , w = None , dim = None , **kwargs):
     x , y = nd_rank(x , dim = dim) , nd_rank(y , dim = dim)
     return pearson(x , y , w , dim , **kwargs)
 
-def wpearson(x : Tensor , y : Tensor , dim = None , **kwargs):
+def wpearson(x : torch.Tensor , y : torch.Tensor , dim = None , **kwargs):
     w = nd_rank_weight(y , dim = dim)
     return pearson(x,y,w,dim)
 
-def wccc(x : Tensor , y : Tensor , dim = None , **kwargs):
+def wccc(x : torch.Tensor , y : torch.Tensor , dim = None , **kwargs):
     w = nd_rank_weight(y , dim = dim)
     return ccc(x,y,w,dim)
 
-def wmse(x : Tensor , y : Tensor , dim = None , reduction='mean' , **kwargs):
+def wmse(x : torch.Tensor , y : torch.Tensor , dim = None , reduction='mean' , **kwargs):
     w = nd_rank_weight(y , dim = dim)
     return mse(x,y,w,dim,reduction)
 
-def wspearman(x : Tensor , y : Tensor , dim = None , **kwargs):
+def wspearman(x : torch.Tensor , y : torch.Tensor , dim = None , **kwargs):
     w = nd_rank_weight(y , dim = dim)
     return spearman(x,y,w,dim)
 
-def transpose_qkv(X : Tensor , num_heads : int):
+def transpose_qkv(X : torch.Tensor , num_heads : int):
     X = X.reshape(X.shape[0],X.shape[1],num_heads,-1)
     X = X.permute(0,2,1,3)
     return X.reshape(-1,X.shape[2],X.shape[3])
 
-def transpose_output(X : Tensor , num_heads : int):
+def transpose_output(X : torch.Tensor , num_heads : int):
     X = X.reshape(-1,num_heads,X.shape[1],X.shape[2])
     X = X.permute(0,2,1,3)
     return X.reshape(X.shape[0],X.shape[1],-1)
@@ -436,7 +434,7 @@ def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_con
             break
     return userText_list , userText_cond
 
-def recur_update(old : dict , update : Optional[dict]) -> dict:
+def recur_update(old : dict , update : dict | None) -> dict:
     if update:
         for k , v in update.items():
             if isinstance(v , dict) and isinstance(old.get(k) , dict):

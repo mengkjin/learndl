@@ -3,7 +3,7 @@ import numpy as np
 
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from src.proj import PATH , MACHINE , Logger
 from src.basic import Device , ModelPath
@@ -230,7 +230,6 @@ class TrainParam:
     def precision(self) -> Any:
         prec = self.Param['env.precision']
         return getattr(torch , prec) if isinstance(prec, str) else prec
-
     @property
     def beg_date(self): return int(self.Param['model.beg_date'])
     @property
@@ -249,28 +248,42 @@ class TrainParam:
     def model_labels(self) -> list[str]: return self.Param['model.labels']
     @property
     def model_data_types(self) -> list[str]: 
-        if isinstance(self.Param['model.data.types'] , str):
-            return str(self.Param['model.data.types']).split('+')
+        if self.model_input_type == 'data' or (self.model_input_type == 'combo' and 'data' in self.Param['model.combo.types']):
+            data_types = self.Param['model.data.types']
         else:
-            return list(self.Param['model.data.types'])
-    @model_data_types.setter
-    def model_data_types(self , value : list[str]):
-        self.Param['model.data.types'] = value
+            data_types = []
+        return str(data_types).split('+') if isinstance(data_types , str) else list(data_types)
     @property
-    def model_data_prenorm(self) -> dict[str,Any]: return self.Param['model.data.prenorm']
+    def model_data_prenorm(self) -> dict[str,Any]: 
+        return self.Param.get('model.data.prenorm',{})
     @property
-    def model_hidden_types(self) -> list[str]: return self.Param['model.hidden.types']
+    def model_hidden_types(self) -> list[str]: 
+        if self.model_input_type == 'hidden' or (self.model_input_type == 'combo' and 'hidden' in self.Param['model.combo.types']):
+            hidden_types = self.Param['model.hidden.types']
+        else:
+            hidden_types = []
+        return str(hidden_types).split('+') if isinstance(hidden_types , str) else list(hidden_types)
     @property
     def model_factor_types(self) -> list[str]: 
-        factors = self.Param.get('model.factor.types' , [])
-        return striped_list(factors)
+        if self.model_input_type == 'factor' or (self.model_input_type == 'combo' and 'factor' in self.Param['model.combo.types']):
+            factors = self.Param['model.factor.types']
+        else:
+            factors = []
+        return str(factors).split('+') if isinstance(factors , str) else striped_list(factors)
     @property
     def model_combo_types(self) -> dict[str,list[str]]: 
-        combos = self.Param.get('model.combo.types' , {})
-        if 'factor' in combos: 
-            combos['factor'] = striped_list(combos['factor'])
+        input_combos = self.Param.get('model.combo.types' , [])
+        if self.model_input_type == 'combo' and not input_combos:
+            raise ValueError('model.combo.types is empty when input_type is combo')
+        combos = {k:v for k , v in self.model_all_input_keys.items() if k in input_combos}
         return combos
-
+    @property
+    def model_all_input_keys(self) -> dict[str,list[str]]: 
+        return {
+            'data' : self.model_data_types,
+            'factor' : self.model_factor_types,
+            'hidden' : self.model_hidden_types,
+        }
     @property
     def model_train_window(self): 
         if (train_window := int(self.Param.get('model.train_window', 0))) > 0:
@@ -295,9 +308,25 @@ class TrainParam:
         else:
             return 'not_a_booster'
     @property
-    def model_booster_optuna(self): return bool(self.Param.get('model.booster_optuna'))
+    def model_booster_optuna(self): 
+        return bool(self.Param.get('model.booster_optuna'))
     @property
-    def model_booster_optuna_n_trials(self): return int(self.Param.get('model.booster_optuna_n_trials',10))
+    def model_booster_optuna_n_trials(self): 
+        return int(self.Param.get('model.booster_optuna_n_trials',10))
+    @property
+    def model_sequence_lens(self) -> dict[str,int]: 
+        return dict(self.Param.get('model.sequence.lens',{}))
+    @property
+    def model_sequence_steps(self) -> dict[str,int]: 
+        return dict(self.Param.get('model.sequence.steps',{}))
+    def seq_lens(self) -> dict[str,int]: 
+        slens = self.model_sequence_lens
+        lens = {key:slens.get(key , slens.get(itp,1)) for itp,keys in self.model_all_input_keys.items() for key in keys}
+        return lens
+    def seq_steps(self) -> dict[str,int]: 
+        ssteps = self.model_sequence_steps
+        steps = {key:ssteps.get(key , ssteps.get(itp,1)) for itp,keys in self.model_all_input_keys.items() for key in keys}
+        return steps
     @property
     def train_data_step(self): return int(self.Param['train.data_step'])
     @property
@@ -444,8 +473,8 @@ class ModelParam:
             self.booster_head_param.expand()
         return self
        
-    def update_data_param(self , x_data : dict):
-        '''when x_data is know , use it to fill some params(seq_len , input_dim , inday_dim , etc.)'''
+    def update_data_param(self , x_data : dict, config : 'TrainConfig'):
+        '''when x_data is known , use it to fill some params(seq_len , input_dim , inday_dim , etc.) of nn module'''
         if not x_data: 
             return self
         keys = list(x_data.keys())
@@ -454,18 +483,19 @@ class ModelParam:
         for param in self.params:
             self.update_param_dict(param , 'input_dim' , input_dim)
             self.update_param_dict(param , 'inday_dim' , inday_dim)
-            if len(keys) == 1: 
-                self.update_param_dict(param , 'seq_len' , param.get('seqlens',{}).get(keys[0]))
+            if len(keys) == 1:
+                value : int = (config.seq_lens() | param.get('seqlens',{})).get(keys[0] , 1)
+                self.update_param_dict(param , 'seq_len' , value)
         return self
     
     @staticmethod
-    def update_param_dict(param , key : str , value , delist = True , overwrite = False):
+    def update_param_dict(param : dict[str,Any] , key : str , value : Any , delist = True , overwrite = False):
         if key in param.keys() and not overwrite: 
             return
         if delist and isinstance(value , (list , tuple)) and len(value) == 1: 
             value = value[0]
         if value is not None: 
-            param.update({key : value})
+            param[key] = value
     
     @property
     def max_num_output(self): return max(self.Param.get('num_output' , [1]))
@@ -550,10 +580,14 @@ class TrainConfig(TrainParam):
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
     def update_data_param(self , x_data : dict):
+        '''
+        when x_data is known , use it to fill some params(seq_len , input_dim , inday_dim , etc.) of nn module
+        do it in whenever x_data is changed
+        '''
         if self.module_type == 'nn' and x_data: 
-            self.Model.update_data_param(x_data)
+            self.Model.update_data_param(x_data , self)
     
-    def weight_scheme(self , stage : str , no_weight = False) -> Optional[str]: 
+    def weight_scheme(self , stage : str , no_weight = False) -> str | None: 
         stg = stage if stage == 'fit' else 'test'
         return None if no_weight else self.Train.Param[f'train.criterion.weight.{stg}']
     

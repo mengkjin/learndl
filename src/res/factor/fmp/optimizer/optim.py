@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal , Optional
+from typing import Literal
 
 from src.proj import MACHINE
 from src.res.factor.util import PortCreator , PortCreateResult , Port
@@ -16,7 +16,7 @@ class PortfolioOptimizerConfig:
     prob_type : PROB_TYPE = 'quadprog'
     engine_type : ENGINE_TYPE = 'mosek'
     cvxpy_solver : CVXPY_SOLVER = 'mosek'
-    optim_config : Optional[str] = None
+    optim_config : str | None = None
     opt_relax : bool = True
     opt_turn  : bool = True
     opt_qobj  : bool = True

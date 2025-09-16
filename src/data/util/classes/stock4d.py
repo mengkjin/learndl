@@ -1,11 +1,10 @@
+import torch
 import numpy as np
 import pandas as pd
 import xarray as xr  
-import torch
 
 from copy import deepcopy
 from dataclasses import dataclass
-from torch import Tensor
 from typing import Any
 
 from src.func import match_values , index_union
@@ -40,7 +39,7 @@ class Stock4DData:
 
     def asserted(self):
         if self.shape:
-            assert isinstance(self.values , (np.ndarray , Tensor)) , self.values
+            assert isinstance(self.values , (np.ndarray , torch.Tensor)) , self.values
             assert self.ndim == 4 , self.shape
             assert self.shape[0] == len(self.secid) 
             assert self.shape[1] == len(self.date)
@@ -104,7 +103,7 @@ class Stock4DData:
     def as_type(self , dtype = None):
         if dtype and isinstance(self.values , np.ndarray): 
             self.values = self.values.astype(dtype)
-        if dtype and isinstance(self.values , Tensor): 
+        if dtype and isinstance(self.values , torch.Tensor): 
             self.values = self.values.to(dtype)
         return self
     
@@ -120,7 +119,7 @@ class Stock4DData:
         obj = self if inplace else self.copy()
         if secid is None or len(secid) == 0: 
             return obj
-        asTensor , dtype = isinstance(obj.values , Tensor) , obj.dtype
+        asTensor , dtype = isinstance(obj.values , torch.Tensor) , obj.dtype
         values = np.full((len(secid) , *obj.shape[1:]) , np.nan)
         _ , p0s , p1s = np.intersect1d(secid , obj.secid , return_indices=True)
         values[p0s] = obj.values[p1s]
@@ -132,7 +131,7 @@ class Stock4DData:
         obj = self if inplace else self.copy()
         if date is None or len(date) == 0: 
             return obj
-        asTensor , dtype = isinstance(obj.values , Tensor) , obj.dtype
+        asTensor , dtype = isinstance(obj.values , torch.Tensor) , obj.dtype
         values = np.full((obj.shape[0] , len(date) , *obj.shape[2:]) , np.nan)
         _ , p0d , p1d = np.intersect1d(date , obj.date , return_indices=True)
         values[:,p0d] = obj.values[:,p1d]
@@ -149,7 +148,7 @@ class Stock4DData:
         elif date is None or len(date) == 0:
             return obj.align_secid(secid = secid)
         else:
-            asTensor , dtype = isinstance(obj.values , Tensor) , obj.dtype
+            asTensor , dtype = isinstance(obj.values , torch.Tensor) , obj.dtype
             values = np.full((len(secid),len(date),*obj.shape[2:]) , np.nan)
             _ , p0s , p1s = np.intersect1d(secid , obj.secid , return_indices=True)
             _ , p0d , p1d = np.intersect1d(date  , obj.date  , return_indices=True)
@@ -165,7 +164,7 @@ class Stock4DData:
         obj = self if inplace else self.copy()
         if feature is None or len(feature) == 0: 
             return obj
-        asTensor , dtype = isinstance(obj.values , Tensor) , obj.dtype
+        asTensor , dtype = isinstance(obj.values , torch.Tensor) , obj.dtype
         values = np.full((*obj.shape[:-1],len(feature)) , np.nan)
         _ , p0f , p1f = np.intersect1d(feature , obj.feature , return_indices=True)
         values[...,p0f] = obj.values[...,p1f]
@@ -173,7 +172,7 @@ class Stock4DData:
         obj.feature = feature
         return obj.as_type(dtype)
     
-    def add_feature(self , new_feature , new_value : np.ndarray | Tensor):
+    def add_feature(self , new_feature , new_value : np.ndarray | torch.Tensor):
         assert new_value.shape == self.shape[:-1]
         new_value = new_value.reshape(*new_value.shape , 1)
         self.values  = np.concatenate([self.values,new_value],axis=-1)
@@ -190,7 +189,7 @@ class Stock4DData:
         return self
     
     def loc(self , fillna : Any = None , **kwargs):
-        values : np.ndarray | Tensor | Any = self.values
+        values : np.ndarray | torch.Tensor | Any = self.values
         for k,v in kwargs.items():  
             if isinstance(v , (str,int,float)): 
                 kwargs[k] = [v]
@@ -207,7 +206,7 @@ class Stock4DData:
             index  = match_values(kwargs['secid'] , self.secid)
             values = values[index,:]
         if fillna is not None: 
-            if isinstance(values , Tensor): 
+            if isinstance(values , torch.Tensor): 
                 values = values.nan_to_num(fillna)
             else: 
                 values[np.isnan(values)] = fillna

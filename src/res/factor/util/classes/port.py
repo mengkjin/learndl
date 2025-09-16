@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from copy import deepcopy
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from src.basic import CONF
 from src.data import DATAVENDOR
@@ -97,7 +97,7 @@ class Port:
             rslt.rebalance(*old_pos)
         return rslt
     
-    def fut_ret(self , new_date : Optional[int] = None ,
+    def fut_ret(self , new_date : int | None = None ,
                 price0 : Literal['close' , 'vwap' , 'open'] = 'close' ,
                 price1 : Literal['close' , 'vwap' , 'open'] = 'close') -> float:
         if not self: 
@@ -111,10 +111,10 @@ class Port:
         port = self.port.merge(q , on = 'secid').fillna(0)
         return (port['weight'] * port['ret']).to_numpy().sum()
     
-    def close2open(self , new_date : Optional[int] = None) -> float:
+    def close2open(self , new_date : int | None = None) -> float:
         return self.fut_ret(new_date , price0 = 'close' , price1 = 'open')
     
-    def close2vwap(self , new_date : Optional[int] = None) -> float:
+    def close2vwap(self , new_date : int | None = None) -> float:
         return self.fut_ret(new_date , price0 = 'close' , price1 = 'vwap')
     
     def rebalance(self , long_position : float = 1., short_position : float = 0.):

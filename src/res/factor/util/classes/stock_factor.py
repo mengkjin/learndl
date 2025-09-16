@@ -4,7 +4,7 @@ import warnings
 
 from collections.abc import Iterable
 from copy import deepcopy
-from typing import Any , Literal , Optional , Union
+from typing import Any , Literal
 
 from src.basic import INSTANCE_RECORD , DB
 from src.func import transform as T
@@ -149,10 +149,10 @@ def param_match(args1 : dict[str,Any] , args2 : dict[str,Any]) -> bool:
     if len(args1) != len(args2): 
         return False
     matches = [k in args2 and args2[k] == v for k , v in args1.items()]
-    return all(matches)
+    return all(matches) 
 
 class StockFactor:
-    def __init__(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor',dict[int,pd.Series]] , normalized = False , step = None):
+    def __init__(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' , normalized = False , step = None):
         self.update(factor , normalized , step)
         INSTANCE_RECORD.update_factor(self)
 
@@ -162,7 +162,7 @@ class StockFactor:
     def __call__(self , benchmark):
         return self.within(benchmark)
 
-    def update(self , factor : Union[pd.DataFrame,pd.Series,DataBlock,'StockFactor',dict[int,pd.Series]] , normalized = False , step = None):
+    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' , normalized = False , step = None):
         if isinstance(factor , StockFactor):
             factor = factor.prior_input
         elif isinstance(factor , dict):
@@ -296,7 +296,7 @@ class StockFactor:
         else:
             return StockFactor(self._blk.align(secid , date , factor_name , inplace = False))
 
-    def within(self , benchmark : Optional[Benchmark | str] , recalculate = False) -> 'StockFactor':
+    def within(self , benchmark : Benchmark | str | None , recalculate = False) -> 'StockFactor':
         '''use benchmark to mask factor'''
         if isinstance(benchmark , str): 
             benchmark = Benchmark(benchmark)
@@ -382,7 +382,7 @@ class StockFactor:
             self.stats['weighted_pnl'] = (params , pnl)
         return self.stats['weighted_pnl'][1]
     
-    def coverage(self , benchmark : Optional[Benchmark | str] = None):
+    def coverage(self , benchmark : Benchmark | str | None = None):
         params = {'benchmark' : benchmark.name if isinstance(benchmark,Benchmark) else benchmark}
         if 'coverage' not in self.stats or not param_match(self.stats['coverage'][0] , params):
             dates = self.date

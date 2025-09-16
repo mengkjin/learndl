@@ -1,9 +1,6 @@
 import torch
 
 from torch import nn , Tensor
-from typing import Optional
-# import torch.nn.functional as F
-
 class MultiheadAttention(nn.Module):
     def __init__(self, d_model, n_heads, d_k=None, d_v=None, res_attention=False, attn_dropout=0., proj_dropout=0., qkv_bias=True, lsa=False):
         """Multi Head Attention Layer
@@ -29,8 +26,15 @@ class MultiheadAttention(nn.Module):
         # Poject output
         self.to_out = nn.Sequential(nn.Linear(n_heads * d_v, d_model), nn.Dropout(proj_dropout))
 
-    def forward(self, Q:Tensor, K:Optional[Tensor]=None, V:Optional[Tensor]=None, prev:Optional[Tensor]=None,
-                key_padding_mask:Optional[Tensor]=None, attn_mask:Optional[Tensor]=None):
+    def forward(
+        self, 
+        Q:Tensor, 
+        K:Tensor | None = None, 
+        V:Tensor | None = None, 
+        prev:Tensor | None = None,
+        key_padding_mask:Tensor | None = None, 
+        attn_mask:Tensor | None = None
+    ):
 
         bs = Q.size(0)
         if K is None: 
@@ -72,9 +76,9 @@ class ScaledDotProductAttention(nn.Module):
         self.lsa = lsa
 
     def forward(self, q:Tensor, k:Tensor, v:Tensor, 
-                prev:Optional[Tensor]=None, 
-                key_padding_mask:Optional[Tensor]=None, 
-                attn_mask:Optional[Tensor]=None):
+                prev:Tensor | None = None, 
+                key_padding_mask:Tensor | None = None, 
+                attn_mask:Tensor | None = None):
         '''
         Input shape:
             q               : [bs x n_heads x max_q_len x d_k]

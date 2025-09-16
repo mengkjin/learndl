@@ -1,5 +1,6 @@
-from torch import Tensor , set_grad_enabled
-from typing import Any , Optional
+import torch
+from torch import set_grad_enabled
+from typing import Any
 
 from src.res.algo import AlgoModule
 from src.res.model.util import BasePredictorModel , BatchData , BatchOutput , Optimizer
@@ -16,10 +17,10 @@ class NNBooster(BasePredictorModel):
         return self.config.booster_head_param
     
     def init_model(self , 
-                   model_nn_module : Optional[str] = None , 
-                   model_nn_param : Optional[dict] = None , 
-                   model_boost_module : Optional[str] = None, 
-                   model_boost_param : Optional[dict] = None , 
+                   model_nn_module : str | None = None , 
+                   model_nn_param : dict | None = None , 
+                   model_boost_module : str | None = None, 
+                   model_boost_param : dict | None = None , 
                    testor_mode : bool = False ,
                    *args , **kwargs):
         if testor_mode: 
@@ -73,17 +74,17 @@ class NNBooster(BasePredictorModel):
 
     def multiloss_params(self): return AlgoModule.multiloss_params(self.net)
 
-    def forward(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
+    def forward(self , batch_data : BatchData | torch.Tensor , *args , **kwargs) -> Any: 
         return self.forward_full(batch_data , *args , **kwargs)
 
-    def forward_net(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
+    def forward_net(self , batch_data : BatchData | torch.Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
         if len(batch_data) == 0: 
             return None
         x = batch_data.x if isinstance(batch_data , BatchData) else batch_data
         return self.net(x , *args , **kwargs)
     
-    def forward_full(self , batch_data : BatchData | Tensor , *args , **kwargs): 
+    def forward_full(self , batch_data : BatchData | torch.Tensor , *args , **kwargs): 
         '''model object that can be called to forward'''
         if len(batch_data) == 0: 
             return None

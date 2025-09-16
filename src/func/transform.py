@@ -3,7 +3,7 @@ import pandas as pd
 import statsmodels.api as sm
 import warnings
 
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 from scipy.stats import norm, rankdata
 from scipy.linalg import lstsq
 
@@ -183,9 +183,9 @@ def whiten(v : pd.DataFrame | pd.Series | np.ndarray , weight = None) -> Any:
 def winsorize(v , 
               center : Literal['median' , 'mean'] = 'median', 
               scale : Literal['mad' , 'sd'] = 'mad', 
-              const : Optional[float | np.floating] = None , 
-              trim_val : tuple[Optional[float],Optional[float]] = (None , None) , 
-              winsor_val : tuple[Optional[float],Optional[float]] = (None , None) , 
+              const : float | np.floating | None = None , 
+              trim_val : tuple[float | None,float | None] = (None , None) , 
+              winsor_val : tuple[float | None,float | None] = (None , None) , 
               winsor_pct : tuple[float,float] = (0. , 1.)):
     assert center in ['median' , 'mean'] , center
     assert scale in ['mad' , 'sd'] , scale
@@ -308,7 +308,7 @@ def cov_to_corr(cov : np.ndarray):
     sd = np.sqrt(cov.diagonal())[None]
     return cov / sd.T.dot(sd)
 
-def weighted_ts(ts : np.ndarray , nwindow : int = 504 , halflife : Optional[int] = None):
+def weighted_ts(ts : np.ndarray , nwindow : int = 504 , halflife : int | None = None):
     
     n = min(len(ts) , nwindow)
     if halflife:
@@ -318,7 +318,7 @@ def weighted_ts(ts : np.ndarray , nwindow : int = 504 , halflife : Optional[int]
         wgt = 1
     return ts[-n:] * wgt
 
-def ewma_cov(ts , nwindow : int = 504 , halflife : Optional[int] = None , shrinkage : float = 0.33 , 
+def ewma_cov(ts , nwindow : int = 504 , halflife : int | None = None , shrinkage : float = 0.33 , 
              corr = False):
     assert 0 <= shrinkage <= 1 , shrinkage
     min_periods=int(nwindow / 4)
@@ -328,7 +328,7 @@ def ewma_cov(ts , nwindow : int = 504 , halflife : Optional[int] = None , shrink
         v = v * (1 - shrinkage) + shrink_cov(ts , min_periods , corr) * shrinkage
     return v
 
-def ewma_sd(ts , nwindow : int = 504 , halflife : Optional[int] = None):
+def ewma_sd(ts , nwindow : int = 504 , halflife : int | None = None):
     min_periods=int(nwindow / 4)
     ts = weighted_ts(ts , nwindow , halflife)
     v = np.nanstd(ts , axis = 0)

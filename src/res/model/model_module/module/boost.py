@@ -1,5 +1,4 @@
-from torch import Tensor
-from typing import Optional
+import torch
 
 from src.res.algo import AlgoModule
 from src.res.model.util import BasePredictorModel , BatchData
@@ -10,8 +9,8 @@ class BoostPredictor(BasePredictorModel):
     AVAILABLE_CALLBACKS = ['StatusDisplay' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis']
 
     def init_model(self , 
-                   model_module : Optional[str] = None , 
-                   model_param : Optional[dict] = None ,
+                   model_module : str | None = None , 
+                   model_param : dict | None = None ,
                    testor_mode : bool = False ,
                    *args , **kwargs):
         if testor_mode: 
@@ -41,7 +40,7 @@ class BoostPredictor(BasePredictorModel):
         self.booster.load_dict(model_file['booster_dict'])
         return self
     
-    def forward(self , batch_data : BatchData | Tensor , *args , **kwargs): 
+    def forward(self , batch_data : BatchData | torch.Tensor , *args , **kwargs): 
         '''model object that can be called to forward'''
         if len(batch_data) == 0: 
             return None

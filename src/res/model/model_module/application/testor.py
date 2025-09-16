@@ -1,4 +1,4 @@
-from torch import Tensor
+import torch
 
 from src.res.model.data_module import DataModule , get_realistic_batch_data
 from src.res.model.util import TrainConfig
@@ -27,7 +27,7 @@ class ModelTestor:
 
     def try_forward(self) :
         '''as name says, try to forward'''
-        if isinstance(self.batch_data.x , Tensor):
+        if isinstance(self.batch_data.x , torch.Tensor):
             print(f'x shape is {self.batch_data.x.shape}')
         else:
             print(f'multiple x of {len(self.batch_data.x)}')

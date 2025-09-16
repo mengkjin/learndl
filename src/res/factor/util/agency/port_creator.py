@@ -2,7 +2,7 @@ import time
 
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from ..classes import Port , Benchmark , Portfolio , AlphaModel , Amodel , RiskAnalytic , RISK_MODEL
 
@@ -14,8 +14,8 @@ class PortCreator(ABC):
     def setup(self , print_info : bool = False , **kwargs): 
         return self
     
-    def create(self , model_date : int , alpha_model : Optional[AlphaModel | Amodel] = None , 
-               benchmark : Optional[Benchmark | Portfolio | Port] = None , init_port : Port | Any = None , 
+    def create(self , model_date : int , alpha_model : AlphaModel | Amodel | None = None , 
+               benchmark : Benchmark | Portfolio | Port | None = None , init_port : Port | Any = None , 
                detail_infos = True) -> 'PortCreateResult': 
         self.model_date = model_date
         self.alpha_model = alpha_model if alpha_model is not None else Amodel.create_random(model_date)

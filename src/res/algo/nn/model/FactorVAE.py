@@ -1,5 +1,4 @@
 import torch
-from typing import Optional
 from torch import nn,Tensor
 from torch.distributions import Normal , kl_divergence
 
@@ -34,9 +33,9 @@ class FactorVAE(nn.Module):
         self.bn = nn.BatchNorm1d(1)
         self.sampling = VAESampling()
 
-    def forward(self, x : Tensor, y : Optional[Tensor] = None , 
-                factor_noise : Optional[Tensor] = None ,
-                alpha_noise : Optional[Tensor] = None):
+    def forward(self, x : Tensor, y : Tensor | None = None , 
+                factor_noise : Tensor | None = None ,
+                alpha_noise : Tensor | None = None):
         '''
         in  : 
             x : [bs x seq_len x input_dim]
@@ -115,7 +114,7 @@ class PortfolioLayer(nn.Module):
         return p
     
 class VAESampling(nn.Module):
-    def forward(self , mu : Tensor , sigma : Tensor , noise : Optional[Tensor] = None):
+    def forward(self , mu : Tensor , sigma : Tensor , noise : Tensor | None = None):
         if noise is None:  
             return self.reparameterize(mu , sigma)
         else: 
@@ -131,7 +130,7 @@ class DistributionLayer(nn.Module):
     in  : [1 x input_dim]
     out : ([1 x output_dim] , [1 x output_dim])
     '''
-    def __init__(self, input_dim : int , output_dim : int , hidden_size : Optional[int] = None):
+    def __init__(self, input_dim : int , output_dim : int , hidden_size : int | None = None):
         super().__init__()
         if hidden_size is None: 
             hidden_size = output_dim
@@ -207,7 +206,7 @@ class FactorDecoder(nn.Module):
         self.beta_layer = BetaLayer(hidden_dim , factor_num)
         self.alpha_sampling = VAESampling()
 
-    def forward(self, x : Tensor , factors : Tensor , alpha_noise : Optional[Tensor] = None) -> tuple[Tensor,Tensor,Tensor,Tensor]:
+    def forward(self, x : Tensor , factors : Tensor , alpha_noise : Tensor | None = None) -> tuple[Tensor,Tensor,Tensor,Tensor]:
         mu_alpha, sigma_alpha = self.alpha_layer(x)
         beta = self.beta_layer(x)
         alpha = self.alpha_sampling(mu_alpha, sigma_alpha , alpha_noise)

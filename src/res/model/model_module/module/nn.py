@@ -1,5 +1,6 @@
-from torch import Tensor , set_grad_enabled
-from typing import Any , Optional
+import torch
+from torch import set_grad_enabled
+from typing import Any
 
 from src.res.algo import AlgoModule
 from src.res.model.util import BasePredictorModel , BatchData , Optimizer
@@ -7,8 +8,8 @@ from src.res.model.model_module.util.swa import choose_swa_method
 
 class NNPredictor(BasePredictorModel):
     def init_model(self , 
-                   model_module : Optional[str] = None , 
-                   model_param : Optional[dict] = None , 
+                   model_module : str | None = None , 
+                   model_param : dict | None = None , 
                    testor_mode : bool = False ,
                    *args , **kwargs):
         if testor_mode: 
@@ -55,7 +56,7 @@ class NNPredictor(BasePredictorModel):
     
     def multiloss_params(self): return AlgoModule.multiloss_params(self.net)
     
-    def forward(self , batch_data : BatchData | Tensor , *args , **kwargs) -> Any: 
+    def forward(self , batch_data : BatchData | torch.Tensor , *args , **kwargs) -> Any: 
         '''model object that can be called to forward'''
         if len(batch_data) == 0: 
             return None

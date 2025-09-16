@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from contextlib import nullcontext
-from typing import Any , ClassVar , Optional
+from typing import Any , ClassVar
 
 from src.proj import MACHINE
 from src.basic import SILENT , CALENDAR , RegisteredModel
@@ -91,7 +91,7 @@ class ModelPredictor:
         self.save_preds()
         return self
 
-    def save_preds(self , df : Optional[pd.DataFrame] = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
+    def save_preds(self , df : pd.DataFrame | None = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
         new_df = df if isinstance(df , pd.DataFrame) else self.df
         if new_df.empty: 
             return self

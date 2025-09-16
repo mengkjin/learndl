@@ -3,15 +3,14 @@ import numpy as np
 import pandas as pd
 import torch.nn as nn
 from dataclasses import dataclass , field
-from torch import Tensor
-from typing import Any , Optional
+from typing import Any
 
 from src.basic.util.device import Device , send_to , get_device
 
 def _object_shape(obj : Any) -> Any:
     if obj is None: 
         return None
-    elif isinstance(obj , Tensor | np.ndarray): 
+    elif isinstance(obj , torch.Tensor | np.ndarray): 
         return obj.shape
     elif isinstance(obj , (list , tuple)): 
         return tuple([_object_shape(x) for x in obj])
@@ -21,16 +20,19 @@ def _object_shape(obj : Any) -> Any:
 @dataclass(slots=True)
 class BatchData:
     '''custom data component of a batch(x,y,w,i,valid)'''
-    x       : Tensor | tuple[Tensor,...] | list[Tensor]
-    y       : Tensor 
-    w       : Tensor | None
-    i       : Tensor 
-    valid   : Tensor
+    x       : torch.Tensor | tuple[torch.Tensor,...] | list[torch.Tensor]
+    y       : torch.Tensor 
+    w       : torch.Tensor | None
+    i       : torch.Tensor 
+    valid   : torch.Tensor
     kwargs  : dict[str,Any] = field(default_factory=dict)
     
     def __post_init__(self):
         if isinstance(self.x , (list , tuple)) and len(self.x) == 1: 
             self.x = self.x[0]
+        assert self.y is not None , 'y must not be None'
+        assert self.i is not None , 'i must not be None'
+        assert self.valid is not None , 'valid must not be None'
     def to(self , device = None): 
         if device is None: 
             return self
@@ -97,7 +99,7 @@ class BatchData:
             v.append(bd.valid)
             kwargs.append(bd.kwargs)
         assert all([len(kwg) == 0 for kwg in kwargs]) , [kwg.keys() for kwg in kwargs]
-        if isinstance(x[0] , Tensor):
+        if isinstance(x[0] , torch.Tensor):
             x = torch.concat(x)
         else:
             assert all([len(xx) == len(x[0]) for xx in x]) , [len(xx) for xx in x]
@@ -111,28 +113,28 @@ class BatchData:
 
 @dataclass
 class BatchMetric:
-    score   : Tensor | float = 0.
-    losses  : dict[str,Tensor] = field(default_factory=dict)
+    score   : torch.Tensor | float = 0.
+    losses  : dict[str,torch.Tensor] = field(default_factory=dict)
 
     def __post_init__(self):
-        if isinstance(self.score , Tensor): 
+        if isinstance(self.score , torch.Tensor): 
             self.score = self.score.item()
-        self.loss = Tensor([0])
+        self.loss = torch.Tensor([0])
         for value in self.losses.values(): 
             self.loss = self.loss.to(value) + value
 
     @property
     def loss_item(self) -> float: return self.loss.item()
 
-    def set_score(self , score : Tensor | float): 
-        self.score = score.item() if isinstance(score , Tensor) else score
+    def set_score(self , score : torch.Tensor | float): 
+        self.score = score.item() if isinstance(score , torch.Tensor) else score
 
-    def add_loss(self , key : str , value : Tensor):
+    def add_loss(self , key : str , value : torch.Tensor):
         assert key not in self.losses.keys() , (key , self.losses.keys())
         self.loss = self.loss.to(value) + value
         self.losses[key] = value
 
-    def add_losses(self , losses : dict[str,Tensor] , prefix : str | tuple[str,...] | None = None):
+    def add_losses(self , losses : dict[str,torch.Tensor] , prefix : str | tuple[str,...] | None = None):
         if prefix is not None:
             losses = {key:value for key , value in losses.items() if key.startswith(prefix)}
         for key , value in losses.items():
@@ -140,14 +142,14 @@ class BatchMetric:
 
 @dataclass(slots=True)
 class BatchOutput:
-    outputs : Optional[Tensor | tuple | list] = None
+    outputs : torch.Tensor | tuple | list | None = None
     def __len__(self): return len(self.pred)
     @property
     def device(self): return self.pred.device
     @property
-    def pred(self) -> Tensor:
+    def pred(self) -> torch.Tensor:
         if self.outputs is None: 
-            return Tensor(size=(0,1)).requires_grad_()
+            return torch.Tensor(size=(0,1)).requires_grad_()
         output = self.outputs[0] if isinstance(self.outputs , (list , tuple)) else self.outputs
         if output.ndim == 1: 
             output = output.unsqueeze(1)
@@ -163,9 +165,9 @@ class BatchOutput:
             return {}
     
     @property
-    def hidden(self) -> Tensor: return self.other['hidden']
+    def hidden(self) -> torch.Tensor: return self.other['hidden']
         
-    def override_pred(self , pred : Optional[Tensor]):
+    def override_pred(self , pred : torch.Tensor | None):
         assert self.outputs is not None
         assert pred is not None
         raw_pred = self.pred
@@ -203,7 +205,7 @@ class BatchOutput:
     def hidden_df(self , secid : np.ndarray , date : np.ndarray , narrow_df = False ,
                   colnames : str | list | None = None , **kwargs):
         '''kwargs will be used in df.assign(**kwargs)'''
-        full_hidden : Tensor | Any = self.other['hidden']
+        full_hidden : torch.Tensor | Any = self.other['hidden']
         full_hidden = full_hidden.cpu().numpy()
 
         assert full_hidden.ndim == 2 , full_hidden.shape

@@ -4,7 +4,7 @@ import src.res.factor.util.agency as AGENCY
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any , Optional
+from typing import Any
 
 from .constr import LinearConstraint , BoundConstraint , TurnConstraint , CovConstraint , ShortConstraint
 
@@ -71,7 +71,7 @@ class SolverInput:
             self.relaxer(self)
         return self
     
-    def utility(self , w : Optional[np.ndarray] = None , prob_type = 'linprog' , turn = True ,  qobj = True , qcon = True , short = True):
+    def utility(self , w : np.ndarray | None = None , prob_type = 'linprog' , turn = True ,  qobj = True , qcon = True , short = True):
         utility = AGENCY.PortCreateUtility()
         if w is not None:
             utility(alpha = w.dot(self.alpha))
@@ -85,7 +85,7 @@ class SolverInput:
             utility = utility * self.utility_scaler
         return utility
     
-    def accuracy(self , w : Optional[np.ndarray] = None):
+    def accuracy(self , w : np.ndarray | None = None):
         accuracy = AGENCY.PortCreateAccuracy()
         if w is not None:
             accuracy(lin_ub_bias = np.min(self.lin_con.ub - self.lin_con.A.dot(w)))

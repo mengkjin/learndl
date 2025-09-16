@@ -1,7 +1,7 @@
 import numpy as np
 
 from dataclasses import dataclass
-from typing import Any, Literal , Optional
+from typing import Any, Literal
 
 @dataclass
 class LinearConstraint:
@@ -23,7 +23,7 @@ class LinearConstraint:
     def __len__(self): return len(self.A)
     def is_empty(self): return len(self) == 0
 
-    def check(self , N : Optional[int] = None):
+    def check(self , N : int | None = None):
         if N is None:
             assert self.A.ndim == 2 , self.A
             assert self.type.ndim == 1 , self.type
@@ -89,7 +89,7 @@ class BoundConstraint:
 
     def __bool__(self): return True
 
-    def check(self , N : Optional[int] = None):
+    def check(self , N : int | None = None):
         if N is None:
             assert self.type.ndim == 1 , self.type
             assert self.lb.ndim == 1 , self.lb
@@ -120,7 +120,7 @@ class TurnConstraint:
 
     def __bool__(self) -> bool: return self.dbl is not None and self.dbl > 0.0
 
-    def check(self , N : Optional[int] = None):
+    def check(self , N : int | None = None):
         if self.rho == 0: 
             self.rho = None
         if self.dbl == 0: 
@@ -149,7 +149,7 @@ class ShortConstraint:
 
     def __bool__(self) -> bool: return bool(self.pos)
 
-    def check(self , N : Optional[int] = None):
+    def check(self , N : int | None = None):
         if self.pos == 0  : 
             self.pos  = None
         if self.cost == 0 : 
@@ -192,7 +192,7 @@ class CovConstraint:
 
     def __bool__(self): return self.lmbd is not None or self.te is not None
 
-    def check(self , N : Optional[int] = None):
+    def check(self , N : int | None = None):
         if self.lmbd == 0: 
             self.lmbd = None
         if self.te   == 0: 

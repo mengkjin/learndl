@@ -1,13 +1,12 @@
+import torch
 import numpy as np
 import pandas as pd
 import xarray as xr  
 
 from dataclasses import dataclass
-from torch import Tensor
-
 @dataclass(slots=True)
 class NdData:
-    values : np.ndarray | Tensor 
+    values : np.ndarray | torch.Tensor 
     index  : list[np.ndarray]
     def __post_init__(self):
         assert self.values.ndim == len(self.index) , (self.values.ndim , len(self.index))

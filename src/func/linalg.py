@@ -1,10 +1,9 @@
 import torch
-from torch import Tensor
 
-def factor_standardize(A : Tensor , dim = 0):
+def factor_standardize(A : torch.Tensor , dim = 0):
     return (A - A.mean(dim,keepdim=True)) / A.std(dim,keepdim=True)
 
-def symmetric_orth(A : Tensor , dim = 0):
+def symmetric_orth(A : torch.Tensor , dim = 0):
     # no grad
     assert A.ndim == 2 , A.shape
     A = factor_standardize(A , dim)
@@ -13,7 +12,7 @@ def symmetric_orth(A : Tensor , dim = 0):
     M = A.T.mm(A)
     M = M * (1 - 1e-6) + torch.eye(len(M)) * 1e-6
     eigenvalues , eigenvectors = torch.linalg.eigh(M)
-    S : Tensor = eigenvectors.mm(torch.diag(1 / eigenvalues.sqrt())).mm(eigenvectors.T)
+    S : torch.Tensor = eigenvectors.mm(torch.diag(1 / eigenvalues.sqrt())).mm(eigenvectors.T)
     assert ~S.isnan().any() , f'S contains nan , possibly A.T.mm(A) is not positive definite'
     B = A.mm(S)
     if dim == 1: 

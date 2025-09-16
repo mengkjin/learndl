@@ -1,7 +1,5 @@
 import pandas as pd
 
-from typing import Optional
-
 from src.basic import CALENDAR , DB
 from src.data.loader import TRADE , RISK
 
@@ -39,7 +37,7 @@ class ClassicLabelsUpdater:
     def update_one(cls , date : int , days : int , lag1 : bool , label_name : str):
         DB.db_save(calc_classic_labels(date , days , lag1) , cls.DB_SRC , label_name , date , verbose = True)
 
-def calc_classic_labels(date : int , days : int , lag1 : bool) -> Optional[pd.DataFrame]:
+def calc_classic_labels(date : int , days : int , lag1 : bool) -> pd.DataFrame | None:
     d0 = CALENDAR.td(date) + lag1
     d1 = CALENDAR.td(d0 , days)
 

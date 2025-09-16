@@ -1,7 +1,7 @@
 import numpy as np
 
 from copy import deepcopy
-from typing import Any , Optional
+from typing import Any
 
 from src.basic.conf import DEFAULT_OPT_CONFIG
 from src.res.factor.util import AlphaModel , Amodel , Benchmark , Port , Portfolio , RISK_MODEL , Rmodel
@@ -57,7 +57,7 @@ class PortfolioOptimizerInput:
             self.config[key].update(given)
 
     def to_solver_input(self , model_date : int , alpha_model : AlphaModel | Amodel | Any = None , 
-                        benchmark : Optional[Benchmark | Portfolio | Port] = None , init_port : Port | Any = None):
+                        benchmark : Benchmark | Portfolio | Port | None = None , init_port : Port | Any = None):
 
         self.model_date = model_date
         self.risk_model : Rmodel | Any = RISK_MODEL.get_model(model_date)

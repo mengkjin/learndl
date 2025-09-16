@@ -1,5 +1,5 @@
 import os
-from typing import Any , Literal , Optional
+from typing import Any , Literal
 
 from ..util import Portfolio , Benchmark , AlphaModel , Port
 
@@ -33,7 +33,7 @@ def get_prefix(category : Literal['optim' , 'top']): return category.title()
 def get_factor_name(alpha : AlphaModel | str):
     return alpha.name if isinstance(alpha , AlphaModel) else alpha
 
-def get_benchmark(benchmark : Optional[Portfolio | Benchmark | Port | str] = None): 
+def get_benchmark(benchmark : Portfolio | Benchmark | Port | str | None = None): 
     if benchmark is None:
         benchmark = Portfolio()
     elif isinstance(benchmark , str):
@@ -42,7 +42,7 @@ def get_benchmark(benchmark : Optional[Portfolio | Benchmark | Port | str] = Non
         benchmark = Portfolio.from_ports(benchmark)
     return benchmark
 
-def get_benchmark_name(benchmark : Optional[Portfolio | Benchmark | str]):
+def get_benchmark_name(benchmark : Portfolio | Benchmark | str | None):
     if benchmark is None:
         return 'default'
     elif isinstance(benchmark , (Portfolio , Benchmark)):
@@ -70,7 +70,7 @@ def get_suffix(lag : int , suffixes : list[str] | str | None = None):
     return '.'.join([f'lag{lag}' , *suffixes])
 
 def get_full_name(category : Literal['optim' , 'top'] , alpha : AlphaModel | str , 
-                  benchmark : Optional[Portfolio | Benchmark | str] = None , 
+                  benchmark : Portfolio | Benchmark | str | None = None , 
                   strategy : str = 'default' , suffixes : list[str] | str | None = None , lag : int = 0 , **kwargs):
     suffixes = suffixes or []
     return '.'.join([

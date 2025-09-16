@@ -1,4 +1,4 @@
-from typing import Any , Literal , Optional , Type
+from typing import Any , Literal , Type
 
 from . import calculator as Calc
 from .calculator import BaseOptimCalc
@@ -40,7 +40,7 @@ class FmpOptimManager(BaseTestManager):
         Calc.Optim_Attrib_Style ,
     ]
 
-    def optim(self , factor: StockFactor , benchmarks: Optional[list[Benchmark|Any]] | Any = 'defaults' , 
+    def optim(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
               add_lag = 1 , optim_config = None , verbosity = 2):
         alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)
@@ -49,7 +49,7 @@ class FmpOptimManager(BaseTestManager):
         self.account = self.portfolio_group.building().accounting().total_account()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
-             add_lag = 1 , optim_config : Optional[str | Literal['default' , 'custome']] = None , verbosity = 1 , **kwargs):
+             add_lag = 1 , optim_config : str | Literal['default' , 'custome'] | None = None , verbosity = 1 , **kwargs):
         self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , verbosity = verbosity)
         for task in self.tasks.values():  
             task.calc(self.account , verbosity = verbosity - 1) 

@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-from torch import Tensor
-from typing import Callable , Optional , Any , Literal
+from typing import Callable , Any , Literal
 
 from src.func import mse , pearson , ccc , spearman
 from .multiloss import MultiHeadLosses
@@ -20,7 +19,7 @@ class MetricsCalculator:
         self.multi_type = multi_type
         self.multi_param = multi_param
     
-    def __call__(self , *args , **kwargs) -> Tensor:
+    def __call__(self , *args , **kwargs) -> torch.Tensor:
         ...
     
     def new_model(self , net : nn.Module | None = None , penalty_conds : dict[str,bool] | None = None , 
@@ -43,29 +42,29 @@ class MetricsCalculator:
 
         return self
     
-    def _calc(self , type : str , *args , **kwargs) -> Tensor:
+    def _calc(self , type : str , *args , **kwargs) -> torch.Tensor:
         if type == 'loss':
             return self.calculators['loss'](*args , **kwargs)
         elif type == 'score':
             return self.calculators['score'](*args , **kwargs)
         else:
             return self.calculators[f'penalty.{type}'](*args , **kwargs)
-    def losses(self , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
-               dim : int = 0 , which_head : Optional[int] = None, **kwargs) -> Tensor:
+    def losses(self , label : torch.Tensor , pred : torch.Tensor , weight : torch.Tensor | None = None , 
+               dim : int = 0 , which_head : int | None = None, **kwargs) -> torch.Tensor:
         return self._calc('loss' , label , pred , weight , dim , which_head , **kwargs)
-    def score(self , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
-              dim : int = 0 , which_head : Optional[int] = None, **kwargs) -> Tensor:
+    def score(self , label : torch.Tensor , pred : torch.Tensor , weight : torch.Tensor | None = None , 
+              dim : int = 0 , which_head : int | None = None, **kwargs) -> torch.Tensor:
         return self._calc('score' , label , pred , weight , dim , which_head , **kwargs)
-    def penalties(self , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
-                  dim : int = 0 , which_head : Optional[int] = None, **kwargs) -> dict[str,Tensor]:
-        penalties : dict[str,Tensor] = {}
+    def penalties(self , label : torch.Tensor , pred : torch.Tensor , weight : torch.Tensor | None = None , 
+                  dim : int = 0 , which_head : int | None = None, **kwargs) -> dict[str,torch.Tensor]:
+        penalties : dict[str,torch.Tensor] = {}
         for k,v in self.calculators.items():
             if k.startswith('penalty.'):
                 penalties[k] = v(label , pred , weight , dim , which_head , **kwargs)
         return penalties
-    def loss_penalties(self , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
-                      dim : int = 0 , which_head : Optional[int] = None, **kwargs) -> dict[str,Tensor]:
-        lps : dict[str,Tensor] = {}
+    def loss_penalties(self , label : torch.Tensor , pred : torch.Tensor , weight : torch.Tensor | None = None , 
+                      dim : int = 0 , which_head : int | None = None, **kwargs) -> dict[str,torch.Tensor]:
+        lps : dict[str,torch.Tensor] = {}
         losses = self.losses(label , pred , weight , dim , which_head , **kwargs)
         lps[self.loss_criterion] = self.multilosses(losses , mt_param = kwargs)
         for k,v in self.calculators.items():
@@ -106,8 +105,8 @@ class MetricCalculator:
         self.cond = cond
         return self
 
-    def __call__(self, label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
-                 dim : int = 0 , which_head : Optional[int] = None, **kwargs) -> Tensor:
+    def __call__(self, label : torch.Tensor , pred : torch.Tensor , weight : torch.Tensor | None = None , 
+                 dim : int = 0 , which_head : int | None = None, **kwargs) -> torch.Tensor:
         '''calculate the resulting metric'''
         if not self.cond: 
             return torch.Tensor([0.])
@@ -116,8 +115,8 @@ class MetricCalculator:
         self.display()
         return v
     
-    def slice_inputs(self, label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
-                     dim : int = 0 , which_head : Optional[int] = None, **kwargs):
+    def slice_inputs(self, label : torch.Tensor , pred : torch.Tensor , weight : torch.Tensor | None = None , 
+                     dim : int = 0 , which_head : int | None = None, **kwargs):
         if self.metric_type == 'penalty':
             return (label , pred , weight , dim) , kwargs
         
@@ -155,8 +154,8 @@ class MetricCalculator:
         self.DISPLAY_LOG[f'{self.metric_type}.{self.criterion}'] = True
 
     @classmethod
-    def _slice_lpw(cls , label : Tensor , pred : Tensor , weight : Optional[Tensor] = None , 
-                   which_head : Optional[int] = None , nan_check : bool = False , training = False) -> tuple[Tensor , Tensor , Optional[Tensor]]:
+    def _slice_lpw(cls , label : torch.Tensor , pred : torch.Tensor , weight : torch.Tensor | None = None , 
+                   which_head : int | None = None , nan_check : bool = False , training = False) -> tuple[torch.Tensor , torch.Tensor , torch.Tensor | None]:
         '''each element return ith column, if negative then return raw element'''
         if nan_check: 
             label , pred , weight = cls._slice_nan(label , pred , weight)
@@ -172,16 +171,16 @@ class MetricCalculator:
         return label , pred , weight
 
     @staticmethod
-    def _slice_col(data : Optional[Tensor] , col : Optional[int] = None) -> Any:
+    def _slice_col(data : torch.Tensor | None , col : int | None = None) -> Any:
         return data if data is None or col is None else data[...,col]
         
     @staticmethod
-    def _slice_nan(*args , print_all_nan = False) -> tuple[Tensor , Tensor , Optional[Tensor]] | Any:
+    def _slice_nan(*args , print_all_nan = False) -> tuple[torch.Tensor , torch.Tensor , torch.Tensor | None] | Any:
         nanpos = False
         for arg in args:
             if arg is not None: 
                 nanpos += arg.isnan()
-        if isinstance(nanpos , Tensor) and nanpos.any():
+        if isinstance(nanpos , torch.Tensor) and nanpos.any():
             if nanpos.ndim > 1:
                 nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
             if print_all_nan and nanpos.all(): 
@@ -192,7 +191,7 @@ class MetricCalculator:
 
 class LossMetrics:
     @classmethod
-    def get_func(cls , name : str , **kwargs) -> Callable[...,Tensor]:
+    def get_func(cls , name : str , **kwargs) -> Callable[...,torch.Tensor]:
         if name == 'mse':
             return cls.mse
         elif name == 'pearson':
@@ -205,23 +204,23 @@ class LossMetrics:
             raise ValueError(f'Invalid loss name: {name}')
 
     @staticmethod
-    def mse(label : Tensor , pred : Tensor , w : Tensor | None = None , dim = None , **kwargs):
+    def mse(label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs):
         v = mse(label , pred , w , dim)
         return v
     
     @staticmethod
-    def pearson(label : Tensor , pred : Tensor , w : Tensor | None = None , dim = None , **kwargs):
+    def pearson(label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs):
         v = pearson(label , pred , w , dim)
         return torch.exp(-v)
     
     @staticmethod
-    def ccc(label : Tensor , pred : Tensor , w : Tensor | None = None , dim = None , **kwargs):
+    def ccc(label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs):
         v = ccc(label , pred , w , dim)
         return torch.exp(-v)
     
     @staticmethod
-    def quantile(label : Tensor , pred : Tensor , w : Tensor | None = None , dim = None , 
-                 quantiles : list[float] = [0.1,0.5,0.9] , predictions : Tensor | None = None , **kwargs):
+    def quantile(label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , 
+                 quantiles : list[float] = [0.1,0.5,0.9] , predictions : torch.Tensor | None = None , **kwargs):
         assert predictions is not None , f'predictions should be provided'
         assert predictions.shape[-1] == len(quantiles) , f'shape of predictions {predictions.shape} should be (...,{len(quantiles)})'
         if predictions.ndim == label.ndim + 1: 
@@ -247,7 +246,7 @@ class LossMetrics:
 
 class ScoreMetrics:
     @classmethod
-    def get_func(cls , name : str , **kwargs) -> Callable[...,Tensor]:
+    def get_func(cls , name : str , **kwargs) -> Callable[...,torch.Tensor]:
         if name == 'mse':
             return cls.mse
         elif name == 'pearson':
@@ -260,32 +259,32 @@ class ScoreMetrics:
             raise ValueError(f'Invalid score name: {name}')
 
     @staticmethod
-    def mse(label : Tensor , pred : Tensor , w : Tensor | None = None , dim = None , **kwargs):
+    def mse(label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs):
         v = mse(label , pred , w , dim)
         return -v
 
     @staticmethod
-    def pearson(label : Tensor , pred : Tensor , w : Tensor | None = None , dim = None , **kwargs):
+    def pearson(label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs):
         return pearson(label , pred , w , dim)
     
     @staticmethod
-    def ccc(label : Tensor , pred : Tensor , w : Tensor | None = None , dim = None , **kwargs):
+    def ccc(label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs):
         return ccc(label , pred , w , dim)
     
     @staticmethod
-    def spearman(label : Tensor , pred : Tensor , w : Tensor | None = None , dim = None , **kwargs):
+    def spearman(label : torch.Tensor , pred : torch.Tensor , w : torch.Tensor | None = None , dim = None , **kwargs):
         return spearman(label , pred , w , dim)
     
 class PenaltyMetrics:
     @classmethod
-    def get_func(cls , name : str , **kwargs) -> Callable[...,Tensor]:
+    def get_func(cls , name : str , **kwargs) -> Callable[...,torch.Tensor]:
         if name == 'hidden_corr':
             return cls.hidden_corr
         else:
             raise ValueError(f'Invalid penalty name: {name}')
 
     @staticmethod
-    def hidden_corr(*args , hidden : Tensor | list | tuple , **kwargs) -> Tensor:
+    def hidden_corr(*args , hidden : torch.Tensor | list | tuple , **kwargs) -> torch.Tensor:
         '''if kwargs containse hidden, calculate 2nd-norm of hTh'''
         if isinstance(hidden,(tuple,list)): 
             hidden = torch.cat(hidden,dim=-1)

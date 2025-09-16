@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from abc import ABC , abstractmethod
 from dataclasses import dataclass
-from typing import Any , Union
+from typing import Any
 
 from src.basic import CONF
 from src.res.factor.util import Portfolio
@@ -31,7 +31,7 @@ def select_conditioner(name : str):
         return candidates[0]
 
 class AccountAccessor:
-    def __init__(self , input : Union[Portfolio , pd.DataFrame , pd.Series , np.ndarray , 'AccountAccessor']):
+    def __init__(self , input : 'Portfolio|pd.DataFrame|pd.Series|np.ndarray|AccountAccessor'):
         self.input = input
         self.account = self.get_account()
 
