@@ -9,7 +9,10 @@ from .calendar import CALENDAR
 from .task_record import TaskRecorder
 from .email import Email
 
-_catch_warnings = ['must accept context and return_scalar arguments']
+_catch_warnings = [
+    'must accept context and return_scalar arguments' ,
+    'an item of incompatible dtype' ,
+]
 
 class AutoRunTask:
     def __init__(self , task_name : str , task_key : str | Any | None = None , email = True , message_catcher : bool = True , source = 'py' , **kwargs):
@@ -62,6 +65,9 @@ class AutoRunTask:
             self.error_messages.append('\n'.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
         else:
             self.status = 'Success'
+
+        for log_type , message in Logger.iter_lazy_messages():
+            getattr(self , log_type)(message)
         
         self.warning_catcher.__exit__(exc_type, exc_value, exc_traceback)
         self.md_catcher.__exit__(exc_type, exc_value, exc_traceback)

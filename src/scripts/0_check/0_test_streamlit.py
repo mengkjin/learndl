@@ -41,6 +41,7 @@
 #       default : 42.
 import time , random
 
+from src.proj import Logger
 from src.basic import AutoRunTask , Timer
 from src.app import BackendTaskRecorder , ScriptLockMultiple
 
@@ -49,16 +50,18 @@ from src.app import BackendTaskRecorder , ScriptLockMultiple
 def main(txt : str = 'Hello, World!' , **kwargs):
     port_name = kwargs.pop('port_name')
     with AutoRunTask('test_streamlit' , port_name , **kwargs) as runner:
-        with Timer('abc'):
-            runner.info(str(kwargs))
-            runner.info(f'info:{txt}')
-            runner.warning(f'warning:{txt}')
-            runner.debug(f'debug:{txt}')
-            runner.critical(f'critical:{txt}')
-            if (rnd := random.random()) < 0.5:
-                runner.error(f'error:{rnd}')
-            else:
-                runner.info(f'info:{rnd}')
+        with Logger.EnclosedMessage('main part'):
+            with Timer('abc'):
+                runner.info(str(kwargs))
+                runner.info(f'info:{txt}')
+                Logger.add_lazy_message('critical' , f'critical: lazy message')
+                runner.warning(f'warning:{txt}')
+                runner.debug(f'debug:{txt}')
+                runner.critical(f'critical:{txt}')
+                if (rnd := random.random()) < 0.5:
+                    runner.error(f'error:{rnd}')
+                else:
+                    runner.info(f'info:{rnd}')
         time.sleep(10)
 
     return runner

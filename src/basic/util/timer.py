@@ -17,7 +17,7 @@ class Timer:
             print(self._str_at_first() , end='\n' if self.newline else '')
     def __exit__(self, type, value, trace):
         if not SILENT:
-            print(self._str_at_first() if self.exit_only else '' + self._str_at_exit())
+            print((self._str_at_first() if self.exit_only else '') + self._str_at_exit())
     def _str_at_first(self):
         return f'{self.key} start ... '
     def _str_at_exit(self):

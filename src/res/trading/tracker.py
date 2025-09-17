@@ -2,10 +2,11 @@ import pandas as pd
 
 from pathlib import Path
 
-from src.proj import PATH
+from src.proj import PATH , Logger
 from src.basic import CALENDAR , Email
 from src.res.trading.util import TradingPort
 
+FOCUSED_PORTS = ['use_daily']
 class TradingPortfolioTracker:
     @classmethod
     def update(cls , reset_ports : list[str] | None = None):
@@ -26,10 +27,13 @@ class TradingPortfolioTracker:
             print(f'No trading portfolios updated on {date}')
         else:
             print(f'Trading portfolios updated on {date}: {list(new_ports.keys())}')
-            for k in new_ports:
-                in_count = (~new_ports[k]['secid'].isin(last_ports[k]['secid'])).sum()
-                out_count = (~last_ports[k]['secid'].isin(new_ports[k]['secid'])).sum()
-                print(f'    Port {k} : total {len(new_ports[k])} , in {in_count} , out {out_count}')
+            for port_name in new_ports:
+                in_count = (~new_ports[port_name]['secid'].isin(last_ports[port_name]['secid'])).sum()
+                out_count = (~last_ports[port_name]['secid'].isin(new_ports[port_name]['secid'])).sum()
+                message = f'Port {port_name} : total {len(new_ports[port_name])} , in {in_count} , out {out_count}'
+                print(f'    {message}')
+                if port_name in FOCUSED_PORTS:
+                    Logger.add_lazy_message('critical' , message)
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)
             Email.Attach(path)
