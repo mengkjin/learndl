@@ -1,4 +1,5 @@
 import pandas as pd
+from importlib import import_module
 
 from itertools import combinations
 from typing import Type
@@ -12,6 +13,7 @@ from src.func.parallel import parallel
 class StockFactorHierarchy:
     '''hierarchy of factor classes'''
     _instance = None
+    pool = StockFactorCalculator.registry
 
     def __new__(cls):
         if cls._instance is None:
@@ -39,10 +41,6 @@ class StockFactorHierarchy:
         if MACHINE.server:
             df = cls().factor_df()
             df.to_csv(PATH.rslt_factor.joinpath('factor_list.csv'))
-    
-    @classmethod
-    def validate_category(cls , category0 : str , category1 : str):
-        StockFactorCalculator.validate_category(category0 , category1)
 
     @staticmethod
     def factor_filter(stock_factor_cls : Type[StockFactorCalculator] , **kwargs):
@@ -59,9 +57,23 @@ class StockFactorHierarchy:
         return not conditions or all(conditions)
 
     def load(self):     
-        '''load all factor classes from definition path'''
-        self.pool : dict[str , Type[StockFactorCalculator]] = {}   
+        '''load all factor classes from definition path'''   
+        for path in sorted(PATH.fac_def.rglob('*.py')):
+            module_name = '.'.join(path.relative_to(PATH.main).with_suffix('').parts)
+            import_module(module_name)
+
         self.hier : dict[str , list[Type[StockFactorCalculator]]] = {}
+        for obj in self.pool.values():
+            if obj.level not in self.hier: 
+                self.hier[obj.level] = []
+            self.hier[obj.level].append(obj)
+
+        return self
+
+    def load_old(self):     
+        '''load all factor classes from definition path'''
+        self.pool = {}   
+        self.hier = {}
         for level_path in PATH.fac_def.iterdir():
             if not level_path.is_dir(): 
                 continue
@@ -70,7 +82,8 @@ class StockFactorHierarchy:
                 continue
 
             for name , obj in dynamic_members(level_path , subclass_of = StockFactorCalculator):
-                assert name not in self.pool , f'{name} in module {obj.__module__} is duplicated'                        
+                assert name not in self.pool , f'{name} in module {obj.__module__} is duplicated'  
+                assert level_name == obj.level , f'{name} level is {obj.level} but {level_name} is expected'                      
                 self.pool[name] = obj
                 if level_name not in self.hier: 
                     self.hier[level_name] = []

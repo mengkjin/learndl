@@ -19,7 +19,6 @@ def report_report_count(date : int , n_month: int):
 
 class cov_inst_3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'coverage'
     description = '3个月区间内覆盖股票机构数量'
     
@@ -28,7 +27,6 @@ class cov_inst_3m(StockFactorCalculator):
     
 class cov_inst_6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'coverage'
     description = '6个月区间内覆盖股票机构数量'
     
@@ -36,7 +34,6 @@ class cov_inst_6m(StockFactorCalculator):
         return report_inst_count(date, 6)
 class cov_inst_12m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'coverage'
     description = '12个月区间内覆盖股票机构数量'
     
@@ -45,7 +42,6 @@ class cov_inst_12m(StockFactorCalculator):
     
 class cov_inst_12m_anndt(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'coverage'
     description = '12个月区间内覆盖股票机构数量,公告日后7天'
     
@@ -59,7 +55,6 @@ class cov_inst_12m_anndt(StockFactorCalculator):
     
 class cov_report_3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'coverage'
     description = '3个月区间内覆盖股票报告数量'
     
@@ -68,7 +63,6 @@ class cov_report_3m(StockFactorCalculator):
     
 class cov_report_6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'coverage'
     description = '6个月区间内覆盖股票报告数量'
     
@@ -77,7 +71,6 @@ class cov_report_6m(StockFactorCalculator):
     
 class cov_report_12m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'coverage'
     description = '12个月区间内覆盖股票报告数量'
     

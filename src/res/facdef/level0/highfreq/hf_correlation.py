@@ -47,7 +47,6 @@ def inday_corr_std(date : int , n_day : int , expression : str):
 
 class inday_mkt_beta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内beta均值'
 
@@ -56,7 +55,6 @@ class inday_mkt_beta(StockFactorCalculator):
     
 class inday_mkt_corr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内量价相关性均值'
 
@@ -65,7 +63,6 @@ class inday_mkt_corr(StockFactorCalculator):
     
 class inday_ret_autocorr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内收益率自相关系数均值'
 
@@ -74,7 +71,6 @@ class inday_ret_autocorr(StockFactorCalculator):
     
 class inday_vol_ret1_corr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内波动价相关性均值'
 
@@ -83,7 +79,6 @@ class inday_vol_ret1_corr(StockFactorCalculator):
     
 class inday_vol_vwap_corr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内波动价相关性均值'
 
@@ -92,7 +87,6 @@ class inday_vol_vwap_corr(StockFactorCalculator):
     
 class inday_vol_autocorr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内成交量自相关系数均值'
 
@@ -101,7 +95,6 @@ class inday_vol_autocorr(StockFactorCalculator):
     
 class inday_mkt_beta_std(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内beta标准差'
 
@@ -110,7 +103,6 @@ class inday_mkt_beta_std(StockFactorCalculator):
     
 class inday_mkt_corr_std(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内量价相关性标准差'
 
@@ -119,7 +111,6 @@ class inday_mkt_corr_std(StockFactorCalculator):
     
 class inday_ret_autocorr_std(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内收益率自相关系数标准差'
 
@@ -128,7 +119,6 @@ class inday_ret_autocorr_std(StockFactorCalculator):
     
 class inday_vol_ret1_corr_std(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内波动价相关性标准差'
 
@@ -137,7 +127,6 @@ class inday_vol_ret1_corr_std(StockFactorCalculator):
     
 class inday_vol_vwap_corr_std(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内波动价相关性标准差'
 
@@ -146,7 +135,6 @@ class inday_vol_vwap_corr_std(StockFactorCalculator):
     
 class inday_vol_autocorr_std(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_correlation'
     description = '20日日内成交量自相关系数标准差'
 

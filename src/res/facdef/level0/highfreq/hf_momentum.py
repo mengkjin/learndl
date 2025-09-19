@@ -27,7 +27,6 @@ def neutral_resid_pl(df : pl.DataFrame , x : str , y : str , over = 'secid'):
 
 class inday_amap_orig(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_momentum'
     description = 'APM原始值,上下午价格行为差异'
 
@@ -70,7 +69,6 @@ class inday_amap_orig(StockFactorCalculator):
     
 class inday_conf_persist(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_momentum'
     description = '过度自信因子'
 
@@ -107,7 +105,6 @@ class inday_conf_persist(StockFactorCalculator):
     
 class inday_regain_conf_persist(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_momentum'
     description = '重拾自信因子'
 
@@ -146,7 +143,6 @@ class inday_regain_conf_persist(StockFactorCalculator):
     
 class inday_high_time(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_momentum'
     description = '日内高点位置'
 
@@ -170,7 +166,6 @@ class inday_high_time(StockFactorCalculator):
     
 class inday_incvol_mom(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_momentum'
     description = '量升累计收益'
 
@@ -192,7 +187,6 @@ class inday_incvol_mom(StockFactorCalculator):
     
 class inday_trend_avg(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_momentum'
     description = '日内价格变化路径'
 
@@ -215,7 +209,6 @@ class inday_trend_avg(StockFactorCalculator):
     
 class inday_trend_std(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_momentum'
     description = '日内价格变化路径'
 
@@ -242,7 +235,6 @@ class inday_trend_std(StockFactorCalculator):
     
 class inday_vwap_diff_hlvol(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_momentum'
     description = '日内高低成交量vwap差'
 
@@ -273,7 +265,6 @@ class inday_vwap_diff_hlvol(StockFactorCalculator):
     
 class mom_high_volcv(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_momentum'
     description = '分钟成交量波动最大区间的动量因子'
 
@@ -299,7 +290,6 @@ class mom_high_volcv(StockFactorCalculator):
     
 class mom_high_pstd(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_momentum'
     description = '日内高波动累计动量'
 

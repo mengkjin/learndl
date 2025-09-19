@@ -45,7 +45,6 @@ def sue_reg(expression: str , date: int , n_last : int = 8 , **kwargs):
 
 class sue_gp(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外毛利润'
     
@@ -54,7 +53,6 @@ class sue_gp(StockFactorCalculator):
 
 class sue_gp_reg(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外毛利润-带截距回归'
     
@@ -63,7 +61,6 @@ class sue_gp_reg(StockFactorCalculator):
 
 class sue_npro(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外归母净利润'
     
@@ -72,7 +69,6 @@ class sue_npro(StockFactorCalculator):
 
 class sue_npro_reg(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外归母净利润-带截距回归'
     
@@ -81,7 +77,6 @@ class sue_npro_reg(StockFactorCalculator):
 
 class sue_op(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外营业利润'
     
@@ -90,7 +85,6 @@ class sue_op(StockFactorCalculator):
 
 class sue_op_reg(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外营业利润-带截距回归'
     
@@ -99,7 +93,6 @@ class sue_op_reg(StockFactorCalculator):
 
 class sue_tp(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外利润总额'
     
@@ -108,7 +101,6 @@ class sue_tp(StockFactorCalculator):
 
 class sue_tp_reg(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外利润总额-带截距回归'
     
@@ -117,7 +109,6 @@ class sue_tp_reg(StockFactorCalculator):
 
 class sue_sales(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外营业收入'
     
@@ -126,7 +117,6 @@ class sue_sales(StockFactorCalculator):
 
 class sue_sales_reg(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外营业收入-带截距回归'
     
@@ -135,7 +125,6 @@ class sue_sales_reg(StockFactorCalculator):
 
 class sue_tax(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外所得税'
     
@@ -144,7 +133,6 @@ class sue_tax(StockFactorCalculator):
 
 class sue_tax_reg(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '预期外所得税-带截距回归'
     

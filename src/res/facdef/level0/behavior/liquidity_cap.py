@@ -18,7 +18,6 @@ def cap_classic(date , cap_type : Literal['tt' , 'fl' , 'fr']):
 
 class lncap(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '市值(对数总市值)'
     
@@ -27,7 +26,6 @@ class lncap(StockFactorCalculator):
     
 class lncap_liq(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '市值(对数流通市值)'
     
@@ -36,7 +34,6 @@ class lncap_liq(StockFactorCalculator):
     
 class lncap_free(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '市值(对数自由流通市值)'
     
@@ -45,7 +42,6 @@ class lncap_free(StockFactorCalculator):
 
 class lockedstk(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '锁仓比'
     

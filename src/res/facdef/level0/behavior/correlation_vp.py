@@ -21,7 +21,6 @@ def vp_correlation(date , n_months : int , volume_type : Literal['amount' , 'vol
 
 class turnvp_corr1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'correlation'
     description = '1个月换手率-成交均价相关系数'
     
@@ -30,7 +29,6 @@ class turnvp_corr1m(StockFactorCalculator):
     
 class turnvp_corr2m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'correlation'
     description = '2个月换手率-成交均价相关系数'
     
@@ -39,7 +37,6 @@ class turnvp_corr2m(StockFactorCalculator):
     
 class turnvp_corr3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'correlation'
     description = '3个月换手率-成交均价相关系数'
     
@@ -48,7 +45,6 @@ class turnvp_corr3m(StockFactorCalculator):
     
 class turnvp_corr6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'correlation'
     description = '6个月换手率-成交均价相关系数'
     
@@ -57,7 +53,6 @@ class turnvp_corr6m(StockFactorCalculator):
     
 class turnvp_corr12m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'correlation'
     description = '12个月换手率-成交均价相关系数'
     

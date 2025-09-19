@@ -34,7 +34,6 @@ def trailing(date , func : Callable[[int] , pl.DataFrame] , agg : Literal['avg' 
 
 class inday_smart_money(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_liquidity'
     description = '聪明钱因子'
 
@@ -54,7 +53,6 @@ class inday_smart_money(StockFactorCalculator):
     
 class inday_stupid_money(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_liquidity'
     description = '傻钱因子'
 
@@ -74,7 +72,6 @@ class inday_stupid_money(StockFactorCalculator):
     
 class inday_vol_utd(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_liquidity'
     description = '20日换手率分布因子'
 
@@ -87,7 +84,6 @@ class inday_vol_utd(StockFactorCalculator):
     
 class inday_vol_coefvar(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_liquidity'
     description = '20日变异数比率因子'
 
@@ -100,7 +96,6 @@ class inday_vol_coefvar(StockFactorCalculator):
     
 class inday_vol_end15min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_liquidity'
     description = '尾盘成交占比'
 
@@ -117,7 +112,6 @@ class inday_vol_end15min(StockFactorCalculator):
     
 class inday_vol_st5min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_liquidity'
     description = '开盘成交占比'
 
@@ -134,7 +128,6 @@ class inday_vol_st5min(StockFactorCalculator):
     
 class inday_volpct_phigh(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_liquidity'
     description = '高价格成交占比'
 
@@ -152,7 +145,6 @@ class inday_volpct_phigh(StockFactorCalculator):
     
 class inday_volpct_plow(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_liquidity'
     description = '低价格成交占比'
 
@@ -170,7 +162,6 @@ class inday_volpct_plow(StockFactorCalculator):
     
 class inday_volpct_devhigh(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_liquidity'
     description = '高价格波动成交占比'
 
@@ -190,7 +181,6 @@ class inday_volpct_devhigh(StockFactorCalculator):
     
 class vol_high_std(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_momentum'
     description = '高波动交易日成交量占比'
 

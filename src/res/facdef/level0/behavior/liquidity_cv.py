@@ -16,7 +16,6 @@ def coefficient_variance(date , n_months : int , data_type : Literal['amount' , 
 
 class amt_cv1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '1个月成交额变异系数'
     
@@ -25,7 +24,6 @@ class amt_cv1m(StockFactorCalculator):
 
 class amt_cv2m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '2个月成交额变异系数'
     
@@ -34,7 +32,6 @@ class amt_cv2m(StockFactorCalculator):
     
 class amt_cv3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '3个月成交额变异系数'
     
@@ -43,7 +40,6 @@ class amt_cv3m(StockFactorCalculator):
     
 class amt_cv6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '6个月成交额变异系数'
     
@@ -52,7 +48,6 @@ class amt_cv6m(StockFactorCalculator):
     
 class amt_cv12m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '12个月成交额变异系数'
     
@@ -61,7 +56,6 @@ class amt_cv12m(StockFactorCalculator):
 
 class turn_cv1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '1个月换手率变异系数'
     
@@ -70,7 +64,6 @@ class turn_cv1m(StockFactorCalculator):
 
 class turn_cv2m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '2个月换手率变异系数'
     
@@ -79,7 +72,6 @@ class turn_cv2m(StockFactorCalculator):
     
 class turn_cv3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '3个月换手率变异系数'
     
@@ -88,7 +80,6 @@ class turn_cv3m(StockFactorCalculator):
     
 class turn_cv6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '6个月换手率变异系数'
     
@@ -97,7 +88,6 @@ class turn_cv6m(StockFactorCalculator):
     
 class turn_cv12m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'liquidity'
     description = '12个月换手率变异系数'
     

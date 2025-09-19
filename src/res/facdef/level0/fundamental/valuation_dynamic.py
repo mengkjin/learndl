@@ -6,7 +6,6 @@ from typing import Literal
 from src.data import DATAVENDOR
 from src.res.factor.calculator import StockFactorCalculator
 
-
 __all__ = [
     'btop_stability' ,
     'dtop_stability' ,
@@ -65,7 +64,6 @@ def valuation_stability(numerator : str , date : int):
 
 class btop_stability(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'value'
     description = 'BP稳定性,均值除标准差'
     
@@ -74,7 +72,6 @@ class btop_stability(StockFactorCalculator):
 
 class dtop_stability(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'value'
     description = 'DP稳定性,均值除标准差'
     
@@ -86,7 +83,6 @@ class dtop_stability(StockFactorCalculator):
 
 class etop_stability(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'value'
     description = 'ETOP稳定性,均值除标准差'
     
@@ -95,7 +91,6 @@ class etop_stability(StockFactorCalculator):
     
 class stop_stability(StockFactorCalculator):    
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'value'
     description = 'STOP稳定性,均值除标准差'
     
@@ -104,7 +99,6 @@ class stop_stability(StockFactorCalculator):
     
 class cfev_stability(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'value'
     description = 'CFEV稳定性,均值除标准差'
     

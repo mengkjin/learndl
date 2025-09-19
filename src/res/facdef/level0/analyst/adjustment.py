@@ -39,7 +39,6 @@ def get_npro_adjustment(date : int , n_month : int , type : Literal['rec' , 'upn
 
 class rec_npro_12m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '12个月盈利预测上调幅度'
     
@@ -48,7 +47,6 @@ class rec_npro_12m(StockFactorCalculator):
     
 class rec_npro_6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '6个月盈利预测上调幅度'
     
@@ -57,7 +55,6 @@ class rec_npro_6m(StockFactorCalculator):
     
 class rec_npro_3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '3个月盈利预测上调幅度'
     
@@ -66,7 +63,6 @@ class rec_npro_3m(StockFactorCalculator):
     
 class rec_npro_6m_anndt(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '6个月盈利预测上调幅度,公告日后7天'
     
@@ -75,7 +71,6 @@ class rec_npro_6m_anndt(StockFactorCalculator):
 
 class upnum_npro_12m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '12个月分析师盈利上修数量'
     
@@ -84,7 +79,6 @@ class upnum_npro_12m(StockFactorCalculator):
 
 class upnum_npro_6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '6个月分析师盈利上修数量'
     
@@ -93,7 +87,6 @@ class upnum_npro_6m(StockFactorCalculator):
 
 class upnum_npro_3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '3个月分析师盈利上修数量'
     
@@ -102,7 +95,6 @@ class upnum_npro_3m(StockFactorCalculator):
     
 class upnum_npro_6m_anndt(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '6个月分析师盈利上修数量,公告日后7天'
     
@@ -111,7 +103,6 @@ class upnum_npro_6m_anndt(StockFactorCalculator):
 
 class uppct_npro_12m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '12个月分析师盈利上修占比'
     
@@ -120,7 +111,6 @@ class uppct_npro_12m(StockFactorCalculator):
     
 class uppct_npro_6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '6个月分析师盈利上修占比'
     
@@ -129,7 +119,6 @@ class uppct_npro_6m(StockFactorCalculator):
     
 class uppct_npro_3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '3个月分析师盈利上修占比'
     
@@ -138,7 +127,6 @@ class uppct_npro_3m(StockFactorCalculator):
 
 class uppct_npro_6m_anndt(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'adjustment'
     description = '6个月分析师盈利上修占比,公告日后7天'
     

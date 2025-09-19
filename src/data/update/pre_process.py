@@ -3,12 +3,11 @@ import numpy as np
 
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
-from typing import Any , Iterator , Literal
+from typing import Any , Iterator
 
 from src.proj import Logger
 from src.basic import CONF , Timer , CALENDAR
 from src.func.primas import neutralize_2d , process_factor
-from src.func.classproperty import classproperty_str
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorLoader
 
@@ -240,65 +239,67 @@ class pp_indus(TypePreProcessor):
     def final_feat(self): return None
     def process(self , blocks): return blocks['indus']
 
+class _ClassProperty:
+    def __init__(self , method : str):
+        assert method in dir(self) , f'{method} is not in {dir(self)}'
+        self.method = method
+        self.cache_values = {}
+
+    def __get__(self,instance,owner) -> str:
+        if owner not in self.cache_values:
+            self.cache_values[owner] = getattr(self , self.method)(owner)
+        return self.cache_values[owner]
+
+    def __set__(self,instance,value):
+        raise AttributeError(f'{instance.__class__.__name__}.{self.method} is read-only attributes')
+
+    def category0(self , owner) -> str:
+        return CONF.Category1_to_Category0(owner.category1)
+
+    def category1(self , owner) -> str:
+        return str(owner.__qualname__).removeprefix('pp_').lower()
+    
 class FactorPreProcessor(TypePreProcessor):
-    category0 : Literal['fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative']
-    @classproperty_str
-    def category1(cls): return cls.__qualname__.removeprefix('pp_').lower()
+    category0 = _ClassProperty('category0')
+    category1 = _ClassProperty('category1')    
+
     def block_loaders(self): 
-        return {'factor' : FactorLoader(self.category0 , self.category1)}
+        return {'factor' : FactorLoader(self.category1)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['factor']
 
-class pp_quality(FactorPreProcessor):
-    category0 = 'fundamental'
+class pp_quality(FactorPreProcessor): ...
 
-class pp_growth(FactorPreProcessor):
-    category0 = 'fundamental'
+class pp_growth(FactorPreProcessor): ...
 
-class pp_value(FactorPreProcessor):
-    category0 = 'fundamental'
+class pp_value(FactorPreProcessor): ...
 
-class pp_earning(FactorPreProcessor):
-    category0 = 'fundamental'
+class pp_earning(FactorPreProcessor): ...
 
-class pp_surprise(FactorPreProcessor):
-    category0 = 'analyst'
+class pp_surprise(FactorPreProcessor): ...
+    
+class pp_coverage(FactorPreProcessor): ...
 
-class pp_coverage(FactorPreProcessor):
-    category0 = 'analyst'
+class pp_forecast(FactorPreProcessor): ...
 
-class pp_forecast(FactorPreProcessor):
-    category0 = 'analyst'
+class pp_adjustment(FactorPreProcessor): ...
 
-class pp_adjustment(FactorPreProcessor):
-    category0 = 'analyst'
+class pp_hf_momentum(FactorPreProcessor): ...
+    
+class pp_hf_volatility(FactorPreProcessor): ...
 
-class pp_hf_momentum(FactorPreProcessor):
-    category0 = 'high_frequency'
+class pp_hf_correlation(FactorPreProcessor): ...
 
-class pp_hf_volatility(FactorPreProcessor):
-    category0 = 'high_frequency'
+class pp_hf_liquidity(FactorPreProcessor): ...
 
-class pp_hf_correlation(FactorPreProcessor):
-    category0 = 'high_frequency'
+class pp_momentum(FactorPreProcessor): ...
 
-class pp_hf_liquidity(FactorPreProcessor):
-    category0 = 'high_frequency'
+class pp_volatility(FactorPreProcessor): ...
 
-class pp_momentum(FactorPreProcessor):
-    category0 = 'behavior'
+class pp_correlation(FactorPreProcessor): ...
 
-class pp_volatility(FactorPreProcessor):
-    category0 = 'behavior'
+class pp_liquidity(FactorPreProcessor): ...
 
-class pp_correlation(FactorPreProcessor):
-    category0 = 'behavior'
+class pp_holding(FactorPreProcessor): ...
 
-class pp_liquidity(FactorPreProcessor):
-    category0 = 'behavior'
-
-class pp_holding(FactorPreProcessor):
-    category0 = 'money_flow'
-
-class pp_trading(FactorPreProcessor):
-    category0 = 'money_flow'
+class pp_trading(FactorPreProcessor): ...

@@ -112,7 +112,6 @@ def get_mkt_port(date : int) -> pd.Series:
 
 class holding_act_weight(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '基金持股市值占比-市场市值占比'
 
@@ -124,7 +123,6 @@ class holding_act_weight(StockFactorCalculator):
     
 class holding_median(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '基金内个股权重中位数'
 
@@ -134,7 +132,6 @@ class holding_median(StockFactorCalculator):
     
 class holding_mv(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '持有个股市值'
 
@@ -146,7 +143,6 @@ class holding_mv(StockFactorCalculator):
     
 class holding_num(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '持有个股基金数量'
 
@@ -156,7 +152,6 @@ class holding_num(StockFactorCalculator):
     
 class holding_mv_ratio(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '持有个股股数占股本比例'
 
@@ -166,7 +161,6 @@ class holding_mv_ratio(StockFactorCalculator):
     
 class holding_rel_weight(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '基金持股市值占比/市场市值占比'
 
@@ -178,7 +172,6 @@ class holding_rel_weight(StockFactorCalculator):
     
 class holding_rel_median(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '基金内个股主动权重中位数'
 
@@ -191,7 +184,6 @@ class holding_rel_median(StockFactorCalculator):
     
 class holding_top_median(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '重仓股基金个股权重中位数'
 
@@ -201,7 +193,6 @@ class holding_top_median(StockFactorCalculator):
     
 class holding_top_mv(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '重仓股持有个股市值'
 
@@ -213,7 +204,6 @@ class holding_top_mv(StockFactorCalculator):
  
 class holding_top_num(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '重仓股持有个股基金数量'
 
@@ -223,7 +213,6 @@ class holding_top_num(StockFactorCalculator):
     
 class holding_top_addnum(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '重仓股持有个股基金数量增量'
 
@@ -234,7 +223,6 @@ class holding_top_addnum(StockFactorCalculator):
     
 class holding_top_addmv(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'holding'
     description = '重仓股持有个股市值增量'
 

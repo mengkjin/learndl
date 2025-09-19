@@ -33,7 +33,6 @@ def trailing(date , func : Callable[[int] , pl.DataFrame] , agg : Literal['avg' 
 
 class inday_err_ret(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内极端收益'
 
@@ -52,7 +51,6 @@ class inday_err_ret(StockFactorCalculator):
     
 class inday_maxdd(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内最大回撤'
 
@@ -72,7 +70,6 @@ class inday_maxdd(StockFactorCalculator):
     
 class inday_std_1min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内1分钟标准差'
 
@@ -87,7 +84,6 @@ class inday_std_1min(StockFactorCalculator):
     
 class inday_std_5min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内5分钟标准差'
 
@@ -102,7 +98,6 @@ class inday_std_5min(StockFactorCalculator):
 
 class inday_skewness_1min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内1分钟偏度'
 
@@ -117,7 +112,6 @@ class inday_skewness_1min(StockFactorCalculator):
     
 class inday_skewness_5min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内5分钟偏度'
 
@@ -132,7 +126,6 @@ class inday_skewness_5min(StockFactorCalculator):
     
 class inday_kurt_1min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内1分钟峰度'
 
@@ -147,7 +140,6 @@ class inday_kurt_1min(StockFactorCalculator):
     
 class inday_kurt_5min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内5分钟峰度'
 
@@ -162,7 +154,6 @@ class inday_kurt_5min(StockFactorCalculator):
     
 class inday_vardown_1min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内1分钟下行波动占比'
 
@@ -182,7 +173,6 @@ class inday_vardown_1min(StockFactorCalculator):
     
 class vardown_intra5min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内5分钟下行波动占比'
 
@@ -202,7 +192,6 @@ class vardown_intra5min(StockFactorCalculator):
 
 class inday_vol_std_1min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内1分钟成交量波动率'
 
@@ -217,7 +206,6 @@ class inday_vol_std_1min(StockFactorCalculator):
     
 class inday_vol_std_5min(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'high_frequency'
     category1 = 'hf_volatility'
     description = '日内5分钟成交量波动率'
 

@@ -42,7 +42,6 @@ def cfev_augment_range(date : int):
 
 class btop_augment(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'value'
     description = 'btop增强因子'
     
@@ -54,7 +53,6 @@ class btop_augment(StockFactorCalculator):
     
 class etop_augment(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'value'
     description = 'etop增强因子'
     
@@ -66,7 +64,6 @@ class etop_augment(StockFactorCalculator):
     
 class cfev_augment(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'value'
     description = 'cfev增强因子'
     
@@ -78,7 +75,6 @@ class cfev_augment(StockFactorCalculator):
     
 class valuation_augment(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'value'
     description = '估值增强因子'
     

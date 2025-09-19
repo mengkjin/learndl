@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
+import re
 
 from abc import abstractmethod
-from typing import Any , Literal
+from typing import Any , Literal , Type
 from pathlib import Path
 
 from ..util import StockFactor
@@ -10,37 +11,101 @@ from ..util import StockFactor
 from src.basic import CONF , CALENDAR , DB
 from src.data import DATAVENDOR
 from src.func.singleton import SingletonABCMeta
-from src.func.classproperty import classproperty_str
 from src.func.parallel import parallel
 
-class CategoryError(Exception): ...
+class _FactorProperty:
+    def __init__(self , method : str):
+        assert method in dir(self) , f'{method} is not in {dir(self)}'
+        self.method = method
+        self.cache_values = {}
 
-class StockFactorCalculator(metaclass=SingletonABCMeta):
+    def __get__(self,instance,owner) -> Any:
+        if owner not in self.cache_values:
+            self.cache_values[owner] = getattr(self , self.method)(owner)
+        return self.cache_values[owner]
+
+    def __set__(self,instance,value):
+        raise AttributeError(f'{instance.__class__.__name__}.{self.method} is read-only attributes')
+
+class _FactorPropertyStr(_FactorProperty):
+    '''property of factor string'''
+    def __get__(self,instance,owner) -> str:
+        return super().__get__(instance,owner)
+
+    def category0(self , owner) -> str:
+        return CONF.Category1_to_Category0(owner.category1)
+
+    def factor_name(self , owner) -> str:
+        return owner.__qualname__
+
+    def level(self , owner) -> str:
+        '''level of the factor'''
+        module : str = owner.__module__
+        module = re.sub(r'[/.\\]' , '.' , module)
+        level = re.search(r'.(level\d+).' , module)
+        assert level is not None , f'level not found in {module}'
+        return level.group(1)
+    
+    def file_name(self , owner) -> str:
+        '''file name of the factor'''
+        return '/'.join(Path(owner.__module__.split('level')[-1]).parts[1:]).removesuffix('.py')
+    
+    def factor_string(self , owner):
+        '''full string of the factor'''
+        return f'Factor {owner.level}/{owner.category0}/{owner.category1}/{owner.factor_name}'
+    
+class StockFactorCalculatorMeta(SingletonABCMeta):
+    '''meta class of StockFactorCalculator'''
+    ignore_names : list[str] = [
+        'StockFactorCalculatorMeta' , 'StockFactorCalculator'
+    ]
+    registry : dict[str,Type['StockFactorCalculator'] | Any] = {}
+
+    def __new__(cls, name, bases, dct):
+        ''' 
+        validate attribute of factor (init_date , description , category0 , category1)
+        add subclass to registry
+        '''
+        new_cls = super().__new__(cls, name, bases, dct)
+        if name not in cls.ignore_names:
+            if dct.get('init_date' , -1) < CONF.FACTOR_INIT_DATE: 
+                raise AttributeError(f'class {name} init_date should be later than {CONF.FACTOR_INIT_DATE} , but got {getattr(new_cls, "init_date" , -1)}')
+
+            if not dct.get('description' , ''):
+                raise AttributeError(f'class {name} description is not set')
+
+            if not dct.get('category1' , ''):
+                raise AttributeError(f'class {name} category1 is not set')
+
+            CONF.Validate_Category(getattr(new_cls, 'category0' , '') , dct.get('category1' , ''))
+
+            assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
+                f'{name} in module {new_cls.__module__} is duplicated within {cls.registry[name].__module__}'
+            cls.registry[name] = new_cls
+        return new_cls
+
+class StockFactorCalculator(metaclass=StockFactorCalculatorMeta):
+    '''base class of factor calculator'''
     init_date : int = -1
-    category0 : Literal['fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative'] | Any
     category1 : Literal['quality' , 'growth' , 'value' , 'earning' , 'surprise' , 'coverage' , 'forecast' , 
                         'adjustment' , 'hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity' , 
                         'momentum' , 'volatility' , 'correlation' , 'liquidity' , 'holding' , 'trading'] | Any = None
     description : str = ''
 
-    INIT_DATE = 20110101
-    CATEGORY0_SET = ['fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative']
-    CATEGORY1_SET = {
-        'fundamental' : ['quality' , 'growth' , 'value' , 'earning'] ,
-        'analyst' : ['surprise' , 'coverage' , 'forecast' , 'adjustment'] ,
-        'high_frequency' : ['hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity'] ,
-        'behavior' : ['momentum' , 'volatility' , 'correlation' , 'liquidity'] ,
-        'money_flow' : ['holding' , 'trading'] ,
-        'alternative' : None
-    }
+    category0 = _FactorPropertyStr('category0')
+    factor_name = _FactorPropertyStr('factor_name')
+    level = _FactorPropertyStr('level')
+    file_name = _FactorPropertyStr('file_name')
+    factor_string = _FactorPropertyStr('factor_string')
+
+    INIT_DATE = CONF.FACTOR_INIT_DATE
+    CATEGORY0_SET = CONF.CATEGORY0_SET
+    CATEGORY1_SET = CONF.CATEGORY1_SET
     FACTOR_CALENDAR = CALENDAR.td_within(INIT_DATE , step = CONF.UPDATE['step'])
     FACTOR_TARGET_DATES = CALENDAR.slice(FACTOR_CALENDAR , CONF.UPDATE['start'] , CONF.UPDATE['end'])
-    UPDATE_MIN_VALID_COUNT_RELAX  = 20
-    UPDATE_MIN_VALID_COUNT_STRICT = 100
+    UPDATE_MIN_VALID_COUNT_RELAX : int = 20
+    UPDATE_MIN_VALID_COUNT_STRICT : int = 100
     UPDATE_RELAX_DATES : list[int] = []
-
-    def __new__(cls , *args , **kwargs):
-        return super().__new__(cls.validate_attrs())
     
     @classmethod
     def Calc(cls , date : int):
@@ -135,32 +200,6 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
         '''after subclassing , set calc_factor as wrapper'''
         super().__init_subclass__(**kwargs)
         setattr(cls , 'calc_factor' , cls.calc_factor_wrapper(cls.calc_factor))
-    
-    @classproperty_str
-    def factor_name(cls) -> str:
-        return cls.__qualname__
-
-    @classproperty_str
-    def level(cls) -> str:
-        '''level of the factor'''
-        return 'level' + Path(cls.__module__.split('level')[-1]).parts[0]
-    
-    @classproperty_str
-    def file_name(cls) -> str:
-        '''file name of the factor'''
-        return '/'.join(Path(cls.__module__.split('level')[-1]).parts[1:]).removesuffix('.py')
-    
-    @classproperty_str
-    def factor_string(cls):
-        return f'Factor {cls.level}/{cls.category0}/{cls.category1}/{cls.factor_name}'
-    
-    @classproperty_str
-    def min_date(cls):
-        return DB.factor_min_date(cls.factor_name)
-    
-    @classproperty_str
-    def max_date(cls):
-        return DB.factor_max_date(cls.factor_name)
 
     def __repr__(self):
         return f'{self.factor_name}(from{self.init_date},{self.category0},{self.category1})'
@@ -168,44 +207,7 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     def __call__(self , date : int):
         '''return factor value of a given date , calculate if not exist'''
         return self.calc_factor(date)
-    
-    @classmethod
-    def validate_attrs(cls):
-        '''
-        validate attribute of factor
-        init_date : must be greater than INIT_DATE(20070101)
-        category0 : must be in CATEGORY0_SET([fundamental , analyst , high_frequency , behavior , money_flow , alternative])
-        category1 : must be in CATEGORY1_SET[category0] if category1_list is not None , otherwise must be not None
-            fundamental : quality , growth , value , earning
-            analyst : surprise , coverage , forecast , adjustment
-            high_frequency : hf_momentum , hf_volatility , hf_correlation , hf_liquidity
-            behavior : momentum , volatility , correlation , liquidity
-            money_flow : holding , trading
-            alternative : None
-        description : must be a non-empty string
-        '''
-        if cls.init_date < cls.INIT_DATE: 
-            raise CategoryError(f'init_date should be later than {cls.INIT_DATE} , but got {cls.init_date}')
 
-        cls.validate_category(cls.category0 , cls.category1)
-
-        if not cls.description:
-            raise CategoryError('description is not set')
-        
-        return cls
-
-    @classmethod
-    def validate_category(cls , category0 : str , category1 : str):
-        if category0 not in cls.CATEGORY0_SET:
-            raise CategoryError(f'category0 is should be in {cls.CATEGORY0_SET}, but got {category0}')
-        
-        if not category1:
-            raise CategoryError('category1 is not set')
-        
-        if (category1_list := cls.CATEGORY1_SET[category0]):
-            if category1 not in category1_list:
-                raise CategoryError(f'category1 is should be in {category1_list}, but got {category1}')
-        
     @classmethod
     def validate_value(cls , df : pd.Series , date : int , strict = False):
         '''validate factor value'''
@@ -247,6 +249,14 @@ class StockFactorCalculator(metaclass=SingletonABCMeta):
     def stored_dates(cls): 
         '''return list of stored dates of factor data'''
         return DB.factor_dates(cls.factor_name)
+
+    @classmethod
+    def min_date(cls):
+        return DB.factor_min_date(cls.factor_name)
+
+    @classmethod
+    def max_date(cls):
+        return DB.factor_max_date(cls.factor_name)
     
     @classmethod
     def has_date(cls , date : int):

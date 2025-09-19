@@ -11,7 +11,6 @@ def exret_std(date , n_months : int , lag_months : int = 0):
 
 class exret_std1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'volatility'
     description = '1个月超额收益率标准差'
     
@@ -20,7 +19,6 @@ class exret_std1m(StockFactorCalculator):
     
 class exret_std2m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'volatility'
     description = '2个月超额收益率标准差'
     
@@ -29,7 +27,6 @@ class exret_std2m(StockFactorCalculator):
  
 class exret_std3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'volatility'
     description = '3个月超额收益率标准差'
     
@@ -38,7 +35,6 @@ class exret_std3m(StockFactorCalculator):
     
 class exret_std6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'volatility'
     description = '6个月超额收益率标准差'
     
@@ -47,7 +43,6 @@ class exret_std6m(StockFactorCalculator):
     
 class exret_std12m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'volatility'
     description = '12个月超额收益率标准差'
     

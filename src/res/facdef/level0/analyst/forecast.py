@@ -66,7 +66,6 @@ def valtop_pct(date : int , val : Literal['sales' , 'np' , 'op' , 'tp'] , pct_mo
 
 class etop_est(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '归母净利润/市值一致预期值'
 
@@ -75,7 +74,6 @@ class etop_est(StockFactorCalculator):
     
 class etop_est_pct3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '3个月归母净利润/市值一致预期变化'
 
@@ -84,7 +82,6 @@ class etop_est_pct3m(StockFactorCalculator):
     
 class etop_est_pct6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '6个月归母净利润/市值一致预期变化'
 
@@ -93,7 +90,6 @@ class etop_est_pct6m(StockFactorCalculator):
 
 class eps_est_pct3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '3个月EPS一致预期变化'
 
@@ -102,7 +98,6 @@ class eps_est_pct3m(StockFactorCalculator):
     
 class eps_est_pct6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '6个月EPS一致预期变化'
 
@@ -111,7 +106,6 @@ class eps_est_pct6m(StockFactorCalculator):
 
 class eps_ftm_pct3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '3个月EPSFTM一致预期值变化'
 
@@ -120,7 +114,6 @@ class eps_ftm_pct3m(StockFactorCalculator):
     
 class eps_ftm_pct6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '6个月EPSFTM一致预期值变化'
 
@@ -129,7 +122,6 @@ class eps_ftm_pct6m(StockFactorCalculator):
 
 class optop_est(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '营业利润/市值一致预期值'
 
@@ -138,7 +130,6 @@ class optop_est(StockFactorCalculator):
     
 class optop_est_pct3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '3个月营业利润/市值一致预期变化'
 
@@ -147,7 +138,6 @@ class optop_est_pct3m(StockFactorCalculator):
     
 class optop_est_pct6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '6个月营业利润/市值一致预期变化'
 
@@ -158,7 +148,6 @@ class optop_est_pct6m(StockFactorCalculator):
 
 class sales_cagr1y_est(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '1年营业收入CAGR一致预期值'
 
@@ -167,7 +156,6 @@ class sales_cagr1y_est(StockFactorCalculator):
     
 class sales_cagr2y_est(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '2年营业收入CAGR一致预期值'
 
@@ -176,7 +164,6 @@ class sales_cagr2y_est(StockFactorCalculator):
     
 class npro_cagr1y_est(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '1年归母净利润CAGR一致预期值'
 
@@ -185,7 +172,6 @@ class npro_cagr1y_est(StockFactorCalculator):
     
 class npro_cagr2y_est(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '2年归母净利润CAGR一致预期值'
 
@@ -194,7 +180,6 @@ class npro_cagr2y_est(StockFactorCalculator):
     
 class epg_est(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = 'PEG一致预期值'
 
@@ -205,7 +190,6 @@ class epg_est(StockFactorCalculator):
     
 class roe_est(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '净资产收益率一致预期值'
 
@@ -214,7 +198,6 @@ class roe_est(StockFactorCalculator):
 
 class stop_est(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '营业收入/市值一致预期值'
 
@@ -223,7 +206,6 @@ class stop_est(StockFactorCalculator):
     
 class stop_est_pct3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '3个月营业收入/市值一致预期变化'
 
@@ -232,7 +214,6 @@ class stop_est_pct3m(StockFactorCalculator):
 
 class stop_est_pct6m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '6个月营业收入/市值一致预期变化'
 
@@ -241,7 +222,6 @@ class stop_est_pct6m(StockFactorCalculator):
 
 class tptop_est(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '利润总额/市值一致预期值'
 
@@ -250,7 +230,6 @@ class tptop_est(StockFactorCalculator):
     
 class tptop_est_pct3m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '3个月利润总额/市值一致预期变化'
 
@@ -259,7 +238,6 @@ class tptop_est_pct3m(StockFactorCalculator):
 
 class tptop_est_pct6m(StockFactorCalculator):   
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '6个月利润总额/市值一致预期变化'
 
@@ -268,7 +246,6 @@ class tptop_est_pct6m(StockFactorCalculator):
     
 class price_potential(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'forecast'
     description = '分析师评级一致目标价空间'
 

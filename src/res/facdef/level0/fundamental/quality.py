@@ -14,7 +14,6 @@ __all__ = [
 
 class assetcur_asset(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'quality'
     description = '流动资产/总资产'
     
@@ -23,7 +22,6 @@ class assetcur_asset(StockFactorCalculator):
     
 class liab_equ(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'quality'
     description = '产权比率'
     
@@ -32,7 +30,6 @@ class liab_equ(StockFactorCalculator):
     
 class liab_ta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'quality'
     description = '资产负债率'
     
@@ -41,7 +38,6 @@ class liab_ta(StockFactorCalculator):
     
 class liabcur_liab(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'quality'
     description = '流动负债/总负债'
     
@@ -50,7 +46,6 @@ class liabcur_liab(StockFactorCalculator):
     
 class ratio_cash(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'quality'
     description = '现金比率'
     
@@ -59,7 +54,6 @@ class ratio_cash(StockFactorCalculator):
     
 class ratio_current(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'quality'
     description = '流动比率'
     
@@ -68,7 +62,6 @@ class ratio_current(StockFactorCalculator):
     
 class ratio_quick(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'quality'
     description = '速动比率'
     
@@ -77,7 +70,6 @@ class ratio_quick(StockFactorCalculator):
 
 class assetsturn_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'quality'
     description = '单季度资产周转率'
     
@@ -88,7 +80,6 @@ class assetsturn_qtr(StockFactorCalculator):
     
 class assetsturn_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'quality'
     description = 'TTM资产周转率'
     
@@ -98,7 +89,6 @@ class assetsturn_ttm(StockFactorCalculator):
         return sales / ta
 class ta_equ(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'quality'
     description = '权益乘数'
     
@@ -107,7 +97,6 @@ class ta_equ(StockFactorCalculator):
     
 class npro_tp_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度归母净利润/利润总额'
     
@@ -116,7 +105,6 @@ class npro_tp_qtr(StockFactorCalculator):
 
 class npro_tp_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM归母净利润/利润总额'
     
@@ -125,7 +113,6 @@ class npro_tp_ttm(StockFactorCalculator):
 
 class oper_total_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度营业利润/营业收入(营业利润率)'
     
@@ -134,7 +121,6 @@ class oper_total_qtr(StockFactorCalculator):
 
 class dedt_npro_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度净利润/营业收入(净利润率)'
     
@@ -143,7 +129,6 @@ class dedt_npro_qtr(StockFactorCalculator):
     
 class cfo_cf_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度经营活动现金流/营业收入(经营活动现金流率)'
     
@@ -152,7 +137,6 @@ class cfo_cf_qtr(StockFactorCalculator):
     
 class net_cfo_ratio(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度经营活动净额占比'
     

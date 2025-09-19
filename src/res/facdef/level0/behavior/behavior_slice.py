@@ -49,7 +49,6 @@ def mom_low_amp_v2(date , n_days : int , low_amplitude_ratio = 0.7):
 
 class mom_ltampl_v1(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'momentum'
     description = '160日长端动量(低振幅)'
     
@@ -62,7 +61,6 @@ class mom_ltampl_v1(StockFactorCalculator):
     
 class mom_ltampl_v2(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'momentum'
     description = '160日长端动量(低振幅)v2'
     
@@ -71,7 +69,6 @@ class mom_ltampl_v2(StockFactorCalculator):
     
 class mom_slicevol1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'momentum'
     description = '1个月理想反转(成交量切分，较大-较小)'
     
@@ -84,7 +81,6 @@ class mom_slicevol1m(StockFactorCalculator):
     
 class corr_slicevol1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'correlation'
     description = '1个月corr差(成交量切分，较大-较小)'
     
@@ -100,7 +96,6 @@ class corr_slicevol1m(StockFactorCalculator):
     
 class beta_slicevol1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'correlation'
     description = '1个月beta差(成交量切分，较大-较小)'
     
@@ -116,7 +111,6 @@ class beta_slicevol1m(StockFactorCalculator):
 
 class skew_slicevol1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'momentum'
     description = '1个月skew差(成交量切分，较大-较小)'
     
@@ -130,7 +124,6 @@ class skew_slicevol1m(StockFactorCalculator):
 
 class ampl_slicecp1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'momentum'
     description = '1个月振幅(收盘价切分，较大)'
     

@@ -40,7 +40,19 @@ class BackendTaskRecorder:
         - any other type (converted to str)
     '''
     def __init__(self , **kwargs):
-        self.init_attributes(**argparse_dict(**kwargs))
+        parsed_kwargs = argparse_dict(**kwargs)
+        task_id : str | None = parsed_kwargs.pop('task_id' , None)
+        if task_id:
+            self._task_id = task_id
+        else:
+            task_item = TaskItem.create(None , source=parsed_kwargs.get('source' , None) , queue = True)
+            self._task_id = task_item.id
+        self.update_msg : dict[str , Any] = {'pid': os.getpid()}
+        self.params = parsed_kwargs
+        if 'email' in self.params:
+            if isinstance(self.params['email'] , str): 
+                self.params['email'] = eval(self.params['email'])
+            self.params['email'] = bool(self.params['email'])
 
     def __repr__(self):
         return f'BackendTaskRecorder(task_id = {self.task_id})'
@@ -49,7 +61,7 @@ class BackendTaskRecorder:
         def wrapper(*args , **kwargs):
             with self:
                 ret = func(*args , **kwargs , **self.params)
-                self.func_return(ret)
+                self._func_return(ret)
             return ret
         return wrapper
 
@@ -68,22 +80,10 @@ class BackendTaskRecorder:
             self.update_msg[key] = value
         else:
             self.params[key] = value
-        
-    def init_attributes(self , task_id : str | None = None , **kwargs):
-        if task_id:
-            self._task_id = task_id
-        else:
-            task_item = TaskItem.create(None , source=kwargs.get('source' , None) , queue = True)
-            self._task_id = task_item.id
-        self.update_msg : dict[str , Any] = {'pid': os.getpid()}
-        self.params = kwargs
-        if 'email' in self.params:
-            if isinstance(self.params['email'] , str): 
-                self.params['email'] = eval(self.params['email'])
-            self.params['email'] = bool(self.params['email'])
 
     @property
     def task_id(self):
+        '''task_id : script_name@time_id'''
         return self._task_id
 
     def __enter__(self):
@@ -146,7 +146,7 @@ class BackendTaskRecorder:
             else:
                 return cls(message = str(ret))
 
-    def func_return(self , func_return : Any | None = None):
+    def _func_return(self , func_return : Any | None = None):
         if not self.task_id or func_return is None: 
             return
         exit_msg = self.ExitMessage.from_return(func_return)

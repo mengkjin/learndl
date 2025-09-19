@@ -11,7 +11,6 @@ def price_weivol(date , n_months : int , lag_months : int = 0):
 
 class price_weivol1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'behavior'
     category1 = 'momentum'
     description = '1个月成交量加权收盘价比值'
 

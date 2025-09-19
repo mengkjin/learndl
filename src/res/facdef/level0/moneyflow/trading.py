@@ -24,7 +24,6 @@ def inflow_by_return(date , n_months : int , direction : Literal[-1,1] , div_amt
     
 class bsact_neg_1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'trading'
     description = '1个月资金流入-负收益'
     
@@ -33,7 +32,6 @@ class bsact_neg_1m(StockFactorCalculator):
     
 class bsact_pos_1m(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'trading'
     description = '1个月资金流入-正收益'
     
@@ -42,7 +40,6 @@ class bsact_pos_1m(StockFactorCalculator):
     
 class flow_small(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'trading'
     description = '1个月资金流强度--小单'
     
@@ -55,7 +52,6 @@ class flow_small(StockFactorCalculator):
     
 class flow_medium(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'trading'
     description = '1个月资金流强度--中单'
     
@@ -68,7 +64,6 @@ class flow_medium(StockFactorCalculator):
     
 class flow_large(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'trading'
     description = '1个月资金流强度--大单'
     
@@ -81,7 +76,6 @@ class flow_large(StockFactorCalculator):
     
 class flow_exlarge(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'trading'
     description = '1个月资金流强度--超大单'
     
@@ -94,7 +88,6 @@ class flow_exlarge(StockFactorCalculator):
     
 class flow_elsm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'trading'
     description = '1个月超大单-小单占比'
     
@@ -107,7 +100,6 @@ class flow_elsm(StockFactorCalculator):
 
 class flow_corr_elsm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'trading'
     description = '1个月超大单-小单相关性'
     
@@ -122,7 +114,6 @@ class flow_corr_elsm(StockFactorCalculator):
     
 class flow_corr_smlag(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'money_flow'
     category1 = 'trading'
     description = '1个月小单滞后相关性'
     

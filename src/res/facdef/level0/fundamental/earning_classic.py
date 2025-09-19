@@ -34,7 +34,6 @@ def get_hist_zscore_polars(expression : str , date : int):
 
 class npro_core_ratio(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '核心净利润占比'
     
@@ -48,7 +47,6 @@ class npro_core_ratio(StockFactorCalculator):
     
 class gp_margin_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度毛利润除以营业收入(毛利率)'
     
@@ -56,7 +54,6 @@ class gp_margin_qtr(StockFactorCalculator):
         return DATAVENDOR.get_fin_latest('gp@qtr / sales@qtr' , date)
 class gp_margin_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM毛利润除以营业收入(毛利率)'
     
@@ -65,7 +62,6 @@ class gp_margin_ttm(StockFactorCalculator):
     
 class gp_margin_zscore(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM毛利润除以营业收入(毛利率),Z-Score'
     
@@ -74,7 +70,6 @@ class gp_margin_zscore(StockFactorCalculator):
 
 class gp_ta_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度毛利润除以总资产'
     
@@ -83,7 +78,6 @@ class gp_ta_qtr(StockFactorCalculator):
 
 class gp_ta_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM毛利润除以总资产'
     
@@ -92,7 +86,6 @@ class gp_ta_ttm(StockFactorCalculator):
 
 class gp_ta_zscore(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '毛利润/总资产,Z-Score'
 
@@ -101,7 +94,6 @@ class gp_ta_zscore(StockFactorCalculator):
     
 class dedt_equ_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM扣非归母净利润/净资产'
     
@@ -110,7 +102,6 @@ class dedt_equ_ttm(StockFactorCalculator):
 
 class dedt_sales_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM扣非归母净利润/营业收入'
     
@@ -119,7 +110,6 @@ class dedt_sales_ttm(StockFactorCalculator):
 
 class dedt_ta_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM扣非归母净利润/总资产'
     
@@ -128,7 +118,6 @@ class dedt_ta_ttm(StockFactorCalculator):
 
 class roe_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度归母净利润/净资产(ROE)'
     
@@ -136,7 +125,6 @@ class roe_qtr(StockFactorCalculator):
         return DATAVENDOR.get_fin_latest('npro@qtr / equ@qtr' , date)
 class roe_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM归母净利润/净资产(ROE)'
     
@@ -145,7 +133,6 @@ class roe_ttm(StockFactorCalculator):
 
 class roe_zscore(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '归母净利润/净资产,Z-Score'
     
@@ -155,7 +142,6 @@ class roe_zscore(StockFactorCalculator):
 
 class roa_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度归母净利润/总资产(ROA)'
     
@@ -164,7 +150,6 @@ class roa_qtr(StockFactorCalculator):
     
 class roa_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM归母净利润/总资产(ROA)'
     
@@ -173,7 +158,6 @@ class roa_ttm(StockFactorCalculator):
 
 class roa_zscore(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM归母净利润/总资产(ROA),Z-Score'
     
@@ -182,7 +166,6 @@ class roa_zscore(StockFactorCalculator):
 
 class net_margin_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度归母净利润/营业收入(净利率)'
     
@@ -190,7 +173,6 @@ class net_margin_qtr(StockFactorCalculator):
         return DATAVENDOR.get_fin_latest('npro@qtr / sales@qtr' , date)
 class net_margin_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM归母净利润/营业收入(净利率)'
     
@@ -199,7 +181,6 @@ class net_margin_ttm(StockFactorCalculator):
     
 class net_margin_zscore(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM归母净利润/营业收入(净利率),Z-Score'
     
@@ -208,7 +189,6 @@ class net_margin_zscore(StockFactorCalculator):
 
 class cfo_sales_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度经营活动现金流/营业收入'
     
@@ -217,7 +197,6 @@ class cfo_sales_qtr(StockFactorCalculator):
     
 class cfo_sales_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM经营活动现金流/营业收入'
     
@@ -226,7 +205,6 @@ class cfo_sales_ttm(StockFactorCalculator):
 
 class cfo_sales_zscore(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM经营活动现金流/营业收入,Z-Score'
     
@@ -235,7 +213,6 @@ class cfo_sales_zscore(StockFactorCalculator):
 
 class cfo_ta_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度经营活动现金流/总资产'
     
@@ -244,7 +221,6 @@ class cfo_ta_qtr(StockFactorCalculator):
 
 class cfo_ta_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM经营活动现金流/总资产'
     
@@ -253,7 +229,6 @@ class cfo_ta_ttm(StockFactorCalculator):
     
 class cfo_ta_zscore(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM经营活动现金流/总资产,Z-Score'
     
@@ -262,7 +237,6 @@ class cfo_ta_zscore(StockFactorCalculator):
     
 class oper_margin_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度营业利润/营业收入(营业利润率)'
     
@@ -271,7 +245,6 @@ class oper_margin_qtr(StockFactorCalculator):
     
 class oper_margin_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM营业利润/营业收入(营业利润率)'
     
@@ -280,7 +253,6 @@ class oper_margin_ttm(StockFactorCalculator):
 
 class oper_margin_zscore(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM营业利润/营业收入(营业利润率),Z-Score'
     
@@ -289,7 +261,6 @@ class oper_margin_zscore(StockFactorCalculator):
 
 class expense_sales_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度费用/营业收入'
     
@@ -298,7 +269,6 @@ class expense_sales_qtr(StockFactorCalculator):
 
 class expense_sales_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM费用/营业收入'
     
@@ -307,7 +277,6 @@ class expense_sales_ttm(StockFactorCalculator):
     
 class expense_sales_zscore(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM费用/营业收入,Z-Score'
     
@@ -316,7 +285,6 @@ class expense_sales_zscore(StockFactorCalculator):
 
 class roic_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度EBIT(1-税率)/投入资本'
     
@@ -325,7 +293,6 @@ class roic_qtr(StockFactorCalculator):
 
 class roic_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM,EBIT(1-税率)/投入资本'
     
@@ -334,7 +301,6 @@ class roic_ttm(StockFactorCalculator):
     
 class roic_zscore(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM,EBIT(1-税率)/投入资本,Z-Score'
     
@@ -343,7 +309,6 @@ class roic_zscore(StockFactorCalculator):
 
 class ebit_tangible_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM,EBIT/有形资产'
     
@@ -351,7 +316,6 @@ class ebit_tangible_ttm(StockFactorCalculator):
         return DATAVENDOR.get_fin_latest('ebit@ttm / tangible_asset@ttm' , date)
 class tax_equ_qtr(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = '单季度所得税/净资产'
     
@@ -360,7 +324,6 @@ class tax_equ_qtr(StockFactorCalculator):
     
 class tax_equ_ttm(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM所得税/净资产'
     
@@ -369,7 +332,6 @@ class tax_equ_ttm(StockFactorCalculator):
 
 class tax_equ_zscore(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'earning'
     description = 'TTM所得税/净资产,Z-Score'
     

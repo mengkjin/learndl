@@ -20,7 +20,6 @@ def get_indrank_delta(expression : str , date : int):
 
 class eps_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM每股收益行业内分位数之差'
     
@@ -29,7 +28,6 @@ class eps_rank_delta(StockFactorCalculator):
 
 class sales_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = '营业收入行业内分位数之差'
     
@@ -38,7 +36,6 @@ class sales_rank_delta(StockFactorCalculator):
     
 class gp_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM毛利润行业内分位数之差'
     
@@ -47,7 +44,6 @@ class gp_rank_delta(StockFactorCalculator):
     
 class npro_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM归母净利润行业内分位数之差'
     
@@ -56,7 +52,6 @@ class npro_rank_delta(StockFactorCalculator):
     
 class dedt_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM扣非归母净利润行业内分位数之差'
     
@@ -65,7 +60,6 @@ class dedt_rank_delta(StockFactorCalculator):
     
 class tax_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = '所得税行业内分位数之差'
     
@@ -74,7 +68,6 @@ class tax_rank_delta(StockFactorCalculator):
 
 class roe_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM净资产收益率行业内分位数之差'
     
@@ -83,7 +76,6 @@ class roe_rank_delta(StockFactorCalculator):
     
 class gp_margin_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM毛利润率行业内分位数之差'
     
@@ -92,7 +84,6 @@ class gp_margin_rank_delta(StockFactorCalculator):
 
 class oper_margin_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM营业利润率行业内分位数之差'
     
@@ -101,7 +92,6 @@ class oper_margin_rank_delta(StockFactorCalculator):
 
 class net_margin_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = 'TTM净利率行业内分位数之差'
     
@@ -110,7 +100,6 @@ class net_margin_rank_delta(StockFactorCalculator):
     
 class ta_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = '总资产行业内分位数之差'
     
@@ -119,7 +108,6 @@ class ta_rank_delta(StockFactorCalculator):
     
 class equ_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = '净资产行业内分位数之差'
     
@@ -128,7 +116,6 @@ class equ_rank_delta(StockFactorCalculator):
     
 class liab_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = '总负债行业内分位数之差'
     
@@ -137,7 +124,6 @@ class liab_rank_delta(StockFactorCalculator):
     
 class cfo_rank_delta(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = '经营活动现金流行业内分位数之差'
     

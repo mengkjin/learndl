@@ -4,7 +4,7 @@ import pandas as pd
 from dataclasses import dataclass
 
 from src.proj import PATH
-from src.basic import Timer , DB
+from src.basic import Timer , DB , CONF
 from src.data.util import DataBlock
 
 @dataclass(slots=True)
@@ -57,13 +57,13 @@ class FrameLoader:
     
 @dataclass
 class FactorLoader:
-    category0  : str
     category1  : str
 
     def __post_init__(self):
+        CONF.Validate_Category(self.category0 , self.category1)
+
         from src.res.factor.calculator import StockFactorHierarchy
         self.hier = StockFactorHierarchy()
-        self.hier.validate_category(self.category0 , self.category1)
     
     def load(self , start_dt : int | None = None , end_dt : int | None = None):
         return self.load_block(start_dt , end_dt)
@@ -79,3 +79,7 @@ class FactorLoader:
             df = pd.concat(factors).pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_dataframe(df)
         return block
+
+    @property
+    def category0(self):
+        return CONF.Category1_to_Category0(self.category1)

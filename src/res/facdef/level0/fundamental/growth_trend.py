@@ -34,7 +34,6 @@ def calc_trend(data : pd.Series):
 
 class gp_ta_qoq_trend(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = '单季度毛利润/总资产环比变化趋势'
     
@@ -44,7 +43,6 @@ class gp_ta_qoq_trend(StockFactorCalculator):
     
 class gp_ta_yoy_trend(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = '单季度毛利润/总资产同比变化趋势'
     
@@ -54,7 +52,6 @@ class gp_ta_yoy_trend(StockFactorCalculator):
     
 class npro_trend(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = '归母净利润变动趋势'
     
@@ -64,7 +61,6 @@ class npro_trend(StockFactorCalculator):
 
 class cfo_trend(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'fundamental'
     category1 = 'growth'
     description = '经营活动现金流变动趋势'
     

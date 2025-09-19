@@ -74,7 +74,6 @@ def get_profit_outperform(date : int , val : Literal['tp' , 'npro' , 'sales' , '
 
 class outperform_title(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'surprise'
     description = '研报标题超预期个数'
 
@@ -83,7 +82,6 @@ class outperform_title(StockFactorCalculator):
     
 class outperform_titlepct(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'surprise'
     description = '研报标题超预期比例'
 
@@ -92,7 +90,6 @@ class outperform_titlepct(StockFactorCalculator):
     
 class outperform_npro(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'surprise'
     description = '单季度净利润超预期幅度'
 
@@ -101,7 +98,6 @@ class outperform_npro(StockFactorCalculator):
     
 class outperform_sales(StockFactorCalculator):
     init_date = 20110101
-    category0 = 'analyst'
     category1 = 'surprise'
     description = '单季度营业收入超预期幅度'
 
