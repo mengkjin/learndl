@@ -1,5 +1,5 @@
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import MomentumFactor
 
 
 def price_weivol(date , n_months : int , lag_months : int = 0):
@@ -9,9 +9,8 @@ def price_weivol(date , n_months : int , lag_months : int = 0):
     weivol = (vol * cp).sum() / vol.sum() / cp.iloc[-1]
     return weivol
 
-class price_weivol1m(StockFactorCalculator):
+class price_weivol1m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '1个月成交量加权收盘价比值'
 
     def calc_factor(self , date : int):

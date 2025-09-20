@@ -3,7 +3,7 @@ import pandas as pd
 from typing import Literal
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import ValueFactor
 
 __all__ = [
     'btop' , 'btop_rank1y' , 'btop_rank3y' , 
@@ -118,33 +118,29 @@ def valuation_rank3y(numerator : str , denominator , date : int , qtr_method = '
     den = get_denominator_hist(denominator , date , 3 , 21)
     return calc_valuation(num , den , pct = True)
 
-class btop(StockFactorCalculator):
+class btop(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '市净率倒数'
     
     def calc_factor(self, date: int):
         return valuation_latest('equ@qtr' , 'mv' , date)
     
-class btop_rank1y(StockFactorCalculator):
+class btop_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '市净率倒数,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('equ@qtr' , 'mv' , date)
     
-class btop_rank3y(StockFactorCalculator):
+class btop_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '市净率倒数,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('equ@qtr' , 'mv' , date)
     
-class dtop(StockFactorCalculator):
+class dtop(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '滚动分红率'
     
     def calc_factor(self, date: int):
@@ -156,9 +152,8 @@ class dtop(StockFactorCalculator):
             dv_ttm = dv_ttm.dropna().groupby('secid')['dv_ttm'].last() / 100
         return calc_valuation(dv_ttm , 1 , pct = False)
     
-class dtop_rank1y(StockFactorCalculator):
+class dtop_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '股东分红率,1年分位数'
     
     def calc_factor(self, date: int):
@@ -166,9 +161,8 @@ class dtop_rank1y(StockFactorCalculator):
         dv_ttm = DATAVENDOR.TRADE.get_val_data(start_date , end_date , 'dv_ttm' , prev=False , pivot=True)
         return calc_valuation(dv_ttm , 1 , pct = True)
     
-class dtop_rank3y(StockFactorCalculator):
+class dtop_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '股东分红率,3年分位数'
     
     def calc_factor(self, date: int):
@@ -176,316 +170,277 @@ class dtop_rank3y(StockFactorCalculator):
         dv_ttm = DATAVENDOR.TRADE.get_specific_data(start_date , end_date , 'val' , 'dv_ttm' , prev=False , pivot=True , date_step = 21)
         return calc_valuation(dv_ttm , 1 , pct = True)
 
-class ebitev_ttm(StockFactorCalculator):
+class ebitev_ttm(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'EBIT/EV'
     
     def calc_factor(self, date: int):
         return valuation_latest('ebit@ttm' , 'ev' , date)
 
-class ebitev_ttm_rank1y(StockFactorCalculator):
+class ebitev_ttm_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'EBIT/EV,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('ebit@ttm' , 'ev' , date)
 
-class ebitev_ttm_rank3y(StockFactorCalculator):
+class ebitev_ttm_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'EBIT/EV,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('ebit@ttm' , 'ev' , date)
     
-class ebitdaev_ttm(StockFactorCalculator):
+class ebitdaev_ttm(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'EBITDA/EV'
     
     def calc_factor(self, date: int):
         return valuation_latest('ebitda@ttm' , 'ev' , date)
 
-class ebitdaev_ttm_rank1y(StockFactorCalculator):
+class ebitdaev_ttm_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'EBITDA/EV,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('ebitda@ttm' , 'ev' , date)
 
-class ebitdaev_ttm_rank3y(StockFactorCalculator):
+class ebitdaev_ttm_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'EBITDA/EV,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('ebitda@ttm' , 'ev' , date)
     
-class etop_ttm(StockFactorCalculator):
+class etop_ttm(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM市盈率倒数'
     
     def calc_factor(self, date: int):
         return valuation_latest('npro@ttm' , 'mv' , date)
     
-class etop_ttm_rank1y(StockFactorCalculator):
+class etop_ttm_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM市盈率倒数,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('npro@ttm' , 'mv' , date)
     
-class etop_ttm_rank3y(StockFactorCalculator):
+class etop_ttm_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM市盈率倒数,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('npro@ttm' , 'mv' , date)
     
-class etop_dedt_ttm(StockFactorCalculator):
+class etop_dedt_ttm(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM扣非市盈率倒数'
     
     def calc_factor(self, date: int):
         return valuation_latest('dedt@ttm' , 'mv' , date)
     
-class etop_dedt_ttm_rank1y(StockFactorCalculator):
+class etop_dedt_ttm_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM扣非市盈率倒数,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('dedt@ttm' , 'mv' , date)
     
-class etop_dedt_ttm_rank3y(StockFactorCalculator):
+class etop_dedt_ttm_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM扣非市盈率倒数,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('dedt@ttm' , 'mv' , date)
 
-class etop(StockFactorCalculator):
+class etop(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度市盈率倒数'
     
     def calc_factor(self, date: int):
         return valuation_latest('npro@qtr' , 'mv' , date)
 
-class etop_rank1y(StockFactorCalculator):
+class etop_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度市盈率倒数,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('npro@qtr' , 'mv' , date)
     
-class etop_rank3y(StockFactorCalculator):
+class etop_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度市盈率倒数,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('npro@qtr' , 'mv' , date)
     
-class fcfetop_ttm(StockFactorCalculator):
+class fcfetop_ttm(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM企业股权自由现金流量/市值'
     
     def calc_factor(self, date: int):
         return valuation_latest('fcfe@ttm' , 'mv' , date)
 
-class fcfetop_ttm_rank1y(StockFactorCalculator):
+class fcfetop_ttm_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM企业股权自由现金流量/市值,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('fcfe@ttm' , 'mv' , date)
     
-class fcfetop_ttm_rank3y(StockFactorCalculator):
+class fcfetop_ttm_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM企业股权自由现金流量/市值,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('fcfe@ttm' , 'mv' , date)
 
 
-class fcfetop_qtr(StockFactorCalculator):
+class fcfetop_qtr(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度企业股权自由现金流量/市值'
     
     def calc_factor(self, date: int):
         return valuation_latest('fcfe@qtr' , 'mv' , date)
 
-class fcfetop_qtr_rank1y(StockFactorCalculator):
+class fcfetop_qtr_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度企业股权自由现金流量/市值,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('fcfe@qtr' , 'mv' , date)
     
-class fcfetop_qtr_rank3y(StockFactorCalculator):
+class fcfetop_qtr_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度企业股权自由现金流量/市值,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('fcfe@qtr' , 'mv' , date)
 
     
-class cfotop_ttm(StockFactorCalculator):
+class cfotop_ttm(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM经营现金流/市值'
     
     def calc_factor(self, date: int):
         return valuation_latest('ncfo@ttm' , 'mv' , date)
 
-class cfotop_ttm_rank1y(StockFactorCalculator):
+class cfotop_ttm_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM经营现金流/市值,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('ncfo@ttm' , 'mv' , date)
     
-class cfotop_ttm_rank3y(StockFactorCalculator):
+class cfotop_ttm_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM经营现金流/市值,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('ncfo@ttm' , 'mv' , date)
 
-class cfotop(StockFactorCalculator):
+class cfotop(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度经营现金流/市值'
     
     def calc_factor(self, date: int):
         return valuation_latest('ncfo@qtr' , 'mv' , date)
 
-class cfotop_rank1y(StockFactorCalculator):
+class cfotop_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度经营现金流/市值,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('ncfo@qtr' , 'mv' , date)
     
-class cfotop_rank3y(StockFactorCalculator):
+class cfotop_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度经营现金流/市值,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('ncfo@qtr' , 'mv' , date)
     
-class stop_ttm(StockFactorCalculator):
+class stop_ttm(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM市销率倒数'
     
     def calc_factor(self, date: int):
         return valuation_latest('sales@ttm' , 'mv' , date)
     
-class stop_ttm_rank1y(StockFactorCalculator):
+class stop_ttm_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM市销率倒数,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('sales@ttm' , 'mv' , date)
     
-class stop_ttm_rank3y(StockFactorCalculator):
+class stop_ttm_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM市销率倒数,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('sales@ttm' , 'mv' , date)
 
-class stop(StockFactorCalculator):
+class stop(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度市销率倒数'
     
     def calc_factor(self, date: int):
         return valuation_latest('sales@qtr' , 'mv' , date)
 
-class stop_rank1y(StockFactorCalculator):
+class stop_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度市销率倒数,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('sales@qtr' , 'mv' , date)
     
-class stop_rank3y(StockFactorCalculator):
+class stop_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度市销率倒数,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('sales@qtr' , 'mv' , date)
     
-class cfev(StockFactorCalculator):
+class cfev(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度经营性现金流/EV'
     
     def calc_factor(self, date: int):
         return valuation_latest('ncfo@qtr' , 'ev' , date)
     
-class cfev_rank1y(StockFactorCalculator):
+class cfev_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度经营性现金流/EV,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('ncfo@qtr' , 'ev' , date)
     
-class cfev_rank3y(StockFactorCalculator):
+class cfev_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '单季度经营性现金流/EV,3年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank3y('ncfo@qtr' , 'ev' , date)
 
     
-class cfev_ttm(StockFactorCalculator):
+class cfev_ttm(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM经营性现金流/EV'
     
     def calc_factor(self, date: int):
         return valuation_latest('ncfo@ttm' , 'ev' , date)
     
-class cfev_ttm_rank1y(StockFactorCalculator):
+class cfev_ttm_rank1y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM经营性现金流/EV,1年分位数'
     
     def calc_factor(self, date: int):
         return valuation_rank1y('ncfo@ttm' , 'ev' , date)
     
-class cfev_ttm_rank3y(StockFactorCalculator):
+class cfev_ttm_rank3y(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'TTM经营性现金流/EV,3年分位数'
     
     def calc_factor(self, date: int):

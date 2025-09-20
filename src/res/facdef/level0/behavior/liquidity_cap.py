@@ -2,7 +2,7 @@ import numpy as np
 
 from typing import Literal
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import LiquidityFactor
 
 
 def cap_classic(date , cap_type : Literal['tt' , 'fl' , 'fr']):
@@ -16,33 +16,29 @@ def cap_classic(date , cap_type : Literal['tt' , 'fl' , 'fr']):
     else:
         raise ValueError(f'cap_type {cap_type} not supported')
 
-class lncap(StockFactorCalculator):
+class lncap(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '市值(对数总市值)'
     
     def calc_factor(self, date: int):
         return cap_classic(date , 'tt')
     
-class lncap_liq(StockFactorCalculator):
+class lncap_liq(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '市值(对数流通市值)'
     
     def calc_factor(self, date: int):
         return cap_classic(date , 'fl')
     
-class lncap_free(StockFactorCalculator):
+class lncap_free(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '市值(对数自由流通市值)'
     
     def calc_factor(self, date: int):
         return cap_classic(date , 'fr')
 
-class lockedstk(StockFactorCalculator):
+class lockedstk(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '锁仓比'
     
     def calc_factor(self, date: int):

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import GrowthFactor
 
 
 __all__ = [
@@ -40,161 +40,141 @@ def get_accv(expression : str , date : int):
     data = DATAVENDOR.get_fin_hist(expression , date , 10)
     return calc_accv(data)
 
-class eps_acce(StockFactorCalculator):
+class eps_acce(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM每股收益行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_acce('eps@ttm' , date)
 
-class sales_acce(StockFactorCalculator):
+class sales_acce(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '营业收入行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_acce('sales@ttm' , date)
     
-class gp_acce(StockFactorCalculator):
+class gp_acce(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM毛利润行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_acce('gp@ttm' , date)
     
-class npro_acce(StockFactorCalculator):
+class npro_acce(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM归母净利润行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_acce('npro@ttm' , date)
     
-class dedt_acce(StockFactorCalculator):
+class dedt_acce(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM扣非归母净利润行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_acce('dedt@ttm' , date)
     
-class tax_acce(StockFactorCalculator):
+class tax_acce(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '所得税行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_acce('tax@ttm' , date)
 
-class roe_acce(StockFactorCalculator):
+class roe_acce(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM净资产收益率行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_acce('npro@ttm / equ@ttm' , date)
     
-class gp_margin_acce(StockFactorCalculator):
+class gp_margin_acce(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM毛利润率行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_acce('gp@ttm / sales@ttm' , date)
 
-class oper_margin_acce(StockFactorCalculator):
+class oper_margin_acce(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM营业利润率行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_acce('oper_np@ttm / sales@ttm' , date)
 
-class net_margin_acce(StockFactorCalculator):
+class net_margin_acce(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM净利率行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_acce('npro@ttm / sales@ttm' , date)
     
-class eps_accv(StockFactorCalculator):
+class eps_accv(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM每股收益行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_accv('eps@ttm' , date)
 
-class sales_accv(StockFactorCalculator):
+class sales_accv(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '营业收入行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_accv('sales@ttm' , date)
     
-class gp_accv(StockFactorCalculator):
+class gp_accv(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM毛利润行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_accv('gp@ttm' , date)
     
-class npro_accv(StockFactorCalculator):
+class npro_accv(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM归母净利润行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_accv('npro@ttm' , date)
     
-class dedt_accv(StockFactorCalculator):
+class dedt_accv(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM扣非归母净利润行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_accv('dedt@ttm' , date)
     
-class tax_accv(StockFactorCalculator):
+class tax_accv(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '所得税行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_accv('tax@ttm' , date)
 
-class roe_accv(StockFactorCalculator):
+class roe_accv(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM净资产收益率行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_accv('npro@ttm / equ@ttm' , date)
     
-class gp_margin_accv(StockFactorCalculator):
+class gp_margin_accv(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM毛利润率行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_accv('gp@ttm / sales@ttm' , date)
 
-class oper_margin_accv(StockFactorCalculator):
+class oper_margin_accv(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM营业利润率行业内分位数之差'
     
     def calc_factor(self, date: int):
         return get_accv('oper_np@ttm / sales@ttm' , date)
 
-class net_margin_accv(StockFactorCalculator):
+class net_margin_accv(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM净利率行业内分位数之差'
     
     def calc_factor(self, date: int):

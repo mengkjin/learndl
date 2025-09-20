@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import CorrelationFactor
 
 from src.func.transform import time_weight , apply_ols
 
@@ -17,41 +17,36 @@ def calc_beta(date , n_months : int , lag_months : int = 0 , half_life = 0 , min
 
     return beta
 
-class beta_1m(StockFactorCalculator):
+class beta_1m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '1个月贝塔'
     
     def calc_factor(self, date: int):
         return calc_beta(date , 1)
     
-class beta_2m(StockFactorCalculator):
+class beta_2m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '2个月贝塔'
     
     def calc_factor(self, date: int):
         return calc_beta(date , 2)
 
-class beta_3m(StockFactorCalculator):
+class beta_3m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '3个月贝塔'
     
     def calc_factor(self, date: int):
         return calc_beta(date , 3)
 
-class beta_6m(StockFactorCalculator):
+class beta_6m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '6个月贝塔'
     
     def calc_factor(self, date: int):
         return calc_beta(date , 6)
     
-class beta_12m(StockFactorCalculator):
+class beta_12m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '12个月贝塔'
     
     def calc_factor(self, date: int):

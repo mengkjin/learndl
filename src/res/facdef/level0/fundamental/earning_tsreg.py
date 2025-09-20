@@ -4,7 +4,7 @@ import polars as pl
 import statsmodels.api as sm
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import EarningFactor
 
 
 __all__ = [
@@ -49,27 +49,24 @@ def ts_last_resid_polars(y_var : str | pd.Series , x_vars : list[str | pd.Series
 
     return df
 
-class lpnp(StockFactorCalculator):
+class lpnp(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '线性提纯净利润'
     
     def calc_factor(self, date: int):        
         df = ts_last_resid_polars(y_var='npro@qtr' , x_vars=['is@total_revenue@qtr - sales@qtr' , 'bs@cip@qtr'] , date = date)
         return df
     
-class ocfa(StockFactorCalculator):
+class ocfa(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '产能利用率提升'
     
     def calc_factor(self, date: int):
         df = ts_last_resid_polars(y_var='is@oper_cost@qtr' , x_vars=['bs@fix_assets@qtr'] , date = date)
         return df
     
-class rroc(StockFactorCalculator):
+class rroc(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '营业能力改善'
     
     def calc_factor(self, date: int):

@@ -3,7 +3,7 @@ import numpy as np
 from typing import Literal
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import AdjustmentFactor
 
 __all__ = [
     'rec_npro_12m' , 'rec_npro_6m' , 'rec_npro_3m' , 'rec_npro_6m_anndt' ,
@@ -37,97 +37,85 @@ def get_npro_adjustment(date : int , n_month : int , type : Literal['rec' , 'upn
         df = df.groupby(['secid'])['np'].mean()
     return df    
 
-class rec_npro_12m(StockFactorCalculator):
+class rec_npro_12m(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '12个月盈利预测上调幅度'
     
     def calc_factor(self, date: int):
         return get_npro_adjustment(date , 12 , 'rec')
     
-class rec_npro_6m(StockFactorCalculator):
+class rec_npro_6m(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '6个月盈利预测上调幅度'
     
     def calc_factor(self, date: int):
         return get_npro_adjustment(date , 6 , 'rec')
     
-class rec_npro_3m(StockFactorCalculator):
+class rec_npro_3m(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '3个月盈利预测上调幅度'
     
     def calc_factor(self, date: int):
         return get_npro_adjustment(date , 3 , 'rec')
     
-class rec_npro_6m_anndt(StockFactorCalculator):
+class rec_npro_6m_anndt(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '6个月盈利预测上调幅度,公告日后7天'
     
     def calc_factor(self, date: int):
         return get_npro_adjustment(date , 6 , 'rec' , within_ann_days = 7)
 
-class upnum_npro_12m(StockFactorCalculator):
+class upnum_npro_12m(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '12个月分析师盈利上修数量'
     
     def calc_factor(self, date: int):
         return get_npro_adjustment(date , 12 , 'upnum')  
 
-class upnum_npro_6m(StockFactorCalculator):
+class upnum_npro_6m(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '6个月分析师盈利上修数量'
     
     def calc_factor(self, date: int):
         return get_npro_adjustment(date , 6 , 'upnum')  
 
-class upnum_npro_3m(StockFactorCalculator):
+class upnum_npro_3m(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '3个月分析师盈利上修数量'
     
     def calc_factor(self, date: int):
         return get_npro_adjustment(date , 3 , 'upnum')
     
-class upnum_npro_6m_anndt(StockFactorCalculator):
+class upnum_npro_6m_anndt(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '6个月分析师盈利上修数量,公告日后7天'
     
     def calc_factor(self, date: int):
         return get_npro_adjustment(date , 6 , 'upnum' , within_ann_days = 7)
 
-class uppct_npro_12m(StockFactorCalculator):
+class uppct_npro_12m(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '12个月分析师盈利上修占比'
     
     def calc_factor(self, date: int):
         return get_npro_adjustment(date , 12 , 'uppct')
     
-class uppct_npro_6m(StockFactorCalculator):
+class uppct_npro_6m(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '6个月分析师盈利上修占比'
     
     def calc_factor(self, date: int):
         return get_npro_adjustment(date , 6 , 'uppct')
     
-class uppct_npro_3m(StockFactorCalculator):
+class uppct_npro_3m(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '3个月分析师盈利上修占比'
     
     def calc_factor(self, date: int):
         return get_npro_adjustment(date , 3 , 'uppct')
 
-class uppct_npro_6m_anndt(StockFactorCalculator):
+class uppct_npro_6m_anndt(AdjustmentFactor):
     init_date = 20110101
-    category1 = 'adjustment'
     description = '6个月分析师盈利上修占比,公告日后7天'
     
     def calc_factor(self, date: int):

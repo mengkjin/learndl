@@ -3,7 +3,7 @@ import numpy as np
 from typing import Any , Literal
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import SurpriseFactor
 
 
 __all__ = [
@@ -72,33 +72,29 @@ def get_profit_outperform(date : int , val : Literal['tp' , 'npro' , 'sales' , '
     return df.groupby('secid')['outperform_pct'].mean()
 
 
-class outperform_title(StockFactorCalculator):
+class outperform_title(SurpriseFactor):
     init_date = 20110101
-    category1 = 'surprise'
     description = '研报标题超预期个数'
 
     def calc_factor(self, date: int):
         return get_title_outperform(date , type = 'num')
     
-class outperform_titlepct(StockFactorCalculator):
+class outperform_titlepct(SurpriseFactor):
     init_date = 20110101
-    category1 = 'surprise'
     description = '研报标题超预期比例'
 
     def calc_factor(self, date: int):
         return get_title_outperform(date , type = 'pct')
     
-class outperform_npro(StockFactorCalculator):
+class outperform_npro(SurpriseFactor):
     init_date = 20110101
-    category1 = 'surprise'
     description = '单季度净利润超预期幅度'
 
     def calc_factor(self, date: int):
         return get_profit_outperform(date , val = 'npro')
     
-class outperform_sales(StockFactorCalculator):
+class outperform_sales(SurpriseFactor):
     init_date = 20110101
-    category1 = 'surprise'
     description = '单季度营业收入超预期幅度'
 
     def calc_factor(self, date: int):

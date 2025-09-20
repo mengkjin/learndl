@@ -4,7 +4,7 @@ import statsmodels.api as sm
 import polars as pl
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import GrowthFactor
 
 
 __all__ = [
@@ -32,36 +32,32 @@ def calc_trend(data : pd.Series):
             to_pandas().set_index('secid').iloc[:,0]
     return df
 
-class gp_ta_qoq_trend(StockFactorCalculator):
+class gp_ta_qoq_trend(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度毛利润/总资产环比变化趋势'
     
     def calc_factor(self, date: int):
         gp_ta_qoq = DATAVENDOR.get_fin_qoq('gp@qtr / ta@qtr' , date , 20).iloc[:,0]
         return calc_trend(gp_ta_qoq)
     
-class gp_ta_yoy_trend(StockFactorCalculator):
+class gp_ta_yoy_trend(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度毛利润/总资产同比变化趋势'
     
     def calc_factor(self, date: int):
         gp_ta_yoy = DATAVENDOR.get_fin_yoy('gp@qtr / ta@qtr' , date , 20).iloc[:,0]
         return calc_trend(gp_ta_yoy)
     
-class npro_trend(StockFactorCalculator):
+class npro_trend(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '归母净利润变动趋势'
     
     def calc_factor(self, date: int):
         npro = DATAVENDOR.get_fin_hist('npro@qtr' , date , 20).iloc[:,0]
         return calc_trend(npro)
 
-class cfo_trend(StockFactorCalculator):
+class cfo_trend(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '经营活动现金流变动趋势'
     
     def calc_factor(self, date: int):

@@ -12,7 +12,8 @@ def parse_ts_input(
     value_cols = ['value'] , 
     date_cols = ['date' , 'end_date'] , 
     feat_cols = ['secid' , 'factor']
-):
+) -> tuple[np.ndarray , np.ndarray]:
+    '''parse dataframe input of time series to numpy array and feature names'''
     ts_cols = np.array([*ts.index.names , *ts.columns]).astype(str)
     value_cols = np.intersect1d(value_cols , ts_cols)
     date_cols  = np.intersect1d(date_cols  , ts_cols)
@@ -21,55 +22,66 @@ def parse_ts_input(
     ts = ts.pivot_table(value_cols[0] , date_cols[0] , feat_cols[0])
     return ts.to_numpy() , ts.columns.to_numpy()
     
-def parse_cov_output(cov : np.ndarray , feat : np.ndarray):
+def parse_cov_output(cov : np.ndarray , feat : np.ndarray) -> pd.DataFrame:
+    '''parse covariance matrix output to dataframe'''
     return pd.DataFrame(cov , index=feat , columns=feat)
 
-def parse_sd_output(sd : np.ndarray , feat : np.ndarray , feat_name = 'sd'):
+def parse_sd_output(sd : np.ndarray , feat : np.ndarray , feat_name = 'sd') -> pd.DataFrame:
+    '''parse standard deviation output to dataframe'''
     return pd.DataFrame(sd , index=feat , columns=pd.Index([feat_name]))
 
 class DateDfs:
+    '''date-indexed dataframe cache'''
     def __init__(self , max_len = 50) -> None:
         self.max_len = max_len
         self.D : dict[int , pd.DataFrame] = {}
 
-    def trim(self , date : int | None = None):
+    def trim(self , date : int | None = None) -> None:
+        '''trim cache to keep the latest max_len entries'''
         if date and date in self.D: 
             del self.D[date] 
         if len(self.D) >= self.max_len: 
             del self.D[list(self.D.keys())[0]]
 
-    def add(self , v , date : int):
+    def add(self , v , date : int) -> None:
+        '''add a new dataframe to cache'''
         self.trim(date)
         self.D[date] = v
 
-    def get(self , date : int):
+    def get(self , date : int) -> pd.DataFrame | None:
+        '''get a dataframe from cache'''
         if date in self.D: 
             return self.D[date]
         else: 
             return None
 
 class DateSeriesDict:
+    '''date-indexed multi-series dictionary cache'''
     def __init__(self , max_len = 50) -> None:
         self.max_len = max_len
         self.D : dict[int , dict[str , pd.Series]] = {}
 
-    def trim(self , date : int | None = None):
+    def trim(self , date : int | None = None) -> None:
+        '''trim cache to keep the latest max_len entries'''
         if len(self.D) >= self.max_len: 
             del self.D[list(self.D.keys())[0]]
         if date not in self.D and date is not None: 
             self.D[date] = {}
 
-    def add(self , v , date : int ,  name : str):
+    def add(self , v , date : int ,  name : str) -> None:
+        '''add a new series to cache'''
         self.trim(date)
         self.D[date][name] = v
 
-    def get(self , date : int , name : str):
+    def get(self , date : int , name : str) -> pd.Series | None:
+        '''get a series from cache'''
         if date in self.D and name in self.D[date]: 
             return self.D[date][name]
         else: 
             return None   
 
 class TuShareCNE5_Calculator:
+    '''calculator for CNE5 risk model'''
     START_DATE = 20050101
     def __init__(self) -> None:
 
@@ -89,6 +101,7 @@ class TuShareCNE5_Calculator:
             DB.db_path('models' , f'tushare_cne5_{key}' , 20250101).parent.parent.mkdir(parents=True , exist_ok=True)
 
     def descriptor(self , v , date : int , name : str , fillna : Any = 0) -> pd.Series:
+        '''calculate descriptor of a given series'''
         assert isinstance(v , pd.Series) , v
         univ = self.get_estuniv(date)
         indus = self.ind_grp.get(date)
@@ -100,7 +113,8 @@ class TuShareCNE5_Calculator:
         self.style.add(v , date , name)
         return v
 
-    def get_exposure(self , date : int , read = False):
+    def get_exposure(self , date : int , read = False) -> pd.DataFrame:
+        '''get exposure of a given date'''
         df = self.exposure.get(date)
         if (df is None or df.empty) and read: 
             df = DB.db_load('models' , 'tushare_cne5_exp' , date)
@@ -115,19 +129,22 @@ class TuShareCNE5_Calculator:
         self.exposure.add(df , date)
         return df
 
-    def get_estuniv(self , date : int):
+    def get_estuniv(self , date : int) -> pd.DataFrame:
+        '''get estuniv of a given date'''
         df = self.estuniv.get(date)
         if df is None or df.empty: 
             df = self.calc_estuniv(date)
         return df
     
-    def get_industry(self , date : int):
+    def get_industry(self , date : int) -> pd.DataFrame:
+        '''get industry of a given date'''
         df = self.ind_exp.get(date)
         if df is None or df.empty: 
             df = self.calc_indus(date)
         return df
     
-    def get_style(self , date : int , name : str):
+    def get_style(self , date : int , name : str) -> pd.Series:
+        '''get style of a given date'''
         assert name in CONF.RISK['style'] , name
         df = self.style.get(date , name)
         if df is None or df.empty: 
@@ -135,7 +152,8 @@ class TuShareCNE5_Calculator:
         df = df.fillna(0)
         return df
     
-    def get_coef(self , date : int , read = False):
+    def get_coef(self , date : int , read = False) -> pd.DataFrame:
+        '''get coef of a given date'''
         coef = self.coef.get(date)
         if (coef is None or coef.empty) and read: 
             coef = DB.db_load('models' , 'tushare_cne5_coef' , date)
@@ -144,7 +162,8 @@ class TuShareCNE5_Calculator:
             coef , resid = self.calc_model(date)
         return coef
     
-    def get_resid(self , date : int , read = False):
+    def get_resid(self , date : int , read = False) -> pd.DataFrame:
+        '''get resid of a given date'''
         resid = self.resid.get(date)
         if (resid is None or resid.empty) and read: 
             resid = DB.db_load('models' , 'tushare_cne5_res' , date)
@@ -153,7 +172,8 @@ class TuShareCNE5_Calculator:
             coef , resid = self.calc_model(date)
         return resid
 
-    def calc_estuniv(self , date : int):
+    def calc_estuniv(self , date : int) -> pd.DataFrame:
+        '''calculate estuniv of a given date'''
         list_days = 252
         redempt_tmv_pct = 0.8
 
@@ -191,7 +211,8 @@ class TuShareCNE5_Calculator:
         self.estuniv.add(new_desc , date)
         return new_desc
     
-    def calc_indus(self , date : int):
+    def calc_indus(self , date : int) -> pd.DataFrame:
+        '''calculate industry of a given date'''
         univ = self.get_estuniv(date)
         df = DATAVENDOR.INFO.get_indus(date)
         self.ind_grp.add(df , date)
@@ -203,15 +224,18 @@ class TuShareCNE5_Calculator:
         
         return df
     
-    def calc_style(self , date : int):
+    def calc_style(self , date : int) -> None:
+        '''calculate style of a given date'''
         for style_name in CONF.RISK['style']: 
             getattr(self , f'calc_{style_name}')(date)
     
-    def calc_size(self , date : int):
+    def calc_size(self , date : int) -> pd.Series:
+        '''calculate size of a given date'''
         v = np.log(DATAVENDOR.TRADE.get_val(date).set_index('secid')['total_mv'] / 10**8)
         return self.descriptor(v , date , 'size' , 'min')
     
-    def calc_beta(self , date : int):
+    def calc_beta(self , date : int) -> pd.Series:
+        '''calculate beta of a given date'''
         n_window = 252
         half_life = 63
         min_finite_ratio = 0.25
@@ -229,7 +253,8 @@ class TuShareCNE5_Calculator:
 
         return self.descriptor(v , date , 'beta' , 0)
 
-    def calc_momentum(self , date : int):
+    def calc_momentum(self , date : int) -> pd.Series:
+        '''calculate momentum of a given date'''
         dates = CALENDAR.td_trailing(date , 525)[:504]
         wgt_df = pd.DataFrame({'date':dates , 'weight':time_weight(504,126)})
 
@@ -239,7 +264,8 @@ class TuShareCNE5_Calculator:
         
         return self.descriptor(v , date , 'momentum' , 0)
     
-    def calc_residual_volatility(self , date : int):
+    def calc_residual_volatility(self , date : int) -> pd.Series:
+        '''calculate residual volatility of a given date'''
         # 0.74 * dastd + 0.16 * cmra + 0.10 * hsigma
         # orthogonalize over size and beta
         # dsastd : annualized daily standard deviation of 252 trade_days with half_life 42
@@ -274,16 +300,19 @@ class TuShareCNE5_Calculator:
 
         return self.descriptor(v , date , 'residual_volatility' , 'median')
     
-    def calc_non_linear_size(self , date : int):
+    def calc_non_linear_size(self , date : int) -> pd.Series:
+        '''calculate non-linear size of a given date'''
         size = self.get_style(date , 'size')
         v = neutral_resid(size , size ** 3 , np.sqrt(self.get_estuniv(date)['weight']))
         return self.descriptor(v , date , 'non_linear_size' , 'min')
     
-    def calc_book_to_price(self , date : int):
+    def calc_book_to_price(self , date : int) -> pd.Series:
+        '''calculate book to price of a given date'''
         v = (1 / DATAVENDOR.TRADE.get_val(date).reset_index().set_index('secid')['pb']).fillna(0)
         return self.descriptor(v , date , 'book_to_price' , 'median')
     
-    def calc_liquidity(self , date : int):
+    def calc_liquidity(self , date : int) -> pd.Series:
+        '''calculate liquidity of a given date'''
 
         cols = ['secid','turnover_rate']
         stom = pd.concat([DATAVENDOR.TRADE.get_val(d , cols) for d in CALENDAR.td_trailing(date , 21)]).\
@@ -302,7 +331,8 @@ class TuShareCNE5_Calculator:
 
         return self.descriptor(v , date , 'liquidity' , 'median')
     
-    def calc_earnings_yield(self , date : int):
+    def calc_earnings_yield(self , date : int) -> pd.Series:
+        '''calculate earnings yield of a given date'''
         cp = DATAVENDOR.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')['close']
         cetop = DATAVENDOR.INDI.ttm_latest('ocfps' , date) / cp
         cetop = self.descriptor(cetop.fillna(0) , date , 'cetop' , 'median')
@@ -314,7 +344,8 @@ class TuShareCNE5_Calculator:
 
         return self.descriptor(v , date , 'earnings_yield' , 'median')
     
-    def calc_growth(self , date : int):
+    def calc_growth(self , date : int) -> pd.Series:
+        '''calculate growth of a given date'''
 
         val = 'diluted2_eps'
         df = DATAVENDOR.INDI.acc(val , date , 5 , pivot = False , year_only=True)
@@ -333,7 +364,8 @@ class TuShareCNE5_Calculator:
         v = 0.53 * egro + 0.47 * sgro
         return self.descriptor(v , date , 'growth' , 'median')
     
-    def calc_leverage(self , date : int):
+    def calc_leverage(self , date : int) -> pd.Series:
+        '''calculate leverage of a given date'''
 
         cp = DATAVENDOR.TRADE.get_trd(date , ['secid' , 'close']).set_index('secid')['close']
         mlev = (DATAVENDOR.INDI.acc_latest('longdeb_to_debt' , date).fillna(100) / 100 *
@@ -351,7 +383,9 @@ class TuShareCNE5_Calculator:
 
         return self.descriptor(v , date , 'leverage' , 'median')
     
-    def calc_model(self , date : int):
+    def calc_model(self , date : int) -> tuple[pd.DataFrame , pd.DataFrame]:
+        '''calculate model of a given date'''
+
         exp_date = CALENDAR.td(date , -1).as_int() # DATAVENDOR.CALENDAR.offset(date , -1)
         exp = self.get_exposure(exp_date , read = True)
         exp = exp[exp['estuniv'] == 1]
@@ -359,10 +393,10 @@ class TuShareCNE5_Calculator:
         ret = ret.reindex(exp.index).fillna(0).rename(columns={'pctchange':'ret'})
 
         wgt : Any = exp['weight'].copy()
-        mkt = (exp['estuniv'] * exp['market']).rename('market')
+        mkt = (exp.loc[: , 'estuniv'] * exp.loc[: , 'market']).rename('market')
         rsk = exp.drop(columns=['estuniv','weight','market'])
         
-        mask = rsk.notna().any(axis = 1)
+        mask : pd.Series | Any = rsk.notna().any(axis = 1)
         wgt.loc[~mask] = 0
         rsk.loc[~mask , :] = 0
         rsk = rsk.fillna(rsk.mean())
@@ -380,7 +414,8 @@ class TuShareCNE5_Calculator:
         self.resid.add(resid , date)
         return coef , resid
     
-    def calc_common_risk(self , date : int):
+    def calc_common_risk(self , date : int) -> pd.DataFrame:
+        '''calculate common risk of a given date'''
         assert date >= self.START_DATE , (date , self.START_DATE)
         dates = CALENDAR.td_trailing(date , 504)
         dates = dates[dates >= self.START_DATE]
@@ -399,7 +434,8 @@ class TuShareCNE5_Calculator:
         self.common_risk.add(cov , date)
         return cov
 
-    def calc_specific_risk(self , date : int):
+    def calc_specific_risk(self , date : int) -> pd.DataFrame:
+        '''calculate specific risk of a given date'''
         assert date >= self.START_DATE , (date , self.START_DATE)
         dates = CALENDAR.td_trailing(date , 504)
         dates = dates[dates >= self.START_DATE]
@@ -417,13 +453,15 @@ class TuShareCNE5_Calculator:
         return sd
         
     @classmethod
-    def updatable_dates(cls , job : Literal['exposure' , 'risk']):
+    def updatable_dates(cls , job : Literal['exposure' , 'risk']) -> np.ndarray:
+        '''get updatable dates of a given job of "exposure" or "risk"'''
         end_date = np.min([DB.db_max_date('trade_ts' , 'day'), DB.db_max_date('trade_ts' , 'day_val')])
         dates = CALENDAR.diffs(cls.START_DATE , end_date , cls.updated_dates(job))
         return dates
 
     @classmethod
-    def updated_dates(cls , job : Literal['exposure' , 'risk']):
+    def updated_dates(cls , job : Literal['exposure' , 'risk']) -> np.ndarray:
+        '''get updated dates of a given job of "exposure" or "risk"'''
         all_updated : np.ndarray | Any = None
         if job == 'exposure':
             check_list = ['tushare_cne5_exp','tushare_cne5_coef','tushare_cne5_res']
@@ -437,7 +475,8 @@ class TuShareCNE5_Calculator:
             all_updated = updated if all_updated is None else np.intersect1d(all_updated , updated)
         return all_updated
         
-    def update_date(self , date : int , job : Literal['exposure' , 'risk']):
+    def update_date(self , date : int , job : Literal['exposure' , 'risk']) -> None:
+        '''update a given date of a given job of "exposure" or "risk"'''
         assert DATAVENDOR.CALENDAR.is_trade_date(date) , f'{date} is not a trade_date'
         if job == 'exposure':
             DB.db_save(self.get_exposure(date) , 'models' , 'tushare_cne5_exp'  , date , verbose=True)
@@ -451,6 +490,7 @@ class TuShareCNE5_Calculator:
         
     @classmethod
     def update(cls):
+        '''update all updatable dates'''
         task = cls()
         for date in task.updatable_dates('exposure'): 
             task.update_date(date , 'exposure')
@@ -460,6 +500,7 @@ class TuShareCNE5_Calculator:
     
     @classmethod
     def update_rollback(cls , rollback_date : int):
+        '''update all updatable dates from a given rollback date'''
         CALENDAR.check_rollback_date(rollback_date)
         task = cls()
         start_date = CALENDAR.td(rollback_date , 1)

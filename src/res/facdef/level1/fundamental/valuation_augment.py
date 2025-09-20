@@ -4,7 +4,7 @@ import pandas as pd
 from src.data import DATAVENDOR
 from src.func.transform import winsorize , whiten
 
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import ValueFactor
 from src.res.facdef.level0.fundamental.valuation_static import (btop , btop_rank3y , etop , etop_rank3y , cfev , cfev_rank3y)
 from src.res.facdef.level0.fundamental.valuation_dynamic import btop_stability , etop_stability , cfev_stability
 
@@ -40,9 +40,8 @@ def cfev_augment_range(date : int):
     cf_range = (val > 0)
     return cf_range
 
-class btop_augment(StockFactorCalculator):
+class btop_augment(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'btop增强因子'
     
     def calc_factor(self, date: int):
@@ -51,9 +50,8 @@ class btop_augment(StockFactorCalculator):
                        for calc in [btop , btop_rank3y , btop_stability]] , axis = 1).mean(axis = 1)
         return v
     
-class etop_augment(StockFactorCalculator):
+class etop_augment(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'etop增强因子'
     
     def calc_factor(self, date: int):
@@ -62,9 +60,8 @@ class etop_augment(StockFactorCalculator):
                        for calc in [etop , etop_rank3y , etop_stability]] , axis = 1).mean(axis = 1)
         return v
     
-class cfev_augment(StockFactorCalculator):
+class cfev_augment(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'cfev增强因子'
     
     def calc_factor(self, date: int):
@@ -73,9 +70,8 @@ class cfev_augment(StockFactorCalculator):
                        for calc in [cfev , cfev_rank3y , cfev_stability]] , axis = 1).mean(axis = 1)
         return v
     
-class valuation_augment(StockFactorCalculator):
+class valuation_augment(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = '估值增强因子'
     
     def calc_factor(self, date: int):

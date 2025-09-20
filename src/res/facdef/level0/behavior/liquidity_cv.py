@@ -1,6 +1,6 @@
 from typing import Literal
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import LiquidityFactor
 
 
 def coefficient_variance(date , n_months : int , data_type : Literal['amount' , 'turnover'] , min_finite_ratio = 0.25):
@@ -14,81 +14,71 @@ def coefficient_variance(date , n_months : int , data_type : Literal['amount' , 
     vals = DATAVENDOR.TRADE.mask_min_finite(vals , min_finite_ratio = min_finite_ratio)
     return vals.std() / vals.mean()
 
-class amt_cv1m(StockFactorCalculator):
+class amt_cv1m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '1个月成交额变异系数'
     
     def calc_factor(self, date: int):
         return coefficient_variance(date , 1 , 'amount')
 
-class amt_cv2m(StockFactorCalculator):
+class amt_cv2m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '2个月成交额变异系数'
     
     def calc_factor(self, date: int):
         return coefficient_variance(date , 2 , 'amount')
     
-class amt_cv3m(StockFactorCalculator):
+class amt_cv3m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '3个月成交额变异系数'
     
     def calc_factor(self, date: int):
         return coefficient_variance(date , 3 , 'amount')
     
-class amt_cv6m(StockFactorCalculator):
+class amt_cv6m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '6个月成交额变异系数'
     
     def calc_factor(self, date: int):
         return coefficient_variance(date , 6 , 'amount')
     
-class amt_cv12m(StockFactorCalculator):
+class amt_cv12m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '12个月成交额变异系数'
     
     def calc_factor(self, date: int):
         return coefficient_variance(date , 12 , 'amount')
 
-class turn_cv1m(StockFactorCalculator):
+class turn_cv1m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '1个月换手率变异系数'
     
     def calc_factor(self, date: int):
         return coefficient_variance(date , 1 , 'turnover')
 
-class turn_cv2m(StockFactorCalculator):
+class turn_cv2m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '2个月换手率变异系数'
     
     def calc_factor(self, date: int):
         return coefficient_variance(date , 2 , 'turnover')
     
-class turn_cv3m(StockFactorCalculator):
+class turn_cv3m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '3个月换手率变异系数'
     
     def calc_factor(self, date: int):
         return coefficient_variance(date , 3 , 'turnover')
     
-class turn_cv6m(StockFactorCalculator):
+class turn_cv6m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '6个月换手率变异系数'
     
     def calc_factor(self, date: int):
         return coefficient_variance(date , 6 , 'turnover')
     
-class turn_cv12m(StockFactorCalculator):
+class turn_cv12m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '12个月换手率变异系数'
     
     def calc_factor(self, date: int):

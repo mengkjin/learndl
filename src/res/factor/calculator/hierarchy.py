@@ -2,7 +2,7 @@ import pandas as pd
 from importlib import import_module
 
 from itertools import combinations
-from typing import Type
+from typing import Generator , Iterator , Type
 
 from .factor_calc import StockFactorCalculator
 
@@ -37,13 +37,14 @@ class StockFactorHierarchy:
         return self.pool[key] if key in self.pool else self.hier[key]
     
     @classmethod
-    def export_factor_list(cls):
+    def export_factor_list(cls) -> None:
+        '''export factor list to csv'''
         if MACHINE.server:
             df = cls().factor_df()
             df.to_csv(PATH.rslt_factor.joinpath('factor_list.csv'))
 
     @staticmethod
-    def factor_filter(stock_factor_cls : Type[StockFactorCalculator] , **kwargs):
+    def factor_filter(stock_factor_cls : Type[StockFactorCalculator] , **kwargs) -> bool:
         '''filter factor by given attributes'''
         conditions : list[bool] = []
         for k , v in kwargs.items():
@@ -91,7 +92,7 @@ class StockFactorHierarchy:
 
         return self
 
-    def factor_df(self , **kwargs):
+    def factor_df(self , **kwargs) -> pd.DataFrame:
         '''
         return a DataFrame of all factors with given attributes
         factor_name : str | None = None
@@ -109,19 +110,19 @@ class StockFactorHierarchy:
         df = pd.DataFrame(df_datas, columns = pd.Index(attr_list))
         return df
 
-    def factor_names(self):
+    def factor_names(self) -> list[str]:
         '''return a list of factor names'''
         return [f'{cls.factor_name}({cls.level}.{cls.file_name})' for cls in self]
 
-    def iter_levels(self):
+    def iter_levels(self) -> Iterator[str]:
         '''return a list of levels'''
         return iter(self.hier)
     
-    def iter_level_factors(self , level : str):
+    def iter_level_factors(self , level : str) -> Generator[Type[StockFactorCalculator] , None , None]: 
         '''return a list of factor classes in a given level'''
         return (cls for cls in self.hier[level])
 
-    def iter_instance(self , **kwargs):
+    def iter_instance(self , **kwargs) -> Generator[StockFactorCalculator , None , None]:
         '''
         return a list of factor instances with given attributes
         factor_name : str | None = None
@@ -132,7 +133,7 @@ class StockFactorHierarchy:
         '''
         return (cls() for cls in self if self.factor_filter(cls , **kwargs))
     
-    def get_factor(self , factor_name : str):
+    def get_factor(self , factor_name : str) -> Type[StockFactorCalculator]:
         '''
         return a factor class by factor_name
         e.g.
@@ -142,7 +143,7 @@ class StockFactorHierarchy:
         return self.pool[factor_name]
     
     def test_calc_all_factors(self , date : int = 20241031 , check_variation = True , check_duplicates = True , 
-                              multi_thread = True , ignore_error = True , verbose = True , **kwargs):
+                              multi_thread = True , ignore_error = True , verbose = True , **kwargs) -> dict[str , pd.Series]:
         '''
         test calculation of all factors , if check_duplicates is True , check factors diffs' standard deviation and correlation
         factor_name : str | None = None

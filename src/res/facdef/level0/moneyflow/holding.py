@@ -2,7 +2,7 @@ import pandas as pd
 
 from src.basic import CALENDAR , DB
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import HoldingFactor
 
 from src.data.util import DFCollection
 
@@ -110,9 +110,8 @@ def get_mkt_port(date : int) -> pd.Series:
     mkt_port = mkt_port / mkt_port.sum()
     return mkt_port
 
-class holding_act_weight(StockFactorCalculator):
+class holding_act_weight(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '基金持股市值占比-市场市值占比'
 
     def calc_factor(self, date: int):
@@ -121,18 +120,16 @@ class holding_act_weight(StockFactorCalculator):
         fund_port = full_port.groupby('secid')['mkv'].sum() / full_port['mkv'].sum()
         return (fund_port - mkt_port).dropna()
     
-class holding_median(StockFactorCalculator):
+class holding_median(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '基金内个股权重中位数'
 
     def calc_factor(self, date: int):
         full_port = get_active_fund_holding(date)
         return full_port.groupby('secid')['stk_mkv_ratio'].median() / 100
     
-class holding_mv(StockFactorCalculator):
+class holding_mv(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '持有个股市值'
 
     def calc_factor(self, date: int):
@@ -141,27 +138,24 @@ class holding_mv(StockFactorCalculator):
         assert isinstance(mv , pd.Series) , f'mv must be a pandas series, but got {type(mv)}'
         return mv / 10**8
     
-class holding_num(StockFactorCalculator):
+class holding_num(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '持有个股基金数量'
 
     def calc_factor(self, date: int):
         full_port = get_active_fund_holding(date)
         return full_port.groupby('secid')['fund_id'].count()
     
-class holding_mv_ratio(StockFactorCalculator):
+class holding_mv_ratio(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '持有个股股数占股本比例'
 
     def calc_factor(self, date: int):
         full_port = get_active_fund_holding(date)
         return full_port.groupby('secid')['stk_float_ratio'].sum()
     
-class holding_rel_weight(StockFactorCalculator):
+class holding_rel_weight(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '基金持股市值占比/市场市值占比'
 
     def calc_factor(self, date: int):
@@ -170,9 +164,8 @@ class holding_rel_weight(StockFactorCalculator):
         fund_port = full_port.groupby('secid')['mkv'].sum() / full_port['mkv'].sum()
         return (fund_port / mkt_port).dropna()
     
-class holding_rel_median(StockFactorCalculator):
+class holding_rel_median(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '基金内个股主动权重中位数'
 
     def calc_factor(self, date: int):
@@ -182,18 +175,16 @@ class holding_rel_median(StockFactorCalculator):
         full_port['stk_mkv_ratio'] = full_port['stk_mkv_ratio'] / full_port['mkt_port']
         return full_port.groupby('secid')['stk_mkv_ratio'].median().sort_index()
     
-class holding_top_median(StockFactorCalculator):
+class holding_top_median(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '重仓股基金个股权重中位数'
 
     def calc_factor(self, date: int):
         top_port = get_active_top_holding(date)
         return top_port.groupby('secid')['stk_mkv_ratio'].median() / 100
     
-class holding_top_mv(StockFactorCalculator):
+class holding_top_mv(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '重仓股持有个股市值'
 
     def calc_factor(self, date: int):
@@ -202,18 +193,16 @@ class holding_top_mv(StockFactorCalculator):
         assert isinstance(mv , pd.Series) , f'mv must be a pandas series, but got {type(mv)}'
         return mv / 10**8
  
-class holding_top_num(StockFactorCalculator):
+class holding_top_num(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '重仓股持有个股基金数量'
 
     def calc_factor(self, date: int):
         top_port = get_active_top_holding(date)
         return top_port.groupby('secid')['fund_id'].count()
     
-class holding_top_addnum(StockFactorCalculator):
+class holding_top_addnum(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '重仓股持有个股基金数量增量'
 
     def calc_factor(self, date: int):
@@ -221,9 +210,8 @@ class holding_top_addnum(StockFactorCalculator):
         top_port_0 = get_active_top_holding(one_quater_ago(date))
         return top_port.groupby('secid')['fund_id'].count() - top_port_0.groupby('secid')['fund_id'].count()
     
-class holding_top_addmv(StockFactorCalculator):
+class holding_top_addmv(HoldingFactor):
     init_date = 20110101
-    category1 = 'holding'
     description = '重仓股持有个股市值增量'
 
     def calc_factor(self, date: int):

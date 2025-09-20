@@ -1,7 +1,7 @@
 import pandas as pd
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import LiquidityFactor
 
 from src.func.transform import apply_ols
 
@@ -12,49 +12,43 @@ def turnover_classic(date , n_months : int , lag_months : int = 0 , min_finite_r
     turns = turns.mean()
     return turns
 
-class turn_1m(StockFactorCalculator):
+class turn_1m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '1个月换手率'
     
     def calc_factor(self, date: int):
         return turnover_classic(date , 1)
 
-class turn_2m(StockFactorCalculator):
+class turn_2m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '2个月换手率'
     
     def calc_factor(self, date: int):
         return turnover_classic(date , 2)
 
-class turn_3m(StockFactorCalculator):
+class turn_3m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '3个月换手率'
     
     def calc_factor(self, date: int):
         return turnover_classic(date , 3)
     
-class turn_6m(StockFactorCalculator):
+class turn_6m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '6个月换手率'
     
     def calc_factor(self, date: int):
         return turnover_classic(date , 6)
     
-class turn_12m(StockFactorCalculator):
+class turn_12m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '12个月换手率'
     
     def calc_factor(self, date: int):
         return turnover_classic(date , 12)
     
-class turn_unexpected(StockFactorCalculator):
+class turn_unexpected(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '1个月意外换手率'
     
     def calc_factor(self, date: int):

@@ -2,7 +2,7 @@ import numpy as np
 
 from typing import Literal
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import MomentumFactor , CorrelationFactor
 
 from src.func.transform import neutral_resid
 
@@ -47,9 +47,8 @@ def mom_low_amp_v2(date , n_days : int , low_amplitude_ratio = 0.7):
     mom = neutral_resid(ret20 , mom , whiten = False)
     return mom
 
-class mom_ltampl_v1(StockFactorCalculator):
+class mom_ltampl_v1(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '160日长端动量(低振幅)'
     
     def calc_factor(self, date: int):
@@ -59,17 +58,15 @@ class mom_ltampl_v1(StockFactorCalculator):
         mom = rets.where(low , np.nan).sum()
         return mom
     
-class mom_ltampl_v2(StockFactorCalculator):
+class mom_ltampl_v2(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '160日长端动量(低振幅)v2'
     
     def calc_factor(self, date: int):
         return mom_low_amp_v2(date , 160 , 0.7)
     
-class mom_slicevol1m(StockFactorCalculator):
+class mom_slicevol1m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '1个月理想反转(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
@@ -79,9 +76,8 @@ class mom_slicevol1m(StockFactorCalculator):
         mom = rets.where(high , np.nan).sum() - rets.where(low , np.nan).sum()
         return mom
     
-class corr_slicevol1m(StockFactorCalculator):
+class corr_slicevol1m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '1个月corr差(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
@@ -94,9 +90,8 @@ class corr_slicevol1m(StockFactorCalculator):
         diff = h_stk.corrwith(h_mkt , axis = 0) - l_stk.corrwith(l_mkt , axis = 0)
         return diff
     
-class beta_slicevol1m(StockFactorCalculator):
+class beta_slicevol1m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '1个月beta差(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
@@ -109,9 +104,8 @@ class beta_slicevol1m(StockFactorCalculator):
         diff = h_stk.corrwith(h_mkt , axis = 0) * h_stk.std() / h_mkt.std() - l_stk.corrwith(l_mkt , axis = 0) * l_stk.std() / l_mkt.std()
         return diff
 
-class skew_slicevol1m(StockFactorCalculator):
+class skew_slicevol1m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '1个月skew差(成交量切分，较大-较小)'
     
     def calc_factor(self, date: int):
@@ -122,9 +116,8 @@ class skew_slicevol1m(StockFactorCalculator):
         diff = h_rets.skew() - l_rets.skew()
         return diff
 
-class ampl_slicecp1m(StockFactorCalculator):
+class ampl_slicecp1m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '1个月振幅(收盘价切分，较大)'
     
     def calc_factor(self, date: int):

@@ -1,7 +1,7 @@
 import pandas as pd
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import MomentumFactor
 
 
 __all__ = ['anndt_phigh' , 'mom_aog' , 'mom_aaa']
@@ -9,9 +9,8 @@ __all__ = ['anndt_phigh' , 'mom_aog' , 'mom_aaa']
 def date_min_max(date_col : pd.Series):
     return date_col.min() , date_col.max()
 
-class anndt_phigh(StockFactorCalculator):
+class anndt_phigh(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '公告日最高价距离'
     
     def calc_factor(self, date: int):
@@ -24,9 +23,8 @@ class anndt_phigh(StockFactorCalculator):
         ann_dt_perf['phigh'] = ann_dt_perf['close'] / ann_dt_perf['high'] - 1
         return ann_dt_perf['phigh']
     
-class mom_aog(StockFactorCalculator):
+class mom_aog(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '公告日次日超额收益'
     
     def calc_factor(self, date: int):
@@ -39,9 +37,8 @@ class mom_aog(StockFactorCalculator):
         return ann_dt_perf['resid']
 
 
-class mom_aaa(StockFactorCalculator):
+class mom_aaa(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '公告日后3日超额收益'
     
     def calc_factor(self, date: int):

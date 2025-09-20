@@ -1,7 +1,7 @@
 import pandas as pd
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import GrowthFactor
 
 
 __all__ = [
@@ -21,49 +21,43 @@ def get_compound_growth(expression: str , date: int , n_year : int = 5 , **kwarg
     df = df.groupby('secid')[val].pct_change() * 4 / df.groupby('secid')['qtrs'].diff()
     return df.groupby('secid').last()
 
-class ta_gro5y(StockFactorCalculator):
+class ta_gro5y(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '5年年度增长率-总资产'
     
     def calc_factor(self, date: int):
         return get_compound_growth('ta@qtr' , date)
     
-class equ_gro5y(StockFactorCalculator):
+class equ_gro5y(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '5年年度增长率-净资产'
     
     def calc_factor(self, date: int):
         return get_compound_growth('equ@qtr' , date)
     
-class liab_gro5y(StockFactorCalculator):
+class liab_gro5y(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '5年年度增长率-总负债'
     
     def calc_factor(self, date: int):
         return get_compound_growth('liab@qtr' , date)
 
-class sales_gro5y(StockFactorCalculator):
+class sales_gro5y(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '5年年度增长率-营业收入'
     
     def calc_factor(self, date: int):
         return get_compound_growth('sales@ttm' , date)
 
-class npro_gro5y(StockFactorCalculator):
+class npro_gro5y(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '5年年度增长率-归母净利润'
     
     def calc_factor(self, date: int):
         return get_compound_growth('npro@ttm' , date)
     
-class cfo_gro5y(StockFactorCalculator):
+class cfo_gro5y(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '5年年度增长率-经营活动现金流'
     
     def calc_factor(self, date: int):

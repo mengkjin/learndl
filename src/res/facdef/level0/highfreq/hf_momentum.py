@@ -2,7 +2,7 @@ import pandas as pd
 import polars as pl
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import HfMomentumFactor
 
 from src.func.transform import neutral_resid
 
@@ -25,9 +25,8 @@ def neutral_resid_pl(df : pl.DataFrame , x : str , y : str , over = 'secid'):
     )
     return df
 
-class inday_amap_orig(StockFactorCalculator):
+class inday_amap_orig(HfMomentumFactor):
     init_date = 20110101
-    category1 = 'hf_momentum'
     description = 'APM原始值,上下午价格行为差异'
 
     def calc_factor(self, date: int):
@@ -67,9 +66,8 @@ class inday_amap_orig(StockFactorCalculator):
         return apm
 
     
-class inday_conf_persist(StockFactorCalculator):
+class inday_conf_persist(HfMomentumFactor):
     init_date = 20110101
-    category1 = 'hf_momentum'
     description = '过度自信因子'
 
     def calc_factor(self, date: int):
@@ -103,9 +101,8 @@ class inday_conf_persist(StockFactorCalculator):
         cp = cp.to_pandas().set_index('secid')['conf_persist']
         return cp
     
-class inday_regain_conf_persist(StockFactorCalculator):
+class inday_regain_conf_persist(HfMomentumFactor):
     init_date = 20110101
-    category1 = 'hf_momentum'
     description = '重拾自信因子'
 
     def calc_factor(self, date: int):
@@ -141,9 +138,8 @@ class inday_regain_conf_persist(StockFactorCalculator):
         rcp = rcp.to_pandas().set_index('secid')['regain_conf_persist']
         return rcp
     
-class inday_high_time(StockFactorCalculator):
+class inday_high_time(HfMomentumFactor):
     init_date = 20110101
-    category1 = 'hf_momentum'
     description = '日内高点位置'
 
     def calc_factor(self, date: int):
@@ -164,9 +160,8 @@ class inday_high_time(StockFactorCalculator):
         df = df.to_pandas().set_index('secid')['high_flag']
         return df
     
-class inday_incvol_mom(StockFactorCalculator):
+class inday_incvol_mom(HfMomentumFactor):
     init_date = 20110101
-    category1 = 'hf_momentum'
     description = '量升累计收益'
 
     def calc_factor(self, date: int):
@@ -185,9 +180,8 @@ class inday_incvol_mom(StockFactorCalculator):
         ).to_pandas().set_index('secid')['incvol_ret']
         return df
     
-class inday_trend_avg(StockFactorCalculator):
+class inday_trend_avg(HfMomentumFactor):
     init_date = 20110101
-    category1 = 'hf_momentum'
     description = '日内价格变化路径'
 
     def calc_factor(self, date: int):
@@ -207,9 +201,8 @@ class inday_trend_avg(StockFactorCalculator):
         trend = neutral_resid(trend , mom20)
         return trend
     
-class inday_trend_std(StockFactorCalculator):
+class inday_trend_std(HfMomentumFactor):
     init_date = 20110101
-    category1 = 'hf_momentum'
     description = '日内价格变化路径'
 
     def calc_factor(self, date: int):
@@ -231,11 +224,8 @@ class inday_trend_std(StockFactorCalculator):
         trend = neutral_resid(trend , mom20)
         return trend
     
-
-    
-class inday_vwap_diff_hlvol(StockFactorCalculator):
+class inday_vwap_diff_hlvol(HfMomentumFactor):
     init_date = 20110101
-    category1 = 'hf_momentum'
     description = '日内高低成交量vwap差'
 
     def calc_factor(self, date: int):
@@ -263,9 +253,8 @@ class inday_vwap_diff_hlvol(StockFactorCalculator):
         )
         return df.to_pandas().set_index('secid')['vwap_diff_pct']
     
-class mom_high_volcv(StockFactorCalculator):
+class mom_high_volcv(HfMomentumFactor):
     init_date = 20110101
-    category1 = 'hf_momentum'
     description = '分钟成交量波动最大区间的动量因子'
 
     def calc_factor(self, date: int):
@@ -288,9 +277,8 @@ class mom_high_volcv(StockFactorCalculator):
         df = df.merge(day_rets , on = ['secid' , 'date'] , how = 'inner')
         return df.groupby('secid')['pctchange'].mean()
     
-class mom_high_pstd(StockFactorCalculator):
+class mom_high_pstd(HfMomentumFactor):
     init_date = 20110101
-    category1 = 'hf_momentum'
     description = '日内高波动累计动量'
 
     def calc_factor(self, date: int):

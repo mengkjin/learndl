@@ -4,7 +4,7 @@ import polars as pl
 from typing import Literal , Callable
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import HfLiquidityFactor
 
 
 __all__ = [
@@ -32,9 +32,8 @@ def trailing(date , func : Callable[[int] , pl.DataFrame] , agg : Literal['avg' 
         raise ValueError(f'Invalid agg method: {agg}')
     return df.to_pandas().set_index('secid')['value'].sort_index()
 
-class inday_smart_money(StockFactorCalculator):
+class inday_smart_money(HfLiquidityFactor):
     init_date = 20110101
-    category1 = 'hf_liquidity'
     description = '聪明钱因子'
 
     def calc_factor(self, date: int):
@@ -51,9 +50,8 @@ class inday_smart_money(StockFactorCalculator):
             return df.select(['secid' , 'value'])
         return trailing(date , inday_pct , 'avg' , 20)
     
-class inday_stupid_money(StockFactorCalculator):
+class inday_stupid_money(HfLiquidityFactor):
     init_date = 20110101
-    category1 = 'hf_liquidity'
     description = '傻钱因子'
 
     def calc_factor(self, date: int):
@@ -70,9 +68,8 @@ class inday_stupid_money(StockFactorCalculator):
             return df.select(['secid' , 'value'])
         return trailing(date , inday_pct , 'avg' , 20)
     
-class inday_vol_utd(StockFactorCalculator):
+class inday_vol_utd(HfLiquidityFactor):
     init_date = 20110101
-    category1 = 'hf_liquidity'
     description = '20日换手率分布因子'
 
     def calc_factor(self, date: int):
@@ -82,9 +79,8 @@ class inday_vol_utd(StockFactorCalculator):
             return df
         return trailing(date , inday_std , 'cv' , 20)
     
-class inday_vol_coefvar(StockFactorCalculator):
+class inday_vol_coefvar(HfLiquidityFactor):
     init_date = 20110101
-    category1 = 'hf_liquidity'
     description = '20日变异数比率因子'
 
     def calc_factor(self, date: int):
@@ -94,9 +90,8 @@ class inday_vol_coefvar(StockFactorCalculator):
             return df
         return trailing(date , inday_cv , 'avg' , 20)
     
-class inday_vol_end15min(StockFactorCalculator):
+class inday_vol_end15min(HfLiquidityFactor):
     init_date = 20110101
-    category1 = 'hf_liquidity'
     description = '尾盘成交占比'
 
     def calc_factor(self, date: int):
@@ -110,9 +105,8 @@ class inday_vol_end15min(StockFactorCalculator):
             return df.select(['secid' , 'value'])
         return trailing(date , inday_pct , 'avg' , 20)
     
-class inday_vol_st5min(StockFactorCalculator):
+class inday_vol_st5min(HfLiquidityFactor):
     init_date = 20110101
-    category1 = 'hf_liquidity'
     description = '开盘成交占比'
 
     def calc_factor(self, date: int):
@@ -126,9 +120,8 @@ class inday_vol_st5min(StockFactorCalculator):
             return df.select(['secid' , 'value'])
         return trailing(date , inday_pct , 'avg' , 20)
     
-class inday_volpct_phigh(StockFactorCalculator):
+class inday_volpct_phigh(HfLiquidityFactor):
     init_date = 20110101
-    category1 = 'hf_liquidity'
     description = '高价格成交占比'
 
     def calc_factor(self, date: int):
@@ -143,9 +136,8 @@ class inday_volpct_phigh(StockFactorCalculator):
             return df.select(['secid' , 'value'])
         return trailing(date , inday_pct , 'avg' , 20)
     
-class inday_volpct_plow(StockFactorCalculator):
+class inday_volpct_plow(HfLiquidityFactor):
     init_date = 20110101
-    category1 = 'hf_liquidity'
     description = '低价格成交占比'
 
     def calc_factor(self, date: int):
@@ -160,9 +152,8 @@ class inday_volpct_plow(StockFactorCalculator):
             return df.select(['secid' , 'value'])
         return trailing(date , inday_pct , 'avg' , 20)
     
-class inday_volpct_devhigh(StockFactorCalculator):
+class inday_volpct_devhigh(HfLiquidityFactor):
     init_date = 20110101
-    category1 = 'hf_liquidity'
     description = '高价格波动成交占比'
 
     def calc_factor(self, date: int):
@@ -179,9 +170,8 @@ class inday_volpct_devhigh(StockFactorCalculator):
             return df.select(['secid' , 'value'])
         return trailing(date , inday_pct , 'avg' , 20)
     
-class vol_high_std(StockFactorCalculator):
+class vol_high_std(HfLiquidityFactor):
     init_date = 20110101
-    category1 = 'hf_momentum'
     description = '高波动交易日成交量占比'
 
     def calc_factor(self, date: int):

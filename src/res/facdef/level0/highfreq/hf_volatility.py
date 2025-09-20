@@ -3,7 +3,7 @@ import polars as pl
 from typing import Callable , Literal
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import HfVolatilityFactor
 
 
 __all__ = [
@@ -31,9 +31,8 @@ def trailing(date , func : Callable[[int] , pl.DataFrame] , agg : Literal['avg' 
         raise ValueError(f'Invalid agg method: {agg}')
     return df.to_pandas().set_index('secid')['value'].sort_index()
 
-class inday_err_ret(StockFactorCalculator):
+class inday_err_ret(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内极端收益'
 
     def calc_factor(self, date: int):
@@ -49,9 +48,8 @@ class inday_err_ret(StockFactorCalculator):
             return df
         return trailing(date , err_ret , 'avg' , 20)
     
-class inday_maxdd(StockFactorCalculator):
+class inday_maxdd(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内最大回撤'
 
     def calc_factor(self, date: int):
@@ -68,9 +66,8 @@ class inday_maxdd(StockFactorCalculator):
             return df
         return trailing(date , maxdd , 'max' , 5)
     
-class inday_std_1min(StockFactorCalculator):
+class inday_std_1min(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内1分钟标准差'
 
     def calc_factor(self, date: int):
@@ -82,9 +79,8 @@ class inday_std_1min(StockFactorCalculator):
             return df
         return trailing(date , std , 'avg' , 20)
     
-class inday_std_5min(StockFactorCalculator):
+class inday_std_5min(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内5分钟标准差'
 
     def calc_factor(self, date: int):
@@ -96,9 +92,8 @@ class inday_std_5min(StockFactorCalculator):
             return df
         return trailing(date , std , 'avg' , 20)
 
-class inday_skewness_1min(StockFactorCalculator):
+class inday_skewness_1min(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内1分钟偏度'
 
     def calc_factor(self, date: int):
@@ -110,9 +105,8 @@ class inday_skewness_1min(StockFactorCalculator):
             return df
         return trailing(date , skewness , 'avg' , 20)
     
-class inday_skewness_5min(StockFactorCalculator):
+class inday_skewness_5min(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内5分钟偏度'
 
     def calc_factor(self, date: int):   
@@ -124,9 +118,8 @@ class inday_skewness_5min(StockFactorCalculator):
             return df
         return trailing(date , skewness , 'avg' , 20)
     
-class inday_kurt_1min(StockFactorCalculator):
+class inday_kurt_1min(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内1分钟峰度'
 
     def calc_factor(self, date: int):
@@ -138,9 +131,8 @@ class inday_kurt_1min(StockFactorCalculator):
             return df
         return trailing(date , kurt , 'avg' , 20)
     
-class inday_kurt_5min(StockFactorCalculator):
+class inday_kurt_5min(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内5分钟峰度'
 
     def calc_factor(self, date: int):   
@@ -152,9 +144,8 @@ class inday_kurt_5min(StockFactorCalculator):
             return df
         return trailing(date , kurt , 'avg' , 20)
     
-class inday_vardown_1min(StockFactorCalculator):
+class inday_vardown_1min(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内1分钟下行波动占比'
 
     def calc_factor(self, date: int):
@@ -171,9 +162,8 @@ class inday_vardown_1min(StockFactorCalculator):
             return df
         return trailing(date , vardown , 'avg' , 20)
     
-class vardown_intra5min(StockFactorCalculator):
+class vardown_intra5min(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内5分钟下行波动占比'
 
     def calc_factor(self, date: int):
@@ -190,9 +180,8 @@ class vardown_intra5min(StockFactorCalculator):
             return df
         return trailing(date , vardown , 'avg' , 20)
 
-class inday_vol_std_1min(StockFactorCalculator):
+class inday_vol_std_1min(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内1分钟成交量波动率'
 
     def calc_factor(self, date: int):
@@ -204,9 +193,8 @@ class inday_vol_std_1min(StockFactorCalculator):
             return df
         return trailing(date , std , 'avg' , 20)
     
-class inday_vol_std_5min(StockFactorCalculator):
+class inday_vol_std_5min(HfVolatilityFactor):
     init_date = 20110101
-    category1 = 'hf_volatility'
     description = '日内5分钟成交量波动率'
 
     def calc_factor(self, date: int):

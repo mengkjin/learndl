@@ -4,7 +4,7 @@ from typing import Any
 from dataclasses import dataclass
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import MomentumFactor , CorrelationFactor , VolatilityFactor
 
 from src.func.transform import time_weight , apply_ols
 from src.func.singleton import singleton
@@ -141,241 +141,211 @@ def select_ff3(n_months : int):
     else:
         raise ValueError(f'n_months must be in [1, 2, 3, 6, 12] , got {n_months}')
 
-class ff_mom_1m(StockFactorCalculator):
+class ff_mom_1m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '1个月ff3残差动量'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(1)(date).resid_mom()
     
-class ff_mom_2m(StockFactorCalculator):
+class ff_mom_2m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '2个月ff3残差动量'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(2)(date).resid_mom()
     
-class ff_mom_3m(StockFactorCalculator):
+class ff_mom_3m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '3个月ff3残差动量'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(3)(date).resid_mom()
     
-class ff_mom_6m(StockFactorCalculator):
+class ff_mom_6m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '6个月ff3残差动量'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(6)(date).resid_mom()
     
-class ff_mom_12m(StockFactorCalculator):
+class ff_mom_12m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '12个月ff3残差动量'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(12)(date).resid_mom()
     
-class ff_r2_1m(StockFactorCalculator):
+class ff_r2_1m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '1个月ff3模型R2'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(1)(date).r2()
     
-class ff_r2_2m(StockFactorCalculator):
+class ff_r2_2m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '2个月ff3模型R2'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(2)(date).r2()
     
-class ff_r2_3m(StockFactorCalculator):
+class ff_r2_3m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '3个月ff3模型R2'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(3)(date).r2()
     
-class ff_r2_6m(StockFactorCalculator):
+class ff_r2_6m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '6个月ff3模型R2'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(6)(date).r2()
     
-class ff_r2_12m(StockFactorCalculator):
+class ff_r2_12m(CorrelationFactor):
     init_date = 20110101
-    category1 = 'correlation'
     description = '12个月ff3模型R2'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(12)(date).r2()    
     
-class ff_alpha_1m(StockFactorCalculator):
+class ff_alpha_1m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '1个月ff3模型alpha'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(1)(date).alpha()
     
-class ff_alpha_2m(StockFactorCalculator):
+class ff_alpha_2m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '2个月ff3模型alpha'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(2)(date).alpha()
     
-class ff_alpha_3m(StockFactorCalculator):
+class ff_alpha_3m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '3个月ff3模型alpha'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(3)(date).alpha()
     
-class ff_alpha_6m(StockFactorCalculator):
+class ff_alpha_6m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '6个月ff3模型alpha'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(6)(date).alpha()
     
-class ff_alpha_12m(StockFactorCalculator):
+class ff_alpha_12m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '12个月ff3模型alpha'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(12)(date).alpha()
     
-class ff_resvol_1m(StockFactorCalculator):
+class ff_resvol_1m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '1个月ff3模型残差波动率'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(1)(date).resid_vol()
     
-class ff_resvol_2m(StockFactorCalculator):
+class ff_resvol_2m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '2个月ff3模型残差波动率'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(2)(date).resid_vol()
     
-class ff_resvol_3m(StockFactorCalculator):
+class ff_resvol_3m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '3个月ff3模型残差波动率'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(3)(date).resid_vol()
     
-class ff_resvol_6m(StockFactorCalculator):
+class ff_resvol_6m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '6个月ff3模型残差波动率'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(6)(date).resid_vol()
     
-class ff_resvol_12m(StockFactorCalculator):
+class ff_resvol_12m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '12个月ff3模型残差波动率'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(12)(date).resid_vol()
 
-class ff_resskew_1m(StockFactorCalculator):
+class ff_resskew_1m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '1个月ff3模型残差偏度'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(1)(date).resid_skew()
 
-class ff_resskew_2m(StockFactorCalculator):
+class ff_resskew_2m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '2个月ff3模型残差偏度'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(2)(date).resid_skew()
     
-class ff_resskew_3m(StockFactorCalculator):
+class ff_resskew_3m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '3个月ff3模型残差偏度'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(3)(date).resid_skew()
     
-class ff_resskew_6m(StockFactorCalculator):
+class ff_resskew_6m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '6个月ff3模型残差偏度'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(6)(date).resid_skew()
     
-class ff_resskew_12m(StockFactorCalculator):
+class ff_resskew_12m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '12个月ff3模型残差偏度'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(12)(date).resid_skew()
     
-class ff_reskurt_1m(StockFactorCalculator):
+class ff_reskurt_1m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '1个月ff3模型残差峰度'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(1)(date).resid_kurt()
     
-class ff_reskurt_2m(StockFactorCalculator):
+class ff_reskurt_2m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '2个月ff3模型残差峰度'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(2)(date).resid_kurt()
     
-class ff_reskurt_3m(StockFactorCalculator):
+class ff_reskurt_3m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '3个月ff3模型残差峰度'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(3)(date).resid_kurt()
     
-class ff_reskurt_6m(StockFactorCalculator):
+class ff_reskurt_6m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '6个月ff3模型残差峰度'
 
     def calc_factor(self , date : int):
         return FamaFrench3.select_ff3(6)(date).resid_kurt()
     
-class ff_reskurt_12m(StockFactorCalculator):
+class ff_reskurt_12m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '12个月ff3模型残差峰度'
 
     def calc_factor(self , date : int):

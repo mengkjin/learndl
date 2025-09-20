@@ -3,7 +3,7 @@ import statsmodels.api as sm
 import polars as pl
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import EarningFactor
 
 
 __all__ = [
@@ -43,97 +43,85 @@ def sue_reg(expression: str , date: int , n_last : int = 8 , **kwargs):
             to_pandas().set_index('secid').iloc[:,0]
     return df
 
-class sue_gp(StockFactorCalculator):
+class sue_gp(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外毛利润'
     
     def calc_factor(self, date: int):
         return sue('gp@qtr' , date)
 
-class sue_gp_reg(StockFactorCalculator):
+class sue_gp_reg(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外毛利润-带截距回归'
     
     def calc_factor(self, date: int):
         return sue_reg('gp@qtr' , date)
 
-class sue_npro(StockFactorCalculator):
+class sue_npro(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外归母净利润'
     
     def calc_factor(self, date: int):
         return sue('npro@qtr' , date)
 
-class sue_npro_reg(StockFactorCalculator):
+class sue_npro_reg(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外归母净利润-带截距回归'
     
     def calc_factor(self, date: int):
         return sue_reg('npro@qtr' , date)
 
-class sue_op(StockFactorCalculator):
+class sue_op(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外营业利润'
     
     def calc_factor(self, date: int):
         return sue('oper_np@qtr' , date)
 
-class sue_op_reg(StockFactorCalculator):
+class sue_op_reg(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外营业利润-带截距回归'
     
     def calc_factor(self, date: int):
         return sue_reg('oper_np@qtr' , date)
 
-class sue_tp(StockFactorCalculator):
+class sue_tp(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外利润总额'
     
     def calc_factor(self, date: int):
         return sue('total_np@qtr' , date)
 
-class sue_tp_reg(StockFactorCalculator):
+class sue_tp_reg(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外利润总额-带截距回归'
     
     def calc_factor(self, date: int):
         return sue_reg('total_np@qtr' , date)
 
-class sue_sales(StockFactorCalculator):
+class sue_sales(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外营业收入'
     
     def calc_factor(self, date: int):
         return sue('sales@qtr' , date)
 
-class sue_sales_reg(StockFactorCalculator):
+class sue_sales_reg(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外营业收入-带截距回归'
     
     def calc_factor(self, date: int):
         return sue_reg('sales@qtr' , date)
 
-class sue_tax(StockFactorCalculator):
+class sue_tax(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外所得税'
     
     def calc_factor(self, date: int):
         return sue('tax@qtr' , date)
 
-class sue_tax_reg(StockFactorCalculator):
+class sue_tax_reg(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '预期外所得税-带截距回归'
     
     def calc_factor(self, date: int):

@@ -4,7 +4,7 @@ import pandas as pd
 from typing import Literal
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import ValueFactor
 
 __all__ = [
     'btop_stability' ,
@@ -62,17 +62,15 @@ def valuation_stability(numerator : str , date : int):
     den = get_denominator_hist('mv' , date , 3)
     return calc_stability(num , den)
 
-class btop_stability(StockFactorCalculator):
+class btop_stability(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'BP稳定性,均值除标准差'
     
     def calc_factor(self, date: int):
         return valuation_stability('equ@qtr' , date)
 
-class dtop_stability(StockFactorCalculator):
+class dtop_stability(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'DP稳定性,均值除标准差'
     
     def calc_factor(self, date: int):
@@ -81,25 +79,22 @@ class dtop_stability(StockFactorCalculator):
             start_date , end_date , 'val' , 'dv_ttm' , pivot = True , date_step = 21)
         return calc_stability(dv_ttm , 1)
 
-class etop_stability(StockFactorCalculator):
+class etop_stability(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'ETOP稳定性,均值除标准差'
     
     def calc_factor(self, date: int):
         return valuation_stability('npro@qtr' , date)
     
-class stop_stability(StockFactorCalculator):    
+class stop_stability(ValueFactor):    
     init_date = 20110101
-    category1 = 'value'
     description = 'STOP稳定性,均值除标准差'
     
     def calc_factor(self, date: int):
         return valuation_stability('sales@qtr' , date)
     
-class cfev_stability(StockFactorCalculator):
+class cfev_stability(ValueFactor):
     init_date = 20110101
-    category1 = 'value'
     description = 'CFEV稳定性,均值除标准差'
     
     def calc_factor(self, date: int):

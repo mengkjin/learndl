@@ -1,5 +1,5 @@
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import CoverageFactor
 
 __all__ = [
     'cov_inst_3m' , 'cov_inst_6m' , 'cov_inst_12m' , 'cov_inst_12m_anndt' ,
@@ -17,32 +17,28 @@ def report_report_count(date : int , n_month: int):
     df = df.drop_duplicates().groupby('secid').size()
     return df.reindex(secid).fillna(0)
 
-class cov_inst_3m(StockFactorCalculator):
+class cov_inst_3m(CoverageFactor):
     init_date = 20110101
-    category1 = 'coverage'
     description = '3个月区间内覆盖股票机构数量'
     
     def calc_factor(self, date: int):
         return report_inst_count(date, 3)
     
-class cov_inst_6m(StockFactorCalculator):
+class cov_inst_6m(CoverageFactor):
     init_date = 20110101
-    category1 = 'coverage'
     description = '6个月区间内覆盖股票机构数量'
     
     def calc_factor(self, date: int):
         return report_inst_count(date, 6)
-class cov_inst_12m(StockFactorCalculator):
+class cov_inst_12m(CoverageFactor):
     init_date = 20110101
-    category1 = 'coverage'
     description = '12个月区间内覆盖股票机构数量'
     
     def calc_factor(self, date: int):
         return report_inst_count(date, 12)
     
-class cov_inst_12m_anndt(StockFactorCalculator):
+class cov_inst_12m_anndt(CoverageFactor):
     init_date = 20110101
-    category1 = 'coverage'
     description = '12个月区间内覆盖股票机构数量,公告日后7天'
     
     def calc_factor(self, date: int):
@@ -53,25 +49,22 @@ class cov_inst_12m_anndt(StockFactorCalculator):
         df = df[ann_cal['anndt'] > 0].groupby('secid')['org_name'].nunique().reindex(secid).fillna(0)
         return df
     
-class cov_report_3m(StockFactorCalculator):
+class cov_report_3m(CoverageFactor):
     init_date = 20110101
-    category1 = 'coverage'
     description = '3个月区间内覆盖股票报告数量'
     
     def calc_factor(self, date: int):
         return report_report_count(date , 3)
     
-class cov_report_6m(StockFactorCalculator):
+class cov_report_6m(CoverageFactor):
     init_date = 20110101
-    category1 = 'coverage'
     description = '6个月区间内覆盖股票报告数量'
     
     def calc_factor(self, date: int):
         return report_report_count(date , 6)
     
-class cov_report_12m(StockFactorCalculator):
+class cov_report_12m(CoverageFactor):
     init_date = 20110101
-    category1 = 'coverage'
     description = '12个月区间内覆盖股票报告数量'
     
     def calc_factor(self, date: int):

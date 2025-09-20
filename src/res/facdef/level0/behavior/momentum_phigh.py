@@ -1,5 +1,5 @@
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import MomentumFactor
 
 
 def phigh(date , n_months : int , lag_months : int = 0):
@@ -9,9 +9,8 @@ def phigh(date , n_months : int , lag_months : int = 0):
     mom  = cp / high - 1
     return mom
 
-class mom_phigh1m(StockFactorCalculator):
+class mom_phigh1m(MomentumFactor):
     init_date = 20110101
-    category1 = 'momentum'
     description = '1个月最高价距离'
 
     def calc_factor(self , date : int):

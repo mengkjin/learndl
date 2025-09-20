@@ -1,5 +1,5 @@
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import GrowthFactor
 
 
 __all__ = [
@@ -27,304 +27,266 @@ def get_yoy_latest(expression : str , date : int):
 def get_qoq_latest(expression : str , date : int):
     return DATAVENDOR.get_fin_qoq(expression , date , 4).dropna().groupby('secid').last().iloc[:,0]
 
-class ta_yoy(StockFactorCalculator):
+class ta_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '总资产同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('ta@qtr' , date)
     
-class ta_qoq(StockFactorCalculator):
+class ta_qoq(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '总资产环比变化率'
     
     def calc_factor(self, date: int):
         return get_qoq_latest('ta@qtr' , date)
     
-class equ_yoy(StockFactorCalculator):
+class equ_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '净资产同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('equ@qtr' , date)
     
-class equ_qoq(StockFactorCalculator):
+class equ_qoq(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '净资产环比变化率'
     
     def calc_factor(self, date: int):
         return get_qoq_latest('equ@qtr' , date)
     
-class liab_yoy(StockFactorCalculator):
+class liab_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '总负债同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('liab@qtr' , date)
 
-class liab_qoq(StockFactorCalculator):
+class liab_qoq(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '总负债环比变化率'
     
     def calc_factor(self, date: int):
         return get_qoq_latest('liab@qtr' , date)
 
-class gp_qoq(StockFactorCalculator):
+class gp_qoq(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度毛利润环比变化率'
     
     def calc_factor(self, date: int):
         return get_qoq_latest('gp@qtr' , date)
 
-class gp_yoy(StockFactorCalculator):
+class gp_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度毛利润同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('gp@qtr' , date)
 
-class gp_ttm_yoy(StockFactorCalculator):
+class gp_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM毛利润同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('gp@ttm' , date)
     
-class gp_margin_yoy(StockFactorCalculator):
+class gp_margin_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度毛利润/营业收入同比变化值'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('gp@qtr / sales@qtr' , date)
     
-class gp_margin_ttm_yoy(StockFactorCalculator):
+class gp_margin_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM毛利润/营业收入同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('gp@ttm / sales@ttm' , date)
     
-class dedt_equ_yoy(StockFactorCalculator):
+class dedt_equ_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度扣非归母净利润/净资产同比变化值'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('dedt@qtr/equ@qtr' , date)
     
-class dedt_equ_ttm_yoy(StockFactorCalculator):
+class dedt_equ_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM扣非归母净利润/净资产同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('dedt@ttm/equ@ttm' , date)
 
-class dedt_qoq(StockFactorCalculator):
+class dedt_qoq(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度扣非归母净利润环比变化率'
     
     def calc_factor(self, date: int):
         return get_qoq_latest('dedt@qtr' , date)
 
-class dedt_yoy(StockFactorCalculator):
+class dedt_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度扣非归母净利润同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('dedt@qtr' , date)
     
-class dedt_ttm_yoy(StockFactorCalculator):
+class dedt_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM扣非归母净利润同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('dedt@ttm' , date)
     
-class oper_margin_yoy(StockFactorCalculator):
+class oper_margin_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度营业利润率/营业收入同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('oper_np@qtr / sales@qtr' , date)
 
-class oper_margin_ttm_yoy(StockFactorCalculator):
+class oper_margin_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM营业利润率/营业收入同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('oper_np@ttm / sales@ttm' , date)
 
-class npro_qoq(StockFactorCalculator):
+class npro_qoq(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度归母净利润环比变化率'
     
     def calc_factor(self, date: int):
         return get_qoq_latest('npro@qtr' , date)
     
-class npro_yoy(StockFactorCalculator):
+class npro_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度归母净利润同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('npro@qtr' , date)
 
-class npro_ttm_yoy(StockFactorCalculator):
+class npro_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM归母净利润同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('npro@ttm' , date)
 
-class roe_yoy(StockFactorCalculator):
+class roe_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度净资产收益率同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('npro@qtr / equ@qtr' , date)
     
-class roe_ttm_yoy(StockFactorCalculator):
+class roe_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM净资产收益率同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('npro@ttm / equ@ttm' , date)
 
-class roa_yoy(StockFactorCalculator):
+class roa_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度总资产收益率同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('npro@qtr / ta@qtr' , date)
     
-class roa_ttm_yoy(StockFactorCalculator):
+class roa_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM总资产收益率同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('npro@ttm / ta@ttm' , date)
 
-class net_margin_yoy(StockFactorCalculator):
+class net_margin_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度净利率同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('npro@qtr / sales@qtr' , date)
 
-class net_margin_ttm_yoy(StockFactorCalculator):
+class net_margin_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM净利率同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('npro@ttm / sales@ttm' , date)
 
-class sales_qoq(StockFactorCalculator):
+class sales_qoq(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度营业收入环比变化率'
     
     def calc_factor(self, date: int):
         return get_qoq_latest('sales@qtr' , date)
     
-class sales_yoy(StockFactorCalculator):
+class sales_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度营业收入同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('sales@qtr' , date)
 
-class sales_ttm_yoy(StockFactorCalculator):
+class sales_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM营业收入同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('sales@ttm' , date)
 
-class assetsturn_yoy(StockFactorCalculator):
+class assetsturn_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度营业收入/总资产(周转率)同比变化值'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('sales@qtr / ta@qtr' , date)
 
-class assetsturn_ttm_yoy(StockFactorCalculator):
+class assetsturn_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM营业收入/总资产(周转率)同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('sales@ttm / ta@ttm' , date)
 
-class tax_qoq(StockFactorCalculator):
+class tax_qoq(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度所得税环比变化率'
     
     def calc_factor(self, date: int):
         return get_qoq_latest('tax@qtr' , date)
-class tax_yoy(StockFactorCalculator):
+class tax_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM所得税同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('tax@qtr' , date)
     
-class tax_ttm_yoy(StockFactorCalculator):
+class tax_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM所得税同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('tax@ttm' , date) 
     
-class cfo_qoq(StockFactorCalculator):
+class cfo_qoq(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度经营活动现金流环比变化率'
     
     def calc_factor(self, date: int):
         return get_qoq_latest('ncfo@qtr' , date)
     
-class cfo_yoy(StockFactorCalculator):
+class cfo_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = '单季度经营活动现金流同比变化率'
     
     def calc_factor(self, date: int):
         return get_yoy_latest('ncfo@qtr' , date)
     
-class cfo_ttm_yoy(StockFactorCalculator):
+class cfo_ttm_yoy(GrowthFactor):
     init_date = 20110101
-    category1 = 'growth'
     description = 'TTM经营活动现金流同比变化率'
     
     def calc_factor(self, date: int):

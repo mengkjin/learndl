@@ -1,5 +1,5 @@
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import LiquidityFactor
 
 
 def amihud(date , n_months : int , lag_months : int = 0):
@@ -22,50 +22,44 @@ def mif(date , n_months : int , lag_months : int = 0):
     vol = DATAVENDOR.TRADE.get_volumes(start_date , end_date , volume_type='amount' , pivot=True)
     mif = (DATAVENDOR.TRADE.mask_min_finite(vwap / cp - 1) / vol).sum() * (10 ** 6)
     return mif
-
-class illiq_1m(StockFactorCalculator):
+    
+class illiq_1m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '1个月Amihud非流动性因子'
     
     def calc_factor(self, date: int):
         return amihud(date , 1)
     
-class illiq_2m(StockFactorCalculator):
+class illiq_2m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '2个月Amihud非流动性因子'
     
     def calc_factor(self, date: int):
         return amihud(date , 2)
     
-class illiq_3m(StockFactorCalculator):
+class illiq_3m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '3个月Amihud非流动性因子'
     
     def calc_factor(self, date: int):
         return amihud(date , 3)
     
-class illiq_6m(StockFactorCalculator):
+class illiq_6m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '6个月Amihud非流动性因子'
     
     def calc_factor(self, date: int):
         return amihud(date , 6)
     
-class illiq_12m(StockFactorCalculator):
+class illiq_12m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '12个月Amihud非流动性因子'
     
     def calc_factor(self, date: int):
         return amihud(date , 12)
     
-class mif_1m(StockFactorCalculator):
+class mif_1m(LiquidityFactor):
     init_date = 20110101
-    category1 = 'liquidity'
     description = '1个月市场冲击因子'
     
     def calc_factor(self, date: int):

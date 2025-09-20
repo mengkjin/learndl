@@ -1,5 +1,5 @@
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import VolatilityFactor
 
 
 def skewness_volwei(date , n_months : int , lag_months : int = 0):
@@ -13,37 +13,32 @@ def skewness_volwei(date , n_months : int , lag_months : int = 0):
     wgt = vol.pow(1/3) / vol.pow(1/3).mean()
     return (ret * wgt).skew()
 
-class price_weiskew1m(StockFactorCalculator):
+class price_weiskew1m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '1个月成交量加权偏度'
     def calc_factor(self , date : int):
         return skewness_volwei(date , 1)
     
-class price_weiskew2m(StockFactorCalculator):
+class price_weiskew2m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '2个月成交量加权偏度'
     def calc_factor(self , date : int):
         return skewness_volwei(date , 2)
     
-class price_weiskew3m(StockFactorCalculator):
+class price_weiskew3m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '3个月成交量加权偏度'
     def calc_factor(self , date : int):
         return skewness_volwei(date , 3)
     
-class price_weiskew6m(StockFactorCalculator):
+class price_weiskew6m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '6个月成交量加权偏度'
     def calc_factor(self , date : int):
         return skewness_volwei(date , 6)
     
-class price_weiskew12m(StockFactorCalculator):
+class price_weiskew12m(VolatilityFactor):
     init_date = 20110101
-    category1 = 'volatility'
     description = '12个月成交量加权偏度'
     def calc_factor(self , date : int):
         return skewness_volwei(date , 12)

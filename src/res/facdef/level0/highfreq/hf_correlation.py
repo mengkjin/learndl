@@ -1,7 +1,7 @@
 import polars as pl
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import HfCorrelationFactor
 
 
 __all__ = [
@@ -45,97 +45,85 @@ def inday_corr_std(date : int , n_day : int , expression : str):
         to_pandas().set_index('secid')['value'].sort_index()
     return df
 
-class inday_mkt_beta(StockFactorCalculator):
+class inday_mkt_beta(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内beta均值'
 
     def calc_factor(self, date: int):
         return inday_corr_avg(date , 20 , 'beta')
     
-class inday_mkt_corr(StockFactorCalculator):
+class inday_mkt_corr(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内量价相关性均值'
 
     def calc_factor(self, date: int):
         return inday_corr_avg(date , 20 , 'corr')
     
-class inday_ret_autocorr(StockFactorCalculator):
+class inday_ret_autocorr(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内收益率自相关系数均值'
 
     def calc_factor(self, date: int):
         return inday_corr_avg(date , 20 , 'ret_autocorr')
     
-class inday_vol_ret1_corr(StockFactorCalculator):
+class inday_vol_ret1_corr(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内波动价相关性均值'
 
     def calc_factor(self, date: int):
         return inday_corr_avg(date , 20 , 'vol_ret1')
     
-class inday_vol_vwap_corr(StockFactorCalculator):
+class inday_vol_vwap_corr(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内波动价相关性均值'
 
     def calc_factor(self, date: int):
         return inday_corr_avg(date , 20 , 'vol_vwap')
     
-class inday_vol_autocorr(StockFactorCalculator):
+class inday_vol_autocorr(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内成交量自相关系数均值'
 
     def calc_factor(self, date: int):
         return inday_corr_avg(date , 20 , 'vol_autocorr')
     
-class inday_mkt_beta_std(StockFactorCalculator):
+class inday_mkt_beta_std(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内beta标准差'
 
     def calc_factor(self, date: int):
         return inday_corr_std(date , 20 , 'beta')
     
-class inday_mkt_corr_std(StockFactorCalculator):
+class inday_mkt_corr_std(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内量价相关性标准差'
 
     def calc_factor(self, date: int):
         return inday_corr_std(date , 20 , 'corr')
     
-class inday_ret_autocorr_std(StockFactorCalculator):
+class inday_ret_autocorr_std(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内收益率自相关系数标准差'
 
     def calc_factor(self, date: int):
         return inday_corr_std(date , 20 , 'ret_autocorr')
     
-class inday_vol_ret1_corr_std(StockFactorCalculator):
+class inday_vol_ret1_corr_std(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内波动价相关性标准差'
 
     def calc_factor(self, date: int):
         return inday_corr_std(date , 20 , 'vol_ret1')
     
-class inday_vol_vwap_corr_std(StockFactorCalculator):
+class inday_vol_vwap_corr_std(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内波动价相关性标准差'
 
     def calc_factor(self, date: int):
         return inday_corr_std(date , 20 , 'vol_vwap')
     
-class inday_vol_autocorr_std(StockFactorCalculator):
+class inday_vol_autocorr_std(HfCorrelationFactor):
     init_date = 20110101
-    category1 = 'hf_correlation'
     description = '20日日内成交量自相关系数标准差'
 
     def calc_factor(self, date: int):

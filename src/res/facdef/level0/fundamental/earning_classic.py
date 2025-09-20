@@ -1,7 +1,7 @@
 import polars as pl
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import EarningFactor
 
 
 __all__ = [
@@ -32,9 +32,8 @@ def get_hist_zscore_polars(expression : str , date : int):
         agg((pl.col('value').last() - pl.col('value').mean()) / pl.col('value').std()).\
             to_pandas().set_index('secid').iloc[:,0]
 
-class npro_core_ratio(StockFactorCalculator):
+class npro_core_ratio(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '核心净利润占比'
     
     def calc_factor(self, date: int):
@@ -45,294 +44,257 @@ class npro_core_ratio(StockFactorCalculator):
         core = gp - sum(subtracts)
         return core / npro
     
-class gp_margin_qtr(StockFactorCalculator):
+class gp_margin_qtr(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '单季度毛利润除以营业收入(毛利率)'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('gp@qtr / sales@qtr' , date)
-class gp_margin_ttm(StockFactorCalculator):
+class gp_margin_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM毛利润除以营业收入(毛利率)'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('gp@ttm / sales@ttm' , date)
     
-class gp_margin_zscore(StockFactorCalculator):
+class gp_margin_zscore(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM毛利润除以营业收入(毛利率),Z-Score'
     
     def calc_factor(self, date: int):
         return get_hist_zscore('gp@ttm / sales@ttm' , date)
 
-class gp_ta_qtr(StockFactorCalculator):
+class gp_ta_qtr(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '单季度毛利润除以总资产'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('gp@qtr / ta@qtr' , date)
 
-class gp_ta_ttm(StockFactorCalculator):
+class gp_ta_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM毛利润除以总资产'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('gp@ttm / ta@ttm' , date)
 
-class gp_ta_zscore(StockFactorCalculator):
+class gp_ta_zscore(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '毛利润/总资产,Z-Score'
 
     def calc_factor(self, date: int):
         return get_hist_zscore('gp@qtr / ta@qtr' , date)
     
-class dedt_equ_ttm(StockFactorCalculator):
+class dedt_equ_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM扣非归母净利润/净资产'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('dedt@ttm / equ@ttm' , date)
 
-class dedt_sales_ttm(StockFactorCalculator):
+class dedt_sales_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM扣非归母净利润/营业收入'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('dedt@ttm / sales@ttm' , date)
 
-class dedt_ta_ttm(StockFactorCalculator):
+class dedt_ta_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM扣非归母净利润/总资产'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('dedt@ttm / ta@ttm' , date)
 
-class roe_qtr(StockFactorCalculator):
+class roe_qtr(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '单季度归母净利润/净资产(ROE)'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('npro@qtr / equ@qtr' , date)
-class roe_ttm(StockFactorCalculator):
+class roe_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM归母净利润/净资产(ROE)'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('npro@ttm / equ@ttm' , date)
 
-class roe_zscore(StockFactorCalculator):
+class roe_zscore(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '归母净利润/净资产,Z-Score'
     
     def calc_factor(self, date: int):
         return get_hist_zscore('npro@qtr / equ@qtr' , date)
     
 
-class roa_qtr(StockFactorCalculator):
+class roa_qtr(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '单季度归母净利润/总资产(ROA)'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('npro@qtr / ta@qtr' , date)
     
-class roa_ttm(StockFactorCalculator):
+class roa_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM归母净利润/总资产(ROA)'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('npro@ttm / ta@ttm' , date)
 
-class roa_zscore(StockFactorCalculator):
+class roa_zscore(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM归母净利润/总资产(ROA),Z-Score'
     
     def calc_factor(self, date: int):
         return get_hist_zscore('npro@qtr / ta@qtr' , date)
 
-class net_margin_qtr(StockFactorCalculator):
+class net_margin_qtr(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '单季度归母净利润/营业收入(净利率)'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('npro@qtr / sales@qtr' , date)
-class net_margin_ttm(StockFactorCalculator):
+class net_margin_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM归母净利润/营业收入(净利率)'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('npro@ttm / sales@ttm' , date)
     
-class net_margin_zscore(StockFactorCalculator):
+class net_margin_zscore(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM归母净利润/营业收入(净利率),Z-Score'
     
     def calc_factor(self, date: int):
         return get_hist_zscore('npro@qtr / sales@qtr' , date)
 
-class cfo_sales_qtr(StockFactorCalculator):
+class cfo_sales_qtr(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '单季度经营活动现金流/营业收入'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('ncfo@qtr / sales@qtr' , date)
     
-class cfo_sales_ttm(StockFactorCalculator):
+class cfo_sales_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM经营活动现金流/营业收入'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('ncfo@ttm / sales@ttm' , date)
 
-class cfo_sales_zscore(StockFactorCalculator):
+class cfo_sales_zscore(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM经营活动现金流/营业收入,Z-Score'
     
     def calc_factor(self, date: int):
         return get_hist_zscore('ncfo@qtr / sales@qtr' , date)
 
-class cfo_ta_qtr(StockFactorCalculator):
+class cfo_ta_qtr(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '单季度经营活动现金流/总资产'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('ncfo@qtr / ta@qtr' , date)
 
-class cfo_ta_ttm(StockFactorCalculator):
+class cfo_ta_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM经营活动现金流/总资产'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('ncfo@ttm / ta@ttm' , date)
     
-class cfo_ta_zscore(StockFactorCalculator):
+class cfo_ta_zscore(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM经营活动现金流/总资产,Z-Score'
     
     def calc_factor(self, date: int):
         return get_hist_zscore('ncfo@qtr / ta@qtr' , date)
     
-class oper_margin_qtr(StockFactorCalculator):
+class oper_margin_qtr(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '单季度营业利润/营业收入(营业利润率)'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('oper_np@qtr / sales@qtr' , date)
     
-class oper_margin_ttm(StockFactorCalculator):
+class oper_margin_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM营业利润/营业收入(营业利润率)'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('oper_np@ttm / sales@ttm' , date)
 
-class oper_margin_zscore(StockFactorCalculator):
+class oper_margin_zscore(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM营业利润/营业收入(营业利润率),Z-Score'
     
     def calc_factor(self, date: int):
         return get_hist_zscore('oper_np@qtr / sales@qtr' , date)
 
-class expense_sales_qtr(StockFactorCalculator):
+class expense_sales_qtr(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '单季度费用/营业收入'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('(is@sell_exp@qtr + is@admin_exp@qtr + is@fin_exp@qtr) / sales@qtr' , date)
 
-class expense_sales_ttm(StockFactorCalculator):
+class expense_sales_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM费用/营业收入'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('(is@sell_exp@ttm + is@admin_exp@ttm + is@fin_exp@ttm) / sales@ttm' , date)
     
-class expense_sales_zscore(StockFactorCalculator):
+class expense_sales_zscore(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM费用/营业收入,Z-Score'
     
     def calc_factor(self, date: int):
         return get_hist_zscore('(is@sell_exp@qtr + is@admin_exp@qtr + is@fin_exp@qtr) / sales@qtr' , date)
 
-class roic_qtr(StockFactorCalculator):
+class roic_qtr(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '单季度EBIT(1-税率)/投入资本'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('roic@qtr' , date)
 
-class roic_ttm(StockFactorCalculator):
+class roic_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM,EBIT(1-税率)/投入资本'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('roic@ttm' , date)
     
-class roic_zscore(StockFactorCalculator):
+class roic_zscore(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM,EBIT(1-税率)/投入资本,Z-Score'
     
     def calc_factor(self, date: int):
         return get_hist_zscore('roic@qtr' , date)
 
-class ebit_tangible_ttm(StockFactorCalculator):
+class ebit_tangible_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM,EBIT/有形资产'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('ebit@ttm / tangible_asset@ttm' , date)
-class tax_equ_qtr(StockFactorCalculator):
+class tax_equ_qtr(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = '单季度所得税/净资产'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('tax@qtr / equ@qtr' , date)
     
-class tax_equ_ttm(StockFactorCalculator):
+class tax_equ_ttm(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM所得税/净资产'
     
     def calc_factor(self, date: int):
         return DATAVENDOR.get_fin_latest('tax@ttm / equ@ttm' , date)
 
-class tax_equ_zscore(StockFactorCalculator):
+class tax_equ_zscore(EarningFactor):
     init_date = 20110101
-    category1 = 'earning'
     description = 'TTM所得税/净资产,Z-Score'
     
     def calc_factor(self, date: int):

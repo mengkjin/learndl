@@ -1,7 +1,7 @@
 from typing import Literal
 
 from src.data import DATAVENDOR
-from src.res.factor.calculator import StockFactorCalculator
+from src.res.factor.calculator import ForecastFactor
 
 
 __all__ = [
@@ -64,81 +64,71 @@ def valtop_pct(date : int , val : Literal['sales' , 'np' , 'op' , 'tp'] , pct_mo
         v1 = valtop_estimate(date , date // 10000 , val , n_month , pct_month)
     return (v0 - v1) / v1.abs()
 
-class etop_est(StockFactorCalculator):
+class etop_est(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '归母净利润/市值一致预期值'
 
     def calc_factor(self, date: int):
         return valtop_ftm(date , 'np')
     
-class etop_est_pct3m(StockFactorCalculator):
+class etop_est_pct3m(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '3个月归母净利润/市值一致预期变化'
 
     def calc_factor(self, date: int):
         return valtop_pct(date , 'np' , 3)
     
-class etop_est_pct6m(StockFactorCalculator):
+class etop_est_pct6m(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '6个月归母净利润/市值一致预期变化'
 
     def calc_factor(self, date: int):
         return valtop_pct(date , 'np' , 6)
 
-class eps_est_pct3m(StockFactorCalculator):
+class eps_est_pct3m(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '3个月EPS一致预期变化'
 
     def calc_factor(self, date: int):
         return val_pct(date , 'eps' , 3)
     
-class eps_est_pct6m(StockFactorCalculator):
+class eps_est_pct6m(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '6个月EPS一致预期变化'
 
     def calc_factor(self, date: int):
         return val_pct(date , 'eps' , 6)
 
-class eps_ftm_pct3m(StockFactorCalculator):
+class eps_ftm_pct3m(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '3个月EPSFTM一致预期值变化'
 
     def calc_factor(self, date: int):
         return val_pct(date , 'eps' , 3 , ftm = True)
     
-class eps_ftm_pct6m(StockFactorCalculator):
+class eps_ftm_pct6m(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '6个月EPSFTM一致预期值变化'
 
     def calc_factor(self, date: int):
         return val_pct(date , 'eps' , 6 , ftm = True)
 
-class optop_est(StockFactorCalculator):
+class optop_est(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '营业利润/市值一致预期值'
 
     def calc_factor(self, date: int):
         return valtop_ftm(date , 'op' , 12)
     
-class optop_est_pct3m(StockFactorCalculator):
+class optop_est_pct3m(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '3个月营业利润/市值一致预期变化'
 
     def calc_factor(self, date: int):
         return valtop_pct(date , 'op' , 3)
     
-class optop_est_pct6m(StockFactorCalculator):
+class optop_est_pct6m(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '6个月营业利润/市值一致预期变化'
 
     UPDATE_RELAX_DATES : list[int] = [20110104 , 20110111 , 20110118]
@@ -146,41 +136,36 @@ class optop_est_pct6m(StockFactorCalculator):
     def calc_factor(self, date: int):
         return valtop_pct(date , 'op' , 6)
 
-class sales_cagr1y_est(StockFactorCalculator):
+class sales_cagr1y_est(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '1年营业收入CAGR一致预期值'
 
     def calc_factor(self, date: int):
         return val_cagr(date , 'sales' , 1 , 12)
     
-class sales_cagr2y_est(StockFactorCalculator):
+class sales_cagr2y_est(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '2年营业收入CAGR一致预期值'
 
     def calc_factor(self, date: int):
         return val_cagr(date , 'sales' , 2 , 12)
     
-class npro_cagr1y_est(StockFactorCalculator):
+class npro_cagr1y_est(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '1年归母净利润CAGR一致预期值'
 
     def calc_factor(self, date: int):
         return val_cagr(date , 'np' , 1 , 12)
     
-class npro_cagr2y_est(StockFactorCalculator):
+class npro_cagr2y_est(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '2年归母净利润CAGR一致预期值'
 
     def calc_factor(self, date: int):
         return val_cagr(date , 'np' , 2 , 12)
     
-class epg_est(StockFactorCalculator):
+class epg_est(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = 'PEG一致预期值'
 
     def calc_factor(self, date: int):
@@ -188,65 +173,57 @@ class epg_est(StockFactorCalculator):
         ep = valtop_estimate(date , date // 10000 , 'np' , 12)
         return ep * cagr
     
-class roe_est(StockFactorCalculator):
+class roe_est(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '净资产收益率一致预期值'
 
     def calc_factor(self, date: int):
         return DATAVENDOR.ANALYST.get_val_ftm(date , 'roe' , 12)
 
-class stop_est(StockFactorCalculator):
+class stop_est(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '营业收入/市值一致预期值'
 
     def calc_factor(self, date: int):
         return valtop_ftm(date , 'sales' , 12)
     
-class stop_est_pct3m(StockFactorCalculator):
+class stop_est_pct3m(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '3个月营业收入/市值一致预期变化'
 
     def calc_factor(self, date: int):
         return valtop_pct(date , 'sales' , 3)
 
-class stop_est_pct6m(StockFactorCalculator):
+class stop_est_pct6m(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '6个月营业收入/市值一致预期变化'
 
     def calc_factor(self, date: int):
         return valtop_pct(date , 'sales' , 6)
 
-class tptop_est(StockFactorCalculator):
+class tptop_est(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '利润总额/市值一致预期值'
 
     def calc_factor(self, date: int):
         return valtop_ftm(date , 'tp' , 12)
     
-class tptop_est_pct3m(StockFactorCalculator):
+class tptop_est_pct3m(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '3个月利润总额/市值一致预期变化'
 
     def calc_factor(self, date: int):
         return valtop_pct(date , 'tp' , 3)
 
-class tptop_est_pct6m(StockFactorCalculator):   
+class tptop_est_pct6m(ForecastFactor):   
     init_date = 20110101
-    category1 = 'forecast'
     description = '6个月利润总额/市值一致预期变化'
 
     def calc_factor(self, date: int):
         return valtop_pct(date , 'tp' , 6)
     
-class price_potential(StockFactorCalculator):
+class price_potential(ForecastFactor):
     init_date = 20110101
-    category1 = 'forecast'
     description = '分析师评级一致目标价空间'
 
     def calc_factor(self, date: int):
