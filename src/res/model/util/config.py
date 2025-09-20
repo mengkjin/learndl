@@ -695,7 +695,7 @@ class TrainConfig(TrainParam):
 
     def process_parser(self , stage = -1 , resume = -1 , checkname = -1 , verbose = True):
         if self.model_base_path:
-            if resume == -1 or resume == -1:
+            if resume == -1 or resume == 1:
                 resume = 1
             else:
                 raise ValueError(f'resume must be -1 or 1 when base_path is not None , got {resume}')

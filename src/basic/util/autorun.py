@@ -26,7 +26,6 @@ class AutoRunTask:
         self.time_str = self.init_time.strftime('%Y%m%d%H%M%S')
         
         self.exit_files = []
-        self.exit_messages = {level : [] for level in ['info' , 'warning' , 'error' , 'critical' , 'debug']}
         self.logged_messages = []
         self.error_messages = []
 
@@ -56,18 +55,17 @@ class AutoRunTask:
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.end_time = datetime.now()
-        for level , msgs in self.exit_messages.items():
-            for msg in msgs:
-                getattr(self.logger , level)(msg)
+        
+        for log_type , message in Logger.iter_lazy_messages():
+            getattr(self.logger , log_type)(message)
+            self.logged_messages.append(f'{log_type.upper()} : {message}')
+
         if exc_type is not None:
             traceback.print_exc()
             self.status = 'Error'
             self.error_messages.append('\n'.join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
         else:
             self.status = 'Success'
-
-        for log_type , message in Logger.iter_lazy_messages():
-            getattr(self , log_type)(message)
         
         self.warning_catcher.__exit__(exc_type, exc_value, exc_traceback)
         self.md_catcher.__exit__(exc_type, exc_value, exc_traceback)
@@ -127,47 +125,47 @@ class AutoRunTask:
                 f'Error Messages : ' + '-' * 20 ,
                 self.error_message ,
                 f'Final Messages : ' + '-' * 20 ,
-                self.final_message ,
+                self.exit_message ,
             ]
 
             self.emailer.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , 
                               attachment_group = ['default' , 'autorun'])
 
-    def info(self , message : str , at_exit = False):
+    def info(self , message : str , at_exit = True):
         if at_exit:
-            self.exit_messages['info'].append(message)
+            Logger.add_lazy_message('info', message)
         else:
             self.logger.info(message)
-        self.logged_messages.append(f'INFO : {message}')
+            self.logged_messages.append(f'INFO : {message}')
     
-    def error(self , message : str , at_exit = False):
+    def error(self , message : str , at_exit = True):
         if at_exit:
-            self.exit_messages['error'].append(message)
+            Logger.add_lazy_message('error', message)
         else:
             self.logger.error(message)
-        self.logged_messages.append(f'ERROR : {message}')
+            self.logged_messages.append(f'ERROR : {message}')
         self.error_messages.append(message)
 
-    def warning(self , message : str , at_exit = False):
+    def warning(self , message : str , at_exit = True):
         if at_exit:
-            self.exit_messages['warning'].append(message)
+            Logger.add_lazy_message('warning', message)
         else:
             self.logger.warning(message)
-        self.logged_messages.append(f'WARNING : {message}')
+            self.logged_messages.append(f'WARNING : {message}')
 
-    def debug(self , message : str , at_exit = False):
+    def debug(self , message : str , at_exit = True):
         if at_exit:
-            self.exit_messages['debug'].append(message)
+            Logger.add_lazy_message('debug', message)
         else:
             self.logger.debug(message)
-        self.logged_messages.append(f'DEBUG : {message}')
+            self.logged_messages.append(f'DEBUG : {message}')
 
-    def critical(self , message : str , at_exit = False):
+    def critical(self , message : str , at_exit = True):
         if at_exit:
-            self.exit_messages['critical'].append(message)
+            Logger.add_lazy_message('critical', message)
         else:
             self.logger.critical(message)
-        self.logged_messages.append(f'CRITICAL : {message}')
+            self.logged_messages.append(f'CRITICAL : {message}')
 
     def attach(self , file : Path | str | list[Path] | list[str] , streamlit = True , email = True):
         if not isinstance(file , list): 
@@ -179,7 +177,7 @@ class AutoRunTask:
             self.emailer.Attach(file , group = 'autorun')
         
     @property
-    def final_message(self):
+    def exit_message(self):
         return '\n'.join(self.logged_messages)
     
     @property

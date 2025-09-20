@@ -52,16 +52,16 @@ def main(txt : str = 'Hello, World!' , **kwargs):
     with AutoRunTask('test_streamlit' , port_name , **kwargs) as runner:
         with Logger.EnclosedMessage('main part'):
             with Timer('abc'):
-                runner.info(str(kwargs))
-                runner.info(f'info:{txt}')
+                runner.info(f'this is an info: {str(kwargs)}')
+                runner.info(f'this is an info: {txt}')
                 Logger.add_lazy_message('critical' , f'critical: lazy message')
-                runner.warning(f'warning:{txt}')
-                runner.debug(f'debug:{txt}')
-                runner.critical(f'critical:{txt}')
+                runner.warning(f'this is a warning: {txt}')
+                runner.debug(f'this is a debug: {txt}')
+                runner.critical(f'this is a critical: {txt}')
                 if (rnd := random.random()) < 0.5:
-                    runner.error(f'error:{rnd}')
+                    runner.error(f'this is an error: {rnd}')
                 else:
-                    runner.info(f'info:{rnd}')
+                    runner.info(f'this is an info: {rnd}')
         time.sleep(10)
 
     return runner
