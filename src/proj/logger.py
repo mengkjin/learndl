@@ -1,6 +1,6 @@
 import colorlog , logging , sys
 import logging.handlers
-from typing import Any , Literal , Type
+from typing import Any , Generator , Literal , Type
 
 from .path import PATH
 
@@ -9,9 +9,9 @@ _seperator_char = '*'
 _divider_char = '='
 
 class Logger:
-    '''custom colored log (Only one instance) , config at {PATH.conf}/logger.yaml '''
+    """custom colored log , config at PATH.conf / 'glob' / 'logger.yaml'"""
     _instance : 'Logger | Any' = None
-    _lazy_messages : dict[str , list[str]] = {
+    _cached_messages : dict[Literal['info' , 'warning' , 'error' , 'critical' , 'debug'] , list[str]] = {
         'info' : [] ,
         'warning' : [] ,
         'error' : [] ,
@@ -24,6 +24,7 @@ class Logger:
         return cls._instance.init_logger()
 
     def init_logger(self , test_output = False):
+        """Initialize the logger"""
         config_logger = PATH.read_yaml(PATH.conf.joinpath('glob' , 'logger.yaml'))
         new_path = PATH.log_main.joinpath(config_logger['file']['param']['filename'])
         config_logger['file']['param']['filename'] = str(new_path)
@@ -58,59 +59,76 @@ class Logger:
     
     @classmethod
     def print(cls , *args , **kwargs):
+        """Print the message to the stdout"""
         print(*args , **kwargs)
 
     @classmethod
     def debug(cls , *args , **kwargs):
+        """Debug level message"""
         cls().log.debug(*args , **kwargs)
         cls.dump_to_logwriter(*args)
     
     @classmethod
     def info(cls , *args , **kwargs):
+        """Info level message"""
         cls().log.info(*args , **kwargs)
         cls.dump_to_logwriter(*args)
 
     @classmethod
     def warning(cls , *args , **kwargs):
+        """Warning level message"""
         cls().log.warning(*args , **kwargs)
         cls.dump_to_logwriter(*args)
 
     @classmethod
     def error(cls , *args , **kwargs):
+        """Error level message"""
         cls().log.error(*args , **kwargs)
         cls.dump_to_logwriter(*args)   
 
     @classmethod
     def critical(cls , *args , **kwargs):
+        """Critical level message"""
         cls().log.critical(*args , **kwargs)
         cls.dump_to_logwriter(*args)
 
     @classmethod
     def separator(cls , width = _seperator_width , char = _seperator_char):
+        """Separator message , use info level"""
         cls().log.info(char * width)
 
     @classmethod
     def divider(cls , width = _seperator_width , char = _divider_char):
+        """Divider message , use info level"""
         cls().log.info(char * width)
         
     @staticmethod
     def dump_to_logwriter(*args):
+        """Dump the message to the log writer if sys.stdout has a log attribute"""
         log = getattr(sys.stdout , 'log' , None)
         write = getattr(log , 'write' , None)
         if write:
             write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
-    def add_lazy_message(cls , type : Literal['info' , 'warning' , 'error' , 'critical' , 'debug'] , message : str):
-        cls._lazy_messages[type].append(message)
+    def cache_message(cls , type : Literal['info' , 'warning' , 'error' , 'critical' , 'debug'] , message : str):
+        """Add the message to the cache for later use"""
+        cls._cached_messages[type].append(message)
 
     @classmethod
-    def iter_lazy_messages(cls):
-        for type in cls._lazy_messages:
-            while cls._lazy_messages[type]:
-                yield type , cls._lazy_messages[type].pop(0)
+    def iter_cached_messages(cls) -> Generator[tuple[Literal['info' , 'warning' , 'error' , 'critical' , 'debug'] , str] , None , None]:
+        """Iterate the cached messages"""
+        for type in cls._cached_messages:
+            while cls._cached_messages[type]:
+                yield type , cls._cached_messages[type].pop(0)
 
     class EnclosedMessage:
+        """F
+        ormat Enclosed message
+        example:
+            with Logger.EnclosedMessage('Title'):
+                Logger.info('This is the enclosed message...')
+        """
         def __init__(self , title : str , width = _seperator_width):
             self.title = title.strip()
             self.width = width
@@ -135,6 +153,7 @@ class Logger:
 
 
 class _LevelFormatter(logging.Formatter):
+    """Simple Level Formatter without color"""
     def __init__(self, fmt=None, datefmt=None, level_fmts=None):
         level_fmts = level_fmts or {}
         self._level_formatters = {}
@@ -149,6 +168,7 @@ class _LevelFormatter(logging.Formatter):
             return self._level_formatters[record.levelno].format(record)
         return super(_LevelFormatter, self).format(record)
 class _LevelColorFormatter(colorlog.ColoredFormatter):
+    """Level Color Formatter with default colors"""
     def __init__(self, fmt=None, datefmt=None, log_colors=None,level_fmts=None,secondary_log_colors=None):
         level_fmts = level_fmts or {}
         self._level_formatters = {}

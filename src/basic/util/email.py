@@ -5,31 +5,42 @@ from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
 from pathlib import Path
-from typing import Literal , Any
+from typing import Literal
 
 from src.proj import MACHINE , PATH
+class _EmailSettings:
+    def __init__(
+        self , 
+        server : Literal['netease'] = 'netease'
+    ):
+        self.email_conf = MACHINE.local_settings('email')[server]
+        if MACHINE.name in self.email_conf:
+            self.email_conf.update(self.email_conf[MACHINE.name])
 
-def email_settings():
-    return MACHINE.local_settings('email')
+    @property
+    def smtp_server(self) -> str:
+        return self.email_conf['smtp_server']
+    @property
+    def smtp_port(self) -> int:
+        return self.email_conf['smtp_port']
+    @property
+    def sender(self) -> str:
+        return self.email_conf['sender']
+    @property
+    def password(self) -> str:
+        return self.email_conf['password']
 
 class Email:
     Attachments : dict[str , list[Path]] = {}
     Attachment_dir = PATH.temp.joinpath('email_attachments')
     _instance = None
 
+    settings = _EmailSettings()
+
     def __new__(cls , *args , **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-
-    def __init__(self , server : Literal['netease'] = 'netease'):
-        email_conf : dict[str , Any] = email_settings()[server]
-        if MACHINE.name in email_conf:
-            email_conf.update(email_conf[MACHINE.name])
-        self.smtp_server = email_conf['smtp_server']
-        self.smtp_port   = email_conf['smtp_port']
-        self.sender      = email_conf['sender']  
-        self.password    = email_conf['password']  
 
     @classmethod
     def Attach(cls , attachment : str | Path | list[str] | list[Path] | None = None , 
@@ -50,20 +61,22 @@ class Email:
             if new_path not in cls.Attachments[group]:
                 cls.Attachments[group].append(new_path)
 
-    def recipient(self , recipient : str | None = None):
+    @classmethod
+    def recipient(cls , recipient : str | None = None):
         if recipient is None: 
-            recipient = str(self.sender)
+            recipient = str(cls.settings.sender)
         assert recipient , 'recipient is required'
         assert '@' in recipient , f'recipient address must contain @ , got {recipient}'
         return recipient
     
-    def message(self , title : str  , body : str | None = None , recipient : str | None = None , 
+    @classmethod
+    def message(cls , title : str  , body : str | None = None , recipient : str | None = None , 
                 attachment_group : str | list[str] = 'default' , 
                 clear_attachments : bool = True ,
                 title_prefix : str | None = 'Learndl:'):
         message = MIMEMultipart()
-        message['From'] = self.sender
-        message['To'] = self.recipient(recipient)
+        message['From'] = cls.settings.sender
+        message['To'] = cls.recipient(recipient)
         message['Subject'] = f'{title_prefix} {title}'
         message.attach(MIMEText(body if body is not None else '', 'plain', 'utf-8'))
 
@@ -71,10 +84,10 @@ class Email:
             attachment_group = [attachment_group]
         attachments = []
         for group in attachment_group:
-            if group in self.Attachments:
-                attachments.extend(self.Attachments[group])
+            if group in cls.Attachments:
+                attachments.extend(cls.Attachments[group])
                 if clear_attachments: 
-                    self.Attachments[group] = []
+                    cls.Attachments[group] = []
         attachments = list(set(attachments))
 
         for attachment in attachments:
@@ -87,16 +100,19 @@ class Email:
 
         return message
     
-    def clear_unused_attachments(self):
-        attachments = [f for group in self.Attachments.values() for f in group]
-        for f in self.Attachment_dir.iterdir():
+    @classmethod
+    def clear_unused_attachments(cls):
+        attachments = [f for group in cls.Attachments.values() for f in group]
+        for f in cls.Attachment_dir.iterdir():
             if f not in attachments: 
                 f.unlink()
     
-    def connection(self):
-        return smtplib.SMTP(self.smtp_server, self.smtp_port)
+    @classmethod
+    def connection(cls):
+        return smtplib.SMTP(cls.settings.smtp_server, cls.settings.smtp_port)
 
-    def send(self , title : str  , 
+    @classmethod
+    def send(cls , title : str  , 
              body : str = 'This is test! Hello, World!' ,
              recipient : str | None = None , 
              confirmation_message = '' , attachment_group : str | list[str] = 'default'):
@@ -105,13 +121,13 @@ class Email:
             print('not in my server , skip sending email')
             return
 
-        message = self.message(title , body , recipient , attachment_group = attachment_group)
+        message = cls.message(title , body , recipient , attachment_group = attachment_group)
 
         try:
-            with self.connection() as smtp:
+            with cls.connection() as smtp:
                 smtp.starttls()
-                smtp.login(self.sender, self.password)
-                smtp.sendmail(self.sender, self.recipient(recipient), message.as_string())
+                smtp.login(cls.settings.sender, cls.settings.password)
+                smtp.sendmail(cls.settings.sender, cls.recipient(recipient), message.as_string())
             print(f'sending email success {confirmation_message}')
         except Exception as e:
             print('sending email went wrong:', e)
@@ -126,26 +142,22 @@ def send_email(title : str  ,
         print('not in my server , skip sending email')
         return
     
-    email_conf = email_settings()[server]
-    smtp_server = email_conf['smtp_server']
-    smtp_port   = email_conf['smtp_port']
-    sender      = email_conf['sender']  
-    password    = email_conf['password']  
+    settings = _EmailSettings(server)
 
     if recipient is None: 
-        recipient = str(sender)
+        recipient = str(settings.sender)
     assert recipient , 'recipient is required'
     assert '@' in recipient , f'recipient address must contain @ , got {recipient}'
 
     '''
     message = MIMEText(body , 'plain', 'utf-8')
-    message['From'] = sender
+    message['From'] = settings.sender
     message['To'] = recipient 
     message['Subject'] = title 
     '''
 
     message = MIMEMultipart()
-    message['From'] = sender
+    message['From'] = settings.sender
     message['To'] = recipient
     message['Subject'] = title
     message.attach(MIMEText(body, 'plain', 'utf-8'))
@@ -162,10 +174,10 @@ def send_email(title : str  ,
                 message.attach(part)
 
     try:
-        with smtplib.SMTP(smtp_server, smtp_port) as smtp_connection:
+        with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as smtp_connection:
             smtp_connection.starttls()
-            smtp_connection.login(sender, password)
-            smtp_connection.sendmail(sender, recipient, message.as_string())
+            smtp_connection.login(settings.sender, settings.password)
+            smtp_connection.sendmail(settings.sender, recipient, message.as_string())
         print(f'sending email success {confirmation_message}')
     except Exception as e:
         print('sending email went wrong:', e)

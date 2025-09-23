@@ -1,27 +1,27 @@
-# do not use relative import in this file because it will be running in top-level directory
-from pathlib import Path
 from typing import Generator
 
-from src.func.dynamic_import import dynamic_members
 from src.data.download.tushare.basic import TushareFetcher , TSBackUpDataTransform
 
 class TushareDataDownloader:
     @classmethod
-    def get_fetchers(cls) -> Generator[TushareFetcher , None , None]:
-        task_path = Path(__file__).parent
-        for _ , fetcher in dynamic_members(task_path , subclass_of=TushareFetcher):
+    def iter_fetchers(cls) -> Generator[TushareFetcher , None , None]:
+        """iterate over all tushare fetchers"""
+        TushareFetcher.load_tasks()
+        for fetcher in TushareFetcher.registry.values():
             yield fetcher()
 
     @classmethod
     def update(cls):
+        """update all tushare fetchers"""
         TSBackUpDataTransform.clear()
-        for fetcher in cls.get_fetchers():
+        for fetcher in cls.iter_fetchers():
             fetcher.update()
         TSBackUpDataTransform.update()
 
     @classmethod
     def update_rollback(cls , rollback_date : int):
+        """update all tushare fetchers with rollback date"""
         TSBackUpDataTransform.rollback(rollback_date)
-        for fetcher in cls.get_fetchers():
+        for fetcher in cls.iter_fetchers():
             fetcher.update_rollback(rollback_date)
         TSBackUpDataTransform.update()

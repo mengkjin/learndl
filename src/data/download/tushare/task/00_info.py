@@ -4,16 +4,17 @@ import pandas as pd
 
 from typing import Any
 
-from src.data.download.tushare.basic import InfoFetcher , pro , ts_code_to_secid
+from src.data.download.tushare.basic import InfoFetcher , ts_code_to_secid
  
 class Calendar(InfoFetcher):
+    """A share calendar"""
     DB_KEY = 'calendar'
 
-    def get_data(self , date):
+    def get_data(self , date = None):
         renamer = {'cal_date' : 'calendar' ,
                    'is_open'  : 'trade'}
         fields : str | Any = list(renamer.keys()) if renamer else None
-        df = pro.trade_cal(fields = fields , exchange='SSE').rename(columns=renamer)
+        df = self.pro.trade_cal(fields = fields , exchange='SSE').rename(columns=renamer)
         df = df.sort_values('calendar').reset_index(drop = True)
 
         # process
@@ -27,8 +28,9 @@ class Calendar(InfoFetcher):
         return trd
     
 class Description(InfoFetcher):
+    """A share description"""
     DB_KEY = 'description'
-    def get_data(self , date):
+    def get_data(self , date = None):
         renamer = {
             'ts_code' : 'ts_code' ,
             'name':'sec_name' ,
@@ -39,9 +41,9 @@ class Description(InfoFetcher):
         }
         fields : str | Any = list(renamer.keys())
         df = pd.concat([
-            pro.stock_basic(fields = fields , list_status = 'L') ,
-            pro.stock_basic(fields = fields , list_status = 'D') ,
-            pro.stock_basic(fields = fields , list_status = 'P')
+            self.pro.stock_basic(fields = fields , list_status = 'L') ,
+            self.pro.stock_basic(fields = fields , list_status = 'D') ,
+            self.pro.stock_basic(fields = fields , list_status = 'P')
         ]).rename(columns=renamer)
 
         df = ts_code_to_secid(df , drop_old=False)
@@ -51,11 +53,12 @@ class Description(InfoFetcher):
         return df
     
 class SWIndustry(InfoFetcher):
+    """A share sw industry"""
     DB_KEY = 'industry' 
-    def get_data(self , date):
+    def get_data(self , date = None):
 
-        df1 = self.iterate_fetch(pro.index_member_all , limit = 2000 , is_new = 'Y')
-        df2 = self.iterate_fetch(pro.index_member_all , limit = 2000 , is_new = 'N')
+        df1 = self.iterate_fetch(self.pro.index_member_all , limit = 2000 , is_new = 'Y')
+        df2 = self.iterate_fetch(self.pro.index_member_all , limit = 2000 , is_new = 'N')
 
         df = pd.concat([df1 , df2])
         df = ts_code_to_secid(df)
@@ -65,10 +68,11 @@ class SWIndustry(InfoFetcher):
         return df
     
 class ChangeName(InfoFetcher):
+    """A share change name table (for name change and get st/*st)"""
     DB_KEY = 'change_name'      
-    def get_data(self , date):
+    def get_data(self , date = None):
 
-        df = self.iterate_fetch(pro.namechange , limit = 5000)
+        df = self.iterate_fetch(self.pro.namechange , limit = 5000)
         df = ts_code_to_secid(df)
         df['start_date'] = df['start_date'].fillna(-1).astype(int)
         df['ann_date'] = df['ann_date'].fillna(-1).astype(int)

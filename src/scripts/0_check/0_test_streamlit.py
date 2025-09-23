@@ -54,7 +54,7 @@ def main(txt : str = 'Hello, World!' , **kwargs):
             with Timer('abc'):
                 runner.info(f'this is an info: {str(kwargs)}')
                 runner.info(f'this is an info: {txt}')
-                Logger.add_lazy_message('critical' , f'critical: lazy message')
+                Logger.cache_message('critical' , f'critical: lazy message')
                 runner.warning(f'this is a warning: {txt}')
                 runner.debug(f'this is a debug: {txt}')
                 runner.critical(f'this is a critical: {txt}')

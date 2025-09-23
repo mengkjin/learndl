@@ -1,1 +1,1 @@
-from .task.downloader import TushareDataDownloader
+from .downloader import TushareDataDownloader

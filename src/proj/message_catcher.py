@@ -81,8 +81,8 @@ def _figure_to_base64(fig : Figure | Any):
         critical(f"Error converting figure to base64: {e}")
         return None
     
-@staticmethod
 def _ansi_to_css(ansi_string: str) -> str:
+    """convert ANSI color codes to CSS"""
     mapping =  {
         #'\u001b[0m': '</span>',  # reset
         '\u001b[0m': '</span>',  # reset

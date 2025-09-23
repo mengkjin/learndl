@@ -22,7 +22,7 @@ __all__ = [
 ]
 
 class _FactorProperty:
-    '''get any property of a factor calculator , cached'''
+    """get any property of a factor calculator , cached"""
     def __init__(self , method : str):
         assert method in dir(self) , f'{method} is not in {dir(self)}'
         self.method = method
@@ -37,7 +37,7 @@ class _FactorProperty:
         raise AttributeError(f'{instance.__class__.__name__}.{self.method} is read-only attributes')
 
 class _FactorPropertyStr(_FactorProperty):
-    '''property of factor string'''
+    """property of factor string"""
     def __get__(self,instance,owner) -> str:
         return super().__get__(instance,owner)
 
@@ -48,7 +48,7 @@ class _FactorPropertyStr(_FactorProperty):
         return owner.__qualname__
 
     def level(self , owner) -> str:
-        '''level of the factor'''
+        """level of the factor"""
         module : str = owner.__module__
         module = re.sub(r'[/.\\]' , '.' , module)
         level = re.search(r'.(level\d+).' , module)
@@ -56,16 +56,16 @@ class _FactorPropertyStr(_FactorProperty):
         return level.group(1)
     
     def file_name(self , owner) -> str:
-        '''file name of the factor'''
+        """file name of the factor"""
         return '/'.join(Path(owner.__module__.split('level')[-1]).parts[1:]).removesuffix('.py')
     
     def factor_string(self , owner) -> str:
-        '''full string of the factor'''
+        """full string of the factor"""
         return f'Factor {owner.level}/{owner.category0}/{owner.category1}/{owner.factor_name}'
     
 
 def _calc_factor_wrapper(calc_factor : Callable[['StockFactorCalculator',int],pd.Series]) -> Callable[['StockFactorCalculator',int],pd.Series]:
-    '''
+    """
     check and modify before and after factor value calculation
     before:
         1. date should be >= init_date
@@ -75,7 +75,7 @@ def _calc_factor_wrapper(calc_factor : Callable[['StockFactorCalculator',int],pd
         3. replace infinite values to nan
         4. remove duplicate secid
         5. reindex to secid(date)
-    '''
+    """
     def wrapper(instance : 'StockFactorCalculator' , date : int):
         date = int(date)
         if date < instance.init_date: 
@@ -97,15 +97,15 @@ def _calc_factor_wrapper(calc_factor : Callable[['StockFactorCalculator',int],pd
     return wrapper
 
 class _StockFactorCalculatorMeta(SingletonABCMeta):
-    '''meta class of StockFactorCalculator'''
+    """meta class of StockFactorCalculator"""
     registry : dict[str,Type['StockFactorCalculator'] | Any] = {}
 
     def __new__(cls, name, bases, dct):
-        ''' 
+        """ 
         validate attribute of factor (init_date , description , category0 , category1)
         only if all abstract methods are implemented , then add subclass to registry
         also wrap calc_factor with _calc_factor_wrapper
-        '''
+        """
         new_cls = super().__new__(cls, name, bases, dct)
         abstract_methods = getattr(new_cls , '__abstractmethods__' , None)
         if not abstract_methods:
@@ -135,7 +135,7 @@ class _StockFactorCalculatorMeta(SingletonABCMeta):
         return new_cls
 
 class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
-    '''base class of factor calculator'''
+    """base class of factor calculator"""
     init_date : int = -1
     category1 : Literal['quality' , 'growth' , 'value' , 'earning' , 'surprise' , 'coverage' , 'forecast' , 
                         'adjustment' , 'hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity' , 
@@ -161,21 +161,21 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
         return f'{self.factor_name.capitalize()} Calculator(init_date={self.init_date},category0={self.category0},category1={self.category1},description={self.description})'
     
     def __call__(self , date : int):
-        '''return factor value of a given date , calculate if not exist'''
+        """return factor value of a given date , calculate if not exist"""
         return self.calc_factor(date)
 
     @abstractmethod
     def calc_factor(self , date : int) -> pd.Series:
-        '''calculate factor value , must have secid and factor_value / factor_name columns'''
+        """calculate factor value , must have secid and factor_value / factor_name columns"""
 
     def load_factor(self , date : int) -> pd.Series:
-        '''load factor value of a given date'''
+        """load factor value of a given date"""
         df = DB.factor_load(self.factor_name , date , verbose = False)
         df = pd.Series() if df.empty else df.set_index('secid').loc[:,self.factor_name]
         return df
 
     def eval_factor(self , date : int , verbose : bool = False) -> pd.Series:
-        '''get factor value of a given date , load if exist , calculate if not exist'''
+        """get factor value of a given date , load if exist , calculate if not exist"""
         try:
             df = self.load_factor(date)
         except Exception as e:
@@ -190,7 +190,7 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
         return df
 
     def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
-        '''store factor data after calculate'''
+        """store factor data after calculate"""
         if not overwrite and DB.factor_path(self.factor_name , date).exists(): 
             return False
         df = self.calc_factor(date)
@@ -200,23 +200,23 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
 
     @classmethod
     def Calc(cls , date : int) -> pd.Series:
-        '''calculate factor value of a given date'''
+        """calculate factor value of a given date"""
         return cls().calc_factor(date)
     
     @classmethod
     def Load(cls , date : int) -> pd.Series:
-        '''load factor value of a given date'''
+        """load factor value of a given date"""
         return cls().load_factor(date)
 
     @classmethod
     def Loads(cls , start : int | None = None , end : int | None = None) -> pd.DataFrame:
-        '''load factor values of a given date range'''
+        """load factor values of a given date range"""
         dates = CALENDAR.slice(cls.stored_dates() , start , end)
         return DB.factor_load_multi(cls.factor_name , dates)
 
     @classmethod
     def Eval(cls , date : int) -> pd.Series:
-        '''get factor value of a given date , load if exist , calculate if not exist'''
+        """get factor value of a given date , load if exist , calculate if not exist"""
         return cls().eval_factor(date)
 
     @classmethod
@@ -224,7 +224,7 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
                fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
                weighted_whiten = False , order = ['fillna' , 'whiten' , 'winsor'] ,
                multi_thread = True , ignore_error = True , verbose = False) -> StockFactor:
-        '''get factor values of a given date range , load if exist , calculate if not exist'''
+        """get factor values of a given date range , load if exist , calculate if not exist"""
         assert step % CONF.UPDATE['step'] == 0 , f'step {step} should be a multiple of {CONF.UPDATE["step"]}'
         dates = CALENDAR.slice(cls.FACTOR_CALENDAR , start , end)
         dates = dates[dates <= CALENDAR.updated()][::int(step/CONF.UPDATE['step'])]
@@ -242,18 +242,18 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
 
     @classmethod
     def FastTest(cls , start : int | None = 20170101 , end : int | None = None , step : int = 10 , **kwargs) -> StockFactor:
-        '''fast test of factor values of a given date range'''
+        """fast test of factor values of a given date range"""
         factor = cls.Factor(start , end , step , **kwargs)
         factor.fast_analyze()
         return factor
 
     @classmethod
     def validate_value(cls , df : pd.Series , date : int , strict = False) -> pd.Series:
-        '''
+        """
         validate factor value of a given date
         1. valid count should be >= UPDATE_MIN_VALID_COUNT_STRICT or UPDATE_MIN_VALID_COUNT_RELAX
         2. factor_value must not have infinite values
-        '''
+        """
         actual_valid_count = df.notna().sum()
 
         mininum_valid_count = cls.UPDATE_MIN_VALID_COUNT_STRICT
@@ -270,7 +270,7 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
 
     @classmethod
     def target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False , force = False) -> np.ndarray:
-        '''returntarget dates of factor updates'''
+        """returntarget dates of factor updates"""
         start = start if start is not None else cls.init_date
         end   = end   if end   is not None else 99991231
         dates = CALENDAR.slice(cls.FACTOR_CALENDAR if force else cls.FACTOR_TARGET_DATES , start , end)
@@ -280,106 +280,106 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
     
     @classmethod
     def stored_dates(cls) -> np.ndarray:
-        '''return stored dates of factor data'''
+        """return stored dates of factor data"""
         return DB.factor_dates(cls.factor_name)
 
     @classmethod
     def min_date(cls) -> int:
-        '''return minimum date of stored factor data'''
+        """return minimum date of stored factor data"""
         return DB.factor_min_date(cls.factor_name)
 
     @classmethod
     def max_date(cls) -> int:
-        '''return maximum date of stored factor data'''
+        """return maximum date of stored factor data"""
         return DB.factor_max_date(cls.factor_name)
     
     @classmethod
     def has_date(cls , date : int) -> bool:
-        '''check if factor data exists for a given date'''
+        """check if factor data exists for a given date"""
         return DB.factor_path(cls.factor_name , date).exists()
 
     @classmethod
     def collect_jobs(cls , start : int | None = None , end : int | None = None , 
                      overwrite = False , **kwargs) -> None:
-        '''collect update jobs of this factor within a given date range'''
+        """collect update jobs of this factor within a given date range"""
         from src.res.factor.calculator.factor_update import UPDATE_JOBS
         UPDATE_JOBS.collect_jobs(start , end , overwrite = overwrite , **kwargs , factor_name = cls.factor_name)
 
     @classmethod
     def update(cls , verbosity : int = 1 , **kwargs) -> None:
-        '''update factor data to the latest date'''
+        """update factor data to the latest date"""
         from src.res.factor.calculator.factor_update import UPDATE_JOBS
         cls.collect_jobs(overwrite = False , **kwargs)
         UPDATE_JOBS.process_jobs(verbosity , overwrite = False)
 
 class QualityFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: fundamental , category1: quality'''
+    """Factor Calculator of category0: fundamental , category1: quality"""
     category1 = 'quality'
 
 class GrowthFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: fundamental , category1: growth'''
+    """Factor Calculator of category0: fundamental , category1: growth"""
     category1 = 'growth'
 
 class ValueFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: fundamental , category1: value'''
+    """Factor Calculator of category0: fundamental , category1: value"""
     category1 = 'value'
 
 class EarningFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: fundamental , category1: earning'''
+    """Factor Calculator of category0: fundamental , category1: earning"""
     category1 = 'earning'
 
 class SurpriseFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: analyst , category1: surprise'''
+    """Factor Calculator of category0: analyst , category1: surprise"""
     category1 = 'surprise'
 
 class CoverageFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: analyst , category1: coverage'''
+    """Factor Calculator of category0: analyst , category1: coverage"""
     category1 = 'coverage'
 
 class ForecastFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: analyst , category1: forecast'''
+    """Factor Calculator of category0: analyst , category1: forecast"""
     category1 = 'forecast'
 
 class AdjustmentFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: analyst , category1: adjustment'''
+    """Factor Calculator of category0: analyst , category1: adjustment"""
     category1 = 'adjustment'
 
 class HfMomentumFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: high_frequency , category1: hf_momentum'''
+    """Factor Calculator of category0: high_frequency , category1: hf_momentum"""
     category1 = 'hf_momentum'
 
 class HfVolatilityFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: high_frequency , category1: hf_volatility'''
+    """Factor Calculator of category0: high_frequency , category1: hf_volatility"""
     category1 = 'hf_volatility'
 
 class HfCorrelationFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: high_frequency , category1: hf_correlation'''
+    """Factor Calculator of category0: high_frequency , category1: hf_correlation"""
     category1 = 'hf_correlation'
 
 class HfLiquidityFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: high_frequency , category1: hf_liquidity'''
+    """Factor Calculator of category0: high_frequency , category1: hf_liquidity"""
     category1 = 'hf_liquidity'
 
 class MomentumFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: behavior , category1: momentum'''
+    """Factor Calculator of category0: behavior , category1: momentum"""
     category1 = 'momentum'
 
 class VolatilityFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: behavior , category1: volatility'''
+    """Factor Calculator of category0: behavior , category1: volatility"""
     category1 = 'volatility'
 
 class CorrelationFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: behavior , category1: correlation'''
+    """Factor Calculator of category0: behavior , category1: correlation"""
     category1 = 'correlation'
 
 class LiquidityFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: behavior , category1: liquidity'''
+    """Factor Calculator of category0: behavior , category1: liquidity"""
     category1 = 'liquidity'
 
 class HoldingFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: money_flow , category1: holding'''
+    """Factor Calculator of category0: money_flow , category1: holding"""
     category1 = 'holding'
 
 class TradingFactor(StockFactorCalculator):
-    '''Factor Calculator of category0: money_flow , category1: trading'''
+    """Factor Calculator of category0: money_flow , category1: trading"""
     category1 = 'trading'

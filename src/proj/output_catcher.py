@@ -5,7 +5,15 @@ from io import StringIO
 from pathlib import Path
 
 class OutputDeflector:
-    """double output stream: output to console and catcher"""
+    """
+    double output stream: deflect output to catcher and original output stream (optional)
+    example:
+        catcher = IOCatcher()
+        with OutputDeflector('stdout', catcher, keep_original=True):
+            print('This will be deflected to catcher')
+        with OutputDeflector('stderr', catcher, keep_original=False):
+            Logger.info('This will be deflected to catcher')
+    """
     def __init__(
             self, 
             type : Literal['stdout' , 'stderr'] ,
@@ -23,7 +31,8 @@ class OutputDeflector:
     def __repr__(self):
         return f'{self.__class__.__name__}(original={self.original_output}, catcher={self.catcher}, type={self.type})'
     
-    def _null_initialize(self):
+    def _null_initialize(self) -> None:
+        """Null initialize the deflector"""
         self.original_output = None
         self.is_catching = False
         if hasattr(self, '_catcher_write'):
@@ -32,7 +41,8 @@ class OutputDeflector:
             del self._catcher_flush
 
     @property
-    def original_std(self):
+    def original_std(self) -> 'OutputDeflector | IO | OutputCatcher':
+        """Get the original output stream"""
         if self.original_output is not None:
             return self.original_output
         elif self.type == 'stdout':
@@ -42,23 +52,32 @@ class OutputDeflector:
         else:
             raise ValueError(f"Invalid type: {self.type}")
         
-    def catcher_write(self , text : str | Any):
+    def catcher_write(self , text : str | Any) -> None:
+        """Write to the catcher"""
         if not hasattr(self, '_catcher_write'):
             self._catcher_write = getattr(self.catcher, self.catcher_function , lambda *x: None)
         self._catcher_write(text)
 
-    def catcher_flush(self):
+    def catcher_flush(self) -> None:
+        """Flush the catcher"""
         if not hasattr(self, '_catcher_flush'):
             self._catcher_flush = getattr(self.catcher, 'flush' , lambda: None)
         self._catcher_flush()
 
-    def original_write(self, text : str | Any):
+    def original_write(self, text : str | Any) -> None:
+        """Write to the original output stream"""
         self.original_std.write(text)
 
-    def original_flush(self):
+    def original_flush(self) -> None:
+        """Flush the original output stream"""
         self.original_std.flush()
 
     def start_catching(self):
+        """
+        Start catching of the output stream
+        1. redirect stdout/stderr to the deflector
+        2. set the deflector to catching mode
+        """
         if self.type == 'stdout':
             self.original_output = sys.stdout
             sys.stdout = self
@@ -71,6 +90,12 @@ class OutputDeflector:
         return self
     
     def end_catching(self):
+        """
+        End catching of the output stream
+        1. reset stdout/stderr to original output stream
+        2. close the deflector
+        3. null initialize the deflector
+        """
         if self.type == 'stdout':
             sys.stdout = self.original_output
         elif self.type == 'stderr':
@@ -81,20 +106,22 @@ class OutputDeflector:
         self._null_initialize()
         return self
             
-    def write(self, text : str | Any):
-        # output to console
+    def write(self, text : str | Any) -> None:
+        """Write to the catcher (if catching) and original output stream (if keep_original)"""
         if not self.is_catching or self.keep_original:
             self.original_write(text)
         if self.is_catching:
             self.catcher_write(text)
         self.flush()
         
-    def flush(self):
+    def flush(self) -> None:
+        """Flush the original output stream and the catcher"""
         self.original_std.flush()
         if self.is_catching:
             self.catcher_flush()
 
-    def close(self):
+    def close(self) -> None:
+        """Close the catcher"""
         if isinstance(self.catcher, IO):
             try:
                 self.catcher.close()
@@ -103,6 +130,11 @@ class OutputDeflector:
                 raise e
 
 class OutputCatcher(ABC):
+    """
+    Abstract base class for output catcher for stdout and stderr
+    must implement the get_contents method
+    can rewrite the stdout_catcher/stderr_catcher or stdout_deflector/stderr_deflector
+    """
     keep_original : bool = True
 
     def __init__(self):
@@ -133,6 +165,14 @@ class OutputCatcher(ABC):
         return self.get_contents()
     
 class IOCatcher(OutputCatcher):
+    """
+    Output catcher into StringIO for stdout and stderr
+    example:
+        catcher = IOCatcher()
+        with catcher:
+            print('This will be caught')
+        contents = catcher.contents
+    """
     keep_original = False
     
     def __init__(self):
@@ -153,7 +193,14 @@ class IOCatcher(OutputCatcher):
         self.stderr_catcher.truncate(0)
 
 class LogWriter(OutputCatcher):
-    '''change print target to both terminal and file'''
+    """
+    Output catcher into log file for stdout and stderr
+    example:
+        catcher = LogWriter('log.txt')
+        with catcher:
+            print('This will be caught')
+        contents = catcher.contents
+    """
     def __init__(self, log_path : str | Path | None = None):
         self.log_path = log_path
         if log_path is None: 

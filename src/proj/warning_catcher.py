@@ -2,16 +2,23 @@ import warnings
 import traceback
 
 class WarningCatcher:
-    '''catch specific warnings and show call stack'''
+    """
+    catch specific warnings and show call stack
+    example:
+        with WarningCatcher(['This will raise an exception']):
+            print('This will raise an exception')
+    """
     def __init__(self , catch_warnings : list[str] | None = None):
         self.warnings_caught = []
         self.original_showwarning = warnings.showwarning
         warnings.filterwarnings('always')
-        self.catch_warnings = catch_warnings or []
+        self.catch_warnings = [] if catch_warnings is None else [c.lower() for c in catch_warnings]
+        
     
-    def custom_showwarning(self, message, category, filename, lineno, file=None, line=None):
+    def custom_showwarning(self, message, category, filename, lineno, file=None, line=None) -> None:
+        """Custom warning show function to catch specific warnings and show call stack"""
         # only catch the warnings we care about
-        if any(c in str(message) for c in self.catch_warnings):
+        if any(c in str(message).lower() for c in self.catch_warnings):
             stack = traceback.extract_stack()
             print(f"\n caught warning: {message}")
             print(f"warning location: {filename}:{lineno}")

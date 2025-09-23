@@ -6,12 +6,12 @@ from src.basic import CALENDAR , DB
 from .func import ts_code_to_secid
 
 class TSBackUpDataTransform():
-    '''Daily Quote'''
+    """use csv backup data downloaded from tushare to transform to database"""
     REQUIRED_KEYS = ['adj_factor' , 'daily' , 'daily_basic' , 'moneyflow' , 'stk_limit']
     DB_KEYS = ['day' , 'day_val' , 'day_moneyflow' , 'day_limit']
     
-    
     def get_bak_data(self , date : int , key : str):
+        """get backup data from csv"""
         assert key in self.REQUIRED_KEYS , f'{key} is not in {self.REQUIRED_KEYS}'
         date_str = str(date)
         record_file = PATH.bak_data.joinpath(f'{key}_{date_str}.csv')
@@ -20,6 +20,7 @@ class TSBackUpDataTransform():
         return df
 
     def day(self , date : int):
+        """transform daily quote data"""
         adj = self.get_bak_data(date , 'adj_factor').rename(columns={'adj_factor':'adjfactor'})
 
         quote = self.get_bak_data(date , 'daily').rename(columns={'pct_change':'pctchange','pre_close':'preclose','vol':'volume'})
@@ -55,22 +56,26 @@ class TSBackUpDataTransform():
         return trade
     
     def day_val(self , date : int):
+        """transform daily valuation data"""
         val = self.get_bak_data(date , 'daily_basic')
         val.loc[:,['total_share','float_share','free_share','total_mv','circ_mv']] *= 1e4
         val = ts_code_to_secid(val).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return val
     
     def day_moneyflow(self , date : int):
+        """transform daily moneyflow data"""
         mf = self.get_bak_data(date , 'moneyflow')
         mf = ts_code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return mf
     
     def day_limit(self , date : int):
+        """transform daily limit data"""
         lmt = self.get_bak_data(date , 'stk_limit')
         lmt = ts_code_to_secid(lmt).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return lmt
     
     def transform(self , date : int):
+        """transform all data"""
         db_src = 'trade_ts'
         self.path_record(date).touch()
         for db_key in self.DB_KEYS:
@@ -78,19 +83,23 @@ class TSBackUpDataTransform():
             DB.db_save(data , db_src , db_key , date)
 
     def db_path(self , date : int , db_key : str):
+        """get database path"""
         assert db_key in self.DB_KEYS , f'{db_key} is not in {self.DB_KEYS}'
         return DB.db_path('trade_ts' , db_key , date)
 
     def db_path_backed(self , date : int , db_key : str):
+        """get database path with backed suffix"""
         assert db_key in self.DB_KEYS , f'{db_key} is not in {self.DB_KEYS}'
         return DB.db_path('trade_ts' , f'{db_key}.backed' , date)
     
     def db_path_backed_old(self , date : int , db_key : str):
+        """get database path with backed old suffix"""
         assert db_key in self.DB_KEYS , f'{db_key} is not in {self.DB_KEYS}'
         path = self.db_path(date , db_key)
         return path.with_name(f'.{path.name}.bak')
 
     def clear_day(self , date : int):
+        """clear all previous transformed backed data"""
         if self.path_record(date).exists():
             for db_key in self.DB_KEYS:
                 path = self.db_path(date , db_key)
@@ -107,6 +116,7 @@ class TSBackUpDataTransform():
             self.path_record(date).unlink()
 
     def clear_backed(self , date : int):
+        """clear all backed data"""
         for db_key in self.DB_KEYS:
             backed_path = self.db_path_backed(date , db_key)
             backed_old_path = self.db_path_backed_old(date , db_key)
@@ -116,34 +126,41 @@ class TSBackUpDataTransform():
                 backed_old_path.unlink()
 
     def path_record(self , date : int):
+        """get backed record path"""
         return PATH.bak_record.joinpath(f'{date}.backed')
 
     def get_baked_dates(self):
+        """get all backed dates"""
         return [int(file.stem) for file in PATH.bak_record.glob('*.backed')]
 
     def get_bakable_dates(self):
+        """get all bakable dates (has csv files)"""
         dates = CALENDAR.td_within(start_dt = CALENDAR.td(CALENDAR.updated() , 1) , end_dt = CALENDAR.update_to())
         dates = [date for date in dates if self.bakable_date(date)]
         return dates
     
     def bakable_date(self , date : int):
+        """check if a date is bakable (has all required csv files)"""
         paths = [PATH.bak_data.joinpath(f'{key}_{date}.csv') for key in self.REQUIRED_KEYS]
         return all([path.exists() for path in paths])
     
     @classmethod
     def update(cls):
+        """update all bakable dates"""
         transformer = cls()
         for date in transformer.get_bakable_dates():
             transformer.transform(date)
 
     @classmethod
     def clear(cls):
+        """clear all backed date data"""
         transformer = cls()
         for date in transformer.get_baked_dates():
             transformer.clear_day(date)
 
     @classmethod
     def rollback(cls , rollback_date : int):
+        """rollback all backed date data"""
         transformer = cls()
         start_date = CALENDAR.td(rollback_date)
         end_date = CALENDAR.td(CALENDAR.update_to())

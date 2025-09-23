@@ -1,10 +1,19 @@
 # please check this path before running the code
 import shutil , yaml , time , os
 from pathlib import Path
+from typing import Any
 
 from .machine import MachineSetting
 
 class PathStructure:
+    """
+    Path structure for the project
+    example:
+        PATH.main
+        PATH.scpt
+        PATH.fac_def
+        PATH.conf
+    """
     main        = Path(MachineSetting.get_main_path())
     scpt        = main.joinpath('src' , 'scripts')
     fac_def     = main.joinpath('src' , 'res' , 'facdef')
@@ -68,7 +77,8 @@ class PathStructure:
         self.initialize_path()
 
     @staticmethod
-    def read_yaml(yaml_file : str | Path , **kwargs):
+    def read_yaml(yaml_file : str | Path , **kwargs) -> Any:
+        """Read yaml file"""
         if isinstance(yaml_file , str):
             yaml_file = Path(yaml_file)
         if isinstance(yaml_file , Path) and yaml_file.suffix == '' and yaml_file.with_name(f'{yaml_file.name}.yaml').exists():
@@ -82,49 +92,56 @@ class PathStructure:
         return d
 
     @staticmethod
-    def dump_yaml(data , yaml_file , **kwargs):
+    def dump_yaml(data , yaml_file , **kwargs) -> None:
+        """Dump data to yaml file"""
         with open(yaml_file , 'a' if os.path.exists(yaml_file) else 'w') as f:
             yaml.dump(data , f , **kwargs)
 
     @staticmethod
-    def copytree(src , dst):
+    def copytree(src : str | Path , dst : str | Path) -> None:
+        """Copy entire directory"""
         shutil.copytree(src , dst)
 
     @staticmethod
-    def copyfiles(src , dst , bases):
+    def copyfiles(src : str | Path , dst : str | Path , bases : list[str]) -> None:
+        """Copy files from source to destination"""
         [shutil.copyfile(f'{src}/{base}' , f'{dst}/{base}') for base in bases]
 
     @staticmethod
-    def deltrees(dir , bases , verbose = True):
+    def deltrees(dir : str | Path , bases : list[str] , verbose = True) -> None:
+        """Delete sub folders in the directory"""
         for base in bases:
             if verbose: 
                 print(f'Deleting {base} in {dir}')
             shutil.rmtree(f'{dir}/{base}')
 
     @staticmethod
-    def file_modified_date(path : Path | str , default = 19970101):
+    def file_modified_date(path : Path | str , default = 19970101) -> int:
+        """Get the modified date of the file"""
         if Path(path).exists():
             return int(time.strftime('%Y%m%d',time.localtime(os.path.getmtime(path))))
         else:
             return default
 
     @staticmethod
-    def file_modified_time(path : Path | str , default = 19970101000000):
+    def file_modified_time(path : Path | str , default = 19970101000000) -> int:
+        """Get the modified time of the file"""
         if Path(path).exists():
             return int(time.strftime('%Y%m%d%H%M%S',time.localtime(os.path.getmtime(path))))
         else:
             return default
         
     @classmethod
-    def initialize_path(cls):
+    def initialize_path(cls) -> None:
+        """Initialize the all paths under the main path"""
         for name in dir(cls):
             member = getattr(cls , name)
             if isinstance(member , Path) and member.is_relative_to(cls.main):
                 member.mkdir(parents=True , exist_ok=True)
 
     @classmethod
-    def list_files(cls , directory : str | Path , fullname = False , recur = False):
-        '''list all files in directory'''
+    def list_files(cls , directory : str | Path , fullname = False , recur = False) -> list[Path]:
+        """List all files in directory"""
         if isinstance(directory , str): 
             directory = Path(directory)
         if recur:
@@ -137,7 +154,8 @@ class PathStructure:
         return paths
 
     @staticmethod
-    def filter_paths(paths : list[Path] , ignore_prefix = ('.' , '~')):
+    def filter_paths(paths : list[Path] , ignore_prefix = ('.' , '~')) -> list[Path]:
+        """Filter paths by ignoring certain prefixes"""
         return [p for p in paths if not p.name.startswith(ignore_prefix)]
             
 PATH = PathStructure()

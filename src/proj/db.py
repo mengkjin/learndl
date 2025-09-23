@@ -16,6 +16,13 @@ sqlite3.register_adapter(datetime, adapt_datetime)
 sqlite3.register_converter("TIMESTAMP", convert_datetime)
 
 class DBConnHandler:
+    """
+    Handler for sqlite database connection
+    example:
+        with DBConnHandler('path/to/db.db') as (conn, cursor):
+            cursor.execute('SELECT * FROM table')
+            print(cursor.fetchall())
+    """
     def __init__(self, db_path: str | Path):
         self.db_path = Path(db_path)
         self.reset()
@@ -24,8 +31,8 @@ class DBConnHandler:
         self.check_same_thread = False
         
     @staticmethod
-    def get_connection(db_path: str | Path , check_same_thread: bool = True):
-        """Get database connection(using Streamlit cache)"""
+    def get_connection(db_path: str | Path , check_same_thread: bool = True) -> sqlite3.Connection:
+        """Get database connection"""
         conn = sqlite3.connect(str(db_path), check_same_thread=check_same_thread)
         conn.row_factory = sqlite3.Row  # allow to access rows as dictionaries
         return conn
@@ -44,7 +51,8 @@ class DBConnHandler:
         self.reset()
         self.conn.__exit__(exc_type, exc_value, exc_tb)
 
-    def get_backup_path(self , suffix : str | None = None):
+    def get_backup_path(self , suffix : str | None = None) -> Path:
+        """Get database a backup path"""
         if suffix is None:
             suffix = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_name = f'{self.db_path.stem}_{suffix}'
@@ -52,10 +60,11 @@ class DBConnHandler:
         d.mkdir(parents=True, exist_ok=True)
         return d / f'{backup_name}.db'
     
-    def all_backup_paths(self):
+    def all_backup_paths(self) -> list[Path]:
+        """Get all backup paths that match the database name"""
         return list(self.db_path.parent.glob(f'backup/{self.db_path.stem}_*.db'))
     
-    def backup(self, suffix: str | None = None):
+    def backup(self, suffix: str | None = None) -> Path:
         """
         Backup database and rename the original database
         :param suffix: backup suffix, if not specified, use timestamp
@@ -65,11 +74,13 @@ class DBConnHandler:
         shutil.copy(self.db_path, backup_path)
         return backup_path
     
-    def get_table_names(self):
+    def get_table_names(self) -> list[str]:
+        """Get all table names in the database"""
         with self() as (conn, cursor):
             return cursor.execute('SELECT name FROM sqlite_master WHERE type = "table"').fetchall()
 
-    def restore(self, backup_path: Path | str, delete_backup: bool = False):
+    def restore(self, backup_path: Path | str, delete_backup: bool = False) -> None:
+        """Restore database from a backup path"""
         backup_path = Path(backup_path)
         assert backup_path.exists() , f'Backup file {backup_path} does not exist'
         assert backup_path.stem == self.db_path.stem , f'Backup file {backup_path} is not for {self.db_path}'

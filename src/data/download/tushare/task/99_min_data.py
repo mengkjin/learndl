@@ -1,9 +1,9 @@
 # do not use relative import in this file because it will be running in top-level directory
 import tushare as ts
 
-from src.data.download.tushare.basic import pro
+from src.data.download.tushare.basic import TS_PARAMS
 
 if __name__ == '__main__':
-    df = ts.pro_bar(ts_code='600000.SH', api = pro , freq='1min', 
+    df = ts.pro_bar(ts_code='600000.SH', api = TS_PARAMS.pro , freq='1min', 
                     start_date='2024-11-05 00:00:00', 
                     end_date='2024-11-05 17:00:00')

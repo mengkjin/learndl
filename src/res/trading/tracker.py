@@ -33,7 +33,7 @@ class TradingPortfolioTracker:
                 message = f'Port {port_name} : total {len(new_ports[port_name])} , in {in_count} , out {out_count}'
                 print(f'    {message}')
                 if port_name in FOCUSED_PORTS:
-                    Logger.add_lazy_message('critical' , message)
+                    Logger.cache_message('critical' , message)
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)
             Email.Attach(path)

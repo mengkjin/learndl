@@ -6,7 +6,7 @@ from src.basic import CALENDAR
 from src.data.util.basic.transform import secid_adjust
 
 def ts_code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , drop_old = True , ashare = True):
-    '''switch old symbol into secid'''
+    """switch old symbol into secid"""
     if code_col not in df.columns.values: 
         return df
     if ashare: 
@@ -19,6 +19,7 @@ def ts_code_to_secid(df : pd.DataFrame , code_col = 'ts_code' , drop_old = True 
     return df
 
 def updatable(last_date , freq : Literal['d' , 'w' , 'm'] , update_to : int | None = None):
+    """check if the date is updatable given last date and frequency"""
     update_to = update_to or CALENDAR.update_to()
     if freq == 'd':
         return update_to > last_date
@@ -28,6 +29,7 @@ def updatable(last_date , freq : Literal['d' , 'w' , 'm'] , update_to : int | No
         return ((update_to // 100) % 100) != ((last_date // 100) % 100)
     
 def dates_to_update(last_date , freq : Literal['d' , 'w' , 'm'] , update_to : int | None = None):
+    """get dates to update given last date and frequency"""
     update_to = update_to or CALENDAR.update_to()
     if last_date >= update_to: 
         return np.array([])
@@ -42,7 +44,7 @@ def dates_to_update(last_date , freq : Literal['d' , 'w' , 'm'] , update_to : in
     return np.sort(date_list)
 
 def adjust_precision(df : pd.DataFrame , tol = 1e-8 , dtype_float = np.float32 , dtype_int = np.int64):
-    '''adjust precision for df columns'''
+    """adjust precision for df columns"""
     for col in df.columns:
         if np.issubdtype(df[col].to_numpy().dtype , np.floating): 
             df[col] = df[col].astype(dtype_float)
