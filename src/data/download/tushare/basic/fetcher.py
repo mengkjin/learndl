@@ -100,12 +100,12 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
     @property
     def use_date_type(self) -> bool:
         """whether to use date type for the database"""
-        return self.DB_TYPE == 'info'
+        return self.DB_TYPE != 'info'
     
     def target_path(self , date : int | Any = None) -> Path:
         """get target path in database for date"""
         if self.use_date_type:  
-            assert date is not None
+            assert date is not None , f'{self.__class__.__name__} use date type but date is None'
         else: 
             date = None
         return DB.db_path(self.DB_SRC , self.DB_KEY , date)
@@ -113,13 +113,13 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
     def fetch_and_save(self , date : int | Any = None) -> None:
         """fetch from tushare and save data to database"""
         if self.use_date_type:  
-            assert date is not None
+            assert date is not None , f'{self.__class__.__name__} use date type but date is None'
         DB.db_save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
 
     def set_rollback_date(self , rollback_date : int | None = None):
         """set rollback date to the fetcher for update rollback"""
         CALENDAR.check_rollback_date(rollback_date)
-        assert not hasattr(self , '_rollback_date') , 'rollback_date has been set'
+        assert not hasattr(self , '_rollback_date') , f'{self.__class__.__name__} rollback_date has been set'
         self._rollback_date = rollback_date
 
     @property
@@ -131,9 +131,9 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         """last date that has data of the database"""
         if self.use_date_type:
             dates = DB.db_dates(self.DB_SRC , self.DB_KEY)
-            ldate =  max(dates) if len(dates) else self.START_DATE
+            ldate = max(dates) if len(dates) else self.START_DATE
         else:
-            ldate =  PATH.file_modified_date(self.target_path() , self.START_DATE)
+            ldate = PATH.file_modified_date(self.target_path() , self.START_DATE)
         if self.rollback_date: 
             ldate = min(ldate , self.rollback_date)
         return ldate
@@ -281,8 +281,8 @@ class RollingFetcher(TushareFetcher):
 
     def __init__(self):
         super().__init__()
-        assert self.ROLLING_BACK_DAYS > 0 , 'ROLLING_BACK_DAYS must be positive'
-        assert self.ROLLING_SEP_DAYS > 0 , 'ROLLING_BACK_DAYS must be positive'
+        assert self.ROLLING_BACK_DAYS > 0 , f'{self.__class__.__name__} ROLLING_BACK_DAYS must be positive'
+        assert self.ROLLING_SEP_DAYS > 0 , f'{self.__class__.__name__} ROLLING_BACK_DAYS must be positive'
 
     def get_update_dates(self):
         """get update dates for rolling fetcher"""

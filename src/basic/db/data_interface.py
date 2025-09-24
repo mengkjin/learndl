@@ -181,7 +181,7 @@ def db_path(db_src , db_key , date = None , use_alt = False) -> Path:
         parent = _path.database.joinpath(f'DB_{db_src}')
         base = f'{db_key}.{SAVE_OPT_DB}'
     elif db_src in DB_BY_DATE:
-        assert date is not None
+        assert date is not None , f'{db_src} use date type but date is None'
         parent = _path.database.joinpath(f'DB_{db_src}' , db_key , str(int(date) // 10000))
         base = f'{db_key}.{str(date)}.{SAVE_OPT_DB}'
     else:
@@ -380,7 +380,7 @@ def factor_load_multi(factor_name : str , dates = None , start_dt = None , end_d
 
 @_laptop_func_deprecated
 def get_source_dates(db_src , db_key):
-    assert db_src in DB_BY_DATE
+    assert db_src in DB_BY_DATE , f'{db_src} not in {DB_BY_DATE}'
     return R_source_dates(db_src , db_key)
 
 def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswith = '') -> list:
