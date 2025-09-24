@@ -41,7 +41,7 @@ class SolverInput:
     def relaxable(self): return bool(self.relaxer)
 
     def check(self):
-        assert self.alpha.ndim == 1
+        assert self.alpha.ndim == 1 , self.alpha.ndim
         N = len(self.alpha)
         self.lin_con.check(N)
         self.bnd_con.check(N)

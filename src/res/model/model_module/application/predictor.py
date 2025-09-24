@@ -133,7 +133,7 @@ class ModelPredictor:
         dates : Any = df[date_col].unique()
         dates = np.sort(dates)[-window:]
         df = df.query(f'{date_col} in @dates')
-        assert isinstance(df , pd.DataFrame)
+        assert isinstance(df , pd.DataFrame) , f'{type(df)} is not a DataFrame'
         return df.pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()
     
     @classmethod

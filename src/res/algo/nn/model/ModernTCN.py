@@ -26,7 +26,8 @@ class ModernTCN(nn.Module):
 
         super().__init__()
 
-        assert head_type in ['pretrain', 'prediction'], 'head type should be either pretrain, prediction, or regression'
+        assert head_type in ['pretrain', 'prediction'], \
+            f'head type should be either pretrain, prediction, or regression, but got {head_type}'
         self.nvars = nvars
         self.head_type = head_type
         if stride is None: 

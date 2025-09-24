@@ -47,7 +47,7 @@ def baostock_past_dates(file_type : Literal['secdf' , '5min']):
     return past_dates
     
 def updated_dates(x_min : int = 5):
-    assert x_min in [5 , 10 , 15 , 30 , 60]
+    assert x_min in [5 , 10 , 15 , 30 , 60] , f'{x_min} is not in [5 , 10 , 15 , 30 , 60]'
     return DB.db_dates('trade_ts' , f'{x_min}min')
 
 def updatable(date , last_date):
@@ -122,7 +122,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
             for i , code in enumerate(task_codes):
                 rs = bs.query_history_k_data_plus(code, 'date,time,code,open,high,low,close,volume,amount,adjustflag',
                                                   start_date=start_date_str,end_date=end_date_str,frequency='5', adjustflag='3')
-                assert rs is not None
+                assert rs is not None , f'{rs} is None , corrupted data'
                 result = rs.get_data()
                 if isinstance(result , pd.DataFrame):
                     result.to_feather(tmp_file_path(start_dt , end_dt , code))

@@ -59,7 +59,7 @@ class StockBound:
         if idx is None: 
             self.ub = update_func(self.ub , new_val)
         else:
-            assert idx.dtype == bool
+            assert idx.dtype == bool , idx.dtype
             if isinstance(new_val , np.ndarray): 
                 new_val = new_val[idx]
             if not isinstance(self.ub , np.ndarray): 
@@ -75,7 +75,7 @@ class StockBound:
         if idx is None: 
             self.lb = update_func(self.lb , new_val)
         else:
-            assert idx.dtype == bool
+            assert idx.dtype == bool , idx.dtype
             if isinstance(new_val , np.ndarray):
                 new_val = new_val[idx]
             if not isinstance(self.lb , np.ndarray): 

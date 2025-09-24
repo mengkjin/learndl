@@ -30,7 +30,8 @@ class block_tra(nn.Module):
     
     def forward(self , x : Tensor , hist_loss : Tensor | None = None , y : Tensor | None = None) -> tuple[Tensor , dict]:
         if self.num_states > 1:
-            assert hist_loss is not None and y is not None
+            assert hist_loss is not None and y is not None , \
+                f'{self.__class__.__name__} hist_loss or y are None'
 
             preds = self.predictors(x)
 
@@ -90,7 +91,7 @@ class block_tra(nn.Module):
     
     def loss_opt_transport(self , preds : Tensor , label : Tensor) -> Tensor:
         '''special penalty for tra'''
-        assert self.probs is not None
+        assert self.probs is not None , f'{self.__class__.__name__} probs are None'
         self.global_steps += 1
         square_error = (preds - label).square()
         min_se = square_error.min(dim=-1, keepdim=True).values

@@ -253,7 +253,7 @@ class SellsideSQLDownloader:
         if df is None: 
             return df
         if factor_src == 'haitong':
-            assert isinstance(df , pd.DataFrame)
+            assert isinstance(df , pd.DataFrame) , f'{type(df)} is not a pd.DataFrame'
             df.columns = [col.lower() for col in df.columns.values]
             df = df.rename(columns={'trade_dt':'date'})
             df = secid_adjust(df , 's_info_windcode' , drop_old=True , decode_first=True)
@@ -265,14 +265,14 @@ class SellsideSQLDownloader:
                 df.loc[:,'model'] = 'haitong_dl_' + df.loc[:,'model'].astype(str)
                 df = df.pivot_table('f_value',['date','secid'],'model').reset_index()
         elif factor_src == 'dongfang':
-            assert isinstance(df , pd.DataFrame)
+            assert isinstance(df , pd.DataFrame) , f'{type(df)} is not a pd.DataFrame'
             df.columns = [col.lower() for col in df.columns.values]
             df = secid_adjust(df , ['stockcode' , 'ticker'] , drop_old=True)
 
             df = df.rename(columns={'tradingdate':'date','trade_dt':'date' , 'trade_date':'date'})
             df['date'] = df['date'].astype(str).str.replace('-','').astype(int)
         elif factor_src == 'kaiyuan':
-            assert isinstance(df , dict)
+            assert isinstance(df , dict) , f'{type(df)} is not a dict'
             df0 = pd.DataFrame(columns = pd.Index(['date','code'])).astype(int)
             for k,subdf in df.items():
                 subdf.rename(columns = {'factor':k})
@@ -282,7 +282,7 @@ class SellsideSQLDownloader:
             df['date']  = df['date'].astype(int)
             df = df.set_index(['date','secid']).reset_index()
         elif factor_src == 'huatai':
-            assert isinstance(df , dict)
+            assert isinstance(df , dict) , f'{type(df)} is not a dict'
             df0 = pd.DataFrame(columns = pd.Index(['date','instrument'])).astype(int)
             for k , subdf in df.items():
                 assert 'instrument' in subdf.columns , subdf.columns
@@ -294,7 +294,7 @@ class SellsideSQLDownloader:
         elif factor_src == 'guojin':
             ...
         elif factor_src == 'guosheng':
-            assert isinstance(df , pd.DataFrame)
+            assert isinstance(df , pd.DataFrame) , f'{type(df)} is not a pd.DataFrame'
             df.columns = [factor_name_pinyin_conversion(col.lower()) for col in df.columns.values]
             df = secid_adjust(df , ['symbol'] , drop_old=True)
             df['date'] = df['date'].astype(str).str.replace('-','').astype(int)
@@ -399,8 +399,8 @@ class SellsideSQLDownloader:
     def update_allaround(cls):
 
         prompt = f'{time.ctime()} : download allaround!'
-        assert input(prompt + ', print "yes" to confirm!') == 'yes'
-        assert input(prompt + ', print "yes" again to confirm!') == 'yes'
+        assert (x := input(prompt + ', print "yes" to confirm!')) == 'yes' , f'input {x} is not "yes"'
+        assert (x := input(prompt + ', print "yes" again to confirm!')) == 'yes' , f'input {x} is not "yes"'
         print(prompt)
 
         for factor , connection in cls.factors_and_conns():  

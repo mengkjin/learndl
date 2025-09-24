@@ -231,7 +231,7 @@ class CovConstraint:
         return quad_term
     
     def model_to_normal(self):
-        assert self.cov_type == 'model'
+        assert self.cov_type == 'model' , f'{self.cov_type} is must be model'
         self.cov = self.F.T.dot(self.C).dot(self.F)
         if self.S is not None: 
             ijs = np.arange(len(self.S))

@@ -41,9 +41,9 @@ class Stock4DData:
         if self.shape:
             assert isinstance(self.values , (np.ndarray , torch.Tensor)) , self.values
             assert self.ndim == 4 , self.shape
-            assert self.shape[0] == len(self.secid) 
-            assert self.shape[1] == len(self.date)
-            assert self.shape[3] == len(self.feature)
+            assert self.shape[0] == len(self.secid) , (self.shape[0] , len(self.secid))
+            assert self.shape[1] == len(self.date) , (self.shape[1] , len(self.date))
+            assert self.shape[3] == len(self.feature) , (self.shape[3] , len(self.feature))
         return self
     
     def __repr__(self):
@@ -173,7 +173,7 @@ class Stock4DData:
         return obj.as_type(dtype)
     
     def add_feature(self , new_feature , new_value : np.ndarray | torch.Tensor):
-        assert new_value.shape == self.shape[:-1]
+        assert new_value.shape == self.shape[:-1] , (new_value.shape , self.shape[:-1])
         new_value = new_value.reshape(*new_value.shape , 1)
         self.values  = np.concatenate([self.values,new_value],axis=-1)
         self.feature = np.concatenate([self.feature,[new_feature]],axis=0)
@@ -220,7 +220,8 @@ class Stock4DData:
             if i == 0:
                 new_blk = blk.copy()
             else:
-                assert np.array_equal(new_blk.secid , blk.secid) and np.array_equal(new_blk.date , blk.date)
+                assert np.array_equal(new_blk.secid , blk.secid) , (new_blk.secid , blk.secid)
+                assert np.array_equal(new_blk.date , blk.date) , (new_blk.date , blk.date)
                 new_blk.feature = np.concatenate([new_blk.feature , blk.feature])
                 new_blk.values  = np.concatenate([new_blk.values  , blk.values ] , axis=-1)
         return new_blk

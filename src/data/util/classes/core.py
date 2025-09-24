@@ -284,7 +284,7 @@ class DataBlock(Stock4DData):
             tmp = np.stack([(date <= lst) + (date >= dls) for lst,dls in zip(list_dt , delist_dt)] , axis = 0)
             mask_pos[tmp] = True
 
-        assert (~mask_pos).sum() > 0
+        assert (~mask_pos).sum() > 0 , 'all values are masked'
         self.values[mask_pos] = np.nan
         return self
     

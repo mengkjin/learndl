@@ -47,9 +47,9 @@ class FactorVAE(nn.Module):
             in eval     : y_hat , 
         '''
         if self.training:
-            assert y is not None
+            assert y is not None , f'{self.__class__.__name__} y is None when training'
             assert factor_noise is None or factor_noise.numel() == self.factor_num , factor_noise
-            assert alpha_noise is None or alpha_noise.numel() == y.shape[0]
+            assert alpha_noise is None or alpha_noise.numel() == y.shape[0] , (alpha_noise.numel() , y.shape[0])
             latent_features = self.feature_extractor(x)
             mu_post, sigma_post = self.factor_encoder(latent_features, y)
             factors_post = self.sampling(mu_post, sigma_post , factor_noise)
@@ -244,7 +244,7 @@ if __name__ == '__main__':
 
     batch_data = BatchData.random(batch_size=40)
     x = batch_data.x
-    assert isinstance(x , Tensor)
+    assert isinstance(x , Tensor) , f'{type(x)} is not a Tensor'
     f = batch_data.y
 
     extractor = FeatureExtractor()

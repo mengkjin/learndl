@@ -44,7 +44,7 @@ def batch_data_to_boost_input(batch_data : BatchData ,
     yy_values = tensor_refiller(batch_data.y , secid_j , date_j , (len(secid_i) , len(date_i)))
     ww_values = tensor_refiller(batch_data.w , secid_j , date_j , (len(secid_i) , len(date_i)))
 
-    assert xx_values is not None
+    assert xx_values is not None , f'xx_values must not be none'
     secid = secid[secid_i] if secid is not None else None
     date  = date[date_i]   if date  is not None else None
 

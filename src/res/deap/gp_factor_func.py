@@ -84,7 +84,7 @@ def decay_weight(method , max_len , exp_halflife = -1):
 def factor_coef_mean(x , mean_dim = 0, dim = -1 , weight = None):
     if x is None:
         return x
-    assert x.shape[dim] > 0
+    assert x.shape[dim] > 0 , (x.shape , dim)
     if x.shape[dim] == 1: 
         return torch.ones((1,1)).to(x)
     assert mean_dim >= 0 , f'mean_dim must be non-negative : {mean_dim}'
@@ -110,7 +110,7 @@ def factor_coef_mean(x , mean_dim = 0, dim = -1 , weight = None):
 def factor_coef_total(x , dim = -1):
     if x is None: 
         return x
-    assert x.shape[dim] > 0
+    assert x.shape[dim] > 0 , (x.shape , dim)
     if x.shape[dim] == 1: 
         return torch.ones((1,1)).to(x)
     ij = torch.arange(x.shape[dim])
@@ -127,7 +127,7 @@ def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
     if dim == -1:
         dim = x.dim() - 1
     assert corr_dim != dim , f'corr_dim and dim should be different'
-    assert x.shape[dim] > 0
+    assert x.shape[dim] > 0 , (x.shape , dim)
     if x.shape[dim] == 1: 
         return torch.ones((1,1)).to(x)
     ij = torch.arange(x.shape[dim])
@@ -151,9 +151,9 @@ def factor_coef_with_y(x , y , corr_dim = 1, dim = -1):
 def svd_factors(mat , raw_factor , top_n = -1 , top_ratio = 0. , dim = -1 , inplace = True):
     if mat is None or raw_factor is None: 
         return raw_factor
-    assert mat.dim() == 2 
-    assert mat.shape[0] == mat.shape[1]
-    assert mat.shape[0] == raw_factor.shape[dim]
+    assert mat.dim() == 2 , mat.shape
+    assert mat.shape[0] == mat.shape[1] , mat.shape
+    assert mat.shape[0] == raw_factor.shape[dim] , (mat.shape , raw_factor.shape , dim)
     svd = torch.linalg.svd(mat)
     right  = 'jkl'
     left   = 'i' + right[dim] 
@@ -201,9 +201,9 @@ class MultiFactor:
     def __init__(self , weight_scheme = 'ic', window_type = 'rolling', weight_decay= 'exp' , 
                  ir_window = 40 , roll_window = 40 , halflife  = 20 , 
                  insample = None , universe = None , min_coverage = 0.1 , **kwargs) -> None:
-        assert weight_scheme in ['ew' , 'ic' , 'ir']
-        assert window_type   in ['rolling' , 'insample']
-        assert weight_decay  in ['constant' , 'linear' , 'exp']
+        assert weight_scheme in ['ew' , 'ic' , 'ir'] , weight_scheme
+        assert window_type   in ['rolling' , 'insample'] , window_type
+        assert weight_decay  in ['constant' , 'linear' , 'exp'] , weight_decay
         self.weight_scheme = weight_scheme
         self.window_type   = window_type
         self.weight_decay  = weight_decay
@@ -270,8 +270,8 @@ class MultiFactor:
         weight_scheme = weight_scheme  if weight_scheme is not None else self.weight_scheme
         weight_decay  = weight_decay   if weight_decay  is not None else self.weight_decay
         insample      = insample       if insample      is not None else self.insample
-        assert weight_scheme in ['ew' , 'ic' , 'ir']
-        assert weight_decay  in ['constant' , 'linear' , 'exp']
+        assert weight_scheme in ['ew' , 'ic' , 'ir'] , weight_scheme
+        assert weight_decay  in ['constant' , 'linear' , 'exp'] , weight_decay
 
         if weight_scheme == 'ew': 
             func = self.weight_ew
@@ -286,8 +286,8 @@ class MultiFactor:
         weight_scheme = weight_scheme  if weight_scheme is not None else self.weight_scheme
         weight_decay  = weight_decay   if weight_decay  is not None else self.weight_decay
         roll_window   = roll_window    if roll_window   is not None else self.roll_window
-        assert weight_scheme in ['ew' , 'ic' , 'ir']
-        assert weight_decay  in ['constant' , 'linear' , 'exp']
+        assert weight_scheme in ['ew' , 'ic' , 'ir'] , weight_scheme
+        assert weight_decay  in ['constant' , 'linear' , 'exp'] , weight_decay
 
         if weight_scheme == 'ew': 
             return self.static_factor_weight(weight_scheme , time_slice = self.insample, **kwargs)
@@ -308,7 +308,7 @@ class MultiFactor:
             return torch.einsum('ij,jkl->ikl' , ts_w , data) / torch.einsum('ij,jkl->ikl' , ts_w , fini)
 
     def weighted_multi(self , singles , weight):
-        assert singles.shape == weight.shapes
+        assert singles.shape == weight.shapes , (singles.shape , weight.shape)
         weight = singles.isfinite() * weight
         wsum = torch.nansum(singles * weight , dim = -1) 
         return MF.zscore_inplace(wsum,-1)

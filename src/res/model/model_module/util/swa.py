@@ -50,7 +50,7 @@ class SWAModel:
      
     def bn_loader(self , trainer : BaseTrainer):
         for batch_data in trainer.data.train_dataloader(): 
-            assert isinstance(batch_data, BatchData)
+            assert isinstance(batch_data, BatchData) , f'{type(batch_data)} is not a BatchData'
             trainer.on_train_batch_start()
             yield (batch_data.x , batch_data.kwargs)
 

@@ -79,7 +79,7 @@ class TrainParam:
 
     @property
     def model_base_path(self):
-        # assert self.base_path
+        # assert self.base_path , f'{self.base_path} is None'
         return self.base_path
 
     @property
@@ -211,7 +211,7 @@ class TrainParam:
     def nn_category(self): return AlgoModule.nn_category(self.model_module)
     @property
     def resumeable(self): 
-        assert self.model_name
+        assert self.model_name , f'{self} has model_name None'
         model_path = ModelPath(self.model_name)
         return all([model_path.conf(cfg_key).exists() for cfg_key in TRAIN_CONFIG_LIST])
 
@@ -387,7 +387,7 @@ class ModelParam:
 
     @property
     def model_base_path(self):
-        assert self.base_path is not None
+        assert self.base_path is not None , f'{self} has base_path None'
         return self.base_path
 
     def reset_base_path(self , base_path : Path | ModelPath | str | None):
@@ -440,8 +440,8 @@ class ModelParam:
         assert self.n_model <= 5 , self.n_model
         
         if self.module == 'tra':
-            assert 'hist_loss_seq_len' in self.Param
-            assert 'hist_loss_horizon' in self.Param
+            assert 'hist_loss_seq_len' in self.Param , f'{self.Param} has no hist_loss_seq_len'
+            assert 'hist_loss_horizon' in self.Param , f'{self.Param} has no hist_loss_horizon'
 
         if self.booster_head:
             assert AlgoModule.is_valid(self.booster_head , 'booster') , self.booster_head
@@ -628,7 +628,7 @@ class TrainConfig(TrainParam):
     def parser_resume(self , value = -1 , verbose = True):
         '''ask if resume training when candidate names exists'''
         model_name = self.model_name
-        assert model_name is not None
+        assert model_name is not None , f'{self} has model_name None'
         candidate_name = sorted([m.name for m in PATH.model.iterdir() if m.name.split('.')[0] == model_name])
         if len(candidate_name) > 0 and 'fit' in self.stage_queue:
             if value < 0:
@@ -654,7 +654,7 @@ class TrainConfig(TrainParam):
             elif zero: raise
         '''
         model_name = self.model_name
-        assert model_name is not None
+        assert model_name is not None , f'{self} has model_name None'
         candidate_name = sorted([m.name for m in PATH.model.iterdir() 
                                  if m.name == model_name or m.name.startswith(f'{model_name}.')])
         if self.short_test:

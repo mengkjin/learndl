@@ -19,7 +19,7 @@ class BatchDataLoader:
     def __getitem__(self , i : int): return self.process(list(self.loader)[i] , i)
     def __iter__(self):
         for batch_i , batch_data in enumerate(self.loader):
-            assert isinstance(batch_data , BatchData)
+            assert isinstance(batch_data , BatchData) , f'{type(batch_data)} is not a BatchData'
             if self.exclude_dates is not None or self.include_dates is not None:
                 batch_date  = self.data_module.batch_date0(batch_data)
                 if self.exclude_dates is not None and np.isin(batch_date , self.exclude_dates): 

@@ -123,7 +123,7 @@ class LgbmPlot:
             print(f'plot path not given, will not proceed')
             return
         if isinstance(feature_idx,str):
-            assert feature_idx=='all'
+            assert feature_idx=='all' , feature_idx
             feature_idx = range(len(self.lgbm.model.feature_name()))
         n_subplot = len(feature_idx)
         ncol = n_subplot if n_subplot < 5 else 5
@@ -161,7 +161,7 @@ class LgbmPlot:
         if self.plot_path is None:
             print(f'plot path not given, will not proceed')
             return
-        import shap
+        import shap # type: ignore
         
         # 定义计算SHAP模型，这里使用TreeExplainer
         explainer = shap.TreeExplainer(self.lgbm.model)

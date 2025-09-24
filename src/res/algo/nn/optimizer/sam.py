@@ -33,8 +33,8 @@ def enable_running_stats(model):
 class SAM(optim.Optimizer):
 
     def __init__(self, params, base_optimizer, rho=0.05, **kwargs) -> None:
-        assert isinstance(base_optimizer,
-                          torch.optim.Optimizer), "base_optimizer must be an `Optimizer`"
+        assert isinstance(base_optimizer, torch.optim.Optimizer), \
+            f"base_optimizer must be an `Optimizer`, but got {type(base_optimizer)}"
         self.base_optimizer = base_optimizer
 
         assert 0 <= rho, f"rho should be non-negative:{rho}"
@@ -110,8 +110,8 @@ class SSAMF(SAM):
         update_freq=1,
         **kwargs
     ) -> None:
-        assert isinstance(base_optimizer,
-                          torch.optim.Optimizer), "base_optimizer must be an `Optimizer`"
+        assert isinstance(base_optimizer, torch.optim.Optimizer), \
+            f"base_optimizer must be an `Optimizer`, but got {type(base_optimizer)}"
         self.base_optimizer = base_optimizer
         self.device = device
 
@@ -194,8 +194,9 @@ class SSAMF(SAM):
                 self.state[p]['mask'].to(p)
                 self.state[p]['mask'].require_grad = False
                 start_index = start_index + p.numel()
-                assert self.state[p]['mask'].max() <= 1.0 and self.state[p]['mask'].min() >= 0.0
-        assert start_index == len(mask_list)
+                assert self.state[p]['mask'].max() <= 1.0  , self.state[p]['mask'].max()
+                assert self.state[p]['mask'].min() >= 0.0 , self.state[p]['mask'].min()
+        assert start_index == len(mask_list) , (start_index , len(mask_list))
 
     @torch.no_grad()
     def first_step(self, zero_grad=False):
@@ -215,10 +216,10 @@ class SSAMF(SAM):
     @torch.no_grad()
     def step(self, closure=None, model=None, epoch=None, batch_idx=None, train_data=None, **kwargs):
         super().step(closure, **kwargs)
-        assert model is not None
-        assert train_data is not None
-        assert epoch is not None
-        assert batch_idx is not None
+        assert model is not None , f'{self.__class__.__name__} model is None'
+        assert train_data is not None , f'{self.__class__.__name__} train_data is None'
+        assert epoch is not None , f'{self.__class__.__name__} epoch is None'
+        assert batch_idx is not None , f'{self.__class__.__name__} batch_idx is None'
         if (epoch % self.update_freq == 0) and (batch_idx == 0):
             print('\nUpdate Mask!')
             self.update_mask(model, train_data)

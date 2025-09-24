@@ -90,7 +90,7 @@ class MultiHeadAttention(nn.Module):
     """多头注意力机制"""
     def __init__(self, d_model: int, num_heads: int, dropout: float = 0.1):
         super().__init__()
-        assert d_model % num_heads == 0
+        assert d_model % num_heads == 0 , (d_model , num_heads)
         
         self.d_model = d_model
         self.num_heads = num_heads

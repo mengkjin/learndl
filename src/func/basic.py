@@ -243,7 +243,7 @@ def np_rankic_2d(x : np.ndarray , y : np.ndarray , dim = 0):
         return np.array([np_rankic(x[i,:],y[i,:]) for i in range(x.shape[0])])
     
 def ts_rank_pct(x : torch.Tensor ,dim=-1):
-    assert (len(x.shape) <= 3)
+    assert (len(x.shape) <= 3) , x.shape
     x_rank = x.argsort(dim=dim).argsort(dim=dim).to(torch.float32) + 1
     x_rank[x.isnan()] = torch.nan
     x_rank = x_rank / ((~x_rank.isnan()).sum(dim=dim, keepdim=True))
@@ -306,10 +306,12 @@ def merge_data_2d(data_tuple , row_tuple , col_tuple , row_all = None , col_all 
     elif not all([isinstance(inp,tuple) for inp in (data_tuple , row_tuple , col_tuple)]):
         raise Exception(f'Not All of data_tuple , row_tuple , col_tuple are tuple instance!')
     
-    assert len(data_tuple) == len(row_tuple) == len(col_tuple)
+    assert len(data_tuple) == len(row_tuple) == len(col_tuple) , \
+        (len(data_tuple) , len(row_tuple) , len(col_tuple))
     for i in range(len(data_tuple)):
         #print(i , data_tuple[i].shape , (len(row_tuple[i]) , len(col_tuple[i])))
-        assert data_tuple[i].shape == (len(row_tuple[i]) , len(col_tuple[i]))
+        assert data_tuple[i].shape == (len(row_tuple[i]) , len(col_tuple[i])) , \
+            (data_tuple[i].shape , (len(row_tuple[i]) , len(col_tuple[i])))
     
     row_all = sorted(list(set().union(*row_tuple))) if row_all is None else row_all
     row_index = [[list(row_all).index(r) for r in row_i] for row_i in row_tuple]
@@ -408,7 +410,7 @@ def index_union(idxs , min_value = None , max_value = None) -> tuple[np.ndarray 
     return new_idx , pos_new , pos_old
 
 def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_condition = lambda x:True , print_function = print):
-    assert isinstance(prompt , str)
+    assert isinstance(prompt , str) , prompt
     userText_list , userText_cond = [] , []
     for t in range(recurrent):
         if t == 0:

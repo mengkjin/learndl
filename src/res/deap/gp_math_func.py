@@ -257,7 +257,7 @@ def neutralize_2d(y , x , dim = 1 , method = 'np' , device = None , inplace = Fa
     if x  is None or y is None: 
         return y
 
-    assert method in ['sk' , 'np' , 'torch']
+    assert method in ['sk' , 'np' , 'torch'] , method
     assert dim in [-1,0,1] , dim
     assert y.dim() == 2 , y.dim()
     assert x.dim() in [2,3] , x.dim()
@@ -307,7 +307,7 @@ def neutralize_1d(y , x , insample , method = 'torch' , device = None , inplace 
     if x is None or y is None: 
         return y
 
-    assert method in ['sk' , 'np' , 'torch']
+    assert method in ['sk' , 'np' , 'torch'] , method
     assert y.shape == insample.shape , (y.shape , insample.shape)
     assert y.dim() == 1 , y.dim()
     
@@ -539,7 +539,7 @@ def square(x):
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
 def rank_pct(x,dim=1):
-    assert (len(x.shape) <= 3)
+    assert (len(x.shape) <= 3) , x.shape
     x_rank = x.argsort(dim=dim).argsort(dim=dim).to(torch.float32) + 1 # .where(~x.isnan() , NaN)
     x_rank[x.isnan()] = NaN
     x_rank = x_rank / ((~x_rank.isnan()).sum(dim=dim, keepdim=True))
@@ -548,7 +548,7 @@ def rank_pct(x,dim=1):
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
 def lin_decay(x , dim = 0):   #only for rolling
-    'd日衰减加权平均，加权系数为 d, d-1,...,1'
+    'd日衰减加权平均,加权系数为 d, d-1,...,1'
     shape_ = [1] * len(x.shape)
     shape_[dim] = x.shape[dim]
     coef = torch.arange(1, x.shape[dim] + 1, 1).reshape(shape_).to(x)
@@ -728,19 +728,19 @@ def rlbxy(x, y, d, n, btm, sel_posneg=False):
 #@PrimaTools.prima_legit(2)
 @PrimaTools.decor(2)
 def ts_xbtm_yavg(x, y, d, n):
-    '在过去d日上，根据x进行排序，取最小n个x的y的平均值'
+    '在过去d日上,根据x进行排序,取最小n个x的y的平均值'
     return rlbxy(x, y, d, n, btm='btm')
 
 #@PrimaTools.prima_legit(2)
 @PrimaTools.decor(2)
 def ts_xtop_yavg(x, y, d, n):
-    '在过去d日上，根据x进行排序，取最大n个x的y的平均值'
+    '在过去d日上,根据x进行排序,取最大n个x的y的平均值'
     return rlbxy(x, y, d, n, btm='top')
 
 #@PrimaTools.prima_legit(2)
 @PrimaTools.decor(2)
 def ts_xrng_ydif(x, y, d, n):
-    '在过去d日上，根据x进行排序，取最大n个x的y的平均值与最小n个x的y的平均值的差值'
+    '在过去d日上,根据x进行排序,取最大n个x的y的平均值与最小n个x的y的平均值的差值'
     return rlbxy(x, y, d, n, btm='diff')
 
 def rlbx(x, d, n, btm, sel_posneg=False):
@@ -764,17 +764,17 @@ def rlbx(x, d, n, btm, sel_posneg=False):
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
 def ts_btm_avg(x, d, n):
-    '在过去d日上，根据x进行排序，取最小n个x的y的平均值'
+    '在过去d日上,根据x进行排序,取最小n个x的y的平均值'
     return rlbx(x, d, n, btm='btm')
 
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
 def ts_top_avg(x, d, n):
-    '在过去d日上，根据x进行排序，取最大n个x的y的平均值'
+    '在过去d日上,根据x进行排序,取最大n个x的y的平均值'
     return rlbx(x, d, n, btm='top')
 
 #@PrimaTools.prima_legit(1)
 @PrimaTools.decor(1)
 def ts_rng_dif(x, d, n):
-    '在过去d日上，根据x进行排序，取最大n个x的y的平均值与最小n个x的y的平均值的差值'
+    '在过去d日上,根据x进行排序,取最大n个x的y的平均值与最小n个x的y的平均值的差值'
     return rlbx(x, d, n, btm='diff')

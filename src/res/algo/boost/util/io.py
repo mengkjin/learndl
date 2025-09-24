@@ -31,11 +31,11 @@ class BoosterOutput:
         return df
     
     def rankic(self):
-        assert self.label is not None
+        assert self.label is not None , f'{self.__class__.__name__} label is None'
         return rankic_2d(self.to_2d() , self.label , 0)
     
     def ic(self):
-        assert self.label is not None
+        assert self.label is not None , f'{self.__class__.__name__} label is None'
         return ic_2d(self.to_2d() , self.label , 0)
 
 @dataclass

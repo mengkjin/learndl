@@ -14,7 +14,7 @@ class MetricList:
     type : str
     values : list[Any] = field(default_factory=list) 
 
-    def __post_init__(self): assert self.type in ['loss' , 'score']
+    def __post_init__(self): assert self.type in ['loss' , 'score'] , f'{self.type} must be "loss" or "score"'
     def record(self , metrics): self.values.append(metrics.loss_item if self.type == 'loss' else metrics.score)
     def last(self): self.values[-1]
     def mean(self): return 0 if len(self.values) == 0 else np.mean(self.values)

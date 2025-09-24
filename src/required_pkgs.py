@@ -22,5 +22,7 @@ import optuna
 import tensorboard 
 import dask 
 import portalocker 
+import deap
+import shap
 
 from sklearn.linear_model import LinearRegression 

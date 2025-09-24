@@ -13,7 +13,7 @@ class NNBooster(BasePredictorModel):
 
     @property
     def booster_param(self): 
-        assert self.config.model_booster_head
+        assert self.config.model_booster_head , f'{self.config.model_booster_head} is not a valid booster head'
         return self.config.booster_head_param
     
     def init_model(self , 

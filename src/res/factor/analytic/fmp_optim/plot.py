@@ -153,7 +153,7 @@ def plot_optim_exp_style(data : pd.DataFrame , show = False):
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
                             title = 'Optim FMP Style Exposure' , suptitle=True) as (df , fig):
             lay_out = (2, 5)
-            assert len(df.columns) <= lay_out[0] * lay_out[1]
+            assert len(df.columns) <= lay_out[0] * lay_out[1] , (len(df.columns) , lay_out)
             for i , col in enumerate(df.columns): 
                 ax = fig.add_subplot(*lay_out , i + 1 , frameon = False)
                 ax.plot(df.index , df[col], label=col)
@@ -172,7 +172,7 @@ def plot_optim_exp_indus(data : pd.DataFrame , show = False):
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
                             title = 'Optim FMP Industry Exposure' , suptitle=True) as (df , fig):
             lay_out = (5, 7)
-            assert len(df.columns) <= lay_out[0] * lay_out[1]
+            assert len(df.columns) <= lay_out[0] * lay_out[1] , (len(df.columns) , lay_out)
             for i , col in enumerate(df.columns): 
                 ax = fig.add_subplot(*lay_out , i + 1 , frameon = False)
                 ax.plot(df.index , df[col], label=col)

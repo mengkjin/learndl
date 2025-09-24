@@ -61,7 +61,7 @@ class JSFetcher:
         raise Exception('Unknown default_fetcher')
 
     def eval(self , date = None , **kwargs) -> Any:
-        assert callable(self.fetcher)
+        assert callable(self.fetcher) , f'{self.fetcher} is not callable'
         if self.db_src in DB.DB_BY_NAME:
             v = self.fetcher(self.db_key , *self.args , **kwargs)
         elif self.db_src in DB.DB_BY_DATE:
@@ -280,7 +280,7 @@ class JSFetcher:
         '''get consecutive x_day trade data from R environment , trade_Xday(20240324 , 5) '''
         # read calendar
         calendar = cls.basic_info('calendar')
-        assert isinstance(calendar , pd.DataFrame)
+        assert isinstance(calendar , pd.DataFrame) , f'{type(calendar)} is not a pd.DataFrame'
         rolling_dates = calendar.calendar[calendar.trade > 0].to_numpy().astype(int)
         rolling_dates = sorted(rolling_dates[rolling_dates <= int(date)])[-x:]
         assert rolling_dates[-1] == date , (rolling_dates[-1] , date)

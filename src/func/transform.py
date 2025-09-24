@@ -62,8 +62,10 @@ def rank_in_category(x_: list[np.ndarray], category_: np.ndarray):
     return rtn
 
 def norm_inv(x_: np.ndarray):
-    assert (x_ > 0).all()
-    assert (x_ < 1).all()
+    if len(x_) == 0: 
+        return x_ * 0.0
+    assert (x_ > 0).all() , x_.min()
+    assert (x_ < 1).all() , x_.max()
     rtn = norm.ppf(x_)
     return rtn
 
@@ -73,8 +75,8 @@ def zscore(x_: np.ndarray):
     return (x_ - u) / d
 
 def winsorize_by_bnd(src_: np.ndarray, u_prc_: float = 0.95, l_prc_: float = 0.05):
-    assert src_.ndim == 1
-    assert 0 < l_prc_ and l_prc_ < u_prc_ and u_prc_ < 100
+    assert src_.ndim == 1 , src_.shape
+    assert 0 < l_prc_ and l_prc_ < u_prc_ and u_prc_ < 100 , (l_prc_ , u_prc_)
     ulb = np.nanpercentile(src_, [u_prc_, l_prc_])
     des = src_.copy()
     des[des > ulb[0]] = ulb[0]
@@ -84,10 +86,10 @@ def winsorize_by_bnd(src_: np.ndarray, u_prc_: float = 0.95, l_prc_: float = 0.0
 def winsorize_by_dist(src_: np.ndarray, m_: float = 3.5, winsor_rng : float = 0. ,dist_type_: int=0):
     # dist_type_:0, normal
     # dist_type_:1, log_normal
-    assert src_.ndim == 1
+    assert src_.ndim == 1 , src_.shape
     assert m_ > 0 , m_
     assert winsor_rng > 0 , winsor_rng
-    assert dist_type_ in (0, 1)
+    assert dist_type_ in (0, 1) , dist_type_
     if dist_type_ == 1:
         assert np.all(np.logical_or(np.isnan(src_), src_ > 0)), "winsorize_by_dist>>src_ must be positive when dist type as 1(log_normal)"
         des = np.log(src_)
@@ -107,10 +109,10 @@ def winsorize_by_dist(src_: np.ndarray, m_: float = 3.5, winsor_rng : float = 0.
 def winsorize_by_bnded_dist(src_: np.ndarray, bnd_: float = 0.1, m_: float = 3.5, dist_type_: int=0):
     # dist_type_:0, normal
     # dist_type_:1, log_normal
-    assert bnd_ > 0 and bnd_ < 50
-    assert src_.ndim == 1
-    assert m_ > 0
-    assert dist_type_ in (0, 1)
+    assert bnd_ > 0 and bnd_ < 50 , bnd_
+    assert src_.ndim == 1 , src_.shape
+    assert m_ > 0 , m_
+    assert dist_type_ in (0, 1) , dist_type_
     if dist_type_ == 1:
         assert np.all(np.logical_or(np.isnan(src_), src_ > 0)), "winsorize_by_dist>>src_ must be positive when dist type as 1(log_normal)"
         des = np.log(src_)
@@ -130,8 +132,8 @@ def winsorize_by_bnded_dist(src_: np.ndarray, bnd_: float = 0.1, m_: float = 3.5
 
 def patched_by_industry(y_: np.ndarray, ind_risk_: np.ndarray, method_: int=0):
     # method 0: median, 1: mean
-    assert method_ in (0, 1)
-    assert y_.ndim == 1 and ind_risk_.ndim == 1
+    assert method_ in (0, 1) , method_
+    assert y_.ndim == 1 and ind_risk_.ndim == 1 , (y_.shape , ind_risk_.shape)
     nan_flag = np.isnan(y_)
     if nan_flag.any():
         nan_ind = ind_risk_[nan_flag]
@@ -145,7 +147,7 @@ def patched_by_industry(y_: np.ndarray, ind_risk_: np.ndarray, method_: int=0):
         if np.isnan(replaced_vals).any():
             print('warning>>patched_by_industry>>all nan encountered.')
             replaced_vals[np.isnan(replaced_vals)] = np.nanmedian(replaced_vals)
-        assert not np.isnan(replaced_vals).any()
+        assert not np.isnan(replaced_vals).any() , replaced_vals
         y = y_.copy()
         y[nan_flag] = replaced_vals
     else:

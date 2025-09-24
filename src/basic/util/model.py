@@ -13,6 +13,12 @@ from .calendar import CALENDAR
 __all__ = ['ModelPath' , 'HiddenPath' , 'ModelDict' , 'ModelFile' , 'RegisteredModel' , 'HiddenExtractingModel']
 
 class ModelPath:
+    """
+    model path
+    access stored model in learndl/models
+    example:
+        model_path = ModelPath('gru_day_V0')
+    """
     def __init__(self , model_name : Path | str | None | Any) -> None:
         if isinstance(model_name , ModelPath):
             name = model_name.name
@@ -26,7 +32,8 @@ class ModelPath:
         self.name = name
 
     @staticmethod
-    def sub_dirs(path : Path , as_int = False):
+    def sub_dirs(path : Path , as_int = False) -> np.ndarray:
+        """sub directories"""
         arr = [sub.name for sub in path.iterdir() if sub.is_dir()]
         if as_int: 
             arr = np.array([v for v in arr if v.isdigit()]).astype(int)
@@ -37,22 +44,30 @@ class ModelPath:
         return f'{self.__class__.__name__}(model_name={self.name})'
     def __call__(self , *args): 
         return self.base.joinpath(*[str(arg) for arg in args])
-    def archive(self , *args):  
+    def archive(self , *args) -> Path:
+        """model archive path"""
         return self('archive' , *args)
-    def conf(self , *args):     
+    def conf(self , *args) -> Path:  
+        """model configs path"""
         return self('configs' , *args)
-    def rslt(self , *args):     
+    def rslt(self , *args) -> Path:     
+        """model results path"""
         return self('detailed_analysis' , *args)
-    def snapshot(self , *args): 
+    def snapshot(self , *args) -> Path:
+        """model snapshot path"""
         return self('snapshot' , *args)
-    def full_path(self , model_num , model_date , submodel):
+    def full_path(self , model_num , model_date , submodel) -> Path:
+        """full model path of a given model date / num / submodel"""
         return self('archive', model_num , model_date , submodel)
-    def model_file(self , model_num , model_date , submodel):
+    def model_file(self , model_num , model_date , submodel) -> 'ModelFile':
+        """model file of a given model date / num / submodel"""
         return ModelFile(self('archive', model_num , model_date , submodel))
-    def exists(self , model_num , model_date , submodel):
+    def exists(self , model_num , model_date , submodel) -> bool:
+        """check if a given model date / num / submodel exists"""
         path = self.full_path(model_num , model_date , submodel)
         return path.exists() and len([s for s in path.iterdir()]) > 0
     def mkdir(self , model_nums = None , exist_ok=False):
+        """create model directory"""
         self.archive().mkdir(parents=True,exist_ok=exist_ok)
         if model_nums is not None: 
             [self.archive(mm).mkdir(exist_ok=exist_ok) for mm in model_nums]
@@ -60,27 +75,34 @@ class ModelPath:
         self.rslt().mkdir(exist_ok=exist_ok)
         self.snapshot().mkdir(exist_ok=exist_ok)
     @property
-    def base(self): 
-        assert self.name
+    def base(self) -> Path:
+        """model base path"""
+        assert self.name , f'{self.__class__.__name__} model name is not set'
         return PATH.model.joinpath(self.name)
     @property
-    def model_nums(self):
+    def model_nums(self) -> np.ndarray:
+        """model numbers"""
         return self.sub_dirs(self.archive() , as_int = True)
     @property
     def model_dates(self):
+        """model dates"""
         return self.sub_dirs(self.archive(self.model_nums[-1]) , as_int = True)
     @property
     def model_submodels(self):
+        """model submodels"""
         return self.sub_dirs(self.archive(self.model_nums[-1] , self.model_dates[-1]) , as_int = False)
     def load_config(self):
+        """load model config"""
         from src.res.model.util.config import TrainConfig
         return TrainConfig(self.base , stage = 0)
     def next_model_date(self):
+        """next model date to train"""
         from src.basic.util.calendar import CALENDAR
         config = self.load_config()
         return CALENDAR.td(self.model_dates[-1] , config.model_interval)
     
 class HiddenPath:
+    """hidden factor path for nn models , used for extracting hidden states"""
     def __init__(self , model_name : str , model_num : int , submodel : str) -> None:
         self.model_name , self.model_num , self.submodel = model_name , model_num , submodel
         assert self.model_name in [p.name for p in PATH.hidden.iterdir()] , \
@@ -89,64 +111,85 @@ class HiddenPath:
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name},model_num={self.model_num},submodel={self.submodel})'
 
     @classmethod
-    def from_key(cls , hidden_key : str):
+    def from_key(cls , hidden_key : str) -> 'HiddenPath':
+        """
+        create hidden path from hidden key
+        example:
+            HiddenPath.from_key('gru_day_V0.1.best')
+        """
         model_name , model_num , submodel = cls.parse_hidden_key(hidden_key)
         return cls(model_name , model_num , submodel)
 
     @staticmethod
-    def create_hidden_key(model_name : str , model_num : int , submodel : str) : 
+    def create_hidden_key(model_name : str , model_num : int , submodel : str) -> str:
+        """
+        create hidden key
+        example:
+            HiddenPath.create_hidden_key('gru_day_V0' , 1 , 'best') # gru_day_V0.1.best
+        """
         return f'{model_name}.{model_num}.{submodel}'
     
     @property
-    def hidden_key(self):
+    def hidden_key(self) -> str:
+        """current hidden path's hidden key"""
         return self.create_hidden_key(self.model_name , self.model_num , self.submodel)
     
     @staticmethod
-    def parse_hidden_key(hidden_key : str): 
+    def parse_hidden_key(hidden_key : str) -> tuple[str, int, str]:
+        """parse hidden key"""
         model_name , model_num , submodel = hidden_key.split('.')
-        assert submodel in ['best' , 'swabest' , 'swalast'] , hidden_key
+        assert submodel in ['best' , 'swabest' , 'swalast'] , f'{hidden_key} has invalid submodel: {submodel}'
         return model_name , int(model_num) , submodel
     
     @staticmethod
-    def target_hidden_path(model_name : str , model_num : int , model_date , submodel : str):
+    def target_hidden_path(model_name : str , model_num : int , model_date , submodel : str) -> Path:
+        """target hidden path"""
         return PATH.hidden.joinpath(model_name , str(model_num) , f'{model_date}.{submodel}.feather')
     
-    def target_path(self , model_date: int):
+    def target_path(self , model_date: int) -> Path:
+        """target hidden path of a given model date"""
         return self.target_hidden_path(self.model_name , self.model_num , model_date , self.submodel)
     
-    def last_modified_date(self , model_date : int | None = None):
+    def last_modified_date(self , model_date : int | None = None) -> int:
+        """last modified date of the hidden path"""
         if model_date is None: 
             model_dates = self.model_dates()
             model_date = int(model_dates.max()) if len(model_dates) else -1
         return PATH.file_modified_date(self.target_path(model_date))
     
-    def last_modified_time(self , model_date : int | None = None):
+    def last_modified_time(self , model_date : int | None = None) -> float:
+        """last modified time of the hidden path"""
         if model_date is None: 
             model_dates = self.model_dates()
             model_date = int(model_dates.max()) if len(model_dates) else -1
         return PATH.file_modified_time(self.target_path(model_date))
 
-    def model_dates(self):
+    def model_dates(self) -> np.ndarray:
+        """model dates of source model"""
         suffix = f'.{self.submodel}.feather'
         parent = self.target_path(0).parent
         dates = [int(p.name.removesuffix(suffix)) for p in parent.iterdir() if p.name.endswith(suffix)]
         return np.sort(dates)
 
-    def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int):
+    def save_hidden_df(self , hidden_df : pd.DataFrame , model_date : int) -> None:
+        """save hidden dataframe"""
         hidden_path = self.target_path(model_date)
         DB.save_df(hidden_df , hidden_path , overwrite = True)
 
-    def get_hidden_df(self , model_date : int , exact = False):
+    def get_hidden_df(self , model_date : int , exact = False) -> tuple[int, pd.DataFrame]:
+        """get hidden dataframe"""
         if not exact: 
             model_date = self.latest_hidden_model_date(model_date)
         hidden_df = DB.load_df(self.target_path(model_date))
         return model_date , hidden_df
     
-    def latest_hidden_model_date(self , model_date):
+    def latest_hidden_model_date(self , model_date) -> int:
+        """latest hidden model date"""
         possible_model_dates = self.model_dates()
         return possible_model_dates[possible_model_dates <= model_date].max()
 
 class ModelDict:
+    """model dictionary for nn/booster models"""
     __slots__ = ['state_dict' , 'booster_head' , 'booster_dict']
     def __init__(self ,
                  state_dict  : dict[str,torch.Tensor] | None = None , 
@@ -158,12 +201,14 @@ class ModelDict:
 
     def __repr__(self): return f'{self.__class__.__name__}(state_dict={self.state_dict},booster_head={self.booster_head},booster_dict={self.booster_dict})'
 
-    def reset(self):
+    def reset(self) -> None:
+        """reset model dictionary"""
         self.state_dict = None
         self.booster_head = None
         self.booster_dict = None
 
-    def save(self , path : str | Path , stack = False):
+    def save(self , path : str | Path , stack = False) -> None:
+        """uniformly save model dictionary"""
         if isinstance(path , str): 
             path = Path(path)
         path.mkdir(parents=True,exist_ok=True)
@@ -172,7 +217,8 @@ class ModelDict:
                 torch.save(value , path.joinpath(f'{key}.stack.pt' if stack else f'{key}.pt'))
 
     @property
-    def legal(self):
+    def is_valid(self) -> bool:
+        """check if model dictionary is valid"""
         if self.state_dict is not None:
             assert self.booster_dict is None 
         else:
@@ -180,17 +226,21 @@ class ModelDict:
         return True
 
 class ModelFile:
+    """model file for nn/booster models"""
     def __init__(self , model_path : Path) -> None:
         self.model_path = model_path
     def __getitem__(self , key): return self.load(key)
     def __repr__(self): return f'{self.__class__.__name__}(path={self.model_path})'
     def load(self , key : str) -> Any:
+        """load model dictionary"""
         assert key in ModelDict.__slots__ , (key , ModelDict.__slots__)
         path = self.model_path.joinpath(f'{key}.pt')
         return torch_load(path , map_location='cpu') if path.exists() else None
     def exists(self) -> bool: 
+        """check if model file exists"""
         return any([self.model_path.joinpath(f'{key}.pt').exists() for key in ModelDict.__slots__])
-    def model_dict(self):
+    def model_dict(self) -> ModelDict:
+        """load model dictionary"""
         return ModelDict(**{key:self.load(key) for key in ModelDict.__slots__})
     
 class RegisteredModel(ModelPath):
@@ -226,7 +276,8 @@ class RegisteredModel(ModelPath):
         return f'{self.__class__.__name__}(pred_name={self.pred_name},name={self.name},submodel={self.submodel},num={str(self.num)})'
     
     @classmethod
-    def SelectModels(cls , pred_names : list[str] | str | None = None):
+    def SelectModels(cls , pred_names : list[str] | str | None = None) -> list['RegisteredModel']:
+        """select registered models"""
         if pred_names is None: 
             pred_names = list(cls.MODEL_DICT.keys())
         if isinstance(pred_names , str): 
@@ -234,27 +285,33 @@ class RegisteredModel(ModelPath):
         return [cls(key) for key in pred_names]
     
     @property
-    def pred_dates(self):
+    def pred_dates(self) -> np.ndarray:
+        """model pred dates"""
         return DB.pred_dates(self.pred_name)
     
     @property
-    def pred_target_dates(self):
+    def pred_target_dates(self) -> np.ndarray:
+        """model pred target dates"""
         start_dt = max(self.start_dt , CALENDAR.td(min(self.model_dates) , 1))
         end_dt = None
         return CALENDAR.td_within(start_dt , end_dt)
     
     @property
-    def fmp_dates(self):
+    def fmp_dates(self) -> np.ndarray:
+        """model factor portfolio dates"""
         return DB.dir_dates(PATH.fmp.joinpath(self.pred_name))
     
     @property
-    def fmp_target_dates(self):
+    def fmp_target_dates(self) -> np.ndarray:
+        """model factor portfolio target dates"""
         return self.pred_target_dates[::self.FMP_STEP]
     
-    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False):
+    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False) -> None:
+        """save model pred"""
         DB.pred_save(df , self.pred_name , date , overwrite)
 
-    def load_pred(self , date : int , verbose = True , **kwargs):
+    def load_pred(self , date : int , verbose = True , **kwargs) -> pd.DataFrame:
+        """load model pred"""
         df = DB.pred_load(self.pred_name , date , verbose = verbose , **kwargs)
         if df.empty: 
             return df
@@ -264,13 +321,15 @@ class RegisteredModel(ModelPath):
             self.save_pred(df , date , overwrite = True)
         return df
 
-    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False):
+    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False) -> None:
+        """save model factor portfolio"""
         if df.empty: 
             return
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         DB.save_df(df , path , overwrite = overwrite)
 
-    def load_fmp(self , date : int , verbose = True , **kwargs):
+    def load_fmp(self , date : int , verbose = True , **kwargs) -> pd.DataFrame:
+        """load model factor portfolio"""
         path = PATH.fmp.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         if not path.exists(): 
             if verbose: 
@@ -279,7 +338,8 @@ class RegisteredModel(ModelPath):
         return pd.read_feather(path , **kwargs)
     
     @property
-    def account_dir(self):
+    def account_dir(self) -> Path:
+        """model factor portfolio account directory"""
         return PATH.fmp_account.joinpath(self.pred_name)
 
 class HiddenExtractingModel(ModelPath):
@@ -309,7 +369,8 @@ class HiddenExtractingModel(ModelPath):
         return f'{self.__class__.__name__}(hidden_name={self.hidden_name},name={self.name},submodels={self.submodels},nums={str(self.nums)})'
 
     @classmethod
-    def SelectModels(cls , hidden_names : list[str] | str | None = None):
+    def SelectModels(cls , hidden_names : list[str] | str | None = None) -> list['HiddenExtractingModel']:   
+        """select hidden models"""
         if hidden_names is None: 
             hidden_names = list(cls.MODEL_DICT.keys())
         if isinstance(hidden_names , str): 

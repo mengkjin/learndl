@@ -40,7 +40,7 @@ def extract_js_min(date):
             if not file_name.startswith('equity_pricemin') or not file_name.endswith('.txt'): 
                 continue
             date_str = file_name.removesuffix('.txt').replace('-', '')[-8:]
-            assert date_str.isdigit() , date_str
+            assert date_str.isdigit() , f'{date_str} is not a digit'
             date = int(date_str)
 
             with zip_ref.open(file_name) as file:
@@ -155,7 +155,7 @@ def process_fut_min_files():
             for file_name in file_list:
                 if file_name.startswith('future-min-1min-') and file_name.endswith('.csv'):
                     date_str = file_name.removesuffix('.csv').replace('-', '')[-8:]
-                    assert date_str.isdigit() , date_str
+                    assert date_str.isdigit() , f'{date_str} is not a digit'
                     date = int(date_str)
 
                     if DB.db_path('trade_js', 'fut_min', date).exists(): 

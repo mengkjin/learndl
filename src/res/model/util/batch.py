@@ -168,8 +168,8 @@ class BatchOutput:
     def hidden(self) -> torch.Tensor: return self.other['hidden']
         
     def override_pred(self , pred : torch.Tensor | None):
-        assert self.outputs is not None
-        assert pred is not None
+        assert self.outputs is not None , f'{self} has outputs None'
+        assert pred is not None , f'{pred} is None'
         raw_pred = self.pred
         assert len(pred) == len(raw_pred) , (pred.shape , raw_pred.shape)
         pred = pred.reshape(*raw_pred.shape).to(raw_pred)

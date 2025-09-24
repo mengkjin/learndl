@@ -273,7 +273,7 @@ class gpHandler:
         output:
             toolbox:   toolbox that contains all gp utils
         '''
-        assert sum(n_args) == len(gp_argnames)
+        assert sum(n_args) == len(gp_argnames) , (sum(n_args) , len(gp_argnames))
 
         pset_individual = gp.PrimitiveSetTyped('main', [Fac] * n_args[0] + [Raw] * n_args[1], Fac)
         pset_syntax = gp.PrimitiveSetTyped('main', [torch.Tensor] * sum(n_args), torch.Tensor)
@@ -895,7 +895,7 @@ class gpEliteBlock:
                 print('OutofMemory when concat gpEliteBlock, try use cpu to concat')
                 gc.collect()
                 self.data = MF.concat_factors(*self.data , device=torch.device('cpu')) # to cpu first
-        assert self.data is not None
+        assert self.data is not None , f'{self} has data None'
         return self
 
     def append(self , factor , **kwargs):
@@ -910,7 +910,7 @@ class gpEliteBlock:
         return self
     
     def max_corr(self , factor , abs_corr_cap = 1.01 , dim = None , dim_valids = (None , None) , syntax = None):
-        assert self.data is not None
+        assert self.data is not None , f'{self} has data None'
         
         if isinstance(factor , FF.FactorValue): 
             factor = factor.value
@@ -940,5 +940,5 @@ class gpEliteBlock:
         return data
     
     def select(self , i):
-        assert self.data is not None
+        assert self.data is not None , f'{self} has data None'
         return self.data[...,i] if isinstance(self.data , torch.Tensor) else self.data[i]

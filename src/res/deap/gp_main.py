@@ -330,7 +330,7 @@ def read_gp_data(filename,slice_date=None,df_columns=None,df_index=None,input_fr
         df:          result data
     '''
     df = pd.read_parquet(filename, engine='fastparquet')
-    assert isinstance(df , pd.DataFrame)
+    assert isinstance(df , pd.DataFrame) , f'{type(df)} is not a DataFrame'
     df.index = pd.to_datetime(df.index)
     df = df.sort_index()
     if slice_date is not None: 
@@ -396,7 +396,7 @@ def gp_syntax2value(compiler, individual, gp_inputs, param, tensors, i_iter=0,
         if factor_value is None or factor_neut_type == 0:
             pass
         elif factor_neut_type == 1:
-            assert isinstance(factor_value , torch.Tensor)
+            assert isinstance(factor_value , torch.Tensor) , f'{type(factor_value)} is not a Tensor'
             func = mgr_mem.except_MemoryError(MF.neutralize_1d, print_str=f'neutralizing {str(individual)}')
             shape2d = factor_value.shape
             factor_value = func(y = factor_value.reshape(-1) , 

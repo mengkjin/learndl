@@ -5,7 +5,7 @@ class mod_transformer(nn.Module):
     def __init__(self , input_dim , output_dim , dropout=0.0 , num_layers = 2):
         super().__init__()
         num_heads , ffn_dim = 8 , 4 * output_dim
-        assert output_dim % num_heads == 0
+        assert output_dim % num_heads == 0 , (output_dim , num_heads)
         num_layers = max(2,num_layers)
         self.fc_in = nn.Sequential(nn.Linear(input_dim, output_dim),nn.Tanh())
         self.pos_enc = PositionalEncoding(output_dim,dropout=dropout)
@@ -46,7 +46,7 @@ class ModuleWiseAttention(nn.Module):
     def __init__(self , input_dim , mod_num , att_dim = None , num_heads = None , dropout=0.0):
         super().__init__()
         if isinstance(input_dim , (list,tuple)):
-            assert mod_num == len(input_dim)
+            assert mod_num == len(input_dim) , (mod_num , len(input_dim))
         else:
             input_dim = [input_dim for _ in range(mod_num)]
         
@@ -76,7 +76,7 @@ class PositionalEncoding(nn.Module):
 class SampleWiseTranformer(nn.Module):
     def __init__(self , hidden_dim , ffn_dim = None , num_heads = 8 , encoder_layers = 2 , dropout=0.0):
         super().__init__()
-        assert hidden_dim % num_heads == 0
+        assert hidden_dim % num_heads == 0 , (hidden_dim , num_heads)
         ffn_dim = 4 * hidden_dim if ffn_dim is None else ffn_dim
         self.fc_att = TimeWiseAttention(hidden_dim,hidden_dim)
         enc_layer  = nn.TransformerEncoderLayer(hidden_dim, num_heads, dim_feedforward=ffn_dim , dropout=dropout , batch_first=True)
@@ -97,7 +97,7 @@ class SampleWiseTranformer(nn.Module):
 class TimeWiseTranformer(nn.Module):
     def __init__(self , input_dim , hidden_dim , ffn_dim = None , num_heads = 8 , encoder_layers = 2 , dropout=0.0):
         super().__init__()
-        assert hidden_dim % num_heads == 0
+        assert hidden_dim % num_heads == 0 , (hidden_dim , num_heads)
         ffn_dim = 4 * hidden_dim if ffn_dim is None else ffn_dim
         self.pos_enc = PositionalEncoding(hidden_dim,dropout=dropout)
         enc_layer = nn.TransformerEncoderLayer(hidden_dim , num_heads, dim_feedforward=ffn_dim , dropout=dropout , batch_first=True)
