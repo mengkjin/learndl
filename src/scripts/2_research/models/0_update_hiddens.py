@@ -8,17 +8,11 @@
 # mode: shell
 
 from src.res.api import ModelAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder , ScriptLock
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
-@ScriptLock('update_hiddens' , timeout = 10)
+@ScriptTool('update_hiddens')
 def main(**kwargs):
-    with AutoRunTask('update_hiddens' , **kwargs) as runner:
-        ModelAPI.update_hidden()
-        runner.critical(f'Update hiddens at {runner.update_to} completed')
-
-    return runner
-
+    ModelAPI.update_hidden()
+    
 if __name__ == '__main__':
     main()

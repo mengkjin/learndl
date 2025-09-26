@@ -14,17 +14,11 @@
 #       required : True
 
 from src.res.api import TradingAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
-def main(**kwargs):
-    reset_port_name = kwargs.pop('reset_port_name')
-    with AutoRunTask('reset_tradeports' , reset_port_name , **kwargs) as runner:
-        TradingAPI.update(reset_ports = [reset_port_name])
-        runner.critical(f'Reset trading portfolios at {runner.update_to} completed')
-
-    return runner
+@ScriptTool('reset_tradeports' , '@reset_port_name')
+def main(reset_port_name : str , **kwargs):
+    TradingAPI.update([reset_port_name])
 
 if __name__ == '__main__':
     main()

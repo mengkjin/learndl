@@ -42,29 +42,28 @@
 import time , random
 
 from src.proj import Logger
-from src.basic import AutoRunTask , Timer
-from src.app import BackendTaskRecorder , ScriptLockMultiple
+from src.basic import Timer
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder(txt = 'Bye, World!' , email = 0)
-@ScriptLockMultiple('test_streamlit' , lock_num = 2 , timeout = 2)
-def main(txt : str = 'Hello, World!' , **kwargs):
-    port_name = kwargs.pop('port_name')
-    with AutoRunTask('test_streamlit' , port_name , **kwargs) as runner:
-        with Logger.EnclosedMessage('main part'):
-            with Timer('abc'):
-                runner.info(f'this is an info: {str(kwargs)}')
-                runner.info(f'this is an info: {txt}')
-                Logger.cache_message('critical' , f'critical: lazy message')
-                runner.warning(f'this is a warning: {txt}')
-                runner.debug(f'this is a debug: {txt}')
-                runner.critical(f'this is a critical: {txt}')
-                if (rnd := random.random()) < 0.5:
-                    runner.error(f'this is an error: {rnd}')
-                else:
-                    runner.info(f'this is an info: {rnd}')
-        time.sleep(10)
-
-    return runner
+@ScriptTool('test_streamlit' , '@port_name' , txt = 'Bye, World!' , email = False , lock_num = 2 , lock_timeout = 10)
+def main(txt : str = 'Hello, World!' , start : int | None = 100 , **kwargs):
+    with Logger.EnclosedMessage('main part'):
+        with Timer('abc'):
+            ScriptTool.info(f'this is kwargs: {str(kwargs)}')
+            ScriptTool.info(f'this is an info: {txt}')
+            Logger.cache_message('critical' , f'critical: lazy message')
+            ScriptTool.warning(f'this is a warning: {txt}')
+            ScriptTool.debug(f'this is a debug: {txt}')
+            ScriptTool.critical(f'this is a critical: {txt}')
+            print(f'email: {ScriptTool.get_value('email')}')
+            print(f'forfeit_task: {ScriptTool.get_value('forfeit_task')}')
+            print(f'task_key: {ScriptTool.get_value('task_key')}')
+            print(f'short_test: {ScriptTool.get_value('short_test')}')
+            if (rnd := random.random()) < 0.5:
+                ScriptTool.error(f'this is an error: {rnd}')
+            else:
+                ScriptTool.info(f'this is an info: {rnd}')
+    time.sleep(2)
         
 if __name__ == '__main__':
     main()

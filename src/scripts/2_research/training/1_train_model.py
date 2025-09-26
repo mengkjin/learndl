@@ -22,19 +22,11 @@
 
 from pathlib import Path
 from src.res.api import ModelAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder , ScriptLock
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
-@ScriptLock('train_model' , timeout = 10)
-def main(**kwargs):
-    module_name = kwargs.pop('module_name')
-    module = Path(module_name).parts[-1]
-    with AutoRunTask('train_model' , module , **kwargs) as runner:
-        trainer = ModelAPI.train_model(module = module , short_test = runner.get('short_test'))
-        runner.attach(trainer.result_package)
-        runner.critical(f'Train model at {runner.update_to} completed')
-    return runner
+@ScriptTool('train_model' , '@module_name')
+def main(module_name : str , short_test : bool | None = None , **kwargs):
+    ModelAPI.train_model(Path(module_name).parts[-1] , short_test)
         
 if __name__ == '__main__':
     main()

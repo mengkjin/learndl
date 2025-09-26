@@ -122,6 +122,11 @@ class Logger:
             while cls._cached_messages[type]:
                 yield type , cls._cached_messages[type].pop(0)
 
+    @classmethod
+    def get_cached_messages(cls , type : Literal['info' , 'warning' , 'error' , 'critical' , 'debug']) -> list[str]:
+        """Get the cached messages"""
+        return cls._cached_messages[type]
+
     class EnclosedMessage:
         """F
         ormat Enclosed message

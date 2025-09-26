@@ -15,22 +15,16 @@
 
 from src.res.api import DataAPI
 from src.proj import MACHINE
-from src.basic import AutoRunTask , CALENDAR
-from src.app import BackendTaskRecorder , ScriptLock
+from src.basic import CALENDAR
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder(email = 1)
-@ScriptLock('rollback_update' , timeout = 1 , wait_time = 60)
-def main(**kwargs):
-    rollback_date = int(kwargs.pop('rollback_date'))
-    with AutoRunTask('rollback_update' , rollback_date , **kwargs) as runner:
-        CALENDAR.check_rollback_date(rollback_date)
-        if not MACHINE.updateable:
-            runner.error(f'{MACHINE.name} is not updateable, skip rollback update')
-        else:
-            DataAPI.update_rollback(rollback_date = rollback_date)
-            runner.critical(f'Rollback update of {runner.update_to} completed')
-
-    return runner
+@ScriptTool('rollback_update' , '@rollback_date')
+def main(rollback_date : int , **kwargs):
+    CALENDAR.check_rollback_date(rollback_date)
+    if not MACHINE.updateable:
+        ScriptTool.error(f'{MACHINE.name} is not updateable, skip rollback update')
+    else:
+        DataAPI.update_rollback(rollback_date = rollback_date)
         
 if __name__ == '__main__':
     main()

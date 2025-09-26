@@ -40,7 +40,7 @@ class BackendTaskRecorder:
         - any other type (converted to str)
     '''
     def __init__(self , **kwargs):
-        parsed_kwargs = argparse_dict(**kwargs)
+        parsed_kwargs = self.parse_kwargs(kwargs)
         task_id : str | None = parsed_kwargs.pop('task_id' , None)
         if task_id:
             self._task_id = task_id
@@ -80,6 +80,22 @@ class BackendTaskRecorder:
             self.update_msg[key] = value
         else:
             self.params[key] = value
+
+    @staticmethod
+    def parse_kwargs(kwargs : dict[str , Any]) -> dict[str , Any]:
+        parsed_kwargs = argparse_dict(**kwargs)
+        for key, value in kwargs.items():
+            if not isinstance(value , str):
+                parsed_kwargs[key] = value
+            elif value.lower() in ['true' , 'false']:
+                parsed_kwargs[key] = eval(value)
+            elif value.lower() in ['null' , 'none']:
+                parsed_kwargs[key] = None
+            elif value.isdigit():
+                parsed_kwargs[key] = eval(value)
+            else:
+                parsed_kwargs[key] = value
+        return parsed_kwargs
 
     @property
     def task_id(self):

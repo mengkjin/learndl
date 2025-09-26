@@ -18,18 +18,11 @@
 #   height : 600 # optional
 
 from src.res.api import ModelAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder , ScriptLock
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
-@ScriptLock('resume_model' , timeout = 10)
-def main(**kwargs):
-    model_name = kwargs.pop('model_name')
-    with AutoRunTask('resume_model' , model_name , **kwargs) as runner:
-        ModelAPI.resume_model(model_name = model_name)
-        runner.critical(f'Resume model at {runner.update_to} completed')
-
-    return runner
+@ScriptTool('resume_model' , '@model_name')
+def main(model_name : str , **kwargs):
+    ModelAPI.resume_model(model_name = model_name)
         
 if __name__ == '__main__':
     main()

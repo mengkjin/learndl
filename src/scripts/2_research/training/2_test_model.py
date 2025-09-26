@@ -22,18 +22,11 @@
 #   height : 600 # optional
 
 from src.res.api import ModelAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder , ScriptLock
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
-@ScriptLock('test_model' , timeout = 10)
-def main(**kwargs):
-    model_name = kwargs.pop('model_name')
-    with AutoRunTask('test_model' , model_name , **kwargs) as runner:
-        ModelAPI.test_model(model_name = model_name , short_test = runner.get('short_test'))
-        runner.critical(f'Test model at {runner.update_to} completed')
+@ScriptTool('test_model' , '@model_name' , lock_num = 0)
+def main(model_name : str , short_test : bool | None = None , **kwargs):
+    ModelAPI.test_model(model_name , short_test)
 
-    return runner
-        
 if __name__ == '__main__':
     main()

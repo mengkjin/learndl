@@ -100,7 +100,7 @@ class SessionControl:
         setting = {}
         email = str(st.session_state.get('global-settings-email' , 'none')).lower()
         if email != 'none': 
-            setting['email'] = 1 if email == 'y' else 0
+            setting['email'] = 1 if email.startswith('y') else 0
 
         mode = str(st.session_state.get('global-settings-mode' , 'none')).lower()
         if mode != 'none': 

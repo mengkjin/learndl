@@ -8,17 +8,11 @@
 # mode: shell
 
 from src.res.api import DataAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder , ScriptLock
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
-@ScriptLock('reconstruct_train_data' , timeout = 10)
+@ScriptTool('reconstruct_train_data')
 def main(**kwargs):
-    with AutoRunTask('reconstruct_train_data' , **kwargs) as runner:
-        DataAPI.reconstruct_train_data(confirm = 1)
-        runner.critical(f'Reconstruct train data at {runner.update_to} completed')
-
-    return runner
-
+    DataAPI.reconstruct_train_data(confirm = 1)
+    
 if __name__ == '__main__':
     main()

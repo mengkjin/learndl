@@ -9,25 +9,21 @@
 
 from src.res.api import DataAPI , ModelAPI , TradingAPI , NotificationAPI
 from src.proj import MACHINE
-from src.basic import AutoRunTask , CALENDAR
-from src.app import BackendTaskRecorder , ScriptLock
+from src.basic import CALENDAR
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder(email = 1)
-@ScriptLock('daily_update' , wait_time = 60)
+@ScriptTool('daily_update' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(**kwargs):
-    with AutoRunTask('daily_update' , CALENDAR.update_to() , **kwargs) as runner:
-        if not MACHINE.updateable:
-            runner.error(f'{MACHINE.name} is not updateable, skip daily update')
-        elif runner.forfeit_task: 
-            runner.error(f'task is forfeit, most likely due to finished autoupdate, skip daily update')
+    if not MACHINE.updateable:
+        ScriptTool.error(f'{MACHINE.name} is not updateable, skip daily update')
+    else:
+        DataAPI.update()
+        if not DataAPI.is_updated():
+            ScriptTool.error(f'Data is not updated to the latest date, skip model update')
         else:
-            DataAPI.update()
             ModelAPI.update()
             TradingAPI.update()
             NotificationAPI.proceed()
-            runner.critical(f'Daily update of {runner.update_to} completed')
-
-    return runner
         
 if __name__ == '__main__':
     main()

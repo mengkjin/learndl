@@ -140,7 +140,7 @@ class ModelAPI:
     
     @classmethod
     def schedule_model(cls , schedule_name : str | None = None , short_test : bool | None = None , 
-                       verbosity : int | None = 2 , resume : int = 1 , **kwargs):
+                       resume : int = 1 , verbosity : int | None = 2 , **kwargs):
         '''
         Train a schedule model in config/schedule folder
         '''

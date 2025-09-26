@@ -1,7 +1,7 @@
 import time
 
 from src.proj import PATH , MACHINE , HtmlCatcher
-from src.basic import RegisteredModel
+from src.basic import RegisteredModel , Email
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
 from src.res.model.util import BaseTrainer
@@ -51,9 +51,10 @@ class ModelTrainer(BaseTrainer):
 
     @classmethod
     def train(cls , module : str | None = None , short_test : bool | None = None , message_catcher : bool = True , **kwargs):
-        with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
+        with HtmlCatcher(message_catcher) as catcher:
             trainer = cls.initialize(module = module , short_test = short_test , **kwargs).go()
             catcher.set_attrs(f'Train Model of {trainer.config.model_name}' , trainer.path_training_output)
+        Email.Attach(trainer.result_package)
         return trainer
     
     @classmethod
@@ -62,11 +63,12 @@ class ModelTrainer(BaseTrainer):
         assert model_name, 'model_name is required'
         available_models = cls.available_models(short_test = False)
         assert model_name in available_models , f'model_name {model_name} not found in {available_models}'
-        with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
+        with HtmlCatcher(message_catcher) as catcher:
             trainer = cls.initialize(
                 base_path = PATH.model.joinpath(model_name) , 
                 stage = stage , resume = resume , checkname = checkname , **kwargs).go()
             catcher.set_attrs(f'Resume Model of {trainer.config.model_name}' , trainer.path_training_output)
+        Email.Attach(trainer.result_package)
         return trainer
     
     @classmethod
@@ -75,17 +77,19 @@ class ModelTrainer(BaseTrainer):
         assert model_name, 'model_name is required'
         available_models = cls.available_models(short_test = False)
         assert model_name in available_models , f'model_name {model_name} not found in {available_models}'
-        with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
+        with HtmlCatcher(message_catcher) as catcher:
             trainer = cls.initialize(
                 base_path = PATH.model.joinpath(model_name) , stage = stage , resume = resume , checkname = checkname, **kwargs).go()
             catcher.set_attrs(f'Test Model of {trainer.config.model_name}' , trainer.path_training_output)
+        Email.Attach(trainer.result_package)
         return trainer
     
     @classmethod
     def schedule(cls , schedule_name : str | None = None , short_test : bool | None = None , message_catcher : bool = True ,
                  stage = 0 , resume = 0 , checkname = -1 , **kwargs):
         assert schedule_name, 'schedule_name is required'
-        with HtmlCatcher.CreateCatcher(message_catcher) as catcher:
+        with HtmlCatcher(message_catcher) as catcher:
             trainer = cls.initialize(schedule_name = schedule_name , short_test = short_test , stage = stage , resume = resume , checkname = checkname , **kwargs).go() 
             catcher.set_attrs(f'Schedule Model of {trainer.config.model_name}' , trainer.path_training_output)
+        Email.Attach(trainer.result_package)
         return trainer

@@ -8,17 +8,11 @@
 # mode: shell
 
 from src.res.api import ModelAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder , ScriptLock
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
-@ScriptLock('update_preds' , timeout = 10)
+@ScriptTool('update_preds')
 def main(**kwargs):
-    with AutoRunTask('update_preds' , **kwargs) as runner:
-        ModelAPI.update_preds() 
-        runner.critical(f'Update preds at {runner.update_to} completed')
-
-    return runner
+    ModelAPI.update_preds() 
 
 if __name__ == '__main__':
     main()

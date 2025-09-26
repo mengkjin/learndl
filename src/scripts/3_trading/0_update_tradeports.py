@@ -8,15 +8,11 @@
 # mode: shell
 
 from src.res.api import TradingAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
+@ScriptTool('update_tradeports')
 def main(**kwargs):
-    with AutoRunTask('update_tradeports' , **kwargs) as runner:
-        TradingAPI.update()
-        runner.critical(f'Update trading portfolios at {runner.update_to} completed')
-    return runner
-
+    TradingAPI.update()
+    
 if __name__ == '__main__':
     main()

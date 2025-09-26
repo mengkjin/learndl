@@ -9,22 +9,16 @@
 
 from src.res.api import ModelAPI
 from src.proj import MACHINE
-from src.basic import AutoRunTask , CALENDAR
-from src.app import BackendTaskRecorder , ScriptLock
+from src.basic import CALENDAR
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder(email = 1)
-@ScriptLock('weekly_update' , timeout = 1 , wait_time = 60)
+@ScriptTool('weekly_update' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(**kwargs):
-    with AutoRunTask('weekly_update' , CALENDAR.update_to() , **kwargs) as runner:
-        if not MACHINE.server:
-            runner.error(f'{MACHINE.name} is not a server, skip weekly update')
-        elif runner.forfeit_task:
-            runner.error(f'task is forfeit, most likely due to finished autoupdate, skip weekly update')
-        else:
-            ModelAPI.update_models()
-            runner.critical(f'Weekly update of {runner.update_to} completed')
+    if not MACHINE.server:
+        ScriptTool.error(f'{MACHINE.name} is not a server, skip weekly update')
+    else:
+        ModelAPI.update_models()
 
-    return runner
 
 if __name__ == '__main__':
     main()

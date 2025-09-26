@@ -21,19 +21,11 @@
 #       required : True
 
 from src.res.factor.api import FactorCalculatorAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder , ScriptLock    
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
-@ScriptLock('update_factors' , timeout = 10)
-def main(**kwargs):
-    with AutoRunTask('update_factors_all' , **kwargs) as runner:
-        FactorCalculatorAPI.update(start = int(kwargs.pop('start')) , 
-                                   end = int(kwargs.pop('end')) , 
-                                   groups_in_one_update = None , verbosity = 2)
-        runner.critical(f'Update factors at {runner.update_to} completed')
-
-    return runner
-
+@ScriptTool('update_factors_all' , lock_name = 'update_factors')
+def main(start : int , end : int , **kwargs):
+    FactorCalculatorAPI.update(start = int(start) , end = int(end) , groups_in_one_update = None , verbosity = 2)
+        
 if __name__ == '__main__':
     main()

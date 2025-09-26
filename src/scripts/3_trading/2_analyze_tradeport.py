@@ -20,16 +20,11 @@
 #       desc : end yyyymmdd
 
 from src.res.api import TradingAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
-def main(**kwargs):
-    port_name = kwargs.pop('port_name')
-    with AutoRunTask(f'analyze_tradeport' , port_name , **kwargs) as runner:
-        TradingAPI.Analyze(port_name = port_name, start = runner.get('start') , end = runner.get('end'))
-        runner.critical(f'Analyze trading portfolio [{port_name}] at {runner.update_to} completed')
-    return runner
-
+@ScriptTool('analyze_tradeport' , '@port_name' , lock_num = 0)
+def main(port_name : str , start : int | None = None , end : int | None = None , **kwargs):
+    TradingAPI.Analyze(port_name, start , end)
+    
 if __name__ == '__main__':
     main()

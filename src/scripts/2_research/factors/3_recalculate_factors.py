@@ -23,18 +23,11 @@
 #       default : 20250904
 
 from src.res.factor.api import FactorCalculatorAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder , ScriptLock    
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
-@ScriptLock('update_factors' , timeout = 10)
-def main(**kwargs):
-    with AutoRunTask('recalculate_factors' , **kwargs) as runner:
-        FactorCalculatorAPI.recalculate(start = int(kwargs.pop('start')) , 
-                                        end = int(kwargs.pop('end')) , verbosity = 2)
-        runner.critical(f'Update factors at {runner.update_to} completed')
-
-    return runner
+@ScriptTool('recalculate_factors' , lock_name = 'update_factors')
+def main(start : int , end : int , **kwargs):
+    FactorCalculatorAPI.recalculate(start = int(start) , end = int(end) , verbosity = 2)
 
 if __name__ == '__main__':
     main()

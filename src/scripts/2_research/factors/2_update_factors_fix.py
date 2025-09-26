@@ -13,17 +13,11 @@
 #       required : True
 
 from src.res.factor.api import FactorCalculatorAPI
-from src.basic import AutoRunTask
-from src.app import BackendTaskRecorder , ScriptLock    
+from src.app.script_tool import ScriptTool
 
-@BackendTaskRecorder()
-@ScriptLock('update_factors' , timeout = 10)
-def main(**kwargs):
-    with AutoRunTask('update_factors_fix' , **kwargs) as runner:
-        FactorCalculatorAPI.fix(factors = [s.strip() for s in runner['factor_names'].split(',')] , verbosity = 2)
-        runner.critical(f'Fix factors at {runner.update_to} completed')
-
-    return runner
+@ScriptTool('update_factors_fix' , lock_name = 'update_factors')
+def main(factor_names : str , **kwargs):
+    FactorCalculatorAPI.fix(factors = [s.strip() for s in factor_names.split(',')] , verbosity = 2)
 
 if __name__ == '__main__':
     main()

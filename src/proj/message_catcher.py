@@ -291,8 +291,11 @@ class HtmlCatcher(OutputCatcher):
             HtmlCatcher.Capturing = True
 
     '''catch message from stdout and stderr, and display module'''
-    def __init__(self, title: str  | None = None, export_path: Path | str | None = None , time: datetime | None = None , **kwargs):
-        self._enable_catcher = True
+    def __init__(self, title: str | bool | None = None, time: datetime | None = None , export_path: Path | str | None = None , **kwargs):
+        if isinstance(title , bool) and not title:
+            self._enable_catcher = False
+        else:
+            self._enable_catcher = True
         self.outputs: list[TimedOutput] = []
         self.title = title if title else 'html_catcher'
         self.time = time if time else datetime.now()
@@ -319,14 +322,6 @@ class HtmlCatcher(OutputCatcher):
     @property
     def is_running(self):
         return self.Instance is not None
-    
-    @classmethod
-    def CreateCatcher(cls, message_catcher : Path | str | bool = False , title : str | None = None , time : datetime | None = None , **kwargs):
-        export_path = message_catcher if isinstance(message_catcher , (Path , str)) else None
-        catcher = cls(title , export_path = export_path , time = time , **kwargs)
-        if not message_catcher: 
-            catcher._enable_catcher = False
-        return catcher
     
     def get_export_path(self):
         if isinstance(self._export_path, Path):
