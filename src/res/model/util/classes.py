@@ -8,8 +8,8 @@ from inspect import currentframe
 from pathlib import Path
 from typing import Any , final , Iterator , Literal
 
-from src.proj import PATH , Logger
-from src.basic import ModelDict , BigTimer , INSTANCE_RECORD
+from src.proj import INSTANCE_RECORD ,PATH , Logger
+from src.basic import ModelDict , BigTimer
 from src.func import Filtered
 from src.res.algo import AlgoModule
 from src.data import ModuleData

@@ -6,7 +6,8 @@ from collections.abc import Iterable
 from copy import deepcopy
 from typing import Any , Literal
 
-from src.basic import INSTANCE_RECORD , DB
+from src.proj import INSTANCE_RECORD
+from src.basic import DB
 from src.func import transform as T
 from src.data import DataBlock , DATAVENDOR
 
@@ -16,6 +17,9 @@ from .benchmark import Benchmark
 __all__ = ['StockFactor']
 
 def append_indus(df : pd.DataFrame):
+    """
+    append industry to factor dataframe
+    """
     secid = df.index.get_level_values('secid').unique().to_numpy()
     date = df.index.get_level_values('date').unique().to_numpy()
     old_index = df.index.names
@@ -25,6 +29,9 @@ def append_indus(df : pd.DataFrame):
     return df
 
 def append_ffmv(df : pd.DataFrame):
+    """
+    append fmv to factor dataframe
+    """
     secid = df.index.get_level_values('secid').unique().to_numpy()
     date = df.index.get_level_values('date').unique().to_numpy()
     old_index = df.index.names
@@ -33,6 +40,11 @@ def append_ffmv(df : pd.DataFrame):
     return df
 
 def append_fut_ret(df : pd.DataFrame , nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close'):
+    """
+    append future return to factor dataframe
+    example:
+        df = append_fut_ret(df , nday = 10 , lag = 2 , ret_type = 'close')
+    """
     secid = df.index.get_level_values('secid').unique().to_numpy()
     date = df.index.get_level_values('date').unique().to_numpy()
     old_index = df.index.names
@@ -41,18 +53,27 @@ def append_fut_ret(df : pd.DataFrame , nday : int = 10 , lag : int = 2 , ret_typ
     return df
 
 def melt_frame(df : pd.DataFrame):
+    """
+    melt the dataframe from wide to long
+    """
     if 'factor_name' in df.index.names:
         return df
     else:
         return df.melt(var_name = 'factor_name' , ignore_index = False).set_index('factor_name' , append=True)
 
 def pivot_frame(df : pd.DataFrame):
+    """
+    pivot the dataframe from long to wide
+    """
     if 'factor_name' in df.index.names:
         return df.pivot_table(index = ['date' , 'secid'] , columns = 'factor_name' , values = 'value')
     else:
         return df
 
 def whiten(df : pd.DataFrame | Any, ffmv_weighted = False , pivot = True):
+    """
+    whiten the factors by date / factor_name , weight can be ffmv or not
+    """
     df = melt_frame(df)
     if ffmv_weighted:
         df = append_ffmv(df)
@@ -66,6 +87,9 @@ def whiten(df : pd.DataFrame | Any, ffmv_weighted = False , pivot = True):
     return df
 
 def winsor(df : pd.DataFrame | Any , pivot = True , **kwargs):
+    """
+    winsorize the factors by date / factor_name
+    """
     df = melt_frame(df)
     df = df.groupby(by=['date' , 'factor_name']).transform(T.winsorize , **kwargs)
     if isinstance(df , pd.Series): 
@@ -77,6 +101,9 @@ def winsor(df : pd.DataFrame | Any , pivot = True , **kwargs):
 def fillna(df : pd.DataFrame | Any , 
            fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'zero' ,
            pivot = True , **kwargs):
+    """
+    fill NA values of factors by date / factor_name
+    """
     df = melt_frame(df)
     if fill_method == 'drop':
         df = df.dropna()
@@ -104,11 +131,18 @@ def fillna(df : pd.DataFrame | Any ,
     return df
 
 def neutralize(df : pd.DataFrame | Any , pivot = True , **kwargs):
+    """
+    neutralize the factors by date / factor_name
+    !! unrealized feature !!
+    """
     if pivot: 
         df = pivot_frame(df)
     return df
 
 def eval_grp_avg(x : pd.DataFrame , x_cols : list, y_name : str = 'ret', group_num : int = 10 , excess = False) -> pd.DataFrame:
+    """
+    evaluate the group average return of the factors
+    """
     y = pd.DataFrame(x[y_name], index=x.index, columns=pd.Index([y_name]))
     rtn = list()
     for col in x_cols:
@@ -122,6 +156,9 @@ def eval_grp_avg(x : pd.DataFrame , x_cols : list, y_name : str = 'ret', group_n
     return rtn
 
 def pnl_weights(x : pd.DataFrame, weight_type : str, direction : Any = 1 , group_num : int = 10):
+    """
+    calculate the weights of the factors in calculation of weighted pnl
+    """
     assert weight_type in ['long_short', 'top100' , 'long', 'short'] , weight_type
     assert np.all(np.sign(direction) != 0) , direction
     x = (x / np.nanstd(x, axis=0)) * np.sign(direction)
@@ -139,6 +176,9 @@ def pnl_weights(x : pd.DataFrame, weight_type : str, direction : Any = 1 , group
     return wgt
 
 def eval_weighted_pnl(x : pd.DataFrame , weight_type : str , direction : Any , group_num = 10 , y_name = 'ret'):
+    """
+    evaluate the weighted pnl (top - bottom) of the factors
+    """
     vals = x.drop(columns=[y_name])
     rets = x[[y_name]].to_numpy()
     weights = pnl_weights(vals, weight_type, direction, group_num)
@@ -146,12 +186,27 @@ def eval_weighted_pnl(x : pd.DataFrame , weight_type : str , direction : Any , g
     return rtn
 
 def param_match(args1 : dict[str,Any] , args2 : dict[str,Any]) -> bool:
+    """
+    check if the parameters match each other perfectly
+    """
     if len(args1) != len(args2): 
         return False
     matches = [k in args2 and args2[k] == v for k , v in args1.items()]
     return all(matches) 
 
 class StockFactor:
+    """
+    StockFactor class is used to store and manipulate factor data
+    factor data can be a pandas DataFrame , a pandas Series , a DataBlock , a StockFactor , or a dictionary of pd.Series
+    can include multiple factors
+
+    example:
+        factor = StockFactor(factor_data)
+        factor.normalize()
+        factor.analyze()
+        factor.eval_ic()
+        factor.eval_group_perf()
+    """
     def __init__(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' , normalized = False , step = None):
         self.update(factor , normalized , step)
         INSTANCE_RECORD.update_factor(self)
@@ -163,6 +218,10 @@ class StockFactor:
         return self.within(benchmark)
 
     def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' , normalized = False , step = None):
+        """
+        update the factor data
+        """
+        
         if isinstance(factor , StockFactor):
             factor = factor.prior_input
         elif isinstance(factor , dict):
@@ -190,9 +249,16 @@ class StockFactor:
         self.stats : dict[str,tuple[dict[str,Any],pd.DataFrame]] = {}
         return self
 
-    def copy(self): return deepcopy(self)
+    def copy(self): 
+        """
+        return a copy of the factor
+        """
+        return deepcopy(self)
 
     def rename(self , new_name : str | list[str] | dict[str,str] , inplace = True):
+        """
+        rename the factor data
+        """
         if not inplace: 
             self = self.copy()
         if isinstance(new_name , str):
@@ -210,12 +276,18 @@ class StockFactor:
         return self
 
     def join(self , *others : 'StockFactor'):
+        """
+        join the factor with other factors
+        """
         df = self.frame()
         for other in others: 
             df = df.join(other.frame() , how = 'outer')
         return StockFactor(df)
     
     def ew(self):
+        """
+        calculate the equal-weighted factor from multiple factors
+        """
         if self.factor_num == 1:
             return self
         else:
@@ -223,12 +295,18 @@ class StockFactor:
             return StockFactor(df.rename('multifactor_ew'))
 
     def frame(self) -> pd.DataFrame:
+        """
+        return the factor data as a pandas DataFrame
+        """
         if self._df is None:
             assert self._blk is not None , '_df and _blk cannot be both None'
             self._df = self._blk.to_dataframe()
         return self._df
     
     def block(self) -> DataBlock:
+        """
+        return the factor data as a DataBlock
+        """
         if self._blk is None:
             assert self._df is not None , '_df and _blk cannot be both None'
             self._blk = DataBlock.from_dataframe(self._df)
@@ -236,6 +314,9 @@ class StockFactor:
 
     @property
     def secid(self) -> np.ndarray: 
+        """
+        return the unique secid of the factor
+        """
         if self._blk is not None: 
             return self._blk.secid
         else:
@@ -243,6 +324,9 @@ class StockFactor:
 
     @property
     def date(self) -> np.ndarray:
+        """
+        return the unique date of the factor
+        """
         if self._blk is not None: 
             return self._blk.date
         else:
@@ -250,6 +334,9 @@ class StockFactor:
         
     @property
     def factor_names(self) -> np.ndarray:
+        """
+        return the factor names of the factor
+        """
         if self._blk is not None:
             return self._blk.feature
         else:
@@ -257,10 +344,16 @@ class StockFactor:
         
     @property
     def factor_num(self) -> int:
+        """
+        return the number of factors
+        """
         return self.prior_input.shape[-1]
 
     @property
     def prior_input(self) -> pd.DataFrame | DataBlock:
+        """
+        return the prior input of the factor (DataFrame or DataBlock that is initialized with)
+        """
         if self._df is not None:
             return self._df
         else:
@@ -268,11 +361,17 @@ class StockFactor:
         
     @classmethod
     def Load(cls , factor_name : str , date : int):
+        """
+        load the factor data from the database by factor name and date
+        """
         df = DB.factor_load(factor_name , date).assign(date = date)
         return cls(df)
 
     @classmethod
     def Loads(cls , factor_name : str , start : int | None = None , end : int | None = None):
+        """
+        load the factor data from the database by factor name and date range
+        """
         if start is None: 
             start = 0
         if end is None:   
@@ -281,6 +380,9 @@ class StockFactor:
         return cls(df)
         
     def select(self , secid = None , date = None , factor_name = None):
+        """
+        select the factor data by secid , date , factor name
+        """
         if self._df is not None:
             df = self._df.reset_index()
             if date is not None:  
@@ -297,7 +399,9 @@ class StockFactor:
             return StockFactor(self._blk.align(secid , date , factor_name , inplace = False))
 
     def within(self , benchmark : Benchmark | str | None , recalculate = False) -> 'StockFactor':
-        '''use benchmark to mask factor'''
+        """
+        use benchmark to mask factor , only keep the factors that are in the benchmark
+        """
         if isinstance(benchmark , str): 
             benchmark = Benchmark(benchmark)
         if not benchmark: 
@@ -307,14 +411,23 @@ class StockFactor:
         return self.subsets[benchmark.name]
     
     def alpha_model(self) -> AlphaModel:
+        """
+        transform the factor to alpha model , only one factor is supported
+        """
         assert len(self.factor_names) == 1 , f'only one factor is supported for alpha model , but got {len(self.factor_names)}'
         return self.alpha_models()[0]
 
     def alpha_models(self) -> list[AlphaModel]:
+        """
+        transform the factor to alpha models , multiple factors are supported
+        """
         return [AlphaModel.from_dataframe(data , col) for col , data in self.frame().items()]
 
     def frame_with_cols(self , indus = False , fut_ret = False , ffmv = False ,
-                        nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close'):
+                        nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
+        """
+        return the factor data with additional columns
+        """
         df = self.frame()
         if indus:   
             df = append_indus(df)
@@ -326,6 +439,9 @@ class StockFactor:
 
     def eval_ic(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                 ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
+        """
+        evaluate the IC of the factor
+        """
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
         if 'ic' not in self.stats or not param_match(self.stats['ic'][0] , params):
             factors = self.factor_names
@@ -338,6 +454,9 @@ class StockFactor:
     
     def eval_ic_indus(self , nday : int = 10 , lag : int = 2 , ic_type  : Literal['pearson' , 'spearman'] = 'spearman' ,
                       ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
+        """
+        evaluate the IC of the factor by industry
+        """
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
         if 'ic_indus' not in self.stats or not param_match(self.stats['ic_indus'][0] , params):
             with warnings.catch_warnings():
@@ -351,6 +470,9 @@ class StockFactor:
     
     def eval_group_perf(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 , excess = False , 
                         ret_type : Literal['close' , 'vwap'] = 'close' , trade_date = True) -> pd.DataFrame:
+        """
+        evaluate the group performance of the factor
+        """
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'excess' : excess , 'ret_type' : ret_type , 'trade_date' : trade_date}
         if 'group_perf' not in self.stats or not param_match(self.stats['group_perf'][0] , params):
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
@@ -366,6 +488,9 @@ class StockFactor:
     def eval_weighted_pnl(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
                           ret_type : Literal['close' , 'vwap'] = 'close' , given_direction : Literal[1,0,-1] = 0 ,
                           weight_type_list : list[str] = ['long' , 'long_short' , 'short']) -> pd.DataFrame:
+        """
+        evaluate the weighted pnl of the factor
+        """
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type , 'given_direction' : given_direction , 'weight_type_list' : weight_type_list}
         if 'weighted_pnl' not in self.stats or not param_match(self.stats['weighted_pnl'][0] , params):
             df = self.frame_with_cols(fut_ret=True , nday=nday , lag=lag , ret_type=ret_type)
@@ -381,8 +506,11 @@ class StockFactor:
             pnl = pnl.join(pnl.groupby(['factor_name' , 'weight_type']).cumsum().rename(columns={'ret':'cum_ret'})).reset_index()
             self.stats['weighted_pnl'] = (params , pnl)
         return self.stats['weighted_pnl'][1]
-    
+
     def coverage(self , benchmark : Benchmark | str | None = None):
+        """
+        evaluate the coverage of the factor by benchmark
+        """
         params = {'benchmark' : benchmark.name if isinstance(benchmark,Benchmark) else benchmark}
         if 'coverage' not in self.stats or not param_match(self.stats['coverage'][0] , params):
             dates = self.date
@@ -398,6 +526,10 @@ class StockFactor:
     
     def normalize(self , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
                   weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):
+        """
+        normalize the factor data by fill method , weighted whiten , and winsorize
+        can specify the order of the steps
+        """
         df = self.frame()
         for step in order:
             if step == 'fillna':   
@@ -413,6 +545,9 @@ class StockFactor:
             return StockFactor(df , normalized = True)
     
     def select_analytic(self , task_name : str , **kwargs):
+        """
+        select the analytic task by task name
+        """
         from src.res.factor.analytic import FactorPerfManager , BasePerfCalc
 
         match_task = [task for task in FactorPerfManager.TASK_LIST if task.match_name(task_name)]
@@ -429,6 +564,10 @@ class StockFactor:
                                     'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
                                     'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',
                                     'Group_Year','Distrib_Curve'] | str , plot = True , display = True , **kwargs):
+        """
+        analyze the factor by task name (only one task is supported)
+        access by self.analytic_tasks[task_name]
+        """
         if self.step is not None and 'nday' not in kwargs: 
             kwargs['nday'] = self.step
         task = self.select_analytic(task_name , **kwargs)
@@ -438,12 +577,24 @@ class StockFactor:
         return self
 
     def fast_analyze(self , task_list = ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr'] , **kwargs):
-        '''['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr']'''
+        """
+        fast analyze the factor
+        default task list is ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr']
+        access by self.analytic_tasks[task_name]
+        """
         for task_name in task_list: 
             self.analyze(task_name , **kwargs)
         return self
 
     def full_analyze(self , **kwargs):
+        """
+        full analyze the factor , 
+        default task list is ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Decay', 'IC_Indus',
+                     'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
+                     'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',
+                     'Group_Year','Distrib_Curve']
+        access by self.analytic_tasks[task_name]
+        """
         task_list = ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Decay', 'IC_Indus',
                      'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
                      'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',

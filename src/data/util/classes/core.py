@@ -11,7 +11,7 @@ from src.basic import CALENDAR , DB , SILENT , Timer , torch_load
 from src.func import index_union , index_intersect , forward_fillna
 
 from . import Stock4DData
-from ..basic import INFO
+from ..stock_info import INFO
 
 def data_type_abbr(key : str):
     key = key.lower()

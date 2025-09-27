@@ -9,7 +9,7 @@ from sqlalchemy import create_engine , exc
 from typing import ClassVar , Literal
 
 from src.basic import CALENDAR , DB
-from src.data.util.basic import secid_adjust
+from src.data.util import secid_adjust
 from src.func.time import date_seg
 
 def factor_name_pinyin_conversion(text : str):

@@ -222,12 +222,12 @@ class DataVendor:
     
     def risk_style_exp(self , secid : np.ndarray , date : np.ndarray):
         self.get_risk_exp(date.min() , date.max())
-        block = self.risk_exp.align(secid , date , CONF.RISK['style'] , inplace=False).as_tensor()
+        block = self.risk_exp.align(secid , date , CONF.Factor.RISK.style , inplace=False).as_tensor()
         return block
     
     def risk_industry_exp(self , secid : np.ndarray , date : np.ndarray):
         self.get_risk_exp(date.min() , date.max())
-        block = self.risk_exp.align(secid , date , CONF.RISK['indus'] , inplace=False).as_tensor()
+        block = self.risk_exp.align(secid , date , CONF.Factor.RISK.indus , inplace=False).as_tensor()
         return block
     
     def get_ffmv(self , secid : np.ndarray , d : int):

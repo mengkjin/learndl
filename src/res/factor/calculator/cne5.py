@@ -123,9 +123,8 @@ class TuShareCNE5_Calculator:
         if df is None or df.empty: 
             df = pd.concat([self.get_estuniv(date).loc[:,['estuniv','weight','market']] , 
                             self.get_industry(date) , 
-                            *[self.get_style(date , name) for name in CONF.RISK['style']]] , axis=1)
-        common = CONF.RISK['market'] + CONF.RISK['indus'] + CONF.RISK['style']
-        df = df.loc[:,['estuniv' , 'weight'] + common]
+                            *[self.get_style(date , name) for name in CONF.Factor.RISK.style]] , axis=1)
+        df = df.loc[:,['estuniv' , 'weight'] + CONF.Factor.RISK.common]
         self.exposure.add(df , date)
         return df
 
@@ -145,7 +144,7 @@ class TuShareCNE5_Calculator:
     
     def get_style(self , date : int , name : str) -> pd.Series:
         '''get style of a given date'''
-        assert name in CONF.RISK['style'] , name
+        assert name in CONF.Factor.RISK.style , name
         df = self.style.get(date , name)
         if df is None or df.empty: 
             df = getattr(self , f'calc_{name}')(date)
@@ -218,7 +217,7 @@ class TuShareCNE5_Calculator:
         self.ind_grp.add(df , date)
 
         df = df.assign(values = 1).pivot_table('values' , 'secid' , 'indus', fill_value=0).\
-            loc[:,CONF.RISK['indus']]
+            loc[:,CONF.Factor.RISK.indus]
         df = df.reindex(univ.index).fillna(0).rename_axis(columns=None)
         self.ind_exp.add(df , date)
         
@@ -226,7 +225,7 @@ class TuShareCNE5_Calculator:
     
     def calc_style(self , date : int) -> None:
         '''calculate style of a given date'''
-        for style_name in CONF.RISK['style']: 
+        for style_name in CONF.Factor.RISK.style: 
             getattr(self , f'calc_{style_name}')(date)
     
     def calc_size(self , date : int) -> pd.Series:

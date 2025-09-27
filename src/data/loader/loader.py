@@ -82,7 +82,7 @@ class FactorLoader:
     category1  : str
 
     def __post_init__(self):
-        CONF.Validate_Category(self.category0 , self.category1)
+        CONF.Factor.STOCK.validate_categories(self.category0 , self.category1)
 
         from src.res.factor.calculator import StockFactorHierarchy
         self.hier = StockFactorHierarchy()
@@ -107,4 +107,4 @@ class FactorLoader:
     @property
     def category0(self) -> str:
         """Get the category0 of the factor"""
-        return CONF.Category1_to_Category0(self.category1)
+        return CONF.Factor.STOCK.cat1_to_cat0(self.category1)

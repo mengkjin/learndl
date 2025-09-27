@@ -6,7 +6,7 @@ from typing import Any , Literal
 
 from src.proj import PATH , Logger
 from src.basic import CALENDAR , DB
-from src.data.util.basic import secid_adjust , trade_min_reform
+from src.data.util import secid_adjust , trade_min_reform
 
 START_DATE = 20401231
 BAO_PATH = PATH.miscel.joinpath('Baostock')

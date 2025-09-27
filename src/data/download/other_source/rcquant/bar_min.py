@@ -7,7 +7,7 @@ from typing import Literal
 
 from src.proj import PATH , MACHINE , Logger , IOCatcher
 from src.basic import CALENDAR , DB
-from src.data.util.basic import secid_adjust , trade_min_reform
+from src.data.util import secid_adjust , trade_min_reform
 
 RC_PATH = PATH.miscel.joinpath('Rcquant')
 DATA_TYPES = Literal['sec' , 'etf' , 'fut' , 'cb']

@@ -126,7 +126,7 @@ def select_processor(key : str) -> TypePreProcessor:
 class pp_y(TypePreProcessor):
     def block_loaders(self):
         return {'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag']) ,
-                'risk' : BlockLoader('models', 'tushare_cne5_exp', [*CONF.RISK['indus'], 'size'])}
+                'risk' : BlockLoader('models', 'tushare_cne5_exp', [*CONF.Factor.RISK.indus, 'size'])}
     def final_feat(self): return None
     def process(self , blocks : dict[str,DataBlock]): 
         data_block , model_exp = blocks['y'] , blocks['risk']
@@ -229,13 +229,13 @@ class pp_week(TypePreProcessor):
     
 class pp_style(TypePreProcessor):
     def block_loaders(self): 
-        return {'style' : BlockLoader('models', 'tushare_cne5_exp', CONF.RISK['style'])}
+        return {'style' : BlockLoader('models', 'tushare_cne5_exp', CONF.Factor.RISK.style)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['style']
 
 class pp_indus(TypePreProcessor):
     def block_loaders(self): 
-        return {'indus' : BlockLoader('models', 'tushare_cne5_exp', CONF.RISK['indus'])}
+        return {'indus' : BlockLoader('models', 'tushare_cne5_exp', CONF.Factor.RISK.indus)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['indus']
 
@@ -254,7 +254,7 @@ class _ClassProperty:
         raise AttributeError(f'{instance.__class__.__name__}.{self.method} is read-only attributes')
 
     def category0(self , owner) -> str:
-        return CONF.Category1_to_Category0(owner.category1)
+        return CONF.Factor.STOCK.cat1_to_cat0(owner.category1)
 
     def category1(self , owner) -> str:
         return str(owner.__qualname__).removeprefix('pp_').lower()

@@ -132,7 +132,7 @@ class FactorUpdateJobManager:
         if not (all_factors or selected_factors or kwargs): 
             return self
         if end is None: 
-            end = min(CALENDAR.updated() , CONF.UPDATE['end'])
+            end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
 
         for calc in self.iter_calculators(all_factors , selected_factors , **kwargs):
             dates = calc.target_dates(start , end , overwrite = overwrite , force = force)

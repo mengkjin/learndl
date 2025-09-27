@@ -5,9 +5,14 @@ from .output_catcher import IOCatcher , LogWriter , OutputCatcher , OutputDeflec
 from .message_catcher import HtmlCatcher , MarkdownCatcher
 from .db import DBConnHandler
 from .warning_catcher import WarningCatcher
+from .instance_record import INSTANCE_RECORD
 
 def print_project_info():
-    import torch
+    import torch , os
+    identifier = 'project_initialized'
+    if identifier in os.environ:
+        return
+
     print(f'main path: {MACHINE.project_path}')
     if torch.cuda.is_available():
         print(f'Use device name: ' + torch.cuda.get_device_name(0))
@@ -18,5 +23,7 @@ def print_project_info():
     else:
         print('Use CPU as default device')
 
-if __name__ == '__main__':
-    print_project_info()
+    print(f'src.proj.INSTANCE_RECORD can be accessed to check {INSTANCE_RECORD._slots}')
+    os.environ[identifier] = "1"
+
+print_project_info()

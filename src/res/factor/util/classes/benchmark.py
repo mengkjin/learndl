@@ -16,10 +16,10 @@ class Benchmark(Portfolio):
     '''
     _instance_dict = {}
     
-    AVAILABLES = CONF.BENCH['availables']
-    DEFAULTS   = CONF.BENCH['defaults']
-    CATEGORIES = CONF.BENCH['categories']
-    NONE       = ['none' , 'default' , 'market']
+    AVAILABLES = CONF.Factor.BENCH.availables
+    DEFAULTS   = CONF.Factor.BENCH.defaults
+    CATEGORIES = CONF.Factor.BENCH.categories
+    NONE       = CONF.Factor.BENCH.none
     
     def __new__(cls , name : str | Any | None , *args , **kwargs):
         name = cls.get_object_name(name)

@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Sequence , Any
 
-from src.basic import INSTANCE_RECORD , CONF
+from src.proj import INSTANCE_RECORD
+from src.basic import CONF
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 
@@ -44,11 +45,11 @@ class AccountConfig:
     @property
     def trade_cost(self): 
         if self.trade_engine == 'default':
-            return CONF.TRADE['cost']['default']
+            return CONF.Factor.TRADE.default
         elif self.trade_engine == 'harvest':
-            return CONF.TRADE['cost']['harvest']
+            return CONF.Factor.TRADE.harvest
         elif self.trade_engine == 'yale':
-            return CONF.TRADE['cost']['yale']
+            return CONF.Factor.TRADE.yale
         else:
             raise ValueError(f'Unknown trade engine: {self.trade_engine}')
 
@@ -134,7 +135,7 @@ class PortfolioAccountant:
             rets = self.get_rets(port_old , port_new , bench , ed)
             turn = port_new.turnover(port_old)
             self.account.loc[date , ['pf' , 'bm' , 'overnight' , 'turn']] = \
-                np.round([rets['pf'] , rets['bm'] , rets['overnight'] , turn] , CONF.ROUNDING['return'])
+                np.round([rets['pf'] , rets['bm'] , rets['overnight'] , turn] , CONF.Factor.ROUNDING.ret)
             
             if self.config.analytic: 
                 self.account.loc[date , 'analytic']    = RISK_MODEL.get(date).analyze(port_new , bench , port_old) #type:ignore
@@ -212,8 +213,8 @@ class PortfolioAccountant:
         df = pd.concat(accounts)
         old_index = list(df.index.names)
         df = df.reset_index().sort_values('model_date')
-        new_bm = np.setdiff1d(df['benchmark'] , CONF.BENCH['categories']).tolist()
-        df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.BENCH['categories'] + new_bm , ordered=True) 
+        new_bm = np.setdiff1d(df['benchmark'] , CONF.Factor.BENCH.categories).tolist()
+        df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.Factor.BENCH.categories + new_bm , ordered=True) 
 
         df = df.set_index(old_index).sort_index()
         INSTANCE_RECORD.update_account(df)    

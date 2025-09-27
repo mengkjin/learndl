@@ -83,19 +83,19 @@ class BackendTaskRecorder:
 
     @staticmethod
     def parse_kwargs(kwargs : dict[str , Any]) -> dict[str , Any]:
-        parsed_kwargs = argparse_dict(**kwargs)
+        kwargs = argparse_dict(**kwargs)
         for key, value in kwargs.items():
             if not isinstance(value , str):
-                parsed_kwargs[key] = value
+                kwargs[key] = value
             elif value.lower() in ['true' , 'false']:
-                parsed_kwargs[key] = eval(value)
+                kwargs[key] = eval(value.lower().capitalize())
             elif value.lower() in ['null' , 'none']:
-                parsed_kwargs[key] = None
+                kwargs[key] = None
             elif value.isdigit():
-                parsed_kwargs[key] = eval(value)
+                kwargs[key] = eval(value)
             else:
-                parsed_kwargs[key] = value
-        return parsed_kwargs
+                kwargs[key] = value
+        return kwargs
 
     @property
     def task_id(self):

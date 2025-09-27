@@ -18,13 +18,13 @@ class TaskName:
     def __init__(self):
         self._name = None
 
-    def __get__(self , obj , objtype = None):
-        if obj is None and objtype is not None:
-            return objtype._instances[-1].task_name
+    def __get__(self , instance, owner = None):
+        if instance is None and owner is not None:
+            return owner._instances[-1].task_name
         assert self._name is not None , 'TaskName is not set'
         return self._name.replace(' ' , '_').lower()
 
-    def __set__(self , obj , value : str):
+    def __set__(self , instance, value : str):
         self._name = value
 
 class TaskKey:
@@ -34,20 +34,20 @@ class TaskKey:
     def __bool__(self):
         return self._key is not None
 
-    def __get__(self , obj : 'AutoRunTask' , objtype = None):
+    def __get__(self , instance : 'AutoRunTask', owner = None):
         if self._key is None:
             return None
         elif isinstance(self._key , str) and self._key.startswith('@'):
             key = self._key.removeprefix('@')
-            if obj is not None:
-                value = obj[key]
+            if instance is not None:
+                value = instance[key]
             else:
-                value = objtype.get_value(key)
+                value = owner.get_value(key)
             return str(value).lower()
         else:
             return str(self._key).lower()
 
-    def __set__(self , obj , value):
+    def __set__(self , instance, value):
         self._key = value
 
 class AutoRunTask:

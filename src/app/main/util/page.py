@@ -2,8 +2,8 @@ import streamlit as st
 from pathlib import Path
 from typing import Literal
 import re
+from src.basic import CONF
 from src.app.backend import PathItem
-from src.app.basic import VERSION , PAGE_TITLE
 from .control import SC
 
 PAGE_DIR = Path(__file__).parent.parent.joinpath('pages')
@@ -12,7 +12,7 @@ assert PAGE_DIR.exists() , f"Page directory {PAGE_DIR} does not exist"
 INTRO_PAGES = ['home' , 'developer_info' , 'config_editor' , 'task_queue']
 
 PAGE_TITLES = {
-    'home' : f":rainbow[:material/rocket_launch: {PAGE_TITLE} (_v{VERSION}_)]"
+    'home' : f":rainbow[:material/rocket_launch: {CONF.App.page_title} (_v{CONF.App.version}_)]"
 }
 
 PAGE_ICONS = {

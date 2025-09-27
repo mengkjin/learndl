@@ -42,7 +42,7 @@ class _FactorPropertyStr(_FactorProperty):
         return super().__get__(instance,owner)
 
     def category0(self , owner) -> str:
-        return CONF.Category1_to_Category0(owner.category1)
+        return CONF.Factor.STOCK.cat1_to_cat0(owner.category1)
 
     def factor_name(self , owner) -> str:
         return owner.__qualname__
@@ -109,8 +109,8 @@ class _StockFactorCalculatorMeta(SingletonABCMeta):
         new_cls = super().__new__(cls, name, bases, dct)
         abstract_methods = getattr(new_cls , '__abstractmethods__' , None)
         if not abstract_methods:
-            if dct.get('init_date' , -1) < CONF.FACTOR_INIT_DATE: 
-                raise AttributeError(f'class {name} init_date should be later than {CONF.FACTOR_INIT_DATE} , but got {getattr(new_cls, "init_date" , -1)}')
+            if dct.get('init_date' , -1) < CONF.Factor.UPDATE.init_date: 
+                raise AttributeError(f'class {name} init_date should be later than {CONF.Factor.UPDATE.init_date} , but got {getattr(new_cls, "init_date" , -1)}')
 
             if not dct.get('description' , ''):
                 raise AttributeError(f'class {name} description is not set')
@@ -124,7 +124,7 @@ class _StockFactorCalculatorMeta(SingletonABCMeta):
             if not category0:
                 raise AttributeError(f'class {name} category0 is not set')
 
-            CONF.Validate_Category(category0 , category1)
+            CONF.Factor.STOCK.validate_categories(category0 , category1)
 
             assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
                 f'{name} in module {new_cls.__module__} is duplicated within {cls.registry[name].__module__}'
@@ -148,11 +148,11 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
     file_name = _FactorPropertyStr('file_name')
     factor_string = _FactorPropertyStr('factor_string')
 
-    INIT_DATE = CONF.FACTOR_INIT_DATE
-    CATEGORY0_SET = CONF.CATEGORY0_SET
-    CATEGORY1_SET = CONF.CATEGORY1_SET
-    FACTOR_CALENDAR = CALENDAR.td_within(INIT_DATE , step = CONF.UPDATE['step'])
-    FACTOR_TARGET_DATES = CALENDAR.slice(FACTOR_CALENDAR , CONF.UPDATE['start'] , CONF.UPDATE['end'])
+    INIT_DATE = CONF.Factor.UPDATE.init_date
+    CATEGORY0_SET = CONF.Factor.STOCK.category0
+    CATEGORY1_SET = CONF.Factor.STOCK.category1
+    FACTOR_CALENDAR = CALENDAR.td_within(INIT_DATE , step = CONF.Factor.UPDATE.step)
+    FACTOR_TARGET_DATES = CALENDAR.slice(FACTOR_CALENDAR , CONF.Factor.UPDATE.start , CONF.Factor.UPDATE.end)
     UPDATE_MIN_VALID_COUNT_RELAX : int = 20
     UPDATE_MIN_VALID_COUNT_STRICT : int = 100
     UPDATE_RELAX_DATES : list[int] = []
@@ -225,9 +225,9 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
                weighted_whiten = False , order = ['fillna' , 'whiten' , 'winsor'] ,
                multi_thread = True , ignore_error = True , verbose = False) -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
-        assert step % CONF.UPDATE['step'] == 0 , f'step {step} should be a multiple of {CONF.UPDATE["step"]}'
+        assert step % CONF.Factor.UPDATE.step == 0 , f'step {step} should be a multiple of {CONF.Factor.UPDATE.step}'
         dates = CALENDAR.slice(cls.FACTOR_CALENDAR , start , end)
-        dates = dates[dates <= CALENDAR.updated()][::int(step/CONF.UPDATE['step'])]
+        dates = dates[dates <= CALENDAR.updated()][::int(step/CONF.Factor.UPDATE.step)]
         if len(dates) == 0: 
             return StockFactor(pd.DataFrame())
         calc = cls()

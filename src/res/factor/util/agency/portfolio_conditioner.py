@@ -140,7 +140,7 @@ class AccountConditioner:
         else:
             pf = (self.position_start * self.accessor.overnight + 1) * \
                 (self.position_end * self.accessor.intraday + 1) - 1
-        pf = pf - self.position_change.abs() * CONF.TRADE['cost']['default']
+        pf = pf - self.position_change.abs() * CONF.Factor.TRADE.default
         return pf
     
 class BaseConditioner(ABC):
