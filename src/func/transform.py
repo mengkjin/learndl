@@ -178,7 +178,7 @@ def weighted_mean(v , weight = None):
         return np.nanmean(v , axis = None)
 
 def whiten(v : pd.DataFrame | pd.Series | np.ndarray , weight = None) -> Any:
-    stdev = np.nanstd(v) if isinstance(v , np.ndarray) else np.nanstd(v.to_numpy().flatten()) + 1e-6
+    stdev = np.nanstd(v) if isinstance(v , np.ndarray) else np.nanstd(v.to_numpy(float).flatten()) + 1e-6
     mean = weighted_mean(v , weight)
     return (v - mean) / stdev
 

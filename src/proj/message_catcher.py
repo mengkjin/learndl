@@ -241,7 +241,7 @@ class TimedOutput:
     
     def equivalent(self, other: 'TimedOutput') -> bool:
         if self.type == other.type:
-            if self.content == other.content: 
+            if str(self.content) == str(other.content): 
                 return True
             elif self.type == 'stderr':
                 if self.infos.get('is_progress_bar' , False) and other.infos.get('is_progress_bar' , False):
@@ -297,7 +297,7 @@ class HtmlCatcher(OutputCatcher):
         else:
             self._enable_catcher = True
         self.outputs: list[TimedOutput] = []
-        self.title = title if title else 'html_catcher'
+        self.title = title if isinstance(title , str) else 'html_catcher'
         self.time = time if time else datetime.now()
         self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
         self.kwargs = kwargs

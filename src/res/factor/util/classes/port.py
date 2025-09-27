@@ -160,10 +160,10 @@ class Port:
         
     @property
     def secid(self): 
-        return self.port['secid'].to_numpy()
+        return self.port['secid'].to_numpy(int)
     @property
     def weight(self): 
-        return self.port['weight'].to_numpy()
+        return self.port['weight'].to_numpy(float)
     @property
     def position(self): 
         return self.port['weight'].sum()
@@ -190,7 +190,7 @@ class Port:
         new.port['weight'] = scale * new.port['weight']
         return new
     def weight_align(self , secid , fillna = 0.):
-        return self.port.set_index('secid').reindex(secid)['weight'].fillna(fillna).to_numpy()
+        return self.port.set_index('secid').reindex(secid)['weight'].fillna(fillna).to_numpy(float)
     def merge(self , another , name = None , inplace = False):
         assert isinstance(another , Port) , another
         new = self if inplace else self.copy()

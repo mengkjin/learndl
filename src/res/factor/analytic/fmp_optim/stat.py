@@ -27,22 +27,25 @@ def calc_optim_frontface(account : pd.DataFrame):
 
 def calc_optim_perf_curve(account : pd.DataFrame):
     df = filter_account(account).loc[:,['end','pf','bm','excess']]
-    df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
+    index_names = [str(name) for name in df.index.names]
+    df = df.sort_values([*index_names , 'end']).rename(columns={'end':'trade_date'})
 
-    df[['bm','pf']] = eval_cum_ret(df[['bm','pf']] , 'exp' , groupby=df.index.names)
-    df['excess'] = eval_cum_ret(df['excess'] , 'lin' , groupby=df.index.names)
+    df[['bm','pf']] = eval_cum_ret(df[['bm','pf']] , 'exp' , groupby=index_names)
+    df['excess'] = eval_cum_ret(df['excess'] , 'lin' , groupby=index_names)
     df = df.set_index('trade_date' , append=True)
     return df
 
 def calc_optim_perf_drawdown(account : pd.DataFrame):
     df = filter_account(account).loc[:,['end','pf','overnight']]
-    df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
-    df['drawdown'] = eval_drawdown(df['pf'] , 'exp' , groupby = df.index.names)
+    index_names = [str(name) for name in df.index.names]
+    df = df.sort_values([*index_names , 'end']).rename(columns={'end':'trade_date'})
+    df['drawdown'] = eval_drawdown(df['pf'] , 'exp' , groupby = index_names)
     conditioners = [BaseConditioner.select_conditioner(name)() 
                     for name in ['balance' , 'conservative' , 'radical']]  
     dfs = [] 
     for grp , sub in df.groupby(df.index.names , observed=True):
-        sub['raw'] = eval_cum_ret(sub['pf'] , 'exp' , groupby = sub.index.names)
+        sub_index_names = [str(name) for name in sub.index.names]
+        sub['raw'] = eval_cum_ret(sub['pf'] , 'exp' , groupby = sub_index_names)
         for conditioner in conditioners:
             sub[conditioner.conditioner_name()] = conditioner.conditioned_pf_ret(sub , plot = False)
         sub = sub.set_index('trade_date' , append=True).drop(columns=['pf','overnight'])
@@ -53,9 +56,10 @@ def calc_optim_perf_drawdown(account : pd.DataFrame):
 
 def calc_optim_perf_excess_drawdown(account : pd.DataFrame):
     df = filter_account(account).loc[:,['end','excess']]
-    df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
-    df['excess'] = eval_cum_ret(df['excess'] , 'lin' , groupby=df.index.names)
-    df['peak']   = df.groupby(df.index.names , observed=True)[['excess']].cummax()
+    index_names = [str(name) for name in df.index.names]
+    df = df.sort_values([*index_names , 'end']).rename(columns={'end':'trade_date'})
+    df['excess'] = eval_cum_ret(df['excess'] , 'lin' , groupby=index_names)
+    df['peak']   = df.groupby(index_names , observed=True)[['excess']].cummax()
     df['drawdown'] = df['excess'] - df['peak']
     df = df.set_index('trade_date' , append=True).loc[:,['excess' , 'drawdown']]
     return df
@@ -64,7 +68,8 @@ def calc_optim_perf_lag(account : pd.DataFrame):
     if 'lag' not in account.index.names and 'lag' not in account.columns: 
         return pd.DataFrame()
     df = account.loc[:,['end','excess']].copy()
-    df = df.sort_values([*df.index.names , 'end']).rename(columns={'end':'trade_date'})
+    index_names = [str(name) for name in df.index.names]
+    df = df.sort_values([*index_names , 'end']).rename(columns={'end':'trade_date'})
     df = df.set_index('trade_date',append=True).groupby(df.index.names , observed=True)[['excess']].cumsum()
     if 'suffix' in df.index.names: 
         df = df.reset_index('suffix' , drop=True)

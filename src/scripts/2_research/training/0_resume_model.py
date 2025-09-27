@@ -21,7 +21,8 @@ from src.res.api import ModelAPI
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('resume_model' , '@model_name')
-def main(model_name : str , **kwargs):
+def main(model_name : str | None = None , **kwargs):
+    assert model_name is not None , 'model_name is required'
     ModelAPI.resume_model(model_name = model_name)
         
 if __name__ == '__main__':

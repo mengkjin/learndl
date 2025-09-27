@@ -299,7 +299,7 @@ class SellsideSQLDownloader:
             df = secid_adjust(df , ['symbol'] , drop_old=True)
             df['date'] = df['date'].astype(str).str.replace('-','').astype(int)
 
-        int_columns = df.columns.to_numpy()[df.columns.isin(['date', 'secid'])]
+        int_columns = df.columns.to_numpy(str)[df.columns.isin(['date', 'secid'])]
         flt_columns = df.columns.difference(int_columns.tolist())  
         df[int_columns] = df[int_columns].astype(int)  
         df[flt_columns] = df[flt_columns].astype(float)

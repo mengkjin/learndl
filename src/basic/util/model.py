@@ -157,7 +157,7 @@ class HiddenPath:
             model_date = int(model_dates.max()) if len(model_dates) else -1
         return PATH.file_modified_date(self.target_path(model_date))
     
-    def last_modified_time(self , model_date : int | None = None) -> float:
+    def last_modified_time(self , model_date : int | None = None) -> int:
         """last modified time of the hidden path"""
         if model_date is None: 
             model_dates = self.model_dates()

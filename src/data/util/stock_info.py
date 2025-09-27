@@ -34,7 +34,7 @@ class InfoDataAccess:
         return desc
 
     def get_secid(self , date : int | None = None) -> np.ndarray: 
-        return np.unique(self.get_desc(date , set_index=False)['secid'].to_numpy())
+        return np.unique(self.get_desc(date , set_index=False)['secid'].to_numpy(int))
     
     def get_st(self , date : int | TradeDate | None = None , reason = ['终止上市', '暂停上市' , 'ST', '*ST']):
         new_cname = self.cname[self.cname['change_reason'].isin(reason)]

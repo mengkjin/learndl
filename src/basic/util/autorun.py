@@ -227,7 +227,7 @@ class AutoRunTask:
         return self.status == 'Success'
 
     @property
-    def execution_status(self) -> bool:
+    def execution_status(self) -> str:
         """return True if the task script is failed"""
         return 'Error' if self.error_messages else self.status
 

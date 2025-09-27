@@ -70,9 +70,9 @@ class FDataAccess(DateDataAccess):
         min_end_date : pd.Series | Any = old_index.groupby('secid')['end_date'].min()
         max_end_date : pd.Series | Any = old_index.groupby('secid')['end_date'].max()
         index_range = min_end_date.rename('min').to_frame().join(max_end_date.rename('max'))
-        full_index = pd.MultiIndex.from_product([old_index['secid'].unique() , 
-                                                CALENDAR.qe_within(index_range['min'].min(), index_range['max'].max(), year_only = year_only)],
-                                                names = ['secid' , 'end_date'])
+        full_index = pd.MultiIndex.from_product([old_index['secid'].unique().tolist() , 
+                                                 CALENDAR.qe_within(index_range['min'].min(), index_range['max'].max(), year_only = year_only).tolist()],
+                                                 names = ['secid' , 'end_date'])
         new_index = full_index.to_frame(index=False).join(index_range , on = ['secid'] , how='left')
         new_index = new_index[(new_index['end_date'] >= new_index['min']) & (new_index['end_date'] <= new_index['max'])].set_index(['secid' , 'end_date'])
         return df.reindex(new_index.index)
@@ -146,7 +146,7 @@ class FDataAccess(DateDataAccess):
 
         df_acc = self._get_data_acc_hist(data_type , val , date , lastn + 4 , pivot = False , qtr_method = qtr_method)
         secid = df_acc.index.get_level_values('secid').unique()
-        ystarts = np.unique(df_acc.index.get_level_values('end_date').unique() // 10000 * 10000)
+        ystarts = np.unique(df_acc.index.get_level_values('end_date').unique() // 10000 * 10000).tolist()
         df_ystarts = pd.DataFrame({val:0} , index = pd.MultiIndex.from_product([secid , ystarts] , names=['secid' , 'end_date']))
         df_qtr = pd.concat([df_acc , df_ystarts]).sort_index().groupby('secid').ffill().fillna(0).groupby('secid').diff()
         return self._fin_hist_data_transform(df_qtr , val , df_acc , lastn , pivot , ffill)

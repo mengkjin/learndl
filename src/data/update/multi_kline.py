@@ -53,7 +53,7 @@ def nday_kline(date : int , n_day : int) -> pd.DataFrame:
     with np.errstate(invalid='ignore' , divide = 'ignore'):
         data = pd.concat(datas , axis = 0).sort_values(['secid','date'])
         data.loc[:,'adjfactor'] = data.loc[:,'adjfactor'].ffill().fillna(1)
-        data.loc[:,price_feat] = data.loc[:,price_feat] * data.loc[:,'adjfactor'].values[:,None]
+        data.loc[:,price_feat] = data.loc[:,price_feat] * data.loc[:,'adjfactor'].to_numpy(float)[:,None]
         data['pctchange'] = data['pctchange'] / 100 + 1
         data['vwap'] = data['vwap'] * data['volume']
         agg_dict = {'open':'first','high':'max','low':'min','close':'last','pctchange':'prod','vwap':'sum',**{k:'sum' for k in volume_feat},}

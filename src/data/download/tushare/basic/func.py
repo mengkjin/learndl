@@ -34,11 +34,11 @@ def dates_to_update(last_date , freq : Literal['d' , 'w' , 'm'] , update_to : in
     if last_date >= update_to: 
         return np.array([])
     if freq == 'd':
-        date_list = pd.date_range(str(last_date) , str(update_to)).strftime('%Y%m%d').astype(int).to_numpy()[1:]
+        date_list = pd.date_range(str(last_date) , str(update_to)).strftime('%Y%m%d').to_numpy(int)[1:]
     elif freq == 'w':
-        date_list = pd.date_range(str(last_date) , str(update_to)).strftime('%Y%m%d').astype(int).to_numpy()[::7][1:]
+        date_list = pd.date_range(str(last_date) , str(update_to)).strftime('%Y%m%d').to_numpy(int)[::7][1:]
     elif freq == 'm':
-        date_list = pd.date_range(str(last_date) , str(update_to) , freq='ME').strftime('%Y%m%d').astype(int).to_numpy()
+        date_list = pd.date_range(str(last_date) , str(update_to) , freq='ME').strftime('%Y%m%d').to_numpy(int)
         if last_date in date_list: 
             date_list = date_list[1:]
     return np.sort(date_list)

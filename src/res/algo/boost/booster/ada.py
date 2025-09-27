@@ -204,7 +204,7 @@ class WeakLearner:
 
 if __name__ == '__main__':
     factor_data = load_xingye_data()
-    MDTs = np.sort(np.unique(factor_data['date'].to_numpy()))
+    MDTs = np.sort(np.unique(factor_data['date'].to_numpy(int)))
     windows_len = 24 
     
     ic_dfs = []

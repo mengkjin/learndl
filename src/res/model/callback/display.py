@@ -30,7 +30,7 @@ class CallbackTimer(BaseCallBack):
         if self.recording: 
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_times.items() if v]
-            df = pd.DataFrame(values).sort_values(by=[2],ascending=False).head(5)
+            df = pd.DataFrame(values).sort_values(by=['total_time'],ascending=False).head(5)
             df.columns = columns
             print('Table:Callback Time costs:')
             FUNC.display.display(df)
@@ -135,7 +135,7 @@ class StatusDisplay(BaseCallBack):
         if not MACHINE.server: 
             return
         test_scores = {
-            '{}.{}'.format(*col):'|'.join([f'{k}({round(self.summary_df.loc[k,col] , v)})' for k,v in self.SUMMARY_NDIGITS.items() 
+            '{}.{}'.format(*col):'|'.join([f'{k}({self.summary_df[col].round(v).loc[k]})' for k,v in self.SUMMARY_NDIGITS.items() 
                                            if k in self.summary_df[col].index]) for col in self.summary_df.columns}
     
         test_name = f'{self.config.model_name}(x{len(self.config.model_num_list)})_at_{datetime.datetime.fromtimestamp(self.record_init_time).strftime("%Y%m%d%H%M%S")}'

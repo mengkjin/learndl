@@ -154,7 +154,7 @@ class TradeDataAccess(DateDataAccess):
         circ = self.get_mv(start_dt , end_dt , mv_type = 'circ_mv' , pivot = False)
         rets = rets.merge(circ , on = ['date' , 'secid'])
         rets['mv_change'] = rets['pctchange'] * rets['circ_mv']
-        mkt_ret : pd.Series | Any = rets.groupby('date').apply(lambda x:(x['mv_change']).sum()/x['circ_mv'].sum(),include_groups=False)
+        mkt_ret : pd.Series | Any = rets.groupby('date').apply(lambda x:(x['mv_change']).sum()/x['circ_mv'].sum())
         return mkt_ret.rename('market').to_frame()
     
     def get_market_amount(

@@ -170,7 +170,7 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
     instrument_list = instrument_list.loc[instrument_list['is_active']]
     if first_n > 0: 
         instrument_list = instrument_list.iloc[:first_n]
-    code_list = instrument_list['code'].to_numpy()
+    code_list = instrument_list['code'].to_numpy(str)
     data = rqdatac.get_price(code_list, start_date=str(date), end_date=str(date), frequency='1m',expect_df=True)
     if isinstance(data , pd.DataFrame) and not data.empty:
         data = data.reset_index().rename(columns = {'total_turnover':'amount', 'order_book_id':'code'}).assign(date = date)

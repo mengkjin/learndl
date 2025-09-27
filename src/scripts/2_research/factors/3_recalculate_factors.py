@@ -26,7 +26,8 @@ from src.res.factor.api import FactorCalculatorAPI
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('recalculate_factors' , lock_name = 'update_factors')
-def main(start : int , end : int , **kwargs):
+def main(start : int | None = None, end : int | None = None , **kwargs):
+    assert start is not None and end is not None , 'start and end are required'
     FactorCalculatorAPI.recalculate(start = int(start) , end = int(end) , verbosity = 2)
 
 if __name__ == '__main__':

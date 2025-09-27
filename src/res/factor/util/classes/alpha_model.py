@@ -86,7 +86,7 @@ class Amodel:
                        secid : np.ndarray | Any = None , name : str | Any = None):
         if isinstance(data , pd.Series): 
             data = data.to_frame()
-        if np.isin(['secid' , 'date'] , data.index.names).all():
+        if np.isin(['secid' , 'date'] , [str(name) for name in data.index.names]).all():
             data = data.xs(date , level='date')
         else:
             if not isinstance(data.index , pd.RangeIndex): 

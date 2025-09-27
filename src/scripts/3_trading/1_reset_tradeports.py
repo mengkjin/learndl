@@ -17,7 +17,8 @@ from src.res.api import TradingAPI
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('reset_tradeports' , '@reset_port_name')
-def main(reset_port_name : str , **kwargs):
+def main(reset_port_name : str | None = None , **kwargs):
+    assert reset_port_name is not None , 'reset_port_name is required'
     TradingAPI.update([reset_port_name])
 
 if __name__ == '__main__':

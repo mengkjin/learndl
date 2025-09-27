@@ -16,7 +16,7 @@ def date_offset(date : Any , offset : int = 0 , astype = int):
     iterable_input = isinstance(date , Iterable)
     date = pd.DatetimeIndex(np.array(date).astype(str) if iterable_input else [str(date)])
     dseries : pd.DatetimeIndex = (date + pd.DateOffset(n=offset))
-    new_date = dseries.strftime('%Y%m%d').astype(astype).to_numpy()
+    new_date = dseries.strftime('%Y%m%d').to_numpy(astype)
     return new_date if iterable_input else new_date[0]
 
 def date_diff(date1 : int | str , date2 : int | str):

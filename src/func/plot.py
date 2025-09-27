@@ -153,7 +153,7 @@ def plot_table(df : pd.DataFrame , int_cols = None , pct_cols = None , flt_cols 
         for column_definition in column_definitions:
             column_definition.name = column_definition.name.title()
 
-    column_definitions += [ColumnDefinition(name = df.index.names[0] , width = index_width , 
+    column_definitions += [ColumnDefinition(name = str(df.index.names[0]) , width = index_width , 
                                             textprops = {'ha':'left','fontsize':fontsize,'weight':'bold','style':'italic'})]
 
     for column_definition in column_definitions:

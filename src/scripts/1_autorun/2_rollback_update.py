@@ -19,7 +19,8 @@ from src.basic import CALENDAR
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('rollback_update' , '@rollback_date')
-def main(rollback_date : int , **kwargs):
+def main(rollback_date : int | None = None , **kwargs):
+    assert rollback_date is not None , 'rollback_date is required'
     CALENDAR.check_rollback_date(rollback_date)
     if not MACHINE.updateable:
         ScriptTool.error(f'{MACHINE.name} is not updateable, skip rollback update')

@@ -3,6 +3,7 @@ name = "learndl"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
+dynamic = ["version"]  # 添加这一行，声明 version 是动态的
 dependencies = [
     "baostock>=0.8.9",
     "catboost>=1.2.8",
@@ -20,6 +21,7 @@ dependencies = [
     "openpyxl>=3.1.5",
     "optuna>=4.5.0",
     "pandas==2.3.0",
+    "pandas-stubs>=2.3.2",
     "pip>=25.2",
     "plottable>=0.1.5",
     "polars>=1.32.3",
@@ -27,8 +29,11 @@ dependencies = [
     "pymysql>=1.1.2",
     "pypinyin>=0.55.0",
     "pyreadr>=0.5.3",
+    "pyright>=1.1.405",
     "pytimedinput>=2.0.1",
     "pyyaml>=6.0.2",
+    "types-PyYAML>=6.0.12",
+    "types-requests>=2.32.4",
     "rqdatac>=3.2.11",
     "ruff>=0.13.0",
     "scikit-learn==1.7.0",
@@ -94,3 +99,37 @@ ignore = [
     "F403" , # import *
 ]
 "required_pkgs.py" = ["F401"]
+
+[tool.pyright]
+include = ["src"]
+exclude = [
+    "**/__pycache__",
+    "**/.venv",
+    "**/venv",
+    "**/node_modules",
+    "**/.git",
+    "**/build",
+    "**/dist",
+    "**/.ruff_cache",
+    "**/resources"
+]
+
+# 类型检查模式
+typeCheckingMode = "basic"  # 或 "strict"
+
+# Python 版本
+pythonVersion = "3.12"
+
+# 额外的搜索路径
+extraPaths = ["src"]
+
+# 报告选项
+reportMissingImports = "warning"
+reportMissingTypeStubs = "none"
+reportGeneralTypeIssues = "warning"
+reportOptionalMemberAccess = "warning"
+reportOptionalSubscript = "warning"
+reportPrivateImportUsage = "warning"
+
+# 忽略特定错误
+ignore = []

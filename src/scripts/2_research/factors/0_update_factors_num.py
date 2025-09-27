@@ -17,7 +17,8 @@ from src.res.factor.api import FactorCalculatorAPI
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('update_factors_num' , lock_name = 'update_factors')
-def main(num : int , **kwargs):
+def main(num : int | None = None , **kwargs):
+    assert num is not None , 'num is required'
     FactorCalculatorAPI.update(groups_in_one_update=int(num) , verbosity = 2)
 
 if __name__ == '__main__':

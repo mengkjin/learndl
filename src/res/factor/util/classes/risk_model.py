@@ -50,7 +50,7 @@ class Rmodel:
         df = self.F.loc[: , 'weight'] * 1e8
         if secid is not None: 
             df = self.loc_secid(df , secid , 0.)
-        return df.to_numpy().flatten()
+        return df.to_numpy(float).flatten()
     @property
     def common_factors(self): 
         return CONF.Factor.RISK.common

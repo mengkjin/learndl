@@ -31,6 +31,10 @@ class ScriptTool:
         lock_wait_time : int = 1 ,
         **kwargs
     ):
+        self.task_name = task_name
+        self.task_key = task_key
+        self.lock_name = lock_name
+
         self.backend_recorder = BackendTaskRecorder(**kwargs)
         self.script_lock = ScriptLockMultiple(lock_name or task_name , lock_num , lock_timeout , lock_wait_time)
         self.autorun_task = AutoRunTask(task_name , task_key , catchers , forfeit_if_done)

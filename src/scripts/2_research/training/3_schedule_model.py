@@ -30,9 +30,9 @@ from src.res.api import ModelAPI
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('train_schedule_model' , '@schedule_name' , lock_num = 2)
-def main(schedule_name : str , short_test : bool | None = None , resume : bool | None = None , **kwargs):
-    resume = 1 if resume is None else int(resume)
-    ModelAPI.schedule_model(schedule_name , short_test , resume)
+def main(schedule_name : str | None = None , short_test : bool | None = None , resume : bool | None = None , **kwargs):
+    assert schedule_name is not None , 'schedule_name is required'
+    ModelAPI.schedule_model(schedule_name , short_test , 1 if resume is None else int(resume))
         
 if __name__ == '__main__':
     main()

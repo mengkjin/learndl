@@ -125,7 +125,7 @@ class GroupReturnAnalysis(BaseCallBack):
 
         FUNC.dfs_to_excel(rslt , self.path_grp)
         grp : pd.DataFrame = rslt['market']
-        grp.index.names = [col.replace('model_','') for col in grp.index.names]
+        grp.index.names = [str(col).replace('model_','') for col in grp.index.names]
         print('Table: Grouped Return Results:')
         FUNC.display.display(grp)
         print(f'Grouped Return Results are saved to {self.path_grp}')

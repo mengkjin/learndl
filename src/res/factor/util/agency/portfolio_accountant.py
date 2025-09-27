@@ -246,10 +246,10 @@ class PortfolioAccountManager:
         return list(self.accounts.keys())
     
     def account_last_model_dates(self):
-        return {name:np.max(df['model_date'].to_numpy()) for name,df in self.accounts.items() if not df.empty}
+        return {name:np.max(df['model_date'].to_numpy(int)) for name,df in self.accounts.items() if not df.empty}
     
     def account_last_end_dates(self):
-        return {name:np.max(df['end'].to_numpy()) for name,df in self.accounts.items() if not df.empty}
+        return {name:np.max(df['end'].to_numpy(int)) for name,df in self.accounts.items() if not df.empty}
 
     def load_single(self , path : str | Path , missing_ok = True , append = True):
         path = Path(path)

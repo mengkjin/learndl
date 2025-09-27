@@ -66,7 +66,7 @@ class DataVendor:
 
     def secid(self , date : int | None = None) -> np.ndarray: 
         if date is None: 
-            return np.unique(self.all_stocks['secid'].to_numpy())
+            return np.unique(self.all_stocks['secid'].to_numpy(int))
         if date not in self.day_secids:
             self.day_secids[date] = self.INFO.get_secid(date)
         return self.day_secids[date]

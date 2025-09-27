@@ -23,7 +23,8 @@ from src.res.api import TradingAPI
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('analyze_tradeport' , '@port_name' , lock_num = 0)
-def main(port_name : str , start : int | None = None , end : int | None = None , **kwargs):
+def main(port_name : str | None = None , start : int | None = None , end : int | None = None , **kwargs):
+    assert port_name is not None , 'port_name is required'
     TradingAPI.Analyze(port_name, start , end)
     
 if __name__ == '__main__':

@@ -177,7 +177,7 @@ class BasicBoosterModel(ABC):
     def df_input(cls , factor_data : pd.DataFrame | None = None , idx : int = -1 , windows_len = 24) -> dict[str,Any]:
         if factor_data is None: 
             factor_data = load_xingye_data()
-        MDTs = np.sort(np.unique(factor_data['date'].to_numpy()))
+        MDTs = np.sort(np.unique(factor_data['date'].to_numpy(int)))
 
         idtEnd = MDTs[idx - 1]
         idtStart = MDTs[idx - windows_len]

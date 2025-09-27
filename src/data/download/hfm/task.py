@@ -281,7 +281,7 @@ class JSFetcher:
         # read calendar
         calendar = cls.basic_info('calendar')
         assert isinstance(calendar , pd.DataFrame) , f'{type(calendar)} is not a pd.DataFrame'
-        rolling_dates = calendar.calendar[calendar.trade > 0].to_numpy().astype(int)
+        rolling_dates = calendar.calendar[calendar.trade > 0].to_numpy(int)
         rolling_dates = sorted(rolling_dates[rolling_dates <= int(date)])[-x:]
         assert rolling_dates[-1] == date , (rolling_dates[-1] , date)
 
@@ -298,7 +298,7 @@ class JSFetcher:
         
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             data = pd.concat(data , axis = 0)
-            data.loc[:,price_feat] = data.loc[:,price_feat] * data.loc[:,'adjfactor'].values[:,None]
+            data.loc[:,price_feat] = data.loc[:,price_feat] * data.loc[:,'adjfactor'].to_numpy(float)[:,None]
             data['pctchange'] = data['pctchange'] / 100 + 1
             data['vwap'] = data['vwap'] * data['volume']
             agg_dict = {'open':'first','high':'max','low':'min','close':'last','pctchange':'prod','vwap':'sum',**{k:'sum' for k in volume_feat},}
