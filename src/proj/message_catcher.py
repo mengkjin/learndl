@@ -729,10 +729,11 @@ class MarkdownCatcher(OutputCatcher):
         else:
             self.filename = Path(given_export_path)
         if to_share_folder:
-            if MACHINE.share_folder_path is None:
+            share_folder_path = MACHINE.get_share_folder_path()
+            if share_folder_path is None:
                 self.filename = None
             else:
-                self.filename = MACHINE.share_folder_path.joinpath('markdown_catcher' , self.filename.name)
+                self.filename = share_folder_path.joinpath('markdown_catcher' , self.filename.name)
         
         self.kwargs = kwargs
         self.last_seperator = None

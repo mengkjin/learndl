@@ -660,19 +660,23 @@ class TrainConfig(TrainParam):
         if self.short_test:
             ...
         elif 'fit' in self.stage_queue and candidate_name:
-            if self.resume_training and len(candidate_name) == 1:
-                model_name = candidate_name[0]
-            elif self.resume_training:
-                if value < 0:
-                    Logger.info(f'--Attempting to resume but multiple models exist, input number to choose')
-                    [Logger.info(f'{i} : {PATH.model}/{model}') for i , model in enumerate(candidate_name)]
-                    value = int(input('which one to use? '))
-                model_name = candidate_name[value]
+            if self.resume_training:
+                if len(candidate_name) == 1:
+                    model_name = candidate_name[0]
+                else:
+                    if value < 0:
+                        Logger.info(f'--Attempting to resume but multiple models exist, input number to choose')
+                        [Logger.info(f'{i} : {PATH.model}/{model}') for i , model in enumerate(candidate_name)]
+                        value = int(input('which one to use? '))
+                    assert 0 <= value < len(candidate_name) , f'value {value} is out of range {len(candidate_name)}'
+                    model_name = candidate_name[value]
             else:
                 if value < 0:
-                    Logger.info(f'--Model dirs of {model_name} exists, input [yes] to add a new directory!')
-                    user_input = input(f'Add a new folder of [{model_name}]? [yes/no] : ').lower()
-                    value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
+                    #Logger.info(f'--Model dirs of {model_name} exists, input [yes] to add a new directory!')
+                    #user_input = input(f'Add a new folder of [{model_name}]? [yes/no] : ').lower()
+                    #value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
+                    Logger.info(f'--Model dirs of {model_name} exists, automatically add a new directory!')
+                    value = 1
                 if value == 0: 
                     raise Exception(f'--Model dirs of [{model_name}] exists!')
                 model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
@@ -686,6 +690,7 @@ class TrainConfig(TrainParam):
                     Logger.info(f'--Attempting to test while multiple models exists, input number to choose')
                     [Logger.info(f'{i} : {PATH.model}/{model}') for i , model in enumerate(candidate_name)]
                     value = int(input('which one to use? '))
+                assert 0 <= value < len(candidate_name) , f'value {value} is out of range {len(candidate_name)}'
                 model_name = candidate_name[value]
 
         if verbose:

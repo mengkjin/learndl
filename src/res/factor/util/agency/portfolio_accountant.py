@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal , Sequence , Any
 
-from src.proj import INSTANCE_RECORD
+from src.proj import InstanceRecord
 from src.basic import CONF
 from src.data import DATAVENDOR
 from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
@@ -217,7 +217,7 @@ class PortfolioAccountant:
         df['benchmark'] = pd.Categorical(df['benchmark'] , categories = CONF.Factor.BENCH.categories + new_bm , ordered=True) 
 
         df = df.set_index(old_index).sort_index()
-        INSTANCE_RECORD.update_account(df)    
+        InstanceRecord.update_account(df)    
         return df
     
 class PortfolioAccountManager:   

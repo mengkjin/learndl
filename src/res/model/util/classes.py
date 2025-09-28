@@ -8,7 +8,7 @@ from inspect import currentframe
 from pathlib import Path
 from typing import Any , final , Iterator , Literal
 
-from src.proj import INSTANCE_RECORD ,PATH , Logger
+from src.proj import InstanceRecord ,PATH , Logger
 from src.basic import ModelDict , BigTimer
 from src.func import Filtered
 from src.res.algo import AlgoModule
@@ -285,7 +285,7 @@ class BaseTrainer(ModelStreamLine):
         self.init_model(**kwargs)
         self.init_callbacks(**kwargs)
         self.wrap_callbacks()
-        INSTANCE_RECORD.update_trainer(self)
+        InstanceRecord.update_trainer(self)
         
     @final
     def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:
@@ -381,8 +381,8 @@ class BaseTrainer(ModelStreamLine):
             self.on_configure_model()
 
             if not self.stage_queue:
-                Logger.warning("stage_queue is empty , please check src.INSTANCE_RECORD['trainer']")
-                raise Exception("stage_queue is empty , please check src.INSTANCE_RECORD['trainer']")
+                Logger.warning("stage_queue is empty , please check src.proj.InstanceRecord['trainer']")
+                raise Exception("stage_queue is empty , please check src.proj.InstanceRecord['trainer']")
 
             if 'data' in self.stage_queue: 
                 self.stage_data()

@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from copy import deepcopy
 from typing import Any , Literal
 
-from src.proj import INSTANCE_RECORD
+from src.proj import InstanceRecord
 from src.basic import DB
 from src.func import transform as T
 from src.data import DataBlock , DATAVENDOR
@@ -209,7 +209,7 @@ class StockFactor:
     """
     def __init__(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' , normalized = False , step = None):
         self.update(factor , normalized , step)
-        INSTANCE_RECORD.update_factor(self)
+        InstanceRecord.update_factor(self)
 
     def __repr__(self):
         return f'{self.__class__.__name__}(normalized={self.normalized},names={self.factor_names},dates={self.date.min()}-{self.date.max()})'

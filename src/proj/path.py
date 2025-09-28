@@ -3,18 +3,25 @@ import shutil , yaml , time , os
 from pathlib import Path
 from typing import Any
 
-from .machine import MachineSetting
+from .machine import MACHINE
 
-class PathStructure:
+def _initialize_path(obj : object) -> None:
+    """Initialize the all paths under the main path"""
+    for name in dir(obj):
+        member = getattr(obj , name)
+        if isinstance(member , Path) and member.is_relative_to(MACHINE.main_path):
+            member.mkdir(parents=True , exist_ok=True)
+
+class PATH:
     """
     Path structure for the project
-    example:
+    examples:
         PATH.main
         PATH.scpt
         PATH.fac_def
         PATH.conf
     """
-    main        = Path(MachineSetting.get_main_path())
+    main        = MACHINE.main_path
     scpt        = main.joinpath('src' , 'scripts')
     fac_def     = main.joinpath('src' , 'res' , 'facdef')
     conf        = main.joinpath('configs')
@@ -64,7 +71,7 @@ class PathStructure:
     # local_resources folder
     local_resources = main.joinpath('.local_resources')
     temp            = local_resources.joinpath('temp')
-    local_machine   = local_resources.joinpath(MachineSetting.get_machine_name())
+    local_machine   = local_resources.joinpath(MACHINE.name)
     app_db          = local_machine.joinpath('app_db')
     runtime         = local_machine.joinpath('runtime')
     optuna          = local_machine.joinpath('optuna')
@@ -72,9 +79,6 @@ class PathStructure:
 
     # local_settings folder
     local_settings = main.joinpath('.local_settings')
-
-    def __init__(self):
-        self.initialize_path()
 
     @staticmethod
     def read_yaml(yaml_file : str | Path , **kwargs) -> Any:
@@ -158,4 +162,4 @@ class PathStructure:
         """Filter paths by ignoring certain prefixes"""
         return [p for p in paths if not p.name.startswith(ignore_prefix)]
             
-PATH = PathStructure()
+_initialize_path(PATH)

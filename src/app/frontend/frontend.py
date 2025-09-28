@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal , Any , Callable , Sequence
 import streamlit as st
-import base64 , yaml , time , traceback , shutil
+import base64 , yaml , traceback , shutil
 import streamlit.components.v1 as components
 import pandas as pd
 
@@ -449,11 +449,9 @@ class YAMLFileEditorState:
     content_status : str = 'success'
     load_status : str = 'success'
     save_status : str = 'success'
-    reload_timestamp : float = 0.
-
+    
     def __post_init__(self):
-        self.load_content : str | None = None
-        self.edit_content : str | None = None
+        ...
     
     @classmethod
     def get_state(cls , key : str , root : Path | str | None = None) -> 'YAMLFileEditorState':
@@ -464,6 +462,22 @@ class YAMLFileEditorState:
         if root is not None:
             st.session_state.yaml_file_editor_states[key].root = Path(root)
         return st.session_state.yaml_file_editor_states[key]
+
+    @property
+    def editor_key(self):
+        return f"file-editor-{self.key}-{self.path}"
+    
+    @property
+    def load_content(self):
+        return getattr(st.session_state , f'{self.editor_key}-load' , '')
+
+    @load_content.setter
+    def load_content(self , value):
+        st.session_state[f'{self.editor_key}-load'] = value
+
+    @property
+    def edit_content(self):
+        return getattr(st.session_state , f'{self.editor_key}'  , '')
 
 class YAMLFileEditor:
     _instances = {}
@@ -538,10 +552,10 @@ class YAMLFileEditor:
         file_path = self.get_file_path(file_path)
         try:
             with open(file_path, "r") as f:
-                self.state.load_content = f.read()
+                self.state.load_content = f.read() or ''
             self.state.load_status = 'success'
-            self.state.reload_timestamp = time.time()
         except Exception as e:
+            self.state.load_content = ''
             self.state.load_status = f'Load file failed: {e}'
         return self.state.load_content
 
@@ -560,11 +574,6 @@ class YAMLFileEditor:
         except Exception as e:
             self.state.save_status = f'Save file failed: {e}'
 
-    @ActionLogger.log_action()
-    def reload_file(self):
-        self.load_file()
-        self.refresh_file_editor()
-
     def init_path_input(self , file_path : Path | str | Sequence[Path | str] | None = None , default_file : Path | str | None = None):
         if file_path is None and default_file is not None:
             file_path = default_file
@@ -577,7 +586,7 @@ class YAMLFileEditor:
                           on_change = self.text_input_on_change , 
                           icon = ":material/edit_document:" ,
                           help = "Input the YAML file path")
-
+            self.input_type = 'input'
         elif isinstance(file_path , Sequence):
             root = self.get_file_root()
             options = [Path(path).absolute().relative_to(root) for path in file_path]
@@ -592,6 +601,7 @@ class YAMLFileEditor:
             st.selectbox(f":blue-badge[:material/edit_document: **Select File Path : {self.state.root}/**]", options ,
                         key=f"{self.key}-file-select" , index = index ,
                         on_change = self.selectbox_on_change , help = "Select the YAML file" )
+            self.input_type = 'select'
         else:
             raise ValueError(f"Invalid file path: {file_path}")
 
@@ -603,21 +613,22 @@ class YAMLFileEditor:
             self.init_path_input(file_path , default_file)
         if not self.load_file(): 
             return
-        editor_key = f"{self.key}_{self.get_file_path().name}_{self.state.reload_timestamp}"
-        self.state.edit_content = st_ace(
-            value=self.state.load_content or '',
+        
+        st_ace(
+            value = self.state.load_content,
             height = self.height ,
             language="yaml",
             theme="chrome",
             font_size=14,
-            key=editor_key
+            key=self.state.editor_key
         )
 
         cols = st.columns(3 , gap = 'small')
         with cols[0]:
-            if st.button("Reload", key = f"yaml-file-editor-{self.key}-reload" ,
-                         on_click=self.on_reload_file , help = "Reload the YAML file"):
+            if st.button("Reload (double click)", key = f"yaml-file-editor-{self.key}-reload" ,
+                         on_click = self.on_reload_file , help = "Reload the YAML file"):
                 st.rerun()
+
         with cols[1]:
             if st.button("Validate" , key = f"yaml-file-editor-{self.key}-validate" ,
                          on_click = self.on_validate_content , help = "Validate the YAML file"):
@@ -651,25 +662,20 @@ class YAMLFileEditor:
             except Exception as e:
                 st.warning(f"Cannot parse YAML: {e}")
 
-    def path_input_on_change(self , st_widget_key : str):
+    def path_input_on_change(self , st_widget_key : str | None = None):
+        if st_widget_key is None:
+            st_widget_key = f"{self.key}-file-{self.input_type}"
         self.set_file_path(st.session_state[st_widget_key])
         # self.load_file()
-        print(f"path_input_on_change 1: {self.state.path}")
-        self.refresh_file_editor()
-        print(f"path_input_on_change 2: {self.state.reload_timestamp}")
-
+        
     def text_input_on_change(self):
         self.path_input_on_change(f"{self.key}-file-input")
 
     def selectbox_on_change(self):
         self.path_input_on_change(f"{self.key}-file-select")
 
-    def refresh_file_editor(self):
-        self.state.reload_timestamp = time.time()
-
     def on_reload_file(self):
-        self.reload_file()
-        self.refresh_file_editor()
+        self.load_file()
 
     def on_validate_content(self):
         self.validate_file_content()
