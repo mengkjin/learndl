@@ -1,4 +1,4 @@
-import traceback
+import traceback , sys
 
 from datetime import datetime
 from pathlib import Path
@@ -158,7 +158,7 @@ class AutoRunTask:
                                     f'exit_code: {len(self.error_messages)}']))
         # change_power_mode('power-saver')
 
-    def __call__(self , func : Callable , *args , **kwargs):
+    def __call__(self , func : Callable):
         assert callable(func) , 'func must be a callable'
         def wrapper(*args , **kwargs):
             self.kwargs.update(kwargs)
@@ -271,6 +271,7 @@ class AutoRunTask:
                 f'End time : {self.end_time.strftime("%Y-%m-%d %H:%M:%S")}' ,
                 f'AutoRun Status : {self.status}' ,
                 f'Excution Status : {self.execution_status}' ,
+                f'CMD line : {" ".join(sys.argv)}' ,
                 f'Error Messages : ' + '-' * 20 ,
                 self.error_message ,
                 f'Final Messages : ' + '-' * 20 ,

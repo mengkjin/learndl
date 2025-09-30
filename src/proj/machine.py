@@ -57,9 +57,9 @@ class MACHINE:
     assert python_path , f'python_path not set for {name}'
 
     @classmethod
-    def select_machine(cls):
+    def machine_names(cls):
         """Select the machine setting"""
-        return cls
+        return list(_machine_dict.keys())
     
     @classmethod
     def PATH(cls):

@@ -3,13 +3,13 @@
 # author: jinmeng
 # date: 2024-11-27
 # description: Run Daily Update
-# content: 每日更新数据,因子,模型隐变量,模型推理
+# content: 每日更新数据,因子,模型隐变量,模型推理,运行定时任务
 # email: True
 # mode: shell
 
 from src.res.api import DataAPI , ModelAPI , TradingAPI , NotificationAPI
 from src.proj import MACHINE
-from src.basic import CALENDAR
+from src.basic import CALENDAR , TaskScheduler
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('daily_update' , CALENDAR.update_to() , forfeit_if_done = True)
@@ -24,6 +24,7 @@ def main(**kwargs):
             ModelAPI.update()
             TradingAPI.update()
             NotificationAPI.proceed()
+            TaskScheduler.run_all_tasks()
         
 if __name__ == '__main__':
     main()

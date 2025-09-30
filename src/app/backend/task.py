@@ -5,8 +5,7 @@ from dataclasses import dataclass , field , asdict
 from datetime import datetime
 from pathlib import Path
 
-
-from src.proj import PATH , DBConnHandler
+from src.proj import PATH , DBConnHandler , Logger
 from src.app.abc import check_process_status , kill_process , ScriptCmd
 
 class TaskDatabase:
@@ -168,7 +167,7 @@ class TaskDatabase:
     
     def update_task(self, task_id: str, backend_updated: bool = False, **kwargs):
         """Update task status and related information"""
-        if not kwargs: 
+        if not kwargs or task_id == '': 
             return
         with self.conn_handler as (conn, cursor):
             exit_files = kwargs.pop('exit_files' , None)
@@ -516,8 +515,9 @@ class TaskItem:
     
     def __post_init__(self):
         assert isinstance(self.script, str) , f'script must be a string, but got {type(self.script)}'
-        assert ' ' not in self.script , f'script must not contain space, but got {self.script}'
-        assert '@' not in self.script , f'script must not contain @, but got {self.script}'
+        if self.script:
+            assert ' ' not in self.script , f'script must not contain space, but got {self.script}'
+            assert '@' not in self.script , f'script must not contain @, but got {self.script}'
         self.source = self.source.lower() if self.source else 'py'
         if self.task_id is None:
             self.task_id = self.id
@@ -576,7 +576,7 @@ class TaskItem:
 
     @property
     def id(self):
-        return f"{str(self.relative)}@{self.time_id}"
+        return f"{str(self.relative)}@{self.time_id}" if self.script else ''
     
     @property
     def format_path(self):
@@ -605,11 +605,15 @@ class TaskItem:
     def create(cls, script : Path | str | None , task_db : TaskDatabase | None = None , source : Literal['py', 'bash','app'] | str | None = None , 
                queue : TaskQueue | bool | None = None):
         if script is None:
-            script = sys.modules['__main__'].__file__
-            assert script , 'script is not found'
-            script = os.path.abspath(script)
-            cmd = ' '.join(sys.argv)
-            item = cls(str(script), cmd = cmd , status = 'running' , start_time = time.time() , source = source)
+            try:
+                script = sys.modules['__main__'].__file__
+                assert script , 'script is not found'
+                script = os.path.abspath(script)
+                cmd = ' '.join(sys.argv)
+                item = cls(str(script), cmd = cmd , status = 'running' , start_time = time.time() , source = source)
+            except AttributeError as e:
+                Logger.error(f'script is not found: {e}')
+                return cls('', source = source)
         else:
             item = cls(str(script) , source = source)
         item.set_task_db(task_db)

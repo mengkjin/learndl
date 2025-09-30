@@ -39,16 +39,17 @@
 #       desc : seed
 #       required : False
 #       default : 42.
-import time , random
+import time , random , sys
 
 from src.proj import Logger
 from src.basic import Timer
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('test_streamlit' , '@port_name' , txt = 'Bye, World!' , email = False , lock_num = 2 , lock_timeout = 10)
-def main(txt : str = 'Hello, World!' , start : int | None = 100 , **kwargs):
+def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello, World!' , start : int | None = 100 , **kwargs):
     with Logger.EnclosedMessage('main part'):
         with Timer('abc'):
+            ScriptTool.info(f'cmd is: {" ".join(sys.argv)}')
             ScriptTool.info(f'this is kwargs: {str(kwargs)}')
             ScriptTool.info(f'this is an info: {txt}')
             Logger.cache_message('critical' , f'critical: lazy message')
@@ -58,7 +59,6 @@ def main(txt : str = 'Hello, World!' , start : int | None = 100 , **kwargs):
             print(f'email: {ScriptTool.get_value('email')}')
             print(f'forfeit_task: {ScriptTool.get_value('forfeit_task')}')
             print(f'task_key: {ScriptTool.get_value('task_key')}')
-            print(f'short_test: {ScriptTool.get_value('short_test')}')
             if (rnd := random.random()) < 0.5:
                 ScriptTool.error(f'this is an error: {rnd}')
             else:
