@@ -443,12 +443,14 @@ class StockFactor:
         evaluate the IC of the factor
         """
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
+        
+
         if 'ic' not in self.stats or not param_match(self.stats['ic'][0] , params):
-            factors = self.factor_names
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
-            ic = df.groupby(by=['date'], as_index=True).apply(
-                lambda x:x[factors].corrwith(x['ret'], method=ic_type)).\
-                rename_axis('factor_name',axis='columns')
+            grouped = df.groupby(by=['date'], as_index=True)
+            def df_ic(subdf : pd.DataFrame , **kwargs):
+                return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type).to_frame()
+            ic = grouped.apply(df_ic , include_groups = False).rename_axis('factor_name',axis='columns')
             self.stats['ic'] = (params , ic)
         return self.stats['ic'][1]
     
@@ -462,9 +464,9 @@ class StockFactor:
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', message='.*correlation coefficient is not defined.*')
                 df = self.frame_with_cols(indus = True , fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
-                ic = df.groupby(['date' , 'industry'])[['date' , 'industry' , 'ret' , *self.factor_names]].\
-                    apply(lambda x:x[self.factor_names].corrwith(x['ret'], method=ic_type)).\
-                    rename_axis('factor_name',axis='columns')
+                def df_ic(subdf : pd.DataFrame , **kwargs):
+                    return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type).to_frame()
+                ic = df.groupby(['date' , 'industry']).apply(df_ic , include_groups = False).rename_axis('factor_name',axis='columns')
             self.stats['ic_indus'] = (params , ic)
         return self.stats['ic_indus'][1]
     
@@ -476,8 +478,8 @@ class StockFactor:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'excess' : excess , 'ret_type' : ret_type , 'trade_date' : trade_date}
         if 'group_perf' not in self.stats or not param_match(self.stats['group_perf'][0] , params):
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
-            kwargs = {'x_cols' : self.factor_names , 'y_name' : 'ret' , 'group_num' : group_num , 'excess' : excess}
-            df = df.groupby('date').apply(lambda x:eval_grp_avg(x , **kwargs)) 
+            kwargs = {'x_cols' : self.factor_names , 'y_name' : 'ret' , 'group_num' : group_num , 'excess' : excess , 'include_groups' : False}
+            df = df.groupby('date').apply(eval_grp_avg , **kwargs) 
             df = df.melt(var_name='factor_name' , value_name='group_ret' , ignore_index=False).sort_values(['date','factor_name']).reset_index()
             if trade_date:
                 df['start'] = DATAVENDOR.td_array(df['date'] , lag)
@@ -498,7 +500,8 @@ class StockFactor:
 
             dfs = []
             for wt in weight_type_list:
-                df_wt = df.groupby('date').apply(lambda x:eval_weighted_pnl(x, wt, direction, group_num)).\
+                kwargs = {'weight_type' : wt , 'direction' : direction , 'group_num' : group_num , 'include_groups' : False}
+                df_wt = df.groupby('date').apply(eval_weighted_pnl, **kwargs).\
                     reset_index().melt(id_vars=['date'],var_name='factor_name',value_name='ret').assign(weight_type = wt)
                 dfs.append(df_wt)
 

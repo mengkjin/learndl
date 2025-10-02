@@ -7,7 +7,7 @@ from typing import Any , Literal
 from src.data import DATAVENDOR 
 from ...util import Benchmark , StockFactor
 
-def eval_stats(x):
+def eval_stats(x , **kwargs):
     assert isinstance(x , pd.DataFrame) , type(x)
     stats : dict[str , pd.Series | Any] = {}
     stats['sum'] = x.sum()
@@ -19,7 +19,7 @@ def eval_stats(x):
     stats['cum_mdd'] = (cumsum - cumsum.cummax()).min()
     return pd.concat([val.rename(key) for key , val in stats.items()], axis=1, sort=True)
 
-def eval_ic_stats(ic_table : pd.DataFrame , nday : int = 5):
+def eval_ic_stats(ic_table : pd.DataFrame , nday : int = 5 , **kwargs):
     n_periods  = 243 / nday
     
     ic_stats   = eval_stats(ic_table).reset_index(drop=False)
@@ -39,7 +39,7 @@ def eval_ic_stats(ic_table : pd.DataFrame , nday : int = 5):
     ic_stats = ic_stats.merge(range_date[['factor_name','range']] , on='factor_name')
     return ic_stats
 
-def eval_qtile_by_day(factor : pd.DataFrame , scaling : bool = True):
+def eval_qtile_by_day(factor : pd.DataFrame , scaling : bool = True , **kwargs):
     if scaling: 
         factor = (factor - factor.mean()) / factor.std()
     rtn = pd.concat([factor.quantile(q / 100).rename(f'{q}%') for q in (5,25,50,75,95)], axis=1, sort=True)
@@ -112,8 +112,8 @@ def calc_factor_ic_year(factor : StockFactor , benchmark : Benchmark | str | Non
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type)
     
     full_rslt = eval_ic_stats(ic_table , nday = nday).assign(year = 'all')
-    year_rslt = ic_table.assign(year = ic_table.index.astype(str).str[:4]).groupby(['year']).\
-        apply(eval_ic_stats , nday = nday).reset_index(drop=False)
+    grouped = ic_table.assign(year = ic_table.index.astype(str).str[:4]).groupby(['year'])
+    year_rslt = grouped.apply(eval_ic_stats , nday = nday , include_groups = False).reset_index(drop=False)
 
     rtn = pd.concat((year_rslt, full_rslt), axis=0)
     return rtn
@@ -158,8 +158,10 @@ def calc_factor_pnl_curve(factor : StockFactor , benchmark : Benchmark | str | N
 def calc_factor_style_corr(factor : StockFactor , benchmark : Benchmark | str | None = None):
     factor = factor.within(benchmark)
     style = DATAVENDOR.risk_style_exp(factor.secid , factor.date).to_dataframe()
-    df    = factor.frame().merge(style, on=['secid', 'date'], how='inner').groupby('date' , observed=True).\
-        apply(lambda x: x.corr(method='spearman').loc[factor.factor_names, style.columns.values])
+    def df_style_corr(subdf : pd.DataFrame , **kwargs):
+        return subdf.corr(method='spearman').loc[factor.factor_names, style.columns.values]
+    grouped = factor.frame().merge(style, on=['secid', 'date'], how='inner').groupby('date' , observed=True)
+    df = grouped.apply(df_style_corr , include_groups = False)
     df.index.rename(['date','factor_name'], inplace=True)
     df = df.reset_index()
     return df
@@ -218,7 +220,7 @@ def calc_factor_group_year(factor : StockFactor , benchmark : Benchmark | str | 
     factor_list = top_perf.columns.to_list()
 
     top_perf['year'] = top_perf.index.astype(str).str[:4]
-    year_rslt = top_perf.groupby(['year'])[factor_list].apply(eval_stats).reset_index(drop=False)
+    year_rslt = top_perf.groupby(['year'])[factor_list].apply(eval_stats , include_groups = False).reset_index(drop=False)
 
     year_rslt['range'] = year_rslt['year'] + '0101-' + year_rslt['year'] + '1231'
     year_rslt.loc[year_rslt['year'] == scd[:4], 'range'] = f'{scd}-' + year_rslt['year'] + '1231'
@@ -257,5 +259,5 @@ def calc_factor_distrib_curve(factor : StockFactor , benchmark : Benchmark | str
 
 def calc_factor_distrib_qtile(factor : StockFactor , benchmark : Benchmark | str | None = None , scaling : bool = True):
     factor = factor.within(benchmark)
-    qtile = factor.frame().groupby(['date']).apply(eval_qtile_by_day , scaling = scaling).reset_index()
+    qtile = factor.frame().groupby(['date']).apply(eval_qtile_by_day , scaling = scaling , include_groups = False).reset_index()
     return qtile

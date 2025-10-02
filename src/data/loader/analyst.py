@@ -46,7 +46,7 @@ class AnalystDataAccess(DateDataAccess):
     @staticmethod
     def weighted_val(df : pd.DataFrame , end_date : int , col : str , half_life : int = 180):
         df = df.assign(_w = np.exp(-np.log(2) * CALENDAR.cd_diff_array(end_date , df['report_date']) / half_life))
-        return df.groupby('secid').apply(lambda x:(x[col] * x['_w']).sum() / x['_w'].sum())
+        return df.groupby('secid').apply(lambda x,**kwg:(x[col] * x['_w']).sum() / x['_w'].sum() , include_groups = False)
     
     @staticmethod
     def val_multiplier(val : str):

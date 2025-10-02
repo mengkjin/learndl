@@ -120,7 +120,7 @@ def fetch_attrib_style(x : pd.Series) -> pd.DataFrame:
 def calc_optim_exp_style(account : pd.DataFrame):
     df = filter_account(account , pos_model_date=True)
     df = df.loc[:,['start','analytic']].set_index('start' , append=True)
-    df = df.groupby(df.index.names , observed=True)['analytic'].apply(fetch_exp_style).reset_index('style')
+    df = df.groupby(df.index.names , observed=True)['analytic'].apply(fetch_exp_style , include_groups = False).reset_index('style')
     df = df.pivot_table('active' , df.index.names , columns='style' , observed=True)
     df = df.rename_axis(None , axis='columns').rename_axis(index={'start':'trade_date'})
     return df
@@ -128,7 +128,7 @@ def calc_optim_exp_style(account : pd.DataFrame):
 def calc_optim_exp_indus(account : pd.DataFrame):
     df = filter_account(account , pos_model_date=True)
     df = df.loc[:,['start','analytic']].set_index('start' , append=True)
-    df = df.groupby(df.index.names , observed=True)['analytic'].apply(fetch_exp_indus).reset_index('industry')
+    df = df.groupby(df.index.names , observed=True)['analytic'].apply(fetch_exp_indus , include_groups = False).reset_index('industry')
     df = df.pivot_table('active' , df.index.names , columns='industry' , observed=True)
     df = df.rename_axis(None , axis='columns').rename_axis(index={'start':'trade_date'})
     return df
@@ -136,7 +136,7 @@ def calc_optim_exp_indus(account : pd.DataFrame):
 def calc_optim_attrib_source(account : pd.DataFrame):
     df = filter_account(account , pos_model_date=True)
     df = df.loc[:,['end','attribution']].set_index('end' , append=True)
-    df = df.groupby(df.index.names , observed=True)['attribution'].apply(fetch_attrib_source).reset_index('source')
+    df = df.groupby(df.index.names , observed=True)['attribution'].apply(fetch_attrib_source , include_groups = False).reset_index('source')
     df = df.pivot_table('contribution' , df.index.names , columns='source' , observed=True).\
         loc[:,['tot' , 'excess' , 'market' , 'industry' , 'style' , 'specific' , 'cost']].\
         rename_axis(None , axis='columns').sort_index().\
@@ -147,7 +147,7 @@ def calc_optim_attrib_source(account : pd.DataFrame):
 def calc_optim_attrib_style(account : pd.DataFrame):
     df = filter_account(account , pos_model_date=True)
     df = df.loc[:,['end','attribution']].set_index('end' , append=True)
-    df = df.groupby(df.index.names , observed=True)['attribution'].apply(fetch_attrib_style).reset_index('style')
+    df = df.groupby(df.index.names , observed=True)['attribution'].apply(fetch_attrib_style , include_groups = False).reset_index('style')
     if isinstance(df , pd.Series): 
         df = df.to_frame()
     df = df.pivot_table('contribution' , df.index.names , columns='style' , observed=True).\
