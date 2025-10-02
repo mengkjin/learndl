@@ -462,8 +462,8 @@ class StockFactor:
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', message='.*correlation coefficient is not defined.*')
                 df = self.frame_with_cols(indus = True , fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
-                ic = df.groupby(['date' , 'industry']).apply(
-                    lambda x:x[self.factor_names].corrwith(x['ret'], method=ic_type)).\
+                ic = df.groupby(['date' , 'industry'])[['date' , 'industry' , 'ret' , *self.factor_names]].\
+                    apply(lambda x:x[self.factor_names].corrwith(x['ret'], method=ic_type)).\
                     rename_axis('factor_name',axis='columns')
             self.stats['ic_indus'] = (params , ic)
         return self.stats['ic_indus'][1]

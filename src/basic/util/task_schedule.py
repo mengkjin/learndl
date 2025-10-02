@@ -4,9 +4,9 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 
-from src.proj import MACHINE , Logger
+from src.proj import MACHINE , Logger , PATH , SharedSync
 
-_share_folder = MACHINE.get_share_folder_path()
+_share_folder = MACHINE.share_folder_path()
 if _share_folder is not None:
     root_path = _share_folder.joinpath('task_schedule')
     root_path.mkdir(parents=True, exist_ok=True)
@@ -132,7 +132,22 @@ class TaskScheduler:
 
     @classmethod
     def run_all_tasks(cls):
+        SharedSync.sync()
         cls.get_all_tasks()
         tasks = list(ScheduledTask._instances.get(MACHINE.name , {}).values())
         for task in tasks:
             task.run()
+
+    @classmethod
+    def add_run_script(cls, script : str | Path , kwargs : dict | None = None , machine_name : str = 'mengkjin-server'):
+        """add a script to run"""
+        kwargs = kwargs or {}
+        if isinstance(script , str):
+            script = PATH.scpt.joinpath(script).with_suffix('.py')
+            assert script.exists() , f'script {script} does not exist'
+        else:
+            script = str(script.absolute())
+        kwargs_str = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in kwargs.items() if v != ''])
+        cmdline = f"{MACHINE.python_path} {script} {kwargs_str}"
+        Logger.info(f"add run script {script} with kwargs {kwargs} to {machine_name}")
+        cls.add_task(machine_name = machine_name, cmdline = cmdline)

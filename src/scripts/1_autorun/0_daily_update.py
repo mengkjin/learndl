@@ -8,12 +8,13 @@
 # mode: shell
 
 from src.res.api import DataAPI , ModelAPI , TradingAPI , NotificationAPI
-from src.proj import MACHINE
+from src.proj import MACHINE , SharedSync
 from src.basic import CALENDAR , TaskScheduler
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('daily_update' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(**kwargs):
+    SharedSync.sync()
     if not MACHINE.updateable:
         ScriptTool.error(f'{MACHINE.name} is not updateable, skip daily update')
     else:

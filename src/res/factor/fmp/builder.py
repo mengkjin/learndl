@@ -234,11 +234,13 @@ class PortfolioBuilderGroup:
                 print(f'{self.category_title} of {str(self)} start!')
                 self.opt_count = 0
             elif where == 'loop':
-                if self.verbosity > 1 or (self.verbosity > 0 and (self.opt_count % 50 == 0)): 
+                if self.verbosity > 1 and self.opt_count % 100 == 0: 
                     time_cost = {k:float(np.round(v*1000,2)) for k,v in self._builder.creations[-1].time.items()}
                     print(f'{self.category_title} of {self.opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
                           f' Finished at {self._date} , time cost (ms) : {time_cost}')
                 self.opt_count += 1
             elif where == 'end':
                 self.t1 = time.time()
-                print(f'Group {self.category_title} Finished , Total time: {self.t1-self.t0:.2f} secs, each optim time: {(self.t1-self.t0)/max(self.opt_count,1):.2f}')
+                total_time = f'Total time: {self.t1-self.t0:.2f} secs'
+                each_time = f'each {self.category_title} time: {(self.t1-self.t0)/max(self.opt_count,1):.2f}'
+                print(f'Group {self.category_title} Finished, {total_time}, {each_time}')

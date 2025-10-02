@@ -72,19 +72,12 @@ class MACHINE:
     @classmethod
     def local_settings(cls , name : str) -> dict:
         """Get the local settings of the machine"""
-        PATH = cls.PATH()
-        p = PATH.local_settings.joinpath(f'{name}.yaml')
-        if not p.exists():
-            raise FileNotFoundError(f'{p} does not exist , .local_settings folder only has {[p.stem for p in PATH.list_files(PATH.local_settings)]}')
-        return PATH.read_yaml(p)
+        return cls.PATH().get_local_settings(name)
 
     @classmethod
-    def get_share_folder_path(cls) -> Path | None:
+    def share_folder_path(cls) -> Path | None:
         """Get the share folder path of the machine"""
-        try:
-            return Path(cls.local_settings('share_folder')[cls.name])
-        except (FileNotFoundError , KeyError):
-            return None
+        return cls.PATH().get_share_folder_path()
         
     @classmethod
     def configs(cls , conf_type : Literal['glob' , 'registry' , 'factor' , 'boost' , 'nn' , 'train' , 'trade' , 'schedule'] , name : str) -> dict:

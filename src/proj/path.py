@@ -72,6 +72,8 @@ class PATH:
     local_resources = main.joinpath('.local_resources')
     temp            = local_resources.joinpath('temp')
     local_machine   = local_resources.joinpath(MACHINE.name)
+    local_shared    = local_resources.joinpath('shared')
+    shared_schedule = local_shared.joinpath('schedule_model')
     app_db          = local_machine.joinpath('app_db')
     runtime         = local_machine.joinpath('runtime')
     optuna          = local_machine.joinpath('optuna')
@@ -161,5 +163,21 @@ class PATH:
     def filter_paths(paths : list[Path] , ignore_prefix = ('.' , '~')) -> list[Path]:
         """Filter paths by ignoring certain prefixes"""
         return [p for p in paths if not p.name.startswith(ignore_prefix)]
+
+    @classmethod
+    def get_local_settings(cls , name : str) -> dict:
+        """Get the local settings of the machine"""
+        p = cls.local_settings.joinpath(f'{name}.yaml')
+        if not p.exists():
+            raise FileNotFoundError(f'{p} does not exist , .local_settings folder only has {[p.stem for p in cls.list_files(cls.local_settings)]}')
+        return cls.read_yaml(p)
+
+    @classmethod
+    def get_share_folder_path(cls) -> Path | None:
+        """Get the share folder path of the machine"""
+        try:
+            return Path(cls.get_local_settings('share_folder')[MACHINE.name])
+        except (FileNotFoundError , KeyError):
+            return None
             
 _initialize_path(PATH)

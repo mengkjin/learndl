@@ -6,6 +6,7 @@ from .message_catcher import HtmlCatcher , MarkdownCatcher
 from .db import DBConnHandler
 from .warning_catcher import WarningCatcher
 from .instance_record import InstanceRecord
+from .shared_sync import SharedSync
 
 def print_project_info():
     import torch , os

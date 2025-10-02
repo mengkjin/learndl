@@ -2,13 +2,13 @@
 # coding: utf-8
 # author: jinmeng
 # date: 2025-10-01
-# description: Train Schedule Model
-# content: 训练某个计划好的模型,模型的参数在configs/schedule里定义,也可以改变configs
+# description: Train Shared Schedule Model
+# content: 训练某个新模型,模型的参数在.local_resources/shared/schedule_model里定义,也可以改变其他configs
 # email: True
 # mode: shell
 # parameters:
 #   schedule_name : 
-#       type : "[p.stem for p in Path('configs/schedule').glob('*.yaml')]"
+#       type : "[p.stem for p in Path('.local_resources/shared/schedule_model').glob('*.yaml')]"
 #       desc : schedule config file to train
 #       required : True
 #   short_test : 
@@ -23,7 +23,7 @@
 #       required : True
 # file_editor:
 #   name : "Schedule Config File Editor"
-#   path: "configs/schedule/{schedule_name}.yaml"
+#   path: ".local_resources/shared/schedule_model/{schedule_name}.yaml"
 #   height : 300 # optional
 
 from src.res.api import ModelAPI
