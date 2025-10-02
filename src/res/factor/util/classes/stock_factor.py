@@ -449,7 +449,7 @@ class StockFactor:
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
             grouped = df.groupby(by=['date'], as_index=True)
             def df_ic(subdf : pd.DataFrame , **kwargs):
-                return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type).to_frame()
+                return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type)
             ic = grouped.apply(df_ic , include_groups = False).rename_axis('factor_name',axis='columns')
             self.stats['ic'] = (params , ic)
         return self.stats['ic'][1]
@@ -465,7 +465,7 @@ class StockFactor:
                 warnings.filterwarnings('ignore', message='.*correlation coefficient is not defined.*')
                 df = self.frame_with_cols(indus = True , fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
                 def df_ic(subdf : pd.DataFrame , **kwargs):
-                    return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type).to_frame()
+                    return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type)
                 ic = df.groupby(['date' , 'industry']).apply(df_ic , include_groups = False).rename_axis('factor_name',axis='columns')
             self.stats['ic_indus'] = (params , ic)
         return self.stats['ic_indus'][1]
