@@ -60,6 +60,11 @@ class MACHINE:
     def machine_names(cls):
         """Select the machine setting"""
         return list(_machine_dict.keys())
+
+    @classmethod
+    def machine_main_path(cls , machine_name : str) -> Path:
+        """Get the main path at another machine"""
+        return Path(_machine_dict[machine_name][1])
     
     @classmethod
     def PATH(cls):

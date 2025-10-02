@@ -82,6 +82,18 @@ class PATH:
     # local_settings folder
     local_settings = main.joinpath('.local_settings')
 
+    @classmethod
+    def path_at_machine(cls , path : Path | str , machine_name : str) -> str | Path:
+        """Get the path at another machine"""
+        if isinstance(path , str):
+            path = Path(path)
+            return str(cls.path_at_machine(Path(path) , machine_name))
+        else:
+            if path.is_relative_to(MACHINE.main_path):
+                return MACHINE.machine_main_path(machine_name).joinpath(path.relative_to(MACHINE.main_path))
+            else:
+                return path
+        
     @staticmethod
     def read_yaml(yaml_file : str | Path , **kwargs) -> Any:
         """Read yaml file"""

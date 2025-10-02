@@ -100,6 +100,7 @@ class ScheduledTask:
                 shell=True,
                 encoding='utf-8',
                 env = env,
+                check = True,
             )
             # print the result
             Logger.info(f"command {self.cmdline} executed successfully, return code: {result.returncode}\n")
@@ -144,10 +145,11 @@ class TaskScheduler:
         kwargs = kwargs or {}
         if isinstance(script , str):
             script = PATH.scpt.joinpath(script).with_suffix('.py')
-            assert script.exists() , f'script {script} does not exist'
+            assert Path(script).exists() , f'script {script} does not exist'
         else:
             script = str(script.absolute())
+        script = PATH.path_at_machine(script , machine_name)
         kwargs_str = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in kwargs.items() if v != ''])
-        cmdline = f"{MACHINE.python_path} {script} {kwargs_str}"
+        cmdline = f"{PATH.path_at_machine(Path(MACHINE.python_path) , machine_name)} {script} {kwargs_str}"
         Logger.info(f"add run script {script} with kwargs {kwargs} to {machine_name}")
         cls.add_task(machine_name = machine_name, cmdline = cmdline)
