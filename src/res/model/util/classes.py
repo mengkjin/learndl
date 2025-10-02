@@ -382,7 +382,7 @@ class BaseTrainer(ModelStreamLine):
 
             if not self.stage_queue:
                 Logger.warning("stage_queue is empty , please check src.proj.InstanceRecord['trainer']")
-                raise Exception("stage_queue is empty , please check src.proj.InstanceRecord['trainer']")
+                raise Exception("stage_queue is empty , please check src.InstanceRecord['trainer']")
 
             if 'data' in self.stage_queue: 
                 self.stage_data()

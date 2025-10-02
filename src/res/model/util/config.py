@@ -27,6 +27,18 @@ def conf_path(base_path : ModelPath | Path | str | None , *args):
     path = f(*args).with_suffix('.yaml')
     return path
 
+def schedule_path(base_path : ModelPath | Path | str | None , name : str):
+    base_path = ModelPath(base_path)
+    if base_path:
+        path = base_path.conf('schedule').joinpath(f'{name}.yaml')
+    else:
+        schedule_path_0 = PATH.conf.joinpath('schedule').joinpath(f'{name}.yaml')
+        schedule_path_1 = PATH.shared_schedule.joinpath(f'{name}.yaml')
+        assert schedule_path_0.exists() or schedule_path_1.exists() , f'{name} does not exist in config/schedule or .local_resources/shared/schedule_model/schedule'
+        assert not (schedule_path_0.exists() and schedule_path_1.exists()) , f'{name} exists in both config/schedule and .local_resources/shared/schedule_model/schedule'
+        path = schedule_path_0 if schedule_path_0.exists() else schedule_path_1
+    return path
+
 def conf_copy(source : Path , target : Path , overwrite = False):
     if source.is_dir():
         if not overwrite: 
@@ -58,7 +70,7 @@ def schedule_config(base_path : ModelPath | Path | None , name : str | None):
         name = schedules[0].stem if schedules else None
     p : dict[str,Any] = {}
     if name: 
-        p.update(PATH.read_yaml(conf_path(base_path , 'schedule', name)))
+        p.update(PATH.read_yaml(schedule_path(base_path , name)))
     return p
 
 class TrainParam:
@@ -194,8 +206,8 @@ class TrainParam:
         conf_copy(conf_dir(None , 'train') , conf_dir(where , 'train') , overwrite)
         if self.schedule_name:
             conf_copy(
-                conf_path(None , 'schedule' , self.schedule_name) , 
-                conf_path(where , 'schedule' , self.schedule_name) , overwrite)
+                schedule_path(None , self.schedule_name) , 
+                schedule_path(where , self.schedule_name) , overwrite)
 
     @classmethod
     def guess_module(cls , base_path : Path | ModelPath | None):

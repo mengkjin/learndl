@@ -119,9 +119,10 @@ class TaskScheduler:
         return _share_folder is not None
 
     @staticmethod
-    def get_all_tasks() -> None:
+    def get_all_tasks():
         """get all the tasks"""
-        [ScheduledTask.load_task(file) for file in root_path.rglob('*.await')]       
+        ScheduledTask._instances.clear()
+        return [ScheduledTask.load_task(file) for file in root_path.rglob('*.await')]       
 
     @classmethod
     def add_task(cls, machine_name : str = 'mengkjin-server', cmdline : str = ''):
@@ -129,7 +130,7 @@ class TaskScheduler:
         assert machine_name in MACHINE.machine_names() , f'machine_name {machine_name} not in {MACHINE.machine_names()}'
         if not cmdline:
             return
-        ScheduledTask.new_task(machine_name, cmdline)
+        return ScheduledTask.new_task(machine_name, cmdline)
 
     @classmethod
     def run_all_tasks(cls):
@@ -152,4 +153,4 @@ class TaskScheduler:
         kwargs_str = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in kwargs.items() if v != ''])
         cmdline = f"{PATH.path_at_machine(Path(MACHINE.python_path) , machine_name)} {script} {kwargs_str}"
         Logger.info(f"add run script {script} with kwargs {kwargs} to {machine_name}")
-        cls.add_task(machine_name = machine_name, cmdline = cmdline)
+        return cls.add_task(machine_name = machine_name, cmdline = cmdline)

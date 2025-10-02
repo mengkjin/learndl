@@ -1,7 +1,7 @@
 import streamlit as st
 import os , subprocess
 
-from typing import Literal, Callable
+from typing import Any , Literal, Callable
 from pathlib import Path
 
 from src.app.backend import (
@@ -208,6 +208,17 @@ def show_param_settings(runner : ScriptRunner):
                 path = runner.header.file_previewer['path'].format(**params)
                 file_previewer = FilePreviewer(path , height = runner.header.file_previewer.get('height'))
                 file_previewer.preview()
+
+def conditional_path(format_str : str , params : dict[str, Any] , root = PATH.main):
+    if '|' in format_str:
+        format_strs = [s.strip() for s in format_str.split('|')]
+        for s in format_strs:
+            path = s.strip().format(**params)
+            if Path(path).exists() or root.joinpath(path).exists():
+                return path
+        return path
+    else:
+        return format_str.strip().format(**params)
 
 def run_button_button(runner : ScriptRunner | None , sidebar = False):
     if runner is None:
