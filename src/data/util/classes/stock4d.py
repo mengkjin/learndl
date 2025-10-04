@@ -234,7 +234,7 @@ class Stock4DData:
             xarr = NdData.from_xarray(xr.Dataset.from_dataframe(df))
         except Exception as e:
             print(e)
-            print(df)
+            print(df[df.index.duplicated()])
             raise e
         try:
             value = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
