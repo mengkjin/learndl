@@ -9,3 +9,8 @@ scores_v0:
   src: sellside
   key: dongfang.scores_v0
   col: avg
+
+master_combined:
+  src: sellside
+  key: huatai.master_combined
+  col: master_combined

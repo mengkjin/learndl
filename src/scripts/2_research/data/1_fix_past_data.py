@@ -13,7 +13,6 @@ from src.basic import DB
 
 @ScriptTool('fix_past_data')
 def main(**kwargs):
-    dates = DB.dates('sellside' , 'dongfang.scores_v0')
     for date in [20250801]:
         df = DB.load(f'sellside' , 'dongfang.scores_v0' , date)
         print(df.drop_duplicates().any())

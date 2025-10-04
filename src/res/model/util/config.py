@@ -329,6 +329,8 @@ class TrainParam:
     def model_interval(self) -> int: 
         if (interval := int(self.Param.get('model.interval', 0))) > 0:
             return interval
+        elif self.module_type == 'db':
+            return int(self.Param.get(f'model.interval.{self.module_type}', 2400))
         else:
             return int(self.Param.get(f'model.interval.{self.module_type}', 120))
     @property
