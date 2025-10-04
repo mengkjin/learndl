@@ -69,13 +69,42 @@ class JSFetcher:
         return v
     
     def target_path(self , date = None):
-        return DB.db_path(self.db_src , self.db_key , date)
+        return DB.path(self.db_src , self.db_key , date)
     
     def source_dates(self):
-        return DB.get_source_dates(self.db_src , self.db_key)
-    
+        assert self.db_src in DB.DB_BY_DATE , f'{self.db_src} not in {DB.DB_BY_DATE}'
+        return self.R_source_dates(self.db_src , self.db_key)
+
+    @classmethod
+    def R_dir_dates(cls , directory):
+        '''get all path dates in a dir from R environment'''
+        return DB.file_dates(PATH.list_files(directory , recur = True))
+        
+    @classmethod
+    def R_source_dates(cls , db_src , db_key):
+        if db_src != 'benchmark_js': 
+            db_key = re.sub(r'\d+', '', db_key)
+        source_key = '/'.join([db_src , db_key])
+        date_source = {
+            'models/risk_exp'   : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model' ,
+            'models/risk_cov'   : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/6_factor_return_covariance/jm2018_model' ,
+            'models/risk_spec'  : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/C_specific_risk/jm2018_model' ,
+            'models/longcl_exp' : 'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/A1_Analyst',
+            'trade_js/day'         : 'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_vwap' ,
+            'trade_js/min'         : 'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin' ,
+            'labels_js/ret'        : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
+            'labels_js/ret_lag'    : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
+            'benchmark_js/csi300'  : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI300' ,
+            'benchmark_js/csi500'  : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI500' ,
+            'benchmark_js/csi800'  : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI800' ,
+            'benchmark_js/csi1000' : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI1000' ,
+        }[source_key]
+
+        source_dates = cls.R_dir_dates(date_source)
+        return np.array(sorted(source_dates) , dtype=int)
+
     def target_dates(self):
-        return DB.db_dates(self.db_src , self.db_key)
+        return DB.dates(self.db_src , self.db_key)
     
     def get_update_dates(self , start_dt = None , end_dt = None , trace = 0 , incremental = True , force = False):
         source_dates = self.source_dates()

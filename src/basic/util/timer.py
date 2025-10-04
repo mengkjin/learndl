@@ -7,16 +7,17 @@ from .silence import SILENT
 
 class Timer:
     '''simple timer to print out time'''
-    def __init__(self , *args , newline = False , exit_only = True): 
+    def __init__(self , *args , newline = False , exit_only = True , silent = False): 
         self.newline = newline
         self.exit_only = exit_only
+        self.silent = silent
         self.key = '/'.join(args)
     def __enter__(self):
         self.start_time = time.time()
-        if not SILENT and not self.exit_only: 
+        if not self.silent and not SILENT and not self.exit_only: 
             print(self._str_at_first() , end='\n' if self.newline else '')
     def __exit__(self, type, value, trace):
-        if not SILENT:
+        if not self.silent and not SILENT:
             print((self._str_at_first() if self.exit_only else '') + self._str_at_exit())
     def _str_at_first(self):
         return f'{self.key} start ... '

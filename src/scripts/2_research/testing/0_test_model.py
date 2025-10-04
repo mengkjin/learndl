@@ -1,4 +1,4 @@
-#! /usr/bin/env python3.10
+#! /usr/bin/env User/mengkjin/workspace/learndl/.venv/bin/python
 # coding: utf-8
 # author: jinmeng
 # date: 2025-06-20

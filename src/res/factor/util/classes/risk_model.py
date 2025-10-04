@@ -162,7 +162,7 @@ class RiskModel(GeneralModel):
 
     def init_loaders(self):
         for key in ['exp' , 'coef' , 'res' , 'cov' , 'spec']:
-            DB.db_path('models' , f'tushare_cne5_{key}' , 20250101).parent.parent.mkdir(parents=True , exist_ok=True)
+            DB.path('models' , f'tushare_cne5_{key}' , 20250101).parent.parent.mkdir(parents=True , exist_ok=True)
 
         self.F_loader = BlockLoader('models' , 'tushare_cne5_exp')
         self.C_loader = FrameLoader('models' , 'tushare_cne5_cov')
@@ -170,7 +170,7 @@ class RiskModel(GeneralModel):
 
     def append(self , model : Rmodel , override = False):
         return super().append(model , override)
-    def available_dates(self): return DB.db_dates('models' , 'tushare_cne5_exp')
+    def available_dates(self): return DB.dates('models' , 'tushare_cne5_exp')
     def get(self , date : int , latest = True) -> Rmodel:
         model = super().get(date , latest)
         assert isinstance(model , Rmodel) , f'rmodel at {date} does not exists!'

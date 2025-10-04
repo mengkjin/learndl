@@ -25,7 +25,7 @@ class FDataAccess(DateDataAccess):
 
     def data_loader(self , date , data_type):
         if data_type in self.DATA_TYPE_LIST: 
-            return DB.db_load('financial_ts' , data_type , date , check_na_cols=False)
+            return DB.load('financial_ts' , data_type , date , check_na_cols=False)
         else:
             raise KeyError(data_type)
     

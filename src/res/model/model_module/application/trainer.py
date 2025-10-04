@@ -93,3 +93,13 @@ class ModelTrainer(BaseTrainer):
             catcher.set_attrs(f'Schedule Model of {trainer.config.model_name}' , trainer.path_training_output)
         Email.Attach(trainer.result_package)
         return trainer
+
+    @classmethod
+    def test_db_mapping(cls , mapping_name : str | None = None , short_test : bool | None = None , message_catcher : bool = True , 
+             stage = 2 , resume = 0 , checkname = -1 , **kwargs):
+        assert mapping_name, 'model_name is required'
+        with HtmlCatcher(message_catcher) as catcher:
+            trainer = cls.initialize(module = f'db@{mapping_name}' , short_test = short_test , stage = stage , resume = resume , checkname = checkname, **kwargs).go()
+            catcher.set_attrs(f'Test DB Mapping of {mapping_name}' , trainer.path_training_output)
+        Email.Attach(trainer.result_package)
+        return trainer

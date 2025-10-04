@@ -15,7 +15,7 @@ class ClassicLabelsUpdater:
         for days in cls.DAYS:
             for lag1 in cls.LAGS:
                 label_name = f'ret{days}' + ('_lag' if lag1 else '')
-                stored_dates = DB.db_dates(cls.DB_SRC , label_name)
+                stored_dates = DB.dates(cls.DB_SRC , label_name)
                 end_date     = CALENDAR.td(CALENDAR.updated() , - days - lag1)
                 update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
                 for date in update_dates:
@@ -35,7 +35,7 @@ class ClassicLabelsUpdater:
 
     @classmethod
     def update_one(cls , date : int , days : int , lag1 : bool , label_name : str):
-        DB.db_save(calc_classic_labels(date , days , lag1) , cls.DB_SRC , label_name , date , verbose = True)
+        DB.save(calc_classic_labels(date , days , lag1) , cls.DB_SRC , label_name , date , verbose = True)
 
 def calc_classic_labels(date : int , days : int , lag1 : bool) -> pd.DataFrame | None:
     d0 = CALENDAR.td(date) + lag1

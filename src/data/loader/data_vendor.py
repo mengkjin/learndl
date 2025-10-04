@@ -39,7 +39,7 @@ class DataVendor:
         self.start_dt = 99991231
         self.end_dt   = -1
 
-        dates = DB.db_dates('trade_ts' , 'day')
+        dates = DB.dates('trade_ts' , 'day')
         self.max_date   = dates[-1] if len(dates) else -1
         self.min_date   = dates[0] if len(dates) else 99991231
 
@@ -89,8 +89,7 @@ class DataVendor:
             names = [names]
         dates = DATAVENDOR.td_within(start_dt , end_dt , step)
 
-        func = DB.pred_load_multi if factor_type == 'pred' else DB.factor_load_multi
-        values = [func(name , dates , date_colname = 'date') for name in names]
+        values = [DB.load_multi(factor_type , name , dates , date_colname = 'date') for name in names]
         values = [v.set_index(['secid','date']) for v in values if not v.empty]
         if values:
             return DataBlock.from_dataframe(pd.concat(values , axis=1).sort_index())
@@ -174,7 +173,7 @@ class DataVendor:
         d = date[0] if isinstance(date , np.ndarray) else date
         assert d > 0 , 'Attempt to get unaccessable date'
         if d not in self.day_quotes: 
-            df : pd.DataFrame | Any = DB.db_load('trade_ts' , 'day' , date)[['secid','adjfactor','close','vwap','open']]
+            df : pd.DataFrame | Any = DB.load('trade_ts' , 'day' , date)[['secid','adjfactor','close','vwap','open']]
             if df is not None: 
                 self.day_quotes[d] = df
         return self.day_quotes.get(d , None)

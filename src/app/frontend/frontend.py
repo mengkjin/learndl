@@ -362,6 +362,7 @@ class FilePreviewer:
         elif not self.path.exists():
             st.error(f"File {self.path} not found" , icon = ":material/error:")
             return
+        st.markdown(f"**File Path:** {self.path.absolute()}")
         with st.container(height = self.height , border = False):
             # st.info(f"Previewing file: {self.path}" , icon = ":material/file_present:" , width = "stretch")
             suffix = self.path.suffix
@@ -614,6 +615,7 @@ class YAMLFileEditor:
         if not self.load_file(): 
             return
         
+        st.markdown(f"**File Path:** {self.get_file_path().absolute()}")
         st_ace(
             value = self.state.load_content,
             height = self.height ,

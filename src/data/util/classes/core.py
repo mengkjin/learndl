@@ -179,8 +179,8 @@ class DataBlock(Stock4DData):
     @classmethod
     def load_db(cls , db_src : str , db_key : str , start_dt = None , end_dt = None , feature = None , use_alt = True):
         dates = CALENDAR.td_within(start_dt , end_dt)
-        main_dates = np.intersect1d(dates , DB.db_dates(db_src , db_key , use_alt=use_alt))
-        df = DB.db_load_multi(db_src , db_key , main_dates , use_alt=use_alt)
+        main_dates = np.intersect1d(dates , DB.dates(db_src , db_key , use_alt=use_alt))
+        df = DB.load_multi(db_src , db_key , main_dates , use_alt=use_alt)
 
         if len(df) == 0: 
             return cls()

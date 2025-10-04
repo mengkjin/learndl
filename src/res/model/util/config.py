@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any , Literal
 
 from src.proj import PATH , MACHINE , Logger
-from src.basic import Device , ModelPath
+from src.basic import Device , ModelPath , ModelDBMapping , DB
 from src.func import recur_update
 from src.res.algo import AlgoModule
 
@@ -16,16 +16,10 @@ from .storage import Checkpoint , Deposition
 TRAIN_CONFIG_LIST = ['train' , 'env' , 'callbacks' , 'conditional' , 'model']
 
 def conf_dir(base_path : ModelPath | Path | str | None , *args):
-    base_path = ModelPath(base_path)
-    f = base_path.conf if base_path else PATH.conf.joinpath
-    path = f(*args)
-    return path
+    return ModelPath(base_path).conf(*args)
 
 def conf_path(base_path : ModelPath | Path | str | None , *args):
-    base_path = ModelPath(base_path)
-    f = base_path.conf if base_path else PATH.conf.joinpath
-    path = f(*args).with_suffix('.yaml')
-    return path
+    return ModelPath(base_path).conf(*args).with_suffix('.yaml')
 
 def schedule_path(base_path : ModelPath | Path | str | None , name : str):
     base_path = ModelPath(base_path)
@@ -58,8 +52,11 @@ def striped_list(factors : list[str] | dict | str):
             factors = list(factors.values())
         return [ff for f in factors for ff in striped_list(f)]
 
-def conf_mod_type(module : str):
-    return AlgoModule.module_type(module)
+def conf_mod_type(module : str) -> Literal['nn' , 'booster' , 'db']:
+    if module.startswith('db@'):
+        return 'db'
+    else:
+        return AlgoModule.module_type(module)
 
 def schedule_config(base_path : ModelPath | Path | None , name : str | None):
     # schedule configs are used to override the train config
@@ -148,6 +145,8 @@ class TrainParam:
             return self
         if self.Param['model.name']: 
             model_name = str(self.Param['model.name'])
+        elif self.model_module.startswith('db@'):
+            model_name = self.model_module.replace('@','_')
         else: 
             mod_str = self.model_module 
             head_str = 'booster' if self.model_booster_head else None
@@ -175,9 +174,9 @@ class TrainParam:
         if nn_datatype:  
             self.Param['model.data.types'] = nn_datatype
 
-
-        if self.module_type != 'nn' or self.model_booster_head: 
+        if self.module_type in ['booster' , 'db'] or self.model_booster_head: 
             self.Param['model.submodels'] = ['best']
+
         if 'best' not in self.model_submodels: 
             self.model_submodels.insert(0 , 'best')
 
@@ -187,7 +186,7 @@ class TrainParam:
         return self
     
     def generate_model_param(self , update_inplace = True , **kwargs):
-        module = self.model_module if self.module_type == 'nn' else self.model_booster_type
+        module = self.model_booster_type if self.module_type == 'booster' else self.model_module
         assert isinstance(module , str) , (self.model_module , module)
         model_param = ModelParam(self.base_path , module , self.model_booster_head , self.verbosity , self.short_test , self.schedule_name , **kwargs).expand()
         if update_inplace: 
@@ -210,57 +209,76 @@ class TrainParam:
                 schedule_path(where , self.schedule_name) , overwrite)
 
     @classmethod
-    def guess_module(cls , base_path : Path | ModelPath | None):
+    def guess_module(cls , base_path : Path | ModelPath | None) -> str:
         return str(PATH.read_yaml(conf_path(base_path , 'train', 'model'))['module']).lower()
     
     @staticmethod
-    def get_module_type(module : str):
+    def get_module_type(module : str) -> Literal['nn' , 'booster' , 'db']:
         return conf_mod_type(module)
     
     @property
-    def module_type(self): return conf_mod_type(self.model_module)
+    def module_type(self) -> Literal['nn' , 'booster' , 'db']: 
+        return conf_mod_type(self.model_module)
+
     @property
-    def nn_category(self): return AlgoModule.nn_category(self.model_module)
+    def nn_category(self) -> str | None: 
+        return AlgoModule.nn_category(self.model_module)
+
     @property
-    def resumeable(self): 
+    def resumeable(self) -> bool: 
         assert self.model_name , f'{self} has model_name None'
         model_path = ModelPath(self.model_name)
         return all([model_path.conf(cfg_key).exists() for cfg_key in TRAIN_CONFIG_LIST])
 
     @property
-    def short_test(self): return bool(self.Param['env.short_test'])
+    def short_test(self) -> bool: 
+        return bool(self.Param['env.short_test'])
     @short_test.setter
     def short_test(self , value : bool):
         self.Param['env.short_test'] = value
+
     @property
-    def verbosity(self): return int(self.Param['env.verbosity'])
+    def verbosity(self) -> int: 
+        return int(self.Param['env.verbosity'])
     @property
-    def random_seed(self): return self.Param['env.random_seed']
+    def random_seed(self) -> Any: 
+        return self.Param['env.random_seed']
     @property
-    def mem_storage(self): return bool(self.Param['env.mem_storage'])
+    def mem_storage(self) -> bool: 
+        return bool(self.Param['env.mem_storage'])
     @property
     def precision(self) -> Any:
         prec = self.Param['env.precision']
         return getattr(torch , prec) if isinstance(prec, str) else prec
     @property
-    def beg_date(self): return int(self.Param['model.beg_date'])
+    def beg_date(self) -> int: 
+        return int(self.Param['model.beg_date'])
     @property
-    def end_date(self): return int(self.Param['model.end_date'])
+    def end_date(self) -> int: 
+        return int(self.Param['model.end_date'])
     @property
-    def model_rslt_path(self): return self.model_base_path.rslt()
+    def model_rslt_path(self) -> Path: 
+        return self.model_base_path.rslt()
     @property
-    def model_submodels(self) -> list: return self.Param['model.submodels']
+    def model_submodels(self) -> list: 
+        return self.Param['model.submodels']
     @property
-    def model_module(self): return str(self.Param['model.module']).lower()
+    def model_module(self): 
+        return str(self.Param['model.module']).lower()
     @property
-    def model_input_type(self) -> Literal['data' , 'hidden' , 'factor' , 'combo']: 
+    def model_input_type(self) -> Literal['db' , 'data' , 'hidden' , 'factor' , 'combo']: 
+        if self.module_type == 'db':
+            return 'db'
         assert self.Param['model.input_type'] in ['data' , 'hidden' , 'factor' , 'combo'] , self.Param['model.input_type']
         return self.Param['model.input_type']
     @property
-    def model_labels(self) -> list[str]: return self.Param['model.labels']
+    def model_labels(self) -> list[str]: 
+        return self.Param['model.labels']
     @property
     def model_data_types(self) -> list[str]: 
-        if self.model_input_type == 'data' or (self.model_input_type == 'combo' and 'data' in self.Param['model.combo.types']):
+        if self.module_type == 'db':
+            data_types = []
+        elif self.model_input_type == 'data' or (self.model_input_type == 'combo' and 'data' in self.Param['model.combo.types']):
             data_types = self.Param['model.data.types']
         else:
             data_types = []
@@ -270,14 +288,18 @@ class TrainParam:
         return self.Param.get('model.data.prenorm',{})
     @property
     def model_hidden_types(self) -> list[str]: 
-        if self.model_input_type == 'hidden' or (self.model_input_type == 'combo' and 'hidden' in self.Param['model.combo.types']):
+        if self.module_type == 'db':
+            hidden_types = []
+        elif self.model_input_type == 'hidden' or (self.model_input_type == 'combo' and 'hidden' in self.Param['model.combo.types']):
             hidden_types = self.Param['model.hidden.types']
         else:
             hidden_types = []
         return str(hidden_types).split('+') if isinstance(hidden_types , str) else list(hidden_types)
     @property
     def model_factor_types(self) -> list[str]: 
-        if self.model_input_type == 'factor' or (self.model_input_type == 'combo' and 'factor' in self.Param['model.combo.types']):
+        if self.module_type == 'db':
+            factors = []
+        elif self.model_input_type == 'factor' or (self.model_input_type == 'combo' and 'factor' in self.Param['model.combo.types']):
             factors = self.Param['model.factor.types']
         else:
             factors = []
@@ -295,23 +317,25 @@ class TrainParam:
             'data' : self.model_data_types,
             'factor' : self.model_factor_types,
             'hidden' : self.model_hidden_types,
+            'db' : [self.model_module] if self.model_input_type == 'db' else [],
         }
     @property
-    def model_train_window(self): 
+    def model_train_window(self) -> int: 
         if (train_window := int(self.Param.get('model.train_window', 0))) > 0:
             return train_window
         else:
-            return int(self.Param[f'model.train_window.{self.module_type}'])
+            return int(self.Param.get(f'model.train_window.{self.module_type}' , 240))
     @property
-    def model_interval(self): 
+    def model_interval(self) -> int: 
         if (interval := int(self.Param.get('model.interval', 0))) > 0:
             return interval
         else:
-            return int(self.Param[f'model.interval.{self.module_type}'])
+            return int(self.Param.get(f'model.interval.{self.module_type}', 120))
     @property
-    def model_booster_head(self): return self.Param['model.booster_head']
+    def model_booster_head(self) -> Any: 
+        return self.Param['model.booster_head']
     @property
-    def model_booster_type(self):
+    def model_booster_type(self) -> str:
         if self.model_module in ['booster' , 'hidden_aggregator']:
             assert AlgoModule.is_valid(self.Param['model.booster_type'] , 'booster') , self.Param['model.booster_type']
             return self.Param['model.booster_type']
@@ -320,10 +344,10 @@ class TrainParam:
         else:
             return 'not_a_booster'
     @property
-    def model_booster_optuna(self): 
+    def model_booster_optuna(self) -> bool: 
         return bool(self.Param.get('model.booster_optuna'))
     @property
-    def model_booster_optuna_n_trials(self): 
+    def model_booster_optuna_n_trials(self) -> int: 
         return int(self.Param.get('model.booster_optuna_n_trials',10))
     @property
     def model_sequence_lens(self) -> dict[str,int]: 
@@ -340,9 +364,12 @@ class TrainParam:
         steps = {key:ssteps.get(key , ssteps.get(itp,1)) for itp,keys in self.model_all_input_keys.items() for key in keys}
         return steps
     @property
-    def train_data_step(self): return int(self.Param['train.data_step'])
+    def train_data_step(self) -> int: 
+        return int(self.Param['train.data_step'])
     @property
-    def train_train_ratio(self): return float(self.Param['train.dataloader.train_ratio'])
+    def train_train_ratio(self) -> float: 
+        # valid ratio is 1 - train_ratio
+        return float(self.Param['train.dataloader.train_ratio'])
     @property
     def train_sample_method(self) -> Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']: 
         return self.Param['train.dataloader.sample_method']
@@ -350,31 +377,44 @@ class TrainParam:
     def train_shuffle_option(self) -> Literal['static' , 'init' , 'epoch']: 
         return self.Param['train.dataloader.shuffle_option']
     @property
-    def train_batch_size(self): return int(self.Param['train.batch_size'])
+    def train_batch_size(self) -> int: 
+        return int(self.Param['train.batch_size'])
     @property
-    def train_max_epoch(self): return int(self.Param['train.max_epoch'])
+    def train_max_epoch(self) -> int: 
+        return int(self.Param['train.max_epoch'])
     @property
-    def train_skip_horizon(self): return int(self.Param['train.skip_horizon'])
+    def train_skip_horizon(self) -> int: 
+        return int(self.Param['train.skip_horizon'])
     @property
-    def train_trainer_transfer(self) -> bool: return self.Param['train.trainer.transfer']
+    def train_trainer_transfer(self) -> bool: 
+        return self.Param['train.trainer.transfer']
     @property
-    def train_criterion_loss(self) -> Any: return self.Param['train.criterion.loss']
+    def train_criterion_loss(self) -> Any: 
+        return self.Param['train.criterion.loss']
     @property
-    def train_criterion_score(self) -> Any: return self.Param['train.criterion.score']
+    def train_criterion_score(self) -> Any: 
+        return self.Param['train.criterion.score']
     @property
-    def train_criterion_penalty(self) -> dict[Any,Any]: return self.Param['train.criterion.penalty']
+    def train_criterion_penalty(self) -> dict[Any,Any]: 
+        return self.Param['train.criterion.penalty']
     @property
-    def train_multilosses_type(self) -> Any: return self.Param['train.multilosses.type']
+    def train_multilosses_type(self) -> Any: 
+        return self.Param['train.multilosses.type']
     @property
-    def train_multilosses_param(self) -> dict: return self.Param[f'train.multilosses.param.{self.train_multilosses_type}']
+    def train_multilosses_param(self) -> dict: 
+        return self.Param[f'train.multilosses.param.{self.train_multilosses_type}']
     @property
-    def train_trainer_optimizer(self) -> dict[str,Any]: return self.Param['train.trainer.optimizer']
+    def train_trainer_optimizer(self) -> dict[str,Any]: 
+        return self.Param['train.trainer.optimizer']
     @property
-    def train_trainer_scheduler(self) -> dict[str,Any]: return self.Param['train.trainer.scheduler']
+    def train_trainer_scheduler(self) -> dict[str,Any]: 
+        return self.Param['train.trainer.scheduler']
     @property
-    def train_trainer_learn_rate(self) -> dict[str,Any]: return self.Param['train.trainer.learn_rate']
+    def train_trainer_learn_rate(self) -> dict[str,Any]: 
+        return self.Param['train.trainer.learn_rate']
     @property
-    def train_trainer_gradient_clip_value(self) -> Any: return self.Param['train.trainer.gradient.clip_value']
+    def train_trainer_gradient_clip_value(self) -> Any: 
+        return self.Param['train.trainer.gradient.clip_value']
 
     @property
     def callbacks(self) -> dict[str,dict]: 
@@ -388,14 +428,15 @@ class ModelParam:
         self.base_path = ModelPath(base_path)
         self.model_name = self.base_path.name
         self.module = module.lower()
-        self.booster_head = booster_head
+        self.booster_head = booster_head if self.module_type == 'nn' else None    
         self.short_test = short_test
         self.verbosity = verbosity
         self.schedule_name = schedule_name
         self.override = kwargs
         self.load_param().check_validity()
 
-    def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
+    def __repr__(self): 
+        return f'{self.__class__.__name__}(model_name={self.model_name})'
 
     @property
     def model_base_path(self):
@@ -412,17 +453,20 @@ class ModelParam:
         return self.model_param
 
     @property
-    def module_type(self): 
+    def module_type(self) -> Literal['nn' , 'booster' , 'db']: 
         return conf_mod_type(self.module)
 
     @property
-    def mod_type_dir(self):
+    def mod_type_dir(self) -> str:
         return 'boost' if self.module_type == 'booster' else self.module_type
 
     def conf_file(self , base : Path | ModelPath | str | None | Literal['self'] = 'self'):
         if base == 'self': 
             base = self.base_path
-        return conf_path(base , self.mod_type_dir , self.module)
+        if self.module_type == 'db':
+            return conf_path(base , 'registry' , 'db_models_mapping')
+        else:
+            return conf_path(base , self.mod_type_dir , self.module)
 
     def load_param(self):
         self.model_param : dict[str,Any] = {}
@@ -445,11 +489,14 @@ class ModelParam:
     def check_validity(self):
         assert self.module_type == 'nn' or not self.booster_head , f'{self.module} is not a valid module'
 
-        lens = [len(v) for v in self.Param.values() if isinstance(v , (list,tuple))]
-        self.n_model = max(lens) if lens else 1
-        if self.short_test: 
-            self.n_model = min(1 , self.n_model)
-        assert self.n_model <= 5 , self.n_model
+        if self.module_type == 'db':
+            self.n_model = 1
+        else:
+            lens = [len(v) for v in self.Param.values() if isinstance(v , (list,tuple))]
+            self.n_model = max(lens) if lens else 1
+            if self.short_test: 
+                self.n_model = min(1 , self.n_model)
+            assert self.n_model <= 5 , self.n_model
         
         if self.module == 'tra':
             assert 'hist_loss_seq_len' in self.Param , f'{self.Param} has no hist_loss_seq_len'
@@ -460,7 +507,7 @@ class ModelParam:
             self.booster_head_param = ModelParam(self.base_path , self.booster_head , False , self.verbosity , **self.override)
         return self
     
-    def get(self , key : str , default = None):
+    def get(self , key : str , default = None) -> Any:
         return self.Param.get(key , default)
     
     def copy_to(self , where : Path | ModelPath | str , overwrite = False):
@@ -477,6 +524,10 @@ class ModelParam:
 
     def expand(self):
         self.params : list[dict[str,Any]] = []
+        if self.module_type == 'db':
+            self.params.append(self.model_param.copy())
+            return self
+
         for mm in range(self.n_model):
             par = {k:v[mm % len(v)] if isinstance(v , (list, tuple)) else v for k,v in self.Param.items()}
             self.params.append(par)
@@ -487,8 +538,9 @@ class ModelParam:
        
     def update_data_param(self , x_data : dict, config : 'TrainConfig'):
         '''when x_data is known , use it to fill some params(seq_len , input_dim , inday_dim , etc.) of nn module'''
-        if not x_data: 
+        if self.module_type == 'db' or not x_data:
             return self
+        
         keys = list(x_data.keys())
         input_dim = [x_data[mdt].shape[-1] for mdt in keys]
         inday_dim = [x_data[mdt].shape[-2] for mdt in keys]
@@ -510,14 +562,21 @@ class ModelParam:
             param[key] = value
     
     @property
-    def max_num_output(self): return max(self.Param.get('num_output' , [1]))
+    def max_num_output(self) -> int: 
+        return max(self.Param.get('num_output' , [1]))
+
+    @property
+    def db_mapping(self) -> ModelDBMapping:
+        assert self.module_type == 'db' , f'{self.module_type} is not a db module , cannot use db_mapping'
+        if not hasattr(self , '_db_mapping'):
+            self._db_mapping = ModelDBMapping.from_dict(self.module , self.Param)
+        return self._db_mapping
 
 class TrainConfig(TrainParam):
     def __init__(
         self , base_path : ModelPath | Path | str | None , override = None, schedule_name : str | None = None ,
         stage = -1 , resume = -1 , checkname = -1 , makedir = True , **kwargs
     ):
-        self.stage_queue = []
         self.device      = Device()
 
         self.Train = TrainParam(base_path , override, schedule_name , **kwargs)
@@ -530,7 +589,10 @@ class TrainConfig(TrainParam):
         
 
     @classmethod
-    def default(cls , override = None , stage = 0, resume = 0 , checkname = 0 , makedir = False):
+    def default(cls , module = None , override = None , stage = 0, resume = 0 , checkname = 0 , makedir = False):
+        if module:
+            override = override or {}
+            override['model.module'] = module
         return cls(None, override , stage = stage,resume=resume , checkname=checkname,makedir=makedir)
         
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
@@ -557,21 +619,42 @@ class TrainConfig(TrainParam):
 
     
     @property
-    def Param(self) -> dict[str,Any]: return self.Train.Param
+    def Param(self) -> dict[str,Any]: 
+        return self.Train.Param
     @property
-    def model_base_path(self): return self.Train.model_base_path
+    def model_base_path(self) -> ModelPath: 
+        return self.Train.model_base_path
     @property
-    def model_name(self) -> str|Any: return self.Train.model_name
+    def model_name(self) -> str | Any: 
+        return self.Train.model_name
     @property
-    def model_param(self): return self.Model.params
+    def model_param(self) -> list[dict[str,Any]]: 
+        return self.Model.params
     @property
-    def model_num(self): return self.Model.n_model
+    def model_num(self) -> int: 
+        return self.Model.n_model
     @property
-    def model_num_list(self) -> list[int]: return list(range(self.Model.n_model))
+    def model_num_list(self) -> list[int]: 
+        return list(range(self.Model.n_model))
     @property
-    def booster_head_param(self): 
+    def booster_head_param(self) -> dict[str,Any]: 
         assert len(self.Model.booster_head_param.params) == 1 , self.Model.booster_head_param.params
         return self.Model.booster_head_param.params[0]
+    @property
+    def db_mapping(self) -> ModelDBMapping:
+        return self.Model.db_mapping
+    @property
+    def beg_date(self) -> int: 
+        beg_date = self.Train.beg_date
+        if self.module_type == 'db':
+            beg_date = max(beg_date , DB.min_date(self.db_mapping.src , self.db_mapping.key))
+        return beg_date
+    @property
+    def end_date(self) -> int: 
+        end_date = self.Train.end_date
+        if self.module_type == 'db':
+            end_date = min(end_date , DB.max_date(self.db_mapping.src , self.db_mapping.key))
+        return end_date
 
     def update(self, update = None , **kwargs):
         update = update or {}
@@ -581,17 +664,17 @@ class TrainConfig(TrainParam):
             setattr(self , k , v)
         return self
     
-    def get(self , key , default = None):
+    def get(self , key , default = None) -> Any:
         return self.Param[key] if key in self.Train.Param else getattr(self , key , default)
     
-    def set_config_environment(self , manual_seed = None):
+    def set_config_environment(self , manual_seed = None) -> None:
         self.set_random_seed(manual_seed if manual_seed else self.random_seed)
         torch.set_default_dtype(self.precision)
         torch.backends.cuda.matmul.__setattr__('allow_tf32' ,self.Param['env.allow_tf32']) #= self.allow_tf32
         torch.autograd.anomaly_mode.set_detect_anomaly(self.Param['env.detect_anomaly'])
         # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
-    def update_data_param(self , x_data : dict):
+    def update_data_param(self , x_data : dict) -> None:
         '''
         when x_data is known , use it to fill some params(seq_len , input_dim , inday_dim , etc.) of nn module
         do it in whenever x_data is changed
@@ -628,14 +711,14 @@ class TrainConfig(TrainParam):
         if value < 0:
             Logger.info(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
             value = int(input(f'[0,fit+test] , [1,fit] , [2,test]'))
-        stage_queue = ['data' , 'fit' , 'test']
+        stage_queue : list[Literal['data' , 'fit' , 'test']] = ['data' , 'fit' , 'test']
         if value > 0:
             stage_queue = ['data' , stage_queue[value]]
         elif value < 0:
             raise Exception(f'Error input : {value}')
         if verbose:
             Logger.info('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))))
-        self.stage_queue = stage_queue
+        self._stage_queue = stage_queue
 
     def parser_resume(self , value = -1 , verbose = True):
         '''ask if resume training when candidate names exists'''
@@ -670,6 +753,8 @@ class TrainConfig(TrainParam):
         candidate_name = sorted([m.name for m in PATH.model.iterdir() 
                                  if m.name == model_name or m.name.startswith(f'{model_name}.')])
         if self.short_test:
+            ...
+        elif self.module_type == 'db':
             ...
         elif 'fit' in self.stage_queue and candidate_name:
             if self.resume_training:
@@ -768,3 +853,16 @@ class TrainConfig(TrainParam):
 
         with Logger.EnclosedMessage(' model info '): 
             Logger.print('\n'.join(info_strs))
+
+    @property
+    def stage_queue(self) -> list[Literal['data' , 'fit' , 'test']]:
+        """
+        stage queue for training
+        if module_type is db, fit stage is not included
+        """
+        if not hasattr(self , '_stage_queue'):
+            return []
+        elif self.module_type == 'db':
+            return [stage for stage in self._stage_queue if stage != 'fit']
+        else:
+            return self._stage_queue

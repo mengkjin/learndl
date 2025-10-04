@@ -230,7 +230,12 @@ class Stock4DData:
     def from_dataframe(cls , df : pd.DataFrame | None):
         if df is None or df.empty: 
             return cls()
-        xarr = NdData.from_xarray(xr.Dataset.from_dataframe(df))
+        try:
+            xarr = NdData.from_xarray(xr.Dataset.from_dataframe(df))
+        except Exception as e:
+            print(e)
+            print(df)
+            raise e
         try:
             value = cls(xarr.values , xarr.index[0] , xarr.index[1] , xarr.index[-1])
         except:

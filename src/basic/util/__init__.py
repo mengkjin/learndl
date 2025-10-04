@@ -1,6 +1,6 @@
 from .version import torch_load 
 from .device import Device , get_device 
-from .model import * 
+from .model import *
 from .silence import SILENT 
 from .timer import Timer , BigTimer , PTimer 
 from .calendar import CALENDAR , TradeDate 

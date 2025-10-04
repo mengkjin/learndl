@@ -9,14 +9,14 @@ from src.func.singleton import singleton
 @singleton
 class InfoDataAccess:
     def __init__(self) -> None:
-        self.desc = DB.db_load('information_ts' , 'description') 
+        self.desc = DB.load('information_ts' , 'description') 
         self.desc['list_dt'] = np.maximum(self.desc['list_dt'] , CALENDAR.calendar_start())
 
-        self.cname = DB.db_load('information_ts' , 'change_name') 
+        self.cname = DB.load('information_ts' , 'change_name') 
         self.cname = self.cname.query('secid >= 0').sort_values(['secid','ann_date','start_date']).rename(columns={'ann_date':'ann_dt'})
 
         self.indus_dict = pd.DataFrame(MACHINE.configs('glob' , 'tushare_indus'))
-        self.indus_data = DB.db_load('information_ts' , 'industry') 
+        self.indus_data = DB.load('information_ts' , 'industry') 
 
         self.indus_data['indus'] = self.indus_dict.loc[self.indus_data['l2_name'],'indus'].values
         self.indus_data = self.indus_data.sort_values(['secid','in_date'])

@@ -264,6 +264,8 @@ class BaseDataModule(ABC):
             assert self.stage is None or self.stage in ['fit' , 'test' , 'predict' , 'extract'] , self.stage
             assert self.model_date is None or self.model_date > 0 , self.model_date
             assert self.seqlens is None or self.seqlens , self.seqlens
+            if self.seqlens is None:
+                self.seqlens = {}
             if self.stage != 'extract':
                 self.extract_backward_days = None 
                 self.extract_forward_days  = None
@@ -425,23 +427,21 @@ class BaseTrainer(ModelStreamLine):
             self.on_test_model_start()
             self.model.test()
             self.on_test_model_end()
-        self.on_test_end()    
+        self.on_test_end()
 
     def iter_model_num_date(self): 
         '''iter of model_date and model_num , considering resume_training'''
         model_iter = list(itertools.product(self.data.model_date_list , self.config.model_num_list))
         assert self.status.stage in ['fit' , 'test'] , self.status.stage
-        if self.config.resume_training:
-            if self.status.stage == 'fit':
-                models_trained = np.full(len(model_iter) , True , dtype = bool)
-                for i , (model_date , model_num) in enumerate(model_iter):
-                    if not self.deposition.exists(model_num , model_date):
-                        models_trained[max(i,0):] = False
-                        break
-                model_iter = Filtered(model_iter , ~models_trained)
-                
-            #elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:
-            #    model_iter = []
+        if self.config.resume_training and self.status.stage == 'fit':
+            models_trained = np.full(len(model_iter) , True , dtype = bool)
+            for i , (model_date , model_num) in enumerate(model_iter):
+                if not self.deposition.exists(model_num , model_date):
+                    models_trained[max(i,0):] = False
+                    break
+            model_iter = Filtered(model_iter , ~models_trained)  
+        #elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:
+        #    model_iter = []
         return model_iter
 
     def iter_model_submodels(self):
@@ -532,8 +532,6 @@ class BaseTrainer(ModelStreamLine):
     
     def on_test_submodel_start(self):
         self.metrics.new_epoch(**self.status.status)
-        assert self.deposition.exists(self.model_num , self.model_date , self.model_submodel) , \
-            (self.model_num , self.model_date , self.model_submodel)
         
     def on_test_submodel_end(self): 
         self.metrics.collect_epoch()
@@ -642,13 +640,16 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
         self.reset()
         self.model_dict = ModelDict()
 
-    def __call__(self , input : BatchData | torch.Tensor | Any , *args , **kwargs):
-        if input is None or len(input) == 0:
+    def __call__(self , input : BatchData | torch.Tensor | Any | int | None , *args , **kwargs):
+        if isinstance(input , int):
+            from src.res.model.data_module import DataModule
+            input = DataModule.get_date_batch_data(self.config , input)
+            output = self.forward(input , *args , **kwargs)
+        elif input is None or len(input) == 0:
             output = None
         else:
             output = self.forward(input , *args , **kwargs)
-        batch_output = BatchOutput(output)
-        return batch_output
+        return BatchOutput(output)
     
     def __repr__(self): 
         return f'{self.__class__.__name__}(model_full_name={self.model_full_name})'
@@ -710,6 +711,7 @@ class BasePredictorModel(ModelStreamLineWithTrainer):
             self._model_submodel = submodel
         else: 
             submodel = self.model_submodel
+        assert self.deposition.exists(model_num , model_date , submodel) , (model_num , model_date , submodel)
         return self.deposition.load_model(model_num , model_date , submodel)
     
     @abstractmethod

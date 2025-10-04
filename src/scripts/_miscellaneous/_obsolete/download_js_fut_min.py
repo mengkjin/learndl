@@ -29,9 +29,9 @@ if __name__ == '__main__':
     parser.add_argument('--end' , type=int , default=20191231)
     args = parser.parse_args()
     target_dates = CALENDAR.cd_within(args.start , args.end)
-    stored_dates = DB.db_dates('trade_js' , 'fut_min')
+    stored_dates = DB.dates('trade_js' , 'fut_min')
     dates = CALENDAR.diffs(target_dates , stored_dates)
     api = jsdata.get_api()
     for date in dates:
         df = download_jsdata(date , api = api)
-        DB.db_save(df , 'trade_js' , 'fut_min' , date , verbose = True)
+        DB.save(df , 'trade_js' , 'fut_min' , date , verbose = True)

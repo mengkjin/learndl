@@ -189,7 +189,7 @@ class FactorUpdateJobManager:
 
         removed_factors = []
         for calc in cls.iter_calculators(all_factors = True):
-            path = DB.factor_path(calc.factor_name , date)
+            path = DB.path('factor' , calc.factor_name , date)
             if path.exists():
                 path.unlink()
                 removed_factors.append(calc.factor_name)

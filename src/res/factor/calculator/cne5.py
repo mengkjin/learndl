@@ -98,7 +98,7 @@ class TuShareCNE5_Calculator:
         self.specific_risk = DateDfs(50)
 
         for key in ['exp' , 'coef' , 'res' , 'cov' , 'spec']:
-            DB.db_path('models' , f'tushare_cne5_{key}' , 20250101).parent.parent.mkdir(parents=True , exist_ok=True)
+            DB.path('models' , f'tushare_cne5_{key}' , 20250101).parent.parent.mkdir(parents=True , exist_ok=True)
 
     def descriptor(self , v , date : int , name : str , fillna : Any = 0) -> pd.Series:
         '''calculate descriptor of a given series'''
@@ -117,7 +117,7 @@ class TuShareCNE5_Calculator:
         '''get exposure of a given date'''
         df = self.exposure.get(date)
         if (df is None or df.empty) and read: 
-            df = DB.db_load('models' , 'tushare_cne5_exp' , date)
+            df = DB.load('models' , 'tushare_cne5_exp' , date)
             if 'secid' in df.columns: 
                 df = df.set_index('secid')
         if df is None or df.empty: 
@@ -155,7 +155,7 @@ class TuShareCNE5_Calculator:
         '''get coef of a given date'''
         coef = self.coef.get(date)
         if (coef is None or coef.empty) and read: 
-            coef = DB.db_load('models' , 'tushare_cne5_coef' , date)
+            coef = DB.load('models' , 'tushare_cne5_coef' , date)
             self.coef.add(coef , date)
         if coef is None or coef.empty: 
             coef , resid = self.calc_model(date)
@@ -165,7 +165,7 @@ class TuShareCNE5_Calculator:
         '''get resid of a given date'''
         resid = self.resid.get(date)
         if (resid is None or resid.empty) and read: 
-            resid = DB.db_load('models' , 'tushare_cne5_res' , date)
+            resid = DB.load('models' , 'tushare_cne5_res' , date)
             self.resid.add(resid , date)
         if resid is None or resid.empty: 
             coef , resid = self.calc_model(date)
@@ -454,7 +454,7 @@ class TuShareCNE5_Calculator:
     @classmethod
     def updatable_dates(cls , job : Literal['exposure' , 'risk']) -> np.ndarray:
         '''get updatable dates of a given job of "exposure" or "risk"'''
-        end_date = np.min([DB.db_max_date('trade_ts' , 'day'), DB.db_max_date('trade_ts' , 'day_val')])
+        end_date = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
         dates = CALENDAR.diffs(cls.START_DATE , end_date , cls.updated_dates(job))
         return dates
 
@@ -470,7 +470,7 @@ class TuShareCNE5_Calculator:
             raise KeyError(job)
         
         for x in check_list:
-            updated = DB.db_dates('models' , x)
+            updated = DB.dates('models' , x)
             all_updated = updated if all_updated is None else np.intersect1d(all_updated , updated)
         return all_updated
         
@@ -478,12 +478,12 @@ class TuShareCNE5_Calculator:
         '''update a given date of a given job of "exposure" or "risk"'''
         assert DATAVENDOR.CALENDAR.is_trade_date(date) , f'{date} is not a trade_date'
         if job == 'exposure':
-            DB.db_save(self.get_exposure(date) , 'models' , 'tushare_cne5_exp'  , date , verbose=True)
-            DB.db_save(self.get_coef(date)     , 'models' , 'tushare_cne5_coef' , date , verbose=True)
-            DB.db_save(self.get_resid(date)    , 'models' , 'tushare_cne5_res'  , date , verbose=True)
+            DB.save(self.get_exposure(date) , 'models' , 'tushare_cne5_exp'  , date , verbose=True)
+            DB.save(self.get_coef(date)     , 'models' , 'tushare_cne5_coef' , date , verbose=True)
+            DB.save(self.get_resid(date)    , 'models' , 'tushare_cne5_res'  , date , verbose=True)
         elif job == 'risk':
-            DB.db_save(self.calc_common_risk(date)   , 'models' , 'tushare_cne5_cov'  , date , verbose=True)
-            DB.db_save(self.calc_specific_risk(date) , 'models' , 'tushare_cne5_spec' , date , verbose=True)
+            DB.save(self.calc_common_risk(date)   , 'models' , 'tushare_cne5_cov'  , date , verbose=True)
+            DB.save(self.calc_specific_risk(date) , 'models' , 'tushare_cne5_spec' , date , verbose=True)
         else:
             raise KeyError(job)
         
@@ -503,7 +503,7 @@ class TuShareCNE5_Calculator:
         CALENDAR.check_rollback_date(rollback_date)
         task = cls()
         start_date = CALENDAR.td(rollback_date , 1)
-        end_date = np.min([DB.db_max_date('trade_ts' , 'day'), DB.db_max_date('trade_ts' , 'day_val')])
+        end_date = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
         dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
         for date in dates:
             task.update_date(date , 'exposure')

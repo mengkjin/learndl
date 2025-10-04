@@ -38,6 +38,10 @@ def rolling_rotation(x : torch.Tensor , index0 : torch.Tensor | Any , index1 : t
     return new_x
 
 class DataModule(BaseDataModule):    
+    """
+    DataModule for model fitting / testing / predicting
+    """
+    _config_instance_for_batch_data : dict[TrainConfig,'DataModule'] = {}
     def __init__(self , config : TrainConfig | None = None , use_data : Literal['fit','predict','both'] = 'fit'):
         '''
         1. load Package of BlockDatas of x , y , norms and index
@@ -97,10 +101,13 @@ class DataModule(BaseDataModule):
         ) -> bool:
         stage = 'predict' if self.use_data == 'predict' else stage
         
-        slens = self.config.seq_lens() | param.get('seqlens',{})
-        slens = {key:int(val) for key,val in slens.items() if key in self.input_keys}
-        slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})
-        
+        if self.input_type == 'db':
+            slens = {self.config.model_module: 1}
+        else:
+            slens = self.config.seq_lens() | param.get('seqlens',{})
+            slens = {key:int(val) for key,val in slens.items() if key in self.input_keys}
+            slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})
+            
         loader_param = self.LoaderParam(stage , model_date , slens , extract_backward_days , extract_forward_days)
         if self.loader_param == loader_param: 
             return False
@@ -108,6 +115,11 @@ class DataModule(BaseDataModule):
         return True
 
     def setup_input_prepare(self):
+        '''additional input prepare for hidden / db input'''
+        self.setup_input_prepare_hidden()
+        self.setup_input_prepare_db()
+
+    def setup_input_prepare_hidden(self):
         '''additional input prepare for hidden input , load hidden data if needed'''
         if self.input_type not in ['hidden' , 'combo'] or not self.input_keys_hidden: 
             return
@@ -130,7 +142,23 @@ class DataModule(BaseDataModule):
             (self.next_model_date(self.model_date) , hidden_max_date)
         self.config.update_data_param(self.datas.x)
 
+    def setup_input_prepare_db(self):
+        '''additional input prepare for hidden input , load hidden data if needed'''
+        if self.input_type != 'db': 
+            return
+        assert self.stage in ['test' , 'predict'] , self.stage
+        test_dates = self.test_full_dates
+        next_model_date = self.next_model_date(self.model_date)
+        test_dates = test_dates[(test_dates > self.model_date) * (test_dates <= next_model_date)]
+            
+        db_mapping = self.config.db_mapping
+        assert db_mapping.name == self.config.model_module , (db_mapping.name , self.config.model_module)
+        self.datas.x[db_mapping.name] = db_mapping.load_block(test_dates[0] , test_dates[-1]).\
+            align_secid_date(self.datas.secid , self.datas.date)
+        self.config.update_data_param(self.datas.x)
+
     def setup_loader_prepare(self):
+        
         x_keys = self.input_keys
         y_keys = [k for k in self.seq_lens.keys() if k not in x_keys]
         assert all([self.seq_lens[xkey] > 0 for xkey in x_keys]) , (self.seq_lens , x_keys)
@@ -177,13 +205,13 @@ class DataModule(BaseDataModule):
             assert self.step_len == len(test_dates) , (self.step_len , len(test_dates))
 
     @property
-    def input_type(self) -> Literal['data' , 'hidden' , 'factor' , 'combo']: 
+    def input_type(self) -> Literal['db' , 'data' , 'hidden' , 'factor' , 'combo']: 
         return self.config.model_input_type
     
     @property
     def input_keys(self) -> list[str]:
         keys = self.input_keys_data + self.input_keys_factor + self.input_keys_hidden
-        assert len(keys) > 0 , self.config.model_input_type
+        assert len(keys) > 0 or self.config.model_input_type == 'db' , self.config.model_input_type
         return keys
 
     @property
@@ -413,3 +441,13 @@ class DataModule(BaseDataModule):
         else:
             sample_index[self.stage] = sequential_sampling(0 , l1)
         return sample_index    
+
+    @classmethod
+    def get_date_batch_data(cls , config : TrainConfig , date : int , model_num : int = 0):
+        if config not in cls._config_instance_for_batch_data:
+            cls._config_instance_for_batch_data[config] = cls(config , 'both').load_data()
+        module = cls._config_instance_for_batch_data[config]
+        model_param = config.model_param[model_num]
+        assert date in module.test_full_dates , f"date {date} not in test_full_dates [{module.test_full_dates.min()}-{module.test_full_dates.max()}]"
+        module.setup('predict' , model_param , date)
+        return module.predict_dataloader()[0]

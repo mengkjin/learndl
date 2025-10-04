@@ -10,7 +10,7 @@ from src.basic import DB
 from .version import torch_load
 from .calendar import CALENDAR
 
-__all__ = ['ModelPath' , 'HiddenPath' , 'ModelDict' , 'ModelFile' , 'RegisteredModel' , 'HiddenExtractingModel']
+__all__ = ['ModelPath' , 'HiddenPath' , 'ModelDict' , 'ModelFile' , 'ModelDBMapping' , 'RegisteredModel' , 'HiddenExtractingModel']
 
 class ModelPath:
     """
@@ -49,7 +49,10 @@ class ModelPath:
         return self('archive' , *args)
     def conf(self , *args) -> Path:  
         """model configs path"""
-        return self('configs' , *args)
+        if self:
+            return self('configs' , *args)
+        else:
+            return PATH.conf.joinpath(*args)
     def rslt(self , *args) -> Path:     
         """model results path"""
         return self('detailed_analysis' , *args)
@@ -242,6 +245,31 @@ class ModelFile:
     def model_dict(self) -> ModelDict:
         """load model dictionary"""
         return ModelDict(**{key:self.load(key) for key in ModelDict.__slots__})
+
+class ModelDBMapping:
+    """model db mapping definition"""
+    def __init__(self ,  name : str , src : str , key : str , col : str | list[str] | None = None) -> None:
+        self.name = name
+        self.src = src
+        self.key = key
+        self.col = [col] if isinstance(col , str) else col
+    
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(name={self.name},src={self.src},key={self.key},col={self.col})'
+    
+    @classmethod
+    def from_yaml(cls , name : str , base_path : ModelPath | Path | str | None = None) -> 'ModelDBMapping':
+        base_path = ModelPath(base_path)
+        mapping : dict[str,Any] = PATH.read_yaml(base_path.conf('registry' , 'db_models_mapping'))
+        return cls(name , **mapping[name.removeprefix('db@')])
+
+    @classmethod
+    def from_dict(cls , name : str , mapping : dict[str,Any]) -> 'ModelDBMapping':
+        return cls(name , **mapping[name.removeprefix('db@')])
+
+    def load_block(self , start_dt : int , end_dt : int , silent = True):
+        from src.data.loader import BlockLoader
+        return BlockLoader(db_src = self.src , db_key = self.key , feature = self.col).load(start_dt , end_dt , silent = silent)
     
 class RegisteredModel(ModelPath):
     '''
@@ -287,7 +315,7 @@ class RegisteredModel(ModelPath):
     @property
     def pred_dates(self) -> np.ndarray:
         """model pred dates"""
-        return DB.pred_dates(self.pred_name)
+        return DB.dates('pred' , self.pred_name)
     
     @property
     def pred_target_dates(self) -> np.ndarray:
@@ -308,11 +336,11 @@ class RegisteredModel(ModelPath):
     
     def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False) -> None:
         """save model pred"""
-        DB.pred_save(df , self.pred_name , date , overwrite)
+        DB.save(df , 'pred' , self.pred_name , date , overwrite)
 
     def load_pred(self , date : int , verbose = True , **kwargs) -> pd.DataFrame:
         """load model pred"""
-        df = DB.pred_load(self.pred_name , date , verbose = verbose , **kwargs)
+        df = DB.load('pred' , self.pred_name , date , verbose = verbose , **kwargs)
         if df.empty: 
             return df
         if self.pred_name not in df.columns:

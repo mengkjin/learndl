@@ -3,21 +3,21 @@ from src.res.model.util import TrainConfig
 from .nn import NNPredictor
 from .boost import BoostPredictor
 from .nn_booster import NNBooster
+from .db import DBPredictor
 
-def get_predictor_module(model_module : str | TrainConfig , *args , **kwargs):
-    if isinstance(model_module , str):
-        module_type = TrainConfig.get_module_type(model_module)
-        if module_type == 'nn':
-            mod = NNPredictor
-        else:
-            mod = BoostPredictor
-        return mod(*args , **kwargs)
-    elif isinstance(model_module , TrainConfig):
-        config = model_module
-        if config.module_type == 'nn' and config.model_booster_head:
-            mod = NNBooster
-        elif config.module_type == 'nn':
-            mod = NNPredictor
-        else:
-            mod = BoostPredictor
-        return mod(*args , **kwargs).bound_with_config(config)
+def get_predictor_module(module : str | TrainConfig , *args , **kwargs):
+    if isinstance(module , str):
+        module = TrainConfig.default(module)
+    module_type = module.module_type
+    booster_head = module.model_booster_head
+
+    if module_type == 'nn':
+        mod = NNPredictor if not booster_head else NNBooster
+    elif module_type == 'booster':
+        mod = BoostPredictor
+    elif module_type == 'db':
+        mod = DBPredictor
+    predictor = mod(*args , **kwargs)
+    predictor.bound_with_config(module)
+    return predictor
+    

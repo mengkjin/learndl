@@ -108,13 +108,13 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             assert date is not None , f'{self.__class__.__name__} use date type but date is None'
         else: 
             date = None
-        return DB.db_path(self.DB_SRC , self.DB_KEY , date)
+        return DB.path(self.DB_SRC , self.DB_KEY , date)
 
     def fetch_and_save(self , date : int | Any = None) -> None:
         """fetch from tushare and save data to database"""
         if self.use_date_type:  
             assert date is not None , f'{self.__class__.__name__} use date type but date is None'
-        DB.db_save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
+        DB.save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
 
     def set_rollback_date(self , rollback_date : int | None = None):
         """set rollback date to the fetcher for update rollback"""
@@ -130,7 +130,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
     def last_date(self) -> int:
         """last date that has data of the database"""
         if self.use_date_type:
-            dates = DB.db_dates(self.DB_SRC , self.DB_KEY)
+            dates = DB.dates(self.DB_SRC , self.DB_KEY)
             ldate = max(dates) if len(dates) else self.START_DATE
         else:
             ldate = PATH.file_modified_date(self.target_path() , self.START_DATE)
@@ -314,4 +314,4 @@ class RollingFetcher(TushareFetcher):
                 subdf = df.query(f'{self.ROLLING_DATE_COL} == @date').copy()
                 if not self.SAVEING_DATE_COL: 
                     subdf = subdf.drop(columns = [self.ROLLING_DATE_COL])
-                DB.db_save(subdf , self.DB_SRC , self.DB_KEY , date = date , verbose = False)
+                DB.save(subdf , self.DB_SRC , self.DB_KEY , date = date , verbose = False)

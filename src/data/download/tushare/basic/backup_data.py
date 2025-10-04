@@ -80,17 +80,17 @@ class TSBackUpDataTransform():
         self.path_record(date).touch()
         for db_key in self.DB_KEYS:
             data = getattr(self , db_key)(date)
-            DB.db_save(data , db_src , db_key , date)
+            DB.save(data , db_src , db_key , date)
 
     def db_path(self , date : int , db_key : str):
         """get database path"""
         assert db_key in self.DB_KEYS , f'{db_key} is not in {self.DB_KEYS}'
-        return DB.db_path('trade_ts' , db_key , date)
+        return DB.path('trade_ts' , db_key , date)
 
     def db_path_backed(self , date : int , db_key : str):
         """get database path with backed suffix"""
         assert db_key in self.DB_KEYS , f'{db_key} is not in {self.DB_KEYS}'
-        return DB.db_path('trade_ts' , f'{db_key}.backed' , date)
+        return DB.path('trade_ts' , f'{db_key}.backed' , date)
     
     def db_path_backed_old(self , date : int , db_key : str):
         """get database path with backed old suffix"""

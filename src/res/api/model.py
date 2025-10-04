@@ -137,27 +137,23 @@ class ModelAPI:
             int : use the verbosity level , if above 10 will print more details
         '''
         return cls.Trainer.test(model_name = model_name , short_test = short_test , verbosity = verbosity , **kwargs)
-    
+
+    @classmethod
+    def test_db_mapping(cls , mapping_name : str | None = None , short_test : bool | None = None , verbosity : int | None = 2 , 
+                        **kwargs):
+        '''
+        test a existing db mapping
+        '''
+        return cls.Trainer.test_db_mapping(mapping_name = mapping_name , short_test = short_test , verbosity = verbosity , **kwargs)
+
     @classmethod
     def schedule_model(cls , schedule_name : str | None = None , short_test : bool | None = None , 
                        resume : int = 1 , verbosity : int | None = 2 , **kwargs):
         '''
-        Train a schedule model in config/schedule folder
+        Train a schedule model in config/schedule or .local_resources/shared/schedule_model folder
         '''
         return cls.Trainer.schedule(schedule_name = schedule_name , short_test = short_test , verbosity = verbosity , 
                                     stage = 0 , resume = resume , checkname = -1 , **kwargs)
-
-    @classmethod
-    def shared_schedule_model(cls , schedule_name : str | None = None , short_test : bool | None = None , 
-                       resume : int = 1 , verbosity : int | None = 2 , **kwargs):
-        '''
-        Train a schedule model in .local_resources/shared/schedule_model/schedule folder
-        '''
-        if PATH.conf.joinpath('schedule', f'{schedule_name}.yaml').exists():
-            raise ValueError(f'{schedule_name} exists in config/schedule folder, please use schedule_model instead, or delete schedule with duplicate name')
-        return cls.Trainer.schedule(schedule_name = schedule_name , short_test = short_test , verbosity = verbosity , 
-                                    stage = 0 , resume = resume , checkname = -1 , **kwargs)
-
     
     @classmethod
     def clear_st_models(cls):

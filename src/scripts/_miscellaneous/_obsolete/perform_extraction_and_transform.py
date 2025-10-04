@@ -131,7 +131,7 @@ def perform_extraction_and_transform(date : int):
         if sec_type == 'sec':
             sec_df = transform_sec(df)
         src_key = f'min' if sec_type == 'sec' else f'{sec_type}_min'
-        DB.db_save(sec_df , 'trade_js' , src_key , date , verbose = True)
+        DB.save(sec_df , 'trade_js' , src_key , date , verbose = True)
     
 if __name__ == '__main__' and MACHINE.server:
     args = argparse.ArgumentParser()

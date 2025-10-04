@@ -1,6 +1,6 @@
 # main model configs ----------------------------------------------------------------
 name          : null  # any name or null
-module        : tft  # any of [nn defined in src/algo/nn/api.py] or ['booster' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
+module        : db@scores_v0  # any of [nn defined in src/algo/nn/api.py] or ['booster' , 'lgbm' , 'ada' , 'xgboost' , 'catboost'] or 'db@{model_name}'
 submodels     : [best , swalast , swabest] # subset of ['best' , 'swalast' , 'swabest'] , but for booster , only use best
 beg_date      : 20170103 # model start date
 end_date      : 99991231 # model end date

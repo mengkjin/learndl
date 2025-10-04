@@ -9,7 +9,7 @@ from src.proj import PATH
 from src.basic import DB
 
 def load_calendars():
-    calendar = DB.db_load('information_ts' , 'calendar' , raise_if_not_exist = True).loc[:,['calendar' , 'trade']]
+    calendar = DB.load('information_ts' , 'calendar' , raise_if_not_exist = True).loc[:,['calendar' , 'trade']]
     if (res_path := PATH.conf.joinpath('glob','reserved_calendar.json')).exists():
         res_calendar = pd.read_json(res_path).loc[:,['calendar' , 'trade']]
         calendar = pd.concat([calendar , res_calendar[res_calendar['calendar'] > calendar['calendar'].max()]]).sort_values('calendar')
@@ -135,7 +135,7 @@ class CALENDAR:
         return cls.today(-1 if datetime.now().time() <= time(19, 59, 0) else 0)
     @staticmethod
     def updated():
-        return DB.db_max_date('trade_ts' , 'day')
+        return DB.max_date('trade_ts' , 'day')
     @staticmethod
     def _date_convert_to_index(date):
         if isinstance(date , TradeDate): 

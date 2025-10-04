@@ -21,29 +21,42 @@ class BlockLoader:
     use_alt : bool = True
 
     def __post_init__(self):
-        src_path = PATH.database.joinpath(f'DB_{self.db_src}')
-        assert src_path.exists() , f'{src_path} not exists'
-        assert np.isin(self.db_key , [p.name for p in src_path.iterdir()]).all() , f'{self.db_key} not all in {src_path}'
+        assert self.src_path.exists() , f'{self.src_path} not exists'
+        assert np.isin(self.db_key , [p.name for p in self.src_path.iterdir()]).all() , f'{self.db_key} not all in {self.src_path}'
 
-    def load(self , start_dt : int | None = None , end_dt : int | None = None) -> DataBlock:
+    @property
+    def src_path(self):
+        if self.db_src == 'factor':
+            return PATH.factor
+        elif self.db_src == 'pred':
+            return PATH.preds
+        else:
+            return PATH.database.joinpath(f'DB_{self.db_src}')
+
+    def load(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> DataBlock:
         """Load block data , alias for load_block"""
-        return self.load_block(start_dt , end_dt)
+        return self.load_block(start_dt , end_dt , silent = silent)
     
-    def load_block(self , start_dt : int | None = None , end_dt : int | None = None) -> DataBlock:
+    def load_block(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> DataBlock:
         """Load block data , alias for load"""
         sub_blocks = []
-        db_keys = self.db_key if isinstance(self.db_key , list) else [self.db_key]
-        for db_key in db_keys:
-            with Timer(f' --> {self.db_src} blocks reading [{db_key}] DataBase'):
+        for db_key in self.iter_keys():
+            with Timer(f' --> {self.db_src} blocks reading [{db_key}] DataBase' , silent = silent):
                 blk = DataBlock.load_db(self.db_src , db_key , start_dt , end_dt , 
                                         feature = self.feature , use_alt = self.use_alt)
                 sub_blocks.append(blk)
         if len(sub_blocks) <= 1:  
             block = sub_blocks[0]
         else:
-            with Timer(f' --> {self.db_src} blocks merging ({len(sub_blocks)})'): 
+            with Timer(f' --> {self.db_src} blocks merging ({len(sub_blocks)})' , silent = silent): 
                 block = DataBlock.merge(sub_blocks)
         return block
+
+    def iter_keys(self):
+        if isinstance(self.db_key , list):
+            return self.db_key
+        else:
+            return [self.db_key]
 
 @dataclass(slots=True)
 class FrameLoader:
@@ -62,13 +75,13 @@ class FrameLoader:
         assert PATH.database.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
             f'{PATH.database}/{self.db_src}/{self.db_key} not exists'
     
-    def load(self , start_dt : int | None = None , end_dt : int | None = None) -> pd.DataFrame:
+    def load(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> pd.DataFrame:
         """Load frame data , alias for load_frame"""
-        return self.load_frame(start_dt , end_dt)
+        return self.load_frame(start_dt , end_dt , silent = silent)
 
-    def load_frame(self , start_dt : int | None = None , end_dt : int | None = None) -> pd.DataFrame:
+    def load_frame(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> pd.DataFrame:
         """Load frame data , alias for load"""
-        df = DB.db_load_multi(self.db_src , self.db_key , start_dt=start_dt , end_dt=end_dt , use_alt = self.use_alt)
+        df = DB.load_multi(self.db_src , self.db_key , start_dt=start_dt , end_dt=end_dt , use_alt = self.use_alt)
         return df
     
 @dataclass
@@ -87,19 +100,19 @@ class FactorLoader:
         from src.res.factor.calculator import StockFactorHierarchy
         self.hier = StockFactorHierarchy()
     
-    def load(self , start_dt : int | None = None , end_dt : int | None = None) -> DataBlock:
+    def load(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> DataBlock:
         """Load factor data , alias for load_block"""
-        return self.load_block(start_dt , end_dt)
+        return self.load_block(start_dt , end_dt , silent = silent)
 
-    def load_block(self , start_dt : int | None = None , end_dt : int | None = None) -> DataBlock:
+    def load_block(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> DataBlock:
         """Load factor data , alias for load"""
         factors : list[pd.DataFrame] = []
-        with Timer(f' --> factor blocks reading [{self.category0} , {self.category1}]'):
+        with Timer(f' --> factor blocks reading [{self.category0} , {self.category1}]' , silent = silent):
             for calc in self.hier.iter_instance(category0 = self.category0 , category1 = self.category1):
                 df = calc.Loads(start_dt , end_dt)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
-        with Timer(f' --> factor blocks merging ({len(factors)} factors)'): 
+        with Timer(f' --> factor blocks merging ({len(factors)} factors)' , silent = silent): 
             df = pd.concat(factors).pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_dataframe(df)
         return block

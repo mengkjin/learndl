@@ -364,7 +364,7 @@ class StockFactor:
         """
         load the factor data from the database by factor name and date
         """
-        df = DB.factor_load(factor_name , date).assign(date = date)
+        df = DB.load('factor' , factor_name , date).assign(date = date)
         return cls(df)
 
     @classmethod
@@ -376,7 +376,7 @@ class StockFactor:
             start = 0
         if end is None:   
             end = 99991231
-        df = DB.factor_load_multi(factor_name , start_dt=start , end_dt=end)
+        df = DB.load_multi('factor' , factor_name , start_dt=start , end_dt=end)
         return cls(df)
         
     def select(self , secid = None , date = None , factor_name = None):

@@ -5,16 +5,21 @@ from src.res.model.util import TrainConfig
 from src.res.model.model_module.module import get_predictor_module
 
 class ModelTestor:
-    '''Check if a newly defined model can be forward correctly'''
+    """
+    Check if a newly defined model can be forward correctly
+    Example:
+        testor = ModelTestor(module = 'db@scores_v0' , data_types = 'day')
+        testor.try_forward()
+        testor.try_metrics()
+    """
     def __init__(self , module = 'tra_lstm' , data_types = 'day') -> None:
         override_cfg = {
             'env.short_test' : True ,
-            'model.module' : module , 
             'model.input_type' : 'data' ,
             'model.data.types' : data_types , 
             'model.booster_head' : False
         }
-        self.config = TrainConfig.default(override = override_cfg)
+        self.config = TrainConfig.default(module = module , override = override_cfg)
         self.data = DataModule(self.config , 'predict').load_data()
         self.data.setup('predict' , self.config.model_param[0] , self.data.model_date_list[0])   
         
@@ -41,7 +46,7 @@ class ModelTestor:
         if not hasattr(self , 'outputs'): 
             self.try_forward()
         metrics = self.metrics.calculate('train' , self.batch_data.y , self.output.pred , self.batch_data.w)
-        print('metrics : ' , metrics)
+        print('metric output : ' , metrics.output)
         print(f'Test Metrics Success')
         return self
     

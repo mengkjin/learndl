@@ -1,4 +1,4 @@
-import os , platform , re
+import os , platform
 from dask.delayed import delayed
 from dask.base import compute
 import numpy as np
@@ -9,8 +9,14 @@ from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal , Generator
 
-from src.proj import MACHINE as _machine , PATH as _path
+from src.proj import MACHINE , PATH
 from .code_mapper import secid_to_secid
+
+__all__ = [
+    'DB_BY_NAME' , 'DB_BY_DATE' , 'SAVE_OPT_DB' , 'SAVE_OPT_BLK' , 'SAVE_OPT_NORM' , 'SAVE_OPT_MODEL' ,
+    'save' , 'load' , 'load_multi' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
+    'file_dates' , 'dir_dates' , 'save_df' , 'load_df' ,
+]
 
 SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
 SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
@@ -23,6 +29,9 @@ DB_BY_DATE  : list[str] = ['models' , 'sellside' ,
                            'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'holding_ts'
                            ]  
 
+assert 'pred' not in DB_BY_NAME + DB_BY_DATE , 'pred must not in DB_BY_NAME and DB_BY_DATE'
+assert 'factor' not in DB_BY_NAME + DB_BY_DATE , 'factor must not in DB_BY_NAME and DB_BY_DATE'
+
 _db_alternatives : dict[str , str] = {
     'trade_ts' : 'trade_js' ,
     'benchmark_ts' : 'benchmark_js'
@@ -30,12 +39,13 @@ _db_alternatives : dict[str , str] = {
 _load_parallel : Literal['thread' , 'process' , 'dask' , 'none'] = 'thread'
 # in Mac-Matthew , thread > dask > none > process
 
-_load_max_workers : int | Any = 40 if _machine.server else os.cpu_count()
+_load_max_workers : int | Any = 40 if MACHINE.server else os.cpu_count()
 
 _deprecated_db_by_name  : list[str] = ['information_js']
 _deprecated_db_by_date  : list[str] = ['trade' , 'labels' , 'benchmark' , 'trade_js' , 'labels_js' , 'benchmark_js'] 
 
-def _db_src_deprecated(i):
+def _db_src_deprecated(i : int):
+    """print deprecated db_src information , i is the index of the db_src"""
     def wrapper(func):
         def inner(*args , **kwargs):
             db_src = args[i]
@@ -45,24 +55,20 @@ def _db_src_deprecated(i):
         return inner
     return wrapper
 
-def _laptop_func_deprecated(func):
-    def wrapper(*args , **kwargs):
-        if _machine.server:
-            print(f'at {func.__name__} will be deprecated soon, please update your code')
-        return func(*args , **kwargs)
-    return wrapper
-
 def _today(offset = 0 , astype : Any = int):
+    """get today's date"""
     d = datetime.today() + timedelta(days=offset)
     return astype(d.strftime('%Y%m%d'))
 
 def _paths_to_dates(paths : list[Path] | Generator[Path, None, None]):
+    """get dates from paths"""
     datestrs = [p.stem[-8:] for p in paths]
     dates = np.array([ds for ds in datestrs if ds.isdigit() and len(ds) == 8]).astype(int)
     dates.sort()
     return dates
 
 def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
+    """get dates from directory"""
     paths = directory.rglob('*')
     dates = _paths_to_dates(paths)
     if end_dt   is not None: 
@@ -73,23 +79,20 @@ def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
         dates = dates[dates // 10000 == year]
     return dates
 
-def dir_min_date(directory : Path):
-    years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
-    if not years: 
-        return 0
-    paths = [p for p in directory.joinpath(str(min(years))).iterdir()]
-    dates = _paths_to_dates(paths)
-    return min(dates) if len(dates) else 0
-
-def dir_max_date(directory : Path):
-    years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
-    if not years: 
-        return 99991231
-    paths = [p for p in directory.joinpath(str(max(years))).iterdir()]
-    dates = _paths_to_dates(paths)
-    return max(dates) if len(dates) else 99991231
+def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswith = '') -> list:
+    """get _db_path date from R environment"""
+    if isinstance(path , (list,tuple)):
+        return [d[0] for d in [file_dates(p , startswith , endswith) for p in path] if d]
+    else:
+        if not path.name.startswith(startswith): 
+            return []
+        if not path.name.endswith(endswith): 
+            return []
+        s = path.stem[-8:]
+        return [int(s)] if s.isdigit() else []
 
 def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , printing_prefix = None):
+    """save dataframe to path"""
     path = Path(path)
     if df is None or df.empty: 
         return False
@@ -108,6 +111,7 @@ def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , pr
         return False
 
 def load_df(path : Path , raise_if_not_exist = False):
+    """load dataframe from path"""
     if not path.exists():
         if raise_if_not_exist: 
             raise FileNotFoundError(path)
@@ -121,6 +125,7 @@ def load_df(path : Path , raise_if_not_exist = False):
     return df
 
 def _load_df_mapper(df : pd.DataFrame):
+    """map dataframe"""
     old_index = df.index.names if 'secid' in df.index.names else None
     if old_index is not None: 
         df = df.reset_index(drop = False)
@@ -128,10 +133,13 @@ def _load_df_mapper(df : pd.DataFrame):
         df['secid'] = secid_to_secid(df['secid'])
     if old_index is not None: 
         df = df.set_index(old_index)
+    if 'date' in df.index.names and 'date' in df.columns:
+        df = df.reset_index('date' , drop = True)
     return df
 
-def load_df_multi(paths : dict , date_colname : str = 'date' , 
+def _load_df_multi(paths : dict , date_colname : str = 'date' , 
                   parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread'):
+    """load dataframe from multiple paths"""
     if parallel is None: 
         parallel = _load_parallel
     reader : Any = pd.read_feather if SAVE_OPT_DB == 'feather' else pd.read_parquet
@@ -157,6 +165,7 @@ def load_df_multi(paths : dict , date_colname : str = 'date' ,
 
 def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_cols = False , 
                df_syntax : str | None = 'some df' , reset_index = True , ignored_fields = []):
+    """process dataframe"""
     if date_colname and date is not None: 
         df[date_colname] = date
 
@@ -176,63 +185,79 @@ def _process_df(df : pd.DataFrame , date = None, date_colname = None , check_na_
         df = df.drop(columns=ignored_fields , errors='ignore')
     return df
 
-def db_path(db_src , db_key , date = None , use_alt = False) -> Path:
-    if db_src in DB_BY_NAME:
-        parent = _path.database.joinpath(f'DB_{db_src}')
-        base = f'{db_key}.{SAVE_OPT_DB}'
-    elif db_src in DB_BY_DATE:
-        assert date is not None , f'{db_src} use date type but date is None'
-        parent = _path.database.joinpath(f'DB_{db_src}' , db_key , str(int(date) // 10000))
-        base = f'{db_key}.{str(date)}.{SAVE_OPT_DB}'
+def _db_parent(db_src : str , db_key : str | None = None) -> Path:
+    """get database parent _db_path"""
+    if db_src in DB_BY_NAME + DB_BY_DATE:
+        parent = PATH.database.joinpath(f'DB_{db_src}')
+    elif db_src == 'pred':
+        parent = PATH.preds
+    elif db_src == 'factor':
+        parent = PATH.factor
     else:
-        raise KeyError(db_src)
-    new_path = parent.joinpath(base)
+        raise ValueError(f'{db_src} not in {DB_BY_NAME} and {DB_BY_DATE} , or not pred or factor')
+    if db_key is None:
+        return parent
+    else:
+        return parent.joinpath(db_key)
+
+def _db_path(db_src , db_key , date = None , use_alt = False) -> Path:
+    """
+    Get path of database
+    Parameters
+    ----------
+    db_src: str
+        database source name , or factor or pred
+    db_key: str
+        database key , or factor name or pred name
+    date: int, default None
+        date to be saved, if the db is by date, date is required
+    """
+    assert db_src in ['pred' , 'factor'] + DB_BY_NAME + DB_BY_DATE , f'{db_src} not in {DB_BY_NAME} and {DB_BY_DATE}'
+    if db_src in DB_BY_NAME:
+        new_path = _db_parent(db_src).joinpath(f'{db_key}.{SAVE_OPT_DB}')
+    else:
+        assert date is not None , f'{db_src} use date type but date is None'
+        parent = _db_parent(db_src , db_key)
+        new_path = parent.joinpath(str(int(date) // 10000) , f'{db_key}.{str(date)}.{SAVE_OPT_DB}')
     if not new_path.exists() and db_src in _db_alternatives and use_alt:
-        alt_path = db_path(_db_alternatives[db_src] , db_key , date , use_alt = False)
+        alt_path = _db_path(_db_alternatives[db_src] , db_key , date , use_alt = False)
         if alt_path.exists(): 
             new_path = alt_path
     return new_path
 
-def db_dates(db_src , db_key , start_dt = None , end_dt = None , year = None , use_alt = False):
-    path = _path.database.joinpath(f'DB_{db_src}' , db_key)
+def _db_dates(db_src , db_key , start_dt = None , end_dt = None , year = None , use_alt = False):
+    """get dates from any database data"""
+    path = _db_parent(db_src , db_key)
     dates = dir_dates(path , start_dt , end_dt , year)
     if db_src in _db_alternatives and use_alt:
         alt_src   = _db_alternatives[db_src]
-        alt_path  = _path.database.joinpath(f'DB_{alt_src}' , db_key)
+        alt_path  = _db_parent(alt_src , db_key)
         alt_dates = np.setdiff1d(dir_dates(alt_path , start_dt , end_dt , year) , dates)
         dates = np.concatenate([alt_dates , dates])
     return dates
 
-def db_min_date(db_src , db_key , fast = True):
-    if fast:
-        # will not use alternative db
-        path = _path.database.joinpath(f'DB_{db_src}' , db_key)
-        years = sorted([int(y.stem) for y in path.iterdir() if y.is_dir()])
-        for year in years:
-            dates = dir_dates(path.joinpath(str(year)))
-            if len(dates): 
-                return min(dates)
-        return 99991231
-    else:
-        dates = db_dates(db_src , db_key)
-        return min(dates) if len(dates) else 99991231
+def min_date(db_src , db_key):
+    """get minimum date from any database data"""
+    directory = _db_parent(db_src , db_key)
+    years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
+    if not years: 
+        return 0
+    paths = [p for p in directory.joinpath(str(min(years))).iterdir()]
+    dates = _paths_to_dates(paths)
+    return min(dates) if len(dates) else 0
 
-def db_max_date(db_src , db_key , fast = True):
-    if fast:
-        # will not use alternative db
-        path = _path.database.joinpath(f'DB_{db_src}' , db_key)
-        years = sorted([int(y.stem) for y in path.iterdir() if y.is_dir()])
-        for year in years[::-1]:
-            dates = dir_dates(path.joinpath(str(year)))
-            if len(dates): 
-                return max(dates)
-        return -1
-    else:
-        dates = db_dates(db_src , db_key)
-        return max(dates) if len(dates) else -1
+def max_date(db_src , db_key):
+    """get maximum date from any database data"""
+    directory = _db_parent(db_src , db_key)
+    years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
+    if not years: 
+        return 99991231
+    paths = [p for p in directory.joinpath(str(max(years))).iterdir()]
+    dates = _paths_to_dates(paths)
+    return max(dates) if len(dates) else 99991231
 
 # @_db_src_deprecated(1)
-def db_save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True):
+def save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True):
     '''
     Save data to database
     Parameters  
@@ -240,21 +265,21 @@ def db_save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose =
     df: pd.DataFrame | None
         data to be saved
     db_src: str
-        database source name
+        database source name , or factor or pred
     db_key: str
-        database key
+        database key , or factor name or pred name
     date: int, default None
         date to be saved, if the db is by date, date is required
     '''
     printing_prefix = f'DataBase object [{db_src}],[{db_key}],[{date}]' if verbose else None
     if df is not None and (len(df.index.names) > 1 or df.index.name): 
         df = df.reset_index()
-    mark = save_df(df , db_path(db_src , db_key , date , use_alt = False) , 
+    mark = save_df(df , _db_path(db_src , db_key , date , use_alt = False) , 
                    overwrite = True , printing_prefix = printing_prefix)
     return mark
 
 # @_db_src_deprecated(0)
-def db_load(db_src , db_key , date = None , date_colname = None , verbose = True , use_alt = False , 
+def load(db_src , db_key , date = None , date_colname = None , verbose = True , use_alt = False , 
             raise_if_not_exist = False , **kwargs) -> pd.DataFrame: 
     '''
     Load data from database
@@ -262,9 +287,11 @@ def db_load(db_src , db_key , date = None , date_colname = None , verbose = True
     ----------
     db_src: str
         database source name : ['information_js' , 'information_ts' , 'trade_js' , 'labels_js' , 'benchmark_js' , 
-                               'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'sellside']
+                               'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'sellside' ,
+                               'pred' , 'factor']
     db_key: str
         database key that can be found in the database directory
+        or factor name or pred name
     date: int, default None
         date to be loaded , if the db is by date , date is required
     date_colname: str, default None
@@ -279,146 +306,59 @@ def db_load(db_src , db_key , date = None , date_colname = None , verbose = True
         reset_index: bool, default True
             if True, reset index (no drop index)
     '''
-    path = db_path(db_src , db_key , date , use_alt = use_alt)
+    path = _db_path(db_src , db_key , date , use_alt = use_alt)
     df_syntax = f'{db_src}/{db_key}/{date}' if verbose else None
     df = load_df(path , raise_if_not_exist = raise_if_not_exist)
     df = _process_df(df , date , date_colname , df_syntax = df_syntax , **kwargs)
     return df
 
 # @_db_src_deprecated(0)
-def db_load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None , 
+def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None , 
                   date_colname = 'date' , 
                   verbose = True , use_alt = False , 
                   parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , **kwargs):
+    """load multiple dates from database"""
     if dates is None:
         assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
-        dates = db_dates(db_src , db_key , start_dt , end_dt , use_alt = use_alt)
-    paths : dict[int , Path] = {int(date):db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
+        dates = _db_dates(db_src , db_key , start_dt , end_dt , use_alt = use_alt)
+    paths : dict[int , Path] = {int(date):_db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
     df_syntax = f'{db_src}/{db_key}/multi-dates' if verbose else None
-    df = load_df_multi(paths , date_colname , parallel)
+    df = _load_df_multi(paths , date_colname , parallel)
     df = _process_df(df , df_syntax = df_syntax , **kwargs)
     return df
 
-def db_rename(db_src , db_key , new_db_key):
-    assert new_db_key not in _path.list_files(_path.database.joinpath(f'DB_{db_src}' , db_key)) , f'{new_db_key} already exists'
+def rename(db_src , db_key , new_db_key):
+    """rename database from db_key to new_db_key"""
+    assert new_db_key not in PATH.list_files(_db_parent(db_src , db_key)) , f'{new_db_key} already exists'
     if db_src in DB_BY_NAME:
-        old_path = db_path(db_src , db_key)
-        new_path = db_path(db_src , new_db_key)
+        old_path = _db_path(db_src , db_key)
+        new_path = _db_path(db_src , new_db_key)
         old_path.rename(new_path)
     else:
-        for date in db_dates(db_src , db_key):
-            old_path = db_path(db_src , db_key , date)
-            new_path = db_path(db_src , new_db_key , date)
+        for date in _db_dates(db_src , db_key):
+            old_path = _db_path(db_src , db_key , date)
+            new_path = _db_path(db_src , new_db_key , date)
             new_path.parent.mkdir(parents=True , exist_ok=True)
             old_path.rename(new_path)
-        root = _path.database.joinpath(f'DB_{db_src}' , db_key)
+        root = _db_parent(db_src , db_key)
         [d.rmdir() for d in root.iterdir() if d.is_dir()]
         root.rmdir()
 
 
-def pred_path(model_name : str , date : int | Any):
-    return _path.preds.joinpath(model_name , str(date // 10000) , f'{model_name}.{date}.feather')
+def path(db_src , db_key , date = None , use_alt = False) -> Path:
+    """
+    Get path of database
+    Parameters
+    ----------
+    db_src: str
+        database source name , or factor or pred
+    db_key: str
+        database key , or factor name or pred name
+    date: int, default None
+        date to be saved, if the db is by date, date is required
+    """
+    return _db_path(db_src , db_key , date , use_alt = use_alt)
 
-def pred_dates(model_name : str , start_dt = None , end_dt = None , year = None):
-    return dir_dates(_path.preds.joinpath(model_name) , start_dt , end_dt , year)
-
-def pred_min_date(model_name : str):
-    return dir_min_date(_path.preds.joinpath(model_name))
-
-def pred_max_date(model_name : str):
-    return dir_max_date(_path.preds.joinpath(model_name))
-
-def pred_save(df : pd.DataFrame | None , model_name : str , date : int | Any , overwrite = True):
-    return save_df(df , pred_path(model_name , date) , overwrite)
-
-def pred_load(model_name : str , date : int | Any , date_colname = None , verbose = True , **kwargs):
-    df = load_df(pred_path(model_name , date))
-    df_syntax = f'pred/{model_name}/{date}' if verbose else None
-    return _process_df(df , date , date_colname , df_syntax = df_syntax , **kwargs)
-
-def pred_load_multi(model_name : str , dates = None , start_dt = None , end_dt = None , 
-                    date_colname = 'date' , verbose = True , 
-                    parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , **kwargs):
-    if dates is None:
-        assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
-        dates = pred_dates(model_name , start_dt , end_dt)
-    paths = {date:pred_path(model_name , date) for date in dates}
-    df = load_df_multi(paths , date_colname , parallel)
-    df_syntax = f'pred/{model_name}/multi-dates' if verbose else None
-    return _process_df(df , df_syntax = df_syntax , **kwargs)
-
-def factor_path(factor_name : str , date : int | Any):
-    return _path.factor.joinpath(factor_name , str(date // 10000) , f'{factor_name}.{date}.feather')
-
-def factor_dates(factor_name : str , start_dt = None , end_dt = None , year = None):
-    return dir_dates(_path.factor.joinpath(factor_name) , start_dt , end_dt , year)
-
-def factor_min_date(factor_name : str):
-    return dir_min_date(_path.factor.joinpath(factor_name))
-
-def factor_max_date(factor_name : str):
-    return dir_max_date(_path.factor.joinpath(factor_name))
-
-def factor_save(df : pd.DataFrame | None , factor_name : str , date : int | Any , overwrite = True):
-    return save_df(df , factor_path(factor_name , date) , overwrite)
-
-def factor_load(factor_name : str , date : int | Any , date_colname = None , verbose = True , **kwargs):
-    df = load_df(factor_path(factor_name , date))
-    df_syntax = f'factor/{factor_name}/{date}' if verbose else None
-    return _process_df(df , date , date_colname , df_syntax = df_syntax , **kwargs)
-
-def factor_load_multi(factor_name : str , dates = None , start_dt = None , end_dt = None , 
-                      date_colname = 'date' , verbose = True , 
-                      parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , **kwargs):
-    if dates is None:
-        assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
-        dates = factor_dates(factor_name , start_dt , end_dt)
-    paths = {date:factor_path(factor_name , date) for date in dates}
-    df = load_df_multi(paths , date_colname , parallel)
-    df_syntax = f'factor/{factor_name}/multi-dates' if verbose else None
-    return _process_df(df , df_syntax = df_syntax , **kwargs)
-
-@_laptop_func_deprecated
-def get_source_dates(db_src , db_key):
-    assert db_src in DB_BY_DATE , f'{db_src} not in {DB_BY_DATE}'
-    return R_source_dates(db_src , db_key)
-
-def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswith = '') -> list:
-    '''get path date from R environment'''
-    if isinstance(path , (list,tuple)):
-        return [d[0] for d in [file_dates(p , startswith , endswith) for p in path] if d]
-    else:
-        if not path.name.startswith(startswith): 
-            return []
-        if not path.name.endswith(endswith): 
-            return []
-        s = path.stem[-8:]
-        return [int(s)] if s.isdigit() else []
-    
-@_laptop_func_deprecated
-def R_dir_dates(directory):
-    '''get all path dates in a dir from R environment'''
-    return file_dates(_path.list_files(directory , recur = True))
-    
-@_laptop_func_deprecated
-def R_source_dates(db_src , db_key):
-    if db_src != 'benchmark_js': 
-        db_key = re.sub(r'\d+', '', db_key)
-    source_key = '/'.join([db_src , db_key])
-    date_source = {
-        'models/risk_exp'   : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/2_factor_exposure/jm2018_model' ,
-        'models/risk_cov'   : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/6_factor_return_covariance/jm2018_model' ,
-        'models/risk_spec'  : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/C_specific_risk/jm2018_model' ,
-        'models/longcl_exp' : 'D:/Coding/ChinaShareModel/ModelData/H_Other_Alphas/longcl/A1_Analyst',
-        'trade_js/day'         : 'D:/Coding/ChinaShareModel/ModelData/4_cross_sectional/2_market_data/day_vwap' ,
-        'trade_js/min'         : 'D:/Coding/ChinaShareModel/ModelData/Z_temporal/equity_pricemin' ,
-        'labels_js/ret'        : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
-        'labels_js/ret_lag'    : 'D:/Coding/ChinaShareModel/ModelData/6_risk_model/7_stock_residual_return_forward/jm2018_model' ,
-        'benchmark_js/csi300'  : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI300' ,
-        'benchmark_js/csi500'  : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI500' ,
-        'benchmark_js/csi800'  : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI800' ,
-        'benchmark_js/csi1000' : 'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/CSI1000' ,
-    }[source_key]
-
-    source_dates = R_dir_dates(date_source)
-    return np.array(sorted(source_dates) , dtype=int)
+def dates(db_src , db_key , start_dt = None , end_dt = None , year = None , use_alt = False):
+    """get dates from any database data"""
+    return _db_dates(db_src , db_key , start_dt , end_dt , year , use_alt)

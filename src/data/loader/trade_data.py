@@ -15,14 +15,14 @@ class TradeDataAccess(DateDataAccess):
     
     def data_loader(self , date , data_type):
         if data_type in db_key_dict: 
-            df = DB.db_load('trade_ts' , db_key_dict[data_type] , date , verbose = False)
+            df = DB.load('trade_ts' , db_key_dict[data_type] , date , verbose = False)
         else:
             raise KeyError(data_type)
         return df
     
     def latest_date(self , data_type : str , date : int | None = None):
         if data_type in db_key_dict:
-            dates = DB.db_dates('trade_ts' , db_key_dict[data_type])
+            dates = DB.dates('trade_ts' , db_key_dict[data_type])
             if date: 
                 dates = dates[dates <= date]
             return dates.max()

@@ -12,7 +12,7 @@ from src.app.frontend import (
     FilePreviewer , YAMLFileEditor , ColoredText , expander_subheader , ParamInputsForm
 )
 
-from src.proj import PATH
+from src.proj import PATH , MACHINE
 
 from util.control import SC , set_current_page
 from util.page import get_script_page , print_page_header , runs_page_url
@@ -198,22 +198,23 @@ def show_param_settings(runner : ScriptRunner):
         params = SC.param_inputs_form.param_values
         if runner.header.file_editor:
             with st.expander(runner.header.file_editor.get('name', 'File Editor') , expanded = False , icon = ":material/edit_document:"):
-                path = PATH.main.joinpath(runner.header.file_editor['path'].format(**params))
+                path = conditional_path(runner.header.file_editor['path'], params)
                 file_editor = YAMLFileEditor('param-settings-file-editor', 
                                             file_root=path , file_input=False , 
                                             height = runner.header.file_editor.get('height'))
                 file_editor.show_yaml_editor()
         if runner.header.file_previewer:
             with st.expander(runner.header.file_previewer.get('name', 'File Previewer') , expanded = False , icon = ":material/file_present:"):
-                path = runner.header.file_previewer['path'].format(**params)
+                path = conditional_path(runner.header.file_previewer['path'], params)
                 file_previewer = FilePreviewer(path , height = runner.header.file_previewer.get('height'))
                 file_previewer.preview()
 
 def conditional_path(format_str : str , params : dict[str, Any] , root = PATH.main):
+    params = params | {'PATH' : PATH , 'MACHINE' : MACHINE}
     if '|' in format_str:
         format_strs = [s.strip() for s in format_str.split('|')]
         for s in format_strs:
-            path = s.strip().format(**params)
+            path = s.format(**params)
             if Path(path).exists() or root.joinpath(path).exists():
                 return path
         return path

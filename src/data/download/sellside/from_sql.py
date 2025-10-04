@@ -160,7 +160,7 @@ class SellsideSQLDownloader:
         else:
             start_dt = max(self.start_dt , start_dt)
             if option == 'since':
-                old_dates = DB.db_dates(self.DB_SRC , self.db_key)
+                old_dates = DB.dates(self.DB_SRC , self.db_key)
                 if trace > 0 and len(old_dates) > trace: 
                     old_dates = old_dates[:-trace]
                 if len(old_dates): 
@@ -237,7 +237,7 @@ class SellsideSQLDownloader:
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: 
                 continue
-            DB.db_save(data_at_d , self.DB_SRC , self.db_key , d)
+            DB.save(data_at_d , self.DB_SRC , self.db_key , d)
 
     @classmethod
     def convert_id(cls , x):

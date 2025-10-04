@@ -24,7 +24,6 @@ class PATH:
     main        = MACHINE.main_path
     scpt        = main.joinpath('src' , 'scripts')
     fac_def     = main.joinpath('src' , 'res' , 'facdef')
-    conf        = main.joinpath('configs')
 
     # data folder and subfolders
     data        = main.joinpath('data')
@@ -54,6 +53,10 @@ class PATH:
 
     # models folder and subfolders
     model       = main.joinpath('models')
+
+    # configs folder and subfolders
+    conf        = main.joinpath('configs')
+    conf_schedule = conf.joinpath('schedule')
 
     # results folder and subfolders
     result      = main.joinpath('results')

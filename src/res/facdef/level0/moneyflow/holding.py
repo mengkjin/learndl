@@ -9,7 +9,7 @@ from src.data.util import DFCollection
 RawHoldings = DFCollection(40 , 'end_date')
 ActiveFundHoldings = DFCollection(10 , 'end_date')
 ActiveTopHoldings = DFCollection(10 , 'end_date')
-FundInfo = DB.db_load('information_ts' , 'mutual_fund_info').\
+FundInfo = DB.load('information_ts' , 'mutual_fund_info').\
     loc[:,['fund_id' , 'name' , 'fund_type' , 'list_date' , 'delist_date' , 'invest_type' , 'type' , 'market']]
 
 __all__ = [
@@ -48,7 +48,7 @@ def one_quater_ago(date):
 def get_holding(qtr : int):
     if qtr in RawHoldings:
         return RawHoldings.get(qtr)
-    df = DB.db_load('holding_ts' , 'mutual_fund' , qtr)
+    df = DB.load('holding_ts' , 'mutual_fund' , qtr)
     df = df.groupby(['end_date','fund_id','secid','symbol']).sum().reset_index()
     df = df.sort_values(by=['fund_id', 'mkv'], ascending=[True, False])
     df['rank'] = df.groupby('fund_id').cumcount()

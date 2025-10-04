@@ -88,7 +88,7 @@ def stored_dates(data_type : DATA_TYPES , x_min : int = 1):
     assert x_min in [1 , 5 , 10 , 15 , 30 , 60] , f'only support 1min , 5min , 10min , 15min , 30min , 60min : {x_min}'
     if x_min != 1:
         assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
-    return DB.db_dates('trade_ts' , src_key(data_type , x_min) , use_alt = False)
+    return DB.dates('trade_ts' , src_key(data_type , x_min) , use_alt = False)
 
 def last_date(data_type : DATA_TYPES , offset : int = 0 , x_min : int = 1):
     dates = stored_dates(data_type , x_min)
@@ -106,8 +106,8 @@ def x_mins_target_dates(data_type : DATA_TYPES , date : int | None = None) -> li
         return []
     all_dates = np.array([])
     for x_min in [5 , 10 , 15 , 30 , 60]:
-        source_dates = DB.db_dates('trade_ts' , src_key(data_type , 1))
-        stored_dates = DB.db_dates('trade_ts' , src_key(data_type , x_min))
+        source_dates = DB.dates('trade_ts' , src_key(data_type , 1))
+        stored_dates = DB.dates('trade_ts' , src_key(data_type , x_min))
         target_dates = CALENDAR.diffs(source_dates , stored_dates)
         dates = target_dates[target_dates >= src_start_date(data_type)]
         all_dates = np.concatenate([all_dates , dates])
@@ -120,7 +120,7 @@ def x_mins_to_update(date , data_type : DATA_TYPES):
         return []
     x_mins : list[int]= []
     for x_min in [5 , 10 , 15 , 30 , 60]:
-        path = DB.db_path('trade_ts' , src_key(data_type , x_min) , date)
+        path = DB.path('trade_ts' , src_key(data_type , x_min) , date)
         if not path.exists(): 
             x_mins.append(x_min)
     return x_mins
@@ -160,7 +160,7 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
 
     if (sec_min := load_min(date , data_type)) is not None: 
         df = rcquant_min_to_normal_min(sec_min , data_type)
-        DB.db_save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
+        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
         return True
 
     if not rcquant_init(): 
@@ -181,7 +181,7 @@ def rcquant_bar_min(date : int , data_type : DATA_TYPES , first_n : int = -1):
         write_min(data , date , data_type)
 
         df = rcquant_min_to_normal_min(data , data_type)
-        DB.db_save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
+        DB.save(df , 'trade_ts' , src_key(data_type) , date = date , verbose = True)
         return True
     else:
         return False
@@ -214,10 +214,10 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
     for dt in x_mins_target_dates(data_type , date):
         Logger.info(f'process other {data_type} min bars at {dt} from source rcquant')
         for x_min in x_mins_to_update(dt , data_type = data_type):
-            min_df = DB.db_load('trade_ts' , src_key(data_type) , dt)
+            min_df = DB.load('trade_ts' , src_key(data_type) , dt)
             assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
             x_min_df = trade_min_reform(min_df , x_min , 1)
-            DB.db_save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , verbose = True)
+            DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , verbose = True)
         Logger.divider()
     return True
 

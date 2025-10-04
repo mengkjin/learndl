@@ -1,4 +1,4 @@
-#! /usr/bin/env python3.10
+#! /usr/bin/env User/mengkjin/workspace/learndl/.venv/bin/python
 # coding: utf-8
 # author: jinmeng
 # date: 2025-10-01
@@ -8,7 +8,7 @@
 # mode: shell
 # parameters:
 #   schedule_name : 
-#       type : "[p.stem for p in Path('configs/schedule').glob('*.yaml')] + [p.stem for p in Path('.local_resources/shared/schedule_model').glob('*.yaml')]"
+#       type : "[p.stem for p in PATH.conf_schedule.glob('*.yaml')] + [p.stem for p in PATH.shared_schedule.glob('*.yaml')]"
 #       desc : schedule config file to train
 #       required : True
 #   short_test : 
@@ -23,7 +23,7 @@
 #       required : True
 # file_editor:
 #   name : "Schedule Config File Editor"
-#   path: "configs/schedule/{schedule_name}.yaml | .local_resources/shared/schedule_model/{schedule_name}.yaml"
+#   path: "{PATH.conf_schedule}/{schedule_name}.yaml | {PATH.shared_schedule}/{schedule_name}.yaml"
 #   height : 300 # optional
 
 from src.res.api import ModelAPI

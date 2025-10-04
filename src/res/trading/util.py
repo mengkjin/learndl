@@ -305,8 +305,8 @@ class CompositeAlpha:
         elif '@' in alpha_name:
             exprs = alpha_name.split('@')
             if exprs[0] == 'sellside':
-                dates = DB.db_dates('sellside' , exprs[1])
-                df = DB.db_load('sellside' , exprs[1] , dates[dates <= date].max() , verbose = False).loc[:,['secid' , exprs[2]]]
+                dates = DB.dates('sellside' , exprs[1])
+                df = DB.load('sellside' , exprs[1] , dates[dates <= date].max() , verbose = False).loc[:,['secid' , exprs[2]]]
             else:
                 raise Exception(f'{alpha_name} is not a valid alpha')
         else:

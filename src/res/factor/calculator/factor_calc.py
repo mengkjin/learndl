@@ -170,7 +170,7 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
 
     def load_factor(self , date : int) -> pd.Series:
         """load factor value of a given date"""
-        df = DB.factor_load(self.factor_name , date , verbose = False)
+        df = DB.load('factor' , self.factor_name , date , verbose = False)
         df = pd.Series() if df.empty else df.set_index('secid').loc[:,self.factor_name]
         return df
 
@@ -191,11 +191,11 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
 
     def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
         """store factor data after calculate"""
-        if not overwrite and DB.factor_path(self.factor_name , date).exists(): 
+        if not overwrite and DB.path('factor' , self.factor_name , date).exists(): 
             return False
         df = self.calc_factor(date)
         df = self.validate_value(df , date , strict = strict_validation)
-        saved = DB.factor_save(df.rename(self.factor_name).to_frame() , self.factor_name , date , overwrite)
+        saved = DB.save(df.rename(self.factor_name).to_frame() , 'factor' , self.factor_name , date , overwrite)
         return saved
 
     @classmethod
@@ -212,7 +212,7 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
     def Loads(cls , start : int | None = None , end : int | None = None) -> pd.DataFrame:
         """load factor values of a given date range"""
         dates = CALENDAR.slice(cls.stored_dates() , start , end)
-        return DB.factor_load_multi(cls.factor_name , dates)
+        return DB.load_multi('factor' , cls.factor_name , dates)
 
     @classmethod
     def Eval(cls , date : int) -> pd.Series:
@@ -281,22 +281,22 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
     @classmethod
     def stored_dates(cls) -> np.ndarray:
         """return stored dates of factor data"""
-        return DB.factor_dates(cls.factor_name)
+        return DB.dates('factor' , cls.factor_name)
 
     @classmethod
     def min_date(cls) -> int:
         """return minimum date of stored factor data"""
-        return DB.factor_min_date(cls.factor_name)
+        return DB.min_date('factor' , cls.factor_name)
 
     @classmethod
     def max_date(cls) -> int:
         """return maximum date of stored factor data"""
-        return DB.factor_max_date(cls.factor_name)
+        return DB.max_date('factor' , cls.factor_name)
     
     @classmethod
     def has_date(cls , date : int) -> bool:
         """check if factor data exists for a given date"""
-        return DB.factor_path(cls.factor_name , date).exists()
+        return DB.path('factor' , cls.factor_name , date).exists()
 
     @classmethod
     def collect_jobs(cls , start : int | None = None , end : int | None = None , 
