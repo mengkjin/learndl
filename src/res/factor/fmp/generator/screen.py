@@ -53,8 +53,7 @@ class ScreeningPortfolioCreatorConfig:
         else:
             date = model_date
         df = DB.load(*self.sa_src_key , date)
-        df = df.rename(columns={self.sa_col_name : 'alpha'})
-        assert 'alpha' in df.columns , f'alpha column not found in {df.columns}'
+        df = self.sa_rename(df)
         if indus:
             df = DATAVENDOR.INFO.add_indus(df , date , 'unknown')
         return df
@@ -77,6 +76,16 @@ class ScreeningPortfolioCreatorConfig:
             return self.sorting_alpha[2]
         else:
             return self.sorting_alpha[1]
+
+    def sa_rename(self , df : pd.DataFrame) -> pd.DataFrame:
+        if 'alpha' not in df.columns:
+            df = df.rename(columns={self.sa_col_name : 'alpha'})
+        if 'alpha' not in df.columns:
+            if len(remcols := [col for col in df.columns if col not in ['secid' , 'alpha' , 'index' , 'indus']]) == 1:
+                df = df.rename(columns={remcols[0] : 'alpha'})
+            else:
+                raise ValueError(f'alpha column not found in {df.columns}')
+        return df
     
 class ScreeningPortfolioCreator(PortCreator):
     DEFAULT_SCREEN_RATIO = DEFAULT_SCREEN_RATIO
