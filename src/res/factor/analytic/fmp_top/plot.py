@@ -19,7 +19,7 @@ def df_strategy(df : pd.DataFrame) -> pd.Series:
     assert isinstance(names , pd.Series) , f'names must be a pandas series, but got {type(names)}'
     return names
 
-def plot_top_frontface(data : pd.DataFrame , show = False):
+def plot_top_frontface(data : pd.DataFrame , show = False , title_prefix = 'Top Port'):
     num_per_page : int | Any = 32 // data.groupby('factor_name').size().max()
     if num_per_page == 0: 
         num_per_page = 1
@@ -27,7 +27,7 @@ def plot_top_frontface(data : pd.DataFrame , show = False):
     num_pages  : int | Any = num_groups // num_per_page + (1 if num_groups % num_per_page > 0 else 0)
     group_plot = plot.PlotMultipleData(data , group_key = 'factor_name' , max_num = num_per_page)
     for i , sub_data in enumerate(group_plot):     
-        full_title = f'TopPort FMP Front Face for Factors (P{i+1}/{num_pages})'
+        full_title = f'{title_prefix} Front Face (P{i+1}/{num_pages})'
         with plot.PlotFactorData(sub_data , drop = [] , name_key = None , show = show , full_title = full_title) as (df , fig):
             df = df.reset_index([i for i in df.index.names if i])
             df['strategy'] = df_strategy(df)
@@ -41,10 +41,11 @@ def plot_top_frontface(data : pd.DataFrame , show = False):
                             ignore_cols = ['prefix' , 'factor_name' , 'benchmark' , 'suffix'])
     return group_plot.fig_dict
 
-def plot_top_perf_curve(data : pd.DataFrame , show = False):
+def plot_top_perf_curve(data : pd.DataFrame , show = False , title_prefix = 'Top Port'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name','benchmark'])
     for i , sub_data in enumerate(group_plot):     
-        with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Accumulative Return') as (df , fig):
+        with plot.PlotFactorData(sub_data , show = show and i == 0, 
+                                 title = f'{title_prefix} Accumulative Return') as (df , fig):
     
             if 'topN' not in df.columns and 'topN' not in df.index.names: 
                 df['topN'] = '~'
@@ -57,10 +58,10 @@ def plot_top_perf_curve(data : pd.DataFrame , show = False):
             
     return group_plot.fig_dict
 
-def plot_top_perf_excess(data : pd.DataFrame , show = False):
+def plot_top_perf_excess(data : pd.DataFrame , show = False , title_prefix = 'Top Port'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name','benchmark'])
     for i , sub_data in enumerate(group_plot):     
-        with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Accumulative Excess Return') as (df , fig):
+        with plot.PlotFactorData(sub_data , show = show and i == 0, title = f'{title_prefix} Accumulative Excess Return') as (df , fig):
     
             if 'topN' not in df.columns and 'topN' not in df.index.names: 
                 df['topN'] = '~'
@@ -73,10 +74,11 @@ def plot_top_perf_excess(data : pd.DataFrame , show = False):
 
     return group_plot.fig_dict
 
-def plot_top_perf_drawdown(data : pd.DataFrame , show = False):
+def plot_top_perf_drawdown(data : pd.DataFrame , show = False , title_prefix = 'Top Port'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name','benchmark'])
     for i , sub_data in enumerate(group_plot):     
-        with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Drawdown') as (df , fig):
+        with plot.PlotFactorData(sub_data , show = show and i == 0, 
+                                 title = f'{title_prefix} Performance Drawdown') as (df , fig):
 
             if 'topN' not in df.columns and 'topN' not in df.index.names: 
                 df['topN'] = '~'
@@ -104,10 +106,10 @@ def plot_top_perf_drawdown(data : pd.DataFrame , show = False):
                 
     return group_plot.fig_dict
 
-def plot_top_perf_excess_drawdown(data : pd.DataFrame , show = False):
+def plot_top_perf_excess_drawdown(data : pd.DataFrame , show = False , title_prefix = 'Top Port'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name','benchmark'])
     for i , sub_data in enumerate(group_plot):     
-        with plot.PlotFactorData(sub_data , show = show and i == 0, title = 'TopPort Excess Drawdown') as (df , fig):
+        with plot.PlotFactorData(sub_data , show = show and i == 0, title = f'{title_prefix} Excess Drawdown') as (df , fig):
 
             if 'topN' not in df.columns and 'topN' not in df.index.names: 
                 df['topN'] = '~'
@@ -120,23 +122,23 @@ def plot_top_perf_excess_drawdown(data : pd.DataFrame , show = False):
             
     return group_plot.fig_dict
 
-def plot_top_perf_year(data : pd.DataFrame , show = False):
+def plot_top_perf_year(data : pd.DataFrame , show = False , title_prefix = 'Top Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data ,drop = [] , show = show and i == 0,  
-                                 title = 'TopPort Year Performance') as (df , fig):
+                                 title = f'{title_prefix} Year Performance') as (df , fig):
             plot.plot_table(df.set_index('year') , 
                 pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
-                flt_cols = ['ir','calmar'] , 
+                flt_cols = ['ir','calmar'] ,    
                 column_definitions = [ColumnDefinition(name='Mdd_period', width=2)] , 
                 stripe_by = 1 , emph_last_row=True)
     return group_plot.fig_dict
 
-def plot_top_perf_month(data : pd.DataFrame , show = False):
+def plot_top_perf_month(data : pd.DataFrame , show = False , title_prefix = 'Top Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = [] , show = show and i == 0,  
-                            title = 'TopPort Month Performance') as (df , fig):
+                            title = f'{title_prefix} Month Performance') as (df , fig):
             plot.plot_table(df.set_index('month') , 
                             pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                             flt_cols = ['ir','calmar'] , 
@@ -144,10 +146,10 @@ def plot_top_perf_month(data : pd.DataFrame , show = False):
                             stripe_by = 1 , emph_last_row=True)
     return group_plot.fig_dict
 
-def plot_top_exp_style(data : pd.DataFrame , show = False):
+def plot_top_exp_style(data : pd.DataFrame , show = False , title_prefix = 'Top Port'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
-        with plot.PlotFactorData(sub_data , drop = [] ,show = show and i == 0, title = 'TopPort Style Exposure') as (df , fig):
+        with plot.PlotFactorData(sub_data , drop = [] ,show = show and i == 0, title = f'{title_prefix} Style Exposure') as (df , fig):
             df = df.groupby(['strategy'] , observed=True).mean().reset_index().\
                 melt(id_vars=['strategy'] , var_name='style' , value_name='exposure')
             ax = plot.sns_barplot(df , x='style' , y='exposure' , hue='strategy')
@@ -157,10 +159,10 @@ def plot_top_exp_style(data : pd.DataFrame , show = False):
 
     return group_plot.fig_dict
 
-def plot_top_exp_indus(data : pd.DataFrame , show = False):
+def plot_top_exp_indus(data : pd.DataFrame , show = False , title_prefix = 'Top Port'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
-        with plot.PlotFactorData(sub_data , drop = [] ,show = show and i == 0, title = 'TopPort Industry Exposure') as (df , fig):
+        with plot.PlotFactorData(sub_data , drop = [] ,show = show and i == 0, title = f'{title_prefix} Industry Exposure') as (df , fig):
             df = df.groupby(['strategy'] , observed=True).mean().reset_index().\
                 melt(id_vars=['strategy'] , var_name='industry' , value_name='deviation')
             df_mean : pd.Series | Any = df.groupby(['industry'] , observed=True)['deviation'].mean()
@@ -173,10 +175,10 @@ def plot_top_exp_indus(data : pd.DataFrame , show = False):
 
     return group_plot.fig_dict
 
-def plot_top_attrib_source(data : pd.DataFrame , show = False):
+def plot_top_attrib_source(data : pd.DataFrame , show = False , title_prefix = 'Top Port'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
-        with plot.PlotFactorData(sub_data , drop = [] , show = show and i == 0, title = 'TopPort Cumulative Attribution') as (df , fig):
+        with plot.PlotFactorData(sub_data , drop = [] , show = show and i == 0, title = f'{title_prefix} Cumulative Attribution') as (df , fig):
             df = df.reset_index().set_index('source')[['strategy' , 'contribution']].\
                 loc[['tot' , 'excess' , 'market' , 'industry' , 'style' , 'specific' , 'cost']]
             ax = plot.sns_barplot(df , x='source' , y='contribution' , hue='strategy' , legend='upper right')
@@ -186,10 +188,10 @@ def plot_top_attrib_source(data : pd.DataFrame , show = False):
             
     return group_plot.fig_dict
 
-def plot_top_attrib_style(data : pd.DataFrame , show = False):
+def plot_top_attrib_style(data : pd.DataFrame , show = False , title_prefix = 'Top Port'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
-        with plot.PlotFactorData(sub_data , drop = [] , show = show and i == 0 , title = 'TopPort Style Attribution') as (df , fig):
+        with plot.PlotFactorData(sub_data , drop = [] , show = show and i == 0 , title = f'{title_prefix} Style Attribution') as (df , fig):
             df = df.reset_index().set_index('style').filter(items=['strategy' , 'contribution'])
             ax = plot.sns_barplot(df , x='style' , y='contribution' , hue='strategy' , legend='upper right')
 

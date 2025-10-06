@@ -3,14 +3,14 @@ from typing import Any , Literal
 
 from ..util import Portfolio , Benchmark , AlphaModel , Port
 
-from .generator import PortfolioGenerator
+from .generator import TopStocksPortfolioCreator , ScreeningPortfolioCreator
 
 def parse_full_name(full_name : str):
     components = full_name.split('.')
     assert len(components) >= 5 , f'Full name must have at least 4 components: {full_name}'
     prefix = components[0]
     category = prefix.lower()
-    assert category in ['optim' , 'top'] , f'Unknown category: {category}'
+    assert category in ['optim' , 'top' , 'screen'] , f'Unknown category: {category}'
     factor_name , benchmark , strategy = components[1:4]
     suffix = '.'.join(components[4:])
     lag = int(components[4].split('lag')[-1])
@@ -28,7 +28,7 @@ def parse_full_name(full_name : str):
         elements['n_best'] = int(strategy.split('Top')[-1].replace('_',''))
     return elements
 
-def get_prefix(category : Literal['optim' , 'top']): return category.title()
+def get_prefix(category : Literal['optim' , 'top' , 'screen']): return category.title()
     
 def get_factor_name(alpha : AlphaModel | str):
     return alpha.name if isinstance(alpha , AlphaModel) else alpha
@@ -52,14 +52,19 @@ def get_benchmark_name(benchmark : Portfolio | Benchmark | str | None):
     else:
         raise ValueError(f'Unknown benchmark type: {type(benchmark)}')
 
-def get_strategy_name(category : Literal['optim' , 'top'] , strategy : str = 'default' , kwargs : dict[str,Any] | None = None):
+def get_strategy_name(category : Literal['optim' , 'top' , 'screen'] , strategy : str = 'default' , kwargs : dict[str,Any] | None = None):
     kwargs = kwargs or {}
     if not strategy or strategy == 'default':
         if category == 'top':
-            n = kwargs['n_best'] if 'n_best' in kwargs else PortfolioGenerator.DEFAULT_N_BEST
+            n = kwargs.get('n_best' , TopStocksPortfolioCreator.DEFAULT_N_BEST)
             strategy = f'Top{n:_>3d}'
-        else:
+        elif category == 'screen':
+            ratio = kwargs.get('screen_ratio' , ScreeningPortfolioCreator.DEFAULT_SCREEN_RATIO)
+            strategy = f'Screen{ratio * 100:.0f}%'
+        elif category == 'optim':
             strategy = os.path.basename(kwargs['config_path']) if 'config_path' in kwargs else 'default'
+        else:
+            raise ValueError(f'Unknown category: {category}')
     assert '.' not in strategy , f'To avoid conflict with factor name, strategy name cannot contain dot: {strategy}'
     return strategy
 
@@ -69,7 +74,7 @@ def get_suffix(lag : int , suffixes : list[str] | str | None = None):
         suffixes = [suffixes]
     return '.'.join([f'lag{lag}' , *suffixes])
 
-def get_full_name(category : Literal['optim' , 'top'] , alpha : AlphaModel | str , 
+def get_full_name(category : Literal['optim' , 'top' , 'screen'] , alpha : AlphaModel | str , 
                   benchmark : Portfolio | Benchmark | str | None = None , 
                   strategy : str = 'default' , suffixes : list[str] | str | None = None , lag : int = 0 , **kwargs):
     suffixes = suffixes or []

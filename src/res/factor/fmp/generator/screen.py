@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
@@ -5,24 +6,32 @@ from typing import Any
 
 from ...util import Port , PortCreateResult , PortCreator
 
-DEFAULT_N_BEST = 50
+from src.basic import DB
+from src.data import DATAVENDOR
+
+DEFAULT_SCREEN_RATIO = 0.5
+DEFAULT_SORTING_ALPHA = ('pred' , 'gru_day_V1' , None) # (db_src , db_key , column_name)
 
 @dataclass(slots = True)
-class TopStocksPortfolioCreatorConfig:
+class ScreeningPortfolioCreatorConfig:
     '''
-    Config for PortfolioGenerator (Top Portfolio Generator)
+    Config for Screening Portfolio Generator
     kwargs:
-        n_best          : int = DEFAULT_N_BEST , number of best stocks to select
-        turn_control    : float = 0.2 , control the number of stocks to be substituted
-        buffer_zone     : float = 0.8 , above this rankpct, the stock will remain in the portfolio
-        no_zone         : float = 0.5 , below this rankpct, the stock will not be substituted
-        indus_control   : float = 0.1 , control the ratio of stocks to select in one industry
+        screen_ratio    : float = DEFAULT_SCREEN_RATIO , ratio of stocks to be screened (used as pool of top stocks)
+        sorting_alpha   : tuple[str , str , str | None] = (db_src , db_key , column_name) , source and key of alpha to be used for sorting
     '''
-    n_best          : int = DEFAULT_N_BEST
+    screen_ratio    : float = DEFAULT_SCREEN_RATIO
+    sorting_alpha   : tuple[str , str , str | None] | tuple[str , str] = DEFAULT_SORTING_ALPHA
+    n_best          : int = 50
     turn_control    : float = 0.2
     buffer_zone     : float = 0.8
     no_zone         : float = 0.5
     indus_control   : float = 0.1
+    sorting_alpha_dates : np.ndarray | Any = None
+
+    def __post_init__(self):
+        if self.sorting_alpha_dates is None:
+            self.sorting_alpha_dates = DB.dates(*self.sa_src_key)
 
     @classmethod
     def init_from(cls , print_info : bool = False , **kwargs):
@@ -34,22 +43,51 @@ class TopStocksPortfolioCreatorConfig:
             if drop_kwargs: 
                 print(f'In initializing {cls.__name__}, dropped kwargs: {drop_kwargs}')
         return cls(**use_kwargs)
-    
+
+    def get_sorting_alpha(self , model_date : int , indus = True) -> pd.DataFrame:
+        if model_date not in self.sorting_alpha_dates:
+            if model_date < self.sorting_alpha_dates[0]:
+                return pd.DataFrame()
+            else:
+                date = self.sorting_alpha_dates[self.sorting_alpha_dates < model_date].max()
+        else:
+            date = model_date
+        df = DB.load(*self.sa_src_key , date)
+        df = df.rename(columns={self.sa_col_name : 'alpha'})
+        assert 'alpha' in df.columns , f'alpha column not found in {df.columns}'
+        if indus:
+            df = DATAVENDOR.INFO.add_indus(df , date , 'unknown')
+        return df
+
     @property
-    def stay_num(self):
+    def stay_num(self) -> float:
         return (1 - self.turn_control) * self.n_best
     
     @property
-    def indus_slots(self):
+    def indus_slots(self) -> float:
         return self.n_best * self.indus_control
+
+    @property
+    def sa_src_key(self) -> tuple[str , str]:
+       return self.sorting_alpha[:2]
+
+    @property
+    def sa_col_name(self) -> str:
+        if len(self.sorting_alpha) == 3 and self.sorting_alpha[2] is not None:
+            return self.sorting_alpha[2]
+        else:
+            return self.sorting_alpha[1]
     
-class TopStocksPortfolioCreator(PortCreator):
-    DEFAULT_N_BEST = DEFAULT_N_BEST
+class ScreeningPortfolioCreator(PortCreator):
+    DEFAULT_SCREEN_RATIO = DEFAULT_SCREEN_RATIO
+    DEFAULT_SORTING_ALPHA = DEFAULT_SORTING_ALPHA
+
     def __init__(self , name : str):
         super().__init__(name)
 
     def setup(self , print_info : bool = False , **kwargs):
-        self.conf = TopStocksPortfolioCreatorConfig.init_from(print_info = print_info , **kwargs)
+        self.conf = ScreeningPortfolioCreatorConfig.init_from(print_info = print_info , **kwargs)
+
         return self
     
     def parse_input(self):
@@ -58,13 +96,21 @@ class TopStocksPortfolioCreator(PortCreator):
     def solve(self):
         amodel = self.alpha_model.get_model(self.model_date)
         assert amodel is not None , f'alpha_model is not Amodel at {self.model_date}'
-        pool = amodel.to_dataframe(indus=True , na_indus_as = 'unknown')
+
+        screening_pool = amodel.to_dataframe(indus=True , na_indus_as = 'unknown')
         if not self.bench_port.is_emtpy(): 
-            pool = pool.query('secid in @self.bench_port.secid')
-        pool = pool.copy()
+            screening_pool = screening_pool.query('secid in @self.bench_port.secid').copy()
+        screening_pool.loc[:, 'rankpct']   = screening_pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
+        screening_pool = screening_pool.query('rankpct <= @self.conf.screen_ratio')
+
+        pool = self.conf.get_sorting_alpha(self.model_date)
+        pool = pool.query('secid in @screening_pool.secid').copy()
+        
         pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
         
+        pool = pool.query('rankpct <= @self.conf.screen_ratio')
+
         pool = pool.merge(self.init_port.port , on = 'secid' , how = 'left').sort_values('alpha' , ascending = False)
         pool.loc[:, 'selected'] = pool['weight'].fillna(0) > 0
         pool.loc[:, 'buffered'] = (

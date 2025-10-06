@@ -7,8 +7,8 @@ from typing import Any , Literal
 from src.basic import Timer
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccountant
-from .optimizer import PortfolioOptimizer
-from .generator import PortfolioGenerator
+from .optimizer import OptimizedPortfolioCreator
+from .generator import TopStocksPortfolioCreator , ScreeningPortfolioCreator
 from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , 
                         get_full_name , get_benchmark , get_benchmark_name , parse_full_name)
 
@@ -38,8 +38,16 @@ class PortfolioBuilder:
         buffer_zone : float = 0.8
         no_zone : float = 0.5
         indus_control : float = 0.1
+    screen accepted kwargs:
+        screen_ratio : float = 0.5
+        sorting_alpha : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
+        n_best : int = 50
+        turn_control : float = 0.2
+        buffer_zone : float = 0.8
+        no_zone : float = 0.5
+        indus_control : float = 0.1
     '''
-    def __init__(self , category : Literal['optim' , 'top'] | Any , 
+    def __init__(self , category : Literal['optim' , 'top' , 'screen'] | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , 
                  build_on : Portfolio | None = None , verbosity : int = 1 , **kwargs):
@@ -78,7 +86,7 @@ class PortfolioBuilder:
         return cls(alpha = alpha , build_on = build_on , verbosity = verbosity , **elements , **kwargs)
     
     @staticmethod
-    def get_full_name(category : Literal['optim' , 'top'] , alpha : AlphaModel | str , 
+    def get_full_name(category : Literal['optim' , 'top' , 'screen'] , alpha : AlphaModel | str , 
                       benchmark : Portfolio | Benchmark | str | None = None , 
                       strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
@@ -86,12 +94,17 @@ class PortfolioBuilder:
     def setup(self , verbosity : int | None = None):
         if verbosity is None: 
             verbosity = self.verbosity
-        if self.category == 'optim':
-            self.creator = PortfolioOptimizer(self.full_name).setup(print_info = verbosity > 0 , **self.kwargs)
-        elif self.category == 'top':
-            self.creator = PortfolioGenerator(self.full_name).setup(print_info = verbosity > 0 , **self.kwargs)
-        else:
-            raise ValueError(f'Unknown category: {self.category}')
+
+        match self.category:
+            case 'optim':
+                creator_class = OptimizedPortfolioCreator
+            case 'top':
+                creator_class = TopStocksPortfolioCreator
+            case 'screen':
+                creator_class = ScreeningPortfolioCreator
+            case _:
+                raise ValueError(f'Unknown category: {self.category}')
+        self.creator = creator_class(self.full_name).setup(print_info = verbosity > 0 , **self.kwargs)
         return self
         
     def build(self , date : int):
@@ -136,13 +149,21 @@ class PortfolioBuilderGroup:
             buffer_zone : float = 0.8
             no_zone : float = 0.5
             indus_control : float = 0.1
+        screen accepted kwargs:
+            screen_ratio : float = 0.5
+            sorting_alpha : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
+            n_best : int = 50
+            turn_control : float = 0.2
+            buffer_zone : float = 0.8
+            no_zone : float = 0.5
+            indus_control : float = 0.1
     acc_kwargs:
         daily : bool = False
         analytic : bool = True
         attribution : bool = True
     '''
     def __init__(self , 
-                 category : Literal['optim' , 'top'] | Any ,
+                 category : Literal['optim' , 'top' , 'screen'] | Any ,
                  alpha_models : AlphaModel | list[AlphaModel] , 
                  benchmarks : str | None | list = None , 
                  add_lag : int = 0 , 
@@ -188,9 +209,11 @@ class PortfolioBuilderGroup:
     @property
     def category_title(self):
         if self.category == 'optim':
-            return 'Optimization'
+            return 'Optimized'
         elif self.category == 'top':
-            return 'Generation'
+            return 'TopStocks'
+        elif self.category == 'screen':
+            return 'Screening'
         else:
             return self.category.title()
     

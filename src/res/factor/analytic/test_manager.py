@@ -11,15 +11,17 @@ from src.func import dfs_to_excel , figs_to_pdf , display as disp
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
-TASK_TYPES = ['optim' , 'top' , 'factor' , 't50']
-TYPE_of_TASK = Literal['optim' , 'top' , 'factor' , 't50']
+TASK_TYPES = ['optim' , 'top' , 'factor' , 't50' , 'screen']
+TYPE_of_TASK = Literal['optim' , 'top' , 'factor' , 't50' , 'screen']
 
 class BaseCalculator(ABC):
     TASK_TYPE : TYPE_of_TASK
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
+    DEFAULT_TITLE_GROUP : str | None = None
 
-    def __init__(self , **kwargs) -> None:
-        self.params : dict[str,Any] = kwargs
+    def __init__(self , params : dict[str,Any] | None = None , **kwargs) -> None:
+        self.params : dict[str,Any] = params or {} 
+        self.kwargs = kwargs
     def __repr__(self):
         return f'{self.__class__.__name__} of task {self.TASK_TYPE}(params={self.params})'
     @classmethod
@@ -53,11 +55,17 @@ class BaseCalculator(ABC):
         if self.calc_rslt.empty: 
             self.figs = {}
             return self
-        figs = self.plotter()(self.calc_rslt , show = show)
+        figs = self.plotter()(self.calc_rslt , show = show , title_prefix = self.title_prefix)
         self.figs = {'all':figs} if isinstance(figs , Figure) else figs
         if verbosity > 0: 
             print(f'    --->{self.__class__.__name__} plot Finished!')
         return self
+    @property
+    def title_prefix(self) -> str:
+        prefix = self.DEFAULT_TITLE_GROUP if self.DEFAULT_TITLE_GROUP else self.TASK_TYPE.title()
+        if 'title_prefix' in self.kwargs:
+            prefix = f'{str(self.kwargs["title_prefix"]).replace("_", " ").title()} {prefix}'
+        return prefix
     
 class BaseTestManager(ABC):
     TASK_TYPE : TYPE_of_TASK
@@ -65,6 +73,7 @@ class BaseTestManager(ABC):
 
     def __init__(self , which : str | list[str] | Literal['all'] = 'all' , project_name : str | None = None , **kwargs):
         candidates = {task.task_name():task for task in self.TASK_LIST}
+            
         if which == 'all':
             self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         else:

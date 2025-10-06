@@ -4,7 +4,6 @@ import src.func.plot as plot
 from plottable import ColumnDefinition
 from typing import Any
 
-    
 DROP_KEYS  = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
 
@@ -19,7 +18,7 @@ def df_strategy(df : pd.DataFrame) -> pd.Series:
     assert isinstance(names , pd.Series) , f'names must be a pandas series, but got {type(names)}'
     return names
 
-def plot_optim_frontface(data : pd.DataFrame , show = False):
+def plot_optim_frontface(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     num_per_page : int | Any = 32 // data.groupby('factor_name').size().max()
     if num_per_page == 0: 
         num_per_page = 1
@@ -27,7 +26,7 @@ def plot_optim_frontface(data : pd.DataFrame , show = False):
     num_pages  : int | Any = num_groups // num_per_page + (1 if num_groups % num_per_page > 0 else 0)
     group_plot = plot.PlotMultipleData(data , group_key = 'factor_name' , max_num = num_per_page)
     for i , sub_data in enumerate(group_plot):     
-        full_title = f'Optim FMP Front Face for Factors (P{i+1}/{num_pages})'
+        full_title = f'{title_prefix} Front Face (P{i+1}/{num_pages})'
         with plot.PlotFactorData(sub_data , drop = [] , name_key = None , show = show , full_title = full_title) as (df , fig):
             df = df.reset_index([i for i in df.index.names if i])
             df['strategy'] = df_strategy(df)
@@ -41,11 +40,11 @@ def plot_optim_frontface(data : pd.DataFrame , show = False):
                             ignore_cols = ['prefix' , 'factor_name' , 'benchmark' , 'suffix'])
     return group_plot.fig_dict
 
-def plot_optim_perf_curve(data : pd.DataFrame , show = False):
+def plot_optim_perf_curve(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                            title = 'Optim FMP Accumulative Performance') as (df , fig):
+                            title = f'{title_prefix} Accumulative Performance') as (df , fig):
             ax1 , ax2 = plot.get_twin_axes(fig , 111)
 
             ax1.plot(df.index, df['pf'], label='portfolio')  
@@ -61,11 +60,11 @@ def plot_optim_perf_curve(data : pd.DataFrame , show = False):
             plot.set_yaxis(ax2 , format='pct' , digits=2 , title='Cummulative Excess Return' , title_color='r' , tick_color='r' , tick_pos=None)
     return group_plot.fig_dict
 
-def plot_optim_perf_drawdown(data : pd.DataFrame , show = False):
+def plot_optim_perf_drawdown(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                            title = 'Optim FMP Drawdown') as (df , fig):
+                            title = f'{title_prefix} Performance Drawdown') as (df , fig):
             ax1 , ax2 = plot.get_twin_axes(fig , 111)
             
             ax1.plot(df.index, df['drawdown'], 'grey', label='Drawdown (left)')  
@@ -82,11 +81,11 @@ def plot_optim_perf_drawdown(data : pd.DataFrame , show = False):
                 
     return group_plot.fig_dict
 
-def plot_optim_perf_excess_drawdown(data : pd.DataFrame , show = False):
+def plot_optim_perf_excess_drawdown(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                            title = 'Optim FMP Excess Drawdown') as (df , fig):
+                            title = f'{title_prefix} Excess Drawdown') as (df , fig):
             ax1 , ax2 = plot.get_twin_axes(fig , 111)
 
             ax1.plot(df.index, df['excess'], label='excess')  
@@ -101,11 +100,11 @@ def plot_optim_perf_excess_drawdown(data : pd.DataFrame , show = False):
             plot.set_yaxis(ax2 , format='pct' , digits=2 , title='Drawdown' , title_color='g' , tick_color='g' , tick_pos=None)
     return group_plot.fig_dict
 
-def plot_optim_perf_lag(data : pd.DataFrame , show = False):
+def plot_optim_perf_lag(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS , show = show and i == 0, 
-                            title = 'Optim FMP Cumulative Lag Performance') as (df , fig):
+                            title = f'{title_prefix} Cumulative Lag Performance') as (df , fig):
             ax1 , ax2 = plot.get_twin_axes(fig , 111)
             assert all([col.startswith('lag') for col in df.columns]) , df.columns
             [ax1.plot(df.index , df[col], label=col) for col in df.columns if col != 'lag_cost']
@@ -123,11 +122,11 @@ def plot_optim_perf_lag(data : pd.DataFrame , show = False):
 
     return group_plot.fig_dict
 
-def plot_optim_perf_year(data : pd.DataFrame , show = False):
+def plot_optim_perf_year(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                            title = 'Optim FMP Year Performance') as (df , fig):
+                            title = f'{title_prefix} Year Performance') as (df , fig):
             plot.plot_table(df.set_index('year') , 
                             pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                             flt_cols = ['ir','calmar'] , 
@@ -135,11 +134,11 @@ def plot_optim_perf_year(data : pd.DataFrame , show = False):
                             stripe_by = 1 , emph_last_row=True)
     return group_plot.fig_dict
 
-def plot_optim_perf_month(data : pd.DataFrame , show = False):
+def plot_optim_perf_month(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = [] , show = show and i == 0,  
-                            title = 'FMP Month Performance') as (df , fig):
+                            title = f'{title_prefix} Month Performance') as (df , fig):
             plot.plot_table(df.set_index('month') , 
                             pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                             flt_cols = ['ir','calmar'] , 
@@ -147,11 +146,11 @@ def plot_optim_perf_month(data : pd.DataFrame , show = False):
                             stripe_by = 1 , emph_last_row=True)
     return group_plot.fig_dict
 
-def plot_optim_exp_style(data : pd.DataFrame , show = False):
+def plot_optim_exp_style(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                            title = 'Optim FMP Style Exposure' , suptitle=True) as (df , fig):
+                            title = f'{title_prefix} Style Exposure' , suptitle=True) as (df , fig):
             lay_out = (2, 5)
             assert len(df.columns) <= lay_out[0] * lay_out[1] , (len(df.columns) , lay_out)
             for i , col in enumerate(df.columns): 
@@ -166,11 +165,11 @@ def plot_optim_exp_style(data : pd.DataFrame , show = False):
             fig.autofmt_xdate(rotation = 45)
     return group_plot.fig_dict
 
-def plot_optim_exp_indus(data : pd.DataFrame , show = False):
+def plot_optim_exp_indus(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                            title = 'Optim FMP Industry Exposure' , suptitle=True) as (df , fig):
+                            title = f'{title_prefix} Industry Exposure' , suptitle=True) as (df , fig):
             lay_out = (5, 7)
             assert len(df.columns) <= lay_out[0] * lay_out[1] , (len(df.columns) , lay_out)
             for i , col in enumerate(df.columns): 
@@ -185,11 +184,11 @@ def plot_optim_exp_indus(data : pd.DataFrame , show = False):
             fig.autofmt_xdate(rotation = 45)
     return group_plot.fig_dict
 
-def plot_optim_attrib_source(data : pd.DataFrame , show = False):
+def plot_optim_attrib_source(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                            title = 'Optim FMP Cumulative Attribution') as (df , fig):
+                            title = f'{title_prefix} Cumulative Attribution') as (df , fig):
             ax = fig.add_subplot(111)
             [ax.plot(df.index , df[col], label=col) for col in df.columns]
             ax.legend(loc = 'upper left')
@@ -198,11 +197,11 @@ def plot_optim_attrib_source(data : pd.DataFrame , show = False):
             
     return group_plot.fig_dict
 
-def plot_optim_attrib_style(data : pd.DataFrame , show = False):
+def plot_optim_attrib_style(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                            title = 'Optim FMP Style Attribution' , suptitle=True) as (df , fig):
+                            title = f'{title_prefix} Style Attribution' , suptitle=True) as (df , fig):
             ax = fig.add_subplot(111)
             [ax.plot(df.index , df[col], label=col) for col in df.columns]
             ax.legend(loc = 'upper left')

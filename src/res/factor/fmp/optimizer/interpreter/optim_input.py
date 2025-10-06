@@ -20,7 +20,7 @@ from .input_creator import (
     create_input_cov_con ,  create_input_short_con
 )
 
-class PortfolioOptimizerInput:
+class OptimizedPortfolioInput:
     def __init__(
         self , 
         port_name : str = 'port' ,

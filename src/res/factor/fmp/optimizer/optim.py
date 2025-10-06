@@ -4,7 +4,7 @@ from typing import Literal
 from src.proj import MACHINE
 from src.res.factor.util import PortCreator , PortCreateResult , Port
 
-from .interpreter import PortfolioOptimizerInput
+from .interpreter import OptimizedPortfolioInput
 from .solver import MosekSolver , CvxpySolver
 
 PROB_TYPE = Literal['linprog' , 'quadprog' , 'socp']
@@ -12,7 +12,7 @@ ENGINE_TYPE = Literal['mosek' , 'cvxopt' , 'cvxpy']
 CVXPY_SOLVER = Literal['mosek' , 'ecos' , 'osqp' , 'scs' , 'clarabel']
 
 @dataclass(slots = True)
-class PortfolioOptimizerConfig:
+class OptimizedPortfolioCreatorConfig:
     prob_type : PROB_TYPE = 'quadprog'
     engine_type : ENGINE_TYPE = 'mosek'
     cvxpy_solver : CVXPY_SOLVER = 'mosek'
@@ -42,13 +42,13 @@ class PortfolioOptimizerConfig:
     def opt_cond(self):
         return {'turn' : self.opt_turn , 'qobj' : self.opt_qobj , 'qcon' : self.opt_qcon , 'short' : self.opt_short}
 
-class PortfolioOptimizer(PortCreator):
+class OptimizedPortfolioCreator(PortCreator):
     def __init__(self , name : str):
         super().__init__(name)
 
     def setup(self , print_info : bool = False , **kwargs): 
-        self.conf = PortfolioOptimizerConfig.init_from(print_info = print_info , **kwargs)
-        self.opt_input = PortfolioOptimizerInput(self.name , self.conf.opt_config)
+        self.conf = OptimizedPortfolioCreatorConfig.init_from(print_info = print_info , **kwargs)
+        self.opt_input = OptimizedPortfolioInput(self.name , self.conf.opt_config)
         return self
     
     def parse_input(self):
@@ -90,10 +90,10 @@ class PortfolioOptimizer(PortCreator):
         return self
     
 if __name__ == '__main__':
-    from src.res.factor.fmp.optimizer.optim import PortfolioOptimizer
+    from src.res.factor.fmp.optimizer.optim import OptimizedPortfolioCreator
     config_path = 'custom_opt_config.yaml'
 
-    optim = PortfolioOptimizer('test').setup(config_path = config_path , prob_type='socp')
+    optim = OptimizedPortfolioCreator('test').setup(config_path = config_path , prob_type='socp')
 
     s = optim.create(20240606)
     print(s)

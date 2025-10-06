@@ -8,6 +8,16 @@ from .benchmark import Benchmark
 
 @dataclass
 class Universe:
+    """
+    Universe for factor model portfolio
+    Parameters:
+        name : str
+        -all : all stocks
+        -top<num> : top <num> stocks
+        -top-<num> : exclude bottom <num> stocks
+        -benchmark : benchmark
+        -<benchmark1>+<benchmark2>+... : combination of benchmarks
+    """
     name        : str
     
     def get(self , date : int , safety = True , exclude_bse = True) -> Portfolio:
@@ -21,7 +31,6 @@ class Universe:
             val = DATAVENDOR.TRADE.get_val(DATAVENDOR.TRADE.latest_date('val' , date)).sort_values('circ_mv' , ascending=False)
             val = val.query('secid in @candidates').iloc[:top_num].loc[:,['secid']].\
                 reset_index().assign(date = date , name = self.name)
-            val['weight'] = 1 / len(val)
             pf = Portfolio.from_dataframe(val , name = self.name)
         elif self.name in Benchmark.AVAILABLES:
             pf = Benchmark(self.name)

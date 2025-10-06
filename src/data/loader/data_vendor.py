@@ -163,7 +163,7 @@ class DataVendor:
         return
 
     def get_risk_exp(self , start_dt : int , end_dt : int):
-        db_src , db_key = 'models' , 'risk_exp'
+        db_src , db_key = 'models' , 'tushare_cne5_exp'
         data = self.get_named_data_block(start_dt , end_dt , db_src , db_key , 'tushare_cne5_exp')
         if isinstance(data , DataBlock):
             self.risk_exp = data

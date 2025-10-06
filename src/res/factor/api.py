@@ -2,7 +2,7 @@ from typing import Any , Literal
 
 from src.res.factor.util import StockFactor
 
-from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager
+from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager , FmpScreenManager
 from src.res.factor.calculator import UPDATE_JOBS , TuShareCNE5_Calculator , StockFactorHierarchy
 
 class FactorModelUpdater:
@@ -47,6 +47,8 @@ class FactorTestAPI:
             return FmpTopManager
         elif test_type == 't50':
             return FmpT50Manager
+        elif test_type == 'screen':
+            return FmpScreenManager
         else:
             raise ValueError(f'Invalid test type: {test_type}')
         

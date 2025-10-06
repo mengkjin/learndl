@@ -9,7 +9,7 @@ def update_default_title_prefix(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         if 'title_prefix' not in kwargs:
-            kwargs['title_prefix'] = 'Top50 Port'
+            kwargs['title_prefix'] = 'Screening Port'
         return func(*args, **kwargs)
     return wrapper
 

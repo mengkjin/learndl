@@ -1,2 +1,2 @@
 from . import optim, solver , interpreter
-from .optim import PortfolioOptimizer
+from .optim import OptimizedPortfolioCreator

@@ -102,6 +102,8 @@ class Portfolio:
         if df.empty: 
             return cls(name)
         df = df.reset_index()
+        if 'weight' not in df.columns:
+            df['weight'] = 1 / len(df)
         assert all(col in df.columns for col in ['name' , 'date' , 'secid' , 'weight']) , \
             f'expect columns: name , date , secid , weight , got {df.columns.tolist()}'
         if 'value' not in df.columns: 

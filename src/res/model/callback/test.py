@@ -9,13 +9,14 @@ from src.res.factor.analytic.test_manager import BaseTestManager
 from src.res.model.util import BaseCallBack , PredRecorder
 
 PRED_RECORD = PredRecorder()
+TEST_TYPES : list[TYPE_of_TASK] = ['factor' , 't50' , 'screen']
 
 class DetailedAlphaAnalysis(BaseCallBack):
     DISPLAY_TABLES = ['optim@frontface']
-    DISPLAY_FIGURES = ['factor@ic_curve@best.market' , 'factor@group_curve@best.market' , 't50@perf_drawdown@best.univ']
+    DISPLAY_FIGURES = ['factor@ic_curve@best.market' , 'factor@group_curve@best.market' , 't50@perf_drawdown@best.univ' , 'screen@perf_drawdown@best.univ']
     '''record and concat each model to Alpha model instance'''
     def __init__(self , trainer , use_num : Literal['avg' , 'first'] = 'avg' , 
-                 tasks : list[TYPE_of_TASK] = ['factor' , 't50'] , **kwargs) -> None:
+                 tasks = TEST_TYPES , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         self.print_info()
         assert use_num in ['first' , 'avg'] , use_num
@@ -23,13 +24,16 @@ class DetailedAlphaAnalysis(BaseCallBack):
         assert all(task in FactorTestAPI.TASK_TYPES for task in tasks) , \
             f'ANALYTIC_TASKS must be a list of valid tasks: {FactorTestAPI.TASK_TYPES} , but got {tasks}'
         self.tasks = tasks
+        if 'screen' not in self.tasks:
+            self.tasks += 'screen'
 
     @property
     def analytic_tasks(self) -> list[TYPE_of_TASK]:
-        if self.trainer.config.short_test:
-            return [task for task in self.tasks if task in ['factor' , 't50']]
-        else:
-            return self.tasks
+        tasks = [*self.tasks]
+        for task in TEST_TYPES:
+            if task not in self.tasks:
+                tasks += task
+        return tasks
 
     @property
     def path_data(self): return self.trainer.path_analytical_data
@@ -55,12 +59,13 @@ class DetailedAlphaAnalysis(BaseCallBack):
         factors : dict[int , StockFactor] = {}
         self.test_results : dict[TYPE_of_TASK , BaseTestManager] = {}
         for task in self.analytic_tasks:
-            interval = 1 if task == 't50' else 5
+            interval = 1 if task in ['t50' , 'screen'] else 5
             if interval not in factors.keys():
                 dates = PRED_RECORD.dates[::interval] # noqa
                 factors[interval] = StockFactor(df.reset_index().query('date in @dates').set_index(['secid','date']))
             factor = factors[interval]
-            self.test_results[task] = FactorTestAPI.run_test(task , factor , verbosity = 1 , write_down=False , display_figs=False)
+            self.test_results[task] = FactorTestAPI.run_test(
+                task , factor , verbosity = 1 , write_down=False , display_figs=False , title_prefix=self.config.model_name)
 
         rslts = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_rslts().items()}
         figs  = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_figs().items()}
