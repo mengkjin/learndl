@@ -60,8 +60,8 @@ class TopStocksPortfolioCreator(PortCreator):
         assert amodel is not None , f'alpha_model is not Amodel at {self.model_date}'
         pool = amodel.to_dataframe(indus=True , na_indus_as = 'unknown')
         if not self.bench_port.is_emtpy(): 
-            pool = pool.query('secid in @self.bench_port.secid')
-        pool = pool.copy()
+            pool = pool.query('secid in @self.bench_port.secid').copy()
+
         pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
         

@@ -109,8 +109,9 @@ class ScreeningPortfolioCreator(PortCreator):
         screening_pool = amodel.to_dataframe(indus=True , na_indus_as = 'unknown')
         if not self.bench_port.is_emtpy(): 
             screening_pool = screening_pool.query('secid in @self.bench_port.secid').copy()
+            
         screening_pool.loc[:, 'rankpct']   = screening_pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
-        screening_pool = screening_pool.query('rankpct <= @self.conf.screen_ratio')
+        screening_pool = screening_pool.query('rankpct >= @self.conf.screen_ratio')
 
         pool = self.conf.get_sorting_alpha(self.model_date)
         pool = pool.query('secid in @screening_pool.secid').copy()
@@ -118,8 +119,6 @@ class ScreeningPortfolioCreator(PortCreator):
         pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
         
-        pool = pool.query('rankpct <= @self.conf.screen_ratio')
-
         pool = pool.merge(self.init_port.port , on = 'secid' , how = 'left').sort_values('alpha' , ascending = False)
         pool.loc[:, 'selected'] = pool['weight'].fillna(0) > 0
         pool.loc[:, 'buffered'] = (

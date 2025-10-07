@@ -1,6 +1,104 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+第 2 步：配置脚本
+在运行脚本之前，您必须配置邮件发送相关的参数。
+脚本默认会从环境变量读取配置，如果环境变量不存在，则使用代码中 SMTP_CONFIG 字典里的默认值。为了安全，强烈推荐使用环境变量来存储密码等敏感信息。
+您有两种方式进行配置：
+(推荐) 方式一：通过 systemd 服务文件设置环境变量
+这是一种安全且灵活的方式，您将在下一步创建服务文件时看到如何设置。
+(不推荐) 方式二：直接修改 Python 脚本
+如果您只是快速测试，可以直接编辑 /usr/local/bin/startup_notifier.py 文件中的 SMTP_CONFIG 字典：
+
+# src_runs/4_miscellaneous/startup_notifier.py
+
+# ...
+SMTP_CONFIG = {
+    "server": "smtp.gmail.com",  # 您的 SMTP 服务器 (例如 Gmail)
+    "port": 587,                 # SMTP 端口
+    "sender_email": "your-email@gmail.com", # 您的发件邮箱
+    "receiver_email": "destination-email@example.com", # 收件人邮箱
+    "password": "your_google_app_password" # 您的邮箱密码或应用专用密码
+}
+# ...
+
+> Gmail 用户请注意: 如果您使用 Gmail，需要生成一个 "应用专用密码" (App Password) 而不是使用您的常规登录密码，否则 Google 会阻止登录。
+第 3 步：部署为 systemd 服务
+为了让脚本在每次开机时自动运行，我们将其设置为一个 systemd 系统服务。
+1. 将脚本移动到标准位置并授予执行权限
+打开终端，执行以下命令：
+
+sudo mv src_runs/4_miscellaneous/startup_notifier.py /usr/local/bin/
+sudo chmod +x /usr/local/bin/startup_notifier.py
+
+2. 创建 systemd 服务文件
+执行以下命令来创建并编辑服务文件：
+
+sudo nano /etc/systemd/system/startup-email.service
+将以下内容完整地复制并粘贴到 nano 编辑器中：
+
+[Unit]
+Description=Send startup email notification
+Documentation=https://github.com/mengkjin/learndl
+# 确保在网络连接建立之后再运行此服务
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# 要执行的脚本路径
+ExecStart=/usr/bin/python3 /usr/local/bin/startup_notifier.py
+
+# (推荐) 在这里设置环境变量，以避免将密码硬编码到代码中
+# 请取消下面的注释并替换为你自己的值
+# Environment="SMTP_SERVER=smtp.gmail.com"
+# Environment="SMTP_PORT=587"
+# Environment="SMTP_SENDER=your-email@gmail.com"
+# Environment="SMTP_RECEIVER=destination-email@example.com"
+# Environment="SMTP_PASSWORD=your_app_password"
+
+# 运行服务的用户和组。使用 root 可以确保有权限读取 journalctl 和写入 /var/log
+User=root
+Group=root
+
+Type=oneshot
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+
+重要: 如果您选择使用环境变量，请务必取消 Environment=行的注释（删除行首的#）并填入您的真实信息。完成后，按 Ctrl+X，然后按 Y，最后按 Enter 保存并退出。
+3. 重新加载 systemd 并启用服务
+执行以下命令使服务生效：
+
+
+sudo systemctl daemon-reload
+sudo systemctl enable startup-email.service
+
+enable 命令会创建链接，确保服务在下次启动时自动运行。
+第 4 步：测试
+在重启电脑前，您可以手动测试脚本和服务是否工作正常。
+1. 直接运行脚本测试
+# 这会使用您在脚本中硬编码的配置（或未设置的环境变量）
+sudo python3 /usr/local/bin/startup_notifier.py
+检查您的收件箱是否收到了邮件，并查看终端输出的日志信息。
+2. 测试 systemd 服务
+# 这会使用您在 .service 文件中配置的环境变量来运行
+sudo systemctl start startup-email.service
+
+这个命令会立即启动一次服务。
+3. 查看日志
+如果邮件没有发送成功，可以通过以下命令查看服务的运行日志，定位问题：
+
+# 查看 systemd 服务的日志
+sudo journalctl -u startup-email.service -f
+
+# 查看脚本自己记录的日志文件
+cat /var/log/startup_notifier.log
+
+"""
+
 import subprocess
 import smtplib
 from email.mime.text import MIMEText
