@@ -100,7 +100,6 @@ class DataModule(BaseDataModule):
             model_date = -1 , extract_backward_days = 300 , extract_forward_days = 160
         ) -> bool:
         stage = 'predict' if self.use_data == 'predict' else stage
-        
         if self.input_type == 'db':
             slens = {self.config.model_module: 1}
         else:
@@ -172,8 +171,6 @@ class DataModule(BaseDataModule):
             self.d0 = max(0 , model_date_col - self.config.train_skip_horizon - self.config.model_train_window - d_extend)
             self.d1 = max(0 , model_date_col - self.config.train_skip_horizon)
         elif self.stage in ['predict' , 'test']:
-            if self.stage == 'predict': 
-                self.model_date_list = np.array([self.model_date])
             next_model_date = self.next_model_date(self.model_date)
 
             before_test_dates = self.datas.date[self.datas.date < min(self.test_full_dates)][-y_extend:]
@@ -443,11 +440,12 @@ class DataModule(BaseDataModule):
         return sample_index    
 
     @classmethod
-    def get_date_batch_data(cls , config : TrainConfig , date : int , model_num : int = 0):
+    def get_date_batch_data(cls , config : TrainConfig , date : int , model_num : int = 0) -> BatchData:
         if config not in cls._config_instance_for_batch_data:
             cls._config_instance_for_batch_data[config] = cls(config , 'both').load_data()
         module = cls._config_instance_for_batch_data[config]
         model_param = config.model_param[model_num]
         assert date in module.test_full_dates , f"date {date} not in test_full_dates [{module.test_full_dates.min()}-{module.test_full_dates.max()}]"
-        module.setup('predict' , model_param , date)
-        return module.predict_dataloader()[0]
+        module.setup('predict' , model_param , module.model_date_list[module.model_date_list < date][-1])
+        dataloader = module.predict_dataloader()
+        return dataloader.of_date(date)

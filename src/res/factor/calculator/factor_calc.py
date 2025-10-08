@@ -209,10 +209,13 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
         return cls().load_factor(date)
 
     @classmethod
-    def Loads(cls , start : int | None = None , end : int | None = None) -> pd.DataFrame:
+    def Loads(cls , start : int | None = None , end : int | None = None , fillna = False , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'indus_median') -> pd.DataFrame:
         """load factor values of a given date range"""
         dates = CALENDAR.slice(cls.stored_dates() , start , end)
-        return DB.load_multi('factor' , cls.factor_name , dates)
+        df = DB.load_multi('factor' , cls.factor_name , dates)
+        if fillna:
+            df = StockFactor.fillna(df , fill_method = fill_method)
+        return df
 
     @classmethod
     def Eval(cls , date : int) -> pd.Series:

@@ -48,12 +48,12 @@ class DetailedAlphaAnalysis(BaseCallBack):
         if PRED_RECORD.is_empty: 
             return
         df = PRED_RECORD.all_preds()
+        DB.save_df(df , self.path_pred , overwrite = True)
         if self.use_num == 'first':
             df = df.query('model_num == 0')
         else:
             df = df.groupby(['date','secid','submodel'])['values'].mean().reset_index()
         df = df.set_index(['secid','date'])
-        DB.save_df(df , self.path_pred , overwrite = True)
         df = df.rename(columns={'submodel':'factor_name'}).pivot_table('values',['secid','date'],'factor_name')
             
         factors : dict[int , StockFactor] = {}

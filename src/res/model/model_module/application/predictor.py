@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from contextlib import nullcontext
-from typing import Any , ClassVar
+from typing import Any , ClassVar , Literal
 
 from src.proj import MACHINE
 from src.basic import SILENT , CALENDAR , RegisteredModel
@@ -16,8 +16,9 @@ class ModelPredictor:
     SECID_COLS : ClassVar[str] = 'secid'
     DATE_COLS  : ClassVar[str] = 'date'
 
-    def __init__(self , reg_model : RegisteredModel):
+    def __init__(self , reg_model : RegisteredModel , use_data : Literal['fit' , 'predict' , 'both'] = 'both'):
         self.reg_model = reg_model
+        self.use_data : Literal['fit' , 'predict' , 'both'] = use_data
 
         self.model_name = self.reg_model.name
         self.model_submodel = self.reg_model.submodel
@@ -39,21 +40,30 @@ class ModelPredictor:
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(reg_model={str(self.reg_model)})'
+
+    def __call__(self , date : int):
+        if self.df.empty or date not in self.df['date'].unique():
+            self.predict_dates([date])
+        return self.df.query('date == @date')
     
-    def update_preds(self , update = True , overwrite = False , silent = True):
+    def update_preds(self , update = True , overwrite = False , start_dt = None , end_dt = None , silent = True):
         '''get update dates and predict these dates'''
         assert update != overwrite , 'update and overwrite must be different here'
         with SILENT if silent else nullcontext():   
-            dates = CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else [])
+            dates = CALENDAR.slice(CALENDAR.diffs(self.reg_model.pred_target_dates , self.reg_model.pred_dates if update else []) , start_dt , end_dt)
             self.predict_dates(dates)
+            self.save_preds()
             self.deploy()
 
     def predict_dates(self , dates : np.ndarray | list[int]):
+        '''predict recent days'''
         if len(dates) == 0: 
             return self
-        '''predict recent days'''
-        data_module  = DataModule(self.config , 'both' if min(dates) <= CALENDAR.today(-100) else 'predict').load_data() 
-        pred_dates = dates[dates <= max(data_module.test_full_dates)]
+        dates = np.array(dates)
+        use_data0 = 'both' if min(dates) <= CALENDAR.today(-100) else 'predict'
+        use_data1 = self.use_data 
+        self.data_module  = DataModule(self.config , use_data0 if self.use_data == 'both' else use_data1).load_data() 
+        pred_dates = dates[dates <= max(self.data_module.test_full_dates)]
         if pred_dates.size == 0: 
             return self
         assert any(self.reg_model.model_dates < pred_dates.min()) , f'no model date before {pred_dates}'
@@ -66,20 +76,19 @@ class ModelPredictor:
         for model_date , df_sub in df_task.query('calculated == 0').groupby('model_date'):
             for model_num in self.model_nums:
                 model_param = self.config.model_param[model_num]
-                # print(model_date , 'old' if (data is data_mod_old) else 'new') 
                 assert isinstance(model_date , int) , model_date
-                data_module.setup('predict' ,  model_param , model_date)
+                self.data_module.setup('predict' ,  model_param , model_date)
                 model = self.model.load_model(model_num , model_date , self.model_submodel , model_param = model_param)
                 
-                tdates = data_module.model_test_dates
+                tdates = self.data_module.model_test_dates
                 within = np.isin(tdates , df_sub.query('calculated == 0')['pred_dates'])
-                loader = data_module.predict_dataloader()
+                loader = self.data_module.predict_dataloader()
 
                 for tdate , do_calc , batch_data in zip(tdates , within , loader):
                     if not do_calc or len(batch_data) == 0: 
                         continue
                     # secid = data_module.datas.secid[batch_data.i[:,0].cpu().numpy()]
-                    secid = data_module.batch_secid(batch_data)
+                    secid = self.data_module.batch_secid(batch_data)
                     df = model(batch_data).pred_df(secid , tdate , colnames = self.model_name , model_num = model_num)
                     df_list.append(df)
                     df_task.loc[df_task['pred_dates'] == tdate , 'calculated'] = 1
@@ -88,7 +97,6 @@ class ModelPredictor:
             self.df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
         else:
             self.df = pd.DataFrame()
-        self.save_preds()
         return self
 
     def save_preds(self , df : pd.DataFrame | None = None , overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS):
@@ -101,6 +109,10 @@ class ModelPredictor:
             self.reg_model.save_pred(new_df , date , overwrite)
             self._current_update_dates.append(date)
         return self
+
+    @property
+    def deploy_required(self) -> bool:
+        return MACHINE.hfm_factor_dir is not None
 
     def deploy(self , overwrite = False):
         '''deploy df by day to class.destination'''
@@ -135,22 +147,48 @@ class ModelPredictor:
         df = df.query(f'{date_col} in @dates')
         assert isinstance(df , pd.DataFrame) , f'{type(df)} is not a DataFrame'
         return df.pivot_table(values = self.model_name , index = secid_col , columns = date_col).fillna(0).corr()
+
+    @classmethod
+    def get_model(cls , model_name : str , use_data : Literal['fit' , 'predict' , 'both'] = 'both'):
+        model = RegisteredModel.SelectModels(model_name)[0]
+        return cls(model , use_data)
     
     @classmethod
-    def update(cls , model_name : str | None = None , update = True , overwrite = False , silent = True):
+    def update(cls , model_name : str | None = None , start_dt = None , end_dt = None , silent = True):
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
             print(f'model_name is None, update all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
-            md.update_preds(update = update , overwrite = overwrite , silent = silent)
+            md.update_preds(update = True , overwrite = False , start_dt = start_dt , end_dt = end_dt , silent = silent)
             if md._current_update_dates:
                 print(f'  -->  Finish updating model prediction for {model} , len={len(md._current_update_dates)}')
             else:
                 print(f'  -->  No new updating model prediction for {model}')
-            if md._current_deploy_dates:
-                print(f'  -->  Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}')
+            if md.deploy_required:
+                if md._current_deploy_dates:
+                    print(f'  -->  Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}')
+                else:
+                    print(f'  -->  No new deploying model prediction for {model}')
+        return md
+
+    @classmethod
+    def recalculate(cls , model_name : str | None = None , start_dt = None , end_dt = None , silent = True):
+        """Recalculate all model predictions"""
+        models = RegisteredModel.SelectModels(model_name)
+        if model_name is None: 
+            print(f'model_name is None, update all registered models (len={len(models)})')
+        for model in models:
+            md = cls(model)
+            md.update_preds(update = False , overwrite = True , start_dt = start_dt , end_dt = end_dt , silent = silent)
+            if md._current_update_dates:
+                print(f'  -->  Finish recalculating model prediction for {model} , len={len(md._current_update_dates)}')
             else:
-                print(f'  -->  No new deploying model prediction for {model}')
+                print(f'  -->  No new recalculating model prediction for {model}')
+            if md.deploy_required:
+                if md._current_deploy_dates:
+                    print(f'  -->  Finish deploying model prediction for {model} , len={len(md._current_deploy_dates)}')
+                else:
+                    print(f'  -->  No new deploying model prediction for {model}')
         return md

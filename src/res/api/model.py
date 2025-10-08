@@ -63,8 +63,16 @@ class ModelAPI:
         with Logger.EnclosedMessage(' prepare predict data '):
             cls.prepare_predict_data()
 
-        with Logger.EnclosedMessage(' update factors '):
+        with Logger.EnclosedMessage(' update predictors '):
             cls.Predictor.update()
+
+    @classmethod
+    def recalculate_preds(cls , start_dt = None , end_dt = None):
+        '''
+        Recalculate factors for prediction models (registered models) for both laptop and server:
+        '''
+        with Logger.EnclosedMessage(' recalculate all predictors '):
+            cls.Predictor.recalculate(start_dt = start_dt , end_dt = end_dt)
     
     @classmethod
     def test_models(cls , module = 'tra_lstm' , data_types = 'day'):
@@ -125,8 +133,7 @@ class ModelAPI:
                                  stage = 0 , resume = 0 , checkname= -1)
     
     @classmethod
-    def test_model(cls , model_name : str | None = None , short_test : bool | None = None , verbosity : int | None = 2 , 
-                   **kwargs):
+    def test_model(cls , model_name : str | None = None , short_test : bool | None = None , verbosity : int | None = 2 , **kwargs):
         '''
         test a existing model
         model_name :

@@ -55,8 +55,12 @@ class BaseCalculator(ABC):
         if self.calc_rslt.empty: 
             self.figs = {}
             return self
-        figs = self.plotter()(self.calc_rslt , show = show , title_prefix = self.title_prefix)
-        self.figs = {'all':figs} if isinstance(figs , Figure) else figs
+        try:
+            figs = self.plotter()(self.calc_rslt , show = show , title_prefix = self.title_prefix)
+            self.figs = {'all':figs} if isinstance(figs , Figure) else figs
+        except Exception as e:
+            print(f"plot {self.__class__.__name__} error: {e}")
+            self.figs = {}
         if verbosity > 0: 
             print(f'    --->{self.__class__.__name__} plot Finished!')
         return self

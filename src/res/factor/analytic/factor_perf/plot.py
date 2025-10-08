@@ -8,6 +8,7 @@ def plot_factor_frontface(data : pd.DataFrame , show = False , title_prefix = 'F
     with plot.PlotFactorData(data , drop = [] , title = f'{title_prefix} Front Face' , show=show) as (df , fig):
         df = df.reset_index().drop(columns=['sum']).set_index('factor_name').sort_values(['factor_name','benchmark']).\
             rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
+        
         plot.plot_table(df , flt_cols = ['IC_avg' , 'IC_std' , 'IC(ann)' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 
                         capitalize=False , stripe_by='factor_name')
     return fig

@@ -605,3 +605,10 @@ class StockFactor:
         for task_name in task_list: 
             self.analyze(task_name , **kwargs)
         return self
+
+    @staticmethod
+    def fillna(df : pd.DataFrame , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop') -> pd.DataFrame:
+        """
+        fill na values of the factor data
+        """
+        return fillna(df , fill_method = fill_method)

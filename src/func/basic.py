@@ -409,6 +409,26 @@ def index_union(idxs , min_value = None , max_value = None) -> tuple[np.ndarray 
     pos_old = tuple(np.array([]) if v is None else v[2] for v in inter)
     return new_idx , pos_new , pos_old
 
+def index_stack(idxs , min_value = None , max_value = None) -> tuple[np.ndarray , tuple[np.ndarray , ...] , tuple[np.ndarray , ...]]:
+    new_idx : np.ndarray | Any = None
+    for i , idx in enumerate(idxs):
+        if i == 0 or idx is None or new_idx is None:
+            new_idx = new_idx if idx is None else idx
+        elif np.isin(idx , new_idx).all():
+            ...
+        elif not np.isin(new_idx , idx).any():
+            new_idx = np.concatenate([new_idx , idx])
+        else:
+            raise ValueError(f'idx {idx} is not a subset of new_idx {new_idx} , index_stack inputs must be identical or completely distinct index')
+    if min_value is not None: 
+        new_idx = new_idx[new_idx >= min_value]
+    if max_value is not None: 
+        new_idx = new_idx[new_idx <= max_value]
+    inter   = [np.array([]) if idx is None else np.intersect1d(new_idx , idx , return_indices=True) for idx in idxs]
+    pos_new = tuple(np.array([]) if v is None else v[1] for v in inter)
+    pos_old = tuple(np.array([]) if v is None else v[2] for v in inter)
+    return new_idx , pos_new , pos_old
+
 def ask_for_confirmation(prompt ='' , timeout = 10 , recurrent = 1 , proceed_condition = lambda x:True , print_function = print):
     assert isinstance(prompt , str) , prompt
     userText_list , userText_cond = [] , []

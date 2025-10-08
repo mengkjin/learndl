@@ -7,7 +7,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from src.func import match_values , index_union
+from src.func import match_values , index_union , index_stack
 
 from .nd import NdData
 
@@ -77,23 +77,21 @@ class Stock4DData:
             
         secid   , p0s , p1s = index_union([blk.secid   for blk in blocks])
         date    , p0d , p1d = index_union([blk.date    for blk in blocks])
-        feature , p0f , p1f = index_union([blk.feature for blk in blocks])
+        feature , p0f , p1f = index_stack([blk.feature for blk in blocks])
         len_inday = blocks[0].shape[2]
         assert np.all([blk.shape[2] == len_inday for blk in blocks]) , 'blocks with different inday cannot be merged'
         p0i = p1i = np.arange(len_inday)
 
-        for i , blk in enumerate(blocks): 
-            if i == 0:
-                new_blk = blocks[0].copy().align(secid , date , feature)
-            else:
-                new_blk.values[np.ix_(p0s[i],p0d[i],p0i,p0f[i])] = blk.values[np.ix_(p1s[i],p1d[i],p1i,p1f[i])]
+        new_blk = blocks[0].copy().align(secid , date , feature)
+        for i , blk in enumerate(blocks[1:] , start = 1): 
+            new_blk.values[np.ix_(p0s[i],p0d[i],p0i,p0f[i])] = blk.values[np.ix_(p1s[i],p1d[i],p1i,p1f[i])]
 
         return new_blk
 
     def merge_others(self , others : list | Any):
         if not isinstance(others , list): 
             others = [others]
-        return self.merge([self , *others])
+        return self.merge([self , *others]).align_feature(self.feature)
     
     def as_tensor(self , asTensor = True):
         if asTensor and isinstance(self.values , np.ndarray): 

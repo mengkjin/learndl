@@ -20,7 +20,7 @@ class ScreeningPortfolioCreatorConfig:
         screen_ratio    : float = DEFAULT_SCREEN_RATIO , ratio of stocks to be screened (used as pool of top stocks)
         sorting_alpha   : tuple[str , str , str | None] = (db_src , db_key , column_name) , source and key of alpha to be used for sorting
     '''
-    screen_ratio    : float = DEFAULT_SCREEN_RATIO
+    screen_ratio    : float = 0 # DEFAULT_SCREEN_RATIO
     sorting_alpha   : tuple[str , str , str | None] | tuple[str , str] = DEFAULT_SORTING_ALPHA
     n_best          : int = 50
     turn_control    : float = 0.2
@@ -109,8 +109,8 @@ class ScreeningPortfolioCreator(PortCreator):
         screening_pool = amodel.to_dataframe(indus=True , na_indus_as = 'unknown')
         if not self.bench_port.is_emtpy(): 
             screening_pool = screening_pool.query('secid in @self.bench_port.secid').copy()
-            
-        screening_pool.loc[:, 'rankpct']   = screening_pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
+
+        screening_pool.loc[:, 'rankpct'] = screening_pool['alpha'].rank(pct = True , method = 'first' , ascending = True).fillna(0)
         screening_pool = screening_pool.query('rankpct >= @self.conf.screen_ratio')
 
         pool = self.conf.get_sorting_alpha(self.model_date)

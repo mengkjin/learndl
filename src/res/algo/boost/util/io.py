@@ -8,7 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass , field
 from typing import Any , Literal
 
-from src.func import match_values , index_union , rankic_2d , ic_2d
+from src.func import match_values , index_union , index_stack , rankic_2d , ic_2d
 
 __all__ = ['BoosterOutput' , 'BoosterInput' , 'BoosterWeightMethod']
 
@@ -293,7 +293,7 @@ class BoosterInput:
         
         secid   , p0s , p1s = index_union([blk.secid   for blk in blocks])
         date    , p0d , p1d = index_union([blk.date    for blk in blocks])
-        feature , p0f , p1f = index_union([blk.feature for blk in blocks])
+        feature , p0f , p1f = index_stack([blk.feature for blk in blocks])
         
         x = np.full((len(secid) , len(date) , len(feature)) , fill_value=np.nan)
         y = np.full((len(secid) , len(date)) , fill_value=np.nan)

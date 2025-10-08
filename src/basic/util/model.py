@@ -276,7 +276,7 @@ class RegisteredModel(ModelPath):
     for a registeredmodel to predict recent/history data
     model dict stored in configs/registry/update_models.yaml
     '''
-    START_DT = 20170101 if MACHINE.server else 20241101
+    START_DT = 20170101 if MACHINE.server else 20170101
     FMP_STEP = 5
     MODEL_DICT : dict[str,dict[str,Any]] = MACHINE.configs('registry' , 'registered_models')
 

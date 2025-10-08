@@ -160,6 +160,7 @@ def plot_table(df : pd.DataFrame , int_cols = None , pct_cols = None , flt_cols 
         if column_definition.name not in df.columns and column_definition.name not in df.index.names:
             column_definitions.remove(column_definition)
 
+
     tab = Table(df , textprops = {'ha':'center','fontsize':fontsize} ,  
                 cell_kw={'edgecolor':'black','linewidth': 0.2,} , 
                 column_definitions = column_definitions)

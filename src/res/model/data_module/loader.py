@@ -15,6 +15,9 @@ class BatchDataLoader:
             self.enable_tqdm()
         self.filter_dates(exclude_dates , include_dates)
 
+    def __repr__(self):
+        return f'{self.__class__.__name__}(length={len(self.loader)})'
+
     def __len__(self):  return len(self.loader)
     def __getitem__(self , i : int): return self.process(list(self.loader)[i] , i)
     def __iter__(self):
@@ -50,3 +53,10 @@ class BatchDataLoader:
         self.exclude_dates = exclude_dates
         self.include_dates = include_dates
         return self
+
+    def of_date(self , date : int):
+        assert self.data_module.config.train_sample_method == 'sequential' or self.data_module.stage != 'fit' , (self.data_module.config.train_sample_method , self.data_module.stage)
+        for batch_data in self:
+            if self.data_module.batch_date(batch_data)[0] == date:
+                return batch_data
+        raise ValueError(f'date {date} not found in loader')
