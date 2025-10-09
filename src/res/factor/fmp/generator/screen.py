@@ -115,7 +115,7 @@ class ScreeningPortfolioCreator(PortCreator):
 
         pool = self.conf.get_sorting_alpha(self.model_date)
         pool = pool.query('secid in @screening_pool.secid').copy()
-        
+
         pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
         

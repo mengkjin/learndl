@@ -20,12 +20,13 @@ def append_indus(df : pd.DataFrame):
     """
     append industry to factor dataframe
     """
-    secid = df.index.get_level_values('secid').unique().to_numpy()
-    date = df.index.get_level_values('date').unique().to_numpy()
     old_index = df.index.names
+    df = df.reset_index()
+    secid = df['secid'].unique()
+    date = df['date'].unique()
     appending = DATAVENDOR.risk_industry_exp(secid , date).to_dataframe().fillna('unknown')
     appending = pd.DataFrame(appending.idxmax(axis=1).rename('industry') , index = appending.index)
-    df = df.reset_index().merge(appending , on = ['secid','date']).set_index(old_index)
+    df = df.merge(appending , on = ['secid','date']).set_index(old_index)
     return df
 
 def append_ffmv(df : pd.DataFrame):
