@@ -45,7 +45,7 @@ from src.proj import Logger
 from src.basic import Timer
 from src.app.script_tool import ScriptTool
 
-@ScriptTool('test_streamlit' , '@port_name' , txt = 'Bye, World!' , email = False , lock_num = 2 , lock_timeout = 10)
+@ScriptTool('test_streamlit' , '@port_name' , txt = 'Bye, World!' , lock_num = 2 , lock_timeout = 10)
 def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello, World!' , start : int | None = 100 , **kwargs):
     with Logger.EnclosedMessage('main part'):
         with Timer('abc'):

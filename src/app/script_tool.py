@@ -1,8 +1,11 @@
-from typing import Any, Callable
 import inspect
+from pathlib import Path
+
+from typing import Any, Callable
+
 from src.basic import AutoRunTask
 from src.app.script_lock import ScriptLockMultiple
-from src.app.backend import BackendTaskRecorder
+from src.app.backend import BackendTaskRecorder , ScriptHeader
 
 def _get_default_args(func):
     """get default args of a function"""
@@ -12,6 +15,25 @@ def _get_default_args(func):
         for k, v in sig.parameters.items()
         if v.default is not inspect.Parameter.empty
     }
+
+def _get_caller_path(depth : int = 2):
+    """get the directory of the caller function"""
+    frame = inspect.currentframe()
+    path = None
+    try:
+        assert frame is not None , 'frame is not None'
+        caller_frame = frame
+        for _ in range(depth):
+            caller_frame = getattr(caller_frame , 'f_back')
+        assert caller_frame is not None , 'caller_frame is not None'
+        caller_info = inspect.getframeinfo(caller_frame)
+        path = Path(caller_info.filename).absolute()
+    except Exception as e:
+        print(f'get caller directory failed: {e}')
+    finally:
+        del frame
+    return path
+
 class ScriptTool:
     """
     Tool to wrap script to be used as a task in streamlit project
@@ -42,6 +64,11 @@ class ScriptTool:
         self.task_name = task_name
         self.task_key = task_key
         self.lock_name = lock_name
+        
+        if 'email' not in kwargs and (caller_path := _get_caller_path()) is not None:
+            header = ScriptHeader.read_from_file(caller_path)
+            kwargs.update({'email' : header.email})
+
 
         self.backend_recorder = BackendTaskRecorder(**kwargs)
         self.script_lock = ScriptLockMultiple(lock_name or task_name , lock_num , lock_timeout , lock_wait_time)

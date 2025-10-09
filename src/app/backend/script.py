@@ -95,6 +95,46 @@ class ScriptHeader:
     def get_param_inputs(self):
         return ScriptParamInput.from_dict(self.parameters)
 
+    @classmethod
+    def read_from_file(cls , path : Path , verbose=False, include_starter='#', exit_starter='', ignore_starters=('#!', '# coding:')):
+        yaml_lines: list[str] = []
+        try:
+            with open(path, 'r', encoding='utf-8') as file:
+                for line in file:
+                    stripped_line = line.strip()
+                    if stripped_line.startswith(ignore_starters): 
+                        continue
+                    elif stripped_line.startswith(include_starter):
+                        yaml_lines.append(stripped_line)
+                    elif stripped_line.startswith(exit_starter):
+                        break
+
+            yaml_str = '\n'.join(line.removeprefix(include_starter) for line in yaml_lines)
+            header = cls(**(yaml.safe_load(yaml_str) or {}))
+        except FileNotFoundError:
+            header = cls(
+                disabled = True, 
+                content = f'file not found : {path}', 
+                description = 'file not found'
+            )
+        except yaml.YAMLError as e:
+            header = cls(
+                disabled = True, 
+                content = f'YAML parsing error : {e}', 
+                description = 'YAML parsing error'
+            )
+        except Exception as e:
+            header = cls(
+                disabled = True, 
+                content = f'read file error : {e}', 
+                description = 'read file error'
+            )
+
+        if not header.description: 
+            header.description = path.name
+            
+        return header
+
 @dataclass
 class ScriptParamInput:
     name: str
@@ -167,7 +207,7 @@ class ScriptRunner:
         self.path = path_item
         assert self.script.is_file() and self.script.suffix == '.py', f'{self.script} is not a python script'
         
-        self.header = self.parse_header()
+        self.header = ScriptHeader.read_from_file(self.script)
 
     def __repr__(self):
         return f"ScriptRunner(script={self.script})"
@@ -240,45 +280,6 @@ class ScriptRunner:
 '''
         return infos
         
-    def parse_header(self, verbose=False, include_starter='#', exit_starter='', ignore_starters=('#!', '# coding:')) -> ScriptHeader:
-        yaml_lines: list[str] = []
-        try:
-            with open(self.script, 'r', encoding='utf-8') as file:
-                for line in file:
-                    stripped_line = line.strip()
-                    if stripped_line.startswith(ignore_starters): 
-                        continue
-                    elif stripped_line.startswith(include_starter):
-                        yaml_lines.append(stripped_line)
-                    elif stripped_line.startswith(exit_starter):
-                        break
-
-            yaml_str = '\n'.join(line.removeprefix(include_starter) for line in yaml_lines)
-            header = ScriptHeader(**(yaml.safe_load(yaml_str) or {}))
-        except FileNotFoundError:
-            header = ScriptHeader(
-                disabled = True, 
-                content = f'file not found : {self.script}', 
-                description = 'file not found'
-            )
-        except yaml.YAMLError as e:
-            header = ScriptHeader(
-                disabled = True, 
-                content = f'YAML parsing error : {e}', 
-                description = 'YAML parsing error'
-            )
-        except Exception as e:
-            header = ScriptHeader(
-                disabled = True, 
-                content = f'read file error : {e}', 
-                description = 'read file error'
-            )
-
-        if not header.description: 
-            header.description = self.script.name
-            
-        return header
-
     def build_task(self , queue : TaskQueue | None = None , mode: Literal['shell', 'os'] = 'shell' , **kwargs) -> 'TaskItem':
         '''run script and return exit code (0: error, 1: success)'''
 

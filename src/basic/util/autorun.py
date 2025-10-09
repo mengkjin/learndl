@@ -205,7 +205,7 @@ class AutoRunTask:
 
     @property
     def email(self) -> bool:
-        return self.kwargs.get('email' , True)
+        return bool(self.kwargs.get('email' , True))
 
     @property
     def source(self) -> str:
