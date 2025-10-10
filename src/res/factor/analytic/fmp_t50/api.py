@@ -50,11 +50,6 @@ class FmpT50Manager(BaseTestManager):
     def update_kwargs(self , **kwargs):
         self.kwargs.update({
             'n_best' : 50 ,
-            'turn_control' : 0.1 , 
-            'buffer_zone' : 0.8 , 
-            'no_zone' : 0.5 , 
-            'indus_control' : 0.1 ,
-            'add_lag': 0 ,
         })
         self.kwargs.update(kwargs)
         return self

@@ -49,13 +49,7 @@ class FmpScreenManager(BaseTestManager):
     
     def update_kwargs(self , **kwargs):
         self.kwargs.update({
-            'screen_ratio' : 0.5 ,
-            'sorting_alpha' : ('pred' , 'gru_day_V1' , None) ,
-            'turn_control' : 0.1 , 
-            'buffer_zone' : 0.8 , 
-            'no_zone' : 0.5 , 
-            'indus_control' : 0.1 ,
-            'add_lag': 0 ,
+            'n_best' : 50 ,
         })
         self.kwargs.update(kwargs)
         return self

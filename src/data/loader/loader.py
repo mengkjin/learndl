@@ -109,7 +109,7 @@ class FactorLoader:
         factors : list[pd.DataFrame] = []
         with Timer(f' --> factor blocks reading [{self.category0} , {self.category1}]' , silent = silent):
             for calc in self.hier.iter_instance(category0 = self.category0 , category1 = self.category1):
-                df = calc.Loads(start_dt , end_dt , fillna = True)
+                df = calc.Loads(start_dt , end_dt)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
         with Timer(f' --> factor blocks merging ({len(factors)} factors)' , silent = silent): 

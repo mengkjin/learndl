@@ -20,10 +20,10 @@ class ScreeningPortfolioCreatorConfig:
         screen_ratio    : float = DEFAULT_SCREEN_RATIO , ratio of stocks to be screened (used as pool of top stocks)
         sorting_alpha   : tuple[str , str , str | None] = (db_src , db_key , column_name) , source and key of alpha to be used for sorting
     '''
-    screen_ratio    : float = 0 # DEFAULT_SCREEN_RATIO
+    screen_ratio    : float = DEFAULT_SCREEN_RATIO
     sorting_alpha   : tuple[str , str , str | None] | tuple[str , str] = DEFAULT_SORTING_ALPHA
     n_best          : int = 50
-    turn_control    : float = 0.2
+    turn_control    : float = 0.1
     buffer_zone     : float = 0.8
     no_zone         : float = 0.5
     indus_control   : float = 0.1
@@ -95,8 +95,7 @@ class ScreeningPortfolioCreator(PortCreator):
         super().__init__(name)
 
     def setup(self , print_info : bool = False , **kwargs):
-        self.conf = ScreeningPortfolioCreatorConfig.init_from(print_info = print_info , **kwargs)
-
+        self.conf = ScreeningPortfolioCreatorConfig.init_from(print_info = True , **kwargs)
         return self
     
     def parse_input(self):
@@ -105,17 +104,15 @@ class ScreeningPortfolioCreator(PortCreator):
     def solve(self):
         amodel = self.alpha_model.get_model(self.model_date)
         assert amodel is not None , f'alpha_model is not Amodel at {self.model_date}'
-
         screening_pool = amodel.to_dataframe(indus=True , na_indus_as = 'unknown')
         if not self.bench_port.is_emtpy(): 
             screening_pool = screening_pool.query('secid in @self.bench_port.secid').copy()
-
         screening_pool.loc[:, 'rankpct'] = screening_pool['alpha'].rank(pct = True , method = 'first' , ascending = True).fillna(0)
         screening_pool = screening_pool.query('rankpct >= @self.conf.screen_ratio')
-
+        
         pool = self.conf.get_sorting_alpha(self.model_date)
         pool = pool.query('secid in @screening_pool.secid').copy()
-
+        
         pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)
         
