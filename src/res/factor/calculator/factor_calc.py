@@ -171,7 +171,10 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
     def load_factor(self , date : int) -> pd.Series:
         """load factor value of a given date"""
         df = DB.load('factor' , self.factor_name , date , verbose = False)
-        df = pd.Series() if df.empty else df.set_index('secid').loc[:,self.factor_name]
+        if df.empty:
+            df = pd.Series()
+        else:
+            df = df.set_index('secid').loc[:,self.factor_name]
         return df
 
     def eval_factor(self , date : int , verbose : bool = False) -> pd.Series:
@@ -195,7 +198,8 @@ class StockFactorCalculator(metaclass=_StockFactorCalculatorMeta):
             return False
         df = self.calc_factor(date)
         df = self.validate_value(df , date , strict = strict_validation)
-        saved = DB.save(df.rename(self.factor_name).to_frame() , 'factor' , self.factor_name , date , overwrite)
+        df = df.rename(self.factor_name).to_frame().reset_index()
+        saved = DB.save(df , 'factor' , self.factor_name , date , overwrite)
         return saved
 
     @classmethod

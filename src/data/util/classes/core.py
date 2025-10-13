@@ -606,3 +606,20 @@ class ModuleData:
         for path in folder.iterdir():
             if path.is_file() and int(path.stem) < date:
                 path.unlink()
+
+    @classmethod
+    def purge_all(cls):
+        with open(PATH.datacache.joinpath('cache_key.json') , 'r') as f:
+            cache_key_dict = json.load(f)
+        for key , value in cache_key_dict.items():
+            data_type_list = value['content']
+            data_cache_key = key
+            assert data_cache_key == cls.datacache_key(data_type_list) , (data_cache_key, cls.datacache_key(data_type_list))
+            folder = PATH.datacache.joinpath(data_cache_key)
+            files = list(folder.iterdir())
+            if not files:
+                continue
+            latest_file_path = max([int(f.stem) for f in files])
+            for file in files:
+                if int(file.stem) < latest_file_path:
+                    file.unlink()

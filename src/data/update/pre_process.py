@@ -124,7 +124,7 @@ def select_processor(key : str) -> TypePreProcessor:
     return getattr(inspect.getmodule(select_processor) , f'pp_{key.lower()}')()
 
 class pp_y(TypePreProcessor):
-    def block_loaders(self):
+    def block_loaders(self) -> dict[str,BlockLoader]:
         return {'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag']) ,
                 'risk' : BlockLoader('models', 'tushare_cne5_exp', [*CONF.Factor.RISK.indus, 'size'])}
     def final_feat(self): return None
@@ -148,13 +148,13 @@ class pp_y(TypePreProcessor):
 
         return data_block
 class pp_day(TypePreProcessor):
-    def block_loaders(self): 
+    def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'day' : BlockLoader('trade_ts', 'day', ['adjfactor', *self.TRADE_FEAT])}
     def final_feat(self): return self.TRADE_FEAT
     def process(self , blocks): return blocks['day'].adjust_price()
     
 class pp_15m(TypePreProcessor):
-    def block_loaders(self): 
+    def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'15m' : BlockLoader('trade_ts', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,
                 'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
     def final_feat(self): return self.TRADE_FEAT
@@ -170,7 +170,7 @@ class pp_15m(TypePreProcessor):
         return data_block
     
 class pp_30m(TypePreProcessor):
-    def block_loaders(self): 
+    def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'30m' : BlockLoader('trade_ts', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,            
                 'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
     def final_feat(self): return self.TRADE_FEAT
@@ -187,7 +187,7 @@ class pp_30m(TypePreProcessor):
         return data_block
     
 class pp_60m(TypePreProcessor):
-    def block_loaders(self): 
+    def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'60m' : BlockLoader('trade_ts', '60min', ['close', 'high', 'low', 'open', 'volume', 'vwap']) ,            
                 'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl', 'preclose'])}
     def final_feat(self): return self.TRADE_FEAT
@@ -204,7 +204,7 @@ class pp_60m(TypePreProcessor):
     
 class pp_week(TypePreProcessor):
     WEEKDAYS = 5
-    def block_loaders(self): 
+    def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.TRADE_FEAT])}
     def final_feat(self): return self.TRADE_FEAT
     def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , **kwargs):
@@ -228,13 +228,13 @@ class pp_week(TypePreProcessor):
         return data_block
     
 class pp_style(TypePreProcessor):
-    def block_loaders(self): 
+    def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'style' : BlockLoader('models', 'tushare_cne5_exp', CONF.Factor.RISK.style)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['style']
 
 class pp_indus(TypePreProcessor):
-    def block_loaders(self): 
+    def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'indus' : BlockLoader('models', 'tushare_cne5_exp', CONF.Factor.RISK.indus)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['indus']
@@ -263,7 +263,7 @@ class FactorPreProcessor(TypePreProcessor):
     category0 = _ClassProperty('category0')
     category1 = _ClassProperty('category1')    
 
-    def block_loaders(self): 
+    def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'factor' : FactorLoader(self.category1)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['factor']

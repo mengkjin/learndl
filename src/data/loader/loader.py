@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 
 from dataclasses import dataclass
@@ -7,7 +6,7 @@ from src.proj import PATH
 from src.basic import Timer , DB , CONF
 from src.data.util import DataBlock
 
-@dataclass(slots=True)
+@dataclass
 class BlockLoader:
     """
     Loader for block data of db_src , db_key
@@ -16,13 +15,14 @@ class BlockLoader:
         block = loader.load(start_dt = 20250101 , end_dt = 20250331)
     """
     db_src  : str
-    db_key  : str | list
+    db_key  : str | list | None = None
     feature : list | None = None
     use_alt : bool = True
 
     def __post_init__(self):
         assert self.src_path.exists() , f'{self.src_path} not exists'
-        assert np.isin(self.db_key , [p.name for p in self.src_path.iterdir()]).all() , f'{self.db_key} not all in {self.src_path}'
+        for key in self.iter_keys():
+            assert self.src_path.joinpath(key).exists() , f'{key} not exists in {self.src_path}'
 
     @property
     def src_path(self):
@@ -52,13 +52,14 @@ class BlockLoader:
                 block = DataBlock.merge(sub_blocks)
         return block
 
-    def iter_keys(self):
-        if isinstance(self.db_key , list):
+    def iter_keys(self) -> list[str]:
+        if self.db_key is None:
+            return []
+        elif isinstance(self.db_key , list):
             return self.db_key
         else:
             return [self.db_key]
-
-@dataclass(slots=True)
+@dataclass
 class FrameLoader:
     """
     Loader for frame data of db_src , db_key
@@ -84,25 +85,20 @@ class FrameLoader:
         df = DB.load_multi(self.db_src , self.db_key , start_dt=start_dt , end_dt=end_dt , use_alt = self.use_alt)
         return df
     
-@dataclass
-class FactorLoader:
+class FactorLoader(BlockLoader):
     """
     Loader for factor data given category1
     example:
         loader = FactorLoader(category1 = 'quality')
         df = loader.load(start_dt = 20250101 , end_dt = 20250331)
     """
-    category1  : str
-
-    def __post_init__(self):
+    def __init__(self , category1 : str):
+        super().__init__('factor')
+        self.category1 = category1
         CONF.Factor.STOCK.validate_categories(self.category0 , self.category1)
 
         from src.res.factor.calculator import StockFactorHierarchy
         self.hier = StockFactorHierarchy()
-    
-    def load(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> DataBlock:
-        """Load factor data , alias for load_block"""
-        return self.load_block(start_dt , end_dt , silent = silent)
 
     def load_block(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> DataBlock:
         """Load factor data , alias for load"""
