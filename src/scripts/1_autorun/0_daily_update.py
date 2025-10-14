@@ -25,9 +25,13 @@ def main(**kwargs):
             ModelAPI.update()
             TradingAPI.update()
             NotificationAPI.proceed()
-            TaskScheduler.run_all_tasks()
+            TaskScheduler.print_machine_tasks()
+            
+def run_schedulers():
+    TaskScheduler.run_machine_tasks()
         
 if __name__ == '__main__':
     main()
+    run_schedulers()
         
     

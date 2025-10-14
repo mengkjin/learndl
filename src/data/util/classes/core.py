@@ -617,9 +617,8 @@ class ModuleData:
             assert data_cache_key == cls.datacache_key(data_type_list) , (data_cache_key, cls.datacache_key(data_type_list))
             folder = PATH.datacache.joinpath(data_cache_key)
             files = list(folder.iterdir())
-            if not files:
+            if len(files) <= 1:
                 continue
-            latest_file_path = max([int(f.stem) for f in files])
-            for file in files:
-                if int(file.stem) < latest_file_path:
-                    file.unlink()
+            files.sort(key = lambda x: int(x.stem))
+            for file in files[:-1]:
+                file.unlink()

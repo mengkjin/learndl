@@ -1,5 +1,5 @@
 from src.proj import Logger
-from src.data import CoreDataUpdater , SellsideDataUpdater , OtherDataUpdater , DataPreProcessor
+from src.data import CoreDataUpdater , SellsideDataUpdater , OtherDataUpdater , DataPreProcessor , ModuleData
 # from src.data import JSDataUpdater
 from src.res.factor.api import FactorModelUpdater , FactorCalculatorAPI
 from src.basic import CALENDAR
@@ -34,6 +34,10 @@ class DataAPI:
         # update stock factor
         with Logger.EnclosedMessage(' update stock factors '):
             FactorCalculatorAPI.update()
+
+        with Logger.EnclosedMessage(' purge old data cache '):
+            ModuleData.purge_all()
+
 
     @staticmethod
     def update_rollback(rollback_date : int):

@@ -1,6 +1,6 @@
 import src.res.model.model_module.application as app
 from src.proj import PATH , MACHINE , Logger
-from src.data import DataPreProcessor , ModuleData
+from src.data import DataPreProcessor
 
 class ModelAPI:
     Trainer    = app.ModelTrainer
@@ -37,9 +37,6 @@ class ModelAPI:
         if MACHINE.server:
             with Logger.EnclosedMessage(' reconstruct train data '):
                 cls.reconstruct_train_data()
-
-            with Logger.EnclosedMessage(' purge old data cache '):
-                ModuleData.purge_all()
 
             with Logger.EnclosedMessage(' update models '):
                 cls.Trainer.update_models()

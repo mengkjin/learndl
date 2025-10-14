@@ -33,6 +33,9 @@ class ScheduledTask:
         else:
             raise ValueError(f'machine {self.operator_machine} time_key {self.time_key} already exists')
 
+    def __repr__(self):
+        return f'ScheduledTask(operator_machine={self.operator_machine},cmdline={self.cmdline},distribution_time={self.distribution_time},time_index={self.time_index})'
+
     @classmethod
     def new_task(cls, operator_machine : str, cmdline : str):
         """add new task"""
@@ -114,30 +117,45 @@ class ScheduledTask:
             Logger.error("stop executing subsequent commands\n")
         return self
 
+    @classmethod
+    def get_all_tasks(cls):
+        """get all the tasks"""
+        cls._instances.clear()
+        [cls.load_task(file) for file in root_path.rglob('*.await')]
+        return cls._instances 
+
 class TaskScheduler:
+    machine_name = 'mengkjin-server'
     def __bool__(self):
         return _share_folder is not None
 
     @staticmethod
-    def get_all_tasks():
+    def get_machine_tasks() -> dict[str , 'ScheduledTask']:
         """get all the tasks"""
-        ScheduledTask._instances.clear()
-        return [ScheduledTask.load_task(file) for file in root_path.rglob('*.await')]       
+        SharedSync.sync()
+        return ScheduledTask.get_all_tasks().get(MACHINE.name , {})
 
     @classmethod
     def add_task(cls, machine_name : str = 'mengkjin-server', cmdline : str = ''):
-        cls.get_all_tasks()
-        assert machine_name in MACHINE.machine_names() , f'machine_name {machine_name} not in {MACHINE.machine_names()}'
         if not cmdline:
             return
+        cls.get_machine_tasks()
         return ScheduledTask.new_task(machine_name, cmdline)
 
     @classmethod
-    def run_all_tasks(cls):
+    def print_machine_tasks(cls):
+        """print all the tasks of the machine"""
+        tasks = cls.get_machine_tasks()
+        for task in tasks.values():
+            Logger.warning(f'{task} awaits to be executed')
+        return tasks
+
+    @classmethod
+    def run_machine_tasks(cls):
+        """run all the tasks of the machine"""
         SharedSync.sync()
-        cls.get_all_tasks()
-        tasks = list(ScheduledTask._instances.get(MACHINE.name , {}).values())
-        for task in tasks:
+        tasks = cls.get_machine_tasks()
+        for task in tasks.values():
             task.run()
 
     @classmethod
