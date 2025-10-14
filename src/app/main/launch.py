@@ -111,7 +111,7 @@ def intro_links():
                           help = f""":blue[**{page['label'].title()}**] - {page['help']}"""):
                 st.switch_page(page['page'])
 
-def script_links():
+def script_links(show_dir = False):
     with st.container(key = "sidebar-script-links"):
         def subsubheader(x): 
             st.write(f"""
@@ -125,9 +125,10 @@ def script_links():
         
         group = ''
         for page in script_pages().values():
-            if page['group'] != group:
+            if show_dir and page['group'] != group:
                 subsubheader(page['group'].upper() + ' Scripts')
-            st.page_link(page['page'] , label = page['label'] , icon = page['icon'] , help = page['help'])
+            parts : list[str] = page['label'].split(' > ')
+            st.page_link(page['page'] , label = ' > '.join([f'**{parts[0].upper()}**' , *parts[1:]]) , icon = page['icon'] , help = page['help'])
             group = page['group']
   
 def main():

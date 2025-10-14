@@ -1,32 +1,34 @@
 #! /usr/bin/env User/mengkjin/workspace/learndl/.venv/bin/python
 # coding: utf-8
 # author: jinmeng
-# date: 2024-11-27
-# description: Update Factors Within
-# content: 更新区间内所有未更新的因子数据
+# date: 2025-10-08
+# description: Recalculate All Pred
+# content: 重新计算所有预测数据
 # email: True
 # mode: shell
 # parameters:
 #   start : 
 #       type : int
 #       desc : start yyyymmdd
-#       min : 20250101
+#       min : 20170101
 #       max : 99991231
 #       required : True
+#       default : 20170101
 #   end : 
 #       type : int
 #       desc : end yyyymmdd
-#       min : 20250101
+#       min : 20170101
 #       max : 99991231
 #       required : True
+#       default : 20241231
 
-from src.res.factor.api import FactorCalculatorAPI
+
 from src.app.script_tool import ScriptTool
+from src.res.api import ModelAPI
 
-@ScriptTool('update_factors_all' , lock_name = 'update_factors')
+@ScriptTool('recalc_preds')
 def main(start : int | None = None , end : int | None = None , **kwargs):
-    assert start is not None and end is not None , 'start and end are required'
-    FactorCalculatorAPI.update(start = int(start) , end = int(end) , groups_in_one_update = None , verbosity = 2)
-        
+    ModelAPI.recalculate_preds(start_dt = start , end_dt = end)
+    
 if __name__ == '__main__':
     main()

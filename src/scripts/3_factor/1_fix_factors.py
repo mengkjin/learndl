@@ -15,7 +15,7 @@
 from src.res.factor.api import FactorCalculatorAPI
 from src.app.script_tool import ScriptTool
 
-@ScriptTool('update_factors_fix' , lock_name = 'update_factors')
+@ScriptTool('fix_factors' , lock_name = 'update_factors')
 def main(factor_names : str | None = None , **kwargs):
     assert factor_names is not None , 'factor_names is required'
     FactorCalculatorAPI.fix(factors = [s.strip() for s in factor_names.split(',')] , verbosity = 2)

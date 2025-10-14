@@ -219,10 +219,11 @@ class FactorUpdateJobManager:
         self.process_jobs(verbosity)
 
     @classmethod
-    def recalculate(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None) -> None:
+    def recalculate(cls , verbosity : int = 1 , groups_in_one_update : int | None = 100 , start : int | None = None , end : int | None = None) -> None:
         '''update factor data according'''
+        assert start is not None and end is not None , 'start and end are required for recalculate factors'
         self = cls()
-        self.collect_jobs(start = start , end = end , all_factors = True , overwrite = True)
+        self.collect_jobs(start = start , end = end , all_factors = True , overwrite = True , groups_in_one_update = groups_in_one_update)
         self.process_jobs(verbosity , overwrite = True)
 
     @classmethod

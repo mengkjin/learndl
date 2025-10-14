@@ -96,12 +96,12 @@ def show_script_structure():
                 body = f"""
                 <div style="
                     font-size: 18px;
-                    font-weight: bold;
+                    font-weight: 900px;
                     margin-top: 5px;
                     margin-bottom: 5px;
                     letter-spacing: 3px;
                     margin-left: {(item.level)*45}px;
-                ">📂 {folder_name}</div>
+                ">📂 {folder_name.upper()}</div>
                 """       
                 st.markdown(body , unsafe_allow_html=True)
 

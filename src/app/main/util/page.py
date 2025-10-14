@@ -32,9 +32,13 @@ PAGE_HELPS = {
 }
 
 SCRIPT_ICONS = {
-    'check' : ':material/question_mark:' ,
+    'check'   : ':material/question_mark:' ,
     'autorun' : ':material/schedule:' ,
-    'research' : ':material/experiment:' ,
+    'data'    : ':material/database:' ,
+    'factor'  : ':material/graph_3:' ,
+    'train'   : ':material/model_training:' ,
+    'test'    : ':material/experiment:' ,
+    'predict' : ':material/online_prediction:' ,
     'trading' : ':material/payments:',
 }
 
