@@ -1,9 +1,9 @@
 # do not use relative import in this file because it will be running in top-level directory
 import numpy as np
 
-from src.data.download.tushare.basic import DateFetcher , ts_code_to_secid
+from src.data.download.tushare.basic import DayFetcher , ts_code_to_secid
 
-class DailyQuote(DateFetcher):
+class DailyQuote(DayFetcher):
     """Daily Quote"""
     DB_KEY = 'day'
     def get_data(self , date : int):
@@ -46,7 +46,7 @@ class DailyQuote(DateFetcher):
             'status', 'limit', 'pctchange', 'preclose', 'turn_tt','turn_fl', 'turn_fr']]
         return trade
     
-class DailyValuation(DateFetcher):
+class DailyValuation(DayFetcher):
     """Daily Valuation"""
     DB_KEY = 'day_val'   
     def get_data(self , date : int):
@@ -56,7 +56,7 @@ class DailyValuation(DateFetcher):
         val = ts_code_to_secid(val).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return val
     
-class DailyMoneyFlow(DateFetcher):
+class DailyMoneyFlow(DayFetcher):
     """Daily Money Flow"""
     START_DATE = 20100101
     DB_KEY = 'day_moneyflow'  
@@ -65,7 +65,7 @@ class DailyMoneyFlow(DateFetcher):
         mf = ts_code_to_secid(mf).set_index('secid').sort_index().reset_index().drop(columns='trade_date')
         return mf
     
-class DailyLimit(DateFetcher):
+class DailyLimit(DayFetcher):
     """Daily Price Limit Infomation"""
     START_DATE = 20070101
     DB_KEY = 'day_limit'       

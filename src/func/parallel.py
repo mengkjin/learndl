@@ -24,17 +24,31 @@ def get_method(method , max_workers : int = MAX_WORKERS) -> int:
     else:
         raise ValueError(f'method should be int or str , but got {type(method)}')
 
-def parallel(func : Callable , args : Iterable , keys : Iterable | None = None , 
+def try_func_call(result_dict : dict , key , func : Callable , 
+                  args : Iterable | None = None , kwargs : dict[Any , Any] | None = None ,
+                  catch_errors : tuple[type[Exception],...] =  () , ) -> Any:
+    try:
+        args = args or ()
+        kwargs = kwargs or {}
+        result_dict[key] = func(*args , **kwargs)
+    except catch_errors as e:
+        print(f'{key} : {args} generated an exception: {e}')
+    except Exception as e:
+        print(f'{key} : {args} generated an exception:')
+        raise e
+
+def parallel(func : Callable , args : Iterable , kwargs : dict[Any , Any] | None = None , keys : Iterable | None = None , 
              method : str | int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , 
              max_workers = MAX_WORKERS , ignore_error = False):
     method = get_method(method , max_workers)
     result : dict[Any , Any] = {}
     iterance = enumerate(args) if keys is None else zip(keys , args)
     catch_errors = (Exception , ) if ignore_error else ()
+    kwargs = kwargs or {}
 
-    def try_func(result : dict , key , func : Callable , *args : Any):
+    def try_func(result : dict , key , func : Callable , *args : Any , **kwargs : Any):
         try:
-            result[key] = func(*args)
+            result[key] = func(*args , **kwargs)
         except catch_errors as e:
             print(f'{key} : {args} generated an exception: {e}')
         except Exception as e:
@@ -43,12 +57,30 @@ def parallel(func : Callable , args : Iterable , keys : Iterable | None = None ,
         
     if method == 0:
         for key , arg in iterance:
-            try_func(result , key , func , arg)
+            try_func(result , key , func , arg , **kwargs)
     else:
         PoolExecutor = ProcessPoolExecutor if method == 2 else ThreadPoolExecutor
         with PoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(func, arg):(key , arg) for key , arg in iterance}
+            futures = {pool.submit(func, arg , **kwargs):(key , arg) for key , arg in iterance}
             for future in as_completed(futures):
-                key , arg = futures[future]
-                try_func(result , key , future.result)
+                try_func(result , futures[future][0] , future.result)
+    return result
+
+def parallels(func_calls : Iterable[tuple[Callable , Iterable | None , dict[str , Any] | None]] , keys : Iterable | None = None , 
+              method : str | int | bool | Literal['forloop' , 'thread' , 'process'] = 'thread' , 
+              max_workers = MAX_WORKERS , ignore_error = False):
+    method = get_method(method , max_workers)
+    result : dict[Any , Any] = {}
+    iterance = enumerate(func_calls) if keys is None else zip(keys , func_calls)
+    catch_errors = (Exception , ) if ignore_error else ()
+        
+    if method == 0:
+        for key , (func , args , kwargs) in iterance:
+            try_func_call(result , key , func , args , kwargs , catch_errors = catch_errors)
+    else:
+        PoolExecutor = ProcessPoolExecutor if method == 2 else ThreadPoolExecutor
+        with PoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(func, args , kwargs):key for key , (func , args , kwargs) in iterance}
+            for future in as_completed(futures):
+                try_func_call(result , futures[future] , future.result , catch_errors = catch_errors)
     return result

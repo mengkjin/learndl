@@ -97,14 +97,12 @@ class FactorLoader(BlockLoader):
         self.category1 = category1
         CONF.Factor.STOCK.validate_categories(self.category0 , self.category1)
 
-        from src.res.factor.calculator import StockFactorHierarchy
-        self.hier = StockFactorHierarchy()
-
     def load_block(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> DataBlock:
         """Load factor data , alias for load"""
         factors : list[pd.DataFrame] = []
+        from src.res.factor.calculator import FactorCalculator
         with Timer(f' --> factor blocks reading [{self.category0} , {self.category1}]' , silent = silent):
-            for calc in self.hier.iter_instance(category0 = self.category0 , category1 = self.category1):
+            for calc in FactorCalculator.iter_calculators(category0 = self.category0 , category1 = self.category1):
                 df = calc.Loads(start_dt , end_dt)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)

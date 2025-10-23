@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from src.proj import MACHINE
-from src.data.download.tushare.basic import ts_code_to_secid , InfoFetcher , TushareFetcher , DateFetcher
+from src.data.download.tushare.basic import ts_code_to_secid , InfoFetcher , TushareFetcher , DayFetcher
 
 class FundInfo(InfoFetcher):
     """mutual fund info"""
@@ -50,7 +50,7 @@ class FundPortfolioFetcher(TushareFetcher):
         df = df.reset_index(drop=True)
         return df
 
-class ETFDailyQuote(DateFetcher):
+class ETFDailyQuote(DayFetcher):
     """ETF daily quote"""
     START_DATE = 20180101 if MACHINE.server else 20241215
     DB_KEY = 'etf_day'

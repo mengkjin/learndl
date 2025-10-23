@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from src.proj import MACHINE
-from src.data.download.tushare.basic import InfoFetcher , DateFetcher
+from src.data.download.tushare.basic import InfoFetcher , DayFetcher
 
 class FuturesCalendar(InfoFetcher):
     """futures calendar"""
@@ -33,7 +33,7 @@ class FuturesBasic(InfoFetcher):
         df = pd.concat(dfs)
         return df
 
-class FuturesDailyQuote(DateFetcher):
+class FuturesDailyQuote(DayFetcher):
     """futures daily quote"""
     START_DATE = 20180101 if MACHINE.server else 20241215
     DB_KEY = 'fut_day'

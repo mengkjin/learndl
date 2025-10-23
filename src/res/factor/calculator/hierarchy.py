@@ -1,19 +1,17 @@
 import pandas as pd
-from importlib import import_module
 
 from itertools import combinations
 from typing import Generator , Iterator , Type
 
-from .factor_calc import StockFactorCalculator
+from .factor_calc import FactorCalculator
 
 from src.proj import PATH , MACHINE
-from src.func.dynamic_import import dynamic_members
 from src.func.parallel import parallel
 
 class StockFactorHierarchy:
     '''hierarchy of factor classes'''
     _instance = None
-    pool = StockFactorCalculator.registry
+    pool = FactorCalculator.registry
 
     def __new__(cls):
         if cls._instance is None:
@@ -43,52 +41,14 @@ class StockFactorHierarchy:
             df = cls().factor_df()
             df.to_csv(PATH.rslt_factor.joinpath('factor_list.csv'))
 
-    @staticmethod
-    def factor_filter(stock_factor_cls : Type[StockFactorCalculator] , **kwargs) -> bool:
-        '''filter factor by given attributes'''
-        conditions : list[bool] = []
-        for k , v in kwargs.items():
-            if v is None: 
-                continue
-            attr = getattr(stock_factor_cls , k)
-            if isinstance(v , str): 
-                v = v.replace('\\' , '/')
-                attr = attr.replace('\\' , '/')
-            conditions.append(attr == v)
-        return not conditions or all(conditions)
-
     def load(self):     
         '''load all factor classes from definition path'''   
-        for path in sorted(PATH.fac_def.rglob('*.py')):
-            module_name = '.'.join(path.relative_to(PATH.main).with_suffix('').parts)
-            import_module(module_name)
-
-        self.hier : dict[str , list[Type[StockFactorCalculator]]] = {}
+        FactorCalculator.import_definitions()
+        self.hier : dict[str , list[Type[FactorCalculator]]] = {}
         for obj in self.pool.values():
             if obj.level not in self.hier: 
                 self.hier[obj.level] = []
             self.hier[obj.level].append(obj)
-
-        return self
-
-    def load_old(self):     
-        '''load all factor classes from definition path'''
-        self.pool = {}   
-        self.hier = {}
-        for level_path in PATH.fac_def.iterdir():
-            if not level_path.is_dir(): 
-                continue
-            level_name = level_path.stem
-            if not level_name.startswith('level'): 
-                continue
-
-            for name , obj in dynamic_members(level_path , subclass_of = StockFactorCalculator):
-                assert name not in self.pool , f'{name} in module {obj.__module__} is duplicated'  
-                assert level_name == obj.level , f'{name} level is {obj.level} but {level_name} is expected'                      
-                self.pool[name] = obj
-                if level_name not in self.hier: 
-                    self.hier[level_name] = []
-                self.hier[level_name].append(obj)
 
         return self
 
@@ -98,11 +58,12 @@ class StockFactorHierarchy:
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
+        meta_type : Literal['market_factor' , 'factor'] | None = None
         category0 : str | None = None 
         category1 : str | None = None 
         '''
-        attr_list = ['level' , 'file_name' , 'factor_name' , 'init_date' , 'category0' , 'category1' , 'description' , 'min_date' , 'max_date']
-        iterance = self.iter_instance(**kwargs)
+        attr_list = ['level' , 'file_name' , 'factor_name' , 'init_date' , 'meta_type' , 'category0' , 'category1' , 'description' , 'min_date' , 'max_date']
+        iterance = FactorCalculator.iter_calculators(**kwargs)
         df_datas = []
         for cls in iterance: 
             attrs = [getattr(cls , a) for a in attr_list]
@@ -118,22 +79,11 @@ class StockFactorHierarchy:
         '''return a list of levels'''
         return iter(self.hier)
     
-    def iter_level_factors(self , level : str) -> Generator[Type[StockFactorCalculator] , None , None]: 
+    def iter_level_factors(self , level : str) -> Generator[Type[FactorCalculator] , None , None]: 
         '''return a list of factor classes in a given level'''
         return (cls for cls in self.hier[level])
-
-    def iter_instance(self , **kwargs) -> Generator[StockFactorCalculator , None , None]:
-        '''
-        return a list of factor instances with given attributes
-        factor_name : str | None = None
-        level : str | None = None 
-        file_name : str | None = None
-        category0 : str | None = None 
-        category1 : str | None = None 
-        '''
-        return (cls() for cls in self if self.factor_filter(cls , **kwargs))
     
-    def get_factor(self , factor_name : str) -> Type[StockFactorCalculator]:
+    def get_factor(self , factor_name : str) -> Type[FactorCalculator]:
         '''
         return a factor class by factor_name
         e.g.
@@ -149,20 +99,23 @@ class StockFactorHierarchy:
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
+        meta_type : Literal['market_factor' , 'factor'] | None = 'factor'
         category0 : str | None = None 
         category1 : str | None = None 
         '''
         
-        def calculate_factor(obj : StockFactorCalculator):
+        def calculate_factor(obj : FactorCalculator):
             factor_value = obj.calc_factor(date)
-            valid_ratio = factor_value.dropna().count() / len(factor_value)
+            valid_ratio = len(factor_value.dropna()) / len(factor_value)
             if verbose or valid_ratio < 0.3: 
                 print(f'{obj.factor_name} calculated , valid_ratio is {valid_ratio :.2%}')
             return factor_value
 
-        factor_names = [obj.factor_name for obj in self.iter_instance(**kwargs)]
+        kwargs = kwargs | {'meta_type' : 'factor'}
+        factor_names = [obj.factor_name for obj in FactorCalculator.iter_calculators(**kwargs)]
         factor_values : dict[str , pd.Series] = \
-            parallel(calculate_factor , self.iter_instance(**kwargs) , factor_names , multi_thread , ignore_error = ignore_error)
+            parallel(calculate_factor , FactorCalculator.iter_calculators(**kwargs) , 
+                     keys = factor_names , method = multi_thread , ignore_error = ignore_error)
         self.calc_factor_values = factor_values
 
         if check_variation:

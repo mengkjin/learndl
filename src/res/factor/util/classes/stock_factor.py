@@ -208,7 +208,7 @@ class StockFactor:
         factor.eval_ic()
         factor.eval_group_perf()
     """
-    def __init__(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' , normalized = False , step = None):
+    def __init__(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series|pd.DataFrame]' , normalized = False , step = None):
         self.update(factor , normalized , step)
         InstanceRecord.update_factor(self)
 
@@ -218,7 +218,14 @@ class StockFactor:
     def __call__(self , benchmark):
         return self.within(benchmark)
 
-    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series]' , normalized = False , step = None):
+    @property
+    def empty(self) -> bool:
+        """
+        return True if the factor is empty
+        """
+        return self.prior_input.empty
+
+    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series|pd.DataFrame]' , normalized = False , step = None):
         """
         update the factor data
         """
@@ -226,7 +233,8 @@ class StockFactor:
         if isinstance(factor , StockFactor):
             factor = factor.prior_input
         elif isinstance(factor , dict):
-            factor = pd.concat([f.to_frame().assign(date = d) for d , f in factor.items() if not f.empty])
+            factor = pd.concat([(f.to_frame() if isinstance(f , pd.Series) else f).assign(date = d) 
+                                for d , f in factor.items() if not f.empty])
         elif isinstance(factor , pd.Series):
             factor = factor.to_frame()
 
@@ -234,12 +242,13 @@ class StockFactor:
         self._blk : DataBlock | Any = None
 
         if isinstance(factor , pd.DataFrame):
-            if 'date' not in factor.index.names: 
-                factor = factor.set_index('date' , append=True)
-            if 'secid' not in factor.index.names: 
-                factor = factor.set_index('secid' , append=True)
-            if None in factor.index.names: 
-                factor = factor.reset_index([None] , drop=True)
+            if not factor.empty:
+                if 'date' not in factor.index.names: 
+                    factor = factor.set_index('date' , append=True)
+                if 'secid' not in factor.index.names: 
+                    factor = factor.set_index('secid' , append=True)
+                if None in factor.index.names: 
+                    factor = factor.reset_index([None] , drop=True)
             self._df = factor
         else:
             self._blk = factor
@@ -467,7 +476,9 @@ class StockFactor:
                 df = self.frame_with_cols(indus = True , fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
                 def df_ic(subdf : pd.DataFrame , **kwargs):
                     return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type)
-                ic = df.groupby(['date' , 'industry']).apply(df_ic , include_groups = False).rename_axis('factor_name',axis='columns')
+                ic = df.groupby(['date' , 'industry']).apply(df_ic , include_groups = False).\
+                    rename_axis('factor_name',axis='columns').reset_index(drop=False).\
+                    melt(id_vars = ['date' , 'industry'] , var_name = 'factor_name' , value_name = 'ic_indus')
             self.stats['ic_indus'] = (params , ic)
         return self.stats['ic_indus'][1]
     
@@ -527,6 +538,34 @@ class StockFactor:
                 coverage[factor_name] = (coverage[factor_name] / benchmark_size).clip(lower=0 , upper=1)
             self.stats['coverage'] = (params , coverage)
         return self.stats['coverage'][1]
+
+    def time_series_stats(self , nday : int = 1 , lag : int = 1) -> pd.DataFrame:
+        """
+        evaluate the period time series stats of the factor
+        """
+        ic = self.eval_ic(nday, lag , ic_type = 'pearson').rename(columns = lambda x:f'ic')
+        rankic = self.eval_ic(nday, lag , ic_type = 'spearman').rename(columns = lambda x:f'rankic')
+        
+        gp = self.eval_group_perf(nday, lag).\
+            pivot_table(index = ['date'] , values = 'group_ret' , columns = 'group').\
+            rename(columns = lambda x:f'group@{x}')
+        ii = self.eval_ic_indus(nday, lag).\
+            pivot_table(index = ['date'] , values = 'ic_indus' , columns = 'industry').\
+            rename(columns = lambda x:f'ic_indus@{x}')
+        cv = self.coverage().rename(columns = lambda x:f'coverage')
+        return ic.join(rankic).join(gp).join(ii).join(cv)
+
+    def daily_stats(self) -> pd.DataFrame:
+        """
+        evaluate the daily stats of the factor
+        """
+        return self.time_series_stats(1, 1)
+
+    def weekly_stats(self) -> pd.DataFrame:
+        """
+        evaluate the weekly stats of the factor
+        """
+        return self.time_series_stats(5, 1)
     
     def normalize(self , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
                   weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):

@@ -1,7 +1,9 @@
 # do not use relative import in this file because it will be running in top-level directory
 import pandas as pd
 
-from src.data.download.tushare.basic import InfoFetcher , MonthFetcher , RollingFetcher , ts_code_to_secid
+from src.data.download.tushare.basic import InfoFetcher , MonthFetcher , RollingFetcher , TimeSeriesFetcher , ts_code_to_secid
+from src.basic import DB , CALENDAR
+from src.proj import PATH
 
 def index_weight_get_data(instance : RollingFetcher , index_code , start_dt , end_dt , limit = 4000):
     """get index weight data by iterate fetch"""
@@ -28,8 +30,65 @@ class IndexBasic(InfoFetcher):
             df = self.iterate_fetch(self.pro.index_basic , limit = 5000 , exchange=market.split('-')[0])
             dfs.append(df)
 
-        df = pd.concat(dfs)
+        df = pd.concat(dfs).drop_duplicates()
         return df
+
+class IndexDaily(TimeSeriesFetcher):
+    """
+    index daily quotes
+    000300.SH: 沪深300指数
+    000905.SH: 中证500指数
+    000906.SH: 中证800指数
+    000852.SH: 中证1000指数
+    932000.CSI: 中证2000指数
+    000985.CSI: 中证全指指数
+    """
+    START_DATE = 20100101
+    DB_SRC = 'index_daily_ts'
+    DB_KEY = 'ignore'
+    TARGET_INDEX = ['000300.SH' , '000905.SH' , '000906.SH' , '000852.SH' , '932000.CSI' , '000985.CSI']
+
+    def last_update_date(self) -> int:
+        target_path = DB.path(self.DB_SRC , self.TARGET_INDEX[-1])
+        ldate = PATH.file_modified_date(target_path , self.START_DATE)
+        if self.rollback_date: 
+            ldate = min(ldate , self.rollback_date)
+        return ldate
+    
+    def get_data(self , index : str , start_date : int , end_date : int):
+        if start_date > end_date:
+            return pd.DataFrame()
+        if self.rollback_date is not None:
+            start_date = min(start_date , self.rollback_date)
+        df = self.iterate_fetch(self.pro.index_daily , limit = 5000 , ts_code = index , start_date = str(start_date) , end_date = str(end_date))
+        return df
+
+    def get_update_dates(self):
+        """get update dates for rolling fetcher"""
+        assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
+        update_to = CALENDAR.update_to()
+        update = self.updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
+        return [update_to] if update else []
+
+    def update_dates(self , dates):
+        """override TushareFetcher.update_with_dates because rolling fetcher needs get data by ROLLING_SEP_DAYS intervals"""
+        if not dates:
+            return
+        end_dt = max(dates)
+
+        for index in self.TARGET_INDEX:
+            path = DB.path(self.DB_SRC , index)
+            old_df = pd.DataFrame()
+            start_date = self.START_DATE
+            if path.exists():
+                _df = pd.read_feather(path)
+                if 'trade_date' in old_df.columns:
+                    start_date = int(old_df['trade_date'].max()) + 1
+                    old_df = _df
+            df = self.get_data(index , start_date , end_dt)
+            df = pd.concat([old_df , df]).drop_duplicates(subset = ['trade_date']).sort_values('trade_date')
+            df['trade_date'] = df['trade_date'].astype(int)
+            DB.save(df , self.DB_SRC , index , verbose = True)
     
 class THSConcept(MonthFetcher):
     """Tonghuashun Concept"""

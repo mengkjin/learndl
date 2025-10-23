@@ -195,7 +195,7 @@ class DataVendor:
 
     def nday_fut_ret(self , secid : np.ndarray , date : np.ndarray , nday : int = 10 , lag : int = 2 , 
                      ret_type : Literal['close' , 'vwap'] = 'close'):
-        assert lag > 0 , f'lag must be positive : {lag}'
+        assert lag > 0 , f'lag must be positive : {lag}. If you want to use next day\'s return, set lag = 1'
         date_min = self.td(date.min() , -10).td
         date_max = self.td(int(date.max()) , nday + lag + 10).td
         self.get_returns(date_min , date_max)

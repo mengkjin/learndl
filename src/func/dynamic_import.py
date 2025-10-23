@@ -20,6 +20,17 @@ def dynamic_members(path : str | Path ,
                     subclass_of : Type | None = None ,
                     ignore_imported_members = True
                     ):
+    """
+    example:
+        for name , obj in dynamic_members(level_path , subclass_of = StockFactorCalculator):
+            assert name not in self.pool , f'{name} in module {obj.__module__} is duplicated'  
+            assert level_name == obj.level , f'{name} level is {obj.level} but {level_name} is expected'                      
+            self.pool[name] = obj
+            if level_name not in self.hier: 
+                self.hier[level_name] = []
+            self.hier[level_name].append(obj)
+    
+    """
     for module in dynamic_modules(path):
         for name , obj in inspect.getmembers(module , predicate):
             if ignore_imported_members and module.__name__ !=  getattr(obj , '__module__' , None): 

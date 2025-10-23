@@ -97,7 +97,7 @@ def calc_factor_ic_indus(factor : StockFactor , benchmark : Benchmark | str | No
                          ret_type : Literal['close' , 'vwap'] = 'close'):
     factor = factor.within(benchmark) 
     ic_indus = factor.eval_ic_indus(nday , lag , ic_type , ret_type)
-    ic_mean = ic_indus.groupby('industry').mean().stack()
+    ic_mean = ic_indus.groupby(['industry','factor_name'])['ic_indus'].mean()
     ic_std : pd.DataFrame | Any = ic_indus.groupby('industry').std()
     ic_std = ic_std.stack()
     ic_ir   = ic_mean / (ic_std + 1e-6)

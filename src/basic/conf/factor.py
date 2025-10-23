@@ -1,4 +1,5 @@
 # basic variables in factor package
+import numpy as np
 from typing import Any
 
 from src.proj import MACHINE
@@ -22,6 +23,11 @@ class FactorUpdateConfig:
     def init_date(self) -> int:
         """uniforminit date of factor update"""
         return 20110101
+    @property
+    def target_dates(self) -> np.ndarray:
+        """target dates of factor update"""
+        from src.basic import CALENDAR
+        return CALENDAR.slice(CALENDAR.td_within(self.init_date , step = self.step) , self.start , self.end)
 
 class RiskModelConfig:
     @property
@@ -119,7 +125,7 @@ class PortfolioOptimizationConfig:
 class _StockFactorDefinitionCat0:
     def __get__(self,instance,owner) -> list[str]:
         return [
-            'fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative'
+            'fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative' , 'market'
         ]
 
     def __set__(self,instance,value):
@@ -133,7 +139,8 @@ class _StockFactorDefinitionCat1:
             'high_frequency' : ['hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity'] ,
             'behavior' : ['momentum' , 'volatility' , 'correlation' , 'liquidity'] ,
             'money_flow' : ['holding' , 'trading'] ,
-            'alternative' : None
+            'alternative' : None ,
+            'market' : ['regime']
         }
     def __set__(self,instance,value):
         raise AttributeError(f'{instance.__class__.__name__} is read-only attributes')
@@ -173,6 +180,8 @@ class StockFactorDefinitionConfig:
                 return 'behavior'
             case 'holding' | 'trading':
                 return 'money_flow'
+            case 'regime':
+                return 'market'
             case _:
                 raise ValueError(f'undefined category1: {category1}')
 

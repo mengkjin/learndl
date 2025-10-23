@@ -1,26 +1,24 @@
-import time , traceback
+import time
 import numpy as np
 import pandas as pd
 import polars as pl
 
 from dataclasses import dataclass
-from typing import Any , Generator
-from threading import Lock
+from typing import Any , Generator , Callable
 
-from .factor_calc import StockFactorCalculator
-from .hierarchy import StockFactorHierarchy
+from .factor_calc import FactorCalculator
 
-from src.basic import CONF , CALENDAR , DB
+from src.basic import CONF , CALENDAR
+from src.proj import Logger
 from src.data import DATAVENDOR
-from src.func.singleton import singleton
-from src.func.parallel import parallel
+from src.func.parallel import parallel , parallels
 
 CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 
 @dataclass  
 class FactorUpdateJob:
-    '''single factor update job'''
-    calc : StockFactorCalculator
+    """single factor update job"""
+    calc : FactorCalculator
     date : int
 
     def __post_init__(self):
@@ -28,128 +26,132 @@ class FactorUpdateJob:
         
     @property
     def level(self) -> str: 
-        '''level of the factor'''
+        """level of the factor"""
         return self.calc.level
     @property
     def factor_name(self) -> str: 
-        '''name of the factor'''
+        """name of the factor"""
         return self.calc.factor_name
     @property
     def sort_key(self) -> Any: 
-        '''sort key of the job'''
+        """sort key of the job : (level , date , factor_name)"""
         return (self.level , self.date , self.factor_name)
     def do(self , show_success : bool = False , overwrite = False) -> None:
-        '''do the job'''
-        if self.date not in StockFactorCalculator.FACTOR_TARGET_DATES:
-            print(f'Warning: {self.calc.factor_string} at date {self.date} is not in StockFactorCalculator.FACTOR_TARGET_DATES')
-        prefix = f'{self.calc.factor_string} at date {self.date}'
-        try:
-            self.done = self.calc.calc_and_deploy(self.date , overwrite = overwrite)
-            if show_success:
-                print(f'{prefix} ' + 'deploy successful' if self.done else 'already there')
-        except CATCH_ERRORS as e:
-            print(f'{prefix} failed: {e}')
-            traceback.print_exc()
+        """do the job"""
+        self.done = self.calc.update(self.date , overwrite = overwrite , show_success = show_success , catch_errors = CATCH_ERRORS)
     
-@singleton
 class FactorUpdateJobManager:
-    '''manager of factor update jobs'''
-    def __init__(self , multi_thread = True):
-        self.jobs : list[FactorUpdateJob] = []
-        self.lock = Lock()
-        self.multi_thread = multi_thread
+    """manager of factor update jobs"""
+    _instance = None
+    jobs : list[FactorUpdateJob] = []
+    multi_thread : bool = True
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
     def __repr__(self):
-        return f'FactorUpdateJobs({len(self)} jobs)'
-    def __len__(self): 
-        return len(self.jobs)
-    def levels(self) -> np.ndarray: 
-        '''unique levels of the jobs'''
-        return np.unique([job.level for job in self.jobs])
-    def dates(self) -> np.ndarray:  
-        '''unique dates of the jobs'''
-        return np.unique([job.date for job in self.jobs])
-    def groups(self) -> list[tuple[str , int]]: 
-        '''groups of update jobs (by level and date)'''
-        return sorted(set((job.level , job.date) for job in self.jobs))
-    def to_dataframe(self) -> pd.DataFrame:
-        '''convert to dataframe for illustration'''
+        return f'FactorUpdateJobs({len(self.jobs)} jobs)'
+
+    @classmethod
+    def levels(cls) -> np.ndarray: 
+        """unique levels of the jobs"""
+        return np.unique([job.level for job in cls.jobs])
+    @classmethod
+    def dates(cls) -> np.ndarray:  
+        """unique dates of the jobs"""
+        return np.unique([job.date for job in cls.jobs])
+    @classmethod
+    def groups(cls) -> list[tuple[str , int]]: 
+        """groups of update jobs (by level and date)"""
+        return sorted(set((job.level , job.date) for job in cls.jobs))
+    @classmethod
+    def to_dataframe(cls) -> pd.DataFrame:
+        """convert to dataframe for illustration"""
         columns = ['level' , 'date' , 'factor']
         return pd.DataFrame(
-            [(job.level , job.date , job.factor_name) for job in self.jobs] , 
+            [(job.level , job.date , job.factor_name) for job in cls.jobs] , 
             columns=pd.Index(columns)
         ).sort_values(by=columns)
 
-    def clear(self) -> None: 
-        '''clear all jobs'''
-        self.jobs.clear()
-    def sort(self) -> None: 
-        '''sort jobs by sort_key'''
-        self.jobs.sort(key=lambda x: x.sort_key)
-    def append(self , job : FactorUpdateJob) -> None: 
-        '''append a job'''
-        self.jobs.append(job)
-    def grouped_jobs(self) -> Generator[tuple[tuple[str , int] , list[FactorUpdateJob]] , None , None]:
-        '''group jobs by level and date'''
-        for level , date in self.groups():
-            yield (level , date) , self.filter_jobs(self.jobs , level , date)
+    @classmethod
+    def clear(cls) -> None: 
+        """clear all jobs"""
+        cls.jobs.clear()
+    @classmethod
+    def sort(cls) -> None: 
+        """sort jobs by sort_key"""
+        cls.jobs.sort(key=lambda x: x.sort_key)
+    @classmethod
+    def append(cls , job : FactorUpdateJob) -> None: 
+        """append a job"""
+        cls.jobs.append(job)
+    @classmethod
+    def grouped_jobs(cls) -> Generator[tuple[tuple[str , int] , list[FactorUpdateJob]] , None , None]:
+        """group jobs by level and date"""
+        for level , date in cls.groups():
+            yield (level , date) , cls.filter_jobs(cls.jobs , level , date)
     @staticmethod
     def filter_jobs(jobs : list[FactorUpdateJob] , level : str , date : int) -> list[FactorUpdateJob]:
-        '''filter jobs by level and date'''
+        """filter jobs by level and date"""
         return [job for job in jobs if job.level == level and job.date == date]
-    def unfinished_factors(self , date : int | None = None) -> dict[int , list[StockFactorCalculator]] | list[StockFactorCalculator]:
-        '''get unfinished factors'''
-        if date is None: 
-            factors = {}
-            for date in StockFactorCalculator.FACTOR_TARGET_DATES:
-                if f := self.unfinished_factors(date): 
-                    factors[date] = f
-            return factors
-        else:
-            if date not in StockFactorCalculator.FACTOR_TARGET_DATES:
-                return []
-            else:
-                hier = StockFactorHierarchy()
-                factors = [calc for calc in hier.iter_instance() if not calc.has_date(date)]
-                return factors
 
-    def collect_jobs(self , start : int | None = None , end : int | None = None , 
+    @classmethod
+    def unfinished_factors(cls , date : int | None = None) -> dict[int , list[FactorCalculator]]:
+        """get unfinished factors"""
+        factors : dict[int , list[FactorCalculator]] = {}
+        for calc in FactorCalculator.iter_calculators():
+            if date is None:
+                for d in calc.target_dates():
+                    if d not in factors:
+                        factors[d] = []
+                    factors[d].append(calc)
+            else:
+                if date in calc.target_dates():
+                    if date not in factors:
+                        factors[date] = []
+                    factors[date].append(calc)
+        return factors
+
+    @classmethod
+    def collect_jobs(cls , start : int | None = None , end : int | None = None , 
                      all_factors = False , selected_factors : list[str] | None = None ,
                      overwrite = False , groups_in_one_update : int | None = None , 
-                     force = False ,**kwargs):
-        '''
+                     **kwargs) -> None:
+        """
         update update jobs for all factors between start and end date
-        force : if True , will update factors beyond update_start
         **kwargs:
             factor_name : str | None = None
             level : str | None = None 
             file_name : str | None = None
             category0 : str | None = None 
             category1 : str | None = None 
-        '''
+        """
         selected_factors = selected_factors or []
-        self.clear()
+        cls.clear()
         
         if not (all_factors or selected_factors or kwargs): 
-            return self
+            return
         if end is None: 
             end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
 
-        for calc in self.iter_calculators(all_factors , selected_factors , **kwargs):
-            dates = calc.target_dates(start , end , overwrite = overwrite , force = force)
-            [self.append(FactorUpdateJob(calc , d)) for d in dates]
+        for calc in cls.iter_calculators(all_factors , selected_factors , **kwargs):
+            for date in calc.target_dates(start , end , overwrite = overwrite):
+                cls.append(FactorUpdateJob(calc , date))
 
-        if len(self) == 0:
+        if len(cls.jobs) == 0:
             print('There is no update jobs to proceed...')
         else:
             if groups_in_one_update is not None:
-                groups = self.groups()[:groups_in_one_update]
-                self.jobs = [job for level , date in groups for job in self.filter_jobs(self.jobs , level , date)]
-            levels , dates = self.levels() , self.dates()
-            print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Finish collecting {len(self)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
-        return self
+                groups = cls.groups()[:groups_in_one_update]
+                cls.jobs = [job for level , date in groups for job in cls.filter_jobs(cls.jobs , level , date)]
+            levels , dates = cls.levels() , cls.dates()
+            print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Finish collecting {len(cls.jobs)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
     
-    def process_jobs(self , verbosity : int = 1 , overwrite = False , auto_retry = True) -> None:
-        '''
+    @classmethod
+    def process_jobs(cls , verbosity : int = 1 , overwrite = False , auto_retry = True) -> None:
+        """
         perform all update jobs
 
         verbosity : 
@@ -157,16 +159,16 @@ class FactorUpdateJobManager:
             1 : show error and success stats
             2 : show all
         overwrite : if True , overwrite existing data
-        '''
-        if len(self) == 0: 
+        """
+        if len(cls.jobs) == 0: 
             return
 
         def do_job(job : FactorUpdateJob): 
             job.do(verbosity > 1 , overwrite)
 
-        for (level , date) , jobs in self.grouped_jobs():
+        for (level , date) , jobs in cls.grouped_jobs():
             DATAVENDOR.data_storage_control()
-            parallel(do_job , jobs , keys = [job.factor_name for job in jobs] , method = self.multi_thread)
+            parallel(do_job , jobs , keys = [job.factor_name for job in jobs] , method = cls.multi_thread)
             failed_jobs = [job for job in jobs if not job.done]
             if verbosity > 0:
                 print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Factors of {level} at {date} done: {len(jobs) - len(failed_jobs)} / {len(jobs)}')
@@ -179,37 +181,55 @@ class FactorUpdateJobManager:
                 failed_again_jobs = [job for job in failed_jobs if not job.done]
                 if failed_again_jobs:
                     print(f'Failed factors again: {[job.factor_name for job in failed_again_jobs]}')
-        [self.jobs.remove(job) for job in jobs if job.done]
+        [cls.jobs.remove(job) for job in jobs if job.done]
+
+    @classmethod
+    def update_factor_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False):
+        """update all factor stats"""
+        func_calls : dict[int , list[tuple[Callable , np.ndarray | list[int] , dict[str , Any] | None]]] = {}
+        for calc in FactorCalculator.iter_calculators():
+            target_dates = calc.stats_target_dates()
+            for stats_type in ['daily' , 'weekly']:
+                func  = getattr(calc , f'update_{stats_type}_stats')
+                dates = target_dates[stats_type]
+                years = np.unique(dates // 10000)
+                for year in years:
+                    if year not in func_calls:
+                        func_calls[year] = []
+                    func_calls[year].append((func , dates[dates // 10000 == year] ,{'overwrite' : overwrite}))
+        
+        func_calls = {year: calls for year , calls in sorted(func_calls.items())}
+
+        for year , calls in func_calls.items():
+            n_calls = len(calls)
+            n_dates = sum([len(dates) for _, dates , _ in calls])
+            Logger.info(f'Update Factor Stats of Year {year} : {n_calls} function calls , {n_dates} dates')
+            parallels(calls , method = 'thread')
+
+        return func_calls
 
     @classmethod
     def clear_jobs(cls , date : int , verbosity : int = 1) -> None:
-        '''clear jobs of a given date'''
+        """clear jobs of a given date"""
         if verbosity > 0:
             print(f'Clearing factors of {date}')
 
         removed_factors = []
         for calc in cls.iter_calculators(all_factors = True):
-            path = DB.path('factor' , calc.factor_name , date)
-            if path.exists():
-                path.unlink()
+            cleared = calc.clear_stored_data(date)
+            if cleared:
                 removed_factors.append(calc.factor_name)
         if verbosity > 0:
             print(f'Removed {len(removed_factors)} factors')
 
     @classmethod
-    def iter_calculators(cls , all_factors = False , selected_factors : list[str] | None = None , **kwargs) -> Generator[StockFactorCalculator , None , None]:
+    def iter_calculators(cls , all = False , selected_factors : list[str] | None = None , **kwargs) -> Generator[FactorCalculator , None , None]:
         '''iterate over calculators'''
         selected_factors = selected_factors or []
         if selected_factors:
-            assert not all_factors , \
-                f'all_factors ({all_factors}) and selected_factors ({selected_factors}) cannot be supplied at once'
-        hier = StockFactorHierarchy()
-        if all_factors:
-            return hier.iter_instance()
-        elif selected_factors:
-            return (calc for calc in hier.iter_instance() if calc.factor_name in selected_factors)
-        else:
-            return hier.iter_instance(**kwargs)
+            assert not all , \
+                f'all ({all}) and selected_factors ({selected_factors}) cannot be supplied at once'
+        return FactorCalculator.iter_calculators(all = all , selected_factors = selected_factors , **kwargs)
 
     @classmethod
     def update(cls , verbosity : int = 1 , groups_in_one_update : int | None = 100 , start : int | None = None , end : int | None = None) -> None:
@@ -267,14 +287,8 @@ class FactorUpdateJobManager:
         for calc in cls.iter_calculators(all_factors , selected_factors , **kwargs):
             dates = calc.stored_dates()
             def load_fac(date : int):
-                prefix = f'{calc.factor_string} at date {date}'
-                try:
-                    factor = calc.load_factor(date)
-                except Exception as e:
-                    print(f'{prefix} loading failed: {e}')
-                    calc.calc_and_deploy(date , overwrite = True)
-                    factor = calc.load_factor(date)
-                valid_count = factor.notna().sum()
+                factor = calc.eval_factor(date)
+                valid_count = factor.loc[:,calc.factor_name].notna().sum()
                 return pd.DataFrame({'factor' : [calc.factor_name] , 'date' : [date] , 'valid_count' : [valid_count]})
             factor_coverage = parallel(load_fac , dates , method = 'threading')
             dfs.extend(list(factor_coverage.values()))

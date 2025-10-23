@@ -18,17 +18,22 @@ class TushareFetcherMeta(ABCMeta):
     def __new__(cls , name , bases , dct):
         new_cls = super().__new__(cls , name , bases , dct)
         abstract_methods = getattr(new_cls , '__abstractmethods__' , None)
-        if not abstract_methods:
+        if not abstract_methods and not name.startswith('_'):
             assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
                 f'{name} in module {new_cls.__module__} is duplicated within {cls.registry[name].__module__}'
             
             db_type = getattr(new_cls , 'DB_TYPE' , '')
             db_src = getattr(new_cls , 'DB_SRC' , '')
             db_key = getattr(new_cls , 'DB_KEY' , '')
-            if db_type == 'info':
-                assert db_src in DB.DB_BY_NAME , (db_type , db_src , db_key)
+            update_freq = getattr(new_cls , 'UPDATE_FREQ' , '')
+            assert db_type , f'{name} DB_TYPE must be set'
+            assert db_src , f'{name} DB_SRC must be set'
+            assert db_key , f'{name} DB_KEY must be set'
+            assert update_freq , f'{name} UPDATE_FREQ must be set'
+            if db_type in ['info' , 'time_series']:
+                assert DB.by_name(db_src) , (db_type , db_src , db_key)
             elif db_type in ['date' , 'fina' , 'rolling' , 'fundport']:
-                assert db_src in DB.DB_BY_DATE , (db_type , db_src , db_key)
+                assert DB.by_date(db_src) , (db_type , db_src , db_key)
             else:
                 raise KeyError(db_type)
             cls.registry[name] = new_cls
@@ -38,11 +43,11 @@ class TushareFetcherMeta(ABCMeta):
 class TushareFetcher(metaclass=TushareFetcherMeta):
     """base class of TushareFetcher"""
     START_DATE  : int = 19970101
-    DB_TYPE     : Literal['info' , 'date' , 'fina' , 'rolling' , 'fundport'] = 'info'
-    UPDATE_FREQ : Literal['d' , 'w' , 'm'] = 'd'
+    DB_TYPE     : Literal['info' , 'time_series' , 'date' , 'fina' , 'rolling' , 'fundport' , ''] = ''
+    UPDATE_FREQ : Literal['d' , 'w' , 'm' , ''] = ''
     DB_SRC      : str = ''
     DB_KEY      : str = ''
-        
+    
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}Fetcher(type={self.DB_TYPE},db={self.DB_SRC}/{self.DB_KEY},start={self.START_DATE},freq={self.UPDATE_FREQ})'
     
@@ -70,17 +75,20 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
 
     def _info_fetcher_update_date(self) -> list[int] | np.ndarray:
         """update date for info fetcher"""
+        assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
         update_to = CALENDAR.update_to()    
-        return [update_to] if updatable(self.last_date() , self.UPDATE_FREQ , update_to) else []
+        return [update_to] if self.updatable(self.last_date() , self.UPDATE_FREQ , update_to) else []
 
     def _date_fetcher_update_dates(self) -> list[int] | np.ndarray:
         """update dates for date fetcher"""
+        assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
         return dates_to_update(self.last_date() , self.UPDATE_FREQ) 
     
     def _fina_fetcher_update_dates(self , data_freq : Literal['y' , 'h' , 'q'] = 'q' , consider_future : bool = False) -> list[int] | np.ndarray:
         """update dates for fina fetcher"""
+        assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
         update_to = CALENDAR.update_to()
-        update = updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
+        update = self.updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
         if not update: 
             return []
 
@@ -98,22 +106,21 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         return TS_PARAMS.pro
 
     @property
-    def use_date_type(self) -> bool:
+    def db_by_name(self) -> bool:
         """whether to use date type for the database"""
-        return self.DB_TYPE != 'info'
+        return self.DB_TYPE in ['info' , 'time_series']
     
     def target_path(self , date : int | Any = None) -> Path:
         """get target path in database for date"""
-        if self.use_date_type:  
-            assert date is not None , f'{self.__class__.__name__} use date type but date is None'
-        else: 
+        if self.db_by_name:  
             date = None
+        else: 
+            assert date is not None , f'{self.__class__.__name__} use date type but date is None'
         return DB.path(self.DB_SRC , self.DB_KEY , date)
 
     def fetch_and_save(self , date : int | Any = None) -> None:
         """fetch from tushare and save data to database"""
-        if self.use_date_type:  
-            assert date is not None , f'{self.__class__.__name__} use date type but date is None'
+        assert self.db_by_name or date is not None , f'{self.__class__.__name__} use date type but date is None'
         DB.save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
 
     def set_rollback_date(self , rollback_date : int | None = None):
@@ -129,21 +136,26 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
 
     def last_date(self) -> int:
         """last date that has data of the database"""
-        if self.use_date_type:
+        if self.db_by_name:
+            ldate = PATH.file_modified_date(self.target_path() , self.START_DATE)
+        else:
             dates = DB.dates(self.DB_SRC , self.DB_KEY)
             ldate = max(dates) if len(dates) else self.START_DATE
-        else:
-            ldate = PATH.file_modified_date(self.target_path() , self.START_DATE)
         if self.rollback_date: 
             ldate = min(ldate , self.rollback_date)
         return ldate
+
+    @staticmethod
+    def updatable(last_date , freq : Literal['d' , 'w' , 'm'] , update_to : int | None = None):
+        """check if the date is updatable given last date and frequency"""
+        return updatable(last_date , freq , update_to)
     
     def last_update_date(self) -> int:
         """last modified / updated date of the database"""
-        if self.use_date_type:
-            ldate = PATH.file_modified_date(self.target_path(self.last_date()) , self.START_DATE)
-        else:
+        if self.db_by_name:
             ldate = PATH.file_modified_date(self.target_path() , self.START_DATE)
+        else:
+            ldate = PATH.file_modified_date(self.target_path(self.last_date()) , self.START_DATE)
         if self.rollback_date: 
             ldate = min(ldate , self.rollback_date)
         return ldate
@@ -242,19 +254,30 @@ class InfoFetcher(TushareFetcher):
     def get_update_dates(self):
         return self._info_fetcher_update_date()
 
-class DateFetcher(TushareFetcher):
+class TimeSeriesFetcher(TushareFetcher):
+    """base class of time series fetcher , implement get_data for real use"""
+    DB_TYPE = 'time_series'
+    UPDATE_FREQ = 'd'
+
+    def get_update_dates(self):
+        return self._info_fetcher_update_date()
+
+class TradeDataFetcher(TushareFetcher):
     """base class of date fetcher , implement get_data for real use"""
     DB_TYPE = 'date'
-    UPDATE_FREQ = 'd'
     DB_SRC = 'trade_ts'
 
     def get_update_dates(self): return self._date_fetcher_update_dates()
 
-class WeekFetcher(DateFetcher):
+class DayFetcher(TradeDataFetcher):
+    """base class of day fetcher , implement get_data for real use"""
+    UPDATE_FREQ = 'd'
+
+class WeekFetcher(TradeDataFetcher):
     """base class of week fetcher , implement get_data for real use"""
     UPDATE_FREQ = 'w'
 
-class MonthFetcher(DateFetcher):
+class MonthFetcher(TradeDataFetcher):
     """base class of month fetcher , implement get_data for real use"""
     UPDATE_FREQ = 'm'
 
@@ -286,8 +309,9 @@ class RollingFetcher(TushareFetcher):
 
     def get_update_dates(self):
         """get update dates for rolling fetcher"""
+        assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
         update_to = CALENDAR.update_to()
-        update = updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
+        update = self.updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
         if not update: 
             return []
 

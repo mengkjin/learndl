@@ -13,7 +13,7 @@ from src.proj import MACHINE , PATH
 from .code_mapper import secid_to_secid
 
 __all__ = [
-    'DB_BY_NAME' , 'DB_BY_DATE' , 'SAVE_OPT_DB' , 'SAVE_OPT_BLK' , 'SAVE_OPT_NORM' , 'SAVE_OPT_MODEL' ,
+    'by_name' , 'by_date' , 'iter_db_srcs' ,
     'save' , 'load' , 'load_multi' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
     'file_dates' , 'dir_dates' , 'save_df' , 'load_df' ,
 ]
@@ -23,14 +23,16 @@ SAVE_OPT_BLK  : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
 SAVE_OPT_NORM : Literal['pt' , 'pth' , 'npz' , 'npy' , 'np'] = 'pt'
 SAVE_OPT_MODEL: Literal['pt'] = 'pt'
 
-DB_BY_NAME  : list[str] = ['information_js' , 'information_ts']
+DB_BY_NAME  : list[str] = ['information_js' , 'information_ts' , 'index_daily_ts']
 DB_BY_DATE  : list[str] = ['models' , 'sellside' ,
                            'trade_js' , 'labels_js' , 'benchmark_js' , 
                            'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'holding_ts'
-                           ]  
+                           ]
 
-assert 'pred' not in DB_BY_NAME + DB_BY_DATE , 'pred must not in DB_BY_NAME and DB_BY_DATE'
-assert 'factor' not in DB_BY_NAME + DB_BY_DATE , 'factor must not in DB_BY_NAME and DB_BY_DATE'
+EXPORT_BY_NAME : list[str] = ['market_factor' , 'factor_stats_daily' , 'factor_stats_weekly']
+EXPORT_BY_DATE : list[str] = ['pred' , 'factor']
+for name in EXPORT_BY_NAME + EXPORT_BY_DATE:
+    assert name not in DB_BY_NAME + DB_BY_DATE , f'{name} must not in DB_BY_NAME and DB_BY_DATE'
 
 _db_alternatives : dict[str , str] = {
     'trade_ts' : 'trade_js' ,
@@ -66,6 +68,19 @@ def _paths_to_dates(paths : list[Path] | Generator[Path, None, None]):
     dates = np.array([ds for ds in datestrs if ds.isdigit() and len(ds) == 8]).astype(int)
     dates.sort()
     return dates
+
+def by_name(db_src : str) -> bool:
+    """whether the database is by name"""
+    return db_src in DB_BY_NAME + EXPORT_BY_NAME
+
+def by_date(db_src : str) -> bool:
+    """whether the database is by date"""
+    return db_src in DB_BY_DATE + EXPORT_BY_DATE
+
+def iter_db_srcs() -> Generator[str, None, None]:
+    """iterate over all database sources"""
+    for db_src in DB_BY_NAME + DB_BY_DATE + EXPORT_BY_NAME + EXPORT_BY_DATE:
+        yield db_src
 
 def dir_dates(directory : Path , start_dt = None , end_dt = None , year = None):
     """get dates from directory"""
@@ -193,6 +208,8 @@ def _db_parent(db_src : str , db_key : str | None = None) -> Path:
         parent = PATH.preds
     elif db_src == 'factor':
         parent = PATH.factor
+    elif db_src in EXPORT_BY_NAME:
+        parent = PATH.export.joinpath(db_src)
     else:
         raise ValueError(f'{db_src} not in {DB_BY_NAME} and {DB_BY_DATE} , or not pred or factor')
     if db_key is None:
@@ -212,13 +229,14 @@ def _db_path(db_src , db_key , date = None , use_alt = False) -> Path:
     date: int, default None
         date to be saved, if the db is by date, date is required
     """
-    assert db_src in ['pred' , 'factor'] + DB_BY_NAME + DB_BY_DATE , f'{db_src} not in {DB_BY_NAME} and {DB_BY_DATE}'
-    if db_src in DB_BY_NAME:
+    if db_src in DB_BY_NAME + EXPORT_BY_NAME:
         new_path = _db_parent(db_src).joinpath(f'{db_key}.{SAVE_OPT_DB}')
-    else:
+    elif db_src in DB_BY_DATE + EXPORT_BY_DATE:
         assert date is not None , f'{db_src} use date type but date is None'
         parent = _db_parent(db_src , db_key)
         new_path = parent.joinpath(str(int(date) // 10000) , f'{db_key}.{str(date)}.{SAVE_OPT_DB}')
+    else:
+        raise ValueError(f'{db_src} not in {DB_BY_NAME} and {DB_BY_DATE} and {EXPORT_BY_NAME} and {EXPORT_BY_DATE}')
     if not new_path.exists() and db_src in _db_alternatives and use_alt:
         alt_path = _db_path(_db_alternatives[db_src] , db_key , date , use_alt = False)
         if alt_path.exists(): 
@@ -244,17 +262,17 @@ def min_date(db_src , db_key):
         return 0
     paths = [p for p in directory.joinpath(str(min(years))).iterdir()]
     dates = _paths_to_dates(paths)
-    return min(dates) if len(dates) else 0
+    return min(dates) if len(dates) else 99991231
 
 def max_date(db_src , db_key):
     """get maximum date from any database data"""
     directory = _db_parent(db_src , db_key)
     years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
     if not years: 
-        return 99991231
+        return 0
     paths = [p for p in directory.joinpath(str(max(years))).iterdir()]
     dates = _paths_to_dates(paths)
-    return max(dates) if len(dates) else 99991231
+    return max(dates) if len(dates) else 0
 
 # @_db_src_deprecated(1)
 def save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True):
@@ -265,9 +283,9 @@ def save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = Tr
     df: pd.DataFrame | None
         data to be saved
     db_src: str
-        database source name , or factor or pred
+        database source name , or export source name
     db_key: str
-        database key , or factor name or pred name
+        database key , or export key name
     date: int, default None
         date to be saved, if the db is by date, date is required
     '''
@@ -280,18 +298,15 @@ def save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = Tr
 
 # @_db_src_deprecated(0)
 def load(db_src , db_key , date = None , date_colname = None , verbose = True , use_alt = False , 
-            raise_if_not_exist = False , **kwargs) -> pd.DataFrame: 
+         raise_if_not_exist = False , **kwargs) -> pd.DataFrame: 
     '''
     Load data from database
     Parameters
     ----------
     db_src: str
-        database source name : ['information_js' , 'information_ts' , 'trade_js' , 'labels_js' , 'benchmark_js' , 
-                               'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'sellside' ,
-                               'pred' , 'factor']
+        database source name , or export source name (etc. pred , factor , market_factor , factor_stats_daily , factor_stats_weekly)
     db_key: str
-        database key that can be found in the database directory
-        or factor name or pred name
+        database key , or export key name
     date: int, default None
         date to be loaded , if the db is by date , date is required
     date_colname: str, default None
@@ -318,6 +333,10 @@ def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None 
                   verbose = True , use_alt = False , 
                   parallel : Literal['thread' , 'process' , 'dask' , 'none'] | None = 'thread' , **kwargs):
     """load multiple dates from database"""
+    if db_src in DB_BY_NAME + EXPORT_BY_NAME:
+        return load(db_src , db_key , dates = dates , start_dt = start_dt , end_dt = end_dt , 
+                    date_colname = date_colname , verbose = verbose , use_alt = use_alt , 
+                    parallel = parallel , **kwargs)
     if dates is None:
         assert start_dt is not None and end_dt is not None , f'start_dt and end_dt must be provided if dates is not provided'
         dates = _db_dates(db_src , db_key , start_dt , end_dt , use_alt = use_alt)
@@ -351,9 +370,9 @@ def path(db_src , db_key , date = None , use_alt = False) -> Path:
     Parameters
     ----------
     db_src: str
-        database source name , or factor or pred
+        database source name , or export source name (etc. pred , factor , market_factor , factor_stats_daily , factor_stats_weekly)
     db_key: str
-        database key , or factor name or pred name
+        database key , or export key name
     date: int, default None
         date to be saved, if the db is by date, date is required
     """

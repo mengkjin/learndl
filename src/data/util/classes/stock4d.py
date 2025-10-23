@@ -59,6 +59,8 @@ class Stock4DData:
     def dtype(self): return None if self.values is None else self.values.dtype
     @property
     def ndim(self): return None if self.values is None else self.values.ndim
+    @property
+    def empty(self): return self.values is None or self.values.size == 0
 
     def update(self , **kwargs):
         [setattr(self,k,v) for k,v in kwargs.items() if k in ['values','secid','date','feature']]

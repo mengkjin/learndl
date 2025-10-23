@@ -62,9 +62,9 @@ class JSFetcher:
 
     def eval(self , date = None , **kwargs) -> Any:
         assert callable(self.fetcher) , f'{self.fetcher} is not callable'
-        if self.db_src in DB.DB_BY_NAME:
+        if DB.by_name(self.db_src):
             v = self.fetcher(self.db_key , *self.args , **kwargs)
-        elif self.db_src in DB.DB_BY_DATE:
+        elif DB.by_date(self.db_src):
             v = self.fetcher(date , *self.args , **kwargs)  
         return v
     
@@ -72,7 +72,7 @@ class JSFetcher:
         return DB.path(self.db_src , self.db_key , date)
     
     def source_dates(self):
-        assert self.db_src in DB.DB_BY_DATE , f'{self.db_src} not in {DB.DB_BY_DATE}'
+        assert DB.by_date(self.db_src) , f'{self.db_src} is not by date'
         return self.R_source_dates(self.db_src , self.db_key)
 
     @classmethod

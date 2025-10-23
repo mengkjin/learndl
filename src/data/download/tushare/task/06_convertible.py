@@ -1,6 +1,6 @@
 # do not use relative import in this file because it will be running in top-level directory
 from src.proj import MACHINE
-from src.data.download.tushare.basic import InfoFetcher , DateFetcher
+from src.data.download.tushare.basic import InfoFetcher , DayFetcher
 
 class ConvertibleBasic(InfoFetcher):
     """convertible basic infomation"""
@@ -11,7 +11,7 @@ class ConvertibleBasic(InfoFetcher):
         df = self.iterate_fetch(self.pro.cb_basic , limit = 5000)
         return df
 
-class ConvertibleDailyQuote(DateFetcher):
+class ConvertibleDailyQuote(DayFetcher):
     """convertible daily quote"""
     START_DATE = 20180101 if MACHINE.server else 20241215
     DB_KEY = 'cb_day'

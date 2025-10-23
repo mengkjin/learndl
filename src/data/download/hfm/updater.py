@@ -174,16 +174,15 @@ class JSDataUpdater():
                     print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
         return result
 
-    def fetch_all(self , db_srcs = DB.DB_BY_NAME + DB.DB_BY_DATE , start_dt = None , end_dt = None , force = False):
+    def fetch_all(self ,start_dt = None , end_dt = None , force = False):
         # selected DB is totally refreshed , so delete first
         if not MACHINE.belong_to_jinmeng: 
             return
-        if not isinstance(db_srcs , (list,tuple)): 
-            db_srcs = [db_srcs]
-        for db_src in db_srcs:
-            if db_src in DB.DB_BY_NAME:
+
+        for db_src in DB.iter_db_srcs():
+            if DB.by_name(db_src):
                 self.fetch_by_name(db_src)
-            elif db_src in DB.DB_BY_DATE:
+            elif DB.by_date(db_src):
                 self.fetch_by_date(db_src , start_dt , end_dt , force = force)
             else:
                 raise Exception(db_src)
