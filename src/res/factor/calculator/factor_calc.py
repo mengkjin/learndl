@@ -378,7 +378,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return done
 
     @classmethod
-    def update_stats(cls , stats_type : Literal['daily' , 'weekly'] , dates : np.ndarray | list[int] | None , overwrite = False) -> None:
+    def update_stats(cls , stats_type : Literal['daily' , 'weekly'] , dates : np.ndarray | list[int] | None , overwrite = False , verbose = False) -> None:
         """update factor daily or weekly stats"""
         if dates is None:
             dates = cls.stats_target_dates()[stats_type]
@@ -386,21 +386,23 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
             dates = np.intersect1d(dates , cls.stats_target_dates()[stats_type])
         if len(dates) == 0:
             return
-
+        
         old_df = DB.load(f'factor_stats_{stats_type}' , cls.factor_name , verbose = False)
         new_df = getattr(cls.Factor(dates = dates) , f'{stats_type}_stats')()
         df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
             sort_values('date').reset_index(drop = True)
         DB.save(df , f'factor_stats_{stats_type}' , cls.factor_name)
+        if verbose:
+            print(f'Updated {stats_type} stats of {cls.factor_name} for {len(dates)} dates')
 
     @classmethod
-    def update_daily_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False) -> None:
+    def update_daily_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , verbose = False) -> None:
         """update factor daily stats"""
-        cls.update_stats('daily' , dates , overwrite)
+        cls.update_stats('daily' , dates , overwrite , verbose)
     @classmethod
-    def update_weekly_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False) -> None:
+    def update_weekly_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , verbose = False) -> None:
         """update factor weekly stats"""
-        cls.update_stats('weekly' , dates , overwrite)
+        cls.update_stats('weekly' , dates , overwrite , verbose)
 
     @classmethod
     def stats_stored_dates(cls) -> dict[str , np.ndarray]:
