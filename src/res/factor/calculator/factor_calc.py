@@ -545,7 +545,7 @@ class MarketFactorCalculator(FactorCalculator):
         return None
 
     @classmethod
-    def stats_target_dates(cls) -> dict[str , np.ndarray]:
+    def stats_target_dates(cls , *args , **kwargs) -> dict[str , np.ndarray]:
         """return target dates of factor stats"""
         return {
             'daily' : np.array([] , dtype = int),
