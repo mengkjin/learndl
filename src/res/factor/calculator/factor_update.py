@@ -184,11 +184,11 @@ class FactorUpdateJobManager:
         [cls.jobs.remove(job) for job in jobs if job.done]
 
     @classmethod
-    def update_factor_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False):
+    def update_factor_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , all_factors = False , selected_factors : list[str] | None = None , **kwargs):
         """update all factor stats"""
         func_calls : dict[int , list[tuple[Callable , np.ndarray | list[int] , dict[str , Any] | None]]] = {}
-        for calc in FactorCalculator.iter_calculators():
-            target_dates = calc.stats_target_dates()
+        for calc in cls.iter_calculators(all = all_factors , selected_factors = selected_factors , **kwargs):
+            target_dates = calc.stats_target_dates(start , end , overwrite)
             for stats_type in ['daily' , 'weekly']:
                 func  = getattr(calc , f'update_{stats_type}_stats')
                 dates = target_dates[stats_type]
@@ -237,6 +237,7 @@ class FactorUpdateJobManager:
         self = cls()
         self.collect_jobs(start = start , end = end , all_factors = True , groups_in_one_update = groups_in_one_update)
         self.process_jobs(verbosity)
+        self.update_factor_stats(start , end , all_factors = True)
 
     @classmethod
     def recalculate(cls , verbosity : int = 1 , groups_in_one_update : int | None = 100 , start : int | None = None , end : int | None = None) -> None:
@@ -245,20 +246,16 @@ class FactorUpdateJobManager:
         self = cls()
         self.collect_jobs(start = start , end = end , all_factors = True , overwrite = True , groups_in_one_update = groups_in_one_update)
         self.process_jobs(verbosity , overwrite = True)
-
-    @classmethod
-    def update_overwrite(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None) -> None:
-        '''update factor data according'''
-        self = cls()
-        self.collect_jobs(start = start , end = end , all_factors = True , overwrite = True)
-        self.process_jobs(verbosity)
+        self.update_factor_stats(start , end , overwrite = True , all_factors = True)
 
     @classmethod
     def update_rollback(cls , rollback_date : int , verbosity : int = 1 , groups_in_one_update : int | None = 100) -> None:
         CALENDAR.check_rollback_date(rollback_date)
         self = cls()
-        self.collect_jobs(start = CALENDAR.td(rollback_date , 1) , overwrite = True , all_factors = True , groups_in_one_update = groups_in_one_update)
+        start = CALENDAR.td(rollback_date , 1)
+        self.collect_jobs(start = start , all_factors = True , overwrite = True , groups_in_one_update = groups_in_one_update)
         self.process_jobs(verbosity , overwrite = True)
+        self.update_factor_stats(start , overwrite = True , all_factors = True)
 
     @classmethod
     def update_fix(cls , factors : list[str] | None = None , verbosity : int = 1 , start : int | None = None , end : int | None = None) -> None:
@@ -267,6 +264,7 @@ class FactorUpdateJobManager:
         print(f'Fixing factors : {factors}')
         self.collect_jobs(selected_factors = factors , overwrite = True , start = start , end = end)
         self.process_jobs(verbosity , overwrite = True)
+        self.update_factor_stats(start , end , overwrite = True , selected_factors = factors)
 
     @classmethod
     def eval_coverage(cls , all_factors = False , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:

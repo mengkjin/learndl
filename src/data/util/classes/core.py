@@ -30,24 +30,24 @@ def data_type_alias(key : str):
 def block_file_path(key : str , predict=False, alias_search = True):
     train_mark = '.00' if predict else ''
     if key.lower() in ['y' , 'labels']: 
-        return PATH.block.joinpath(f'Y{train_mark}.{DB.SAVE_OPT_BLK}')
+        return DB.block_path(f'Y{train_mark}')
     else:
         alias_list = data_type_alias(key) if alias_search else []
         for new_key in alias_list:
-            path = PATH.block.joinpath(f'X_{new_key}{train_mark}.{DB.SAVE_OPT_BLK}')
+            path = DB.block_path(f'X_{new_key}{train_mark}')
             if path.exists(): 
                 return path
-        return PATH.block.joinpath(f'X_{key}{train_mark}.{DB.SAVE_OPT_BLK}')
+        return DB.block_path(f'X_{key}{train_mark}')
 
 def norm_file_path(key : str , predict = False, alias_search = True):
     if key.lower() == 'y':
-        return PATH.norm.joinpath(f'Y.{DB.SAVE_OPT_NORM}')
+        return DB.norm_path(f'Y')
     alias_list = data_type_alias(key) if alias_search else []
     for new_key in alias_list:
-        path = PATH.norm.joinpath(f'X_{new_key}.{DB.SAVE_OPT_BLK}')
+        path = DB.norm_path(f'X_{new_key}')
         if path.exists():
             return path
-    return PATH.norm.joinpath(f'X_{key}.{DB.SAVE_OPT_BLK}')
+    return DB.norm_path(f'X_{key}')
 
 class DataBlock(Stock4DData):
     DEFAULT_INDEX = ['secid','date','minute','factor_name']

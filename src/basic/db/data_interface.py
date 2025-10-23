@@ -15,7 +15,8 @@ from .code_mapper import secid_to_secid
 __all__ = [
     'by_name' , 'by_date' , 'iter_db_srcs' ,
     'save' , 'load' , 'load_multi' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
-    'file_dates' , 'dir_dates' , 'save_df' , 'load_df' ,
+    'file_dates' , 'dir_dates' , 'save_df' , 'load_df' , 
+    'block_path' , 'norm_path' ,
 ]
 
 SAVE_OPT_DB   : Literal['feather' , 'parquet'] = 'feather'
@@ -381,3 +382,9 @@ def path(db_src , db_key , date = None , use_alt = False) -> Path:
 def dates(db_src , db_key , start_dt = None , end_dt = None , year = None , use_alt = False):
     """get dates from any database data"""
     return _db_dates(db_src , db_key , start_dt , end_dt , year , use_alt)
+
+def block_path(name : str) -> Path:
+    return PATH.block.joinpath(f'{name}.{SAVE_OPT_BLK}')
+
+def norm_path(name : str) -> Path:
+    return PATH.norm.joinpath(f'{name}.{SAVE_OPT_NORM}')

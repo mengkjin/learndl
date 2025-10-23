@@ -295,6 +295,8 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
             assert step % cls.update_step == 0 , f'step {step} should be a multiple of {cls.update_step}'
             dates = CALENDAR.slice(cls.factor_calendar , start , end)
             dates = dates[dates <= CALENDAR.updated()][::int(step/cls.update_step)]
+        else:
+            dates = np.intersect1d(dates , cls.factor_calendar)
         if len(dates) == 0: 
             return StockFactor(pd.DataFrame())
         calc = cls()
@@ -415,9 +417,9 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return dates
 
     @classmethod
-    def stats_target_dates(cls) -> dict[str , np.ndarray]:
+    def stats_target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> dict[str , np.ndarray]:
         """return dates of factor stats"""
-        factor_stored_dates = cls.stored_dates()
+        factor_stored_dates = CALENDAR.slice(cls.stored_dates() , start , end)
         stats_stored_dates = cls.stats_stored_dates()
         target_dates : dict[str , np.ndarray] = {}
         skip_days = {
@@ -426,8 +428,10 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         }
         for key , dates in stats_stored_dates.items():
             max_date = CALENDAR.td(CALENDAR.updated() , -skip_days[key])
-            target_dates[key] = np.setdiff1d(factor_stored_dates , dates)
-            target_dates[key] = target_dates[key][target_dates[key] <= max_date]
+            target = factor_stored_dates[factor_stored_dates <= max_date]
+            if not overwrite:
+                target = np.intersect1d(target , dates)
+            target_dates[key] = target
         return target_dates
 
     @classmethod
@@ -450,6 +454,8 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @classmethod
     def match_attrs(cls , **kwargs) -> bool:
         """check if the factor matches the given attributes"""
+        if len(kwargs) == 0:
+            return False
         conditions : list[bool] = []
         for k , v in kwargs.items():
             if v is None: 
