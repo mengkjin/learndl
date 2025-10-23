@@ -125,7 +125,7 @@ def _calc_factor_wrapper(calc_factor : Callable[['FactorCalculator',int],pd.Seri
             df = df.drop_duplicates(subset = ['date'] , keep = 'first').sort_values('date')
         else:
             assert 'secid' in df.columns , f'secid not found in calc_factor result for stock factor: {df.columns}'
-            df = df.drop_duplicates(subset = ['secid'] , keep = 'first').set_index('secid').reindex(DATAVENDOR.secid(date))
+            df = df.drop_duplicates(subset = ['secid'] , keep = 'first').set_index('secid').reindex(DATAVENDOR.secid(date)).reset_index(drop = False)
 
         df = df.reset_index(drop = True).replace([np.inf , -np.inf] , np.nan)
         return df
@@ -252,7 +252,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         except Exception as e:
             Logger.error(f'{self.factor_name} at {date} error : {e}')
             df = pd.DataFrame()
-        if df.empty: 
+        if df.empty or (self.meta_type == 'market_factor' and 'date' not in df.columns) or (self.meta_type == 'factor' and 'secid' not in df.columns): 
             self.calc_and_deploy(date , overwrite = True)
             df = self._df
             assert df is not None and not df.empty , f'factor {self.factor_name} is not calculated at {date}'
