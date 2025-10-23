@@ -204,7 +204,7 @@ class FactorUpdateJobManager:
             n_calls = len(calls)
             n_dates = sum([len(dates) for _, dates , _ in calls])
             Logger.info(f'Update Factor Stats of Year {year} : {n_calls} function calls , {n_dates} dates')
-            parallels(calls , method = 'thread')
+            parallels(calls , method = 'forloop')
 
         return func_calls
 

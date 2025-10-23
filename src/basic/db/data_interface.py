@@ -344,6 +344,8 @@ def load_multi(db_src , db_key , dates = None , start_dt = None , end_dt = None 
     paths : dict[int , Path] = {int(date):_db_path(db_src , db_key , date , use_alt = use_alt) for date in dates}
     df_syntax = f'{db_src}/{db_key}/multi-dates' if verbose else None
     df = _load_df_multi(paths , date_colname , parallel)
+    if df.empty and df_syntax == 'models/tushare_cne5_exp/multi-dates':
+        print(dates)
     df = _process_df(df , df_syntax = df_syntax , **kwargs)
     return df
 

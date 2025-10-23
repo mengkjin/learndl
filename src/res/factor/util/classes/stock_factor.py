@@ -453,13 +453,14 @@ class StockFactor:
         evaluate the IC of the factor
         """
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
-        
 
         if 'ic' not in self.stats or not param_match(self.stats['ic'][0] , params):
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
             grouped = df.groupby(by=['date'], as_index=True)
             def df_ic(subdf : pd.DataFrame , **kwargs):
-                return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type)
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', message='An input array is constant; the correlation coefficient is not defined' , category=RuntimeWarning)
+                    return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type)
             ic = grouped.apply(df_ic , include_groups = False).rename_axis('factor_name',axis='columns')
             self.stats['ic'] = (params , ic)
         return self.stats['ic'][1]
@@ -547,10 +548,10 @@ class StockFactor:
         rankic = self.eval_ic(nday, lag , ic_type = 'spearman').rename(columns = lambda x:f'rankic')
         
         gp = self.eval_group_perf(nday, lag).\
-            pivot_table(index = ['date'] , values = 'group_ret' , columns = 'group').\
+            pivot_table(index = ['date'] , values = 'group_ret' , columns = 'group' , observed=True).\
             rename(columns = lambda x:f'group@{x}')
         ii = self.eval_ic_indus(nday, lag).\
-            pivot_table(index = ['date'] , values = 'ic_indus' , columns = 'industry').\
+            pivot_table(index = ['date'] , values = 'ic_indus' , columns = 'industry' , observed=True).\
             rename(columns = lambda x:f'ic_indus@{x}')
         cv = self.coverage().rename(columns = lambda x:f'coverage')
         return ic.join(rankic).join(gp).join(ii).join(cv)

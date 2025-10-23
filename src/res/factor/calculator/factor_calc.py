@@ -387,7 +387,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         if len(dates) == 0:
             return
 
-        old_df = DB.load(f'factor_stats_{stats_type}' , cls.factor_name)
+        old_df = DB.load(f'factor_stats_{stats_type}' , cls.factor_name , verbose = False)
         new_df = getattr(cls.Factor(dates = dates) , f'{stats_type}_stats')()
         df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
             sort_values('date').reset_index(drop = True)
@@ -408,12 +408,11 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         stats_types = ['daily' , 'weekly']
         dates : dict[str , np.ndarray] = {}
         for stats_type in stats_types:
-            path = DB.path(f'factor_stats_{stats_type}' , f'{cls.factor_name}')
-            if not path.exists():
+            df = DB.load(f'factor_stats_{stats_type}' , f'{cls.factor_name}' , verbose = False)
+            if df.empty:
                 dates[stats_type] = np.array([] , dtype = int)
             else:
-                df = DB.load_df(path)
-                dates[stats_type] = df['date'].to_numpy(int) if not df.empty else np.array([], dtype = int)
+                dates[stats_type] = df['date'].to_numpy(int)
         return dates
 
     @classmethod

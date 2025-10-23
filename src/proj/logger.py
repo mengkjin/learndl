@@ -8,6 +8,40 @@ _seperator_width = 80
 _seperator_char = '*'
 _divider_char = '='
 
+def _init_log(test_output = False):
+    """Initialize the logger"""
+    log_config = PATH.read_yaml(PATH.conf.joinpath('glob' , 'logger.yaml'))
+    new_path = PATH.log_main.joinpath(log_config['file']['param']['filename'])
+    log_config['file']['param']['filename'] = str(new_path)
+    new_path.parent.mkdir(exist_ok=True)
+    log = logging.getLogger(log_config['name'])
+    log.setLevel(getattr(logging , log_config['level']))
+
+    while log.handlers:
+        log.handlers[-1].close()
+        log.removeHandler(log.handlers[-1])
+
+    for hdname in log_config['handlers']:
+        hdargs = log_config[hdname]['param']
+        hdclass : Type[logging.Handler] = eval(log_config[hdname]['class'])
+        handler = hdclass(**hdargs)
+        handler.setLevel(log_config[hdname]['level'])
+        hdformatter = eval(log_config[hdname]['formatter_class'])(
+            datefmt=log_config['datefmt'],
+            **log_config['formatters'][log_config[hdname]['formatter']])
+        handler.setFormatter(hdformatter)
+        log.addHandler(handler)
+
+    
+    if test_output:
+        log.debug('This is the DEBUG    message...')
+        log.info('This is the INFO     message...')
+        log.warning('This is the WARNING  message...')
+        log.error('This is the ERROR    message...')
+        log.critical('This is the CRITICAL message...')
+
+    return log
+
 class Logger:
     """custom colored log , config at PATH.conf / 'glob' / 'logger.yaml'"""
     _instance : 'Logger | Any' = None
@@ -18,45 +52,13 @@ class Logger:
         'critical' : [] ,
         'debug' : [] ,
     }
+    log = _init_log()
+
     def __new__(cls, *args , **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-        return cls._instance.init_logger()
+        return cls._instance
 
-    def init_logger(self , test_output = False):
-        """Initialize the logger"""
-        config_logger = PATH.read_yaml(PATH.conf.joinpath('glob' , 'logger.yaml'))
-        new_path = PATH.log_main.joinpath(config_logger['file']['param']['filename'])
-        config_logger['file']['param']['filename'] = str(new_path)
-        new_path.parent.mkdir(exist_ok=True)
-        log = logging.getLogger(config_logger['name'])
-        log.setLevel(getattr(logging , config_logger['level']))
-
-        while log.handlers:
-            log.handlers[-1].close()
-            log.removeHandler(log.handlers[-1])
-
-        for hdname in config_logger['handlers']:
-            hdargs = config_logger[hdname]['param']
-            hdclass : Type[logging.Handler] = eval(config_logger[hdname]['class'])
-            handler = hdclass(**hdargs)
-            handler.setLevel(config_logger[hdname]['level'])
-            hdformatter = eval(config_logger[hdname]['formatter_class'])(datefmt=config_logger['datefmt'],
-                                                                         **config_logger['formatters'][config_logger[hdname]['formatter']])
-            handler.setFormatter(hdformatter)
-            log.addHandler(handler)
-
-        
-        if test_output:
-            log.debug('This is the DEBUG    message...')
-            log.info('This is the INFO     message...')
-            log.warning('This is the WARNING  message...')
-            log.error('This is the ERROR    message...')
-            log.critical('This is the CRITICAL message...')
-
-        self.log = log
-        return self
-    
     @classmethod
     def print(cls , *args , **kwargs):
         """Print the message to the stdout"""
@@ -65,42 +67,42 @@ class Logger:
     @classmethod
     def debug(cls , *args , **kwargs):
         """Debug level message"""
-        cls().log.debug(*args , **kwargs)
+        cls.log.debug(*args , **kwargs)
         cls.dump_to_logwriter(*args)
     
     @classmethod
     def info(cls , *args , **kwargs):
         """Info level message"""
-        cls().log.info(*args , **kwargs)
+        cls.log.info(*args , **kwargs)
         cls.dump_to_logwriter(*args)
 
     @classmethod
     def warning(cls , *args , **kwargs):
         """Warning level message"""
-        cls().log.warning(*args , **kwargs)
+        cls.log.warning(*args , **kwargs)
         cls.dump_to_logwriter(*args)
 
     @classmethod
     def error(cls , *args , **kwargs):
         """Error level message"""
-        cls().log.error(*args , **kwargs)
+        cls.log.error(*args , **kwargs)
         cls.dump_to_logwriter(*args)   
 
     @classmethod
     def critical(cls , *args , **kwargs):
         """Critical level message"""
-        cls().log.critical(*args , **kwargs)
+        cls.log.critical(*args , **kwargs)
         cls.dump_to_logwriter(*args)
 
     @classmethod
     def separator(cls , width = _seperator_width , char = _seperator_char):
         """Separator message , use info level"""
-        cls().log.info(char * width)
+        cls.log.info(char * width)
 
     @classmethod
     def divider(cls , width = _seperator_width , char = _divider_char):
         """Divider message , use info level"""
-        cls().log.info(char * width)
+        cls.log.info(char * width)
         
     @staticmethod
     def dump_to_logwriter(*args):
@@ -155,7 +157,6 @@ class Logger:
                 padding_left = '*' * max(0 , (self.width - txt_len - 2) // 2)
                 padding_right = '*' * max(0 , self.width - txt_len - 2 - len(padding_left))
                 Logger.info(' '.join([padding_left , message , padding_right]))
-
 
 class _LevelFormatter(logging.Formatter):
     """Simple Level Formatter without color"""

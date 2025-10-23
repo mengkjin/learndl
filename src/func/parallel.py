@@ -32,9 +32,9 @@ def try_func_call(result_dict : dict , key , func : Callable ,
         kwargs = kwargs or {}
         result_dict[key] = func(*args , **kwargs)
     except catch_errors as e:
-        print(f'{key} : {args} generated an exception: {e}')
+        print(f'{key} : {func.__name__}({args}) generated an exception: {e}')
     except Exception as e:
-        print(f'{key} : {args} generated an exception:')
+        print(f'{key} : {func.__name__}({args}) generated an exception:')
         raise e
 
 def parallel(func : Callable , args : Iterable , kwargs : dict[Any , Any] | None = None , keys : Iterable | None = None , 
