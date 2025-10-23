@@ -430,7 +430,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
             max_date = CALENDAR.td(CALENDAR.updated() , -skip_days[key])
             target = factor_stored_dates[factor_stored_dates <= max_date]
             if not overwrite:
-                target = np.intersect1d(target , dates)
+                target = np.setdiff1d(target , dates)
             target_dates[key] = target
         return target_dates
 
