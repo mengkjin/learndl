@@ -8,6 +8,39 @@ _seperator_width = 80
 _seperator_char = '*'
 _divider_char = '='
 
+class _LevelFormatter(logging.Formatter):
+    """Simple Level Formatter without color"""
+    def __init__(self, fmt=None, datefmt=None, level_fmts=None):
+        level_fmts = level_fmts or {}
+        self._level_formatters = {}
+        for level, format in level_fmts.items():
+            # Could optionally support level names too
+            self._level_formatters[getattr(logging , level)] = logging.Formatter(fmt=format, datefmt=datefmt)
+        # self._fmt will be the default format
+        super(_LevelFormatter, self).__init__(fmt=fmt, datefmt=datefmt)
+
+    def format(self, record):
+        if record.levelno in self._level_formatters:
+            return self._level_formatters[record.levelno].format(record)
+        return super(_LevelFormatter, self).format(record)
+class _LevelColorFormatter(colorlog.ColoredFormatter):
+    """Level Color Formatter with default colors"""
+    def __init__(self, fmt=None, datefmt=None, log_colors=None,level_fmts=None,secondary_log_colors=None):
+        level_fmts = level_fmts or {}
+        self._level_formatters = {}
+        for level, format in level_fmts.items():
+            # Could optionally support level names too
+            self._level_formatters[getattr(logging , level)] = colorlog.ColoredFormatter(fmt=format, datefmt=datefmt , log_colors=log_colors , secondary_log_colors=secondary_log_colors)
+        # self._fmt will be the default format
+        super(_LevelColorFormatter, self).__init__(fmt=fmt, datefmt=datefmt,
+                                                   log_colors=log_colors or {},
+                                                   secondary_log_colors=secondary_log_colors or {})
+
+    def format(self, record):
+        if record.levelno in self._level_formatters:
+            return self._level_formatters[record.levelno].format(record)
+        return super(_LevelColorFormatter, self).format(record)
+
 def _init_log(test_output = False):
     """Initialize the logger"""
     log_config = PATH.read_yaml(PATH.conf.joinpath('glob' , 'logger.yaml'))
@@ -158,35 +191,3 @@ class Logger:
                 padding_right = '*' * max(0 , self.width - txt_len - 2 - len(padding_left))
                 Logger.info(' '.join([padding_left , message , padding_right]))
 
-class _LevelFormatter(logging.Formatter):
-    """Simple Level Formatter without color"""
-    def __init__(self, fmt=None, datefmt=None, level_fmts=None):
-        level_fmts = level_fmts or {}
-        self._level_formatters = {}
-        for level, format in level_fmts.items():
-            # Could optionally support level names too
-            self._level_formatters[getattr(logging , level)] = logging.Formatter(fmt=format, datefmt=datefmt)
-        # self._fmt will be the default format
-        super(_LevelFormatter, self).__init__(fmt=fmt, datefmt=datefmt)
-
-    def format(self, record):
-        if record.levelno in self._level_formatters:
-            return self._level_formatters[record.levelno].format(record)
-        return super(_LevelFormatter, self).format(record)
-class _LevelColorFormatter(colorlog.ColoredFormatter):
-    """Level Color Formatter with default colors"""
-    def __init__(self, fmt=None, datefmt=None, log_colors=None,level_fmts=None,secondary_log_colors=None):
-        level_fmts = level_fmts or {}
-        self._level_formatters = {}
-        for level, format in level_fmts.items():
-            # Could optionally support level names too
-            self._level_formatters[getattr(logging , level)] = colorlog.ColoredFormatter(fmt=format, datefmt=datefmt , log_colors=log_colors , secondary_log_colors=secondary_log_colors)
-        # self._fmt will be the default format
-        super(_LevelColorFormatter, self).__init__(fmt=fmt, datefmt=datefmt,
-                                                   log_colors=log_colors or {},
-                                                   secondary_log_colors=secondary_log_colors or {})
-
-    def format(self, record):
-        if record.levelno in self._level_formatters:
-            return self._level_formatters[record.levelno].format(record)
-        return super(_LevelColorFormatter, self).format(record)
