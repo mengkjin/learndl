@@ -13,7 +13,7 @@ from src.proj import Logger , PATH
 from src.basic import CONF , CALENDAR , DB
 from src.data import DATAVENDOR
 from src.func.singleton import SingletonABCMeta
-from src.func.parallel import parallel
+from src.func.parallel import parallel , parallels
 
 __all__ = [
     'FactorCalculator' , 'StockFactorCalculator' , 'MarketFactorCalculator' ,
@@ -300,7 +300,11 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         if len(dates) == 0: 
             return StockFactor(pd.DataFrame())
         calc = cls()
-        dfs = parallel(calc.eval_factor , dates , {'verbose' : verbose} , keys = dates , method = multi_thread , ignore_error = ignore_error)
+
+        #dfs = parallel(calc.eval_factor , dates , {'verbose' : verbose} , keys = dates , method = multi_thread , ignore_error = ignore_error)
+        func_calls = [(calc.eval_factor , (date , ) , {'verbose' : verbose}) for date in dates]
+        dfs = parallels(func_calls , keys = dates , method = multi_thread , ignore_error = ignore_error)
+        
         factor = StockFactor(dfs , step = step)
         if normalize: 
             factor.normalize(fill_method , weighted_whiten , order , inplace = True)

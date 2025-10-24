@@ -186,7 +186,7 @@ class FactorUpdateJobManager:
     @classmethod
     def update_factor_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , all_factors = False , selected_factors : list[str] | None = None , **kwargs):
         """update all factor stats"""
-        func_calls : dict[int , list[tuple[Callable , np.ndarray | list[int] , dict[str , Any] | None]]] = {}
+        func_calls : dict[int , list[tuple[Callable , tuple[Any,...] , dict[str , Any] | None]]] = {}
         for calc in cls.iter_calculators(all = all_factors , selected_factors = selected_factors , **kwargs):
             target_dates = calc.stats_target_dates(start , end , overwrite)
             for stats_type in ['daily' , 'weekly']:
@@ -196,13 +196,13 @@ class FactorUpdateJobManager:
                 for year in years:
                     if year not in func_calls:
                         func_calls[year] = []
-                    func_calls[year].append((func , dates[dates // 10000 == year] ,{'overwrite' : overwrite , 'verbose' : True}))
+                    func_calls[year].append((func , (dates[dates // 10000 == year] , ) ,{'overwrite' : overwrite , 'verbose' : True}))
         
         func_calls = {year: calls for year , calls in sorted(func_calls.items())}
 
         for year , calls in func_calls.items():
             n_calls = len(calls)
-            n_dates = sum([len(dates) for _, dates , _ in calls])
+            n_dates = sum([len(args[0]) for _, args , _ in calls])
             Logger.info(f'Update Factor Stats of Year {year} : {n_calls} function calls , {n_dates} dates')
             parallels(calls , method = 'forloop')
 
