@@ -183,12 +183,16 @@ class IOCatcher(OutputCatcher):
     def __init__(self):
         self.stdout_catcher = StringIO()
         self.stderr_catcher = StringIO()
-    
-    def get_contents(self):
-        return {
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._contents = {
             'stdout': self.stdout_catcher.getvalue(),
             'stderr': self.stderr_catcher.getvalue(),
         }
+        super().__exit__(exc_type, exc_val, exc_tb)
+    
+    def get_contents(self):
+        return self._contents
     
     def clear(self):
         self.stdout_catcher.seek(0)
