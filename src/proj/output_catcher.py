@@ -4,6 +4,9 @@ from abc import ABC, abstractmethod
 from io import StringIO
 from pathlib import Path
 
+from .path import PATH
+from .logger import Logger
+
 class OutputDeflector:
     """
     double output stream: deflect output to catcher and original output stream (optional)
@@ -84,6 +87,7 @@ class OutputDeflector:
         elif self.type == 'stderr':
             self.original_output = sys.stderr
             sys.stderr = self
+            Logger.reset_logger()
         else:
             raise ValueError(f"Invalid type: {self.type}")
         self.is_catching = True
@@ -100,6 +104,7 @@ class OutputDeflector:
             sys.stdout = self.original_output
         elif self.type == 'stderr':
             sys.stderr = self.original_output
+            Logger.reset_logger()
         else:
             raise ValueError(f"Invalid type: {self.type}")
         self.close()
@@ -122,9 +127,9 @@ class OutputDeflector:
 
     def close(self) -> None:
         """Close the catcher"""
-        if isinstance(self.catcher, IO):
+        if hasattr(self.catcher, 'close'):
             try:
-                self.catcher.close()
+                getattr(self.catcher, 'close')()
             except Exception as e:
                 print(f"Error closing catcher: {e}")
                 raise e
@@ -206,7 +211,7 @@ class LogWriter(OutputCatcher):
         if log_path is None: 
             self.log_file = None
         else:
-            log_path = Path(log_path)
+            log_path = PATH.main.joinpath(log_path)
             log_path.parent.mkdir(exist_ok=True,parents=True)
             self.log_file = open(log_path, "w")
         self.stdout_catcher = self.log_file

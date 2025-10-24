@@ -23,6 +23,7 @@ class _LevelFormatter(logging.Formatter):
         if record.levelno in self._level_formatters:
             return self._level_formatters[record.levelno].format(record)
         return super(_LevelFormatter, self).format(record)
+
 class _LevelColorFormatter(colorlog.ColoredFormatter):
     """Level Color Formatter with default colors"""
     def __init__(self, fmt=None, datefmt=None, log_colors=None,level_fmts=None,secondary_log_colors=None):
@@ -41,38 +42,37 @@ class _LevelColorFormatter(colorlog.ColoredFormatter):
             return self._level_formatters[record.levelno].format(record)
         return super(_LevelColorFormatter, self).format(record)
 
-def _init_log(test_output = False):
+def log_config() -> dict[str, Any]:
     """Initialize the logger"""
     log_config = PATH.read_yaml(PATH.conf.joinpath('glob' , 'logger.yaml'))
     new_path = PATH.log_main.joinpath(log_config['file']['param']['filename'])
     log_config['file']['param']['filename'] = str(new_path)
     new_path.parent.mkdir(exist_ok=True)
-    log = logging.getLogger(log_config['name'])
-    log.setLevel(getattr(logging , log_config['level']))
 
+    return log_config
+
+def new_log(config : dict[str, Any]) -> logging.Logger:
+    log = logging.getLogger(config['name'])
+    log.setLevel(getattr(logging , config['level']))
+    reset_logger(log , config)
+    return log
+
+def reset_logger(log : logging.Logger , config : dict[str, Any]):
+    """reset the log writer"""
     while log.handlers:
         log.handlers[-1].close()
         log.removeHandler(log.handlers[-1])
 
-    for hdname in log_config['handlers']:
-        hdargs = log_config[hdname]['param']
-        hdclass : Type[logging.Handler] = eval(log_config[hdname]['class'])
+    for hdname in config['handlers']:
+        hdargs = config[hdname]['param']
+        hdclass : Type[logging.Handler] = eval(config[hdname]['class'])
         handler = hdclass(**hdargs)
-        handler.setLevel(log_config[hdname]['level'])
-        hdformatter = eval(log_config[hdname]['formatter_class'])(
-            datefmt=log_config['datefmt'],
-            **log_config['formatters'][log_config[hdname]['formatter']])
+        handler.setLevel(config[hdname]['level'])
+        hdformatter = eval(config[hdname]['formatter_class'])(
+            datefmt=config['datefmt'],
+            **config['formatters'][config[hdname]['formatter']])
         handler.setFormatter(hdformatter)
         log.addHandler(handler)
-
-    
-    if test_output:
-        log.debug('This is the DEBUG    message...')
-        log.info('This is the INFO     message...')
-        log.warning('This is the WARNING  message...')
-        log.error('This is the ERROR    message...')
-        log.critical('This is the CRITICAL message...')
-
     return log
 
 class Logger:
@@ -85,12 +85,18 @@ class Logger:
         'critical' : [] ,
         'debug' : [] ,
     }
-    log = _init_log()
+    _config = log_config()
+    log = new_log(_config)
 
     def __new__(cls, *args , **kwargs):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
+
+    @classmethod
+    def reset_logger(cls):
+        """reset the log writer"""
+        reset_logger(cls.log , cls._config)
 
     @classmethod
     def print(cls , *args , **kwargs):

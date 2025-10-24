@@ -1,0 +1,7 @@
+This will be caught
+[32m******************************* MAIN PART START ********************************[0m
+email: True
+forfeit_task: False
+task_key: a
+abc start ... finished! Cost 0.00 secs
+[32m******************************* MAIN PART FINISH *******************************[0m

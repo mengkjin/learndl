@@ -558,7 +558,7 @@ class StockFactor:
             pivot_table(index = ['date'] , values = 'ic_indus' , columns = 'industry' , observed=True).\
             rename(columns = lambda x:f'ic_indus@{x}')
         cv = self.coverage().rename(columns = lambda x:f'coverage')
-        return ic.join(rankic).join(gp).join(ii).join(cv)
+        return ic.join(rankic).join(gp).join(ii).join(cv).reset_index(drop=False)
 
     def daily_stats(self) -> pd.DataFrame:
         """

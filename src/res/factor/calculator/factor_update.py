@@ -1,4 +1,3 @@
-import time
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -141,13 +140,13 @@ class FactorUpdateJobManager:
                 cls.append(FactorUpdateJob(calc , date))
 
         if len(cls.jobs) == 0:
-            print('There is no update jobs to proceed...')
+            print('There is no Factor Update Jobs to Proceed...')
         else:
             if groups_in_one_update is not None:
                 groups = cls.groups()[:groups_in_one_update]
                 cls.jobs = [job for level , date in groups for job in cls.filter_jobs(cls.jobs , level , date)]
             levels , dates = cls.levels() , cls.dates()
-            print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Finish collecting {len(cls.jobs)} update jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
+            print(f'Finish Collecting {len(cls.jobs)} Factor Update Jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
     
     @classmethod
     def process_jobs(cls , verbosity : int = 1 , overwrite = False , auto_retry = True) -> None:
@@ -171,16 +170,16 @@ class FactorUpdateJobManager:
             parallel(do_job , jobs , keys = [job.factor_name for job in jobs] , method = cls.multi_thread)
             failed_jobs = [job for job in jobs if not job.done]
             if verbosity > 0:
-                print(f'{time.strftime("%Y-%m-%d %H:%M:%S")} : Factors of {level} at {date} done: {len(jobs) - len(failed_jobs)} / {len(jobs)}')
+                print(f'Factor Update of {level} at {date} Done: {len(jobs) - len(failed_jobs)} / {len(jobs)}')
                 if failed_jobs: 
-                    print(f'Failed factors: {[job.factor_name for job in failed_jobs]}')
+                    print(f'Failed Factors: {[job.factor_name for job in failed_jobs]}')
             if auto_retry and failed_jobs:
                 if verbosity > 0: 
-                    print(f'Auto retry failed factors...')
+                    print(f'Auto Retry Failed Factors...')
                 parallel(do_job , failed_jobs , method = len(failed_jobs) > 10)
                 failed_again_jobs = [job for job in failed_jobs if not job.done]
                 if failed_again_jobs:
-                    print(f'Failed factors again: {[job.factor_name for job in failed_again_jobs]}')
+                    print(f'Failed Factors Again: {[job.factor_name for job in failed_again_jobs]}')
         [cls.jobs.remove(job) for job in jobs if job.done]
 
     @classmethod
@@ -200,13 +199,16 @@ class FactorUpdateJobManager:
         
         func_calls = {year: calls for year , calls in sorted(func_calls.items())}
 
+        total_calls , total_dates = 0 , 0
         for year , calls in func_calls.items():
             n_calls = len(calls)
             n_dates = sum([len(args[0]) for _, args , _ in calls])
             Logger.info(f'Update Factor Stats of Year {year} : {n_calls} function calls , {n_dates} dates')
             parallels(calls , method = 'forloop')
+            total_calls += n_calls
+            total_dates += n_dates
 
-        return func_calls
+        print(f'Factor Stats Update Done: {len(func_calls)} Years , {n_calls} function calls , {n_dates} dates')
 
     @classmethod
     def clear_jobs(cls , date : int , verbosity : int = 1) -> None:
