@@ -13,7 +13,7 @@ from src.proj import Logger , PATH
 from src.basic import CONF , CALENDAR , DB
 from src.data import DATAVENDOR
 from src.func.singleton import SingletonABCMeta
-from src.func.parallel import parallel , parallels
+from src.func.parallel import parallels
 
 __all__ = [
     'FactorCalculator' , 'StockFactorCalculator' , 'MarketFactorCalculator' ,
@@ -296,7 +296,6 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     def Factor(cls , start : int | None = 20170101 , end : int | None = None , step : int = 10 , 
                dates : np.ndarray | list[int] | None = None , normalize = True , 
                fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
-               weighted_whiten = False , order = ['fillna' , 'whiten' , 'winsor'] ,
                multi_thread = True , ignore_error = True , verbose = False) -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
         if dates is None:
@@ -314,7 +313,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         
         factor = StockFactor(dfs , step = step)
         if normalize: 
-            factor.normalize(fill_method , weighted_whiten , order , inplace = True)
+            factor.normalize(fill_method , inplace = True)
         return factor
 
     @classmethod
@@ -402,7 +401,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         new_df = getattr(cls.Factor(dates = dates) , f'{stats_type}_stats')()
         df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
             sort_values('date').reset_index(drop = True)
-        DB.save(df , f'factor_stats_{stats_type}' , cls.factor_name)
+        DB.save(df , f'factor_stats_{stats_type}' , cls.factor_name , verbose = False)
         if verbose:
             print(f'Updated {stats_type} stats of {cls.factor_name} for {len(dates)} dates')
 

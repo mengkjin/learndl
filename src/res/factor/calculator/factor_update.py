@@ -195,7 +195,7 @@ class FactorUpdateJobManager:
                 for year in years:
                     if year not in func_calls:
                         func_calls[year] = []
-                    func_calls[year].append((func , (dates[dates // 10000 == year] , ) ,{'overwrite' : overwrite , 'verbose' : True}))
+                    func_calls[year].append((func , (dates[dates // 10000 == year] , ) ,{'overwrite' : overwrite}))
         
         func_calls = {year: calls for year , calls in sorted(func_calls.items())}
 
