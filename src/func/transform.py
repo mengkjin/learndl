@@ -188,15 +188,18 @@ def winsorize(v ,
               const : float | np.floating | None = None , 
               trim_val : tuple[float | None,float | None] = (None , None) , 
               winsor_val : tuple[float | None,float | None] = (None , None) , 
-              winsor_pct : tuple[float,float] = (0. , 1.)):
+              winsor_pct : tuple[float,float] = (0. , 1.) ,
+              radius_for_invalid_winsor : float = 1e4):
     assert center in ['median' , 'mean'] , center
     assert scale in ['mad' , 'sd'] , scale
     
     v = trim(v , *trim_val)
     v = winsor(v , *winsor_val)
 
-    s = np.nanmedian(np.abs(v - np.nanmedian(v))) if scale == 'mad' else np.nanstd(v)
-    c = np.nanmedian(v) if center == 'median' else  np.nanmean(v)
+    center_val = np.nanmedian(v) if center == 'median' else  np.nanmean(v)
+    radius_val = np.nanmedian(np.abs(v - np.nanmedian(v))) if scale == 'mad' else np.nanstd(v)
+    if radius_val == 0:
+        radius_val = radius_for_invalid_winsor
 
     if const is None:
         if center == 'median' and scale == 'mad' : 
@@ -206,7 +209,7 @@ def winsorize(v ,
         else: 
             raise KeyError(center , scale)
 
-    v = winsor(v , c - const * s , c + const * s)
+    v = winsor(v , center_val - const * radius_val , center_val + const * radius_val)
     v = winsor(v , np.quantile(v , winsor_pct[0]) , np.quantile(v , winsor_pct[1]))
 
     return v

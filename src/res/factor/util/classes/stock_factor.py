@@ -661,9 +661,11 @@ class StockFactor:
         for step in order:
             if step == 'fillna':   
                 df = fillna(df , fill_method = fill_method)
-            elif step == 'whiten': 
-                df = whiten(df , ffmv_weighted = weighted_whiten)
             elif step == 'winsor': 
                 df = winsor(df)
+            elif step == 'whiten': 
+                df = whiten(df , ffmv_weighted = weighted_whiten)
+            else:
+                raise ValueError(f'step {step} not supported')
         df = pivot_frame(df)
         return df
