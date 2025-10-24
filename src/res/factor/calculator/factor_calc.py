@@ -77,15 +77,22 @@ class _FactorMetaType:
 
 class _FactorCalendar:
     """calendar of factor"""
-    _dates = CALENDAR.slice(CALENDAR.td_within(CONF.Factor.UPDATE.init_date) , CONF.Factor.UPDATE.start , CONF.Factor.UPDATE.end)
+    _dates = CALENDAR.td_within(CONF.Factor.UPDATE.init_date)
     
     def __get__(self,instance,owner) -> np.ndarray:
         init_date = getattr(owner, 'init_date')
         update_step = getattr(owner, 'update_step')
-        update_to = CALENDAR.updated()
+        
         assert update_step > 0 , f'update_step should be greater than 0 for {owner.__qualname__} , but got {update_step}'
         dates = self._dates[::update_step]
-        return dates[(dates >= init_date) & (dates <= update_to)]
+        return dates[dates >= init_date]
+
+class _UpdateCalendar:
+    """calendar of factor"""
+    def __get__(self,instance,owner) -> np.ndarray:
+        dates = getattr(owner, 'factor_calendar')
+        update_to = CALENDAR.updated()
+        return dates[(dates >= CONF.Factor.UPDATE.start) & (dates <= CONF.Factor.UPDATE.end) & (dates <= update_to)]
 
 
 def _calc_factor_wrapper(calc_factor : Callable[['FactorCalculator',int],pd.Series | pd.DataFrame]) -> Callable[['FactorCalculator',int], pd.DataFrame]:
@@ -201,6 +208,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     factor_string = _FactorPropertyStr('factor_string')
 
     factor_calendar = _FactorCalendar()
+    update_calendar = _UpdateCalendar()
 
     UPDATE_MIN_VALID_COUNT_RELAX : int = 20
     UPDATE_MIN_VALID_COUNT_STRICT : int = 100
@@ -300,7 +308,6 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         if len(dates) == 0: 
             return StockFactor(pd.DataFrame())
         calc = cls()
-
         #dfs = parallel(calc.eval_factor , dates , {'verbose' : verbose} , keys = dates , method = multi_thread , ignore_error = ignore_error)
         func_calls = [(calc.eval_factor , (date , ) , {'verbose' : verbose}) for date in dates]
         dfs = parallels(func_calls , keys = dates , method = multi_thread , ignore_error = ignore_error)
@@ -341,7 +348,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @classmethod
     def target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> np.ndarray:
         """returntarget dates of factor updates"""
-        dates = CALENDAR.slice(cls.factor_calendar , start , end)
+        dates = CALENDAR.slice(cls.update_calendar , start , end)
         if not overwrite: 
             dates = CALENDAR.diffs(dates , cls.stored_dates())
         return dates

@@ -80,7 +80,11 @@ def parallels(func_calls : Iterable[tuple[Callable , Iterable | None , dict[str 
     else:
         PoolExecutor = ProcessPoolExecutor if method == 2 else ThreadPoolExecutor
         with PoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(func, args , kwargs):key for key , (func , args , kwargs) in iterance}
+            #futures = {pool.submit(func, *(args or ()) , **(kwargs or {})):key for key , (func , args , kwargs) in iterance}
+            #for future in as_completed(futures):
+            #    try_func_call(result , futures[future] , future.result , catch_errors = catch_errors)
+
+            futures = {pool.submit(try_func_call, result , key , func , args , kwargs , catch_errors = catch_errors):key for key , (func , args , kwargs) in iterance}
             for future in as_completed(futures):
-                try_func_call(result , futures[future] , future.result , catch_errors = catch_errors)
+                future.result()
     return result

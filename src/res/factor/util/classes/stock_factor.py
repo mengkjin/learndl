@@ -213,6 +213,8 @@ class StockFactor:
         InstanceRecord.update_factor(self)
 
     def __repr__(self):
+        if self.date.size == 0:
+            return f'{self.__class__.__name__}(normalized={self.normalized},names={self.factor_names},dates=None)'
         return f'{self.__class__.__name__}(normalized={self.normalized},names={self.factor_names},dates={self.date.min()}-{self.date.max()})'
     
     def __call__(self , benchmark):
@@ -339,6 +341,8 @@ class StockFactor:
         """
         if self._blk is not None: 
             return self._blk.date
+        elif self._df.empty:
+            return np.array([])
         else:
             return self._df.index.get_level_values('date').unique().to_numpy()
         
