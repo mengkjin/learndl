@@ -578,15 +578,7 @@ class StockFactor:
         normalize the factor data by fill method , weighted whiten , and winsorize
         can specify the order of the steps
         """
-        df = self.frame()
-        for step in order:
-            if step == 'fillna':   
-                df = fillna(df , fill_method = fill_method)
-            elif step == 'whiten': 
-                df = whiten(df , ffmv_weighted = weighted_whiten)
-            elif step == 'winsor': 
-                df = winsor(df)
-        df = pivot_frame(df)
+        df = self.normaliz_df(self.frame() , fill_method = fill_method , weighted_whiten = weighted_whiten , order = order)
         if inplace: 
             return self.update(df , normalized = True)
         else:
@@ -657,3 +649,21 @@ class StockFactor:
         fill na values of the factor data
         """
         return fillna(df , fill_method = fill_method)
+
+    @staticmethod
+    def normaliz_df(df : pd.DataFrame , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+                  weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):
+        """
+        normalize the dataframe factor data by fill method , weighted whiten , and winsorize
+        can specify the order of the steps
+        """
+        assert 'date' in df.index.names and 'secid' in df.index.names , f'df must have date and secid as index : {df}'
+        for step in order:
+            if step == 'fillna':   
+                df = fillna(df , fill_method = fill_method)
+            elif step == 'whiten': 
+                df = whiten(df , ffmv_weighted = weighted_whiten)
+            elif step == 'winsor': 
+                df = winsor(df)
+        df = pivot_frame(df)
+        return df
