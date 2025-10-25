@@ -190,6 +190,7 @@ class FactorUpdateJobManager:
             target_dates = calc.stats_target_dates(start , end , overwrite)
             for stats_type in ['daily' , 'weekly']:
                 func  = getattr(calc , f'update_{stats_type}_stats')
+                func.__qualname__ = f'{calc.factor_name}.{stats_type}_stats'
                 dates = target_dates[stats_type]
                 years = np.unique(dates // 10000)
                 for year in years:

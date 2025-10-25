@@ -147,8 +147,7 @@ def eval_grp_avg(x : pd.DataFrame , x_cols : list, y_name : str = 'ret', group_n
     y = pd.DataFrame(x[y_name], index=x.index, columns=pd.Index([y_name]))
     rtn = list()
     for col in x_cols:
-        bins = x[col].drop_duplicates().quantile(np.linspace(0,1,group_num + 1))
-        y['group'] = pd.cut(x[col], bins=bins, labels=[i for i in range(1, group_num + 1)])
+        y['group'] = pd.cut(x[col].rank(pct = True), bins=np.linspace(0,1,group_num + 1).tolist(), labels=[i for i in range(1, group_num + 1)])
         if excess: 
             y[y_name] -= y[y_name].mean()
         grp_avg_ret = y.groupby('group' , observed = True)[y_name].mean().rename(col)

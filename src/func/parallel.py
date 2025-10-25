@@ -32,9 +32,9 @@ def try_func_call(result_dict : dict , key , func : Callable ,
         kwargs = kwargs or {}
         result_dict[key] = func(*args , **kwargs)
     except catch_errors as e:
-        print(f'{key} : {func.__qualname__}({args}) generated an exception: {e}')
+        print(f'{key} : {func}({args} , {kwargs}) generated an exception: {e}')
     except Exception as e:
-        print(f'{key} : {func.__qualname__}({args}) generated an exception:')
+        print(f'{key} : {func}({args} , {kwargs}) generated an exception:')
         raise e
 
 def parallel(func : Callable , args : Iterable , kwargs : dict[Any , Any] | None = None , keys : Iterable | None = None , 
@@ -80,10 +80,6 @@ def parallels(func_calls : Iterable[tuple[Callable , Iterable | None , dict[str 
     else:
         PoolExecutor = ProcessPoolExecutor if method == 2 else ThreadPoolExecutor
         with PoolExecutor(max_workers=max_workers) as pool:
-            #futures = {pool.submit(func, *(args or ()) , **(kwargs or {})):key for key , (func , args , kwargs) in iterance}
-            #for future in as_completed(futures):
-            #    try_func_call(result , futures[future] , future.result , catch_errors = catch_errors)
-
             futures = {pool.submit(try_func_call, result , key , func , args , kwargs , catch_errors = catch_errors):key for key , (func , args , kwargs) in iterance}
             for future in as_completed(futures):
                 future.result()
