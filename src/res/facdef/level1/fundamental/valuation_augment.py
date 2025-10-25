@@ -46,8 +46,8 @@ class btop_augment(ValueFactor):
     
     def calc_factor(self, date: int):
         x_range = btop_augment_range(date)
-        v = pd.concat([whiten(winsorize(calc.EvalSeries(date).where(x_range , np.nan))) 
-                       for calc in [btop , btop_rank3y , btop_stability]] , axis = 1).mean(axis = 1)
+        vals = [btop.EvalSeries(date) , btop_rank3y.EvalSeries(date) , btop_stability.EvalSeries(date)]
+        v = pd.concat([whiten(winsorize(val.where(x_range , np.nan))) for val in vals] , axis = 1).mean(axis = 1)
         return v
     
 class etop_augment(ValueFactor):
@@ -56,8 +56,8 @@ class etop_augment(ValueFactor):
     
     def calc_factor(self, date: int):
         x_range = etop_augment_range(date)
-        v = pd.concat([whiten(winsorize(calc.EvalSeries(date).where(x_range , np.nan))) 
-                       for calc in [etop , etop_rank3y , etop_stability]] , axis = 1).mean(axis = 1)
+        vals = [etop.EvalSeries(date) , etop_rank3y.EvalSeries(date) , etop_stability.EvalSeries(date)]
+        v = pd.concat([whiten(winsorize(val.where(x_range , np.nan))) for val in vals] , axis = 1).mean(axis = 1)
         return v
     
 class cfev_augment(ValueFactor):
@@ -66,8 +66,8 @@ class cfev_augment(ValueFactor):
     
     def calc_factor(self, date: int):
         x_range = cfev_augment_range(date)
-        v = pd.concat([whiten(winsorize(calc.EvalSeries(date).where(x_range , np.nan))) 
-                       for calc in [cfev , cfev_rank3y , cfev_stability]] , axis = 1).mean(axis = 1)
+        vals = [cfev.EvalSeries(date) , cfev_rank3y.EvalSeries(date) , cfev_stability.EvalSeries(date)]
+        v = pd.concat([whiten(winsorize(val.where(x_range , np.nan))) for val in vals] , axis = 1).mean(axis = 1)
         return v
     
 class valuation_augment(ValueFactor):
@@ -75,9 +75,9 @@ class valuation_augment(ValueFactor):
     description = '估值增强因子'
     
     def calc_factor(self, date: int):
-        bp  = btop_augment.Eval(date).set_index('secid')
-        ep  = etop_augment.Eval(date).set_index('secid')
-        cfp = cfev_augment.Eval(date).set_index('secid')
+        bp  = btop_augment.EvalSeries(date)
+        ep  = etop_augment.EvalSeries(date)
+        cfp = cfev_augment.EvalSeries(date)
         if any(f.empty or f.isna().all() for f in [bp , ep , cfp]): 
             return pd.Series()
         v = pd.concat([whiten(winsorize(calc)) for calc in [bp , ep , cfp]] , axis = 1).mean(axis = 1)
