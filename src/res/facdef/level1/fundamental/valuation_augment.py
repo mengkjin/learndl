@@ -9,7 +9,7 @@ from src.res.facdef.level0.fundamental.valuation_static import (btop , btop_rank
 from src.res.facdef.level0.fundamental.valuation_dynamic import btop_stability , etop_stability , cfev_stability
 
 def btop_augment_range(date : int):
-    bp_raw = btop.Eval(date)
+    bp_raw = btop.EvalSeries(date)
 
     fixed_asset_ratio  = DATAVENDOR.get_fin_latest('bs@fix_assets@qtr / ta@qtr' , date)
     capital_intensity  = DATAVENDOR.get_fin_latest('ta@qtr / sales@qtr' , date)
@@ -36,7 +36,7 @@ def etop_augment_range(date : int):
     return ep_range
 
 def cfev_augment_range(date : int):
-    val = cfev.Eval(date).set_index('secid')
+    val = cfev.EvalSeries(date)
     cf_range = (val > 0)
     return cf_range
 
@@ -46,7 +46,7 @@ class btop_augment(ValueFactor):
     
     def calc_factor(self, date: int):
         x_range = btop_augment_range(date)
-        v = pd.concat([whiten(winsorize(calc.Eval(date).set_index('secid').where(x_range , np.nan))) 
+        v = pd.concat([whiten(winsorize(calc.EvalSeries(date).where(x_range , np.nan))) 
                        for calc in [btop , btop_rank3y , btop_stability]] , axis = 1).mean(axis = 1)
         return v
     
@@ -56,7 +56,7 @@ class etop_augment(ValueFactor):
     
     def calc_factor(self, date: int):
         x_range = etop_augment_range(date)
-        v = pd.concat([whiten(winsorize(calc.Eval(date).set_index('secid').where(x_range , np.nan))) 
+        v = pd.concat([whiten(winsorize(calc.EvalSeries(date).where(x_range , np.nan))) 
                        for calc in [etop , etop_rank3y , etop_stability]] , axis = 1).mean(axis = 1)
         return v
     
@@ -66,7 +66,7 @@ class cfev_augment(ValueFactor):
     
     def calc_factor(self, date: int):
         x_range = cfev_augment_range(date)
-        v = pd.concat([whiten(winsorize(calc.Eval(date).set_index('secid').where(x_range , np.nan))) 
+        v = pd.concat([whiten(winsorize(calc.EvalSeries(date).where(x_range , np.nan))) 
                        for calc in [cfev , cfev_rank3y , cfev_stability]] , axis = 1).mean(axis = 1)
         return v
     

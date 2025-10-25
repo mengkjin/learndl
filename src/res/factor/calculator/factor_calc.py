@@ -268,6 +268,16 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
                 print(f'{self.factor_name} at {date} recalculated')
         return df
 
+    def eval_factor_series(self ,  date : int , verbose : bool = False) -> pd.Series:
+        """get factor value of a given date , load if exist , calculate if not exist , return a Series"""
+        df = self.eval_factor(date , verbose)
+        if 'secid' in df.columns:
+            return df.set_index('secid').iloc[:,0]
+        elif 'date' in df.columns:
+            return df.set_index('date').iloc[:,0]
+        else:
+            raise ValueError(f'factor {self.factor_name} at {date} has no secid or date column')
+
     @classmethod
     def Calc(cls , date : int) -> pd.Series | pd.DataFrame:
         """calculate factor value of a given date"""
@@ -294,6 +304,11 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     def Eval(cls , date : int) -> pd.DataFrame:
         """get factor value of a given date , load if exist , calculate if not exist"""
         return cls().eval_factor(date)
+
+    @classmethod
+    def EvalSeries(cls , date : int) -> pd.Series:
+        """get factor value of a given date , load if exist , calculate if not exist , return a Series"""
+        return cls().eval_factor_series(date)
 
     @classmethod
     def Factor(cls , start : int | None = 20170101 , end : int | None = None , step : int = 10 , 
