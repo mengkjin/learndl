@@ -463,6 +463,7 @@ class StockFactor:
             def df_ic(subdf : pd.DataFrame , **kwargs):
                 with warnings.catch_warnings():
                     warnings.filterwarnings('ignore', message='An input array is constant; the correlation coefficient is not defined' , category=RuntimeWarning)
+                    warnings.filterwarnings('ignore', message='invalid value encountered in divide' , category=RuntimeWarning)
                     return subdf[self.factor_names].corrwith(subdf['ret'], method=ic_type)
             ic = grouped.apply(df_ic , include_groups = False).rename_axis('factor_name',axis='columns')
             self.stats['ic'] = (params , ic)

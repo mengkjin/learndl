@@ -33,7 +33,8 @@ class DataAPI:
 
         # update stock factor
         with Logger.EnclosedMessage(' update stock factors '):
-            FactorCalculatorAPI.update()
+            # FactorCalculatorAPI.update()
+            ...
 
         with Logger.EnclosedMessage(' purge old data cache '):
             ModuleData.purge_all()
