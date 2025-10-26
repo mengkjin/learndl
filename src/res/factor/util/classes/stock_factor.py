@@ -657,6 +657,12 @@ class StockFactor:
         normalize the dataframe factor data by fill method , weighted whiten , and winsorize
         can specify the order of the steps
         """
+        
+        if len(df.index.names) > 1 or df.index.name: 
+            df_index = df.index.names if df.index.names else [df.index.name]
+            df = df.reset_index(df_index)
+        else:
+            df_index = None
         assert 'date' in df.index.names and 'secid' in df.index.names , f'df must have date and secid as index : {df}'
         for step in order:
             if step == 'fillna':   
@@ -668,4 +674,6 @@ class StockFactor:
             else:
                 raise ValueError(f'step {step} not supported')
         df = pivot_frame(df)
+        if df_index is not None:
+            df = df.set_index(df_index)
         return df
