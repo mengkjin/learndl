@@ -4,12 +4,12 @@ from typing import Any , Literal
 from src.proj import Logger
 from src.data import DATAVENDOR
 from src.res.factor.util import StockFactor
-from src.res.factor.api import FactorModelUpdater , FactorCalculatorAPI , FactorTestAPI
+from src.res.factor.api import RiskModelUpdater , FactorCalculatorAPI , FactorTestAPI
 from src.res.factor.calculator import StockFactorHierarchy
 
 __all__ = [
     'FactorAPI' , 'get_random_factor' , 'get_real_factor' , 'get_factor' , 'get_project_name' ,
-    'FactorModelUpdater' , 'FactorCalculatorAPI' , 'FactorTestAPI' , 'StockFactorHierarchy' ,
+    'RiskModelUpdater' , 'FactorCalculatorAPI' , 'FactorTestAPI' , 'StockFactorHierarchy' ,
     'StockFactor' , 'DATAVENDOR'
 ]
 

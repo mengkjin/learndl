@@ -2,7 +2,7 @@ from .multi_kline import MultiKlineUpdater
 from .labels import ClassicLabelsUpdater
 from .pre_process import DataPreProcessor
 
-class OtherDataUpdater:
+class AffiliatedDataUpdater:
     @classmethod
     def update(cls):
         MultiKlineUpdater.update()
