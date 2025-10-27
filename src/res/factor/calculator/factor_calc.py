@@ -328,7 +328,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         #dfs = parallel(calc.eval_factor , dates , {'verbose' : verbose} , keys = dates , method = multi_thread , ignore_error = ignore_error)
         func_calls = [(calc.eval_factor , (date , ) , {'verbose' : verbose}) for date in dates]
         dfs = parallels(func_calls , keys = dates , method = multi_thread , ignore_error = ignore_error)
-        
+
         factor = StockFactor(dfs , step = step)
         if normalize: 
             factor.normalize(fill_method , inplace = True)
@@ -449,6 +449,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     def stats_target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> dict[str , np.ndarray]:
         """return dates of factor stats"""
         factor_stored_dates = CALENDAR.slice(cls.stored_dates() , start , end)
+        factor_stored_dates = np.intersect1d(factor_stored_dates , cls.factor_calendar)
         stats_stored_dates = cls.stats_stored_dates()
         target_dates : dict[str , np.ndarray] = {}
         skip_days = {
