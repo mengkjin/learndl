@@ -627,6 +627,7 @@ class MarketFactorCalculator(FactorCalculator):
 class QualityFactor(StockFactorCalculator):
     """Factor Calculator of category0: fundamental , category1: quality"""
     category1 = 'quality'
+    update_step = 1
 
 class GrowthFactor(StockFactorCalculator):
     """Factor Calculator of category0: fundamental , category1: growth"""
