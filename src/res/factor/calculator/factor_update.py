@@ -208,7 +208,7 @@ class FactorUpdateJobManager:
             total_calls += n_calls
             total_dates += n_dates
 
-        print(f'Factor Stats Update Done: {len(func_calls)} Years , {n_calls} function calls , {n_dates} dates')
+        print(f'Factor Stats Update Done: {len(func_calls)} Years , {total_calls} function calls , {total_dates} dates')
 
     @classmethod
     def clear_jobs(cls , date : int , verbosity : int = 1) -> None:

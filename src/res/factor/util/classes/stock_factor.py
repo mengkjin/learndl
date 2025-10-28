@@ -230,7 +230,13 @@ class StockFactor:
         """
         update the factor data
         """
-        
+        self._df  : pd.DataFrame | Any = None
+        self._blk : DataBlock | Any = None
+        self.normalized = normalized
+        self.subsets : dict[str,StockFactor] = {}
+        self.step = step
+        self.stats : dict[str,tuple[dict[str,Any],pd.DataFrame]] = {}
+
         if isinstance(factor , StockFactor):
             factor = factor.prior_input
         elif isinstance(factor , dict):
@@ -239,25 +245,20 @@ class StockFactor:
         elif isinstance(factor , pd.Series):
             factor = factor.to_frame()
 
-        self._df  : pd.DataFrame | Any = None
-        self._blk : DataBlock | Any = None
+        assert isinstance(factor , (pd.DataFrame , DataBlock)) , f'factor must be a pandas DataFrame or a DataBlock , but got {type(factor)} : {factor}'
 
         if isinstance(factor , pd.DataFrame):
-            if not factor.empty:
-                if 'date' not in factor.index.names: 
-                    factor = factor.set_index('date' , append=True)
-                if 'secid' not in factor.index.names: 
-                    factor = factor.set_index('secid' , append=True)
-                if None in factor.index.names: 
-                    factor = factor.reset_index([None] , drop=True)
+            if factor.empty:
+                factor = pd.DataFrame(columns=['date' , 'secid'])
+            factor = factor.reset_index().drop(columns=['index'] , errors='ignore')
+            if 'date' in factor.columns: 
+                factor = factor.set_index('date' , append=True)
+            if 'secid' in factor.columns: 
+                factor = factor.set_index('secid' , append=True)
             self._df = factor
         else:
             self._blk = factor
 
-        self.normalized = normalized
-        self.subsets : dict[str,StockFactor] = {}
-        self.step = step
-        self.stats : dict[str,tuple[dict[str,Any],pd.DataFrame]] = {}
         return self
 
     def copy(self): 
@@ -658,13 +659,9 @@ class StockFactor:
         can specify the order of the steps
         """
         
-        if len(df.index.names) > 1 or df.index.name: 
-            df_index = df.index.names if df.index.names else [df.index.name]
-            df = df.reset_index(df_index)
-        else:
-            df_index = None
+        df = df.reset_index().drop(columns=['index'] , errors='ignore')
+        assert 'date' in df.columns and 'secid' in df.columns , f'df must have date and secid as index : {df}'
         df = df.set_index(['date' , 'secid'])
-        assert 'date' in df.index.names and 'secid' in df.index.names , f'df must have date and secid as index : {df}'
         for step in order:
             if step == 'fillna':   
                 df = fillna(df , fill_method = fill_method)
@@ -674,7 +671,5 @@ class StockFactor:
                 df = whiten(df , ffmv_weighted = weighted_whiten)
             else:
                 raise ValueError(f'step {step} not supported')
-        df = pivot_frame(df)
-        if df_index is not None:
-            df = df.reset_index().set_index(df_index)
+        df = pivot_frame(df).reset_index()
         return df

@@ -296,7 +296,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         """load factor values of a given date range"""
         dates = CALENDAR.slice(cls.stored_dates() , start , end)
         df = DB.load_multi('factor' , cls.factor_name , dates)
-        if normalize:
+        if cls.meta_type == 'factor' and normalize:
             df = StockFactor.normaliz_df(df , fill_method = fill_method)
         return df
 
@@ -319,7 +319,10 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         if dates is None:
             assert step % cls.update_step == 0 , f'step {step} should be a multiple of {cls.update_step}'
             dates = CALENDAR.slice(cls.factor_calendar , start , end)
-            dates = dates[dates <= CALENDAR.updated()][::int(step/cls.update_step)]
+            if len(dates) > 0:
+                dates = dates[dates <= CALENDAR.updated()][::int(step/cls.update_step)]
+            else:
+                dates = CALENDAR.slice(cls.stored_dates() , start , end)
         else:
             dates = np.intersect1d(dates , cls.factor_calendar)
         if len(dates) == 0: 
