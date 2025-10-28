@@ -253,6 +253,8 @@ class StockFactor:
                 factor = factor.set_index('date' , append=True)
             if 'secid' in factor.columns: 
                 factor = factor.set_index('secid' , append=True)
+            if None in factor.index.names:
+                factor = factor.reset_index([None] , drop=True)
             self._df = factor
         else:
             self._blk = factor
@@ -660,6 +662,8 @@ class StockFactor:
             df = df.set_index('date' , append=True)
         if 'secid' not in df.index.names:
             df = df.set_index('secid' , append=True)
+        if None in df.index.names:
+            df = df.reset_index([None] , drop=True)
         assert 'date' in df.index.names and 'secid' in df.index.names , f'df must have date and secid as index : {df}'
         for step in order:
             if step == 'fillna':   
