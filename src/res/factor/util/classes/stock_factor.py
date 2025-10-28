@@ -236,7 +236,6 @@ class StockFactor:
         self.subsets : dict[str,StockFactor] = {}
         self.step = step
         self.stats : dict[str,tuple[dict[str,Any],pd.DataFrame]] = {}
-
         if isinstance(factor , StockFactor):
             factor = factor.prior_input
         elif isinstance(factor , dict):
@@ -246,7 +245,6 @@ class StockFactor:
             factor = factor.to_frame()
 
         assert isinstance(factor , (pd.DataFrame , DataBlock)) , f'factor must be a pandas DataFrame or a DataBlock , but got {type(factor)} : {factor}'
-
         if isinstance(factor , pd.DataFrame):
             if factor.empty:
                 factor = pd.DataFrame(columns=['date' , 'secid'])
@@ -579,7 +577,7 @@ class StockFactor:
         normalize the factor data by fill method , weighted whiten , and winsorize
         can specify the order of the steps
         """
-        df = self.normaliz_df(self.frame() , fill_method = fill_method , weighted_whiten = weighted_whiten , order = order)
+        df = self.normalize_df(self.frame() , fill_method = fill_method , weighted_whiten = weighted_whiten , order = order)
         if inplace: 
             return self.update(df , normalized = True)
         else:
@@ -652,16 +650,17 @@ class StockFactor:
         return fillna(df , fill_method = fill_method)
 
     @staticmethod
-    def normaliz_df(df : pd.DataFrame , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+    def normalize_df(df : pd.DataFrame , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
                   weighted_whiten = False , order = ['fillna' , 'winsor' , 'whiten'] , inplace = False):
         """
         normalize the dataframe factor data by fill method , weighted whiten , and winsorize
         can specify the order of the steps
         """
-        
-        df = df.reset_index().drop(columns=['index'] , errors='ignore')
-        assert 'date' in df.columns and 'secid' in df.columns , f'df must have date and secid as index : {df}'
-        df = df.set_index(['date' , 'secid'])
+        if 'date' not in df.index.names:
+            df = df.set_index('date' , append=True)
+        if 'secid' not in df.index.names:
+            df = df.set_index('secid' , append=True)
+        assert 'date' in df.index.names and 'secid' in df.index.names , f'df must have date and secid as index : {df}'
         for step in order:
             if step == 'fillna':   
                 df = fillna(df , fill_method = fill_method)
@@ -671,5 +670,5 @@ class StockFactor:
                 df = whiten(df , ffmv_weighted = weighted_whiten)
             else:
                 raise ValueError(f'step {step} not supported')
-        df = pivot_frame(df).reset_index()
+        df = pivot_frame(df).reset_index(['date' , 'secid']).reset_index(drop=True)
         return df

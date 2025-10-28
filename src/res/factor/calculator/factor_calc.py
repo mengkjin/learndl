@@ -297,7 +297,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         dates = CALENDAR.slice(cls.stored_dates() , start , end)
         df = DB.load_multi('factor' , cls.factor_name , dates)
         if cls.meta_type == 'factor' and normalize:
-            df = StockFactor.normaliz_df(df , fill_method = fill_method)
+            df = StockFactor.normalize_df(df , fill_method = fill_method)
         return df
 
     @classmethod
