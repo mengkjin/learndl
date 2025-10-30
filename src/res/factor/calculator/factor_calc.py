@@ -20,7 +20,7 @@ __all__ = [
     'QualityFactor' , 'GrowthFactor' , 'ValueFactor' , 'EarningFactor' , 'SurpriseFactor' , 'CoverageFactor' , 'ForecastFactor' , 'AdjustmentFactor' ,
     'HfMomentumFactor' , 'HfVolatilityFactor' , 'HfCorrelationFactor' , 'HfLiquidityFactor' ,
     'MomentumFactor' , 'VolatilityFactor' , 'CorrelationFactor' , 'LiquidityFactor' , 'HoldingFactor' , 'TradingFactor' ,
-    'RegimeFactor'
+    'MarketEventFactor'
 ]
 
 class _FactorProperty:
@@ -68,12 +68,7 @@ class _FactorPropertyStr(_FactorProperty):
 class _FactorMetaType:
     """meta class of factor"""
     def __get__(self,instance,owner) -> Literal['market_factor' , 'factor']:
-        category0 = getattr(owner, 'category0' , None)
-        assert category0 is not None , f'category0 is not set for {owner.__qualname__}'
-        if category0 == 'market':
-            return 'market_factor'
-        else:
-            return 'factor'
+        return CONF.Factor.STOCK.cat0_to_meta(owner.category0)
 
 class _FactorCalendar:
     """calendar of factor"""
@@ -118,9 +113,8 @@ def _calc_factor_wrapper(calc_factor : Callable[['FactorCalculator',int],pd.Seri
         if not isinstance(df , (pd.Series , pd.DataFrame)):  
             raise TypeError(f'calc_factor must return a Series or DataFrame , but got {type(df)} for factor {instance.factor_name}')
         
-        if df.empty: 
-            df = pd.DataFrame()
-        elif isinstance(df , pd.Series): 
+        
+        if isinstance(df , pd.Series): 
             df = df.rename(instance.factor_name).to_frame()
             
         if len(df.index.names) > 1 or df.index.name:
@@ -699,6 +693,6 @@ class TradingFactor(StockFactorCalculator):
     """Factor Calculator of category0: money_flow , category1: trading"""
     category1 = 'trading'
 
-class RegimeFactor(MarketFactorCalculator):
-    """Factor Calculator of category0: market , category1: regime"""
-    category1 = 'regime'
+class MarketEventFactor(MarketFactorCalculator):
+    """Factor Calculator of category0: market , category1: market_event"""
+    category1 = 'market_event'

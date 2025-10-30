@@ -66,6 +66,21 @@ class SWIndustry(InfoFetcher):
         df['out_date'] = df['out_date'].fillna(99991231).astype(int)
         df = df.reset_index(drop=True)
         return df
+
+class ZXIndustry(InfoFetcher):
+    """A share zx industry"""
+    DB_KEY = 'zx_industry' 
+    def get_data(self , date = None):
+
+        df1 = self.iterate_fetch(self.pro.ci_index_member , limit = 2000 , is_new = 'Y')
+        df2 = self.iterate_fetch(self.pro.ci_index_member , limit = 2000 , is_new = 'N')
+
+        df = pd.concat([df1 , df2])
+        df = ts_code_to_secid(df)
+        df['in_date'] = df['in_date'].fillna(99991231).astype(int)
+        df['out_date'] = df['out_date'].fillna(99991231).astype(int)
+        df = df.reset_index(drop=True)
+        return df
     
 class ChangeName(InfoFetcher):
     """A share change name table (for name change and get st/*st)"""

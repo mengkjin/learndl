@@ -1,6 +1,6 @@
 # basic variables in factor package
 import numpy as np
-from typing import Any
+from typing import Any , Literal
 
 from src.proj import MACHINE
 
@@ -122,6 +122,15 @@ class PortfolioOptimizationConfig:
         """custom portfolio optimization config"""
         return MACHINE.configs('factor' , 'custom_opt_config')
 
+class _StockFactorDefinitionMetaType:
+    def __get__(self,instance,owner) -> list[str]:
+        return [
+            'factor' , 'market_factor'
+        ]
+
+    def __set__(self,instance,value):
+        raise AttributeError(f'{instance.__class__.__name__} is read-only attributes')
+
 class _StockFactorDefinitionCat0:
     def __get__(self,instance,owner) -> list[str]:
         return [
@@ -140,7 +149,7 @@ class _StockFactorDefinitionCat1:
             'behavior' : ['momentum' , 'volatility' , 'correlation' , 'liquidity'] ,
             'money_flow' : ['holding' , 'trading'] ,
             'alternative' : None ,
-            'market' : ['regime']
+            'market' : ['market_event']
         }
     def __set__(self,instance,value):
         raise AttributeError(f'{instance.__class__.__name__} is read-only attributes')
@@ -149,8 +158,14 @@ class CategoryError(Exception):
     ...
 
 class StockFactorDefinitionConfig:
+    _META = _StockFactorDefinitionMetaType()
     _CAT0 = _StockFactorDefinitionCat0()
     _CAT1 = _StockFactorDefinitionCat1()
+
+    @property
+    def meta_type(self) -> list[str]:
+        """meta type of stock factor"""
+        return self._META
     
     @property
     def category0(self) -> list[str]:
@@ -160,7 +175,16 @@ class StockFactorDefinitionConfig:
     def category1(self) -> dict[str , list[str] | None]:
         """category1 of stock factor"""
         return self._CAT1
-    
+
+    @classmethod
+    def cat0_to_meta(cls , category0 : str) -> Literal['factor' , 'market_factor']:
+        if category0 not in cls._CAT0:
+            raise CategoryError(f'category0 is should be in {cls._CAT0}, but got {category0}')
+        if category0 == 'market':
+            return 'market_factor'
+        else:
+            return 'factor'
+            
     @classmethod
     def cat0_to_cat1(cls , category0 : str) -> list[str] | None:
         """Get the possible category1 of the category0 of stock factor"""
@@ -180,7 +204,7 @@ class StockFactorDefinitionConfig:
                 return 'behavior'
             case 'holding' | 'trading':
                 return 'money_flow'
-            case 'regime':
+            case 'market_event':
                 return 'market'
             case _:
                 raise ValueError(f'undefined category1: {category1}')

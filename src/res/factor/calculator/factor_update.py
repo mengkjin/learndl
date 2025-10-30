@@ -8,7 +8,6 @@ from typing import Any , Generator , Callable
 from .factor_calc import FactorCalculator
 
 from src.basic import CONF , CALENDAR
-from src.proj import Logger
 from src.data import DATAVENDOR
 from src.func.parallel import parallel , parallels
 
@@ -198,12 +197,15 @@ class FactorUpdateJobManager:
                     func_calls[year].append((func , (dates[dates // 10000 == year] , ) ,{'overwrite' : overwrite}))
         
         func_calls = {year: calls for year , calls in sorted(func_calls.items())}
+        if len(func_calls) == 0:
+            print('There is no Factor Stats Update to Proceed')
+            return
 
         total_calls , total_dates = 0 , 0
         for year , calls in func_calls.items():
             n_calls = len(calls)
-            n_dates = sum([len(args[0]) for _, args , _ in calls])
-            Logger.info(f'Update Factor Stats of Year {year} : {n_calls} function calls , {n_dates} dates')
+            n_dates = sum([len(args[0]) for _ , args , _ in calls])
+            print(f'Update Factor Stats of Year {year} : {n_calls} function calls , {n_dates} dates')
             parallels(calls , method = 'forloop')
             total_calls += n_calls
             total_dates += n_dates

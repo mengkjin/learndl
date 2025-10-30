@@ -61,20 +61,19 @@ class DataPreProcessor:
         if not predict and not args.confirm and \
             not input('Confirm update data? type "yes" to confirm!').lower()[0] == 'y' : 
             return
-        t1 = time.time()
-        Logger.info(f'predict is {predict} , Data Processing start!')
+        print(f'Data Processing start with predict={predict}!')
         
         if data_types is None:
             blocks = PREDICT_DATASET if predict else TRAIN_DATASET
         else:
             blocks = data_types
         processor = cls(predict , blocks = blocks)
-        Logger.info(f'{len(processor.blocks)} datas : {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
+        print(f'{len(processor.blocks)} datas : {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
         # return processor
         for key , proc in processor.processors():
             modified_time = DataBlock.last_modified_time(key , predict)
             if CALENDAR.is_updated_today(modified_time):
-                Logger.info(f'{key} is up to {modified_time} already!')
+                print(f'Skipping: {key} already updated at {modified_time}!')
                 continue
             tt1 = time.time()
 
@@ -90,10 +89,8 @@ class DataPreProcessor:
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             del data_block
             gc.collect()
-            Logger.info(f'{key} finished! Cost {time.time() - tt1:.2f} Seconds')
+            print(f'{key} finished! Cost {time.time() - tt1:.2f} Seconds')
             Logger.divider()
-
-        Logger.info(f'Data Processing Finished! Cost {time.time() - t1:.2f} Seconds')
 
 class TypePreProcessor(ABC):
     TRADE_FEAT : list[str] = ['open','close','high','low','vwap','turn_fl']

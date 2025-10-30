@@ -203,16 +203,16 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
     assert data_type is not None , f'data_type is required'
     dts = target_dates(data_type , date)
     if len(dts) == 0: 
-        Logger.info(f'rcquant {data_type} bar min has no date to download')
+        print(f'Skipping: rcquant {data_type} bar min has no date to download')
     for dt in dts:
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
             Logger.warning(f'rcquant {data_type} bar min {dt} failed')
         else:
-            Logger.info(f'rcquant {data_type} bar min {dt} success')
+            print(f'rcquant {data_type} bar min {dt} success')
 
     for dt in x_mins_target_dates(data_type , date):
-        Logger.info(f'process other {data_type} min bars at {dt} from source rcquant')
+        print(f'process other {data_type} min bars at {dt} from source rcquant')
         for x_min in x_mins_to_update(dt , data_type = data_type):
             min_df = DB.load('trade_ts' , src_key(data_type) , dt)
             assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'

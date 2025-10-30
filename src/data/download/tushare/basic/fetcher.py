@@ -118,11 +118,6 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             assert date is not None , f'{self.__class__.__name__} use date type but date is None'
         return DB.path(self.DB_SRC , self.DB_KEY , date)
 
-    def fetch_and_save(self , date : int | Any = None) -> None:
-        """fetch from tushare and save data to database"""
-        assert self.db_by_name or date is not None , f'{self.__class__.__name__} use date type but date is None'
-        DB.save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
-
     def set_rollback_date(self , rollback_date : int | None = None):
         """set rollback date to the fetcher for update rollback"""
         CALENDAR.check_rollback_date(rollback_date)
@@ -160,21 +155,25 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             ldate = min(ldate , self.rollback_date)
         return ldate
 
-    def update(self) -> None:
+    @classmethod
+    def update(cls) -> None:
         """update the fetcher"""
         try:
-            self.set_rollback_date(None)
-            self.update_with_retries()
+            fetcher = cls()
+            fetcher.set_rollback_date(None)
+            fetcher.update_with_retries()
         except Exception as e:
-            Logger.error(f'{self.__class__.__name__} update failed: {e}')
+            Logger.error(f'{cls.__name__} update failed: {e}')
     
-    def update_rollback(self , rollback_date : int) -> None:
+    @classmethod
+    def update_rollback(cls , rollback_date : int) -> None:
         """update the fetcher with rollback date"""
         try:
-            self.set_rollback_date(rollback_date)
-            self.update_with_retries()
+            fetcher = cls()
+            fetcher.set_rollback_date(rollback_date)
+            fetcher.update_with_retries()
         except Exception as e:
-            Logger.error(f'{self.__class__.__name__} update rollback failed: {e}')
+            Logger.error(f'{cls.__name__} update rollback failed: {e}')
 
     def check_server_down(self) -> bool:
         """check if the tushare server is down"""
@@ -189,15 +188,17 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         """update the fetcher given dates"""
         if self.check_server_down(): 
             return
+        if not self.db_by_name:
+            assert None not in dates , f'{self.__class__.__name__} use date type but date is None'
         for date in dates: 
-            self.fetch_and_save(date)
+            DB.save(self.get_data(date) , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
 
     def update_with_retries(self , timeout_wait_seconds = 20 , timeout_max_retries = 10) -> None:
         """update the fetcher with retries"""
         dates = self.get_update_dates()
 
         if len(dates) == 0: 
-            print(f'{str(self)} has no dates to update')
+            print(f'Skipping:  {self.__class__.__name__} has no dates to update')
             return
         
         print(f'{str(self)} update dates {dates[0]} ~ {dates[-1]}')

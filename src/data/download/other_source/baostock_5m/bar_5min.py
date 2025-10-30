@@ -118,7 +118,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
                 bs.logout()
                 break
             
-            Logger.info(f'{start_dt} - {end_dt} : {len(downloaded)} already downloaded , {len(task_codes)} codes to download :')
+            print(f'{start_dt} - {end_dt} : {len(downloaded)} already downloaded , {len(task_codes)} codes to download :')
             for i , code in enumerate(task_codes):
                 rs = bs.query_history_k_data_plus(code, 'date,time,code,open,high,low,close,volume,amount,adjustflag',
                                                   start_date=start_date_str,end_date=end_date_str,frequency='5', adjustflag='3')
@@ -132,7 +132,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
 
         except Exception as e:
             bs.logout()
-            Logger.info(f'{retry} retry {e}')
+            Logger.warning(f'{retry} retry {e}')
             retry += 1
         else:
             break
@@ -179,13 +179,13 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
-                Logger.info(f'{last_dt} - {dt} failed')
+                Logger.warning(f'{last_dt} - {dt} failed')
             else:
-                Logger.info(f'{last_dt} - {dt} success')
+                print(f'{last_dt} - {dt} success')
 
     for dt in x_mins_update_dates(date):
         
-        Logger.info(f'process other min bars at {dt} from source baostock')
+        print(f'process other min bars at {dt} from source baostock')
         for x_min in x_mins_to_update(dt):
             five_min_df = DB.load('trade_ts' , '5min' , dt)
             x_min_df = trade_min_reform(five_min_df , x_min , 5)

@@ -1,4 +1,4 @@
-import colorlog , logging , sys
+import colorlog , logging , sys , time
 import logging.handlers
 from typing import Any , Generator , Literal , Type
 
@@ -180,9 +180,12 @@ class Logger:
             self.width = width
 
         def __enter__(self):
+            self.start_time = time.time()
             self.write(f'{self.title.upper()} START')
 
         def __exit__(self , exc_type , exc_value , traceback):
+            duration = time.time() - self.start_time
+            Logger.info(f'{self.title.upper()} Finished! Cost {duration:.2f} Seconds')
             self.write(f'{self.title.upper()} FINISH')
 
         def __repr__(self):

@@ -1,9 +1,12 @@
 # do not use relative import in this file because it will be running in top-level directory
 import pandas as pd
+import numpy as np
 
-from src.data.download.tushare.basic import InfoFetcher , MonthFetcher , RollingFetcher , TimeSeriesFetcher , ts_code_to_secid
+from src.data.download.tushare.basic import InfoFetcher , DayFetcher ,MonthFetcher , RollingFetcher , TimeSeriesFetcher , ts_code_to_secid
 from src.basic import DB , CALENDAR
 from src.proj import PATH
+from typing import Any
+
 
 def index_weight_get_data(instance : RollingFetcher , index_code , start_dt , end_dt , limit = 4000):
     """get index weight data by iterate fetch"""
@@ -89,6 +92,56 @@ class IndexDaily(TimeSeriesFetcher):
             df = pd.concat([old_df , df]).drop_duplicates(subset = ['trade_date']).sort_values('trade_date')
             df['trade_date'] = df['trade_date'].astype(int)
             DB.save(df , self.DB_SRC , index , verbose = True)
+
+class ZXIndexDaily(DayFetcher):
+    """
+    index daily quotes
+    """
+    START_DATE = 20100101
+    DB_KEY = 'zx_industry_index'
+    
+    def get_data(self , date : int , end_date : int | None = None):
+        if end_date is None:
+            end_date = date
+        df = self.iterate_fetch(self.pro.ci_daily , limit = 5000 , start_date = str(date) , end_date = str(end_date))
+        return df
+
+    def get_zx_index_quotes(self , start_date : int , end_date : int):
+        """get zx index quotes"""
+        date_dfs : dict[Any , pd.DataFrame] = {}
+        index_dfs : dict[Any , pd.DataFrame] = {}
+        data = self.get_data(start_date , end_date)
+        for date , df in data.groupby('trade_date' , group_keys = True):
+            date_dfs[date] = df
+        for index , df in data.groupby('ts_code' , group_keys = True):
+            index_dfs[index] = df
+        return date_dfs , index_dfs
+
+    def update_dates(self , dates) -> None:
+        """update the fetcher given dates"""
+        if self.check_server_down(): 
+            return
+        if not self.db_by_name:
+            assert None not in dates , f'{self.__class__.__name__} use date type but date is None'
+        si = dates[np.arange(len(dates))[::25]]
+        ei = dates[np.arange(len(dates))[24::25]]
+        if len(si) != len(ei):
+            ei = np.concatenate([ei , dates[-1:]])
+
+        for start , end in zip(si , ei): 
+            date_dfs , index_dfs = self.get_zx_index_quotes(start , end)
+            for date , df in date_dfs.items():
+                DB.save(df , self.DB_SRC , self.DB_KEY , date = date , verbose = True)
+            for index , df in index_dfs.items():
+                self.update_index_daily_file(index , df , verbose = False)
+
+    def update_index_daily_file(self , index : str , df : pd.DataFrame , verbose = False):
+        df_old = DB.load('index_daily_ts' , index , verbose = False)
+        if not df_old.empty:
+            df = pd.concat([df_old , df]).drop_duplicates('trade_date' , keep = 'last')
+        df = df.sort_values('trade_date').reset_index(drop = True)
+        df['trade_date'] = df['trade_date'].astype(int)
+        DB.save(df , 'index_daily_ts' , index , verbose = verbose)
     
 class THSConcept(MonthFetcher):
     """Tonghuashun Concept"""

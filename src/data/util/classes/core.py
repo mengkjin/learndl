@@ -577,14 +577,14 @@ class ModuleData:
             if (np.isin(data_type_list , list(data.x.keys())).all() and
                 (y_labels is None or np.isin(y_labels , list(data.y.feature)).all())):
                 if not SILENT: 
-                    Logger.info(f'try using {path} , success!')
+                    print(f'Loading Module Data, Try \'{path}\', success!')
             else:
                 if not SILENT: 
-                    Logger.warning(f'try using {path} , but incompatible, load raw blocks!')
+                    Logger.warning(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
                 data = None
         except ModuleNotFoundError:
             '''can be caused by different package version'''
-            Logger.warning(f'try using {path} , but incompatible, load raw blocks!')
+            Logger.warning(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
             data = None
         except Exception as e:
             raise e
