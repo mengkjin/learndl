@@ -104,6 +104,7 @@ class ZXIndexDaily(DayFetcher):
         if end_date is None:
             end_date = date
         df = self.iterate_fetch(self.pro.ci_daily , limit = 5000 , start_date = str(date) , end_date = str(end_date))
+        df['trade_date'] = df['trade_date'].astype(int)
         return df
 
     def get_zx_index_quotes(self , start_date : int , end_date : int):
@@ -138,9 +139,9 @@ class ZXIndexDaily(DayFetcher):
     def update_index_daily_file(self , index : str , df : pd.DataFrame , verbose = False):
         df_old = DB.load('index_daily_ts' , index , verbose = False)
         if not df_old.empty:
+            df_old['trade_date'] = df_old['trade_date'].astype(int)
             df = pd.concat([df_old , df]).drop_duplicates('trade_date' , keep = 'last')
         df = df.sort_values('trade_date').reset_index(drop = True)
-        df['trade_date'] = df['trade_date'].astype(int)
         DB.save(df , 'index_daily_ts' , index , verbose = verbose)
     
 class THSConcept(MonthFetcher):
