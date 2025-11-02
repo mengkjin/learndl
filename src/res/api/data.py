@@ -1,5 +1,5 @@
 from src.proj import Logger
-from src.data import CoreDataUpdater , SellsideDataUpdater , AffiliatedDataUpdater , DataPreProcessor , ModuleData
+from src.data import CoreDataUpdater , SellsideDataUpdater , AffiliatedDataUpdater , DataPreProcessor
 # from src.data import JSDataUpdater
 from src.res.factor.api import RiskModelUpdater , FactorCalculatorAPI
 from src.basic import CALENDAR
@@ -21,7 +21,7 @@ class DataAPI:
         b. for server, move Updater's to Database'
         """
         # download data from tushare and other sources
-        cls.wrap_update(CoreDataUpdater.update , 'download core data')
+        cls.wrap_update(CoreDataUpdater.update , 'download core data' , True)
 
         # download sellside data
         cls.wrap_update(SellsideDataUpdater.update , 'download sellside data' , sellside)
@@ -38,15 +38,13 @@ class DataAPI:
         # update stock factor
         cls.wrap_update(FactorCalculatorAPI.update , 'update stock factors' , factor)
 
-        cls.wrap_update(ModuleData.purge_all , 'purge old data cache')
-
 
     @classmethod
     def update_rollback(cls , rollback_date : int , risk = True , affiliated = True , factor = True):
         """
         Rollback data to the specified date
         """
-        cls.wrap_update(CoreDataUpdater.update_rollback , 'download core data' , rollback_date = rollback_date)
+        cls.wrap_update(CoreDataUpdater.update_rollback , 'download core data' , True ,rollback_date = rollback_date)
         cls.wrap_update(RiskModelUpdater.update_rollback , 'update risk models' , risk , rollback_date = rollback_date)
         cls.wrap_update(AffiliatedDataUpdater.update_rollback , 'update affiliated datas' , affiliated , rollback_date = rollback_date)
         cls.wrap_update(FactorCalculatorAPI.update_rollback , 'update stock factors' , factor , rollback_date = rollback_date)

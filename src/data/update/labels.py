@@ -3,7 +3,9 @@ import pandas as pd
 from src.basic import CALENDAR , DB
 from src.data.loader import TRADE , RISK
 
-class ClassicLabelsUpdater:
+from .basic import BasicUpdater
+
+class ClassicLabelsUpdater(BasicUpdater):
     START_DATE = 20050101
     DB_SRC = 'labels_ts'
 

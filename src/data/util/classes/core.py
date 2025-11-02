@@ -425,68 +425,6 @@ class ModuleData:
             return hist_data
 
     @classmethod
-    def load_datas_old(cls , data_type_list : list[str] , y_labels : list[str] | None = None , 
-                   predict : bool = False , dtype : str | Any = torch.float , 
-                   save_upon_loading : bool = True):
-        '''if predict is True, only load recent data'''
-        if dtype is None: 
-            dtype = torch.float
-        if isinstance(dtype , str): 
-            dtype = getattr(torch , dtype)
-
-        if predict: 
-            dataset_path = 'no_dataset'
-        else:
-            try:
-                last_date = DataBlock.last_data_date('y' , False)
-                dataset_code = '+'.join(data_type_list)
-                dataset_path = f'{PATH.datacache}/{dataset_code}.{last_date}.pt'
-            except ModuleNotFoundError:
-                '''can be caused by different package version'''
-                dataset_path = 'no_dataset'
-
-        if y_labels is not None and Path(dataset_path).exists():
-            try:
-                data = cls(**torch_load(dataset_path))
-                if (np.isin(data_type_list , list(data.x.keys())).all() and
-                    np.isin(y_labels , list(data.y.feature)).all()):
-                    if not SILENT: 
-                        print(f'try using {dataset_path} , success!')
-                else:
-                    if not SILENT: 
-                        print(f'try using {dataset_path} , but incompatible, load raw blocks!')
-                    data = None
-            except ModuleNotFoundError:
-                '''can be caused by different package version'''
-                print(f'try using {dataset_path} , but incompatible, load raw blocks!')
-                data = None
-            except Exception as e:
-                raise e
-        else:
-            data = None
-
-        if data is None:
-            data_type_list = ['y' , *data_type_list]
-            
-            blocks = DataBlock.load_keys(data_type_list, predict , alias_search=True,dtype = dtype)
-            norms  = DataBlockNorm.load_keys(data_type_list, predict , alias_search=True,dtype = dtype)
-
-            y : DataBlock = blocks['y']
-            x : dict[str,DataBlock] = {cls.abbr(key):val for key , val in blocks.items() if key != 'y'}
-            norms = {cls.abbr(key):val for key,val in norms.items() if val is not None and key != 'y'}
-            secid , date = y.secid , y.date
-
-            assert all([xx.shape[:2] == y.shape[:2] == (len(secid),len(date)) for xx in x.values()])
-
-            data = {'x' : x , 'y' : y , 'norms' : norms , 'secid' : secid , 'date' : date}
-            if not predict and save_upon_loading and data_type_list: 
-                torch.save(data , dataset_path , pickle_protocol = 4)
-            data = cls(**data)
-
-        data.y.align_feature(y_labels)
-        return data
-
-    @classmethod
     def load_datas(cls , data_type_list : list[str] , y_labels : list[str] | None = None , 
                        predict : bool = False , dtype : str | Any = torch.float , 
                        save_upon_loading : bool = True):
@@ -589,6 +527,7 @@ class ModuleData:
         except Exception as e:
             raise e
 
+        cls.datacache_purge_old(data_type_list)
         return data
     
     @classmethod
@@ -600,11 +539,14 @@ class ModuleData:
         torch.save(data , path , pickle_protocol = 4)
 
     @classmethod
-    def datacache_purge_old(cls , data_type_list : list[str] , date : int):
+    def datacache_purge_old(cls , data_type_list : list[str]):
         data_cache_key = cls.datacache_key(data_type_list)
         folder = PATH.datacache.joinpath(data_cache_key)
+        dates = [int(path.stem) for path in folder.iterdir()]
+        if len(dates) <= 1:
+            return
         for path in folder.iterdir():
-            if path.is_file() and int(path.stem) < date:
+            if path.is_file() and int(path.stem) < max(dates):
                 path.unlink()
 
     @classmethod

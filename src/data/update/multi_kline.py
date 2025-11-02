@@ -3,11 +3,11 @@ import numpy as np
 from typing import Any
 from src.basic import CALENDAR , DB
 
-DB_SRC = 'trade_ts'
-class MultiKlineUpdater:
-    START_DATE = 20050101
-    
+from .basic import BasicUpdater
 
+DB_SRC = 'trade_ts'
+class MultiKlineUpdater(BasicUpdater):
+    START_DATE = 20050101
     DAYS = [5 , 10 , 20]
 
     @classmethod

@@ -1,0 +1,41 @@
+from typing import Any , Type
+from importlib import import_module
+from pathlib import Path
+
+from src.proj import PATH
+
+class BasicUpdaterMeta(type):
+    """meta class of BasicUpdater"""
+    registry : dict[str , Type['BasicUpdater'] | Any] = {}
+    def __new__(cls , name , bases , dct):
+        new_cls = super().__new__(cls , name , bases , dct)
+        if name != 'BasicUpdater':
+            assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
+                f'{name} in module {new_cls.__module__} is duplicated within {cls.registry[name].__module__}'
+            assert 'update' in new_cls.__dict__  , \
+                f'{name} must implement update method'
+            assert 'update_rollback' in new_cls.__dict__ , \
+                f'{name} must implement update_rollback method'
+            cls.registry[name] = new_cls
+        return new_cls
+
+class BasicUpdater(metaclass=BasicUpdaterMeta):
+    """
+    base class of basic updater
+    must implement update and update_rollback methods
+    def update(self):
+        pass
+    def update_rollback(self , rollback_date : int):
+        pass
+    """
+    _imported : bool = False
+    @classmethod
+    def import_updaters(cls):
+        if cls._imported:
+            return
+        paths = sorted([path for path in Path(__file__).parent.rglob('*.py') 
+                        if path.is_file() and path.stem not in ['basic' , '__init__']])
+        for path in paths:
+            module_name = '.'.join(path.relative_to(PATH.main).with_suffix('').parts)
+            import_module(module_name)
+        cls._imported = True

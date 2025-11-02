@@ -1,6 +1,5 @@
 from .multi_kline import MultiKlineUpdater
 from .labels import ClassicLabelsUpdater
-from .pre_process import DataPreProcessor
 
 class AffiliatedDataUpdater:
     @classmethod
