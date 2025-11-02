@@ -39,3 +39,11 @@ class BasicUpdater(metaclass=BasicUpdaterMeta):
             module_name = '.'.join(path.relative_to(PATH.main).with_suffix('').parts)
             import_module(module_name)
         cls._imported = True
+
+    @classmethod
+    def update(cls):
+        raise NotImplementedError(f'{cls.__name__} must implement update method')
+
+    @classmethod
+    def update_rollback(cls , rollback_date : int):
+        raise NotImplementedError(f'{cls.__name__} must implement update_rollback method')

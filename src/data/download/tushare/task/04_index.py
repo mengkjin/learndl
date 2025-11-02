@@ -104,7 +104,8 @@ class ZXIndexDaily(DayFetcher):
         if end_date is None:
             end_date = date
         df = self.iterate_fetch(self.pro.ci_daily , limit = 5000 , start_date = str(date) , end_date = str(end_date))
-        df['trade_date'] = df['trade_date'].astype(int)
+        if not df.empty:
+            df['trade_date'] = df['trade_date'].astype(int)
         return df
 
     def get_zx_index_quotes(self , start_date : int , end_date : int):
@@ -112,6 +113,8 @@ class ZXIndexDaily(DayFetcher):
         date_dfs : dict[Any , pd.DataFrame] = {}
         index_dfs : dict[Any , pd.DataFrame] = {}
         data = self.get_data(start_date , end_date)
+        if data.empty:
+            return date_dfs , index_dfs
         for date , df in data.groupby('trade_date' , group_keys = True):
             date_dfs[date] = df
         for index , df in data.groupby('ts_code' , group_keys = True):

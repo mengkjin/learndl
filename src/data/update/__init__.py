@@ -1,13 +1,14 @@
-from .multi_kline import MultiKlineUpdater
-from .labels import ClassicLabelsUpdater
+from .basic import BasicUpdater
 
 class AffiliatedDataUpdater:
     @classmethod
     def update(cls):
-        MultiKlineUpdater.update()
-        ClassicLabelsUpdater.update()
+        BasicUpdater.import_updaters()
+        for name , updater in BasicUpdater.registry.items():
+            updater.update()
 
     @classmethod
     def update_rollback(cls , rollback_date : int):
-        MultiKlineUpdater.update_rollback(rollback_date)
-        ClassicLabelsUpdater.update_rollback(rollback_date)
+        BasicUpdater.import_updaters()
+        for name , updater in BasicUpdater.registry.items():
+            updater.update_rollback(rollback_date)
