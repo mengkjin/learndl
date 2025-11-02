@@ -3,6 +3,7 @@ from importlib import import_module
 from pathlib import Path
 
 from src.proj import PATH
+from src.basic import CALENDAR
 
 class BasicUpdaterMeta(type):
     """meta class of BasicUpdater"""
@@ -16,6 +17,8 @@ class BasicUpdaterMeta(type):
                 f'{name} must implement update method'
             assert 'update_rollback' in new_cls.__dict__ , \
                 f'{name} must implement update_rollback method'
+            assert 'recalculate_all' in new_cls.__dict__ , \
+                f'{name} must implement recalculate_all method'
             cls.registry[name] = new_cls
         return new_cls
 
@@ -29,6 +32,7 @@ class BasicUpdater(metaclass=BasicUpdaterMeta):
         pass
     """
     _imported : bool = False
+    _rollback_date : int = 99991231
     @classmethod
     def import_updaters(cls):
         if cls._imported:
@@ -47,3 +51,12 @@ class BasicUpdater(metaclass=BasicUpdaterMeta):
     @classmethod
     def update_rollback(cls , rollback_date : int):
         raise NotImplementedError(f'{cls.__name__} must implement update_rollback method')
+
+    @classmethod
+    def recalculate_all(cls):
+        raise NotImplementedError(f'{cls.__name__} must implement recalculate_all method')
+
+    @classmethod
+    def set_rollback_date(cls , rollback_date : int):
+        CALENDAR.check_rollback_date(rollback_date)
+        cls._rollback_date = rollback_date

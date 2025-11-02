@@ -1,7 +1,11 @@
 import pandas as pd
 
+import numpy as np
+from typing import Literal
+
 from src.basic import CALENDAR , DB
 from src.data.loader import TRADE , RISK
+from src.proj import Logger
 
 from .basic import BasicUpdater
 
@@ -14,24 +18,35 @@ class ClassicLabelsUpdater(BasicUpdater):
 
     @classmethod
     def update(cls):
-        for days in cls.DAYS:
-            for lag1 in cls.LAGS:
-                label_name = f'ret{days}' + ('_lag' if lag1 else '')
-                stored_dates = DB.dates(cls.DB_SRC , label_name)
-                end_date     = CALENDAR.td(CALENDAR.updated() , - days - lag1)
-                update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
-                for date in update_dates:
-                    cls.update_one(date , days , lag1 , label_name)
+        cls.update_all('update')
 
     @classmethod
     def update_rollback(cls , rollback_date : int):
-        CALENDAR.check_rollback_date(rollback_date)
+        cls.set_rollback_date(rollback_date)
+        cls.update_all('rollback')
+
+    @classmethod
+    def recalculate_all(cls):
+        cls.update_all('recalc')
+
+    @classmethod
+    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback']):
+        if update_type == 'recalc':
+            Logger.warning('Recalculate all classic labels is not supported yet')
         for days in cls.DAYS:
             for lag1 in cls.LAGS:
                 label_name = f'ret{days}' + ('_lag' if lag1 else '')
-                start_date = CALENDAR.td(rollback_date , - days - lag1 + 1)
-                end_date = CALENDAR.td(CALENDAR.updated() , - days - lag1)
-                update_dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
+                if update_type == 'recalc':
+                    stored_dates = np.array([])
+                elif update_type == 'update':
+                    stored_dates = DB.dates(cls.DB_SRC , label_name)
+                elif update_type == 'rollback':
+                    rollback_date = CALENDAR.td(cls._rollback_date , - days - lag1 + 1)
+                    stored_dates = CALENDAR.slice(DB.dates(cls.DB_SRC , label_name) , 0 , rollback_date - 1)
+                else:
+                    raise ValueError(f'Invalid update type: {update_type}')
+                end_date     = CALENDAR.td(CALENDAR.updated() , - days - lag1)
+                update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
                 for date in update_dates:
                     cls.update_one(date , days , lag1 , label_name)
 

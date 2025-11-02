@@ -255,25 +255,45 @@ def _db_dates(db_src , db_key , start_dt = None , end_dt = None , year = None , 
         dates = np.concatenate([alt_dates , dates])
     return dates
 
-def min_date(db_src , db_key):
+def min_date(db_src , db_key , use_alt = False):
     """get minimum date from any database data"""
     directory = _db_parent(db_src , db_key)
-    years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
-    if not years: 
-        return 0
-    paths = [p for p in directory.joinpath(str(min(years))).iterdir()]
-    dates = _paths_to_dates(paths)
-    return min(dates) if len(dates) else 99991231
+    years = [int(y.stem) for y in directory.iterdir() if y.is_dir()] if directory.exists() else []
+    if years: 
+        paths = [p for p in directory.joinpath(str(min(years))).iterdir()]
+        dates = _paths_to_dates(paths)
+        mdate = min(dates) if len(dates) else 99991231
+    else:
+        mdate = 99991231
+    if db_src in _db_alternatives and use_alt:
+        alt_src   = _db_alternatives[db_src]
+        directory = _db_parent(alt_src , db_key)
+        years = [int(y.stem) for y in directory.iterdir() if y.is_dir()] if directory.exists() else []
+        if years: 
+            paths = [p for p in directory.joinpath(str(min(years))).iterdir()]
+            dates = _paths_to_dates(paths)
+            mdate = min(mdate , min(dates) if len(dates) else 99991231)
+    return mdate
 
-def max_date(db_src , db_key):
+def max_date(db_src , db_key , use_alt = False):
     """get maximum date from any database data"""
     directory = _db_parent(db_src , db_key)
-    years = [int(y.stem) for y in directory.iterdir() if y.is_dir()]
-    if not years: 
-        return 0
-    paths = [p for p in directory.joinpath(str(max(years))).iterdir()]
-    dates = _paths_to_dates(paths)
-    return max(dates) if len(dates) else 0
+    years = [int(y.stem) for y in directory.iterdir() if y.is_dir()] if directory.exists() else []
+    if years: 
+        paths = [p for p in directory.joinpath(str(max(years))).iterdir()]
+        dates = _paths_to_dates(paths)
+        mdate = max(dates) if len(dates) else 0
+    else:
+        mdate = 0
+    if db_src in _db_alternatives and use_alt:
+        alt_src   = _db_alternatives[db_src]
+        directory = _db_parent(alt_src , db_key)
+        years = [int(y.stem) for y in directory.iterdir() if y.is_dir()] if directory.exists() else []
+        if years: 
+            paths = [p for p in directory.joinpath(str(max(years))).iterdir()]
+            dates = _paths_to_dates(paths)
+            mdate = max(mdate , max(dates) if len(dates) else 0)
+    return mdate
 
 # @_db_src_deprecated(1)
 def save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True):

@@ -1,39 +1,53 @@
 import pandas as pd
 import numpy as np
-from typing import Any
+from typing import Any , Literal
 from src.basic import CALENDAR , DB
+from src.proj import Logger
 
 from .basic import BasicUpdater
 
-DB_SRC = 'trade_ts'
 class MultiKlineUpdater(BasicUpdater):
     START_DATE = 20050101
+    DB_SRC = 'trade_ts'
+
     DAYS = [5 , 10 , 20]
 
     @classmethod
     def update(cls):
+        cls.update_all('update')
+
+    @classmethod
+    def update_rollback(cls , rollback_date : int):
+        cls.set_rollback_date(rollback_date)
+        cls.update_all('rollback')
+
+    @classmethod
+    def recalculate_all(cls):
+        cls.update_all('recalc')
+
+    @classmethod
+    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback']):
+        if update_type == 'recalc':
+            Logger.warning('Recalculate all nday klines is not supported yet')
         for n_day in cls.DAYS:
             label_name = f'{n_day}day'
-            stored_dates = DB.dates(DB_SRC , label_name)
-            end_date     = DB.dates(DB_SRC , 'day').max()
+            if update_type == 'recalc':
+                stored_dates = np.array([])
+            elif update_type == 'update':
+                stored_dates = DB.dates(cls.DB_SRC , label_name)
+            elif update_type == 'rollback':
+                rollback_date = CALENDAR.td(cls._rollback_date , 1)
+                stored_dates = CALENDAR.slice(DB.dates(cls.DB_SRC , label_name) , 0 , rollback_date - 1)
+            else:
+                raise ValueError(f'Invalid update type: {update_type}')
+            end_date     = DB.dates(cls.DB_SRC , 'day').max()
             update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
             for date in update_dates: 
                 cls.update_one(date , n_day , label_name)
 
     @classmethod
-    def update_rollback(cls , rollback_date : int):
-        CALENDAR.check_rollback_date(rollback_date)
-        for n_day in cls.DAYS:
-            label_name = f'{n_day}day'
-            start_date = CALENDAR.td(rollback_date , 1)
-            end_date = DB.dates(DB_SRC , 'day').max()
-            update_dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
-            for date in update_dates: 
-                cls.update_one(date , n_day , label_name)
-
-    @classmethod
     def update_one(cls , date : int , n_day : int , label_name : str):
-        DB.save(nday_kline(date , n_day) , DB_SRC , label_name , date , verbose = True)
+        DB.save(nday_kline(date , n_day) , cls.DB_SRC , label_name , date , verbose = True)
 
 
 def nday_kline(date : int , n_day : int) -> pd.DataFrame:
@@ -46,7 +60,7 @@ def nday_kline(date : int , n_day : int) -> pd.DataFrame:
     price_feat  = ['open','close','high','low','vwap']
     volume_feat = ['amount','volume','turn_tt','turn_fl','turn_fr']
 
-    datas = [DB.load(DB_SRC , 'day' , d , date_colname='date') for d in trailing_dates]
+    datas = [DB.load('trade_ts' , 'day' , d , date_colname='date') for d in trailing_dates]
     datas = [d for d in datas if not d.empty]
     if not datas: 
         return pd.DataFrame()

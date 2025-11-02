@@ -1,29 +1,46 @@
 import pandas as pd
+import numpy as np
 
+from typing import Literal
 from src.basic import CALENDAR , DB
+from src.proj import Logger
 
 from .basic import BasicUpdater
 
 class DailyRiskUpdater(BasicUpdater):
-    START_DATE = 20100101
+    START_DATE = max(20100101 , DB.min_date('trade_ts' , '5min' , use_alt=True))
     DB_SRC = 'exposure'
     DB_KEY = 'daily_risk'
 
     @classmethod
     def update(cls):
-        stored_dates = DB.dates(cls.DB_SRC , cls.DB_KEY)
-        end_date = min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min'))
-        update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
-        for date in update_dates:
-            cls.update_one(date)
+        cls.update_all('update')
 
     @classmethod
     def update_rollback(cls , rollback_date : int):
-        CALENDAR.check_rollback_date(rollback_date)
+        cls.set_rollback_date(rollback_date)
+        cls.update_all('rollback')
         
-        start_date = CALENDAR.td(rollback_date)
-        end_date = min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min'))
-        update_dates = CALENDAR.td_within(start_dt = start_date , end_dt = end_date)
+    @classmethod
+    def recalculate_all(cls):
+        cls.update_all('recalc')
+
+    @classmethod
+    def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback']):
+        if update_type == 'recalc':
+            Logger.warning('Recalculate all daily risk is not supported yet')
+        if update_type == 'recalc':
+            stored_dates = np.array([])
+        elif update_type == 'update':
+            stored_dates = DB.dates(cls.DB_SRC , cls.DB_KEY)
+        elif update_type == 'rollback':
+            rollback_date = CALENDAR.td(cls._rollback_date)
+            stored_dates = CALENDAR.slice(DB.dates(cls.DB_SRC , cls.DB_KEY) , 0 , rollback_date - 1)
+        else:
+            raise ValueError(f'Invalid update type: {update_type}')
+            
+        end_date = min(CALENDAR.updated() , DB.max_date('trade_ts' , '5min' , use_alt=True))
+        update_dates = CALENDAR.diffs(cls.START_DATE , end_date , stored_dates)
         for date in update_dates:
             cls.update_one(date)
 
