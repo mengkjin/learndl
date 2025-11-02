@@ -5,7 +5,7 @@ from src.basic import CALENDAR , DB
 from .basic import BasicUpdater
 
 class DailyRiskUpdater(BasicUpdater):
-    START_DATE = 20110101
+    START_DATE = max(20120101 , DB.min_date('trade_ts' , '5min'))
     DB_SRC = 'exposure'
     DB_KEY = 'daily_risk'
 
@@ -33,10 +33,13 @@ class DailyRiskUpdater(BasicUpdater):
 
 def calc_daily_risk(date : int):
     inputs : dict[str , pd.DataFrame] = {
-        'quote' : DB.load('trade_ts' , 'day' , date).set_index('secid') ,
-        'moneyflow' : DB.load('trade_ts' , 'day_moneyflow' , date).set_index('secid') ,
-        'min' : DB.load('trade_ts' , '5min' , date).set_index('secid')
+        'quote' : DB.load('trade_ts' , 'day' , date) ,
+        'moneyflow' : DB.load('trade_ts' , 'day_moneyflow' , date),
+        'min' : DB.load('trade_ts' , '5min' , date)
     }
+    for name , df in inputs.items():
+        if not df.emtpy:
+            inputs['name'] = df.set_index('secid')
     funcs = [
         day_true_range , 
         day_turnover ,
