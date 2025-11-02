@@ -5,7 +5,7 @@ from src.basic import CALENDAR , DB
 from .basic import BasicUpdater
 
 class DailyRiskUpdater(BasicUpdater):
-    START_DATE = max(20120101 , DB.min_date('trade_ts' , '5min'))
+    START_DATE = 20100101
     DB_SRC = 'exposure'
     DB_KEY = 'daily_risk'
 
@@ -35,11 +35,11 @@ def calc_daily_risk(date : int):
     inputs : dict[str , pd.DataFrame] = {
         'quote' : DB.load('trade_ts' , 'day' , date) ,
         'moneyflow' : DB.load('trade_ts' , 'day_moneyflow' , date),
-        'min' : DB.load('trade_ts' , '5min' , date)
+        'min' : DB.load('trade_ts' , '5min' , date , use_alt=True)
     }
     for name , df in inputs.items():
-        if not df.emtpy:
-            inputs['name'] = df.set_index('secid')
+        if not df.empty:
+            inputs[name] = df.set_index('secid')
     funcs = [
         day_true_range , 
         day_turnover ,
@@ -86,6 +86,7 @@ def day_sqrt_avg_size(quote : pd.DataFrame , min : pd.DataFrame , moneyflow : pd
         mf_sell_num = (mf_sell_size / avg_size).sum(axis = 1)
 
         num_trades = (mf_buy_num + mf_sell_num) / 2 * 10
+        num_trades = num_trades.rename('num_trades')
 
     q = quote.join(num_trades)
     q['sqrt_avg_size'] = (q['amount'] / q['num_trades']).pow(0.5)
