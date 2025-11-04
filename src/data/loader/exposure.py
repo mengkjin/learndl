@@ -10,7 +10,7 @@ from .access import DateDataAccess
 
 @singleton
 class ExposureAccess(DateDataAccess):
-    MAX_LEN = 60
+    MAX_LEN = 300
     DATA_TYPE_LIST = ['daily_risk']
     
     def data_loader(self , date , data_type):
