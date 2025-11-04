@@ -38,7 +38,7 @@ def umr_new_all(date , n_months : int , risk_window : int = 10):
         reset_index(drop = True).set_index('secid').reindex(rets.columns)
     commom_x = mv_indus.join(p_neg_rets)
 
-    risk_start_date = DATAVENDOR.CALENDAR.td(start_date , -2 * risk_window + 1)
+    risk_start_date = max(DATAVENDOR.CALENDAR.td(start_date , -2 * risk_window + 1) , DB.min_date('exposure' , 'daily_risk'))
     umrs : dict[str , pd.Series] = {}
     for risk_type in risk_type_list:
         risks = DATAVENDOR.EXPO.get_risks(risk_start_date , end_date , field = risk_type , pivot = True)
@@ -51,9 +51,13 @@ def umr_new_all(date , n_months : int , risk_window : int = 10):
 
         _avg_risk = risks.rolling(risk_window).mean().tail(n_days)
         exc_risk = _avg_risk - risks.tail(n_days)
+        exc_risk = exc_risk.dropna(how = 'all')
+
         p_neg_risk = ((exc_risk < 0).sum(axis = 0) / n_days).rename('p_neg_risk')
         x = commom_x.join(p_neg_risk)
-        umr = (exc_rets * wgt * exc_risk).sum(axis = 0).reindex(rets.columns)
+
+        umr = (exc_rets.tail(exc_risk.shape[0]) * wgt[-exc_risk.shape[0]:] * exc_risk).sum(axis = 0).reindex(rets.columns)
+
         umr_resid = neutral_resid(x , umr)
         umrs[risk_type] = umr_resid
     # umr = (exc_rets * wgt * avg_risk).sum(axis = 0)

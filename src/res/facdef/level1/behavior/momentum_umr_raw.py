@@ -1,4 +1,5 @@
 import pandas as pd
+from src.basic import DB
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
@@ -16,13 +17,14 @@ def umr_raw_all(date , n_months : int , risk_window : int = 10):
     n_days = exc_rets.shape[0]
     wgt = time_weight(n_days , int(n_days / 2)).reshape(-1,1)
 
-    risk_start_date = DATAVENDOR.CALENDAR.td(start_date , -risk_window + 1)
+    risk_start_date = max(DATAVENDOR.CALENDAR.td(start_date , -risk_window + 1) , DB.min_date('exposure' , 'daily_risk'))
     umrs : dict[str , pd.Series] = {}
     for risk_type in risk_type_list:
         risks = DATAVENDOR.EXPO.get_risks(risk_start_date , end_date , field = risk_type , pivot = True)
         avg_risk = risks.rolling(risk_window).mean().tail(n_days)
         exc_risk = avg_risk - risks.tail(n_days)
-        umr = (exc_rets * wgt * exc_risk).sum(axis = 0).reindex(rets.columns)
+        exc_risk = exc_risk.dropna(how = 'all')
+        umr = (exc_rets.tail(exc_risk.shape[0]) * wgt[-exc_risk.shape[0]:] * exc_risk).sum(axis = 0).reindex(rets.columns)
         umrs[risk_type] = umr
     all_umr = pd.concat(umrs.values() , axis = 1).mean(axis = 1).rename('umr_raw')
     return all_umr
