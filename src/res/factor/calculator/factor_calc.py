@@ -387,8 +387,29 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         """check if factor data exists for a given date"""
         return DB.path(cls.meta_type , cls.factor_name , date).exists()
 
-    def update(self , date : int , overwrite = False , show_success = False , catch_errors : tuple[type[Exception],...] = ()) -> bool:
-        """update factor data to the latest date"""
+    @classmethod
+    def update_all(cls , start : int | None = None , end : int | None = None , overwrite = False , verbose = False) -> None:
+        """update factor data and stats of a given date"""
+        cls.update_all_factors(start = start , end = end , overwrite = overwrite , verbose = verbose)
+        cls.update_all_stats(start = start , end = end , overwrite = overwrite , verbose = verbose)
+
+    @classmethod
+    def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , verbose = False) -> None:
+        """update all factor data until date"""
+        dates = cls.target_dates(start = start , end = end , overwrite = overwrite)
+        calc = cls()
+        for date in dates:
+            calc.update_day_factor(date , overwrite = overwrite , show_success = verbose)
+
+    @classmethod
+    def update_all_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , verbose = False) -> None:
+        """update all factor stats until date"""
+        target_dates = cls.stats_target_dates(start = start , end = end , overwrite = overwrite)
+        for stats_type , dates in target_dates.items():
+            cls.update_periodic_stats(stats_type , dates , overwrite = overwrite , verbose = verbose)
+
+    def update_day_factor(self , date : int , overwrite = False , show_success = False , catch_errors : tuple[type[Exception],...] = ()) -> bool:
+        """update factor data of a given date"""
         if date not in CONF.Factor.UPDATE.target_dates:
             print(f'Warning: {self.factor_string} at date {date} is not in CONF.Factor.UPDATE.target_dates')
         prefix = f'{self.factor_string} at date {date}'
@@ -403,7 +424,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return done
 
     @classmethod
-    def update_stats(cls , stats_type : Literal['daily' , 'weekly'] , dates : np.ndarray | list[int] | None , overwrite = False , verbose = False) -> None:
+    def update_periodic_stats(cls , stats_type : Literal['daily' , 'weekly'] , dates : np.ndarray | list[int] | None , overwrite = False , verbose = False) -> None:
         """update factor daily or weekly stats"""
         if dates is None:
             dates = cls.stats_target_dates()[stats_type]
@@ -423,11 +444,12 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @classmethod
     def update_daily_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , verbose = False) -> None:
         """update factor daily stats"""
-        cls.update_stats('daily' , dates , overwrite , verbose)
+        cls.update_periodic_stats('daily' , dates , overwrite , verbose)
+
     @classmethod
     def update_weekly_stats(cls , dates : np.ndarray | list[int] | None , overwrite = False , verbose = False) -> None:
         """update factor weekly stats"""
-        cls.update_stats('weekly' , dates , overwrite , verbose)
+        cls.update_periodic_stats('weekly' , dates , overwrite , verbose)
 
     @classmethod
     def stats_stored_dates(cls) -> dict[str , np.ndarray]:
@@ -443,12 +465,12 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return dates
 
     @classmethod
-    def stats_target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> dict[str , np.ndarray]:
+    def stats_target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> dict[Literal['daily' , 'weekly'] , np.ndarray]:
         """return dates of factor stats"""
         factor_stored_dates = CALENDAR.slice(cls.stored_dates() , start , end)
         factor_stored_dates = np.intersect1d(factor_stored_dates , cls.factor_calendar)
         stats_stored_dates = cls.stats_stored_dates()
-        target_dates : dict[str , np.ndarray] = {}
+        target_dates = {}
         skip_days = {
             'daily' : 1,
             'weekly' : 5,

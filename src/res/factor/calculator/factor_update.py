@@ -36,7 +36,7 @@ class FactorUpdateJob:
         return (self.level , self.date , self.factor_name)
     def do(self , show_success : bool = False , overwrite = False) -> None:
         """do the job"""
-        self.done = self.calc.update(self.date , overwrite = overwrite , show_success = show_success , catch_errors = CATCH_ERRORS)
+        self.done = self.calc.update_day_factor(self.date , overwrite = overwrite , show_success = show_success , catch_errors = CATCH_ERRORS)
     
 class FactorUpdateJobManager:
     """manager of factor update jobs"""
@@ -187,14 +187,13 @@ class FactorUpdateJobManager:
         func_calls : dict[int , list[tuple[Callable , tuple[Any,...] , dict[str , Any] | None]]] = {}
         for calc in cls.iter_calculators(all = all_factors , selected_factors = selected_factors , **kwargs):
             target_dates = calc.stats_target_dates(start , end , overwrite)
-            for stats_type in ['daily' , 'weekly']:
+            for stats_type , dates in target_dates.items():
                 func  = getattr(calc , f'update_{stats_type}_stats')
-                dates = target_dates[stats_type]
                 years = np.unique(dates // 10000)
                 for year in years:
                     if year not in func_calls:
                         func_calls[year] = []
-                    func_calls[year].append((func , (dates[dates // 10000 == year] , ) ,{'overwrite' : overwrite}))
+                    func_calls[year].append((func , (dates[dates // 10000 == year] , ) , {'overwrite' : overwrite}))
         
         func_calls = {year: calls for year , calls in sorted(func_calls.items())}
         if len(func_calls) == 0:
