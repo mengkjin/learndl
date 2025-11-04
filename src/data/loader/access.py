@@ -9,8 +9,8 @@ from src.data.util import INFO , DFCollection , PLDFCollection
 
 class DateDataAccess(ABC):
     MAX_LEN = -1
-    DATA_TYPE_LIST = []
-    PL_DATA_TYPE_LIST = []
+    DATA_TYPE_LIST = []     # pandas DataFrame
+    PL_DATA_TYPE_LIST = []   # polars DataFrame (large size data)
     DATE_KEY = 'date'
 
     def __init__(self) -> None:
@@ -58,10 +58,13 @@ class DateDataAccess(ABC):
         return self.pl_collections[data_type].gets(dates , field , rename_date_key = rename_date_key)
     
     def get_specific_data(self , start_dt : int | TradeDate , end_dt : int | TradeDate , 
-                          data_type : str , field : list | str , prev = True , mask = False , pivot = False , drop_old = True , 
+                          data_type : str , field : list | str | None , prev = True , mask = False , pivot = False , drop_old = True , 
                           date_step = 1):
         dates = CALENDAR.td_array(CALENDAR.td_within(start_dt , end_dt , date_step) , -1 if prev else 0)
-        remain_field = ['secid'] + ([field] if isinstance(field , str) else list(field))
+        if field is not None:
+            remain_field = ['secid'] + ([field] if isinstance(field , str) else list(field))
+        else:
+            remain_field = None
 
         df = self.gets(dates , data_type , remain_field , rename_date_key = 'date')
         if prev: 

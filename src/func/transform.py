@@ -272,8 +272,15 @@ def apply_ols(x : np.ndarray | pd.DataFrame | pd.Series , y : np.ndarray | pd.Da
     coef[:,all_nan] = np.nan
     return coef
 
-def neutral_resid(x , y , weight : Any = None , whiten = True):
-    finite = np.isfinite(x) * np.isfinite(y)
+def neutral_resid(x , y , weight : Any = None , whiten = True) -> Any:
+    finite = np.isfinite(y)
+    x_finite = np.isfinite(x)
+    if x.ndim == 1:
+        finite = finite * x_finite
+    elif x.ndim == 2:
+        finite = finite * x_finite.all(axis = 1)
+    else:
+        raise ValueError(f'x must be 1D or 2D, but got {x.ndim}')
     _x , _y = x[finite] , y[finite]
     _w = weight if weight is None else weight[finite]
     if weight is None:

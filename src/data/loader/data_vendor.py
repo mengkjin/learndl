@@ -14,6 +14,7 @@ from .analyst import ANALYST
 from .min_kline import MKLINE    
 from .model_data import RISK
 from .trade_data import TRADE
+from .exposure import EXPO
 
 @singleton
 class DataVendor:
@@ -34,6 +35,7 @@ class DataVendor:
     ANALYST = ANALYST
 
     MKLINE = MKLINE
+    EXPO = EXPO
     
     def __init__(self):
         self.start_dt = 99991231

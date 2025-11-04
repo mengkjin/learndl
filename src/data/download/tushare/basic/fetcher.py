@@ -285,7 +285,7 @@ class MonthFetcher(TradeDataFetcher):
 class FinaFetcher(TushareFetcher):
     """base class of fina fetcher , implement get_data for real use"""
     DB_TYPE = 'fina'
-    UPDATE_FREQ = 'w'
+    UPDATE_FREQ = 'd'
     DB_SRC = 'financial_ts'
     DATA_FREQ : Literal['y' , 'h' , 'q'] = 'q'
     CONSIDER_FUTURE = False

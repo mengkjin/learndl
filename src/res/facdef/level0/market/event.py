@@ -70,7 +70,6 @@ class high_level_switch(MarketEventFactor):
         df = self._high_level_switch(start_date , date).query('date > @max_date & date <= @date')
         return df
 
-
 class selloff_rebound(MarketEventFactor):
     """
     暴跌反弹,过去交易日大跌环境下,当日反弹
