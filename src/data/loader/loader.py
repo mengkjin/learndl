@@ -93,11 +93,18 @@ class FactorLoader(BlockLoader):
         loader = FactorLoader(category1 = 'quality')
         df = loader.load(start_dt = 20250101 , end_dt = 20250331)
     """
-    def __init__(self , category1 : str , normalize = False , fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop'):
+    def __init__(
+        self , 
+        category1 : str , 
+        normalize = False , 
+        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+        **kwargs
+    ):
         super().__init__('factor')
         self.category1 = category1
         self.normalize = normalize
         self.fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = fill_method
+        self.kwargs = kwargs
         CONF.Factor.STOCK.validate_categories(self.category0 , self.category1)
 
     def load_block(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> DataBlock:
@@ -105,7 +112,7 @@ class FactorLoader(BlockLoader):
         factors : list[pd.DataFrame] = []
         from src.res.factor.calculator import FactorCalculator
         with Timer(f' --> factor blocks reading [{self.category0} , {self.category1}]' , silent = silent):
-            for calc in FactorCalculator.iter_calculators(category0 = self.category0 , category1 = self.category1):
+            for calc in FactorCalculator.iter_calculators(category0 = self.category0 , category1 = self.category1 , **self.kwargs):
                 df = calc.Loads(start_dt , end_dt , normalize = self.normalize , fill_method = self.fill_method)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)

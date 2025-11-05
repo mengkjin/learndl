@@ -80,6 +80,9 @@ class umr_new_1m(MomentumFactor):
     init_date = 20110101
     update_step = 1
     description = '1个月统一反转因子,原始计算'
+    updatable = False
+    preprocess = False
+
     
     def calc_factor(self, date: int):
         return umr_new_all(date , 1)
@@ -88,6 +91,8 @@ class umr_new_3m(MomentumFactor):
     init_date = 20110101
     update_step = 1
     description = '3个月统一反转因子,原始计算'
+    updatable = False
+    preprocess = False
     
     def calc_factor(self, date: int):
         return umr_new_all(date , 3)
@@ -96,6 +101,8 @@ class umr_new_6m(MomentumFactor):
     init_date = 20110101
     update_step = 1
     description = '6个月统一反转因子,原始计算'
+    updatable = False
+    preprocess = False
     
     def calc_factor(self, date: int):
         return umr_new_all(date , 6)
@@ -104,6 +111,8 @@ class umr_new_12m(MomentumFactor):
     init_date = 20110101
     update_step = 1
     description = '12个月统一反转因子,原始计算'
+    updatable = False
+    preprocess = False
     
     def calc_factor(self, date: int):
         return umr_new_all(date , 12)

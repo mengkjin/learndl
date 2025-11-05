@@ -99,7 +99,7 @@ class FactorUpdateJobManager:
     def unfinished_factors(cls , date : int | None = None) -> dict[int , list[FactorCalculator]]:
         """get unfinished factors"""
         factors : dict[int , list[FactorCalculator]] = {}
-        for calc in FactorCalculator.iter_calculators():
+        for calc in cls.iter_calculators(all = True):
             if date is None:
                 for d in calc.target_dates():
                     if d not in factors:
@@ -223,7 +223,7 @@ class FactorUpdateJobManager:
             print(f'Clearing factors of {date}')
 
         removed_factors = []
-        for calc in cls.iter_calculators(all_factors = True):
+        for calc in cls.iter_calculators(all = True):
             cleared = calc.clear_stored_data(date)
             if cleared:
                 removed_factors.append(calc.factor_name)
@@ -237,7 +237,7 @@ class FactorUpdateJobManager:
         if selected_factors:
             assert not all , \
                 f'all ({all}) and selected_factors ({selected_factors}) cannot be supplied at once'
-        return FactorCalculator.iter_calculators(all = all , selected_factors = selected_factors , **kwargs)
+        return FactorCalculator.iter_calculators(all = all , selected_factors = selected_factors , updatable = True , **kwargs)
 
     @classmethod
     def update(cls , verbosity : int = 3 , groups_in_one_update : int | None = 100 , start : int | None = None , end : int | None = None) -> None:

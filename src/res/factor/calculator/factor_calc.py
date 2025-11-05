@@ -194,6 +194,8 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
                         'adjustment' , 'hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity' , 
                         'momentum' , 'volatility' , 'correlation' , 'liquidity' , 'holding' , 'trading'] | Any = None
     description : str = ''
+    updatable = True
+    preprocess = True
 
     meta_type = _FactorMetaType()
     category0 = _FactorPropertyStr('category0')
