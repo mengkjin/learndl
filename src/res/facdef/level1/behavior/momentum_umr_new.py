@@ -73,7 +73,7 @@ def umr_new_all(date , n_months : int , risk_window : int = 10):
     all_umr = pd.concat(umrs.values() , axis = 1).fillna(0)
     orth_umr = symmetric_orth_np(all_umr.to_numpy() , standardize = False).mean(axis = 1)
     
-    df = pd.DataFrame({'umr_new': lm_resid(orth_umr , None , normalize = True)} , index = all_umr.index)
+    df = pd.Series({'umr_new': lm_resid(orth_umr , None , normalize = True)} , index = all_umr.index)
     return df
 
 class umr_new_1m(MomentumFactor):

@@ -167,7 +167,9 @@ class FactorUpdateJobManager:
         for (level , date) , jobs in cls.grouped_jobs():
             DATAVENDOR.data_storage_control()
             keys = [job.factor_name for job in jobs]
-            if verbosity > 2:
+            if len(keys) > 10:
+                print(f'Updating {level} at {date} : {len(keys)} factors')
+            else:
                 print(f'Updating {level} at {date} : {keys}')
             parallel(do_job , jobs , keys = keys , method = cls.multi_thread)
             failed_jobs = [job for job in jobs if not job.done]

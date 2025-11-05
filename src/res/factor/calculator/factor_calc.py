@@ -234,7 +234,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         raise NotImplementedError(f'{self.factor_name} factor history is not implemented')
 
     @abstractmethod
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , verbose = False) -> bool:
         """store factor data after calculate"""
         raise NotImplementedError(f'{self.factor_name} calc_and_deploy is not implemented')
 
@@ -420,9 +420,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
             print(f'Warning: {self.factor_string} at date {date} is not in CONF.Factor.UPDATE.target_dates')
         prefix = f'{self.factor_string} at date {date}'
         try:
-            done = self.calc_and_deploy(date , overwrite = overwrite)
-            if show_success:
-                print(f'{prefix} ' + 'deploy successful' if done else 'already there')
+            done = self.calc_and_deploy(date , overwrite = overwrite , verbose = show_success)
         except catch_errors as e:
             print(f'{prefix} failed: {e}')
             traceback.print_exc()
@@ -528,7 +526,7 @@ class StockFactorCalculator(FactorCalculator):
         """update all factor history calculations, must be implemented for market factor"""
         raise NotImplementedError(f'{self.factor_name} : fill history should not be implemented for stock factor')
 
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , verbose = False) -> bool:
         """store factor data after calculate"""
         if not overwrite and DB.path('factor' , self.factor_name , date).exists(): 
             return False
@@ -539,7 +537,7 @@ class StockFactorCalculator(FactorCalculator):
         self._df = df
         self._date = date
 
-        return DB.save(df , 'factor' , self.factor_name , date)
+        return DB.save(df , 'factor' , self.factor_name , date , verbose = verbose)
 
     def validate_value(self , df : pd.DataFrame , date : int , strict = False) -> pd.DataFrame:
         """
@@ -564,7 +562,7 @@ class StockFactorCalculator(FactorCalculator):
 
 class MarketFactorCalculator(FactorCalculator):
     """base class of market factor calculator"""
-    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False) -> bool:
+    def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , verbose = False) -> bool:
         """store factor data after calculate"""
         if not DB.path(self.meta_type , self.factor_name).exists():
             df = self.calc_history(date)
@@ -577,7 +575,7 @@ class MarketFactorCalculator(FactorCalculator):
             df = pd.concat([old_df , df]).drop_duplicates(subset = ['date'] , keep = 'first').\
                 sort_values('date').reset_index(drop = True)
 
-        return DB.save(df , self.meta_type , self.factor_name)
+        return DB.save(df , self.meta_type , self.factor_name , verbose = verbose)
 
     def validate_value(self , df : pd.DataFrame , date : int , strict = False) -> pd.DataFrame:
         """
