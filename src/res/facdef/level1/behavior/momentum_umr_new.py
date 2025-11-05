@@ -5,7 +5,7 @@ from src.basic import CALENDAR , DB , CONF
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
-from src.func.transform import time_weight , neutral_resid
+from src.func.transform import time_weight , lm_resid
 
 def umr_new_all(date , n_months : int , risk_window : int = 10):
     risk_type_list = ['true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
@@ -58,7 +58,7 @@ def umr_new_all(date , n_months : int , risk_window : int = 10):
 
         umr = (exc_rets.tail(exc_risk.shape[0]) * wgt[-exc_risk.shape[0]:] * exc_risk).sum(axis = 0).reindex(rets.columns)
 
-        umr_resid = neutral_resid(x , umr)
+        umr_resid = lm_resid(umr , x , normalize = True)
         umrs[risk_type] = umr_resid
     # umr = (exc_rets * wgt * avg_risk).sum(axis = 0)
     all_umr = pd.concat(umrs.values() , axis = 1).mean(axis = 1).rename('umr_new')

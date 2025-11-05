@@ -4,7 +4,7 @@ from typing import Literal
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor
 
-from src.func.transform import neutral_resid
+from src.func.transform import lm_resid
 
 def get_amplitudes(start_date , end_date , pivot = True):
     quotes = DATAVENDOR.TRADE.get_quotes(start_date , end_date , ['high' , 'low' , 'preclose'] , adj_price = False)
@@ -44,7 +44,7 @@ def mom_low_amp_v2(date , n_days : int , low_amplitude_ratio = 0.7):
 
     ret20 = ((DATAVENDOR.TRADE.get_returns(*DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd') , pivot=True) + 1).prod() - 1).reindex(mom.index)
 
-    mom = neutral_resid(ret20 , mom , whiten = False)
+    mom = lm_resid(mom , ret20 , normalize = False)
     return mom
 
 class mom_ltampl_v1(MomentumFactor):

@@ -3,7 +3,7 @@ from src.basic import DB
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
-from src.func.transform import time_weight
+from src.func.transform import time_weight , lm_resid
 
 def umr_raw_all(date , n_months : int , risk_window : int = 10):
     risk_type_list = ['true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
@@ -25,7 +25,9 @@ def umr_raw_all(date , n_months : int , risk_window : int = 10):
         exc_risk = avg_risk - risks.tail(n_days)
         exc_risk = exc_risk.dropna(how = 'all')
         umr = (exc_rets.tail(exc_risk.shape[0]) * wgt[-exc_risk.shape[0]:] * exc_risk).sum(axis = 0).reindex(rets.columns)
-        umrs[risk_type] = umr
+        
+        umr_resid = lm_resid(umr , None , normalize = True)
+        umrs[risk_type] = umr_resid
     all_umr = pd.concat(umrs.values() , axis = 1).mean(axis = 1).rename('umr_raw')
     return all_umr
 

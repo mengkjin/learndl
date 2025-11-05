@@ -5,7 +5,7 @@ from typing import Any , Literal
 
 from src.basic import CONF , CALENDAR , DB
 from src.data import DATAVENDOR
-from src.func.transform import (time_weight , descriptor , apply_ols , neutral_resid , ewma_cov , ewma_sd)
+from src.func.transform import (time_weight , descriptor , apply_ols , lm_resid , ewma_cov , ewma_sd)
 
 def parse_ts_input(
     ts : pd.DataFrame , 
@@ -302,7 +302,7 @@ class TuShareCNE5_Calculator:
     def calc_non_linear_size(self , date : int) -> pd.Series:
         '''calculate non-linear size of a given date'''
         size = self.get_style(date , 'size')
-        v = neutral_resid(size , size ** 3 , np.sqrt(self.get_estuniv(date)['weight']))
+        v = lm_resid(size ** 3 , size , np.sqrt(self.get_estuniv(date)['weight']))
         return self.descriptor(v , date , 'non_linear_size' , 'min')
     
     def calc_book_to_price(self , date : int) -> pd.Series:

@@ -272,24 +272,28 @@ def apply_ols(x : np.ndarray | pd.DataFrame | pd.Series , y : np.ndarray | pd.Da
     coef[:,all_nan] = np.nan
     return coef
 
-def neutral_resid(x , y , weight : Any = None , whiten = True) -> Any:
-    finite = np.isfinite(y)
-    x_finite = np.isfinite(x)
-    if x.ndim == 1:
-        finite = finite * x_finite
-    elif x.ndim == 2:
-        finite = finite * x_finite.all(axis = 1)
+def lm_resid(y , x : np.ndarray | pd.Series | pd.DataFrame | None , weight : Any = None , normalize = True) -> Any:
+    if x is None:
+        y_hat = 0
     else:
-        raise ValueError(f'x must be 1D or 2D, but got {x.ndim}')
-    _x , _y = x[finite] , y[finite]
-    _w = weight if weight is None else weight[finite]
-    if weight is None:
-        model = sm.OLS(_y , sm.add_constant(_x)).fit()
-    else:
-        model = sm.WLS(_y , sm.add_constant(_x) , weights = _w).fit()
-    resid = y - model.predict(sm.add_constant(x))
-    if whiten:
-        resid = (resid - np.nanmean(resid)) / (np.nanstd(resid) + 1e-6)
+        finite = np.isfinite(y)
+        x_finite = np.isfinite(x)
+        if x.ndim == 1:
+            finite = finite * x_finite
+        elif x.ndim == 2:
+            finite = finite * x_finite.all(axis = 1)
+        else:
+            raise ValueError(f'x must be 1D or 2D, but got {x.ndim}')
+        _x , _y = x[finite] , y[finite]
+        _w = weight if weight is None else weight[finite]
+        if weight is None:
+            model = sm.OLS(_y , sm.add_constant(_x)).fit()
+        else:
+            model = sm.WLS(_y , sm.add_constant(_x) , weights = _w).fit()
+        y_hat = model.predict(sm.add_constant(x))
+    resid = y - y_hat
+    if normalize:
+        resid = whiten(winsorize(resid))
     return resid
 
 def shrink_cov(X : np.ndarray , min_periods : int | None = None , corr = False):

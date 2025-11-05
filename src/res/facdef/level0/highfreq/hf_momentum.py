@@ -4,7 +4,7 @@ import polars as pl
 from src.data import DATAVENDOR
 from src.res.factor.calculator import HfMomentumFactor
 
-from src.func.transform import neutral_resid
+from src.func.transform import lm_resid
 
 __all__ = [
     'inday_amap_orig' , 'inday_conf_persist' , 'inday_regain_conf_persist' , 'inday_high_time' ,
@@ -62,7 +62,7 @@ class inday_amap_orig(HfMomentumFactor):
         ).group_by('secid').agg(
             (pl.col('delta').mean() / pl.col('delta').std() / pl.col('delta').count().sqrt()).alias('apm') 
         ).to_pandas().set_index('secid')['apm'].reindex(mom20.index)
-        apm = neutral_resid(apm , mom20)
+        apm = lm_resid(mom20 , apm)
         return apm
 
     
@@ -198,7 +198,7 @@ class inday_trend_avg(HfMomentumFactor):
         trend = pl.concat([price_trend(date) for date in dates]).group_by('secid').agg(
             pl.col('trend').mean().alias('trend_avg')
         ).to_pandas().set_index('secid')['trend_avg'].reindex(mom20.index)
-        trend = neutral_resid(trend , mom20)
+        trend = lm_resid(mom20 , trend)
         return trend
     
 class inday_trend_std(HfMomentumFactor):
@@ -221,7 +221,7 @@ class inday_trend_std(HfMomentumFactor):
         trend = pl.concat([price_trend(date) for date in dates]).group_by('secid').agg(
             pl.col('trend').std().alias('trend_std')
         ).to_pandas().set_index('secid')['trend_std'].reindex(mom20.index)
-        trend = neutral_resid(trend , mom20)
+        trend = lm_resid(mom20 , trend)
         return trend
     
 class inday_vwap_diff_hlvol(HfMomentumFactor):
