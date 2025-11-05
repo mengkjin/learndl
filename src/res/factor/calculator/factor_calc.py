@@ -500,10 +500,11 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         meta_type : Literal['market_factor' , 'factor'] | None = None
         category0 : str | None = None 
         category1 : str | None = None 
+        updatable : bool | None = None
         """
         cls.import_definitions()
         for name , calculator in cls.registry.items():
-            if all or (selected_factors and name in selected_factors) or calculator.match_attrs(**kwargs):
+            if (kwargs and calculator.match_attrs(**kwargs)) or (not kwargs and (all or (selected_factors and name in selected_factors))):
                 yield calculator()
 
     @classmethod
