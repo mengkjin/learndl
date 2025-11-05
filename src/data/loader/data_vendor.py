@@ -36,6 +36,8 @@ class DataVendor:
 
     MKLINE = MKLINE
     EXPO = EXPO
+
+    CUSTOM_DATA = {}
     
     def __init__(self):
         self.start_dt = 99991231

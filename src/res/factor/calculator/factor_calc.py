@@ -146,7 +146,8 @@ class _FactorCalculatorMeta(SingletonABCMeta):
         """
         new_cls = super().__new__(cls, name, bases, dct)
         abstract_methods = getattr(new_cls , '__abstractmethods__' , None)
-        if not abstract_methods:
+        registered = getattr(new_cls , 'registered' , True)
+        if not abstract_methods and registered:
             assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
                 f'{name} in module {new_cls.__module__} is duplicated within {cls.registry[name].__module__}'
 
@@ -360,12 +361,17 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return True
 
     @classmethod
-    def target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> np.ndarray:
+    def missing_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> np.ndarray:
         """returntarget dates of factor updates"""
         dates = CALENDAR.slice(cls.update_calendar , start , end)
         if not overwrite: 
             dates = CALENDAR.diffs(dates , cls.stored_dates())
         return dates
+
+    @classmethod
+    def target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> np.ndarray:
+        """returntarget dates of factor updates"""
+        return cls.missing_dates(start , end , overwrite)
     
     @classmethod
     def stored_dates(cls) -> np.ndarray:
@@ -399,7 +405,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         dates = cls.target_dates(start = start , end = end , overwrite = overwrite)
         calc = cls()
         for date in dates:
-            calc.update_day_factor(date , overwrite = overwrite , show_success = verbose)
+            calc.update_day_factor(date , overwrite = overwrite , show_success = verbose , show_warning = False)
 
     @classmethod
     def update_all_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , verbose = False) -> None:
@@ -408,9 +414,9 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         for stats_type , dates in target_dates.items():
             cls.update_periodic_stats(stats_type , dates , overwrite = overwrite , verbose = verbose)
 
-    def update_day_factor(self , date : int , overwrite = False , show_success = False , catch_errors : tuple[type[Exception],...] = ()) -> bool:
+    def update_day_factor(self , date : int , overwrite = False , show_success = False , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
         """update factor data of a given date"""
-        if date not in CONF.Factor.UPDATE.target_dates:
+        if show_warning and date not in CONF.Factor.UPDATE.target_dates:
             print(f'Warning: {self.factor_string} at date {date} is not in CONF.Factor.UPDATE.target_dates')
         prefix = f'{self.factor_string} at date {date}'
         try:
@@ -617,7 +623,7 @@ class MarketFactorCalculator(FactorCalculator):
     @classmethod
     def target_dates(cls , start : int | None = None , end : int | None = None , overwrite = False) -> np.ndarray:
         """returntarget dates of factor updates"""
-        return super().target_dates(start , end , overwrite)[-1:]
+        return cls.missing_dates(start , end , overwrite)[-1:]
     
     @classmethod
     def stored_dates(cls) -> np.ndarray:

@@ -33,7 +33,7 @@ class FundPortfolioFetcher(TushareFetcher):
     DATA_FREQ = 'q'
     CONSIDER_FUTURE = False
 
-    def get_update_dates(self):
+    def target_dates(self):
         dates = self._fina_fetcher_update_dates(self.DATA_FREQ , self.CONSIDER_FUTURE)
         if len(dates) <= 2: 
             dates = [] # if a lot of dates are missing, ignore update state to update

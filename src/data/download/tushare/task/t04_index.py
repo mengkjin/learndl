@@ -66,7 +66,7 @@ class IndexDaily(TimeSeriesFetcher):
         df = self.iterate_fetch(self.pro.index_daily , limit = 5000 , ts_code = index , start_date = str(start_date) , end_date = str(end_date))
         return df
 
-    def get_update_dates(self):
+    def target_dates(self):
         """get update dates for rolling fetcher"""
         assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
         update_to = CALENDAR.update_to()
@@ -121,14 +121,15 @@ class ZXIndexDaily(DayFetcher):
             index_dfs[index] = df
         return date_dfs , index_dfs
 
-    def update_dates(self , dates) -> None:
+    def update_dates(self , dates , step = 25 , **kwargs) -> None:
         """update the fetcher given dates"""
         if self.check_server_down(): 
             return
         if not self.db_by_name:
             assert None not in dates , f'{self.__class__.__name__} use date type but date is None'
-        si = dates[np.arange(len(dates))[::25]]
-        ei = dates[np.arange(len(dates))[24::25]]
+        assert step > 1 , f'step must be larger than 1 , got {step}'
+        si = dates[np.arange(len(dates))[::step]]
+        ei = dates[np.arange(len(dates))[step-1::step]]
         if len(si) != len(ei):
             ei = np.concatenate([ei , dates[-1:]])
 

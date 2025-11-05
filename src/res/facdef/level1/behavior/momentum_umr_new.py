@@ -6,6 +6,20 @@ from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
 from src.func.transform import time_weight , lm_resid
+from src.func.linalg import symmetric_orth_np
+
+_cached_data = {}
+
+def get_market_event_dates():
+    if 'market_event_dates' not in _cached_data:
+        market_events = [
+            DB.load('market_factor' , 'high_level_switch').query('high_level_switch == 1')['date'].to_numpy() ,
+            DB.load('market_factor' , 'platform_breakout').query('platform_breakout == 1')['date'].to_numpy() ,
+            DB.load('market_factor' , 'selloff_rebound').query('trigger_rebound == 1')['date'].to_numpy()
+        ]
+        market_event_dates = np.unique(np.concatenate(market_events))
+        _cached_data['market_event_dates'] = market_event_dates
+    return _cached_data['market_event_dates']  
 
 def umr_new_all(date , n_months : int , risk_window : int = 10):
     risk_type_list = ['true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
@@ -27,12 +41,7 @@ def umr_new_all(date , n_months : int , risk_window : int = 10):
             reset_index(drop = True).rename(columns = {'actual_date' : 'date'}).dropna()
     disclosure_dates['date'] = disclosure_dates['date'].astype(int)
 
-    market_event_dates = [
-        DB.load('market_factor' , 'high_level_switch').query('high_level_switch == 1')['date'].to_numpy() ,
-        DB.load('market_factor' , 'platform_breakout').query('platform_breakout == 1')['date'].to_numpy() ,
-        DB.load('market_factor' , 'selloff_rebound').query('trigger_rebound == 1')['date'].to_numpy()
-    ]
-    market_event_dates = np.unique(np.concatenate(market_event_dates))
+    market_event_dates = get_market_event_dates()
 
     mv_indus = DATAVENDOR.RISK.get_exp(date , ['secid' , 'size'] + CONF.Factor.RISK.indus).\
         reset_index(drop = True).set_index('secid').reindex(rets.columns)
@@ -60,9 +69,12 @@ def umr_new_all(date , n_months : int , risk_window : int = 10):
 
         umr_resid = lm_resid(umr , x , normalize = True)
         umrs[risk_type] = umr_resid
-    # umr = (exc_rets * wgt * avg_risk).sum(axis = 0)
-    all_umr = pd.concat(umrs.values() , axis = 1).mean(axis = 1).rename('umr_new')
-    return all_umr
+    
+    all_umr = pd.concat(umrs.values() , axis = 1).fillna(0)
+    orth_umr = symmetric_orth_np(all_umr.to_numpy() , standardize = False).mean(axis = 1)
+    
+    df = pd.DataFrame({'umr_new': lm_resid(orth_umr , None , normalize = True)} , index = all_umr.index)
+    return df
 
 class umr_new_1m(MomentumFactor):
     init_date = 20110101
