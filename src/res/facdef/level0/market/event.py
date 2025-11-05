@@ -65,9 +65,9 @@ class high_level_switch(MarketEventFactor):
         return df
     
     def calc_factor(self, date: int) -> pd.DataFrame:
-        max_date = self.max_date()
+        max_date = min(self.max_date() , date)
         start_date = DATAVENDOR.CALENDAR.td(max_date , -250)
-        df = self._high_level_switch(start_date , date).query('date > @max_date & date <= @date')
+        df = self._high_level_switch(start_date , date).query('date <= @date')
         return df
 
 class selloff_rebound(MarketEventFactor):
@@ -133,9 +133,9 @@ class selloff_rebound(MarketEventFactor):
         return df
     
     def calc_factor(self, date: int) -> pd.DataFrame:
-        max_date = self.max_date()
+        max_date = min(self.max_date() , date)
         start_date = DATAVENDOR.CALENDAR.td(max_date , -250)
-        df = self._selloff_rebound(start_date , date).query('date > @max_date & date <= @date')
+        df = self._selloff_rebound(start_date , date).query('date <= @date')
         return df
 
 class platform_breakout(MarketEventFactor):
@@ -169,7 +169,7 @@ class platform_breakout(MarketEventFactor):
         return df
     
     def calc_factor(self, date: int) -> pd.DataFrame:
-        max_date = self.max_date()
+        max_date = min(self.max_date() , date)
         start_date = DATAVENDOR.CALENDAR.td(max_date , -7)
-        df = self._platform_breakout(start_date , date).query('date > @max_date & date <= @date')
+        df = self._platform_breakout(start_date , date).query('date <= @date')
         return df

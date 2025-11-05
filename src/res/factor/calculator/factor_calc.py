@@ -568,7 +568,7 @@ class MarketFactorCalculator(FactorCalculator):
                 return False
             df = self(date)
             df = self.validate_value(df , date , strict = strict_validation)
-            df = pd.concat([old_df , df]).drop_duplicates(subset = ['date'] , keep = 'last').\
+            df = pd.concat([old_df , df]).drop_duplicates(subset = ['date'] , keep = 'first').\
                 sort_values('date').reset_index(drop = True)
 
         return DB.save(df , self.meta_type , self.factor_name)
