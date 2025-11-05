@@ -273,6 +273,15 @@ class TradeDataFetcher(TushareFetcher):
 class DayFetcher(TradeDataFetcher):
     """base class of day fetcher , implement get_data for real use"""
     UPDATE_FREQ = 'd'
+    
+    @classmethod
+    def update_missing(cls):
+        """update missing dates"""
+        fetcher = cls()
+        dates = CALENDAR.td_within(start_dt = cls.START_DATE , end_dt = CALENDAR.update_to())
+        stored_dates = DB.dates(cls.DB_SRC , cls.DB_KEY)
+        missing_dates = np.setdiff1d(dates , stored_dates)
+        fetcher.update_dates(missing_dates)
 
 class WeekFetcher(TradeDataFetcher):
     """base class of week fetcher , implement get_data for real use"""
