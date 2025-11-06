@@ -10,15 +10,15 @@
 #   start : 
 #       type : int
 #       desc : start yyyymmdd
-#       min : 20250101
+#       min : 20110101
 #       max : 99991231
-#       required : True
+#       required : False
 #   end : 
 #       type : int
 #       desc : end yyyymmdd
-#       min : 20250101
+#       min : 20110101
 #       max : 99991231
-#       required : True
+#       required : False
 #   num_per_group : 
 #       type : int
 #       desc : number of updates in a group
