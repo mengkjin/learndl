@@ -128,7 +128,10 @@ def _calc_factor_wrapper(calc_factor : Callable[['FactorCalculator',int],pd.Seri
             assert 'secid' in df.columns , f'secid not found in calc_factor result for stock factor: {df.columns}'
             df = df.drop_duplicates(subset = ['secid'] , keep = 'first').set_index('secid').reindex(DATAVENDOR.secid(date)).reset_index(drop = False)
 
-        df = df.reset_index(drop = True).replace([np.inf , -np.inf] , np.nan)
+        for col in df.columns:
+            if df[col].dtype != 'O':
+                df[col] = df[col].mask(np.isinf(df[col]), np.nan)
+        df = df.reset_index(drop = True)
         return df
     return wrapper
 
@@ -557,10 +560,10 @@ class StockFactorCalculator(FactorCalculator):
             mininum_valid_count = self.UPDATE_MIN_VALID_COUNT_RELAX
 
         if actual_valid_count < mininum_valid_count:
-            raise ValueError(f'factor_value must have at least {mininum_valid_count} valid values , but got {actual_valid_count}')
+            raise ValueError(f'{self.factor_name} at {date} must have at least {mininum_valid_count} valid values , but got {actual_valid_count}')
         
         if np.isinf(values).any():
-            raise ValueError(f'factor_value must not have infinite values , but got {np.isinf(df).sum()} infs')
+            raise ValueError(f'{self.factor_name} at {date} must not have infinite values , but got {np.isinf(df).sum()} infs')
         return df
 
 class MarketFactorCalculator(FactorCalculator):

@@ -8,6 +8,8 @@ from src.res.factor.calculator import MomentumFactor
 from src.func.transform import time_weight , lm_resid
 from src.func.linalg import symmetric_orth_np
 
+__all__ = ['umr_new_1m' , 'umr_new_3m' , 'umr_new_6m' , 'umr_new_12m']
+
 _cached_data = {}
 
 def get_market_event_dates():
@@ -21,7 +23,7 @@ def get_market_event_dates():
         _cached_data['market_event_dates'] = market_event_dates
     return _cached_data['market_event_dates']  
 
-def umr_new_all(date , n_months : int , risk_window : int = 10):
+def calc_umr_new(date , n_months : int , risk_window : int = 10):
     risk_type_list = ['true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
         'sqrt_avg_size' , 'open_close_pct' , 'ret_volatility' , 'ret_skewness']
     start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
@@ -72,47 +74,41 @@ def umr_new_all(date , n_months : int , risk_window : int = 10):
     
     all_umr = pd.concat(umrs.values() , axis = 1).fillna(0)
     orth_umr = symmetric_orth_np(all_umr.to_numpy() , standardize = False).mean(axis = 1)
-    
-    df = pd.Series({'umr_new': lm_resid(orth_umr , None , normalize = True)} , index = all_umr.index)
+    df = pd.Series(lm_resid(orth_umr , None , normalize = True) , index = all_umr.index).rename('umr_new')
     return df
 
 class umr_new_1m(MomentumFactor):
     init_date = 20110101
     update_step = 1
     description = '1个月统一反转因子,原始计算'
-    updatable = False
     preprocess = False
-
     
     def calc_factor(self, date: int):
-        return umr_new_all(date , 1)
+        return calc_umr_new(date , 1)
 
 class umr_new_3m(MomentumFactor):
     init_date = 20110101
     update_step = 1
     description = '3个月统一反转因子,原始计算'
-    updatable = False
     preprocess = False
     
     def calc_factor(self, date: int):
-        return umr_new_all(date , 3)
+        return calc_umr_new(date , 3)
 
 class umr_new_6m(MomentumFactor):
     init_date = 20110101
     update_step = 1
     description = '6个月统一反转因子,原始计算'
-    updatable = False
     preprocess = False
     
     def calc_factor(self, date: int):
-        return umr_new_all(date , 6)
+        return calc_umr_new(date , 6)
 
 class umr_new_12m(MomentumFactor):
     init_date = 20110101
     update_step = 1
     description = '12个月统一反转因子,原始计算'
-    updatable = False
     preprocess = False
     
     def calc_factor(self, date: int):
-        return umr_new_all(date , 12)
+        return calc_umr_new(date , 12)
