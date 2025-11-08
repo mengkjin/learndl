@@ -1,7 +1,6 @@
 import itertools , time
 import numpy as np
 
-from contextlib import nullcontext
 from typing import Any , Literal
 
 from src.basic import Timer
@@ -104,6 +103,7 @@ class PortfolioBuilder:
                 creator_class = ScreeningPortfolioCreator
             case _:
                 raise ValueError(f'Unknown category: {self.category}')
+
         self.creator = creator_class(self.full_name).setup(print_info = verbosity > 0 , **self.kwargs)
         return self
         
@@ -194,7 +194,7 @@ class PortfolioBuilderGroup:
         self.verbosity = verbosity
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({len(self.alpha_models)} alphas , {len(self.benchmarks)} benchmarks , ' + \
+        return f'{self.__class__.__name__}({self.category_title} , {len(self.alpha_models)} alphas , {len(self.benchmarks)} benchmarks , ' + \
                f'{len(self.lags)} lags , {len(self.param_groups)} param_groups , {len(self.relevant_dates)} dates , ' + \
                f'({len(self.alpha_models) * len(self.benchmarks) * len(self.lags) * len(self.param_groups) * len(self.relevant_dates)} builds)'
     
@@ -237,12 +237,10 @@ class PortfolioBuilderGroup:
         return self
     
     def accounting(self , start : int = -1 , end : int = 99991231):
-        t0 = time.time()
-        for builder in self.builders:
-            with Timer(f'{builder.portfolio.name} accounting') if self.verbosity > 1 else nullcontext():
-                builder.accounting(start , end , **self.acc_kwargs)
-        if self.verbosity > 0 :
-            print(f'Group Accounting Finished , Total time: {time.time()-t0:.2f} secs.')
+        with Timer(f'{self.__class__.__name__} accounting' , silent = self.verbosity < 1):
+            for builder in self.builders:
+                with Timer(f'{builder.portfolio.name} accounting' , silent = self.verbosity < 2):
+                    builder.accounting(start , end , **self.acc_kwargs)
         return self
     
     def total_account(self):
@@ -254,16 +252,16 @@ class PortfolioBuilderGroup:
         if self.verbosity > 0:
             if where == 'start':
                 self.t0 = time.time()
-                print(f'{self.category_title} of {str(self)} start!')
+                print(f'{str(self)} start!')
                 self.opt_count = 0
             elif where == 'loop':
                 if self.verbosity > 1 and self.opt_count % 100 == 0: 
                     time_cost = {k:float(np.round(v*1000,2)) for k,v in self._builder.creations[-1].time.items()}
-                    print(f'{self.category_title} of {self.opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
+                    print(f'building of {self.opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
                           f' Finished at {self._date} , time cost (ms) : {time_cost}')
                 self.opt_count += 1
             elif where == 'end':
                 self.t1 = time.time()
-                total_time = f'Total time: {self.t1-self.t0:.2f} secs'
-                each_time = f'each {self.category_title} time: {(self.t1-self.t0)/max(self.opt_count,1):.2f}'
-                print(f'Group {self.category_title} Finished, {total_time}, {each_time}')
+                total_time = f'cost {self.t1-self.t0:.2f} secs'
+                each_time = f'{(self.t1-self.t0)/max(self.opt_count,1)*1000:.1f} ms per building'
+                print(f'{self.__class__.__name__} building finished, {total_time}, {each_time}')

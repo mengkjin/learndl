@@ -154,10 +154,18 @@ class StatusDisplay(BaseCallBack):
         with open(self.RESULT_PATH, 'a') as f:
             json.dump({test_name:result}, f, indent=4)
 
-    def on_data_start(self):    Logger.critical(self.tic_str('data'))
-    def on_data_end(self):      Logger.critical(self.toc_str('data'))
-    def on_fit_start(self):     Logger.critical(self.tic_str('fit'))
-    def on_fit_end(self):       Logger.critical(self.toc_str('fit' , avg=True))
+    def on_before_data_start(self):    
+        Logger.critical(self.tic_str('data'))
+    def on_after_data_end(self):      
+        Logger.critical(self.toc_str('data'))
+    def on_before_fit_start(self):     
+        Logger.critical(self.tic_str('fit'))
+    def on_after_fit_end(self):       
+        Logger.critical(self.toc_str('fit' , avg=True))
+    def on_before_test_start(self):
+        Logger.critical(self.tic_str('test'))
+    def on_after_test_end(self):
+        Logger.critical(self.toc_str('test'))
 
     def on_fit_model_start(self):
         self.tic('model')
@@ -197,10 +205,8 @@ class StatusDisplay(BaseCallBack):
         self.record_texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
             self.toc('model') / 60 , self.toc('model') / (self.record_epoch_model + 1))
         Logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts))
-    
+
     def on_test_start(self): 
-        Logger.critical(self.tic_str('test'))
-                
         self.test_df_date = pd.DataFrame()
         self.test_df_model = pd.DataFrame()
         self.test_summarized = False
@@ -211,7 +217,6 @@ class StatusDisplay(BaseCallBack):
     def on_test_end(self): 
         Logger.warning('Testing Mean Score({}):'.format(self.config.train_criterion_score))
         self.summarize_test_result()
-        Logger.critical(self.toc_str('test'))
 
     def update_test_score(self):
         df_date = pd.DataFrame({
@@ -259,9 +264,9 @@ class StatusDisplay(BaseCallBack):
         df_display = self.summary_df
         if len(df_display) > 100: 
             df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]
-        print('Table: Test Summary:')
-        FUNC.display.display(df_display)
-        print(f'Test results are saved to {self.path_test}')
+        with Logger.EnclosedMessage('Table: Test Summary:' , timer = False): 
+            FUNC.display.display(df_display)
+            print(f'Table saved to {self.path_test}')
 
         # export excel
         rslt = {'summary' : self.summary_df , 'by_model' : self.test_df_model}

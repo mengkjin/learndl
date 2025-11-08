@@ -513,15 +513,15 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @classmethod
     def match_attrs(cls , **kwargs) -> bool:
         """check if the factor matches the given attributes"""
+        kwargs = {k : v for k , v in kwargs.items() if v is not None}
         if len(kwargs) == 0:
             return False
         conditions : list[bool] = []
         for k , v in kwargs.items():
-            if v is None: 
-                continue
-            attr = getattr(cls , k)
+            attr = getattr(cls , k , None)
             if isinstance(v , str): 
                 v = v.replace('\\' , '/')
+            if isinstance(attr , str):
                 attr = attr.replace('\\' , '/')
             conditions.append(attr == v)
         return not conditions or all(conditions)

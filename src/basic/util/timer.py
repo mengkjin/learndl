@@ -18,11 +18,25 @@ class Timer:
             print(self._str_at_first() , end='\n' if self.newline else '')
     def __exit__(self, type, value, trace):
         if not self.silent and not SILENT:
-            print((self._str_at_first() if self.exit_only else '') + self._str_at_exit())
+            print(self._str_at_exit())
     def _str_at_first(self):
         return f'{self.key} start ... '
     def _str_at_exit(self):
-        return f'finished! Cost {time.time()-self.start_time:.2f} secs'
+        time_cost = time.time() - self.start_time
+        if time_cost < 1000:
+            text = f'finished! Cost {time_cost:.2f} secs'
+        elif time_cost < 3600:
+            minutes, seconds = divmod(time_cost, 60)
+            text =  f'finished! Cost {minutes:.0f} mins {seconds:.1f} secs'
+        else:
+            hours, remainder = divmod(time_cost, 3600)
+            minutes , seconds = divmod(remainder, 60)
+            text = f'finished! Cost {hours:.0f} hours {minutes:.0f} minutes {seconds:.1f} seconds'
+
+        if self.exit_only:
+            return f'{self.key} {text}'
+        elif self.newline:
+            return text
 
 class PTimer:
     '''process timer , call to record and .summarize() to print out summary'''

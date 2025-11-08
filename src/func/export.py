@@ -16,7 +16,7 @@ def dfs_to_excel(dfs : dict[str , pd.DataFrame] , path : str | Path , mode : Lit
         for key, value in dfs.items():
             value.to_excel(writer, sheet_name = f'{name_prefix}{key}')
     if print_prefix: 
-        print(f'{print_prefix} are saved to {path}')
+        print(f'{print_prefix} saved to {path}')
     return path
 
 def figs_to_pdf(figs : dict[str , Figure] , path : str | Path , print_prefix = None):
@@ -26,5 +26,5 @@ def figs_to_pdf(figs : dict[str , Figure] , path : str | Path , print_prefix = N
             pdf.savefig(fig)
             plt.close(fig)
     if print_prefix: 
-        print(f'{print_prefix} are saved to {path}')
+        print(f'{print_prefix} saved to {path}')
     return path

@@ -1,27 +1,297 @@
-import io , sys , re , html , time , base64 , platform 
+import io , sys , re , html , time , base64 , platform , warnings , traceback
 import pandas as pd
-            
+
+from typing import Any, Callable ,Literal , IO
+from abc import ABC, abstractmethod
+from io import StringIO
+from pathlib import Path
 from dataclasses import dataclass , field
 from datetime import datetime , timedelta
 from matplotlib.figure import Figure
-from typing import Any , Callable , Literal
-from pathlib import Path
 
-from .machine import MACHINE
 from .path import PATH
-from .output_catcher import OutputDeflector , OutputCatcher
+from .logger import Logger
+from .machine import MACHINE
 
-__all__ = ['HtmlCatcher' , 'MarkdownCatcher']
+__all__ = [
+    'IOCatcher' , 'LogWriter' , 'OutputCatcher' , 'OutputDeflector' , 
+    'HtmlCatcher' , 'MarkdownCatcher' , 'WarningCatcher' ,
+]
 
-class_mapping = {
-    'stdout' : 'stdout',
-    'stderr' : 'stderr',
-    'data_frame' : 'dataframe',
-    'figure' : 'image',
-}
+class OutputDeflector:
+    """
+    double output stream: deflect output to catcher and original output stream (optional)
+    example:
+        catcher = IOCatcher()
+        with OutputDeflector('stdout', catcher, keep_original=True):
+            print('This will be deflected to catcher')
+        with OutputDeflector('stderr', catcher, keep_original=False):
+            Logger.info('This will be deflected to catcher')
+    """
+    def __init__(
+            self, 
+            type : Literal['stdout' , 'stderr'] ,
+            catcher : 'OutputDeflector | IO | OutputCatcher | None', 
+            keep_original : bool = True,
+            catcher_function : str = 'write',
+        ):
+        self.catcher = catcher
+        self.type = type
 
-def critical(message: str):
-    sys.stderr.write(f"\u001b[41m\u001b[1m{message}\u001b[0m\n")
+        self.keep_original = keep_original
+        self.catcher_function = catcher_function
+        self._null_initialize()
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(original={self.original_output}, catcher={self.catcher}, type={self.type})'
+    
+    def _null_initialize(self) -> None:
+        """Null initialize the deflector"""
+        self.original_output = None
+        self.is_catching = False
+        if hasattr(self, '_catcher_write'):
+            del self._catcher_write
+        if hasattr(self, '_catcher_flush'):
+            del self._catcher_flush
+
+    @property
+    def original_std(self) -> 'OutputDeflector | IO | OutputCatcher':
+        """Get the original output stream"""
+        if self.original_output is not None:
+            return self.original_output
+        elif self.type == 'stdout':
+            return sys.stdout
+        elif self.type == 'stderr':
+            return sys.stderr
+        else:
+            raise ValueError(f"Invalid type: {self.type}")
+        
+    def catcher_write(self , text : str | Any) -> None:
+        """Write to the catcher"""
+        if not hasattr(self, '_catcher_write'):
+            self._catcher_write = getattr(self.catcher, self.catcher_function , lambda *x: None)
+        self._catcher_write(text)
+
+    def catcher_flush(self) -> None:
+        """Flush the catcher"""
+        if not hasattr(self, '_catcher_flush'):
+            self._catcher_flush = getattr(self.catcher, 'flush' , lambda: None)
+        self._catcher_flush()
+
+    def original_write(self, text : str | Any) -> None:
+        """Write to the original output stream"""
+        self.original_std.write(text)
+
+    def original_flush(self) -> None:
+        """Flush the original output stream"""
+        self.original_std.flush()
+
+    def start_catching(self):
+        """
+        Start catching of the output stream
+        1. redirect stdout/stderr to the deflector
+        2. set the deflector to catching mode
+        """
+        if self.type == 'stdout':
+            self.original_output = sys.stdout
+            sys.stdout = self
+        elif self.type == 'stderr':
+            self.original_output = sys.stderr
+            sys.stderr = self
+            Logger.reset_logger()
+        else:
+            raise ValueError(f"Invalid type: {self.type}")
+        self.is_catching = True
+        return self
+    
+    def end_catching(self):
+        """
+        End catching of the output stream
+        1. reset stdout/stderr to original output stream
+        2. close the deflector
+        3. null initialize the deflector
+        """
+        if self.type == 'stdout':
+            sys.stdout = self.original_output
+        elif self.type == 'stderr':
+            sys.stderr = self.original_output
+            Logger.reset_logger()
+        else:
+            raise ValueError(f"Invalid type: {self.type}")
+        self.close()
+        self._null_initialize()
+        return self
+            
+    def write(self, text : str | Any) -> None:
+        """Write to the catcher (if catching) and original output stream (if keep_original)"""
+        if not self.is_catching or self.keep_original:
+            self.original_write(text)
+        if self.is_catching:
+            self.catcher_write(text)
+        self.flush()
+        
+    def flush(self) -> None:
+        """Flush the original output stream and the catcher"""
+        self.original_std.flush()
+        if self.is_catching:
+            self.catcher_flush()
+
+    def close(self) -> None:
+        """Close the catcher"""
+        if hasattr(self.catcher, 'close'):
+            try:
+                getattr(self.catcher, 'close')()
+            except Exception as e:
+                print(f"Error closing catcher: {e}")
+                raise e
+
+class OutputCatcher(ABC):
+    """
+    Abstract base class for output catcher for stdout and stderr
+    must implement the get_contents method
+    can rewrite the stdout_catcher/stderr_catcher or stdout_deflector/stderr_deflector
+    """
+    keep_original : bool = True
+
+    def __init__(self):
+        self.stdout_catcher = None
+        self.stderr_catcher = None
+    
+    def __enter__(self):
+        self.stdout_deflector = OutputDeflector('stdout', self.stdout_catcher , self.keep_original).start_catching()
+        self.stderr_deflector = OutputDeflector('stderr', self.stderr_catcher , self.keep_original).start_catching()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stdout_deflector.end_catching()
+        self.stderr_deflector.end_catching()
+
+    def write(self, text : str | Any):
+        ...
+    
+    def flush(self):
+        ...
+
+    @abstractmethod
+    def get_contents(self) -> Any:
+        ...
+
+    @property
+    def contents(self) -> Any:
+        return self.get_contents()
+    
+class IOCatcher(OutputCatcher):
+    """
+    Output catcher into StringIO for stdout and stderr
+    example:
+        catcher = IOCatcher()
+        with catcher:
+            print('This will be caught')
+        contents = catcher.contents
+    """
+    keep_original = False
+    
+    def __init__(self):
+        self.stdout_catcher = StringIO()
+        self.stderr_catcher = StringIO()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._contents = {
+            'stdout': self.stdout_catcher.getvalue(),
+            'stderr': self.stderr_catcher.getvalue(),
+        }
+        super().__exit__(exc_type, exc_val, exc_tb)
+    
+    def get_contents(self):
+        return self._contents
+    
+    def clear(self):
+        self.stdout_catcher.seek(0)
+        self.stdout_catcher.truncate(0)
+        
+        self.stderr_catcher.seek(0)
+        self.stderr_catcher.truncate(0)
+
+class LogWriter(OutputCatcher):
+    """
+    Output catcher into log file for stdout and stderr
+    example:
+        catcher = LogWriter('log.txt')
+        with catcher:
+            print('This will be caught')
+        contents = catcher.contents
+    """
+    def __init__(self, log_path : str | Path | None = None):
+        self.log_path = log_path
+        if log_path is None: 
+            self.log_file = None
+        else:
+            log_path = PATH.main.joinpath(log_path)
+            log_path.parent.mkdir(exist_ok=True,parents=True)
+            self.log_file = open(log_path, "w")
+        self.stdout_catcher = self.log_file
+        self.stderr_catcher = self.log_file
+
+    def get_contents(self):
+        if self.log_path is None: 
+            return ''
+        else:
+            with open(self.log_path , 'r') as f:
+                return f.read()
+
+class WarningCatcher:
+    """
+    catch specific warnings and show call stack
+    example:
+        with WarningCatcher(['This will raise an exception']):
+            print('This will raise an exception')
+    """
+    def __init__(self , catch_warnings : list[str] | None = None):
+        self.warnings_caught = []
+        self.original_showwarning = warnings.showwarning
+        warnings.filterwarnings('always')
+        self.catch_warnings = [] if catch_warnings is None else [c.lower() for c in catch_warnings]
+        
+    
+    def custom_showwarning(self, message, category, filename, lineno, file=None, line=None) -> None:
+        """Custom warning show function to catch specific warnings and show call stack"""
+        # only catch the warnings we care about
+        if any(c in str(message).lower() for c in self.catch_warnings):
+            stack = traceback.extract_stack()
+            print(f"\n caught warning: {message}")
+            print(f"warning location: {filename}:{lineno}")
+            print("call stack:")
+            for i, frame in enumerate(stack[:-1]):  # exclude current frame
+                print(f"  {i+1}. {frame.filename}:{frame.lineno} in {frame.name}")
+                print(f"     {frame.line}")
+            print("-" * 80)
+            
+            raise Exception(message)
+        
+        # call original warning show function
+        self.original_showwarning(message, category, filename, lineno, file, line)
+    
+    def __enter__(self):
+        warnings.showwarning = self.custom_showwarning
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        warnings.showwarning = self.original_showwarning
+
+def _critical(message: str):
+    red_bg_white_bold = "\u001b[41m\u001b[1m\u001b[37m"  # red backgroud , white bold
+    reset_all = "\u001b[0m"
+    red_text = "\u001b[31m\u001b[1m"  # red text (no background) , bold
+
+    try:
+        mod_name = Path(__file__).stem
+    except NameError:
+        mod_name = 'None'
+
+    prefix = f'{time.strftime("%y-%m-%d %H:%M:%S")}|MOD:{mod_name:{12}s}|'
+    
+    output = f"{red_bg_white_bold}{prefix}{reset_all}{red_text}: {message}{reset_all}\n"
+    sys.stderr.write(output)
 
 def _str_to_html(text: str | Any):
     """capture string"""
@@ -78,7 +348,7 @@ def _figure_to_base64(fig : Figure | Any):
         buffer.close()
         return image_base64
     except Exception as e:
-        critical(f"Error converting figure to base64: {e}")
+        _critical(f"Error converting figure to base64: {e}")
         return None
     
 def _ansi_to_css(ansi_string: str) -> str:
@@ -133,7 +403,7 @@ def _figure_to_html(fig: Figure | Any):
             if image_base64 := _figure_to_base64(fig):
                 content = f'<img src="data:image/png;base64,{image_base64}" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 5px; margin: 10px 0;">'
     except Exception as e:
-        critical(f"Error capturing matplotlib figure: {e}")
+        _critical(f"Error capturing matplotlib figure: {e}")
     return content
 
 def _strf_delta(tdelta : timedelta):
@@ -186,7 +456,12 @@ class TimedOutput:
     
     @property
     def format_type(self):
-        return class_mapping[self.type]
+        return {
+            'stdout' : 'stdout',
+            'stderr' : 'stderr',
+            'data_frame' : 'dataframe',
+            'figure' : 'image',
+        }[self.type]
     
     @property
     def type_str(self):
@@ -348,7 +623,7 @@ class HtmlCatcher(OutputCatcher):
 
     def SetInstance(self):
         if self.Instance is not None:
-            critical(f"{self.Instance} is already running, blocking {self}")
+            _critical(f"{self.Instance} is already running, blocking {self}")
             self._enable_catcher = False
         else:
             self.__class__.Instance = self
@@ -367,7 +642,7 @@ class HtmlCatcher(OutputCatcher):
             return self
         self.start_time = datetime.now()
         self.redirect_display_function()
-        critical(f"{self} start to capture messages at {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        _critical(f"{self} start to capture messages")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -381,7 +656,7 @@ class HtmlCatcher(OutputCatcher):
     def export(self , export_path: Path | None = None):
         if export_path is None: 
             export_path = self.get_export_path()
-        critical(f"{self} Finished Capturing, saved to {export_path}")
+        _critical(f"{self} Finished Capturing, saved to {export_path}")
         export_path.parent.mkdir(exist_ok=True,parents=True)
         with open(export_path, 'w', encoding='utf-8') as f:
             f.write(self.generate_html())

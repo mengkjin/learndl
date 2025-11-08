@@ -21,6 +21,12 @@
 #       default : "resume/False"
 #       desc : resume training , if change schedule file, set to False
 #       required : True
+#   start : 
+#       type : int
+#       desc : start date
+#   end : 
+#       type : int
+#       desc : end date
 # file_editor:
 #   name : "Schedule Config File Editor"
 #   path: "{PATH.conf_schedule}/{schedule_name}.yaml | {PATH.shared_schedule}/{schedule_name}.yaml"
@@ -30,9 +36,11 @@ from src.res.api import ModelAPI
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('train_schedule_model' , '@schedule_name' , lock_num = 2)
-def main(schedule_name : str | None = None , short_test : bool | None = None , resume : bool | None = None , **kwargs):
+def main(schedule_name : str | None = None , short_test : bool | None = None , 
+         resume : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
     assert schedule_name is not None , 'schedule_name is required'
-    ModelAPI.schedule_model(schedule_name , short_test , 1 if resume is None else int(resume))
+    ModelAPI.schedule_model(schedule_name , short_test , 1 if resume is None else int(resume) , 
+                            start = start , end = end)
         
 if __name__ == '__main__':
     main()

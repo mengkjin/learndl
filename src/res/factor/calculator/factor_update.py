@@ -162,15 +162,16 @@ class FactorUpdateJobManager:
             return
 
         def do_job(job : FactorUpdateJob): 
-            job.do(verbosity > 1 , overwrite)
+            job.do(verbosity > 2 , overwrite)
 
         for (level , date) , jobs in cls.grouped_jobs():
             DATAVENDOR.data_storage_control()
             keys = [job.factor_name for job in jobs]
-            if len(keys) > 10:
-                print(f'Updating {level} at {date} : {len(keys)} factors')
-            else:
-                print(f'Updating {level} at {date} : {keys}')
+            if verbosity > 1:
+                if len(keys) > 10:
+                    print(f'Updating {level} at {date} : {len(keys)} factors')
+                else:
+                    print(f'Updating {level} at {date} : {keys}')
             parallel(do_job , jobs , keys = keys , method = cls.multi_thread)
             failed_jobs = [job for job in jobs if not job.done]
             if verbosity > 0:
@@ -240,7 +241,7 @@ class FactorUpdateJobManager:
         return FactorCalculator.iter_calculators(all = all , selected_factors = selected_factors , updatable = True , **kwargs)
 
     @classmethod
-    def update(cls , verbosity : int = 3 , groups_in_one_update : int | None = 100 , start : int | None = None , end : int | None = None) -> None:
+    def update(cls , verbosity : int = 1 , groups_in_one_update : int | None = 100 , start : int | None = None , end : int | None = None) -> None:
         '''update factor data according'''
         self = cls()
         self.collect_jobs(start = start , end = end , all_factors = True , groups_in_one_update = groups_in_one_update)

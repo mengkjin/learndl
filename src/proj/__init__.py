@@ -1,11 +1,11 @@
 from .machine import MACHINE
 from .path import PATH
 from .logger import Logger
-from .output_catcher import IOCatcher , LogWriter , OutputCatcher , OutputDeflector
-from .message_catcher import HtmlCatcher , MarkdownCatcher
-from .db import DBConnHandler
-from .warning_catcher import WarningCatcher
-from .instance_record import InstanceRecord
+from .catcher import (
+    IOCatcher , LogWriter , OutputCatcher , OutputDeflector , 
+    HtmlCatcher , MarkdownCatcher , WarningCatcher)
+from .sqlite import DBConnHandler
+from .debug import InstanceRecord
 from .shared_sync import SharedSync
 
 def print_project_info():

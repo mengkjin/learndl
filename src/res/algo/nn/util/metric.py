@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Callable , Any , Literal
 
+from src.proj import Logger
 from src.func import mse , pearson , ccc , spearman
 from .multiloss import MultiHeadLosses
 
@@ -150,7 +151,7 @@ class MetricCalculator:
     def display(self):
         if self.DISPLAY_LOG.get(f'{self.metric_type}.{self.criterion}' , False): 
             return
-        print(f'{self.metric_type} function of [{self.criterion}] calculated and success!')
+        Logger.debug(f'{self.metric_type} function of [{self.criterion}] calculated and success!')
         self.DISPLAY_LOG[f'{self.metric_type}.{self.criterion}'] = True
 
     @classmethod
@@ -184,7 +185,7 @@ class MetricCalculator:
             if nanpos.ndim > 1:
                 nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
             if print_all_nan and nanpos.all(): 
-                print('Encountered all nan inputs in metric calculation!')
+                Logger.warning('Encountered all nan inputs in metric calculation!')
                 [print(arg) for arg in args]
             args = [None if arg is None else arg[~nanpos] for arg in args]
         return args

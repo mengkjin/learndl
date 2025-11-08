@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Any , Type
 
+from src.basic import Timer
 from . import calculator as Calc
 from .calculator import BaseScreenPortCalc
 from ..test_manager import BaseTestManager
@@ -40,11 +41,10 @@ class FmpScreenManager(BaseTestManager):
         self.account = self.portfolio_group.building().accounting().total_account()
 
     def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , verbosity = 1 , **kwargs):
-        self.generate(factor , benchmark , verbosity = verbosity)
-        for task in self.tasks.values():  
-            task.calc(self.account , verbosity = verbosity - 1) 
-        if verbosity > 0: 
-            print(f'{self.__class__.__name__} calc Finished!')
+        with Timer(f'{self.__class__.__name__} calc' , silent = verbosity < 1):
+            self.generate(factor , benchmark , verbosity = verbosity)
+            for task in self.tasks.values():  
+                task.calc(self.account , verbosity = verbosity - 1) 
         return self
     
     def update_kwargs(self , **kwargs):

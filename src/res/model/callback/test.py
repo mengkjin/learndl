@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import Any , Literal
 
+from src.proj import Logger
 from src import func as FUNC
 from src.basic import DB
 from src.res.factor.util import StockFactor
@@ -59,22 +60,24 @@ class DetailedAlphaAnalysis(BaseCallBack):
         factors : dict[int , StockFactor] = {}
         self.test_results : dict[TYPE_of_TASK , BaseTestManager] = {}
         for task in self.analytic_tasks:
-            interval = 1 if task in ['t50' , 'screen'] else 5
-            if interval not in factors.keys():
-                dates = PRED_RECORD.dates[::interval] # noqa
-                factors[interval] = StockFactor(df.reset_index().query('date in @dates').set_index(['secid','date']))
-            factor = factors[interval]
-            self.test_results[task] = FactorTestAPI.run_test(
-                task , factor , verbosity = 1 , write_down=False , display_figs=False , title_prefix=self.config.model_name)
+            with Logger.EnclosedMessage(f'{task} test'):
+                interval = 1 if task in ['t50' , 'screen'] else 5
+                if interval not in factors.keys():
+                    dates = PRED_RECORD.dates[::interval] # noqa
+                    factors[interval] = StockFactor(df.reset_index().query('date in @dates').set_index(['secid','date']))
+                factor = factors[interval]
+                self.test_results[task] = FactorTestAPI.run_test(
+                    task , factor , verbosity = 1 , write_down=False , display_figs=False , title_prefix=self.config.model_name)
 
         rslts = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_rslts().items()}
         figs  = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_figs().items()}
 
-        self.display_dfs(rslts)
-        self.display_figs(figs)
+        with Logger.EnclosedMessage('Display Analytic Results' , timer = False):
+            self.display_dfs(rslts)
+            self.display_figs(figs)
 
-        FUNC.dfs_to_excel(rslts , self.path_data , print_prefix='Analytic datas')
-        FUNC.figs_to_pdf(figs , self.path_plot , print_prefix='Analytic plots')
+            FUNC.dfs_to_excel(rslts , self.path_data , print_prefix='Analytic datas')
+            FUNC.figs_to_pdf(figs , self.path_plot , print_prefix='Analytic plots')
 
     @classmethod
     def display_dfs(cls , dfs : dict[str , pd.DataFrame]):
@@ -131,6 +134,6 @@ class GroupReturnAnalysis(BaseCallBack):
         FUNC.dfs_to_excel(rslt , self.path_grp)
         grp : pd.DataFrame = rslt['market']
         grp.index.names = [str(col).replace('model_','') for col in grp.index.names]
-        print('Table: Grouped Return Results:')
-        FUNC.display.display(grp)
-        print(f'Grouped Return Results are saved to {self.path_grp}')
+        with Logger.EnclosedMessage('Table: Grouped Return Results:' , timer = False):
+            FUNC.display.display(grp)
+            print(f'Table saved to {self.path_grp}')

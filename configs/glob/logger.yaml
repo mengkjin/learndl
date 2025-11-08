@@ -2,7 +2,7 @@ console:
   class: logging.StreamHandler
   formatter: levelcolor
   formatter_class: _LevelColorFormatter
-  level: INFO
+  level: DEBUG
   param: {}
 datefmt: '%y-%m-%d %H:%M:%S'
 file:

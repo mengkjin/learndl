@@ -10,10 +10,8 @@ class BaseOptimCalc(BaseCalculator):
     DEFAULT_TITLE_GROUP = 'Optim Port'
 
     def calc(self , account : pd.DataFrame , verbosity = 0):
-        with self.suppress_warnings(): 
+        with self.calc_manager(f'    --->{self.__class__.__name__} calc' , verbosity = verbosity): 
             self.calc_rslt : pd.DataFrame = self.calculator()(account)
-        if verbosity > 0: 
-            print(f'    --->{self.__class__.__name__} calc Finished!')
         return self
     
 class Optim_FrontFace(BaseOptimCalc):

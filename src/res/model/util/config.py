@@ -577,12 +577,13 @@ class ModelParam:
 class TrainConfig(TrainParam):
     def __init__(
         self , base_path : ModelPath | Path | str | None , override = None, schedule_name : str | None = None ,
-        stage = -1 , resume = -1 , checkname = -1 , makedir = True , **kwargs
+        stage = -1 , resume = -1 , checkname = -1 , makedir = True , start : int | None = None , end : int | None = None , **kwargs
     ):
-        self.device      = Device()
-
-        self.Train = TrainParam(base_path , override, schedule_name , **kwargs)
-        self.Model = self.Train.generate_model_param()
+        self.device = Device()
+        self.start  = start
+        self.end    = end
+        self.Train  = TrainParam(base_path , override, schedule_name , **kwargs)
+        self.Model  = self.Train.generate_model_param()
 
         self.process_parser(stage , resume , checkname)
         assert self.Train.model_base_path , self.Train.model_name
@@ -650,12 +651,16 @@ class TrainConfig(TrainParam):
         beg_date = self.Train.beg_date
         if self.module_type == 'db':
             beg_date = max(beg_date , DB.min_date(self.db_mapping.src , self.db_mapping.key))
+        if self.start is not None:
+            beg_date = max(beg_date , self.start)
         return beg_date
     @property
     def end_date(self) -> int: 
         end_date = self.Train.end_date
         if self.module_type == 'db':
             end_date = min(end_date , DB.max_date(self.db_mapping.src , self.db_mapping.key))
+        if self.end is not None:
+            end_date = min(end_date , self.end)
         return end_date
 
     def update(self, update = None , **kwargs):
@@ -808,7 +813,7 @@ class TrainConfig(TrainParam):
             else:
                 raise ValueError(f'checkname must be -1 or 0 when base_path is not None , got {checkname}')
             verbose = False
-        with Logger.EnclosedMessage(' parser training args ') if verbose else nullcontext():
+        with Logger.EnclosedMessage(' parser training args ' , timer = False) if verbose else nullcontext():
             self.parser_stage(stage , verbose)
             self.parser_resume(resume , verbose)
             self.parser_select(checkname , verbose) 
@@ -853,7 +858,7 @@ class TrainConfig(TrainParam):
         info_strs.append(f'Stage Queue     : {self.stage_queue}')
         info_strs.append(f'Resume Training : {self.resume_training}')
 
-        with Logger.EnclosedMessage(' model info '): 
+        with Logger.EnclosedMessage(' model info ' , timer = False): 
             Logger.print('\n'.join(info_strs))
 
     @property

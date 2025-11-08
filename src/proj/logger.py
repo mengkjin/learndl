@@ -175,17 +175,19 @@ class Logger:
             with Logger.EnclosedMessage('Title'):
                 Logger.info('This is the enclosed message...')
         """
-        def __init__(self , title : str , width = _seperator_width):
+        def __init__(self , title : str , width = _seperator_width , timer = True):
             self.title = title.strip()
             self.width = width
-
+            self.timer = timer
+            
         def __enter__(self):
             self.start_time = time.time()
             self.write(f'{self.title.upper()} START')
 
         def __exit__(self , exc_type , exc_value , traceback):
-            duration = time.time() - self.start_time
-            Logger.info(f'{self.title.upper()} Finished! Cost {duration:.2f} Seconds')
+            if self.timer:
+                duration = time.time() - self.start_time
+                Logger.info(f'{self.title.upper()} Finished! Cost {duration:.2f} Seconds')
             self.write(f'{self.title.upper()} FINISH')
 
         def __repr__(self):

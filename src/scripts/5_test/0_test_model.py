@@ -16,6 +16,12 @@
 #       type : [True , False]
 #       desc : short test
 #       prefix : "short_test/"
+#   start : 
+#       type : int
+#       desc : start date
+#   end : 
+#       type : int
+#       desc : end date
 # file_previewer:
 #   name : "Model Output File Previewer"
 #   path: "models/{model_name}/detailed_analysis/training_output.html"
@@ -25,9 +31,9 @@ from src.res.api import ModelAPI
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('test_model' , '@model_name' , lock_num = 0)
-def main(model_name : str | None = None , short_test : bool | None = None , **kwargs):
+def main(model_name : str | None = None , short_test : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
     assert model_name is not None , 'model_name is required'
-    ModelAPI.test_model(model_name , short_test)
+    ModelAPI.test_model(model_name , short_test , start = start , end = end)
 
 if __name__ == '__main__':
     main()

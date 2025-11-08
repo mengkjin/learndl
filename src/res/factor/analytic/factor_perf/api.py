@@ -1,5 +1,6 @@
 from typing import Any , Type
 
+from src.basic import Timer
 from . import calculator as Calc
 from .calculator import BasePerfCalc
 from ..test_manager import BaseTestManager
@@ -53,8 +54,7 @@ class FactorPerfManager(BaseTestManager):
     ]
 
     def calc(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = None , verbosity = 1):
-        for task in self.tasks.values(): 
-            task.calc(factor , benchmarks , verbosity = verbosity - 1)
-        if verbosity > 0: 
-            print(f'{self.__class__.__name__} calc Finished!')
+        with Timer(f'{self.__class__.__name__} calc' , silent = verbosity < 1):
+            for task in self.tasks.values(): 
+                task.calc(factor , benchmarks , verbosity = verbosity - 1)
         return self

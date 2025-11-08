@@ -15,6 +15,12 @@
 #       type : [True , False]
 #       desc : short test
 #       prefix : "short_test/"
+#   start : 
+#       type : int
+#       desc : start date
+#   end : 
+#       type : int
+#       desc : end date
 # file_editor:
 #   name : "Model Config File Editor"
 #   path: "configs/{module_name}.yaml"
@@ -25,9 +31,9 @@ from src.res.api import ModelAPI
 from src.app.script_tool import ScriptTool
 
 @ScriptTool('train_model' , '@module_name')
-def main(module_name : str | None = None , short_test : bool | None = None , **kwargs):
+def main(module_name : str | None = None , short_test : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
     assert module_name is not None , 'module_name is required'
-    ModelAPI.train_model(Path(module_name).parts[-1] , short_test)
+    ModelAPI.train_model(Path(module_name).parts[-1] , short_test , start = start , end = end)
         
 if __name__ == '__main__':
     main()

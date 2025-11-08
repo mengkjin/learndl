@@ -95,7 +95,7 @@ class ScreeningPortfolioCreator(PortCreator):
         super().__init__(name)
 
     def setup(self , print_info : bool = False , **kwargs):
-        self.conf = ScreeningPortfolioCreatorConfig.init_from(print_info = True , **kwargs)
+        self.conf = ScreeningPortfolioCreatorConfig.init_from(print_info = print_info , **kwargs)
         return self
     
     def parse_input(self):

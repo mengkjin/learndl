@@ -1,5 +1,6 @@
 from typing import Any , Literal , Type
 
+from src.basic import Timer
 from . import calculator as Calc
 from .calculator import BaseOptimCalc
 from ..test_manager import BaseTestManager
@@ -50,11 +51,10 @@ class FmpOptimManager(BaseTestManager):
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              add_lag = 1 , optim_config : str | Literal['default' , 'custome'] | None = None , verbosity = 1 , **kwargs):
-        self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , verbosity = verbosity)
-        for task in self.tasks.values():  
-            task.calc(self.account , verbosity = verbosity - 1) 
-        if verbosity > 0: 
-            print(f'{self.__class__.__name__} calc Finished!')
+        with Timer(f'{self.__class__.__name__} calc' , silent = verbosity < 1):
+            self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , verbosity = verbosity)
+            for task in self.tasks.values():  
+                task.calc(self.account , verbosity = verbosity - 1) 
         return self
     
     def update_kwargs(self , add_lag = 1 , **kwargs):

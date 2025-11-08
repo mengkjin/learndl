@@ -1,5 +1,6 @@
 from typing import Any , Type
 
+from src.basic import Timer
 from . import calculator as Calc
 from .calculator import BaseTopPortCalc
 from ..test_manager import BaseTestManager
@@ -48,11 +49,10 @@ class FmpTopManager(BaseTestManager):
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              n_bests = [20,30,50,100] , verbosity = 1 , **kwargs):
-        self.generate(factor , benchmark , n_bests = n_bests , verbosity = verbosity)
-        for task in self.tasks.values():  
-            task.calc(self.account , verbosity = verbosity - 1) 
-        if verbosity > 0: 
-            print(f'{self.__class__.__name__} calc Finished!')
+        with Timer(f'{self.__class__.__name__} calc' , silent = verbosity < 1):
+            self.generate(factor , benchmark , n_bests = n_bests , verbosity = verbosity)
+            for task in self.tasks.values():  
+                task.calc(self.account , verbosity = verbosity - 1) 
         return self
     
     def update_kwargs(self , n_bests = [20,30,50,100] , **kwargs):

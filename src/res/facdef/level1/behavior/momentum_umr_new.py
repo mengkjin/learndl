@@ -82,6 +82,7 @@ class umr_new_1m(MomentumFactor):
     update_step = 1
     description = '1个月统一反转因子,原始计算'
     preprocess = False
+    type_dongfang = True
     
     def calc_factor(self, date: int):
         return calc_umr_new(date , 1)

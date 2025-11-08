@@ -54,6 +54,13 @@ class ModelStreamLine(ABC):
     def on_validation_batch_start(self): ...
     def on_validation_epoch_end(self): ...
     def on_validation_epoch_start(self): ...
+    def on_before_data_start(self): ...
+    def on_after_data_end(self): ...
+    def on_before_fit_start(self): ...
+    def on_after_fit_end(self): ...
+    def on_before_test_start(self): ...
+    def on_after_test_end(self): ...
+    
 
 def possible_hooks() -> list[str]: 
     return [x for x in dir(ModelStreamLine) if not x.startswith('_')]
@@ -405,12 +412,15 @@ class BaseTrainer(ModelStreamLine):
 
     def stage_data(self):
         '''stage of loading model data'''
+        self.on_before_data_start()
         self.on_data_start()
         self.data.load_data()
         self.on_data_end()
+        self.on_after_data_end()
         
     def stage_fit(self):
         '''stage of fitting'''
+        self.on_before_fit_start()
         self.on_fit_start()
         for self.status.model_date , self.status.model_num in self.iter_model_num_date():
             if self.status.fit_iter_num == 0:
@@ -419,15 +429,18 @@ class BaseTrainer(ModelStreamLine):
             self.model.fit()
             self.on_fit_model_end()
         self.on_fit_end()
+        self.on_after_fit_end()
 
     def stage_test(self):
         '''stage of testing'''
+        self.on_before_test_start()
         self.on_test_start()
         for self.status.model_date , self.status.model_num in self.iter_model_num_date():
             self.on_test_model_start()
             self.model.test()
             self.on_test_model_end()
         self.on_test_end()
+        self.on_after_test_end()
 
     def iter_model_num_date(self): 
         '''iter of model_date and model_num , considering resume_training'''

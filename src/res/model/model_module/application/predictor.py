@@ -37,7 +37,6 @@ class ModelPredictor:
         self._current_update_dates = []
         self._current_deploy_dates = []
 
-
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(reg_model={str(self.reg_model)})'
 

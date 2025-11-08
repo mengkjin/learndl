@@ -7,6 +7,7 @@ from matplotlib.figure import Figure
 from typing import Any , Callable , Literal , Type
 
 from src.proj import PATH
+from src.basic import Timer
 from src.func import dfs_to_excel , figs_to_pdf , display as disp
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
@@ -32,13 +33,17 @@ class BaseCalculator(ABC):
         ]
         return name.lower() in candidate_names
 
-    class suppress_warnings:
+    class calc_manager:
+        def __init__(self , *args , verbosity = 0):
+            self.timer = Timer(*args , silent = verbosity < 1)
         def __enter__(self):
+            self.timer.__enter__()
             warnings.filterwarnings('ignore', message='Degrees of freedom <= 0 for slice', category=RuntimeWarning)
             warnings.filterwarnings('ignore', message='divide by zero encountered in divide', category=RuntimeWarning)
             warnings.filterwarnings('ignore', message='invalid value encountered in multiply', category=RuntimeWarning)
         def __exit__(self , *args):
             warnings.resetwarnings()
+            self.timer.__exit__(*args)
 
     @classmethod
     def task_name(cls): 
@@ -52,17 +57,16 @@ class BaseCalculator(ABC):
         self.calc_rslt = self.calculator()(*args , **kwargs)
         return self
     def plot(self , show = False , verbosity = 0): 
-        if self.calc_rslt.empty: 
-            self.figs = {}
-            return self
-        try:
-            figs = self.plotter()(self.calc_rslt , show = show , title_prefix = self.title_prefix)
-            self.figs = {'all':figs} if isinstance(figs , Figure) else figs
-        except Exception as e:
-            print(f"plot {self.__class__.__name__} error: {e}")
-            self.figs = {}
-        if verbosity > 0: 
-            print(f'    --->{self.__class__.__name__} plot Finished!')
+        with Timer(f'    --->{self.__class__.__name__} plot' , silent = verbosity < 1):
+            if self.calc_rslt.empty: 
+                self.figs = {}
+                return self
+            try:
+                figs = self.plotter()(self.calc_rslt , show = show , title_prefix = self.title_prefix)
+                self.figs = {'all':figs} if isinstance(figs , Figure) else figs
+            except Exception as e:
+                print(f"Error when plotting {self.__class__.__name__}: {e}")
+                self.figs = {}    
         return self
     @property
     def title_prefix(self) -> str:
@@ -103,10 +107,15 @@ class BaseTestManager(ABC):
 
     @abstractmethod
     def calc(self , factor : StockFactor , *args , verbosity = 1 , **kwargs):
-        for task in self.tasks.values():  
-            task.calc(factor , *args , verbosity = verbosity - 1 , **kwargs) 
-        if verbosity > 0: 
-            print(f'{self.__class__.__name__} calc Finished!')
+        with Timer(f'{self.__class__.__name__} calc' , silent = verbosity < 1):
+            for task in self.tasks.values():  
+                task.calc(factor , *args , verbosity = verbosity - 1 , **kwargs) 
+        return self
+
+    def plot(self , show = False , verbosity = 1):
+        with Timer(f'{self.__class__.__name__} plot' , silent = verbosity < 1):
+            for task in self.tasks.values(): 
+                task.plot(show = show , verbosity = verbosity - 1)
         return self
 
     def get_project_name(self):
@@ -124,13 +133,6 @@ class BaseTestManager(ABC):
         elif self.TASK_TYPE == 'factor':
             rslt_dir = PATH.rslt_factor
         return rslt_dir.joinpath(self.get_project_name())
-
-    def plot(self , show = False , verbosity = 1):
-        for task in self.tasks.values(): 
-            task.plot(show = show , verbosity = verbosity - 1)
-        if verbosity > 0: 
-            print(f'{self.__class__.__name__} plot Finished!')
-        return self
 
     def get_rslts(self):
         return {k:v.calc_rslt for k,v in self.tasks.items()}
