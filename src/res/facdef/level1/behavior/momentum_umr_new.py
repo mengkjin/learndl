@@ -12,13 +12,9 @@ __all__ = ['umr_new_1m' , 'umr_new_3m' , 'umr_new_6m' , 'umr_new_12m']
 
 _cached_data = {}
 
-def get_market_event_dates():
+def get_market_event_dates(events = ['high_level_switch' , 'platform_breakout' , 'selloff_rebound']):
     if 'market_event_dates' not in _cached_data:
-        market_events = [
-            DB.load('market_factor' , 'high_level_switch').query('high_level_switch == 1')['date'].to_numpy() ,
-            DB.load('market_factor' , 'platform_breakout').query('platform_breakout == 1')['date'].to_numpy() ,
-            DB.load('market_factor' , 'selloff_rebound').query('trigger_rebound == 1')['date'].to_numpy()
-        ]
+        market_events = [DB.load('market_factor' , event).query(f'{event} == 1')['date'].to_numpy() for event in events]
         market_event_dates = np.unique(np.concatenate(market_events))
         _cached_data['market_event_dates'] = market_event_dates
     return _cached_data['market_event_dates']  

@@ -197,6 +197,19 @@ class DataVendor:
         q = q[['secid' , 'ret']].set_index('secid')
         return q
 
+    def get_miscel_ret(self , df : pd.DataFrame , ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
+        """get ret of miscel secids and dates, df must contain 'secid' , 'start' , 'end' columns"""
+        assert 'secid' in df.columns and 'start' in df.columns and 'end' in df.columns , \
+            f'df must contain "secid" , "start" , "end" columns : {df.columns}'
+        dates = np.unique(np.concatenate([df['start'].to_numpy() , df['end'].to_numpy()]))
+        quotes = DB.load_multi('trade_ts' , 'day' , dates).filter(items = ['secid' , 'date' , ret_type])
+
+        df = df.merge(quotes.rename(columns = {'date' : 'start' , ret_type : 'p0'}) , on = ['secid' , 'start'] , how = 'left')
+        df = df.merge(quotes.rename(columns = {'date' : 'end' , ret_type : 'p1'}) , on = ['secid' , 'end'] , how = 'left')
+        df = df.assign(ret = df['p1'] / df['p0'] - 1)
+        df = df.filter(items = ['secid' , 'start' , 'end' , 'ret'])
+        return df
+
     def nday_fut_ret(self , secid : np.ndarray , date : np.ndarray , nday : int = 10 , lag : int = 2 , 
                      ret_type : Literal['close' , 'vwap'] = 'close'):
         assert lag > 0 , f'lag must be positive : {lag}. If you want to use next day\'s return, set lag = 1'

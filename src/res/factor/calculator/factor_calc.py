@@ -59,7 +59,7 @@ class _FactorPropertyStr(_FactorProperty):
     
     def file_name(self , owner) -> str:
         """file name of the factor"""
-        return '/'.join(Path(owner.__module__.split('level')[-1]).parts[1:]).removesuffix('.py')
+        return '/'.join(Path(owner.__module__.split('facdef')[-1].replace('.' , '/')).parts[1:]).removesuffix('.py')
     
     def factor_string(self , owner) -> str:
         """full string of the factor"""
@@ -81,6 +81,18 @@ class _FactorCalendar:
         assert update_step > 0 , f'update_step should be greater than 0 for {owner.__qualname__} , but got {update_step}'
         dates = self._dates[::update_step]
         return dates[dates >= init_date]
+
+class _FactorMinDate:
+    """min date of factor"""
+    def __get__(self,instance,owner) -> int:
+        method = getattr(owner , 'get_min_date')
+        return method()
+
+class _FactorMaxDate:
+    """max date of factor"""
+    def __get__(self,instance,owner) -> int:
+        method = getattr(owner , 'get_max_date')
+        return method()
 
 class _UpdateCalendar:
     """calendar of factor"""
@@ -209,6 +221,9 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
 
     factor_calendar = _FactorCalendar()
     update_calendar = _UpdateCalendar()
+
+    min_date = _FactorMinDate()
+    max_date = _FactorMaxDate()
 
     UPDATE_MIN_VALID_COUNT_RELAX : int = 20
     UPDATE_MIN_VALID_COUNT_STRICT : int = 100
@@ -384,12 +399,12 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return DB.dates(cls.meta_type , cls.factor_name)
 
     @classmethod
-    def min_date(cls) -> int:
+    def get_min_date(cls) -> int:
         """return minimum date of stored factor data"""
         return DB.min_date(cls.meta_type , cls.factor_name)
 
     @classmethod
-    def max_date(cls) -> int:
+    def get_max_date(cls) -> int:
         """return maximum date of stored factor data"""
         return DB.max_date(cls.meta_type , cls.factor_name)
     
@@ -568,18 +583,27 @@ class StockFactorCalculator(FactorCalculator):
 
 class MarketFactorCalculator(FactorCalculator):
     """base class of market factor calculator"""
+    @classmethod
+    def recalculate(cls , date : int | None = None , verbose = True) -> bool:
+        """recalculate factor data of a given date"""
+        calc_date = CALENDAR.updated() if date is None else int(date)
+        instance = cls()
+        df = instance.calc_history(calc_date)
+        df = instance.validate_value(df , calc_date , strict = True)
+        return DB.save(df , cls.meta_type , cls.factor_name , verbose = verbose)
+
     def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , verbose = False) -> bool:
         """store factor data after calculate"""
         if not DB.path(self.meta_type , self.factor_name).exists():
-            df = self.calc_history(date)
-        else:
-            old_df = DB.load(self.meta_type , self.factor_name , verbose = False)
-            if not overwrite and not old_df.empty and any(old_df['date'] == date):
-                return False
-            df = self(date)
-            df = self.validate_value(df , date , strict = strict_validation)
-            df = pd.concat([old_df , df]).drop_duplicates(subset = ['date'] , keep = 'first').\
-                sort_values('date').reset_index(drop = True)
+            return self.recalculate(date , verbose = verbose)
+        
+        old_df = DB.load(self.meta_type , self.factor_name , verbose = False)
+        if not overwrite and not old_df.empty and any(old_df['date'] == date):
+            return False
+        df = self(date)
+        df = self.validate_value(df , date , strict = strict_validation)
+        df = pd.concat([old_df , df]).drop_duplicates(subset = ['date'] , keep = 'first').\
+            sort_values('date').reset_index(drop = True)
 
         return DB.save(df , self.meta_type , self.factor_name , verbose = verbose)
 
@@ -637,13 +661,13 @@ class MarketFactorCalculator(FactorCalculator):
         return dates
 
     @classmethod
-    def min_date(cls) -> int:
+    def get_min_date(cls) -> int:
         """return minimum date of stored factor data"""
         dates = cls.stored_dates()
         return dates.min() if len(dates) > 0 else 99991231
 
     @classmethod
-    def max_date(cls) -> int:
+    def get_max_date(cls) -> int:
         """return maximum date of stored factor data"""
         dates = cls.stored_dates()
         return dates.max() if len(dates) > 0 else 0

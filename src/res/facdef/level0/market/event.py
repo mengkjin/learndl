@@ -65,7 +65,7 @@ class high_level_switch(MarketEventFactor):
         return df
     
     def calc_factor(self, date: int) -> pd.DataFrame:
-        max_date = min(self.max_date() , date)
+        max_date = min(self.max_date , date)
         start_date = DATAVENDOR.CALENDAR.td(max_date , -250)
         df = self._high_level_switch(start_date , date).query('date <= @date')
         return df
@@ -80,7 +80,7 @@ class selloff_rebound(MarketEventFactor):
     init_date = 20110101
     description = '暴跌反弹,过去交易日大跌环境下,当日反弹'
 
-    singal_columns = ['trigger_rebound' , 'selloff' , 'rebound' , 'minimum_rebound' , 'minimum_selloff' , 'tr' , 'atr' , 'parameter_magnifier']
+    singal_columns = ['selloff' , 'rebound' , 'selloff_start' , 'rebound_start' , 'minimum_rebound' , 'minimum_selloff' , 'tr' , 'atr' , 'parameter_magnifier']
 
     @classmethod
     def _selloff_rebound(cls , start : int | None = None , end : int | None = None) -> pd.DataFrame:
@@ -99,32 +99,48 @@ class selloff_rebound(MarketEventFactor):
 
         quote['selloff'] = 0.
         quote['rebound'] = 0.
-        cr = 1.
-        so = 1.
-        reset_selloff = False
+        quote['selloff_start'] = -1
+        quote['rebound_start'] = -1
+        selloff_level = 1.
+        rebound_level = 1.
+        selloff_start = -1
+        rebound_start = -1
         for row , q in quote.iterrows():
             assert isinstance(row , int)
-            prev_selloff = quote['selloff'][row - 1] if row > 0 else 0.
+            if row == 0:
+                prev_selloff = 0.
+                prev_selloff_start = int(q['trade_date'])
+            else:
+                prev_selloff = quote['selloff'][row - 1]
+                prev_selloff_start = quote['selloff_start'][row - 1]
+
             if q['pct_chg'] > 0:
-                cr = cr * (1 + q['pct_chg'] / 100)
-                quote.loc[row , 'rebound'] = cr - 1
+                rebound_level = rebound_level * (1 + q['pct_chg'] / 100)
+                quote.loc[row , 'rebound'] = rebound_level - 1
+                if rebound_start == -1:
+                    rebound_start = int(q['trade_date'])
+                quote.loc[row , 'rebound_start'] = rebound_start
             else:
-                cr = 1.
-            if cr > 1 + q['minimum_rebound']:
-                so = 1.
+                rebound_level = 1.
+                rebound_start = -1
+
+            if rebound_level > 1 + q['minimum_rebound']:
+                selloff_level = 1.
+                selloff_start = -1
                 quote.loc[row , 'selloff'] = prev_selloff
-                reset_selloff = True
+                quote.loc[row , 'selloff_start'] = prev_selloff_start
             else:
-                so = so * (1 + q['pct_chg'] / 100)
-                if reset_selloff:
-                    quote.loc[row , 'selloff'] = so - 1
+                selloff_level = selloff_level * (1 + q['pct_chg'] / 100)
+                if selloff_start == -1:
+                    selloff_start = int(q['trade_date'])
+                    quote.loc[row , 'selloff'] = selloff_level - 1
+                    quote.loc[row , 'selloff_start'] = selloff_start
                 elif row > 0:
-                    quote.loc[row , 'selloff'] = min(prev_selloff , so - 1)
-                reset_selloff = False
-
+                    quote.loc[row , 'selloff'] = min(prev_selloff , selloff_level - 1)
+                    quote.loc[row , 'selloff_start'] = prev_selloff_start
+                    
         quote['selloff_rebound'] = 1 * (quote['selloff'] < quote['minimum_selloff']) * (quote['rebound'] > quote['minimum_rebound'])
-        quote['trigger_rebound'] = quote['selloff_rebound'].where(quote['selloff_rebound'].shift(1) != 1 , 0)
-
+        quote['selloff_rebound'] = quote['selloff_rebound'].where(quote['selloff_rebound'].shift(1) != 1 , 0)
         quote = quote.rename(columns = {'trade_date' : 'date'}).filter(items = ['date' , cls.factor_name , *cls.singal_columns]).reset_index(drop = True)
         return quote
 
@@ -133,7 +149,7 @@ class selloff_rebound(MarketEventFactor):
         return df
     
     def calc_factor(self, date: int) -> pd.DataFrame:
-        max_date = min(self.max_date() , date)
+        max_date = min(self.max_date , date)
         start_date = DATAVENDOR.CALENDAR.td(max_date , -250)
         df = self._selloff_rebound(start_date , date).query('date <= @date')
         return df
@@ -169,7 +185,7 @@ class platform_breakout(MarketEventFactor):
         return df
     
     def calc_factor(self, date: int) -> pd.DataFrame:
-        max_date = min(self.max_date() , date)
+        max_date = min(self.max_date , date)
         start_date = DATAVENDOR.CALENDAR.td(max_date , -7)
         df = self._platform_breakout(start_date , date).query('date <= @date')
         return df
