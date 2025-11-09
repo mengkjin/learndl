@@ -50,9 +50,9 @@ def parallel(func : Callable , args : Iterable , kwargs : dict[Any , Any] | None
         try:
             result[key] = func(*args , **kwargs)
         except catch_errors as e:
-            print(f'{key} : {args} generated an exception: {e}')
+            print(f'{key} : {args} generates an exception: {e}')
         except Exception as e:
-            print(f'{key} : {args} generated an exception:')
+            print(f'{key} : {args} generates an exception: {e}')
             raise e
         
     if method == 0:
