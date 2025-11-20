@@ -17,9 +17,9 @@ class UpdateAPI:
         if not DataAPI.is_updated():
             Logger.cache_message('error', 'Data is not updated to the latest date, skip model update')
             return
-        FactorAPI.update()
+        FactorAPI.update(timeout = 3)
         ModelAPI.update()
-        PoolingAPI.update()
+        PoolingAPI.update(timeout = 3)
         TradingAPI.update()
         NotificationAPI.update()
 

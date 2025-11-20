@@ -1,9 +1,11 @@
 import pandas as pd
+import time
 
 from typing import Any , Generator
 
 from .factor_calc import FactorCalculator , PoolingCalculator
 
+from src.proj import Logger
 from src.basic import CONF , CALENDAR
 from src.func.parallel import parallel
 
@@ -52,9 +54,10 @@ class PoolingFactorUpdater:
     @classmethod
     def process_jobs(cls , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , verbosity : int = 1 , **kwargs) -> None:
+                     overwrite = False , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
         """
         update update jobs for all factors between start and end date
+        timeout : timeout for processing jobs in hours , if <= 0 , no timeout
         **kwargs:
             factor_name : str | None = None
             level : str | None = None 
@@ -69,11 +72,17 @@ class PoolingFactorUpdater:
         if end is None: 
             end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
 
+        start_time = time.time()
         for level , calculators in cls.grouped_calculators(all , selected_factors , **kwargs):
             for calc in calculators:
                 if verbosity > 0:
                     print(f'Updating {level} : {calc.factor_name} at {start} ~ {end}')
                 calc.update_all(start = start , end = end , overwrite = overwrite , verbose = verbosity > 1)
+
+            if timeout > 0 and time.time() - start_time > timeout * 3600:
+                Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
+                Logger.warning(f'Terminated at level {level} , factor {calc.factor_name}')
+                break
 
     @classmethod
     def iter_calculators(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> Generator[FactorCalculator , None , None]:
@@ -81,27 +90,27 @@ class PoolingFactorUpdater:
         return FactorCalculator.iter_calculators(all , selected_factors , updatable = True , is_pooling = True , **kwargs)
 
     @classmethod
-    def update(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None) -> None:
+    def update(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         '''update factor data according'''
-        cls.process_jobs(start = start , end = end , all = True , verbosity = verbosity)
+        cls.process_jobs(start = start , end = end , all = True , verbosity = verbosity , timeout = timeout)
         
     @classmethod
-    def recalculate(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None) -> None:
+    def recalculate(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         '''update factor data according'''
         assert start is not None and end is not None , 'start and end are required for recalculate factors'
-        cls.process_jobs(start = start , end = end , all = True , overwrite = True , verbosity = verbosity)
+        cls.process_jobs(start = start , end = end , all = True , overwrite = True , verbosity = verbosity , timeout = timeout)
 
     @classmethod
-    def update_rollback(cls , rollback_date : int , verbosity : int = 1) -> None:
+    def update_rollback(cls , rollback_date : int , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
         CALENDAR.check_rollback_date(rollback_date)
         start = CALENDAR.td(rollback_date , 1)
-        cls.process_jobs(start = start , all = True , overwrite = True , verbosity = verbosity)
+        cls.process_jobs(start = start , all = True , overwrite = True , verbosity = verbosity , timeout = timeout)
         
     @classmethod
-    def update_fix(cls , factors : list[str] | None = None , verbosity : int = 1 , start : int | None = None , end : int | None = None) -> None:
+    def update_fix(cls , factors : list[str] | None = None , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         factors = factors or []
         print(f'Fixing factors : {factors}')
-        cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , verbosity = verbosity)
+        cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , verbosity = verbosity , timeout = timeout)
         
     @classmethod
     def eval_coverage(cls , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:

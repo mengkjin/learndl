@@ -1,13 +1,15 @@
 import numpy as np
 import pandas as pd
 import polars as pl
+import time
 
 from dataclasses import dataclass
 from typing import Any , Generator , Callable
 
 from .factor_calc import FactorCalculator
 
-from src.basic import CONF , CALENDAR
+from src.proj import Logger
+from src.basic import CONF , CALENDAR 
 from src.data import DATAVENDOR
 from src.func.parallel import parallel , parallels
 
@@ -116,8 +118,7 @@ class StockFactorUpdater:
     @classmethod
     def collect_jobs(cls , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , groups_in_one_update : int | None = None , 
-                     **kwargs) -> None:
+                     overwrite = False , **kwargs) -> None:
         """
         update update jobs for all factors between start and end date
         **kwargs:
@@ -142,14 +143,11 @@ class StockFactorUpdater:
         if len(cls.jobs) == 0:
             print('There is no Factor Update Jobs to Proceed...')
         else:
-            if groups_in_one_update is not None:
-                groups = cls.groups()[:groups_in_one_update]
-                cls.jobs = [job for level , date in groups for job in cls.filter_jobs(cls.jobs , level , date)]
             levels , dates = cls.levels() , cls.dates()
             print(f'Finish Collecting {len(cls.jobs)} Factor Update Jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
     
     @classmethod
-    def process_jobs(cls , verbosity : int = 1 , overwrite = False , auto_retry = True) -> None:
+    def process_jobs(cls , verbosity : int = 1 , overwrite = False , auto_retry = True , timeout : int = -1) -> None:
         """
         perform all update jobs
 
@@ -158,6 +156,7 @@ class StockFactorUpdater:
             1 : show error and success stats
             2 : show all
         overwrite : if True , overwrite existing data
+        timeout : timeout for processing jobs in hours , if <= 0 , no timeout
         """
         if len(cls.jobs) == 0: 
             return
@@ -165,6 +164,7 @@ class StockFactorUpdater:
         def do_job(job : FactorUpdateJob): 
             job.do(verbosity > 2 , overwrite)
 
+        start_time = time.time()
         for (level , date) , jobs in cls.grouped_jobs():
             DATAVENDOR.data_storage_control()
             keys = [job.factor_name for job in jobs]
@@ -186,6 +186,10 @@ class StockFactorUpdater:
                 failed_again_jobs = [job for job in failed_jobs if not job.done]
                 if failed_again_jobs:
                     print(f'Failed Factors Again: {[job.factor_name for job in failed_again_jobs]}')
+            if timeout > 0 and time.time() - start_time > timeout * 3600:
+                Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
+                Logger.warning(f'Terminated at level {level} at date {date}')
+                break
         [cls.jobs.remove(job) for job in jobs if job.done]
 
     @classmethod
@@ -243,38 +247,38 @@ class StockFactorUpdater:
         return FactorCalculator.iter_calculators(all , selected_factors , updatable = True , is_pooling = False , **kwargs)
 
     @classmethod
-    def update(cls , verbosity : int = 1 , groups_in_one_update : int | None = 100 , start : int | None = None , end : int | None = None) -> None:
+    def update(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1) -> None:
         '''update factor data according'''
         self = cls()
-        self.collect_jobs(start = start , end = end , all = True , groups_in_one_update = groups_in_one_update)
-        self.process_jobs(verbosity)
+        self.collect_jobs(start = start , end = end , all = True)
+        self.process_jobs(verbosity , timeout = timeout)
         self.update_factor_stats(start , end , all = True)
 
     @classmethod
-    def recalculate(cls , verbosity : int = 1 , groups_in_one_update : int | None = 100 , start : int | None = None , end : int | None = None) -> None:
+    def recalculate(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1) -> None:
         '''update factor data according'''
         assert start is not None and end is not None , 'start and end are required for recalculate factors'
         self = cls()
-        self.collect_jobs(start = start , end = end , all = True , overwrite = True , groups_in_one_update = groups_in_one_update)
-        self.process_jobs(verbosity , overwrite = True)
+        self.collect_jobs(start = start , end = end , all = True , overwrite = True)
+        self.process_jobs(verbosity , overwrite = True , timeout = timeout)
         self.update_factor_stats(start , end , overwrite = True , all = True)
 
     @classmethod
-    def update_rollback(cls , rollback_date : int , verbosity : int = 1 , groups_in_one_update : int | None = 100) -> None:
+    def update_rollback(cls , rollback_date : int , verbosity : int = 1 , timeout : int = -1) -> None:
         CALENDAR.check_rollback_date(rollback_date)
         self = cls()
         start = CALENDAR.td(rollback_date , 1)
-        self.collect_jobs(start = start , all = True , overwrite = True , groups_in_one_update = groups_in_one_update)
-        self.process_jobs(verbosity , overwrite = True)
+        self.collect_jobs(start = start , all = True , overwrite = True)
+        self.process_jobs(verbosity , overwrite = True , timeout = timeout)
         self.update_factor_stats(start , overwrite = True , all = True)
 
     @classmethod
-    def update_fix(cls , factors : list[str] | None = None , verbosity : int = 1 , start : int | None = None , end : int | None = None) -> None:
+    def update_fix(cls , factors : list[str] | None = None , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1) -> None:
         factors = factors or []
         self = cls()
         print(f'Fixing factors : {factors}')
         self.collect_jobs(selected_factors = factors , overwrite = True , start = start , end = end)
-        self.process_jobs(verbosity , overwrite = True)
+        self.process_jobs(verbosity , overwrite = True , timeout = timeout)
         self.update_factor_stats(start , end , overwrite = True , selected_factors = factors)
 
     @classmethod

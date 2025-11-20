@@ -52,14 +52,14 @@ class FactorAPI:
     """
 
     @classmethod
-    def update(cls):
+    def update(cls , timeout : int = -1):
         # update stock factor
-        wrap_update(FactorCalculatorAPI.update , 'update stock factors')
+        wrap_update(FactorCalculatorAPI.update , 'update stock factors' , timeout = timeout)
 
     @classmethod
-    def update_rollback(cls , rollback_date : int):
+    def update_rollback(cls , rollback_date : int , timeout : int = -1):
         # update stock factor
-        wrap_update(FactorCalculatorAPI.update_rollback , 'update stock factors' , rollback_date = rollback_date)
+        wrap_update(FactorCalculatorAPI.update_rollback , 'update stock factors' , rollback_date = rollback_date , timeout = timeout)
 
     class Test:
         @staticmethod
@@ -128,11 +128,11 @@ class PoolingAPI:
     """
 
     @classmethod
-    def update(cls):
+    def update(cls , timeout : int = -1):
         # update pooling factor
-        wrap_update(PoolingCalculatorAPI.update , 'update pooling factors')
+        wrap_update(PoolingCalculatorAPI.update , 'update pooling factors' , timeout = timeout)
 
     @classmethod
-    def update_rollback(cls , rollback_date : int):
+    def update_rollback(cls , rollback_date : int , timeout : int = -1):
         # update pooling factor
-        wrap_update(PoolingCalculatorAPI.update_rollback , 'update pooling factors' , rollback_date = rollback_date)
+        wrap_update(PoolingCalculatorAPI.update_rollback , 'update pooling factors' , rollback_date = rollback_date , timeout = timeout)

@@ -324,7 +324,7 @@ class event_factor_momentum(WeightedPoolingCalculator):
     can add '+' or '-' to factor names to indicate the direction of the factor
     can calculate factor weights for market event momentum algorithm
     """
-    init_date = 20241201
+    init_date = 20170101
     update_step = 1
     description = '基于时点动量的因子轮动(生产因子集合)'
     sub_factors : list[str] = [
@@ -340,7 +340,6 @@ class event_factor_momentum(WeightedPoolingCalculator):
         '-mom_1m' , '-mom_3m' , # reversal
         'umr_new_1m' , 'umr_new_3m' , 'umr_new_6m' , 'umr_new_12m', # umr_new
     ]
-    updatable = False
 
     def calc_factor(self , date : int) -> pd.DataFrame:
         factor_weight = self.get_pooling_weight(date)

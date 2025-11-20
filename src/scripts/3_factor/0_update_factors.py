@@ -19,18 +19,18 @@
 #       min : 20110101
 #       max : 99991231
 #       required : False
-#   num_per_group : 
-#       type : int
-#       desc : number of updates in a group
-#       default : 100
+#   timeout : 
+#       type : float
+#       desc : timeout for updating factors in hours
+#       default : 10
 
 from src.res.factor.api import FactorCalculatorAPI , PoolingCalculatorAPI
 from src.app import ScriptTool
 
 @ScriptTool('update_factors' , lock_name = 'update_factors')
-def main(start : int | None = None , end : int | None = None , num_per_group : int | None = 100 , **kwargs):
-    FactorCalculatorAPI.update(start = start , end = end , groups_in_one_update=num_per_group, verbosity = 10)
-    PoolingCalculatorAPI.update(start = start , end = end , groups_in_one_update=num_per_group, verbosity = 10)
+def main(start : int | None = None , end : int | None = None , timeout : float = 10 , **kwargs):
+    FactorCalculatorAPI.update(start = start , end = end , timeout = timeout, verbosity = 10)
+    PoolingCalculatorAPI.update(start = start , end = end , timeout = timeout, verbosity = 10)
 
 
 if __name__ == '__main__':

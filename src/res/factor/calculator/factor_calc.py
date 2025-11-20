@@ -67,8 +67,12 @@ class _FactorPropertyStr(_FactorProperty):
 
 class _FactorPropertyBool(_FactorProperty):
     """property of boolean"""
+    def __init__(self , method : Literal['is_pooling']):
+        self.method = method
+
     def __get__(self,instance,owner) -> bool:
-        return super().__get__(instance,owner)
+        value = getattr(self , self.method)(owner)
+        return value
 
     def is_pooling(self , owner) -> bool:
         return owner.meta_type == 'pooling'
@@ -244,6 +248,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     description : str = ''
     updatable = True
     preprocess = True
+    is_pooling = _FactorPropertyBool('is_pooling')
 
     meta_type = _FactorMetaType()
     db_src    = _FactorDBSrc()
@@ -256,9 +261,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
 
     factor_calendar = _FactorCalendar('calendar')
     update_calendar = _FactorCalendar('update')
-
-    is_pooling = _FactorPropertyBool('is_pooling')
-
+    
     min_date = _FactorStoredDates('min')
     max_date = _FactorStoredDates('max')
 

@@ -5,7 +5,6 @@ from src.res.factor.risk import TuShareCNE5_Calculator
 from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager , FmpScreenManager
 from src.res.factor.calculator import StockFactorHierarchy , StockFactorUpdater , PoolingFactorUpdater
 
-
 class RiskModelUpdater:
     @classmethod
     def update(cls):
