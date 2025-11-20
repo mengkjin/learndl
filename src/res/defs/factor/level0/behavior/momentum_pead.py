@@ -2,7 +2,8 @@ from typing import Literal
 
 from src.basic import CALENDAR
 from src.data import DATAVENDOR
-from src.res.factor.calculator import MomentumFactor    
+from src.res.factor.calculator import MomentumFactor
+from src.func.singleton import singleton   
 
 def get_profit_ann_dt(date : int):
     ann_dt = DATAVENDOR.IS.get_ann_dt(date , 1 , 180)
@@ -43,6 +44,7 @@ def get_pead_df(date : int , price_type : Literal['open' , 'low'] , rank_pct : b
 
     return pred_df
 
+@singleton
 class _pead_calculator:
     """
     to calculate pead factors faster
