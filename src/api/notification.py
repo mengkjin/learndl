@@ -5,6 +5,8 @@ from datetime import datetime
 from src.proj import MACHINE
 from src.basic import send_email , CALENDAR , TaskRecorder , DB
 
+from .util import wrap_update
+
 class TempFile:
     def __init__(self, file_name: str):
         self.file_name = file_name
@@ -73,16 +75,13 @@ def email_to_fanghan(test = False):
 
 class NotificationAPI:
     @classmethod
-    def proceed(cls):
-        cls.send_email()
-
-    @staticmethod
-    def send_email():
+    def update(cls):
         if not MACHINE.server:
             print('not in my server , skip sending email')
             return
-        check_cuda_status()
-        email_to_fanghan()
+        wrap_update(check_cuda_status , 'check cuda status')
+        wrap_update(email_to_fanghan , 'email to fanghan')
+
 
 
     

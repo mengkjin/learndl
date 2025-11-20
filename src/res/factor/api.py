@@ -1,9 +1,10 @@
 from typing import Any , Literal
 
 from src.res.factor.util import StockFactor
-
+from src.res.factor.risk import TuShareCNE5_Calculator
 from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager , FmpScreenManager
-from src.res.factor.calculator import UPDATE_JOBS , TuShareCNE5_Calculator , StockFactorHierarchy
+from src.res.factor.calculator import StockFactorHierarchy , StockFactorUpdater , PoolingFactorUpdater
+
 
 class RiskModelUpdater:
     @classmethod
@@ -17,23 +18,41 @@ class RiskModelUpdater:
 class FactorCalculatorAPI:
     @classmethod
     def update(cls , **kwargs):
-        UPDATE_JOBS.update(**kwargs)
+        StockFactorUpdater.update(**kwargs)
         StockFactorHierarchy.export_factor_list()
 
     @classmethod
     def update_rollback(cls , rollback_date : int , **kwargs):
-        UPDATE_JOBS.update_rollback(rollback_date , **kwargs)
+        StockFactorUpdater.update_rollback(rollback_date , **kwargs)
         StockFactorHierarchy.export_factor_list()
 
     @classmethod
     def recalculate(cls , **kwargs):
-        UPDATE_JOBS.recalculate(**kwargs)
+        StockFactorUpdater.recalculate(**kwargs)
         StockFactorHierarchy.export_factor_list()
 
     @classmethod
     def fix(cls , factors : list[str] | None = None , **kwargs):
         factors = factors or []
-        UPDATE_JOBS.update_fix(factors , **kwargs)
+        StockFactorUpdater.update_fix(factors , **kwargs)
+
+class PoolingCalculatorAPI:
+    @classmethod
+    def update(cls , **kwargs):
+        PoolingFactorUpdater.update(**kwargs)
+
+    @classmethod
+    def recalculate(cls , **kwargs):
+        PoolingFactorUpdater.recalculate(**kwargs)
+
+    @classmethod
+    def update_rollback(cls , rollback_date : int , **kwargs):
+        PoolingFactorUpdater.update_rollback(rollback_date , **kwargs)
+
+    @classmethod
+    def fix(cls , factors : list[str] | None = None , **kwargs):
+        factors = factors or []
+        PoolingFactorUpdater.update_fix(factors , **kwargs)
 
 class FactorTestAPI:
     TASK_TYPES = TASK_TYPES

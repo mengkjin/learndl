@@ -32,8 +32,8 @@
 #   path: "{PATH.conf_schedule}/{schedule_name}.yaml | {PATH.shared_schedule}/{schedule_name}.yaml"
 #   height : 300 # optional
 
-from src.res.api import ModelAPI
-from src.app.script_tool import ScriptTool
+from src.api import ModelAPI
+from src.app import ScriptTool
 
 @ScriptTool('train_schedule_model' , '@schedule_name' , lock_num = 2)
 def main(schedule_name : str | None = None , short_test : bool | None = None , 

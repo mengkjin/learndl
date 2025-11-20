@@ -125,7 +125,7 @@ class PortfolioOptimizationConfig:
 class _StockFactorDefinitionMetaType:
     def __get__(self,instance,owner) -> list[str]:
         return [
-            'factor' , 'market_factor'
+            'factor' , 'market_factor' , 'risk_factor'
         ]
 
     def __set__(self,instance,value):
@@ -134,7 +134,7 @@ class _StockFactorDefinitionMetaType:
 class _StockFactorDefinitionCat0:
     def __get__(self,instance,owner) -> list[str]:
         return [
-            'fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative' , 'market'
+            'pooling' , 'risk' , 'fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative' , 'market'
         ]
 
     def __set__(self,instance,value):
@@ -143,6 +143,8 @@ class _StockFactorDefinitionCat0:
 class _StockFactorDefinitionCat1:
     def __get__(self,instance,owner) -> dict[str , list[str] | None]:
         return {
+            'risk' : ['style'] ,
+            'pooling' : ['weighted' , 'nonlinear'] ,
             'fundamental' : ['quality' , 'growth' , 'value' , 'earning'] ,
             'analyst' : ['surprise' , 'coverage' , 'forecast' , 'adjustment'] ,
             'high_frequency' : ['hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity'] ,
@@ -177,11 +179,15 @@ class StockFactorDefinitionConfig:
         return self._CAT1
 
     @classmethod
-    def cat0_to_meta(cls , category0 : str) -> Literal['factor' , 'market_factor']:
+    def cat0_to_meta(cls , category0 : str) -> Literal['factor' , 'market_factor' , 'risk_factor' , 'pooling']:
         if category0 not in cls._CAT0:
             raise CategoryError(f'category0 is should be in {cls._CAT0}, but got {category0}')
         if category0 == 'market':
             return 'market_factor'
+        elif category0 == 'risk':
+            return 'risk_factor'
+        elif category0 == 'pooling':
+            return 'pooling'
         else:
             return 'factor'
             
@@ -206,6 +212,10 @@ class StockFactorDefinitionConfig:
                 return 'money_flow'
             case 'market_event':
                 return 'market'
+            case 'style':
+                return 'risk'
+            case 'weighted' | 'nonlinear':
+                return 'pooling'
             case _:
                 raise ValueError(f'undefined category1: {category1}')
 

@@ -23,7 +23,8 @@ class PATH:
     """
     main        = MACHINE.main_path
     scpt        = main.joinpath('src' , 'scripts')
-    fac_def     = main.joinpath('src' , 'res' , 'facdef')
+    fac_def     = main.joinpath('src' , 'res' , 'defs' , 'factor')
+    pool_def    = main.joinpath('src' , 'res' , 'defs' , 'pooling')
 
     # data folder and subfolders
     data        = main.joinpath('data')

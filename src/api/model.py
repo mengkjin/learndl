@@ -2,6 +2,8 @@ import src.res.model.model_module.application as app
 from src.proj import PATH , MACHINE , Logger
 from src.data import DataPreProcessor
 
+from .util import wrap_update
+
 class ModelAPI:
     Trainer    = app.ModelTrainer
     Testor     = app.ModelTestor
@@ -14,17 +16,10 @@ class ModelAPI:
         '''
         Update prediction interims and results periodically:
         '''
-        with Logger.EnclosedMessage(' prepare predict data '):
-            cls.prepare_predict_data()
-
-        with Logger.EnclosedMessage(' update hidden '):
-            cls.Extractor.update()
-
-        with Logger.EnclosedMessage(' update predictors '):
-            cls.Predictor.update()
-
-        with Logger.EnclosedMessage(' update predictor portfolios '):
-            cls.FmpBuilder.update()
+        wrap_update(cls.prepare_predict_data , 'prepare predict data')
+        wrap_update(cls.Extractor.update , 'update hidden')
+        wrap_update(cls.Predictor.update , 'update predictors')
+        wrap_update(cls.FmpBuilder.update , 'update predictor portfolios')
 
     
     @classmethod
@@ -35,44 +30,33 @@ class ModelAPI:
         b. for server, continue training registered models in model'
         '''
         if MACHINE.server:
-            with Logger.EnclosedMessage(' reconstruct train data '):
-                cls.reconstruct_train_data()
-
-            with Logger.EnclosedMessage(' update models '):
-                cls.Trainer.update_models()
+            wrap_update(cls.reconstruct_train_data , 'reconstruct train data')
+            wrap_update(cls.Trainer.update_models , 'update models')
         else:
-            with Logger.EnclosedMessage(' update models '):
-                Logger.warning('This is not a server with cuda, skip this process')
+            Logger.warning('This is not a server with cuda, skip this process')
 
     @classmethod
     def update_hidden(cls):
         '''
         Update hidden features for hidden feature models for both laptop and server:
         '''
-        with Logger.EnclosedMessage(' prepare predict data '):
-            cls.prepare_predict_data()
-
-        with Logger.EnclosedMessage(' update hidden '):
-            cls.Extractor.update()
+        wrap_update(cls.prepare_predict_data , 'prepare predict data')
+        wrap_update(cls.Extractor.update , 'update hidden')
     
     @classmethod
     def update_preds(cls):
         '''
         Update factors for prediction models (registered models) for both laptop and server:
         '''
-        with Logger.EnclosedMessage(' prepare predict data '):
-            cls.prepare_predict_data()
-
-        with Logger.EnclosedMessage(' update predictors '):
-            cls.Predictor.update()
+        wrap_update(cls.prepare_predict_data , 'prepare predict data')
+        wrap_update(cls.Predictor.update , 'update predictors')
 
     @classmethod
     def recalculate_preds(cls , start_dt = None , end_dt = None):
         '''
         Recalculate factors for prediction models (registered models) for both laptop and server:
         '''
-        with Logger.EnclosedMessage(' recalculate all predictors '):
-            cls.Predictor.recalculate(start_dt = start_dt , end_dt = end_dt)
+        wrap_update(cls.Predictor.recalculate , 'recalculate all predictors' , start_dt = start_dt , end_dt = end_dt)
     
     @classmethod
     def test_models(cls , module = 'tra_lstm' , data_types = 'day'):

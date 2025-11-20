@@ -44,17 +44,17 @@ class FDataAccess(DateDataAccess):
         if within_days > 0:
             ann_dt = ann_dt[ann_dt['td_backward'] >= CALENDAR.cd(date , -within_days)]
         ann_dt = ann_dt[ann_dt['secid'] >= 0].sort_values(['secid' , 'td_backward']).set_index(['secid','end_date'])
-        
         if latest_n <= 0:
             return ann_dt
         else:
-            grp = ann_dt.groupby('secid')
-            return grp.last() if latest_n == 1 else grp.tail(latest_n).groupby('secid').first()
+            grp = ann_dt.reset_index(drop=False).groupby('secid')
+            ann_dt = grp.last() if latest_n == 1 else grp.tail(latest_n).groupby('secid').first()
+            return ann_dt.set_index(['end_date'] , append=True)
 
     def get_ann_calendar(self , date , after_days = 7 , within_days = 365):
         assert after_days > 0 , f'after_days must be greater than 0 , got {after_days}'
         dates = CALENDAR.cd_trailing(date , within_days)
-        ann_dt = self.get_ann_dt(date , 0 , within_days).assign(count = 1)
+        ann_dt = self.get_ann_dt(date , 0 , within_days).reset_index('end_date' , drop=True).assign(count = 1)
         v = ann_dt.pivot_table(index = 'ann_date' , columns = 'secid' , values = 'count').reindex(dates).fillna(0)
 
         ann_calendar = 0

@@ -10,29 +10,43 @@ from src.func.parallel import parallel
 
 class StockFactorHierarchy:
     '''hierarchy of factor classes'''
+    assert PATH.fac_def.exists() , f'{PATH.fac_def} does not exist'
     _instance = None
+    initialized = False
     pool = FactorCalculator.registry
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
-    def __init__(self):
-        assert PATH.fac_def.exists() , f'{PATH.fac_def} does not exist'
-        self.load()
 
+    def __init__(self):
+        self.initialize()
+    
     def __repr__(self):
         str_level_factors = [','.join(f'{level}({len(factors)})' for level , factors in self.hier.items())]
         return f'StockFactorHierarchy({str_level_factors})'
     
     def __iter__(self):
         '''return a generator of factor classes'''
-        return (cls for level in self.iter_levels() for cls in self.iter_level_factors(level))
+        return self.iter_factors()
     
     def __getitem__(self , key : str):
         '''return a list of factor classes in a given level / or a factor class by factor_name'''
         return self.pool[key] if key in self.pool else self.hier[key]
+
+    @classmethod
+    def initialize(cls) -> None:
+        """initialize the hierarchy of factor classes"""
+        if cls.initialized:
+            return
+        FactorCalculator.import_definitions()
+        cls.hier : dict[str , list[Type[FactorCalculator]]] = {}
+        for obj in cls.pool.values():
+            if obj.level not in cls.hier: 
+                cls.hier[obj.level] = []
+            cls.hier[obj.level].append(obj)
+        cls.initialized = True
     
     @classmethod
     def export_factor_list(cls) -> None:
@@ -41,18 +55,8 @@ class StockFactorHierarchy:
             df = cls().factor_df()
             df.to_csv(PATH.rslt_factor.joinpath('factor_list.csv'))
 
-    def load(self):     
-        '''load all factor classes from definition path'''   
-        FactorCalculator.import_definitions()
-        self.hier : dict[str , list[Type[FactorCalculator]]] = {}
-        for obj in self.pool.values():
-            if obj.level not in self.hier: 
-                self.hier[obj.level] = []
-            self.hier[obj.level].append(obj)
-
-        return self
-
-    def factor_df(self , **kwargs) -> pd.DataFrame:
+    @classmethod
+    def factor_df(cls , **kwargs) -> pd.DataFrame:
         '''
         return a DataFrame of all factors with given attributes
         factor_name : str | None = None
@@ -62,35 +66,44 @@ class StockFactorHierarchy:
         category0 : str | None = None 
         category1 : str | None = None 
         '''
+        cls.initialize()
         attr_list = ['level' , 'file_name' , 'factor_name' , 'init_date' , 'meta_type' , 'category0' , 'category1' , 'description' , 'min_date' , 'max_date']
-        iterance = FactorCalculator.iter_calculators(**kwargs)
         df_datas = []
-        for cls in iterance: 
-            attrs = [getattr(cls , a) for a in attr_list]
+        for calc in FactorCalculator.iter_calculators(**kwargs): 
+            attrs = [getattr(calc , a) for a in attr_list]
             df_datas.append(attrs)
         df = pd.DataFrame(df_datas, columns = pd.Index(attr_list))
         return df
 
-    def factor_names(self) -> list[str]:
+    @classmethod
+    def factor_names(cls) -> list[str]:
         '''return a list of factor names'''
-        return [f'{cls.factor_name}({cls.level}.{cls.file_name})' for cls in self]
+        return [obj.factor_name for obj in cls().pool.values()]
 
-    def iter_levels(self) -> Iterator[str]:
+    @classmethod
+    def iter_levels(cls) -> Iterator[str]:
         '''return a list of levels'''
-        return iter(self.hier)
+        return iter(cls().hier)
     
-    def iter_level_factors(self , level : str) -> Generator[Type[FactorCalculator] , None , None]: 
+    @classmethod
+    def iter_level_factors(cls , level : str) -> Generator[Type[FactorCalculator] , None , None]: 
         '''return a list of factor classes in a given level'''
-        return (cls for cls in self.hier[level])
+        return (factor for factor in cls().hier[level])
+
+    @classmethod
+    def iter_factors(cls , **kwargs) -> Generator[Type[FactorCalculator] , None , None]:
+        '''return a list of factor classes with given attributes'''
+        return (factor for level in cls().iter_levels() for factor in cls().iter_level_factors(level))
     
-    def get_factor(self , factor_name : str) -> Type[FactorCalculator]:
+    @classmethod
+    def get_factor(cls , factor_name : str) -> Type[FactorCalculator]:
         '''
         return a factor class by factor_name
         e.g.
         factor_name = 'turn_12m'
         factor_cls = StockFactorHierarchy()[factor_name]
         '''
-        return self.pool[factor_name]
+        return cls().pool[factor_name]
     
     def test_calc_all_factors(self , date : int = 20241031 , check_variation = True , check_duplicates = True , 
                               multi_thread = True , ignore_error = True , verbose = True , **kwargs) -> dict[str , pd.Series]:
@@ -112,10 +125,9 @@ class StockFactorHierarchy:
             return factor_value
 
         kwargs = kwargs | {'meta_type' : 'factor'}
-        factor_names = [obj.factor_name for obj in FactorCalculator.iter_calculators(**kwargs)]
         factor_values : dict[str , pd.Series] = \
-            parallel(calculate_factor , FactorCalculator.iter_calculators(**kwargs) , 
-                     keys = factor_names , method = multi_thread , ignore_error = ignore_error)
+            parallel(calculate_factor , FactorCalculator.iter_calculators(is_pooling = False , **kwargs) , 
+                     keys = self.factor_names() , method = multi_thread , ignore_error = ignore_error)
         self.calc_factor_values = factor_values
 
         if check_variation:

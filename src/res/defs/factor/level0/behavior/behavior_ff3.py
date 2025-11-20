@@ -33,11 +33,23 @@ class FF3_Model:
     
 class FamaFrench3:
     N_MONTHS : int = -1
-    def __init__(self , date):
+    def __init__(self , date : int):
         assert self.N_MONTHS > 0 , self.N_MONTHS
+        assert date > 0 , f'date must be greater than 0 , got {date}'
         if getattr(self, 'date' , None) is None or self.date != int(date):
-            self.date = int(date)
-            self.fit(self.date)
+            self.date = date
+            self.fit()
+
+    @property
+    def date(self):
+        if not hasattr(self, '_date'):
+            return -1
+        else:
+            return self._date
+    
+    @date.setter
+    def date(self , date : int):
+        self._date = date
 
     @staticmethod
     def group_ret(df : pd.DataFrame) -> pd.Series:
@@ -62,8 +74,8 @@ class FamaFrench3:
         ret_L = cls.group_ret(df.loc[bp_rank < 1/3])
         return (ret_H - ret_L).rename('hml')
 
-    def fit(self , date , half_life = 0 , min_finite_ratio = 0.25):
-        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , self.N_MONTHS , 'm')
+    def fit(self , half_life = 0 , min_finite_ratio = 0.25):
+        start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(self.date , self.N_MONTHS , 'm')
 
         rets = DATAVENDOR.TRADE.get_returns(start_date , end_date , mask = False , pivot = False).rename(columns={'pctchange':'ret'})
         mv   = DATAVENDOR.TRADE.get_mv(start_date , end_date , mv_type = 'circ_mv' , pivot = False , prev=True).rename(columns={'circ_mv':'mv'})

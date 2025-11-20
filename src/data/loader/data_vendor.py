@@ -201,13 +201,16 @@ class DataVendor:
         """get ret of miscel secids and dates, df must contain 'secid' , 'start' , 'end' columns"""
         assert 'secid' in df.columns and 'start' in df.columns and 'end' in df.columns , \
             f'df must contain "secid" , "start" , "end" columns : {df.columns}'
-        dates = np.unique(np.concatenate([df['start'].to_numpy() , df['end'].to_numpy()]))
-        quotes = DB.load_multi('trade_ts' , 'day' , dates).filter(items = ['secid' , 'date' , ret_type])
+        df['prev'] = CALENDAR.td_array(df['start'] , -1)
+        dates = np.unique(np.concatenate([df['prev'].to_numpy() , df['end'].to_numpy()]))
+        quotes = DB.load_multi('trade_ts' , 'day' , dates).filter(items = ['secid' , 'date' , ret_type , 'adjfactor'])
+        quotes[ret_type] = quotes[ret_type] * quotes['adjfactor']
 
-        df = df.merge(quotes.rename(columns = {'date' : 'start' , ret_type : 'p0'}) , on = ['secid' , 'start'] , how = 'left')
-        df = df.merge(quotes.rename(columns = {'date' : 'end' , ret_type : 'p1'}) , on = ['secid' , 'end'] , how = 'left')
-        df = df.assign(ret = df['p1'] / df['p0'] - 1)
-        df = df.filter(items = ['secid' , 'start' , 'end' , 'ret'])
+        q0 = df.merge(quotes , left_on = ['secid' , 'prev'] , right_on = ['secid' , 'date'] , how = 'left')[ret_type]
+        q1 = df.merge(quotes , left_on = ['secid' , 'end'] , right_on = ['secid' , 'date'] , how = 'left')[ret_type]
+        ret = q1 / q0 - 1
+        df['ret'] = ret
+        del df['prev']
         return df
 
     def nday_fut_ret(self , secid : np.ndarray , date : np.ndarray , nday : int = 10 , lag : int = 2 , 
@@ -270,24 +273,28 @@ class DataVendor:
         fin_data = FinData(expression , **kwargs)
         return fin_data.get_hist(date , lastn , new_name)
 
-    def get_fin_qoq(self , expression : str , date : int , lastn : int , **kwargs) -> pd.DataFrame:
+    def get_fin_qoq(self , expression : str , date : int , lastn : int , method : Literal['pct' , 'diff'] = 'pct' , **kwargs) -> pd.DataFrame:
         data = FinData(expression , **kwargs).get_hist(date = date , lastn = lastn + 2)
         full_index = pd.MultiIndex.from_product([data.index.get_level_values('secid').unique() ,
                                                  data.index.get_level_values('end_date').unique()])
         df_yoy = data.reindex(full_index)
         df_yoy_base = df_yoy.groupby('secid').shift(1)
-        df_yoy = (df_yoy - df_yoy_base) / df_yoy_base.abs()
+        df_yoy = (df_yoy - df_yoy_base) 
+        if method == 'pct':
+            df_yoy = df_yoy / df_yoy_base.abs()
 
         df_yoy = df_yoy.reindex(data.index).where(~data.isna() , np.nan).replace([np.inf , -np.inf] , np.nan)
         return df_yoy.groupby('secid').tail(lastn)
     
-    def get_fin_yoy(self , expression : str , date : int , lastn : int , **kwargs) -> pd.DataFrame:
+    def get_fin_yoy(self , expression : str , date : int , lastn : int , method : Literal['pct' , 'diff'] = 'pct' , **kwargs) -> pd.DataFrame:
         data = FinData(expression , **kwargs).get_hist(date = date , lastn = lastn + 5)
         full_index = pd.MultiIndex.from_product([data.index.get_level_values('secid').unique() ,
                                                  data.index.get_level_values('end_date').unique()])
         df_yoy = data.reindex(full_index)
         df_yoy_base = df_yoy.groupby('secid').shift(4)
-        df_yoy = (df_yoy - df_yoy_base) / df_yoy_base.abs()
+        df_yoy = (df_yoy - df_yoy_base) 
+        if method == 'pct':
+            df_yoy = df_yoy / df_yoy_base.abs()
 
         df_yoy = df_yoy.reindex(data.index).where(~data.isna() , np.nan).replace([np.inf , -np.inf] , np.nan)
         return df_yoy.groupby('secid').tail(lastn)

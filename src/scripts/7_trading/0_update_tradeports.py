@@ -7,8 +7,8 @@
 # email: True
 # mode: shell
 
-from src.res.api import TradingAPI
-from src.app.script_tool import ScriptTool
+from src.api import TradingAPI
+from src.app import ScriptTool
 
 @ScriptTool('update_tradeports')
 def main(**kwargs):

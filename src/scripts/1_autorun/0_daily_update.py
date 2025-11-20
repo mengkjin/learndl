@@ -7,25 +7,16 @@
 # email: True
 # mode: shell
 
-from src.res.api import DataAPI , ModelAPI , TradingAPI , NotificationAPI
-from src.proj import MACHINE , SharedSync
+from src.api import UpdateAPI
+from src.proj import SharedSync
 from src.basic import CALENDAR , TaskScheduler
-from src.app.script_tool import ScriptTool
+from src.app import ScriptTool
 
 @ScriptTool('daily_update' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(**kwargs):
     SharedSync.sync()
-    if not MACHINE.updateable:
-        ScriptTool.error(f'{MACHINE.name} is not updateable, skip daily update')
-    else:
-        DataAPI.update()
-        if not DataAPI.is_updated():
-            ScriptTool.error(f'Data is not updated to the latest date, skip model update')
-        else:
-            ModelAPI.update()
-            TradingAPI.update()
-            NotificationAPI.proceed()
-            TaskScheduler.print_machine_tasks()
+    UpdateAPI.daily()
+    TaskScheduler.print_machine_tasks()
             
 def run_schedulers():
     TaskScheduler.run_machine_tasks()

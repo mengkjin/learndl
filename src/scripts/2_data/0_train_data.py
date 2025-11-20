@@ -7,8 +7,8 @@
 # email: True
 # mode: shell
 
-from src.res.api import DataAPI
-from src.app.script_tool import ScriptTool
+from src.api import DataAPI
+from src.app import ScriptTool
 
 @ScriptTool('reconstruct_train_data')
 def main(**kwargs):

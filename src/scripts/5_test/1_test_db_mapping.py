@@ -23,8 +23,8 @@
 #       type : int
 #       desc : end date
 
-from src.res.api import ModelAPI
-from src.app.script_tool import ScriptTool
+from src.api import ModelAPI
+from src.app import ScriptTool
 
 @ScriptTool('test_db_mapping' , '@mapping_name' , lock_num = 0)
 def main(mapping_name : str | None = None , short_test : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):

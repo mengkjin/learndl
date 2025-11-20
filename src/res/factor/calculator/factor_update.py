@@ -36,9 +36,10 @@ class FactorUpdateJob:
         return (self.level , self.date , self.factor_name)
     def do(self , show_success : bool = False , overwrite = False) -> None:
         """do the job"""
-        self.done = self.calc.update_day_factor(self.date , overwrite = overwrite , show_success = show_success , catch_errors = CATCH_ERRORS)
+        self.done = self.calc.update_day_factor(
+            self.date , overwrite = overwrite , show_success = show_success , catch_errors = CATCH_ERRORS)
     
-class FactorUpdateJobManager:
+class StockFactorUpdater:
     """manager of factor update jobs"""
     _instance = None
     jobs : list[FactorUpdateJob] = []
@@ -50,7 +51,7 @@ class FactorUpdateJobManager:
         return cls._instance
     
     def __repr__(self):
-        return f'FactorUpdateJobs({len(self.jobs)} jobs)'
+        return f'{self.__class__.__name__}({len(self.jobs)} jobs)'
 
     @classmethod
     def levels(cls) -> np.ndarray: 
@@ -99,7 +100,7 @@ class FactorUpdateJobManager:
     def unfinished_factors(cls , date : int | None = None) -> dict[int , list[FactorCalculator]]:
         """get unfinished factors"""
         factors : dict[int , list[FactorCalculator]] = {}
-        for calc in cls.iter_calculators(all = True):
+        for calc in cls.iter_calculators():
             if date is None:
                 for d in calc.target_dates():
                     if d not in factors:
@@ -114,7 +115,7 @@ class FactorUpdateJobManager:
 
     @classmethod
     def collect_jobs(cls , start : int | None = None , end : int | None = None , 
-                     all_factors = False , selected_factors : list[str] | None = None ,
+                     all = True , selected_factors : list[str] | None = None ,
                      overwrite = False , groups_in_one_update : int | None = None , 
                      **kwargs) -> None:
         """
@@ -129,12 +130,12 @@ class FactorUpdateJobManager:
         selected_factors = selected_factors or []
         cls.clear()
         
-        if not (all_factors or selected_factors or kwargs): 
+        if not (all or selected_factors or kwargs): 
             return
         if end is None: 
             end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
 
-        for calc in cls.iter_calculators(all_factors , selected_factors , **kwargs):
+        for calc in cls.iter_calculators(all , selected_factors , **kwargs):
             for date in calc.target_dates(start , end , overwrite = overwrite):
                 cls.append(FactorUpdateJob(calc , date))
 
@@ -188,10 +189,11 @@ class FactorUpdateJobManager:
         [cls.jobs.remove(job) for job in jobs if job.done]
 
     @classmethod
-    def update_factor_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , all_factors = False , selected_factors : list[str] | None = None , **kwargs):
+    def update_factor_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , 
+                            all = True , selected_factors : list[str] | None = None , **kwargs):
         """update all factor stats"""
         func_calls : dict[int , list[tuple[Callable , tuple[Any,...] , dict[str , Any] | None]]] = {}
-        for calc in cls.iter_calculators(all = all_factors , selected_factors = selected_factors , **kwargs):
+        for calc in cls.iter_calculators(all , selected_factors , **kwargs):
             target_dates = calc.stats_target_dates(start , end , overwrite)
             for stats_type , dates in target_dates.items():
                 func  = getattr(calc , f'update_{stats_type}_stats')
@@ -224,7 +226,7 @@ class FactorUpdateJobManager:
             print(f'Clearing factors of {date}')
 
         removed_factors = []
-        for calc in cls.iter_calculators(all = True):
+        for calc in cls.iter_calculators():
             cleared = calc.clear_stored_data(date)
             if cleared:
                 removed_factors.append(calc.factor_name)
@@ -232,39 +234,39 @@ class FactorUpdateJobManager:
             print(f'Removed {len(removed_factors)} factors')
 
     @classmethod
-    def iter_calculators(cls , all = False , selected_factors : list[str] | None = None , **kwargs) -> Generator[FactorCalculator , None , None]:
+    def iter_calculators(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> Generator[FactorCalculator , None , None]:
         '''iterate over calculators'''
         selected_factors = selected_factors or []
         if selected_factors:
             assert not all , \
                 f'all ({all}) and selected_factors ({selected_factors}) cannot be supplied at once'
-        return FactorCalculator.iter_calculators(all = all , selected_factors = selected_factors , updatable = True , **kwargs)
+        return FactorCalculator.iter_calculators(all , selected_factors , updatable = True , is_pooling = False , **kwargs)
 
     @classmethod
     def update(cls , verbosity : int = 1 , groups_in_one_update : int | None = 100 , start : int | None = None , end : int | None = None) -> None:
         '''update factor data according'''
         self = cls()
-        self.collect_jobs(start = start , end = end , all_factors = True , groups_in_one_update = groups_in_one_update)
+        self.collect_jobs(start = start , end = end , all = True , groups_in_one_update = groups_in_one_update)
         self.process_jobs(verbosity)
-        self.update_factor_stats(start , end , all_factors = True)
+        self.update_factor_stats(start , end , all = True)
 
     @classmethod
     def recalculate(cls , verbosity : int = 1 , groups_in_one_update : int | None = 100 , start : int | None = None , end : int | None = None) -> None:
         '''update factor data according'''
         assert start is not None and end is not None , 'start and end are required for recalculate factors'
         self = cls()
-        self.collect_jobs(start = start , end = end , all_factors = True , overwrite = True , groups_in_one_update = groups_in_one_update)
+        self.collect_jobs(start = start , end = end , all = True , overwrite = True , groups_in_one_update = groups_in_one_update)
         self.process_jobs(verbosity , overwrite = True)
-        self.update_factor_stats(start , end , overwrite = True , all_factors = True)
+        self.update_factor_stats(start , end , overwrite = True , all = True)
 
     @classmethod
     def update_rollback(cls , rollback_date : int , verbosity : int = 1 , groups_in_one_update : int | None = 100) -> None:
         CALENDAR.check_rollback_date(rollback_date)
         self = cls()
         start = CALENDAR.td(rollback_date , 1)
-        self.collect_jobs(start = start , all_factors = True , overwrite = True , groups_in_one_update = groups_in_one_update)
+        self.collect_jobs(start = start , all = True , overwrite = True , groups_in_one_update = groups_in_one_update)
         self.process_jobs(verbosity , overwrite = True)
-        self.update_factor_stats(start , overwrite = True , all_factors = True)
+        self.update_factor_stats(start , overwrite = True , all = True)
 
     @classmethod
     def update_fix(cls , factors : list[str] | None = None , verbosity : int = 1 , start : int | None = None , end : int | None = None) -> None:
@@ -276,7 +278,7 @@ class FactorUpdateJobManager:
         self.update_factor_stats(start , end , overwrite = True , selected_factors = factors)
 
     @classmethod
-    def eval_coverage(cls , all_factors = False , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:
+    def eval_coverage(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:
         '''
         update update jobs for all factors between start and end date
         **kwargs:
@@ -287,11 +289,11 @@ class FactorUpdateJobManager:
             category1 : str | None = None 
         '''
         selected_factors = selected_factors or []
-        if not (all_factors or selected_factors or kwargs): 
+        if not (all or selected_factors or kwargs): 
             return pd.DataFrame()
         dfs : list[pd.DataFrame] = []
 
-        for calc in cls.iter_calculators(all_factors , selected_factors , **kwargs):
+        for calc in cls.iter_calculators(all , selected_factors , **kwargs):
             dates = calc.stored_dates()
             def load_fac(date : int):
                 factor = calc.eval_factor(date)
@@ -311,5 +313,3 @@ class FactorUpdateJobManager:
         df.to_excel('factor_coverage.xlsx' , sheet_name='full coverage')
         agg.to_excel('factor_coverage_agg.xlsx' , sheet_name='coverage_agg_stats')
         return df
-
-UPDATE_JOBS = FactorUpdateJobManager()

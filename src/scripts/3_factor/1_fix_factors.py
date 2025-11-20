@@ -12,13 +12,14 @@
 #       desc : factor names by ","
 #       required : True
 
-from src.res.factor.api import FactorCalculatorAPI
-from src.app.script_tool import ScriptTool
+from src.res.factor.api import FactorCalculatorAPI , PoolingCalculatorAPI
+from src.app import ScriptTool
 
 @ScriptTool('fix_factors' , lock_name = 'update_factors')
 def main(factor_names : str | None = None , **kwargs):
     assert factor_names is not None , 'factor_names is required'
     FactorCalculatorAPI.fix(factors = [s.strip() for s in factor_names.split(',')] , verbosity = 10)
+    PoolingCalculatorAPI.fix(factors = [s.strip() for s in factor_names.split(',')] , verbosity = 10)
 
 if __name__ == '__main__':
     main()

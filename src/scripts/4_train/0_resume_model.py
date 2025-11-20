@@ -17,8 +17,8 @@
 #   path: "models/{model_name}/detailed_analysis/training_output.html"
 #   height : 600 # optional
 
-from src.res.api import ModelAPI
-from src.app.script_tool import ScriptTool
+from src.api import ModelAPI
+from src.app import ScriptTool
 
 @ScriptTool('resume_model' , '@model_name')
 def main(model_name : str | None = None , **kwargs):

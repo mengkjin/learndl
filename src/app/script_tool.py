@@ -7,6 +7,8 @@ from src.basic import AutoRunTask
 from src.app.script_lock import ScriptLockMultiple
 from src.app.backend import BackendTaskRecorder , ScriptHeader
 
+__all__ = ['ScriptTool']
+
 def _get_default_args(func):
     """get default args of a function"""
     sig = inspect.signature(func)

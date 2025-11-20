@@ -30,7 +30,7 @@ DB_BY_DATE  : list[str] = ['models' , 'sellside' , 'exposure' ,
                            'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'holding_ts'
                            ]
 
-EXPORT_BY_NAME : list[str] = ['market_factor' , 'factor_stats_daily' , 'factor_stats_weekly']
+EXPORT_BY_NAME : list[str] = ['market_factor' , 'factor_stats_daily' , 'factor_stats_weekly' , 'pooling_weight']
 EXPORT_BY_DATE : list[str] = ['pred' , 'factor']
 for name in EXPORT_BY_NAME + EXPORT_BY_DATE:
     assert name not in DB_BY_NAME + DB_BY_DATE , f'{name} must not in DB_BY_NAME and DB_BY_DATE'
@@ -209,10 +209,10 @@ def _db_parent(db_src : str , db_key : str | None = None) -> Path:
         parent = PATH.preds
     elif db_src == 'factor':
         parent = PATH.factor
-    elif db_src in EXPORT_BY_NAME:
+    elif db_src in EXPORT_BY_DATE + EXPORT_BY_NAME:
         parent = PATH.export.joinpath(db_src)
     else:
-        raise ValueError(f'{db_src} not in {DB_BY_NAME} and {DB_BY_DATE} , or not pred or factor')
+        raise ValueError(f'{db_src} not in {DB_BY_NAME} and {DB_BY_DATE} , or not pred or factor or {EXPORT_BY_DATE} or {EXPORT_BY_NAME}')
     if db_key is None:
         return parent
     else:

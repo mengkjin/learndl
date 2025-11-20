@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from src.proj import PATH
-from src.basic import Timer , DB , CONF
+from src.basic import Timer , DB , CONF , CALENDAR
 from src.data.util import DataBlock
 
 @dataclass
@@ -112,8 +112,9 @@ class FactorLoader(BlockLoader):
         factors : list[pd.DataFrame] = []
         from src.res.factor.calculator import FactorCalculator
         with Timer(f' --> factor blocks reading [{self.category0} , {self.category1}]' , silent = silent):
+            dates = CALENDAR.td_within(start_dt , end_dt)
             for calc in FactorCalculator.iter_calculators(category0 = self.category0 , category1 = self.category1 , **self.kwargs):
-                df = calc.Loads(start_dt , end_dt , normalize = self.normalize , fill_method = self.fill_method)
+                df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
         with Timer(f' --> factor blocks merging ({len(factors)} factors)' , silent = silent): 

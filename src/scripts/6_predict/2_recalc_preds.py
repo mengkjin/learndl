@@ -23,8 +23,8 @@
 #       default : 20241231
 
 
-from src.app.script_tool import ScriptTool
-from src.res.api import ModelAPI
+from src.app import ScriptTool
+from src.api import ModelAPI
 
 @ScriptTool('recalc_preds')
 def main(start : int | None = None , end : int | None = None , **kwargs):

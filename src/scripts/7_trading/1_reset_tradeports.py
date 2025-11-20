@@ -13,8 +13,8 @@
 #       desc : port names by ","
 #       required : True
 
-from src.res.api import TradingAPI
-from src.app.script_tool import ScriptTool
+from src.api import TradingAPI
+from src.app import ScriptTool
 
 @ScriptTool('reset_tradeports' , '@reset_port_name')
 def main(reset_port_name : str | None = None , **kwargs):

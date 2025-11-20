@@ -113,7 +113,9 @@ class CALENDAR:
 
     @staticmethod
     def today(offset = 0) -> int: 
-        d = datetime.today() + timedelta(days=offset)
+        d = datetime.today() 
+        if offset != 0:
+            d = d + timedelta(days=offset)
         return int(d.strftime('%Y%m%d'))
     @staticmethod
     def time() -> int: 

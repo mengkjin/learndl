@@ -24,12 +24,14 @@
 #       desc : number of updates in a group
 #       default : 100
 
-from src.res.factor.api import FactorCalculatorAPI
-from src.app.script_tool import ScriptTool
+from src.res.factor.api import FactorCalculatorAPI , PoolingCalculatorAPI
+from src.app import ScriptTool
 
 @ScriptTool('update_factors' , lock_name = 'update_factors')
 def main(start : int | None = None , end : int | None = None , num_per_group : int | None = 100 , **kwargs):
     FactorCalculatorAPI.update(start = start , end = end , groups_in_one_update=num_per_group, verbosity = 10)
-        
+    PoolingCalculatorAPI.update(start = start , end = end , groups_in_one_update=num_per_group, verbosity = 10)
+
+
 if __name__ == '__main__':
     main()

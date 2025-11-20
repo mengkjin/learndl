@@ -20,6 +20,8 @@ def append_indus(df : pd.DataFrame):
     """
     append industry to factor dataframe
     """
+    if df.empty:
+        return df.assign(industry = [])
     old_index = df.index.names
     df = df.reset_index()
     secid = df['secid'].unique()
@@ -33,6 +35,8 @@ def append_ffmv(df : pd.DataFrame):
     """
     append fmv to factor dataframe
     """
+    if df.empty:
+        return df.assign(ffmv = [])
     secid = df.index.get_level_values('secid').unique().to_numpy()
     date = df.index.get_level_values('date').unique().to_numpy()
     old_index = df.index.names
@@ -46,6 +50,8 @@ def append_fut_ret(df : pd.DataFrame , nday : int = 10 , lag : int = 2 , ret_typ
     example:
         df = append_fut_ret(df , nday = 10 , lag = 2 , ret_type = 'close')
     """
+    if df.empty:
+        return df.assign(ret = [])
     secid = df.index.get_level_values('secid').unique().to_numpy()
     date = df.index.get_level_values('date').unique().to_numpy()
     old_index = df.index.names
@@ -140,14 +146,17 @@ def neutralize(df : pd.DataFrame | Any , pivot = True , **kwargs):
         df = pivot_frame(df)
     return df
 
-def eval_grp_avg(x : pd.DataFrame , x_cols : list, y_name : str = 'ret', group_num : int = 10 , excess = False) -> pd.DataFrame:
+def eval_grp_avg(x : pd.DataFrame , x_cols : list[str], y_name : str = 'ret', group_num : int = 10 , excess = False , direction : int = 1) -> pd.DataFrame:
     """
     evaluate the group average return of the factors
     """
     y = pd.DataFrame(x[y_name], index=x.index, columns=pd.Index([y_name]))
+    group_bins = np.linspace(0,1,group_num + 1).tolist()
+    group_labels = [i for i in range(1, group_num + 1)] if direction > 0 else [i for i in range(group_num, 0, -1)]
+
     rtn = list()
     for col in x_cols:
-        y['group'] = pd.cut(x[col].rank(pct = True), bins=np.linspace(0,1,group_num + 1).tolist(), labels=[i for i in range(1, group_num + 1)])
+        y['group'] = pd.cut(x[col].rank(pct = True), bins=group_bins, labels=group_labels)
         if excess: 
             y[y_name] -= y[y_name].mean()
         grp_avg_ret = y.groupby('group' , observed = True)[y_name].mean().rename(col)
@@ -207,14 +216,16 @@ class StockFactor:
         factor.eval_ic()
         factor.eval_group_perf()
     """
-    def __init__(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series|pd.DataFrame]' , normalized = False , step = None):
-        self.update(factor , normalized , step)
+    def __init__(self , factor : 'None|pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series|pd.DataFrame]' = None , normalized = False):
+        self.update(factor if factor is not None else pd.DataFrame() , normalized)
         InstanceRecord.update_factor(self)
 
     def __repr__(self):
+        format_str = f'{self.__class__.__name__}(normalized={self.normalized},names={self.factor_names},dates={{}})'
         if self.date.size == 0:
-            return f'{self.__class__.__name__}(normalized={self.normalized},names={self.factor_names},dates=None)'
-        return f'{self.__class__.__name__}(normalized={self.normalized},names={self.factor_names},dates={self.date.min()}-{self.date.max()})'
+            return format_str.format('None')
+        else:
+            return format_str.format(f'{self.date.size}({self.date.min()}-{self.date.max()})')
     
     def __call__(self , benchmark):
         return self.within(benchmark)
@@ -226,7 +237,7 @@ class StockFactor:
         """
         return self.prior_input.empty
 
-    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series|pd.DataFrame]' , normalized = False , step = None):
+    def update(self , factor : 'pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series|pd.DataFrame]' , normalized = False):
         """
         update the factor data
         """
@@ -234,7 +245,6 @@ class StockFactor:
         self._blk : DataBlock | Any = None
         self.normalized = normalized
         self.subsets : dict[str,StockFactor] = {}
-        self.step = step
         self.stats : dict[str,tuple[dict[str,Any],pd.DataFrame]] = {}
         if isinstance(factor , StockFactor):
             factor = factor.prior_input
@@ -266,6 +276,17 @@ class StockFactor:
         return a copy of the factor
         """
         return deepcopy(self)
+
+    def filter(self , dates : Iterable[Any] | None = None , **kwargs):
+        """
+        filter the factor data by dates or other index
+        """
+        if dates is None:
+            return self
+        df = self._df
+        if dates is not None:
+            df = df.query('date in @dates')
+        return StockFactor(df , normalized = self.normalized) 
 
     def rename(self , new_name : str | list[str] | dict[str,str] , inplace = True):
         """
@@ -382,15 +403,11 @@ class StockFactor:
         return cls(df)
 
     @classmethod
-    def Loads(cls , factor_name : str , start : int | None = None , end : int | None = None):
+    def Loads(cls , factor_name : str , start : int | None = None , end : int | None = None , dates : np.ndarray | None = None):
         """
         load the factor data from the database by factor name and date range
         """
-        if start is None: 
-            start = 0
-        if end is None:   
-            end = 99991231
-        df = DB.load_multi('factor' , factor_name , start_dt=start , end_dt=end)
+        df = DB.load_multi('factor' , factor_name , dates = dates , start_dt=start , end_dt=end)
         return cls(df)
         
     def select(self , secid = None , date = None , factor_name = None):
@@ -488,6 +505,16 @@ class StockFactor:
             self.stats['ic_indus'] = (params , ic)
         return self.stats['ic_indus'][1]
     
+    @staticmethod
+    def _eval_group_perf(df : pd.DataFrame , factors , group_num : int = 10 , excess = False , direction : int = 1) -> pd.DataFrame:
+        """
+        evaluate the group performance df , columns must have : ['ret' , *factors]
+        """
+        kwargs = {'x_cols' : factors , 'y_name' : 'ret' , 'group_num' : group_num , 'excess' : excess , 'include_groups' : False , 'direction' : direction}
+        df = df.groupby('date').apply(eval_grp_avg , **kwargs) 
+        df = df.melt(var_name='factor_name' , value_name='group_ret' , ignore_index=False).sort_values(['date','factor_name']).reset_index()
+        return df
+
     def eval_group_perf(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 , excess = False , 
                         ret_type : Literal['close' , 'vwap'] = 'close' , trade_date = True) -> pd.DataFrame:
         """
@@ -496,9 +523,7 @@ class StockFactor:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'excess' : excess , 'ret_type' : ret_type , 'trade_date' : trade_date}
         if 'group_perf' not in self.stats or not param_match(self.stats['group_perf'][0] , params):
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type)
-            kwargs = {'x_cols' : self.factor_names , 'y_name' : 'ret' , 'group_num' : group_num , 'excess' : excess , 'include_groups' : False}
-            df = df.groupby('date').apply(eval_grp_avg , **kwargs) 
-            df = df.melt(var_name='factor_name' , value_name='group_ret' , ignore_index=False).sort_values(['date','factor_name']).reset_index()
+            df = self._eval_group_perf(df , self.factor_names , group_num , excess)
             if trade_date:
                 df['start'] = DATAVENDOR.td_array(df['date'] , lag)
                 df['end']   = DATAVENDOR.td_array(df['date'] , lag + nday - 1)
@@ -579,6 +604,8 @@ class StockFactor:
         normalize the factor data by fill method , weighted whiten , and winsorize
         can specify the order of the steps
         """
+        if not order:
+            return self
         df = self.normalize_df(self.frame() , fill_method = fill_method , weighted_whiten = weighted_whiten , order = order)
         if inplace: 
             return self.update(df , normalized = True)
@@ -604,30 +631,30 @@ class StockFactor:
                 task_name : Literal['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Decay', 'IC_Indus',
                                     'IC_Year','IC_Benchmark','IC_Monotony','PnL_Curve',
                                     'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',
-                                    'Group_Year','Distrib_Curve'] | str , plot = True , display = True , **kwargs):
+                                    'Group_Year','Distrib_Curve'] | str , 
+                nday : int = 5 ,
+                plot = True , display = True , **kwargs):
         """
         analyze the factor by task name (only one task is supported)
         access by self.analytic_tasks[task_name]
         """
-        if self.step is not None and 'nday' not in kwargs: 
-            kwargs['nday'] = self.step
-        task = self.select_analytic(task_name , **kwargs)
+        task = self.select_analytic(task_name ,  nday = nday , **kwargs)
         task.calc(self)
         if plot: 
             task.plot(show = display)
         return self
 
-    def fast_analyze(self , task_list = ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr'] , **kwargs):
+    def fast_analyze(self , task_list = ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr'] , nday : int = 5 , **kwargs):
         """
         fast analyze the factor
         default task list is ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Benchmark','IC_Monotony','Style_Corr']
         access by self.analytic_tasks[task_name]
         """
         for task_name in task_list: 
-            self.analyze(task_name , **kwargs)
+            self.analyze(task_name , nday = nday , **kwargs)
         return self
 
-    def full_analyze(self , **kwargs):
+    def full_analyze(self , nday : int = 5 , **kwargs):
         """
         full analyze the factor , 
         default task list is ['FrontFace', 'Coverage' , 'IC_Curve', 'IC_Decay', 'IC_Indus',
@@ -641,7 +668,7 @@ class StockFactor:
                      'Style_Corr','Group_Curve','Group_Decay','Group_IR_Decay',
                      'Group_Year','Distrib_Curve']
         for task_name in task_list: 
-            self.analyze(task_name , **kwargs)
+            self.analyze(task_name , nday = nday , **kwargs)
         return self
 
     @staticmethod
@@ -674,5 +701,5 @@ class StockFactor:
                 df = whiten(df , ffmv_weighted = weighted_whiten)
             else:
                 raise ValueError(f'step {step} not supported')
-        df = pivot_frame(df).reset_index(['date' , 'secid']).reset_index(drop=True)
+        df = pivot_frame(df).reset_index(['date' , 'secid']).reset_index(drop=True).rename_axis(None , axis = 1)
         return df

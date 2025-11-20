@@ -5,8 +5,8 @@ from src.data import DATAVENDOR
 from src.func.transform import winsorize , whiten
 
 from src.res.factor.calculator import ValueFactor
-from src.res.facdef.level0.fundamental.valuation_static import (btop , btop_rank3y , etop , etop_rank3y , cfev , cfev_rank3y)
-from src.res.facdef.level0.fundamental.valuation_dynamic import btop_stability , etop_stability , cfev_stability
+from src.res.defs.factor.level0.fundamental.valuation_static import (btop , btop_rank3y , etop , etop_rank3y , cfev , cfev_rank3y)
+from src.res.defs.factor.level0.fundamental.valuation_dynamic import btop_stability , etop_stability , cfev_stability
 
 def btop_augment_range(date : int):
     bp_raw = btop.EvalSeries(date)

@@ -26,13 +26,14 @@
 #       desc : number of updates in a group
 #       default : 100
 
-from src.res.factor.api import FactorCalculatorAPI
-from src.app.script_tool import ScriptTool
+from src.res.factor.api import FactorCalculatorAPI , PoolingCalculatorAPI
+from src.app import ScriptTool
 
 @ScriptTool('recalc_factors' , lock_name = 'update_factors')
 def main(start : int | None = None, end : int | None = None , num_per_group : int | None = 100 , **kwargs):
     assert start is not None and end is not None , 'start and end are required'
     FactorCalculatorAPI.recalculate(start = int(start) , end = int(end) , groups_in_one_update=num_per_group, verbosity = 10)
+    PoolingCalculatorAPI.recalculate(start = int(start) , end = int(end) , groups_in_one_update=num_per_group, verbosity = 10)
 
 if __name__ == '__main__':
     main()

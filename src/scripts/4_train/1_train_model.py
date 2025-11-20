@@ -27,8 +27,8 @@
 #   height : 300 # optional
 
 from pathlib import Path
-from src.res.api import ModelAPI
-from src.app.script_tool import ScriptTool
+from src.api import ModelAPI
+from src.app import ScriptTool
 
 @ScriptTool('train_model' , '@module_name')
 def main(module_name : str | None = None , short_test : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
