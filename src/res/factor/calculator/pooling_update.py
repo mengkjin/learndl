@@ -1,13 +1,14 @@
 import pandas as pd
+import numpy as np
 import time
 
-from typing import Any , Generator
+from typing import Any , Callable , Generator
 
 from .factor_calc import FactorCalculator , PoolingCalculator
 
 from src.proj import Logger
 from src.basic import CONF , CALENDAR
-from src.func.parallel import parallel
+from src.func.parallel import parallels
 
 class PoolingFactorUpdater:
     """manager of factor update jobs"""
@@ -71,18 +72,58 @@ class PoolingFactorUpdater:
             return
         if end is None: 
             end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
+        
+        grouped_calculators = cls.grouped_calculators(all , selected_factors , **kwargs)
+        if len(grouped_calculators) == 0:
+            print('There is no Pooling Factor Update Jobs to Proceed...')
+        else:
+            n_jobs = len(grouped_calculators)
+            levels = sorted(list(set([level for level , _ in grouped_calculators])))
+            print(f'Finish Collecting {n_jobs} Pooling Factor Update Jobs , levels: {levels} , number of factors: {len(grouped_calculators)}')
 
         start_time = time.time()
-        for level , calculators in cls.grouped_calculators(all , selected_factors , **kwargs):
+        for level , calculators in grouped_calculators:
             for calc in calculators:
                 if verbosity > 0:
                     print(f'Updating {level} : {calc.factor_name} at {start} ~ {end}')
-                calc.update_all(start = start , end = end , overwrite = overwrite , verbose = verbosity > 1)
+                calc.update_all_factors(start = start , end = end , overwrite = overwrite , verbose = verbosity > 1)
 
-            if timeout > 0 and time.time() - start_time > timeout * 3600:
-                Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
-                Logger.warning(f'Terminated at level {level} , factor {calc.factor_name}')
-                break
+                if timeout > 0 and time.time() - start_time > timeout * 3600:
+                    Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
+                    Logger.warning(f'Terminated at level {level} , factor {calc.factor_name}')
+                    break
+                
+    @classmethod
+    def update_factor_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , 
+                            all = True , selected_factors : list[str] | None = None , **kwargs):
+        """update all factor stats"""
+        func_calls : dict[int , list[tuple[Callable , tuple[Any,...] , dict[str , Any] | None]]] = {}
+        for calc in cls.iter_calculators(all , selected_factors , **kwargs):
+            target_dates = calc.stats_target_dates(start , end , overwrite)
+            for stats_type , dates in target_dates.items():
+                func  = getattr(calc , f'update_{stats_type}_stats')
+                years = np.unique(dates // 10000)
+                for year in years:
+                    if year not in func_calls:
+                        func_calls[year] = []
+                    func_calls[year].append((func , (dates[dates // 10000 == year] , ) , {'overwrite' : overwrite}))
+        
+        func_calls = {year: calls for year , calls in sorted(func_calls.items())}
+        if len(func_calls) == 0:
+            print('There is no Pooling Factor Stats Update to Proceed')
+            return
+
+        total_calls , total_dates = 0 , 0
+        for year , calls in func_calls.items():
+            n_calls = len(calls)
+            n_dates = sum([len(args[0]) for _ , args , _ in calls])
+            print(f'Update Pooling Factor Stats of Year {year} : {n_calls} function calls , {n_dates} dates')
+            parallels(calls , method = 'forloop')
+            total_calls += n_calls
+            total_dates += n_dates
+
+        print(f'Pooling Factor Stats Update Done: {len(func_calls)} Years , {total_calls} function calls , {total_dates} dates')
+
 
     @classmethod
     def iter_calculators(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> Generator[FactorCalculator , None , None]:
@@ -93,25 +134,29 @@ class PoolingFactorUpdater:
     def update(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         '''update factor data according'''
         cls.process_jobs(start = start , end = end , all = True , verbosity = verbosity , timeout = timeout)
-        
+        cls.update_factor_stats(start , end , all = True)
+
     @classmethod
     def recalculate(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         '''update factor data according'''
         assert start is not None and end is not None , 'start and end are required for recalculate factors'
         cls.process_jobs(start = start , end = end , all = True , overwrite = True , verbosity = verbosity , timeout = timeout)
+        cls.update_factor_stats(start , end , all = True , overwrite = True)
 
     @classmethod
     def update_rollback(cls , rollback_date : int , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
         CALENDAR.check_rollback_date(rollback_date)
         start = CALENDAR.td(rollback_date , 1)
         cls.process_jobs(start = start , all = True , overwrite = True , verbosity = verbosity , timeout = timeout)
+        cls.update_factor_stats(start , overwrite = True , all = True)
         
     @classmethod
     def update_fix(cls , factors : list[str] | None = None , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         factors = factors or []
         print(f'Fixing factors : {factors}')
         cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , verbosity = verbosity , timeout = timeout)
-        
+        cls.update_factor_stats(start , end , overwrite = True , selected_factors = factors)
+
     @classmethod
     def eval_coverage(cls , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:
         '''
@@ -131,7 +176,8 @@ class PoolingFactorUpdater:
                 factor = calc.eval_factor(date)
                 valid_count = factor.loc[:,calc.factor_name].notna().sum()
                 return pd.DataFrame({'factor' : [calc.factor_name] , 'date' : [date] , 'valid_count' : [valid_count]})
-            factor_coverage = parallel(load_fac , dates , method = 'threading')
+            calls = [(load_fac , (date , ) , {}) for date in dates]
+            factor_coverage = parallels(calls , method = 'threading')
             dfs.extend(list(factor_coverage.values()))
 
         df = pd.concat(dfs)

@@ -214,5 +214,5 @@ if __name__ == '__main__':
         input_df = AdaBoost.df_input(factor_data , idx , windows_len)
         ada.fit(BoosterInput.from_dataframe(input_df['train']) , silent = True)
         ic_dfs.append(ada.calc_ic(input_df['test']))
-    df = pd.concat(ic_dfs)
+    df = pd.concat([d for d in ic_dfs if not d.empty])
     print(df)

@@ -15,7 +15,7 @@ class FuturesCalendar(InfoFetcher):
             df = self.iterate_fetch(self.pro.trade_cal , limit = 5000 , exchange=market.split('-')[0])
             dfs.append(df)
 
-        df = pd.concat(dfs)
+        df = pd.concat([d for d in dfs if not d.empty])
         return df
 
 class FuturesBasic(InfoFetcher):
@@ -30,7 +30,7 @@ class FuturesBasic(InfoFetcher):
             df = self.iterate_fetch(self.pro.fut_basic , limit = 5000 , exchange=market.split('-')[0])
             dfs.append(df)
 
-        df = pd.concat(dfs)
+        df = pd.concat([d for d in dfs if not d.empty])
         return df
 
 class FuturesDailyQuote(DayFetcher):

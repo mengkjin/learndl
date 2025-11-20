@@ -33,7 +33,7 @@ class IndexBasic(InfoFetcher):
             df = self.iterate_fetch(self.pro.index_basic , limit = 5000 , exchange=market.split('-')[0])
             dfs.append(df)
 
-        df = pd.concat(dfs).drop_duplicates()
+        df = pd.concat([d for d in dfs if not d.empty]).drop_duplicates()
         return df
 
 class IndexDaily(TimeSeriesFetcher):
@@ -160,7 +160,7 @@ class THSConcept(MonthFetcher):
             # print(i , ts_code)
             df = self.pro.ths_member(ts_code = ts_code)
             dfs.append(df)
-        df_all = pd.concat(dfs).rename(columns={'name':'concept'})
+        df_all = pd.concat([d for d in dfs if not d.empty]).rename(columns={'name':'concept'})
         df_all = df_all.merge(df_theme , on = 'ts_code' , how='left').rename(columns={'ts_code':'index_code'})
         df_all = ts_code_to_secid(df_all , 'code')
         df = df_all.reset_index(drop = True)

@@ -37,7 +37,7 @@ class AnalystDataAccess(DateDataAccess):
             for key , value in filter_kwargs.items():
                 df = df.query(f'{key} == @value')
             reports.append(df)
-        df = pd.concat(reports).reset_index(drop = True)
+        df = pd.concat([rep for rep in reports if not rep.empty]).reset_index(drop = True)
         df['report_date'] = df['report_date'].astype(int)
         if latest:
             df = df.sort_values(['secid' , 'report_date']).groupby(['secid' , 'org_name' , 'quarter']).last().reset_index(drop = False)

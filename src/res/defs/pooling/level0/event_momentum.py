@@ -36,7 +36,7 @@ class EventSignal:
                 df['event'] = event
             df = df.loc[:,['event' , 'event_date' , 'start' , 'end' , 'date']]
             event_dfs.append(df)
-        event_df = pd.concat(event_dfs).reset_index(drop = True)
+        event_df = pd.concat([d for d in event_dfs if not d.empty]).reset_index(drop = True)
         self.df = event_df.copy()
         self.loaded = True
         return self
@@ -106,10 +106,10 @@ class SignedFactor:
 
         self.loaded = False
 
-    def eval(self , dates : np.ndarray | list[int] | int):
+    def eval(self , dates : np.ndarray | list[int] | int , verbose : bool = False):
         if isinstance(dates , int):
             dates = [dates]
-        self.factor = StockFactorHierarchy.get_factor(self.factor_name).Factor(dates , verbose = True)
+        self.factor = StockFactorHierarchy.get_factor(self.factor_name).Factor(dates , verbose = verbose)
         self.loaded = True
         return self
 

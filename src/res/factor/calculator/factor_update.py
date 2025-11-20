@@ -11,7 +11,7 @@ from .factor_calc import FactorCalculator
 from src.proj import Logger
 from src.basic import CONF , CALENDAR 
 from src.data import DATAVENDOR
-from src.func.parallel import parallel , parallels
+from src.func.parallel import parallels
 
 CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 
@@ -173,7 +173,8 @@ class StockFactorUpdater:
                     print(f'Updating {level} at {date} : {len(keys)} factors')
                 else:
                     print(f'Updating {level} at {date} : {keys}')
-            parallel(do_job , jobs , keys = keys , method = cls.multi_thread)
+            calls = [(do_job , (job , ) , {}) for job in jobs]
+            parallels(calls , keys = keys , method = cls.multi_thread)
             failed_jobs = [job for job in jobs if not job.done]
             if verbosity > 0:
                 print(f'Factor Update of {level} at {date} Done: {len(jobs) - len(failed_jobs)} / {len(jobs)}')
@@ -182,7 +183,8 @@ class StockFactorUpdater:
             if auto_retry and failed_jobs:
                 if verbosity > 0: 
                     print(f'Auto Retry Failed Factors...')
-                parallel(do_job , failed_jobs , method = len(failed_jobs) > 10)
+                calls = [(do_job , (job , ) , {}) for job in failed_jobs]
+                parallels(calls , method = len(failed_jobs) > 10)
                 failed_again_jobs = [job for job in failed_jobs if not job.done]
                 if failed_again_jobs:
                     print(f'Failed Factors Again: {[job.factor_name for job in failed_again_jobs]}')
@@ -303,7 +305,8 @@ class StockFactorUpdater:
                 factor = calc.eval_factor(date)
                 valid_count = factor.loc[:,calc.factor_name].notna().sum()
                 return pd.DataFrame({'factor' : [calc.factor_name] , 'date' : [date] , 'valid_count' : [valid_count]})
-            factor_coverage = parallel(load_fac , dates , method = 'threading')
+            calls = [(load_fac , (date , ) , {}) for date in dates]
+            factor_coverage = parallels(calls , method = 'threading')
             dfs.extend(list(factor_coverage.values()))
 
         df = pd.concat(dfs)

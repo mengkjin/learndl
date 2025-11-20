@@ -175,7 +175,7 @@ def _load_df_multi(paths : dict , date_colname : str = 'date' ,
 
     if not dfs: 
         return pd.DataFrame()
-    df = pd.concat(dfs)
+    df = pd.concat([v for v in dfs if not v.empty])
     df = _load_df_mapper(df)
     return df
 
