@@ -10,8 +10,8 @@ class CoreDataUpdater:
         OtherSourceDownloader.update()
 
     @classmethod
-    def update_rollback(cls , rollback_date : int):
-        TushareDataDownloader.update_rollback(rollback_date)
+    def rollback(cls , rollback_date : int):
+        TushareDataDownloader.rollback(rollback_date)
 
 class SellsideDataUpdater:
     @classmethod
@@ -20,5 +20,5 @@ class SellsideDataUpdater:
         SellsideFTPDownloader.update()
 
     @classmethod
-    def update_rollback(cls , rollback_date : int):
+    def rollback(cls , rollback_date : int):
         ...

@@ -31,13 +31,13 @@ class DataAPI:
 
 
     @classmethod
-    def update_rollback(cls , rollback_date : int , risk = True , affiliated = True):
+    def rollback(cls , rollback_date : int , risk = True , affiliated = True):
         """
         Rollback data to the specified date
         """
-        wrap_update(CoreDataUpdater.update_rollback , 'download core data' ,rollback_date = rollback_date)
-        wrap_update(RiskModelUpdater.update_rollback , 'update risk models' , skip = not risk , rollback_date = rollback_date)
-        wrap_update(AffiliatedDataUpdater.update_rollback , 'update affiliated datas' , skip = not affiliated , rollback_date = rollback_date)
+        wrap_update(CoreDataUpdater.rollback , 'rollback download core data' ,rollback_date = rollback_date)
+        wrap_update(RiskModelUpdater.rollback , 'rollback risk models' , skip = not risk , rollback_date = rollback_date)
+        wrap_update(AffiliatedDataUpdater.rollback , 'rollback affiliated datas' , skip = not affiliated , rollback_date = rollback_date)
         
     @classmethod
     def prepare_predict_data(cls): 

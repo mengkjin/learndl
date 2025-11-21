@@ -4,14 +4,14 @@ from typing import Any , Literal
 from src.proj import Logger
 from src.data import DATAVENDOR
 from src.res.factor.util import StockFactor
-from src.res.factor.api import RiskModelUpdater , FactorCalculatorAPI , PoolingCalculatorAPI , FactorTestAPI
+from src.res.factor.api import RiskModelUpdater , FactorCalculatorAPI , FactorTestAPI
 from src.res.factor.calculator import StockFactorHierarchy
 
 from .util import wrap_update
 
 __all__ = [
-    'FactorAPI' , 'PoolingAPI' , 'get_random_factor' , 'get_real_factor' , 'get_factor' , 'get_project_name' ,
-    'RiskModelUpdater' , 'FactorCalculatorAPI' , 'FactorTestAPI' , 'StockFactorHierarchy' , 'PoolingCalculatorAPI' ,
+    'FactorAPI' , 'get_random_factor' , 'get_real_factor' , 'get_factor' , 'get_project_name' ,
+    'RiskModelUpdater' , 'FactorCalculatorAPI' , 'FactorTestAPI' , 'StockFactorHierarchy' ,
     'StockFactor' , 'DATAVENDOR'
 ]
 
@@ -50,16 +50,47 @@ class FactorAPI:
     .Test.FmpTop()        : test top fmp
     .factor_hierarchy()   : get factor hierarchy
     """
+    class Hierarchy(StockFactorHierarchy):
+        @classmethod
+        def update(cls):
+            wrap_update(StockFactorHierarchy.export_factor_list , 'export factor list')
 
-    @classmethod
-    def update(cls , timeout : int = -1):
-        # update stock factor
-        wrap_update(FactorCalculatorAPI.update , 'update stock factors' , timeout = timeout)
+        @classmethod
+        def rollback(cls , rollback_date : int = -1):
+            wrap_update(StockFactorHierarchy.export_factor_list , 'export factor list')
 
-    @classmethod
-    def update_rollback(cls , rollback_date : int , timeout : int = -1):
-        # update stock factor
-        wrap_update(FactorCalculatorAPI.update_rollback , 'update stock factors' , rollback_date = rollback_date , timeout = timeout)
+    class Factor:
+        @classmethod
+        def update(cls , timeout : int = -1):
+            # update stock factor
+            wrap_update(FactorCalculatorAPI.Factor.update , 'update stock factors' , timeout = timeout)
+
+        @classmethod
+        def rollback(cls , rollback_date : int , timeout : int = -1):
+            # update stock factor
+            wrap_update(FactorCalculatorAPI.Factor.rollback , 'rollback stock factors' , rollback_date = rollback_date , timeout = timeout)
+
+    class Pooling:
+        @classmethod
+        def update(cls , timeout : int = -1):
+            # update pooling factor
+            wrap_update(FactorCalculatorAPI.Pooling.update , 'update pooling factors' , timeout = timeout)
+
+        @classmethod
+        def rollback(cls , rollback_date : int , timeout : int = -1):
+            # update pooling factor
+            wrap_update(FactorCalculatorAPI.Pooling.rollback , 'rollback pooling factors' , rollback_date = rollback_date , timeout = timeout)
+
+    class Stats:
+        @classmethod
+        def update(cls , timeout : int = -1):
+            # update factor stats
+            wrap_update(FactorCalculatorAPI.Stats.update , 'update factor stats' , timeout = timeout)
+
+        @classmethod
+        def rollback(cls , rollback_date : int , timeout : int = -1):
+            # update factor stats
+            wrap_update(FactorCalculatorAPI.Stats.rollback , 'rollback factor stats' , rollback_date = rollback_date , timeout = timeout)
 
     class Test:
         @staticmethod
@@ -99,14 +130,10 @@ class FactorAPI:
                 factor = get_factor(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
                 ret = FactorTestAPI.FmpTop(factor , benchmark , write_down , display_figs , verbosity , project_name , **kwargs)
             return ret
-    
-    @classmethod
-    def Hierarchy(cls):
-        return StockFactorHierarchy()
 
     @classmethod
     def FastAnalyze(cls , factor_name : str , start : int = 20170101 , end : int | None = None , step : int = 10 , lag = 2):
-        factor_calc = cls.Hierarchy().get_factor(factor_name)
+        factor_calc = cls.Hierarchy.get_factor(factor_name)
         dates = factor_calc.FactorDates(start,end,step)
         factor = factor_calc.Factor(dates , verbose= True , normalize = True , ignore_error = False)
         factor.fast_analyze(nday = step , lag = lag)
@@ -114,25 +141,8 @@ class FactorAPI:
     
     @classmethod
     def FullAnalyze(cls , factor_name : str , start : int = 20170101 , end : int | None = None , step : int = 1 , lag = 2):
-        factor_calc = cls.Hierarchy().get_factor(factor_name)
+        factor_calc = cls.Hierarchy.get_factor(factor_name)
         dates = factor_calc.FactorDates(start,end,step)
         factor = factor_calc.Factor(dates , verbose= True , normalize = True , ignore_error = False)
         factor.full_analyze(nday = step , lag = lag)
         return factor
-
-class PoolingAPI:
-    """
-    Interface for factor related operations
-    .update()             : update pooling factor
-    .update_rollback()    : update pooling factor rollback
-    """
-
-    @classmethod
-    def update(cls , timeout : int = -1):
-        # update pooling factor
-        wrap_update(PoolingCalculatorAPI.update , 'update pooling factors' , timeout = timeout)
-
-    @classmethod
-    def update_rollback(cls , rollback_date : int , timeout : int = -1):
-        # update pooling factor
-        wrap_update(PoolingCalculatorAPI.update_rollback , 'update pooling factors' , rollback_date = rollback_date , timeout = timeout)

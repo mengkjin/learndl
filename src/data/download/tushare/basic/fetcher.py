@@ -167,7 +167,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             Logger.error(f'{cls.__name__} update failed: {e}')
     
     @classmethod
-    def update_rollback(cls , rollback_date : int) -> None:
+    def rollback(cls , rollback_date : int) -> None:
         """update the fetcher with rollback date"""
         try:
             fetcher = cls()

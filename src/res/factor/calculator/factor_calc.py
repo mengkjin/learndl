@@ -560,7 +560,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         """
         cls.import_definitions()
         for name , calculator in cls.registry.items():
-            if (all if not selected_factors else (name in selected_factors)) and calculator.match_attrs(**kwargs):
+            if ((name in selected_factors) if selected_factors else all) and calculator.match_attrs(**kwargs):
                 yield calculator()
 
     @classmethod

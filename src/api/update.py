@@ -2,7 +2,7 @@ from src.proj import Logger , MACHINE
 from src.basic import CALENDAR
 
 from .data import DataAPI
-from .factor import FactorAPI , PoolingAPI
+from .factor import FactorAPI
 from .model import ModelAPI
 from .trading import TradingAPI
 from .notification import NotificationAPI
@@ -17,9 +17,11 @@ class UpdateAPI:
         if not DataAPI.is_updated():
             Logger.cache_message('error', 'Data is not updated to the latest date, skip model update')
             return
-        FactorAPI.update(timeout = 3)
+        FactorAPI.Factor.update(timeout = 3)
         ModelAPI.update()
-        PoolingAPI.update(timeout = 3)
+        FactorAPI.Pooling.update(timeout = 3)
+        FactorAPI.Stats.update(timeout = 3)
+        FactorAPI.Hierarchy.update()
         TradingAPI.update()
         NotificationAPI.update()
 
@@ -29,8 +31,11 @@ class UpdateAPI:
             Logger.cache_message('error', f'{MACHINE.name} is not updateable, skip rollback update')
             return
         CALENDAR.check_rollback_date(rollback_date)
-        DataAPI.update_rollback(rollback_date = rollback_date)
-        FactorAPI.update_rollback(rollback_date = rollback_date)
+        DataAPI.rollback(rollback_date)
+        FactorAPI.Factor.rollback(rollback_date , timeout = 10)
+        FactorAPI.Pooling.rollback(rollback_date , timeout = 10)
+        FactorAPI.Stats.rollback(rollback_date)
+        FactorAPI.Hierarchy.rollback(rollback_date)
 
     @classmethod
     def weekly(cls):

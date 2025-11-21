@@ -19,9 +19,9 @@ class TushareDataDownloader:
         TSBackUpDataTransform.update()
 
     @classmethod
-    def update_rollback(cls , rollback_date : int):
+    def rollback(cls , rollback_date : int):
         """update all tushare fetchers with rollback date"""
         TSBackUpDataTransform.rollback(rollback_date)
         for fetcher in cls.iter_fetchers():
-            fetcher.update_rollback(rollback_date)
+            fetcher.rollback(rollback_date)
         TSBackUpDataTransform.update()

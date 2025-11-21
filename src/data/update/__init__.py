@@ -8,7 +8,7 @@ class AffiliatedDataUpdater:
             updater.update()
 
     @classmethod
-    def update_rollback(cls , rollback_date : int):
+    def rollback(cls , rollback_date : int):
         BasicUpdater.import_updaters()
         for name , updater in BasicUpdater.registry.items():
-            updater.update_rollback(rollback_date)
+            updater.rollback(rollback_date)

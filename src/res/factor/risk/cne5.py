@@ -498,7 +498,7 @@ class TuShareCNE5_Calculator:
         return task
     
     @classmethod
-    def update_rollback(cls , rollback_date : int):
+    def rollback(cls , rollback_date : int):
         '''update all updatable dates from a given rollback date'''
         CALENDAR.check_rollback_date(rollback_date)
         task = cls()

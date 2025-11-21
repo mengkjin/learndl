@@ -21,7 +21,7 @@ class ClassicLabelsUpdater(BasicUpdater):
         cls.update_all('update')
 
     @classmethod
-    def update_rollback(cls , rollback_date : int):
+    def rollback(cls , rollback_date : int):
         cls.set_rollback_date(rollback_date)
         cls.update_all('rollback')
 

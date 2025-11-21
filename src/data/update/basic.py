@@ -15,8 +15,8 @@ class BasicUpdaterMeta(type):
                 f'{name} in module {new_cls.__module__} is duplicated within {cls.registry[name].__module__}'
             assert 'update' in new_cls.__dict__  , \
                 f'{name} must implement update method'
-            assert 'update_rollback' in new_cls.__dict__ , \
-                f'{name} must implement update_rollback method'
+            assert 'rollback' in new_cls.__dict__ , \
+                f'{name} must implement rollback method'
             assert 'recalculate_all' in new_cls.__dict__ , \
                 f'{name} must implement recalculate_all method'
             cls.registry[name] = new_cls
@@ -25,10 +25,10 @@ class BasicUpdaterMeta(type):
 class BasicUpdater(metaclass=BasicUpdaterMeta):
     """
     base class of basic updater
-    must implement update and update_rollback methods
+    must implement update and rollback methods
     def update(self):
         pass
-    def update_rollback(self , rollback_date : int):
+    def rollback(self , rollback_date : int):
         pass
     """
     _imported : bool = False
@@ -49,8 +49,8 @@ class BasicUpdater(metaclass=BasicUpdaterMeta):
         raise NotImplementedError(f'{cls.__name__} must implement update method')
 
     @classmethod
-    def update_rollback(cls , rollback_date : int):
-        raise NotImplementedError(f'{cls.__name__} must implement update_rollback method')
+    def rollback(cls , rollback_date : int):
+        raise NotImplementedError(f'{cls.__name__} must implement rollback method')
 
     @classmethod
     def recalculate_all(cls):

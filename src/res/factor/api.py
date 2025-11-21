@@ -3,7 +3,7 @@ from typing import Any , Literal
 from src.res.factor.util import StockFactor
 from src.res.factor.risk import TuShareCNE5_Calculator
 from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager , FmpScreenManager
-from src.res.factor.calculator import StockFactorHierarchy , StockFactorUpdater , PoolingFactorUpdater
+from src.res.factor.calculator import StockFactorHierarchy , StockFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater
 
 class RiskModelUpdater:
     @classmethod
@@ -11,47 +11,45 @@ class RiskModelUpdater:
         TuShareCNE5_Calculator.update()
 
     @classmethod
-    def update_rollback(cls , rollback_date : int):
-        TuShareCNE5_Calculator.update_rollback(rollback_date)
+    def rollback(cls , rollback_date : int):
+        TuShareCNE5_Calculator.rollback(rollback_date)
 
 class FactorCalculatorAPI:
-    @classmethod
-    def update(cls , **kwargs):
-        StockFactorUpdater.update(**kwargs)
-        StockFactorHierarchy.export_factor_list()
+    Factor = StockFactorUpdater
+    Pooling = PoolingFactorUpdater
+    Stats = FactorStatsUpdater
 
     @classmethod
-    def update_rollback(cls , rollback_date : int , **kwargs):
-        StockFactorUpdater.update_rollback(rollback_date , **kwargs)
-        StockFactorHierarchy.export_factor_list()
+    def update(cls , **kwargs):
+        cls.Factor.update(**kwargs)
+        cls.Pooling.update(**kwargs)
+        cls.Stats.update(**kwargs)
+        cls.export_list()
+
+    @classmethod
+    def rollback(cls , rollback_date : int , **kwargs):
+        cls.Factor.rollback(rollback_date , **kwargs)
+        cls.Pooling.rollback(rollback_date , **kwargs)
+        cls.Stats.rollback(rollback_date , **kwargs)
+        cls.export_list()
 
     @classmethod
     def recalculate(cls , **kwargs):
-        StockFactorUpdater.recalculate(**kwargs)
+        cls.Factor.recalculate(**kwargs)
+        cls.Pooling.recalculate(**kwargs)
+        cls.Stats.recalculate(**kwargs)
+        cls.export_list()
+
+    @classmethod
+    def fix(cls , factors : list[str] , **kwargs):
+        cls.Factor.fix(factors , **kwargs)
+        cls.Pooling.fix(factors , **kwargs)
+        cls.Stats.fix(factors , **kwargs)
+        cls.export_list()
+
+    @classmethod
+    def export_list(cls):
         StockFactorHierarchy.export_factor_list()
-
-    @classmethod
-    def fix(cls , factors : list[str] | None = None , **kwargs):
-        factors = factors or []
-        StockFactorUpdater.update_fix(factors , **kwargs)
-
-class PoolingCalculatorAPI:
-    @classmethod
-    def update(cls , **kwargs):
-        PoolingFactorUpdater.update(**kwargs)
-
-    @classmethod
-    def recalculate(cls , **kwargs):
-        PoolingFactorUpdater.recalculate(**kwargs)
-
-    @classmethod
-    def update_rollback(cls , rollback_date : int , **kwargs):
-        PoolingFactorUpdater.update_rollback(rollback_date , **kwargs)
-
-    @classmethod
-    def fix(cls , factors : list[str] | None = None , **kwargs):
-        factors = factors or []
-        PoolingFactorUpdater.update_fix(factors , **kwargs)
 
 class FactorTestAPI:
     TASK_TYPES = TASK_TYPES

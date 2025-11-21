@@ -144,14 +144,14 @@ class PoolingFactorUpdater:
         cls.update_factor_stats(start , end , all = True , overwrite = True)
 
     @classmethod
-    def update_rollback(cls , rollback_date : int , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
+    def rollback(cls , rollback_date : int , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
         CALENDAR.check_rollback_date(rollback_date)
         start = CALENDAR.td(rollback_date , 1)
         cls.process_jobs(start = start , all = True , overwrite = True , verbosity = verbosity , timeout = timeout)
         cls.update_factor_stats(start , overwrite = True , all = True)
         
     @classmethod
-    def update_fix(cls , factors : list[str] | None = None , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
+    def fix(cls , factors : list[str] | None = None , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         factors = factors or []
         print(f'Fixing factors : {factors}')
         cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , verbosity = verbosity , timeout = timeout)
