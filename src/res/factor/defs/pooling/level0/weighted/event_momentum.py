@@ -50,6 +50,10 @@ class EventSignal:
         return self.df['date'].sort_values().unique()
 
     def relative_dates(self , start : int , end : int , trailing : int = 35) -> np.ndarray:
+        """
+        get relative dates between event dates and factor dates
+        give a trailing window > 10 (event lookback window) + 20 (weight proliferation window)
+        """
         dates = np.unique(np.concatenate([self.event_dates , self.factor_dates]))
         return CALENDAR.slice(dates , CALENDAR.td(start , -trailing) , end)
 
@@ -184,8 +188,10 @@ class EventFactorWeight:
             return self
 
         event_perf = self.event_perf.copy()
-        event_date_metric = event_perf.sort_values('group').groupby(['event_date' , 'event' , 'factor_name']).\
-            apply(self.event_date_metric).rename('weight').reset_index()
+        event_date_metric = event_perf.sort_values('group').\
+            groupby(['event_date' , 'event' , 'factor_name']).\
+            apply(self.event_date_metric , include_groups = False).\
+            rename('weight').reset_index()
 
         if self.momentum_time_decay:
             event_date_weight = self.time_decay_event_weight(event_date_metric)
@@ -196,7 +202,8 @@ class EventFactorWeight:
             event_date_weight.loc[event_date_weight['weight'] <= 0 , 'weight'] = 0
 
         weights = event_date_weight.groupby('event_date' , group_keys = False).\
-            apply(self.scale_weights).reset_index(drop = True).rename(columns = {'event_date' : 'date'})
+            apply(self.scale_weights , include_groups = False).\
+            reset_index(drop = True).rename(columns = {'event_date' : 'date'})
 
         weight_table = weights.pivot_table(index = 'date' , columns = 'factor_name' , values = 'weight').fillna(0)
         self.weights = weight_table.loc[:,self.factor_names]
@@ -206,13 +213,13 @@ class EventFactorWeight:
         return self
 
     @classmethod
-    def event_date_metric(cls , x : pd.DataFrame) -> float:
+    def event_date_metric(cls , x : pd.DataFrame , **kwargs) -> float:
         top = x.iloc[-1]['group_ret']
         bot = 0 if cls.momentum_type == 'top' else x.iloc[1]['group_ret']
         return top - bot
 
     @staticmethod
-    def scale_weights(x : pd.DataFrame) -> pd.DataFrame:
+    def scale_weights(x : pd.DataFrame , **kwargs) -> pd.DataFrame:
         weights = x['weight']
         if weights.sum() <= 0:
             y = (weights * 0 + 1) / len(weights)

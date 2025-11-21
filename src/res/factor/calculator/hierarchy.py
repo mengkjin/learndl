@@ -53,7 +53,9 @@ class StockFactorHierarchy:
         '''export factor list to csv'''
         if MACHINE.server:
             df = cls.full_factor_table()
-            df.to_csv(PATH.rslt_factor.joinpath('factor_list.csv'))
+            df.to_csv(PATH.local_shared.joinpath('factor_list.csv'))
+            if path := PATH.get_share_folder_path():
+                df.to_csv(path.joinpath('factor_list.csv'))
 
     @classmethod
     def full_factor_table(cls) -> pd.DataFrame:

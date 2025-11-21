@@ -23,6 +23,7 @@ class UpdateAPI:
         ModelAPI.update()
         FactorAPI.Pooling.update(timeout = 3)
         FactorAPI.Stats.update()
+        FactorAPI.Hierarchy.update()
         TradingAPI.update()
         NotificationAPI.update()
 
