@@ -17,11 +17,12 @@ class UpdateAPI:
         if not DataAPI.is_updated():
             Logger.cache_message('error', 'Data is not updated to the latest date, skip model update')
             return
-        FactorAPI.Factor.update(timeout = 3)
+        FactorAPI.Stock.update(timeout = 3)
+        FactorAPI.Market.update()
+        FactorAPI.Risk.update()
         ModelAPI.update()
         FactorAPI.Pooling.update(timeout = 3)
-        FactorAPI.Stats.update(timeout = 3)
-        FactorAPI.Hierarchy.update()
+        FactorAPI.Stats.update()
         TradingAPI.update()
         NotificationAPI.update()
 
@@ -32,7 +33,9 @@ class UpdateAPI:
             return
         CALENDAR.check_rollback_date(rollback_date)
         DataAPI.rollback(rollback_date)
-        FactorAPI.Factor.rollback(rollback_date , timeout = 10)
+        FactorAPI.Stock.rollback(rollback_date , timeout = 10)
+        FactorAPI.Market.rollback(rollback_date)
+        FactorAPI.Risk.rollback(rollback_date)
         FactorAPI.Pooling.rollback(rollback_date , timeout = 10)
         FactorAPI.Stats.rollback(rollback_date)
         FactorAPI.Hierarchy.rollback(rollback_date)

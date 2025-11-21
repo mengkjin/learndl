@@ -231,9 +231,6 @@ class _FactorCalculatorMeta(SingletonABCMeta):
         for path in sorted(PATH.fac_def.rglob('*.py')):
             module_name = '.'.join(path.relative_to(PATH.main).with_suffix('').parts)
             import_module(module_name)
-        for path in sorted(PATH.pool_def.rglob('*.py')):
-            module_name = '.'.join(path.relative_to(PATH.main).with_suffix('').parts)
-            import_module(module_name)
         cls.definition_imported = True
         
 class FactorCalculator(metaclass=_FactorCalculatorMeta):

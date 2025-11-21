@@ -3,7 +3,10 @@ from typing import Any , Literal
 from src.res.factor.util import StockFactor
 from src.res.factor.risk import TuShareCNE5_Calculator
 from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager , FmpScreenManager
-from src.res.factor.calculator import StockFactorHierarchy , StockFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater
+from src.res.factor.calculator import (
+    StockFactorHierarchy , StockFactorUpdater , MarketFactorUpdater , 
+    RiskFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater
+)
 
 class RiskModelUpdater:
     @classmethod
@@ -15,34 +18,44 @@ class RiskModelUpdater:
         TuShareCNE5_Calculator.rollback(rollback_date)
 
 class FactorCalculatorAPI:
-    Factor = StockFactorUpdater
+    Stock = StockFactorUpdater
+    Market = MarketFactorUpdater
+    Risk = RiskFactorUpdater
     Pooling = PoolingFactorUpdater
     Stats = FactorStatsUpdater
 
     @classmethod
     def update(cls , **kwargs):
-        cls.Factor.update(**kwargs)
+        cls.Stock.update(**kwargs)
+        cls.Market.update(**kwargs)
+        cls.Risk.update(**kwargs)
         cls.Pooling.update(**kwargs)
         cls.Stats.update(**kwargs)
         cls.export()
 
     @classmethod
     def rollback(cls , rollback_date : int , **kwargs):
-        cls.Factor.rollback(rollback_date , **kwargs)
+        cls.Stock.rollback(rollback_date , **kwargs)
+        cls.Market.rollback(rollback_date , **kwargs)
+        cls.Risk.rollback(rollback_date , **kwargs)
         cls.Pooling.rollback(rollback_date , **kwargs)
         cls.Stats.rollback(rollback_date , **kwargs)
         cls.export()
 
     @classmethod
     def recalculate(cls , **kwargs):
-        cls.Factor.recalculate(**kwargs)
+        cls.Stock.recalculate(**kwargs)
+        cls.Market.recalculate(**kwargs)
+        cls.Risk.recalculate(**kwargs)
         cls.Pooling.recalculate(**kwargs)
         cls.Stats.recalculate(**kwargs)
         cls.export()
 
     @classmethod
     def fix(cls , factors : list[str] , **kwargs):
-        cls.Factor.fix(factors , **kwargs)
+        cls.Stock.fix(factors , **kwargs)
+        cls.Market.fix(factors , **kwargs)
+        cls.Risk.fix(factors , **kwargs)
         cls.Pooling.fix(factors , **kwargs)
         cls.Stats.fix(factors , **kwargs)
         cls.export()

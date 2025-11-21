@@ -3,7 +3,7 @@ import pandas as pd
 from src.func.transform import winsorize , whiten
 
 from src.res.factor.calculator import CoverageFactor
-from src.res.defs.factor.level0.analyst.coverage import (
+from src.res.factor.defs.stock.level0.analyst.coverage import (
     cov_inst_3m , cov_inst_12m , cov_report_3m , cov_report_12m
 )
 

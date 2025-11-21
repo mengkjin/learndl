@@ -116,7 +116,7 @@ class TradeDataAccess(DateDataAccess):
             rets = self.get_quotes(CALENDAR.td(start_dt , -1) , end_dt , ['adjfactor' , price_symbol] , mask = False , pivot = False).reset_index('date')
             rets['adjfactor'] = rets['adjfactor'].groupby('secid').ffill().fillna(1)
             rets['adjp'] = rets[price_symbol] * rets['adjfactor']
-            rets[symbol] = rets['adjp'].pct_change()
+            rets[symbol] = rets['adjp'].pct_change(fill_method=None)
             rets = rets[rets['date'] >= start_dt].reset_index().set_index(['date' , 'secid']).sort_index()
         else:
             raise KeyError(return_type)

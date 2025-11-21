@@ -1,5 +1,3 @@
 from .factor_calc import *
-
+from .updater import *
 from .hierarchy import StockFactorHierarchy
-
-from .updater import StockFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater

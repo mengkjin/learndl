@@ -75,7 +75,7 @@ class AnalystDataAccess(DateDataAccess):
     def target_price(self , date : int , n_month : int = 12 , lag_month : int = 0):
         date = CALENDAR.cd(date , -30 * lag_month)
         df = self.get_trailing_reports(date , n_month , latest = True)
-        df = df.query('max_price.notna() | min_price.notna()')
+        df = df.query('max_price.notna() | min_price.notna()').copy()
         df['target_price'] = df.loc[:,['max_price' , 'min_price']].mean(axis = 1)
         v = df.groupby('secid')['target_price'].mean()
         return v

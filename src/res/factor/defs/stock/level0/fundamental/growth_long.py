@@ -17,8 +17,8 @@ def get_compound_growth(expression: str , date: int , n_year : int = 5 , **kwarg
     df['qtrs'] = (df['end_date'] // 10000) * 4 + df['end_date'] % 10000 // 300 
     df = df.set_index('end_date',append=True).sort_index()
 
-    # df = (df.groupby('secid')[val].pct_change() + 1) ** (4 / df.groupby('secid')['qtrs'].diff()) - 1
-    df = df.groupby('secid')[val].pct_change() * 4 / df.groupby('secid')['qtrs'].diff()
+    # df = (df.groupby('secid')[val].pct_change(fill_method=None) + 1) ** (4 / df.groupby('secid')['qtrs'].diff()) - 1
+    df = df.groupby('secid')[val].pct_change(fill_method=None) * 4 / df.groupby('secid')['qtrs'].diff()
     return df.groupby('secid').last()
 
 class ta_gro5y(GrowthFactor):

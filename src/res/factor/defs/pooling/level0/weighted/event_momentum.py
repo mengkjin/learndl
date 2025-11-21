@@ -49,7 +49,7 @@ class EventSignal:
     def factor_dates(self):
         return self.df['date'].sort_values().unique()
 
-    def relative_dates(self , start : int , end : int , trailing : int = 15) -> np.ndarray:
+    def relative_dates(self , start : int , end : int , trailing : int = 35) -> np.ndarray:
         dates = np.unique(np.concatenate([self.event_dates , self.factor_dates]))
         return CALENDAR.slice(dates , CALENDAR.td(start , -trailing) , end)
 
@@ -140,7 +140,7 @@ class SignedFactor:
         """
         calculate factor frame , with optional date weights
         """
-        if date_weights is None:
+        if date_weights is None or date_weights.empty:
             df = self.factor.frame()
         else:
             if not self.loaded or not np.isin(date_weights.index , self.date).all():
@@ -151,7 +151,7 @@ class SignedFactor:
             df = df.rename(columns = {self.factor_name : self.signed_name})
             df.loc[:,self.signed_name] *= self.direction
 
-        if date_weights is not None:
+        if date_weights is not None and not date_weights.empty:
             if isinstance(date_weights , pd.DataFrame):
                 weights = date_weights.loc[df.index.get_level_values('date') , self.signed_name].to_numpy()
             else:
@@ -167,11 +167,22 @@ class EventFactorWeight:
     momentum_time_decay : bool = True
     ignore_negative_weight : bool = True
 
-    def __init__(self , event_perf : pd.DataFrame , full_dates : np.ndarray | None = None):
+    def __init__(self , event_perf : pd.DataFrame , full_dates : np.ndarray , factor_names : list[str]):
         self.event_perf = event_perf
         self.full_dates = full_dates
+        self.factor_names = factor_names
 
     def eval(self):
+        if self.event_perf.empty:
+            self.weights = pd.DataFrame(
+                index = pd.Index([] , name = 'date') , 
+                columns = pd.Index(self.factor_names))
+            self.full_weights = pd.DataFrame(
+                index = pd.Index(self.full_dates , name = 'date') , 
+                columns = pd.Index(self.factor_names) ,
+                data = 1 / len(self.factor_names))
+            return self
+
         event_perf = self.event_perf.copy()
         event_date_metric = event_perf.sort_values('group').groupby(['event_date' , 'event' , 'factor_name']).\
             apply(self.event_date_metric).rename('weight').reset_index()
@@ -188,12 +199,10 @@ class EventFactorWeight:
             apply(self.scale_weights).reset_index(drop = True).rename(columns = {'event_date' : 'date'})
 
         weight_table = weights.pivot_table(index = 'date' , columns = 'factor_name' , values = 'weight').fillna(0)
-        self.weights = weight_table
-        if self.full_dates is not None:
-            trailing_full_dates = np.concatenate([CALENDAR.td_trailing(self.full_dates[0] , 21)[:-1] , self.full_dates])
-            self.full_weights = weight_table.reindex(trailing_full_dates).ffill(limit = 20).fillna(1 / weight_table.shape[1]).reindex(self.full_dates)
-        else:
-            self.full_weights = weight_table
+        self.weights = weight_table.loc[:,self.factor_names]
+        trailing_full_dates = np.concatenate([CALENDAR.td_trailing(self.full_dates[0] , 21)[:-1] , self.full_dates])
+        self.full_weights = weight_table.reindex(trailing_full_dates).ffill(limit = 20).fillna(1 / weight_table.shape[1]).reindex(self.full_dates)
+
         return self
 
     @classmethod
@@ -273,7 +282,7 @@ class MarketEventMomentumFactorWeight:
         if not hasattr(self , 'event_perf'):
             self.eval_event_perf(start , end)
         full_dates = CALENDAR.td_within(start , end)
-        self.event_factor_weight = EventFactorWeight(self.event_perf , full_dates).eval()
+        self.event_factor_weight = EventFactorWeight(self.event_perf , full_dates , self.factor_names).eval()
         return self
 
     def weighted_factor(self , dates : np.ndarray , name : str = 'weighted_factor') -> StockFactor:

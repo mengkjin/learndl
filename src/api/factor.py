@@ -59,17 +59,39 @@ class FactorAPI:
         def rollback(cls , rollback_date : int = -1):
             wrap_update(StockFactorHierarchy.export , 'export factor table')
 
-    class Factor:
+    class Stock:
         @classmethod
         def update(cls , timeout : int = -1):
             # update stock factor
-            wrap_update(FactorCalculatorAPI.Factor.update , 'update stock factors' , timeout = timeout)
+            wrap_update(FactorCalculatorAPI.Stock.update , 'update stock factors' , timeout = timeout)
 
         @classmethod
         def rollback(cls , rollback_date : int , timeout : int = -1):
             # update stock factor
-            wrap_update(FactorCalculatorAPI.Factor.rollback , 'rollback stock factors' , rollback_date = rollback_date , timeout = timeout)
+            wrap_update(FactorCalculatorAPI.Stock.rollback , 'rollback stock factors' , rollback_date = rollback_date , timeout = timeout)
 
+    class Market:
+        @classmethod
+        def update(cls):
+            # update market factor
+            wrap_update(FactorCalculatorAPI.Market.update , 'update market factors')
+
+        @classmethod
+        def rollback(cls , rollback_date : int):
+            # update market factor
+            wrap_update(FactorCalculatorAPI.Market.rollback , 'rollback market factors' , rollback_date = rollback_date)
+
+    class Risk:
+        @classmethod
+        def update(cls):
+            # update risk factor
+            wrap_update(FactorCalculatorAPI.Risk.update , 'update risk factors')
+
+        @classmethod
+        def rollback(cls , rollback_date : int):
+            # update risk factor
+            wrap_update(FactorCalculatorAPI.Risk.rollback , 'rollback risk factors' , rollback_date = rollback_date)
+    
     class Pooling:
         @classmethod
         def update(cls , timeout : int = -1):
@@ -83,14 +105,14 @@ class FactorAPI:
 
     class Stats:
         @classmethod
-        def update(cls , timeout : int = -1):
+        def update(cls):
             # update factor stats
-            wrap_update(FactorCalculatorAPI.Stats.update , 'update factor stats' , timeout = timeout)
+            wrap_update(FactorCalculatorAPI.Stats.update , 'update factor stats')
 
         @classmethod
-        def rollback(cls , rollback_date : int , timeout : int = -1):
+        def rollback(cls , rollback_date : int):
             # update factor stats
-            wrap_update(FactorCalculatorAPI.Stats.rollback , 'rollback factor stats' , rollback_date = rollback_date , timeout = timeout)
+            wrap_update(FactorCalculatorAPI.Stats.rollback , 'rollback factor stats' , rollback_date = rollback_date)
 
     class Test:
         @staticmethod

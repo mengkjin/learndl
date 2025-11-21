@@ -4,7 +4,7 @@ import polars as pl
 import time
 
 from dataclasses import dataclass
-from typing import Any , Generator , Callable
+from typing import Any , Generator , Callable , Literal
 
 from .factor_calc import FactorCalculator
 
@@ -14,92 +14,150 @@ from src.data import DATAVENDOR
 from src.func.parallel import parallels
 from src.func.singleton import SingletonMeta
 
-__all__ = ['StockFactorUpdater' , 'PoolingFactorUpdater' , 'FactorStatsUpdater']
+__all__ = ['StockFactorUpdater' , 'MarketFactorUpdater' , 'RiskFactorUpdater' , 'PoolingFactorUpdater' , 'FactorStatsUpdater']
 
 CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 
-def iter_calcs(all = True , selected_factors : list[str] | None = None ,
-               is_pooling : bool | None = None , updatable : bool | None = True , **kwargs) -> Generator[FactorCalculator , None , None]:
-    """iterate over calculators"""
-    return FactorCalculator.iter_calculators(all , selected_factors , updatable = updatable , is_pooling = is_pooling , **kwargs)
-
-def eval_coverage(selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:
-    """
-    update update jobs for all factors between start and end date
-    **kwargs:
-        factor_name : str | None = None
-        level : str | None = None 
-        file_name : str | None = None
-        category0 : str | None = None 
-        category1 : str | None = None 
-    """
-    dfs : list[pd.DataFrame] = []
-
-    for calc in iter_calcs(selected_factors = selected_factors , **kwargs):
-        dates = calc.stored_dates()
-        def load_fac(date : int):
-            factor = calc.eval_factor(date)
-            valid_count = factor.loc[:,calc.factor_name].notna().sum()
-            return pd.DataFrame({'factor' : [calc.factor_name] , 'date' : [date] , 'valid_count' : [valid_count]})
-        calls = [(load_fac , (date , ) , {}) for date in dates]
-        factor_coverage = parallels(calls , method = 'threading')
-        dfs.extend(list(factor_coverage.values()))
-
-    df = pd.concat(dfs)
-    grouped = df.groupby(by='factor')
-    stats : dict[str , pd.Series | Any] = {}
-    stats['mean'] = grouped.mean()['valid_count']
-    stats['min'] = grouped.min()['valid_count']
-    stats['max'] = grouped.max()['valid_count']
-    stats['std'] = grouped.std()['valid_count']
-    agg = pd.concat([stats[key].rename(key) for key in stats.keys()], axis = 1)
-    df.to_excel('factor_coverage.xlsx' , sheet_name='full coverage')
-    agg.to_excel('factor_coverage_agg.xlsx' , sheet_name='coverage_agg_stats')
-    return df
-
-@dataclass  
-class FactorUpdateJob:
-    """single factor update job"""
-    calc : FactorCalculator
-    date : int
-
-    def __post_init__(self):
-        self.done = False
-        
-    @property
-    def level(self) -> str: 
-        """level of the factor"""
-        return self.calc.level
-    @property
-    def factor_name(self) -> str: 
-        """name of the factor"""
-        return self.calc.factor_name
-    @property
-    def sort_key(self) -> Any: 
-        """sort key of the job : (level , date , factor_name)"""
-        return (self.level , self.date , self.factor_name)
-    def do(self , show_success : bool = False , overwrite = False) -> None:
-        """do the job"""
-        self.done = self.calc.update_day_factor(
-            self.date , overwrite = overwrite , show_success = show_success , catch_errors = CATCH_ERRORS)
-    
-class StockFactorUpdater(metaclass=SingletonMeta):
+class BaseFactorUpdater(metaclass=SingletonMeta):
     """manager of factor update jobs"""
-    jobs : list[FactorUpdateJob] = []
     multi_thread : bool = True
+    update_type : Literal['stock' , 'pooling' , 'risk' , 'market' , 'stats']
     
     def __repr__(self):
-        return f'{self.__class__.__name__}({len(self.jobs)} jobs)'
+        return f'{self.__class__.__name__}()'
 
     @classmethod
-    def calculators(cls) -> list[FactorCalculator]:
+    def calculators(cls , all = True , selected_factors : list[str] | None = None , updatable = True , **kwargs) -> list[FactorCalculator]:
         """get all calculators"""
-        return list(iter_calcs(is_pooling = False))
+        meta_type = None if cls.update_type == 'stats' else cls.update_type
+        return list(FactorCalculator.iter_calculators(all , selected_factors , updatable = updatable , meta_type = meta_type , **kwargs))
+
+    @classmethod
+    def grouped_calculators(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> list[tuple[str , list[FactorCalculator]]]:
+        """group jobs by level and date"""
+        groups : dict[str , list[FactorCalculator]] = {}
+        for calc in cls.calculators(all , selected_factors , **kwargs):
+            if calc.level not in groups:
+                groups[calc.level] = []
+            groups[calc.level].append(calc)
+        return sorted(groups.items() , key = lambda x: x[0])
 
     @classmethod
     def factors(cls) -> list[str]:
         """get all factors"""
         return [calc.factor_name for calc in cls.calculators()]
+
+    @classmethod
+    def preview_jobs(cls , start : int | None = None , end : int | None = None , 
+                     all = True , selected_factors : list[str] | None = None ,
+                     overwrite = False , **kwargs) -> None:
+        """preview update jobs for all factors between start and end date"""
+        if end is None: 
+            end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
+
+        for calc in cls.calculators(all , selected_factors , **kwargs):
+            print(f'{calc.level} : {calc.factor_name} at {start} ~ {end}')   
+
+    @classmethod
+    def process_jobs(cls , start : int | None = None , end : int | None = None , 
+                     all = True , selected_factors : list[str] | None = None ,
+                     overwrite = False , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
+        """process update jobs"""
+        raise NotImplementedError(f'process_jobs is not implemented for {cls.__class__.__name__}')
+               
+    @classmethod
+    def update(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
+        """update pooling factor data according"""
+        cls.process_jobs(start = start , end = end , all = True , verbosity = verbosity , timeout = timeout)
+
+    @classmethod
+    def recalculate(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
+        """update pooling factor data according"""
+        assert start is not None and end is not None , 'start and end are required for recalculate factors'
+        cls.process_jobs(start = start , end = end , all = True , overwrite = True , verbosity = verbosity , timeout = timeout)
+
+    @classmethod
+    def rollback(cls , rollback_date : int , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
+        CALENDAR.check_rollback_date(rollback_date)
+        start = CALENDAR.td(rollback_date , 1)
+        cls.process_jobs(start = start , all = True , overwrite = True , verbosity = verbosity , timeout = timeout)
+        
+    @classmethod
+    def fix(cls , factors : list[str] , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
+        assert factors , 'factors are required for fix'
+        print(f'Fixing {(cls.update_type.capitalize() + " ") if cls.update_type else ''}Factor Calculations: {factors}')
+        cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , verbosity = verbosity , timeout = timeout)
+
+
+    @classmethod
+    def eval_coverage(cls , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:
+        """
+        update update jobs for all factors between start and end date
+        **kwargs:
+            factor_name : str | None = None
+            level : str | None = None 
+            file_name : str | None = None
+            category0 : str | None = None 
+            category1 : str | None = None 
+        """
+        dfs : list[pd.DataFrame] = []
+
+        for calc in cls.calculators(selected_factors = selected_factors , **kwargs):
+            dates = calc.stored_dates()
+            def load_fac(date : int):
+                factor = calc.eval_factor(date)
+                valid_count = factor.loc[:,calc.factor_name].notna().sum()
+                return pd.DataFrame({'factor' : [calc.factor_name] , 'date' : [date] , 'valid_count' : [valid_count]})
+            calls = [(load_fac , (date , ) , {}) for date in dates]
+            factor_coverage = parallels(calls , method = cls.multi_thread)
+            dfs.extend(list(factor_coverage.values()))
+
+        df = pd.concat(dfs)
+        grouped = df.groupby(by='factor')
+        stats : dict[str , pd.Series | Any] = {}
+        stats['mean'] = grouped.mean()['valid_count']
+        stats['min'] = grouped.min()['valid_count']
+        stats['max'] = grouped.max()['valid_count']
+        stats['std'] = grouped.std()['valid_count']
+        agg = pd.concat([stats[key].rename(key) for key in stats.keys()], axis = 1)
+        df.to_excel('factor_coverage.xlsx' , sheet_name='full coverage')
+        agg.to_excel('factor_coverage_agg.xlsx' , sheet_name='coverage_agg_stats')
+        return df
+
+class StockFactorUpdater(BaseFactorUpdater):
+    """manager of factor update jobs"""
+    jobs : list['OneUpdateJob'] = []
+    multi_thread : bool = True
+    update_type = 'stock'
+    
+    def __repr__(self):
+        return f'{self.__class__.__name__}({len(self.jobs)} jobs)'
+    
+    @dataclass  
+    class OneUpdateJob:
+        """single factor update job"""
+        calc : FactorCalculator
+        date : int
+
+        def __post_init__(self):
+            self.done = False
+            
+        @property
+        def level(self) -> str: 
+            """level of the factor"""
+            return self.calc.level
+        @property
+        def factor_name(self) -> str: 
+            """name of the factor"""
+            return self.calc.factor_name
+        @property
+        def sort_key(self) -> Any: 
+            """sort key of the job : (level , date , factor_name)"""
+            return (self.level , self.date , self.factor_name)
+        def do(self , show_success : bool = False , overwrite = False) -> None:
+            """do the job"""
+            self.done = self.calc.update_day_factor(
+                self.date , overwrite = overwrite , show_success = show_success , catch_errors = CATCH_ERRORS)
 
     @classmethod
     def levels(cls) -> np.ndarray: 
@@ -131,16 +189,16 @@ class StockFactorUpdater(metaclass=SingletonMeta):
         """sort jobs by sort_key"""
         cls.jobs.sort(key=lambda x: x.sort_key)
     @classmethod
-    def append(cls , job : FactorUpdateJob) -> None: 
+    def append(cls , job : OneUpdateJob) -> None: 
         """append a job"""
         cls.jobs.append(job)
     @classmethod
-    def grouped_jobs(cls) -> Generator[tuple[tuple[str , int] , list[FactorUpdateJob]] , None , None]:
+    def grouped_jobs(cls) -> Generator[tuple[tuple[str , int] , list[OneUpdateJob]] , None , None]:
         """group jobs by level and date"""
         for level , date in cls.groups():
             yield (level , date) , cls.filter_jobs(cls.jobs , level , date)
     @staticmethod
-    def filter_jobs(jobs : list[FactorUpdateJob] , level : str , date : int) -> list[FactorUpdateJob]:
+    def filter_jobs(jobs : list[OneUpdateJob] , level : str , date : int) -> list[OneUpdateJob]:
         """filter jobs by level and date"""
         return [job for job in jobs if job.level == level and job.date == date]
 
@@ -148,7 +206,7 @@ class StockFactorUpdater(metaclass=SingletonMeta):
     def unfinished_factors(cls , date : int | None = None) -> dict[int , list[FactorCalculator]]:
         """get unfinished factors"""
         factors : dict[int , list[FactorCalculator]] = {}
-        for calc in iter_calcs(updatable = True , is_pooling = False):
+        for calc in cls.calculators():
             if date is None:
                 for d in calc.target_dates():
                     if d not in factors:
@@ -182,29 +240,27 @@ class StockFactorUpdater(metaclass=SingletonMeta):
         if end is None: 
             end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
 
-        for calc in iter_calcs(all , selected_factors , is_pooling = False , **kwargs):
+        for calc in cls.calculators(all , selected_factors , **kwargs):
             for date in calc.target_dates(start , end , overwrite = overwrite):
-                cls.append(FactorUpdateJob(calc , date))
+                cls.append(cls.OneUpdateJob(calc , date))
 
         if len(cls.jobs) == 0:
-            print('There is no Factor Update Jobs to Proceed...')
+            print('There is no Stock Factor Update Jobs to Proceed...')
         else:
             levels , dates = cls.levels() , cls.dates()
-            print(f'Finish Collecting {len(cls.jobs)} Factor Update Jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
-    
-    @classmethod
-    def clear_jobs(cls , date : int , verbosity : int = 1) -> None:
-        """clear jobs of a given date"""
-        if verbosity > 0:
-            print(f'Clearing factors of {date}')
+            print(f'Finish Collecting {len(cls.jobs)} Stock Factor Update Jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
 
-        removed_factors = []
-        for calc in iter_calcs(is_pooling = False):
-            cleared = calc.clear_stored_data(date)
-            if cleared:
-                removed_factors.append(calc.factor_name)
-        if verbosity > 0:
-            print(f'Removed {len(removed_factors)} factors')
+    @classmethod
+    def preview_jobs(cls , start : int | None = None , end : int | None = None , 
+                     all = True , selected_factors : list[str] | None = None ,
+                     overwrite = False , **kwargs) -> None:
+        """preview update jobs for all factors between start and end date"""
+        cls.collect_jobs(start , end , all , selected_factors , overwrite)
+
+        for (level , date) , jobs in cls.grouped_jobs():
+            for job in jobs:
+                print(f'{level} : {job.factor_name} at {date}')
+        
 
     @classmethod
     def process_jobs(cls , start : int | None = None , end : int | None = None ,
@@ -225,9 +281,6 @@ class StockFactorUpdater(metaclass=SingletonMeta):
         if len(cls.jobs) == 0: 
             return
 
-        def do_job(job : FactorUpdateJob): 
-            job.do(verbosity > 2 , overwrite)
-
         start_time = time.time()
         timeout = timeout * 3600
         for (level , date) , jobs in cls.grouped_jobs():
@@ -238,94 +291,32 @@ class StockFactorUpdater(metaclass=SingletonMeta):
                     print(f'Updating {level} at {date} : {len(keys)} factors')
                 else:
                     print(f'Updating {level} at {date} : {keys}')
-            calls = [(do_job , (job , ) , {}) for job in jobs]
+            calls = [(job.do , (verbosity > 2 , overwrite) , {}) for job in jobs]
             parallels(calls , keys = keys , method = cls.multi_thread)
             failed_jobs = [job for job in jobs if not job.done]
             if verbosity > 0:
-                print(f'Factor Update of {level} at {date} Done: {len(jobs) - len(failed_jobs)} / {len(jobs)}')
+                print(f'Stock Factor Update of {level} at {date} Done: {len(jobs) - len(failed_jobs)} / {len(jobs)}')
                 if failed_jobs: 
-                    print(f'Failed Factors: {[job.factor_name for job in failed_jobs]}')
+                    print(f'Failed Stock Factors: {[job.factor_name for job in failed_jobs]}')
             if auto_retry and failed_jobs:
                 if verbosity > 0: 
-                    print(f'Auto Retry Failed Factors...')
-                calls = [(do_job , (job , ) , {}) for job in failed_jobs]
+                    print(f'Auto Retry Failed Stock Factors...')
+                calls = [(job.do , (verbosity > 2 , overwrite) , {}) for job in failed_jobs]
                 parallels(calls , method = len(failed_jobs) > 10)
                 failed_again_jobs = [job for job in failed_jobs if not job.done]
                 if failed_again_jobs:
-                    print(f'Failed Factors Again: {[job.factor_name for job in failed_again_jobs]}')
+                    print(f'Failed Stock Factors Again: {[job.factor_name for job in failed_again_jobs]}')
             if timeout > 0 and (time.time() - start_time) > timeout:
                 Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
                 Logger.warning(f'Terminated at level {level} at date {date}')
                 break
         [cls.jobs.remove(job) for job in jobs if job.done]
 
-    @classmethod
-    def update(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1) -> None:
-        """update factor data according"""
-        cls.process_jobs(start , end , all = True , verbosity = verbosity , timeout = timeout)
-
-    @classmethod
-    def recalculate(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1) -> None:
-        """update factor data according"""
-        assert start is not None and end is not None , 'start and end are required for recalculate factors'
-        cls.process_jobs(start , end , verbosity = verbosity , overwrite = True , timeout = timeout)
-        
-    @classmethod
-    def rollback(cls , rollback_date : int , verbosity : int = 1 , timeout : int = -1) -> None:
-        CALENDAR.check_rollback_date(rollback_date)
-        start = CALENDAR.td(rollback_date , 1)
-        cls.process_jobs(start , verbosity = verbosity , overwrite = True , timeout = timeout)
-        
-    @classmethod
-    def fix(cls , factors : list[str] , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1) -> None:
-        assert factors , 'factors are required for fix'
-        print(f'Fixing Factor Calculations: {factors}')
-        cls.process_jobs(start , end , selected_factors = factors , verbosity = verbosity , overwrite = True , timeout = timeout)
-
-class PoolingFactorUpdater(metaclass=SingletonMeta):
+class MarketFactorUpdater(BaseFactorUpdater):
     """manager of factor update jobs"""
     multi_thread : bool = False
-    
-    def __repr__(self):
-        return f'{self.__class__.__name__}()'
-
-    @classmethod
-    def calculators(cls) -> list[FactorCalculator]:
-        """get all calculators"""
-        return list(iter_calcs(is_pooling = True))
-
-    @classmethod
-    def factors(cls) -> list[str]:
-        """get all factors"""
-        return [calc.factor_name for calc in cls.calculators()]
-
-    @classmethod
-    def grouped_calculators(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> list[tuple[str , list[FactorCalculator]]]:
-        """group jobs by level and date"""
-        calculators = list(iter_calcs(all , selected_factors , is_pooling = True , **kwargs))
-        groups : dict[str , list[FactorCalculator]] = {}
-        for calc in calculators:
-            if calc.level not in groups:
-                groups[calc.level] = []
-            groups[calc.level].append(calc)
-        return sorted(groups.items() , key = lambda x: x[0])
-
-    @classmethod
-    def preview_jobs(cls , start : int | None = None , end : int | None = None , 
-                     all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , **kwargs) -> None:
-        """preview update jobs for all factors between start and end date"""
-        selected_factors = selected_factors or []
-        
-        if not (all or selected_factors or kwargs): 
-            return
-        if end is None: 
-            end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
-
-        for level , calculators in cls.grouped_calculators(all , selected_factors , **kwargs):
-            for calc in calculators:
-                print(f'{level} : {calc.factor_name} at {start} ~ {end}')
-        
+    update_type = 'market'
+  
     @classmethod
     def process_jobs(cls , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
@@ -333,23 +324,53 @@ class PoolingFactorUpdater(metaclass=SingletonMeta):
         """
         update update jobs for all factors between start and end date
         timeout : timeout for processing jobs in hours , if <= 0 , no timeout
-        **kwargs:
-            factor_name : str | None = None
-            level : str | None = None 
-            file_name : str | None = None
-            category0 : str | None = None 
-            category1 : str | None = None 
         """
-        selected_factors = selected_factors or []
+        if end is None: 
+            end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
         
-        if not (all or selected_factors or kwargs): 
+        grouped_calculators = cls.grouped_calculators(all , selected_factors , **kwargs)
+        if len(grouped_calculators) == 0:
+            print('There is no Market Factor Update Jobs to Proceed...')
             return
+        else:
+            n_jobs = len(grouped_calculators)
+            levels = sorted(list(set([level for level , _ in grouped_calculators])))
+            print(f'Finish Collecting {n_jobs} Market Factor Update Jobs , levels: {levels} , number of factors: {len(grouped_calculators)}')
+
+        start_time = time.time()
+        timeout = timeout * 3600
+        for level , calculators in grouped_calculators:
+            for calc in calculators:
+                if verbosity > 0:
+                    print(f'Updating {level} Market Factor : {calc.factor_name} at {start} ~ {end}')
+                calc.update_all_factors(start = start , end = end , overwrite = overwrite , verbose = verbosity > 1)
+
+                if timeout > 0 and (time.time() - start_time) > timeout:
+                    Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
+                    Logger.warning(f'Terminated at level {level} , factor {calc.factor_name}')
+                    break  
+
+
+class PoolingFactorUpdater(BaseFactorUpdater):
+    """manager of factor update jobs"""
+    multi_thread : bool = False
+    update_type = 'pooling'
+         
+    @classmethod
+    def process_jobs(cls , start : int | None = None , end : int | None = None , 
+                     all = True , selected_factors : list[str] | None = None ,
+                     overwrite = False , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
+        """
+        update update jobs for all factors between start and end date
+        timeout : timeout for processing jobs in hours , if <= 0 , no timeout
+        """
         if end is None: 
             end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
         
         grouped_calculators = cls.grouped_calculators(all , selected_factors , **kwargs)
         if len(grouped_calculators) == 0:
             print('There is no Pooling Factor Update Jobs to Proceed...')
+            return
         else:
             n_jobs = len(grouped_calculators)
             levels = sorted(list(set([level for level , _ in grouped_calculators])))
@@ -360,61 +381,43 @@ class PoolingFactorUpdater(metaclass=SingletonMeta):
         for level , calculators in grouped_calculators:
             for calc in calculators:
                 if verbosity > 0:
-                    print(f'Updating {level} : {calc.factor_name} at {start} ~ {end}')
+                    print(f'Updating {level} Pooling Factor : {calc.factor_name} at {start} ~ {end}')
                 calc.update_all_factors(start = start , end = end , overwrite = overwrite , verbose = verbosity > 1)
 
                 if timeout > 0 and (time.time() - start_time) > timeout:
                     Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
                     Logger.warning(f'Terminated at level {level} , factor {calc.factor_name}')
-                    break
-                
+                    break  
+
+class RiskFactorUpdater(BaseFactorUpdater):
+    """manager of factor update jobs"""
+    update_type = 'risk'
     
     @classmethod
-    def update(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
-        """update pooling factor data according"""
-        cls.process_jobs(start = start , end = end , all = True , verbosity = verbosity , timeout = timeout)
+    def preview_jobs(cls , start : int | None = None , end : int | None = None , 
+                     all = True , selected_factors : list[str] | None = None ,
+                     overwrite = False , **kwargs) -> None:
+        raise NotImplementedError(f'no job will be done for {cls.__class__.__name__}')
 
     @classmethod
-    def recalculate(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
-        """update pooling factor data according"""
-        assert start is not None and end is not None , 'start and end are required for recalculate factors'
-        cls.process_jobs(start = start , end = end , all = True , overwrite = True , verbosity = verbosity , timeout = timeout)
-
-    @classmethod
-    def rollback(cls , rollback_date : int , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
-        CALENDAR.check_rollback_date(rollback_date)
-        start = CALENDAR.td(rollback_date , 1)
-        cls.process_jobs(start = start , all = True , overwrite = True , verbosity = verbosity , timeout = timeout)
-        
-    @classmethod
-    def fix(cls , factors : list[str] , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
-        assert factors , 'factors are required for fix'
-        print(f'Fixing Pooling Factor Calculations: {factors}')
-        cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , verbosity = verbosity , timeout = timeout)
-
-class FactorStatsUpdater(metaclass=SingletonMeta):
+    def process_jobs(cls , start : int | None = None , end : int | None = None , 
+                     all = True , selected_factors : list[str] | None = None ,
+                     overwrite = False , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
+        """no job will be done for Risk Factor"""
+        return        
+    
+class FactorStatsUpdater(BaseFactorUpdater):
     """manager of factor stats update jobs"""
     multi_thread : bool = False
-    
-    def __repr__(self):
-        return f'{self.__class__.__name__}()'
-
+    update_type = 'stats'
+        
     @classmethod
-    def calculators(cls) -> list[FactorCalculator]:
-        """get all calculators"""
-        return list(iter_calcs())
-
-    @classmethod
-    def factors(cls) -> list[str]:
-        """get all factors"""
-        return [calc.factor_name for calc in cls.calculators()]
-    
-    @classmethod
-    def update_factor_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , 
-                            all = True , selected_factors : list[str] | None = None , **kwargs):
+    def process_jobs(cls , start : int | None = None , end : int | None = None , 
+                            all = True , selected_factors : list[str] | None = None ,
+                            overwrite = False , verbosity : int = 1 , **kwargs):
         """update all factor stats"""
         func_calls : dict[int , list[tuple[Callable , tuple[Any,...] , dict[str , Any] | None]]] = {}
-        for calc in iter_calcs(all , selected_factors , **kwargs):
+        for calc in cls.calculators(all , selected_factors , **kwargs):
             target_dates = calc.stats_target_dates(start , end , overwrite)
             for stats_type , dates in target_dates.items():
                 func  = getattr(calc , f'update_{stats_type}_stats')
@@ -434,32 +437,8 @@ class FactorStatsUpdater(metaclass=SingletonMeta):
             n_calls = len(calls)
             n_dates = sum([len(args[0]) for _ , args , _ in calls])
             print(f'Update Factor Stats of Year {year} : {n_calls} function calls , {n_dates} dates')
-            parallels(calls , method = 'forloop')
+            parallels(calls , method = cls.multi_thread)
             total_calls += n_calls
             total_dates += n_dates
 
-        print(f'Factor Stats Update Done: {len(func_calls)} Years , {total_calls} function calls , {total_dates} dates')
-
-    @classmethod
-    def update(cls , start : int | None = None , end : int | None = None , **kwargs) -> None:
-        """update factor stats"""
-        cls.update_factor_stats(start , end)
-
-    @classmethod
-    def recalculate(cls , start : int | None = None , end : int | None = None , **kwargs) -> None:
-        """recalculate factor stats"""
-        assert start is not None and end is not None , 'start and end are required for recalculate factors'
-        cls.update_factor_stats(start , end , overwrite = True)
-
-    @classmethod
-    def rollback(cls , rollback_date : int , **kwargs) -> None:
-        """update factor stats rollback from a given date"""
-        CALENDAR.check_rollback_date(rollback_date)
-        start = CALENDAR.td(rollback_date , 1)
-        cls.update_factor_stats(start , overwrite = True)
-        
-    @classmethod
-    def fix(cls , factors : list[str] , start : int | None = None , end : int | None = None , **kwargs) -> None:
-        assert factors , 'factors are required for fix'
-        print(f'Fixing Factor Stats: {factors}')
-        cls.update_factor_stats(start , end , overwrite = True , selected_factors = factors)
+        print(f'Factor Stats Update Done: {len(func_calls)} Years , {total_calls} function calls , {total_dates} dates')           
