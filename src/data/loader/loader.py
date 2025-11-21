@@ -27,12 +27,7 @@ class BlockLoader:
 
     @property
     def src_path(self):
-        if self.db_src == 'factor':
-            return PATH.factor
-        elif self.db_src == 'pred':
-            return PATH.preds
-        else:
-            return PATH.database.joinpath(f'DB_{self.db_src}')
+        return DB.src_path(self.db_src)
 
     def load(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> DataBlock:
         """Load block data , alias for load_block"""

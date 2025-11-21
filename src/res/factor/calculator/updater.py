@@ -399,6 +399,16 @@ class FactorStatsUpdater:
     
     def __repr__(self):
         return f'{self.__class__.__name__}()'
+
+    @classmethod
+    def calculators(cls) -> list[FactorCalculator]:
+        """get all calculators"""
+        return list(iter_calcs())
+
+    @classmethod
+    def factors(cls) -> list[str]:
+        """get all factors"""
+        return [calc.factor_name for calc in cls.calculators()]
     
     @classmethod
     def update_factor_stats(cls , start : int | None = None , end : int | None = None , overwrite = False , 

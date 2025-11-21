@@ -13,7 +13,7 @@ from src.proj import MACHINE , PATH
 from .code_mapper import secid_to_secid
 
 __all__ = [
-    'by_name' , 'by_date' , 'iter_db_srcs' ,
+    'by_name' , 'by_date' , 'iter_db_srcs' , 'src_path' ,
     'save' , 'load' , 'load_multi' , 'rename' , 'path' , 'dates' , 'min_date' , 'max_date' ,
     'file_dates' , 'dir_dates' , 'save_df' , 'load_df' , 
     'block_path' , 'norm_path' ,
@@ -31,7 +31,7 @@ DB_BY_DATE  : list[str] = ['models' , 'sellside' , 'exposure' ,
                            ]
 
 EXPORT_BY_NAME : list[str] = ['market_factor' , 'factor_stats_daily' , 'factor_stats_weekly' , 'pooling_weight']
-EXPORT_BY_DATE : list[str] = ['pred' , 'factor']
+EXPORT_BY_DATE : list[str] = ['stock_factor' , 'model_prediction']
 for name in EXPORT_BY_NAME + EXPORT_BY_DATE:
     assert name not in DB_BY_NAME + DB_BY_DATE , f'{name} must not in DB_BY_NAME and DB_BY_DATE'
 
@@ -205,18 +205,20 @@ def _db_parent(db_src : str , db_key : str | None = None) -> Path:
     """get database parent _db_path"""
     if db_src in DB_BY_NAME + DB_BY_DATE:
         parent = PATH.database.joinpath(f'DB_{db_src}')
-    elif db_src == 'pred':
-        parent = PATH.preds
-    elif db_src == 'factor':
-        parent = PATH.factor
-    elif db_src in EXPORT_BY_DATE + EXPORT_BY_NAME:
+    elif db_src in ['pred' , 'factor']:
+        parent = getattr(PATH , db_src)
+    elif db_src in EXPORT_BY_NAME + EXPORT_BY_DATE:
         parent = PATH.export.joinpath(db_src)
     else:
-        raise ValueError(f'{db_src} not in {DB_BY_NAME} and {DB_BY_DATE} , or not pred or factor or {EXPORT_BY_DATE} or {EXPORT_BY_NAME}')
-    if db_key is None:
+        raise ValueError(f'{db_src} not in {DB_BY_NAME} / {DB_BY_DATE} / {EXPORT_BY_NAME} / {EXPORT_BY_DATE} / pred / factor')
+    if db_key is None or db_src in DB_BY_NAME + EXPORT_BY_NAME:
         return parent
     else:
         return parent.joinpath(db_key)
+
+def src_path(db_src : str) -> Path:
+    """get database source path"""
+    return _db_parent(db_src)
 
 def _db_path(db_src , db_key , date = None , use_alt = False) -> Path:
     """
@@ -230,14 +232,12 @@ def _db_path(db_src , db_key , date = None , use_alt = False) -> Path:
     date: int, default None
         date to be saved, if the db is by date, date is required
     """
+    parent = _db_parent(db_src , db_key)
     if db_src in DB_BY_NAME + EXPORT_BY_NAME:
-        new_path = _db_parent(db_src).joinpath(f'{db_key}.{SAVE_OPT_DB}')
-    elif db_src in DB_BY_DATE + EXPORT_BY_DATE:
-        assert date is not None , f'{db_src} use date type but date is None'
-        parent = _db_parent(db_src , db_key)
-        new_path = parent.joinpath(str(int(date) // 10000) , f'{db_key}.{str(date)}.{SAVE_OPT_DB}')
+        new_path = parent.joinpath(f'{db_key}.{SAVE_OPT_DB}')
     else:
-        raise ValueError(f'{db_src} not in {DB_BY_NAME} and {DB_BY_DATE} and {EXPORT_BY_NAME} and {EXPORT_BY_DATE}')
+        assert date is not None , f'{db_src} use date type but date is None'
+        new_path = parent.joinpath(str(int(date) // 10000) , f'{db_key}.{str(date)}.{SAVE_OPT_DB}')
     if not new_path.exists() and db_src in _db_alternatives and use_alt:
         alt_path = _db_path(_db_alternatives[db_src] , db_key , date , use_alt = False)
         if alt_path.exists(): 

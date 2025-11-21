@@ -125,7 +125,7 @@ class PortfolioOptimizationConfig:
 class _StockFactorDefinitionMetaType:
     def __get__(self,instance,owner) -> list[str]:
         return [
-            'factor' , 'market_factor' , 'risk_factor'
+            'stock' , 'market' , 'risk' , 'pooling'
         ]
 
     def __set__(self,instance,value):
@@ -179,17 +179,17 @@ class StockFactorDefinitionConfig:
         return self._CAT1
 
     @classmethod
-    def cat0_to_meta(cls , category0 : str) -> Literal['factor' , 'market_factor' , 'risk_factor' , 'pooling']:
+    def cat0_to_meta(cls , category0 : str) -> Literal['stock' , 'market' , 'risk' , 'pooling']:
         if category0 not in cls._CAT0:
             raise CategoryError(f'category0 is should be in {cls._CAT0}, but got {category0}')
         if category0 == 'market':
-            return 'market_factor'
+            return 'market'
         elif category0 == 'risk':
-            return 'risk_factor'
+            return 'risk'
         elif category0 == 'pooling':
             return 'pooling'
         else:
-            return 'factor'
+            return 'stock'
             
     @classmethod
     def cat0_to_cat1(cls , category0 : str) -> list[str] | None:

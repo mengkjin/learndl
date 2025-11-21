@@ -41,7 +41,7 @@ class PATH:
 
     hidden      = export.joinpath('hidden_feature')
     factor      = export.joinpath('stock_factor')
-    preds       = export.joinpath('model_prediction')
+    pred        = export.joinpath('model_prediction')
     fmp         = export.joinpath('factor_model_port')
     fmp_account = export.joinpath('factor_model_account')
     trade_port  = export.joinpath('trading_portfolio')

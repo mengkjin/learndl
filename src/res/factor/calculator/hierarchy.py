@@ -1,7 +1,7 @@
 import pandas as pd
 
 from itertools import combinations
-from typing import Generator , Iterator , Type
+from typing import Generator , Iterator , Type , Literal
 
 from .factor_calc import FactorCalculator
 
@@ -49,11 +49,17 @@ class StockFactorHierarchy:
         cls.initialized = True
     
     @classmethod
-    def export_factor_list(cls) -> None:
+    def export(cls) -> None:
         '''export factor list to csv'''
         if MACHINE.server:
-            df = cls().factor_df()
+            df = cls.full_factor_table()
             df.to_csv(PATH.rslt_factor.joinpath('factor_list.csv'))
+
+    @classmethod
+    def full_factor_table(cls) -> pd.DataFrame:
+        '''export factor stats to csv'''
+        df = cls.factor_df().merge(cls.factor_stats(), on = 'factor_name')
+        return df
 
     @classmethod
     def factor_df(cls , **kwargs) -> pd.DataFrame:
@@ -62,18 +68,61 @@ class StockFactorHierarchy:
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
-        meta_type : Literal['market_factor' , 'factor'] | None = None
+        meta_type : Literal['market' , 'stock' , 'risk' , 'pooling'] | None = None
         category0 : str | None = None 
         category1 : str | None = None 
         '''
-        cls.initialize()
-        attr_list = ['level' , 'file_name' , 'factor_name' , 'init_date' , 'meta_type' , 'category0' , 'category1' , 'description' , 'min_date' , 'max_date']
+        attr_list = ['meta_type' , 'level' , 'factor_name' , 'init_date' , 'final_date' , 
+        'file_name' , 'category0' , 'category1' , 'description' , 'min_date' , 'max_date']
         df_datas = []
         for calc in FactorCalculator.iter_calculators(**kwargs): 
             attrs = [getattr(calc , a) for a in attr_list]
             df_datas.append(attrs)
         df = pd.DataFrame(df_datas, columns = pd.Index(attr_list))
         return df
+
+    @classmethod
+    def factor_stats(cls , **kwargs) -> pd.DataFrame:
+        '''
+        return a DataFrame of all factors with given attributes
+        factor_name : str | None = None
+        level : str | None = None 
+        file_name : str | None = None
+        meta_type : Literal['market' , 'stock' , 'risk' , 'pooling'] | None = None
+        category0 : str | None = None 
+        category1 : str | None = None 
+        '''
+        dfs = []
+        for calc in FactorCalculator.iter_calculators(**kwargs): 
+            daily_stats = calc.daily_stats()
+            weekly_stats = calc.weekly_stats()
+            if daily_stats.empty and weekly_stats.empty:
+                continue
+            df = pd.DataFrame({
+                'factor_name' : [calc.factor_name],
+                **cls.factor_mean_stats(daily_stats , 'daily'),
+                **cls.factor_mean_stats(weekly_stats , 'weekly'),
+            })
+            dfs.append(df)
+        return pd.concat(dfs)
+
+    @classmethod
+    def factor_mean_stats(cls , stats_df : pd.DataFrame , stats_type : Literal['daily' , 'weekly']) -> dict[str , float]:
+        """return a DataFrame of all factors with given attributes"""
+        ic = stats_df['ic'].mean()
+        rankic = stats_df['rankic'].mean()
+        gptop = stats_df['group@10'].mean()
+        gpmid = stats_df.loc[:,[f'group@{x}' for x in range(1,11)]].to_numpy().mean()
+        gpbot = stats_df['group@1'].mean()
+        stats = {
+            f'{stats_type}_ic' : [ic],
+            f'{stats_type}_rankic' : rankic,
+            f'{stats_type}_long' : gptop - gpmid,
+            f'{stats_type}_short' : gpmid - gpbot,
+        }
+        if stats_type == 'daily':
+            stats['coverage'] = stats_df['coverage'].mean()
+        return stats
 
     @classmethod
     def factor_names(cls) -> list[str]:
@@ -112,7 +161,7 @@ class StockFactorHierarchy:
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
-        meta_type : Literal['market_factor' , 'factor'] | None = 'factor'
+        meta_type : Literal['market' , 'stock' , 'risk' , 'pooling'] | None = 'stock'
         category0 : str | None = None 
         category1 : str | None = None 
         '''
@@ -124,7 +173,7 @@ class StockFactorHierarchy:
                 print(f'{obj.factor_name} calculated , valid_ratio is {valid_ratio :.2%}')
             return factor_value
 
-        kwargs = kwargs | {'meta_type' : 'factor'}
+        kwargs = kwargs | {'meta_type' : 'stock'}
         factor_values : dict[str , pd.Series] = \
             parallel(calculate_factor , FactorCalculator.iter_calculators(is_pooling = False , **kwargs) , 
                      keys = self.factor_names() , method = multi_thread , ignore_error = ignore_error)

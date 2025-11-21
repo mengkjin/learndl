@@ -79,17 +79,17 @@ class _FactorPropertyBool(_FactorProperty):
 
 class _FactorMetaType:
     """meta class of factor"""
-    def __get__(self,instance,owner) -> Literal['market_factor' , 'factor' , 'risk_factor' , 'pooling']:
+    def __get__(self,instance,owner) -> Literal['market' , 'stock' , 'risk' , 'pooling']:
         return CONF.Factor.STOCK.cat0_to_meta(owner.category0)
 
 class _FactorDBSrc:
     """db source of factor"""
-    def __get__(self,instance,owner) -> Literal['factor' , 'market_factor']:
+    def __get__(self,instance,owner) -> Literal['stock_factor' , 'market_factor']:
         meta_type = getattr(owner, 'meta_type')
-        if meta_type == 'market_factor':
+        if meta_type == 'market':
             return 'market_factor'
-        elif meta_type in ['factor' , 'risk_factor' , 'pooling']:
-            return 'factor'
+        elif meta_type in ['stock' , 'risk' , 'pooling']:
+            return 'stock_factor'
         else:
             raise ValueError(f'undefined meta type: {meta_type} for factor {owner.__qualname__}')
 
@@ -114,8 +114,7 @@ class _FactorCalendar:
         assert update_step > 0 , f'update_step should be greater than 0 for {owner.__qualname__} , but got {update_step}'
         dates = self._dates[::update_step]
         dates = dates[dates >= init_date]
-        if final_date > 0:
-            dates = dates[dates <= final_date]
+        dates = dates[dates <= final_date]
         if self.method == 'update':
             dates = dates[(dates >= CONF.Factor.UPDATE.start) & (dates <= CONF.Factor.UPDATE.end)]
         return dates
@@ -157,10 +156,10 @@ def _calc_factor_wrapper(calc_factor : Callable[['FactorCalculator',int],pd.Seri
             df = df.reset_index()
     
         assert instance.factor_name in df.columns , f'factor_name {instance.factor_name} not found in calc_factor result: {df.columns}'
-        if instance.meta_type == 'market_factor':
+        if instance.meta_type == 'market':
             assert 'date' in df.columns , f'date not found in calc_factor result for market factor: {df.columns}'
             df = df.drop_duplicates(subset = ['date'] , keep = 'first').sort_values('date')
-        elif instance.meta_type in ['factor' , 'risk_factor' , 'pooling']:
+        elif instance.meta_type in ['stock' , 'risk' , 'pooling']:
             assert 'secid' in df.columns , f'secid not found in calc_factor result for stock factor: {df.columns}'
             df = df.drop_duplicates(subset = ['secid'] , keep = 'first').set_index('secid').reindex(DATAVENDOR.secid(date)).reset_index(drop = False)
         else:
@@ -199,13 +198,13 @@ class _FactorCalculatorMeta(SingletonABCMeta):
                 raise AttributeError(f'class {name} description is not set')
 
             if issubclass(new_cls , StockFactorCalculator):
-                assert getattr(new_cls, 'meta_type') == 'factor' , f'{name} must be a factor'
+                assert getattr(new_cls, 'meta_type') == 'stock' , f'{name} must be a stock factor'
             elif issubclass(new_cls , MarketFactorCalculator):
-                assert getattr(new_cls, 'meta_type') == 'market_factor' , f'{name} must be a market factor'
+                assert getattr(new_cls, 'meta_type') == 'market' , f'{name} must be a market factor'
             elif issubclass(new_cls , RiskFactorCalculator):
-                assert getattr(new_cls, 'meta_type') == 'risk_factor' , f'{name} must be a risk factor'
+                assert getattr(new_cls, 'meta_type') == 'risk' , f'{name} must be a risk factor'
             elif issubclass(new_cls , PoolingCalculator):
-                assert getattr(new_cls, 'meta_type') == 'pooling' , f'{name} must be a pooling'
+                assert getattr(new_cls, 'meta_type') == 'pooling' , f'{name} must be a pooling factor'
             else:
                 raise ValueError(f'undefined factor type: {name}')
 
@@ -240,7 +239,7 @@ class _FactorCalculatorMeta(SingletonABCMeta):
 class FactorCalculator(metaclass=_FactorCalculatorMeta):
     """base class of factor calculator"""
     init_date   : int = -1
-    final_date  : int = -1
+    final_date  : int = 99991231
     update_step : int = CONF.Factor.UPDATE.step
     category1 : Literal['weighted' , 'nonlinear' , 'style' , 'market_event' , 'quality' , 'growth' , 'value' , 'earning' , 'surprise' , 'coverage' , 'forecast' , 
                         'adjustment' , 'hf_momentum' , 'hf_volatility' , 'hf_correlation' , 'hf_liquidity' , 
@@ -289,7 +288,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     @abstractmethod
     def calc_history(self , date : int) -> pd.DataFrame:
         """update all factor history calculations, must be implemented for market factor"""
-        if self.meta_type != 'market_factor':
+        if self.meta_type != 'market':
             raise NotImplementedError(f'{self.factor_name} is not a market factor')
         raise NotImplementedError(f'{self.factor_name} factor history is not implemented')
 
@@ -316,8 +315,8 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
             Logger.error(f'{self.factor_name} at {date} error : {e}')
             df = pd.DataFrame()
         if (df.empty or 
-            (self.meta_type == 'market_factor' and 'date' not in df.columns) or 
-            (self.meta_type == 'factor' and 'secid' not in df.columns)): 
+            (self.meta_type == 'market' and 'date' not in df.columns) or 
+            (self.meta_type == 'stock' and 'secid' not in df.columns)): 
             self.calc_and_deploy(date , overwrite = True)
             df = self._df
             assert df is not None and not df.empty , f'factor {self.factor_name} is not calculated at {date}'
@@ -352,7 +351,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         """load factor values of a given date range""" 
         dates = np.intersect1d(dates , cls.stored_dates())
         df = DB.load_multi(cls.db_src , cls.db_key , dates)
-        if cls.meta_type == 'factor' and normalize:
+        if cls.meta_type == 'stock' and normalize:
             df = StockFactor.normalize_df(df , fill_method = fill_method)
         return df
 
@@ -514,6 +513,16 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         cls.update_periodic_stats('weekly' , dates , overwrite , verbose)
 
     @classmethod
+    def daily_stats(cls) -> pd.DataFrame:
+        """return stats DataFrame of a given stats type"""
+        return DB.load('factor_stats_daily' , cls.db_key , verbose = False)
+
+    @classmethod
+    def weekly_stats(cls) -> pd.DataFrame:
+        """return stats DataFrame of a given stats type"""
+        return DB.load('factor_stats_weekly' , cls.db_key , verbose = False)
+
+    @classmethod
     def stats_stored_dates(cls) -> dict[str , np.ndarray]:
         """return dates of factor stats"""
         stats_types = ['daily' , 'weekly']
@@ -553,7 +562,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
-        meta_type : Literal['market_factor' , 'factor' , 'risk_factor'] | None = None
+        meta_type : Literal['market' , 'stock' , 'risk' , 'pooling'] | None = None
         category0 : str | None = None 
         category1 : str | None = None 
         updatable : bool | None = None
@@ -626,7 +635,6 @@ class RiskFactorCalculator(FactorCalculator):
     risk_model_key : str = ''
     update_step = 1
     preprocess = False
-    updatable = False
 
     def calc_history(self , date : int) -> pd.DataFrame:
         """no need to validate value for risk factor"""
@@ -696,17 +704,17 @@ class RiskFactorCalculator(FactorCalculator):
     @classmethod
     def stored_dates(cls) -> np.ndarray:
         """return stored dates of factor data"""
-        return DB.dates('models' , f'{cls.risk_model_name}_exp')
+        return CALENDAR.slice(DB.dates('models' , f'{cls.risk_model_name}_exp') , cls.init_date)
 
     @classmethod
     def get_min_date(cls) -> int:
         """return minimum date of stored factor data"""
-        return DB.min_date('models' , f'{cls.risk_model_name}_exp')
+        return max(cls.init_date , DB.min_date('models' , f'{cls.risk_model_name}_exp'))
 
     @classmethod
     def get_max_date(cls) -> int:
         """return maximum date of stored factor data"""
-        return DB.max_date('models' , f'{cls.risk_model_name}_exp')
+        return min(cls.final_date , DB.max_date('models' , f'{cls.risk_model_name}_exp'))
     
     @classmethod
     def has_date(cls , date : int) -> bool:

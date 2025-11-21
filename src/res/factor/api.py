@@ -24,32 +24,32 @@ class FactorCalculatorAPI:
         cls.Factor.update(**kwargs)
         cls.Pooling.update(**kwargs)
         cls.Stats.update(**kwargs)
-        cls.export_list()
+        cls.export()
 
     @classmethod
     def rollback(cls , rollback_date : int , **kwargs):
         cls.Factor.rollback(rollback_date , **kwargs)
         cls.Pooling.rollback(rollback_date , **kwargs)
         cls.Stats.rollback(rollback_date , **kwargs)
-        cls.export_list()
+        cls.export()
 
     @classmethod
     def recalculate(cls , **kwargs):
         cls.Factor.recalculate(**kwargs)
         cls.Pooling.recalculate(**kwargs)
         cls.Stats.recalculate(**kwargs)
-        cls.export_list()
+        cls.export()
 
     @classmethod
     def fix(cls , factors : list[str] , **kwargs):
         cls.Factor.fix(factors , **kwargs)
         cls.Pooling.fix(factors , **kwargs)
         cls.Stats.fix(factors , **kwargs)
-        cls.export_list()
+        cls.export()
 
     @classmethod
-    def export_list(cls):
-        StockFactorHierarchy.export_factor_list()
+    def export(cls):
+        StockFactorHierarchy.export()
 
 class FactorTestAPI:
     TASK_TYPES = TASK_TYPES
