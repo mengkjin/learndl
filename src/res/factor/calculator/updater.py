@@ -12,7 +12,7 @@ from src.proj import Logger
 from src.basic import CONF , CALENDAR 
 from src.data import DATAVENDOR
 from src.func.parallel import parallels
-from src.func.singleton import singleton
+from src.func.singleton import SingletonMeta
 
 __all__ = ['StockFactorUpdater' , 'PoolingFactorUpdater' , 'FactorStatsUpdater']
 
@@ -83,8 +83,7 @@ class FactorUpdateJob:
         self.done = self.calc.update_day_factor(
             self.date , overwrite = overwrite , show_success = show_success , catch_errors = CATCH_ERRORS)
     
-@singleton
-class StockFactorUpdater:
+class StockFactorUpdater(metaclass=SingletonMeta):
     """manager of factor update jobs"""
     jobs : list[FactorUpdateJob] = []
     multi_thread : bool = True
@@ -283,8 +282,7 @@ class StockFactorUpdater:
         print(f'Fixing Factor Calculations: {factors}')
         cls.process_jobs(start , end , selected_factors = factors , verbosity = verbosity , overwrite = True , timeout = timeout)
 
-@singleton
-class PoolingFactorUpdater:
+class PoolingFactorUpdater(metaclass=SingletonMeta):
     """manager of factor update jobs"""
     multi_thread : bool = False
     
@@ -394,8 +392,7 @@ class PoolingFactorUpdater:
         print(f'Fixing Pooling Factor Calculations: {factors}')
         cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , verbosity = verbosity , timeout = timeout)
 
-@singleton
-class FactorStatsUpdater:
+class FactorStatsUpdater(metaclass=SingletonMeta):
     """manager of factor stats update jobs"""
     multi_thread : bool = False
     
