@@ -230,6 +230,7 @@ class StockFactorUpdater:
             job.do(verbosity > 2 , overwrite)
 
         start_time = time.time()
+        timeout = timeout * 3600
         for (level , date) , jobs in cls.grouped_jobs():
             DATAVENDOR.data_storage_control()
             keys = [job.factor_name for job in jobs]
@@ -253,7 +254,7 @@ class StockFactorUpdater:
                 failed_again_jobs = [job for job in failed_jobs if not job.done]
                 if failed_again_jobs:
                     print(f'Failed Factors Again: {[job.factor_name for job in failed_again_jobs]}')
-            if timeout > 0 and time.time() - start_time > timeout * 3600:
+            if timeout > 0 and (time.time() - start_time) > timeout:
                 Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
                 Logger.warning(f'Terminated at level {level} at date {date}')
                 break
@@ -357,13 +358,14 @@ class PoolingFactorUpdater:
             print(f'Finish Collecting {n_jobs} Pooling Factor Update Jobs , levels: {levels} , number of factors: {len(grouped_calculators)}')
 
         start_time = time.time()
+        timeout = timeout * 3600
         for level , calculators in grouped_calculators:
             for calc in calculators:
                 if verbosity > 0:
                     print(f'Updating {level} : {calc.factor_name} at {start} ~ {end}')
                 calc.update_all_factors(start = start , end = end , overwrite = overwrite , verbose = verbosity > 1)
 
-                if timeout > 0 and time.time() - start_time > timeout * 3600:
+                if timeout > 0 and (time.time() - start_time) > timeout:
                     Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
                     Logger.warning(f'Terminated at level {level} , factor {calc.factor_name}')
                     break

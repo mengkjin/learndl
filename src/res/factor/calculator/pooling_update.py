@@ -82,13 +82,14 @@ class PoolingFactorUpdater:
             print(f'Finish Collecting {n_jobs} Pooling Factor Update Jobs , levels: {levels} , number of factors: {len(grouped_calculators)}')
 
         start_time = time.time()
+        timeout = timeout * 3600
         for level , calculators in grouped_calculators:
             for calc in calculators:
                 if verbosity > 0:
                     print(f'Updating {level} : {calc.factor_name} at {start} ~ {end}')
                 calc.update_all_factors(start = start , end = end , overwrite = overwrite , verbose = verbosity > 1)
 
-                if timeout > 0 and time.time() - start_time > timeout * 3600:
+                if timeout > 0 and (time.time() - start_time) > timeout:
                     Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
                     Logger.warning(f'Terminated at level {level} , factor {calc.factor_name}')
                     break
