@@ -282,7 +282,6 @@ class StockFactorUpdater(BaseFactorUpdater):
             return
 
         start_time = time.time()
-        timeout = timeout * 3600
         for (level , date) , jobs in cls.grouped_jobs():
             DATAVENDOR.data_storage_control()
             keys = [job.factor_name for job in jobs]
@@ -306,7 +305,7 @@ class StockFactorUpdater(BaseFactorUpdater):
                 failed_again_jobs = [job for job in failed_jobs if not job.done]
                 if failed_again_jobs:
                     print(f'Failed Stock Factors Again: {[job.factor_name for job in failed_again_jobs]}')
-            if timeout > 0 and (time.time() - start_time) > timeout:
+            if timeout and (time.time() - start_time) > timeout * 3600:
                 Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
                 Logger.warning(f'Terminated at level {level} at date {date}')
                 break
@@ -338,14 +337,13 @@ class MarketFactorUpdater(BaseFactorUpdater):
             print(f'Finish Collecting {n_jobs} Market Factor Update Jobs , levels: {levels} , number of factors: {len(grouped_calculators)}')
 
         start_time = time.time()
-        timeout = timeout * 3600
         for level , calculators in grouped_calculators:
             for calc in calculators:
                 if verbosity > 0:
                     print(f'Updating {level} Market Factor : {calc.factor_name} at {start} ~ {end}')
                 calc.update_all_factors(start = start , end = end , overwrite = overwrite , verbose = verbosity > 1)
 
-                if timeout > 0 and (time.time() - start_time) > timeout:
+                if timeout and (time.time() - start_time) > timeout * 3600:
                     Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
                     Logger.warning(f'Terminated at level {level} , factor {calc.factor_name}')
                     break  
@@ -377,14 +375,13 @@ class PoolingFactorUpdater(BaseFactorUpdater):
             print(f'Finish Collecting {n_jobs} Pooling Factor Update Jobs , levels: {levels} , number of factors: {len(grouped_calculators)}')
 
         start_time = time.time()
-        timeout = timeout * 3600
         for level , calculators in grouped_calculators:
             for calc in calculators:
                 if verbosity > 0:
                     print(f'Updating {level} Pooling Factor : {calc.factor_name} at {start} ~ {end}')
                 calc.update_all_factors(start = start , end = end , overwrite = overwrite , verbose = verbosity > 1)
 
-                if timeout > 0 and (time.time() - start_time) > timeout:
+                if timeout and (time.time() - start_time) > timeout * 3600:
                     Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
                     Logger.warning(f'Terminated at level {level} , factor {calc.factor_name}')
                     break  
@@ -415,7 +412,7 @@ class FactorStatsUpdater(BaseFactorUpdater):
     def process_jobs(cls , start : int | None = None , end : int | None = None , 
                             all = True , selected_factors : list[str] | None = None ,
                             overwrite = False , verbosity : int = 1 , **kwargs):
-        """update all factor stats"""
+        """update all factor stats by year"""
         func_calls : dict[int , list[tuple[Callable , tuple[Any,...] , dict[str , Any] | None]]] = {}
         for calc in cls.calculators(all , selected_factors , **kwargs):
             target_dates = calc.stats_target_dates(start , end , overwrite)

@@ -32,6 +32,7 @@ from src.app import ScriptTool
 @ScriptTool('recalc_factors' , lock_name = 'update_factors')
 def main(start : int | None = None, end : int | None = None , timeout : float | None = 10 , **kwargs):
     assert start is not None and end is not None , 'start and end are required'
+    timeout = float(timeout) if timeout is not None else None
     FactorCalculatorAPI.recalculate(start = int(start) , end = int(end) , timeout = timeout, verbosity = 10)
     
 if __name__ == '__main__':
