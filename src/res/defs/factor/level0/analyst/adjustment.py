@@ -17,7 +17,8 @@ def get_npro_adjustment(date : int , n_month : int , type : Literal['rec' , 'upn
     start_date = DATAVENDOR.CALENDAR.cd(date , -30 * n_month) # noqa
 
     df = DATAVENDOR.ANALYST.get_trailing_reports(date , n_month + 6).set_index(['secid','org_name','report_date'])
-    df = df.query('quarter == @target_quarter').sort_index().groupby(['secid','org_name'])['np'].pct_change().dropna().reset_index()
+    df = df.query('quarter == @target_quarter').sort_index().groupby(['secid','org_name'])['np'].\
+        pct_change(fill_method = None).dropna().reset_index()
     df = df.query('report_date >= @start_date').set_index(['secid','report_date'])
 
     if within_ann_days is not None:

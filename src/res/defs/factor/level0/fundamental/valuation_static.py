@@ -146,7 +146,7 @@ class dtop(ValueFactor):
     def calc_factor(self, date: int):
         # some date this column is erronous
         dv_ttm = DATAVENDOR.TRADE.get_val(date).set_index(['secid'])['dv_ttm'] / 100
-        while dv_ttm.isna().all():
+        if dv_ttm.notna().sum() <= 100:
             start_date , end_date = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'y')
             dv_ttm = DATAVENDOR.TRADE.get_val_data(start_date , end_date , 'dv_ttm' , prev=False , pivot=False)
             dv_ttm = dv_ttm.dropna().groupby('secid')['dv_ttm'].last() / 100
