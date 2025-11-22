@@ -62,7 +62,7 @@ class FactorCalculatorAPI:
 
     @classmethod
     def export(cls):
-        StockFactorHierarchy.export()
+        StockFactorHierarchy.export_factor_table()
 
 class FactorTestAPI:
     TASK_TYPES = TASK_TYPES

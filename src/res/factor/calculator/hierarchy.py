@@ -47,9 +47,20 @@ class StockFactorHierarchy:
                 cls.hier[obj.level] = []
             cls.hier[obj.level].append(obj)
         cls.initialized = True
+
+    @classmethod
+    def load_factor_table(cls) -> pd.DataFrame:
+        '''export factor stats to csv'''
+        if MACHINE.server:
+            df = pd.read_csv(PATH.local_shared.joinpath('factor_stats.csv'))
+        elif path := PATH.get_share_folder_path():
+            df = pd.read_csv(path.joinpath('factor_stats.csv'))
+        else:
+            df = pd.DataFrame()
+        return df
     
     @classmethod
-    def export(cls) -> None:
+    def export_factor_table(cls) -> None:
         '''export factor list to csv'''
         if MACHINE.server:
             df = cls.full_factor_table()
@@ -60,7 +71,7 @@ class StockFactorHierarchy:
     @classmethod
     def full_factor_table(cls) -> pd.DataFrame:
         '''export factor stats to csv'''
-        df = cls.factor_df().merge(cls.factor_stats(), on = 'factor_name')
+        df = cls.factor_df().merge(cls.factor_stats(), on = 'factor_name' , how = 'left')
         return df
 
     @classmethod
@@ -113,9 +124,10 @@ class StockFactorHierarchy:
         """return a DataFrame of all factors with given attributes"""
         ic = stats_df['ic'].mean()
         rankic = stats_df['rankic'].mean()
-        gptop = stats_df['group@10'].mean()
-        gpmid = stats_df.loc[:,[f'group@{x}' for x in range(1,11)]].to_numpy().mean()
-        gpbot = stats_df['group@1'].mean()
+        gp = stats_df.filter(like='group@').sort_index(axis = 1 , key = lambda x: x.str.extract(r'group@(\d+)').astype(int)[0])
+        gptop = gp.ffill(axis = 1).iloc[:,-1].mean()
+        gpmid = gp.mean(axis = 1).mean()
+        gpbot = gp.bfill(axis = 1).iloc[:,0].mean()
         stats = {
             f'{stats_type}_ic' : [ic],
             f'{stats_type}_rankic' : rankic,

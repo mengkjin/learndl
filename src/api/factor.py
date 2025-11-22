@@ -53,11 +53,11 @@ class FactorAPI:
     class Hierarchy(StockFactorHierarchy):
         @classmethod
         def update(cls):
-            wrap_update(StockFactorHierarchy.export , 'export factor table')
+            wrap_update(StockFactorHierarchy.export_factor_table , 'export factor table')
 
         @classmethod
         def rollback(cls , rollback_date : int = -1):
-            wrap_update(StockFactorHierarchy.export , 'export factor table')
+            wrap_update(StockFactorHierarchy.export_factor_table , 'export factor table')
 
     class Stock:
         @classmethod
