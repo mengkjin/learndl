@@ -13,7 +13,7 @@ from src.proj import Logger , PATH
 from src.basic import CONF , CALENDAR , DB
 from src.data import DATAVENDOR
 from src.func.singleton import SingletonABCMeta
-from src.func.parallel import parallels
+from src.func.parallel import parallel
 
 __all__ = [
     'FactorCalculator' , 'StockFactorCalculator' , 'MarketFactorCalculator' , 'RiskFactorCalculator' ,
@@ -383,8 +383,8 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         if len(dates) == 0: 
             return StockFactor()
         calc = cls()
-        func_calls = [(calc.eval_factor , {'date' : date , 'verbose' : verbose}) for date in dates]
-        dfs = parallels(func_calls , keys = dates , method = multi_thread , ignore_error = ignore_error)
+        func_calls = {date:(calc.eval_factor , {'date' : date , 'verbose' : verbose}) for date in dates}
+        dfs = parallel(func_calls , method = multi_thread , ignore_error = ignore_error)
 
         factor = StockFactor(dfs)
         if normalize: 

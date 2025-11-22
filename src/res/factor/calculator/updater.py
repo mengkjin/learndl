@@ -11,7 +11,7 @@ from .factor_calc import FactorCalculator
 from src.proj import Logger
 from src.basic import CONF , CALENDAR 
 from src.data import DATAVENDOR
-from src.func.parallel import parallels
+from src.func.parallel import parallel
 from src.func.singleton import SingletonMeta
 
 __all__ = ['StockFactorUpdater' , 'MarketFactorUpdater' , 'RiskFactorUpdater' , 'PoolingFactorUpdater' , 'FactorStatsUpdater']
@@ -303,14 +303,15 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         """
         dfs : list[pd.DataFrame] = []
 
+        def load_fac(calc : FactorCalculator , date : int):
+            factor = calc.eval_factor(date)
+            valid_count = factor.loc[:,calc.factor_name].notna().sum()
+            return pd.DataFrame({'factor' : [calc.factor_name] , 'date' : [date] , 'valid_count' : [valid_count]})
+            
         for calc in cls.calculators(selected_factors = selected_factors , **kwargs):
             dates = calc.stored_dates()
-            def load_fac(date : int):
-                factor = calc.eval_factor(date)
-                valid_count = factor.loc[:,calc.factor_name].notna().sum()
-                return pd.DataFrame({'factor' : [calc.factor_name] , 'date' : [date] , 'valid_count' : [valid_count]})
-            calls = [(load_fac , {'date' : date}) for date in dates]
-            factor_coverage = parallels(calls , method = cls.multi_thread)
+            calls = {date:(load_fac , {'calc' : calc , 'date' : date}) for date in dates}
+            factor_coverage = parallel(calls , method = cls.multi_thread)
             dfs.extend(list(factor_coverage.values()))
 
         df = pd.concat(dfs)
@@ -343,7 +344,7 @@ class StockFactorUpdater(BaseFactorUpdater):
         DATAVENDOR.data_storage_control()
         if verbosity > 1:
             print(f'Updating {group} : ' + (f'{len(jobs)} factors' if len(jobs) > 10 else str(jobs)))
-        parallels([job.do for job in jobs] , keys = jobs , method = cls.multi_thread)
+        parallel({job:job.do for job in jobs} , method = cls.multi_thread)
         if verbosity > 0:
             print(f'Stock Factor Update of {group} Done: {sum(job.done for job in jobs)} / {len(jobs)}')
         if failed_jobs := [job for job in jobs if not job.done]: 
@@ -351,7 +352,7 @@ class StockFactorUpdater(BaseFactorUpdater):
             if cls.multi_thread:
                 # if multi_thread is True, auto retry failed jobs
                 print(f'Auto Retry Failed Stock Factors...')
-                parallels([job.do for job in failed_jobs] , keys = failed_jobs , method = cls.multi_thread)
+                parallel({job:job.do for job in failed_jobs} , method = cls.multi_thread)
                 if failed_jobs := [job for job in jobs if not job.done]:
                     print(f'Failed Stock Factors Again: {failed_jobs}')
 
@@ -431,4 +432,4 @@ class FactorStatsUpdater(BaseFactorUpdater):
                            verbosity : int = 1 , **kwargs) -> None:
         """process a group of factor stats update jobs"""
         print(f'Update Factor Stats of Year {group["year"]} : {len(jobs)} function calls , {sum([len(job.dates()) for job in jobs])} dates')
-        parallels([job.do for job in jobs] , keys = jobs , method = cls.multi_thread)
+        parallel({job:job.do for job in jobs} , method = cls.multi_thread)

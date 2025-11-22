@@ -187,10 +187,11 @@ class StockFactorHierarchy:
                 print(f'{obj.factor_name} calculated , valid_ratio is {valid_ratio :.2%}')
             return factor_value
 
-        kwargs = kwargs | {'meta_type' : 'stock'}
+        kwargs = kwargs
+        func_calls = {obj:(calculate_factor , {'obj' : obj}) for obj in FactorCalculator.iter_calculators(**kwargs)}
+        
         factor_values : dict[str , pd.Series] = \
-            parallel(calculate_factor , FactorCalculator.iter_calculators(is_pooling = False , **kwargs) , 
-                     keys = self.factor_names() , method = multi_thread , ignore_error = ignore_error)
+            parallel(func_calls , method = multi_thread , ignore_error = ignore_error)
         self.calc_factor_values = factor_values
 
         if check_variation:
