@@ -383,7 +383,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         if len(dates) == 0: 
             return StockFactor()
         calc = cls()
-        func_calls = [(calc.eval_factor , (date , ) , {'verbose' : verbose}) for date in dates]
+        func_calls = [(calc.eval_factor , {'date' : date , 'verbose' : verbose}) for date in dates]
         dfs = parallels(func_calls , keys = dates , method = multi_thread , ignore_error = ignore_error)
 
         factor = StockFactor(dfs)

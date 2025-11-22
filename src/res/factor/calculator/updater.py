@@ -3,8 +3,8 @@ import pandas as pd
 import polars as pl
 import time
 
-from dataclasses import dataclass
-from typing import Any , Generator , Callable , Literal
+from abc import ABC , abstractmethod
+from typing import Any , Generator , Literal
 
 from .factor_calc import FactorCalculator
 
@@ -18,13 +18,150 @@ __all__ = ['StockFactorUpdater' , 'MarketFactorUpdater' , 'RiskFactorUpdater' , 
 
 CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 
+class _BaseJob(ABC):
+    """base job class"""
+    def __init__(self , calc : FactorCalculator , verbose : bool = False , overwrite : bool = False):
+        self.calc = calc
+        self.verbose = verbose
+        self.overwrite = overwrite
+        self.done = False
+
+    def __repr__(self):
+        return self.calc.factor_name
+        
+    @property
+    def level(self) -> str: 
+        """level of the factor"""
+        return self.calc.level
+
+    @property
+    def factor_name(self) -> str: 
+        """name of the factor"""
+        return self.calc.factor_name
+
+    def match(self , **kwargs) -> bool:
+        """check if the job matches the given attributes"""
+        for key , value in kwargs.items():
+            if getattr(self , key) != value:
+                return False
+        return True
+
+    @abstractmethod
+    def dates(self) -> np.ndarray:
+        """dates of the job"""
+        
+    @abstractmethod
+    def sort_key(self) -> Any: 
+        """sort key of the job"""
+        
+    @abstractmethod
+    def do(self) -> None:
+        """do the job"""
+        
+    @abstractmethod
+    def preview(self) -> None:
+        """preview the job"""
+        
+class _JobFactorDate(_BaseJob):
+    """single factor single date update job"""
+    def __init__(self , calc : FactorCalculator , date : int , verbose : bool = False , overwrite : bool = False , **kwargs):
+        super().__init__(calc , verbose , overwrite)
+        self.date = date
+
+    def dates(self) -> np.ndarray:
+        """dates of the job"""
+        return np.array([self.date])
+
+    def sort_key(self) -> Any: 
+        """sort key of the job : (level , date , factor_name)"""
+        return (self.level , self.date , self.factor_name)
+
+    def do(self) -> None:
+        """do the job"""
+        self.done = self.calc.update_day_factor(
+            self.date , overwrite = self.overwrite , show_success = self.verbose , catch_errors = CATCH_ERRORS)
+    
+    def preview(self) -> None:
+        """preview the job"""
+        print(f'{self.level} : {self.factor_name} at {self.date}')
+
+class _JobFactorAll(_BaseJob):
+    """single factor update all job"""
+    def __init__(self , calc : FactorCalculator , start : int | None = None , end : int | None = None , 
+                 verbose : bool = False , overwrite : bool = False , **kwargs):
+        super().__init__(calc , verbose , overwrite)
+        self.start = start
+        self.end = end
+
+    def dates(self) -> np.ndarray:
+        """dates of the job"""
+        return self.calc.target_dates(self.start , self.end , overwrite = self.overwrite)
+
+    def sort_key(self) -> Any: 
+        """sort key of the job"""
+        return (self.level , self.factor_name)
+
+    def do(self) -> None:
+        """do the job"""
+        self.calc.update_all_factors(
+            start = self.start , end = self.end , overwrite = self.overwrite , verbose = self.verbose
+        )
+        self.done = True
+
+    def preview(self) -> None:
+        """preview the job"""
+        print(f'Updating {self.level} : {self.factor_name} from {self.start} to {self.end}')
+
+class _JobFactorStats(_BaseJob):
+    """single factor stats update all job"""
+    def __init__(self , calc : FactorCalculator , stats_type : Literal['daily' , 'weekly'] , 
+                 year : int , dates : np.ndarray , verbose : bool = False , overwrite : bool = False , **kwargs):
+        super().__init__(calc , verbose , overwrite)
+        self.stats_type = stats_type
+        self.year = year
+        self.year_dates = dates[dates // 10000 == year]
+
+    def dates(self) -> np.ndarray:
+        """dates of the job"""
+        return self.year_dates
+        
+    def sort_key(self) -> Any: 
+        """sort key of the job"""
+        return (self.year , self.factor_name)
+
+    def do(self) -> None:
+        """do the job"""
+        if self.stats_type == 'daily':
+            self.calc.update_daily_stats(self.dates() , overwrite = self.overwrite , verbose = self.verbose)
+        elif self.stats_type == 'weekly':
+            self.calc.update_weekly_stats(self.dates() , overwrite = self.overwrite , verbose = self.verbose)
+        else:
+            raise ValueError(f'Invalid stats type: {self.stats_type}')
+        self.done = True
+    
+    def preview(self) -> None:
+        """preview the job"""
+        print(f'{self.level} : {self.factor_name} - {self.stats_type} at year {self.year}')
+
 class BaseFactorUpdater(metaclass=SingletonMeta):
     """manager of factor update jobs"""
-    multi_thread : bool = True
+    jobs : list[_BaseJob] | Any = None
+    multi_thread : bool = False
     update_type : Literal['stock' , 'pooling' , 'risk' , 'market' , 'stats']
     
     def __repr__(self):
-        return f'{self.__class__.__name__}()'
+        n_jobs = len(self.jobs) if self.jobs is not None else 0
+        return f'{self.__name__}({n_jobs} jobs)'
+
+    @classmethod
+    def levels(cls) -> np.ndarray: 
+        """unique levels of the jobs"""
+        return np.unique([job.level for job in cls.jobs])
+
+    @classmethod
+    def sort_jobs(cls) -> None: 
+        """sort jobs by sort_key"""
+        cls.jobs.sort(key=lambda x: x.sort_key())
 
     @classmethod
     def calculators(cls , all = True , selected_factors : list[str] | None = None , updatable = True , **kwargs) -> list[FactorCalculator]:
@@ -33,38 +170,103 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         return list(FactorCalculator.iter_calculators(all , selected_factors , updatable = updatable , meta_type = meta_type , **kwargs))
 
     @classmethod
-    def grouped_calculators(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> list[tuple[str , list[FactorCalculator]]]:
-        """group jobs by level and date"""
-        groups : dict[str , list[FactorCalculator]] = {}
-        for calc in cls.calculators(all , selected_factors , **kwargs):
-            if calc.level not in groups:
-                groups[calc.level] = []
-            groups[calc.level].append(calc)
-        return sorted(groups.items() , key = lambda x: x[0])
-
-    @classmethod
     def factors(cls) -> list[str]:
         """get all factors"""
         return [calc.factor_name for calc in cls.calculators()]
 
+    @staticmethod
+    def filter_jobs(jobs : list , **kwargs) -> list[Any]:
+        """filter jobs by level"""
+        return [job for job in jobs if job.match(**kwargs)]
+
+    @classmethod
+    def collect_jobs(cls , start : int | None = None , end : int | None = None , 
+                     all = True , selected_factors : list[str] | None = None ,
+                     verbosity : int = 1 , overwrite = False , **kwargs) -> None:
+        """
+        collect FactorCalculator jobs for all factors between start and end date
+        """
+        cls.jobs.clear()
+        
+        if end is None: 
+            end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
+
+        for calc in cls.calculators(all , selected_factors , **kwargs):
+            if cls.update_type in ['risk']:
+                ...
+            elif cls.update_type in ['market' , 'pooling']:
+                target_dates = calc.target_dates(start , end , overwrite = overwrite)
+                if len(target_dates) > 0:
+                    cls.jobs.append(_JobFactorAll(calc , start , end , verbosity - 1 > 0 , overwrite))
+            elif cls.update_type in ['stock']:
+                target_dates = calc.target_dates(start , end , overwrite = overwrite)
+                for date in calc.target_dates(start , end , overwrite = overwrite):
+                    cls.jobs.append(_JobFactorDate(calc , date , verbosity - 2 > 0 , overwrite))
+            elif cls.update_type == 'stats':
+                target_dates = calc.stats_target_dates(start , end , overwrite)
+                for stats_type , dates in target_dates.items():
+                    for year in np.unique(dates // 10000):
+                        cls.jobs.append(_JobFactorStats(calc , stats_type , year , dates , verbosity - 2 > 0 , overwrite))
+            else:
+                raise ValueError(f'Invalid update type: {cls.update_type}')
+        cls.jobs.sort(key=lambda x: x.sort_key())
+
+        if cls.jobs:
+            print(f'Finish Collecting {len(cls.jobs)} Factor Update - {cls.update_type.capitalize()} Jobs')
+        else:
+            print(f'There is no Factor Update - {cls.update_type.capitalize()} Jobs to Proceed...')
+        
     @classmethod
     def preview_jobs(cls , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
                      overwrite = False , **kwargs) -> None:
         """preview update jobs for all factors between start and end date"""
-        if end is None: 
-            end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
-
-        for calc in cls.calculators(all , selected_factors , **kwargs):
-            print(f'{calc.level} : {calc.factor_name} at {start} ~ {end}')   
+        cls.collect_jobs(start , end , all , selected_factors , overwrite = overwrite)
+        [job.preview() for job in cls.jobs]
 
     @classmethod
     def process_jobs(cls , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
                      overwrite = False , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
-        """process update jobs"""
-        raise NotImplementedError(f'process_jobs is not implemented for {cls.__class__.__name__}')
-               
+        """
+        update update jobs for all factors between start and end date
+        default behavior is to collect jobs first to find all FactorCalculators then update one by one
+        timeout : timeout for processing jobs in hours , if <= 0 , no timeout
+        """
+        cls.collect_jobs(start , end , all , selected_factors , verbosity , overwrite)
+        start_time = time.time()
+        for group , jobs in cls.grouped_jobs():
+            cls.process_group_jobs(group , jobs , verbosity)
+
+            if timeout and (time.time() - start_time) > timeout * 3600:
+                Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
+                Logger.warning(f'Terminated at {group}')
+                break
+
+    @classmethod
+    def grouped_jobs_by(cls , keys : list[str]) -> Generator[tuple[dict , list[Any]] , None , None]:
+        """group jobs by key"""
+        group_values = sorted(set(tuple(getattr(job , key) for key in keys) for job in cls.jobs))
+        for gv in group_values:
+            group = dict(zip(keys , gv))
+            yield group , cls.filter_jobs(cls.jobs , **group)
+
+    @classmethod
+    def grouped_jobs(cls) -> Generator[tuple[dict , list[_BaseJob]] , None , None]:
+        """
+        group jobs by level and date
+        eg. level = 'level1' , factor_name = 'factor1'
+        groups = sorted(set((job.level , job.factor_name) for job in cls.jobs))
+        for level , factor_name in groups:
+            yield (level , factor_name) , cls.filter_jobs(cls.jobs , level = level , factor_name = factor_name)
+        """
+        raise NotImplementedError(f'grouped_jobs is not implemented for {cls.__name__}')
+        
+    @classmethod
+    def process_group_jobs(cls , group : dict , jobs : list[_BaseJob] , verbosity : int = 1 , **kwargs) -> None:
+        """process a group of jobs"""   
+        raise NotImplementedError(f'process_group_jobs is not implemented for {cls.__name__}')
+
     @classmethod
     def update(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         """update pooling factor data according"""
@@ -88,7 +290,6 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         print(f'Fixing {(cls.update_type.capitalize() + " ") if cls.update_type else ''}Factor Calculations: {factors}')
         cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , verbosity = verbosity , timeout = timeout)
 
-
     @classmethod
     def eval_coverage(cls , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:
         """
@@ -108,7 +309,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
                 factor = calc.eval_factor(date)
                 valid_count = factor.loc[:,calc.factor_name].notna().sum()
                 return pd.DataFrame({'factor' : [calc.factor_name] , 'date' : [date] , 'valid_count' : [valid_count]})
-            calls = [(load_fac , (date , ) , {}) for date in dates]
+            calls = [(load_fac , {'date' : date}) for date in dates]
             factor_coverage = parallels(calls , method = cls.multi_thread)
             dfs.extend(list(factor_coverage.values()))
 
@@ -126,316 +327,108 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
 
 class StockFactorUpdater(BaseFactorUpdater):
     """manager of factor update jobs"""
-    jobs : list['OneUpdateJob'] = []
+    jobs : list[_BaseJob] = []
     multi_thread : bool = True
     update_type = 'stock'
-    
-    def __repr__(self):
-        return f'{self.__class__.__name__}({len(self.jobs)} jobs)'
-    
-    @dataclass  
-    class OneUpdateJob:
-        """single factor update job"""
-        calc : FactorCalculator
-        date : int
-
-        def __post_init__(self):
-            self.done = False
-            
-        @property
-        def level(self) -> str: 
-            """level of the factor"""
-            return self.calc.level
-        @property
-        def factor_name(self) -> str: 
-            """name of the factor"""
-            return self.calc.factor_name
-        @property
-        def sort_key(self) -> Any: 
-            """sort key of the job : (level , date , factor_name)"""
-            return (self.level , self.date , self.factor_name)
-        def do(self , show_success : bool = False , overwrite = False) -> None:
-            """do the job"""
-            self.done = self.calc.update_day_factor(
-                self.date , overwrite = overwrite , show_success = show_success , catch_errors = CATCH_ERRORS)
 
     @classmethod
-    def levels(cls) -> np.ndarray: 
-        """unique levels of the jobs"""
-        return np.unique([job.level for job in cls.jobs])
-    @classmethod
-    def dates(cls) -> np.ndarray:  
-        """unique dates of the jobs"""
-        return np.unique([job.date for job in cls.jobs])
-    @classmethod
-    def groups(cls) -> list[tuple[str , int]]: 
-        """groups of update jobs (by level and date)"""
-        return sorted(set((job.level , job.date) for job in cls.jobs))
-    @classmethod
-    def to_dataframe(cls) -> pd.DataFrame:
-        """convert to dataframe for illustration"""
-        columns = ['level' , 'date' , 'factor']
-        return pd.DataFrame(
-            [(job.level , job.date , job.factor_name) for job in cls.jobs] , 
-            columns=pd.Index(columns)
-        ).sort_values(by=columns)
-
-    @classmethod
-    def clear(cls) -> None: 
-        """clear all jobs"""
-        cls.jobs.clear()
-    @classmethod
-    def sort(cls) -> None: 
-        """sort jobs by sort_key"""
-        cls.jobs.sort(key=lambda x: x.sort_key)
-    @classmethod
-    def append(cls , job : OneUpdateJob) -> None: 
-        """append a job"""
-        cls.jobs.append(job)
-    @classmethod
-    def grouped_jobs(cls) -> Generator[tuple[tuple[str , int] , list[OneUpdateJob]] , None , None]:
+    def grouped_jobs(cls) -> Generator[tuple[Any , list[_BaseJob]] , None , None]:
         """group jobs by level and date"""
-        for level , date in cls.groups():
-            yield (level , date) , cls.filter_jobs(cls.jobs , level , date)
-    @staticmethod
-    def filter_jobs(jobs : list[OneUpdateJob] , level : str , date : int) -> list[OneUpdateJob]:
-        """filter jobs by level and date"""
-        return [job for job in jobs if job.level == level and job.date == date]
+        return cls.grouped_jobs_by(['level' , 'date'])
 
     @classmethod
-    def unfinished_factors(cls , date : int | None = None) -> dict[int , list[FactorCalculator]]:
-        """get unfinished factors"""
-        factors : dict[int , list[FactorCalculator]] = {}
-        for calc in cls.calculators():
-            if date is None:
-                for d in calc.target_dates():
-                    if d not in factors:
-                        factors[d] = []
-                    factors[d].append(calc)
-            else:
-                if date in calc.target_dates():
-                    if date not in factors:
-                        factors[date] = []
-                    factors[date].append(calc)
-        return factors
-
-    @classmethod
-    def collect_jobs(cls , start : int | None = None , end : int | None = None , 
-                     all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , **kwargs) -> None:
-        """
-        update update jobs for all factors between start and end date
-        **kwargs:
-            factor_name : str | None = None
-            level : str | None = None 
-            file_name : str | None = None
-            category0 : str | None = None 
-            category1 : str | None = None 
-        """
-        selected_factors = selected_factors or []
-        cls.clear()
-        
-        if not (all or selected_factors or kwargs): 
-            return
-        if end is None: 
-            end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
-
-        for calc in cls.calculators(all , selected_factors , **kwargs):
-            for date in calc.target_dates(start , end , overwrite = overwrite):
-                cls.append(cls.OneUpdateJob(calc , date))
-
-        if len(cls.jobs) == 0:
-            print('There is no Stock Factor Update Jobs to Proceed...')
-        else:
-            levels , dates = cls.levels() , cls.dates()
-            print(f'Finish Collecting {len(cls.jobs)} Stock Factor Update Jobs , levels: {levels} , dates: {min(dates)} ~ {max(dates)}')
-
-    @classmethod
-    def preview_jobs(cls , start : int | None = None , end : int | None = None , 
-                     all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , **kwargs) -> None:
-        """preview update jobs for all factors between start and end date"""
-        cls.collect_jobs(start , end , all , selected_factors , overwrite)
-
-        for (level , date) , jobs in cls.grouped_jobs():
-            for job in jobs:
-                print(f'{level} : {job.factor_name} at {date}')
-        
-
-    @classmethod
-    def process_jobs(cls , start : int | None = None , end : int | None = None ,
-                     all = True , selected_factors : list[str] | None = None ,
-                     verbosity : int = 1 , overwrite = False , timeout : int = -1 , auto_retry = True) -> None:
-        """
-        perform all update jobs
-
-        verbosity : 
-            0 : show only error
-            1 : show error and success stats
-            2 : show all
-        overwrite : if True , overwrite existing data
-        timeout : timeout for processing jobs in hours , if <= 0 , no timeout
-        """
-        cls.collect_jobs(start , end , all , selected_factors , overwrite)
-
-        if len(cls.jobs) == 0: 
-            return
-
-        start_time = time.time()
-        for (level , date) , jobs in cls.grouped_jobs():
-            DATAVENDOR.data_storage_control()
-            keys = [job.factor_name for job in jobs]
-            if verbosity > 1:
-                if len(keys) > 10:
-                    print(f'Updating {level} at {date} : {len(keys)} factors')
-                else:
-                    print(f'Updating {level} at {date} : {keys}')
-            calls = [(job.do , (verbosity > 2 , overwrite) , {}) for job in jobs]
-            parallels(calls , keys = keys , method = cls.multi_thread)
-            failed_jobs = [job for job in jobs if not job.done]
-            if verbosity > 0:
-                print(f'Stock Factor Update of {level} at {date} Done: {len(jobs) - len(failed_jobs)} / {len(jobs)}')
-                if failed_jobs: 
-                    print(f'Failed Stock Factors: {[job.factor_name for job in failed_jobs]}')
-            if auto_retry and failed_jobs:
-                if verbosity > 0: 
-                    print(f'Auto Retry Failed Stock Factors...')
-                calls = [(job.do , (verbosity > 2 , overwrite) , {}) for job in failed_jobs]
-                parallels(calls , method = len(failed_jobs) > 10)
-                failed_again_jobs = [job for job in failed_jobs if not job.done]
-                if failed_again_jobs:
-                    print(f'Failed Stock Factors Again: {[job.factor_name for job in failed_again_jobs]}')
-            if timeout and (time.time() - start_time) > timeout * 3600:
-                Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
-                Logger.warning(f'Terminated at level {level} at date {date}')
-                break
-        [cls.jobs.remove(job) for job in jobs if job.done]
+    def process_group_jobs(cls , group : dict , jobs : list[_BaseJob] , 
+                           verbosity : int = 1 , **kwargs) -> None:
+        """process a group of stock factor update jobs"""
+        DATAVENDOR.data_storage_control()
+        if verbosity > 1:
+            print(f'Updating {group} : ' + (f'{len(jobs)} factors' if len(jobs) > 10 else str(jobs)))
+        parallels([job.do for job in jobs] , keys = jobs , method = cls.multi_thread)
+        if verbosity > 0:
+            print(f'Stock Factor Update of {group} Done: {sum(job.done for job in jobs)} / {len(jobs)}')
+        if failed_jobs := [job for job in jobs if not job.done]: 
+            print(f'Failed Stock Factors: {failed_jobs}')
+            if cls.multi_thread:
+                # if multi_thread is True, auto retry failed jobs
+                print(f'Auto Retry Failed Stock Factors...')
+                parallels([job.do for job in failed_jobs] , keys = failed_jobs , method = cls.multi_thread)
+                if failed_jobs := [job for job in jobs if not job.done]:
+                    print(f'Failed Stock Factors Again: {failed_jobs}')
 
 class MarketFactorUpdater(BaseFactorUpdater):
-    """manager of factor update jobs"""
+    """manager of market factor update jobs"""
+    jobs : list[_JobFactorAll] = []
     multi_thread : bool = False
     update_type = 'market'
-  
+
     @classmethod
-    def process_jobs(cls , start : int | None = None , end : int | None = None , 
-                     all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
-        """
-        update update jobs for all factors between start and end date
-        timeout : timeout for processing jobs in hours , if <= 0 , no timeout
-        """
-        if end is None: 
-            end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
+    def grouped_jobs(cls) -> Generator[tuple[dict , list[_JobFactorAll]] , None , None]:
+        """group jobs by level and factor_name"""
+        return cls.grouped_jobs_by(['level' , 'factor_name'])
         
-        grouped_calculators = cls.grouped_calculators(all , selected_factors , **kwargs)
-        if len(grouped_calculators) == 0:
-            print('There is no Market Factor Update Jobs to Proceed...')
-            return
-        else:
-            n_jobs = len(grouped_calculators)
-            levels = sorted(list(set([level for level , _ in grouped_calculators])))
-            print(f'Finish Collecting {n_jobs} Market Factor Update Jobs , levels: {levels} , number of factors: {len(grouped_calculators)}')
-
-        start_time = time.time()
-        for level , calculators in grouped_calculators:
-            for calc in calculators:
-                if verbosity > 0:
-                    print(f'Updating {level} Market Factor : {calc.factor_name} at {start} ~ {end}')
-                calc.update_all_factors(start = start , end = end , overwrite = overwrite , verbose = verbosity > 1)
-
-                if timeout and (time.time() - start_time) > timeout * 3600:
-                    Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
-                    Logger.warning(f'Terminated at level {level} , factor {calc.factor_name}')
-                    break  
-
+    @classmethod
+    def process_group_jobs(cls , group : dict , jobs : list[_JobFactorAll] , 
+                           verbosity : int = 1 , **kwargs) -> None:
+        """process a group of market factor update jobs"""
+        assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
+        if verbosity > 0:
+            jobs[0].preview()
+        jobs[0].do()
 
 class PoolingFactorUpdater(BaseFactorUpdater):
-    """manager of factor update jobs"""
+    """manager of pooling factor update jobs"""
+    jobs : list[_BaseJob] = []
     multi_thread : bool = False
     update_type = 'pooling'
-         
+
     @classmethod
-    def process_jobs(cls , start : int | None = None , end : int | None = None , 
-                     all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
-        """
-        update update jobs for all factors between start and end date
-        timeout : timeout for processing jobs in hours , if <= 0 , no timeout
-        """
-        if end is None: 
-            end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
+    def grouped_jobs(cls) -> Generator[tuple[dict , list[_BaseJob]] , None , None]:
+        """group jobs by level and factor_name"""
+        return cls.grouped_jobs_by(['level' , 'factor_name'])
         
-        grouped_calculators = cls.grouped_calculators(all , selected_factors , **kwargs)
-        if len(grouped_calculators) == 0:
-            print('There is no Pooling Factor Update Jobs to Proceed...')
-            return
-        else:
-            n_jobs = len(grouped_calculators)
-            levels = sorted(list(set([level for level , _ in grouped_calculators])))
-            print(f'Finish Collecting {n_jobs} Pooling Factor Update Jobs , levels: {levels} , number of factors: {len(grouped_calculators)}')
-
-        start_time = time.time()
-        for level , calculators in grouped_calculators:
-            for calc in calculators:
-                if verbosity > 0:
-                    print(f'Updating {level} Pooling Factor : {calc.factor_name} at {start} ~ {end}')
-                calc.update_all_factors(start = start , end = end , overwrite = overwrite , verbose = verbosity > 1)
-
-                if timeout and (time.time() - start_time) > timeout * 3600:
-                    Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
-                    Logger.warning(f'Terminated at level {level} , factor {calc.factor_name}')
-                    break  
+    @classmethod
+    def process_group_jobs(cls , group : dict , jobs : list[_BaseJob] , 
+                           verbosity : int = 1 , **kwargs) -> None:
+        """process a group of market factor update jobs"""
+        assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
+        if verbosity > 0:
+            jobs[0].preview()
+        jobs[0].do()
 
 class RiskFactorUpdater(BaseFactorUpdater):
-    """manager of factor update jobs"""
+    """manager of risk factor update jobs"""
+    jobs : list[_BaseJob] = []
+    multi_thread : bool = False
     update_type = 'risk'
-    
-    @classmethod
-    def preview_jobs(cls , start : int | None = None , end : int | None = None , 
-                     all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , **kwargs) -> None:
-        raise NotImplementedError(f'no job will be done for {cls.__class__.__name__}')
 
     @classmethod
-    def process_jobs(cls , start : int | None = None , end : int | None = None , 
-                     all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , verbosity : int = 1 , timeout : int = -1 , **kwargs) -> None:
-        """no job will be done for Risk Factor"""
-        return        
+    def grouped_jobs(cls) -> Generator[tuple[Any , list[_BaseJob]] , None , None]:
+        """group jobs by level and factor_name"""
+        return cls.grouped_jobs_by(['level' , 'factor_name'])
+
+    @classmethod
+    def process_group_jobs(cls , group : Any , jobs : list[_BaseJob] , 
+                           verbosity : int = 1 , **kwargs) -> None:
+        """process a group of market factor update jobs"""
+        assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
+        if verbosity > 0:
+            jobs[0].preview()
+        jobs[0].do()
     
 class FactorStatsUpdater(BaseFactorUpdater):
     """manager of factor stats update jobs"""
+    jobs : list[_BaseJob] = []
     multi_thread : bool = False
     update_type = 'stats'
-        
+
     @classmethod
-    def process_jobs(cls , start : int | None = None , end : int | None = None , 
-                            all = True , selected_factors : list[str] | None = None ,
-                            overwrite = False , verbosity : int = 1 , **kwargs):
-        """update all factor stats by year"""
-        func_calls : dict[int , list[tuple[Callable , tuple[Any,...] , dict[str , Any] | None]]] = {}
-        for calc in cls.calculators(all , selected_factors , **kwargs):
-            target_dates = calc.stats_target_dates(start , end , overwrite)
-            for stats_type , dates in target_dates.items():
-                func  = getattr(calc , f'update_{stats_type}_stats')
-                years = np.unique(dates // 10000)
-                for year in years:
-                    if year not in func_calls:
-                        func_calls[year] = []
-                    func_calls[year].append((func , (dates[dates // 10000 == year] , ) , {'overwrite' : overwrite}))
-        
-        func_calls = {year: calls for year , calls in sorted(func_calls.items())}
-        if len(func_calls) == 0:
-            print('There is no Factor Stats Update to Proceed')
-            return
+    def grouped_jobs(cls) -> Generator[tuple[dict , list[_BaseJob]] , None , None]:
+        """group jobs by level and date"""
+        return cls.grouped_jobs_by(['year'])
 
-        total_calls , total_dates = 0 , 0
-        for year , calls in func_calls.items():
-            n_calls = len(calls)
-            n_dates = sum([len(args[0]) for _ , args , _ in calls])
-            print(f'Update Factor Stats of Year {year} : {n_calls} function calls , {n_dates} dates')
-            parallels(calls , method = cls.multi_thread)
-            total_calls += n_calls
-            total_dates += n_dates
-
-        print(f'Factor Stats Update Done: {len(func_calls)} Years , {total_calls} function calls , {total_dates} dates')           
+    @classmethod
+    def process_group_jobs(cls , group : Any , jobs : list[_BaseJob] , 
+                           verbosity : int = 1 , **kwargs) -> None:
+        """process a group of factor stats update jobs"""
+        print(f'Update Factor Stats of Year {group["year"]} : {len(jobs)} function calls , {sum([len(job.dates()) for job in jobs])} dates')
+        parallels([job.do for job in jobs] , keys = jobs , method = cls.multi_thread)
