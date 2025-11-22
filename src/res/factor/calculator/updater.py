@@ -166,8 +166,11 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     @classmethod
     def calculators(cls , all = True , selected_factors : list[str] | None = None , updatable = True , **kwargs) -> list[FactorCalculator]:
         """get all calculators"""
-        meta_type = None if cls.update_type == 'stats' else cls.update_type
-        return list(FactorCalculator.iter_calculators(all , selected_factors , updatable = updatable , meta_type = meta_type , **kwargs))
+        if cls.update_type == 'stats':
+            kwargs = kwargs | {'is_pooling' : False}
+        else:
+            kwargs = kwargs | {'meta_type' : cls.update_type}
+        return list(FactorCalculator.iter_calculators(all , selected_factors , updatable = updatable , **kwargs))
 
     @classmethod
     def factors(cls) -> list[str]:
@@ -238,7 +241,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         for group , jobs in cls.grouped_jobs():
             cls.process_group_jobs(group , jobs , verbosity)
 
-            if timeout and (time.time() - start_time) > timeout * 3600:
+            if timeout > 0 and (time.time() - start_time) > timeout * 3600:
                 Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
                 Logger.warning(f'Terminated at {group}')
                 break
@@ -432,4 +435,6 @@ class FactorStatsUpdater(BaseFactorUpdater):
                            verbosity : int = 1 , **kwargs) -> None:
         """process a group of factor stats update jobs"""
         print(f'Update Factor Stats of Year {group["year"]} : {len(jobs)} function calls , {sum([len(job.dates()) for job in jobs])} dates')
+        if verbosity > 1 and len(jobs) <= 10:
+            print(f'Factors included: {jobs}')
         parallel({job:job.do for job in jobs} , method = cls.multi_thread)
