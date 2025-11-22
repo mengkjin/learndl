@@ -132,7 +132,7 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
 
         except Exception as e:
             bs.logout()
-            Logger.warning(f'{retry} retry {e}')
+            Logger.debug(f'{retry} retry {e}')
             retry += 1
         else:
             break
@@ -179,7 +179,7 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
-                Logger.warning(f'{last_dt} - {dt} failed')
+                Logger.debug(f'{last_dt} - {dt} failed')
             else:
                 print(f'{last_dt} - {dt} success')
 

@@ -32,7 +32,7 @@ class ClassicLabelsUpdater(BasicUpdater):
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback']):
         if update_type == 'recalc':
-            Logger.warning('Recalculate all classic labels is not supported yet')
+            Logger.warning(f'Recalculate all classic labels is not supported yet for {cls.__name__}')
         for days in cls.DAYS:
             for lag1 in cls.LAGS:
                 label_name = f'ret{days}' + ('_lag' if lag1 else '')

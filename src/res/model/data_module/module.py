@@ -381,7 +381,7 @@ class DataModule(BaseDataModule):
             divlast = method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST)
             histnorm = method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM)
             if not SILENT and (divlast or histnorm): 
-                Logger.warning(f'Pre-Norming method of [{mdt}] : {divlast} {histnorm}')
+                Logger.debug(f'Pre-Norming method of [{mdt}] : {divlast} {histnorm}')
             if divlast: 
                 self.prenorm_divlast.append(mdt)
             if histnorm: 

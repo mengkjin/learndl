@@ -28,8 +28,7 @@ class DailyRiskUpdater(BasicUpdater):
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback']):
         if update_type == 'recalc':
-            Logger.warning('Recalculate all daily risk is not supported yet')
-        if update_type == 'recalc':
+            Logger.warning(f'Recalculate all daily risk is not supported yet for {cls.__name__}')
             stored_dates = np.array([])
         elif update_type == 'update':
             stored_dates = DB.dates(cls.DB_SRC , cls.DB_KEY)

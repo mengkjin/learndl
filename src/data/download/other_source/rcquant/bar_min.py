@@ -67,14 +67,14 @@ def rcquant_init():
             if _error := output['stderr']:
                 key_info = re.search(r'Your account will be expired after  (\d+) days', _error)
                 if key_info:
-                    Logger.warning(f'RcQuant Warning : {key_info.group(0)}')
+                    Logger.debug(f'RcQuant Warning : {key_info.group(0)}')
                 else:
                     Logger.error(f'RcQuant Error : {_error}')
         except FileNotFoundError:
             Logger.error(f'rcquant login info not found, please check .local_settings/rcquant.yaml')
             return False
         except QuotaExceeded as e:
-            Logger.warning(f'rcquant init failed: {e}')
+            Logger.debug(f'rcquant init failed: {e}')
             return False
     return True
 
@@ -207,7 +207,7 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
     for dt in dts:
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
-            Logger.warning(f'rcquant {data_type} bar min {dt} failed')
+            Logger.debug(f'rcquant {data_type} bar min {dt} failed')
         else:
             print(f'rcquant {data_type} bar min {dt} success')
 
@@ -228,7 +228,7 @@ def rcquant_proceed(date : int | None = None , first_n : int = -1):
         try:
             rcquant_download(date , data_type , first_n)
         except Exception as e:
-            Logger.warning(f'rcquant download {data_type} minbar failed: {e}')
+            Logger.debug(f'rcquant download {data_type} minbar failed: {e}')
             return False
     
     return True

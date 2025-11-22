@@ -81,7 +81,7 @@ class DataBlock(Stock4DData):
         try:
             return max(DataBlock.load_dict(DataBlock.block_path(key , predict))['date'])
         except ModuleNotFoundError as e:
-            Logger.warning(f'last_data_date({key , predict}) error: ModuleNotFoundError: {e}')
+            Logger.debug(f'last_data_date({key , predict}) error: ModuleNotFoundError: {e}')
             return None
 
     def save(self , key : str , predict=False , start_dt = None , end_dt = None):
@@ -518,11 +518,11 @@ class ModuleData:
                     print(f'Loading Module Data, Try \'{path}\', success!')
             else:
                 if not SILENT: 
-                    Logger.warning(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
+                    Logger.debug(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
                 data = None
         except ModuleNotFoundError:
             '''can be caused by different package version'''
-            Logger.warning(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
+            Logger.debug(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
             data = None
         except Exception as e:
             raise e

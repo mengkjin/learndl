@@ -28,7 +28,7 @@ class MultiKlineUpdater(BasicUpdater):
     @classmethod
     def update_all(cls , update_type : Literal['recalc' , 'update' , 'rollback']):
         if update_type == 'recalc':
-            Logger.warning('Recalculate all nday klines is not supported yet')
+            Logger.warning(f'Recalculate all nday klines is not supported yet for {cls.__name__}')
         for n_day in cls.DAYS:
             label_name = f'{n_day}day'
             if update_type == 'recalc':

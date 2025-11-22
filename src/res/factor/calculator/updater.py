@@ -121,6 +121,9 @@ class _JobFactorStats(_BaseJob):
         self.year = year
         self.year_dates = dates[dates // 10000 == year]
 
+    def __repr__(self):
+        return f'{self.calc.factor_name}({self.stats_type})'
+
     def dates(self) -> np.ndarray:
         """dates of the job"""
         return self.year_dates
@@ -242,8 +245,8 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             cls.process_group_jobs(group , jobs , verbosity)
 
             if timeout > 0 and (time.time() - start_time) > timeout * 3600:
-                Logger.warning(f'Timeout: {timeout} hours reached, stopping update')
-                Logger.warning(f'Terminated at {group}')
+                Logger.debug(f'Timeout: {timeout} hours reached, stopping update')
+                Logger.debug(f'Terminated at {group}')
                 break
 
     @classmethod
@@ -436,5 +439,5 @@ class FactorStatsUpdater(BaseFactorUpdater):
         """process a group of factor stats update jobs"""
         print(f'Update Factor Stats of Year {group["year"]} : {len(jobs)} function calls , {sum([len(job.dates()) for job in jobs])} dates')
         if verbosity > 1 and len(jobs) <= 10:
-            print(f'Factors included: {jobs}')
+            print(f'Jobs included: {jobs}')
         parallel({job:job.do for job in jobs} , method = cls.multi_thread)

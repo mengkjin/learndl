@@ -211,10 +211,10 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
                 if '最多访问' in str(e):
                     if timeout_max_retries <= 0: 
                         raise e
-                    Logger.warning(f'{e} , wait {timeout_wait_seconds} seconds')
+                    Logger.debug(f'{e} , wait {timeout_wait_seconds} seconds')
                     time.sleep(timeout_wait_seconds)
                 elif 'Connection to api.waditu.com timed out' in str(e):
-                    Logger.warning(e)
+                    Logger.debug(e)
                     TS_PARAMS.server_down = True
                     self.check_server_down()
                     raise Exception('Tushare server is down, skip today\'s update')

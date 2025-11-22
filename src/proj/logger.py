@@ -136,12 +136,12 @@ class Logger:
     @classmethod
     def separator(cls , width = _seperator_width , char = _seperator_char):
         """Separator message , use info level"""
-        cls.log.info(char * width)
+        cls.log.debug(char * width)
 
     @classmethod
     def divider(cls , width = _seperator_width , char = _divider_char):
         """Divider message , use info level"""
-        cls.log.info(char * width)
+        cls.log.debug(char * width)
         
     @staticmethod
     def dump_to_logwriter(*args):
@@ -187,7 +187,7 @@ class Logger:
         def __exit__(self , exc_type , exc_value , traceback):
             if self.timer:
                 duration = time.time() - self.start_time
-                Logger.info(f'{self.title.upper()} Finished! Cost {duration:.2f} Seconds')
+                Logger.debug(f'{self.title.upper()} Finished! Cost {duration:.2f} Seconds')
             self.write(f'{self.title.upper()} FINISH')
 
         def __repr__(self):
