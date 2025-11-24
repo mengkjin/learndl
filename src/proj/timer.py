@@ -46,13 +46,13 @@ class Duration:
         
             fmtstrs = []
             if days > 0:
-                fmtstrs.append(f'{days:d} Day')
+                fmtstrs.append(f'{days:.0f} Day')
             if hours >= 1:
-                fmtstrs.append(f'{hours:d} Hour')
+                fmtstrs.append(f'{hours:.0f} Hour')
             if minutes >= 1:
-                fmtstrs.append(f'{minutes:d} Min')
+                fmtstrs.append(f'{minutes:.0f} Min')
             if seconds >= 1:
-                fmtstrs.append(f'{seconds:d} Sec')
+                fmtstrs.append(f'{seconds:.0f} Sec')
             return ' '.join(fmtstrs)
     
 class Timer:
