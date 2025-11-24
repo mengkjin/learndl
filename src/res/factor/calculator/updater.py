@@ -6,7 +6,7 @@ import time
 from abc import ABC , abstractmethod
 from typing import Any , Generator , Literal
 
-from .factor_calc import FactorCalculator
+from .factor_calc import FactorCalculator , WeightedPoolingCalculator
 
 from src.proj import Logger
 from src.basic import CONF , CALENDAR 
@@ -223,6 +223,15 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             print(f'There is no Factor Update - {cls.update_type.capitalize()} Jobs to Proceed...')
         
     @classmethod
+    def before_process_jobs(cls , start : int | None = None , end : int | None = None , 
+                            all = True , selected_factors : list[str] | None = None ,
+                            verbosity : int = 1 , overwrite = False , **kwargs) -> None:
+        """before process jobs"""
+        for calc in cls.calculators(all , selected_factors , **kwargs):
+            if isinstance(calc , WeightedPoolingCalculator):
+                calc.drop_pooling_weight(after = start , overwrite = overwrite)
+
+    @classmethod
     def preview_jobs(cls , start : int | None = None , end : int | None = None , 
                      all = True , selected_factors : list[str] | None = None ,
                      overwrite = False , **kwargs) -> None:
@@ -241,6 +250,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         """
         cls.collect_jobs(start , end , all , selected_factors , verbosity , overwrite)
         start_time = time.time()
+        cls.before_process_jobs(start , end , all , selected_factors , verbosity , overwrite)
         for group , jobs in cls.grouped_jobs():
             cls.process_group_jobs(group , jobs , verbosity)
 

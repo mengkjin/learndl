@@ -67,14 +67,15 @@ class DataPreProcessor:
             blocks = PREDICT_DATASET if predict else TRAIN_DATASET
         else:
             blocks = data_types
-        processor = cls(predict , blocks = blocks)
+        processor = cls(predict = predict , blocks = blocks)
         print(f'Will process {len(processor.blocks)} datas : {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
         # return processor
         for key , proc in processor.processors():
             
             modified_time = DataBlock.last_modified_time(key , predict)
             if CALENDAR.is_updated_today(modified_time):
-                print(f'Skipping: {key} already updated at {modified_time}!')
+                time_str = time.strftime('%Y/%m/%d %H:%M:%S',time.strptime(str(modified_time) , '%Y%m%d%H%M%S'))
+                print(f'Skipping: {key} already updated at {time_str}!')
                 continue
             print(f'Processing: {key}')
             tt1 = time.time()

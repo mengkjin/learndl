@@ -188,8 +188,10 @@ class SellsideSQLDownloader:
     def download_period(self , connection , start , end):
         t0 = time.time()
         df = self.query_default(connection , start , end)
-        self.save_data(df)
-        Logger.success(f'Finished: {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {Duration(time.time()-t0).fmtstr}')
+        if self.save_data(df):
+            Logger.success(f'Finished: {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {Duration(time.time()-t0).fmtstr}')
+        else:
+            Logger.fail(   f'Failure : No data downloaded')
         return True
 
     def query_start_dt(self , connection : Connection):
@@ -229,15 +231,17 @@ class SellsideSQLDownloader:
                                            connection) for factor in self.factors}
         return df
 
-    def save_data(self , data : pd.DataFrame | None):
+    def save_data(self , data : pd.DataFrame | None) -> bool:
         if data is None or data.empty or len(data) == 0: 
-            return
+            return False
         data = data.sort_values(['date' , 'secid']).set_index('date')
+        status = True
         for d in data.index.unique():
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: 
                 continue
-            DB.save(data_at_d , self.DB_SRC , self.db_key , d)
+            status = status or DB.save(data_at_d , self.DB_SRC , self.db_key , d)
+        return status
 
     @classmethod
     def convert_id(cls , x):
@@ -379,7 +383,7 @@ class SellsideSQLDownloader:
 
     @classmethod
     def update_since(cls , trace = 0):
-        print(f'Fetching:  {cls.__name__} since last update!')
+        print(f'Fetching: {cls.__name__} since last update!')
 
         for factor , connection in cls.factors_and_conns():  
             factor.download('since' , connection , trace = trace)

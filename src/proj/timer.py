@@ -36,9 +36,9 @@ class Duration:
         
         # Store components in a dictionary for f-string formatting
         if self.duration < 1:
-            return '<1 Second'
+            return '<1 Sec'
         elif self.duration < 60:
-            return f'{self.duration:.1f} Secs'
+            return f'{self.duration:.1f} Sec'
         else:
             days, remainder = divmod(self.duration, 86400) # 86400 seconds in a day
             hours, remainder = divmod(remainder, 3600)    # 3600 seconds in an hour

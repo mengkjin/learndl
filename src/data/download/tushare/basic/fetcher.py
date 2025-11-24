@@ -200,7 +200,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         dates = self.target_dates()
 
         if len(dates) == 0: 
-            print(f'Skipping:  {self.__class__.__name__} has no dates to update')
+            print(f'Skipping: {self.__class__.__name__} already updated!')
             return
         
         print(f'Fetching:  {self.__class__.__name__} update dates {dates[0]} ~ {dates[-1]}')

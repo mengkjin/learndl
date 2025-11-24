@@ -649,7 +649,6 @@ class AffiliateFactorCalculator(FactorCalculator):
         """no need to validate value for affiliate factor"""
         raise NotImplementedError(f'{self.factor_name} validate_value is not implemented')
 
-    @abstractmethod
     def load_factor(self , date : int) -> pd.DataFrame:
         """load full factor value of a given date"""
         df = DB.load(self.load_db_src , self.load_db_key , date).loc[:,['secid' , self.load_col_name]]
@@ -982,6 +981,17 @@ class WeightedPoolingCalculator(PoolingCalculator):
         """load pooling weight of a given date"""
         df = DB.load('pooling_weight' , self.db_key , verbose = False)
         return df
+
+    def drop_pooling_weight(self , after : int | None = None , overwrite = False):
+        """trim pooling weight of a given date range"""
+        if not overwrite:
+            return
+        if after is not None:
+            df = self.load_pooling_weight()
+            df = df.query('date < @after').copy()
+            DB.save(df , 'pooling_weight' , self.db_key , verbose = False)
+        else:
+            self.purge_pooling_weight(confirm = True)
 
     def purge_pooling_weight(self , confirm : bool = False) -> None:
         """purge pooling weight of a given date"""

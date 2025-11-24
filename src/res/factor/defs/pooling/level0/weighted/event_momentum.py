@@ -192,7 +192,6 @@ class EventFactorWeight:
             groupby(['event_date' , 'event' , 'factor_name']).\
             apply(self.event_date_metric , include_groups = False).\
             rename('weight').reset_index()
-
         if self.momentum_time_decay:
             event_date_weight = self.time_decay_event_weight(event_date_metric)
         else:
@@ -201,9 +200,8 @@ class EventFactorWeight:
         if self.ignore_negative_weight:
             event_date_weight.loc[event_date_weight['weight'] <= 0 , 'weight'] = 0
 
-        weights = event_date_weight.groupby('event_date' , group_keys = False).\
-            apply(self.scale_weights , include_groups = False).\
-            reset_index(drop = True).rename(columns = {'event_date' : 'date'})
+        event_date_weight['weight'] = event_date_weight.groupby('event_date')['weight'].transform(self.scale_weights)
+        weights = event_date_weight.rename(columns = {'event_date' : 'date'})
 
         weight_table = weights.pivot_table(index = 'date' , columns = 'factor_name' , values = 'weight').fillna(0)
         self.weights = weight_table.loc[:,self.factor_names]
@@ -219,13 +217,12 @@ class EventFactorWeight:
         return top - bot
 
     @staticmethod
-    def scale_weights(x : pd.DataFrame , **kwargs) -> pd.DataFrame:
-        weights = x['weight']
+    def scale_weights(weights : pd.Series , **kwargs) -> pd.Series:
         if weights.sum() <= 0:
             y = (weights * 0 + 1) / len(weights)
         else:
             y = weights / weights.sum()
-        return x.copy().assign(weight = y)
+        return y
 
     @classmethod
     def time_decay_event_weight(cls , event_date_metric : pd.DataFrame , n_window : int = 10 , half_life : int = 5) -> pd.DataFrame:
@@ -356,7 +353,7 @@ class event_factor_momentum(WeightedPoolingCalculator):
         '-mom_1m' , '-mom_3m' , # reversal
         'umr_new_1m' , 'umr_new_3m' , 'umr_new_6m' , 'umr_new_12m', # umr_new
     ]
-    updatable = False
+    # updatable = False
 
     def calc_factor(self , date : int) -> pd.DataFrame:
         factor_weight = self.get_pooling_weight(date)

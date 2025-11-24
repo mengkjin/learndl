@@ -113,13 +113,14 @@ def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , ve
     if df is None or df.empty: 
         return False
     elif overwrite or not path.exists(): 
+        status = 'overwritten' if path.exists() else 'saved'
         path.parent.mkdir(parents=True , exist_ok=True)
         if SAVE_OPT_DB == 'feather':
             df.to_feather(path)
         else:
             df.to_parquet(path , engine='fastparquet')
         if verbose: 
-            print(f'{path} {"overwritten" if overwrite else "saved"} successfully')
+            print(f'{path} {status} successfully')
         return True
     else:
         if verbose: 

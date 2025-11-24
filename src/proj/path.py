@@ -148,7 +148,7 @@ class PATH:
     def file_modified_time(path : Path | str , default = 19970101000000) -> int:
         """Get the modified time of the file"""
         if Path(path).exists():
-            return int(time.strftime('%Y%m%d%H%M%S',time.localtime(os.path.getmtime(path))))
+            return int(time.strftime('%Y/%m/%d %H:%M:%S',time.localtime(os.path.getmtime(path))))
         else:
             return default
         

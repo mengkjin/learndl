@@ -1,9 +1,10 @@
-import torch
+import torch , time
 import numpy as np
 import pandas as pd
 
 from itertools import product
 
+from src.proj import SILENT
 from src.basic import CALENDAR , HiddenPath , HiddenExtractingModel
 from src.res.model.util import TrainConfig
 from src.res.model.data_module import DataModule
@@ -18,7 +19,7 @@ class ModelHiddenExtractor:
         self.config = TrainConfig.load_model(self.model_path , override={'env.short_test':False , 'train.dataloader.sample_method':'sequential'})
         self.model  = get_predictor_module(self.config)
         assert isinstance(self.model , NNPredictor) , self.model
-        self.load_model_data() # must load data before loading model, to get input_dim parameter
+        # self.load_model_data() # must load data before loading model, to get input_dim parameter
     
     def __repr__(self):
         return f'{self.__class__.__name__}({self.hidden_model})'
@@ -55,8 +56,10 @@ class ModelHiddenExtractor:
         
     def load_model_data(self):
         if not getattr(self , 'data_loaded' , False):
-            self.data = DataModule(self.config , 'both').load_data()
+            with SILENT:
+                self.data = DataModule(self.config , 'both').load_data()
             self.data_loaded = True
+            print(f'-->  Loaded model data for {self.hidden_name} successfully!')
 
     def model_iter(self , model_dates : list | np.ndarray | int | None = None , update = True):
         if model_dates is None: 
@@ -83,13 +86,15 @@ class ModelHiddenExtractor:
                 hidden_path = HiddenPath(self.hidden_name , model_num , submodel)
                 modified_time = hidden_path.last_modified_time(model_date)
                 if CALENDAR.is_updated_today(modified_time):
-                    print(f'Skipping: {hidden_path.hidden_key} already updated at {modified_time}!')
+                    time_str = time.strftime('%Y/%m/%d %H:%M:%S',time.strptime(str(modified_time) , '%Y%m%d%H%M%S'))
+                    print(f'-->  Skipping: {hidden_path.hidden_key} already updated at {time_str}!')
                     continue
                 self.model_hidden(hidden_path , model_date , overwrite , silent)
                 self._current_update_dates.append(model_date)
         return self
     
     def model_hidden(self , hidden_path : HiddenPath , model_date :int , overwrite = False , silent = False) -> pd.DataFrame | None:
+        self.load_model_data()
         model_num , submodel = hidden_path.model_num , hidden_path.submodel
         self.model.load_model(model_num , model_date , submodel)
 
