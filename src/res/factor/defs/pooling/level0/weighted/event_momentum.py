@@ -356,6 +356,7 @@ class event_factor_momentum(WeightedPoolingCalculator):
         '-mom_1m' , '-mom_3m' , # reversal
         'umr_new_1m' , 'umr_new_3m' , 'umr_new_6m' , 'umr_new_12m', # umr_new
     ]
+    updatable = False
 
     def calc_factor(self , date : int) -> pd.DataFrame:
         factor_weight = self.get_pooling_weight(date)

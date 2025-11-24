@@ -18,6 +18,7 @@ from src.app import ScriptTool
 @ScriptTool('fix_factors' , lock_name = 'update_factors')
 def main(factor_names : str | None = None , **kwargs):
     assert factor_names is not None , 'factor_names is required'
+    factor_names = 'event_factor_momentum'
     FactorCalculatorAPI.fix(factors = [s.strip() for s in factor_names.split(',')] , verbosity = 10)
     
 if __name__ == '__main__':
