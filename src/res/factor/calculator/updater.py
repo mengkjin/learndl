@@ -11,7 +11,7 @@ from .factor_calc import FactorCalculator , WeightedPoolingCalculator
 from src.proj import Logger
 from src.basic import CONF , CALENDAR 
 from src.data import DATAVENDOR
-from src.func.parallel import parallel
+from src.func.parallel import parallel , try_func_call
 from src.func.singleton import SingletonMeta
 
 __all__ = ['StockFactorUpdater' , 'MarketFactorUpdater' , 'AffiliateFactorUpdater' , 'PoolingFactorUpdater' , 'FactorStatsUpdater']
@@ -76,8 +76,10 @@ class _JobFactorDate(_BaseJob):
         """sort key of the job : (level , date , factor_name)"""
         return (self.level , self.date , self.factor_name)
 
-    def do(self) -> None:
+    def do(self , verbose : bool = False) -> None:
         """do the job"""
+        if verbose:
+            self.preview()
         self.done = self.calc.update_day_factor(
             self.date , overwrite = self.overwrite , show_success = self.verbose , catch_errors = CATCH_ERRORS)
     
@@ -101,8 +103,10 @@ class _JobFactorAll(_BaseJob):
         """sort key of the job"""
         return (self.level , self.factor_name)
 
-    def do(self) -> None:
+    def do(self , verbose : bool = False) -> None:
         """do the job"""
+        if verbose:
+            self.preview()
         self.calc.update_all_factors(
             start = self.start , end = self.end , overwrite = self.overwrite , verbose = self.verbose
         )
@@ -132,8 +136,10 @@ class _JobFactorStats(_BaseJob):
         """sort key of the job"""
         return (self.year , self.factor_name)
 
-    def do(self) -> None:
+    def do(self , verbose : bool = False) -> None:
         """do the job"""
+        if verbose:
+            self.preview()
         if self.stats_type == 'daily':
             self.calc.update_daily_stats(self.dates() , overwrite = self.overwrite , verbose = self.verbose)
         elif self.stats_type == 'weekly':
@@ -388,9 +394,7 @@ class MarketFactorUpdater(BaseFactorUpdater):
                            verbosity : int = 1 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        if verbosity > 0:
-            jobs[0].preview()
-        jobs[0].do()
+        try_func_call((jobs[0].do , {'verbose' : verbosity > 0}))
 
 class PoolingFactorUpdater(BaseFactorUpdater):
     """manager of pooling factor update jobs"""
@@ -408,9 +412,7 @@ class PoolingFactorUpdater(BaseFactorUpdater):
                            verbosity : int = 1 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        if verbosity > 0:
-            jobs[0].preview()
-        jobs[0].do()
+        try_func_call((jobs[0].do , {'verbose' : verbosity > 0}))
 
 class AffiliateFactorUpdater(BaseFactorUpdater):
     """manager of affiliate factor update jobs"""
@@ -428,9 +430,7 @@ class AffiliateFactorUpdater(BaseFactorUpdater):
                            verbosity : int = 1 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        if verbosity > 0:
-            jobs[0].preview()
-        jobs[0].do()
+        try_func_call((jobs[0].do , {'verbose' : verbosity > 0}))
     
 class FactorStatsUpdater(BaseFactorUpdater):
     """manager of factor stats update jobs"""

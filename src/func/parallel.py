@@ -110,13 +110,15 @@ def unwrap_func_call(func_call : TYPE_FUNC_CALL) -> tuple[Callable , list | tupl
     return func , args , kwargs
 
 def try_func_call(
-    result_dict : dict , key : Any , 
     func_call : TYPE_FUNC_CALL , 
+    key : Any = None, result_dict : dict | None = None, 
     catch_errors : tuple[type[Exception],...] =  () , 
 ) -> Any:
     func , args , kwargs = unwrap_func_call(func_call)
     try: 
-        result_dict[key] = func(*args , **kwargs)
+        res = func(*args , **kwargs)
+        if result_dict is not None:
+            result_dict[key] = res
     except catch_errors as e:
         print(f'{key} : {func}({args} , {kwargs}) generated an exception: {e}')
     except Exception as e:
@@ -153,11 +155,11 @@ def parallels(
         
     if method == 0:
         for key , func_call in iterance:
-            try_func_call(result , key , func_call , catch_errors = catch_errors)
+            try_func_call(func_call , key , result , catch_errors = catch_errors)
     else:
         PoolExecutor = ProcessPoolExecutor if method == 2 else ThreadPoolExecutor
         with PoolExecutor(max_workers=max_workers) as pool:
-            futures = {pool.submit(try_func_call, result , key , func_call , catch_errors = catch_errors):key for key , func_call in iterance}
+            futures = {pool.submit(try_func_call, func_call , key , result , catch_errors = catch_errors):key for key , func_call in iterance}
             for future in as_completed(futures):
                 future.result()
     return result
