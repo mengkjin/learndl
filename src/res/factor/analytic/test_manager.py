@@ -6,8 +6,7 @@ from abc import ABC , abstractmethod
 from matplotlib.figure import Figure
 from typing import Any , Callable , Literal , Type
 
-from src.proj import PATH
-from src.basic import Timer
+from src.proj import PATH , Timer
 from src.func import dfs_to_excel , figs_to_pdf , display as disp
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor

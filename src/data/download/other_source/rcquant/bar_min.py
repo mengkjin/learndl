@@ -67,14 +67,14 @@ def rcquant_init():
             if _error := output['stderr']:
                 key_info = re.search(r'Your account will be expired after  (\d+) days', _error)
                 if key_info:
-                    Logger.debug(f'RcQuant Warning : {key_info.group(0)}')
+                    Logger.warning(f'RcQuant Warning : {key_info.group(0)}')
                 else:
                     Logger.error(f'RcQuant Error : {_error}')
         except FileNotFoundError:
             Logger.error(f'rcquant login info not found, please check .local_settings/rcquant.yaml')
             return False
         except QuotaExceeded as e:
-            Logger.debug(f'rcquant init failed: {e}')
+            Logger.error(f'rcquant init failed: {e}')
             return False
     return True
 
@@ -207,9 +207,9 @@ def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = 
     for dt in dts:
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
-            Logger.debug(f'rcquant {data_type} bar min {dt} failed')
+            Logger.fail(f'rcquant {data_type} bar min {dt} failed')
         else:
-            print(f'rcquant {data_type} bar min {dt} success')
+            Logger.success(f'rcquant {data_type} bar min {dt} success')
 
     for dt in x_mins_target_dates(data_type , date):
         print(f'process other {data_type} min bars at {dt} from source rcquant')
@@ -228,7 +228,7 @@ def rcquant_proceed(date : int | None = None , first_n : int = -1):
         try:
             rcquant_download(date , data_type , first_n)
         except Exception as e:
-            Logger.debug(f'rcquant download {data_type} minbar failed: {e}')
+            Logger.error(f'rcquant download {data_type} minbar failed: {e}')
             return False
     
     return True

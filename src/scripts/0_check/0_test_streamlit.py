@@ -40,9 +40,7 @@
 #       required : False
 #       default : 42.
 import time , random , sys
-
-from src.proj import Logger , LogWriter
-from src.basic import Timer
+from src.proj import Logger , LogWriter , Timer
 from src.app import ScriptTool
 
 @ScriptTool('test_streamlit' , '@port_name' , txt = 'Bye, World!' , lock_num = 2 , lock_timeout = 10)
@@ -52,6 +50,16 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
         print('This will be caught')
         with Logger.EnclosedMessage('main part'):
             with Timer('abc'):
+                Logger.critical('critical message')
+                Logger.error('error message')
+                Logger.warning('warning message')
+                Logger.info('info message')
+                Logger.debug('debug message')
+                Logger.highlight('highlight message')
+                Logger.separator()
+                Logger.divider()
+                Logger.success('success message')
+                Logger.fail('fail message')
                 ScriptTool.info(f'cmd is: {" ".join(sys.argv)}')
                 ScriptTool.info(f'this is kwargs: {str(kwargs)}')
                 ScriptTool.info(f'this is an info: {txt}')
@@ -66,7 +74,7 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
                     ScriptTool.error(f'this is an error: {rnd}')
                 else:
                     ScriptTool.info(f'this is an info: {rnd}')
-    time.sleep(2)
+    time.sleep(1)
         
 if __name__ == '__main__':
     main()

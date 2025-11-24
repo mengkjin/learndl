@@ -8,6 +8,7 @@ from pypinyin import lazy_pinyin
 from sqlalchemy import create_engine , exc
 from typing import ClassVar , Literal
 
+from src.proj import Logger , Duration
 from src.basic import CALENDAR , DB
 from src.data.util import secid_adjust
 from src.func.time import date_seg
@@ -172,7 +173,7 @@ class SellsideSQLDownloader:
         if not date_intervals: 
             return 
         
-        print(f'{time.ctime()} : {self.DB_SRC}/{self.db_key} from ' + 
+        print(f'Fetching: {self.DB_SRC}/{self.db_key} from ' + 
             f'{date_intervals[0][0]} to {date_intervals[-1][1]}, total {len(date_intervals)} periods')
 
         if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang':
@@ -185,11 +186,10 @@ class SellsideSQLDownloader:
                 pool.starmap(self.download_period, [(connection , *inter) for inter in date_intervals])
  
     def download_period(self , connection , start , end):
-        print(f'Start {self.DB_SRC}/{self.db_key}:{start}-{end} ')
         t0 = time.time()
         df = self.query_default(connection , start , end)
         self.save_data(df)
-        print(f'Done {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {time.time()-t0:.1f} Secs')
+        Logger.success(f'Finished: {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {Duration(time.time()-t0).fmtstr}')
         return True
 
     def query_start_dt(self , connection : Connection):
@@ -203,7 +203,7 @@ class SellsideSQLDownloader:
             try:
                 df = self.make_query(self.default_query , conn , start_dt , end_dt)
             except exc.ResourceClosedError:
-                print(f'{self.factor_src} Connection is closed, re-connect')
+                Logger.warning(f'{self.factor_src} Connection is closed, re-connect')
                 conn = connection.connect(reconnect = True)
             i += 1
         if not connection.stay_connect: 
@@ -374,14 +374,12 @@ class SellsideSQLDownloader:
     def factors_and_conns(cls , keys = None):
         factors = cls.default_factors(keys)
         conns   = Connection.default_connections()
-        print(f'Connection and Factor preparation finished!')
         # return [(factor , conns[factor.factor_src]) for factor in factors.values()]
         return [(factor , conns[factor.connection_key]) for factor in factors.values()]
 
     @classmethod
     def update_since(cls , trace = 0):
-        prompt = f'{time.ctime()} : download since last update!'
-        print(prompt)
+        print(f'Fetching:  {cls.__name__} since last update!')
 
         for factor , connection in cls.factors_and_conns():  
             factor.download('since' , connection , trace = trace)
@@ -411,7 +409,7 @@ class SellsideSQLDownloader:
         try:
             cls.update_since(trace = 0)
         except Exception as e:
-            print(f'In {cls.__name__} : Error in update_since: {e}')
+            Logger.error(f'In {cls.__name__} : Error in update_since: {e}')
             traceback.print_exc()
         
 if __name__ == '__main__':

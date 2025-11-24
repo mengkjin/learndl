@@ -5,8 +5,8 @@ import pandas as pd
 from contextlib import nullcontext
 from typing import Any , ClassVar , Literal
 
-from src.proj import MACHINE
-from src.basic import SILENT , CALENDAR , RegisteredModel
+from src.proj import MACHINE , SILENT
+from src.basic import CALENDAR , RegisteredModel
 from src.res.model.util import TrainConfig
 from src.res.model.data_module import DataModule
 from src.res.model.model_module.module import get_predictor_module

@@ -352,7 +352,7 @@ class event_factor_momentum(WeightedPoolingCalculator):
         'dtop' , # dividend
         'pead_aog_rank' , 'pead_alg_rank' , # PEAD
         '-turn_1m' , '-turn_3m' , # liquidity
-        '-ff_r2_1m' , '-atr_1m' , # volatility
+        'ff_r2_1m' , 'atr_1m' , # volatility
         '-mom_1m' , '-mom_3m' , # reversal
         'umr_new_1m' , 'umr_new_3m' , 'umr_new_6m' , 'umr_new_12m', # umr_new
     ]

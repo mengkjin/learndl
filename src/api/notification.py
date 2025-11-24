@@ -45,7 +45,7 @@ def email_to_fanghan(test = False):
     today = CALENDAR.updated()
     task_recorder = TaskRecorder('notification' , 'email_to_fanghan' , str(today))
     if task_recorder.is_finished():
-        print(f'email_to_fanghan at {today} is already done')
+        print(f'Skipping: email_to_fanghan at {today} already done')
         return
     
     pred_dates = DB.dates('pred' , 'gru_day_V1')

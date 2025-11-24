@@ -6,8 +6,8 @@ from numpy.random import permutation
 from torch.utils.data import BatchSampler
 from typing import Any , Literal
 
-from src.proj import PATH , Logger
-from src.basic import SILENT , HiddenPath
+from src.proj import PATH , Logger , SILENT
+from src.basic import HiddenPath
 from src.data import DataBlockNorm , DataPreProcessor , ModuleData , DataBlock
 from src.func import tensor_standardize_and_weight , match_values
 from src.res.model.util import BaseBuffer , BaseDataModule , BatchData , TrainConfig , MemFileStorage , StoredFileLoader
@@ -69,7 +69,7 @@ class DataModule(BaseDataModule):
         DataPreProcessor.main(predict = True , data_types = data_types)
        
     def load_data(self):
-        self.datas = ModuleData.load(self.input_keys_data + self.input_keys_factor , self.config.model_labels, 
+        self.datas = ModuleData.load(self.input_keys_data + self.input_keys_factor , self.config.model_labels , self.config.input_factor_names , 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision)
         self.config.update_data_param(self.datas.x)
@@ -381,7 +381,7 @@ class DataModule(BaseDataModule):
             divlast = method.get('divlast'  , False) and (mdt in DataBlockNorm.DIVLAST)
             histnorm = method.get('histnorm' , True)  and (mdt in DataBlockNorm.HISTNORM)
             if not SILENT and (divlast or histnorm): 
-                Logger.debug(f'Pre-Norming method of [{mdt}] : {divlast} {histnorm}')
+                Logger.success(f'Pre-Norming method of [{mdt}] : {divlast} {histnorm}')
             if divlast: 
                 self.prenorm_divlast.append(mdt)
             if histnorm: 

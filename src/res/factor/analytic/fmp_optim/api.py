@@ -1,6 +1,6 @@
 from typing import Any , Literal , Type
 
-from src.basic import Timer
+from src.proj import Timer
 from . import calculator as Calc
 from .calculator import BaseOptimCalc
 from ..test_manager import BaseTestManager

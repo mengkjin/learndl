@@ -7,6 +7,8 @@ from .catcher import (
 from .sqlite import DBConnHandler
 from .debug import InstanceRecord
 from .shared_sync import SharedSync
+from .silence import SILENT
+from .timer import Duration , Timer , PTimer , BigTimer
 
 def print_project_info():
     import torch , os

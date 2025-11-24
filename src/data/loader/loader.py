@@ -3,8 +3,8 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import Literal
 
-from src.proj import PATH
-from src.basic import Timer , DB , CONF , CALENDAR
+from src.proj import PATH , Timer
+from src.basic import DB , CONF , CALENDAR
 from src.data.util import DataBlock
 
 @dataclass
@@ -83,9 +83,44 @@ class FrameLoader:
     
 class FactorLoader(BlockLoader):
     """
+    Loader for factor data given factor names
+    example:
+        loader = FactorLoader(name = ['df_scores_v0'])
+        df = loader.load(start_dt = 20250101 , end_dt = 20250331)
+    """
+    def __init__(
+        self , 
+        names : str | list[str] , 
+        normalize = False , 
+        fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = 'drop' ,
+        **kwargs
+    ):
+        super().__init__('factor')
+        self.names = names if isinstance(names , list) else [names]
+        self.normalize = normalize
+        self.fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = fill_method
+        self.kwargs = kwargs
+        
+    def load_block(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> DataBlock:
+        """Load factor data , alias for load"""
+        factors : list[pd.DataFrame] = []
+        from src.res.factor.calculator import FactorCalculator
+        with Timer(f' --> factor blocks reading [{len(self.names)} factors]' , silent = silent):
+            dates = CALENDAR.td_within(start_dt , end_dt)
+            for calc in FactorCalculator.iter_calculators(selected_factors = self.names , **self.kwargs):
+                df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method)
+                df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
+                factors.append(df)
+        with Timer(f' --> factor blocks merging ({len(factors)} factors)' , silent = silent): 
+            df = pd.concat([fac for fac in factors if not fac.empty]).pivot_table('value' , ['secid','date'] , 'feature')
+            block = DataBlock.from_dataframe(df)
+        return block
+
+class FactorCategory1Loader(BlockLoader):
+    """
     Loader for factor data given category1
     example:
-        loader = FactorLoader(category1 = 'quality')
+        loader = FactorCategory1Loader(category1 = 'quality')
         df = loader.load(start_dt = 20250101 , end_dt = 20250331)
     """
     def __init__(
@@ -100,8 +135,7 @@ class FactorLoader(BlockLoader):
         self.normalize = normalize
         self.fill_method : Literal['drop' , 'zero' ,'ffill' , 'mean' , 'median' , 'indus_mean' , 'indus_median'] = fill_method
         self.kwargs = kwargs
-        CONF.Factor.STOCK.validate_categories(self.category0 , self.category1)
-
+        
     def load_block(self , start_dt : int | None = None , end_dt : int | None = None , silent = False) -> DataBlock:
         """Load factor data , alias for load"""
         factors : list[pd.DataFrame] = []

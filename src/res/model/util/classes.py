@@ -8,8 +8,8 @@ from inspect import currentframe
 from pathlib import Path
 from typing import Any , final , Iterator , Literal
 
-from src.proj import InstanceRecord ,PATH , Logger
-from src.basic import ModelDict , BigTimer
+from src.proj import InstanceRecord ,PATH , Logger , BigTimer
+from src.basic import ModelDict 
 from src.func import Filtered
 from src.res.algo import AlgoModule
 from src.data import ModuleData
@@ -390,7 +390,7 @@ class BaseTrainer(ModelStreamLine):
             self.on_configure_model()
 
             if not self.stage_queue:
-                Logger.debug("stage_queue is empty , please check src.proj.InstanceRecord['trainer']")
+                Logger.error("stage_queue is empty , please check src.proj.InstanceRecord['trainer']")
                 raise Exception("stage_queue is empty , please check src.InstanceRecord['trainer']")
 
             if 'data' in self.stage_queue: 
@@ -424,7 +424,7 @@ class BaseTrainer(ModelStreamLine):
         self.on_fit_start()
         for self.status.model_date , self.status.model_num in self.iter_model_num_date():
             if self.status.fit_iter_num == 0:
-                Logger.warning(f'First Iterance: ({self.status.model_date} , {self.status.model_num})')
+                Logger.highlight(f'First Iterance: ({self.status.model_date} , {self.status.model_num})')
             self.on_fit_model_start()
             self.model.fit()
             self.on_fit_model_end()

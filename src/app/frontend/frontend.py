@@ -703,15 +703,15 @@ class ColoredText(str):
     @staticmethod
     def auto_color(message : str):
         if message.lower().startswith('error'):
-            return 'violet'
+            return 'red'
         elif message.lower().startswith('warning'):
-            return 'blue'
+            return 'yellow'
         elif message.lower().startswith('info'):
             return 'green'
         elif message.lower().startswith('debug'):
             return 'gray'
         elif message.lower().startswith('critical'):
-            return 'red'
+            return 'blue'
         else:
             return None
         

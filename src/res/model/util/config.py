@@ -52,9 +52,11 @@ def striped_list(factors : list[str] | dict | str):
             factors = list(factors.values())
         return [ff for f in factors for ff in striped_list(f)]
 
-def conf_mod_type(module : str) -> Literal['nn' , 'booster' , 'db']:
+def conf_mod_type(module : str) -> Literal['nn' , 'booster' , 'db' , 'factor']:
     if module.startswith('db@'):
         return 'db'
+    elif module.startswith('factor@'):
+        return 'factor'
     else:
         return AlgoModule.module_type(module)
 
@@ -147,6 +149,8 @@ class TrainParam:
             model_name = str(self.Param['model.name'])
         elif self.model_module.startswith('db@'):
             model_name = self.model_module.replace('@','_')
+        elif self.model_module.startswith('factor@'):
+            model_name = self.model_module.replace('@','_')
         else: 
             mod_str = self.model_module 
             head_str = 'booster' if self.model_booster_head else None
@@ -174,8 +178,13 @@ class TrainParam:
         if nn_datatype:  
             self.Param['model.data.types'] = nn_datatype
 
-        if self.module_type in ['booster' , 'db'] or self.model_booster_head: 
+        if self.module_type != 'nn' or self.model_booster_head: 
             self.Param['model.submodels'] = ['best']
+
+        if self.module_type == 'factor':
+            self.Param['input_type'] = 'factor'
+            self.Param['factor.types'] = []
+            self.Param['sequence.lens']['factor'] = 1
 
         if 'best' not in self.model_submodels: 
             self.model_submodels.insert(0 , 'best')
@@ -213,11 +222,11 @@ class TrainParam:
         return str(PATH.read_yaml(conf_path(base_path , 'train', 'model'))['module']).lower()
     
     @staticmethod
-    def get_module_type(module : str) -> Literal['nn' , 'booster' , 'db']:
+    def get_module_type(module : str) -> Literal['nn' , 'booster' , 'db' , 'factor']:
         return conf_mod_type(module)
     
     @property
-    def module_type(self) -> Literal['nn' , 'booster' , 'db']: 
+    def module_type(self) -> Literal['nn' , 'booster' , 'db' , 'factor']: 
         return conf_mod_type(self.model_module)
 
     @property
@@ -417,6 +426,17 @@ class TrainParam:
     @property
     def train_trainer_gradient_clip_value(self) -> Any: 
         return self.Param['train.trainer.gradient.clip_value']
+    @property
+    def input_factor_names(self) -> list[str]: 
+        if self.module_type == 'factor':
+            return [self.model_module.removeprefix('factor@')]
+        else:
+            return []
+    @property
+    def factor_factor_calculator(self): 
+        assert self.module_type == 'factor' , f'{self.module_type} is not a factor module'
+        from src.res.factor.calculator import StockFactorHierarchy
+        return StockFactorHierarchy.get_factor(self.input_factor_names[0])
 
     @property
     def callbacks(self) -> dict[str,dict]: 
@@ -455,7 +475,7 @@ class ModelParam:
         return self.model_param
 
     @property
-    def module_type(self) -> Literal['nn' , 'booster' , 'db']: 
+    def module_type(self) -> Literal['nn' , 'booster' , 'db' , 'factor']: 
         return conf_mod_type(self.module)
 
     @property
@@ -651,6 +671,8 @@ class TrainConfig(TrainParam):
         beg_date = self.Train.beg_date
         if self.module_type == 'db':
             beg_date = max(beg_date , DB.min_date(self.db_mapping.src , self.db_mapping.key))
+        elif self.module_type == 'factor':
+            beg_date = max(beg_date , self.factor_factor_calculator.init_date)
         if self.start is not None:
             beg_date = max(beg_date , self.start)
         return beg_date
@@ -659,6 +681,8 @@ class TrainConfig(TrainParam):
         end_date = self.Train.end_date
         if self.module_type == 'db':
             end_date = min(end_date , DB.max_date(self.db_mapping.src , self.db_mapping.key))
+        elif self.module_type == 'factor':
+            end_date = min(end_date , self.factor_factor_calculator.final_date)
         if self.end is not None:
             end_date = min(end_date , self.end)
         return end_date
@@ -813,7 +837,7 @@ class TrainConfig(TrainParam):
             else:
                 raise ValueError(f'checkname must be -1 or 0 when base_path is not None , got {checkname}')
             verbose = False
-        with Logger.EnclosedMessage(' parser training args ' , timer = False) if verbose else nullcontext():
+        with Logger.EnclosedMessage(' parser training args ') if verbose else nullcontext():
             self.parser_stage(stage , verbose)
             self.parser_resume(resume , verbose)
             self.parser_select(checkname , verbose) 
@@ -858,8 +882,8 @@ class TrainConfig(TrainParam):
         info_strs.append(f'Stage Queue     : {self.stage_queue}')
         info_strs.append(f'Resume Training : {self.resume_training}')
 
-        with Logger.EnclosedMessage(' model info ' , timer = False): 
-            Logger.print('\n'.join(info_strs))
+        with Logger.EnclosedMessage(' model info '): 
+            print('\n'.join(info_strs))
 
     @property
     def stage_queue(self) -> list[Literal['data' , 'fit' , 'test']]:

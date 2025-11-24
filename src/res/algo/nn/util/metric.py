@@ -151,7 +151,7 @@ class MetricCalculator:
     def display(self):
         if self.DISPLAY_LOG.get(f'{self.metric_type}.{self.criterion}' , False): 
             return
-        Logger.debug(f'{self.metric_type} function of [{self.criterion}] calculated and success!')
+        Logger.success(f'{self.metric_type} function of [{self.criterion}] calculated and success!')
         self.DISPLAY_LOG[f'{self.metric_type}.{self.criterion}'] = True
 
     @classmethod
@@ -185,7 +185,7 @@ class MetricCalculator:
             if nanpos.ndim > 1:
                 nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0
             if print_all_nan and nanpos.all(): 
-                Logger.debug('Encountered all nan inputs in metric calculation!')
+                Logger.error('Encountered all nan inputs in metric calculation!')
                 [print(arg) for arg in args]
             args = [None if arg is None else arg[~nanpos] for arg in args]
         return args

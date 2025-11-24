@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any , ClassVar
 
-from src.proj import PATH , Logger
-from src.basic import CALENDAR , DB , SILENT , Timer , torch_load
+from src.proj import PATH , Logger , SILENT , Timer
+from src.basic import CALENDAR , DB , torch_load
 from src.func import index_union , index_intersect , forward_fillna
 
 from . import Stock4DData
@@ -81,7 +81,7 @@ class DataBlock(Stock4DData):
         try:
             return max(DataBlock.load_dict(DataBlock.block_path(key , predict))['date'])
         except ModuleNotFoundError as e:
-            Logger.debug(f'last_data_date({key , predict}) error: ModuleNotFoundError: {e}')
+            Logger.error(f'last_data_date({key , predict}) error: ModuleNotFoundError: {e}')
             return None
 
     def save(self , key : str , predict=False , start_dt = None , end_dt = None):
@@ -402,19 +402,21 @@ class ModuleData:
         return self.date[(self.date >= start) & (self.date <= end)][::interval]
     
     @classmethod
-    def load(cls , data_type_list : list[str] , y_labels : list[str] | None = None , 
+    def load(cls , data_type_list : list[str] , 
+             y_labels : list[str] | None = None , 
+             factor_names : list[str] | None = None ,
              fit : bool = True , predict : bool = False , 
              dtype : str | Any = torch.float , 
              save_upon_loading : bool = True):
         
         assert fit or predict , (fit , predict)
         if not predict: 
-            return cls.load_datas(data_type_list , y_labels , False , dtype , save_upon_loading)
+            return cls.load_datas(data_type_list , y_labels , factor_names , False , dtype , save_upon_loading)
         elif not fit:
-            return cls.load_datas(data_type_list , y_labels , True  , dtype , save_upon_loading)
+            return cls.load_datas(data_type_list , y_labels , factor_names , True  , dtype , save_upon_loading)
         else:
-            hist_data = cls.load_datas(data_type_list , y_labels , False , dtype , save_upon_loading)
-            pred_data = cls.load_datas(data_type_list , y_labels , True  , dtype , save_upon_loading)
+            hist_data = cls.load_datas(data_type_list , y_labels , factor_names , False , dtype , save_upon_loading)
+            pred_data = cls.load_datas(data_type_list , y_labels , factor_names , True  , dtype , save_upon_loading)
 
             hist_data.y = hist_data.y.merge_others([pred_data.y])
             hist_data.secid , hist_data.date = hist_data.y.secid , hist_data.y.date
@@ -425,9 +427,11 @@ class ModuleData:
             return hist_data
 
     @classmethod
-    def load_datas(cls , data_type_list : list[str] , y_labels : list[str] | None = None , 
-                       predict : bool = False , dtype : str | Any = torch.float , 
-                       save_upon_loading : bool = True):
+    def load_datas(cls , data_type_list : list[str] , 
+                   y_labels : list[str] | None = None , 
+                   factor_names : list[str] | None = None ,
+                   predict : bool = False , dtype : str | Any = torch.float , 
+                   save_upon_loading : bool = True):
         '''
         load all x/y data if input_type is data or factor
         if predict is True, only load recent data
@@ -458,6 +462,11 @@ class ModuleData:
             if not predict and save_upon_loading: 
                 cls.datacache_save(data , last_date or y.date[-1] , data_type_list)
             data = cls(**data)
+
+        if factor_names:
+            from src.data.loader import FactorLoader
+            add_x = FactorLoader(factor_names).load_block(data.date[0] , data.date[-1] , silent = True)
+            data.x['factor'] = add_x.align_secid_date(data.secid , data.date)
 
         data.y.align_feature(y_labels)
         return data
@@ -518,11 +527,11 @@ class ModuleData:
                     print(f'Loading Module Data, Try \'{path}\', success!')
             else:
                 if not SILENT: 
-                    Logger.debug(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
+                    Logger.warning(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
                 data = None
         except ModuleNotFoundError:
             '''can be caused by different package version'''
-            Logger.debug(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
+            Logger.warning(f'Loading Module Data, Try \'{path}\', Incompatible, Load Raw blocks!')
             data = None
         except Exception as e:
             raise e

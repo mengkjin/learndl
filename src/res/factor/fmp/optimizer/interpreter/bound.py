@@ -210,7 +210,7 @@ class GeneralBound:
     def export(self , wb : np.ndarray | Any = None):
         assert wb is None or isinstance(wb , np.ndarray) , f'Only stock weight can be export , risk style/indus cannot'
         if np.isnan(wb).any():
-            Logger.debug(f'GeneralBound {self.key} when export has nan of wb : {np.isnan(wb).sum()} / {np.size(wb)}')
+            Logger.warning(f'GeneralBound {self.key} when export has nan of wb : {np.isnan(wb).sum()} / {np.size(wb)}')
             wb = np.nan_to_num(wb)
         if self.key == 'abs': 
             lb , ub = self.lb , self.ub
@@ -229,10 +229,10 @@ class GeneralBound:
                    others : list['GeneralBound'] | None = None) -> tuple:
         others = others or []
         if np.isnan(A).any():
-            Logger.debug(f'GeneralBound {self.key} when export_lin has nan of A : {np.isnan(A).sum()} / {np.size(A)}')
+            Logger.warning(f'GeneralBound {self.key} when export_lin has nan of A : {np.isnan(A).sum()} / {np.size(A)}')
             A = np.nan_to_num(A)
         if np.isnan(wb).any():
-            Logger.debug(f'GeneralBound {self.key} when export_lin has nan of wb : {np.isnan(wb).sum()} / {np.size(wb)}')
+            Logger.warning(f'GeneralBound {self.key} when export_lin has nan of wb : {np.isnan(wb).sum()} / {np.size(wb)}')
             wb = np.nan_to_num(wb)
         #assert not isinstance(self.lb , np.ndarray) , self.lb
         #assert not isinstance(self.ub , np.ndarray) , self.ub

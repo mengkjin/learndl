@@ -6,12 +6,13 @@ from abc import ABC, abstractmethod
 from io import StringIO
 from pathlib import Path
 from dataclasses import dataclass , field
-from datetime import datetime , timedelta
+from datetime import datetime
 from matplotlib.figure import Figure
 
 from .path import PATH
 from .logger import Logger
 from .machine import MACHINE
+from .timer import Duration
 
 __all__ = [
     'IOCatcher' , 'LogWriter' , 'OutputCatcher' , 'OutputDeflector' , 
@@ -290,41 +291,52 @@ def _critical(message: str):
 
     prefix = f'{time.strftime("%y-%m-%d %H:%M:%S")}|MOD:{mod_name:{12}s}|'
     
-    output = f"{red_bg_white_bold}{prefix}{reset_all}{red_text}: {message}{reset_all}\n"
+    output = f"{red_bg_white_bold}{prefix}{reset_all}: {red_text}{message}{reset_all}\n"
     sys.stderr.write(output)
+    return output
 
 def _str_to_html(text: str | Any):
     """capture string"""
+    
     assert isinstance(text, str) , f"text must be a string , but got {type(text)}"
     if re.match(r"^(?!100%\|)\d{1,2}%\|", text): 
         return None  # skip unfinished progress bar
     text = html.escape(text)
-    text = re.sub(r'\u001b\[(\d+;)*\d+m', _convert_ansi_sequence, text)
-    text = _ansi_to_css(text)
+    text = re.sub(r'(?:\u001b\[[\d;]*m)+', replace_ansi_sequences, text)
+    
     return text
 
-def _convert_ansi_sequence(match):
-    """convert complex ANSI sequence"""
-    sequence = match.group(0)
-    codes = sequence[2:-1].split(';')  # remove \u001b[ and m
+def replace_ansi_sequences(match):
+    # match.group(0) contains all continuous ANSI sequences
+    sequences = match.group(0)
+    all_codes = []
+
+    for seq_match in re.finditer(r'\u001b\[([\d;]*)m', sequences):
+        codes_str = seq_match.group(1)
+        if codes_str:
+            all_codes.extend(codes_str.split(';'))
     
+    return _convert_ansi_codes_to_span(all_codes)
+
+def _convert_ansi_codes_to_span(codes):
+    """convert ANSI codes list to a single span tag"""
     styles = []
     bg_color = None
     fg_color = None
     
-    for code in codes:
-        if not code: 
+    for code_str in codes:
+        if not code_str:
             continue
-        code = int(code)
+        code = int(code_str)
         if code == 0:
             return '</span>'
         elif code == 1:
             styles.append('font-weight: bold')
         elif 30 <= code <= 37:  # foreground color
-            colors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
+            colors = ['black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'white']
             fg_color = colors[code - 30]
         elif 40 <= code <= 47:  # background color
-            colors = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white']
+            colors = ['black', 'red', 'green', 'yellow', 'blue', 'purple', 'cyan', 'white']
             bg_color = colors[code - 40]
     
     if fg_color:
@@ -361,21 +373,21 @@ def _ansi_to_css(ansi_string: str) -> str:
         '\u001b[32m': '<span style="color: green;">',  # green
         '\u001b[33m': '<span style="color: yellow;">',  # yellow
         '\u001b[34m': '<span style="color: blue;">',  # blue
-        '\u001b[35m': '<span style="color: magenta;">',  # magenta
+        '\u001b[35m': '<span style="color: purple;">',  # purple
         '\u001b[36m': '<span style="color: cyan;">',  # cyan
         '\u001b[37m': '<span style="color: white;">',  # white
         '\u001b[41m': '<span style="background-color: red; color: white;">',  # red background
         '\u001b[42m': '<span style="background-color: green; color: white;">',  # green background
         '\u001b[43m': '<span style="background-color: yellow; color: black;">',  # yellow background
         '\u001b[44m': '<span style="background-color: blue; color: white;">',  # blue background
-        '\u001b[45m': '<span style="background-color: magenta; color: white;">',  # magenta background
+        '\u001b[45m': '<span style="background-color: purple; color: white;">',  # purple background
         '\u001b[46m': '<span style="background-color: cyan; color: black;">',  # cyan background
         '\u001b[47m': '<span style="background-color: white; color: black;">',  # white background
         '\u001b[91m': '<span style="color: lightred">', # 亮红色
         '\u001b[92m': '<span style="color: lightgreen">', # 亮绿色
         '\u001b[93m': '<span style="color: lightyellow">', # 亮黄色
         '\u001b[94m': '<span style="color: lightblue">', # 亮蓝色
-        '\u001b[95m': '<span style="color: lightmagenta">', # 亮洋红色
+        '\u001b[95m': '<span style="color: lightpurple">', # 亮洋红色
         '\u001b[96m': '<span style="color: lightcyan">', # 亮青色
     }
     for ansi_code, html_code in mapping.items():
@@ -405,40 +417,6 @@ def _figure_to_html(fig: Figure | Any):
     except Exception as e:
         _critical(f"Error capturing matplotlib figure: {e}")
     return content
-
-def _strf_delta(tdelta : timedelta):
-    """
-    Custom function to format a timedelta object.
-    
-    Args:
-        tdelta (timedelta): The timedelta object to format.
-        fmt (str): The format string, using placeholders like {D}, {H}, {M}, {S}.
-    """
-    # Extract total seconds, including days.
-    assert tdelta.seconds >= 0 , f"tdelta must be a positive timedelta , but got {tdelta}"
-    total_seconds = int(tdelta.total_seconds())
-
-    # Handle negative timedeltas
-    total_seconds = abs(total_seconds)
-
-    # Calculate time components
-    days, remainder = divmod(total_seconds, 86400) # 86400 seconds in a day
-    hours, remainder = divmod(remainder, 3600)    # 3600 seconds in an hour
-    minutes, seconds = divmod(remainder, 60)      # 60 seconds in a minute
-    
-    # Store components in a dictionary for f-string formatting
-    fmtstr = ''
-    if days:
-        fmtstr += f'{days} Days '
-    if hours:
-        fmtstr += f'{hours} Hours '
-    if minutes:
-        fmtstr += f'{minutes} Minutes '
-    if seconds:
-        fmtstr += f'{seconds} Seconds'
-    if not fmtstr:
-        fmtstr = '<1 Seconds'
-    return fmtstr
 
 @dataclass
 class TimedOutput:
@@ -642,7 +620,7 @@ class HtmlCatcher(OutputCatcher):
             return self
         self.start_time = datetime.now()
         self.redirect_display_function()
-        _critical(f"{self} start to capture messages")
+        _critical(f"{self} Capturing Start")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -656,7 +634,7 @@ class HtmlCatcher(OutputCatcher):
     def export(self , export_path: Path | None = None):
         if export_path is None: 
             export_path = self.get_export_path()
-        _critical(f"{self} Finished Capturing, saved to {export_path}")
+        _critical(f"{self} Capturing Finished, saved to {export_path}")
         export_path.parent.mkdir(exist_ok=True,parents=True)
         with open(export_path, 'w', encoding='utf-8') as f:
             f.write(self.generate_html())
@@ -726,13 +704,12 @@ class HtmlCatcher(OutputCatcher):
         if self.kwargs:
             key_width = max(int(max(len(key) for key in list(self.kwargs.keys())) * 5.5) + 10 , key_width)
         finish_time = datetime.now()
-        duration = _strf_delta(finish_time - self.start_time)
         infos = {
             'Machine' : MACHINE.name,
             'Python' : f"{platform.python_version()}-{platform.machine()}",
             'Start at' : self.start_time.strftime('%Y-%m-%d %H:%M:%S'),
             'Finish at' : finish_time.strftime('%Y-%m-%d %H:%M:%S'),
-            'Duration' : duration,
+            'Duration' : Duration((finish_time - self.start_time).total_seconds()).fmtstr,
             'Outputs Num' : len(self.outputs)
         }
         infos_block = '\n'.join([f'<div class="add-infos"><span class="add-key">{key}</span><span class="add-seperator">:</span><span class="add-value">{value}</span></div>' 
@@ -1085,10 +1062,9 @@ class MarkdownCatcher(OutputCatcher):
 
     def _markdown_footer(self):
         finish_time = datetime.now()
-        duration = _strf_delta(finish_time - self.start_time)
         self.markdown_file.write(f"## Log End \n")
         self.markdown_file.write(f"- *Finish at: {finish_time.strftime('%Y-%m-%d %H:%M:%S')}*  \n")
-        self.markdown_file.write(f"- *Duration: {duration}*  \n")
+        self.markdown_file.write(f"- *Duration: {Duration((finish_time - self.start_time).total_seconds()).fmtstr}*  \n")
         self.markdown_file.write(f"- *Stdout Lines: {self.stats['stdout_lines']}*  \n")
         self.markdown_file.write(f"- *Stderr Lines: {self.stats['stderr_lines']}*  \n")
         self.markdown_file.write(f"***\n")

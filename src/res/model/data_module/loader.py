@@ -1,7 +1,7 @@
 import numpy as np
 from tqdm import tqdm
 
-from src.basic import SILENT
+from src.proj import SILENT
 from src.res.model.util import BaseDataModule , BatchData
     
 class BatchDataLoader:

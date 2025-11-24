@@ -16,11 +16,11 @@ from src.func.singleton import SingletonABCMeta
 from src.func.parallel import parallel
 
 __all__ = [
-    'FactorCalculator' , 'StockFactorCalculator' , 'MarketFactorCalculator' , 'RiskFactorCalculator' ,
+    'FactorCalculator' , 'StockFactorCalculator' , 'MarketFactorCalculator' , 'AffiliateFactorCalculator' ,
     'QualityFactor' , 'GrowthFactor' , 'ValueFactor' , 'EarningFactor' , 'SurpriseFactor' , 'CoverageFactor' , 'ForecastFactor' , 'AdjustmentFactor' ,
     'HfMomentumFactor' , 'HfVolatilityFactor' , 'HfCorrelationFactor' , 'HfLiquidityFactor' ,
     'MomentumFactor' , 'VolatilityFactor' , 'CorrelationFactor' , 'LiquidityFactor' , 'HoldingFactor' , 'TradingFactor' ,
-    'StyleFactor' , 'MarketEventFactor' , 'WeightedPoolingCalculator' , 'NonlinearPoolingCalculator'
+    'StyleFactor' , 'SellsideFactor' , 'MarketEventFactor' , 'WeightedPoolingCalculator' , 'NonlinearPoolingCalculator'
 ]
 
 class _FactorProperty:
@@ -67,7 +67,7 @@ class _FactorPropertyStr(_FactorProperty):
 
 class _FactorPropertyBool(_FactorProperty):
     """property of boolean"""
-    def __init__(self , method : Literal['is_pooling']):
+    def __init__(self , method : Literal['is_pooling' , 'is_market']):
         self.method = method
 
     def __get__(self,instance,owner) -> bool:
@@ -77,9 +77,12 @@ class _FactorPropertyBool(_FactorProperty):
     def is_pooling(self , owner) -> bool:
         return owner.meta_type == 'pooling'
 
+    def is_market(self , owner) -> bool:
+        return owner.meta_type == 'market'
+
 class _FactorMetaType:
     """meta class of factor"""
-    def __get__(self,instance,owner) -> Literal['market' , 'stock' , 'risk' , 'pooling']:
+    def __get__(self,instance,owner) -> Literal['market' , 'stock' , 'affiliate' , 'pooling']:
         return CONF.Factor.STOCK.cat0_to_meta(owner.category0)
 
 class _FactorDBSrc:
@@ -88,7 +91,7 @@ class _FactorDBSrc:
         meta_type = getattr(owner, 'meta_type')
         if meta_type == 'market':
             return 'market_factor'
-        elif meta_type in ['stock' , 'risk' , 'pooling']:
+        elif meta_type in ['stock' , 'affiliate' , 'pooling']:
             return 'stock_factor'
         else:
             raise ValueError(f'undefined meta type: {meta_type} for factor {owner.__qualname__}')
@@ -159,7 +162,7 @@ def _calc_factor_wrapper(calc_factor : Callable[['FactorCalculator',int],pd.Seri
         if instance.meta_type == 'market':
             assert 'date' in df.columns , f'date not found in calc_factor result for market factor: {df.columns}'
             df = df.drop_duplicates(subset = ['date'] , keep = 'first').sort_values('date')
-        elif instance.meta_type in ['stock' , 'risk' , 'pooling']:
+        elif instance.meta_type in ['stock' , 'affiliate' , 'pooling']:
             assert 'secid' in df.columns , f'secid not found in calc_factor result for stock factor: {df.columns}'
             df = df.drop_duplicates(subset = ['secid'] , keep = 'first').set_index('secid').reindex(DATAVENDOR.secid(date)).reset_index(drop = False)
         else:
@@ -201,8 +204,8 @@ class _FactorCalculatorMeta(SingletonABCMeta):
                 assert getattr(new_cls, 'meta_type') == 'stock' , f'{name} must be a stock factor'
             elif issubclass(new_cls , MarketFactorCalculator):
                 assert getattr(new_cls, 'meta_type') == 'market' , f'{name} must be a market factor'
-            elif issubclass(new_cls , RiskFactorCalculator):
-                assert getattr(new_cls, 'meta_type') == 'risk' , f'{name} must be a risk factor'
+            elif issubclass(new_cls , AffiliateFactorCalculator):
+                assert getattr(new_cls, 'meta_type') == 'affiliate' , f'{name} must be a affiliate factor'
             elif issubclass(new_cls , PoolingCalculator):
                 assert getattr(new_cls, 'meta_type') == 'pooling' , f'{name} must be a pooling factor'
             else:
@@ -244,7 +247,9 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
     description : str = ''
     updatable = True
     preprocess = True
+    
     is_pooling = _FactorPropertyBool('is_pooling')
+    is_market = _FactorPropertyBool('is_market')
 
     meta_type = _FactorMetaType()
     db_src    = _FactorDBSrc()
@@ -556,10 +561,11 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         iterate over calculators
         return a list of factor instances with given attributes
         is_pooling : bool | None = None
+        is_market : bool | None = None
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
-        meta_type : Literal['market' , 'stock' , 'risk' , 'pooling'] | None = None
+        meta_type : Literal['market' , 'stock' , 'affiliate' , 'pooling'] | None = None
         category0 : str | None = None 
         category1 : str | None = None 
         updatable : bool | None = None
@@ -625,16 +631,14 @@ class StockFactorCalculator(FactorCalculator):
             raise ValueError(f'{self.factor_name} at {date} must not have infinite values , but got {np.isinf(df).sum()} infs')
         return df
 
-class RiskFactorCalculator(FactorCalculator):
-    """base class of risk factor calculator for style factor (no need to calculate at all)"""
-    init_date = 20110101
-    risk_model_name = 'tushare_cne5'
-    risk_model_key : str = ''
-    update_step = 1
-    preprocess = False
+class AffiliateFactorCalculator(FactorCalculator):
+    """base class of affiliate factor calculator (no need to calculate at all)"""
+    load_db_src : str = 'models'
+    load_db_key : str = 'tushare_cne5_exp'
+    load_col_name : str = ''
 
     def calc_history(self , date : int) -> pd.DataFrame:
-        """no need to validate value for risk factor"""
+        """no need to validate value for affiliate factor"""
         raise NotImplementedError(f'{self.factor_name} factor history is not implemented')
 
     def calc_and_deploy(self , date : int , strict_validation = True , overwrite = False , verbose = False) -> bool:
@@ -642,13 +646,14 @@ class RiskFactorCalculator(FactorCalculator):
         return False
 
     def validate_value(self , df : pd.DataFrame , *args , **kwargs) -> pd.DataFrame:
-        """no need to validate value for risk factor"""
+        """no need to validate value for affiliate factor"""
         raise NotImplementedError(f'{self.factor_name} validate_value is not implemented')
 
+    @abstractmethod
     def load_factor(self , date : int) -> pd.DataFrame:
         """load full factor value of a given date"""
-        df = DB.load('models' , f'{self.risk_model_name}_exp' , date).loc[:,['secid' , self.risk_model_key]]
-        df = df.rename(columns = {self.risk_model_key : self.factor_name})
+        df = DB.load(self.load_db_src , self.load_db_key , date).loc[:,['secid' , self.load_col_name]]
+        df = df.rename(columns = {self.load_col_name : self.factor_name})
         return df
 
     def eval_factor(self , date : int , verbose : bool = False) -> pd.DataFrame:
@@ -661,8 +666,8 @@ class RiskFactorCalculator(FactorCalculator):
         ) -> pd.DataFrame:
         """load factor values of a given date range"""
         dates = np.intersect1d(dates , cls.stored_dates())
-        df = DB.load_multi('models' , f'{cls.risk_model_name}_exp' , dates).loc[:,['secid' , 'date' , cls.risk_model_key]]
-        df = df.rename(columns = {cls.risk_model_key : cls.factor_name})
+        df = DB.load_multi(cls.load_db_src , cls.load_db_key , dates).loc[:,['secid' , 'date' , cls.load_col_name]]
+        df = df.rename(columns = {cls.load_col_name : cls.factor_name})
         return df
 
     @classmethod
@@ -701,22 +706,22 @@ class RiskFactorCalculator(FactorCalculator):
     @classmethod
     def stored_dates(cls) -> np.ndarray:
         """return stored dates of factor data"""
-        return CALENDAR.slice(DB.dates('models' , f'{cls.risk_model_name}_exp') , cls.init_date)
+        return CALENDAR.slice(DB.dates(cls.load_db_src , cls.load_db_key) , cls.init_date)
 
     @classmethod
     def get_min_date(cls) -> int:
         """return minimum date of stored factor data"""
-        return max(cls.init_date , DB.min_date('models' , f'{cls.risk_model_name}_exp'))
+        return max(cls.init_date , DB.min_date(cls.load_db_src , cls.load_db_key))
 
     @classmethod
     def get_max_date(cls) -> int:
         """return maximum date of stored factor data"""
-        return min(cls.final_date , DB.max_date('models' , f'{cls.risk_model_name}_exp'))
+        return min(cls.final_date , DB.max_date(cls.load_db_src , cls.load_db_key))
     
     @classmethod
     def has_date(cls , date : int) -> bool:
         """check if factor data exists for a given date"""
-        return DB.path('models' , f'{cls.risk_model_name}_exp' , date).exists()
+        return DB.path(cls.load_db_src , cls.load_db_key , date).exists()
 
     @classmethod
     def update_all_factors(cls , start : int | None = None , end : int | None = None , overwrite = False , verbose = False) -> None:
@@ -878,87 +883,99 @@ class PoolingCalculator(FactorCalculator):
         return df
 
 class QualityFactor(StockFactorCalculator):
-    """Factor Calculator of category0: fundamental , category1: quality"""
+    """Factor Calculator of meta_type: stock , category0: fundamental , category1: quality"""
     category1 = 'quality'
 
 class GrowthFactor(StockFactorCalculator):
-    """Factor Calculator of category0: fundamental , category1: growth"""
+    """Factor Calculator of meta_type: stock , category0: fundamental , category1: growth"""
     category1 = 'growth'
 
 class ValueFactor(StockFactorCalculator):
-    """Factor Calculator of category0: fundamental , category1: value"""
+    """Factor Calculator of meta_type: stock , category0: fundamental , category1: value"""
     category1 = 'value'
 
 class EarningFactor(StockFactorCalculator):
-    """Factor Calculator of category0: fundamental , category1: earning"""
+    """Factor Calculator of meta_type: stock , category0: fundamental , category1: earning"""
     category1 = 'earning'
 
 class SurpriseFactor(StockFactorCalculator):
-    """Factor Calculator of category0: analyst , category1: surprise"""
+    """Factor Calculator of meta_type: stock , category0: analyst , category1: surprise"""
     category1 = 'surprise'
 
 class CoverageFactor(StockFactorCalculator):
-    """Factor Calculator of category0: analyst , category1: coverage"""
+    """Factor Calculator of meta_type: stock , category0: analyst , category1: coverage"""
     category1 = 'coverage'
 
 class ForecastFactor(StockFactorCalculator):
-    """Factor Calculator of category0: analyst , category1: forecast"""
+    """Factor Calculator of meta_type: stock , category0: analyst , category1: forecast"""
     category1 = 'forecast'
 
 class AdjustmentFactor(StockFactorCalculator):
-    """Factor Calculator of category0: analyst , category1: adjustment"""
+    """Factor Calculator of meta_type: stock , category0: analyst , category1: adjustment"""
     category1 = 'adjustment'
 
 class HfMomentumFactor(StockFactorCalculator):
-    """Factor Calculator of category0: high_frequency , category1: hf_momentum"""
+    """Factor Calculator of meta_type: stock , category0: high_frequency , category1: hf_momentum"""
     category1 = 'hf_momentum'
 
 class HfVolatilityFactor(StockFactorCalculator):
-    """Factor Calculator of category0: high_frequency , category1: hf_volatility"""
+    """Factor Calculator of meta_type: stock , category0: high_frequency , category1: hf_volatility"""
     category1 = 'hf_volatility'
 
 class HfCorrelationFactor(StockFactorCalculator):
-    """Factor Calculator of category0: high_frequency , category1: hf_correlation"""
+    """Factor Calculator of meta_type: stock , category0: high_frequency , category1: hf_correlation"""
     category1 = 'hf_correlation'
 
 class HfLiquidityFactor(StockFactorCalculator):
-    """Factor Calculator of category0: high_frequency , category1: hf_liquidity"""
+    """Factor Calculator of meta_type: stock , category0: high_frequency , category1: hf_liquidity"""
     category1 = 'hf_liquidity'
 
 class MomentumFactor(StockFactorCalculator):
-    """Factor Calculator of category0: behavior , category1: momentum"""
+    """Factor Calculator of meta_type: stock , category0: behavior , category1: momentum"""
     category1 = 'momentum'
 
 class VolatilityFactor(StockFactorCalculator):
-    """Factor Calculator of category0: behavior , category1: volatility"""
+    """Factor Calculator of meta_type: stock , category0: behavior , category1: volatility"""
     category1 = 'volatility'
 
 class CorrelationFactor(StockFactorCalculator):
-    """Factor Calculator of category0: behavior , category1: correlation"""
+    """Factor Calculator of meta_type: stock , category0: behavior , category1: correlation"""
     category1 = 'correlation'
 
 class LiquidityFactor(StockFactorCalculator):
-    """Factor Calculator of category0: behavior , category1: liquidity"""
+    """Factor Calculator of meta_type: stock , category0: behavior , category1: liquidity"""
     category1 = 'liquidity'
 
 class HoldingFactor(StockFactorCalculator):
-    """Factor Calculator of category0: money_flow , category1: holding"""
+    """Factor Calculator of meta_type: stock , category0: money_flow , category1: holding"""
     category1 = 'holding'
 
 class TradingFactor(StockFactorCalculator):
-    """Factor Calculator of category0: money_flow , category1: trading"""
+    """Factor Calculator of meta_type: stock , category0: money_flow , category1: trading"""
     category1 = 'trading'
 
-class StyleFactor(RiskFactorCalculator):
-    """Factor Calculator of category0: risk , category1: style"""
+class StyleFactor(AffiliateFactorCalculator):
+    """Factor Calculator of meta_type: affiliate , category0: risk , category1: style"""
+    init_date = 20110101
     category1 = 'style'
+    load_db_src = 'models'
+    load_db_key = 'tushare_cne5_exp'
+    update_step = 1
+    preprocess = False
+
+class SellsideFactor(AffiliateFactorCalculator):
+    """Factor Calculator of meta_type: affiliate , category0: external , category1: sellside"""
+    category1 = 'sellside'
+    load_db_src = 'sellside'
+    update_step = 1
+    preprocess = False
 
 class MarketEventFactor(MarketFactorCalculator):
-    """Factor Calculator of category0: market , category1: market_event"""
+    """Factor Calculator of meta_type: market , category0: market , category1: market_event"""
     category1 = 'market_event'
 
 class WeightedPoolingCalculator(PoolingCalculator):
-    """Factor Calculator of category0: pooling , category1: weighted"""
+    """Factor Calculator of meta_type: pooling , category0: pooling , category1: weighted"""
     category1 = 'weighted'
 
     def load_pooling_weight(self) -> pd.DataFrame:
@@ -1018,5 +1035,5 @@ class WeightedPoolingCalculator(PoolingCalculator):
         DB.save(weights , 'pooling_weight' , calc.db_key , verbose = verbose)
 
 class NonlinearPoolingCalculator(PoolingCalculator):
-    """Factor Calculator of category0: pooling , category1: nonlinear"""
+    """Factor Calculator of meta_type: pooling , category0: pooling , category1: nonlinear"""
     category1 = 'nonlinear'

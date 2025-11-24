@@ -3,6 +3,7 @@ import logging.handlers
 from typing import Any , Generator , Literal , Type
 
 from .path import PATH
+from .timer import Duration
 
 _seperator_width = 80
 _seperator_char = '*'
@@ -78,13 +79,9 @@ def reset_logger(log : logging.Logger , config : dict[str, Any]):
 class Logger:
     """custom colored log , config at PATH.conf / 'glob' / 'logger.yaml'"""
     _instance : 'Logger | Any' = None
-    _cached_messages : dict[Literal['info' , 'warning' , 'error' , 'critical' , 'debug'] , list[str]] = {
-        'info' : [] ,
-        'warning' : [] ,
-        'error' : [] ,
-        'critical' : [] ,
-        'debug' : [] ,
-    }
+    _type_levels = Literal['info' , 'debug' , 'warning' , 'error' , 'critical']
+    _levels : list[_type_levels] = ['info' , 'debug' , 'warning' , 'error' , 'critical']
+    _cached_messages : dict[_type_levels , list[str]] = {level : [] for level in _levels}
     _config = log_config()
     log = new_log(_config)
 
@@ -99,9 +96,24 @@ class Logger:
         reset_logger(cls.log , cls._config)
 
     @classmethod
-    def print(cls , *args , **kwargs):
-        """Print the message to the stdout"""
-        print(*args , **kwargs)
+    def mark(cls , *args , **kwargs):
+        """dump to log writer with no display"""
+        cls.dump_to_logwriter(*args)
+
+    @classmethod
+    def success(cls , *args , **kwargs):
+        """custom green colored Mark level message"""
+        sys.stdout.write(f"\u001b[32m{' '.join(args)}\u001b[0m" + '\n')
+
+    @classmethod
+    def fail(cls , *args , **kwargs):
+        """custom red colored Fail level message"""
+        sys.stderr.write(f"\u001b[31m{' '.join(args)}\u001b[0m" + '\n')
+
+    @classmethod
+    def highlight(cls , *args , **kwargs):
+        """custom cyan colored Highlight level message"""
+        sys.stderr.write(f"\u001b[36m\u001b[1m{' '.join(args)}\u001b[0m" + '\n')
 
     @classmethod
     def debug(cls , *args , **kwargs):
@@ -152,19 +164,19 @@ class Logger:
             write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
-    def cache_message(cls , type : Literal['info' , 'warning' , 'error' , 'critical' , 'debug'] , message : str):
+    def cache_message(cls , type : _type_levels , message : str):
         """Add the message to the cache for later use"""
         cls._cached_messages[type].append(message)
 
     @classmethod
-    def iter_cached_messages(cls) -> Generator[tuple[Literal['info' , 'warning' , 'error' , 'critical' , 'debug'] , str] , None , None]:
+    def iter_cached_messages(cls) -> Generator[tuple[_type_levels , str] , None , None]:
         """Iterate the cached messages"""
         for type in cls._cached_messages:
             while cls._cached_messages[type]:
                 yield type , cls._cached_messages[type].pop(0)
 
     @classmethod
-    def get_cached_messages(cls , type : Literal['info' , 'warning' , 'error' , 'critical' , 'debug']) -> list[str]:
+    def get_cached_messages(cls , type : _type_levels) -> list[str]:
         """Get the cached messages"""
         return cls._cached_messages[type]
 
@@ -175,20 +187,16 @@ class Logger:
             with Logger.EnclosedMessage('Title'):
                 Logger.info('This is the enclosed message...')
         """
-        def __init__(self , title : str , width = _seperator_width , timer = True):
+        def __init__(self , title : str , width = _seperator_width):
             self.title = title.strip()
             self.width = width
-            self.timer = timer
             
         def __enter__(self):
             self.start_time = time.time()
-            self.write(f'{self.title.upper()} START')
+            self.write(f'{self.title} Start')
 
         def __exit__(self , exc_type , exc_value , traceback):
-            if self.timer:
-                duration = time.time() - self.start_time
-                Logger.debug(f'{self.title.upper()} Finished! Cost {duration:.2f} Seconds')
-            self.write(f'{self.title.upper()} FINISH')
+            self.write(f'{self.title} Finished in {Duration(time.time() - self.start_time).fmtstr}')
 
         def __repr__(self):
             return f'EnclosedMessage(title = {self.title} , width = {self.width})'
@@ -196,9 +204,9 @@ class Logger:
         def write(self , message : str):
             txt_len = len(message)
             if txt_len >= self.width:
-                Logger.info(message)
+                Logger.highlight(message.upper())
             else:
                 padding_left = '*' * max(0 , (self.width - txt_len - 2) // 2)
                 padding_right = '*' * max(0 , self.width - txt_len - 2 - len(padding_left))
-                Logger.info(' '.join([padding_left , message , padding_right]))
+                Logger.highlight(' '.join([padding_left , message.upper() , padding_right]))
 

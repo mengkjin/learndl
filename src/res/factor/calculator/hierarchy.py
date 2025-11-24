@@ -52,9 +52,9 @@ class StockFactorHierarchy:
     def load_factor_table(cls) -> pd.DataFrame:
         '''export factor stats to csv'''
         if MACHINE.server:
-            df = pd.read_csv(PATH.local_shared.joinpath('factor_stats.csv'))
+            df = pd.read_csv(PATH.local_shared.joinpath('factor_list.csv'))
         elif path := PATH.get_share_folder_path():
-            df = pd.read_csv(path.joinpath('factor_stats.csv'))
+            df = pd.read_csv(path.joinpath('factor_list.csv'))
         else:
             df = pd.DataFrame()
         return df
@@ -64,9 +64,9 @@ class StockFactorHierarchy:
         '''export factor list to csv'''
         if MACHINE.server:
             df = cls.full_factor_table()
-            df.to_csv(PATH.local_shared.joinpath('factor_list.csv'))
+            df.to_csv(PATH.local_shared.joinpath('factor_list.csv') , index = False)
             if path := PATH.get_share_folder_path():
-                df.to_csv(path.joinpath('factor_list.csv'))
+                df.to_csv(path.joinpath('factor_list.csv') , index = False)
 
     @classmethod
     def full_factor_table(cls) -> pd.DataFrame:
@@ -81,7 +81,7 @@ class StockFactorHierarchy:
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
-        meta_type : Literal['market' , 'stock' , 'risk' , 'pooling'] | None = None
+        meta_type : Literal['market' , 'stock' , 'affiliate' , 'pooling'] | None = None
         category0 : str | None = None 
         category1 : str | None = None 
         '''
@@ -101,7 +101,7 @@ class StockFactorHierarchy:
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
-        meta_type : Literal['market' , 'stock' , 'risk' , 'pooling'] | None = None
+        meta_type : Literal['market' , 'stock' , 'affiliate' , 'pooling'] | None = None
         category0 : str | None = None 
         category1 : str | None = None 
         '''
@@ -175,7 +175,7 @@ class StockFactorHierarchy:
         factor_name : str | None = None
         level : str | None = None 
         file_name : str | None = None
-        meta_type : Literal['market' , 'stock' , 'risk' , 'pooling'] | None = 'stock'
+        meta_type : Literal['market' , 'stock' , 'affiliate' , 'pooling'] | None = 'stock'
         category0 : str | None = None 
         category1 : str | None = None 
         '''

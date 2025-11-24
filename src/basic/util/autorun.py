@@ -111,7 +111,7 @@ class AutoRunTask:
         self._catchers : list[HtmlCatcher | MarkdownCatcher | WarningCatcher] = []
         
         if 'html' in self.catchers:
-            self._catchers.append(HtmlCatcher(self.task_full_name , self.init_time , self.message_catcher_path))
+            self._catchers.append(HtmlCatcher(self.task_full_name , self.init_time , self.html_catcher_path))
         if 'markdown' in self.catchers:
             self._catchers.append(MarkdownCatcher(self.task_full_name , to_share_folder=True , add_time_to_title=False))
         if 'warning' in self.catchers:
@@ -251,9 +251,9 @@ class AutoRunTask:
         return '\n'.join(self.error_messages)
     
     @property
-    def message_catcher_path(self) -> Path:
+    def html_catcher_path(self) -> Path:
         """return the path of the html message catcher"""
-        return PATH.log_autorun.joinpath('message_catcher' , f'{self.task_full_name}.{self.time_str}.html')
+        return PATH.log_autorun.joinpath('html_catcher' , self.task_name , f'{self.task_full_name}.{self.time_str}.html')
     
     def today(self , format : str = '%Y%m%d') -> str:
         """return the today's date in the given format"""

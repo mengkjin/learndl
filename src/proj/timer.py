@@ -5,6 +5,56 @@ import numpy as np
 from typing import Callable
 from .silence import SILENT
 
+class Duration:
+    def __init__(self , duration : int | float):
+        assert duration >= 0 , f"duration must be a positive duration , but got {duration}"
+        self.duration = duration
+    def __str__(self):
+        if self.duration < 60:
+            return f"{self.duration:.2f} Secs"
+        elif self.duration < 3600:
+            return f"{int(self.duration / 60)} Min {int(self.duration % 60)} Secs"
+        else:
+            return f"{int(self.duration / 3600)} Hr {int(self.duration % 3600 / 60)} Min {int(self.duration % 60)} Secs"
+    def __repr__(self):
+        return f"Duration(duration={self.duration})"
+    @property
+    def hours(self):
+        return self.duration / 3600
+    @property
+    def minutes(self):
+        return self.duration / 60
+    @property
+    def seconds(self):
+        return self.duration
+    @property
+    def days(self):
+        return self.duration / 86400
+    @property
+    def fmtstr(self):
+        # Calculate time components
+        
+        # Store components in a dictionary for f-string formatting
+        if self.duration < 1:
+            return '<1 Second'
+        elif self.duration < 60:
+            return f'{self.duration:.1f} Secs'
+        else:
+            days, remainder = divmod(self.duration, 86400) # 86400 seconds in a day
+            hours, remainder = divmod(remainder, 3600)    # 3600 seconds in an hour
+            minutes, seconds = divmod(remainder, 60)      # 60 seconds in a minute
+        
+            fmtstrs = []
+            if days > 0:
+                fmtstrs.append(f'{days:d} Day')
+            if hours >= 1:
+                fmtstrs.append(f'{hours:d} Hour')
+            if minutes >= 1:
+                fmtstrs.append(f'{minutes:d} Min')
+            if seconds >= 1:
+                fmtstrs.append(f'{seconds:d} Sec')
+            return ' '.join(fmtstrs)
+    
 class Timer:
     '''simple timer to print out time'''
     def __init__(self , *args , newline = False , exit_only = True , silent = False): 

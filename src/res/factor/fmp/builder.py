@@ -3,7 +3,7 @@ import numpy as np
 
 from typing import Any , Literal
 
-from src.basic import Timer
+from src.proj import Timer
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccountant
 from .optimizer import OptimizedPortfolioCreator

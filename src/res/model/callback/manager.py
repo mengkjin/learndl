@@ -19,7 +19,7 @@ class CallBackManager(BaseCallBack):
 
     @classmethod
     def setup(cls , trainer : BaseTrainer):
-        with Logger.EnclosedMessage(' setup callbacks ' , timer = False):
+        with Logger.EnclosedMessage(' setup callbacks '):
             cb_configs = trainer.config.callbacks
             for cb in trainer.model.COMPULSARY_CALLBACKS:
                 if cb not in cb_configs: 

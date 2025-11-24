@@ -6,7 +6,8 @@ from collections.abc import Iterable
 from contextlib import nullcontext
 from typing import Any
 
-from src.basic import CALENDAR , RegisteredModel , SILENT
+from src.proj import SILENT
+from src.basic import CALENDAR , RegisteredModel
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
 from src.res.factor.fmp import PortfolioBuilder 
 

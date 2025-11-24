@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Any , Type
 
-from src.basic import Timer
+from src.proj import Timer
 from . import calculator as Calc
 from .calculator import BaseScreenPortCalc
 from ..test_manager import BaseTestManager

@@ -1,6 +1,10 @@
 # main model configs ----------------------------------------------------------------
 name          : null  # any name or null
-module        : db@scores_v0  # any of [nn defined in src/algo/nn/api.py] or ['booster' , 'lgbm' , 'ada' , 'xgboost' , 'catboost'] or 'db@{model_name}'
+module        : db@scores_v0  
+# any of [nn defined in src/algo/nn/api.py] 
+#     or ['booster' , 'lgbm' , 'ada' , 'xgboost' , 'catboost'] 
+#     or 'db@{model_name}'
+#     or 'factor@{factor_name}'
 submodels     : [best , swalast , swabest] # subset of ['best' , 'swalast' , 'swabest'] , but for booster , only use best
 beg_date      : 20170103 # model start date
 end_date      : 99991231 # model end date
@@ -46,7 +50,7 @@ hidden.types: # list of hidden states , use if input_type is hidden
   - gru_day_V0.0.best
   - gru_day_V0.1.best
 
-factor.types: # list of factor names , use if input_type is factor
+factor.types: # list of category1 , use if input_type is factor
   fundament:  [quality]
   #fundament:  [quality , growth , value , earning]
   #analyst:    [surprise , coverage , forecast , adjustment]

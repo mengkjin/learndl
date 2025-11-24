@@ -4,7 +4,8 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from src.basic import CALENDAR , CONF , SILENT , DB
+from src.proj import SILENT
+from src.basic import CALENDAR , CONF , DB
 from src.func.singleton import singleton
 from src.data.util import DataBlock , INFO
 

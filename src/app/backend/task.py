@@ -5,7 +5,7 @@ from dataclasses import dataclass , field , asdict
 from datetime import datetime
 from pathlib import Path
 
-from src.proj import PATH , DBConnHandler , Logger
+from src.proj import PATH , DBConnHandler , Logger , Duration
 from src.app.abc import check_process_status , kill_process , ScriptCmd
 
 class TaskDatabase:
@@ -758,13 +758,7 @@ class TaskItem:
     
     @property
     def duration_str(self):
-        duration = self.duration
-        if duration < 60:
-            return f"{duration:.2f} Secs"
-        elif duration < 3600:
-            return f"{int(duration / 60)} Min {int(duration%60)} Secs"
-        else:
-            return f"{int(duration / 3600)} Hr {int(duration%3600 / 60)} Min {int(duration%60)} Secs"
+        return Duration(self.duration).fmtstr
         
     @property
     def running_str(self):

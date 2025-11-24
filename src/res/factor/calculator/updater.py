@@ -14,7 +14,7 @@ from src.data import DATAVENDOR
 from src.func.parallel import parallel
 from src.func.singleton import SingletonMeta
 
-__all__ = ['StockFactorUpdater' , 'MarketFactorUpdater' , 'RiskFactorUpdater' , 'PoolingFactorUpdater' , 'FactorStatsUpdater']
+__all__ = ['StockFactorUpdater' , 'MarketFactorUpdater' , 'AffiliateFactorUpdater' , 'PoolingFactorUpdater' , 'FactorStatsUpdater']
 
 CATCH_ERRORS = (ValueError , TypeError , pl.exceptions.ColumnNotFoundError)
 
@@ -150,7 +150,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     """manager of factor update jobs"""
     jobs : list[_BaseJob] | Any = None
     multi_thread : bool = False
-    update_type : Literal['stock' , 'pooling' , 'risk' , 'market' , 'stats']
+    update_type : Literal['stock' , 'pooling' , 'affiliate' , 'market' , 'stats']
     
     def __repr__(self):
         n_jobs = len(self.jobs) if self.jobs is not None else 0
@@ -170,7 +170,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     def calculators(cls , all = True , selected_factors : list[str] | None = None , updatable = True , **kwargs) -> list[FactorCalculator]:
         """get all calculators"""
         if cls.update_type == 'stats':
-            kwargs = kwargs | {'is_pooling' : False}
+            kwargs = kwargs | {'is_market' : False}
         else:
             kwargs = kwargs | {'meta_type' : cls.update_type}
         return list(FactorCalculator.iter_calculators(all , selected_factors , updatable = updatable , **kwargs))
@@ -198,7 +198,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             end = min(CALENDAR.updated() , CONF.Factor.UPDATE.end)
 
         for calc in cls.calculators(all , selected_factors , **kwargs):
-            if cls.update_type in ['risk']:
+            if cls.update_type in ['affiliate']:
                 ...
             elif cls.update_type in ['market' , 'pooling']:
                 target_dates = calc.target_dates(start , end , overwrite = overwrite)
@@ -245,8 +245,8 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             cls.process_group_jobs(group , jobs , verbosity)
 
             if timeout > 0 and (time.time() - start_time) > timeout * 3600:
-                Logger.debug(f'Timeout: {timeout} hours reached, stopping update')
-                Logger.debug(f'Terminated at {group}')
+                Logger.fail(f'Timeout: {timeout} hours reached, stopping update')
+                Logger.fail(f'Terminated at {group}')
                 break
 
     @classmethod
@@ -402,11 +402,11 @@ class PoolingFactorUpdater(BaseFactorUpdater):
             jobs[0].preview()
         jobs[0].do()
 
-class RiskFactorUpdater(BaseFactorUpdater):
-    """manager of risk factor update jobs"""
+class AffiliateFactorUpdater(BaseFactorUpdater):
+    """manager of affiliate factor update jobs"""
     jobs : list[_BaseJob] = []
     multi_thread : bool = False
-    update_type = 'risk'
+    update_type = 'affiliate'
 
     @classmethod
     def grouped_jobs(cls) -> Generator[tuple[Any , list[_BaseJob]] , None , None]:

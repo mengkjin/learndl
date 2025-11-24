@@ -5,11 +5,11 @@ from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from typing import Any , Iterator
 
-from src.proj import Logger
-from src.basic import CONF , Timer , CALENDAR
+from src.proj import Logger , Timer
+from src.basic import CONF , CALENDAR
 from src.func.primas import neutralize_2d , process_factor
 from src.data.util import DataBlock
-from src.data.loader import BlockLoader , FactorLoader
+from src.data.loader import BlockLoader , FactorCategory1Loader
 
 __all__ = ['DataPreProcessor']
 
@@ -49,11 +49,11 @@ class DataPreProcessor:
             yield blk , select_processor(blk)
     
     @classmethod
-    def proceed(cls):
-        return cls.main(predict = True)
+    def proceed(cls , predict = True):
+        return cls.main(predict = True , verbosity = 0 if predict else 1)
 
     @classmethod
-    def main(cls , predict = False, confirm = 0 , parser = None , data_types : list[str] | None = None):
+    def main(cls , predict = False, confirm = 0 , parser = None , data_types : list[str] | None = None , verbosity = 1):
         if parser is None:
             parser = argparse.ArgumentParser(description = 'manual to this script')
             parser.add_argument("--confirm", type=str, default = confirm)
@@ -61,31 +61,33 @@ class DataPreProcessor:
         if not predict and not args.confirm and \
             not input('Confirm update data? type "yes" to confirm!').lower()[0] == 'y' : 
             return
-        print(f'Data Processing start with predict={predict}!')
+        print(f'Data Processing start with predict = {predict}!')
         
         if data_types is None:
             blocks = PREDICT_DATASET if predict else TRAIN_DATASET
         else:
             blocks = data_types
         processor = cls(predict , blocks = blocks)
-        print(f'{len(processor.blocks)} datas : {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
+        print(f'Will process {len(processor.blocks)} datas : {str(list(processor.blocks))} , from {processor.load_start_dt} to {processor.load_end_dt}')
         # return processor
         for key , proc in processor.processors():
+            
             modified_time = DataBlock.last_modified_time(key , predict)
             if CALENDAR.is_updated_today(modified_time):
                 print(f'Skipping: {key} already updated at {modified_time}!')
                 continue
+            print(f'Processing: {key}')
             tt1 = time.time()
 
-            with Timer(f'{key} blocks loading'):
-                block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt)
-            with Timer(f'{key} blocks process'):
+            with Timer(f'{key} blocks loading' , silent = verbosity < 1):
+                block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, silent = verbosity < 1)
+            with Timer(f'{key} blocks process' , silent = verbosity < 1):
                 data_block = proc.process_blocks(block_dict)
-            with Timer(f'{key} blocks masking'):   
+            with Timer(f'{key} blocks masking' , silent = verbosity < 1):   
                 data_block = data_block.mask_values(mask = processor.mask)
-            with Timer(f'{key} blocks saving '):
+            with Timer(f'{key} blocks saving ' , silent = verbosity < 1):
                 data_block.save(key , predict , processor.save_start_dt , processor.save_end_dt)
-            with Timer(f'{key} blocks norming'):
+            with Timer(f'{key} blocks norming' , silent = verbosity < 1):
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             del data_block
             gc.collect()
@@ -102,10 +104,10 @@ class TypePreProcessor(ABC):
     @abstractmethod
     def process(self, blocks : dict[str,DataBlock]) -> DataBlock: ...
         
-    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , **kwargs):
+    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , silent = False , **kwargs):
         blocks : dict[str,DataBlock] = {}
         for src_key , loader in self.block_loaders().items():
-            blocks[src_key] = loader.load_block(start_dt , end_dt , **kwargs).align(secid = secid_align , date = date_align)
+            blocks[src_key] = loader.load_block(start_dt , end_dt , silent = silent , **kwargs).align(secid = secid_align , date = date_align)
             secid_align = blocks[src_key].secid
             date_align  = blocks[src_key].date
         return blocks
@@ -261,7 +263,7 @@ class FactorPreProcessor(TypePreProcessor):
     category1 = _ClassProperty('category1')    
 
     def block_loaders(self) -> dict[str,BlockLoader]: 
-        return {'factor' : FactorLoader(self.category1 , normalize = True , fill_method = 'drop' , preprocess = True)}
+        return {'factor' : FactorCategory1Loader(self.category1 , normalize = True , fill_method = 'drop' , preprocess = True)}
     def final_feat(self): return None
     def process(self , blocks): return blocks['factor']
 

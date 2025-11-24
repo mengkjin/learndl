@@ -1,6 +1,6 @@
 from typing import Any , Type
 
-from src.basic import Timer
+from src.proj import Timer
 from . import calculator as Calc
 from .calculator import BaseTopPortCalc
 from ..test_manager import BaseTestManager

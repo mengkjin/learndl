@@ -128,11 +128,11 @@ def baostock_bar_5min(start_dt : int , end_dt : int , first_n : int = -1 , retry
                     result.to_feather(tmp_file_path(start_dt , end_dt , code))
 
                 if i % 100 == 0:
-                    Logger.print(f'{i + 1}/{len(task_codes)} {start_dt} - {end_dt} : {code}...' , end = '\r')
+                    Logger.success(f'{i + 1}/{len(task_codes)} {start_dt} - {end_dt} : {code}...' , end = '\r')
 
         except Exception as e:
             bs.logout()
-            Logger.debug(f'{retry} retry {e}')
+            Logger.error(f'Baostock 5min download failed at {start_dt} - {end_dt} : {code} , retry {retry} : {e}')
             retry += 1
         else:
             break
@@ -179,9 +179,9 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
-                Logger.debug(f'{last_dt} - {dt} failed')
+                Logger.fail(f'{last_dt} - {dt} failed')
             else:
-                print(f'{last_dt} - {dt} success')
+                Logger.success(f'{last_dt} - {dt} success')
 
     for dt in x_mins_update_dates(date):
         

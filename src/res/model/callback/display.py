@@ -93,7 +93,10 @@ class StatusDisplay(BaseCallBack):
     def optimizer(self): 
         return getattr(self.trainer.model , 'optimizer')
     def display(self , *args , **kwargs):
-        return Logger.info(*args , **kwargs) if (self.show_info_step or self.initial_models) else Logger.debug(*args , **kwargs)
+        if (self.show_info_step or self.initial_models):
+            return Logger.info(*args , **kwargs)
+        else:
+            return Logger.mark(*args , **kwargs)
     def event_sdout(self , event) -> str:
         if event == 'reset_learn_rate':
             sdout = f'Reset learn rate and scheduler at the end of epoch {self.status.epoch} , effective at epoch {self.status.epoch + 1}'
@@ -125,7 +128,7 @@ class StatusDisplay(BaseCallBack):
 
     # callbacks
     def on_configure_model(self):
-        Logger.warning('Model Specifics:')
+        Logger.highlight('Model Specifics:')
         self.config.print_out()
     def on_summarize_model(self):
         if not self.test_summarized: 
@@ -215,7 +218,7 @@ class StatusDisplay(BaseCallBack):
         self.update_test_score()
 
     def on_test_end(self): 
-        Logger.warning('Testing Mean Score({}):'.format(self.config.train_criterion_score))
+        Logger.highlight('Testing Mean Score({}):'.format(self.config.train_criterion_score))
         self.summarize_test_result()
 
     def update_test_score(self):
@@ -264,7 +267,7 @@ class StatusDisplay(BaseCallBack):
         df_display = self.summary_df
         if len(df_display) > 100: 
             df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]
-        with Logger.EnclosedMessage('Table: Test Summary:' , timer = False): 
+        with Logger.EnclosedMessage('Table: Test Summary:'): 
             FUNC.display.display(df_display)
             print(f'Table saved to {self.path_test}')
 

@@ -181,7 +181,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
         """check if the tushare server is down"""
         if TS_PARAMS.server_down:
             if not getattr(self , '_print_server_down_message' , False):
-                Logger.warning(f'{self.__class__.__name__} will not update because Tushare server is down')
+                Logger.error(f'{self.__class__.__name__} will not update because Tushare server is down')
                 setattr(self , '_print_server_down_message' , True)
             return True
         return False
@@ -203,7 +203,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             print(f'Skipping:  {self.__class__.__name__} has no dates to update')
             return
         
-        print(f'{str(self)} update dates {dates[0]} ~ {dates[-1]}')
+        print(f'Fetching:  {self.__class__.__name__} update dates {dates[0]} ~ {dates[-1]}')
         while timeout_max_retries >= 0:
             try:
                 self.update_dates(dates)
@@ -211,10 +211,10 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
                 if '最多访问' in str(e):
                     if timeout_max_retries <= 0: 
                         raise e
-                    Logger.debug(f'{e} , wait {timeout_wait_seconds} seconds')
+                    Logger.error(f'{e} , wait {timeout_wait_seconds} seconds')
                     time.sleep(timeout_wait_seconds)
                 elif 'Connection to api.waditu.com timed out' in str(e):
-                    Logger.debug(e)
+                    Logger.error(e)
                     TS_PARAMS.server_down = True
                     self.check_server_down()
                     raise Exception('Tushare server is down, skip today\'s update')

@@ -107,7 +107,7 @@ def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswi
         s = path.stem[-8:]
         return [int(s)] if s.isdigit() else []
 
-def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , printing_prefix = None):
+def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , verbose = True):
     """save dataframe to path"""
     path = Path(path)
     if df is None or df.empty: 
@@ -118,12 +118,12 @@ def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , pr
             df.to_feather(path)
         else:
             df.to_parquet(path , engine='fastparquet')
-        if printing_prefix: 
-            print(f'{printing_prefix} save to {path} successfully')
+        if verbose: 
+            print(f'{path} {"overwritten" if overwrite else "saved"} successfully')
         return True
     else:
-        if printing_prefix: 
-            print(f'{printing_prefix} already exists')
+        if verbose: 
+            print(f'{path} already exists')
         return False
 
 def load_df(path : Path , raise_if_not_exist = False):
@@ -310,11 +310,10 @@ def save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = Tr
     date: int, default None
         date to be saved, if the db is by date, date is required
     '''
-    printing_prefix = f'DataBase object [{db_src}],[{db_key}],[{date}]' if verbose else None
     if df is not None and (len(df.index.names) > 1 or df.index.name): 
         df = df.reset_index()
     mark = save_df(df , _db_path(db_src , db_key , date , use_alt = False) , 
-                   overwrite = True , printing_prefix = printing_prefix)
+                   overwrite = True , verbose = verbose)
     return mark
 
 # @_db_src_deprecated(0)

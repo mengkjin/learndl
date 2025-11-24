@@ -19,18 +19,18 @@ formatters:
   color:
     fmt: '%(log_color)s%(asctime)s|MOD:%(module)-12s|%(reset_log_color)s: %(message_log_color)s%(message)s'
     log_colors:
-      CRITICAL: bold,white,bg_red
-      DEBUG: bold,white,bg_cyan
-      ERROR: bold,white,bg_purple
+      CRITICAL: bold,white,bg_blue
+      DEBUG: bold,white
+      ERROR: bold,white,bg_red
       INFO: bold,white,bg_green
-      WARNING: bold,white,bg_blue
+      WARNING: bold,white,bg_yellow
     secondary_log_colors:
       message:
-        CRITICAL: bold,red
-        DEBUG: cyan
-        ERROR: bold,purple
-        INFO: green
-        WARNING: bold,blue
+        CRITICAL: bold,blue
+        DEBUG: reset
+        ERROR: bold,red
+        INFO: bold,green
+        WARNING: bold,yellow
       reset:
         CRITICAL: reset
         DEBUG: reset
@@ -48,18 +48,18 @@ formatters:
       DEBUG: '%(message_log_color)s%(message)s'
       INFO: '%(message_log_color)s%(message)s'
     log_colors:
-      CRITICAL: bold,white,bg_red
-      DEBUG: bold,white,bg_cyan
-      ERROR: bold,white,bg_purple
+      CRITICAL: bold,white,bg_blue
+      DEBUG: reset
+      ERROR: bold,white,bg_red
       INFO: bold,white,bg_green
-      WARNING: bold,white,bg_blue
+      WARNING: bold,white,bg_yellow
     secondary_log_colors:
       message:
-        CRITICAL: bold,red
-        DEBUG: cyan
-        ERROR: bold,purple
-        INFO: green
-        WARNING: bold,blue
+        CRITICAL: bold,blue
+        DEBUG: reset
+        ERROR: bold,red
+        INFO: bold,green
+        WARNING: bold,yellow
       reset:
         CRITICAL: reset
         DEBUG: reset

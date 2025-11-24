@@ -5,7 +5,7 @@ from src.res.factor.risk import TuShareCNE5_Calculator
 from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager , FmpScreenManager
 from src.res.factor.calculator import (
     StockFactorHierarchy , StockFactorUpdater , MarketFactorUpdater , 
-    RiskFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater
+    AffiliateFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater
 )
 
 class RiskModelUpdater:
@@ -20,7 +20,7 @@ class RiskModelUpdater:
 class FactorCalculatorAPI:
     Stock = StockFactorUpdater
     Market = MarketFactorUpdater
-    Risk = RiskFactorUpdater
+    Risk = AffiliateFactorUpdater
     Pooling = PoolingFactorUpdater
     Stats = FactorStatsUpdater
 

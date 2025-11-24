@@ -125,7 +125,7 @@ class PortfolioOptimizationConfig:
 class _StockFactorDefinitionMetaType:
     def __get__(self,instance,owner) -> list[str]:
         return [
-            'stock' , 'market' , 'risk' , 'pooling'
+            'stock' , 'market' , 'affiliate' , 'pooling'
         ]
 
     def __set__(self,instance,value):
@@ -134,7 +134,10 @@ class _StockFactorDefinitionMetaType:
 class _StockFactorDefinitionCat0:
     def __get__(self,instance,owner) -> list[str]:
         return [
-            'pooling' , 'risk' , 'fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative' , 'market'
+            'fundamental' , 'analyst' , 'high_frequency' , 'behavior' , 'money_flow' , 'alternative' ,
+            'market' ,
+            'risk' , 'external' ,
+            'pooling' , 
         ]
 
     def __set__(self,instance,value):
@@ -143,6 +146,7 @@ class _StockFactorDefinitionCat0:
 class _StockFactorDefinitionCat1:
     def __get__(self,instance,owner) -> dict[str , list[str] | None]:
         return {
+            'external' : ['sellside'] ,
             'risk' : ['style'] ,
             'pooling' : ['weighted' , 'nonlinear'] ,
             'fundamental' : ['quality' , 'growth' , 'value' , 'earning'] ,
@@ -179,13 +183,13 @@ class StockFactorDefinitionConfig:
         return self._CAT1
 
     @classmethod
-    def cat0_to_meta(cls , category0 : str) -> Literal['stock' , 'market' , 'risk' , 'pooling']:
+    def cat0_to_meta(cls , category0 : str) -> Literal['stock' , 'market' , 'affiliate' , 'pooling']:
         if category0 not in cls._CAT0:
             raise CategoryError(f'category0 is should be in {cls._CAT0}, but got {category0}')
         if category0 == 'market':
             return 'market'
-        elif category0 == 'risk':
-            return 'risk'
+        elif category0 in ['risk' , 'external']:
+            return 'affiliate'
         elif category0 == 'pooling':
             return 'pooling'
         else:
@@ -201,23 +205,26 @@ class StockFactorDefinitionConfig:
         """Get the category0 given category1 of stock factor"""
         match category1:
             case 'quality' | 'growth' | 'value' | 'earning':
-                return 'fundamental'
+                category0 = 'fundamental'
             case 'surprise' | 'coverage' | 'forecast' | 'adjustment':
-                return 'analyst'
+                category0 = 'analyst'
             case 'hf_momentum' | 'hf_volatility' | 'hf_correlation' | 'hf_liquidity':
-                return 'high_frequency'
+                category0 = 'high_frequency'
             case 'momentum' | 'volatility' | 'correlation' | 'liquidity':
-                return 'behavior'
+                category0 = 'behavior'
             case 'holding' | 'trading':
-                return 'money_flow'
+                category0 = 'money_flow'
             case 'market_event':
-                return 'market'
+                category0 = 'market'
             case 'style':
-                return 'risk'
+                category0 = 'risk'
+            case 'sellside':
+                category0 = 'external'
             case 'weighted' | 'nonlinear':
-                return 'pooling'
+                category0 = 'pooling'
             case _:
                 raise ValueError(f'undefined category1: {category1}')
+        return category0
 
     @classmethod
     def validate_categories(cls , category0 : str , category1 : str) -> None:

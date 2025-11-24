@@ -3,7 +3,7 @@ from src.res.model.util import TrainConfig
 from .nn import NNPredictor
 from .boost import BoostPredictor
 from .nn_booster import NNBooster
-from .db import DBPredictor
+from .null import NullPredictor
 
 def get_predictor_module(module : str | TrainConfig , *args , **kwargs):
     if isinstance(module , str):
@@ -15,8 +15,10 @@ def get_predictor_module(module : str | TrainConfig , *args , **kwargs):
         mod = NNPredictor if not booster_head else NNBooster
     elif module_type == 'booster':
         mod = BoostPredictor
-    elif module_type == 'db':
-        mod = DBPredictor
+    elif module_type in ['db' , 'factor']:
+        mod = NullPredictor
+    else:
+        raise ValueError(f'invalid module type: {module_type}')
     predictor = mod(*args , **kwargs)
     predictor.bound_with_config(module)
     return predictor
