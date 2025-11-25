@@ -182,9 +182,9 @@ class TrainParam:
             self.Param['model.submodels'] = ['best']
 
         if self.module_type == 'factor':
-            self.Param['input_type'] = 'factor'
-            self.Param['factor.types'] = []
-            self.Param['sequence.lens']['factor'] = 1
+            self.Param['model.input_type'] = 'factor'
+            self.Param['model.factor.types'] = []
+            self.Param['model.sequence.lens']['factor'] = 1
 
         if 'best' not in self.model_submodels: 
             self.model_submodels.insert(0 , 'best')
@@ -369,10 +369,14 @@ class TrainParam:
     def seq_lens(self) -> dict[str,int]: 
         slens = self.model_sequence_lens
         lens = {key:slens.get(key , slens.get(itp,1)) for itp,keys in self.model_all_input_keys.items() for key in keys}
+        if self.module_type == 'factor':
+            lens['factor'] = 1
         return lens
     def seq_steps(self) -> dict[str,int]: 
         ssteps = self.model_sequence_steps
         steps = {key:ssteps.get(key , ssteps.get(itp,1)) for itp,keys in self.model_all_input_keys.items() for key in keys}
+        if self.module_type == 'factor':
+            steps['factor'] = 1
         return steps
     @property
     def train_data_step(self) -> int: 
@@ -487,13 +491,16 @@ class ModelParam:
             base = self.base_path
         if self.module_type == 'db':
             return conf_path(base , 'registry' , 'db_models_mapping')
+        elif self.module_type == 'factor':
+            return Path('')
         else:
             return conf_path(base , self.mod_type_dir , self.module)
 
     def load_param(self):
         self.model_param : dict[str,Any] = {}
-        p : dict[str,Any] = PATH.read_yaml(self.conf_file())
-        self.model_param.update(p)
+        if self.module_type != 'factor':
+            p : dict[str,Any] = PATH.read_yaml(self.conf_file())
+            self.model_param.update(p)
         self.update_schedule_param()
         self.special_adjustment()
         return self
@@ -537,11 +544,12 @@ class ModelParam:
             assert self.model_name == ModelPath(where).name , \
                 f'{self.model_name} != {ModelPath(where).name}'
 
-        conf_copy(self.conf_file(None) , self.conf_file() , overwrite)
-        if self.booster_head: 
-            conf_copy(
-                conf_path(None , 'booster' , self.booster_head) , 
-                conf_path(where , 'booster' , self.booster_head) , overwrite)
+        if self.module_type != 'factor':
+            conf_copy(self.conf_file(None) , self.conf_file() , overwrite)
+            if self.booster_head: 
+                conf_copy(
+                    conf_path(None , 'booster' , self.booster_head) , 
+                    conf_path(where , 'booster' , self.booster_head) , overwrite)
         return self
 
     def expand(self):
@@ -810,8 +818,10 @@ class TrainConfig(TrainParam):
                 model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
 
         elif 'fit' not in self.stage_queue and 'test' in self.stage_queue:
-            assert len(candidate_name) > 0 , f'no models of {model_name} while you want to test'
-            if len(candidate_name) == 1:
+            assert self.module_type == 'factor' or len(candidate_name) > 0 , f'no models of {model_name} while you want to test'
+            if len(candidate_name) == 0:
+                ...
+            elif len(candidate_name) == 1:
                 model_name = candidate_name[0]
             else:
                 if value < 0:

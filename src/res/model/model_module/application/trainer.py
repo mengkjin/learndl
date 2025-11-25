@@ -115,3 +115,16 @@ class ModelTrainer(BaseTrainer):
             catcher.set_attrs(f'Test DB Mapping of {mapping_name}' , trainer.path_training_output)
         Email.Attach(trainer.result_package)
         return trainer
+
+    @classmethod
+    def test_factor(cls , factor_name : str | None = None , short_test : bool | None = None , 
+                    stage = 2 , resume = 0 , checkname = -1 , start : int | None = None , end : int | None = None , **kwargs):
+        assert factor_name, 'factor_name is required'
+        with HtmlCatcher(True) as catcher:
+            trainer = cls.initialize(
+                module = f'factor@{factor_name}' , short_test = short_test , stage = stage , resume = resume , 
+                checkname = checkname, start = start , end = end , **kwargs)
+            trainer.go()
+            catcher.set_attrs(f'Test Factor of {factor_name}' , trainer.path_training_output)
+        Email.Attach(trainer.result_package)
+        return trainer

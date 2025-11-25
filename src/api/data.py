@@ -27,7 +27,7 @@ class DataAPI:
         wrap_update(RiskModelUpdater.update , 'update risk models' , skip = not risk)
 
         # update other datas , include labels , so must be after RiskModelUpdater
-        wrap_update(AffiliatedDataUpdater.update , 'update affiliated datas' , skip = not affiliated)
+        wrap_update(AffiliatedDataUpdater.update , 'update affiliated data' , skip = not affiliated)
 
 
     @classmethod

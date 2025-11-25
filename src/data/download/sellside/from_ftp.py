@@ -3,6 +3,8 @@ import pandas as pd
 
 from ftplib import FTP
 
+from src.proj import Logger
+
 class SellsideFTPDownloader(object):
     def __init__(self, host='47.100.224.38', user="factor", password="msjg_factor@1024"):
         self.ftp = self.ftp_login(host, user, password)
@@ -37,7 +39,8 @@ class SellsideFTPDownloader(object):
 
     @classmethod
     def update(cls):
-        pass
+        return
+        Logger.info(f'Download: {cls.__name__} since last update!')
 
 def main():
     connector = SellsideFTPDownloader()

@@ -139,6 +139,15 @@ class ModelAPI:
                                            verbosity = verbosity , **kwargs)
 
     @classmethod
+    def test_factor(cls , factor_name : str | None = None , short_test : bool | None = None , 
+                    start : int | None = None , end : int | None = None , verbosity : int | None = 2 , **kwargs):
+        '''
+        test a existing factor
+        '''
+        return cls.Trainer.test_factor(factor_name , short_test , start = start , end = end , 
+                                       verbosity = verbosity , **kwargs)
+
+    @classmethod
     def schedule_model(cls , schedule_name : str | None = None , short_test : bool | None = None , resume : int = 1 , 
                        start : int | None = None , end : int | None = None , verbosity : int | None = 2 , **kwargs):
         '''

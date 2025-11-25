@@ -103,6 +103,7 @@ class DataModule(BaseDataModule):
         if self.input_type == 'db':
             slens = {self.config.model_module: 1}
         else:
+            print(self.config.seq_lens() , param.get('seqlens',{}))
             slens = self.config.seq_lens() | param.get('seqlens',{})
             slens = {key:int(val) for key,val in slens.items() if key in self.input_keys}
             slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})
@@ -208,7 +209,9 @@ class DataModule(BaseDataModule):
     @property
     def input_keys(self) -> list[str]:
         keys = self.input_keys_data + self.input_keys_factor + self.input_keys_hidden
-        assert len(keys) > 0 or self.config.model_input_type == 'db' , self.config.model_input_type
+        if self.config.module_type == 'factor':
+            keys.append('factor')
+        assert len(keys) > 0 or self.config.model_input_type in ['db'] , self.config.model_input_type
         return keys
 
     @property

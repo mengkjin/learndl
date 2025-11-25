@@ -203,7 +203,7 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             print(f'Skipping: {self.__class__.__name__} already updated!')
             return
         
-        print(f'Fetching:  {self.__class__.__name__} update dates {dates[0]} ~ {dates[-1]}')
+        print(f'Download:  {self.__class__.__name__} update dates {dates[0]} ~ {dates[-1]}')
         while timeout_max_retries >= 0:
             try:
                 self.update_dates(dates)

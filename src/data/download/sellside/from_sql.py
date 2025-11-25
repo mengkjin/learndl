@@ -173,7 +173,7 @@ class SellsideSQLDownloader:
         if not date_intervals: 
             return 
         
-        print(f'Fetching: {self.DB_SRC}/{self.db_key} from ' + 
+        print(f'Download: {self.DB_SRC}/{self.db_key} from ' + 
             f'{date_intervals[0][0]} to {date_intervals[-1][1]}, total {len(date_intervals)} periods')
 
         if self.MAX_WORKERS == 1 or self.factor_src == 'dongfang':
@@ -191,7 +191,7 @@ class SellsideSQLDownloader:
         if self.save_data(df):
             Logger.success(f'Finished: {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {Duration(time.time()-t0).fmtstr}')
         else:
-            Logger.fail(   f'Failure : No data downloaded')
+            Logger.fail(   f'Failure : No data')
         return True
 
     def query_start_dt(self , connection : Connection):
@@ -383,8 +383,6 @@ class SellsideSQLDownloader:
 
     @classmethod
     def update_since(cls , trace = 0):
-        print(f'Fetching: {cls.__name__} since last update!')
-
         for factor , connection in cls.factors_and_conns():  
             factor.download('since' , connection , trace = trace)
 
@@ -400,16 +398,17 @@ class SellsideSQLDownloader:
     @classmethod
     def update_allaround(cls):
 
-        prompt = f'{time.ctime()} : download allaround!'
+        prompt = f'Download: {cls.__name__} allaround!'
         assert (x := input(prompt + ', print "yes" to confirm!')) == 'yes' , f'input {x} is not "yes"'
         assert (x := input(prompt + ', print "yes" again to confirm!')) == 'yes' , f'input {x} is not "yes"'
-        print(prompt)
+        Logger.info(prompt)
 
         for factor , connection in cls.factors_and_conns():  
             factor.download('all' , connection)
 
     @classmethod
     def update(cls):
+        Logger.info(f'Download: {cls.__name__} since last update!')
         try:
             cls.update_since(trace = 0)
         except Exception as e:

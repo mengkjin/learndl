@@ -112,6 +112,7 @@ class FactorLoader(BlockLoader):
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
         with Timer(f' --> factor blocks merging ({len(factors)} factors)' , silent = silent): 
+            assert len([fac for fac in factors if not fac.empty]) > 0 , f'no factors found for {self.names}'
             df = pd.concat([fac for fac in factors if not fac.empty]).pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_dataframe(df)
         return block
@@ -147,6 +148,7 @@ class FactorCategory1Loader(BlockLoader):
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
         with Timer(f' --> factor blocks merging ({len(factors)} factors)' , silent = silent): 
+            assert len([fac for fac in factors if not fac.empty]) > 0 , f'no factors found for {self.category0} , {self.category1}'
             df = pd.concat([fac for fac in factors if not fac.empty]).pivot_table('value' , ['secid','date'] , 'feature')
             block = DataBlock.from_dataframe(df)
         return block

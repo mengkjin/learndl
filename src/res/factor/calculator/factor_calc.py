@@ -405,6 +405,14 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return factor
 
     @classmethod
+    def FullTest(cls , start : int | None = 20170101 , end : int | None = None , **kwargs):
+        """full test of factor values of a given date range"""
+        from src.res.model.model_module.application import ModelTrainer
+        dates = cls.stored_dates()
+        dates = CALENDAR.slice(dates , start , end)
+        ModelTrainer.test_factor(cls.factor_name , False , start = dates[0] , end = dates[-1] , **kwargs)
+
+    @classmethod
     def target_path(cls , date : int | None = None) -> Path:
         """full test of factor values of a given date range"""
         return DB.path(cls.db_src , cls.db_key , date)

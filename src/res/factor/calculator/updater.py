@@ -11,7 +11,7 @@ from .factor_calc import FactorCalculator , WeightedPoolingCalculator
 from src.proj import Logger
 from src.basic import CONF , CALENDAR 
 from src.data import DATAVENDOR
-from src.func.parallel import parallel , try_func_call
+from src.func.parallel import parallel
 from src.func.singleton import SingletonMeta
 
 __all__ = ['StockFactorUpdater' , 'MarketFactorUpdater' , 'AffiliateFactorUpdater' , 'PoolingFactorUpdater' , 'FactorStatsUpdater']
@@ -28,6 +28,9 @@ class _BaseJob(ABC):
 
     def __repr__(self):
         return self.calc.factor_name
+
+    def __call__(self , **kwargs) -> None:
+        return self.do(**kwargs)
         
     @property
     def level(self) -> str: 
@@ -55,7 +58,7 @@ class _BaseJob(ABC):
         """sort key of the job"""
         
     @abstractmethod
-    def do(self) -> None:
+    def do(self , **kwargs) -> None:
         """do the job"""
         
     @abstractmethod
@@ -76,7 +79,7 @@ class _JobFactorDate(_BaseJob):
         """sort key of the job : (level , date , factor_name)"""
         return (self.level , self.date , self.factor_name)
 
-    def do(self , verbose : bool = False) -> None:
+    def do(self , verbose : bool = False , **kwargs) -> None:
         """do the job"""
         if verbose:
             self.preview()
@@ -103,7 +106,7 @@ class _JobFactorAll(_BaseJob):
         """sort key of the job"""
         return (self.level , self.factor_name)
 
-    def do(self , verbose : bool = False) -> None:
+    def do(self , verbose : bool = False , **kwargs) -> None:
         """do the job"""
         if verbose:
             self.preview()
@@ -136,7 +139,7 @@ class _JobFactorStats(_BaseJob):
         """sort key of the job"""
         return (self.year , self.factor_name)
 
-    def do(self , verbose : bool = False) -> None:
+    def do(self , verbose : bool = False , **kwargs) -> None:
         """do the job"""
         if verbose:
             self.preview()
@@ -161,6 +164,10 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     def __repr__(self):
         n_jobs = len(self.jobs) if self.jobs is not None else 0
         return f'{self.__name__}({n_jobs} jobs)'
+
+    @classmethod
+    def jobs_dict(cls):
+        return {job:job for job in cls.jobs}
 
     @classmethod
     def levels(cls) -> np.ndarray: 
@@ -224,9 +231,9 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         cls.jobs.sort(key=lambda x: x.sort_key())
 
         if cls.jobs:
-            print(f'Finish Collecting {len(cls.jobs)} Factor Update - {cls.update_type.capitalize()} Jobs')
+            Logger.info(f'Finish Collecting {len(cls.jobs)} Jobs for {cls.__name__}')
         else:
-            print(f'There is no Factor Update - {cls.update_type.capitalize()} Jobs to Proceed...')
+            print(f'Skipping: There is no {cls.__name__} Jobs to Proceed...')
         
     @classmethod
     def before_process_jobs(cls , start : int | None = None , end : int | None = None , 
@@ -394,7 +401,7 @@ class MarketFactorUpdater(BaseFactorUpdater):
                            verbosity : int = 1 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        try_func_call((jobs[0].do , {'verbose' : verbosity > 0}))
+        parallel(cls.jobs_dict() , method = cls.multi_thread , verbose = verbosity > 0)
 
 class PoolingFactorUpdater(BaseFactorUpdater):
     """manager of pooling factor update jobs"""
@@ -412,7 +419,7 @@ class PoolingFactorUpdater(BaseFactorUpdater):
                            verbosity : int = 1 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        try_func_call((jobs[0].do , {'verbose' : verbosity > 0}))
+        parallel(cls.jobs_dict() , method = cls.multi_thread , verbose = verbosity > 0)
 
 class AffiliateFactorUpdater(BaseFactorUpdater):
     """manager of affiliate factor update jobs"""
@@ -430,7 +437,7 @@ class AffiliateFactorUpdater(BaseFactorUpdater):
                            verbosity : int = 1 , **kwargs) -> None:
         """process a group of market factor update jobs"""
         assert len(jobs) == 1 , f'Only one job is allowed for group {group} , got {len(jobs)}'
-        try_func_call((jobs[0].do , {'verbose' : verbosity > 0}))
+        parallel(cls.jobs_dict() , method = cls.multi_thread , verbose = verbosity > 0)
     
 class FactorStatsUpdater(BaseFactorUpdater):
     """manager of factor stats update jobs"""

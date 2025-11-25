@@ -14,15 +14,18 @@ class DailyRiskUpdater(BasicUpdater):
 
     @classmethod
     def update(cls):
+        Logger.info(f'Update: {cls.__name__} since last update!')
         cls.update_all('update')
 
     @classmethod
     def rollback(cls , rollback_date : int):
+        Logger.info(f'Update: {cls.__name__} rollback from {rollback_date}!')
         cls.set_rollback_date(rollback_date)
         cls.update_all('rollback')
         
     @classmethod
     def recalculate_all(cls):
+        Logger.info(f'Update: {cls.__name__} recalculate all!')
         cls.update_all('recalc')
 
     @classmethod

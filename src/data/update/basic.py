@@ -2,7 +2,7 @@ from typing import Any , Type
 from importlib import import_module
 from pathlib import Path
 
-from src.proj import PATH
+from src.proj import PATH , Logger
 from src.basic import CALENDAR
 
 class BasicUpdaterMeta(type):
@@ -46,14 +46,17 @@ class BasicUpdater(metaclass=BasicUpdaterMeta):
 
     @classmethod
     def update(cls):
+        Logger.info(f'Update: {cls.__name__} since last update!')
         raise NotImplementedError(f'{cls.__name__} must implement update method')
 
     @classmethod
     def rollback(cls , rollback_date : int):
+        Logger.info(f'Update: {cls.__name__} rollback from {rollback_date}!')
         raise NotImplementedError(f'{cls.__name__} must implement rollback method')
 
     @classmethod
     def recalculate_all(cls):
+        Logger.info(f'Update: {cls.__name__} recalculate all!')
         raise NotImplementedError(f'{cls.__name__} must implement recalculate_all method')
 
     @classmethod
