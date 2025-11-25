@@ -23,7 +23,7 @@ formatters:
       DEBUG: bold,white
       ERROR: bold,white,bg_red
       INFO: bold,white,bg_green
-      WARNING: bold,white,bg_yellow
+      WARNING: bold,black,bg_yellow
     secondary_log_colors:
       message:
         CRITICAL: bold,blue
@@ -52,7 +52,7 @@ formatters:
       DEBUG: reset
       ERROR: bold,white,bg_red
       INFO: bold,white,bg_green
-      WARNING: bold,white,bg_yellow
+      WARNING: bold,black,bg_yellow
     secondary_log_colors:
       message:
         CRITICAL: bold,blue

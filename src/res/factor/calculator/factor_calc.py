@@ -1002,6 +1002,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
         if not overwrite:
             return
         if after is not None:
+            Logger.warning(f'Dropping pooling weight of {self.factor_name} after {after}!')
             df = self.load_pooling_weight()
             df = df.query('date < @after').copy()
             DB.save(df , 'pooling_weight' , self.db_key , verbose = False)
@@ -1011,6 +1012,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
     def purge_pooling_weight(self , confirm : bool = False) -> None:
         """purge pooling weight of a given date"""
         if confirm:
+            Logger.warning(f'Purging pooling weight of {self.factor_name}!')
             DB.path('pooling_weight' , self.db_key).unlink(missing_ok = True)
 
     def get_pooling_weight(self , date : int) -> pd.DataFrame:
