@@ -390,7 +390,6 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         calc = cls()
         func_calls = {date:(calc.eval_factor , {'date' : date , 'verbose' : verbose}) for date in dates}
         dfs = parallel(func_calls , method = multi_thread , ignore_error = ignore_error)
-
         factor = StockFactor(dfs)
         if normalize: 
             factor.normalize(fill_method , inplace = True)
@@ -480,6 +479,14 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         target_dates = cls.stats_target_dates(start = start , end = end , overwrite = overwrite)
         for stats_type , dates in target_dates.items():
             cls.update_periodic_stats(stats_type , dates , overwrite = overwrite , verbose = verbose)
+
+    @classmethod
+    def recalculate_all(cls , start : int | None = None , end : int | None = None , verbose = False) -> None:
+        calc = cls()
+        if isinstance(calc , WeightedPoolingCalculator):
+            calc.drop_pooling_weight(after = start , overwrite = True)
+        cls.update_all_factors(start = start , end = end , overwrite = True , verbose = verbose)
+        cls.update_all_stats(start = start , end = end , overwrite = True , verbose = verbose)
 
     def update_day_factor(self , date : int , overwrite = False , show_success = False , show_warning = False ,catch_errors : tuple[type[Exception],...] = ()) -> bool:
         """update factor data of a given date"""

@@ -47,12 +47,12 @@ def parallel(
     return result
 
 class FuncCall:
-    def __init__(self , func_input : INPUT_TYPE , key : Any | None = None , 
-                 result : dict | None = None , catch_errors : tuple[type[Exception],...] = () ,
+    def __init__(self , func_input : INPUT_TYPE , key : Any , 
+                 result_dict : dict , catch_errors : tuple[type[Exception],...] = () ,
                  **kwargs):
         self.func_input = func_input
         self.key = key
-        self.result = result
+        self.result_dict = result_dict
         self.catch_errors = catch_errors
         self.kwargs = kwargs
        
@@ -89,13 +89,13 @@ class FuncCall:
 
     @classmethod
     def try_call(cls , func_input : INPUT_TYPE , key : Any | None = None , 
-                 result : dict | None = None , catch_errors : tuple[type[Exception],...] = () ,
+                 result_dict : dict | None = None , catch_errors : tuple[type[Exception],...] = () ,
                  **kwargs) -> Any:
         func , args , kwargs = cls.unwrap(func_input , **kwargs)
         try:
             result = func(*args , **kwargs)
-            if result is not None and key is not None:
-                result[key] = result
+            if result_dict is not None and key is not None:
+                result_dict[key] = result
             return result
         except catch_errors as e:
             Logger.warning(f'{key} : {func}({args} , {kwargs}) generated an exception: {e}')
@@ -104,7 +104,7 @@ class FuncCall:
             raise e
 
     def do(self) -> Any:
-        self.try_call(self.func_input , self.key , self.result , self.catch_errors , **self.kwargs)
+        self.try_call(self.func_input , self.key , self.result_dict , self.catch_errors , **self.kwargs)
 
     def submit(self , pool : ThreadPoolExecutor | ProcessPoolExecutor):
         return pool.submit(self.do)

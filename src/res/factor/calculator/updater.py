@@ -316,8 +316,10 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
     @classmethod
     def fix(cls , factors : list[str] , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
         assert factors , 'factors are required for fix'
-        print(f'Fixing {(cls.update_type.capitalize() + " ") if cls.update_type else ''}Factor Calculations: {factors}')
-        cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , verbosity = verbosity , timeout = timeout)
+        factors = [factor for factor in cls.factors() if factor in factors]
+        if factors:
+            print(f'Fixing {(cls.update_type.capitalize() + " ") if cls.update_type else ''}Factor Calculations: {factors}')
+            cls.process_jobs(selected_factors = factors , overwrite = True , start = start , end = end , verbosity = verbosity , timeout = timeout)
 
     @classmethod
     def eval_coverage(cls , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:
