@@ -5,7 +5,7 @@ import pandas as pd
 from contextlib import nullcontext
 from typing import Any , ClassVar , Literal
 
-from src.proj import MACHINE , SILENT
+from src.proj import MACHINE , SILENT , Logger
 from src.basic import CALENDAR , RegisteredModel
 from src.res.model.util import TrainConfig
 from src.res.model.data_module import DataModule
@@ -157,7 +157,7 @@ class ModelPredictor:
         '''Update pre-registered factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' '''
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
-            print(f'model_name is None, update all registered models (len={len(models)})')
+            Logger.info(f'model_name is None, update all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
             md.update_preds(update = True , overwrite = False , start_dt = start_dt , end_dt = end_dt , silent = silent)
@@ -177,7 +177,7 @@ class ModelPredictor:
         """Recalculate all model predictions"""
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
-            print(f'model_name is None, update all registered models (len={len(models)})')
+            Logger.info(f'model_name is None, update all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
             md.update_preds(update = False , overwrite = True , start_dt = start_dt , end_dt = end_dt , silent = silent)

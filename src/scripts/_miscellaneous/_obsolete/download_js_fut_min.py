@@ -1,7 +1,9 @@
 from src.basic import DB , CALENDAR
 import argparse
-import jsdata , datetime # type: ignore 
+import jsdata # type: ignore 
 import pandas as pd
+
+from datetime import datetime
 from typing import Any
 
 def download_jsdata(date : int , limit = 5000 , api : Any = None):
@@ -10,8 +12,8 @@ def download_jsdata(date : int , limit = 5000 , api : Any = None):
     while True:
         df = api.future_min(**{
         "freq": "1min",
-        "start_time": f"{datetime.datetime.strptime(str(date),'%Y%m%d').strftime('%Y-%m-%d')} 00:00:00",
-        "end_time": f"{datetime.datetime.strptime(str(date),'%Y%m%d').strftime('%Y-%m-%d')} 23:59:59",
+        "start_time": f"{datetime.strptime(str(date),'%Y%m%d').strftime('%Y-%m-%d')} 00:00:00",
+        "end_time": f"{datetime.strptime(str(date),'%Y%m%d').strftime('%Y-%m-%d')} 23:59:59",
         "limit": limit ,
         "offset" : offset})
         offset += limit

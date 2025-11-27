@@ -8,7 +8,7 @@
 # mode: shell
 # parameters:
 #   module_name : 
-#       type : "Path('.local_resources/temp/available_modules.txt').read_text().splitlines()"
+#       type : Options.available_modules()
 #       desc : module to train
 #       required : True
 #   short_test : 

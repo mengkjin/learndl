@@ -8,7 +8,7 @@ from inspect import currentframe
 from pathlib import Path
 from typing import Any , final , Iterator , Literal
 
-from src.proj import InstanceRecord ,PATH , Logger , BigTimer
+from src.proj import InstanceRecord , PATH , Logger
 from src.basic import ModelDict 
 from src.func import Filtered
 from src.res.algo import AlgoModule
@@ -386,21 +386,24 @@ class BaseTrainer(ModelStreamLine):
     
     def main_process(self):
         '''Main stage of data & fit & test'''
-        with BigTimer(Logger.critical , 'Main Process'):
+        with Logger.EnclosedProcess(f'{self.config.model_name} Trainer Main Process'):
             self.on_configure_model()
 
             if not self.stage_queue:
                 Logger.error("stage_queue is empty , please check src.proj.InstanceRecord['trainer']")
                 raise Exception("stage_queue is empty , please check src.InstanceRecord['trainer']")
 
-            if 'data' in self.stage_queue: 
-                self.stage_data()
+            if 'data' in self.stage_queue:
+                with Logger.EnclosedProcess('Stage [Data]'):
+                    self.stage_data()
 
             if 'fit' in self.stage_queue:  
-                self.stage_fit()
+                with Logger.EnclosedProcess('Stage [Fit]'):
+                    self.stage_fit()
 
             if 'test' in self.stage_queue: 
-                self.stage_test()
+                with Logger.EnclosedProcess('Stage [Test]'):
+                    self.stage_test()
             
             self.on_summarize_model()
 

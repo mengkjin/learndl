@@ -6,7 +6,8 @@
 # content: 在Ubuntu系统中挂起系统，如果当前有运行脚本，则不挂起系统
 
 
-import datetime , platform , subprocess
+import platform , subprocess
+from datetime import datetime
 from src.proj import PATH
 from src.app import get_running_scripts
 
@@ -15,15 +16,14 @@ default_log_path = PATH.log_main.joinpath('suspend','suspend_check.log')
 def suspend_this_machine(log_path = default_log_path):
     running_scripts = get_running_scripts(__file__)
     do_suspend = not running_scripts and platform.system() != 'Windows'
-    main_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     log_path.parent.mkdir(parents = True , exist_ok = True)
     with open(log_path, 'a') as log_file:
         if running_scripts:
-            main_str += f' : Suspension aborted due to running scripts: {running_scripts}\n'
+            main_str = f'{datetime.now()} : Suspension aborted due to running scripts: {running_scripts}\n'
         elif platform.system() == 'Windows':
-            main_str += f' : Suspension aborted due windows platform\n'
+            main_str = f'{datetime.now()} : Suspension aborted due windows platform\n'
         else:
-            main_str += f' : Suspension applied\n'
+            main_str = f'{datetime.now()} : Suspension applied\n'
         log_file.write(main_str)
         print(main_str , end = '')
     if do_suspend:

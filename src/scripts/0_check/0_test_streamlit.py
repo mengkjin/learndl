@@ -56,6 +56,7 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
                 Logger.info('info message')
                 Logger.debug('debug message')
                 Logger.highlight('highlight message')
+                Logger.highlight('highlight message with default prefix' , default_prefix = True)
                 Logger.separator()
                 Logger.divider()
                 Logger.success('success message')

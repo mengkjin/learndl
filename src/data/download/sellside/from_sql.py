@@ -1,9 +1,10 @@
-import platform , re , time , traceback
+import platform , re , traceback
 import pandas as pd
 import numpy as np
 import multiprocessing as mp  
 
 from dataclasses import dataclass
+from datetime import datetime
 from pypinyin import lazy_pinyin
 from sqlalchemy import create_engine , exc
 from typing import ClassVar , Literal
@@ -186,10 +187,10 @@ class SellsideSQLDownloader:
                 pool.starmap(self.download_period, [(connection , *inter) for inter in date_intervals])
  
     def download_period(self , connection , start , end):
-        t0 = time.time()
+        t0 = datetime.now()
         df = self.query_default(connection , start , end)
         if self.save_data(df):
-            Logger.success(f'Finished: {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {Duration(time.time()-t0).fmtstr}')
+            Logger.success(f'Finished: {self.DB_SRC}/{self.db_key}:{start}-{end}, cost {Duration(since = t0)}')
         else:
             Logger.fail(   f'Failure : No data')
         return True

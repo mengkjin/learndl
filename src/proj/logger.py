@@ -1,5 +1,7 @@
-import colorlog , logging , sys , time
+import colorlog , logging , sys
 import logging.handlers
+
+from datetime import datetime
 from typing import Any , Generator , Literal , Type
 
 from .path import PATH
@@ -111,9 +113,15 @@ class Logger:
         sys.stderr.write(f"\u001b[31m{' '.join(args)}\u001b[0m" + '\n')
 
     @classmethod
-    def highlight(cls , *args , **kwargs):
+    def highlight(cls , *args , default_prefix = False , **kwargs):
         """custom cyan colored Highlight level message"""
-        sys.stderr.write(f"\u001b[36m\u001b[1m{' '.join(args)}\u001b[0m" + '\n')
+        msg = ' '.join(args)
+        msg = f'\u001b[36m\u001b[1m{msg}\u001b[0m'
+        if default_prefix:
+            prefix = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|LEVEL:{"HIGHLIGHT":9s}|'
+            prefix = f'\u001b[46m\u001b[1m\u001b[30m{prefix}\u001b[0m'
+            msg = f'{prefix}: {msg}'
+        sys.stderr.write(msg + '\n')
 
     @classmethod
     def debug(cls , *args , **kwargs):
@@ -180,6 +188,25 @@ class Logger:
         """Get the cached messages"""
         return cls._cached_messages[type]
 
+    class EnclosedProcess:
+        """
+        Enclosed process to print out time
+        example:
+            with Logger.EnclosedProcess('Process Name'):
+                Logger.info('This is the enclosed process...')
+        """
+        def __init__(self , name = None , printer = None):
+            self.printer = printer or Logger.critical
+            self.name = name or 'Process'
+        def __repr__(self):
+            return f'{self.__class__.__name__}(name = {self.name} , printer = {self.printer})'
+        def __enter__(self):
+            self._init_time = datetime.now()
+            self.printer(f'{self.name} Start at {self._init_time}')
+        def __exit__(self, *args): 
+            self._end_time = datetime.now()
+            self.printer(f'{self.name} Finished at {self._end_time}! Cost {Duration(self._end_time - self._init_time)}')
+
     class EnclosedMessage:
         """F
         ormat Enclosed message
@@ -192,11 +219,12 @@ class Logger:
             self.width = width
             
         def __enter__(self):
-            self.start_time = time.time()
+            self._init_time = datetime.now()
             self.write(f'{self.title} Start')
 
         def __exit__(self , exc_type , exc_value , traceback):
-            self.write(f'{self.title} Finished in {Duration(time.time() - self.start_time).fmtstr}')
+            self._end_time = datetime.now()
+            self.write(f'{self.title} Finished in {Duration(self._end_time - self._init_time)}')
 
         def __repr__(self):
             return f'EnclosedMessage(title = {self.title} , width = {self.width})'

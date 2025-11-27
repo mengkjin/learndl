@@ -1,5 +1,7 @@
 # please check this path before running the code
-import shutil , yaml , time , os
+import shutil , yaml , os
+
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -53,13 +55,14 @@ class PATH:
 
     # models folder and subfolders
     model       = main.joinpath('models')
-
+    
     # configs folder and subfolders
     conf        = main.joinpath('configs')
     conf_schedule = conf.joinpath('schedule')
 
     # results folder and subfolders
     result      = main.joinpath('results')
+    null_model  = result.joinpath('null_models')
     rslt_train  = result.joinpath('train')
     rslt_factor = result.joinpath('test').joinpath('perf')
     rslt_optim  = result.joinpath('test').joinpath('optim')
@@ -140,7 +143,7 @@ class PATH:
     def file_modified_date(path : Path | str , default = 19970101) -> int:
         """Get the modified date of the file"""
         if Path(path).exists():
-            return int(time.strftime('%Y%m%d',time.localtime(os.path.getmtime(path))))
+            return int(datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y%m%d'))
         else:
             return default
 
@@ -148,7 +151,7 @@ class PATH:
     def file_modified_time(path : Path | str , default = 19970101000000) -> int:
         """Get the modified time of the file"""
         if Path(path).exists():
-            return int(time.strftime('%Y%m%d%H%M%S',time.localtime(os.path.getmtime(path))))
+            return int(datetime.fromtimestamp(os.path.getmtime(path)).strftime('%Y%m%d%H%M%S'))
         else:
             return default
         

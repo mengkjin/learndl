@@ -1,4 +1,4 @@
-import io , sys , re , html , time , base64 , platform , warnings , traceback
+import io , sys , re , html , base64 , platform , warnings , traceback
 import pandas as pd
 
 from typing import Any, Callable ,Literal , IO
@@ -280,18 +280,14 @@ class WarningCatcher:
         warnings.showwarning = self.original_showwarning
 
 def _critical(message: str):
-    red_bg_white_bold = "\u001b[41m\u001b[1m\u001b[37m"  # red backgroud , white bold
+    purple_bg_white_bold = "\u001b[45m\u001b[1m\u001b[37m"  # purple backgroud , white bold
     reset_all = "\u001b[0m"
-    red_text = "\u001b[31m\u001b[1m"  # red text (no background) , bold
+    # purple_text = "\u001b[35m\u001b[1m"  # purple text (no background) , bold
 
-    try:
-        mod_name = Path(__file__).stem
-    except NameError:
-        mod_name = 'None'
-
-    prefix = f'{time.strftime("%y-%m-%d %H:%M:%S")}|MOD:{mod_name:{12}s}|'
+    level_name = 'CRITICAL'
+    prefix = f'{datetime.now().strftime("%y-%m-%d %H:%M:%S")}|LEVEL:{level_name:9s}|'
     
-    output = f"{red_bg_white_bold}{prefix}{reset_all}: {red_text}{message}{reset_all}\n"
+    output = f"{purple_bg_white_bold}{prefix}{reset_all}: {purple_bg_white_bold}{message}{reset_all}\n"
     sys.stderr.write(output)
     return output
 
@@ -427,7 +423,7 @@ class TimedOutput:
     valid: bool = True
     
     def __post_init__(self):
-        self._time = time.time()
+        self._time = datetime.now()
 
     def __bool__(self):
         return self.valid
@@ -454,15 +450,15 @@ class TimedOutput:
 
     @property
     def create_time(self):
-        return self._time
+        return self._time.timestamp()
 
     @property
     def sort_key(self):
-        return self._time
+        return self._time.timestamp()
 
     @property
     def time_str(self) -> str:
-        return datetime.fromtimestamp(self._time).strftime('%H:%M:%S.%f')[:-3]
+        return self._time.strftime('%H:%M:%S.%f')[:-3]
     
     @classmethod
     def create(cls, content: str | pd.DataFrame | pd.Series | Figure | None | Any , output_type: str | None = None):
@@ -544,14 +540,14 @@ class HtmlCatcher(OutputCatcher):
             HtmlCatcher.Capturing = True
 
     '''catch message from stdout and stderr, and display module'''
-    def __init__(self, title: str | bool | None = None, time: datetime | None = None , export_path: Path | str | None = None , **kwargs):
+    def __init__(self, title: str | bool | None = None, init_time: datetime | None = None , export_path: Path | str | None = None , **kwargs):
         if isinstance(title , bool) and not title:
             self._enable_catcher = False
         else:
             self._enable_catcher = True
         self.outputs: list[TimedOutput] = []
         self.title = title if isinstance(title , str) else 'html_catcher'
-        self.time = time if time else datetime.now()
+        self.init_time = init_time if init_time else datetime.now()
         self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
         self.kwargs = kwargs
         self.__class__.InstanceList.append(self)
@@ -581,7 +577,7 @@ class HtmlCatcher(OutputCatcher):
             path = self._export_path
         else:
             title = self.title.replace(" " , "_")
-            time_str = self.time.strftime('%Y%m%d%H%M%S')
+            time_str = self.init_time.strftime('%Y%m%d%H%M%S')
             path = self.ExportDIR.joinpath(title , f'{title}.{time_str}.html')
         assert not path or path.suffix == '.html' , f"export_path must be a html file , but got {path}"
         return path
@@ -591,7 +587,7 @@ class HtmlCatcher(OutputCatcher):
             if title: 
                 self.title = title
             if time: 
-                self.time = time
+                self.init_time = time
             if export_path: 
                 self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
             assert not self._export_path or self._export_path.suffix == '.html' , f"export_path must be a html file , but got {self._export_path}"
@@ -707,8 +703,8 @@ class HtmlCatcher(OutputCatcher):
         infos = {
             'Machine' : MACHINE.name,
             'Python' : f"{platform.python_version()}-{platform.machine()}",
-            'Start at' : self.start_time.strftime('%Y-%m-%d %H:%M:%S'),
-            'Finish at' : finish_time.strftime('%Y-%m-%d %H:%M:%S'),
+            'Start at' : f'{self.start_time}',
+            'Finish at' : f'{finish_time}',
             'Duration' : Duration((finish_time - self.start_time).total_seconds()).fmtstr,
             'Outputs Num' : len(self.outputs)
         }
@@ -723,7 +719,7 @@ class HtmlCatcher(OutputCatcher):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{self.title.title()} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</title>
+    <title>{self.title.title()} - {datetime.now()}</title>
     <style>
         body {{
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -1057,13 +1053,13 @@ class MarkdownCatcher(OutputCatcher):
         self.markdown_file.write(f"## Log Start \n")
         self.markdown_file.write(f"- *Machine: {MACHINE.name}*  \n")
         self.markdown_file.write(f"- *Python: {platform.python_version()}-{platform.machine()}*  \n")
-        self.markdown_file.write(f"- *Start at: {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}*  \n")
+        self.markdown_file.write(f"- *Start at: {self.start_time}*  \n")
         self.markdown_file.write(f"## Log Main \n")
 
     def _markdown_footer(self):
         finish_time = datetime.now()
         self.markdown_file.write(f"## Log End \n")
-        self.markdown_file.write(f"- *Finish at: {finish_time.strftime('%Y-%m-%d %H:%M:%S')}*  \n")
+        self.markdown_file.write(f"- *Finish at: {finish_time}*  \n")
         self.markdown_file.write(f"- *Duration: {Duration((finish_time - self.start_time).total_seconds()).fmtstr}*  \n")
         self.markdown_file.write(f"- *Stdout Lines: {self.stats['stdout_lines']}*  \n")
         self.markdown_file.write(f"- *Stderr Lines: {self.stats['stderr_lines']}*  \n")

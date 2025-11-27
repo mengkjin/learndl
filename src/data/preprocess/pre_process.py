@@ -1,11 +1,12 @@
-import argparse , gc , inspect, time , torch
+import argparse , gc , inspect , torch
 import numpy as np
 
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
+from datetime import datetime
 from typing import Any , Iterator
 
-from src.proj import Logger , Timer
+from src.proj import Logger , Timer , Duration
 from src.basic import CONF , CALENDAR
 from src.func.primas import neutralize_2d , process_factor
 from src.data.util import DataBlock
@@ -74,15 +75,14 @@ class DataPreProcessor:
         for key , proc in processor.processors():
             modified_time = DataBlock.last_modified_time(key , predict)
             if CALENDAR.is_updated_today(modified_time):
-                time_str = time.strftime('%Y/%m/%d %H:%M:%S',time.strptime(str(modified_time) , '%Y%m%d%H%M%S'))
-                print(f'Skipping: [{key}] already updated at {time_str}!')
+                print(f'Skipping: [{key}] already updated at {datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S')}!')
                 continue
             if verbosity >= 2:
                 print(f'Processing: [{key}]')
-            tt1 = time.time()
+            tt1 = datetime.now()
 
             with Timer(f'[{key}] blocks loading' , silent = verbosity < 2):
-                block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, silent = verbosity < 1)
+                block_dict = proc.load_blocks(processor.load_start_dt, processor.load_end_dt, silent = verbosity < 2)
             with Timer(f'[{key}] blocks process' , silent = verbosity < 2):
                 data_block = proc.process_blocks(block_dict)
             with Timer(f'[{key}] blocks masking' , silent = verbosity < 2):   
@@ -93,7 +93,7 @@ class DataPreProcessor:
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             del data_block
             gc.collect()
-            Logger.success(f'[{key}] finished! Cost {time.time() - tt1:.2f} Seconds')
+            Logger.success(f'[{key}] finished! Cost {Duration(since = tt1)}')
             if verbosity >= 2:
                 Logger.divider()
 
@@ -209,12 +209,12 @@ class pp_week(TypePreProcessor):
     def block_loaders(self) -> dict[str,BlockLoader]: 
         return {'day':BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *self.TRADE_FEAT])}
     def final_feat(self): return self.TRADE_FEAT
-    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , **kwargs):
+    def load_blocks(self , start_dt = None , end_dt = None , secid_align = None , date_align = None , silent = False , **kwargs):
         if start_dt is not None and start_dt < 0: 
             start_dt = 2 * start_dt
         blocks : dict[str,DataBlock] = {}
         for src_key , loader in self.block_loaders().items():
-            blocks[src_key] = loader.load_block(start_dt , end_dt , **kwargs).align(secid = secid_align , date = date_align)
+            blocks[src_key] = loader.load_block(start_dt , end_dt , silent = silent , **kwargs).align(secid = secid_align , date = date_align)
             secid_align = blocks[src_key].secid
             date_align  = blocks[src_key].date
         return blocks

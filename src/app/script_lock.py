@@ -1,6 +1,7 @@
-import functools , time , datetime , random
+import functools , time , random
 import portalocker
 
+from datetime import datetime
 from typing import Callable
 
 from src.proj import PATH , Logger
@@ -28,12 +29,11 @@ class ScriptLock:
     def _log(self, message: str):
         """print out message"""
         if self.verbose:
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            Logger.info(f"[{timestamp}] {message}")
+            Logger.info(f"[{datetime.now()}] {message}")
 
-    def _log_get_lock(self , start_time: float | None = None):
-        if start_time is not None and time.time() - start_time > 1:
-            self._log(f"Wait {time.time() - start_time:.1f} seconds to get lock of {self.lock_name}, continue to run.")
+    def _log_get_lock(self , start_time: datetime | None = None):
+        if start_time is not None and (wait_time := (datetime.now() - start_time).total_seconds()) > 1:
+            self._log(f"Wait {wait_time:.1f} seconds to get lock of {self.lock_name}, continue to run.")
         else:
             self._log(f"Get lock of {self.lock_name}, continue to run.")
 
@@ -55,9 +55,9 @@ class ScriptLock:
             return self
         self.lock_file = open(lock_path, 'w')
         self._has_wait_message = False
-        start_time = time.time()         
+        start_time = datetime.now()         
         if self.timeout:
-            while time.time() - start_time < self.timeout:
+            while (datetime.now() - start_time).total_seconds() < self.timeout:
                 try:
                     portalocker.lock(self.lock_file, portalocker.LOCK_EX | portalocker.LOCK_NB)
                     self._log_get_lock(start_time)
@@ -67,7 +67,7 @@ class ScriptLock:
                         raise BlockingIOError(f"Other instance is running")
                     self._log_wait_lock()
                     time.sleep(self.wait_time)
-            # self._log(f"Wait {time.time() - start_time:.1f} seconds to get lock, exceed timeout ({self.timeout} seconds)")
+            # self._log(f"Wait {(datetime.now() - start_time).total_seconds():.1f} seconds to get lock, exceed timeout ({self.timeout} seconds)")
             raise TimeoutError(f"get lock timeout ({self.timeout} seconds): {lock_path}")
         else:
             try:
@@ -124,13 +124,12 @@ class ScriptLockMultiple:
     def _log(self, message: str):
         """print out message"""
         if self.verbose:
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            Logger.info(f"[{timestamp}] {message}")
+            Logger.info(f"[{datetime.now()}] {message}")
 
-    def _log_get_lock(self, lock_id: int, start_time: float | None = None):
+    def _log_get_lock(self, lock_id: int, start_time: datetime | None = None):
         """record the log of getting lock"""
-        if start_time is not None and time.time() - start_time > 1:
-            self._log(f"Wait {time.time() - start_time:.1f} seconds to get lock {lock_id} of {self.lock_name}, continue to run.")
+        if start_time is not None and (wait_time := (datetime.now() - start_time).total_seconds()) > 1:
+            self._log(f"Wait {wait_time:.1f} seconds to get lock {lock_id} of {self.lock_name}, continue to run.")
         else:
             self._log(f"Get lock {lock_id} of {self.lock_name}, continue to run.")
 
@@ -166,12 +165,12 @@ class ScriptLockMultiple:
         if self.lock_num <= 0:
             return self
             
-        start_time = time.time()
+        start_time = datetime.now()
         self._has_wait_message = False
         
         if self.timeout:
             # there is timeout
-            while time.time() - start_time < self.timeout:
+            while (datetime.now() - start_time).total_seconds() < self.timeout:
                 lock_id = self._try_acquire_any_lock()
                 if lock_id is not None:
                     self._log_get_lock(lock_id, start_time)

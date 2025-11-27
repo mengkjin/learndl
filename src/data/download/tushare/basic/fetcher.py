@@ -203,16 +203,17 @@ class TushareFetcher(metaclass=TushareFetcherMeta):
             print(f'Skipping: {self.__class__.__name__} already updated!')
             return
         
-        print(f'Download:  {self.__class__.__name__} update dates {dates[0]} ~ {dates[-1]}')
+        print(f'Download: {self.__class__.__name__} update dates {dates[0]} ~ {dates[-1]}')
         while timeout_max_retries >= 0:
             try:
                 self.update_dates(dates)
             except Exception as e:
                 if '最多访问' in str(e):
                     if timeout_max_retries <= 0: 
-                        raise e
-                    Logger.error(f'{e} , wait {timeout_wait_seconds} seconds')
-                    time.sleep(timeout_wait_seconds)
+                        Logger.error(f'max retries reached: {e}')
+                    else:
+                        Logger.warning(f'{e} , wait {timeout_wait_seconds} seconds')
+                        time.sleep(timeout_wait_seconds)
                 elif 'Connection to api.waditu.com timed out' in str(e):
                     Logger.error(e)
                     TS_PARAMS.server_down = True

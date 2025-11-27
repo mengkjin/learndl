@@ -1,4 +1,4 @@
-import time , os , sys , re
+import os , sys , re
 import pandas as pd
 from typing import Any , Literal , Sequence
 from dataclasses import dataclass , field , asdict
@@ -8,6 +8,8 @@ from pathlib import Path
 from src.proj import PATH , DBConnHandler , Logger , Duration
 from src.app.abc import check_process_status , kill_process , ScriptCmd
 
+def timestamp():
+    return datetime.now().timestamp()
 class TaskDatabase:
     def __init__(self , db_name: str | Path | None = None):
         self.db_path = self.get_db_path()
@@ -163,7 +165,7 @@ class TaskDatabase:
             cursor.execute('''
             INSERT INTO queue_records (queue_id, create_time)
                 VALUES (?, ?)
-                ''', (queue_id, time.time()))
+                ''', (queue_id, timestamp()))
     
     def update_task(self, task_id: str, backend_updated: bool = False, **kwargs):
         """Update task status and related information"""
@@ -189,7 +191,7 @@ class TaskDatabase:
                 cursor.execute('''
                 INSERT INTO task_backend_updated (task_id, updated_time)
                 VALUES (?, ?)
-                ''', (task_id, time.time()))
+                ''', (task_id, timestamp()))
 
     def get_backend_updated_tasks(self) -> list[str]:
         """Get backend updated tasks"""
@@ -500,7 +502,7 @@ class TaskItem:
     '''TaskItem is a class that represents a task item in the Task Queue'''
     script : str
     cmd : str = ''
-    create_time : float = field(default_factory=time.time)
+    create_time : float = field(default_factory=timestamp)
     status : Literal['starting', 'running', 'complete', 'error' , 'killed'] = 'starting'
     source : Literal['py', 'bash','app'] | str | Any = None
     pid : int | None = None
@@ -586,7 +588,7 @@ class TaskItem:
     def belong_to(self , script_runner):
         return self.script == str(script_runner.script)
     
-    def time_str(self , time_type : Literal['create', 'start', 'end'] = 'create' , format : str = '%Y/%m/%d %H:%M:%S'):
+    def time_str(self , time_type : Literal['create', 'start', 'end'] = 'create' , format : str = '%Y-%m-%d %H:%M:%S'):
         if time_type == 'create':
             time = self.create_time
         elif time_type == 'start':
@@ -610,7 +612,7 @@ class TaskItem:
                 assert script , 'script is not found'
                 script = os.path.abspath(script)
                 cmd = ' '.join(sys.argv)
-                item = cls(str(script), cmd = cmd , status = 'running' , start_time = time.time() , source = source)
+                item = cls(str(script), cmd = cmd , status = 'running' , start_time = timestamp() , source = source)
             except AttributeError as e:
                 Logger.error(f'script is not found: {e}')
                 return cls('', source = source)
@@ -678,7 +680,7 @@ class TaskItem:
     def kill(self):
         if self.pid and self.status not in ['complete' , 'error']:
             if kill_process(self.pid):
-                self.update({'status': 'killed', 'end_time': time.time()} , write_to_db = True)
+                self.update({'status': 'killed', 'end_time': timestamp()} , write_to_db = True)
                 return True
             else:
                 return False
@@ -753,7 +755,7 @@ class TaskItem:
     @property
     def duration(self):
         start_time = self.start_time or self.create_time
-        end_time = self.end_time or time.time()
+        end_time = self.end_time or timestamp()
         return end_time - start_time
     
     @property
@@ -838,9 +840,9 @@ class TaskItem:
         assert cmd is not None , 'script cmd is not set'
         try:
             process = cmd.run()
-            self.update({'pid': process.real_pid, 'status': 'running', 'start_time': time.time()} , write_to_db = True)
+            self.update({'pid': process.real_pid, 'status': 'running', 'start_time': timestamp()} , write_to_db = True)
         except Exception as e:
-            self.update({'status': 'error', 'exit_error': str(e), 'end_time': time.time()} , write_to_db = True)
+            self.update({'status': 'error', 'exit_error': str(e), 'end_time': timestamp()} , write_to_db = True)
             raise e
         return self
 
@@ -869,14 +871,14 @@ if __name__ == '__main__':
         task_id="0_check/0_test_streamlit.py@1752898666",
         status="running",
         pid=12345,
-        start_time=time.time()
+        start_time=timestamp()
     )
 
     # 更新任务为已完成
     db.update_task(
         task_id="0_check/0_test_streamlit.py@1752898666",
         status="completed",
-        end_time=time.time(),
+        end_time=timestamp(),
         exit_code=0
     )
 

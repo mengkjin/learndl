@@ -2,8 +2,10 @@
 import pandas as pd
 import numpy as np
 import torch
-import copy , os, platform , shutil , time , yaml
+import copy , os, platform , shutil , yaml
+
 from argparse import ArgumentParser , Namespace
+from datetime import datetime
 from deap.algorithms import varAnd
 from torch.multiprocessing import Pool
 from tqdm import tqdm
@@ -771,7 +773,7 @@ def outer_loop(i_iter , gp_space , start_gen = 0):
         i_iter:   i of outer loop
         gp_space:  dict that includes gp parameters, gp datas and gp arguements, and various other datas
     """
-    timenow = time.time()
+    init_time = datetime.now()
     gp_space.i_iter = i_iter
 
     '''更新残差标签'''
@@ -794,7 +796,7 @@ def outer_loop(i_iter , gp_space , start_gen = 0):
     gp_space.timer.append_time('AvgVarAnd' , gp_space.timer.acc_timer('varAnd').avgtime(pop_out = True))
     gp_space.timer.append_time('AvgCompile', gp_space.timer.acc_timer('compile').avgtime(pop_out = True))
     gp_space.timer.append_time('AvgEval',    gp_space.timer.acc_timer('eval').avgtime(pop_out = True))
-    gp_space.timer.append_time('All' , time.time() - timenow)
+    gp_space.timer.append_time('All' , (datetime.now() - init_time).total_seconds())
     return
 
 class gpGenerator:
@@ -931,7 +933,7 @@ def main(job_id = None , start_iter = 0 , start_gen = 0 , test_code = False , no
     """
     defaults.noWith = noWith
     with Profiler(doso = test_code) as pfr:
-        time0 = time.time()
+        time0 = datetime.now()
         
         gp_params = gp_parameters(job_id , continuation = start_iter>0 or start_gen>0 , test_code = test_code , **kwargs)
         gp_space = gp_namespace(gp_params)
@@ -940,7 +942,7 @@ def main(job_id = None , start_iter = 0 , start_gen = 0 , test_code = False , no
             print('=' * 20 + f' Iteration {i_iter} start from Generation {start_gen * (i_iter == start_iter)} ' + '=' * 20)
             outer_loop(i_iter , gp_space , start_gen = start_gen * (i_iter == start_iter))
 
-    hours, secs = divmod(time.time() - time0, 3600)
+    hours, secs = divmod((datetime.now() - time0).total_seconds(), 3600)
     print('=' * 20 + f' Total Time Cost :{hours:.0f} hours {secs/60:.1f} ' + '=' * 20)
     gp_space.mgr_file.save_state(gp_space.timer.time_table(showoff=True) , 'runtime' , 0)
     gp_space.mgr_mem.print_memeory_record()

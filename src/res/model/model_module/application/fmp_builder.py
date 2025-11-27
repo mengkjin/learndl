@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from contextlib import nullcontext
 from typing import Any
 
-from src.proj import SILENT
+from src.proj import SILENT , Logger
 from src.basic import CALENDAR , RegisteredModel
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
 from src.res.factor.fmp import PortfolioBuilder 
@@ -159,7 +159,7 @@ class ModelPortfolioBuilder:
         '''Update pre-registered models' factor model portfolios'''
         models = RegisteredModel.SelectModels(model_name)
         if model_name is None: 
-            print(f'model_name is None, build fmps for all registered models (len={len(models)})')
+            Logger.info(f'model_name is None, build fmps for all registered models (len={len(models)})')
         for model in models:
             md = cls(model)
             md.update_fmps(update = update , overwrite = overwrite , silent = silent)

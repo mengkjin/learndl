@@ -8,7 +8,7 @@
 # mode: shell
 # parameters:
 #   schedule_name : 
-#       type : "[p.stem for p in PATH.conf_schedule.glob('*.yaml')] + [p.stem for p in PATH.shared_schedule.glob('*.yaml')]"
+#       type : Options.available_schedules()
 #       desc : schedule config file to train
 #       required : True
 #   short_test : 

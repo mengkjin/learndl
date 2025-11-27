@@ -14,6 +14,7 @@ from .metrics import Metrics
 from .storage import Checkpoint , Deposition
 
 TRAIN_CONFIG_LIST = ['train' , 'env' , 'callbacks' , 'conditional' , 'model']
+TYPE_MODULE_TYPES = Literal['nn' , 'booster' , 'db' , 'factor']
 
 def conf_dir(base_path : ModelPath | Path | str | None , *args):
     return ModelPath(base_path).conf(*args)
@@ -52,7 +53,7 @@ def striped_list(factors : list[str] | dict | str):
             factors = list(factors.values())
         return [ff for f in factors for ff in striped_list(f)]
 
-def conf_mod_type(module : str) -> Literal['nn' , 'booster' , 'db' , 'factor']:
+def conf_mod_type(module : str) -> TYPE_MODULE_TYPES:
     if module.startswith('db@'):
         return 'db'
     elif module.startswith('factor@'):
@@ -87,6 +88,10 @@ class TrainParam:
         self.base_path = ModelPath(base_path)
         self.model_name = self.base_path.name
         return self
+
+    @property
+    def model_root_path(self) -> Path:
+        return PATH.null_model if self.module_type in ['db' , 'factor'] else PATH.model
 
     @property
     def model_base_path(self):
@@ -147,10 +152,8 @@ class TrainParam:
             return self
         if self.Param['model.name']: 
             model_name = str(self.Param['model.name'])
-        elif self.model_module.startswith('db@'):
-            model_name = self.model_module.replace('@','_')
-        elif self.model_module.startswith('factor@'):
-            model_name = self.model_module.replace('@','_')
+        elif self.module_type in ['db' , 'factor']:
+            model_name = self.model_module
         else: 
             mod_str = self.model_module 
             head_str = 'booster' if self.model_booster_head else None
@@ -222,11 +225,11 @@ class TrainParam:
         return str(PATH.read_yaml(conf_path(base_path , 'train', 'model'))['module']).lower()
     
     @staticmethod
-    def get_module_type(module : str) -> Literal['nn' , 'booster' , 'db' , 'factor']:
+    def get_module_type(module : str) -> TYPE_MODULE_TYPES:
         return conf_mod_type(module)
     
     @property
-    def module_type(self) -> Literal['nn' , 'booster' , 'db' , 'factor']: 
+    def module_type(self) -> TYPE_MODULE_TYPES: 
         return conf_mod_type(self.model_module)
 
     @property
@@ -479,7 +482,7 @@ class ModelParam:
         return self.model_param
 
     @property
-    def module_type(self) -> Literal['nn' , 'booster' , 'db' , 'factor']: 
+    def module_type(self) -> TYPE_MODULE_TYPES: 
         return conf_mod_type(self.module)
 
     @property
@@ -747,14 +750,17 @@ class TrainConfig(TrainParam):
         torch.backends.cudnn.deterministic = True
 
     def parser_stage(self , value = -1 , verbose = True):
-        if value < 0:
-            Logger.info(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
-            value = int(input(f'[0,fit+test] , [1,fit] , [2,test]'))
         stage_queue : list[Literal['data' , 'fit' , 'test']] = ['data' , 'fit' , 'test']
-        if value > 0:
-            stage_queue = ['data' , stage_queue[value]]
-        elif value < 0:
-            raise Exception(f'Error input : {value}')
+        if self.module_type in ['db' , 'factor']:
+            stage_queue = ['data' , 'test']
+        else:
+            if value < 0:
+                Logger.info(f'--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only')
+                value = int(input(f'[0,fit+test] , [1,fit] , [2,test]'))
+            if value > 0:
+                stage_queue = ['data' , stage_queue[value]]
+            elif value < 0:
+                raise Exception(f'Error input : {value}')
         if verbose:
             Logger.info('--Process Queue : {:s}'.format(' + '.join(map(lambda x:(x[0].upper() + x[1:]), stage_queue))))
         self._stage_queue = stage_queue
@@ -763,7 +769,7 @@ class TrainConfig(TrainParam):
         '''ask if resume training when candidate names exists'''
         model_name = self.model_name
         assert model_name is not None , f'{self} has model_name None'
-        candidate_name = sorted([m.name for m in PATH.model.iterdir() if m.name.split('.')[0] == model_name])
+        candidate_name = sorted([m.name for m in self.model_root_path.iterdir() if m.name.split('.')[0] == model_name])
         if len(candidate_name) > 0 and 'fit' in self.stage_queue:
             if value < 0:
                 Logger.info(f'--Multiple model path of {model_name} exists, input [yes] to resume training, or start a new one!')
@@ -789,11 +795,12 @@ class TrainConfig(TrainParam):
         '''
         model_name = self.model_name
         assert model_name is not None , f'{self} has model_name None'
-        candidate_name = sorted([m.name for m in PATH.model.iterdir() 
+        candidate_name = sorted([m.name for m in self.model_root_path.iterdir() 
                                  if m.name == model_name or m.name.startswith(f'{model_name}.')])
         if self.short_test:
             ...
-        elif self.module_type == 'db':
+        elif self.module_type in ['db' , 'factor']:
+            # model name should be the same as the base path name
             ...
         elif 'fit' in self.stage_queue and candidate_name:
             if self.resume_training:
@@ -802,7 +809,7 @@ class TrainConfig(TrainParam):
                 else:
                     if value < 0:
                         Logger.info(f'--Attempting to resume but multiple models exist, input number to choose')
-                        [Logger.info(f'{i} : {PATH.model}/{model}') for i , model in enumerate(candidate_name)]
+                        [Logger.info(f'{i} : {self.model_root_path}/{model}') for i , model in enumerate(candidate_name)]
                         value = int(input('which one to use? '))
                     assert 0 <= value < len(candidate_name) , f'value {value} is out of range {len(candidate_name)}'
                     model_name = candidate_name[value]
@@ -826,7 +833,7 @@ class TrainConfig(TrainParam):
             else:
                 if value < 0:
                     Logger.info(f'--Attempting to test while multiple models exists, input number to choose')
-                    [Logger.info(f'{i} : {PATH.model}/{model}') for i , model in enumerate(candidate_name)]
+                    [Logger.info(f'{i} : {self.model_root_path}/{model}') for i , model in enumerate(candidate_name)]
                     value = int(input('which one to use? '))
                 assert 0 <= value < len(candidate_name) , f'value {value} is out of range {len(candidate_name)}'
                 model_name = candidate_name[value]
@@ -856,41 +863,50 @@ class TrainConfig(TrainParam):
     def print_out(self):
         info_strs = []
         info_strs.append(f'Model Name   : {self.model_name}')
-        info_strs.append(f'Model Module : {self.model_module}')
-        if self.module_type == 'booster':
-            if self.model_module != self.model_booster_type:
-                info_strs.append(f'  -->  Booster Type   : {self.model_booster_type}')
-            if self.model_booster_optuna:
-                info_strs.append(f'  -->  Booster Params :  Optuna for {self.model_booster_optuna_n_trials} trials')
+        if self.module_type in ['db' , 'factor']:
+            info_strs.append(f'Model Module : {self.model_module}')
+            info_strs.append(f'Model Labels : {self.model_labels}')
+            info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
+            info_strs.append(f'Resume Training : {self.resume_training}')
+            
+        else:
+            info_strs.append(f'Model Module : {self.model_module}')
+            if self.module_type == 'booster':
+                if self.model_module != self.model_booster_type:
+                    info_strs.append(f'  -->  Booster Type   : {self.model_booster_type}')
+                if self.model_booster_optuna:
+                    info_strs.append(f'  -->  Booster Params :  Optuna for {self.model_booster_optuna_n_trials} trials')
+                else:
+                    info_strs.append(f'  -->  Booster Params :')
+                    for k , v in self.Model.Param.items():
+                        info_strs.append(f'    -->  {k} : {v}')
             else:
-                info_strs.append(f'  -->  Booster Params :')
+                if self.model_booster_head:
+                    info_strs.append(f'  -->  Use Booster Head : {self.model_booster_head}')
+                info_strs.append(f'  -->  Model Params :')
                 for k , v in self.Model.Param.items():
                     info_strs.append(f'    -->  {k} : {v}')
-        else:
-            if self.model_booster_head:
-                info_strs.append(f'  -->  Use Booster Head : {self.model_booster_head}')
-            info_strs.append(f'  -->  Model Params :')
-            for k , v in self.Model.Param.items():
-                info_strs.append(f'    -->  {k} : {v}')
-        info_strs.append(f'Model Num    : {self.Model.n_model}')
-        info_strs.append(f'Model Inputs : {self.model_input_type}')
-        if self.model_input_type == 'data':
-            info_strs.append(f'  -->  Data Types : {self.model_data_types}')
-        elif self.model_input_type == 'hidden':
-            info_strs.append(f'  -->  Hidden Models : {self.model_hidden_types}')
-        elif self.model_input_type == 'factor':
-            info_strs.append(f'  -->  Factor Types : {self.model_factor_types}')
-        elif self.model_input_type == 'combo':
-            info_strs.append(f'  -->  Combo Types : {self.model_combo_types}')
-        info_strs.append(f'Model Labels : {self.model_labels}')
-        info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
-        info_strs.append(f'Interval     : {self.model_interval} days')
-        info_strs.append(f'Train Window : {self.model_train_window} days')
-        info_strs.append(f'Sampling     : {self.train_sample_method}')
-        info_strs.append(f'Shuffling    : {self.train_shuffle_option}')
-        info_strs.append(f'Random Seed  : {self.random_seed}')
-        info_strs.append(f'Stage Queue     : {self.stage_queue}')
-        info_strs.append(f'Resume Training : {self.resume_training}')
+            info_strs.append(f'Model Num    : {self.Model.n_model}')
+            info_strs.append(f'Model Inputs : {self.model_input_type}')
+            if self.model_input_type == 'data':
+                info_strs.append(f'  -->  Data Types : {self.model_data_types}')
+            elif self.model_input_type == 'hidden':
+                info_strs.append(f'  -->  Hidden Models : {self.model_hidden_types}')
+            elif self.model_input_type == 'factor':
+                info_strs.append(f'  -->  Factor Types : {self.model_factor_types}')
+                if self.input_factor_names:
+                    info_strs.append(f'  -->  Factor Names : {self.input_factor_names}')
+            elif self.model_input_type == 'combo':
+                info_strs.append(f'  -->  Combo Types : {self.model_combo_types}')
+            info_strs.append(f'Model Labels : {self.model_labels}')
+            info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
+            info_strs.append(f'Interval     : {self.model_interval} days')
+            info_strs.append(f'Train Window : {self.model_train_window} days')
+            info_strs.append(f'Sampling     : {self.train_sample_method}')
+            info_strs.append(f'Shuffling    : {self.train_shuffle_option}')
+            info_strs.append(f'Random Seed  : {self.random_seed}')
+            info_strs.append(f'Stage Queue     : {self.stage_queue}')
+            info_strs.append(f'Resume Training : {self.resume_training}')
 
         with Logger.EnclosedMessage(' model info '): 
             print('\n'.join(info_strs))
@@ -903,7 +919,5 @@ class TrainConfig(TrainParam):
         """
         if not hasattr(self , '_stage_queue'):
             return []
-        elif self.module_type == 'db':
-            return [stage for stage in self._stage_queue if stage != 'fit']
         else:
             return self._stage_queue

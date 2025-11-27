@@ -199,26 +199,26 @@ def rcquant_min_to_normal_min(df : pd.DataFrame , data_type : DATA_TYPES):
     df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap','num_trades']].sort_values(['secid','minute']).reset_index(drop = True)
     return df
 
-def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1):
+def rcquant_download(date : int | None = None , data_type : DATA_TYPES | None = None ,  first_n : int = -1 , verbosity : int = 1):
     assert data_type is not None , f'data_type is required'
     dts = target_dates(data_type , date)
     if len(dts) == 0: 
         print(f'Skipping: rcquant {data_type} bar min has no date to download')
     for dt in dts:
+        print(f'Download: rcquant {data_type} bar min update date {dt}')
         mark = rcquant_bar_min(dt , data_type , first_n)
         if not mark: 
             Logger.fail(f'rcquant {data_type} bar min {dt} failed')
-        else:
+        elif verbosity > 1 :
             Logger.success(f'rcquant {data_type} bar min {dt} success')
 
     for dt in x_mins_target_dates(data_type , date):
-        print(f'process other {data_type} min bars at {dt} from source rcquant')
+        print(f'Transform: {data_type} X-min bars at {dt} from source rcquant')
         for x_min in x_mins_to_update(dt , data_type = data_type):
             min_df = DB.load('trade_ts' , src_key(data_type) , dt)
             assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
             x_min_df = trade_min_reform(min_df , x_min , 1)
             DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , verbose = True)
-        Logger.divider()
     return True
 
 def rcquant_proceed(date : int | None = None , first_n : int = -1):

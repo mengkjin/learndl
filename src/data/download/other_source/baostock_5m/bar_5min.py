@@ -169,7 +169,7 @@ def baostock_5min_to_normal_5min(df : pd.DataFrame):
     df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap']].sort_values(['secid','minute']).reset_index(drop = True)
     return df
 
-def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : int = 10):
+def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : int = 10 , verbosity : int = 1):
     pending_dt = pending_date()
     end_dt = CALENDAR.update_to() if date is None else date
     if pending_dt == end_dt: 
@@ -179,17 +179,15 @@ def baostock_proceed(date : int | None = None , first_n : int = -1 , retry_n : i
         if (updatable(dt , last_dt) or (date == dt)) and (dt >= last_dt):
             mark = baostock_bar_5min(last_dt , dt , first_n , retry_n)
             if not mark: 
-                Logger.fail(f'{last_dt} - {dt} failed')
-            else:
-                Logger.success(f'{last_dt} - {dt} success')
+                Logger.fail(f'baostock 5min {last_dt} - {dt} failed')
+            elif verbosity > 1 :
+                Logger.success(f'baostock 5min {last_dt} - {dt} success')
 
     for dt in x_mins_update_dates(date):
-        
-        print(f'process other min bars at {dt} from source baostock')
+        print(f'Transform: sec X-min bars at {dt} from source baostock')
         for x_min in x_mins_to_update(dt):
             five_min_df = DB.load('trade_ts' , '5min' , dt)
             x_min_df = trade_min_reform(five_min_df , x_min , 5)
             DB.save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , verbose = True)
-        Logger.divider()
 
     return True

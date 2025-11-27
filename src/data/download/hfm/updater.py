@@ -1,11 +1,12 @@
-import tarfile, time
+import tarfile
 import numpy as np
 import pandas as pd
 
+from datetime import datetime
 from functools import reduce
 from pathlib import Path
 
-from src.proj import PATH , MACHINE , Logger
+from src.proj import PATH , MACHINE , Logger , Duration
 from src.basic import DB
 
 from .task import JSFetcher , JSDownloader
@@ -62,7 +63,7 @@ class JSDataUpdater():
 
     @classmethod
     def get_new_updater(cls):
-        stime = time.strftime('%y%m%d%H%M%S',time.localtime())
+        stime = datetime.now().strftime('%y%m%d%H%M%S')
         return PATH.updater.joinpath(f'{cls.UPDATER_TITLE}.{stime}.tar')
 
     def get_db_params(self , db_src):
@@ -145,11 +146,11 @@ class JSDataUpdater():
         params = self.get_db_params(db_src)
         result = None # {}
         for param in params:
-            start_time = time.time()
+            start_time = datetime.now()
             df , target_path = param()
             target_str = self.handle_result(df , target_path , result)
             if target_str: 
-                print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
+                Logger.success(f'Fetching: {target_str} Done! Cost {Duration(since = start_time)}')
         return result
     
     def fetch_by_date(self , db_src , start_dt = None , end_dt = None , force = False):
@@ -165,13 +166,13 @@ class JSDataUpdater():
             for cond , param in zip(update_cond[i] , params):
                 if not cond: 
                     continue
-                start_time = time.time()
+                start_time = datetime.now()
                 df , target_path = param(date , df_min = temporal.get('df_min'))
                 target_str = self.handle_result(df , target_path , result)
                 if param.db_src == 'trade_js' and param.db_key == 'min': 
                     temporal['df_min'] = df
                 if target_str: 
-                    print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
+                    Logger.success(f'Fetching: {target_str} Done! Cost {Duration(since = start_time)}')
         return result
 
     def fetch_all(self ,start_dt = None , end_dt = None , force = False):
@@ -190,10 +191,10 @@ class JSDataUpdater():
     def download_all(self):
         paths : list[Path] = []
         for path in JSDownloader.proceed():
-            start_time = time.time()
+            start_time = datetime.now()
             target_str = self.handle_result(path , path)
             if target_str: 
-                print(f'{time.ctime()} : {target_str} Done! Cost {time.time() - start_time:.2f} Secs')
+                Logger.success(f'Download: {target_str} Done! Cost {Duration(since = start_time)}')
             paths.append(path)
         return paths
 
@@ -205,25 +206,20 @@ class JSDataUpdater():
         assert not MACHINE.server , f'must on terminal machine'
         if not MACHINE.belong_to_hfm: 
             return
-        start_time = time.time()
-        print(f'Update JSData Update Files')
-        Updater = cls()
-        Updater.fetch_all()
-        Updater.download_all()
-        Updater.transform_datas()
-        Updater.print_unfetch()
-        print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
-
+        with Logger.EnclosedMessage('Update JSData Update Files'):
+            Updater = cls()
+            Updater.fetch_all()
+            Updater.download_all()
+            Updater.transform_datas()
+            Updater.print_unfetch()
+            
     @classmethod
     def update_server(cls):
         assert MACHINE.server , f'must on server machine'
-        start_time = time.time()
 
-        print(f'Unpack JSData Update Files') 
-        cls.unpack_exist_updaters(del_after_dumping=True)
-        cls.transform_datas()
-
-        print(f'{time.ctime()} : All Updates Done! Cost {time.time() - start_time:.2f} Secs')
+        with Logger.EnclosedMessage('Unpack JSData Update Files'):
+            cls.unpack_exist_updaters(del_after_dumping=True)
+            cls.transform_datas()
 
     @classmethod
     def update(cls):

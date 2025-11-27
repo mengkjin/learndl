@@ -8,13 +8,10 @@
 # mode: shell
 # parameters:
 #   factor_name : 
-#       type : str
+#       type : Options.available_factors()
 #       desc : input a factor name
 #       required : True
-#   short_test : 
-#       type : [True , False]
-#       desc : short test
-#       prefix : "short_test/"
+#       prefix : "factor@"
 #   start : 
 #       type : int
 #       desc : start date
@@ -26,9 +23,9 @@ from src.api import ModelAPI
 from src.app import ScriptTool
 
 @ScriptTool('test_factor' , '@factor_name' , lock_num = 0)
-def main(factor_name : str | None = None , short_test : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
+def main(factor_name : str | None = None , start : int | None = None , end : int | None = None , **kwargs):
     assert factor_name is not None , 'factor_name is required'
-    ModelAPI.test_factor(factor_name , short_test , start = start , end = end)
+    ModelAPI.test_factor(factor_name , start = start , end = end)
 
 if __name__ == '__main__':
     main()

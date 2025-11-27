@@ -8,7 +8,7 @@
 # mode: shell
 # parameters:
 #   model_name : 
-#       type : "[p.name for p in Path('models').iterdir() if not p.name.endswith('_ShortTest') and not p.name.startswith('.')]"
+#       type : Options.available_models()
 #       desc : choose a model
 #       prefix : "model/"
 #       required : True

@@ -1,23 +1,28 @@
-import time
 import pandas as pd
 import numpy as np
 
+from datetime import datetime , timedelta
 from typing import Callable
 from .silence import SILENT
 
 class Duration:
-    def __init__(self , duration : int | float):
-        assert duration >= 0 , f"duration must be a positive duration , but got {duration}"
-        self.duration = duration
-    def __str__(self):
-        if self.duration < 60:
-            return f"{self.duration:.2f} Secs"
-        elif self.duration < 3600:
-            return f"{int(self.duration / 60)} Min {int(self.duration % 60)} Secs"
-        else:
-            return f"{int(self.duration / 3600)} Hr {int(self.duration % 3600 / 60)} Min {int(self.duration % 60)} Secs"
+    def __init__(self , duration : int | float | timedelta | None = None , since : float | datetime | None = None):
+        assert duration is not None or since is not None , "duration or since must be provided"
+        assert duration is None or since is None , f"duration and since cannot be provided at the same time, got duration = {duration} and since = {since}"
+        if duration is not None:
+            if isinstance(duration , timedelta):
+                dur = duration.total_seconds()
+            else:
+                dur = duration
+        elif since is not None:
+            if isinstance(since , datetime):
+                dur = (datetime.now() - since).total_seconds()
+            else:
+                dur = (datetime.now() - datetime.fromtimestamp(since)).total_seconds()
+        assert dur >= 0 , f"duration must be a positive duration , but got {dur}"
+        self.duration = dur
     def __repr__(self):
-        return f"Duration(duration={self.duration})"
+        return self.fmtstr
     @property
     def hours(self):
         return self.duration / 3600
@@ -63,26 +68,19 @@ class Timer:
         self.silent = silent
         self.key = '/'.join(args)
     def __enter__(self):
-        self.start_time = time.time()
+        self._init_time = datetime.now()
         if not self.silent and not SILENT and not self.exit_only: 
-            print(self._str_at_first() , end='\n' if self.newline else '')
+            print(self.enter_str , end='\n' if self.newline else '')
     def __exit__(self, type, value, trace):
         if not self.silent and not SILENT:
-            print(self._str_at_exit())
-    def _str_at_first(self):
-        return f'{self.key} start ... '
-    def _str_at_exit(self):
-        time_cost = time.time() - self.start_time
-        if time_cost < 1000:
-            text = f'finished! Cost {time_cost:.2f} secs'
-        elif time_cost < 3600:
-            minutes, seconds = divmod(time_cost, 60)
-            text =  f'finished! Cost {minutes:.0f} mins {seconds:.1f} secs'
-        else:
-            hours, remainder = divmod(time_cost, 3600)
-            minutes , seconds = divmod(remainder, 60)
-            text = f'finished! Cost {hours:.0f} hours {minutes:.0f} minutes {seconds:.1f} seconds'
+            print(self.exit_str)
 
+    @property
+    def enter_str(self):
+        return f'{self.key} start ... '
+    @property
+    def exit_str(self):
+        text = f'finished! Cost {Duration(since = self._init_time)}'
         if self.exit_only:
             return f'{self.key} {text}'
         elif self.newline:
@@ -100,10 +98,10 @@ class PTimer:
                 self.target[self.key] = []
         def __enter__(self):
             if self.target is not None: 
-                self.start_time = time.time()
+                self._init_time = datetime.now()
         def __exit__(self, type, value, trace):
             if self.target is not None: 
-                self.target[self.key].append(time.time() - self.start_time)
+                self.target[self.key].append((datetime.now() - self._init_time).total_seconds())
 
     def func_timer(self , func : Callable):
         def wrapper(*args , **kwargs):
@@ -120,24 +118,3 @@ class PTimer:
                                 columns = pd.Index(['keys' , 'num_calls', 'total_time']))
             tb['avg_time'] = tb['total_time'] / tb['num_calls']
             print(tb.sort_values(by=['total_time'],ascending=False))
-
-class BigTimer:
-    '''big timer to print out time'''
-    def __init__(self , printer = print , name = None):
-        self.printer = printer
-        self.name = name if name else 'Whole Process'
-    def __enter__(self):
-        self.start_time = time.time()
-    def __exit__(self, *args): 
-        if not SILENT: 
-            self.printer(f'{self.name} Finished! Cost {self.time_str(time.time()-self.start_time)}')
-    @staticmethod
-    def time_str(seconds : float | int):
-        time_str = ''
-        if (hours := seconds // 3600) > 0: 
-            time_str += f'{hours:.0f} Hours '
-        if (minutes := (seconds - hours * 3600) // 60) > 0: 
-            time_str += f'{minutes:.0f} Minutes '
-        time_str += f'{seconds - hours * 3600 - minutes * 60:.1f} Seconds'
-        return time_str
-

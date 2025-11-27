@@ -103,7 +103,6 @@ class DataModule(BaseDataModule):
         if self.input_type == 'db':
             slens = {self.config.model_module: 1}
         else:
-            print(self.config.seq_lens() , param.get('seqlens',{}))
             slens = self.config.seq_lens() | param.get('seqlens',{})
             slens = {key:int(val) for key,val in slens.items() if key in self.input_keys}
             slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})

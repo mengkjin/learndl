@@ -1,11 +1,12 @@
 This will be caught
 [36m[1m******************************* MAIN PART START ********************************[0m
-[1m[37m[44m25-11-24 00:55:24|MOD:logger      |[0m: [1m[34mcritical message[0m
-[1m[37m[41m25-11-24 00:55:24|MOD:logger      |[0m: [1m[31merror message[0m
-[1m[37m[43m25-11-24 00:55:24|MOD:logger      |[0m: [1m[33mwarning message[0m
+[1m[37m[45m25-11-26 00:26:04|LEVEL:CRITICAL |[0m: [1m[37m[45mcritical message[0m
+[1m[37m[41m25-11-26 00:26:04|LEVEL:ERROR    |[0m: [1m[31merror message[0m
+[1m[30m[43m25-11-26 00:26:04|LEVEL:WARNING  |[0m: [1m[33mwarning message[0m
 [1m[32minfo message[0m
 [0mdebug message[0m
 [36m[1mhighlight message[0m
+[46m[1m[30m25-11-26 00:26:04|LEVEL:HIGHLIGHT|[0m: [36m[1mhighlight message with default prefix[0m
 [0m********************************************************************************[0m
 [0m================================================================================[0m
 [32msuccess message[0m
@@ -13,5 +14,5 @@ This will be caught
 email: True
 forfeit_task: False
 task_key: a
-abc finished! Cost 0.00 secs
-[36m[1m**************************** FINISHED IN <1 SECOND *****************************[0m
+abc finished! Cost <1 Sec
+[36m[1m************************* MAIN PART FINISHED IN <1 SEC *************************[0m

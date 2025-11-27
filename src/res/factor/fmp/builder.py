@@ -1,6 +1,7 @@
-import itertools , time
+import itertools
 import numpy as np
 
+from datetime import datetime
 from typing import Any , Literal
 
 from src.proj import Timer
@@ -251,17 +252,18 @@ class PortfolioBuilderGroup:
     def print_in_optimization(self , where : Literal['start' , 'loop' , 'end']):
         if self.verbosity > 0:
             if where == 'start':
-                self.t0 = time.time()
+                self.t0 = datetime.now()
                 print(f'{str(self)} start!')
                 self.opt_count = 0
             elif where == 'loop':
                 if self.verbosity > 1 and self.opt_count % 100 == 0: 
-                    time_cost = {k:float(np.round(v*1000,2)) for k,v in self._builder.creations[-1].time.items()}
+                    time_cost = {k:float(np.round(v*1000,2)) for k,v in self._builder.creations[-1].timecost.items()}
                     print(f'building of {self.opt_count:4d}th [{self._builder.portfolio.name:{self.port_name_nchar}s}]' + 
                           f' Finished at {self._date} , time cost (ms) : {time_cost}')
                 self.opt_count += 1
             elif where == 'end':
-                self.t1 = time.time()
-                total_time = f'cost {self.t1-self.t0:.2f} secs'
-                each_time = f'{(self.t1-self.t0)/max(self.opt_count,1)*1000:.1f} ms per building'
+                self.t1 = datetime.now()
+                secs = (self.t1 - self.t0).total_seconds()
+                total_time = f'cost {secs:.2f} secs'
+                each_time = f'{(secs/max(self.opt_count,1)*1000):.1f} ms per building'
                 print(f'{self.__class__.__name__} building finished, {total_time}, {each_time}')

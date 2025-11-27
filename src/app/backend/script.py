@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal , Any
 from dataclasses import dataclass , asdict , field
 
-from src.proj import PATH , MACHINE # noqa
+from src.proj import PATH , MACHINE , Options # noqa
 from src.app.abc import ScriptCmd
 from .task import TaskItem , TaskQueue
     

@@ -1,7 +1,9 @@
+import os  , traceback
+
 from typing import Any , Callable
 from pathlib import Path
 from dataclasses import dataclass
-import os , time , traceback
+from datetime import datetime
 
 from src.app.abc import argparse_dict
 from .task import TaskItem , TaskDatabase
@@ -106,7 +108,7 @@ class BackendTaskRecorder:
         return self
 
     def __exit__(self , exc_type , exc_value , exc_traceback):
-        self.update_msg['end_time'] = time.time()
+        self.update_msg['end_time'] = datetime.now()
         if exc_type is None:
             self.update_msg['status'] = 'error' if self.exit_msg.code else 'complete'
         else:

@@ -16,7 +16,7 @@ def main():
     log_path = PATH.log_main.joinpath('suspend','power_check.log')
     log_path.parent.mkdir(parents = True , exist_ok = True)
     if running_scripts:
-        main_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' : Power set to saver'
+        main_str = f'{datetime.now()} : Power set to saver'
         main_str += f' aborted due to running scripts: {running_scripts}\n'
         print(main_str , end = '')
         with open(log_path, 'a') as log_file:

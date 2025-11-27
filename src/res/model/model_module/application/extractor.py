@@ -1,10 +1,11 @@
-import torch , time
+import torch
 import numpy as np
 import pandas as pd
 
+from datetime import datetime
 from itertools import product
 
-from src.proj import SILENT
+from src.proj import SILENT , Logger
 from src.basic import CALENDAR , HiddenPath , HiddenExtractingModel
 from src.res.model.util import TrainConfig
 from src.res.model.data_module import DataModule
@@ -86,8 +87,7 @@ class ModelHiddenExtractor:
                 hidden_path = HiddenPath(self.hidden_name , model_num , submodel)
                 modified_time = hidden_path.last_modified_time(model_date)
                 if CALENDAR.is_updated_today(modified_time):
-                    time_str = time.strftime('%Y/%m/%d %H:%M:%S',time.strptime(str(modified_time) , '%Y%m%d%H%M%S'))
-                    print(f'-->  Skipping: {hidden_path.hidden_key} already updated at {time_str}!')
+                    print(f'-->  Skipping: {hidden_path.hidden_key} already updated at {datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S')}!')
                     continue
                 self.model_hidden(hidden_path , model_date , overwrite , silent)
                 self._current_update_dates.append(model_date)
@@ -135,7 +135,7 @@ class ModelHiddenExtractor:
         
         models = HiddenExtractingModel.SelectModels(model_name)
         if model_name is None: 
-            print(f'model_name is None, update all hidden models (len={len(models)})')
+            Logger.info(f'model_name is None, update all hidden models (len={len(models)})')
         for model in models:
             extractor = cls(model)
             extractor.extract_hidden(update = update , overwrite = overwrite , silent = silent)

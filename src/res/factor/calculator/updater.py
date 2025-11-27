@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 import polars as pl
-import time
 
 from abc import ABC , abstractmethod
+from datetime import datetime
 from typing import Any , Generator , Literal
 
 from .factor_calc import FactorCalculator , WeightedPoolingCalculator
@@ -186,7 +186,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
             kwargs = kwargs | {'is_market' : False}
         else:
             kwargs = kwargs | {'meta_type' : cls.update_type}
-        return list(FactorCalculator.iter_calculators(all , selected_factors , updatable = updatable , **kwargs))
+        return list(FactorCalculator.iter(all , selected_factors , updatable = updatable , **kwargs))
 
     @classmethod
     def factors(cls) -> list[str]:
@@ -262,12 +262,12 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
         timeout : timeout for processing jobs in hours , if <= 0 , no timeout
         """
         cls.collect_jobs(start , end , all , selected_factors , verbosity , overwrite)
-        start_time = time.time()
+        start_time = datetime.now()
         cls.before_process_jobs(start , end , all , selected_factors , verbosity , overwrite)
         for group , jobs in cls.grouped_jobs():
             cls.process_group_jobs(group , jobs , verbosity)
 
-            if timeout > 0 and (time.time() - start_time) > timeout * 3600:
+            if timeout > 0 and (datetime.now() - start_time).total_seconds() > timeout * 3600:
                 Logger.fail(f'Timeout: {timeout} hours reached, stopping update')
                 Logger.fail(f'Terminated at {group}')
                 break
@@ -303,7 +303,7 @@ class BaseFactorUpdater(metaclass=SingletonMeta):
 
     @classmethod
     def recalculate(cls , verbosity : int = 1 , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> None:
-        """update pooling factor data according"""
+        """recalculate factors between start and end date"""
         assert start is not None and end is not None , 'start and end are required for recalculate factors'
         cls.process_jobs(start = start , end = end , all = True , overwrite = True , verbosity = verbosity , timeout = timeout)
 

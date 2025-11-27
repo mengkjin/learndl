@@ -130,21 +130,21 @@ class ModelAPI:
         return cls.Trainer.test(model_name , short_test , start = start , end = end , verbosity = verbosity , **kwargs)
 
     @classmethod
-    def test_db_mapping(cls , mapping_name : str | None = None , short_test : bool | None = None , 
+    def test_db_mapping(cls , mapping_name : str | None = None , 
                         start : int | None = None , end : int | None = None , verbosity : int | None = 2 , **kwargs):
         '''
         test a existing db mapping
         '''
-        return cls.Trainer.test_db_mapping(mapping_name , short_test , start = start , end = end , 
+        return cls.Trainer.test_db_mapping(mapping_name , start = start , end = end , 
                                            verbosity = verbosity , **kwargs)
 
     @classmethod
-    def test_factor(cls , factor_name : str | None = None , short_test : bool | None = None , 
+    def test_factor(cls , factor_name : str | None = None , 
                     start : int | None = None , end : int | None = None , verbosity : int | None = 2 , **kwargs):
         '''
         test a existing factor
         '''
-        return cls.Trainer.test_factor(factor_name , short_test , start = start , end = end , 
+        return cls.Trainer.test_factor(factor_name , start = start , end = end , 
                                        verbosity = verbosity , **kwargs)
 
     @classmethod

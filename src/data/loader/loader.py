@@ -107,7 +107,7 @@ class FactorLoader(BlockLoader):
         from src.res.factor.calculator import FactorCalculator
         with Timer(f' --> factor blocks reading [{len(self.names)} factors]' , silent = silent):
             dates = CALENDAR.td_within(start_dt , end_dt)
-            for calc in FactorCalculator.iter_calculators(selected_factors = self.names , **self.kwargs):
+            for calc in FactorCalculator.iter(selected_factors = self.names , **self.kwargs):
                 df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
@@ -143,7 +143,7 @@ class FactorCategory1Loader(BlockLoader):
         from src.res.factor.calculator import FactorCalculator
         with Timer(f' --> factor blocks reading [{self.category0} , {self.category1}]' , silent = silent):
             dates = CALENDAR.td_within(start_dt , end_dt)
-            for calc in FactorCalculator.iter_calculators(category0 = self.category0 , category1 = self.category1 , **self.kwargs):
+            for calc in FactorCalculator.iter(category0 = self.category0 , category1 = self.category1 , **self.kwargs):
                 df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)

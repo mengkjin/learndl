@@ -1,9 +1,11 @@
-import operator , time , joblib , os , gc , itertools , re , traceback
+import operator , joblib , os , gc , itertools , re , traceback
 import numpy as np
 import pandas as pd
 import torch
+
 from argparse import Namespace
 from dataclasses import dataclass
+from datetime import datetime
 from deap import base , creator , tools , gp
 from copy import deepcopy
 from tqdm import tqdm
@@ -503,10 +505,10 @@ class gpFileManager:
     def update_sku(self , individual , pool_skuname):
         poolid = int(pool_skuname.split('_')[-1])
         if poolid % 100 == 0:
-            start_time_sku = time.time()
+            start_time_sku = datetime.now()
             output_path = f'{self.dir.sku}/z_{pool_skuname}.txt'
             with open(output_path, 'w', encoding='utf-8') as file1:
-                print(gpHandler.syx2str(individual),'\n start_time',time.ctime(start_time_sku),file=file1)
+                print(gpHandler.syx2str(individual),'\n start_time',str(start_time_sku),file=file1)
 
     def record_basename(self , i_iter = 0 , i_gen = 0):
         iter_str = 'iteration' if i_iter < 0 else f'iter{i_iter}'
@@ -588,7 +590,7 @@ class gpTimer:
         def __enter__(self):
             if self.print: 
                 print('-' * 20 + f' {self.key} ' + '-' * 20)
-            self.start_time = time.time()
+            self._init_time = datetime.now()
             if self.memory_check and torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 self.gmem_start = torch.cuda.mem_get_info()[0] / MemoryManager.unit
@@ -598,7 +600,7 @@ class gpTimer:
                 print(f'Error in PTimer {self.key}' , type , value)
                 traceback.print_exc()
             else:
-                time_cost = time.time() - self.start_time
+                time_cost = (datetime.now() - self._init_time).total_seconds()
                 if self.memory_check:
                     torch.cuda.empty_cache()
                     mem_end  = torch.cuda.mem_get_info()[0] / MemoryManager.unit
@@ -624,13 +626,13 @@ class gpTimer:
             self.key   = key
             self.clear()
         def __enter__(self):
-            self.start_time = time.time()
+            self._init_time = datetime.now()
         def __exit__(self, type, value, trace):
             if type is not None:
                 print(f'Error in AccTimer {self.key}' , type , value)
                 traceback.print_exc()
             else:
-                self.time  += time.time() - self.start_time
+                self.time  += (datetime.now() - self._init_time).total_seconds()
                 self.count += 1
         def __repr__(self) -> str:
             return f'time : {self.time} , count {self.count}'
@@ -710,7 +712,7 @@ class MemoryManager():
                 self.record[key] = []
             self.record[key].append(gmem_freed)
         if showoff: 
-            print(f'{starter}{time.ctime()}Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
+            print(f'{starter}{datetime.now()}Cuda Memory: Free {gmem_free:.1f}G, Allocated {gmem_allo:.1f}G, Reserved {gmem_rsrv:.1f}G, Re-collect {gmem_freed:.1f}G Cache!') 
         
         return gmem_free
     

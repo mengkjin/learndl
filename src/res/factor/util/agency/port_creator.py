@@ -1,7 +1,6 @@
-import time
-
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
+from datetime import datetime
 from typing import Any , Literal
 
 from ..classes import Port , Benchmark , Portfolio , AlphaModel , Amodel , RiskAnalytic , RISK_MODEL
@@ -29,15 +28,18 @@ class PortCreator(ABC):
             self.bench_port = benchmark.get(model_date , latest = True)
         self.detail_infos = detail_infos
 
-        t0 = time.time()
+        t0 = datetime.now()
         self.parse_input()  
-        t1 = time.time()
+        t1 = datetime.now()
         self.solve()
-        t2 = time.time()
+        t2 = datetime.now()
         self.output()
-        t3 = time.time()
+        t3 = datetime.now()
 
-        self.create_result.time.update({'parse_input' : t1 - t0 , 'solve' : t2 - t1 , 'output' : t3 - t2})
+        self.create_result.timecost.update({
+            'parse_input' : (t1 - t0).total_seconds() ,
+             'solve' : (t2 - t1).total_seconds() , 
+             'output' : (t3 - t2).total_seconds()})
         return self.create_result
     
     @abstractmethod
@@ -120,7 +122,7 @@ class PortCreateResult:
     utility     : PortCreateUtility | Any = None
     accuracy    : PortCreateAccuracy | Any = None
     analytic    : RiskAnalytic | Any = None
-    time        : dict[str,float] = field(default_factory=dict)
+    timecost    : dict[str,float] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.utility is None: 

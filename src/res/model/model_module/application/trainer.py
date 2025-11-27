@@ -1,4 +1,4 @@
-import time
+from datetime import datetime
 
 from src.proj import PATH , MACHINE , HtmlCatcher
 from src.basic import RegisteredModel , Email
@@ -46,9 +46,9 @@ class ModelTrainer(BaseTrainer):
         else:
             for model in RegisteredModel.SelectModels():
                 print(f'Updating model: {model.model_path}')
-                print(f'Start time: {time.strftime("%Y-%m-%d %H:%M:%S")}')
+                print(f'Start time: {datetime.now()}')
                 cls.initialize(0 , 1 , 0 , model.model_path).go()
-                print(f'End time: {time.strftime("%Y-%m-%d %H:%M:%S")}')
+                print(f'End time: {datetime.now()}')
 
     @classmethod
     def train(cls , module : str | None = None , short_test : bool | None = None , 
@@ -104,12 +104,13 @@ class ModelTrainer(BaseTrainer):
         return trainer
 
     @classmethod
-    def test_db_mapping(cls , mapping_name : str | None = None , short_test : bool | None = None , 
-                        stage = 2 , resume = 0 , checkname = -1 , start : int | None = None , end : int | None = None , **kwargs):
+    def test_db_mapping(cls , mapping_name : str | None = None , 
+                        stage = 2 , resume = 0 , checkname = -1 , 
+                        start : int | None = None , end : int | None = None , **kwargs):
         assert mapping_name, 'model_name is required'
         with HtmlCatcher(True) as catcher:
             trainer = cls.initialize(
-                module = f'db@{mapping_name}' , short_test = short_test , stage = stage , resume = resume , 
+                module = f'db@{mapping_name}' , short_test = False , stage = stage , resume = resume , 
                 checkname = checkname, start = start , end = end , **kwargs)
             trainer.go()
             catcher.set_attrs(f'Test DB Mapping of {mapping_name}' , trainer.path_training_output)
@@ -117,12 +118,13 @@ class ModelTrainer(BaseTrainer):
         return trainer
 
     @classmethod
-    def test_factor(cls , factor_name : str | None = None , short_test : bool | None = None , 
-                    stage = 2 , resume = 0 , checkname = -1 , start : int | None = None , end : int | None = None , **kwargs):
+    def test_factor(cls , factor_name : str | None = None , 
+                    stage = 2 , resume = 0 , checkname = -1 , 
+                    start : int | None = None , end : int | None = None , **kwargs):
         assert factor_name, 'factor_name is required'
         with HtmlCatcher(True) as catcher:
             trainer = cls.initialize(
-                module = f'factor@{factor_name}' , short_test = short_test , stage = stage , resume = resume , 
+                module = f'factor@{factor_name}' , short_test = False , stage = stage , resume = resume , 
                 checkname = checkname, start = start , end = end , **kwargs)
             trainer.go()
             catcher.set_attrs(f'Test Factor of {factor_name}' , trainer.path_training_output)

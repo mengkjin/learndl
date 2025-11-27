@@ -1,7 +1,8 @@
-import time , datetime , json
+import json
 import numpy as np
 import pandas as pd
 
+from datetime import datetime
 from typing import Any , ClassVar
 
 from src import func as FUNC
@@ -16,20 +17,20 @@ class CallbackTimer(BaseCallBack):
         super().__init__(trainer , **kwargs)
         self.print_info(verbosity = self.verbosity)
         self.recording = self.verbosity >= 10
-        self.record_hook_times : dict[str,list]  = {hook:[] for hook in self.possible_hooks()}
-        self.record_start_time : dict[str,float] = {}
+        self.record_hook_durations : dict[str,list[float]]  = {hook:[] for hook in self.possible_hooks()}
+        self.record_start_time : dict[str,datetime] = {}
     def at_enter(self , hook_name , verbosity : int = 0):
         super().at_enter(hook_name , verbosity)
         if self.recording: 
-            self.record_start_time[hook_name] = time.time()
+            self.record_start_time[hook_name] = datetime.now()
     def at_exit(self, hook_name , verbosity : int = 0):
         if self.recording: 
-            self.record_hook_times[hook_name].append(time.time() - self.record_start_time[hook_name])
+            self.record_hook_durations[hook_name].append((datetime.now() - self.record_start_time[hook_name]).total_seconds())
         super().at_exit(hook_name , verbosity)
     def on_summarize_model(self):
         if self.recording: 
             columns = ['hook_name' , 'num_calls', 'total_time' , 'avg_time']
-            values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_times.items() if v]
+            values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_durations.items() if v]
             df = pd.DataFrame(values).sort_values(by=['total_time'],ascending=False).head(5)
             df.columns = columns
             print('Table:Callback Time costs:')
@@ -71,8 +72,8 @@ class StatusDisplay(BaseCallBack):
         super().__init__(trainer , **kwargs)
         self.print_info(verbosity = self.verbosity)
         self.show_info_step = [0,10,5,3,2,1][min(self.verbosity // 2 , 5)]
-        self.record_init_time = time.time()
-        self.record_times : dict[str,float] = {}
+        self.record_init_time = datetime.now()
+        self.record_times : dict[str,datetime] = {}
         self.record_texts : dict[str,str]   = {}
         self.record_epoch_model : int = 0
         self.record_epoch_stage : int = 0
@@ -111,24 +112,20 @@ class StatusDisplay(BaseCallBack):
         return sdout
 
     def tic(self , key : str): 
-        self.record_times[key] = time.time()
-    def toc(self , key : str): 
-        return time.time() - self.record_times[key]
-    def tic_str(self , key : str):
-        self.tic(key)
-        return 'Start Process [{}] at {:s}!'.format(key.title() , time.ctime(self.record_times[key]))
-    def toc_str(self , key : str , avg = False): 
-        toc = self.toc(key)
+        self.record_times[key] = datetime.now()
+    def tc(self , key : str):
+        return (datetime.now() - self.record_times[key]).total_seconds()
+    def toc(self , key : str , avg = False): 
+        tc = self.tc(key)
         if avg and self.record_model_stage * self.record_epoch_stage:
             self.record_texts[key] = 'Finish Process [{}], Cost {:.1f} Hours, {:.1f} Min/model, {:.1f} Sec/Epoch'.format(
-                key.title() , toc / 3600 , toc / 60 / self.record_model_stage , toc / self.record_epoch_stage)
+                key.title() , tc / 3600 , tc / 60 / self.record_model_stage , tc / self.record_epoch_stage)
+            Logger.highlight(self.record_texts[key] , default_prefix = True)
         else:
-            self.record_texts[key] = 'Finish Process [{}], Cost {:.1f} Secs'.format(key.title() , toc)
-        return self.record_texts[f'{key}']
+            self.record_texts[key] = 'Finish Process [{}], Cost {:.1f} Secs'.format(key.title() , tc)
 
     # callbacks
     def on_configure_model(self):
-        Logger.highlight('Model Specifics:')
         self.config.print_out()
     def on_summarize_model(self):
         if not self.test_summarized: 
@@ -141,10 +138,10 @@ class StatusDisplay(BaseCallBack):
             '{}.{}'.format(*col):'|'.join([f'{k}({self.summary_df[col].round(v).loc[k]})' for k,v in self.SUMMARY_NDIGITS.items() 
                                            if k in self.summary_df[col].index]) for col in self.summary_df.columns}
     
-        test_name = f'{self.config.model_name}(x{len(self.config.model_num_list)})_at_{datetime.datetime.fromtimestamp(self.record_init_time).strftime("%Y%m%d%H%M%S")}'
+        test_name = f'{self.config.model_name}(x{len(self.config.model_num_list)})_at_{self.record_init_time.strftime("%Y%m%d%H%M%S")}'
         result = {
             '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
-            '1_start' : time.ctime(self.record_init_time) ,
+            '1_start' : str(self.record_init_time) ,
             '2_basic' : 'short' if self.config.short_test else 'full' , 
             '3_datas' : str(self.config.model_data_types) ,
             '4_label' : ','.join(self.config.model_labels),
@@ -158,17 +155,17 @@ class StatusDisplay(BaseCallBack):
             json.dump({test_name:result}, f, indent=4)
 
     def on_before_data_start(self):    
-        Logger.critical(self.tic_str('data'))
+        self.tic('data')
     def on_after_data_end(self):      
-        Logger.critical(self.toc_str('data'))
+        self.toc('data')
     def on_before_fit_start(self):     
-        Logger.critical(self.tic_str('fit'))
+        self.tic('fit')
     def on_after_fit_end(self):       
-        Logger.critical(self.toc_str('fit' , avg=True))
+        self.toc('fit' , avg=True)
     def on_before_test_start(self):
-        Logger.critical(self.tic_str('test'))
+        self.tic('test')
     def on_after_test_end(self):
-        Logger.critical(self.toc_str('test'))
+        self.toc('test')
 
     def on_fit_model_start(self):
         self.tic('model')
@@ -206,7 +203,7 @@ class StatusDisplay(BaseCallBack):
         best_score = self.status.best_attempt_metric if self.status.best_attempt_metric else valid_score
         self.record_texts['status'] = f'Train{train_score: .4f} Valid{valid_score: .4f} BestVal{best_score: .4f}'
         self.record_texts['time'] = 'Cost{:5.1f}Min,{:5.1f}Sec/Ep'.format(
-            self.toc('model') / 60 , self.toc('model') / (self.record_epoch_model + 1))
+            self.tc('model') / 60 , self.tc('model') / (self.record_epoch_model + 1))
         Logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts))
 
     def on_test_start(self): 

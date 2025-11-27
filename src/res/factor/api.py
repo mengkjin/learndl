@@ -66,6 +66,8 @@ class FactorCalculatorAPI:
 
 class FactorTestAPI:
     TASK_TYPES = TASK_TYPES
+    Hierarchy = StockFactorHierarchy
+
     @classmethod
     def get_test_manager(cls , test_type : TYPE_of_TASK):
         if test_type == 'factor':
@@ -80,6 +82,20 @@ class FactorTestAPI:
             return FmpScreenManager
         else:
             raise ValueError(f'Invalid test type: {test_type}')
+
+    @classmethod
+    def FastAnalyze(cls , factor_name : str , start : int | None = 20170101 , end : int | None = None , step : int = 10 , lag = 2):
+        calc = cls.Hierarchy.get_factor(factor_name)
+        factor = calc.Factor(calc.FactorDates(start,end,step))
+        factor.fast_analyze()
+        return factor
+
+    @classmethod
+    def FullAnalyze(cls , factor_name : str , start : int | None = 20170101 , end : int | None = None , step : int = 1 , lag = 2):
+        calc = cls.Hierarchy.get_factor(factor_name)
+        factor = calc.Factor(calc.FactorDates(start,end,step))
+        factor.full_analyze()
+        return factor
         
     @staticmethod
     def _print_test_info(test_type : TYPE_of_TASK , factor : StockFactor ,

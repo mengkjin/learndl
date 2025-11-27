@@ -1,6 +1,7 @@
-import optuna , random , string , time
+import optuna , random , string
 
 from contextlib import nullcontext
+from datetime import datetime
 from typing import Any , Literal
 
 from src.proj import PATH , MACHINE
@@ -18,7 +19,7 @@ class OptunaBooster(GeneralBooster):
     DEFAULT_SILENT_STUDY = True
     DEFAULT_N_TRIALS = 50 if MACHINE.server else 20
     DEFAULT_SAVE_STUDIES = True
-    DEFAULT_STORAGE = f'sqlite:///{PATH.optuna.relative_to(PATH.main)}/booster_{time.strftime("%Y%m") }.sqlite3'
+    DEFAULT_STORAGE = f'sqlite:///{PATH.optuna.relative_to(PATH.main)}/booster_{datetime.now().strftime("%Y%m") }.sqlite3'
 
     @property
     def best_params(self):
@@ -86,7 +87,7 @@ class OptunaBooster(GeneralBooster):
     
     def study_create(self , direction='maximize' , silent = False):
         name_str = self.given_name if self.given_name else self.booster.__class__.__name__
-        time_str = time.strftime('%Y%m%d-%H%M%S') 
+        time_str = datetime.now().strftime('%Y%m%d-%H%M%S') 
         rand_str =''.join(random.choices(string.ascii_letters + string.digits, k=10))
     
         with OptunaSilent() if silent else nullcontext():

@@ -571,7 +571,7 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         return target_dates
 
     @classmethod
-    def iter_calculators(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> Generator['FactorCalculator' , None , None]:
+    def iter(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> Generator['FactorCalculator' , None , None]:
         """
         iterate over calculators
         return a list of factor instances with given attributes
@@ -587,7 +587,8 @@ class FactorCalculator(metaclass=_FactorCalculatorMeta):
         """
         cls.import_definitions()
         for name , calculator in cls.registry.items():
-            if ((name in selected_factors) if selected_factors else all) and calculator.match_attrs(**kwargs):
+            if ((name in selected_factors) if selected_factors else all) and \
+                calculator.match_attrs(**kwargs):
                 yield calculator()
 
     @classmethod
@@ -1026,7 +1027,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
             return pd.DataFrame()
         weight = self._loaded_weight.query('date == @date').copy().set_index('date')
         if weight.empty:
-            print(self._loaded_weight['date'].unique())
+            Logger.warning(f'pooling weight is empty for {date} , has dates: {self._loaded_weight["date"].unique()}')
             raise ValueError(f'pooling weight is empty for {date}')
         return weight
 

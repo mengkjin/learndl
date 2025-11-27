@@ -88,7 +88,7 @@ class StockFactorHierarchy:
         attr_list = ['meta_type' , 'level' , 'factor_name' , 'init_date' , 'final_date' , 
         'file_name' , 'category0' , 'category1' , 'description' , 'min_date' , 'max_date']
         df_datas = []
-        for calc in FactorCalculator.iter_calculators(**kwargs): 
+        for calc in FactorCalculator.iter(**kwargs): 
             attrs = [getattr(calc , a) for a in attr_list]
             df_datas.append(attrs)
         df = pd.DataFrame(df_datas, columns = pd.Index(attr_list))
@@ -106,7 +106,7 @@ class StockFactorHierarchy:
         category1 : str | None = None 
         '''
         dfs = []
-        for calc in FactorCalculator.iter_calculators(**kwargs): 
+        for calc in FactorCalculator.iter(**kwargs): 
             daily_stats = calc.daily_stats()
             weekly_stats = calc.weekly_stats()
             if daily_stats.empty and weekly_stats.empty:
@@ -188,7 +188,7 @@ class StockFactorHierarchy:
             return factor_value
 
         kwargs = kwargs
-        func_calls = {obj:(calculate_factor , {'obj' : obj}) for obj in FactorCalculator.iter_calculators(**kwargs)}
+        func_calls = {obj:(calculate_factor , {'obj' : obj}) for obj in FactorCalculator.iter(**kwargs)}
         
         factor_values : dict[str , pd.Series] = \
             parallel(func_calls , method = multi_thread , ignore_error = ignore_error)

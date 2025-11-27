@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import torch
 from datetime import datetime
-from src.proj import MACHINE
+from src.proj import MACHINE , Logger
 from src.basic import send_email , CALENDAR , TaskRecorder , DB
 
 from .util import wrap_update
@@ -21,27 +21,34 @@ class TempFile:
             pass
 
 def check_cuda_status():
-    if not MACHINE.server or torch.cuda.is_available(): 
-        return
+    if not MACHINE.server:
+        print(f'Skipping: {MACHINE.name} is not a server, skip checking cuda status')
+    elif torch.cuda.is_available(): 
+        print(f'Success : Server {MACHINE.name} CUDA is available')
+    else:
+        Logger.error(f'Server {MACHINE.name} CUDA Failed , please check the cuda status, possible solution:')
     
-    title = f'Learndl: Server CUDA Failed'
-    body = f"""Server {MACHINE.name} CUDA Failed , please check the cuda status, possible solution: 
-    sudo apt purge nvidia-*
-    sudo apt install nvidia-driver-535
-    sudo reboot
+        title = f'Learndl: Server CUDA Failed'
+        body = f"""Server {MACHINE.name} CUDA Failed , please check the cuda status, possible solution: 
+        sudo apt purge nvidia-*
+        sudo apt install nvidia-driver-535
+        sudo reboot
 
-    lsmod | grep nvidia
-    nvidia-smi
-    """
-    recipient = 'mengkjin@163.com'
-    
-    try:
-        send_email(title , body , recipient , confirmation_message='CUDA Status')
-    except Exception:
-        pass
+        lsmod | grep nvidia
+        nvidia-smi
+        """
+        recipient = 'mengkjin@163.com'
+        
+        try:
+            send_email(title , body , recipient , confirmation_message='CUDA Status')
+        except Exception:
+            pass
 
 
 def email_to_fanghan(test = False):
+    if not MACHINE.server:
+        print(f'Skipping: {MACHINE.name} is not a server, skip emailing to fanghan')
+        return
     today = CALENDAR.updated()
     task_recorder = TaskRecorder('notification' , 'email_to_fanghan' , str(today))
     if task_recorder.is_finished():
@@ -71,16 +78,20 @@ def email_to_fanghan(test = False):
             send_email(title , body , recipient , attachments , confirmation_message='Fanghan')
             task_recorder.mark_finished(success = True)
         except Exception as e:
-            print(f'发送邮件给方晗失败! {e}')
+            Logger.error(f'Failed to send email to fanghan: {e}')
+            return
+    print(f'Success : email_to_fanghan at {today} sent')
+    return
 
 class NotificationAPI:
     @classmethod
     def update(cls):
-        if not MACHINE.server:
-            print('not in my server , skip sending email')
-            return
-        wrap_update(check_cuda_status , 'check cuda status')
-        wrap_update(email_to_fanghan , 'email to fanghan')
+        wrap_update(cls.process , 'Notification')
+
+    @classmethod
+    def process(cls):
+        check_cuda_status()
+        email_to_fanghan()
 
 
 

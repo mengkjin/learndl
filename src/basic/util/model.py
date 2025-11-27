@@ -23,7 +23,7 @@ class ModelPath:
         if isinstance(model_name , ModelPath):
             name = model_name.name
         elif isinstance(model_name , Path):
-            assert model_name.absolute().parent == PATH.model , model_name
+            assert model_name.absolute().parent in [PATH.model , PATH.null_model] , model_name
             name = model_name.name
         elif model_name is None:
             name = ''
@@ -78,10 +78,14 @@ class ModelPath:
         self.rslt().mkdir(exist_ok=exist_ok)
         self.snapshot().mkdir(exist_ok=exist_ok)
     @property
+    def root_path(self) -> Path:
+        """root of model path based on name"""
+        return PATH.null_model if self.name.startswith(('db@' , 'factor@')) else PATH.model
+    @property
     def base(self) -> Path:
         """model base path"""
         assert self.name , f'{self.__class__.__name__} model name is not set'
-        return PATH.model.joinpath(self.name)
+        return self.root_path.joinpath(self.name)
     @property
     def model_nums(self) -> np.ndarray:
         """model numbers"""

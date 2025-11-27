@@ -8,7 +8,7 @@
 # mode: shell
 # parameters:
 #   port_name : 
-#       type : "[p.name for p in Path('data/Export/trading_portfolio').iterdir() if not p.name.startswith('.')]"
+#       type : Options.available_tradeports()
 #       prefix : "tradeport/"
 #       desc : trade port name
 #       required : True
