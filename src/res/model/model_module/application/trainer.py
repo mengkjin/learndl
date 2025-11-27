@@ -1,6 +1,4 @@
-from datetime import datetime
-
-from src.proj import PATH , MACHINE , HtmlCatcher
+from src.proj import PATH , MACHINE , HtmlCatcher , Logger
 from src.basic import RegisteredModel , Email
 from src.res.model.callback import CallBackManager
 from src.res.model.data_module import DataModule
@@ -45,10 +43,8 @@ class ModelTrainer(BaseTrainer):
             print('This is not server! Will not update models!')
         else:
             for model in RegisteredModel.SelectModels():
-                print(f'Updating model: {model.model_path}')
-                print(f'Start time: {datetime.now()}')
-                cls.initialize(0 , 1 , 0 , model.model_path).go()
-                print(f'End time: {datetime.now()}')
+                with Logger.ParagraphI(f'Updating model {model.model_path}'):
+                    cls.initialize(0 , 1 , 0 , model.model_path).go()
 
     @classmethod
     def train(cls , module : str | None = None , short_test : bool | None = None , 

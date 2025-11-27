@@ -87,7 +87,8 @@ class ModelHiddenExtractor:
                 hidden_path = HiddenPath(self.hidden_name , model_num , submodel)
                 modified_time = hidden_path.last_modified_time(model_date)
                 if CALENDAR.is_updated_today(modified_time):
-                    print(f'-->  Skipping: {hidden_path.hidden_key} already updated at {datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S')}!')
+                    time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
+                    print(f'-->  Skipping: {hidden_path.hidden_key} already updated at {time_str}!')
                     continue
                 self.model_hidden(hidden_path , model_date , overwrite , silent)
                 self._current_update_dates.append(model_date)

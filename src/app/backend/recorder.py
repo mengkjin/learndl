@@ -108,7 +108,7 @@ class BackendTaskRecorder:
         return self
 
     def __exit__(self , exc_type , exc_value , exc_traceback):
-        self.update_msg['end_time'] = datetime.now()
+        self.update_msg['end_time'] = datetime.now().timestamp()
         if exc_type is None:
             self.update_msg['status'] = 'error' if self.exit_msg.code else 'complete'
         else:

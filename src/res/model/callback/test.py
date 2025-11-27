@@ -60,7 +60,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         factors : dict[int , StockFactor] = {}
         self.test_results : dict[TYPE_of_TASK , BaseTestManager] = {}
         for task in self.analytic_tasks:
-            with Logger.EnclosedMessage(f'{task} test'):
+            with Logger.ParagraphIII(f'{task} test'):
                 interval = 1 if task in ['t50' , 'screen'] else 5
                 if interval not in factors.keys():
                     dates = PRED_RECORD.dates[::interval] # noqa
@@ -72,7 +72,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
         rslts = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_rslts().items()}
         figs  = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_figs().items()}
 
-        with Logger.EnclosedMessage('Display Analytic Results'):
+        with Logger.ParagraphIII('Display Analytic Results'):
             self.display_dfs(rslts)
             self.display_figs(figs)
 
@@ -134,6 +134,6 @@ class GroupReturnAnalysis(BaseCallBack):
         FUNC.dfs_to_excel(rslt , self.path_grp)
         grp : pd.DataFrame = rslt['market']
         grp.index.names = [str(col).replace('model_','') for col in grp.index.names]
-        with Logger.EnclosedMessage('Table: Grouped Return Results:'):
+        with Logger.ParagraphIII('Table: Grouped Return Results:'):
             FUNC.display.display(grp)
             print(f'Table saved to {self.path_grp}')

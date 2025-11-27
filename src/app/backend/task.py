@@ -589,15 +589,16 @@ class TaskItem:
         return self.script == str(script_runner.script)
     
     def time_str(self , time_type : Literal['create', 'start', 'end'] = 'create' , format : str = '%Y-%m-%d %H:%M:%S'):
-        if time_type == 'create':
-            time = self.create_time
-        elif time_type == 'start':
-            time = self.start_time
-        elif time_type == 'end':
-            time = self.end_time
-        if time is None: 
+        try:
+            if time_type == 'create':
+                return datetime.fromtimestamp(self.create_time).strftime(format)
+            elif time_type == 'start':
+                return datetime.fromtimestamp(self.start_time or self.create_time).strftime(format)
+            elif time_type == 'end':
+                return datetime.fromtimestamp(self.end_time or self.create_time).strftime(format)
+        except (ValueError , TypeError):
+            Logger.error(f'{time_type} time is not a number: {self.create_time}')
             return 'N/A'
-        return datetime.fromtimestamp(time).strftime(format)
 
     @property
     def script_key(self):
@@ -756,7 +757,11 @@ class TaskItem:
     def duration(self):
         start_time = self.start_time or self.create_time
         end_time = self.end_time or timestamp()
-        return end_time - start_time
+        try:
+            return end_time - start_time
+        except (ValueError , TypeError):
+            Logger.error(f'duration is not a number: {end_time} - {start_time}')
+            return 0
     
     @property
     def duration_str(self):

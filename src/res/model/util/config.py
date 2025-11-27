@@ -854,7 +854,7 @@ class TrainConfig(TrainParam):
             else:
                 raise ValueError(f'checkname must be -1 or 0 when base_path is not None , got {checkname}')
             verbose = False
-        with Logger.EnclosedMessage(' parser training args ') if verbose else nullcontext():
+        with Logger.ParagraphIII(' parser training args ') if verbose else nullcontext():
             self.parser_stage(stage , verbose)
             self.parser_resume(resume , verbose)
             self.parser_select(checkname , verbose) 
@@ -908,7 +908,7 @@ class TrainConfig(TrainParam):
             info_strs.append(f'Stage Queue     : {self.stage_queue}')
             info_strs.append(f'Resume Training : {self.resume_training}')
 
-        with Logger.EnclosedMessage(' model info '): 
+        with Logger.ParagraphIII(' model info '): 
             print('\n'.join(info_strs))
 
     @property

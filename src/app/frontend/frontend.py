@@ -286,8 +286,8 @@ class ActionLogger:
         args_str , kwargs_str = cls.get_args_str(args , kwargs , ignore)
         export_str = '\n'.join([
             f'Action: [{action}]', 
-            f'    Start:  [{start_time}]', 
-            f'    End:    [{datetime.now()}]', 
+            f'    Start:  [{start_time.strftime("%Y-%m-%d %H:%M:%S")}]', 
+            f'    End:    [{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]', 
             f'    Args:   [{args_str}]', 
             f'    Kwargs: [{kwargs_str}]'])
         with open(cls.action_log, 'a') as f:
@@ -320,8 +320,8 @@ class ActionLogger:
     def record_error(cls , start_time : datetime , action : str , error : str ):
         export_str = '\n'.join([
             f'Action: [{action}]', 
-            f'    Start:  [{start_time}]', 
-            f'    End:    [{datetime.now()}]', 
+            f'    Start:  [{start_time.strftime("%Y-%m-%d %H:%M:%S")}]', 
+            f'    End:    [{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]', 
             f'    Error:  [{error}]'])
         with open(cls.error_log, 'a') as f:
             f.write(export_str + '\n')

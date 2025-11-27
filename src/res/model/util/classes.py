@@ -386,7 +386,7 @@ class BaseTrainer(ModelStreamLine):
     
     def main_process(self):
         '''Main stage of data & fit & test'''
-        with Logger.EnclosedProcess(f'{self.config.model_name} Trainer Main Process'):
+        with Logger.ParagraphI(f'{self.config.model_name} Trainer Main Process'):
             self.on_configure_model()
 
             if not self.stage_queue:
@@ -394,15 +394,15 @@ class BaseTrainer(ModelStreamLine):
                 raise Exception("stage_queue is empty , please check src.InstanceRecord['trainer']")
 
             if 'data' in self.stage_queue:
-                with Logger.EnclosedProcess('Stage [Data]'):
+                with Logger.ParagraphII('Stage [Data]'):
                     self.stage_data()
 
             if 'fit' in self.stage_queue:  
-                with Logger.EnclosedProcess('Stage [Fit]'):
+                with Logger.ParagraphII('Stage [Fit]'):
                     self.stage_fit()
 
             if 'test' in self.stage_queue: 
-                with Logger.EnclosedProcess('Stage [Test]'):
+                with Logger.ParagraphII('Stage [Test]'):
                     self.stage_test()
             
             self.on_summarize_model()

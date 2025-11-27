@@ -32,7 +32,7 @@ def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance']
                       log_path : Path | None = None ,
                       verbose = False):
     # running_scripts = get_running_scripts(exclude_scripts)
-    main_str = f'{datetime.now()} : Power set to {mode}'
+    main_str = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} : Power set to {mode}'
     if platform.system() == 'Windows':
         main_str += f' aborted due windows platform\n'
     else:

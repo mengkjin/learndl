@@ -7,6 +7,6 @@ def wrap_update(update_func , message : str , skip : bool = False , *args , **kw
     if skip:
         Logger.warning(f'Skipping: {message.title()}')
     else:
-        with Logger.EnclosedMessage(f' {message.title()} '):
+        with Logger.ParagraphIII(f' {message.title()} '):
             update_func(*args , **kwargs)
         

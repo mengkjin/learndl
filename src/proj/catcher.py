@@ -703,8 +703,8 @@ class HtmlCatcher(OutputCatcher):
         infos = {
             'Machine' : MACHINE.name,
             'Python' : f"{platform.python_version()}-{platform.machine()}",
-            'Start at' : f'{self.start_time}',
-            'Finish at' : f'{finish_time}',
+            'Start at' : f'{self.start_time.strftime("%Y-%m-%d %H:%M:%S")}',
+            'Finish at' : f'{finish_time.strftime("%Y-%m-%d %H:%M:%S")}',
             'Duration' : Duration((finish_time - self.start_time).total_seconds()).fmtstr,
             'Outputs Num' : len(self.outputs)
         }
@@ -719,7 +719,7 @@ class HtmlCatcher(OutputCatcher):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{self.title.title()} - {datetime.now()}</title>
+    <title>{self.title.title()} - {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}</title>
     <style>
         body {{
             font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;

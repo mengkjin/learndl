@@ -130,7 +130,7 @@ class AutoRunTask:
             self.error_messages.append(error_message)
 
         if not self.error_messages:
-            self.critical(f'{self.task_full_name.replace("_", " ").title()} started at {self.init_time} completed')
+            self.critical(f'{self.task_full_name.replace("_", " ").title()} started at {self.init_time.strftime("%Y-%m-%d %H:%M:%S")} completed')
 
         for log_type , message in Logger.iter_cached_messages():
             getattr(Logger , log_type)(message)
@@ -267,8 +267,8 @@ class AutoRunTask:
                 f'Machine : {MACHINE.name}' ,
                 f'Source : {self.source}' ,
                 f'Task name : {self.task_full_name}' ,
-                f'Start time : {self.init_time}' ,
-                f'End time : {self.end_time}' ,
+                f'Start time : {self.init_time.strftime("%Y-%m-%d %H:%M:%S")}' ,
+                f'End time : {self.end_time.strftime("%Y-%m-%d %H:%M:%S")}' ,
                 f'AutoRun Status : {self.status}' ,
                 f'Excution Status : {self.execution_status}' ,
                 f'CMD line : {" ".join(sys.argv)}' ,

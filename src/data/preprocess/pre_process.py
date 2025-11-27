@@ -75,7 +75,8 @@ class DataPreProcessor:
         for key , proc in processor.processors():
             modified_time = DataBlock.last_modified_time(key , predict)
             if CALENDAR.is_updated_today(modified_time):
-                print(f'Skipping: [{key}] already updated at {datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S')}!')
+                time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
+                print(f'Skipping: [{key}] already updated at {time_str}!')
                 continue
             if verbosity >= 2:
                 print(f'Processing: [{key}]')

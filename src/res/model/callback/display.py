@@ -33,7 +33,7 @@ class CallbackTimer(BaseCallBack):
             values  = [[k , len(v) , np.sum(v) , np.mean(v)] for k,v in self.record_hook_durations.items() if v]
             df = pd.DataFrame(values).sort_values(by=['total_time'],ascending=False).head(5)
             df.columns = columns
-            print('Table:Callback Time costs:')
+            print('Table: Callback Time costs:')
             FUNC.display.display(df)
 
 class BatchDisplay(BaseCallBack):
@@ -141,7 +141,7 @@ class StatusDisplay(BaseCallBack):
         test_name = f'{self.config.model_name}(x{len(self.config.model_num_list)})_at_{self.record_init_time.strftime("%Y%m%d%H%M%S")}'
         result = {
             '0_model' : f'{self.config.model_name}(x{len(self.config.model_num_list)})',
-            '1_start' : str(self.record_init_time) ,
+            '1_start' : self.record_init_time.strftime("%Y-%m-%d %H:%M:%S") ,
             '2_basic' : 'short' if self.config.short_test else 'full' , 
             '3_datas' : str(self.config.model_data_types) ,
             '4_label' : ','.join(self.config.model_labels),
@@ -264,7 +264,7 @@ class StatusDisplay(BaseCallBack):
         df_display = self.summary_df
         if len(df_display) > 100: 
             df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]
-        with Logger.EnclosedMessage('Table: Test Summary:'): 
+        with Logger.ParagraphIII('Table: Test Summary:'): 
             FUNC.display.display(df_display)
             print(f'Table saved to {self.path_test}')
 

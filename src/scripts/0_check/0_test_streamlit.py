@@ -48,7 +48,7 @@ def main(port_name : str = 'a' , module_name : str = 'bbb' , txt : str = 'Hello,
     catcher = LogWriter('log.txt')
     with catcher:
         print('This will be caught')
-        with Logger.EnclosedMessage('main part'):
+        with Logger.ParagraphIII('main part'):
             with Timer('abc'):
                 Logger.critical('critical message')
                 Logger.error('error message')

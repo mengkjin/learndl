@@ -122,7 +122,7 @@ class FactorAPI:
                        start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
                        write_down = True , display_figs = False , verbosity = 1 , 
                        **kwargs):
-            with Logger.EnclosedMessage(' test factor performance '):
+            with Logger.ParagraphIII(' test factor performance '):
                 project_name = get_project_name(names , factor_type)
                 factor = get_factor(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
                 ret = FactorTestAPI.FactorPerf(factor , benchmark , write_down , display_figs , verbosity , project_name , **kwargs)
@@ -135,7 +135,7 @@ class FactorAPI:
                      write_down = True , display_figs = False , verbosity = 1 , 
                      prob_type : Literal['linprog' , 'quadprog' , 'socp'] = 'linprog' ,
                      **kwargs):
-            with Logger.EnclosedMessage(' test optimized fmp '):
+            with Logger.ParagraphIII(' test optimized fmp '):
                 project_name = get_project_name(names , factor_type)
                 factor = get_factor(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
                 ret = FactorTestAPI.FmpOptim(factor , benchmark , write_down , display_figs , verbosity , project_name , prob_type = prob_type ,**kwargs)
@@ -147,7 +147,7 @@ class FactorAPI:
                    start_dt = 20240101 , end_dt = 20240331 , step = 5 ,
                    write_down = True , display_figs = False , verbosity = 1 , 
                    **kwargs):
-            with Logger.EnclosedMessage(' test top fmp '):
+            with Logger.ParagraphIII(' test top fmp '):
                 project_name = get_project_name(names , factor_type)
                 factor = get_factor(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
                 ret = FactorTestAPI.FmpTop(factor , benchmark , write_down , display_figs , verbosity , project_name , **kwargs)

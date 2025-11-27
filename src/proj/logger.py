@@ -188,53 +188,65 @@ class Logger:
         """Get the cached messages"""
         return cls._cached_messages[type]
 
-    class EnclosedProcess:
+    class ParagraphI:
         """
-        Enclosed process to print out time
+        Format Enclosed process to print out time
         example:
-            with Logger.EnclosedProcess('Process Name'):
+            with Logger.ParagraphI('Process Name'):
                 Logger.info('This is the enclosed process...')
         """
-        def __init__(self , name = None , printer = None):
-            self.printer = printer or Logger.critical
-            self.name = name or 'Process'
-        def __repr__(self):
-            return f'{self.__class__.__name__}(name = {self.name} , printer = {self.printer})'
+        def __init__(self , title : str):
+            self.title = title.strip().upper()
         def __enter__(self):
             self._init_time = datetime.now()
-            self.printer(f'{self.name} Start at {self._init_time}')
+            self.write(f'{self.title} Start at {self._init_time.strftime("%Y-%m-%d %H:%M:%S")}')
         def __exit__(self, *args): 
             self._end_time = datetime.now()
-            self.printer(f'{self.name} Finished at {self._end_time}! Cost {Duration(self._end_time - self._init_time)}')
+            self.write(f'{self.title} Finished at {self._end_time.strftime("%Y-%m-%d %H:%M:%S")}! Cost {Duration(self._end_time - self._init_time)}')
+        def write(self , message : str):
+            Logger.critical(message)
 
-    class EnclosedMessage:
-        """F
-        ormat Enclosed message
+    class ParagraphII:
+        """
+        Format Enclosed process to print out time
         example:
-            with Logger.EnclosedMessage('Title'):
+            with Logger.ParagraphII('Process Name'):
+                Logger.info('This is the enclosed process...')
+        """
+        def __init__(self , title : str):
+            self.title = title.strip().capitalize()
+        def __enter__(self):
+            self._init_time = datetime.now()
+            self.write(f'{self.title} Start at {self._init_time.strftime("%Y-%m-%d %H:%M:%S")}')
+        def __exit__(self, *args): 
+            self._end_time = datetime.now()
+            self.write(f'{self.title} Finished at {self._end_time.strftime("%Y-%m-%d %H:%M:%S")}! Cost {Duration(self._end_time - self._init_time)}')
+        def write(self , message : str):
+            Logger.warning(message)
+
+    class ParagraphIII:
+        """
+        Format enclosed message
+        example:
+            with Logger.ParagraphIII('Title'):
                 Logger.info('This is the enclosed message...')
         """
         def __init__(self , title : str , width = _seperator_width):
-            self.title = title.strip()
-            self.width = width
+            self.title = title.strip().upper()
             
         def __enter__(self):
             self._init_time = datetime.now()
-            self.write(f'{self.title} Start')
+            self.write(f'{self.title} Start'.upper())
 
         def __exit__(self , exc_type , exc_value , traceback):
             self._end_time = datetime.now()
-            self.write(f'{self.title} Finished in {Duration(self._end_time - self._init_time)}')
+            self.write(f'{self.title} Finished in {Duration(self._end_time - self._init_time)}'.upper())
 
-        def __repr__(self):
-            return f'EnclosedMessage(title = {self.title} , width = {self.width})'
-        
         def write(self , message : str):
             txt_len = len(message)
-            if txt_len >= self.width:
-                Logger.highlight(message.upper())
+            if txt_len >= _seperator_width:
+                Logger.highlight(message)
             else:
-                padding_left = '*' * max(0 , (self.width - txt_len - 2) // 2)
-                padding_right = '*' * max(0 , self.width - txt_len - 2 - len(padding_left))
-                Logger.highlight(' '.join([padding_left , message.upper() , padding_right]))
-
+                padding_left = '*' * max(0 , (_seperator_width - txt_len - 2) // 2)
+                padding_right = '*' * max(0 , _seperator_width - txt_len - 2 - len(padding_left))
+                Logger.highlight(' '.join([padding_left , message , padding_right]))
