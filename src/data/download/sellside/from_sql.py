@@ -241,7 +241,7 @@ class SellsideSQLDownloader:
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: 
                 continue
-            status = status or DB.save(data_at_d , self.DB_SRC , self.db_key , d)
+            status = DB.save(data_at_d , self.DB_SRC , self.db_key , d) or status
         return status
 
     @classmethod

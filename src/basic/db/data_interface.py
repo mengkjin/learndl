@@ -9,7 +9,7 @@ from datetime import datetime , timedelta
 from pathlib import Path
 from typing import Any , Literal , Generator
 
-from src.proj import MACHINE , PATH
+from src.proj import MACHINE , PATH , Logger
 from .code_mapper import secid_to_secid
 
 __all__ = [
@@ -107,24 +107,26 @@ def file_dates(path : Path | list[Path] | tuple[Path] , startswith = '' , endswi
         s = path.stem[-8:]
         return [int(s)] if s.isdigit() else []
 
-def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , verbose = True):
+def save_df(df : pd.DataFrame | None , path : Path | str , overwrite = True , verbose = True , prefix = '  -->  '):
     """save dataframe to path"""
+    prefix = prefix or ''
     path = Path(path)
     if df is None or df.empty: 
         return False
     elif overwrite or not path.exists(): 
-        status = 'overwritten' if path.exists() else 'saved'
+        status = 'Overwritten' if path.exists() else 'Saved to DB'
         path.parent.mkdir(parents=True , exist_ok=True)
         if SAVE_OPT_DB == 'feather':
             df.to_feather(path)
         else:
             df.to_parquet(path , engine='fastparquet')
         if verbose: 
-            print(f'{path} {status} successfully')
+            print(f'{prefix}{status}: {path}')
         return True
     else:
+        status = 'File Exists'
         if verbose: 
-            print(f'{path} already exists')
+            Logger.fail(f'{prefix}{status}: {path}')
         return False
 
 def load_df(path : Path , raise_if_not_exist = False):
@@ -297,7 +299,7 @@ def max_date(db_src , db_key , use_alt = False):
     return mdate
 
 # @_db_src_deprecated(1)
-def save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True):
+def save(df : pd.DataFrame | None , db_src , db_key , date = None , verbose = True , prefix : str | None = None):
     '''
     Save data to database
     Parameters  

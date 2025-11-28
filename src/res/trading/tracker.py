@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 from pathlib import Path
@@ -29,12 +30,17 @@ class TradingPortfolioTracker:
         else:
             print(f'Trading portfolios updated on {date}: {list(new_ports.keys())}')
             for port_name in new_ports:
-                in_count = (~new_ports[port_name]['secid'].isin(last_ports[port_name]['secid'])).sum()
-                out_count = (~last_ports[port_name]['secid'].isin(new_ports[port_name]['secid'])).sum()
-                message = f'Port {port_name} : total {len(new_ports[port_name])} , in {in_count} , out {out_count}'
+                in_secids = np.setdiff1d(new_ports[port_name]['secid'], last_ports[port_name]['secid'])
+                out_secids = np.setdiff1d(last_ports[port_name]['secid'], new_ports[port_name]['secid'])
+                message = f'Port {port_name} : total {len(new_ports[port_name])} , in {len(in_secids)} , out {len(out_secids)}'
                 print(f'    {message}')
                 if port_name in FOCUSED_PORTS:
+                    in_detail = f'include new secids: {in_secids}'
+                    out_detail = f'exclude old secids: {out_secids}'
                     Logger.cache_message('critical' , message)
+                    Logger.cache_message('critical' , in_detail)
+                    Logger.cache_message('critical' , out_detail)
+
             path = cls.attachment_path(date)
             pd.concat([df for df in new_ports.values()]).to_csv(path)
             Email.Attach(path)

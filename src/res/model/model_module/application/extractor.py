@@ -60,7 +60,7 @@ class ModelHiddenExtractor:
             with SILENT:
                 self.data = DataModule(self.config , 'both').load_data()
             self.data_loaded = True
-            print(f'-->  Loaded model data for {self.hidden_name} successfully!')
+            print(f'  -->  Loaded model data for {self.hidden_name} successfully!')
 
     def model_iter(self , model_dates : list | np.ndarray | int | None = None , update = True):
         if model_dates is None: 
@@ -88,7 +88,7 @@ class ModelHiddenExtractor:
                 modified_time = hidden_path.last_modified_time(model_date)
                 if CALENDAR.is_updated_today(modified_time):
                     time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-                    print(f'-->  Skipping: {hidden_path.hidden_key} already updated at {time_str}!')
+                    print(f'  -->  Skipping: {hidden_path.hidden_key} already updated at {time_str}!')
                     continue
                 self.model_hidden(hidden_path , model_date , overwrite , silent)
                 self._current_update_dates.append(model_date)
