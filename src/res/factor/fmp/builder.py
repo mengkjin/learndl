@@ -16,7 +16,7 @@ class PortfolioBuilder:
     '''
     alpha : AlphaModel
     benchmark : Benchmark | Portfolio | Port | str
-    category : Literal['optim' , 'top'] | Any
+    category : Literal['optim' , 'top' , 'screen'] | Any
     lag : int , lag periods (not days)
     strategy : str
     suffixes : list[str] | str

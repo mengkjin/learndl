@@ -3,13 +3,11 @@ from typing import Any , Literal
 
 from src.proj import Logger
 from src import func as FUNC
-from src.basic import DB
 from src.res.factor.util import StockFactor
 from src.res.factor.api import FactorTestAPI , TYPE_of_TASK
 from src.res.factor.analytic.test_manager import BaseTestManager
-from src.res.model.util import BaseCallBack , PredRecorder
+from src.res.model.util import BaseCallBack
 
-PRED_RECORD = PredRecorder()
 TEST_TYPES : list[TYPE_of_TASK] = ['factor' , 't50' , 'screen']
 
 class DetailedAlphaAnalysis(BaseCallBack):
@@ -43,13 +41,10 @@ class DetailedAlphaAnalysis(BaseCallBack):
     @property
     def path_pred(self): return self.trainer.path_pred_dataframe
 
-    def on_test_start(self):     PRED_RECORD.initialize(self.trainer)
-    def on_test_batch_end(self): PRED_RECORD.append_batch_pred()
     def on_test_end(self):  
-        if PRED_RECORD.is_empty: 
+        if self.trainer.record.is_empty: 
             return
-        df = PRED_RECORD.all_preds()
-        DB.save_df(df , self.path_pred , overwrite = True)
+        df = self.trainer.record.all_preds()
         if self.use_num == 'first':
             df = df.query('model_num == 0')
         else:
@@ -63,7 +58,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
             with Logger.ParagraphIII(f'{task} test'):
                 interval = 1 if task in ['t50' , 'screen'] else 5
                 if interval not in factors.keys():
-                    dates = PRED_RECORD.dates[::interval] # noqa
+                    dates = self.trainer.record.dates[::interval] # noqa
                     factors[interval] = StockFactor(df.reset_index().query('date in @dates').set_index(['secid','date']))
                 factor = factors[interval]
                 self.test_results[task] = FactorTestAPI.run_test(
@@ -112,12 +107,10 @@ class GroupReturnAnalysis(BaseCallBack):
     @property
     def path_grp(self): return str(self.config.model_base_path.rslt('group.xlsx'))
 
-    def on_test_start(self):     PRED_RECORD.initialize(self.trainer)
-    def on_test_batch_end(self): PRED_RECORD.append_batch_pred()
     def on_test_end(self):  
-        if PRED_RECORD.is_empty: 
+        if self.trainer.record.is_empty: 
             return
-        df = PRED_RECORD.all_preds(5)
+        df = self.trainer.record.all_preds(5)
              
         df['factor_name'] = df['model_num'].astype(str) + '.' + df['submodel']
             

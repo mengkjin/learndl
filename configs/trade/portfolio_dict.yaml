@@ -81,3 +81,12 @@ gru_daily:
     universe: top-1000
     top_num: 50
     freq: 1
+
+event_factor_momentum.backtest:
+    alpha: factor@event_factor_momentum
+    category: screen
+    universe: top-1000
+    top_num: 50
+    freq: 1
+    backtest: True
+    test_start: 20190101

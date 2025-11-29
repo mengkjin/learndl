@@ -1,5 +1,6 @@
 import itertools
 import numpy as np
+import pandas as pd
 import torch
 
 from abc import ABC , abstractmethod
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Any , final , Iterator , Literal
 
 from src.proj import InstanceRecord , PATH , Logger
-from src.basic import ModelDict 
+from src.basic import ModelDict , DB
 from src.func import Filtered
 from src.res.algo import AlgoModule
 from src.data import ModuleData
@@ -171,6 +172,78 @@ class TrainerStatus(ModelStreamLine):
     def add_event(self , event : str | None):
         if event: 
             self.epoch_event.append(event)
+
+class PredRecorder(ModelStreamLine):
+    def __init__(self , trainer : 'BaseTrainer') -> None:
+        self.trainer = trainer
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}(trainer={self.trainer})'
+        
+    @property
+    def pred_idx(self):
+        return f'{self.trainer.model_num}.{self.trainer.model_submodel}.{self.trainer.model_date}.{self.trainer.batch_idx}'
+
+    @property
+    def is_empty(self):
+        return len(self.preds) == 0
+
+    @property
+    def dates(self):
+        return self.trainer.data.test_full_dates
+    
+    def all_preds(self , interval : int = 1):
+        if self.is_empty: 
+            return pd.DataFrame()
+        elif interval == 1:
+            return pd.concat(self.preds.values())
+        else:
+            dates = self.dates[::interval]
+            seq = [pred.loc[np.isin(pred['date'],dates),:] for pred in self.preds.values()]
+            return pd.concat(seq)
+    
+    def append_batch_pred(self):
+        if self.pred_idx in self.preds.keys(): 
+            return
+        if self.trainer.batch_idx < self.trainer.batch_warm_up: 
+            return
+        
+        which_output = self.trainer.model_param.get('which_output' , 0)
+        
+        secid = self.trainer.data.batch_secid(self.trainer.batch_data)
+        date  = self.trainer.data.batch_date(self.trainer.batch_data)
+
+        pred = self.trainer.batch_output.pred_df(secid , date).dropna()
+        pred = pred.loc[np.isin(pred['date'],self.dates),:]
+        if len(pred) == 0: 
+            return
+
+        pred['model_num'] = self.trainer.model_num
+        pred['submodel']  = self.trainer.model_submodel
+ 
+        if which_output is None:
+            pred['values'] = pred.loc[:,[col for col in pred.columns if col.startswith('pred.')]].mean(axis=1)
+        else:
+            pred['values'] = pred[f'pred.{which_output}']
+        df = pred.loc[:,['model_num' , 'submodel' , 'secid' , 'date' , 'values']]
+
+        self.preds[self.pred_idx] = df
+
+    def load_saved_preds(self):
+        return DB.load_df(self.trainer.path_pred_dataframe)
+
+    def on_test_start(self):
+        self.preds : dict[str,pd.DataFrame] = {}
+
+    def on_test_batch_end(self): 
+        self.append_batch_pred()
+
+    def on_test_end(self):
+        df = self.all_preds()
+        pred_keys = ['model_num','submodel','secid','date']
+        old_df = DB.load_df(self.trainer.path_pred_dataframe)
+        new_df = pd.concat([old_df , df]).drop_duplicates(subset=pred_keys , keep='last').sort_values(by=pred_keys)
+        DB.save_df(new_df , self.trainer.path_pred_dataframe , overwrite = True)
         
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
@@ -301,6 +374,7 @@ class BaseTrainer(ModelStreamLine):
         '''initialized configuration'''
         self.config = TrainConfig(base_path , override = override , schedule_name = schedule_name , **kwargs)
         self.status = TrainerStatus(self.config.train_max_epoch)
+        self.record = PredRecorder(self)
 
     def wrap_callbacks(self):
         [setattr(self , hook , self.hook_wrapper(self , hook , self.verbosity)) for hook in possible_hooks()]
@@ -310,6 +384,7 @@ class BaseTrainer(ModelStreamLine):
         action_status  = getattr(trainer.status , hook)
         action_trainer = getattr(trainer , hook)
         action_model   = getattr(trainer.model , hook)
+        action_record  = getattr(trainer.record , hook)
         def wrapper() -> None:
             if verbosity > 10: 
                 print(f'{hook} of stage {trainer.status.stage} start')
@@ -317,6 +392,7 @@ class BaseTrainer(ModelStreamLine):
             action_status()
             action_trainer()
             action_model()
+            action_record()
             trainer.callback.at_exit(hook , verbosity)
             if verbosity > 10: 
                 print(f'{hook} of stage {trainer.status.stage} end')

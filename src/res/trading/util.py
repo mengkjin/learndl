@@ -39,6 +39,7 @@ class TradingPort:
     name        : str 
     alpha       : str
     universe    : str
+    category    : Literal['top' , 'screen'] = 'top'
     components  : list[str] = field(default_factory=list)
     weights     : list[float] = field(default_factory=list)
     top_num     : int = 50
@@ -48,6 +49,8 @@ class TradingPort:
     test_start  : int = 20190101 # -1 for no backtest
     test_end    : int = -1
     benchmark   : str = 'csi500'
+    sorting_alpha : tuple[str , str , str | None] = ('pred' , 'gru_day_V1' , None)
+    screen_ratio : float = 0.5
     buffer_zone : float = 0.8
     no_zone     : float = 0.5
     indus_control : float = 0.1
@@ -69,6 +72,11 @@ class TradingPort:
             self.turn_control = 1.0
 
         assert not self.backtest or self.test_start > 0 , f'test_start must be positive when backtest is True: {self.test_start}'
+        
+        assert self.category in ['top' , 'screen'] , f'category must be top or screen: {self.category}'
+        if self.category == 'screen':
+            assert self.sorting_alpha is not None , 'sorting_alpha must be provided'
+    
         self.test_start = max(self.test_start , 20170101) if self.test_start > 0 else -1
         self.test_end = 20991231 if self.test_end < 0 else self.test_end
 
@@ -172,10 +180,11 @@ class TradingPort:
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
 
-        builder = PortfolioBuilder('top' , alpha , universe , build_on = last_port , 
+        builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
-                                   indus_control = self.indus_control).setup(0)
+                                   indus_control = self.indus_control , sorting_alpha = self.sorting_alpha ,
+                                   screen_ratio = self.screen_ratio).setup(0)
 
         pf = builder.build(date).port.to_dataframe()
         if pf.empty: 
@@ -304,11 +313,14 @@ class CompositeAlpha:
             df = reg_model.load_pred(dates[dates <= date].max())
         elif '@' in alpha_name:
             exprs = alpha_name.split('@')
-            if exprs[0] == 'sellside':
-                dates = DB.dates('sellside' , exprs[1])
-                df = DB.load('sellside' , exprs[1] , dates[dates <= date].max() , verbose = False).loc[:,['secid' , exprs[2]]]
-            else:
-                raise Exception(f'{alpha_name} is not a valid alpha')
+            alpha_type = exprs[0]
+            alpha_name = exprs[1]
+            alpha_column = exprs[2] if len(exprs) > 2 else alpha_name
+            assert alpha_type in ['sellside' , 'factor'] , f'{alpha_type} is not a valid alpha type'
+            dates = DB.dates(alpha_type , alpha_name)
+            assert len(dates) > 0 , f'no dates found for {alpha_name}'
+            use_date = dates[dates <= date].max()
+            df = DB.load(alpha_type , alpha_name , use_date , verbose = False).loc[:,['secid' , alpha_column]]
         else:
             raise Exception(f'{alpha_name} is not a valid alpha')
         factor = StockFactor(df.assign(date = date))
