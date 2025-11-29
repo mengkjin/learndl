@@ -196,7 +196,7 @@ class Logger:
                 Logger.info('This is the enclosed process...')
         """
         def __init__(self , title : str):
-            self.title = title.strip().upper()
+            self.title = title
         def __enter__(self):
             self._init_time = datetime.now()
             self.write(f'{self.title} Start at {self._init_time.strftime("%Y-%m-%d %H:%M:%S")}')
@@ -214,7 +214,7 @@ class Logger:
                 Logger.info('This is the enclosed process...')
         """
         def __init__(self , title : str):
-            self.title = title.strip().capitalize()
+            self.title = title
         def __enter__(self):
             self._init_time = datetime.now()
             self.write(f'{self.title} Start at {self._init_time.strftime("%Y-%m-%d %H:%M:%S")}')

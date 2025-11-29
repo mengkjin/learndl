@@ -43,7 +43,7 @@ class ModelTrainer(BaseTrainer):
             print('This is not server! Will not update models!')
         else:
             for model in RegisteredModel.SelectModels():
-                with Logger.ParagraphI(f'Updating model {model.model_path}'):
+                with Logger.ParagraphI(f'Updating Model {model.model_path}'):
                     cls.initialize(0 , 1 , 0 , model.model_path).go()
 
     @classmethod

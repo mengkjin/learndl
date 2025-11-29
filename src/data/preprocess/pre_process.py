@@ -94,7 +94,7 @@ class DataPreProcessor:
                 data_block.hist_norm(key , predict , processor.hist_start_dt , processor.hist_end_dt)
             del data_block
             gc.collect()
-            Logger.success(f'[{key}] finished! Cost {Duration(since = tt1)}')
+            Logger.success(f'Preprocessing {key.upper()}(predict={predict}) finished! Cost {Duration(since = tt1)}')
             if verbosity >= 2:
                 Logger.divider()
 

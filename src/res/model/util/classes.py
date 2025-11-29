@@ -462,26 +462,25 @@ class BaseTrainer(ModelStreamLine):
     
     def main_process(self):
         '''Main stage of data & fit & test'''
-        with Logger.ParagraphI(f'{self.config.model_name} Trainer Main Process'):
-            self.on_configure_model()
+        self.on_configure_model()
 
-            if not self.stage_queue:
-                Logger.error("stage_queue is empty , please check src.proj.InstanceRecord['trainer']")
-                raise Exception("stage_queue is empty , please check src.InstanceRecord['trainer']")
+        if not self.stage_queue:
+            Logger.error("stage_queue is empty , please check src.proj.InstanceRecord['trainer']")
+            raise Exception("stage_queue is empty , please check src.InstanceRecord['trainer']")
 
-            if 'data' in self.stage_queue:
-                with Logger.ParagraphII('Stage [Data]'):
-                    self.stage_data()
+        if 'data' in self.stage_queue:
+            with Logger.ParagraphII('Stage [Data]'):
+                self.stage_data()
 
-            if 'fit' in self.stage_queue:  
-                with Logger.ParagraphII('Stage [Fit]'):
-                    self.stage_fit()
+        if 'fit' in self.stage_queue:  
+            with Logger.ParagraphII('Stage [Fit]'):
+                self.stage_fit()
 
-            if 'test' in self.stage_queue: 
-                with Logger.ParagraphII('Stage [Test]'):
-                    self.stage_test()
-            
-            self.on_summarize_model()
+        if 'test' in self.stage_queue: 
+            with Logger.ParagraphII('Stage [Test]'):
+                self.stage_test()
+        
+        self.on_summarize_model()
 
         return self
 

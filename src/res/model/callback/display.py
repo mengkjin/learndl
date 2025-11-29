@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any , ClassVar
 
 from src import func as FUNC
-from src.proj import PATH , MACHINE , Logger
+from src.proj import PATH , MACHINE , Logger , Duration
 from src.res.model.data_module import BatchDataLoader
 from src.res.model.util import BaseCallBack
 
@@ -215,8 +215,9 @@ class StatusDisplay(BaseCallBack):
         self.update_test_score()
 
     def on_test_end(self): 
-        Logger.highlight('Testing Mean Score({}):'.format(self.config.train_criterion_score))
-        self.summarize_test_result()
+        Logger.highlight(f'Finish iterating test batches! Cost {Duration(self.tc('test'))}')
+        with Logger.ParagraphIII('Table: Test Summary:'): 
+            self.summarize_test_result()
 
     def update_test_score(self):
         df_date = pd.DataFrame({
@@ -235,6 +236,9 @@ class StatusDisplay(BaseCallBack):
         self.summary_df = pd.DataFrame()
         if self.test_df_model.empty: 
             return
+
+        print(f'Table: Testing Mean Score ({self.config.train_criterion_score}) for Models:')
+    
         cat_stat = [md for md in self.test_df_model['model_date'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
         cat_subm = ['best' , 'swalast' , 'swabest']
 
@@ -264,9 +268,9 @@ class StatusDisplay(BaseCallBack):
         df_display = self.summary_df
         if len(df_display) > 100: 
             df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]
-        with Logger.ParagraphIII('Table: Test Summary:'): 
-            FUNC.display.display(df_display)
-            print(f'Table saved to {self.path_test}')
+        
+        FUNC.display.display(df_display)
+        print(f'Table saved to {self.path_test}')
 
         # export excel
         rslt = {'summary' : self.summary_df , 'by_model' : self.test_df_model}
