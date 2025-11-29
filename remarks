@@ -1,5 +1,6 @@
 next objectives
 1. resume test models:
--  save past portfolios
--  save past accounting
--  save past analytics
+-  save/load past pred_df
+-  save/load past portfolios
+-  save/load past accounting
+-  save/load past analytics
