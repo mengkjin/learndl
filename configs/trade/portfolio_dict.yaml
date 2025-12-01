@@ -90,3 +90,33 @@ event_factor_momentum.backtest:
     freq: 1
     backtest: True
     test_start: 20190101
+
+event_factor_momentum.backtest1:
+    alpha: factor@event_factor_momentum
+    category: screen
+    universe: top-1000
+    top_num: 50
+    freq: 1
+    backtest: True
+    test_start: 20190101
+    screen_ratio: 0.4
+
+event_factor_momentum.backtest2:
+    alpha: factor@event_factor_momentum
+    category: screen
+    universe: top-1000
+    top_num: 50
+    freq: 1
+    backtest: True
+    test_start: 20190101
+    screen_ratio: 0.3
+
+event_factor_momentum.backtest3:
+    alpha: factor@event_factor_momentum
+    category: screen
+    universe: top-1000
+    top_num: 50
+    freq: 1
+    backtest: True
+    test_start: 20190101
+    screen_ratio: 0.2

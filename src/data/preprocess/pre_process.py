@@ -76,10 +76,10 @@ class DataPreProcessor:
             modified_time = DataBlock.last_modified_time(key , predict)
             if CALENDAR.is_updated_today(modified_time):
                 time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
-                print(f'Skipping: [{key}] already updated at {time_str}!')
+                print(f'Skipping: [{key.upper()}] already preprocessing at {time_str}!')
                 continue
             if verbosity >= 2:
-                print(f'Processing: [{key}]')
+                print(f'Preprocessing: [{key.upper()}] start...')
             tt1 = datetime.now()
 
             with Timer(f'[{key}] blocks loading' , silent = verbosity < 2):
