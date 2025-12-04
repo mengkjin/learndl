@@ -4,12 +4,11 @@
 # date: 2025-11-30
 # description: Backtest Trading Portfolios
 # content: 回测交易组合
-# email: False
+# email: True
 # mode: shell
 # parameters:
 #   port_name_starter : 
 #       type : str
-#       prefix : "tradeport/"
 #       desc : trade port name (search for available tradeport names which starts with this)
 #       required : True
 #   start : 

@@ -489,6 +489,8 @@ class TimedOutput:
         return cls(output_type, content , infos , valid)
     
     def equivalent(self, other: 'TimedOutput') -> bool:
+        if self.type in ['data_frame' , 'figure']:
+            return False
         if self.type == other.type:
             if str(self.content) == str(other.content): 
                 return True

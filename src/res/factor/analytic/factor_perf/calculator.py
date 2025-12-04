@@ -2,10 +2,12 @@ import pandas as pd
 
 from typing import Any , Literal
 
-from . import stat as Stat
-from . import plot as Plot
 from ..test_manager import BaseCalculator
-from ...util import Benchmark , StockFactor
+from src.res.factor.util import Benchmark , StockFactor
+from src.res.factor.util.plot.factor import Plotter
+from src.res.factor.util.stat import factor as Stat
+
+plotter = Plotter('Factor')
 
 class BasePerfCalc(BaseCalculator):
     TASK_TYPE = 'factor'
@@ -32,15 +34,15 @@ class Factor_FrontFace(BasePerfCalc):
     def __init__(self , nday : int = 10 , lag : int = 2 , ic_type : Literal['pearson' , 'spearman'] = 'spearman' ,
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         super().__init__(params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type} , **kwargs)
-    def calculator(self): return Stat.calc_factor_frontface
-    def plotter(self): return Plot.plot_factor_frontface
+    def calculator(self): return Stat.calc_frontface
+    def plotter(self): return plotter.plot_frontface
 
 class Factor_Coverage(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
-    def calculator(self): return Stat.calc_factor_coverage
-    def plotter(self): return Plot.plot_factor_coverage
+    def calculator(self): return Stat.calc_coverage
+    def plotter(self): return plotter.plot_coverage
 
 class Factor_IC_Curve(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
@@ -51,8 +53,8 @@ class Factor_IC_Curve(BasePerfCalc):
             'nday' : nday , 'lag' : lag , 'ma_windows' : ma_windows , 
             'ic_type' : ic_type , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_ic_curve
-    def plotter(self): return Plot.plot_factor_ic_curve
+    def calculator(self): return Stat.calc_ic_curve
+    def plotter(self): return plotter.plot_ic_curve
 
 class Factor_IC_Decay(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
@@ -63,8 +65,8 @@ class Factor_IC_Decay(BasePerfCalc):
             'nday' : nday , 'lag_init' : lag_init , 'lag_num' : lag_num , 
             'ic_type' : ic_type , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_ic_decay
-    def plotter(self): return Plot.plot_factor_ic_decay
+    def calculator(self): return Stat.calc_ic_decay
+    def plotter(self): return plotter.plot_ic_decay
 
 class Factor_IC_Indus(BasePerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
@@ -73,8 +75,8 @@ class Factor_IC_Indus(BasePerfCalc):
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_ic_indus
-    def plotter(self): return Plot.plot_factor_ic_indus
+    def calculator(self): return Stat.calc_ic_indus
+    def plotter(self): return plotter.plot_ic_indus
 
 class Factor_IC_Year(BasePerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
@@ -82,8 +84,8 @@ class Factor_IC_Year(BasePerfCalc):
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_ic_year
-    def plotter(self): return Plot.plot_factor_ic_year
+    def calculator(self): return Stat.calc_ic_year
+    def plotter(self): return plotter.plot_ic_year
 
 class Factor_IC_Benchmark(BasePerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.AVAILABLES
@@ -91,8 +93,8 @@ class Factor_IC_Benchmark(BasePerfCalc):
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_ic_benchmark
-    def plotter(self): return Plot.plot_factor_ic_benchmark
+    def calculator(self): return Stat.calc_ic_benchmark
+    def plotter(self): return plotter.plot_ic_benchmark
 
 class Factor_IC_Monotony(BasePerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
@@ -100,8 +102,8 @@ class Factor_IC_Monotony(BasePerfCalc):
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag_init' : lag_init , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_ic_monotony
-    def plotter(self): return Plot.plot_factor_ic_monotony
+    def calculator(self): return Stat.calc_ic_monotony
+    def plotter(self): return plotter.plot_ic_monotony
 
 class Factor_PnL_Curve(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
@@ -111,22 +113,22 @@ class Factor_PnL_Curve(BasePerfCalc):
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type ,
                   'given_direction' : given_direction , 'weight_type_list' : weight_type_list}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_pnl_curve
-    def plotter(self): return Plot.plot_factor_pnl_curve
+    def calculator(self): return Stat.calc_pnl_curve
+    def plotter(self): return plotter.plot_pnl_curve
 
 class Factor_Style_Corr(BasePerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
-    def calculator(self): return Stat.calc_factor_style_corr
-    def plotter(self): return Plot.plot_factor_style_corr
+    def calculator(self): return Stat.calc_style_corr
+    def plotter(self): return plotter.plot_style_corr
 
 class Factor_Style_Corr_Distrib(BasePerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
-    def calculator(self): return Stat.calc_factor_style_corr
-    def plotter(self): return Plot.plot_factor_style_corr_distrib
+    def calculator(self): return Stat.calc_style_corr
+    def plotter(self): return plotter.plot_style_corr_distrib
 
 class Factor_Group_Curve(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
@@ -134,8 +136,8 @@ class Factor_Group_Curve(BasePerfCalc):
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_group_curve
-    def plotter(self): return Plot.plot_factor_group_curve
+    def calculator(self): return Stat.calc_group_curve
+    def plotter(self): return plotter.plot_group_curve
 
 class Factor_Group_Decay(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
@@ -144,8 +146,8 @@ class Factor_Group_Decay(BasePerfCalc):
         params = {'nday' : nday , 'lag_init' : lag_init , 'group_num' : group_num , 
                   'lag_num' : lag_num , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_group_decay
-    def plotter(self): return Plot.plot_factor_group_decay
+    def calculator(self): return Stat.calc_group_decay
+    def plotter(self): return plotter.plot_group_decay
 
 class Factor_Group_IR_Decay(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
@@ -154,8 +156,8 @@ class Factor_Group_IR_Decay(BasePerfCalc):
         params = {'nday' : nday , 'lag_init' : lag_init , 'group_num' : group_num , 
                   'lag_num' : lag_num , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_group_decay
-    def plotter(self): return Plot.plot_factor_group_ir_decay
+    def calculator(self): return Stat.calc_group_decay
+    def plotter(self): return plotter.plot_group_ir_decay
 
 class Factor_Group_Year(BasePerfCalc):
     COMPULSORY_BENCHMARKS = ['market' , 'csi300' , 'csi500' , 'csi1000']
@@ -163,21 +165,21 @@ class Factor_Group_Year(BasePerfCalc):
                  ret_type : Literal['close' , 'vwap'] = 'close' , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_group_year
-    def plotter(self): return Plot.plot_factor_group_year
+    def calculator(self): return Stat.calc_group_year
+    def plotter(self): return plotter.plot_group_year
 
 class Factor_Distrib_Curve(BasePerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
     def __init__(self , sampling_date_num : int = 12 , hist_bins : int = 50 , **kwargs) -> None:
         params = {'sampling_date_num' : sampling_date_num , 'hist_bins' : hist_bins}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_distrib_curve
-    def plotter(self): return Plot.plot_factor_distrib_curve
+    def calculator(self): return Stat.calc_distrib_curve
+    def plotter(self): return plotter.plot_distrib_curve
 
 class Factor_Distrib_Qtile(BasePerfCalc):
     COMPULSORY_BENCHMARKS = 'market'
     def __init__(self , scaling : bool = True , **kwargs) -> None:
         params = {'scaling' : scaling}
         super().__init__(params = params , **kwargs)
-    def calculator(self): return Stat.calc_factor_distrib_qtile
-    def plotter(self): return Plot.plot_factor_distrib_qtile
+    def calculator(self): return Stat.calc_distrib_qtile
+    def plotter(self): return plotter.plot_distrib_qtile

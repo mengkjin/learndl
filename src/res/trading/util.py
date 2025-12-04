@@ -5,7 +5,7 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Literal , Type
 
-from src.proj import PATH , MACHINE
+from src.proj import PATH , MACHINE , Logger
 from src.basic import CALENDAR , RegisteredModel , DB
 from src.func import dfs_to_excel , figs_to_pdf
 from src.func import display as disp
@@ -254,7 +254,7 @@ class TradingPort:
                 verbosity = 1 , write_down = False , display = True , 
                 trade_engine : Literal['default' , 'harvest' , 'yale'] = 'yale' , **kwargs):
         if not write_down and not display:
-            print('write_down and display cannot be both False')
+            Logger.error(f'{self.name} analyze: write_down and display cannot be both False')
             return self
         start = start if start is not None else -1
         end = end if end is not None else 99991231
@@ -278,7 +278,7 @@ class TradingPort:
         self.analyze_results = rslts
         self.analyze_figs = figs
         if verbosity > 0: 
-            print(f'{self.name} analyze Finished!')
+            Logger.info(f'{self.name} analyze Finished!')
         return self
 
 @dataclass

@@ -5,7 +5,44 @@ from plottable import ColumnDefinition
 from typing import Any
 
 DROP_KEYS  = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
-MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']
+MAJOR_KEYS = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix']   
+
+class Plotter:
+    def __init__(self , title_prefix = 'Optim Port'):
+        self.title_prefix = title_prefix
+
+    def plot_frontface(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_frontface(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_perf_curve(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_perf_curve(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_perf_drawdown(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_perf_drawdown(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_perf_excess_drawdown(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_perf_excess_drawdown(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_perf_lag(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_perf_lag(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_perf_year(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_perf_year(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_perf_month(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_perf_month(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_exp_style(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_exp_style(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_exp_indus(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_exp_indus(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_attrib_source(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_attrib_source(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_attrib_style(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_attrib_style(data , show = show , title_prefix = title_prefix or self.title_prefix)
 
 def _strategy_name(keys : list[str]):
     def wrapper(x) -> str:
@@ -18,7 +55,7 @@ def df_strategy(df : pd.DataFrame) -> pd.Series:
     assert isinstance(names , pd.Series) , f'names must be a pandas series, but got {type(names)}'
     return names
 
-def plot_optim_frontface(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
+def plot_frontface(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     num_per_page : int | Any = 32 // data.groupby('factor_name').size().max()
     if num_per_page == 0: 
         num_per_page = 1
@@ -40,7 +77,7 @@ def plot_optim_frontface(data : pd.DataFrame , show = False , title_prefix = 'Op
                             ignore_cols = ['prefix' , 'factor_name' , 'benchmark' , 'suffix'])
     return group_plot.fig_dict
 
-def plot_optim_perf_curve(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
+def plot_perf_curve(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
@@ -60,7 +97,7 @@ def plot_optim_perf_curve(data : pd.DataFrame , show = False , title_prefix = 'O
             plot.set_yaxis(ax2 , format='pct' , digits=2 , title='Cummulative Excess Return' , title_color='r' , tick_color='r' , tick_pos=None)
     return group_plot.fig_dict
 
-def plot_optim_perf_drawdown(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
+def plot_perf_drawdown(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
@@ -81,7 +118,7 @@ def plot_optim_perf_drawdown(data : pd.DataFrame , show = False , title_prefix =
                 
     return group_plot.fig_dict
 
-def plot_optim_perf_excess_drawdown(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
+def plot_perf_excess_drawdown(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
@@ -100,7 +137,7 @@ def plot_optim_perf_excess_drawdown(data : pd.DataFrame , show = False , title_p
             plot.set_yaxis(ax2 , format='pct' , digits=2 , title='Drawdown' , title_color='g' , tick_color='g' , tick_pos=None)
     return group_plot.fig_dict
 
-def plot_optim_perf_lag(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
+def plot_perf_lag(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS , show = show and i == 0, 
@@ -122,7 +159,7 @@ def plot_optim_perf_lag(data : pd.DataFrame , show = False , title_prefix = 'Opt
 
     return group_plot.fig_dict
 
-def plot_optim_perf_year(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
+def plot_perf_year(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
@@ -134,7 +171,7 @@ def plot_optim_perf_year(data : pd.DataFrame , show = False , title_prefix = 'Op
                             stripe_by = 1 , emph_last_row=True)
     return group_plot.fig_dict
 
-def plot_optim_perf_month(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
+def plot_perf_month(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = [] , show = show and i == 0,  
@@ -146,7 +183,7 @@ def plot_optim_perf_month(data : pd.DataFrame , show = False , title_prefix = 'O
                             stripe_by = 1 , emph_last_row=True)
     return group_plot.fig_dict
 
-def plot_optim_exp_style(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
+def plot_exp_style(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
@@ -165,7 +202,7 @@ def plot_optim_exp_style(data : pd.DataFrame , show = False , title_prefix = 'Op
             fig.autofmt_xdate(rotation = 45)
     return group_plot.fig_dict
 
-def plot_optim_exp_indus(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
+def plot_exp_indus(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
@@ -184,7 +221,7 @@ def plot_optim_exp_indus(data : pd.DataFrame , show = False , title_prefix = 'Op
             fig.autofmt_xdate(rotation = 45)
     return group_plot.fig_dict
 
-def plot_optim_attrib_source(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
+def plot_attrib_source(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
@@ -197,7 +234,7 @@ def plot_optim_attrib_source(data : pd.DataFrame , show = False , title_prefix =
             
     return group_plot.fig_dict
 
-def plot_optim_attrib_style(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
+def plot_attrib_style(data : pd.DataFrame , show = False , title_prefix = 'Optim Port'):
     group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 

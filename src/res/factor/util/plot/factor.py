@@ -4,7 +4,62 @@ import seaborn as sns
 
 import src.func.plot as plot
 
-def plot_factor_frontface(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+class Plotter:
+    def __init__(self , title_prefix = 'Factor'):
+        self.title_prefix = title_prefix
+
+    def plot_frontface(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_frontface(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_coverage(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_coverage(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_ic_curve(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_ic_curve(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_ic_decay(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_ic_decay(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_ic_indus(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_ic_indus(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_ic_year(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_ic_year(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_ic_benchmark(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_ic_benchmark(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_ic_monotony(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_ic_monotony(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_pnl_curve(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_pnl_curve(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_style_corr(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_style_corr(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_style_corr_distrib(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_style_corr_distrib(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_group_curve(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_group_curve(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_group_decay(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_group_decay(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_group_ir_decay(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_group_ir_decay(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_group_year(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_group_year(data , show = show , title_prefix = title_prefix or self.title_prefix)
+
+    def plot_distrib_curve(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_distrib_curve(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+    def plot_distrib_qtile(self , data : pd.DataFrame , show = False , title_prefix = None):
+        return plot_distrib_qtile(data , show = show , title_prefix = title_prefix or self.title_prefix)
+    
+def plot_frontface(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     with plot.PlotFactorData(data , drop = [] , title = f'{title_prefix} Front Face' , show=show) as (df , fig):
         df = df.reset_index().drop(columns=['sum']).set_index('factor_name').sort_values(['factor_name','benchmark']).\
             rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
@@ -13,7 +68,7 @@ def plot_factor_frontface(data : pd.DataFrame , show = False , title_prefix = 'F
                         capitalize=False , stripe_by='factor_name')
     return fig
 
-def plot_factor_coverage(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_coverage(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = ['factor_name'] , title = f'{title_prefix} Coverage Ratio' , show=show and i==0) as (df , fig):
@@ -25,7 +80,7 @@ def plot_factor_coverage(data : pd.DataFrame , show = False , title_prefix = 'Fa
             
     return group_plot.fig_dict
 
-def plot_factor_ic_curve(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_ic_curve(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):  
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} IC Curve' , show=show and i==0 , dropna = 'all') as (df , fig):
@@ -48,7 +103,7 @@ def plot_factor_ic_curve(data : pd.DataFrame , show = False , title_prefix = 'Fa
             
     return group_plot.fig_dict
 
-def plot_factor_ic_decay(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_ic_decay(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = ['factor_name'] , title = f'{title_prefix} Average IC Decay' , show=show and i==0) as (df , fig):
@@ -69,7 +124,7 @@ def plot_factor_ic_decay(data : pd.DataFrame , show = False , title_prefix = 'Fa
 
     return group_plot.fig_dict
 
-def plot_factor_ic_indus(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_ic_indus(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Industry IC & IR' , show=show and i==0) as (df , fig):
@@ -90,7 +145,7 @@ def plot_factor_ic_indus(data : pd.DataFrame , show = False , title_prefix = 'Fa
             plot.set_yaxis(ax2 , format='flt' , digits=2 , title = 'Average ICIR' , title_color='r' , tick_pos=None)
     return group_plot.fig_dict
 
-def plot_factor_ic_year(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_ic_year(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Year IC' , show=show and i==0) as (df , fig):
@@ -101,7 +156,7 @@ def plot_factor_ic_year(data : pd.DataFrame , show = False , title_prefix = 'Fac
                        capitalize=False , stripe_by=1 , emph_last_row=True)
     return group_plot.fig_dict
 
-def plot_factor_ic_benchmark(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_ic_benchmark(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , drop = ['factor_name'] , title = f'{title_prefix} Benchmark IC' , show=show and i==0) as (df , fig):
@@ -111,7 +166,7 @@ def plot_factor_ic_benchmark(data : pd.DataFrame , show = False , title_prefix =
                             fontsize=10 , capitalize=False , stripe_by=1)
     return group_plot.fig_dict
 
-def plot_factor_ic_monotony(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_ic_monotony(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Percentile Ret & IR' , show=show and i==0) as (df , fig):
@@ -131,7 +186,7 @@ def plot_factor_ic_monotony(data : pd.DataFrame , show = False , title_prefix = 
             plot.set_yaxis(ax2 , format='flt' , digits=3 , title = 'Average IR' , title_color='r' , tick_pos=None)
     return group_plot.fig_dict
 
-def plot_factor_pnl_curve(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_pnl_curve(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Cummulative Long-Short PnL' , show=show and i==0) as (df , fig):
@@ -145,7 +200,7 @@ def plot_factor_pnl_curve(data : pd.DataFrame , show = False , title_prefix = 'F
             
     return group_plot.fig_dict
 
-def plot_factor_style_corr(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_style_corr(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Corr Curve with Risk Styles' , show=show and i==0) as (df , fig):
@@ -158,7 +213,7 @@ def plot_factor_style_corr(data : pd.DataFrame , show = False , title_prefix = '
 
     return group_plot.fig_dict
 
-def plot_factor_style_corr_distrib(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_style_corr_distrib(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Corr Distribution with Risk Styles' , show=show and i==0) as (df , fig):
@@ -172,7 +227,7 @@ def plot_factor_style_corr_distrib(data : pd.DataFrame , show = False , title_pr
             
     return group_plot.fig_dict
 
-def plot_factor_group_curve(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_group_curve(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Group CumReturn' , show=show and i==0) as (df , fig):
@@ -184,7 +239,7 @@ def plot_factor_group_curve(data : pd.DataFrame , show = False , title_prefix = 
 
     return group_plot.fig_dict
 
-def plot_factor_group_decay(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_group_decay(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Groups Return Decay' , show=show and i==0) as (df , fig):
@@ -196,7 +251,7 @@ def plot_factor_group_decay(data : pd.DataFrame , show = False , title_prefix = 
             
     return group_plot.fig_dict
 
-def plot_factor_group_ir_decay(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_group_ir_decay(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Groups IR Decay' , show=show and i==0) as (df , fig):
@@ -208,7 +263,7 @@ def plot_factor_group_ir_decay(data : pd.DataFrame , show = False , title_prefix
 
     return group_plot.fig_dict
 
-def plot_factor_group_year(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_group_year(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Annualized Top Group Performance' , show=show and i==0) as (df , fig):
@@ -219,7 +274,7 @@ def plot_factor_group_year(data : pd.DataFrame , show = False , title_prefix = '
                             flt_cols = ['ir'] , pct_ndigit = 3 , stripe_by=1 , emph_last_row=True)
     return group_plot.fig_dict
 
-def plot_factor_distrib_curve(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_distrib_curve(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Cross-Sectional Distribution' , show=show and i==0 , suptitle=True) as (df , fig):
@@ -236,7 +291,7 @@ def plot_factor_distrib_curve(data : pd.DataFrame , show = False , title_prefix 
                     ax.set_title(str(day_df['date']))
     return group_plot.fig_dict
 
-def plot_factor_distrib_qtile(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
+def plot_distrib_qtile(data : pd.DataFrame , show = False , title_prefix = 'Factor'):
     group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
     for i , sub_data in enumerate(group_plot):     
         with plot.PlotFactorData(sub_data , title = f'{title_prefix} Cross-Sectional Quantile' , show=show and i==0) as (df , fig):

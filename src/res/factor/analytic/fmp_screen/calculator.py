@@ -1,8 +1,10 @@
 import pandas as pd
 
-from . import stat as Stat
-from . import plot as Plot
 from ..test_manager import BaseCalculator
+from src.res.factor.util.plot.top_pf import Plotter
+from src.res.factor.util.stat import top_pf as Stat
+
+plotter = Plotter('Screen Port')
 
 class BaseScreenPortCalc(BaseCalculator):
     TASK_TYPE = 'screen'
@@ -17,35 +19,35 @@ class BaseScreenPortCalc(BaseCalculator):
 class Screen_FrontFace(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
-    def calculator(self): return Stat.calc_top_frontface
-    def plotter(self): return Plot.plot_top_frontface
+    def calculator(self): return Stat.calc_frontface
+    def plotter(self): return plotter.plot_frontface
 
 class Screen_Perf_Curve(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
-    def calculator(self): return Stat.calc_top_perf_curve
-    def plotter(self): return Plot.plot_top_perf_curve
+    def calculator(self): return Stat.calc_perf_curve
+    def plotter(self): return plotter.plot_perf_curve
 
 class Screen_Perf_Excess(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
-    def calculator(self): return Stat.calc_top_perf_excess
-    def plotter(self): return Plot.plot_top_perf_excess
+    def calculator(self): return Stat.calc_perf_excess
+    def plotter(self): return plotter.plot_perf_excess
 
 class Screen_Perf_Drawdown(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
-    def calculator(self): return Stat.calc_top_perf_drawdown
-    def plotter(self): return Plot.plot_top_perf_drawdown
+    def calculator(self): return Stat.calc_perf_drawdown
+    def plotter(self): return plotter.plot_perf_drawdown
 
 class T50_Perf_Excess_Drawdown(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
-    def calculator(self): return Stat.calc_top_perf_excess_drawdown
-    def plotter(self): return Plot.plot_top_perf_excess_drawdown
+    def calculator(self): return Stat.calc_perf_excess_drawdown
+    def plotter(self): return plotter.plot_perf_excess_drawdown
 
 class Screen_Perf_Year(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
-    def calculator(self): return Stat.calc_top_perf_year
-    def plotter(self): return Plot.plot_top_perf_year
+    def calculator(self): return Stat.calc_perf_year
+    def plotter(self): return plotter.plot_perf_year

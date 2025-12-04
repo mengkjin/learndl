@@ -98,3 +98,41 @@ def eval_detailed_drawdown(pf : pd.Series , groupby : str | list[str] | None = N
     df['uncovered_max_drawdown'] = eval_uncovered_max_drawdown(df['drawdown'] , groupby = groupby)
     df['recover_ratio'] = 1 - (df['drawdown'] / df['uncovered_max_drawdown']).fillna(0)
     return df
+
+def eval_stats(x , **kwargs):
+    assert isinstance(x , pd.DataFrame) , type(x)
+    stats : dict[str , pd.Series | Any] = {}
+    stats['sum'] = x.sum()
+    stats['avg'] = x.mean()
+    stats['std'] = x.std()
+    stats['abs_avg'] = x.abs().mean()
+    stats['ir'] = (stats['avg'] / stats['std'])
+    cumsum = x.cumsum()
+    stats['cum_mdd'] = (cumsum - cumsum.cummax()).min()
+    return pd.concat([val.rename(key) for key , val in stats.items()], axis=1, sort=True)
+
+def eval_ic_stats(ic_table : pd.DataFrame , nday : int = 5 , **kwargs):
+    n_periods  = 243 / nday
+    
+    ic_stats   = eval_stats(ic_table).reset_index(drop=False)
+
+    ic_stats['direction'] = np.sign(ic_stats['avg'])
+    ic_stats['year_ret'] = ic_stats['avg'] * n_periods
+    ic_stats['std']      = ic_stats['std'] * np.sqrt(n_periods)
+    ic_stats['ir']       = ic_stats['ir'] * np.sqrt(n_periods)
+
+    melt_table = ic_table.reset_index().melt(id_vars=['date'],var_name='factor_name',value_name='ic').dropna().reset_index()
+    min_date : pd.Series | Any = melt_table.groupby('factor_name')['date'].min()
+    max_date : pd.Series | Any = melt_table.groupby('factor_name')['date'].max()
+
+    range_date = pd.concat([min_date.rename('start') , max_date.rename('end')] , axis=1).reset_index()
+    range_date['range'] = range_date['start'].astype(str) + '-' + range_date['end'].astype(str)
+
+    ic_stats = ic_stats.merge(range_date[['factor_name','range']] , on='factor_name')
+    return ic_stats
+
+def eval_qtile_by_day(factor : pd.DataFrame , scaling : bool = True , **kwargs):
+    if scaling: 
+        factor = (factor - factor.mean()) / factor.std()
+    rtn = pd.concat([factor.quantile(q / 100).rename(f'{q}%') for q in (5,25,50,75,95)], axis=1, sort=True)
+    return rtn.rename_axis('factor_name', axis='index')

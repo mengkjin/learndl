@@ -34,8 +34,9 @@ class TradingAPI:
         if ports:
             Logger.warning(f'multiple backtest ports found for {port_name_starter}: {ports}')
             for port in ports:
-                TradingPortfolioBacktestor.analyze(port , start , end , **kwargs)
-                Logger.info(f'backtest {port} finished')
+                with Logger.ParagraphIII(f'backtest {port}'):
+                    TradingPortfolioBacktestor.analyze(port , start , end , **kwargs)
         elif len(ports) == 0:
             Logger.error(f'no backtest ports found starting with {port_name_starter}')
+            Logger.info(f'available backtest ports: {available_ports}')
         
