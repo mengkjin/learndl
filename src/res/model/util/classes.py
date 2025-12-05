@@ -60,6 +60,7 @@ class ModelStreamLine(ABC):
     def on_before_fit_start(self): ...
     def on_after_fit_end(self): ...
     def on_before_test_start(self): ...
+    def on_before_test_end(self): ...
     def on_after_test_end(self): ...
     
 
@@ -119,6 +120,8 @@ class TrainerStatus(ModelStreamLine):
         self.fit_loop_breaker = _FitLoopBreaker(self.max_epoch)
         self.fit_iter_num : int = 0
 
+        self.test_summary : pd.DataFrame = pd.DataFrame()
+
     def as_dict(self):
         d = {k:getattr(self,k) for k in 
              ['max_epoch' , 'stage' , 'dataset' , 'epoch' , 'attempt' , 
@@ -173,12 +176,16 @@ class TrainerStatus(ModelStreamLine):
         if event: 
             self.epoch_event.append(event)
 
-class PredRecorder(ModelStreamLine):
+class TrainerPredRecorder(ModelStreamLine):
     def __init__(self , trainer : 'BaseTrainer') -> None:
         self.trainer = trainer
 
     def __repr__(self):
         return f'{self.__class__.__name__}(trainer={self.trainer})'
+
+    @property
+    def batch_data(self):
+        return self.trainer.batch_data
         
     @property
     def pred_idx(self):
@@ -186,23 +193,23 @@ class PredRecorder(ModelStreamLine):
 
     @property
     def is_empty(self):
-        return len(self.preds) == 0
+        return not hasattr(self , 'preds') or len(self.preds) == 0
 
     @property
     def dates(self):
-        return self.trainer.data.test_full_dates
+        return self.trainer.data.test_full_dates 
     
-    def all_preds(self , interval : int = 1):
+    def collect_preds(self , interval : int = 1):
         if self.is_empty: 
             return pd.DataFrame()
         elif interval == 1:
             return pd.concat(self.preds.values())
         else:
-            dates = self.dates[::interval]
-            seq = [pred.loc[np.isin(pred['date'],dates),:] for pred in self.preds.values()]
+            dates = self.dates[::interval] # noqa: F841
+            seq = [data.query('date in @dates') for data in self.preds.values()]
             return pd.concat(seq)
     
-    def append_batch_pred(self):
+    def append_batch_values(self):
         if self.pred_idx in self.preds.keys(): 
             return
         if self.trainer.batch_idx < self.trainer.batch_warm_up: 
@@ -210,40 +217,47 @@ class PredRecorder(ModelStreamLine):
         
         which_output = self.trainer.model_param.get('which_output' , 0)
         
-        secid = self.trainer.data.batch_secid(self.trainer.batch_data)
-        date  = self.trainer.data.batch_date(self.trainer.batch_data)
-
+        secid = self.trainer.data.batch_secid(self.batch_data)
+        date  = self.trainer.data.batch_date(self.batch_data)
+        
         pred = self.trainer.batch_output.pred_df(secid , date).dropna()
-        pred = pred.loc[np.isin(pred['date'],self.dates),:]
+        pred = pred.query('date in @self.dates')
         if len(pred) == 0: 
             return
 
-        pred['model_num'] = self.trainer.model_num
-        pred['submodel']  = self.trainer.model_submodel
- 
+        label = pd.DataFrame({'secid' : secid , 'date' : date , 'label' : self.trainer.data.batch_label(self.trainer.batch_data)})
+        
+        df = pred.merge(label , on=['secid' , 'date'])
         if which_output is None:
-            pred['values'] = pred.loc[:,[col for col in pred.columns if col.startswith('pred.')]].mean(axis=1)
+            df['pred'] = df.loc[:,[col for col in df.columns if col.startswith('pred.')]].mean(axis=1)
         else:
-            pred['values'] = pred[f'pred.{which_output}']
-        df = pred.loc[:,['model_num' , 'submodel' , 'secid' , 'date' , 'values']]
+            df['pred'] = df[f'pred.{which_output}']
+        df = df.assign(model_num = self.trainer.model_num , submodel = self.trainer.model_submodel)
+        df = df.loc[:,['model_num' , 'submodel' , 'secid' , 'date' , 'pred' , 'label']]
 
         self.preds[self.pred_idx] = df
 
-    def load_saved_preds(self):
-        return DB.load_df(self.trainer.path_pred_dataframe)
+    def load_saved_preds(self) -> pd.DataFrame:
+        df = DB.load_df(self.trainer.path_pred_dataframe)
+        if self.trainer.path_pred_dataframe.exists() and not np.isin(['model_num' , 'submodel' , 'secid' , 'date' , 'pred' , 'label'] , df.columns).all():
+            Logger.warning(f'{self.trainer.path_pred_dataframe} is not valid , removed automatically')
+            self.trainer.path_pred_dataframe.unlink()
+            return pd.DataFrame()
+        return df
 
     def on_test_start(self):
         self.preds : dict[str,pd.DataFrame] = {}
 
     def on_test_batch_end(self): 
-        self.append_batch_pred()
+        self.append_batch_values()
 
     def on_test_end(self):
-        df = self.all_preds()
+        df = self.collect_preds()
         pred_keys = ['model_num','submodel','secid','date']
-        old_df = DB.load_df(self.trainer.path_pred_dataframe)
+        old_df = self.load_saved_preds()
         new_df = pd.concat([old_df , df]).drop_duplicates(subset=pred_keys , keep='last').sort_values(by=pred_keys)
-        DB.save_df(new_df , self.trainer.path_pred_dataframe , overwrite = True)
+        DB.save_df(new_df , self.trainer.path_pred_dataframe , overwrite = True , verbose = False)
+        print(f'Test Predictions saved to {self.trainer.path_pred_dataframe}')
         
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
@@ -303,6 +317,15 @@ class BaseDataModule(ABC):
         batch_date = self.batch_date(batch_data)
         assert (batch_date == batch_date[0]).all() , batch_date
         return batch_date[0]
+
+    def batch_label(self , batch_data : BatchData):
+        label = batch_data.y.cpu().squeeze().numpy()
+        if label.ndim == 1:
+            return label
+        elif label.ndim == 2:
+            return label[:,0]
+        else:
+            raise ValueError(f'label shape {label.shape} is not supported')
 
     @property
     def stage(self) -> Literal['fit' , 'test' , 'predict' , 'extract']:
@@ -374,7 +397,7 @@ class BaseTrainer(ModelStreamLine):
         '''initialized configuration'''
         self.config = TrainConfig(base_path , override = override , schedule_name = schedule_name , **kwargs)
         self.status = TrainerStatus(self.config.train_max_epoch)
-        self.record = PredRecorder(self)
+        self.record = TrainerPredRecorder(self)
 
     def wrap_callbacks(self):
         [setattr(self , hook , self.hook_wrapper(self , hook , self.verbosity)) for hook in possible_hooks()]
@@ -517,6 +540,7 @@ class BaseTrainer(ModelStreamLine):
             self.on_test_model_start()
             self.model.test()
             self.on_test_model_end()
+        self.on_before_test_end()
         self.on_test_end()
         self.on_after_test_end()
 
@@ -680,21 +704,23 @@ class ModelStreamLineWithTrainer(ModelStreamLine):
     def model_submodel(self): return self.trainer.model_submodel
 
 class BaseCallBack(ModelStreamLineWithTrainer):
+    CB_ORDER : int = 0
+    CB_KEY_PARAMS : list[str] = []
     def __init__(self , trainer , turn_off = False) -> None:
         self.bound_with_trainer(trainer)
         self.turn_off : bool = turn_off
         self.__hook_stack = []
 
-    def print_info(self , depth = 0 , **kwargs):
-        frame = currentframe()
-        for _ in range(depth + 1): 
-            frame = getattr(frame , 'f_back')
-        args = {k:v for k,v in getattr(frame , 'f_locals').items() if k not in ['self','trainer','kwargs'] and not k.startswith('_')}
-        args.update(kwargs)
+        for param in self.CB_KEY_PARAMS:
+            assert hasattr(self , param) , f'{self.__class__.__name__} has no attribute {param}'
+
+    def print_info(self , **kwargs):
+        args = {k:getattr(self , k) for k in self.CB_KEY_PARAMS} | kwargs
         info = self.__class__.__name__ + '({})'.format(','.join([f'{k}={v}' for k,v in args.items()])) 
         if self.__class__.__doc__: 
             info += f' , {self.__class__.__doc__}'
         print(info)
+        return self
 
     def __enter__(self): 
         self.__hook_stack.append(self.trace_hook_name())
@@ -725,7 +751,7 @@ class BaseCallBack(ModelStreamLineWithTrainer):
 class BasePredictorModel(ModelStreamLineWithTrainer):
     '''a group of ensemble models , of same net structure'''
     AVAILABLE_CALLBACKS = []
-    COMPULSARY_CALLBACKS = ['StatusDisplay' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis']
+    COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis' , 'StatusDisplay']
     
     def __init__(self, *args , **kwargs) -> None:
         self.reset()

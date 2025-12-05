@@ -1,11 +1,11 @@
 import torch
-from typing import Any
+from typing import Type
 
 from src.res.algo import AlgoModule
 from src.data import BlockLoader
 from src.res.model.util import BaseCallBack
 
-def specific_cb(module_name : str) -> Any:
+def specific_cb(module_name : str) -> Type[BaseCallBack] | None:
     nn_category = AlgoModule.nn_category(module_name)
     if module_name == 'gru_dsize':
         return SpecCB_DSize
@@ -13,12 +13,14 @@ def specific_cb(module_name : str) -> Any:
         return SpecCB_VAE
     elif nn_category == 'tra':
         return SpecCB_TRA
+    else:
+        return None
     
 class SpecCB_TRA(BaseCallBack):
     '''in TRA fill [y] [hist_loss] in batch_data.kwargs , update hist_loss in data.buffer'''
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
-        self.print_info()
+        
     @property
     def net(self) -> torch.nn.Module: return getattr(self.trainer.model , 'net')
     def fill_batch_data(self):
@@ -59,11 +61,13 @@ class SpecCB_TRA(BaseCallBack):
 
 class SpecCB_VAE(BaseCallBack):
     '''in VAE fill [y] [alpha_noise] [factor_noise] in batch_data.kwargs'''
+    CB_KEY_PARAMS = ['manual_seed']
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
-        self.manual_seed = 42 if self.trainer.config.random_seed is None else self.trainer.config.random_seed
-        self.print_info(manual_seed = self.manual_seed)
-        torch.manual_seed(self.manual_seed)
+        torch.manual_seed(self.manual_seed) 
+
+    @property
+    def manual_seed(self) -> int: return 42 if self.trainer.config.random_seed is None else self.trainer.config.random_seed
 
     @property
     def net(self) -> torch.nn.Module: return getattr(self.trainer.model , 'net')
@@ -84,7 +88,6 @@ class SpecCB_DSize(BaseCallBack):
     '''in _dsize model fill [size] in batch_data.kwargs'''
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
-        self.print_info()
         self.size_block = None
 
     def init_buffer(self):

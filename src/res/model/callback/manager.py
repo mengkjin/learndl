@@ -1,11 +1,10 @@
-from typing import Any
+from typing import Type
 
 from src.proj import Logger
 from src.res.model.util import BaseCallBack , BaseTrainer 
 from . import display, fit, test , nnspecific
 
 SEARCH_MODS = [fit , display , test]
-COMPULSARY_CALLBACKS = ['StatusDisplay' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis']
 
 class CallBackManager(BaseCallBack):
     def __init__(self , trainer , *callbacks):
@@ -20,24 +19,28 @@ class CallBackManager(BaseCallBack):
     @classmethod
     def setup(cls , trainer : BaseTrainer):
         with Logger.ParagraphIII(' setup callbacks '):
-            cb_configs = trainer.config.callbacks
-            for cb in trainer.model.COMPULSARY_CALLBACKS:
-                if cb not in cb_configs: 
-                    cb_configs.update({cb:{}})
-            
+            use_cbs = list(set(trainer.model.COMPULSARY_CALLBACKS + list(trainer.config.callbacks.keys())))
             if avail_cbs := trainer.model.AVAILABLE_CALLBACKS:
-                cb_configs = {k:v for k,v in cb_configs.items() if k in avail_cbs}
+                use_cbs = [cb for cb in use_cbs if cb in avail_cbs]
 
-            callbacks = [cls.__get_cb(cb , param , trainer) for cb , param in cb_configs.items()]
-            if nn_specific_cb := nnspecific.specific_cb(trainer.config.model_module): 
-                callbacks.append(nn_specific_cb(trainer))
+            callback_types = [cls.__get_cb(cb) for cb in use_cbs]
+            if specific_cb := cls.__get_specific_cb(trainer.config.model_module):
+                callback_types.append(specific_cb)
+
+            callback_types = sorted(callback_types, key=lambda x: x.CB_ORDER)
+            callbacks = [cb_type(trainer , **trainer.config.callbacks.get(cb_type.__name__ , {})).print_info() for cb_type in callback_types]
         return cls(trainer , *callbacks)
     
     @staticmethod
-    def __get_cb(cb_name : str , param : Any , trainer : BaseTrainer) -> dict | None:
-        assert isinstance(param , dict), (cb_name , param)
+    def __get_cb(cb_name : str) -> Type[BaseCallBack]:
         for cb_mod in SEARCH_MODS:
             if hasattr(cb_mod , cb_name): 
-                return getattr(cb_mod , cb_name)(trainer , **param)
+                cb = getattr(cb_mod , cb_name)
+                assert issubclass(cb , BaseCallBack), f'{cb_name} is not a subclass of BaseCallBack'
+                return cb
         else: # on success
             raise KeyError(cb_name)
+
+    @staticmethod
+    def __get_specific_cb(module_name : str) -> Type[BaseCallBack] | None:
+        return nnspecific.specific_cb(module_name)

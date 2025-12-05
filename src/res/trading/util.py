@@ -273,7 +273,9 @@ class TradingPort:
             figs_to_pdf(figs   , self.result_dir().joinpath('plot.pdf')  , print_prefix=f'Analytic Test of TradingPort {self.name} plots')
 
         if display:
-            [disp.display(fig) for fig in figs.values()]
+            for name , fig in figs.items():
+                print(f'Figure: {name}:')
+                disp.display(fig)
 
         self.analyze_results = rslts
         self.analyze_figs = figs

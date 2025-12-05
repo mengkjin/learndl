@@ -4,5 +4,5 @@ next objectives
 -  save/load past portfolios
 -  save/load past accounting
 -  save/load past analytics
-2. change default test model behavior into callback, original process only store preds. basic test callback must be called
+
 3. Create ReverseScreen Port

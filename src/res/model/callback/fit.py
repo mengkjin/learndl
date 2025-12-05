@@ -7,14 +7,15 @@ from src.res.model.util import BaseCallBack , Optimizer
 
 class EarlyStoppage(BaseCallBack):
     '''stop fitting when validation score cease to improve'''
+    CB_KEY_PARAMS = ['patience']
     def __init__(self , trainer , patience = 20 , **kwargs) -> None:
-        super().__init__(trainer , **kwargs)
-        self.print_info()
         self.patience = patience
+        super().__init__(trainer , **kwargs)
 
     def on_fit_model_start(self):
         self.metric_best_epoch  = -1
         self.metric_best_level = None
+
     def on_validation_epoch_end(self):
         if self.metrics.better_epoch(self.metric_best_level): 
             self.metric_best_epoch  = self.status.epoch 
@@ -24,33 +25,36 @@ class EarlyStoppage(BaseCallBack):
 
 class ValidationConverge(BaseCallBack):
     '''stop fitting when valid_score converge'''
+    CB_KEY_PARAMS = ['patience' , 'eps']
     def __init__(self , trainer , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
-        super().__init__(trainer , **kwargs)
-        self.print_info()
         self.patience = patience
         self.tolerance = eps
+        super().__init__(trainer , **kwargs)
+
     def on_validation_epoch_end(self):
         if FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance):
             self.status.fit_loop_breaker.add_status('Valid Cvg' , self.status.epoch - self.patience + 1)
 
 class TrainConverge(BaseCallBack):
     '''stop fitting when train_loss converge'''
+    CB_KEY_PARAMS = ['patience' , 'eps']
     def __init__(self , trainer , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
-        super().__init__(trainer , **kwargs)
-        self.print_info()
         self.patience = patience
         self.tolerance = eps
+        super().__init__(trainer , **kwargs)
+
     def on_validation_epoch_end(self):
         if FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance):
             self.status.fit_loop_breaker.add_status('Train Cvg' , self.status.epoch - self.patience + 1)
 
 class FitConverge(BaseCallBack):
     '''stop fitting when train_loss and valid_score converge'''
+    CB_KEY_PARAMS = ['patience' , 'eps']
     def __init__(self , trainer , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
-        super().__init__(trainer , **kwargs)
-        self.print_info()
         self.patience = patience
         self.tolerance = eps
+        super().__init__(trainer , **kwargs)
+
     def on_validation_epoch_end(self):
         if (FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance) and 
             FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance)):
@@ -58,12 +62,13 @@ class FitConverge(BaseCallBack):
 
 class EarlyExitRetrain(BaseCallBack):
     '''retrain with new lr if fitting stopped too early'''
+    CB_KEY_PARAMS = ['earliest' , 'max_attempt']
     def __init__(self, trainer , earliest = 5 , max_attempt = 4 , lr_multiplier = [1 , 0.1 , 10 , 0.01 , 100] , **kwargs) -> None:
-        super().__init__(trainer , **kwargs)
-        self.print_info()
         self.earliest = earliest
         self.max_attempt = max_attempt
         self.lr_multiplier = lr_multiplier
+        super().__init__(trainer , **kwargs)
+
     def on_fit_model_start(self):
         self.status.attempt = 0
     def on_before_fit_epoch_end(self):
@@ -79,10 +84,11 @@ class EarlyExitRetrain(BaseCallBack):
 
 class NanLossRetrain(BaseCallBack):
     '''retrain if fitting encounters nan loss'''
+    CB_KEY_PARAMS = ['max_attempt']
     def __init__(self, trainer , max_attempt = 4 , **kwargs) -> None:
-        super().__init__(trainer , **kwargs)
-        self.print_info()
         self.max_attempt = max_attempt
+        super().__init__(trainer , **kwargs)
+
     def on_fit_model_start(self):
         self.remain_nan_life = self.max_attempt
     def on_train_epoch_end(self):
@@ -102,10 +108,10 @@ class NanLossRetrain(BaseCallBack):
 
 class CudaEmptyCache(BaseCallBack):
     '''CudaEmptyCache every few batch (pretty slow)'''
+    CB_KEY_PARAMS = ['batch_interval']
     def __init__(self , trainer , batch_interval = 20 , **kwargs) -> None:
-        super().__init__(trainer , **kwargs)
-        self.print_info()
         self.batch_interval = batch_interval
+        super().__init__(trainer , **kwargs)
         # 2.5s for 86 epochs
     def empty_cache(self):
         if (self.trainer.batch_idx + 1) % self.batch_interval == 0 : 
@@ -119,15 +125,15 @@ class CudaEmptyCache(BaseCallBack):
 
 class ResetOptimizer(BaseCallBack):
     '''reset optimizer on some epoch (can speedup scheduler)'''
+    CB_KEY_PARAMS = ['num_reset' , 'trigger' , 'recover_level' , 'speedup2x']
     reset_speedup_param_list = ['step_size' , 'warmup_stage' , 'anneal_stage' , 'step_size_up' , 'step_size_down']
     def __init__(self, trainer, num_reset = 2 , trigger = 40 , recover_level = 1. , speedup2x = True , **kwargs) -> None:
-        super().__init__(trainer , **kwargs)
-        self.print_info()
         self.num_reset = num_reset
         self.trigger = trigger
         self.recover_level = recover_level 
         self.speedup2x = speedup2x
-        self.trigger_intvl = max(self.trigger // 2 , 1) if self.speedup2x else self.trigger
+        self.trigger_intvl = max(trigger // 2 , 1) if speedup2x else trigger
+        super().__init__(trainer , **kwargs)
     @property
     def optimizer(self) -> Optimizer: 
         return self.trainer.model.optimizer

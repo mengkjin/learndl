@@ -12,7 +12,7 @@ class Options:
     @classmethod
     def available_modules(cls) -> list[str]:
         from src.res.algo import AlgoModule
-        return [f'{module_type}/{module}' for module_type, modules in AlgoModule._availables.items() for module in modules.keys()]
+        return [f'{module_type.replace("booster" , "boost")}/{module}' for module_type, modules in AlgoModule._availables.items() for module in modules.keys()]
 
     @classmethod
     def available_schedules(cls) -> list[str]:
