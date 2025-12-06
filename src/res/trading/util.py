@@ -14,11 +14,11 @@ from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top.api import Calc
 
 TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
-    Calc.Top_FrontFace , 
-    Calc.Top_Perf_Curve ,
-    Calc.Top_Perf_Excess ,
-    Calc.Top_Perf_Drawdown , 
-    Calc.Top_Perf_Year ,
+    Calc.FrontFace , 
+    Calc.Perf_Curve ,
+    Calc.Perf_Excess ,
+    Calc.Drawdown , 
+    Calc.Perf_Year ,
 ]
 
 def all_path_convert():
