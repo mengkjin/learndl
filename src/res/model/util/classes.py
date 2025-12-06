@@ -232,14 +232,14 @@ class TrainerPredRecorder(ModelStreamLine):
             df['pred'] = df.loc[:,[col for col in df.columns if col.startswith('pred.')]].mean(axis=1)
         else:
             df['pred'] = df[f'pred.{which_output}']
-        df = df.assign(model_num = self.trainer.model_num , submodel = self.trainer.model_submodel)
-        df = df.loc[:,['model_num' , 'submodel' , 'secid' , 'date' , 'pred' , 'label']]
+        df = df.assign(model_num = self.trainer.model_num , submodel = self.trainer.model_submodel , model_date = self.trainer.model_date , batch_idx = self.trainer.batch_idx)
+        df = df.loc[:,['model_num' , 'submodel' , 'model_date' , 'batch_idx' , 'secid' , 'date' , 'pred' , 'label']]
 
         self.preds[self.pred_idx] = df
 
     def load_saved_preds(self) -> pd.DataFrame:
         df = DB.load_df(self.trainer.path_pred_dataframe)
-        if self.trainer.path_pred_dataframe.exists() and not np.isin(['model_num' , 'submodel' , 'secid' , 'date' , 'pred' , 'label'] , df.columns).all():
+        if self.trainer.path_pred_dataframe.exists() and not np.isin(['model_num' , 'submodel' , 'model_date' , 'batch_idx' , 'secid' , 'date' , 'pred' , 'label'] , df.columns).all():
             Logger.warning(f'{self.trainer.path_pred_dataframe} is not valid , removed automatically')
             self.trainer.path_pred_dataframe.unlink()
             return pd.DataFrame()
@@ -253,9 +253,11 @@ class TrainerPredRecorder(ModelStreamLine):
 
     def on_test_end(self):
         df = self.collect_preds()
-        pred_keys = ['model_num','submodel','secid','date']
+        pred_keys = ['model_num','submodel','model_date','batch_idx','secid','date']
         old_df = self.load_saved_preds()
-        new_df = pd.concat([old_df , df]).drop_duplicates(subset=pred_keys , keep='last').sort_values(by=pred_keys)
+        new_df = pd.concat([old_df , df])
+        if not new_df.empty:
+            new_df = new_df.drop_duplicates(subset=pred_keys , keep='last').sort_values(by=pred_keys)
         DB.save_df(new_df , self.trainer.path_pred_dataframe , overwrite = True , verbose = False)
         print(f'Test Predictions saved to {self.trainer.path_pred_dataframe}')
         
@@ -474,9 +476,11 @@ class BaseTrainer(ModelStreamLine):
     @property
     def path_training_output(self) -> Path: return self.config.model_base_path.rslt('training_output.html')
     @property
-    def path_analytical_data(self) -> Path: return self.config.model_base_path.rslt('data.xlsx')
+    def path_test_summary(self) -> Path:    return self.config.model_base_path.rslt('test_summary.xlsx')
     @property
-    def path_analytical_plot(self) -> Path: return self.config.model_base_path.rslt('plot.pdf')
+    def path_analytical_data(self) -> Path: return self.config.model_base_path.rslt('analytic_data.xlsx')
+    @property
+    def path_analytical_plot(self) -> Path: return self.config.model_base_path.rslt('analytic_plot.pdf')
     @property
     def path_pred_dataframe(self) -> Path:  return self.config.model_base_path.rslt('pred_df.feather')
     @property

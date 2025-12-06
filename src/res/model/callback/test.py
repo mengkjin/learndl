@@ -10,7 +10,6 @@ from src.res.factor.api import FactorTestAPI , TYPE_of_TASK
 from src.res.factor.analytic.test_manager import BaseTestManager
 from src.res.model.util import BaseCallBack
 
-TEST_TYPES : list[TYPE_of_TASK] = ['factor' , 't50' , 'screen']
 
 class BasicTestResult(BaseCallBack):
     '''basic test result summary'''
@@ -19,7 +18,7 @@ class BasicTestResult(BaseCallBack):
         super().__init__(trainer , **kwargs)
         
     @property
-    def path_test(self): return str(self.config.model_base_path.rslt('test.xlsx'))
+    def path_test(self): return self.trainer.path_test_summary
     @property
     def model_test_dates(self) -> np.ndarray: return self.trainer.data.model_test_dates
     def on_test_start(self): 
@@ -46,9 +45,15 @@ class BasicTestResult(BaseCallBack):
             return
         with Logger.ParagraphIII('Table: Test Summary:'): 
             print(f'Table: Testing Mean Score ({self.config.train_criterion_score}) for Models:')
-        
-            cat_stat = [md for md in self.test_df_model['model_date'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
-            cat_subm = ['best' , 'swalast' , 'swabest']
+
+            df_date = self.test_df_date.copy()
+            if df_date['model_date'].nunique() == 1:
+                # only one model_date, calculate by year
+                df_date['model_date'] = (df_date['date'].astype(int) // 10000).apply(lambda x:f'Y{x}')
+            else:
+                df_date['model_date'] = df_date['model_date'].astype(str)
+                
+            df_model = df_date.groupby(['model_num' , 'model_date' , 'submodel'])['value'].mean().reset_index().rename(columns={'model_date':'stat'})
 
             dfs : dict[str,pd.DataFrame|pd.Series|Any] = {}
             dfs['Avg'] = self.test_df_date.groupby(['model_num','submodel'])['value'].mean()
@@ -61,7 +66,9 @@ class BasicTestResult(BaseCallBack):
             stat_df = pd.concat([df.reset_index().assign(stat=k) for k,df in dfs.items()])
 
             # display summary
-            df = pd.concat([self.test_df_model.rename(columns={'model_date':'stat'}) , stat_df])
+            df = pd.concat([df_model , stat_df])
+            cat_stat = [md for md in df_model['stat'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
+            cat_subm = ['best' , 'swalast' , 'swabest']
 
             base_name = self.config.model_module
             if self.config.module_type == 'booster' and self.config.model_booster_optuna: 
@@ -95,7 +102,9 @@ class DetailedAlphaAnalysis(BaseCallBack):
     '''factor and portfolio level analysis'''
     CB_ORDER : int = 50
     DISPLAY_TABLES = ['optim@frontface']
-    DISPLAY_FIGURES = ['factor@ic_curve@best.market' , 'factor@group_curve@best.market' , 't50@perf_drawdown@best.univ' , 'screen@perf_drawdown@best.univ']
+    DISPLAY_FIGURES = ['factor@ic_curve@best.market' , 'factor@group_curve@best.market' , 't50@perf_drawdown@best.univ' , 'screen@perf_drawdown@best.univ' , 'revscreen@perf_drawdown@best.univ']
+    TEST_TYPES : list[TYPE_of_TASK] = ['factor' , 't50' , 'screen' , 'revscreen']
+
     def __init__(self , trainer , use_num : Literal['avg' , 'first'] = 'avg' , 
                  tasks = TEST_TYPES , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
@@ -104,16 +113,6 @@ class DetailedAlphaAnalysis(BaseCallBack):
         assert all(task in FactorTestAPI.TASK_TYPES for task in tasks) , \
             f'ANALYTIC_TASKS must be a list of valid tasks: {FactorTestAPI.TASK_TYPES} , but got {tasks}'
         self.tasks = tasks
-        if 'screen' not in self.tasks:
-            self.tasks += 'screen'
-
-    @property
-    def analytic_tasks(self) -> list[TYPE_of_TASK]:
-        tasks = [*self.tasks]
-        for task in TEST_TYPES:
-            if task not in self.tasks:
-                tasks += task
-        return tasks
 
     @property
     def path_data(self): return self.trainer.path_analytical_data
@@ -122,28 +121,30 @@ class DetailedAlphaAnalysis(BaseCallBack):
     @property
     def path_pred(self): return self.trainer.path_pred_dataframe
 
+    def pred_dates(self , interval : int = 1) -> np.ndarray:
+        return self.trainer.record.dates[::interval]
+
     def on_test_end(self):  
+        self.test_results : dict[TYPE_of_TASK , BaseTestManager] = {}
+        
         if self.trainer.record.is_empty: 
             return
+        
         df = self.trainer.record.collect_preds()
         if self.use_num == 'first':
             df = df.query('model_num == 0')
         else:
             df = df.groupby(['date','secid','submodel'])['pred'].mean().reset_index()
         df = df.set_index(['secid','date'])
-        df = df.rename(columns={'submodel':'factor_name'}).pivot_table('pred',['secid','date'],'factor_name')
+        df = df.rename(columns={'submodel':'factor_name'}).pivot_table('pred',['secid','date'],'factor_name').reset_index()
             
-        factors : dict[int , StockFactor] = {}
-        self.test_results : dict[TYPE_of_TASK , BaseTestManager] = {}
-        for task in self.analytic_tasks:
+        fmp_factor = StockFactor(df.query('date in @self.pred_dates(1)'))
+        perf_factor = StockFactor(df.query('date in @self.pred_dates(5)'))
+        
+        for task in self.tasks:
             with Logger.ParagraphIII(f'{task} test'):
-                interval = 1 if task in ['t50' , 'screen'] else 5
-                if interval not in factors.keys():
-                    dates = self.trainer.record.dates[::interval] # noqa
-                    factors[interval] = StockFactor(df.reset_index().query('date in @dates').set_index(['secid','date']))
-                factor = factors[interval]
-                self.test_results[task] = FactorTestAPI.run_test(
-                    task , factor , verbosity = 1 , write_down=False , display_figs=False , title_prefix=self.config.model_name)
+                factor = perf_factor if task == 'factor' else fmp_factor
+                self.test_results[task] = FactorTestAPI.run_test(task , factor , title_prefix=self.config.model_name)
 
         rslts = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_rslts().items()}
         figs  = {f'{task}@{k}':v for task , calc in self.test_results.items() for k,v in calc.get_figs().items()}
@@ -188,7 +189,7 @@ class GroupReturnAnalysis(BaseCallBack):
         super().__init__(trainer , **kwargs)
 
     @property
-    def path_grp(self): return str(self.config.model_base_path.rslt('group.xlsx'))
+    def path_grp(self): return str(self.config.model_base_path.rslt('group_return_analysis.xlsx'))
 
     def on_test_end(self):  
         if self.trainer.record.is_empty: 

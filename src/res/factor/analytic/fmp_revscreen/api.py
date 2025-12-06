@@ -7,9 +7,9 @@ from ..test_manager import BaseTestManager
 from ...util import StockFactor , Universe
 from ...fmp import PortfolioBuilderGroup
 
-__all__ = ['FmpScreenManager']
+__all__ = ['FmpRevScreenManager']
 
-class FmpScreenManager(BaseTestManager):
+class FmpRevScreenManager(BaseTestManager):
     '''
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
@@ -22,7 +22,7 @@ class FmpScreenManager(BaseTestManager):
             'perf_year' : Performance Yearly Stats
     '''
     TASK_TYPE = 'screen'
-    TASK_LIST : list[Type[Calc.BaseScreenPortCalc]] = [
+    TASK_LIST : list[Type[Calc.BaseRevScreenPortCalc]] = [
         Calc.FrontFace , 
         Calc.Perf_Curve ,
         Calc.Perf_Excess ,
@@ -36,7 +36,7 @@ class FmpScreenManager(BaseTestManager):
         universe = Universe('top-1000')
         benchmarks = [universe.to_portfolio(dates).rename('univ')]
         self.update_kwargs(verbosity = verbosity)
-        self.portfolio_group = PortfolioBuilderGroup('screen' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , **self.kwargs)
+        self.portfolio_group = PortfolioBuilderGroup('revscreen' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , **self.kwargs)
         self.account = self.portfolio_group.building().accounting().total_account()
 
     def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , verbosity = 1 , **kwargs):

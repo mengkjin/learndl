@@ -3,12 +3,11 @@ from typing import Any , Type
 
 from src.proj import Timer
 from . import calculator as Calc
-from .calculator import BaseT50PortCalc
 from ..test_manager import BaseTestManager
 from ...util import StockFactor , Universe
 from ...fmp import PortfolioBuilderGroup
 
-__all__ = ['Calc' , 'FmpT50Manager' , 'BaseT50PortCalc' , 'BaseTestManager' , 'PortfolioBuilderGroup']
+__all__ = ['FmpT50Manager']
 
 class FmpT50Manager(BaseTestManager):
     '''
@@ -24,11 +23,11 @@ class FmpT50Manager(BaseTestManager):
     '''
     TASK_TYPE = 't50'
     TASK_LIST : list[Type[Calc.BaseT50PortCalc]] = [
-        Calc.T50_FrontFace , 
-        Calc.T50_Perf_Curve ,
-        Calc.T50_Perf_Excess ,
-        Calc.T50_Perf_Drawdown , 
-        Calc.T50_Perf_Year ,
+        Calc.FrontFace , 
+        Calc.Perf_Curve ,
+        Calc.Perf_Excess ,
+        Calc.Drawdown , 
+        Calc.Perf_Year ,
     ]
 
     def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , verbosity = 2 , **kwargs):

@@ -2,7 +2,7 @@ from typing import Any , Literal
 
 from src.res.factor.util import StockFactor
 from src.res.factor.risk import TuShareCNE5_Calculator
-from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager , FmpScreenManager
+from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager , FmpScreenManager , FmpRevScreenManager
 from src.res.factor.calculator import (
     StockFactorHierarchy , StockFactorUpdater , MarketFactorUpdater , 
     AffiliateFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater
@@ -80,6 +80,8 @@ class FactorTestAPI:
             return FmpT50Manager
         elif test_type == 'screen':
             return FmpScreenManager
+        elif test_type == 'revscreen':
+            return FmpRevScreenManager
         else:
             raise ValueError(f'Invalid test type: {test_type}')
 

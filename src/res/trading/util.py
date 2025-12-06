@@ -269,8 +269,8 @@ class TradingPort:
         figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
 
         if write_down:
-            dfs_to_excel(rslts , self.result_dir().joinpath('data.xlsx') , print_prefix=f'Analytic Test of TradingPort {self.name} datas')
-            figs_to_pdf(figs   , self.result_dir().joinpath('plot.pdf')  , print_prefix=f'Analytic Test of TradingPort {self.name} plots')
+            dfs_to_excel(rslts , self.result_dir().joinpath('analytic_data.xlsx') , print_prefix=f'Analytic Test of TradingPort {self.name} datas')
+            figs_to_pdf(figs   , self.result_dir().joinpath('analytic_plot.pdf')  , print_prefix=f'Analytic Test of TradingPort {self.name} plots')
 
         if display:
             for name , fig in figs.items():

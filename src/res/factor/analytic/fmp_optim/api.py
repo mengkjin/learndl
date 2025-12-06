@@ -2,12 +2,11 @@ from typing import Any , Literal , Type
 
 from src.proj import Timer
 from . import calculator as Calc
-from .calculator import BaseOptimCalc
 from ..test_manager import BaseTestManager
 from ...util import Benchmark , StockFactor
 from ...fmp import PortfolioBuilderGroup
 
-__all__ = ['Calc' , 'FmpOptimManager' , 'BaseOptimCalc' , 'BaseTestManager' , 'PortfolioBuilderGroup' , 'Calc']
+__all__ = ['FmpOptimManager']
 
 class FmpOptimManager(BaseTestManager):
     '''
@@ -28,17 +27,17 @@ class FmpOptimManager(BaseTestManager):
     '''
     TASK_TYPE = 'optim'
     TASK_LIST : list[Type[Calc.BaseOptimCalc]] = [
-        Calc.Optim_FrontFace , 
-        Calc.Optim_Perf_Curve ,
-        Calc.Optim_Perf_Drawdown , 
-        Calc.Optim_Perf_Excess_Drawdown , 
-        Calc.Optim_Perf_Year ,
-        Calc.Optim_Perf_Month ,
-        Calc.Optim_Perf_Lag ,
-        Calc.Optim_Exp_Style ,
-        Calc.Optim_Exp_Indus ,
-        Calc.Optim_Attrib_Source ,
-        Calc.Optim_Attrib_Style ,
+        Calc.FrontFace , 
+        Calc.Perf_Curve ,
+        Calc.Drawdown , 
+        Calc.Excess_Drawdown , 
+        Calc.Perf_Year ,
+        Calc.Perf_Month ,
+        Calc.Perf_Lag ,
+        Calc.Exp_Style ,
+        Calc.Exp_Indus ,
+        Calc.Attrib_Source ,
+        Calc.Attrib_Style ,
     ]
 
     def optim(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 

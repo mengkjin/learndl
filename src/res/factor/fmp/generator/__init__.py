@@ -1,2 +1,3 @@
 from .top import TopStocksPortfolioCreator
 from .screen import ScreeningPortfolioCreator
+from .revscreen import RevScreeningPortfolioCreator

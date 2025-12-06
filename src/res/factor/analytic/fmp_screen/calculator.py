@@ -16,37 +16,37 @@ class BaseScreenPortCalc(BaseCalculator):
             self.calc_rslt : pd.DataFrame = self.calculator()(account)
         return self
     
-class Screen_FrontFace(BaseScreenPortCalc):
+class FrontFace(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
     def calculator(self): return Stat.calc_frontface
     def plotter(self): return plotter.plot_frontface
 
-class Screen_Perf_Curve(BaseScreenPortCalc):
+class Perf_Curve(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
     def calculator(self): return Stat.calc_perf_curve
     def plotter(self): return plotter.plot_perf_curve
 
-class Screen_Perf_Excess(BaseScreenPortCalc):
+class Perf_Excess(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
     def calculator(self): return Stat.calc_perf_excess
     def plotter(self): return plotter.plot_perf_excess
 
-class Screen_Perf_Drawdown(BaseScreenPortCalc):
+class Drawdown(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
     def calculator(self): return Stat.calc_perf_drawdown
     def plotter(self): return plotter.plot_perf_drawdown
 
-class T50_Perf_Excess_Drawdown(BaseScreenPortCalc):
+class Excess_Drawdown(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
     def calculator(self): return Stat.calc_perf_excess_drawdown
     def plotter(self): return plotter.plot_perf_excess_drawdown
 
-class Screen_Perf_Year(BaseScreenPortCalc):
+class Perf_Year(BaseScreenPortCalc):
     def __init__(self , **kwargs) -> None:
         super().__init__(params = {} , **kwargs)
     def calculator(self): return Stat.calc_perf_year

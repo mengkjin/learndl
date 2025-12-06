@@ -2,12 +2,11 @@ from typing import Any , Type
 
 from src.proj import Timer
 from . import calculator as Calc
-from .calculator import BaseTopPortCalc
 from ..test_manager import BaseTestManager
 from ...util import Benchmark , StockFactor
 from ...fmp import PortfolioBuilderGroup
 
-__all__ = ['Calc' , 'FmpTopManager' , 'BaseTopPortCalc' , 'BaseTestManager' , 'PortfolioBuilderGroup']
+__all__ = ['FmpTopManager']
 
 class FmpTopManager(BaseTestManager):
     '''
@@ -27,16 +26,16 @@ class FmpTopManager(BaseTestManager):
     '''
     TASK_TYPE = 'top'
     TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
-        Calc.Top_FrontFace , 
-        Calc.Top_Perf_Curve ,
-        Calc.Top_Perf_Excess ,
-        Calc.Top_Perf_Drawdown , 
-        Calc.Top_Perf_Excess_Drawdown ,
-        Calc.Top_Perf_Year ,
-        Calc.Top_Exp_Style ,
-        Calc.Top_Exp_Indus ,
-        Calc.Top_Attrib_Source ,
-        Calc.Top_Attrib_Style ,
+        Calc.FrontFace , 
+        Calc.Perf_Curve ,
+        Calc.Perf_Excess ,
+        Calc.Drawdown , 
+        Calc.Excess_Drawdown ,
+        Calc.Perf_Year ,
+        Calc.Exp_Style ,
+        Calc.Exp_Indus ,
+        Calc.Attrib_Source ,
+        Calc.Attrib_Style ,
     ]
 
     def generate(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 

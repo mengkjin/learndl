@@ -2,11 +2,10 @@ from typing import Any , Type
 
 from src.proj import Timer
 from . import calculator as Calc
-from .calculator import BasePerfCalc
 from ..test_manager import BaseTestManager
 from ...util import Benchmark , StockFactor
 
-__all__ = ['Calc' , 'FactorPerfManager' , 'BasePerfCalc' , 'BaseTestManager']
+__all__ = ['FactorPerfManager']
 
 class FactorPerfManager(BaseTestManager):
     '''

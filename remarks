@@ -4,5 +4,7 @@ next objectives
 -  save/load past portfolios
 -  save/load past accounting
 -  save/load past analytics
+-  factor analysis is easier, will load past factor and calculate from begining. Just remove calculating redundunt charts
+-  portfolio analysis can save account and resume, giving same key. Calculations will start from begining
 
 3. Create ReverseScreen Port

@@ -28,11 +28,11 @@ class ValidationConverge(BaseCallBack):
     CB_KEY_PARAMS = ['patience' , 'eps']
     def __init__(self , trainer , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
         self.patience = patience
-        self.tolerance = eps
+        self.eps = eps
         super().__init__(trainer , **kwargs)
 
     def on_validation_epoch_end(self):
-        if FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance):
+        if FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.eps):
             self.status.fit_loop_breaker.add_status('Valid Cvg' , self.status.epoch - self.patience + 1)
 
 class TrainConverge(BaseCallBack):
@@ -40,11 +40,11 @@ class TrainConverge(BaseCallBack):
     CB_KEY_PARAMS = ['patience' , 'eps']
     def __init__(self , trainer , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
         self.patience = patience
-        self.tolerance = eps
+        self.eps = eps
         super().__init__(trainer , **kwargs)
 
     def on_validation_epoch_end(self):
-        if FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance):
+        if FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.eps):
             self.status.fit_loop_breaker.add_status('Train Cvg' , self.status.epoch - self.patience + 1)
 
 class FitConverge(BaseCallBack):
@@ -52,12 +52,12 @@ class FitConverge(BaseCallBack):
     CB_KEY_PARAMS = ['patience' , 'eps']
     def __init__(self , trainer , patience = 5 , eps = 1.0e-5 , **kwargs) -> None:
         self.patience = patience
-        self.tolerance = eps
+        self.eps = eps
         super().__init__(trainer , **kwargs)
 
     def on_validation_epoch_end(self):
-        if (FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.tolerance) and 
-            FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.tolerance)):
+        if (FUNC.list_converge(self.metrics.metric_epochs['train.loss'], self.patience , self.eps) and 
+            FUNC.list_converge(self.metrics.metric_epochs['valid.score'], self.patience , self.eps)):
             self.status.fit_loop_breaker.add_status('T & V Cvg' , self.status.epoch - self.patience + 1)
 
 class EarlyExitRetrain(BaseCallBack):

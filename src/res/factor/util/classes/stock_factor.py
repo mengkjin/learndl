@@ -616,13 +616,13 @@ class StockFactor:
         """
         select the analytic task by task name
         """
-        from src.res.factor.analytic import FactorPerfManager , BasePerfCalc
+        from src.res.factor.analytic import FactorPerfManager
 
         match_task = [task for task in FactorPerfManager.TASK_LIST if task.match_name(task_name)]
         assert match_task and len(match_task) <= 1 , f'no match or duplicate match tasks : {task_name}'
         task , task_name = match_task[0] , match_task[0].__name__
         if not hasattr(self , 'analytic_tasks'): 
-            self.analytic_tasks : dict[str , BasePerfCalc] = {}
+            self.analytic_tasks = {}
         if task_name not in self.analytic_tasks: 
             self.analytic_tasks[task_name] = task(**kwargs)
         return self.analytic_tasks[task_name]

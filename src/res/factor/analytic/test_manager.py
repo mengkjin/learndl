@@ -11,8 +11,8 @@ from src.func import dfs_to_excel , figs_to_pdf , display as disp
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
-TASK_TYPES = ['optim' , 'top' , 'factor' , 't50' , 'screen']
-TYPE_of_TASK = Literal['optim' , 'top' , 'factor' , 't50' , 'screen']
+TASK_TYPES = ['optim' , 'top' , 'factor' , 't50' , 'screen' , 'revscreen']
+TYPE_of_TASK = Literal['optim' , 'top' , 'factor' , 't50' , 'screen' , 'revscreen']
 
 class BaseCalculator(ABC):
     TASK_TYPE : TYPE_of_TASK
@@ -25,12 +25,12 @@ class BaseCalculator(ABC):
     def __repr__(self):
         return f'{self.__class__.__name__} of task {self.TASK_TYPE}(params={self.params})'
     @classmethod
+    def task_name(cls): 
+        return cls.__name__.lower().removeprefix(f'{cls.TASK_TYPE}_')
+    
+    @classmethod
     def match_name(cls , name : str):
-        candidate_names = [
-            cls.__name__.lower() ,
-            cls.__name__.lower().removeprefix(f'{cls.TASK_TYPE}_'),
-        ]
-        return name.lower() in candidate_names
+        return name.lower() in [cls.__name__.lower() , cls.task_name()]
 
     class calc_manager:
         def __init__(self , *args , verbosity = 0):
@@ -44,9 +44,6 @@ class BaseCalculator(ABC):
             warnings.resetwarnings()
             self.timer.__exit__(*args)
 
-    @classmethod
-    def task_name(cls): 
-        return cls.__name__.lower().removeprefix(f'{cls.TASK_TYPE}_')
     @abstractmethod
     def calculator(self) -> Callable[...,pd.DataFrame]: '''Define calculator'''
     @abstractmethod
@@ -131,6 +128,15 @@ class BaseTestManager(ABC):
             rslt_dir = PATH.rslt_top
         elif self.TASK_TYPE == 'factor':
             rslt_dir = PATH.rslt_factor
+        elif self.TASK_TYPE == 't50':
+            rslt_dir = PATH.result.joinpath('test').joinpath('t50')
+        elif self.TASK_TYPE == 'screen':
+            rslt_dir = PATH.result.joinpath('test').joinpath('screen')
+        elif self.TASK_TYPE == 'revscreen':
+            rslt_dir = PATH.result.joinpath('test').joinpath('revscreen')
+        else:
+            raise ValueError(f'Invalid task type: {self.TASK_TYPE}')
+        rslt_dir.mkdir(parents=True , exist_ok=True)
         return rslt_dir.joinpath(self.get_project_name())
 
     def get_rslts(self):
@@ -144,8 +150,8 @@ class BaseTestManager(ABC):
     
     def write_down(self):
         rslts , figs = self.get_rslts() , self.get_figs()
-        dfs_to_excel(rslts , self.project_path.joinpath('data.xlsx') , print_prefix=f'Analytic Test of {self.name_of_task()} datas')
-        figs_to_pdf(figs   , self.project_path.joinpath('plot.pdf')  , print_prefix=f'Analytic Test of {self.name_of_task()} plots')
+        dfs_to_excel(rslts , self.project_path.joinpath(f'{self.TASK_TYPE}_data.xlsx') , print_prefix=f'{self.TASK_TYPE.title()} Analytic Test of {self.name_of_task()} datas')
+        figs_to_pdf(figs   , self.project_path.joinpath(f'{self.TASK_TYPE}_plot.pdf')  , print_prefix=f'{self.TASK_TYPE.title()} Analytic Test of {self.name_of_task()} plots')
         return self
     
     @classmethod
@@ -156,3 +162,11 @@ class BaseTestManager(ABC):
             return 'Top Portfolio'
         elif cls.TASK_TYPE == 'factor':
             return 'Factor Performance'
+        elif cls.TASK_TYPE == 't50':
+            return 'Top50 Port'
+        elif cls.TASK_TYPE == 'screen':
+            return 'Screen Port'
+        elif cls.TASK_TYPE == 'revscreen':
+            return 'RevScreen Port'
+        else:
+            raise ValueError(f'Invalid task type: {cls.TASK_TYPE}')
