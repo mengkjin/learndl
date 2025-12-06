@@ -98,8 +98,9 @@ class DataBlock(Stock4DData):
                 'feature' : self.feature}
         self.save_dict(data , path)
 
-    def ffill(self):
-        self.values = forward_fillna(self.values , axis = 1)
+    def ffill(self , fill : bool | Any = True):
+        if bool(fill):
+            self.values = forward_fillna(self.values , axis = 1)
         return self
     
     @staticmethod
@@ -148,6 +149,10 @@ class DataBlock(Stock4DData):
         with Timer(f'Load {len(paths)} DataBlocks'):
             blocks = [cls.load_path(path) for path in paths]
 
+            if len(blocks) == 1:
+                blocks[0].ffill(fillna[0]).as_tensor().as_type(dtype)
+                return blocks
+
         with Timer(f'Align DataBlocks'):
             # sligtly faster than .align(secid = secid , date = date)
             if intersect_secid:  
@@ -160,10 +165,7 @@ class DataBlock(Stock4DData):
                 newdate = newdate[newdate >= min(blk.date)]
             
             for i , blk in enumerate(blocks):
-                blk.align_secid_date(newsecid , newdate)
-                if fillna[i]: 
-                    blk.values = forward_fillna(blk.values , axis = 1)
-                blk.as_tensor().as_type(dtype)
+                blk.align_secid_date(newsecid , newdate).ffill(fillna[i]).as_tensor().as_type(dtype)
 
         return blocks
     
@@ -464,9 +466,10 @@ class ModuleData:
             data = cls(**data)
 
         if factor_names:
-            from src.data.loader import FactorLoader
-            add_x = FactorLoader(factor_names).load_block(data.date[0] , data.date[-1] , silent = True)
-            data.x['factor'] = add_x.align_secid_date(data.secid , data.date)
+            with Timer(f'Load {len(factor_names)} Factors'):
+                from src.data.loader import FactorLoader
+                add_x = FactorLoader(factor_names).load_block(data.date[0] , data.date[-1] , silent = True)
+                data.x['factor'] = add_x.align_secid_date(data.secid , data.date)
 
         data.y.align_feature(y_labels)
         return data

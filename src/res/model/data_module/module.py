@@ -69,7 +69,9 @@ class DataModule(BaseDataModule):
         DataPreProcessor.main(predict = True , data_types = data_types)
        
     def load_data(self):
-        self.datas = ModuleData.load(self.input_keys_data + self.input_keys_factor , self.config.model_labels , self.config.input_factor_names , 
+        self.datas = ModuleData.load(self.input_keys_data + self.input_keys_factor , 
+                                     self.config.model_labels , 
+                                     self.config.input_factor_names , 
                                      fit = self.use_data != 'predict' , predict = self.use_data != 'fit' ,
                                      dtype = self.config.precision)
         self.config.update_data_param(self.datas.x)
