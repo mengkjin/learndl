@@ -521,7 +521,7 @@ class ModelParam:
     def check_validity(self):
         assert self.module_type == 'nn' or not self.booster_head , f'{self.module} is not a valid module'
 
-        if self.module_type == 'db':
+        if self.module_type in ['db' , 'factor']:
             self.n_model = 1
         else:
             lens = [len(v) for v in self.Param.values() if isinstance(v , (list,tuple))]

@@ -102,14 +102,15 @@ class DetailedAlphaAnalysis(BaseCallBack):
     '''factor and portfolio level analysis'''
     CB_ORDER : int = 50
     DISPLAY_TABLES = ['optim@frontface']
-    DISPLAY_FIGURES = ['factor@ic_curve@best.market' , 'factor@group_curve@best.market' , 't50@perf_drawdown@best.univ' , 'screen@perf_drawdown@best.univ' , 'revscreen@perf_drawdown@best.univ']
-    TEST_TYPES : list[TYPE_of_TASK] = ['factor' , 't50' , 'screen' , 'revscreen']
+    DISPLAY_FIGURES = ['factor@ic_curve@best.market' , 'factor@group_curve@best.market' , 
+                       't50@drawdown@best.univ' , 'screen@drawdown@best.univ' , 'revscreen@drawdown@best.univ']
 
-    def __init__(self , trainer , use_num : Literal['avg' , 'first'] = 'avg' , 
-                 tasks = TEST_TYPES , **kwargs) -> None:
+    def __init__(self , trainer , tasks = ['factor' , 't50' , 'screen' , 'revscreen'] , 
+                 which_model : Literal['avg' , 'first'] = 'avg' , 
+                 **kwargs) -> None:
         super().__init__(trainer , **kwargs)
-        assert use_num in ['first' , 'avg'] , use_num
-        self.use_num = use_num
+        assert which_model in ['first' , 'avg'] , which_model
+        self.which_model = which_model
         assert all(task in FactorTestAPI.TASK_TYPES for task in tasks) , \
             f'ANALYTIC_TASKS must be a list of valid tasks: {FactorTestAPI.TASK_TYPES} , but got {tasks}'
         self.tasks = tasks
@@ -131,7 +132,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
             return
         
         df = self.trainer.record.collect_preds()
-        if self.use_num == 'first':
+        if self.which_model == 'first' or self.trainer.config.Model.n_model == 1:
             df = df.query('model_num == 0')
         else:
             df = df.groupby(['date','secid','submodel'])['pred'].mean().reset_index()

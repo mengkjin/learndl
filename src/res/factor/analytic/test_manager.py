@@ -11,8 +11,8 @@ from src.func import dfs_to_excel , figs_to_pdf , display as disp
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
-TASK_TYPES = ['optim' , 'top' , 'factor' , 't50' , 'screen' , 'revscreen']
 TYPE_of_TASK = Literal['optim' , 'top' , 'factor' , 't50' , 'screen' , 'revscreen']
+TASK_TYPES : list[TYPE_of_TASK] = ['optim' , 'top' , 'factor' , 't50' , 'screen' , 'revscreen']
 
 class BaseCalculator(ABC):
     TASK_TYPE : TYPE_of_TASK
