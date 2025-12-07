@@ -77,16 +77,25 @@ class DataModule(BaseDataModule):
         self.config.update_data_param(self.datas.x)
         self.labels_n = min(self.datas.y.shape[-1] , self.config.Model.max_num_output)
 
-        if self.use_data == 'predict':
-            self.model_date_list = self.datas.date[:1]
-            self.test_full_dates = self.datas.date[1:]
+        dates = self.datas.date_within(self.beg_date , self.end_date)
+        self.test_full_dates = dates[1:]
+        if (self.use_data == 'predict' or self.config.module_type in ['factor' , 'db']):
+            self.model_date_list = dates[:1] 
         else:
-            self.model_date_list = self.datas.date_within(self.config.beg_date , self.config.end_date , self.config.model_interval)
-            self.test_full_dates = self.datas.date_within(self.config.beg_date , self.config.end_date)[1:]
+            self.model_date_list = dates[::self.config.model_interval]
 
+        
         self.parse_prenorm_method()
         self.reset_dataloaders()
         return self
+
+    @property
+    def beg_date(self):
+        return -1 if self.use_data == 'predict' else self.config.beg_date
+
+    @property
+    def end_date(self):
+        return 99991231 if self.use_data == 'predict' else self.config.end_date
         
     def setup(self, stage : Literal['fit' , 'test' , 'predict' , 'extract'] , 
               param : dict[str,Any] = {'seqlens' : {}} , 

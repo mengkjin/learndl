@@ -136,7 +136,7 @@ class DataBlock(Stock4DData):
                    start_dt = None , end_dt = None , dtype = torch.float):
         if not isinstance(paths , list): 
             paths = [paths]
-        block_names = [Path(path).name.lower() for path in paths]
+        block_names = [Path(path).stem.lower() for path in paths]
         def _guess(names : list[str] , excl : tuple[str,...] = ('y','x_trade','x_day','x_15m','x_min','x_30m','x_60m','week')) -> list[bool]:
             return [x.startswith(excl) == 0 for x in names]
         if fillna == 'guess':
@@ -146,7 +146,7 @@ class DataBlock(Stock4DData):
         else:
             assert len(paths) == len(fillna) , (len(paths) , len(fillna))
         
-        block_title = f'{len(paths)} DataBlocks' if len(paths) > 3 else f'DataBlocks {block_names}'
+        block_title = f'{len(paths)} DataBlocks' if len(paths) > 3 else f'DataBlock [{",".join(block_names)}]'
         with Timer(f'Load {block_title}'):
             blocks = [cls.load_path(path) for path in paths]
 
@@ -467,7 +467,7 @@ class ModuleData:
             data = cls(**data)
 
         if factor_names:
-            factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 3 else f'Factors {factor_names}'
+            factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 1 else f'Factor {factor_names[0]}'
             with Timer(f'Load {factor_title}'):
                 from src.data.loader import FactorLoader
                 add_x = FactorLoader(factor_names).load_block(data.date[0] , data.date[-1] , silent = True)

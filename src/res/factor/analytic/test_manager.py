@@ -97,6 +97,7 @@ class BaseTestManager(ABC):
     def run_test(cls , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
                  which = 'all' , verbosity = 2 ,**kwargs):
         pm = cls(which = which , **kwargs)
+        print(f'finish pm')
         pm.calc(StockFactor(factor) , benchmark , verbosity = verbosity)
         pm.plot(show = False , verbosity = verbosity)
         return pm

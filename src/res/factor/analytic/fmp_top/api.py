@@ -41,9 +41,11 @@ class FmpTopManager(BaseTestManager):
     def generate(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
                  n_bests = [20,30,50,100] , verbosity = 2):
         alpha_models = factor.alpha_models()
+        print(f'finish alpha_models')
         benchmarks = Benchmark.get_benchmarks(benchmarks)
         self.update_kwargs(n_bests = n_bests , verbosity = verbosity)
         self.portfolio_group = PortfolioBuilderGroup('top' , alpha_models , benchmarks , **self.kwargs)
+        print(f'finish portfolio_group')
         self.account = self.portfolio_group.building().accounting().total_account()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
