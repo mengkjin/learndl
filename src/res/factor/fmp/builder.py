@@ -4,7 +4,7 @@ import numpy as np
 from datetime import datetime
 from typing import Any , Literal
 
-from src.proj import Timer
+from src.proj import Timer , Duration
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccountant
 from .optimizer import OptimizedPortfolioCreator
@@ -237,8 +237,11 @@ class PortfolioBuilderGroup:
         return self._port_name_nchar
 
     def building(self):
+        print(f'{self.__class__.__name__} building start!')
         RISK_MODEL.load_models(self.relevant_dates)
+        print(f'{self.__class__.__name__} RISK_MODEL loaded!')
         self.setup_builders()
+        print(f'{self.__class__.__name__} builders setup!')
         self.print_in_optimization('start')
         for self._date in self.relevant_dates:
             for self._builder in self.builders:
@@ -276,6 +279,5 @@ class PortfolioBuilderGroup:
             elif where == 'end':
                 self.t1 = datetime.now()
                 secs = (self.t1 - self.t0).total_seconds()
-                total_time = f'cost {secs:.2f} secs'
                 each_time = f'{(secs/max(self.opt_count,1)*1000):.1f} ms per building'
-                print(f'{self.__class__.__name__} building finished, {total_time}, {each_time}')
+                print(f'{self.__class__.__name__} building finished! Cost {Duration(secs)}, {each_time}')

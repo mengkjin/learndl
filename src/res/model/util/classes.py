@@ -387,17 +387,20 @@ class BaseTrainer(ModelStreamLine):
     
     @final
     def __init__(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs):
-        self.init_config(base_path = base_path , override = override , schedule_name = schedule_name , **kwargs)
-        self.init_data(**kwargs)
-        self.init_model(**kwargs)
-        self.init_callbacks(**kwargs)
-        self.wrap_callbacks()
-        InstanceRecord.update_trainer(self)
+        with Logger.ParagraphII('Stage [Setup]'):
+            self.init_config(base_path = base_path , override = override , schedule_name = schedule_name , **kwargs)
+            self.init_data(**kwargs)
+            self.init_model(**kwargs)
+            self.init_callbacks(**kwargs)
+            self.wrap_callbacks()
+            InstanceRecord.update_trainer(self)
         
     @final
     def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:
         '''initialized configuration'''
-        self.config = TrainConfig(base_path , override = override , schedule_name = schedule_name , **kwargs)
+        with Logger.ParagraphIII('TrainConfig Setup'):
+            self.config = TrainConfig(base_path , override = override , schedule_name = schedule_name , **kwargs)
+            self.config.print_out()
         self.status = TrainerStatus(self.config.train_max_epoch)
         self.record = TrainerPredRecorder(self)
 
@@ -720,7 +723,7 @@ class BaseCallBack(ModelStreamLineWithTrainer):
 
     def print_info(self , **kwargs):
         args = {k:getattr(self , k) for k in self.CB_KEY_PARAMS} | kwargs
-        info = self.__class__.__name__ + '({})'.format(','.join([f'{k}={v}' for k,v in args.items()])) 
+        info = f'Callback {self.__class__.__name__}' + '({})'.format(','.join([f'{k}={v}' for k,v in args.items()])) 
         if self.__class__.__doc__: 
             info += f' , {self.__class__.__doc__}'
         print(info)

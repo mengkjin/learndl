@@ -18,7 +18,7 @@ class CallBackManager(BaseCallBack):
 
     @classmethod
     def setup(cls , trainer : BaseTrainer):
-        with Logger.ParagraphIII(' setup callbacks '):
+        with Logger.ParagraphIII('Callback Setup'):
             use_cbs = list(set(trainer.model.COMPULSARY_CALLBACKS + list(trainer.config.callbacks.keys())))
             if avail_cbs := trainer.model.AVAILABLE_CALLBACKS:
                 use_cbs = [cb for cb in use_cbs if cb in avail_cbs]

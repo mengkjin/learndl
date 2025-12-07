@@ -1,7 +1,6 @@
 import os , random , shutil , torch
 import numpy as np
 
-from contextlib import nullcontext
 from pathlib import Path
 from typing import Any , Literal
 
@@ -854,10 +853,10 @@ class TrainConfig(TrainParam):
             else:
                 raise ValueError(f'checkname must be -1 or 0 when base_path is not None , got {checkname}')
             verbose = False
-        with Logger.ParagraphIII(' parser training args ') if verbose else nullcontext():
-            self.parser_stage(stage , verbose)
-            self.parser_resume(resume , verbose)
-            self.parser_select(checkname , verbose) 
+        
+        self.parser_stage(stage , verbose)
+        self.parser_resume(resume , verbose)
+        self.parser_select(checkname , verbose) 
         return self
 
     def print_out(self):
@@ -908,8 +907,9 @@ class TrainConfig(TrainParam):
             info_strs.append(f'Stage Queue     : {self.stage_queue}')
             info_strs.append(f'Resume Training : {self.resume_training}')
 
-        with Logger.ParagraphIII(' model info '): 
-            print('\n'.join(info_strs))
+        
+        print('\n'.join(info_strs))
+        return self
 
     @property
     def stage_queue(self) -> list[Literal['data' , 'fit' , 'test']]:

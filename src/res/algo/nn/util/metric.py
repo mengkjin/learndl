@@ -151,7 +151,7 @@ class MetricCalculator:
     def display(self):
         if self.DISPLAY_LOG.get(f'{self.metric_type}.{self.criterion}' , False): 
             return
-        Logger.success(f'{self.metric_type} {self.criterion} calculated and success!')
+        Logger.success(f'{self.__class__.__name__}: {self.metric_type} {self.criterion} calculated and success!')
         self.DISPLAY_LOG[f'{self.metric_type}.{self.criterion}'] = True
 
     @classmethod

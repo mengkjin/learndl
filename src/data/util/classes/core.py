@@ -136,36 +136,37 @@ class DataBlock(Stock4DData):
                    start_dt = None , end_dt = None , dtype = torch.float):
         if not isinstance(paths , list): 
             paths = [paths]
-        def _guess(ls,excl):
-            return [Path(x).name.lower().startswith(excl) == 0 for x in ls]
+        block_names = [Path(path).name.lower() for path in paths]
+        def _guess(names : list[str] , excl : tuple[str,...] = ('y','x_trade','x_day','x_15m','x_min','x_30m','x_60m','week')) -> list[bool]:
+            return [x.startswith(excl) == 0 for x in names]
         if fillna == 'guess':
-            exclude_list = ('y','x_trade','x_day','x_15m','x_min','x_30m','x_60m','week')
-            fillna = np.array(_guess(paths , exclude_list))
+            fillna = np.array(_guess(block_names))
         elif fillna is None or isinstance(fillna , bool):
             fillna = np.repeat(fillna , len(paths))
         else:
             assert len(paths) == len(fillna) , (len(paths) , len(fillna))
         
-        with Timer(f'Load {len(paths)} DataBlocks'):
+        block_title = f'{len(paths)} DataBlocks' if len(paths) > 3 else f'DataBlocks {block_names}'
+        with Timer(f'Load {block_title}'):
             blocks = [cls.load_path(path) for path in paths]
 
-            if len(blocks) == 1:
-                blocks[0].ffill(fillna[0]).as_tensor().as_type(dtype)
-                return blocks
-
-        with Timer(f'Align DataBlocks'):
-            # sligtly faster than .align(secid = secid , date = date)
-            if intersect_secid:  
-                newsecid = index_intersect([blk.secid for blk in blocks])[0]
-            else:
-                newsecid = None
-            
-            newdate : np.ndarray | Any = index_union([blk.date for blk in blocks] , start_dt , end_dt)[0]
-            for blk in blocks: 
-                newdate = newdate[newdate >= min(blk.date)]
-            
-            for i , blk in enumerate(blocks):
-                blk.align_secid_date(newsecid , newdate).ffill(fillna[i]).as_tensor().as_type(dtype)
+        if len(blocks) == 1:
+            blocks[0].ffill(fillna[0]).as_tensor().as_type(dtype)
+            return blocks
+        else:
+            with Timer(f'Align {block_title}'):
+                # sligtly faster than .align(secid = secid , date = date)
+                if intersect_secid:  
+                    newsecid = index_intersect([blk.secid for blk in blocks])[0]
+                else:
+                    newsecid = None
+                
+                newdate : np.ndarray | Any = index_union([blk.date for blk in blocks] , start_dt , end_dt)[0]
+                for blk in blocks: 
+                    newdate = newdate[newdate >= min(blk.date)]
+                
+                for i , blk in enumerate(blocks):
+                    blk.align_secid_date(newsecid , newdate).ffill(fillna[i]).as_tensor().as_type(dtype)
 
         return blocks
     
@@ -466,7 +467,8 @@ class ModuleData:
             data = cls(**data)
 
         if factor_names:
-            with Timer(f'Load {len(factor_names)} Factors'):
+            factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 3 else f'Factors {factor_names}'
+            with Timer(f'Load {factor_title}'):
                 from src.data.loader import FactorLoader
                 add_x = FactorLoader(factor_names).load_block(data.date[0] , data.date[-1] , silent = True)
                 data.x['factor'] = add_x.align_secid_date(data.secid , data.date)
