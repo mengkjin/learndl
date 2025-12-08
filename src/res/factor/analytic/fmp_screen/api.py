@@ -32,9 +32,12 @@ class FmpScreenManager(BaseTestManager):
 
     def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , verbosity = 2 , **kwargs):
         alpha_models = factor.alpha_models()
+        print(f'finish alpha_models')
         dates = np.unique(np.concatenate([alpha.available_dates() for alpha in alpha_models]))
         universe = Universe('top-1000')
+        print(f'finish universe')
         benchmarks = [universe.to_portfolio(dates).rename('univ')]
+        print(f'finish benchmarks')
         self.update_kwargs(verbosity = verbosity)
         self.portfolio_group = PortfolioBuilderGroup('screen' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , **self.kwargs)
         self.account = self.portfolio_group.building().accounting().total_account()

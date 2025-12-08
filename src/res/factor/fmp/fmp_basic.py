@@ -60,10 +60,10 @@ def get_strategy_name(category : Literal['optim' , 'top' , 'screen' , 'revscreen
             strategy = f'Top{n:_>3d}'
         elif category == 'screen':
             ratio = kwargs.get('screen_ratio' , ScreeningPortfolioCreator.DEFAULT_SCREEN_RATIO)
-            strategy = f'Screen{ratio * 100:.0f}%'
+            strategy = f'{ratio * 100:.0f}pct'
         elif category == 'revscreen':
             ratio = kwargs.get('screen_ratio' , RevScreeningPortfolioCreator.DEFAULT_SCREEN_RATIO)
-            strategy = f'RevScreen{ratio * 100:.0f}%'
+            strategy = f'{ratio * 100:.0f}pct'
         elif category == 'optim':
             strategy = os.path.basename(kwargs['config_path']) if 'config_path' in kwargs else 'default'
         else:

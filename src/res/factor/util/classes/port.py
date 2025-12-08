@@ -210,12 +210,11 @@ class Port:
         assert isinstance(another , Port) , another
         turn = (self - another).port['weight'].abs().sum()
         return np.round(turn , CONF.Factor.ROUNDING.turnover)
-    def exclude(self , secid : np.ndarray | Any | None = None , inplace = False):
+
+    def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False):
         if secid is None: 
             return self
-        if not inplace:
-            self = self.copy()
-        self.port = self.port.query('secid not in @secid')
+        self.port = self.port.query('secid not in @secid' if exclude else 'secid in @secid')
         return self
 
     @classmethod

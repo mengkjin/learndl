@@ -2,6 +2,7 @@ import itertools
 import numpy as np
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any , Literal
 
 from src.proj import Timer , Duration
@@ -9,7 +10,7 @@ from src.proj import Timer , Duration
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccountant
 from .optimizer import OptimizedPortfolioCreator
 from .generator import TopStocksPortfolioCreator , ScreeningPortfolioCreator , RevScreeningPortfolioCreator
-from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , 
+from .fmp_basic import (get_prefix , get_port_index , get_strategy_name , get_suffix , get_factor_name ,
                         get_full_name , get_benchmark , get_benchmark_name , parse_full_name)
 
 class PortfolioBuilder:
@@ -67,21 +68,45 @@ class PortfolioBuilder:
         self.verbosity = verbosity
         
         self.prefix         = get_prefix(category)
-        self.factor_name    = alpha.name
+        self.factor_name    = get_factor_name(alpha)
         self.benchmark_name = get_benchmark_name(benchmark)
         self.strategy       = get_strategy_name(category , strategy , kwargs)
         self.suffix         = get_suffix(lag , suffixes)
 
-        self.portfolio = Portfolio(self.full_name) if build_on is None else build_on
+        self.portfolio = Portfolio(self.full_name)
         self.creations : list[PortCreateResult] = []
+
+        if build_on:
+            self.set_build_on(build_on)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name=\'{self.full_name}\',kwargs={self.kwargs},'+\
             f'{len(self.portfolio)} fmps,'+'not '* (not hasattr(self , 'account')) + 'accounted)'
+
+    def set_build_on(self , build_on : Portfolio | Path | str | None = None):
+        if build_on is None:
+            port = None
+        elif isinstance(build_on , Portfolio):
+            port = build_on
+        elif isinstance(build_on , (Path , str)):
+            build_on = Path(build_on)
+            assert build_on.exists() , f'{build_on} not exists'
+            if build_on.is_dir():
+                if (path := build_on.joinpath(f'{self.full_name.lower()}.feather')).exists():
+                    port = Portfolio.load(path)
+                else:
+                    port = None
+            else:
+                port = Portfolio.load(build_on)
+        else:
+            raise ValueError(f'Unknown build_on type: {type(build_on)}')
+        if port is not None:
+            self.portfolio = port.rename(self.full_name).filter_dates(dates = port.port_date[port.port_date <= self.alpha.available_dates().min()] , inplace = True)
+        return self
     
     @property
     def full_name(self):
-        return '.'.join([self.prefix , self.factor_name , self.benchmark.name , self.strategy , self.suffix])
+        return '.'.join([self.prefix , self.factor_name , self.benchmark_name , self.strategy , self.suffix])
     
     @property
     def port_index(self):
@@ -190,7 +215,7 @@ class PortfolioBuilderGroup:
 
         assert alpha_models , f'alpha_models must has elements!'
         self.alpha_models = alpha_models if isinstance(alpha_models , list) else [alpha_models]
-        self.relevant_dates = np.unique(np.concatenate([amodel.available_dates() for amodel in self.alpha_models]))
+        self.relevant_dates = np.unique(np.concatenate([amodel.available_dates() for amodel in self.alpha_models])).astype(int)
         self.benchmarks = Benchmark.get_benchmarks(benchmarks)
 
         assert add_lag >= 0 , add_lag
@@ -209,11 +234,11 @@ class PortfolioBuilderGroup:
                f'{len(self.lags)} lags , {len(self.param_groups)} param_groups , {len(self.relevant_dates)} dates , ' + \
                f'({len(self.alpha_models) * len(self.benchmarks) * len(self.lags) * len(self.param_groups) * len(self.relevant_dates)} builds)'
     
-    def setup_builders(self):
+    def setup_builders(self , resume_path : Path | str | None = None):
         self.builders.clear()
         for (alpha , lag , bench , strategy) in itertools.product(self.alpha_models , self.lags , self.benchmarks , self.param_groups):
             kwargs = self.param_groups[strategy] | {'strategy':strategy , 'verbosity':self.verbosity - 1}
-            builder = PortfolioBuilder(self.category , alpha , bench , lag , **kwargs).setup()
+            builder = PortfolioBuilder(self.category , alpha , bench , lag , **kwargs).setup().set_build_on(resume_path)
             self.builders.append(builder)
         return self
     
@@ -278,3 +303,12 @@ class PortfolioBuilderGroup:
                 secs = (self.t1 - self.t0).total_seconds()
                 each_time = f'{(secs/max(self.opt_count,1)*1000):.1f} ms per building'
                 print(f'{self.__class__.__name__} building finished! Cost {Duration(secs)}, {each_time}')
+
+    def save(self , path : Path | str):
+        """save intermediate data to path for future use"""
+        path = Path(path)
+        assert not path.exists() or path.is_dir() , f'{path} already exists and is not a directory'
+        path.mkdir(parents=True, exist_ok=True)
+        for builder in self.builders:
+            builder.portfolio.save(path.joinpath(f'{builder.full_name.lower()}.feather'))
+        return self

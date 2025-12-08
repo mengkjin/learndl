@@ -22,7 +22,7 @@ class Plotter:
     def __init__(self , title_prefix = 'Optim Port'):
         self.title_prefix = title_prefix
 
-    def plot_frontface(self , data : pd.DataFrame , show = False):
+    def plot_frontface(self , data : pd.DataFrame , show = False , title_prefix = None):
         num_per_page : int | Any = 32 // data.groupby('factor_name').size().max()
         if num_per_page == 0: 
             num_per_page = 1
@@ -30,7 +30,7 @@ class Plotter:
         num_pages  : int | Any = num_groups // num_per_page + (1 if num_groups % num_per_page > 0 else 0)
         group_plot = plot.PlotMultipleData(data , group_key = 'factor_name' , max_num = num_per_page)
         for i , sub_data in enumerate(group_plot):     
-            full_title = f'{self.title_prefix} Front Face (P{i+1}/{num_pages})'
+            full_title = f'{title_prefix or self.title_prefix} Front Face (P{i+1}/{num_pages})'
             with plot.PlotFactorData(sub_data , drop = [] , name_key = None , show = show , full_title = full_title) as (df , fig):
                 df = df.reset_index([i for i in df.index.names if i])
                 df['strategy'] = df_strategy(df)
@@ -44,11 +44,11 @@ class Plotter:
                                 ignore_cols = ['prefix' , 'factor_name' , 'benchmark' , 'suffix'])
         return group_plot.fig_dict
 
-    def plot_perf_curve(self , data : pd.DataFrame , show = False):
+    def plot_perf_curve(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
+        title = f'{title_prefix or self.title_prefix} Accumulative Performance'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                                title = f'{self.title_prefix} Accumulative Performance') as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , drop = DROP_KEYS ,  show = show and i == 0) as (df , fig):
                 ax1 , ax2 = plot.get_twin_axes(fig , 111)
 
                 ax1.plot(df.index, df['pf'], label='portfolio')  
@@ -64,11 +64,11 @@ class Plotter:
                 plot.set_yaxis(ax2 , format='pct' , digits=2 , title='Cummulative Excess Return' , title_color='r' , tick_color='r' , tick_pos=None)
         return group_plot.fig_dict
 
-    def plot_perf_drawdown(self , data : pd.DataFrame , show = False):
+    def plot_perf_drawdown(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
+        title = f'{title_prefix or self.title_prefix} Performance Drawdown'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                                title = f'{self.title_prefix} Performance Drawdown') as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , drop = DROP_KEYS ,  show = show and i == 0) as (df , fig):
                 ax1 , ax2 = plot.get_twin_axes(fig , 111)
                 
                 ax1.plot(df.index, df['drawdown'], 'grey', label='Drawdown (left)')  
@@ -85,11 +85,11 @@ class Plotter:
                     
         return group_plot.fig_dict
 
-    def plot_perf_excess_drawdown(self , data : pd.DataFrame , show = False):
+    def plot_perf_excess_drawdown(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
+        title = f'{title_prefix or self.title_prefix} Excess Drawdown'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                                title = f'{self.title_prefix} Excess Drawdown') as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , drop = DROP_KEYS ,  show = show and i == 0) as (df , fig):
                 ax1 , ax2 = plot.get_twin_axes(fig , 111)
 
                 ax1.plot(df.index, df['excess'], label='excess')  
@@ -104,11 +104,11 @@ class Plotter:
                 plot.set_yaxis(ax2 , format='pct' , digits=2 , title='Drawdown' , title_color='g' , tick_color='g' , tick_pos=None)
         return group_plot.fig_dict
 
-    def plot_perf_lag(self , data : pd.DataFrame , show = False):
+    def plot_perf_lag(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
+        title = f'{title_prefix or self.title_prefix} Cumulative Lag Performance'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = DROP_KEYS , show = show and i == 0, 
-                                title = f'{self.title_prefix} Cumulative Lag Performance') as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , drop = DROP_KEYS , show = show and i == 0) as (df , fig):
                 ax1 , ax2 = plot.get_twin_axes(fig , 111)
                 assert all([col.startswith('lag') for col in df.columns]) , df.columns
                 [ax1.plot(df.index , df[col], label=col) for col in df.columns if col != 'lag_cost']
@@ -126,11 +126,11 @@ class Plotter:
 
         return group_plot.fig_dict
 
-    def plot_perf_year(self , data : pd.DataFrame , show = False):
+    def plot_perf_year(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
+        title = f'{title_prefix or self.title_prefix} Year Performance'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                                title = f'{self.title_prefix} Year Performance') as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , drop = DROP_KEYS ,  show = show and i == 0) as (df , fig):
                 plot.plot_table(df.set_index('year') , 
                                 pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                                 flt_cols = ['ir','calmar'] , 
@@ -138,11 +138,11 @@ class Plotter:
                                 stripe_by = 1 , emph_last_row=True)
         return group_plot.fig_dict
 
-    def plot_perf_month(self , data : pd.DataFrame , show = False):
+    def plot_perf_month(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
+        title = f'{title_prefix or self.title_prefix} Month Performance'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = [] , show = show and i == 0,  
-                                title = f'{self.title_prefix} Month Performance') as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , drop = [] , show = show and i == 0) as (df , fig):
                 plot.plot_table(df.set_index('month') , 
                                 pct_cols = ['pf','bm','excess','annualized','mdd','te','turnover'] , 
                                 flt_cols = ['ir','calmar'] , 
@@ -150,11 +150,11 @@ class Plotter:
                                 stripe_by = 1 , emph_last_row=True)
         return group_plot.fig_dict
 
-    def plot_exp_style(self , data : pd.DataFrame , show = False):
+    def plot_exp_style(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
+        title = f'{title_prefix or self.title_prefix} Style Exposure'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                                title = f'{self.title_prefix} Style Exposure' , suptitle=True) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , drop = DROP_KEYS ,  show = show and i == 0 , suptitle=True) as (df , fig):
                 lay_out = (2, 5)
                 assert len(df.columns) <= lay_out[0] * lay_out[1] , (len(df.columns) , lay_out)
                 for i , col in enumerate(df.columns): 
@@ -169,11 +169,11 @@ class Plotter:
                 fig.autofmt_xdate(rotation = 45)
         return group_plot.fig_dict
 
-    def plot_exp_indus(self , data : pd.DataFrame , show = False):
+    def plot_exp_indus(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
+        title = f'{title_prefix or self.title_prefix} Industry Exposure'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                                title = f'{self.title_prefix} Industry Exposure' , suptitle=True) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , drop = DROP_KEYS ,  show = show and i == 0 , suptitle=True) as (df , fig):
                 lay_out = (5, 7)
                 assert len(df.columns) <= lay_out[0] * lay_out[1] , (len(df.columns) , lay_out)
                 for i , col in enumerate(df.columns): 
@@ -188,11 +188,11 @@ class Plotter:
                 fig.autofmt_xdate(rotation = 45)
         return group_plot.fig_dict
 
-    def plot_attrib_source(self , data : pd.DataFrame , show = False):
+    def plot_attrib_source(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
+        title = f'{title_prefix or self.title_prefix} Cumulative Attribution'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                                title = f'{self.title_prefix} Cumulative Attribution') as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , drop = DROP_KEYS ,  show = show and i == 0) as (df , fig):
                 ax = fig.add_subplot(111)
                 [ax.plot(df.index , df[col], label=col) for col in df.columns]
                 ax.legend(loc = 'upper left')
@@ -201,11 +201,11 @@ class Plotter:
                 
         return group_plot.fig_dict
 
-    def plot_attrib_style(self , data : pd.DataFrame , show = False):
+    def plot_attrib_style(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = MAJOR_KEYS)
+        title = f'{title_prefix or self.title_prefix} Style Attribution'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = DROP_KEYS ,  show = show and i == 0, 
-                                title = f'{self.title_prefix} Style Attribution' , suptitle=True) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , drop = DROP_KEYS ,  show = show and i == 0 , suptitle=True) as (df , fig):
                 ax = fig.add_subplot(111)
                 [ax.plot(df.index , df[col], label=col) for col in df.columns]
                 ax.legend(loc = 'upper left')

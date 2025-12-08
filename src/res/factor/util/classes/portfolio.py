@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 from copy import deepcopy
+from pathlib import Path
 from typing import Any , Literal
 
 from src.data import DataBlock
@@ -129,14 +130,36 @@ class Portfolio:
         else:
             df : pd.DataFrame | Any = pd.concat([port.to_dataframe() for port in self.ports.values()] , axis = 0)
             return df
-        
-    def exclude(self , secid : np.ndarray | Any | None = None , inplace = False):
+
+    @classmethod
+    def load(cls , path : Path | str) -> 'Portfolio':
+        path = Path(path)
+        assert path.exists() , f'{path} not exists'
+        return cls.from_dataframe(pd.read_feather(path))
+
+    def save(self , path : Path | str):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self.to_dataframe().to_feather(path)
+    
+    def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
         if secid is None: 
             return self
         if not inplace:
             self = self.copy()
         for port in self.ports.values():
-            port.exclude(secid , True)
+            port.filter_secid(secid , exclude)
+        return self
+
+    def filter_dates(self , dates : np.ndarray | Any | None = None , exclude = False , inplace = False):
+        if dates is None: 
+            return self
+        if not inplace:
+            self = self.copy()
+        if exclude:
+            self.ports = {date:port for date,port in self.ports.items() if date not in dates}
+        else:
+            self.ports = {date:port for date,port in self.ports.items() if date in dates}
         return self
     
     def replace(self , port : 'Port|Portfolio' , inplace = False):

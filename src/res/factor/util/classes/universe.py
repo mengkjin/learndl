@@ -1,12 +1,10 @@
 import pandas as pd
 import numpy as np
-from dataclasses import dataclass
 
 from src.data import DATAVENDOR
 from .portfolio import Portfolio , Port
 from .benchmark import Benchmark
 
-@dataclass
 class Universe:
     """
     Universe for factor model portfolio
@@ -18,7 +16,28 @@ class Universe:
         -benchmark : benchmark
         -<benchmark1>+<benchmark2>+... : combination of benchmarks
     """
-    name        : str
+
+    _cache_name : str | None = None
+    _cache_portfolio : Portfolio | None = None
+
+    def __init__(self , name : str):
+        self.name = name
+
+    def __repr__(self):
+        return f'Universe({self.name})'
+
+    @classmethod
+    def get_cache_portfolio(cls , name : str) -> Portfolio:
+        if cls._cache_name == name and cls._cache_portfolio is not None:
+            port = cls._cache_portfolio
+        else:
+            port = Portfolio(name)
+        return port
+
+    @classmethod
+    def set_cache_portfolio(cls , portfolio : Portfolio):
+        cls._cache_portfolio = portfolio
+        cls._cache_name = portfolio.name
     
     def get(self , date : int , safety = True , exclude_bse = True) -> Portfolio:
         exchange = ['SZSE','SSE'] if exclude_bse else ['SZSE','SSE','BSE']
@@ -46,7 +65,7 @@ class Universe:
             st_list = DATAVENDOR.INFO.get_st(date)['secid'].to_numpy()
             small_cp = DATAVENDOR.TRADE.get_val(date).query('close < 2.0')['secid'].to_numpy()
 
-            pf = pf.exclude(st_list , True).exclude(small_cp , True)
+            pf = pf.filter_secid(st_list , exclude = True , inplace = True).filter_secid(small_cp , exclude = True , inplace = True)
 
         return pf
     
@@ -54,8 +73,9 @@ class Universe:
         return self.get(date , safety , exclude_bse).get(date)
     
     def to_portfolio(self , dates : list[int] | np.ndarray = []) -> Portfolio:
-        port = Portfolio(self.name)
-        for date in dates:
+        port = self.get_cache_portfolio(self.name)
+        for date in np.setdiff1d(dates, port.port_date):
             port.append(self.get_port(date) , ignore_name = True)
+        self.set_cache_portfolio(port)
         return port
 

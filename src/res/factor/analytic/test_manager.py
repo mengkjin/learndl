@@ -4,6 +4,7 @@ import numpy as np
 
 from abc import ABC , abstractmethod
 from matplotlib.figure import Figure
+from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
 from src.proj import PATH , Timer
@@ -171,3 +172,10 @@ class BaseTestManager(ABC):
             return 'RevScreen Port'
         else:
             raise ValueError(f'Invalid task type: {cls.TASK_TYPE}')
+
+    def save(self , path : Path | str):
+        """save intermediate data to path for future use"""
+        ...
+
+    def load(self , path : Path | str):
+        """load intermediate data from path for future use"""

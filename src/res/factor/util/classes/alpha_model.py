@@ -76,28 +76,21 @@ class Amodel:
         return cls(date , np.random.randn(len(secid)) , secid , 'random_alpha')
 
     @classmethod
-    def from_array(cls , date : int , data : np.ndarray , secid : np.ndarray | Any = None , name : str = 'given_alpha'):
-        assert secid is not None , 'When submit alpha as np.ndarray, secid must be submitted too!'
+    def from_array(cls , date : int , data : np.ndarray , secid : np.ndarray , name : str = 'given_alpha'):
         assert len(data) == len(data) , f'alpha must match secid, but get <{len(data)}> and <{len(data)}>'
         return cls(date , data , secid , name)
 
     @classmethod
-    def from_dataframe(cls , date : int , data : pd.Series | pd.DataFrame , 
-                       secid : np.ndarray | Any = None , name : str | Any = None):
-        if isinstance(data , pd.Series): 
-            data = data.to_frame()
-        if np.isin(['secid' , 'date'] , [str(name) for name in data.index.names]).all():
-            data = data.xs(date , level='date')
-        else:
-            if not isinstance(data.index , pd.RangeIndex): 
-                data = data.reset_index()
-            if 'date' in data.columns: 
-                data = data[data['date'] == date]
-                assert len(data) , f'no data of date {date}!'
-                data = data.drop(columns=['date'])
-            data = data.set_index(['secid'])
-
+    def from_dataframe(cls , date : int | Any , data : pd.DataFrame , 
+                       secid : np.ndarray | Any = None , name : str | Any = None , filter_date = False):
+        """data must include ['date' , 'secid' , name_of_alpha] 3 columns"""
+        if not isinstance(data.index , pd.RangeIndex): 
+            data = data.reset_index()
+        if filter_date and 'date' in data.columns:
+            data = data.query('date == @date')
+        data = data.drop(columns=['date']).set_index(['secid'])
         assert len(data.columns) == 1, f'When submit alpha as pd.DataFrame, there must be only one possible column :{data.columns}'
+
         if secid is not None: 
             data = data.reindex(secid).fillna(0)
         else:
@@ -114,9 +107,12 @@ class Amodel:
         if isinstance(data , str) and data == 'random':
             return cls.create_random(date , secid)
         elif isinstance(data , np.ndarray):
+            assert secid is not None , 'When submit alpha as np.ndarray, secid must be submitted too!'
             return cls.from_array(date , data , secid)
         else:
-            return cls.from_dataframe(date , data , secid)
+            if isinstance(data , pd.Series):
+                data = data.to_frame()
+            return cls.from_dataframe(date , data , secid , filter_date=True)
         
     @classmethod
     def combine(cls , alphas : list['Amodel'] , weights : list[float] | np.ndarray | None = None , name : str = 'combined_alpha' , normalize = True):
@@ -152,7 +148,7 @@ class AlphaModel(GeneralModel):
         if not isinstance(data.index , pd.RangeIndex): 
             data = data.reset_index()
         assert 'secid' in data and 'date' in data , data.columns
-        models = [Amodel.from_dataframe(date , data) for date in data['date'].unique()]
+        models = [Amodel.from_dataframe(date , sub_data) for date , sub_data in data.groupby('date')]
         assert models , f'no models created'
         return cls(name if name else models[0].name , models)
 

@@ -409,17 +409,18 @@ class ModuleData:
              y_labels : list[str] | None = None , 
              factor_names : list[str] | None = None ,
              fit : bool = True , predict : bool = False , 
+             factor_start_dt : int | None = None , factor_end_dt : int | None = None ,
              dtype : str | Any = torch.float , 
              save_upon_loading : bool = True):
         
         assert fit or predict , (fit , predict)
         if not predict: 
-            return cls.load_datas(data_type_list , y_labels , factor_names , False , dtype , save_upon_loading)
+            return cls.load_datas(data_type_list , y_labels , factor_names , False , dtype , save_upon_loading ,factor_start_dt , factor_end_dt)
         elif not fit:
-            return cls.load_datas(data_type_list , y_labels , factor_names , True  , dtype , save_upon_loading)
+            return cls.load_datas(data_type_list , y_labels , factor_names , True  , dtype , save_upon_loading ,factor_start_dt , factor_end_dt)
         else:
-            hist_data = cls.load_datas(data_type_list , y_labels , factor_names , False , dtype , save_upon_loading)
-            pred_data = cls.load_datas(data_type_list , y_labels , factor_names , True  , dtype , save_upon_loading)
+            hist_data = cls.load_datas(data_type_list , y_labels , factor_names , False , dtype , save_upon_loading ,factor_start_dt , factor_end_dt)
+            pred_data = cls.load_datas(data_type_list , y_labels , factor_names , True  , dtype , save_upon_loading ,factor_start_dt , factor_end_dt)
 
             hist_data.y = hist_data.y.merge_others([pred_data.y])
             hist_data.secid , hist_data.date = hist_data.y.secid , hist_data.y.date
@@ -434,7 +435,9 @@ class ModuleData:
                    y_labels : list[str] | None = None , 
                    factor_names : list[str] | None = None ,
                    predict : bool = False , dtype : str | Any = torch.float , 
-                   save_upon_loading : bool = True):
+                   save_upon_loading : bool = True , 
+                   factor_start_dt : int | None = None , 
+                   factor_end_dt : int | None = None):
         '''
         load all x/y data if input_type is data or factor
         if predict is True, only load recent data
@@ -470,7 +473,9 @@ class ModuleData:
             factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 1 else f'Factor [{factor_names[0]}]'
             with Timer(f'Load {factor_title}'):
                 from src.data.loader import FactorLoader
-                add_x = FactorLoader(factor_names).load_block(data.date[0] , data.date[-1] , silent = True)
+                start_dt = max(factor_start_dt or data.date[0] , data.date[0])
+                end_dt = min(factor_end_dt or data.date[-1] , data.date[-1])
+                add_x = FactorLoader(factor_names).load_block(start_dt , end_dt , silent = True)
                 data.x['factor'] = add_x.align_secid_date(data.secid , data.date)
 
         data.y.align_feature(y_labels)

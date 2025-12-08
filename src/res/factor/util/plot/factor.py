@@ -8,8 +8,9 @@ class Plotter:
     def __init__(self , title_prefix = 'Factor'):
         self.title_prefix = title_prefix
     
-    def plot_frontface(self , data : pd.DataFrame , show = False):
-        with plot.PlotFactorData(data , drop = [] , title = f'{self.title_prefix} Front Face' , show=show) as (df , fig):
+    def plot_frontface(self , data : pd.DataFrame , show = False , title_prefix = None):
+        title = f'{title_prefix or self.title_prefix} Front Face'
+        with plot.PlotFactorData(data , drop = [] , title = title , show=show) as (df , fig):
             df = df.reset_index().drop(columns=['sum']).set_index('factor_name').sort_values(['factor_name','benchmark']).\
                 rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
             
@@ -17,10 +18,11 @@ class Plotter:
                             capitalize=False , stripe_by='factor_name')
         return fig
 
-    def plot_coverage(self , data : pd.DataFrame , show = False):
+    def plot_coverage(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name'])
+        title = f'{title_prefix or self.title_prefix} Coverage Ratio'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = ['factor_name'] , title = f'{self.title_prefix} Coverage Ratio' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , drop = ['factor_name'] , title = title , show=show and i==0) as (df , fig):
                 df = df.reset_index().set_index('date')
                 ax = plot.sns_lineplot(df , x='date' , y='coverage' , hue='benchmark')
 
@@ -29,10 +31,11 @@ class Plotter:
                 
         return group_plot.fig_dict
 
-    def plot_ic_curve(self , data : pd.DataFrame , show = False):
+    def plot_ic_curve(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} IC Curve'
         for i , sub_data in enumerate(group_plot):  
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} IC Curve' , show=show and i==0 , dropna = 'all') as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0 , dropna = 'all') as (df , fig):
                 df = df.set_index('date').sort_index()
                 ax1 , ax2 = plot.get_twin_axes(fig , 111)
 
@@ -52,10 +55,11 @@ class Plotter:
                 
         return group_plot.fig_dict
 
-    def plot_ic_decay(self , data : pd.DataFrame , show = False):
+    def plot_ic_decay(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name'])
+        title = f'{title_prefix or self.title_prefix} Average IC Decay'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = ['factor_name'] , title = f'{self.title_prefix} Average IC Decay' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , drop = ['factor_name'] , title = title , show=show and i==0) as (df , fig):
                 df = df.pivot_table('ic_mean','lag_type','benchmark',observed=False)
                 ax = fig.add_subplot(111)
                 index_mid = np.arange(len(df)) 
@@ -73,10 +77,11 @@ class Plotter:
 
         return group_plot.fig_dict
 
-    def plot_ic_indus(self , data : pd.DataFrame , show = False):
+    def plot_ic_indus(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Industry IC & IR'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Industry IC & IR' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0) as (df , fig):
                 df = df.rename(columns={'avg':'IC_avg','ir':'ICIR'})
                 df.sort_values(['IC_avg'], ascending=False, inplace=True)
 
@@ -94,10 +99,11 @@ class Plotter:
                 plot.set_yaxis(ax2 , format='flt' , digits=2 , title = 'Average ICIR' , title_color='r' , tick_pos=None)
         return group_plot.fig_dict
 
-    def plot_ic_year(self , data : pd.DataFrame , show = False):
+    def plot_ic_year(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Year IC'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Year IC' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0) as (df , fig):
                 df['direction'] = 'N(-)' if df['direction'].values[-1] < 0 else 'P(+)'
                 df = df.rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, 
                             errors='raise').drop(columns=['sum']).rename(columns={'year':'Year'})
@@ -105,20 +111,22 @@ class Plotter:
                         capitalize=False , stripe_by=1 , emph_last_row=True)
         return group_plot.fig_dict
 
-    def plot_ic_benchmark(self , data : pd.DataFrame , show = False):
+    def plot_ic_benchmark(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name'])
+        title = f'{title_prefix or self.title_prefix} Benchmark IC'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , drop = ['factor_name'] , title = f'{self.title_prefix} Benchmark IC' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , drop = ['factor_name'] , title = title , show=show and i==0) as (df , fig):
                 df = df.reset_index().drop(columns=['sum']).set_index('benchmark').sort_index().\
                 rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)', 'ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
                 plot.plot_table(df , flt_cols = ['IC_avg' , 'IC_std' , 'IC(ann)' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 
                                 fontsize=10 , capitalize=False , stripe_by=1)
         return group_plot.fig_dict
 
-    def plot_ic_monotony(self , data : pd.DataFrame , show = False):
+    def plot_ic_monotony(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Percentile Ret & IR'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Percentile Ret & IR' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0) as (df , fig):
                 df = df.pivot_table('stats_value' , 'group' , 'stats_name',observed=False).\
                     rename(columns={'grp_ret':'RET','grp_ir':'IR'}).reset_index().sort_values('group')
                 ax1 , ax2 = plot.get_twin_axes(fig , 111)
@@ -135,10 +143,11 @@ class Plotter:
                 plot.set_yaxis(ax2 , format='flt' , digits=3 , title = 'Average IR' , title_color='r' , tick_pos=None)
         return group_plot.fig_dict
 
-    def plot_pnl_curve(self , data : pd.DataFrame , show = False):
+    def plot_pnl_curve(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Cummulative Long-Short PnL'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Cummulative Long-Short PnL' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0) as (df , fig):
                 df = df.pivot_table(index='date' , columns='weight_type' , values='cum_ret')
                 ax = fig.add_subplot(111)
                 [ax.plot(df.index , df[weight_type], label=weight_type) for weight_type in df.columns.tolist()]
@@ -149,10 +158,11 @@ class Plotter:
                 
         return group_plot.fig_dict
 
-    def plot_style_corr(self , data : pd.DataFrame , show = False):
+    def plot_style_corr(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Corr Curve with Risk Styles'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Corr Curve with Risk Styles' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0) as (df , fig):
                 df = df.set_index('date').sort_index()
                 ax = fig.add_subplot(111)
                 [ax.plot(df.index , df[style], label=style) for style in df.columns]
@@ -162,10 +172,11 @@ class Plotter:
 
         return group_plot.fig_dict
 
-    def plot_style_corr_distrib(self , data : pd.DataFrame , show = False):
+    def plot_style_corr_distrib(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Corr Distribution with Risk Styles'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Corr Distribution with Risk Styles' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0) as (df , fig):
                 df = df.set_index(['date']).sort_index()
                 df.columns.rename('style_factor', inplace=True)
                 df = df.stack().rename('factor_corr').reset_index(drop=False) # type: ignore
@@ -176,10 +187,11 @@ class Plotter:
                 
         return group_plot.fig_dict
 
-    def plot_group_curve(self , data : pd.DataFrame , show = False):
+    def plot_group_curve(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Group CumReturn'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Group CumReturn' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0) as (df , fig):
                 df = df.set_index('date')
                 ax = plot.sns_lineplot(df , x='date' , y='cum_ret' , hue='group')
 
@@ -188,10 +200,11 @@ class Plotter:
 
         return group_plot.fig_dict
 
-    def plot_group_decay(self , data : pd.DataFrame , show = False):
+    def plot_group_decay(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Groups Return Decay'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Groups Return Decay' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0) as (df , fig):
                 df = df.query('stats_name == "decay_grp_ret"')
 
                 ax = plot.sns_barplot(df , x='lag_type' , y='stats_value' , hue='group')
@@ -200,10 +213,11 @@ class Plotter:
                 
         return group_plot.fig_dict
 
-    def plot_group_ir_decay(self , data : pd.DataFrame , show = False):
+    def plot_group_ir_decay(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Groups IR Decay'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Groups IR Decay' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0) as (df , fig):
                 df = df.query('stats_name == "decay_grp_ir"')
                 ax = plot.sns_barplot(df , x='lag_type' , y='stats_value' , hue='group')
 
@@ -212,10 +226,11 @@ class Plotter:
 
         return group_plot.fig_dict
 
-    def plot_group_year(self , data : pd.DataFrame , show = False):
+    def plot_group_year(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Annualized Top Group Performance'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Annualized Top Group Performance' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0) as (df , fig):
                 df = df.drop(columns=['abs_avg'])
                 plot.plot_table(df.set_index('year') , 
                                 int_cols = ['group'] ,
@@ -223,10 +238,11 @@ class Plotter:
                                 flt_cols = ['ir'] , pct_ndigit = 3 , stripe_by=1 , emph_last_row=True)
         return group_plot.fig_dict
 
-    def plot_distrib_curve(self , data : pd.DataFrame , show = False):
+    def plot_distrib_curve(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Cross-Sectional Distribution'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Cross-Sectional Distribution' , show=show and i==0 , suptitle=True) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0 , suptitle=True) as (df , fig):
                     assert not df['date'].duplicated().any() , df['date']
                     lay_out = (3, min(int(np.ceil(len(df) / 3)) , 3))
                     for i in range(min(len(df) , lay_out[0] * lay_out[1])):
@@ -240,10 +256,11 @@ class Plotter:
                         ax.set_title(str(day_df['date']))
         return group_plot.fig_dict
 
-    def plot_distrib_qtile(self , data : pd.DataFrame , show = False):
+    def plot_distrib_qtile(self , data : pd.DataFrame , show = False , title_prefix = None):
         group_plot = plot.PlotMultipleData(data , group_key = ['factor_name' , 'benchmark'])
+        title = f'{title_prefix or self.title_prefix} Cross-Sectional Quantile'
         for i , sub_data in enumerate(group_plot):     
-            with plot.PlotFactorData(sub_data , title = f'{self.title_prefix} Cross-Sectional Quantile' , show=show and i==0) as (df , fig):
+            with plot.PlotFactorData(sub_data , title = title , show=show and i==0) as (df , fig):
                 df.columns.rename('quantile_name', inplace=True)
                 df = df.set_index('date').stack().rename('quantile_value').reset_index().set_index('date') # type: ignore
                 ax = plot.sns_lineplot(df , x='date' , y='quantile_value' , hue='quantile_name')
