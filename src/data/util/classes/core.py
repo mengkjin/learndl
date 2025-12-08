@@ -467,7 +467,7 @@ class ModuleData:
             data = cls(**data)
 
         if factor_names:
-            factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 1 else f'Factor {factor_names[0]}'
+            factor_title = f'{len(factor_names)} Factors' if len(factor_names) > 1 else f'Factor [{factor_names[0]}]'
             with Timer(f'Load {factor_title}'):
                 from src.data.loader import FactorLoader
                 add_x = FactorLoader(factor_names).load_block(data.date[0] , data.date[-1] , silent = True)

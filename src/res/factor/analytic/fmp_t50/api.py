@@ -32,11 +32,17 @@ class FmpT50Manager(BaseTestManager):
 
     def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , verbosity = 2 , **kwargs):
         alpha_models = factor.alpha_models()
+        print(f'finish alpha_models')
         dates = np.unique(np.concatenate([alpha.available_dates() for alpha in alpha_models]))
+        print(f'finish dates')
         universe = Universe('top-1000')
+        print(f'finish universe')
         benchmarks = [universe.to_portfolio(dates).rename('univ')]
+        print(f'finish benchmarks')
         self.update_kwargs(verbosity = verbosity)
+        print(f'finish update_kwargs')
         self.portfolio_group = PortfolioBuilderGroup('top' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , **self.kwargs)
+        print(f'finish portfolio_group')
         self.account = self.portfolio_group.building().accounting().total_account()
 
     def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , verbosity = 1 , **kwargs):

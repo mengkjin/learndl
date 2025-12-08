@@ -23,6 +23,6 @@ class AppConfig:
     @property
     def auto_refresh_interval(self) -> int:
         """auto refresh interval of the app"""
-        return 60
+        return 0
 
 App = AppConfig()

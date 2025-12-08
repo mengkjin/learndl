@@ -398,7 +398,7 @@ class BaseTrainer(ModelStreamLine):
     @final
     def init_config(self , base_path = None , override : dict | None = None , schedule_name = None , **kwargs) -> None:
         '''initialized configuration'''
-        with Logger.ParagraphIII('TrainConfig Setup'):
+        with Logger.ParagraphIII('Config Setup'):
             self.config = TrainConfig(base_path , override = override , schedule_name = schedule_name , **kwargs)
             self.config.print_out()
         self.status = TrainerStatus(self.config.train_max_epoch)

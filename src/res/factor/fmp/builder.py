@@ -237,11 +237,8 @@ class PortfolioBuilderGroup:
         return self._port_name_nchar
 
     def building(self):
-        print(f'{self.__class__.__name__} building start!')
         RISK_MODEL.load_models(self.relevant_dates)
-        print(f'{self.__class__.__name__} RISK_MODEL loaded!')
         self.setup_builders()
-        print(f'{self.__class__.__name__} builders setup!')
         self.print_in_optimization('start')
         for self._date in self.relevant_dates:
             for self._builder in self.builders:
