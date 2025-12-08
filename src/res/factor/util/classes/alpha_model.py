@@ -84,23 +84,16 @@ class Amodel:
     def from_dataframe(cls , date : int | Any , data : pd.DataFrame , 
                        secid : np.ndarray | Any = None , name : str | Any = None , filter_date = False):
         """data must include ['date' , 'secid' , name_of_alpha] 3 columns"""
-        if not isinstance(data.index , pd.RangeIndex): 
-            data = data.reset_index()
-        if filter_date and 'date' in data.columns:
+        value_col = np.setdiff1d(data.columns.values , ['date' , 'secid'])
+        assert len(value_col) == 1 , f'When submit alpha as pd.DataFrame, there must be only one possible column :{data.columns} but got {value_col}'
+        if filter_date:
             data = data.query('date == @date')
-        data = data.drop(columns=['date']).set_index(['secid'])
-        assert len(data.columns) == 1, f'When submit alpha as pd.DataFrame, there must be only one possible column :{data.columns}'
-
+        data = data.reset_index().set_index('secid')[value_col].dropna()
+        
         if secid is not None: 
             data = data.reindex(secid).fillna(0)
-        else:
-            data = data.dropna()
-        
-        alpha = data.to_numpy().squeeze()
-        secid = data.index.values
-        if name is None: 
-            name = data.columns.values[0]
-        return cls(date , alpha , secid , name)
+
+        return cls(date , data.to_numpy().squeeze() , data.index.values , name or value_col[0])
 
     @classmethod
     def create(cls , date : int , data: np.ndarray | pd.DataFrame | pd.Series | Literal['random'] , secid : np.ndarray | Any = None):
