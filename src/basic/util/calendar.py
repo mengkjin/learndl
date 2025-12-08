@@ -43,8 +43,15 @@ _CLD = _Calendars()
 
 class TradeDate(int):
     def __init__(self , date : int | Any , force_trade_date = False):
-        self.cd = int(date)
-        self.td : int = self.cd if force_trade_date else _CLD.full['td'].loc[self.cd]
+        if isinstance(date , TradeDate):
+            self.cd = date.cd
+            self.td = date.td
+        else:
+            self.cd = int(date)
+            if force_trade_date or self.cd < _CLD.min_date or self.cd > _CLD.max_date:
+                self.td : int = self.cd 
+            else:
+                self.td = _CLD.full['td'].loc[self.cd]
 
     def __repr__(self):
         return str(self.td)
