@@ -35,6 +35,9 @@ class _Calendars:
         self.full = calendar
         self.cal = cal_cal
         self.trd = cal_trd
+
+        self.min_date = calendar.index.min()
+        self.max_date = calendar.index.max()
     
 _CLD = _Calendars()
 
@@ -84,6 +87,8 @@ class TradeDate(int):
         td0 = cls(td0)
         if n == 0: 
             return cls(td0)
+        elif td0 < _CLD.min_date or td0 > _CLD.max_date:
+            return td0
         cld = _CLD.full.copy()
         d_index = cld['td_index'].loc[td0.td] + n
         d_index = np.maximum(np.minimum(d_index , len(cld) - 1) , 0)
