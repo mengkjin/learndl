@@ -4,12 +4,13 @@ from ..test_manager import BaseCalculator
 from src.res.factor.util.plot.top_pf import Plotter
 from src.res.factor.util.stat import top_pf as Stat
 
-plotter = Plotter('Top Port')
+default_title = 'Top Port'
+plotter = Plotter(default_title)
 
 class BaseTopPortCalc(BaseCalculator):
     TASK_TYPE = 'top'
     DEFAULT_BENCHMARKS = 'defaults'
-    DEFAULT_TITLE_GROUP = 'Top Port'
+    DEFAULT_TITLE = default_title
     def calc(self , account : pd.DataFrame , verbosity = 0):
         with self.calc_manager(f'    --->{self.__class__.__name__} calc' , verbosity = verbosity): 
             self.calc_rslt : pd.DataFrame = self.calculator()(account)

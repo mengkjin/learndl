@@ -105,7 +105,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     DISPLAY_FIGURES = ['factor@ic_curve@best.market' , 'factor@group_curve@best.market' , 
                        't50@drawdown@best.univ' , 'screen@drawdown@best.univ' , 'revscreen@drawdown@best.univ']
 
-    def __init__(self , trainer , tasks = ['t50'] , # ['factor' , 't50' , 'screen' , 'revscreen'] , 
+    def __init__(self , trainer , tasks = ['t50' , 'screen'] , # ['factor' , 't50' , 'screen' , 'revscreen'] , 
                  which_model : Literal['avg' , 'first'] = 'avg' , 
                  **kwargs) -> None:
         super().__init__(trainer , **kwargs)

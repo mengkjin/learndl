@@ -22,7 +22,7 @@ class FmpT50Manager(BaseTestManager):
             'perf_year' : Performance Yearly Stats
     '''
     TASK_TYPE = 't50'
-    TASK_LIST : list[Type[Calc.BaseT50PortCalc]] = [
+    TASK_LIST : list[Type[Calc.T50Calc]] = [
         Calc.FrontFace , 
         Calc.Perf_Curve ,
         Calc.Perf_Excess ,
@@ -46,8 +46,8 @@ class FmpT50Manager(BaseTestManager):
         self.account = self.portfolio_group.building().accounting().total_account()
 
     def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , verbosity = 1 , **kwargs):
+        self.generate(factor , benchmark , verbosity = verbosity)
         with Timer(f'{self.__class__.__name__} calc' , silent = verbosity < 1):
-            self.generate(factor , benchmark , verbosity = verbosity)
             for task in self.tasks.values():  
                 task.calc(self.account , verbosity = verbosity - 1) 
         return self

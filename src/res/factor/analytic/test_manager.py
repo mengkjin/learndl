@@ -17,7 +17,7 @@ TASK_TYPES : list[TYPE_of_TASK] = ['optim' , 'top' , 'factor' , 't50' , 'screen'
 class BaseCalculator(ABC):
     TASK_TYPE : TYPE_of_TASK
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
-    DEFAULT_TITLE_GROUP : str | None = None
+    DEFAULT_TITLE : str | None = None
 
     def __init__(self , params : dict[str,Any] | None = None , **kwargs) -> None:
         self.params : dict[str,Any] = params or {} 
@@ -66,7 +66,7 @@ class BaseCalculator(ABC):
         return self
     @property
     def title_prefix(self) -> str:
-        prefix = self.DEFAULT_TITLE_GROUP if self.DEFAULT_TITLE_GROUP else self.TASK_TYPE.title()
+        prefix = self.DEFAULT_TITLE or self.TASK_TYPE.title()
         if 'title_prefix' in self.kwargs:
             prefix = f'{str(self.kwargs["title_prefix"]).replace("_", " ").title()} {prefix}'
         return prefix

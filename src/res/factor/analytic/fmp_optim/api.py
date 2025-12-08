@@ -26,7 +26,7 @@ class FmpOptimManager(BaseTestManager):
             'attrib_style' : Attribution Style
     '''
     TASK_TYPE = 'optim'
-    TASK_LIST : list[Type[Calc.BaseOptimCalc]] = [
+    TASK_LIST : list[Type[Calc.OptimCalc]] = [
         Calc.FrontFace , 
         Calc.Perf_Curve ,
         Calc.Drawdown , 
@@ -50,8 +50,8 @@ class FmpOptimManager(BaseTestManager):
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              add_lag = 1 , optim_config : str | Literal['default' , 'custome'] | None = None , verbosity = 1 , **kwargs):
+        self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , verbosity = verbosity)
         with Timer(f'{self.__class__.__name__} calc' , silent = verbosity < 1):
-            self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , verbosity = verbosity)
             for task in self.tasks.values():  
                 task.calc(self.account , verbosity = verbosity - 1) 
         return self

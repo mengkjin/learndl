@@ -32,24 +32,24 @@ class FactorPerfManager(BaseTestManager):
             'distr_qtile' : Distribution Quantile
     '''
     TASK_TYPE = 'factor'
-    TASK_LIST : list[Type[Calc.BasePerfCalc]] = [
-        Calc.Factor_FrontFace ,
-        Calc.Factor_Coverage ,
-        Calc.Factor_IC_Curve , 
-        Calc.Factor_IC_Decay ,
-        Calc.Factor_IC_Indus ,
-        Calc.Factor_IC_Year ,
-        Calc.Factor_IC_Benchmark ,
-        Calc.Factor_IC_Monotony ,
-        Calc.Factor_PnL_Curve ,
-        Calc.Factor_Style_Corr ,
-        # Calc.Factor_Style_Corr_Distrib ,
-        Calc.Factor_Group_Curve ,
-        Calc.Factor_Group_Decay ,
-        Calc.Factor_Group_IR_Decay ,
-        Calc.Factor_Group_Year ,
-        Calc.Factor_Distrib_Curve ,
-        # Calc.Factor_Distrib_Qtile ,
+    TASK_LIST : list[Type[Calc.FactorCalc]] = [
+        Calc.FrontFace ,
+        Calc.Coverage ,
+        Calc.IC_Curve , 
+        Calc.IC_Decay ,
+        Calc.IC_Indus ,
+        Calc.IC_Year ,
+        Calc.IC_Benchmark ,
+        Calc.IC_Monotony ,
+        Calc.PnL_Curve ,
+        Calc.Style_Corr ,
+        # Calc.Style_Corr_Distrib ,
+        Calc.Group_Curve ,
+        Calc.Group_Decay ,
+        Calc.Group_IR_Decay ,
+        Calc.Group_Year ,
+        Calc.Distrib_Curve ,
+        # Calc.Distrib_Qtile ,
     ]
 
     def calc(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = None , verbosity = 1):
