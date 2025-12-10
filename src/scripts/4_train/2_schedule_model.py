@@ -39,8 +39,7 @@ from src.app import ScriptTool
 def main(schedule_name : str | None = None , short_test : bool | None = None , 
          resume : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
     assert schedule_name is not None , 'schedule_name is required'
-    ModelAPI.schedule_model(schedule_name , short_test , 1 if resume is None else int(resume) , 
-                            start = start , end = end)
+    ModelAPI.schedule_model(schedule_name , short_test , 0 if resume is None else int(resume) , start = start , end = end)
         
 if __name__ == '__main__':
     main()

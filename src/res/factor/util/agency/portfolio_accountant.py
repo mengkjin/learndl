@@ -283,9 +283,9 @@ class PortfolioAccountManager:
         return self
     
     def select_analytic(self , category : Literal['optim' , 'top'] , task_name : str , **kwargs):
-        from src.res.factor.analytic import FmpOptimManager , FmpTopManager , BaseOptimCalc , BaseTopPortCalc
+        from src.res.factor.analytic import OptimFMPTest , TopFMPTest , BaseOptimCalc , BaseTopPortCalc
 
-        task_list = FmpTopManager.TASK_LIST if category == 'top' else FmpOptimManager.TASK_LIST
+        task_list = TopFMPTest.TASK_LIST if category == 'top' else OptimFMPTest.TASK_LIST
         match_task = [task for task in task_list if task.match_name(task_name)]
         assert match_task and len(match_task) <= 1 , f'no match or duplicate match tasks : {task_name}'
         task , task_name = match_task[0] , match_task[0].__name__

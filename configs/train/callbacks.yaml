@@ -9,5 +9,4 @@ StatusDisplay:      {}
 #TrainConverge:      {'patience' : 5 , 'eps' : 1.0e-5} 
 #FitConverge:        {'patience' : 5 , 'eps' : 1.0e-5}
 #CudaEmptyCache:     {'batch_interval' : 20}
-GroupReturnAnalysis:  {}
 DetailedAlphaAnalysis:  {}

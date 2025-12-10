@@ -7,9 +7,9 @@ from ..test_manager import BaseTestManager
 from ...util import Benchmark , StockFactor
 from ...fmp import PortfolioBuilderGroup
 
-__all__ = ['FmpTopManager']
+__all__ = ['TopFMPTest']
 
-class FmpTopManager(BaseTestManager):
+class TopFMPTest(BaseTestManager):
     '''
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
@@ -44,12 +44,12 @@ class FmpTopManager(BaseTestManager):
         alpha_models = factor.alpha_models()
         benchmarks = Benchmark.get_benchmarks(benchmarks)
         self.update_kwargs(n_bests = n_bests , verbosity = verbosity)
-        self.portfolio_group = PortfolioBuilderGroup('top' , alpha_models , benchmarks , **self.kwargs)
+        self.portfolio_group = PortfolioBuilderGroup('top' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , **self.kwargs)
         self.account = self.portfolio_group.building().accounting().total_account()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              n_bests = [20,30,50,100] , verbosity = 1 , **kwargs):
-        with Timer(f'{self.__class__.__name__} calc' , silent = verbosity < 1):
+        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1):
             self.generate(factor , benchmark , n_bests = n_bests , verbosity = verbosity)
             for task in self.tasks.values():  
                 task.calc(self.account , verbosity = verbosity - 1) 

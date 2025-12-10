@@ -1,8 +1,9 @@
 from typing import Any , Literal
+from pathlib import Path
 
 from src.res.factor.util import StockFactor
 from src.res.factor.risk import TuShareCNE5_Calculator
-from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfManager , FmpOptimManager , FmpTopManager , FmpT50Manager , FmpScreenManager , FmpRevScreenManager
+from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfTest , OptimFMPTest , TopFMPTest , T50FMPTest , ScreenFMPTest , RevScreenFMPTest
 from src.res.factor.calculator import (
     StockFactorHierarchy , StockFactorUpdater , MarketFactorUpdater , 
     AffiliateFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater
@@ -71,17 +72,17 @@ class FactorTestAPI:
     @classmethod
     def get_test_manager(cls , test_type : TYPE_of_TASK):
         if test_type == 'factor':
-            return FactorPerfManager
+            return FactorPerfTest
         elif test_type == 'optim':
-            return FmpOptimManager
+            return OptimFMPTest
         elif test_type == 'top':
-            return FmpTopManager
+            return TopFMPTest
         elif test_type == 't50':
-            return FmpT50Manager
+            return T50FMPTest
         elif test_type == 'screen':
-            return FmpScreenManager
+            return ScreenFMPTest
         elif test_type == 'revscreen':
-            return FmpRevScreenManager
+            return RevScreenFMPTest
         else:
             raise ValueError(f'Invalid test type: {test_type}')
 
@@ -99,23 +100,12 @@ class FactorTestAPI:
         factor.full_analyze()
         return factor
         
-    @staticmethod
-    def _print_test_info(test_type : TYPE_of_TASK , factor : StockFactor ,
-                         benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
-                         write_down = False , display_figs = False):
-        n_factor = len(factor.factor_names)
-        benchmark_str = f'{len(benchmark)} BMs' if isinstance(benchmark , list) else f'BM [{str(benchmark)}]'
-        print(f'Running {test_type} test for {n_factor} factors in {benchmark_str}, write_down={write_down}, display_figs={display_figs}')
-
     @classmethod
     def run_test(cls , test_type : TYPE_of_TASK , 
                  factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
-                 write_down = False , display_figs = False , verbosity = 1 , 
-                 project_name : str | None = None , **kwargs):
-        if verbosity > 0: 
-            cls._print_test_info(test_type , factor , benchmark , write_down , display_figs)
-        test_manager = cls.get_test_manager(test_type)
-        pm = test_manager.run_test(factor , benchmark , verbosity=verbosity , project_name = project_name , **kwargs)
+                 test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , 
+                 verbosity = 1 , write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
+        pm = cls.get_test_manager(test_type).run_test(factor , benchmark , test_name , test_path , resume , verbosity=verbosity , save_resumable = save_resumable , **kwargs)
         if write_down:   
             pm.write_down()
         if display_figs: 
@@ -124,22 +114,25 @@ class FactorTestAPI:
 
     @classmethod
     def FactorPerf(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
-                   write_down = False , display_figs = False , verbosity = 1 , project_name : str | None = None , **kwargs):
-        pm = cls.run_test('factor' , factor , benchmark , write_down , display_figs , verbosity , project_name = project_name , **kwargs)
-        assert isinstance(pm , FactorPerfManager) , 'FactorPerfManager is expected!'
+                   test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , 
+                   verbosity = 1 , write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
+        pm = cls.run_test('factor' , factor , benchmark , test_name , test_path , resume , verbosity , write_down , display_figs , save_resumable , **kwargs)
+        assert isinstance(pm , FactorPerfTest) , 'FactorPerfTest is expected!'
         return pm
     
     @classmethod
     def FmpOptim(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
-                 write_down = False , display_figs = False , verbosity = 1 , project_name : str | None = None , **kwargs):
-        pm = cls.run_test('optim' , factor , benchmark , write_down , display_figs , verbosity , project_name = project_name , **kwargs)
-        assert isinstance(pm , FmpOptimManager) , 'FmpOptimManager is expected!'
+                 test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , 
+                 verbosity = 1 , write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
+        pm = cls.run_test('optim' , factor , benchmark , test_name , test_path , resume , verbosity , write_down , display_figs , save_resumable , **kwargs)
+        assert isinstance(pm , OptimFMPTest) , 'OptimFMPTest is expected!'
         return pm
 
 
     @classmethod
     def FmpTop(cls , factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' , 
-               write_down = False , display_figs = False , verbosity = 1 , project_name : str | None = None , **kwargs):
-        pm = cls.run_test('top' , factor , benchmark , write_down , display_figs , verbosity , project_name = project_name , **kwargs)
-        assert isinstance(pm , FmpTopManager) , 'FmpTopManager is expected!'
+               test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , 
+               verbosity = 1 , write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
+        pm = cls.run_test('top' , factor , benchmark , test_name , test_path , resume , verbosity , write_down , display_figs , save_resumable , **kwargs)
+        assert isinstance(pm , TopFMPTest) , 'TopFMPTest is expected!'
         return pm

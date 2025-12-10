@@ -1,4 +1,3 @@
-import datetime
 from typing import Any , Literal
 
 from src.proj import Logger
@@ -10,7 +9,7 @@ from src.res.factor.calculator import StockFactorHierarchy
 from .util import wrap_update
 
 __all__ = [
-    'FactorAPI' , 'get_random_factor' , 'get_real_factor' , 'get_factor' , 'get_project_name' ,
+    'FactorAPI' , 'get_random_factor' , 'get_real_factor' , 'get_factor' , 
     'RiskModelUpdater' , 'FactorCalculatorAPI' , 'FactorTestAPI' , 'StockFactorHierarchy' ,
     'StockFactor' , 'DATAVENDOR'
 ]
@@ -34,12 +33,6 @@ def get_factor(names = None , factor_type : Literal['factor' , 'pred'] = 'factor
         if verbosity > 0: 
             print(f'Getting factor values for {names}...')
         return get_real_factor(names , factor_type , start_dt , end_dt , step)
-    
-def get_project_name(names = None , factor_type : Literal['factor' , 'pred'] = 'factor'):
-    if not names or names == 'random':
-        return 'random_factor'
-    else:
-        return f'{factor_type}_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
 class FactorAPI:
     """
@@ -123,9 +116,8 @@ class FactorAPI:
                        write_down = True , display_figs = False , verbosity = 1 , 
                        **kwargs):
             with Logger.ParagraphIII(' test factor performance '):
-                project_name = get_project_name(names , factor_type)
                 factor = get_factor(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
-                ret = FactorTestAPI.FactorPerf(factor , benchmark , write_down , display_figs , verbosity , project_name , **kwargs)
+                ret = FactorTestAPI.FactorPerf(factor , benchmark , verbosity = verbosity , write_down = write_down , display_figs = display_figs , **kwargs)
             return ret
         
         @staticmethod
@@ -136,9 +128,8 @@ class FactorAPI:
                      prob_type : Literal['linprog' , 'quadprog' , 'socp'] = 'linprog' ,
                      **kwargs):
             with Logger.ParagraphIII(' test optimized fmp '):
-                project_name = get_project_name(names , factor_type)
                 factor = get_factor(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
-                ret = FactorTestAPI.FmpOptim(factor , benchmark , write_down , display_figs , verbosity , project_name , prob_type = prob_type ,**kwargs)
+                ret = FactorTestAPI.FmpOptim(factor , benchmark , verbosity = verbosity , write_down = write_down , display_figs = display_figs , prob_type = prob_type ,**kwargs)
             return ret
         
         @staticmethod
@@ -148,9 +139,8 @@ class FactorAPI:
                    write_down = True , display_figs = False , verbosity = 1 , 
                    **kwargs):
             with Logger.ParagraphIII(' test top fmp '):
-                project_name = get_project_name(names , factor_type)
                 factor = get_factor(names , factor_type , start_dt , end_dt , step , verbosity = verbosity)
-                ret = FactorTestAPI.FmpTop(factor , benchmark , write_down , display_figs , verbosity , project_name , **kwargs)
+                ret = FactorTestAPI.FmpTop(factor , benchmark , verbosity = verbosity , write_down = write_down , display_figs = display_figs , **kwargs)
             return ret
 
     @classmethod

@@ -204,7 +204,7 @@ class TradingPort:
             alpha_model = alpha.item()
             pf['alpha'] = alpha_model.alpha_of(pf['secid'])
             pf['alpha_rank'] = alpha_model.alpha_of(pf['secid'] , rank = True)
-        return pf
+        return pf.assign(name = self.name , date = date)
     
     def build_backward(self , date : int , reset_port = False , export = True) -> pd.DataFrame:
         assert self.backtest , 'backtest must be True'
@@ -224,9 +224,7 @@ class TradingPort:
         print(f'Perform backtest for TradingPort {self.name} , {len(date_list)} days')
         pf = None
         for d in date_list:
-            df = self.build_portfolio(d , reset_port = False , export = export , last_port = pf)
-            pf = Portfolio.from_dataframe(df.assign(date = d , name = self.name))
-
+            pf = Portfolio.from_dataframe(self.build_portfolio(d , export = export , last_port = pf))
         return pd.DataFrame()
     
     def load_portfolio(self , start : int | None = None , end : int | None = None) -> Portfolio:

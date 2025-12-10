@@ -34,6 +34,9 @@ class Portfolio:
     def copy(self): 
         return deepcopy(self)
     @property
+    def is_empty(self):
+        return len(self) == 0
+    @property
     def name(self): 
         return self._name.lower()
 
@@ -60,7 +63,7 @@ class Portfolio:
         
     def append(self , port : Port , override = False , ignore_name = False):
         assert ignore_name or port.name in ['none' , 'empty'] or self.name == port.name , (self.name , port.name)
-        assert override or (port.date not in self.ports.keys()) , (port.name , port.date)
+        assert override or (port.date not in self.ports) , f'port {port.name} {port.date} already exists , portfolio dates: {self.port_date}'
         if port.is_emtpy(): 
             return
         self.ports[port.date] = port
@@ -77,7 +80,7 @@ class Portfolio:
         tar_dates = available_dates[available_dates < date]
         return max(tar_dates) if len(tar_dates) else -1
     def has(self , date : int):
-        return date in self.ports.keys()
+        return date in self.ports
     def get(self , date : int , latest = False): 
         port = self.ports.get(date , None)
         if port is None:
@@ -134,11 +137,16 @@ class Portfolio:
     @classmethod
     def load(cls , path : Path | str) -> 'Portfolio':
         path = Path(path)
-        assert path.exists() , f'{path} not exists'
-        return cls.from_dataframe(pd.read_feather(path))
+        if path.exists():
+            return cls.from_dataframe(pd.read_feather(path))
+        else:
+            return cls(path.stem)
+        
 
-    def save(self , path : Path | str):
+    def save(self , path : Path | str , overwrite = False):
         path = Path(path)
+        if path.exists() and not overwrite:
+            raise FileExistsError(f'{path} already exists')
         path.parent.mkdir(parents=True, exist_ok=True)
         self.to_dataframe().to_feather(path)
     

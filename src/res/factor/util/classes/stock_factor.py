@@ -216,6 +216,12 @@ class StockFactor:
         factor.eval_ic()
         factor.eval_group_perf()
     """
+    def __new__(cls , factor = None , *args , **kwargs):
+        if isinstance(factor , StockFactor):
+            return factor
+        else:
+            return super().__new__(cls)
+
     def __init__(self , factor : 'None|pd.DataFrame|pd.Series|DataBlock|StockFactor|dict[int,pd.Series|pd.DataFrame]' = None , normalized = False):
         self.update(factor if factor is not None else pd.DataFrame() , normalized)
         InstanceRecord.update_factor(self)
@@ -241,8 +247,13 @@ class StockFactor:
         """
         update the factor data
         """
+        if isinstance(factor , StockFactor):
+            assert factor.normalized == normalized , f'normalized must be the same as the original factor : {factor.normalized} != {normalized}'
+            return factor
+
         self._df  : pd.DataFrame | Any = None
         self._blk : DataBlock | Any = None
+        self._alpha_models : dict[str,AlphaModel] = {}
         self.normalized = normalized
         self.subsets : dict[str,StockFactor] = {}
         self.stats : dict[str,tuple[dict[str,Any],pd.DataFrame]] = {}
@@ -277,16 +288,26 @@ class StockFactor:
         """
         return deepcopy(self)
 
-    def filter(self , dates : Iterable[Any] | None = None , **kwargs):
+    def filter_dates(self , dates : np.ndarray | Any | None = None , exclude = False , inplace = False):
         """
         filter the factor data by dates or other index
         """
         if dates is None:
             return self
-        df = self._df
-        if dates is not None:
-            df = df.query('date in @dates')
-        return StockFactor(df , normalized = self.normalized) 
+        df = self._df.query('date not in @dates' if exclude else 'date in @dates')
+        return self.update(df , normalized = self.normalized) if inplace else StockFactor(df , normalized = self.normalized)
+
+    def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
+        if secid is None: 
+            return self
+        df = self._df.query('secid not in @secid' if exclude else 'secid in @secid')
+        return self.update(df , normalized = self.normalized) if inplace else StockFactor(df , normalized = self.normalized)
+
+    def filter_by(self , step : int = 1):
+        """
+        filter the factor data by step
+        """
+        return self.filter_dates(self.date[::step])
 
     def rename(self , new_name : str | list[str] | dict[str,str] , inplace = True):
         """
@@ -441,18 +462,33 @@ class StockFactor:
             self.subsets[benchmark.name] = StockFactor(benchmark(self.prior_input) if benchmark else self.prior_input)
         return self.subsets[benchmark.name]
     
-    def alpha_model(self) -> AlphaModel:
+    def alpha_model(self , use_cache = True) -> AlphaModel:
         """
         transform the factor to alpha model , only one factor is supported
         """
         assert len(self.factor_names) == 1 , f'only one factor is supported for alpha model , but got {len(self.factor_names)}'
-        return self.alpha_models()[0]
+        name = self.factor_names[0]
+        if name not in self._alpha_models or not use_cache:
+            self._alpha_models[name] = self._get_alpha_model(name)
+        return self._alpha_models[name]
 
-    def alpha_models(self) -> list[AlphaModel]:
+    def alpha_models(self , use_cache = True) -> list[AlphaModel]:
         """
         transform the factor to alpha models , multiple factors are supported
         """
-        return [AlphaModel.from_dataframe(data , col) for col , data in self.frame().items()]
+        models = []
+        for name in self.factor_names:
+            if name not in self._alpha_models or not use_cache:
+                self._alpha_models[name] = self._get_alpha_model(name)
+            models.append(self._alpha_models[name])
+        return models
+
+    def _get_alpha_model(self , name : str):
+        """
+        update the alpha models
+        """
+        assert name in self.factor_names , f'{name} is not in the factor names : {self.factor_names}'
+        return AlphaModel.from_dataframe(self.frame()[name] , name)
 
     def frame_with_cols(self , indus = False , fut_ret = False , ffmv = False ,
                         nday : int = 10 , lag : int = 2 , ret_type : Literal['close' , 'vwap'] = 'close') -> pd.DataFrame:
@@ -616,9 +652,9 @@ class StockFactor:
         """
         select the analytic task by task name
         """
-        from src.res.factor.analytic import FactorPerfManager
+        from src.res.factor.analytic import FactorPerfTest
 
-        match_task = [task for task in FactorPerfManager.TASK_LIST if task.match_name(task_name)]
+        match_task = [task for task in FactorPerfTest.TASK_LIST if task.match_name(task_name)]
         assert match_task and len(match_task) <= 1 , f'no match or duplicate match tasks : {task_name}'
         task , task_name = match_task[0] , match_task[0].__name__
         if not hasattr(self , 'analytic_tasks'): 

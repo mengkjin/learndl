@@ -8,6 +8,7 @@ from src.basic import CALENDAR , Email
 from src.res.trading.util import TradingPort
 
 FOCUSED_PORTS = ['use_daily']
+
 class TradingPortfolioTracker:
     @classmethod
     def update(cls , reset_ports : list[str] | None = None):

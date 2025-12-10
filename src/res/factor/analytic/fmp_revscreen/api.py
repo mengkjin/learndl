@@ -7,9 +7,9 @@ from ..test_manager import BaseTestManager
 from ...util import StockFactor , Universe
 from ...fmp import PortfolioBuilderGroup
 
-__all__ = ['FmpRevScreenManager']
+__all__ = ['RevScreenFMPTest']
 
-class FmpRevScreenManager(BaseTestManager):
+class RevScreenFMPTest(BaseTestManager):
     '''
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
@@ -31,17 +31,19 @@ class FmpRevScreenManager(BaseTestManager):
     ]
 
     def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , verbosity = 2 , **kwargs):
-        alpha_models = factor.alpha_models()
-        dates = np.unique(np.concatenate([alpha.available_dates() for alpha in alpha_models]))
-        universe = Universe('top-1000')
-        benchmarks = [universe.to_portfolio(dates).rename('univ')]
+        with Timer(f'{self.__class__.__name__}.get_alpha_models'):
+            alpha_models = factor.alpha_models()
+        with Timer(f'{self.__class__.__name__}.get_universe'):
+            dates = np.unique(np.concatenate([alpha.available_dates() for alpha in alpha_models]))
+            universe = Universe('top-1000')
+            benchmarks = [universe.to_portfolio(dates).rename('univ')]
         self.update_kwargs(verbosity = verbosity)
-        self.portfolio_group = PortfolioBuilderGroup('revscreen' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , **self.kwargs)
+        self.portfolio_group = PortfolioBuilderGroup('revscreen' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , resume = self.resume , resume_path = self.resume_path , **self.kwargs)
         self.account = self.portfolio_group.building().accounting().total_account()
 
     def calc(self , factor : StockFactor , benchmark : Any = 'defaults' , verbosity = 1 , **kwargs):
         self.generate(factor , benchmark , verbosity = verbosity)
-        with Timer(f'{self.__class__.__name__} calc' , silent = verbosity < 1):
+        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1):
             for task in self.tasks.values():  
                 task.calc(self.account , verbosity = verbosity - 1) 
         return self

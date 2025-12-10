@@ -607,7 +607,7 @@ class ModelParam:
 class TrainConfig(TrainParam):
     def __init__(
         self , base_path : ModelPath | Path | str | None , override = None, schedule_name : str | None = None ,
-        stage = -1 , resume = -1 , checkname = -1 , makedir = True , start : int | None = None , end : int | None = None , **kwargs
+        stage = -1 , resume = -1 , selection = -1 , makedir = True , start : int | None = None , end : int | None = None , **kwargs
     ):
         self.device = Device()
         self.start  = start
@@ -615,18 +615,18 @@ class TrainConfig(TrainParam):
         self.Train  = TrainParam(base_path , override, schedule_name , **kwargs)
         self.Model  = self.Train.generate_model_param()
 
-        self.process_parser(stage , resume , checkname)
+        self.process_parser(stage , resume , selection)
         assert self.Train.model_base_path , self.Train.model_name
         if not base_path and makedir: 
             self.makedir()
         
 
     @classmethod
-    def default(cls , module = None , override = None , stage = 0, resume = 0 , checkname = 0 , makedir = False):
+    def default(cls , module = None , override = None , stage = 0, resume = 0 , selection = 0 , makedir = False):
         if module:
             override = override or {}
             override['model.module'] = module
-        return cls(None, override , stage = stage,resume=resume , checkname=checkname,makedir=makedir)
+        return cls(None, override , stage = stage,resume=resume , selection=selection,makedir=makedir)
         
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
     
@@ -641,7 +641,7 @@ class TrainConfig(TrainParam):
         return cls(model_path , override = override, stage = stage)
 
     def makedir(self):
-        if 'fit' in self.stage_queue and not self.resume_training:
+        if 'fit' in self.stage_queue and not self.is_resuming:
             if self.model_base_path.base.exists(): 
                 if not self.short_test and self.Train.resumeable:
                     raise Exception(f'{self.model_name} resumeable, re-train has to delete folder manually')
@@ -682,7 +682,7 @@ class TrainConfig(TrainParam):
         if self.module_type == 'db':
             beg_date = max(beg_date , DB.min_date(self.db_mapping.src , self.db_mapping.key))
         elif self.module_type == 'factor':
-            beg_date = max(beg_date , self.factor_factor_calculator.init_date)
+            beg_date = max(beg_date , self.factor_factor_calculator.get_min_date())
         if self.start is not None:
             beg_date = max(beg_date , self.start)
         return beg_date
@@ -692,7 +692,7 @@ class TrainConfig(TrainParam):
         if self.module_type == 'db':
             end_date = min(end_date , DB.max_date(self.db_mapping.src , self.db_mapping.key))
         elif self.module_type == 'factor':
-            end_date = min(end_date , self.factor_factor_calculator.final_date)
+            end_date = min(end_date , self.factor_factor_calculator.get_max_date())
         if self.end is not None:
             end_date = min(end_date , self.end)
         return end_date
@@ -749,6 +749,14 @@ class TrainConfig(TrainParam):
         torch.backends.cudnn.deterministic = True
 
     def parser_stage(self , value = -1 , verbose = True):
+        """
+        parser stage queue
+        value:
+            -1: choose
+            0: fit + test
+            1: fit only
+            2: test only
+        """
         stage_queue : list[Literal['data' , 'fit' , 'test']] = ['data' , 'fit' , 'test']
         if self.module_type in ['db' , 'factor']:
             stage_queue = ['data' , 'test']
@@ -765,98 +773,115 @@ class TrainConfig(TrainParam):
         self._stage_queue = stage_queue
 
     def parser_resume(self , value = -1 , verbose = True):
-        '''ask if resume training when candidate names exists'''
+        """
+        parser resume flag
+        value:
+            -1: choose
+            0: no
+            1: yes
+        """
         model_name = self.model_name
         assert model_name is not None , f'{self} has model_name None'
-        candidate_name = sorted([m.name for m in self.model_root_path.iterdir() if m.name.split('.')[0] == model_name])
-        if len(candidate_name) > 0 and 'fit' in self.stage_queue:
-            if value < 0:
+        candidate_name = sorted([m.name for m in self.model_root_path.iterdir() if m.name.split('.')[0] == model_name]) 
+        if value < 0:
+            if not candidate_name:
+                value = 0
+            else:
                 Logger.info(f'--Multiple model path of {model_name} exists, input [yes] to resume training, or start a new one!')
                 user_input = input(f'Confirm resume training [{model_name}]? [yes/no] : ')
                 value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
-            self.resume_training = value > 0 
-            if verbose:
-                Logger.info(f'--Confirm Resume Training!' if self.resume_training else '--Start Training New!')
-        else:
-            self.resume_training = False
+        self.is_resuming = value > 0 
+        if verbose:
+            Logger.info(f'--Confirm Resume Training!' if self.is_resuming else '--Start Training New!')
 
     def parser_select(self , value = -1 , verbose = True):
         '''
-        checkname confirmation
-        Confirm the model_name if multifple model_name dirs exists.
-        if train:
-            if zero or (resume and single): do it
-            elif resume and multiple: ask to choose one
-            elif not resume and single/multiple: ask to make new folder
-        else:
-            if multiple: ask to choose one
-            elif zero: raise
+        parse model_name selection if model_name dirs exists
+        value:
+            if no model_name dir exists:
+                skip this section
+            elif fit is in stage_queue:
+                -1: choose (if model_name dirs exists, ask to choose one)
+                0: raw model_name dir if is_resuming , create a new model_name dir otherwise
+                1,2,3,...: choose one by number, start from 1 (if not is_resuming , raise error)
+            elif test only:
+                -1: choose (if more than 1 model_name dirs exists, ask to choose one)
+                0: try to use the raw model_name dir
+                1,2,3,...: choose one by number, start from 1
         '''
         model_name = self.model_name
         assert model_name is not None , f'{self} has model_name None'
         candidate_name = sorted([m.name for m in self.model_root_path.iterdir() 
                                  if m.name == model_name or m.name.startswith(f'{model_name}.')])
-        if self.short_test:
+        if self.short_test or self.module_type in ['db' , 'factor'] or not candidate_name:
             ...
-        elif self.module_type in ['db' , 'factor']:
-            # model name should be the same as the base path name
-            ...
-        elif 'fit' in self.stage_queue and candidate_name:
-            if self.resume_training:
-                if len(candidate_name) == 1:
-                    model_name = candidate_name[0]
+        elif 'fit' in self.stage_queue:
+            if value < 0 or (value == 0 and self.is_resuming and model_name not in candidate_name):
+                Logger.info(f'--Model dirs of {model_name} exists, input number to choose!')
+                if self.is_resuming:
+                    Logger.info(f'    0: use the raw model_name [{model_name}] to resume training!')
                 else:
-                    if value < 0:
-                        Logger.info(f'--Attempting to resume but multiple models exist, input number to choose')
-                        [Logger.info(f'{i} : {self.model_root_path}/{model}') for i , model in enumerate(candidate_name)]
-                        value = int(input('which one to use? '))
-                    assert 0 <= value < len(candidate_name) , f'value {value} is out of range {len(candidate_name)}'
-                    model_name = candidate_name[value]
+                    Logger.info(f'    0: create a new model_name dir!')
+                for i , mn in enumerate(candidate_name):
+                    Logger.info(f'    {i+1}: [{mn}]')
+                value = int(input(f'which one to use? '))
+            if value < 0:
+                raise Exception(f'value {value} is out of range , must be 0 ~ {len(candidate_name)}')
+            elif value == 0: 
+                if self.is_resuming:
+                    if model_name not in candidate_name:
+                        Logger.error(f'The raw model_name [{model_name}] does not exist! You have to start a new training or manually delete the existing model_name dir!')
+                        raise Exception(f'the raw model_name [{model_name}] does not exist!')
+                    Logger.info(f'Input 0 to use the raw model_name [{model_name}] to resume training!')
+                else:
+                    if model_name in candidate_name:
+                        model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
+                    Logger.info(f'Input 0 to create a new model_name dir! New model_name is {model_name}')
             else:
-                if value < 0:
-                    #Logger.info(f'--Model dirs of {model_name} exists, input [yes] to add a new directory!')
-                    #user_input = input(f'Add a new folder of [{model_name}]? [yes/no] : ').lower()
-                    #value = 1 if user_input.lower() in ['' , 'yes' , 'y' ,'t' , 'true' , '1'] else 0
-                    Logger.info(f'--Model dirs of {model_name} exists, automatically add a new directory!')
-                    value = 1
-                if value == 0: 
-                    raise Exception(f'--Model dirs of [{model_name}] exists!')
-                model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))
-
-        elif 'fit' not in self.stage_queue and 'test' in self.stage_queue:
-            assert self.module_type == 'factor' or len(candidate_name) > 0 , f'no models of {model_name} while you want to test'
-            if len(candidate_name) == 0:
-                ...
-            elif len(candidate_name) == 1:
-                model_name = candidate_name[0]
+                model_name = candidate_name[value-1]
+                if not self.is_resuming:
+                    Logger.error(f'You are not resuming, cannot choose model_name {model_name}! You have to start a new training or manually delete the existing model_name dir!')
+                    raise Exception(f'you are not resuming, cannot choose model_name {model_name}')
+        elif 'test' in self.stage_queue:
+            if len(candidate_name) == 1 and candidate_name[0] == model_name:
+                value = 0 # use the raw model_name dir
+            elif value < 0 or (value == 0 and model_name not in candidate_name):
+                Logger.info(f'--Model dirs of {model_name} exists, input number to choose!')
+                Logger.info(f'    0: try to use raw model_name [{model_name}]!')
+                for i , mn in enumerate(candidate_name):
+                    Logger.info(f'    {i+1}: [{mn}]')
+                value = int(input(f'which one to use? '))
+            if value < 0:
+                raise Exception(f'value {value} is out of range , must be 0 ~ {len(candidate_name)}')
+            elif value == 0: 
+                if model_name not in candidate_name:
+                    Logger.error(f'The raw model_name [{model_name}] does not exist! You have to fit one or select a different model_name!')
+                    raise Exception(f'the raw model_name [{model_name}] does not exist!')
             else:
-                if value < 0:
-                    Logger.info(f'--Attempting to test while multiple models exists, input number to choose')
-                    [Logger.info(f'{i} : {self.model_root_path}/{model}') for i , model in enumerate(candidate_name)]
-                    value = int(input('which one to use? '))
-                assert 0 <= value < len(candidate_name) , f'value {value} is out of range {len(candidate_name)}'
-                model_name = candidate_name[value]
+                model_name = candidate_name[value-1]
+        else:
+            raise Exception(f'Invalid stage queue: {self.stage_queue}')
 
         if verbose:
             Logger.info(f'--Model_name is set to {model_name}!')  
         self.Train.reset_base_path(model_name)
         self.Model.reset_base_path(model_name)
 
-    def process_parser(self , stage = -1 , resume = -1 , checkname = -1 , verbose = True):
+    def process_parser(self , stage = -1 , resume = -1 , selection = -1 , verbose = True):
         if self.model_base_path:
             if resume == -1 or resume == 1:
                 resume = 1
             else:
                 raise ValueError(f'resume must be -1 or 1 when base_path is not None , got {resume}')
-            if checkname == -1 or checkname == 0:
-                checkname = 0
+            if selection == -1 or selection == 0:
+                selection = 0
             else:
-                raise ValueError(f'checkname must be -1 or 0 when base_path is not None , got {checkname}')
+                raise ValueError(f'selection must be -1 or 0 when base_path is not None , got {selection}')
             verbose = False
         
         self.parser_stage(stage , verbose)
         self.parser_resume(resume , verbose)
-        self.parser_select(checkname , verbose) 
+        self.parser_select(selection , verbose) 
         return self
 
     def print_out(self):
@@ -866,7 +891,7 @@ class TrainConfig(TrainParam):
             info_strs.append(f'Model Module : {self.model_module}')
             info_strs.append(f'Model Labels : {self.model_labels}')
             info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
-            info_strs.append(f'Resume Training : {self.resume_training}')
+            info_strs.append(f'Resuming     : {self.is_resuming}')
             
         else:
             info_strs.append(f'Model Module : {self.model_module}')
@@ -904,8 +929,8 @@ class TrainConfig(TrainParam):
             info_strs.append(f'Sampling     : {self.train_sample_method}')
             info_strs.append(f'Shuffling    : {self.train_shuffle_option}')
             info_strs.append(f'Random Seed  : {self.random_seed}')
-            info_strs.append(f'Stage Queue     : {self.stage_queue}')
-            info_strs.append(f'Resume Training : {self.resume_training}')
+            info_strs.append(f'Stage Queue  : {self.stage_queue}')
+            info_strs.append(f'Resuming     : {self.is_resuming}')
 
         
         print('\n'.join(info_strs))

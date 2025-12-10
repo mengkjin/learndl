@@ -9,7 +9,7 @@ from src.res.model.model_module.util.data_transform import batch_data_to_boost_i
 
 class NNBooster(BasePredictorModel):
     '''a group of ensemble models , of same net structure'''    
-    AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis' , 'StatusDisplay']
+    AVAILABLE_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay']
 
     @property
     def booster_param(self): 

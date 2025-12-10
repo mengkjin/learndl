@@ -76,9 +76,14 @@ class BaseTestManager(ABC):
     TASK_TYPE : TYPE_of_TASK
     TASK_LIST : list[Type[BaseCalculator]] = []
 
-    def __init__(self , which : str | list[str] | Literal['all'] = 'all' , project_name : str | None = None , **kwargs):
+    def __init__(self , test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False, save_resumable : bool = False , which : str | list[str] | Literal['all'] = 'all' , **kwargs):
         candidates = {task.task_name():task for task in self.TASK_LIST}
             
+        self.kwargs = kwargs
+        self.test_name = test_name
+        self.test_path = test_path
+        self.resume = resume
+        self.save_resumable = save_resumable
         if which == 'all':
             self.tasks = {k:v(**kwargs) for k,v in candidates.items()}
         else:
@@ -87,59 +92,66 @@ class BaseTestManager(ABC):
             illegal = np.setdiff1d(which , list(candidates.keys()))
             assert len(illegal) == 0 , f'Illegal task: {illegal}'
             self.tasks = {k:v(**kwargs) for k,v in candidates.items() if k in which}
-        self.kwargs = kwargs
-        self.project_name = project_name
-        self.get_project_name()
+        self.get_test_name()
 
     def __repr__(self):
         return f'{self.__class__.__name__} of task {self.TASK_TYPE} with {len(self.tasks)} calculators'
 
     @classmethod
     def run_test(cls , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
-                 which = 'all' , verbosity = 2 ,**kwargs):
-        pm = cls(which = which , **kwargs)
-        print(f'finish pm')
+                 test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , verbosity = 2 , which = 'all' , save_resumable : bool = False , **kwargs):
+        pm = cls(test_name , test_path , resume , save_resumable , which , **kwargs)
         pm.calc(StockFactor(factor) , benchmark , verbosity = verbosity)
         pm.plot(show = False , verbosity = verbosity)
         return pm
 
     @abstractmethod
     def calc(self , factor : StockFactor , *args , verbosity = 1 , **kwargs):
-        with Timer(f'{self.__class__.__name__} calc' , silent = verbosity < 1):
+        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1):
             for task in self.tasks.values():  
                 task.calc(factor , *args , verbosity = verbosity - 1 , **kwargs) 
         return self
 
     def plot(self , show = False , verbosity = 1):
-        with Timer(f'{self.__class__.__name__} plot' , silent = verbosity < 1):
+        with Timer(f'{self.__class__.__name__}.plot' , silent = verbosity < 1):
             for task in self.tasks.values(): 
                 task.plot(show = show , verbosity = verbosity - 1)
         return self
 
-    def get_project_name(self):
-        if self.project_name is None:
+    def get_test_name(self):
+        if self.test_name is None:
             start_time = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-            self.project_name = f'test_{start_time}'
-        return self.project_name
+            self.test_name = f'{self.__class__.__name__}_{start_time}'
+        return self.test_name
 
     @property
-    def project_path(self):
-        if self.TASK_TYPE == 'optim':
-            rslt_dir = PATH.rslt_optim
-        elif self.TASK_TYPE == 'top':
-            rslt_dir = PATH.rslt_top
-        elif self.TASK_TYPE == 'factor':
-            rslt_dir = PATH.rslt_factor
-        elif self.TASK_TYPE == 't50':
-            rslt_dir = PATH.result.joinpath('test').joinpath('t50')
-        elif self.TASK_TYPE == 'screen':
-            rslt_dir = PATH.result.joinpath('test').joinpath('screen')
-        elif self.TASK_TYPE == 'revscreen':
-            rslt_dir = PATH.result.joinpath('test').joinpath('revscreen')
+    def test_path(self):
+        if self._test_path is not None:
+            return self._test_path
         else:
-            raise ValueError(f'Invalid task type: {self.TASK_TYPE}')
-        rslt_dir.mkdir(parents=True , exist_ok=True)
-        return rslt_dir.joinpath(self.get_project_name())
+            if self.TASK_TYPE == 'optim':
+                rslt_dir = PATH.rslt_optim
+            elif self.TASK_TYPE == 'top':
+                rslt_dir = PATH.rslt_top
+            elif self.TASK_TYPE == 'factor':
+                rslt_dir = PATH.rslt_factor
+            elif self.TASK_TYPE in ['t50' , 'screen' , 'revscreen']:
+                rslt_dir = PATH.result.joinpath('test').joinpath(self.TASK_TYPE)
+            else:
+                raise ValueError(f'Invalid task type: {self.TASK_TYPE}')
+            rslt_dir.mkdir(parents=True , exist_ok=True)
+            return rslt_dir.joinpath(self.get_test_name())
+
+    @test_path.setter
+    def test_path(self , path : Path | str | None):
+        self._test_path = path if path is None else Path(path)
+
+    @property
+    def resume_path(self):
+        if self._test_path is None:
+            return None
+        else:
+            return self._test_path.joinpath(f'{self.TASK_TYPE}_portfolio')
 
     def get_rslts(self):
         return {k:v.calc_rslt for k,v in self.tasks.items()}
@@ -152,8 +164,8 @@ class BaseTestManager(ABC):
     
     def write_down(self):
         rslts , figs = self.get_rslts() , self.get_figs()
-        dfs_to_excel(rslts , self.project_path.joinpath(f'{self.TASK_TYPE}_data.xlsx') , print_prefix=f'{self.TASK_TYPE.title()} Analytic Test of {self.name_of_task()} datas')
-        figs_to_pdf(figs   , self.project_path.joinpath(f'{self.TASK_TYPE}_plot.pdf')  , print_prefix=f'{self.TASK_TYPE.title()} Analytic Test of {self.name_of_task()} plots')
+        dfs_to_excel(rslts , self.test_path.joinpath(f'{self.TASK_TYPE}_data.xlsx') , print_prefix=f'{self.TASK_TYPE.title()} Analytic Test of {self.name_of_task()} datas')
+        figs_to_pdf(figs   , self.test_path.joinpath(f'{self.TASK_TYPE}_plot.pdf')  , print_prefix=f'{self.TASK_TYPE.title()} Analytic Test of {self.name_of_task()} plots')
         return self
     
     @classmethod

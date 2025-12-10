@@ -6,9 +6,9 @@ from ..test_manager import BaseTestManager
 from ...util import Benchmark , StockFactor
 from ...fmp import PortfolioBuilderGroup
 
-__all__ = ['FmpOptimManager']
+__all__ = ['OptimFMPTest']
 
-class FmpOptimManager(BaseTestManager):
+class OptimFMPTest(BaseTestManager):
     '''
     Factor Model PortfolioPerformance Calculator Manager
     Parameters:
@@ -42,16 +42,18 @@ class FmpOptimManager(BaseTestManager):
 
     def optim(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
               add_lag = 1 , optim_config = None , verbosity = 2):
-        alpha_models = factor.alpha_models()
-        benchmarks = Benchmark.get_benchmarks(benchmarks)
+        with Timer(f'{self.__class__.__name__}.get_alpha_models'):
+            alpha_models = factor.alpha_models()
+        with Timer(f'{self.__class__.__name__}.get_benchmarks'):
+            benchmarks = Benchmark.get_benchmarks(benchmarks)
         self.update_kwargs(add_lag = add_lag , optim_config = optim_config , verbosity = verbosity)
-        self.portfolio_group = PortfolioBuilderGroup('optim' , alpha_models , benchmarks , **self.kwargs)
+        self.portfolio_group = PortfolioBuilderGroup('optim' , alpha_models , benchmarks , resume = self.resume , resume_path = self.resume_path , **self.kwargs)
         self.account = self.portfolio_group.building().accounting().total_account()
 
     def calc(self , factor : StockFactor , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
              add_lag = 1 , optim_config : str | Literal['default' , 'custome'] | None = None , verbosity = 1 , **kwargs):
         self.optim(factor , benchmark , add_lag = add_lag ,optim_config = optim_config , verbosity = verbosity)
-        with Timer(f'{self.__class__.__name__} calc' , silent = verbosity < 1):
+        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1):
             for task in self.tasks.values():  
                 task.calc(self.account , verbosity = verbosity - 1) 
         return self

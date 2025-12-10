@@ -632,7 +632,7 @@ class HtmlCatcher(OutputCatcher):
     def export(self , export_path: Path | None = None):
         if export_path is None: 
             export_path = self.get_export_path()
-        _critical(f"{self} Capturing Finished, saved to {export_path}")
+        _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)} , saved to {export_path}")
         export_path.parent.mkdir(exist_ok=True,parents=True)
         with open(export_path, 'w', encoding='utf-8') as f:
             f.write(self.generate_html())

@@ -12,10 +12,12 @@
 #       desc : choose a model
 #       prefix : "model/"
 #       required : True
-#   short_test : 
+#   resume : 
 #       type : [True , False]
-#       desc : short test
-#       prefix : "short_test/"
+#       prefix : "resume/"
+#       default : "resume/False"
+#       desc : resume testing , if change schedule file, set to False
+#       required : False
 #   start : 
 #       type : int
 #       desc : start date
@@ -31,9 +33,9 @@ from src.api import ModelAPI
 from src.app import ScriptTool
 
 @ScriptTool('test_model' , '@model_name' , lock_num = 0)
-def main(model_name : str | None = None , short_test : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
+def main(model_name : str | None = None , resume : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
     assert model_name is not None , 'model_name is required'
-    ModelAPI.test_model(model_name , short_test , start = start , end = end)
+    ModelAPI.test_model(model_name , resume = 0 if resume is None else int(resume) , start = start , end = end)
 
 if __name__ == '__main__':
     main()

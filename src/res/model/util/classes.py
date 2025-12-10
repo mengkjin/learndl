@@ -177,6 +177,9 @@ class TrainerStatus(ModelStreamLine):
             self.epoch_event.append(event)
 
 class TrainerPredRecorder(ModelStreamLine):
+    PRED_KEYS = ['model_num' , 'model_date' , 'submodel' , 'batch_idx']
+    PRED_IDXS = ['secid' , 'date']
+    PRED_COLS = ['pred' , 'label']
     def __init__(self , trainer : 'BaseTrainer') -> None:
         self.trainer = trainer
 
@@ -192,22 +195,31 @@ class TrainerPredRecorder(ModelStreamLine):
         return f'{self.trainer.model_num}.{self.trainer.model_submodel}.{self.trainer.model_date}.{self.trainer.batch_idx}'
 
     @property
-    def is_empty(self):
-        return not hasattr(self , 'preds') or len(self.preds) == 0
+    def dates(self):
+        return self.trainer.data.test_full_dates
 
     @property
-    def dates(self):
-        return self.trainer.data.test_full_dates 
-    
-    def collect_preds(self , interval : int = 1):
-        if self.is_empty: 
-            return pd.DataFrame()
-        elif interval == 1:
-            return pd.concat(self.preds.values())
-        else:
-            dates = self.dates[::interval] # noqa: F841
-            seq = [data.query('date in @dates') for data in self.preds.values()]
-            return pd.concat(seq)
+    def tested_preds(self) -> pd.DataFrame:
+        return self._tested_preds
+
+    @tested_preds.setter
+    def tested_preds(self , value : pd.DataFrame):
+        self._tested_preds = value
+
+    @property
+    def resume_preds(self) -> pd.DataFrame:
+        return self._resume_preds
+
+    @resume_preds.setter
+    def resume_preds(self , value : pd.DataFrame):
+        self._resume_preds = value
+
+    def get_preds(self , include_resume : bool = False , interval : int = 1) -> pd.DataFrame:
+        df = pd.concat([self.resume_preds , self.tested_preds]) if include_resume else self.tested_preds
+        if interval > 1:
+            dates = df['date'].unique()[::interval] # noqa: F841
+            df = df.query('date in @dates')
+        return df
     
     def append_batch_values(self):
         if self.pred_idx in self.preds.keys(): 
@@ -227,19 +239,25 @@ class TrainerPredRecorder(ModelStreamLine):
 
         label = pd.DataFrame({'secid' : secid , 'date' : date , 'label' : self.trainer.data.batch_label(self.trainer.batch_data)})
         
-        df = pred.merge(label , on=['secid' , 'date'])
+        df = pred.merge(label , on=self.PRED_IDXS)
         if which_output is None:
             df['pred'] = df.loc[:,[col for col in df.columns if col.startswith('pred.')]].mean(axis=1)
         else:
             df['pred'] = df[f'pred.{which_output}']
         df = df.assign(model_num = self.trainer.model_num , submodel = self.trainer.model_submodel , model_date = self.trainer.model_date , batch_idx = self.trainer.batch_idx)
-        df = df.loc[:,['model_num' , 'submodel' , 'model_date' , 'batch_idx' , 'secid' , 'date' , 'pred' , 'label']]
+        df = df.loc[:,self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS]
 
         self.preds[self.pred_idx] = df
 
+    def collect_preds(self):
+        if not self.preds:
+            return
+        self._tested_preds = pd.concat(self.preds.values())
+        self.preds.clear()
+
     def load_saved_preds(self) -> pd.DataFrame:
         df = DB.load_df(self.trainer.path_pred_dataframe)
-        if self.trainer.path_pred_dataframe.exists() and not np.isin(['model_num' , 'submodel' , 'model_date' , 'batch_idx' , 'secid' , 'date' , 'pred' , 'label'] , df.columns).all():
+        if self.trainer.path_pred_dataframe.exists() and not np.isin(self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS , df.columns).all():
             Logger.warning(f'{self.trainer.path_pred_dataframe} is not valid , removed automatically')
             self.trainer.path_pred_dataframe.unlink()
             return pd.DataFrame()
@@ -247,17 +265,26 @@ class TrainerPredRecorder(ModelStreamLine):
 
     def on_test_start(self):
         self.preds : dict[str,pd.DataFrame] = {}
+        self.tested_preds = pd.DataFrame()
+        self.resume_preds = pd.DataFrame()
 
+        if self.trainer.config.is_resuming:
+            df = self.load_saved_preds()
+            if not df.empty:
+                last_model_date = df['model_date'].max()
+                Logger.info(f'Resume testing, recognize past saved preds before model date {last_model_date}')
+                self.resume_preds = df.query('model_date < @last_model_date')
+                
     def on_test_batch_end(self): 
         self.append_batch_values()
 
     def on_test_end(self):
-        df = self.collect_preds()
-        pred_keys = ['model_num','submodel','model_date','batch_idx','secid','date']
-        old_df = self.load_saved_preds()
-        new_df = pd.concat([old_df , df])
+        self.collect_preds()
+        if self.tested_preds.empty:
+            return
+        new_df = pd.concat([self.load_saved_preds() , self.tested_preds])
         if not new_df.empty:
-            new_df = new_df.drop_duplicates(subset=pred_keys , keep='last').sort_values(by=pred_keys)
+            new_df = new_df.drop_duplicates(subset=self.PRED_KEYS + self.PRED_IDXS , keep='last').sort_values(by=self.PRED_KEYS + self.PRED_IDXS)
         DB.save_df(new_df , self.trainer.path_pred_dataframe , overwrite = True , verbose = False)
         print(f'Test Predictions saved to {self.trainer.path_pred_dataframe}')
         
@@ -479,8 +506,6 @@ class BaseTrainer(ModelStreamLine):
     @property
     def path_training_output(self) -> Path: return self.config.model_base_path.rslt('training_output.html')
     @property
-    def path_test_summary(self) -> Path:    return self.config.model_base_path.rslt('test_summary.xlsx')
-    @property
     def path_analytical_data(self) -> Path: return self.config.model_base_path.rslt('analytic_data.xlsx')
     @property
     def path_analytical_plot(self) -> Path: return self.config.model_base_path.rslt('analytic_plot.pdf')
@@ -489,6 +514,14 @@ class BaseTrainer(ModelStreamLine):
     @property
     def result_package(self) -> list[Path]: 
         return [self.path_training_output , self.path_analytical_plot , self.path_analytical_data]
+    @property
+    def tested_model_iter(self):
+        df = self.record.resume_preds.loc[:,['model_num' , 'model_date' , 'submodel']].drop_duplicates()
+        model_iter = []
+        for (model_num , model_date) , subdf in df.groupby(['model_num' , 'model_date']):
+            if np.isin(self.model_submodels , subdf['submodel']).all():
+                model_iter.append((model_date , model_num))
+        return model_iter
     
     def main_process(self):
         '''Main stage of data & fit & test'''
@@ -552,16 +585,20 @@ class BaseTrainer(ModelStreamLine):
         self.on_after_test_end()
 
     def iter_model_num_date(self): 
-        '''iter of model_date and model_num , considering resume_training'''
+        '''iter of model_date and model_num , considering is_resuming'''
         model_iter = list(itertools.product(self.data.model_date_list , self.config.model_num_list))
         assert self.status.stage in ['fit' , 'test'] , self.status.stage
-        if self.config.resume_training and self.status.stage == 'fit':
-            models_trained = np.full(len(model_iter) , True , dtype = bool)
-            for i , (model_date , model_num) in enumerate(model_iter):
-                if not self.deposition.exists(model_num , model_date):
-                    models_trained[max(i,0):] = False
-                    break
-            model_iter = Filtered(model_iter , ~models_trained)  
+        if self.config.is_resuming:
+            if self.status.stage == 'fit':
+                models_trained = np.full(len(model_iter) , True , dtype = bool)
+                for i , (model_date , model_num) in enumerate(model_iter):
+                    if not self.deposition.exists(model_num , model_date):
+                        models_trained[max(i,0):] = False
+                        break
+                model_iter = Filtered(model_iter , ~models_trained)
+            elif self.status.stage == 'test':
+                models_not_tested = [model not in self.tested_model_iter for model in model_iter]
+                model_iter = Filtered(model_iter , models_not_tested)
         #elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:
         #    model_iter = []
         return model_iter
@@ -758,7 +795,7 @@ class BaseCallBack(ModelStreamLineWithTrainer):
 class BasePredictorModel(ModelStreamLineWithTrainer):
     '''a group of ensemble models , of same net structure'''
     AVAILABLE_CALLBACKS = []
-    COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'GroupReturnAnalysis' , 'StatusDisplay']
+    COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay']
     
     def __init__(self, *args , **kwargs) -> None:
         self.reset()

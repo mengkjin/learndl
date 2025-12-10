@@ -1,6 +1,6 @@
 import os , pprint , psutil , torch
 import numpy as np
-from typing import Any
+from typing import Any, Callable, Iterable
 
 from pytimedinput import timedInput
 from scipy import stats
@@ -466,7 +466,7 @@ def recur_update(old : dict , update : dict | None) -> dict:
     return old
 
 class Filtered:
-    def __init__(self, iterable, condition , **kwargs):
+    def __init__(self, iterable, condition : Callable | Iterable , **kwargs):
         self.iterable  = iter(iterable)
         self.condition = condition if callable(condition) else iter(condition)
         self.kwargs = kwargs

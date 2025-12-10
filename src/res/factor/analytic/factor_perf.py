@@ -1,12 +1,15 @@
 import pandas as pd
 
-from typing import Any , Literal
+from typing import Any ,Literal , Type
 
-from ..test_manager import BaseCalculator
+from src.proj import Timer
 from src.res.factor.util import Benchmark , StockFactor
 from src.res.factor.util.plot.factor import Plotter
 from src.res.factor.util.stat import factor as Stat
 
+from .test_manager import BaseCalculator , BaseTestManager
+
+__all__ = ['FactorPerfTest']
 default_title = 'Factor'
 plotter = Plotter(default_title)
 
@@ -184,3 +187,54 @@ class Distrib_Qtile(FactorCalc):
         super().__init__(params = params , **kwargs)
     def calculator(self): return Stat.calc_distrib_qtile
     def plotter(self): return plotter.plot_distrib_qtile
+
+class FactorPerfTest(BaseTestManager):
+    '''
+    Factor Performance Calculator Manager
+    Parameters:
+        which : str | list[str] | Literal['all']
+            Which tasks to run. Can be any of the following:
+            'frontface' : Factor Front Face
+            'coverage' : Factor Coverage
+            'ic_curve' : IC Cumulative Curve
+            'ic_decay' : IC Decay
+            'ic_indus' : IC Industry
+            'ic_year' : IC Year Stats
+            'ic_benchmark' : IC Benchmark
+            'ic_mono' : IC Monotony
+            'pnl_curve' : PnL Cumulative Curve
+            'style_corr' : Factor Style Correlation
+            'grp_curve' : Group Return Cumulative Curve
+            'grp_decay_ir' : Group Return Decay
+            'grp_year' : Group Return Yearly Top
+            'distr_curve' : Distribution Curve
+        deprecated : 
+            'grp_decay_ret' : Group Return Decay
+            'distr_qtile' : Distribution Quantile
+    '''
+    TASK_TYPE = 'factor'
+    TASK_LIST : list[Type[FactorCalc]] = [
+        FrontFace ,
+        # Coverage ,
+        IC_Curve , 
+        # IC_Decay ,
+        IC_Indus ,
+        IC_Year ,
+        IC_Benchmark ,
+        IC_Monotony ,
+        # PnL_Curve ,
+        # Style_Corr ,
+        # Style_Corr_Distrib ,
+        # Group_Curve ,
+        # Group_Decay ,
+        # Group_IR_Decay ,
+        # Group_Year ,
+        # Distrib_Curve ,
+        # Distrib_Qtile ,
+    ]
+
+    def calc(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = None , verbosity = 1):
+        with Timer(f'{self.__class__.__name__}.calc' , silent = verbosity < 1):
+            for task in self.tasks.values(): 
+                task.calc(factor , benchmarks , verbosity = verbosity - 1)
+        return self

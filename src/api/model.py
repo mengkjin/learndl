@@ -63,13 +63,13 @@ class ModelAPI:
         return cls.Testor(module , data_types).try_forward()
     
     @classmethod
-    def initialize_trainer(cls , stage = 0 , resume = 0 , checkname= 1):
+    def initialize_trainer(cls , stage = 0 , resume = 0 , selection = 1):
         '''
         state:     [-1,choose] , [0,fit+test] , [1,fit] , [2,test]
         resume:    [-1,choose] , [0,no]       , [1,yes]
-        checkname: [-1,choose] , [0,default]  , [1,yes]
+        selection: [-1,choose] , [0,raw model name if resuming, create a new model name dir otherwise]  , [1,2,3,...: choose by number, start from 1]
         '''
-        return cls.Trainer.initialize(stage , resume , checkname)
+        return cls.Trainer.initialize(stage , resume , selection)
     
     @classmethod
     def prepare_predict_data(cls): 
@@ -92,31 +92,17 @@ class ModelAPI:
         train a model
         '''
         return cls.Trainer.train(module , short_test , verbosity = verbosity , start = start , end = end , 
-                                 stage = 0 , resume = 0 , checkname = 1 , **kwargs)
+                                 stage = 0 , resume = 0 , selection = 1 , **kwargs)
 
     @classmethod
     def resume_model(cls , model_name : str):
         '''
         resume a model
         '''
-        return cls.Trainer.resume(model_name = model_name)
-
-    @classmethod
-    def short_test(cls , module : str | None = None , verbosity : int | None = 10):
-        '''
-        Short test a module
-        module :
-            None: use default module
-            str : use the module name , must be in ModelAPI.Trainer.available_modules
-        verbosity :
-            None: use default verbosity
-            int : use the verbosity level , if above 10 will print more details
-        '''
-        return cls.Trainer.train(module = module , short_test=True , verbosity = verbosity ,
-                                 stage = 0 , resume = 0 , checkname= -1)
+        return cls.Trainer.resume_train(model_name = model_name)
     
     @classmethod
-    def test_model(cls , model_name : str | None = None , short_test : bool | None = None , 
+    def test_model(cls , model_name : str | None = None , resume : int = 0 ,
                    start : int | None = None , end : int | None = None , verbosity : int | None = 2 , **kwargs):
         '''
         test a existing model
@@ -127,7 +113,7 @@ class ModelAPI:
             None: use default verbosity
             int : use the verbosity level , if above 10 will print more details
         '''
-        return cls.Trainer.test(model_name , short_test , start = start , end = end , verbosity = verbosity , **kwargs)
+        return cls.Trainer.test(model_name , resume = int(resume) , start = start , end = end , verbosity = verbosity , **kwargs)
 
     @classmethod
     def test_db_mapping(cls , mapping_name : str | None = None , 
@@ -139,12 +125,12 @@ class ModelAPI:
                                            verbosity = verbosity , **kwargs)
 
     @classmethod
-    def test_factor(cls , factor_name : str | None = None , 
+    def test_factor(cls , factor_name : str | None = None , resume : int = 0 ,
                     start : int | None = None , end : int | None = None , verbosity : int | None = 2 , **kwargs):
         '''
         test a existing factor
         '''
-        return cls.Trainer.test_factor(factor_name , start = start , end = end , 
+        return cls.Trainer.test_factor(factor_name , resume = resume , start = start , end = end , 
                                        verbosity = verbosity , **kwargs)
 
     @classmethod
