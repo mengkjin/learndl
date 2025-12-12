@@ -11,7 +11,7 @@ from packaging import version
 from plottable import Table , ColumnDefinition
 from typing import Any , Literal
 
-from . import display
+from . import display as disp
 
 CURRENT_SEABORN_VERSION = version.Version(getattr(sns , '__version__')) > version.Version('0.9.1')
 
@@ -25,21 +25,28 @@ def new_figure(size = (16 , 7)):
 
 class PlotMultipleData:
     def __init__(self , data : pd.DataFrame , 
-                 group_key : str | list[str],  max_num = 1 , **kwargs):
+                 group_key : str | list[str] | None ,  num_groups_per_iter = 1 , **kwargs):
         self.data = data
-        if isinstance(group_key , str): 
+        if group_key is None:
+            group_key = []
+        elif isinstance(group_key , list): 
+            group_key = group_key
+        else:
             group_key = [group_key]
         self.group_key = [i for i in group_key if i in data.columns or i in data.index.names]
         self.fig_dict : dict[str , Figure] = {}
-        self.max_num   = max_num
+        self.num_groups_per_iter   = num_groups_per_iter
     
     def __iter__(self):
-        if self.max_num > 1:
+        if len(self.group_key) == 0:
+            yield SubPlotData(self.group_key , self.data , self.fig_dict , 'all')
+            return
+        if self.num_groups_per_iter > 1:
             fig_i : int = 0
             stack_dfs : list[pd.DataFrame] = []
             for g , df in self.data.groupby(self.group_key , group_keys=True , observed=True):
                 stack_dfs.append(df)
-                if len(stack_dfs) >= self.max_num:
+                if len(stack_dfs) >= self.num_groups_per_iter:
                     yield SubPlotData(self.group_key , pd.concat(stack_dfs) , self.fig_dict , f'P{fig_i+1}')
                     fig_i += 1
                     stack_dfs.clear()
@@ -55,7 +62,7 @@ class PlotMultipleData:
 
 @dataclass  
 class SubPlotData:
-    group_by : str | list[str] | None
+    group_by : list[str]
     sub_data : pd.DataFrame
     fig_dict : dict[str , Figure]
     fig_name : str 
@@ -78,10 +85,23 @@ class PlotFactorData:
                  dropna : bool | Literal['all' , 'any'] = True , rounding = 6 , suptitle = False):
         if isinstance(data , SubPlotData):
             data , name_key , fig  = data.sub_data , data.group_by , data.get_fig()
+        
+        if name_key is None:
+            name_key = []
+        elif isinstance(name_key , list):
+            name_key = name_key
+        else:
+            name_key = [name_key]
+
+        if drop is None:
+            self.drop_keys = []
+        elif isinstance(drop , list):
+            self.drop_keys = drop
+        else:
+            self.drop_keys = [drop]
 
         self.raw_index = [i for i in data.index.names if i]
         self.raw_data  = data.reset_index(self.raw_index)
-        self.drop_keys = drop if isinstance(drop , list) else [drop]
         self.sort_keys = [s for s in sort_keys if s in self.raw_data.columns]
         self.fig = fig if fig else new_figure()
 
@@ -96,7 +116,7 @@ class PlotFactorData:
         self.raw_data[numeric_cols] = self.raw_data[numeric_cols].round(rounding)
         
         for col in self.raw_data.columns: 
-            if col.endswith('date'): 
+            if str(col).endswith('date'): 
                 self.raw_data[col] = self.raw_data[col].astype(str)
 
     def __enter__(self):
@@ -114,7 +134,7 @@ class PlotFactorData:
         plt.tight_layout()
         plt.close(self.fig)
         if self.show: 
-            display.display(self.fig)
+            disp.display(self.fig)
 
     def title_suffix(self):
         if self.name_key:

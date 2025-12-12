@@ -3,7 +3,7 @@ from pathlib import Path
 
 from src.res.factor.util import StockFactor
 from src.res.factor.risk import TuShareCNE5_Calculator
-from src.res.factor.analytic import TASK_TYPES , TYPE_of_TASK , FactorPerfTest , OptimFMPTest , TopFMPTest , T50FMPTest , ScreenFMPTest , RevScreenFMPTest
+from src.res.factor.analytic import TEST_TYPES , TYPE_of_TEST , FactorPerfTest , OptimFMPTest , TopFMPTest , T50FMPTest , ScreenFMPTest , RevScreenFMPTest
 from src.res.factor.calculator import (
     StockFactorHierarchy , StockFactorUpdater , MarketFactorUpdater , 
     AffiliateFactorUpdater , PoolingFactorUpdater , FactorStatsUpdater
@@ -66,11 +66,11 @@ class FactorCalculatorAPI:
         StockFactorHierarchy.export_factor_table()
 
 class FactorTestAPI:
-    TASK_TYPES = TASK_TYPES
+    TEST_TYPES = TEST_TYPES
     Hierarchy = StockFactorHierarchy
 
     @classmethod
-    def get_test_manager(cls , test_type : TYPE_of_TASK):
+    def get_analytic_test(cls , test_type : TYPE_of_TEST):
         if test_type == 'factor':
             return FactorPerfTest
         elif test_type == 'optim':
@@ -87,6 +87,10 @@ class FactorTestAPI:
             raise ValueError(f'Invalid test type: {test_type}')
 
     @classmethod
+    def get_test_name(cls , test_type : TYPE_of_TEST):
+        return cls.get_analytic_test(test_type).__name__
+
+    @classmethod
     def FastAnalyze(cls , factor_name : str , start : int | None = 20170101 , end : int | None = None , step : int = 10 , lag = 2):
         calc = cls.Hierarchy.get_factor(factor_name)
         factor = calc.Factor(calc.FactorDates(start,end,step))
@@ -101,11 +105,11 @@ class FactorTestAPI:
         return factor
         
     @classmethod
-    def run_test(cls , test_type : TYPE_of_TASK , 
+    def run_test(cls , test_type : TYPE_of_TEST , 
                  factor : StockFactor , benchmark : list[str|Any] | str | Any | Literal['defaults'] = 'defaults' ,
                  test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False , 
                  verbosity = 1 , write_down = False , display_figs = False , save_resumable : bool = False , **kwargs):
-        pm = cls.get_test_manager(test_type).run_test(factor , benchmark , test_name , test_path , resume , verbosity=verbosity , save_resumable = save_resumable , **kwargs)
+        pm = cls.get_analytic_test(test_type).run_test(factor , benchmark , test_name , test_path , resume , verbosity=verbosity , save_resumable = save_resumable , **kwargs)
         if write_down:   
             pm.write_down()
         if display_figs: 

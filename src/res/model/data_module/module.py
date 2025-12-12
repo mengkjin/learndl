@@ -87,14 +87,17 @@ class DataModule(BaseDataModule):
         '''set critical dates for model date list and test full dates'''
         dates = self.datas.date_within(self.beg_date , self.end_date)
         self.data_dates = dates
-        self.test_full_dates = dates[1:]
-        if self.use_data == 'predict':
-            self.model_date_list = dates[:1] 
-        elif self.config.module_type in ['factor' , 'db']:
-            # first day and every month end
-            self.model_date_list = np.unique(dates[[[0,*np.where(np.diff(dates // 100) != 0)[0]]]])
+
+        if self.config.module_type in ['factor' , 'db']:
+            # first day's previous day and every month end
+            self.test_full_dates = dates
+            self.model_date_list = np.concatenate([self.datas.date[self.datas.date < self.beg_date][-1:] , dates[np.where(np.diff(dates // 100) != 0)[0]]])
         else:
-            self.model_date_list = dates[::self.config.model_interval]
+            self.test_full_dates = dates[1:]
+            if self.use_data == 'predict':
+                self.model_date_list = dates[:1]
+            else:
+                self.model_date_list = dates[::self.config.model_interval]
 
     @property
     def beg_date(self):

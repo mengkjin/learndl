@@ -7,18 +7,17 @@ from typing import Literal , Type
 
 from src.proj import PATH , MACHINE , Logger
 from src.basic import CALENDAR , RegisteredModel , DB
-from src.func import dfs_to_excel , figs_to_pdf
-from src.func import display as disp
+from src.func import dfs_to_excel , figs_to_pdf , display as disp
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Universe
 from src.res.factor.fmp import PortfolioBuilder
-from src.res.factor.analytic.fmp_top.api import Calc
+from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
 
-TASK_LIST : list[Type[Calc.BaseTopPortCalc]] = [
-    Calc.FrontFace , 
-    Calc.Perf_Curve ,
-    Calc.Perf_Excess ,
-    Calc.Drawdown , 
-    Calc.Perf_Year ,
+TASK_LIST : list[Type[TopCalc]] = [
+    FrontFace , 
+    Perf_Curve ,
+    Perf_Excess ,
+    Drawdown , 
+    Perf_Year ,
 ]
 
 def all_path_convert():

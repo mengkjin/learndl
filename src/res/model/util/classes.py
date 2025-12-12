@@ -214,12 +214,17 @@ class TrainerPredRecorder(ModelStreamLine):
     def resume_preds(self , value : pd.DataFrame):
         self._resume_preds = value
 
+    @property
+    def path_pred(self) -> Path: 
+        return self.trainer.config.model_base_path.snapshot('pred_df.feather')
+
     def get_preds(self , include_resume : bool = False , interval : int = 1) -> pd.DataFrame:
         df = pd.concat([self.resume_preds , self.tested_preds]) if include_resume else self.tested_preds
+        df = df.query('date in @self.trainer.data.test_full_dates')
         if interval > 1:
             dates = df['date'].unique()[::interval] # noqa: F841
             df = df.query('date in @dates')
-        return df
+        return df.reset_index(drop=True)
     
     def append_batch_values(self):
         if self.pred_idx in self.preds.keys(): 
@@ -256,10 +261,10 @@ class TrainerPredRecorder(ModelStreamLine):
         self.preds.clear()
 
     def load_saved_preds(self) -> pd.DataFrame:
-        df = DB.load_df(self.trainer.path_pred_dataframe)
-        if self.trainer.path_pred_dataframe.exists() and not np.isin(self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS , df.columns).all():
-            Logger.warning(f'{self.trainer.path_pred_dataframe} is not valid , removed automatically')
-            self.trainer.path_pred_dataframe.unlink()
+        df = DB.load_df(self.path_pred)
+        if self.path_pred.exists() and not np.isin(self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS , df.columns).all():
+            Logger.warning(f'{self.path_pred} is not valid , removed automatically')
+            self.path_pred.unlink()
             return pd.DataFrame()
         return df
 
@@ -285,8 +290,9 @@ class TrainerPredRecorder(ModelStreamLine):
         new_df = pd.concat([self.load_saved_preds() , self.tested_preds])
         if not new_df.empty:
             new_df = new_df.drop_duplicates(subset=self.PRED_KEYS + self.PRED_IDXS , keep='last').sort_values(by=self.PRED_KEYS + self.PRED_IDXS)
-        DB.save_df(new_df , self.trainer.path_pred_dataframe , overwrite = True , verbose = False)
-        print(f'Test Predictions saved to {self.trainer.path_pred_dataframe}')
+        DB.save_df(new_df , self.path_pred , overwrite = True , verbose = False)
+        if self.trainer.verbosity >= 10:
+            print(f'Test Predictions saved to {self.path_pred}')
         
 class BaseDataModule(ABC):
     '''A class to store relavant training data'''
@@ -506,18 +512,18 @@ class BaseTrainer(ModelStreamLine):
     @property
     def path_training_output(self) -> Path: return self.config.model_base_path.rslt('training_output.html')
     @property
-    def path_analytical_data(self) -> Path: return self.config.model_base_path.rslt('analytic_data.xlsx')
+    def path_analytical_data(self) -> Path: return self.config.model_base_path.rslt('test_analytic_data.xlsx')
     @property
-    def path_analytical_plot(self) -> Path: return self.config.model_base_path.rslt('analytic_plot.pdf')
-    @property
-    def path_pred_dataframe(self) -> Path:  return self.config.model_base_path.rslt('pred_df.feather')
+    def path_analytical_plot(self) -> Path: return self.config.model_base_path.rslt('test_analytic_plot.pdf')
     @property
     def result_package(self) -> list[Path]: 
         return [self.path_training_output , self.path_analytical_plot , self.path_analytical_data]
     @property
     def tested_model_iter(self):
-        df = self.record.resume_preds.loc[:,['model_num' , 'model_date' , 'submodel']].drop_duplicates()
         model_iter = []
+        if self.record.resume_preds.empty:
+            return model_iter
+        df = self.record.resume_preds.loc[:,['model_num' , 'model_date' , 'submodel']].drop_duplicates()
         for (model_num , model_date) , subdf in df.groupby(['model_num' , 'model_date']):
             if np.isin(self.model_submodels , subdf['submodel']).all():
                 model_iter.append((model_date , model_num))

@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import Timer , Duration , PATH
+from src.proj import Timer , Duration
 
 from ..util import Portfolio , Benchmark , AlphaModel , RISK_MODEL , PortCreateResult , PortfolioAccountant
 from .optimizer import OptimizedPortfolioCreator
@@ -153,7 +153,7 @@ class PortfolioBuilder:
             case _:
                 raise ValueError(f'Unknown category: {self.category}')
 
-        self.creator = creator_class(self.full_name).setup(print_info = verbosity > 0 , **self.kwargs)
+        self.creator = creator_class(self.full_name).setup(print_info = verbosity > 1 , **self.kwargs)
         return self
         
     def build(self , date : int):
@@ -177,7 +177,7 @@ class PortfolioBuilder:
         self.account = self.portfolio.account_with_index(self.port_index)
         return self
 
-class PortfolioBuilderGroup:
+class PortfolioGroupBuilder:
     '''
     parallel_kwargs:
         can have list of builder_kwargs' components, but cannot overlap with builder_kwargs
@@ -224,8 +224,9 @@ class PortfolioBuilderGroup:
                  verbosity : int = 1 ,
                  resume : bool = False ,
                  resume_path : Path | str | None = None ,
+                 caller = None ,
                  **kwargs):
-        self.builders : list[PortfolioBuilder] = []
+        
         self.category = category
 
         assert alpha_models , f'alpha_models must has elements!'
@@ -245,6 +246,10 @@ class PortfolioBuilderGroup:
         self.verbosity = verbosity
         self.resume = resume
         self.resume_path = Path(resume_path) if resume_path is not None else None
+        self.caller = caller
+
+        self.builders : list[PortfolioBuilder] = []
+        self.accounted = False
 
     @property
     def n_builders(self):
@@ -254,13 +259,24 @@ class PortfolioBuilderGroup:
     def n_builds(self):
         return self.n_builders * len(self.relevant_dates)
 
+    @property
+    def class_name(self):
+        if self.caller is None:
+            return self.__class__.__name__
+        else:
+            return f'{str(self.caller)}.{self.__class__.__name__}'
+
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}({self.category_title}, {self.n_builders} builders[{len(self.alpha_models)}alpha,{len(self.benchmarks)}bm,' + \
+        return f'{self.class_name}({self.category_title}, {self.n_builders} builders[{len(self.alpha_models)}alpha,{len(self.benchmarks)}bm,' + \
                f'{len(self.lags)}lag,{len(self.param_groups)}kwgs] & {len(self.relevant_dates)} dates, totaling {self.n_builds} builds)'
+
+    def builders_info(self):
+        print(f'{self.class_name} has {self.n_builders} builders ({len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs) and {self.n_builds} (x {len(self.relevant_dates)} dates)')\
     
     def builders_setup(self):
-        with Timer(f'{self.__class__.__name__}.builders_setup({self.n_builders} builders) [{len(self.alpha_models)} alphas x {len(self.benchmarks)} bms x {len(self.lags)} lags x {len(self.param_groups)} kwgs]' , silent = self.verbosity < 1):
+        with Timer(f'{self.class_name}.setup' , silent = self.verbosity < 1):
             self.builders.clear()
+            self.accounted = False
             for (alpha , lag , bench , strategy) in itertools.product(self.alpha_models , self.lags , self.benchmarks , self.param_groups):
                 kwargs = self.param_groups[strategy] | {'strategy':strategy , 'verbosity':self.verbosity - 1}
                 builder = PortfolioBuilder(self.category , alpha , bench , lag , **kwargs).setup()
@@ -270,7 +286,7 @@ class PortfolioBuilderGroup:
     def builders_resume(self):
         if self.resume_path is None or not self.resume:
             return
-        with Timer(f'{self.__class__.__name__}.builders_resume({self.resume_path.relative_to(PATH.main)})' , silent = self.verbosity < 1):
+        with Timer(f'{self.class_name}.resume' , silent = self.verbosity < 1):
             for builder in self.builders:
                 builder.set_build_on(self.resume_path)
         return self
@@ -278,7 +294,7 @@ class PortfolioBuilderGroup:
     def export_portfolio(self):
         if self.resume_path is None:
             return
-        with Timer(f'{self.__class__.__name__}.export_portfolio({self.resume_path.relative_to(PATH.main)})' , silent = self.verbosity < 1):
+        with Timer(f'{self.class_name}.export' , silent = self.verbosity < 1):
             for builder in self.builders:
                 builder.export_portfolio(self.resume_path)
         return self
@@ -302,7 +318,8 @@ class PortfolioBuilderGroup:
             self._port_name_nchar = np.max([len(builder.full_name) for builder in self.builders])
         return self._port_name_nchar
 
-    def building(self):
+    def build(self):
+        self.builders_info()
         RISK_MODEL.load_models(self.relevant_dates)
         
         self.builders_setup()
@@ -311,7 +328,7 @@ class PortfolioBuilderGroup:
         _t0 = datetime.now()
         _opt_count = 0
         if self.verbosity > 1:
-            print(f'{self.__class__.__name__}.building({self.n_builds} builds) [{self.n_builders} builders x {len(self.relevant_dates)} dates] start')
+            print(f'{self.class_name}.building start')
             
         for self._date in self.relevant_dates:
             for self._builder in self.builders:
@@ -325,18 +342,21 @@ class PortfolioBuilderGroup:
                           f' Finished at {self._date} , time cost (ms) : {time_cost}')
         if self.verbosity > 0:
             secs = (datetime.now() - _t0).total_seconds()
-            print(f'{self.__class__.__name__}.building({self.n_builds} builds) finished! Cost {Duration(secs)}, {(secs/max(_opt_count,1)*1000):.1f} ms per building')
+            print(f'{self.class_name}.build finished! Cost {Duration(secs)}, {(secs/max(_opt_count,1)*1000):.1f} ms per building')
         self.export_portfolio()
         return self
     
     def accounting(self , start : int = -1 , end : int = 99991231):
-        with Timer(f'{self.__class__.__name__} accounting' , silent = self.verbosity < 1):
+        with Timer(f'{self.class_name} accounting' , silent = self.verbosity < 1):
             for builder in self.builders:
-                with Timer(f'{builder.portfolio.name} accounting' , silent = self.verbosity < 2):
+                with Timer(f'  --> {builder.portfolio.name} accounting' , silent = self.verbosity < 2):
                     builder.accounting(start , end , **self.acc_kwargs)
+        self.accounted = True
         return self
     
-    def total_account(self):
+    def accounts(self):
         assert self.builders , 'No builders to account!'
+        if not self.accounted:
+            self.accounting()
         df = PortfolioAccountant.total_account([builder.account for builder in self.builders])
         return df

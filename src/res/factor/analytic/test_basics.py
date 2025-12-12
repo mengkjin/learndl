@@ -7,27 +7,38 @@ from matplotlib.figure import Figure
 from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
-from src.proj import PATH , Timer
+from src.proj import PATH , Timer , Logger
 from src.func import dfs_to_excel , figs_to_pdf , display as disp
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
-TYPE_of_TASK = Literal['optim' , 'top' , 'factor' , 't50' , 'screen' , 'revscreen']
-TASK_TYPES : list[TYPE_of_TASK] = ['optim' , 'top' , 'factor' , 't50' , 'screen' , 'revscreen']
+TYPE_of_TEST = Literal['factor' , 'optim' , 'top' , 't50' , 'screen' , 'revscreen']
+TEST_TYPES : list[TYPE_of_TEST] = ['factor' , 'optim' , 'top' , 't50' , 'screen' , 'revscreen']
 
-class BaseCalculator(ABC):
-    TASK_TYPE : TYPE_of_TASK
+def test_title(test_type : str) -> str:
+    assert test_type in TEST_TYPES , f'Invalid test type: {test_type}'
+    if test_type == 'factor':
+        return test_type.title()
+    else:
+        return f'{test_type.title()} Port'
+
+class TestTitle:
+    def __get__(self,instance,owner) -> str:
+        return test_title(str(getattr(owner, 'TEST_TYPE')))
+
+class BaseFactorAnalyticCalculator(ABC):
+    TEST_TYPE : TYPE_of_TEST
     DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
-    DEFAULT_TITLE : str | None = None
+    TEST_TITLE = TestTitle()
 
     def __init__(self , params : dict[str,Any] | None = None , **kwargs) -> None:
         self.params : dict[str,Any] = params or {} 
         self.kwargs = kwargs
     def __repr__(self):
-        return f'{self.__class__.__name__} of task {self.TASK_TYPE}(params={self.params})'
+        return f'{self.__class__.__name__} of task {self.TEST_TYPE}(params={self.params})'
     @classmethod
     def task_name(cls): 
-        return cls.__name__.lower().removeprefix(f'{cls.TASK_TYPE}_')
+        return cls.__name__.lower().removeprefix(f'{cls.TEST_TYPE}_')
     
     @classmethod
     def match_name(cls , name : str):
@@ -54,7 +65,7 @@ class BaseCalculator(ABC):
         self.calc_rslt = self.calculator()(*args , **kwargs)
         return self
     def plot(self , show = False , verbosity = 0): 
-        with Timer(f'    --->{self.__class__.__name__} plot' , silent = verbosity < 1):
+        with Timer(f'  --> {self.__class__.__name__} plot' , silent = verbosity < 1):
             if self.calc_rslt.empty: 
                 self.figs = {}
                 return self
@@ -62,19 +73,19 @@ class BaseCalculator(ABC):
                 figs = self.plotter()(self.calc_rslt , show = show , title_prefix = self.title_prefix)
                 self.figs = {'all':figs} if isinstance(figs , Figure) else figs
             except Exception as e:
-                print(f"Error when plotting {self.__class__.__name__}: {e}")
+                Logger.error(f"Error when plotting {self.__class__.__name__}: {e}")
                 self.figs = {}    
         return self
     @property
     def title_prefix(self) -> str:
-        prefix = self.DEFAULT_TITLE or self.TASK_TYPE.title()
-        if 'title_prefix' in self.kwargs:
-            prefix = f'{str(self.kwargs["title_prefix"]).replace("_", " ").title()} {prefix}'
-        return prefix
+        if title_prefix := self.kwargs.get('title_prefix' , None):
+            return f'{title_prefix} {self.TEST_TITLE}'
+        return self.TEST_TITLE
     
-class BaseTestManager(ABC):
-    TASK_TYPE : TYPE_of_TASK
-    TASK_LIST : list[Type[BaseCalculator]] = []
+class BaseFactorAnalyticTest(ABC):
+    TEST_TYPE : TYPE_of_TEST
+    TASK_LIST : list[Type[BaseFactorAnalyticCalculator]] = []
+    TEST_TITLE = TestTitle()
 
     def __init__(self , test_name : str | None = None , test_path : Path | str | None = None , resume : bool = False, save_resumable : bool = False , which : str | list[str] | Literal['all'] = 'all' , **kwargs):
         candidates = {task.task_name():task for task in self.TASK_LIST}
@@ -95,7 +106,7 @@ class BaseTestManager(ABC):
         self.get_test_name()
 
     def __repr__(self):
-        return f'{self.__class__.__name__} of task {self.TASK_TYPE} with {len(self.tasks)} calculators'
+        return f'{self.__class__.__name__}'
 
     @classmethod
     def run_test(cls , factor : StockFactor | pd.DataFrame | DataBlock , benchmark : list[Benchmark|Any] | Any | None = 'defaults' ,
@@ -129,16 +140,7 @@ class BaseTestManager(ABC):
         if self._test_path is not None:
             return self._test_path
         else:
-            if self.TASK_TYPE == 'optim':
-                rslt_dir = PATH.rslt_optim
-            elif self.TASK_TYPE == 'top':
-                rslt_dir = PATH.rslt_top
-            elif self.TASK_TYPE == 'factor':
-                rslt_dir = PATH.rslt_factor
-            elif self.TASK_TYPE in ['t50' , 'screen' , 'revscreen']:
-                rslt_dir = PATH.result.joinpath('test').joinpath(self.TASK_TYPE)
-            else:
-                raise ValueError(f'Invalid task type: {self.TASK_TYPE}')
+            rslt_dir = PATH.rslt_test.joinpath(self.TEST_TYPE)
             rslt_dir.mkdir(parents=True , exist_ok=True)
             return rslt_dir.joinpath(self.get_test_name())
 
@@ -151,7 +153,7 @@ class BaseTestManager(ABC):
         if self._test_path is None:
             return None
         else:
-            return self._test_path.joinpath(f'{self.TASK_TYPE}_portfolio')
+            return self._test_path.joinpath(f'{self.TEST_TYPE}_portfolio')
 
     def get_rslts(self):
         return {k:v.calc_rslt for k,v in self.tasks.items()}
@@ -164,26 +166,9 @@ class BaseTestManager(ABC):
     
     def write_down(self):
         rslts , figs = self.get_rslts() , self.get_figs()
-        dfs_to_excel(rslts , self.test_path.joinpath(f'{self.TASK_TYPE}_data.xlsx') , print_prefix=f'{self.TASK_TYPE.title()} Analytic Test of {self.name_of_task()} datas')
-        figs_to_pdf(figs   , self.test_path.joinpath(f'{self.TASK_TYPE}_plot.pdf')  , print_prefix=f'{self.TASK_TYPE.title()} Analytic Test of {self.name_of_task()} plots')
+        dfs_to_excel(rslts , self.test_path.joinpath(f'{self.TEST_TYPE}_data.xlsx') , print_prefix=f'{self.__class__.__name__} Analytic Datas')
+        figs_to_pdf(figs   , self.test_path.joinpath(f'{self.TEST_TYPE}_plot.pdf')  , print_prefix=f'{self.__class__.__name__} Analytic Plots')
         return self
-    
-    @classmethod
-    def name_of_task(cls):
-        if cls.TASK_TYPE == 'optim':
-            return 'Optim Portfolio'
-        elif cls.TASK_TYPE == 'top':
-            return 'Top Portfolio'
-        elif cls.TASK_TYPE == 'factor':
-            return 'Factor Performance'
-        elif cls.TASK_TYPE == 't50':
-            return 'Top50 Port'
-        elif cls.TASK_TYPE == 'screen':
-            return 'Screen Port'
-        elif cls.TASK_TYPE == 'revscreen':
-            return 'RevScreen Port'
-        else:
-            raise ValueError(f'Invalid task type: {cls.TASK_TYPE}')
 
     def save(self , path : Path | str):
         """save intermediate data to path for future use"""

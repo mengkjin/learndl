@@ -7,10 +7,6 @@ from typing import Any , Generator , Literal , Type
 from .path import PATH
 from .timer import Duration
 
-_seperator_width = 80
-_seperator_char = '*'
-_divider_char = '='
-
 class _LevelFormatter(logging.Formatter):
     """Simple Level Formatter without color"""
     def __init__(self, fmt=None, datefmt=None, level_fmts=None):
@@ -154,14 +150,9 @@ class Logger:
         cls.dump_to_logwriter(*args)
 
     @classmethod
-    def separator(cls , width = _seperator_width , char = _seperator_char):
-        """Separator message , use info level"""
-        cls.log.debug(char * width)
-
-    @classmethod
-    def divider(cls , width = _seperator_width , char = _divider_char):
+    def divider(cls , width : int = 100 , char : Literal['-' , '=' , '*'] = '-'):
         """Divider message , use info level"""
-        cls.log.debug(char * width)
+        print(char * width)
         
     @staticmethod
     def dump_to_logwriter(*args):
@@ -231,9 +222,10 @@ class Logger:
             with Logger.ParagraphIII('Title'):
                 Logger.info('This is the enclosed message...')
         """
-        def __init__(self , title : str , width = _seperator_width):
+        def __init__(self , title : str , width : int = 100 , char : Literal['-' , '=' , '*'] = '*'):
             self.title = title.strip().upper()
-            
+            self.width = width
+            self.char = char
         def __enter__(self):
             self._init_time = datetime.now()
             self.write(f'{self.title} Start'.upper())
@@ -244,9 +236,9 @@ class Logger:
 
         def write(self , message : str):
             txt_len = len(message)
-            if txt_len >= _seperator_width:
+            if txt_len >= self.width:
                 Logger.highlight(message)
             else:
-                padding_left = '*' * max(0 , (_seperator_width - txt_len - 2) // 2)
-                padding_right = '*' * max(0 , _seperator_width - txt_len - 2 - len(padding_left))
+                padding_left = self.char * max(0 , (self.width - txt_len - 2) // 2)
+                padding_right = self.char * max(0 , self.width - txt_len - 2 - len(padding_left))
                 Logger.highlight(' '.join([padding_left , message , padding_right]))

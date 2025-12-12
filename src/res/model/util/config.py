@@ -250,7 +250,8 @@ class TrainParam:
 
     @property
     def verbosity(self) -> int: 
-        return int(self.Param['env.verbosity'])
+        v = int(self.Param['env.verbosity'])
+        return min(max(v , 0) , 10)
     @property
     def random_seed(self) -> Any: 
         return self.Param['env.random_seed']
@@ -696,6 +697,9 @@ class TrainConfig(TrainParam):
         if self.end is not None:
             end_date = min(end_date , self.end)
         return end_date
+    @property
+    def model_labels(self) -> list[str]: 
+        return self.Train.model_labels[:self.Model.max_num_output]
 
     def update(self, update = None , **kwargs):
         update = update or {}
@@ -888,10 +892,10 @@ class TrainConfig(TrainParam):
         info_strs = []
         info_strs.append(f'Model Name   : {self.model_name}')
         if self.module_type in ['db' , 'factor']:
-            info_strs.append(f'Model Module : {self.model_module}')
             info_strs.append(f'Model Labels : {self.model_labels}')
             info_strs.append(f'Model Period : {self.beg_date} ~ {self.end_date}')
             info_strs.append(f'Resuming     : {self.is_resuming}')
+            info_strs.append(f'Verbosity    : {self.verbosity}')
             
         else:
             info_strs.append(f'Model Module : {self.model_module}')
@@ -931,6 +935,7 @@ class TrainConfig(TrainParam):
             info_strs.append(f'Random Seed  : {self.random_seed}')
             info_strs.append(f'Stage Queue  : {self.stage_queue}')
             info_strs.append(f'Resuming     : {self.is_resuming}')
+            info_strs.append(f'Verbosity    : {self.verbosity}')
 
         
         print('\n'.join(info_strs))

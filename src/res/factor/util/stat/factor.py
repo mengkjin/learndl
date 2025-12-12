@@ -15,7 +15,8 @@ def calc_frontface(factor : StockFactor , benchmark : Benchmark | str | None = N
     factor = factor.within(benchmark)
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type)
     ic_stats = eval_ic_stats(ic_table , nday = nday)
-    return ic_stats
+    df = ic_stats.drop(columns=['sum']).rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR','abs_avg' :'|IC|_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
+    return df
 
 def calc_coverage(factor : StockFactor , benchmark : Benchmark | str | None = None):
     return factor.coverage(benchmark).reset_index().melt(id_vars=['date'],var_name='factor_name',value_name='coverage')
@@ -128,6 +129,15 @@ def calc_style_corr(factor : StockFactor , benchmark : Benchmark | str | None = 
     df.index.rename(['date','factor_name'], inplace=True)
     df = df.reset_index()
     return df
+
+def calc_group_return(factor : StockFactor , benchmark : Benchmark | str | None = None , 
+                      nday : int = 10 , lag : int = 2 , group_num : int = 10 , 
+                      ret_type : Literal['close' , 'vwap'] = 'close'):
+    factor = factor.within(benchmark)
+    grp_perf = factor.eval_group_perf(nday , lag , group_num , True , ret_type , False).set_index(['factor_name','group'])
+    grp = grp_perf.groupby(['factor_name' , 'group'] , observed=False)['group_ret'].mean().reset_index()
+    grp = grp.pivot_table('group_ret','factor_name','group',observed=False).reset_index(drop=False)
+    return grp
 
 def calc_group_curve(factor : StockFactor , benchmark : Benchmark | str | None = None , 
                             nday : int = 10 , lag : int = 2 , group_num : int = 10 , excess = False , 

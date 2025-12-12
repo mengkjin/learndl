@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 from typing import Any , ClassVar
 
-from src import func as FUNC
+from src.func import display as disp
 from src.proj import PATH , MACHINE , Logger , Duration
 from src.res.model.data_module import BatchDataLoader
 from src.res.model.util import BaseCallBack
@@ -36,7 +36,7 @@ class CallbackTimer(BaseCallBack):
             df = pd.DataFrame(values).sort_values(by=['total_time'],ascending=False).head(5)
             df.columns = columns
             print('Table: Callback Time costs:')
-            FUNC.display.display(df)
+            disp.display(df)
 
 class BatchDisplay(BaseCallBack):
     '''display batch progress bar'''

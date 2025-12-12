@@ -1,6 +1,6 @@
 from typing import Literal , Any , Callable
 import streamlit as st
-
+import re
 from src.app.backend import ScriptRunner , ScriptParamInput , TaskItem
 
 class ParamInputsForm:
@@ -56,7 +56,7 @@ class ParamInputsForm:
             ptype = param.ptype
             if isinstance(ptype, list):
                 options = ['Choose an option'] + [f'{param.prefix}{e}' for e in ptype]
-                return cls.raw_option([None] + ptype, options)
+                return cls.raw_option([None] + ptype, options , prefix = param.prefix)
             elif ptype is str:
                 return lambda x: (x.strip() if x is not None else None)
             elif ptype is bool:
@@ -69,11 +69,24 @@ class ParamInputsForm:
                 raise ValueError(f"Unsupported param type: {ptype}")
 
         @classmethod
-        def raw_option(cls , raw_values : list[Any], alt_values : list[Any]):
+        def remove_extra_prefix_regex(cls , s : str , prefix : str):
+            if not prefix:
+                return s
+            escaped_prefix = re.escape(prefix)
+            pattern = rf'^({escaped_prefix})(\1)+'
+            match = re.match(pattern, s)
+            if match:
+                return re.sub(pattern, r'\1', s)
+            return s
+
+        @classmethod
+        def raw_option(cls , raw_values : list[Any], alt_values : list[Any] , prefix : str = ''):
             def wrapper(alt : Any):
                 """get index of value in options"""
                 if alt is None or alt == '': 
                     alt = 'Choose an option'
+                if alt not in alt_values:
+                    alt = cls.remove_extra_prefix_regex(alt, prefix)
                 assert alt in alt_values , f"Invalid option '{alt}' in list {alt_values}"
                 raw = raw_values[alt_values.index(alt)] if alt is not None else None
                 return raw
