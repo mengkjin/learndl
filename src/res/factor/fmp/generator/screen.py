@@ -111,6 +111,9 @@ class ScreeningPortfolioCreator(PortCreator):
         screening_pool = screening_pool.query('rankpct >= @self.conf.screen_ratio')
         
         pool = self.conf.get_sorting_alpha(self.model_date)
+        print(self.model_date)
+        print(pool.head())
+        print(screening_pool.head())
         pool = pool.query('secid in @screening_pool.secid').copy()
         
         pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
