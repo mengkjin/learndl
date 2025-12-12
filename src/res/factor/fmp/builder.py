@@ -59,7 +59,7 @@ class PortfolioBuilder:
     def __init__(self , category : Literal['optim' , 'top' , 'screen' , 'revscreen'] | Any , 
                  alpha : AlphaModel , benchmark : Portfolio | Benchmark | str | None = None, lag : int = 0 ,
                  strategy : str = 'default' , suffixes : list[str] | str = [] , 
-                 build_on : Portfolio | None = None , verbosity : int = 1 , **kwargs):
+                 build_on : Portfolio | None = None , overwrite : bool = False , verbosity : int = 1 , **kwargs):
         self.category  = category
         self.alpha     = alpha
         self.benchmark = get_benchmark(benchmark)
@@ -73,11 +73,9 @@ class PortfolioBuilder:
         self.strategy       = get_strategy_name(category , strategy , kwargs)
         self.suffix         = get_suffix(lag , suffixes)
 
-        self.portfolio = Portfolio(self.full_name)
         self.creations : list[PortCreateResult] = []
 
-        if build_on:
-            self.set_build_on(build_on)
+        self.set_build_on(build_on , overwrite)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name=\'{self.full_name}\',kwargs={self.kwargs},'+\
@@ -97,16 +95,20 @@ class PortfolioBuilder:
             else:
                 return path.joinpath(f'{self.full_name.lower()}.feather')
 
-
-    def set_build_on(self , build_on : Portfolio | Path | str):
+    def set_build_on(self , build_on : Portfolio | Path | str | None , overwrite : bool = False):
+        if build_on is None:
+            self.portfolio = Portfolio(self.full_name)
+            return self
         if isinstance(build_on , Portfolio):
             port = build_on
         elif isinstance(build_on , (Path , str)):
             port = Portfolio.load(self.build_on_path(build_on))
         else:
             raise ValueError(f'Unknown build_on type: {type(build_on)}')
-        if port is not None and not port.is_empty:
-            self.portfolio = port.rename(self.full_name).filter_dates(dates = port.port_date[port.port_date < self.alpha.available_dates().min()] , inplace = True)
+        port = port.rename(self.full_name)
+        if not overwrite and port is not None and not port.is_empty:
+            port = port.filter_dates(dates = port.port_date[port.port_date < self.alpha.available_dates().min()] , inplace = True)
+        self.portfolio = port
         return self
 
     def export_portfolio(self , path : Path | str | None = None):
@@ -129,7 +131,7 @@ class PortfolioBuilder:
     def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , verbosity : int = 1 , **kwargs):
         elements = parse_full_name(full_name)
         assert alpha.name.lower() == elements['factor_name'].lower() , f'Alpha name mismatch: {alpha.name} != {elements["factor_name"]}'
-        return cls(alpha = alpha , build_on = build_on , verbosity = verbosity , **elements , **kwargs)
+        return cls(alpha = alpha , verbosity = verbosity , **elements , **kwargs).set_build_on(build_on , False)
     
     @staticmethod
     def get_full_name(category : Literal['optim' , 'top' , 'screen' , 'revscreen'] , alpha : AlphaModel | str , 

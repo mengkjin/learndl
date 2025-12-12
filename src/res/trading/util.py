@@ -179,7 +179,7 @@ class TradingPort:
         if last_port is None:
             last_port = self.get_last_port(date , reset_port)
 
-        builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
+        builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , overwrite = True ,
                                    n_best = self.top_num , turn_control = self.turn_control , 
                                    buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
                                    indus_control = self.indus_control , sorting_alpha = self.sorting_alpha ,

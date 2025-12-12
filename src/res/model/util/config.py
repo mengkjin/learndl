@@ -632,7 +632,7 @@ class TrainConfig(TrainParam):
     def __repr__(self): return f'{self.__class__.__name__}(model_name={self.model_name})'
     
     @classmethod
-    def load_model(cls , model_name : str | ModelPath | Path , override = None , stage = 0):
+    def load_model(cls , model_name : str | ModelPath | Path , override = None , stage = 2):
         ''' 
         load a existing model's config 
         stage is mostly irrelevant here, because mostly we are loading a model's config to pred
@@ -836,7 +836,8 @@ class TrainConfig(TrainParam):
                     if model_name not in candidate_name:
                         Logger.error(f'The raw model_name [{model_name}] does not exist! You have to start a new training or manually delete the existing model_name dir!')
                         raise Exception(f'the raw model_name [{model_name}] does not exist!')
-                    Logger.info(f'Input 0 to use the raw model_name [{model_name}] to resume training!')
+                    if self.verbosity > 0:
+                        Logger.info(f'Input 0 to use the raw model_name [{model_name}] to resume training!')
                 else:
                     if model_name in candidate_name:
                         model_name += '.'+str(max([1]+[int(model.split('.')[-1])+1 for model in candidate_name[1:]]))

@@ -234,9 +234,7 @@ class PortfolioAccountManager:
             if df.empty: 
                 continue
             if name in self.accounts:
-                min_date = df['model_date'].min() # noqa
-                old_df = self.accounts[name].query('model_date < @min_date')
-                self.accounts[name] = pd.concat([old_df , df]).sort_values('model_date')
+                self.accounts[name] = pd.concat([self.accounts[name] , df]).drop_duplicates(subset=['model_date'] , keep='last').sort_values('model_date')
             else:
                 self.accounts[name] = df
         return self

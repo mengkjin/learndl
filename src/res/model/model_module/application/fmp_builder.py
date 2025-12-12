@@ -9,7 +9,7 @@ from typing import Any
 from src.proj import SILENT , Logger
 from src.basic import CALENDAR , RegisteredModel
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager
-from src.res.factor.fmp import PortfolioBuilder 
+from src.res.factor.fmp import PortfolioBuilder , parse_full_name , get_port_index
 
 class ModelPortfolioBuilder:
     FMP_TYPES  = ['top' , 'optim']
@@ -141,13 +141,12 @@ class ModelPortfolioBuilder:
         if len(account_dates) == 0: 
             return
         all_fmp_dfs = pd.concat([self.reg_model.load_fmp(date) for date in account_dates])
-        alpha_model = self.alpha_model(account_dates)
 
         for fmp_name in update_fmp_names:
+            elements = parse_full_name(fmp_name)
             portfolio = Portfolio.from_dataframe(all_fmp_dfs , name = fmp_name)
-            builder   = PortfolioBuilder.from_full_name(fmp_name , alpha_model , portfolio)
-            builder.accounting(last_model_dates[fmp_name])
-            self.accountant.append_accounts(**{fmp_name : builder.account})
+            portfolio.accounting(Benchmark(elements['benchmark']) , analytic = elements['lag'] == 0 , attribution = elements['lag'] == 0)
+            self.accountant.append_accounts(**{fmp_name : portfolio.account_with_index(get_port_index(fmp_name))})
 
         if deploy:
             self.accountant.deploy(update_fmp_names , True)
