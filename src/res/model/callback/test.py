@@ -3,9 +3,9 @@ import numpy as np
 from typing import Any , Literal
 from matplotlib.figure import Figure
 
-from src.proj import Logger , Timer
+from src.proj import Logger , Timer , Display
 from src.basic import DB
-from src.func import dfs_to_excel , figs_to_pdf , display as disp
+from src.func import dfs_to_excel , figs_to_pdf
 from src.res.factor.util import StockFactor , Universe , RISK_MODEL
 from src.res.factor.api import FactorTestAPI
 from src.res.model.util import BaseCallBack
@@ -102,11 +102,9 @@ class BasicTestResult(BaseCallBack):
             # more than 100 rows of test_df_model means the cycle is month / day
             df_display = self.status.test_summary
             if len(df_display) > 100: 
-                df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]
+                df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]           
+            Display(df_display)
             
-            disp.display(df_display)
-            
-
             # export excel
             rslt = {'test_summary' : self.status.test_summary , 'test_by_model' : df_model}
             for model_num in self.config.model_num_list:
@@ -212,11 +210,11 @@ class DetailedAlphaAnalysis(BaseCallBack):
                         df[col] = df[col].map(lambda x:f'{x:.3f}')
                     elif df.columns.name in ['group'] and (isinstance(col , int) or str(col).isdigit()):
                         df[col] = df[col].map(lambda x:f'{x:.3%}')
-                disp.display(df)
+                Display(df)
 
             for name in self.display_figures:
                 print(f'Figure: {name}:')
-                disp.display(self.test_figures[name])
+                Display(self.test_figures[name])
 
             dfs_to_excel(self.test_results , self.path_data , print_prefix='Analytic datas')
             figs_to_pdf(self.test_figures , self.path_plot , print_prefix='Analytic plots')

@@ -103,16 +103,17 @@ class RevScreeningPortfolioCreator(PortCreator):
 
     def solve(self):
         amodel = self.alpha_model.get_model(self.model_date)
-        assert amodel is not None , f'alpha_model is not Amodel at {self.model_date}'
+        assert amodel , f'alpha_model is not Amodel at {self.model_date}'
+        pool = amodel.to_dataframe(indus=True , na_indus_as = 'unknown')
 
         screening_pool = self.conf.get_screen_alpha(self.model_date , indus = True)
-        if not self.bench_port.is_emtpy(): 
-            screening_pool = screening_pool.query('secid in @self.bench_port.secid').copy()
-        screening_pool.loc[:, 'rankpct'] = screening_pool['alpha'].rank(pct = True , method = 'first' , ascending = True).fillna(0)
-        screening_pool = screening_pool.query('rankpct >= @self.conf.screen_ratio')
+        if not screening_pool.empty:
+            if not self.bench_port.is_emtpy(): 
+                screening_pool = screening_pool.query('secid in @self.bench_port.secid').copy()
+            screening_pool.loc[:, 'rankpct'] = screening_pool['alpha'].rank(pct = True , method = 'first' , ascending = True).fillna(0)
+            screening_pool = screening_pool.query('rankpct >= @self.conf.screen_ratio')
         
-        pool = amodel.to_dataframe(indus=True , na_indus_as = 'unknown')
-        pool = pool.query('secid in @screening_pool.secid').copy()
+            pool = pool.query('secid in @screening_pool.secid').copy()
         
         pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)

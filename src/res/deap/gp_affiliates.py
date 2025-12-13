@@ -44,7 +44,7 @@ class Profiler(cProfile.Profile):
         # highlight : 'gp_math_func.py'
         df = pd.DataFrame(
             getattr(self , 'getstats')(), 
-            columns=pd.Index(['full_name', 'ncalls', 'ccalls', 'tottime', 'cumtime' , 'caller']))
+            columns=pd.Index(['full_name', 'ncalls', 'ccalls', 'cumtime' , 'tottime' , 'caller']))
         df.tottime = df.tottime.round(4)
         df.cumtime = df.cumtime.round(4)
         df.full_name = df.full_name.astype(str)
@@ -52,7 +52,7 @@ class Profiler(cProfile.Profile):
             [func_str_decompose(s) for s in df.full_name] , 
             columns = pd.Index(['type' , 'name' , 'where' , 'memory']))
         df = pd.concat([df_func , df],axis=1).sort_values(sort_on,ascending=False)
-        column_order = ['type' , 'name' , 'ncalls', 'ccalls', 'tottime', 'cumtime' , 'where' , 'memory' , 'full_name', 'caller']
+        column_order = ['type' , 'name' , 'ncalls', 'ccalls', 'cumtime' , 'tottime' , 'where' , 'memory' , 'full_name', 'caller']
         df = df.loc[:,column_order]
         if isinstance(highlight , str): 
             df = df[df.full_name.str.find(highlight) > 0]

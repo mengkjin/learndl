@@ -88,7 +88,6 @@ class MemFileStorage:
             group = [group]
         path = self.records.query('group in @group')['path']
         self.del_path(path)
-        gc.collect()
 
     def del_all(self):
         self.del_path(self.records['path'])

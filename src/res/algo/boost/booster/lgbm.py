@@ -7,7 +7,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from src.func import match_values , display as disp
+from src.func import match_values
+from src.proj import Display
 from ..util import BasicBoosterModel , BoosterInput
 
 PLOT_PATH : Path | None = None
@@ -107,7 +108,7 @@ class LgbmPlot:
             plt.yscale(yscale)
         plt.close(fig)
         if show_plot: 
-            disp.display(fig)
+            Display(fig)
         if self.plot_path:
             self.plot_path.joinpath('training_process.png')
             plt.savefig(self.plot_path.joinpath('training_process.png'),dpi=1200)

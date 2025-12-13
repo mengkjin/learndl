@@ -1,6 +1,12 @@
 import colorlog , logging , sys
 import logging.handlers
 
+import re
+import cProfile
+import traceback
+
+import pandas as pd
+
 from datetime import datetime
 from typing import Any , Generator , Literal , Type
 
@@ -242,3 +248,71 @@ class Logger:
                 padding_left = self.char * max(0 , (self.width - txt_len - 2) // 2)
                 padding_right = self.char * max(0 , self.width - txt_len - 2 - len(padding_left))
                 Logger.highlight(' '.join([padding_left , message , padding_right]))
+
+    class Profiler(cProfile.Profile):
+        def __init__(self, profiling = False , builtins = True , **kwargs) -> None:
+            self.profiling = profiling
+            if self.profiling: 
+                super().__init__(builtins = builtins) 
+
+        def __enter__(self):
+            if self.profiling: 
+                return super().__enter__()
+            else:
+                return self
+
+        def __exit__(self, type , value , trace):
+            if type is not None:
+                print(f'Error in Profiler ' , type , value)
+                traceback.print_exc()
+            elif self.profiling:
+                return super().__exit__(type , value , trace)
+
+        def get_df(self , sort_on = 'tottime' , highlight = None , output = None):
+            if not self.profiling: 
+                return pd.DataFrame()
+            # highlight : 'gp_math_func.py'
+            df = pd.DataFrame(
+                getattr(self , 'getstats')(), 
+                columns=pd.Index(['full_name', 'ncalls', 'ccalls', 'cumtime' ,  'tottime' , 'caller']))
+            df.tottime = df.tottime.round(4)
+            df.cumtime = df.cumtime.round(4)
+            df.full_name = df.full_name.astype(str)
+            df_func = pd.DataFrame(
+                [self.decompose_func_str(s) for s in df.full_name] , 
+                columns = pd.Index(['type' , 'name' , 'where' , 'memory']))
+            df = pd.concat([df_func , df],axis=1).sort_values(sort_on,ascending=False)
+            column_order = ['type' , 'name' , 'ncalls', 'ccalls', 'cumtime' ,  'tottime' , 'where' , 'memory' , 'full_name', 'caller']
+            df = df.loc[:,column_order]
+            if isinstance(highlight , str): 
+                df = df[df.full_name.str.find(highlight) > 0]
+            if isinstance(output , str): 
+                df.to_csv(output)
+            return df
+
+        @staticmethod
+        def decompose_func_str(func_string):
+            # Define the regular expression pattern to extract information
+            pattern = {
+                r'<code object (.+) at (.+), file (.+), line (\d+)>' : ['function' , (0,) , (2,3) , (1,)] ,
+                r'<function (.+) at (.+)>' : ['function' , (0,) , () , ()] ,
+                r'<method (.+) of (.+) objects>' : ['method' , (0,) , (1,) , ()] ,
+                r'<built-in method (.+)>' : ['built-in-method' , (0,) , () , ()] ,
+                r'<fastparquet.(.+)>' : ['fastparquet' , () , () , ()] ,
+                r'<pandas._libs.(.+)>' : ['pandas._libs' , (0,) , () , ()],
+            }
+            data = None
+            for pat , use in pattern.items():
+                match = re.match(pat, func_string)
+                if match:
+                    data = [use[0] , ','.join(match.group(i+1) for i in use[1]) , 
+                            ','.join(match.group(i+1) for i in use[2]) , ','.join(match.group(i+1) for i in use[3])]
+                    #try:
+                    #    data = [use[0] , ','.join(match.group(i+1) for i in use[1]) , ','.join(match.group(i+1) for i in use[2])]
+                    #except:
+                    #    print(func_string)
+                    break
+            if data is None: 
+                print(func_string)
+                data = [''] * 4
+            return data

@@ -124,11 +124,22 @@ def script_links(show_dir = False):
                 ">{x}</div>""", unsafe_allow_html=True)
         
         group = ''
-        for page in script_pages().values():
+        for name , page in script_pages().items():
             if show_dir and page['group'] != group:
                 subsubheader(page['group'].upper() + ' Scripts')
             parts : list[str] = page['label'].split(' > ')
-            st.page_link(page['page'] , label = ' > '.join([f'**{parts[0].upper()}**' , *parts[1:]]) , icon = page['icon'] , help = page['help'])
+            cols = st.columns([1,19] , gap = 'small' , vertical_alignment = 'center')
+            runner = page['runner']
+            with cols[0].container(key = f"direct-script-run-{name}"):
+                if runner.ready:
+                    st.button(":material/play_circle:", key=f"direct-script-run-button-enabled-{name}" , 
+                            help = f"Script **{runner.script_name}** is ready to run directly" , disabled = False ,
+                            on_click = SC.click_script_runner_run , args = (runner, None) , type = 'tertiary')
+                else:
+                    st.button(":material/do_not_disturb:", key=f"direct-script-run-button-disabled-{name}" , 
+                              help = f"Script **{runner.script_name}** needs to be configured first" , disabled = True , type = 'tertiary')
+            with cols[1]:
+                st.page_link(page['page'] , label = ' > '.join([f'**{parts[0].upper()}**' , *parts[1:]]) , icon = page['icon'] , help = page['help'])
             group = page['group']
   
 def main():

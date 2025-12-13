@@ -11,7 +11,7 @@ from packaging import version
 from plottable import Table , ColumnDefinition
 from typing import Any , Literal
 
-from . import display as disp
+from src.proj import Display
 
 CURRENT_SEABORN_VERSION = version.Version(getattr(sns , '__version__')) > version.Version('0.9.1')
 
@@ -134,7 +134,7 @@ class PlotFactorData:
         plt.tight_layout()
         plt.close(self.fig)
         if self.show: 
-            disp.display(self.fig)
+            Display(self.fig)
 
     def title_suffix(self):
         if self.name_key:

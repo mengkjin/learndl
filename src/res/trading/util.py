@@ -5,9 +5,9 @@ from dataclasses import dataclass , field
 from pathlib import Path
 from typing import Literal , Type
 
-from src.proj import PATH , MACHINE , Logger
+from src.proj import PATH , MACHINE , Logger , Display
 from src.basic import CALENDAR , RegisteredModel , DB
-from src.func import dfs_to_excel , figs_to_pdf , display as disp
+from src.func import dfs_to_excel , figs_to_pdf
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , AlphaModel , Amodel , Universe
 from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
@@ -272,7 +272,7 @@ class TradingPort:
         if display:
             for name , fig in figs.items():
                 print(f'Figure: {name}:')
-                disp.display(fig)
+                Display(fig)
 
         self.analyze_results = rslts
         self.analyze_figs = figs

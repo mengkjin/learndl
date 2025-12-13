@@ -13,6 +13,7 @@ from .path import PATH
 from .logger import Logger
 from .machine import MACHINE
 from .timer import Duration
+from .display import Display
 
 __all__ = [
     'IOCatcher' , 'LogWriter' , 'OutputCatcher' , 'OutputDeflector' , 
@@ -649,12 +650,14 @@ class HtmlCatcher(OutputCatcher):
 
         self.original_display = self.DisplayModule.display
         self.DisplayModule.display = self.display_wrapper(self.DisplayModule.display)
+        Display.set_callbacks([self.add_output , self.stop_capturing] , [self.start_capturing])
 
     def restore_display_function(self):
         """restore stdout, stderr, and display_module functions"""
         self.stdout_deflector.end_catching()
         self.stderr_deflector.end_catching()
         self.DisplayModule.display = self.original_display
+        Display.reset_callbacks()
 
     def display_wrapper(self, original_func: Callable):
         def wrapper(obj , *args, **kwargs):
@@ -685,6 +688,16 @@ class HtmlCatcher(OutputCatcher):
         output = TimedOutput.create(content , output_type)
         if not self.outputs or (output and not output.equivalent(self.outputs[-1])): 
             self.outputs.append(output)
+
+    @classmethod
+    def stop_capturing(cls , *args, **kwargs):
+        cls.Capturing = False
+        return cls
+
+    @classmethod
+    def start_capturing(cls , *args, **kwargs):
+        cls.Capturing = True
+        return cls
 
     def write_stdout(self, text: str):
         if text := text.strip():

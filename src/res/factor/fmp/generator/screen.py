@@ -103,7 +103,7 @@ class ScreeningPortfolioCreator(PortCreator):
 
     def solve(self):
         amodel = self.alpha_model.get_model(self.model_date)
-        assert amodel is not None , f'alpha_model is not Amodel at {self.model_date}'
+        assert amodel , f'alpha_model is not Amodel at {self.model_date}'
         screening_pool = amodel.to_dataframe(indus=True , na_indus_as = 'unknown')
         if not self.bench_port.is_emtpy(): 
             screening_pool = screening_pool.query('secid in @self.bench_port.secid').copy()
@@ -111,10 +111,10 @@ class ScreeningPortfolioCreator(PortCreator):
         screening_pool = screening_pool.query('rankpct >= @self.conf.screen_ratio')
         
         pool = self.conf.get_sorting_alpha(self.model_date)
-        print(self.model_date)
-        print(pool.head())
-        print(screening_pool.head())
-        pool = pool.query('secid in @screening_pool.secid').copy()
+        if pool.empty:
+            pool = screening_pool.copy()
+        else:
+            pool = pool.query('secid in @screening_pool.secid').copy()
         
         pool.loc[:, 'ind_rank']  = pool.groupby('indus')['alpha'].rank(method = 'first' , ascending = False)
         pool.loc[:, 'rankpct']   = pool['alpha'].rank(pct = True , method = 'first' , ascending = True)

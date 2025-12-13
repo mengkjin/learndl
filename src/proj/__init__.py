@@ -10,6 +10,7 @@ from .shared_sync import SharedSync
 from .silence import SILENT
 from .timer import Duration , Timer , PTimer
 from .options import Options
+from .display import Display
 
 def print_project_info():
     import torch , os

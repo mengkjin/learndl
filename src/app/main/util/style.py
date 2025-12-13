@@ -651,6 +651,26 @@ def style():
                 padding-bottom: 0px !important;
                 padding-left: 10px !important;
             }
+            button {
+                span {
+                    font-size: 20px !important;
+                    font-weight: bold !important;
+                }
+                height: 24px !important;
+                width: 24px !important;
+                margin-top: 0px !important;
+                margin-bottom: -10px !important;
+                padding-top: 0px !important;
+                padding-bottom: 0px !important;
+                border-radius: 50% !important;
+            }
+            div[class*="-enabled"] button {
+                color: white !important;
+                background-color: green !important;
+                &:hover {
+                    background-color: darkgreen !important;
+                }
+            }
         } 
     }
     .stVerticalBlock[class*="home-intro-pages"] {

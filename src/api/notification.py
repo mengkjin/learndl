@@ -2,7 +2,7 @@ import pandas as pd
 import os
 import torch
 from datetime import datetime
-from src.proj import MACHINE , Logger
+from src.proj import MACHINE , Logger , Options
 from src.basic import send_email , CALENDAR , TaskRecorder , DB
 
 from .util import wrap_update
@@ -83,6 +83,10 @@ def email_to_fanghan(test = False):
     print(f'Success : email_to_fanghan at {today} sent')
     return
 
+def reset_options_cache():
+    Options.cache.clear()
+    print(f'Success : reset options cache')
+
 class NotificationAPI:
     @classmethod
     def update(cls):
@@ -92,6 +96,7 @@ class NotificationAPI:
     def process(cls):
         check_cuda_status()
         email_to_fanghan()
+        reset_options_cache()
 
 
 

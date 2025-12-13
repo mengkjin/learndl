@@ -407,16 +407,16 @@ class TrainParam:
     def train_trainer_transfer(self) -> bool: 
         return self.Param['train.trainer.transfer']
     @property
-    def train_criterion_loss(self) -> Any: 
+    def train_criterion_loss(self) -> str: 
         return self.Param['train.criterion.loss']
     @property
-    def train_criterion_score(self) -> Any: 
+    def train_criterion_score(self) -> str: 
         return self.Param['train.criterion.score']
     @property
     def train_criterion_penalty(self) -> dict[Any,Any]: 
         return self.Param['train.criterion.penalty']
     @property
-    def train_multilosses_type(self) -> Any: 
+    def train_multilosses_type(self) -> str: 
         return self.Param['train.multilosses.type']
     @property
     def train_multilosses_param(self) -> dict: 
@@ -448,6 +448,14 @@ class TrainParam:
     @property
     def callbacks(self) -> dict[str,dict]: 
         return {k.replace('callbacks.',''):v for k,v in self.Param.items() if k.startswith('callbacks.')}
+
+    @property
+    def try_cuda(self) -> bool: 
+        return self.module_type == 'nn'
+
+    @property
+    def gc_collect_each_model(self) -> bool: 
+        return self.module_type == 'nn'
 
 class ModelParam:
     def __init__(self , base_path : ModelPath | Path | str | None , module : str , 
@@ -610,7 +618,7 @@ class TrainConfig(TrainParam):
         self , base_path : ModelPath | Path | str | None , override = None, schedule_name : str | None = None ,
         stage = -1 , resume = -1 , selection = -1 , makedir = True , start : int | None = None , end : int | None = None , **kwargs
     ):
-        self.device = Device()
+        
         self.start  = start
         self.end    = end
         self.Train  = TrainParam(base_path , override, schedule_name , **kwargs)
@@ -620,7 +628,8 @@ class TrainConfig(TrainParam):
         assert self.Train.model_base_path , self.Train.model_name
         if not base_path and makedir: 
             self.makedir()
-        
+
+        self.device = Device(try_cuda = self.try_cuda)
 
     @classmethod
     def default(cls , module = None , override = None , stage = 0, resume = 0 , selection = 0 , makedir = False):

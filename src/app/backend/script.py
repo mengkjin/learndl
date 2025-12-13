@@ -135,6 +135,11 @@ class ScriptHeader:
             
         return header
 
+    @property
+    def ready(self):
+        """check if the script is ready to run"""
+        return not self.disabled and not self.parameters
+
 @dataclass
 class ScriptParamInput:
     name: str
@@ -271,6 +276,10 @@ class ScriptRunner:
     @property
     def todo(self):
         return self.header.todo
+
+    @property
+    def ready(self):
+        return self.header.ready
     
     @property
     def information(self):

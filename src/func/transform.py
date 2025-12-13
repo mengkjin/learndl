@@ -9,6 +9,7 @@ from scipy.linalg import lstsq
 
 from src.proj import Logger
 
+
 warnings.filterwarnings('ignore' , category=RuntimeWarning , message='Mean of empty slice')
 
 def fill_na_as_const(x_: np.ndarray, c_ : float = 0.0):

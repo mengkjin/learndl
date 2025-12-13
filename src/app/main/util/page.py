@@ -95,6 +95,7 @@ def get_script_page(script_key: str):
             'head' : runner.format_path ,
             'icon' : icon ,
             'help' : help ,
+            'runner' : runner ,
         }
     return st.session_state['app_script_pages'][runner.script_key]
 

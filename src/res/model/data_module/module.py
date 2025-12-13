@@ -263,8 +263,8 @@ class DataModule(BaseDataModule):
             self.empty_dataloader()
             return
 
-        x_full = {k:torch.Tensor(v.values)[:,self.d0:self.d1] for k,v in self.datas.x.items()}
-        y_full = torch.Tensor(self.datas.y.values)[:,self.d0:self.d1].squeeze(2)[...,:self.labels_n]
+        x_full = {k:torch.Tensor(v.values[:,self.d0:self.d1]) for k,v in self.datas.x.items()}
+        y_full = torch.Tensor(self.datas.y.values[:,self.d0:self.d1]).squeeze(2)[...,:self.labels_n]
 
         # standardized y with step == 1
         self.y_std = self.standardize_y(y_full , None , None , no_weight = True)[0]
@@ -279,8 +279,9 @@ class DataModule(BaseDataModule):
         self.y_std[:,self.step_idx] = y_sampled[:]
         self.static_dataloader(x_full , y_sampled , w_sampled , valid_sampled)
 
-        gc.collect() 
-        torch.cuda.empty_cache()
+        if self.config.gc_collect_each_model:
+            gc.collect() 
+            torch.cuda.empty_cache()
 
     def multiple_valid(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor , 
                        x_all_valid = True) -> torch.Tensor | None:

@@ -9,7 +9,7 @@ from inspect import currentframe
 from pathlib import Path
 from typing import Any , final , Iterator , Literal
 
-from src.proj import InstanceRecord , PATH , Logger
+from src.proj import InstanceRecord , PATH , Logger , Display
 from src.basic import ModelDict , DB
 from src.func import Filtered
 from src.res.algo import AlgoModule
@@ -582,10 +582,12 @@ class BaseTrainer(ModelStreamLine):
         '''stage of testing'''
         self.on_before_test_start()
         self.on_test_start()
-        for self.status.model_date , self.status.model_num in self.iter_model_num_date():
-            self.on_test_model_start()
-            self.model.test()
-            self.on_test_model_end()
+        with Logger.Profiler(profiling = True) as pr:
+            for self.status.model_date , self.status.model_num in self.iter_model_num_date():
+                self.on_test_model_start()
+                self.model.test()
+                self.on_test_model_end()
+        Display(pr.get_df().head(20))
         self.on_before_test_end()
         self.on_test_end()
         self.on_after_test_end()
@@ -594,6 +596,7 @@ class BaseTrainer(ModelStreamLine):
         '''iter of model_date and model_num , considering is_resuming'''
         model_iter = list(itertools.product(self.data.model_date_list , self.config.model_num_list))
         assert self.status.stage in ['fit' , 'test'] , self.status.stage
+        print(f'# of all models: {len(model_iter)}')
         if self.config.is_resuming:
             if self.status.stage == 'fit':
                 models_trained = np.full(len(model_iter) , True , dtype = bool)
@@ -601,12 +604,17 @@ class BaseTrainer(ModelStreamLine):
                     if not self.deposition.exists(model_num , model_date):
                         models_trained[max(i,0):] = False
                         break
+                print(f'# of models not trained: {len(model_iter) - sum(models_trained)}')
                 model_iter = Filtered(model_iter , ~models_trained)
             elif self.status.stage == 'test':
                 models_not_tested = [model not in self.tested_model_iter for model in model_iter]
+                print(f'# of models not tested: {sum(models_not_tested)}')
                 model_iter = Filtered(model_iter , models_not_tested)
         #elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:
         #    model_iter = []
+        else:
+            print(f'# of models to go: {len(model_iter)}')
+        
         return model_iter
 
     def iter_model_submodels(self):

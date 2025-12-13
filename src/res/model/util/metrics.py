@@ -27,14 +27,17 @@ class Metrics:
     
     def __init__(self , 
                  module_type = 'nn' , nn_category = None ,
-                 loss_type : Literal['mse', 'pearson', 'ccc'] = 'ccc' , 
-                 score_type : Literal['mse', 'pearson', 'ccc', 'spearman'] = 'spearman',
+                 loss_type : Literal['mse', 'pearson', 'ccc'] | Any = 'ccc' , 
+                 score_type : Literal['mse', 'pearson', 'ccc', 'spearman'] | Any = 'spearman',
                  penalty_kwargs : dict = {} ,
-                 multilosses_type: Literal['ewa','hybrid','dwa','ruw','gls','rws'] | None = None ,
+                 multilosses_type: Literal['ewa','hybrid','dwa','ruw','gls','rws'] | Any | None = None ,
                  multilosses_param: dict[str,Any] = {} ,
                  **kwargs) -> None:
         assert 'loss' not in penalty_kwargs , 'loss is a reserved keyword for penalty'
         assert 'score' not in penalty_kwargs , 'score is a reserved keyword for penalty'
+        assert loss_type in ['mse', 'pearson', 'ccc'] , f'{loss_type} must be "mse" , "pearson" or "ccc"'
+        assert score_type in ['mse', 'pearson', 'ccc', 'spearman'] , f'{score_type} must be "mse" , "pearson" , "ccc" or "spearman"'
+        assert multilosses_type in ['ewa','hybrid','dwa','ruw','gls','rws' , None] , f'{multilosses_type} must be None or a valid multilosses type: "ewa" , "hybrid" , "dwa" , "ruw" , "gls" or "rws"'
         
         self.module_type = module_type
         self.nn_category = nn_category

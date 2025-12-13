@@ -130,8 +130,10 @@ class BackendTaskRecorder:
         error : str | None = None
 
         @classmethod
-        def from_return(cls , ret : Any):
-            if isinstance(ret , cls):
+        def from_return(cls , ret : Any | None = None):
+            if ret is None:
+                return cls()
+            elif isinstance(ret , cls):
                 return ret
             elif isinstance(ret , str):
                 return cls(message = ret)
@@ -165,7 +167,7 @@ class BackendTaskRecorder:
                 return cls(message = str(ret))
 
     def _func_return(self , func_return : Any | None = None):
-        if not self.task_id or func_return is None: 
+        if not self.task_id: 
             return
         exit_msg = self.ExitMessage.from_return(func_return)
         self.exit_msg = exit_msg

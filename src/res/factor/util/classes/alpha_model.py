@@ -28,6 +28,8 @@ class Amodel:
         return len(self.alpha)
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(name={self.name},date={self.date},length={len(self)})'
+    def __bool__(self):
+        return True
     def get_model(self , *args , **kwargs): 
         return self
     def copy(self): 

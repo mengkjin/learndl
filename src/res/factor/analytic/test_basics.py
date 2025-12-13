@@ -7,8 +7,8 @@ from matplotlib.figure import Figure
 from pathlib import Path
 from typing import Any , Callable , Literal , Type
 
-from src.proj import PATH , Timer , Logger
-from src.func import dfs_to_excel , figs_to_pdf , display as disp
+from src.proj import PATH , Timer , Logger , Display
+from src.func import dfs_to_excel , figs_to_pdf
 from src.data import DataBlock
 from ..util import Benchmark , StockFactor
 
@@ -162,7 +162,7 @@ class BaseFactorAnalyticTest(ABC):
         return {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
     
     def display_figs(self):
-        [disp.display(fig) for fig in self.get_figs().values()]
+        [Display(fig) for fig in self.get_figs().values()]
     
     def write_down(self):
         rslts , figs = self.get_rslts() , self.get_figs()

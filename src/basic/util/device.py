@@ -2,15 +2,8 @@ import psutil , torch
 from torch.nn import Module
 from typing import Any
 
-if torch.backends.mps.is_available():
-    use_device = torch.device('mps')
-elif torch.cuda.is_available():
-    use_device = torch.device('cuda:0')
-else:
-    use_device = torch.device('cpu')
-        
 # MPS memory management
-if use_device.type == 'mps':
+if torch.backends.mps.is_available() == 'mps':
     # clear MPS cache
     torch.mps.empty_cache()
     
@@ -47,12 +40,19 @@ def get_device(obj : Module | torch.Tensor | list | tuple | dict | Any):
 
 class Device:
     '''cpu / cuda / mps device , callable'''
-    def __init__(self , device : torch.device | None = None) -> None:
-        if device is None: 
-            device = use_device
-        self.device = device
+    def __init__(self , try_cuda = True , try_mps = True) -> None:
+        self.device = self.use_device(try_cuda)
     def __repr__(self): return str(self.device)
     def __call__(self, obj): return send_to(obj , self.device)
+
+    @classmethod
+    def use_device(cls , try_cuda = True) -> torch.device:
+        if torch.backends.mps.is_available():
+            return torch.device('mps')
+        elif try_cuda and torch.cuda.is_available():
+            return torch.device('cuda:0')
+        else:
+            return torch.device('cpu')
 
     @property
     def is_cuda(self): return self.device.type == 'cuda'
