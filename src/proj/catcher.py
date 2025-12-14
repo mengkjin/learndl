@@ -224,7 +224,7 @@ class LogWriter(OutputCatcher):
         contents = catcher.contents
     """
     def __init__(self, log_path : str | Path | None = None):
-        self.log_path = log_path
+        self.log_path = Path(log_path) if log_path is not None else None
         if log_path is None: 
             self.log_file = None
         else:
@@ -238,8 +238,7 @@ class LogWriter(OutputCatcher):
         if self.log_path is None: 
             return ''
         else:
-            with open(self.log_path , 'r') as f:
-                return f.read()
+            return self.log_path.read_text(encoding='utf-8')
 
 class WarningCatcher:
     """
@@ -577,7 +576,7 @@ class HtmlCatcher(OutputCatcher):
             return
         export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
         assert export_path.suffix == '.html' , f"export_path must be a html file , but got {export_path}"
-        self._export_file_list.append(export_path)
+        self.export_file_list.append(export_path)
     
     def set_attrs(self , title : str | None = None , export_path : Path | str | None = None , category : str | None = None):
         instance = self.Instance if self.Instance is not None else self
@@ -624,17 +623,22 @@ class HtmlCatcher(OutputCatcher):
         self.add_export_file(export_path)
         if not self.export_file_list:
             return
-        html_content = self.generate_html()
+
+        # log first and then export
         _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
         for export_path in self.export_file_list:
-            export_path.parent.mkdir(exist_ok=True,parents=True)
-            with open(export_path, 'w', encoding='utf-8') as f:
-                f.write(html_content)
-            _critical(f"{self.__class__.__name__} result saved to {export_path}")
-        
+            print(f"  --> {self.__class__.__name__} result saved to {export_path}")
+
         if add_to_email:
             from src.basic.util.email import Email
             Email.Attach(self.export_file_list[-1])
+            if MACHINE.server:
+                print(f"  --> {self.__class__.__name__} attached to email {self.export_file_list[-1]}")
+        
+        html_content = self.generate_html()
+        for export_path in self.export_file_list:
+            export_path.parent.mkdir(exist_ok=True,parents=True)
+            export_path.write_text(html_content, encoding='utf-8')
         
     def redirect_display_function(self):
         """redirect stdout, stderr, and proj.display.Display to catcher"""
@@ -981,7 +985,6 @@ class MarkdownCatcher(OutputCatcher):
         if to_share_folder and (share_folder_path := MACHINE.share_folder_path()) is not None:
             self.add_export_file(share_folder_path.joinpath('markdown_catcher' , self.filename))
         
-        
         self.kwargs = kwargs
         self.last_seperator = None
         self.seperating_by = seperating_by
@@ -1021,7 +1024,7 @@ class MarkdownCatcher(OutputCatcher):
             return
         export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
         assert export_path.suffix == '.md' , f"export_path must be a markdown file , but got {export_path}"
-        self._export_file_list.append(export_path)
+        self.export_file_list.append(export_path)
 
     def __enter__(self):
         if not self.enabled or not self.export_file_list:
@@ -1071,7 +1074,7 @@ class MarkdownCatcher(OutputCatcher):
                 filename.unlink()
             filename.parent.mkdir(exist_ok=True,parents=True)
             shutil.copy(self.running_filename, filename)
-            _critical(f"{self.__class__.__name__} result saved to {filename}")
+            print(f"  --> {self.__class__.__name__} result saved to {filename}")
         self.running_filename.unlink()
     
     def _markdown_header(self):
@@ -1128,11 +1131,9 @@ class MarkdownCatcher(OutputCatcher):
 
     def get_contents(self):
         if self.running_filename.exists():
-            with open(self.running_filename , 'r') as f:
-                return f.read()
+            return self.running_filename.read_text(encoding='utf-8')
         elif self.export_file_list:
-            with open(self.export_file_list[-1] , 'r') as f:
-                return f.read()
+            return self.export_file_list[-1].read_text(encoding='utf-8')
         else:
             return ''
         

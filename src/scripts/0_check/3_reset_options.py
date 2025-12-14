@@ -7,10 +7,10 @@
 # email: False
 # mode: shell
 
-from src.app import BackendTaskRecorder
 from src.proj import Options , Logger
+from src.app import ScriptTool
 
-@BackendTaskRecorder()
+@ScriptTool('reset_options')
 def main(**kwargs):
     Options.cache.clear()
     Logger.success(f'Success : reset options cache')

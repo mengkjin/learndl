@@ -113,7 +113,8 @@ class AutoRunTask:
         if 'html' in self.catchers:
             self._catchers.append(HtmlCatcher(self.task_full_name , self.task_name , self.init_time))
         if 'markdown' in self.catchers:
-            self._catchers.append(MarkdownCatcher(self.task_full_name , self.task_name , self.init_time , to_share_folder=True , add_time_to_title=False))
+            self._catchers.append(MarkdownCatcher(self.task_full_name , self.task_name , self.init_time , 
+                                  to_share_folder=True , add_time_to_title=False))
         if 'warning' in self.catchers:
             self._catchers.append(WarningCatcher(_catch_warnings))
 
