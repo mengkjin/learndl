@@ -8,12 +8,12 @@
 # mode: shell
 
 from src.app import BackendTaskRecorder
-from src.proj import Options
+from src.proj import Options , Logger
 
 @BackendTaskRecorder()
 def main(**kwargs):
     Options.cache.clear()
-    print(f'Success : reset options cache')
+    Logger.success(f'Success : reset options cache')
 
 if __name__ == '__main__':
     main()

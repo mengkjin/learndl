@@ -9,7 +9,7 @@ from inspect import currentframe
 from pathlib import Path
 from typing import Any , final , Iterator , Literal
 
-from src.proj import InstanceRecord , PATH , Logger , Display
+from src.proj import InstanceRecord , PATH , Logger
 from src.basic import ModelDict , DB
 from src.func import Filtered
 from src.res.algo import AlgoModule
@@ -213,6 +213,11 @@ class TrainerPredRecorder(ModelStreamLine):
     @resume_preds.setter
     def resume_preds(self , value : pd.DataFrame):
         self._resume_preds = value
+        self._resume_preds_models = value.loc[:,['model_num' , 'model_date' , 'submodel']].drop_duplicates()
+
+    @property
+    def resume_preds_models(self) -> pd.DataFrame:
+        return self._resume_preds_models
 
     @property
     def path_pred(self) -> Path: 
@@ -518,16 +523,6 @@ class BaseTrainer(ModelStreamLine):
     @property
     def result_package(self) -> list[Path]: 
         return [self.path_training_output , self.path_analytical_plot , self.path_analytical_data]
-    @property
-    def tested_model_iter(self):
-        model_iter = []
-        if self.record.resume_preds.empty:
-            return model_iter
-        df = self.record.resume_preds.loc[:,['model_num' , 'model_date' , 'submodel']].drop_duplicates()
-        for (model_num , model_date) , subdf in df.groupby(['model_num' , 'model_date']):
-            if np.isin(self.model_submodels , subdf['submodel']).all():
-                model_iter.append((model_date , model_num))
-        return model_iter
     
     def main_process(self):
         '''Main stage of data & fit & test'''
@@ -582,12 +577,10 @@ class BaseTrainer(ModelStreamLine):
         '''stage of testing'''
         self.on_before_test_start()
         self.on_test_start()
-        with Logger.Profiler(profiling = True) as pr:
-            for self.status.model_date , self.status.model_num in self.iter_model_num_date():
-                self.on_test_model_start()
-                self.model.test()
-                self.on_test_model_end()
-        Display(pr.get_df().head(20))
+        for self.status.model_date , self.status.model_num in self.iter_model_num_date():
+            self.on_test_model_start()
+            self.model.test()
+            self.on_test_model_end()
         self.on_before_test_end()
         self.on_test_end()
         self.on_after_test_end()
@@ -607,7 +600,13 @@ class BaseTrainer(ModelStreamLine):
                 print(f'# of models not trained: {len(model_iter) - sum(models_trained)}')
                 model_iter = Filtered(model_iter , ~models_trained)
             elif self.status.stage == 'test':
-                models_not_tested = [model not in self.tested_model_iter for model in model_iter]
+                tested_models = []
+                if not self.record.resume_preds.empty:
+                    for (model_num , model_date) , subdf in self.record.resume_preds_models.groupby(['model_num' , 'model_date']):
+                        if np.isin(self.model_submodels , subdf['submodel']).all():
+                            tested_models.append((model_date , model_num))
+ 
+                models_not_tested = [model not in tested_models for model in model_iter]
                 print(f'# of models not tested: {sum(models_not_tested)}')
                 model_iter = Filtered(model_iter , models_not_tested)
         #elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:

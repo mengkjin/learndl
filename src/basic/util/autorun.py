@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any , Literal , Callable
 
-from src.proj import MACHINE , PATH , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher
+from src.proj import MACHINE , Logger , HtmlCatcher , MarkdownCatcher , WarningCatcher
 from .calendar import CALENDAR
 from .task_record import TaskRecorder
 from .email import Email
@@ -111,9 +111,9 @@ class AutoRunTask:
         self._catchers : list[HtmlCatcher | MarkdownCatcher | WarningCatcher] = []
         
         if 'html' in self.catchers:
-            self._catchers.append(HtmlCatcher(self.task_full_name , self.init_time , self.html_catcher_path))
+            self._catchers.append(HtmlCatcher(self.task_full_name , self.task_name , self.init_time))
         if 'markdown' in self.catchers:
-            self._catchers.append(MarkdownCatcher(self.task_full_name , to_share_folder=True , add_time_to_title=False))
+            self._catchers.append(MarkdownCatcher(self.task_full_name , self.task_name , self.init_time , to_share_folder=True , add_time_to_title=False))
         if 'warning' in self.catchers:
             self._catchers.append(WarningCatcher(_catch_warnings))
 
@@ -130,7 +130,7 @@ class AutoRunTask:
             self.error_messages.append(error_message)
 
         if not self.error_messages:
-            self.critical(f'{self.task_full_name.replace("_", " ").title()} started at {self.init_time.strftime("%Y-%m-%d %H:%M:%S")} completed')
+            self.critical(f'{self.task_title} started at {self.init_time.strftime("%Y-%m-%d %H:%M:%S")} completed successfully')
 
         for log_type , message in Logger.iter_cached_messages():
             getattr(Logger , log_type)(message)
@@ -200,6 +200,13 @@ class AutoRunTask:
         return self.task_name if not self.task_key else f'{self.task_name}_{self.task_key}'
 
     @property
+    def task_title(self) -> str:
+        title = self.task_name.replace('_', ' ').title()
+        if self.task_key:
+            title = f'{title} of {self.task_key}'
+        return title
+
+    @property
     def time_str(self) -> str:
         return self.init_time.strftime('%Y%m%d%H%M%S')
 
@@ -249,11 +256,6 @@ class AutoRunTask:
     def error_message(self) -> str:
         """return the aggregated error message of the task"""
         return '\n'.join(self.error_messages)
-    
-    @property
-    def html_catcher_path(self) -> Path:
-        """return the path of the html message catcher"""
-        return PATH.log_autorun.joinpath('html_catcher' , self.task_name , f'{self.task_full_name}.{self.time_str}.html')
     
     def today(self , format : str = '%Y%m%d') -> str:
         """return the today's date in the given format"""

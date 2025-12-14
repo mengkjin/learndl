@@ -12,6 +12,7 @@ from typing import Any , Generator , Literal , Type
 
 from .path import PATH
 from .timer import Duration
+from .display import Display
 
 class _LevelFormatter(logging.Formatter):
     """Simple Level Formatter without color"""
@@ -250,10 +251,18 @@ class Logger:
                 Logger.highlight(' '.join([padding_left , message , padding_right]))
 
     class Profiler(cProfile.Profile):
-        def __init__(self, profiling = False , builtins = True , **kwargs) -> None:
+        def __init__(self, profiling = False , builtins = True , display = True , n_head = 20 , 
+                     columns = ['type' , 'name' , 'ncalls', 'cumtime' ,  'tottime' , 'percall' , 'where' , 'caller'] , sort_on = 'cumtime' , highlight = None , output = None ,
+                     **kwargs) -> None:
             self.profiling = profiling
             if self.profiling: 
                 super().__init__(builtins = builtins) 
+            self.display = display
+            self.n_head = n_head
+            self.columns = columns
+            self.sort_on = sort_on
+            self.highlight = highlight
+            self.output = output
 
         def __enter__(self):
             if self.profiling: 
@@ -266,9 +275,12 @@ class Logger:
                 print(f'Error in Profiler ' , type , value)
                 traceback.print_exc()
             elif self.profiling:
+                if self.display:
+                    df = self.get_df(sort_on = self.sort_on , highlight = self.highlight , output = self.output)
+                    Display(df.loc[:,self.columns].head(self.n_head))
                 return super().__exit__(type , value , trace)
 
-        def get_df(self , sort_on = 'tottime' , highlight = None , output = None):
+        def get_df(self , sort_on = 'cumtime' , highlight = None , output = None):
             if not self.profiling: 
                 return pd.DataFrame()
             # highlight : 'gp_math_func.py'
@@ -282,13 +294,14 @@ class Logger:
                 [self.decompose_func_str(s) for s in df.full_name] , 
                 columns = pd.Index(['type' , 'name' , 'where' , 'memory']))
             df = pd.concat([df_func , df],axis=1).sort_values(sort_on,ascending=False)
-            column_order = ['type' , 'name' , 'ncalls', 'ccalls', 'cumtime' ,  'tottime' , 'where' , 'memory' , 'full_name', 'caller']
+            df['percall'] = df['cumtime'] / df['ncalls']
+            column_order = ['type' , 'name' , 'ncalls', 'ccalls', 'cumtime' ,  'tottime' , 'percall' , 'where' , 'memory' , 'full_name', 'caller']
             df = df.loc[:,column_order]
             if isinstance(highlight , str): 
                 df = df[df.full_name.str.find(highlight) > 0]
             if isinstance(output , str): 
                 df.to_csv(output)
-            return df
+            return df.reset_index(drop=True)
 
         @staticmethod
         def decompose_func_str(func_string):

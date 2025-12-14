@@ -50,8 +50,7 @@ class PATH:
     # logs folder and subfolders
     logs        = main.joinpath('logs')
     log_main    = logs.joinpath('main')
-    log_update  = logs.joinpath('update')
-    log_autorun = logs.joinpath('autorun')
+    log_catcher = logs.joinpath('catcher')
 
     # models folder and subfolders
     model       = main.joinpath('models')

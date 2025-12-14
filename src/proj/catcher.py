@@ -1,7 +1,7 @@
-import io , sys , re , html , base64 , platform , warnings , traceback
+import io , sys , re , html , base64 , platform , warnings , shutil , traceback
 import pandas as pd
 
-from typing import Any, Callable ,Literal , IO
+from typing import Any ,Literal , IO
 from abc import ABC, abstractmethod
 from io import StringIO
 from pathlib import Path
@@ -528,38 +528,29 @@ class TimedOutput:
         return text
 
 class HtmlCatcher(OutputCatcher):
-    ExportDIR = PATH.log_autorun.joinpath('html_catcher')
+    ExportDIR = PATH.log_catcher.joinpath('html')
     Instance : 'HtmlCatcher | None' = None
     InstanceList : list['HtmlCatcher'] = []
     Capturing : bool = True
-    DisplayModule : Any = None
-
-    class NoCapture:
-        def __enter__(self):
-            HtmlCatcher.Capturing = False
-            return self
-        
-        def __exit__(self, exc_type, exc_val, exc_tb):
-            HtmlCatcher.Capturing = True
 
     '''catch message from stdout and stderr, and display module'''
-    def __init__(self, title: str | bool | None = None, init_time: datetime | None = None , export_path: Path | str | None = None , **kwargs):
+    def __init__(self, title: str | bool | None = None , category : str = 'miscelaneous', init_time: datetime | None = None , 
+                 add_time_to_title: bool = True, **kwargs):
         if isinstance(title , bool) and not title:
             self._enable_catcher = False
         else:
             self._enable_catcher = True
-        self.outputs: list[TimedOutput] = []
+        
         self.title = title if isinstance(title , str) else 'html_catcher'
+        self.category = category
         self.init_time = init_time if init_time else datetime.now()
-        self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
-        self.kwargs = kwargs
-        self.__class__.InstanceList.append(self)
 
-        try:
-            import src.func.display as display_module
-            self.__class__.DisplayModule = display_module
-        except ImportError as e:
-            raise ImportError(f"Cannot Import src.func.display: {e}")
+        self.filename = f'{self.title.replace(' ' , '_')}.{self.init_time.strftime("%Y%m%d%H%M%S")}.html' if add_time_to_title else f'{self.title.replace(' ' , '_')}.html'
+        self.add_export_file(self.ExportDIR.joinpath(self.category.replace(' ' , '_') , self.filename))
+
+        self.outputs: list[TimedOutput] = []
+        self.kwargs = kwargs
+        self.InstanceList.append(self)
         
     def __bool__(self):
         return True
@@ -574,28 +565,28 @@ class HtmlCatcher(OutputCatcher):
     @property
     def is_running(self):
         return self.Instance is not None
+
+    @property
+    def export_file_list(self) -> list[Path]:
+        if not hasattr(self , '_export_file_list'):
+            self._export_file_list : list[Path] = []
+        return self._export_file_list
+
+    def add_export_file(self , export_path : Path | str | None = None):
+        if export_path is None:
+            return
+        export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
+        assert export_path.suffix == '.html' , f"export_path must be a html file , but got {export_path}"
+        self._export_file_list.append(export_path)
     
-    def get_export_path(self):
-        if isinstance(self._export_path, Path):
-            path = self._export_path
-        else:
-            title = self.title.replace(" " , "_")
-            time_str = self.init_time.strftime('%Y%m%d%H%M%S')
-            path = self.ExportDIR.joinpath(title , f'{title}.{time_str}.html')
-        assert not path or path.suffix == '.html' , f"export_path must be a html file , but got {path}"
-        return path
-    
-    def set_attrs(self , title : str | None = None , export_path : Path | str | None = None , time : datetime | None = None):
-        if self.Instance is None or self.Instance is self:
-            if title: 
-                self.title = title
-            if time: 
-                self.init_time = time
-            if export_path: 
-                self._export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
-            assert not self._export_path or self._export_path.suffix == '.html' , f"export_path must be a html file , but got {self._export_path}"
-        else:
-            self.Instance.set_attrs(title , export_path)
+    def set_attrs(self , title : str | None = None , export_path : Path | str | None = None , category : str | None = None):
+        instance = self.Instance if self.Instance is not None else self
+        if title: 
+            instance.title = title
+        if category: 
+            instance.category = category
+        if export_path: 
+            instance.add_export_file(export_path)
         return self
 
     def SetInstance(self):
@@ -627,45 +618,38 @@ class HtmlCatcher(OutputCatcher):
             return
         self.export()   
         self.restore_display_function()
-
         self.ClearInstance()
 
-    def export(self , export_path: Path | None = None):
-        if export_path is None: 
-            export_path = self.get_export_path()
-        _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)} , saved to {export_path}")
-        export_path.parent.mkdir(exist_ok=True,parents=True)
-        with open(export_path, 'w', encoding='utf-8') as f:
-            f.write(self.generate_html())
+    def export(self , export_path: Path | None = None , add_to_email: bool = True):
+        self.add_export_file(export_path)
+        if not self.export_file_list:
+            return
+        html_content = self.generate_html()
+        _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
+        for export_path in self.export_file_list:
+            export_path.parent.mkdir(exist_ok=True,parents=True)
+            with open(export_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            _critical(f"{self.__class__.__name__} result saved to {export_path}")
         
-        from src.basic.util.email import Email
-        Email.Attach(export_path)
+        if add_to_email:
+            from src.basic.util.email import Email
+            Email.Attach(self.export_file_list[-1])
         
     def redirect_display_function(self):
-        """redirect stdout, stderr, and display_module functions to catcher"""
+        """redirect stdout, stderr, and proj.display.Display to catcher"""
         self.stdout_deflector = OutputDeflector('stdout', self , self.keep_original , 'write_stdout')
         self.stderr_deflector = OutputDeflector('stderr', self , self.keep_original , 'write_stderr')
         self.stdout_deflector.start_catching()
         self.stderr_deflector.start_catching()
 
-        self.original_display = self.DisplayModule.display
-        self.DisplayModule.display = self.display_wrapper(self.DisplayModule.display)
         Display.set_callbacks([self.add_output , self.stop_capturing] , [self.start_capturing])
 
     def restore_display_function(self):
         """restore stdout, stderr, and display_module functions"""
         self.stdout_deflector.end_catching()
         self.stderr_deflector.end_catching()
-        self.DisplayModule.display = self.original_display
         Display.reset_callbacks()
-
-    def display_wrapper(self, original_func: Callable):
-        def wrapper(obj , *args, **kwargs):
-            self.add_output(obj)
-            with self.NoCapture():
-                display_result = original_func(obj , *args, **kwargs)
-            return display_result
-        return wrapper
     
     def generate_html(self):
         """generate html file with time ordered outputs"""
@@ -972,31 +956,31 @@ class HtmlCatcher(OutputCatcher):
         return tail
     
 class MarkdownCatcher(OutputCatcher):
-    ExportDIR = PATH.log_autorun.joinpath('markdown_catcher')
-    ExportDIR.mkdir(exist_ok=True,parents=True)
+    ExportDIR = PATH.log_catcher.joinpath('markdown')
+    InstanceList : list['OutputCatcher'] = []
 
-    def __init__(self, title: str  | None = None, 
+    def __init__(self, title: str | bool | None = None,
+                 category : str = 'miscelaneous',
+                 init_time: datetime | None = None,
+                 add_time_to_title: bool = True,
                  to_share_folder: bool = False ,
                  seperating_by: Literal['min' , 'hour'  , 'day'] | None = 'min',
-                 add_time_to_title: bool = True,
-                 given_export_path: Path | str | None = None , 
                  **kwargs):
-        self.title = title if title else 'markdown_catcher'
-        self.start_time = datetime.now()
-        if given_export_path is None:
-            if add_time_to_title:
-                filename = f'{self.title}.{self.start_time.strftime("%Y%m%d%H%M%S")}.md'
-            else:
-                filename = f'{self.title}.md'
-            self.filename = self.ExportDIR.joinpath(filename)
+
+        if isinstance(title , bool) and not title:
+            self._enable_catcher = False
         else:
-            self.filename = Path(given_export_path)
-        if to_share_folder:
-            share_folder_path = MACHINE.share_folder_path()
-            if share_folder_path is None:
-                self.filename = None
-            else:
-                self.filename = share_folder_path.joinpath('markdown_catcher' , self.filename.name)
+            self._enable_catcher = True
+
+        self.title = title if isinstance(title , str) else 'markdown_catcher'
+        self.category = category
+        self.init_time = init_time if init_time else datetime.now()
+        
+        self.filename = f'{self.title.replace(' ' , '_')}.{self.init_time.strftime("%Y%m%d%H%M%S")}.md' if add_time_to_title else f'{self.title.replace(' ' , '_')}.md'
+        self.add_export_file(self.ExportDIR.joinpath(self.category.replace(' ' , '_') , self.filename))
+        if to_share_folder and (share_folder_path := MACHINE.share_folder_path()) is not None:
+            self.add_export_file(share_folder_path.joinpath('markdown_catcher' , self.filename))
+        
         
         self.kwargs = kwargs
         self.last_seperator = None
@@ -1017,9 +1001,33 @@ class MarkdownCatcher(OutputCatcher):
             raise ValueError(f"Invalid SeperatingBy: {seperating_by}")
         self.is_catching = False
 
+        self.InstanceList.append(self)
+
+    def __repr__(self) -> str:
+        return f'{self.__class__.__name__}(title={self.title})'
+
+    @property
+    def export_file_list(self) -> list[Path]:
+        if not hasattr(self , '_export_file_list'):
+            self._export_file_list : list[Path] = []
+        return self._export_file_list
+
+    @property
+    def enabled(self) -> bool:
+        return self._enable_catcher
+
+    def add_export_file(self , export_path : Path | str | None = None):
+        if export_path is None:
+            return
+        export_path = Path(export_path) if isinstance(export_path ,  str) else export_path
+        assert export_path.suffix == '.md' , f"export_path must be a markdown file , but got {export_path}"
+        self._export_file_list.append(export_path)
+
     def __enter__(self):
-        if self.filename is None or not self.filename.parent.exists():
-            return self
+        if not self.enabled or not self.export_file_list:
+            return self  
+
+        self.start_time = datetime.now()
         
         self.stats = {
             'stdout_lines' : 0,
@@ -1027,7 +1035,6 @@ class MarkdownCatcher(OutputCatcher):
         }
         
         self._open_markdown_file()
-        
         self._markdown_header()
         self.stdout_deflector = OutputDeflector('stdout', self, True , 'write_stdout').start_catching()
         self.stderr_deflector = OutputDeflector('stderr', self, True , 'write_stderr').start_catching()
@@ -1035,33 +1042,37 @@ class MarkdownCatcher(OutputCatcher):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if not self.is_catching or self.filename is None: 
+        if not self.enabled or not self.is_catching or not self.export_file_list: 
             return
         self._markdown_footer()
         self.markdown_file.flush()
         self.stdout_deflector.end_catching()
         self.stderr_deflector.end_catching()
-        self._close_markdown_file()
-        print(f"Markdown saved to {self.filename.absolute()}")
+        self.export()
+        self.is_catching = False
         return False
     
     def _open_markdown_file(self):
-        assert self.filename is not None and self.filename.parent.exists() , f"filename must be a valid file path"
         i = 0
-        running_filename = self.filename.with_suffix('.running.md')
+        running_filename = self.export_file_list[-1].with_suffix('.running.md')
         while running_filename.exists():
             running_filename = running_filename.with_suffix(f'.{i}.md')
         self.running_filename = running_filename
+        self.running_filename.parent.mkdir(exist_ok=True,parents=True)
         self.markdown_file = open(self.running_filename, 'w', encoding='utf-8')
         
-    def _close_markdown_file(self):
+    def export(self):
         self.markdown_file.close()
-        if self.filename is not None:
-            if self.filename.exists(): 
-                self.filename.unlink()
-            self.running_filename.rename(self.filename)
-        if self.running_filename.exists(): 
-            self.running_filename.unlink()
+        if not self.enabled or not self.export_file_list:
+            return
+        _critical(f"{self} Capturing Finished, cost {Duration(since = self.start_time)}")
+        for filename in self.export_file_list:
+            if filename.exists(): 
+                filename.unlink()
+            filename.parent.mkdir(exist_ok=True,parents=True)
+            shutil.copy(self.running_filename, filename)
+            _critical(f"{self.__class__.__name__} result saved to {filename}")
+        self.running_filename.unlink()
     
     def _markdown_header(self):
         self.markdown_file.write(f"# {self.title.title()}\n")
@@ -1116,10 +1127,14 @@ class MarkdownCatcher(OutputCatcher):
         self.write_std(text , 'stderr')
 
     def get_contents(self):
-        if self.filename is None or not self.filename.exists(): 
+        if self.running_filename.exists():
+            with open(self.running_filename , 'r') as f:
+                return f.read()
+        elif self.export_file_list:
+            with open(self.export_file_list[-1] , 'r') as f:
+                return f.read()
+        else:
             return ''
-        with open(self.filename , 'r') as f:
-            return f.read()
         
     def close(self):
         self.markdown_file.close()

@@ -31,8 +31,8 @@ class OptionsDefinition:
     def available_factors(cls) -> list[str]:
         print(f'refind available factors at {datetime.now()}')
         from src.res.factor.calculator import FactorCalculator
-        return [p.factor_name for p in FactorCalculator.iter(meta_type = 'pooling')] + \
-            [p.factor_name for p in FactorCalculator.iter(category1 = 'sellside')]
+        return [p.factor_name for p in FactorCalculator.iter(meta_type = 'pooling' , updatable = True)] + \
+            [p.factor_name for p in FactorCalculator.iter(category1 = 'sellside' , updatable = True)]
 
 class OptionsCache:
     """Cache for the options"""
