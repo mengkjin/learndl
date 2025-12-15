@@ -1,11 +1,13 @@
 # please check this path before running the code
-import sys , socket
+import sys , socket , platform , os
 
 from pathlib import Path
 from typing import Literal
 
+__all__ = ['MACHINE']
+
 _machine_dict = {
-    # machine name :    (is_server , main_path , updateable)
+    # machine name :    (is_server , main_path , updatable)
     'mengkjin-server':  (True , '/home/mengkjin/workspace/learndl'),
     'HST-jinmeng':      (False , 'E:/workspace/learndl'),
     'Mathews-Mac':      (False , '/Users/mengkjin/workspace/learndl' , False),
@@ -33,7 +35,7 @@ class MACHINE:
     name : str , machine_name
     server : bool , is this machine a server
     main_path : str , main_path of the project
-    updateable : bool , updateable
+    updatable : bool , updatable
     python_path : str , python_path
 
     belong_to_hfm : bool , belong to HFM
@@ -44,12 +46,17 @@ class MACHINE:
     settings : tuple = _machine_dict[name]
     server : bool = settings[0]
     main_path : Path = Path(settings[1])
-    updateable : bool = settings[2] if len(settings) > 2 else True
+    updatable : bool = settings[2] if len(settings) > 2 else True
     python_path : str = _get_python_path(name , main_path)
 
     belong_to_hfm : bool = name.lower().startswith(('hno' , 'hpo'))
     belong_to_jinmeng : bool = 'jinmeng' in name.lower()
     hfm_factor_dir : Path | None = Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha') if belong_to_hfm else None
+
+    system_name = platform.system()
+    is_linux = system_name == 'Linux' and os.name == 'posix'
+    is_windows = system_name == 'Windows'
+    is_macos = system_name == 'Darwin'
     
     assert main_path.exists() , f'main_path not exists: {main_path}'
     assert Path(__file__).is_relative_to(main_path) , f'{__file__} is not in {main_path}'

@@ -382,10 +382,12 @@ def direclty_open_file(path : Path | None = None):
         # Check if the file exists
         if os.path.exists(pdf_path):
             # Use platform-specific commands to open the file
-            if os.name == 'nt':  # For Windows
+            if MACHINE.is_windows:  
                 os.startfile(pdf_path)
-            elif os.name == 'posix':  # For macOS, Linux, etc.
+            elif MACHINE.is_linux or MACHINE.is_macos: 
                 subprocess.run(['open', pdf_path])
+            else:
+                raise ValueError(f'Unsupported platform: {MACHINE.system_name}')
         else:
             st.error("The file was not found.")
     except Exception as e:

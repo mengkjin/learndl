@@ -1,4 +1,4 @@
-import os , fnmatch , platform , psutil , subprocess , time , argparse , shlex , tempfile
+import os , fnmatch , psutil , subprocess , time , argparse , shlex , tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -33,7 +33,7 @@ def change_power_mode(mode : Literal['balanced' , 'power-saver' , 'performance']
                       verbose = False):
     # running_scripts = get_running_scripts(exclude_scripts)
     main_str = f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} : Power set to {mode}'
-    if platform.system() == 'Windows':
+    if MACHINE.is_windows:
         main_str += f' aborted due windows platform\n'
     else:
         main_str += f' applied\n'
@@ -111,24 +111,11 @@ class ScriptCmd:
     def shell(self):
         return self.mode == 'shell'
 
-    @property
-    def is_linux(self):
-        return platform.system() == 'Linux' and os.name == 'posix'
-    
-    @property
-    def is_windows(self):
-        return platform.system() == 'Windows'
-    
-    @property
-    def is_macos(self):
-        return platform.system() == 'Darwin'
-
-        
     def __str__(self):
         if self.mode == 'os':
             return str(self.py_cmd)
         elif self.mode == 'shell':
-            if self.is_macos:
+            if MACHINE.is_macos:
                 return str([*self.shell_cmd , self.apple_script_cmd])
             else:
                 return str(self.shell_cmd)
@@ -142,7 +129,7 @@ class ScriptCmd:
     def create_py_cmd(self):
         args_str = ' '.join([f'--{k} {str(v).replace(" ", "")}' for k , v in self.params.items() if v != ''])
         py_cmd = f'{MACHINE.python_path} {self.script} {args_str}'
-        if platform.system() == 'Windows':
+        if MACHINE.is_windows:
             py_cmd = f'{MACHINE.python_path} -c {self.script} {args_str}'
             py_cmd = py_cmd.replace("'", "'\"'\"'")
         else:
@@ -153,13 +140,13 @@ class ScriptCmd:
         self.os_cmd = shlex.split(self.py_cmd)
 
     def create_shell_cmd(self):
-        if self.is_linux:
+        if MACHINE.is_linux:
             self.shell_cmd = ['gnome-terminal' , '--' , 'bash' , '-c' , f'{self.py_cmd}; echo \'Task complete. Press any key to exit...\'; read -n 1 -s']
             # self.shell_cmd = f'gnome-terminal -- bash -c "{self.py_cmd}; echo \'Task complete. Press any key to exit...\'; read -n 1 -s"'
             # self.shell_cmd = f'gnome-terminal -- bash -c "{self.py_cmd}; exec bash; exit"'
-        elif self.is_windows:
+        elif MACHINE.is_windows:
             self.shell_cmd = f'start cmd /c {self.py_cmd} && pause'
-        elif self.is_macos:
+        elif MACHINE.is_macos:
             self.shell_cmd = ["osascript"] if self.macos_tempfile_method else ["osascript", "-"]
             self.apple_script_cmd = f'''
 tell application "Terminal"
@@ -172,22 +159,22 @@ tell application "Terminal"
 end tell
 '''
         else:
-            raise ValueError(f'Unsupported platform: {platform.system()}')
+            raise ValueError(f'Unsupported platform: {MACHINE.system_name}')
 
     def run(self):
         if self.mode == 'os':
             self.process = Popen(self.os_cmd)
-        elif self.is_linux or self.is_windows:
+        elif MACHINE.is_linux or MACHINE.is_windows:
             self.process = Popen(self.shell_cmd)
-        elif self.is_macos:
+        elif MACHINE.is_macos:
             self.run_in_darwin()
         else:
-            raise ValueError(f'Unsupported platform: {platform.system()}')
+            raise ValueError(f'Unsupported platform: {MACHINE.system_name}')
         return self
 
     def run_in_darwin(self):
         assert self.mode == 'shell' , 'darwin mode does not support os mode'
-        assert self.is_macos , f'Unsupported platform for run_in_darwin: {platform.system()}'
+        assert MACHINE.is_macos , f'Unsupported platform for run_in_darwin: {MACHINE.system_name}'
 
         if self.macos_tempfile_method:
             with tempfile.NamedTemporaryFile(mode='w+', suffix=".applescript", delete=False) as temp_script:
@@ -221,15 +208,15 @@ def get_task_id_from_cmd(cmd : str):
 def get_real_pid(process : subprocess.Popen | subprocess.CompletedProcess | None , cmd : str):
     task_id = get_task_id_from_cmd(cmd)
     script_name = os.path.basename(cmd.split('.py')[0].split(' ')[-1]) + '.py'
-    if (platform.system() == 'Linux' and os.name == 'posix') or (platform.system() == 'Darwin'):
+    if MACHINE.is_linux or MACHINE.is_macos:
         return find_python_process_by_name(script_name , task_id = task_id)
-    elif platform.system() == 'Windows':
+    elif MACHINE.is_windows:
         if (python_pid := find_child_python_process_by_name(process, script_name)) is not None:
             return python_pid
         else:
             return find_python_process_by_name(script_name, task_id=task_id)
     else:
-        raise ValueError(f'Unsupported platform: {platform.system()}')
+        raise ValueError(f'Unsupported platform: {MACHINE.system_name}')
     
 def find_child_python_process_by_name(parent_process: subprocess.Popen | subprocess.CompletedProcess | None, name: str):
     """find child python process in Windows"""

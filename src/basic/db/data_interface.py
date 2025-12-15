@@ -1,4 +1,4 @@
-import os , platform
+import os
 from dask.delayed import delayed
 from dask.base import compute
 import numpy as np
@@ -169,7 +169,7 @@ def _load_df_multi(paths : dict , date_colname : str = 'date' ,
         ddfs = [delayed(reader)(p).assign(**{date_colname:d}) for d,p in paths.items()]
         dfs = compute(ddfs)[0]
     else:
-        assert parallel == 'thread' or platform.system() != 'Windows' , (parallel , platform.system())
+        assert parallel == 'thread' or not MACHINE.is_windows, (parallel , MACHINE.system_name)
         max_workers = min(_load_max_workers , max(len(paths) // 5 , 1))
         PoolExecutor = ThreadPoolExecutor if parallel == 'thread' else ProcessPoolExecutor
         with PoolExecutor(max_workers=max_workers) as pool:

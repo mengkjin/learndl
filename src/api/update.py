@@ -10,8 +10,8 @@ from .notification import NotificationAPI
 class UpdateAPI:
     @classmethod
     def daily(cls):
-        if not MACHINE.updateable:
-            Logger.cache_message('error', f'{MACHINE.name} is not updateable, skip rollback update')
+        if not MACHINE.updatable:
+            Logger.cache_message('error', f'{MACHINE.name} is not updatable, skip rollback update')
             return
         DataAPI.update()
         if not DataAPI.is_updated():
@@ -29,8 +29,8 @@ class UpdateAPI:
 
     @classmethod
     def rollback(cls , rollback_date : int):
-        if not MACHINE.updateable:
-            Logger.cache_message('error', f'{MACHINE.name} is not updateable, skip rollback update')
+        if not MACHINE.updatable:
+            Logger.cache_message('error', f'{MACHINE.name} is not updatable, skip rollback update')
             return
         CALENDAR.check_rollback_date(rollback_date)
         DataAPI.rollback(rollback_date)
@@ -43,8 +43,8 @@ class UpdateAPI:
 
     @classmethod
     def weekly(cls):
-        if not MACHINE.updateable:
-            Logger.cache_message('error', f'{MACHINE.name} is not updateable, skip rollback update')
+        if not MACHINE.updatable:
+            Logger.cache_message('error', f'{MACHINE.name} is not updatable, skip rollback update')
             return
         ModelAPI.update_models()
         
