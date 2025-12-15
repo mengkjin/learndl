@@ -199,7 +199,19 @@ class TrainerPredRecorder(ModelStreamLine):
         return self.trainer.data.test_full_dates
 
     @property
+    def preds(self) -> dict[str,pd.DataFrame]:
+        if not hasattr(self , '_preds'):
+            self._preds = {}
+        return self._preds
+
+    @preds.setter
+    def preds(self , value : dict[str,pd.DataFrame]):
+        self._preds = value
+
+    @property
     def tested_preds(self) -> pd.DataFrame:
+        if not hasattr(self , '_tested_preds'):
+            self._tested_preds = pd.DataFrame()
         return self._tested_preds
 
     @tested_preds.setter
@@ -208,15 +220,23 @@ class TrainerPredRecorder(ModelStreamLine):
 
     @property
     def resume_preds(self) -> pd.DataFrame:
+        if not hasattr(self , '_resume_preds'):
+            self._resume_preds = pd.DataFrame()
+            self._resume_preds_models = pd.DataFrame()
         return self._resume_preds
 
     @resume_preds.setter
     def resume_preds(self , value : pd.DataFrame):
         self._resume_preds = value
-        self._resume_preds_models = value.loc[:,['model_num' , 'model_date' , 'submodel']].drop_duplicates()
+        if not value.empty:
+            self._resume_preds_models = value.loc[:,['model_num' , 'model_date' , 'submodel']].drop_duplicates()
+        else:
+            self._resume_preds_models = pd.DataFrame()
 
     @property
     def resume_preds_models(self) -> pd.DataFrame:
+        if not hasattr(self , '_resume_preds_models'):
+            self._resume_preds_models = pd.DataFrame()
         return self._resume_preds_models
 
     @property
@@ -274,10 +294,6 @@ class TrainerPredRecorder(ModelStreamLine):
         return df
 
     def on_test_start(self):
-        self.preds : dict[str,pd.DataFrame] = {}
-        self.tested_preds = pd.DataFrame()
-        self.resume_preds = pd.DataFrame()
-
         if self.trainer.config.is_resuming:
             df = self.load_saved_preds()
             if not df.empty:

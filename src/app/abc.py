@@ -145,7 +145,7 @@ class ScriptCmd:
             read -n 1 -s
             '''
             self.shell_cmd = ['gnome-terminal' , '--' , 'bash' , '-c' , f'{command}; exec bash']
-            self.shell_cmd = f'gnome-terminal -- bash -c "{self.py_cmd}; exec bash; exit"'
+            # self.shell_cmd = f'gnome-terminal -- bash -c "{self.py_cmd}; exec bash; exit"'
         elif platform.system() == 'Windows':
             self.shell_cmd = f'start cmd /c {self.py_cmd} && pause'
         elif platform.system() == 'Darwin':
