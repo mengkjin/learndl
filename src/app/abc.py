@@ -139,12 +139,7 @@ class ScriptCmd:
 
     def create_shell_cmd(self):
         if platform.system() == 'Linux' and os.name == 'posix':
-            command = f'''
-            {self.py_cmd}
-            echo "Task complete. Press any key to exit..."
-            read -n 1 -s
-            '''
-            self.shell_cmd = ['gnome-terminal' , '--' , 'bash' , '-c' , f'{command}; exec bash']
+            self.shell_cmd = ['gnome-terminal' , '--' , 'bash' , '-c' , f'{self.py_cmd}; echo "Task complete. Press any key to exit..."; read -n 1 -s']
             # self.shell_cmd = f'gnome-terminal -- bash -c "{self.py_cmd}; exec bash; exit"'
         elif platform.system() == 'Windows':
             self.shell_cmd = f'start cmd /c {self.py_cmd} && pause'
