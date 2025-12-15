@@ -74,9 +74,21 @@ def kill_process(pid):
     except Exception:
         pass
     return False
+
+def Popen(cmd : list[str] | str , encoding = 'utf-8' , communicating = False):
+    kwargs = {
+        'shell' : isinstance(cmd , str) ,
+        'encoding' : encoding , 
+        'stdin': subprocess.PIPE if communicating else None,
+        'stdout': subprocess.PIPE if communicating else None,
+        'stderr': subprocess.PIPE if communicating else None,
+        'text': True if communicating else None,
+    }
+    return subprocess.Popen(cmd , **kwargs)
     
 class ScriptCmd:
-    apple_terminal_profile_name = 'Pro'
+    macos_terminal_profile_name = 'Pro'
+    macos_tempfile_method = False
     def __init__(self , script : str | Path , params : dict | None = None , 
                  mode: Literal['shell', 'os'] = 'shell'):
         self.script = str(script.absolute()) if isinstance(script , Path) else script
@@ -98,27 +110,30 @@ class ScriptCmd:
     @property
     def shell(self):
         return self.mode == 'shell'
+
+    @property
+    def is_linux(self):
+        return platform.system() == 'Linux' and os.name == 'posix'
+    
+    @property
+    def is_windows(self):
+        return platform.system() == 'Windows'
+    
+    @property
+    def is_macos(self):
+        return platform.system() == 'Darwin'
+
         
     def __str__(self):
-        if self.mode == 'shell':
-            return str(self.shell_cmd)
-        elif self.mode == 'os':
+        if self.mode == 'os':
             return str(self.py_cmd)
+        elif self.mode == 'shell':
+            if self.is_macos:
+                return str([*self.shell_cmd , self.apple_script_cmd])
+            else:
+                return str(self.shell_cmd)
         else:
             raise ValueError(f'Invalid mode: {self.mode}')
-        
-    def run(self):
-        if self.mode == 'os':
-            self.run_in_os()
-        elif platform.system() == 'Linux' and os.name == 'posix':
-            self.run_in_linux()
-        elif platform.system() == 'Windows':
-            self.run_in_windows()
-        elif platform.system() == 'Darwin':
-            self.run_in_darwin()
-        else:
-            raise ValueError(f'Unsupported platform: {platform.system()}')
-        return self
     
     @property
     def real_pid(self):
@@ -138,17 +153,19 @@ class ScriptCmd:
         self.os_cmd = shlex.split(self.py_cmd)
 
     def create_shell_cmd(self):
-        if platform.system() == 'Linux' and os.name == 'posix':
-            self.shell_cmd = ['gnome-terminal' , '--' , 'bash' , '-c' , f'{self.py_cmd}; echo "Task complete. Press any key to exit..."; read -n 1 -s']
+        if self.is_linux:
+            self.shell_cmd = ['gnome-terminal' , '--' , 'bash' , '-c' , f'{self.py_cmd}; echo \'Task complete. Press any key to exit...\'; read -n 1 -s']
+            # self.shell_cmd = f'gnome-terminal -- bash -c "{self.py_cmd}; echo \'Task complete. Press any key to exit...\'; read -n 1 -s"'
             # self.shell_cmd = f'gnome-terminal -- bash -c "{self.py_cmd}; exec bash; exit"'
-        elif platform.system() == 'Windows':
+        elif self.is_windows:
             self.shell_cmd = f'start cmd /c {self.py_cmd} && pause'
-        elif platform.system() == 'Darwin':
-            self.shell_cmd = f'''
+        elif self.is_macos:
+            self.shell_cmd = ["osascript"] if self.macos_tempfile_method else ["osascript", "-"]
+            self.apple_script_cmd = f'''
 tell application "Terminal"
     -- Create a new terminal window
     set new_window to do script ""
-    set current settings of new_window to settings set "{self.apple_terminal_profile_name}"
+    set current settings of new_window to settings set "{self.macos_terminal_profile_name}"
     do script "{self.py_cmd}; echo 'Task complete. Press any key to exit...'; read -k 1; exit" in new_window
     -- Bring the main application window to the front
     activate
@@ -157,75 +174,46 @@ end tell
         else:
             raise ValueError(f'Unsupported platform: {platform.system()}')
 
-    def run_in_os(self):
-        assert not self.shell , 'os mode does not support shell mode'
-        self.process = subprocess.Popen(self.os_cmd, shell=False , encoding='utf-8')
-
-    def run_in_linux(self):
-        assert self.shell , 'linux mode does not support os mode'
-        assert platform.system() == 'Linux' and os.name == 'posix' , f'Unsupported platform for run_in_linux: {platform.system()}'
-        self.process = subprocess.Popen(self.shell_cmd, shell=True , encoding='utf-8')
-        return self
-    
-    def run_in_windows(self):
-        assert self.shell , 'windows mode does not support os mode'
-        assert platform.system() == 'Windows' , f'Unsupported platform for run_in_windows: {platform.system()}'
-        self.process = subprocess.Popen(self.shell_cmd, shell=True , encoding='utf-8')
+    def run(self):
+        if self.mode == 'os':
+            self.process = Popen(self.os_cmd)
+        elif self.is_linux or self.is_windows:
+            self.process = Popen(self.shell_cmd)
+        elif self.is_macos:
+            self.run_in_darwin()
+        else:
+            raise ValueError(f'Unsupported platform: {platform.system()}')
         return self
 
     def run_in_darwin(self):
-        assert isinstance(self.shell_cmd , str) , 'shell_cmd must be a string in darwin mode'
-        assert platform.system() == 'Darwin' , f'Unsupported platform for run_in_darwin: {platform.system()}'
+        assert self.mode == 'shell' , 'darwin mode does not support os mode'
+        assert self.is_macos , f'Unsupported platform for run_in_darwin: {platform.system()}'
+
+        if self.macos_tempfile_method:
+            with tempfile.NamedTemporaryFile(mode='w+', suffix=".applescript", delete=False) as temp_script:
+                temp_script.write(self.apple_script_cmd)
+                temp_script_path = Path(temp_script.name)
+
         try:
-            self.process = subprocess.Popen(
-                ["osascript", "-"], 
-                stdin=subprocess.PIPE, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                text=True # For string input/output
-            )
-            _ , stderr = self.process.communicate(input=self.shell_cmd)
+            if self.macos_tempfile_method:
+                self.process = Popen([*self.shell_cmd , str(temp_script_path)], communicating = True)
+                _ , stderr = self.process.communicate()
+            else:
+                self.process = Popen(self.shell_cmd, communicating = True)
+                _ , stderr = self.process.communicate(input=self.apple_script_cmd)
 
             if self.process.returncode == 0:
                 Logger.success("AppleScript executed successfully.")
             else:
                 Logger.error(f"AppleScript failed with return code {self.process.returncode}")
                 Logger.error(f"Errors: {stderr}")
-        except subprocess.CalledProcessError as e:
-            Logger.error(f"AppleScript failed with error:\n{e.stderr}")
-        except Exception as e:
-            Logger.error(f"An unexpected error occurred: {e}")
-
-    def run_in_darwin_tempfile(self):
-        assert isinstance(self.shell_cmd , str) , 'shell_cmd must be a string in darwin mode'
-        assert platform.system() == 'Darwin' , f'Unsupported platform for run_in_darwin_tempfile: {platform.system()}'
-        with tempfile.NamedTemporaryFile(mode='w+', suffix=".applescript", delete=False) as temp_script:
-            temp_script.write(self.shell_cmd)
-            temp_script_path = temp_script.name
-
-        try:
-            self.process = subprocess.Popen(
-                ["osascript", temp_script_path],
-                stdin=subprocess.PIPE, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                text=True # For string input/output
-            )
-            _ , stderr = self.process.communicate()
-
-            if self.process.returncode == 0:
-                Logger.success("AppleScript executed successfully.")
-            else:
-                Logger.error(f"AppleScript failed with return code {self.process.returncode}")
-                Logger.error(f"Errors: {stderr}")
-
         except subprocess.CalledProcessError as e:
             Logger.error(f"AppleScript failed with error:\n{e.stderr}")
         except Exception as e:
             Logger.error(f"An unexpected error occurred: {e}")
         finally:
-            if os.path.exists(temp_script_path):
-                os.remove(temp_script_path)
+            if self.macos_tempfile_method:
+                temp_script_path.unlink(True)
 
 def get_task_id_from_cmd(cmd : str):
     return cmd.split('task_id=')[1].split(' ')[0] if 'task_id=' in cmd else None

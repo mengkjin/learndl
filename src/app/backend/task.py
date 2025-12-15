@@ -403,14 +403,12 @@ class TaskQueue:
 
     def empty(self):
         for key in list(self.queue.keys()):
-            if self.queue[key].status != 'running':
-                self.queue.pop(key)
+            self.queue.pop(key)
         self.task_db.clear_queue(self.queue_id)
 
     def clear(self):
         for key in list(self.queue.keys()):
-            if self.queue[key].status != 'running': 
-                self.queue.pop(key)
+            self.queue.pop(key)
         self.task_db.clear_database()
 
     def count(self, status : Literal['starting', 'running', 'complete', 'error' , 'killed']):
