@@ -1,5 +1,5 @@
 # please check this path before running the code
-import sys , socket , platform , os
+import sys , socket , platform , os , torch
 
 from pathlib import Path
 from typing import Literal
@@ -29,6 +29,14 @@ def _get_python_path(machine_name : str , main_path : Path):
     else:
         return 'python'
 
+def _get_best_device():
+    if torch.cuda.is_available():
+        return torch.cuda.get_device_name(0).upper()
+    elif torch.mps.is_available():
+        return 'MPS'
+    else:
+        return 'CPU'
+
 class MACHINE:
     """
     Machine setting for the project
@@ -57,11 +65,25 @@ class MACHINE:
     is_linux = system_name == 'Linux' and os.name == 'posix'
     is_windows = system_name == 'Windows'
     is_macos = system_name == 'Darwin'
+
+    best_device = _get_best_device()
     
     assert main_path.exists() , f'main_path not exists: {main_path}'
     assert Path(__file__).is_relative_to(main_path) , f'{__file__} is not in {main_path}'
     sys.path.append(str(main_path))
     assert python_path , f'python_path not set for {name}'
+
+    @classmethod
+    def machine_info(cls) -> list[str]:
+        """Print the machine info"""
+        return [
+            f'Machine Name : {cls.name}', 
+            f'Is Server    : {cls.server}', 
+            f'System       : {cls.system_name}', 
+            f'Main Path    : {cls.main_path}' , 
+            f'Python Path  : {cls.python_path}' ,
+            f'Best Device  : {cls.best_device}' ,
+        ]
 
     @classmethod
     def machine_names(cls):

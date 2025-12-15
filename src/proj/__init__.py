@@ -18,17 +18,12 @@ def print_project_info():
     if identifier in os.environ:
         return
 
-    print(f'main path: {MACHINE.main_path}')
-    if torch.cuda.is_available():
-        print(f'Use device name: ' + torch.cuda.get_device_name(0))
-    elif MACHINE.server:
-        print('server should have cuda , please check the cuda status')
-    elif torch.mps.is_available():
-        print('Use MPS as default device')
-    else:
-        print('Use CPU as default device')
+    Logger.highlight(f'Project Initialized Successfully!')
+    [Logger.success(info) for info in MACHINE.machine_info()]
+    if MACHINE.server and not torch.cuda.is_available():
+        Logger.error(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status')
 
-    print(f'src.proj.InstanceRecord can be accessed to check {InstanceRecord._slots}')
+    # Logger.debug(f'src.proj.InstanceRecord can be accessed to check {InstanceRecord._slots}')
     os.environ[identifier] = "1"
 
 print_project_info()
