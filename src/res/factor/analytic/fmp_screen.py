@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 from typing import Any , Type
 
 from src.proj import Timer
@@ -83,9 +82,8 @@ class ScreenFMPTest(BaseFactorAnalyticTest):
 
     def generate(self , factor: StockFactor , benchmark : Any = 'defaults' , verbosity = 2 , **kwargs):
         alpha_models = factor.alpha_models()
-        dates = np.unique(np.concatenate([alpha.available_dates() for alpha in alpha_models]))
         universe = Universe('top-1000')
-        benchmarks = [universe.to_portfolio(dates).rename('univ')]
+        benchmarks = [universe.to_portfolio(factor.date).rename('univ')]
         self.update_kwargs(verbosity = verbosity)
         self.portfolio_group = PortfolioGroupBuilder('screen' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , resume = self.resume , resume_path = self.resume_path , caller = self , **self.kwargs)
         self.account = self.portfolio_group.build().accounts()

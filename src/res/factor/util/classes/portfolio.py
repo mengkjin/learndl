@@ -45,7 +45,7 @@ class Portfolio:
         return np.array(list(self.ports.keys()))
     @property
     def port_secid(self): 
-        return np.unique(np.concatenate([port.secid for port in self.ports.values()]))
+        return np.unique(np.concatenate([port.secid for port in self.ports.values()])) if self.ports else np.array([]).astype(int)
 
     @classmethod
     def random(cls):  

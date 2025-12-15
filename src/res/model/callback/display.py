@@ -205,4 +205,4 @@ class StatusDisplay(BaseCallBack):
         Logger.warning('{model}|{attempt} {epoch_model} {exit}|{status}|{time}'.format(**self.record_texts))
     
     def on_before_test_end(self): 
-        Logger.critical(f'Finish iterating test batches! Cost {Duration(self.tc('test'))}')
+        Logger.highlight(f'Finish iterating test batches! Cost {Duration(self.tc('test'))}' , default_prefix = True)

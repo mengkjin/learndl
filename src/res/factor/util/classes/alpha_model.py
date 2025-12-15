@@ -115,7 +115,7 @@ class Amodel:
         assert len(alphas) == len(weights) or len(weights) == 0 , f'alphas and weights must have the same length, but got {len(alphas)} and {len(weights)}'
         if len(weights) == 0:
             weights = np.ones(len(alphas)) / len(alphas)
-        secid = np.unique(np.concatenate([alpha.secid for alpha in alphas]))
+        secid = np.unique(np.concatenate([alpha.secid for alpha in alphas])) if alphas else np.array([])
         alpha = np.sum(np.array([alpha.align(secid).alpha for alpha in alphas]) * np.array(weights)[:,None] , axis = 0) / np.sum(weights)
         if normalize: 
             alpha = zscore(alpha)

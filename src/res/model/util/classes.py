@@ -243,8 +243,18 @@ class TrainerPredRecorder(ModelStreamLine):
     def path_pred(self) -> Path: 
         return self.trainer.config.model_base_path.snapshot('pred_df.feather')
 
+    def tested_models(self):
+        models = []
+        if not self.resume_preds.empty:
+            for (model_num , model_date) , subdf in self.resume_preds_models.groupby(['model_num' , 'model_date']):
+                if np.isin(self.trainer.model_submodels , subdf['submodel']).all():
+                    models.append((model_date , model_num))
+        return models
+
     def get_preds(self , include_resume : bool = False , interval : int = 1) -> pd.DataFrame:
         df = pd.concat([self.resume_preds , self.tested_preds]) if include_resume else self.tested_preds
+        if df.empty:
+            return pd.DataFrame(columns = self.PRED_KEYS + self.PRED_IDXS + self.PRED_COLS)
         df = df.query('date in @self.trainer.data.test_full_dates')
         if interval > 1:
             dates = df['date'].unique()[::interval] # noqa: F841
@@ -298,7 +308,7 @@ class TrainerPredRecorder(ModelStreamLine):
             df = self.load_saved_preds()
             if not df.empty:
                 last_model_date = df['model_date'].max()
-                Logger.info(f'Resume testing, recognize past saved preds before model date {last_model_date}')
+                print(f'Resume testing, recognize past saved preds before model date {last_model_date}')
                 self.resume_preds = df.query('model_date < @last_model_date')
                 
     def on_test_batch_end(self): 
@@ -605,7 +615,8 @@ class BaseTrainer(ModelStreamLine):
         '''iter of model_date and model_num , considering is_resuming'''
         model_iter = list(itertools.product(self.data.model_date_list , self.config.model_num_list))
         assert self.status.stage in ['fit' , 'test'] , self.status.stage
-        print(f'# of all models: {len(model_iter)}')
+        num_all_models = len(model_iter)
+        iter_info = f'In stage [{self.status.stage}], # of all models is {num_all_models}, '
         if self.config.is_resuming:
             if self.status.stage == 'fit':
                 models_trained = np.full(len(model_iter) , True , dtype = bool)
@@ -613,23 +624,18 @@ class BaseTrainer(ModelStreamLine):
                     if not self.deposition.exists(model_num , model_date):
                         models_trained[max(i,0):] = False
                         break
-                print(f'# of models not trained: {len(model_iter) - sum(models_trained)}')
-                model_iter = Filtered(model_iter , ~models_trained)
+                condition = ~models_trained
+                model_iter = Filtered(model_iter , ~condition)
             elif self.status.stage == 'test':
-                tested_models = []
-                if not self.record.resume_preds.empty:
-                    for (model_num , model_date) , subdf in self.record.resume_preds_models.groupby(['model_num' , 'model_date']):
-                        if np.isin(self.model_submodels , subdf['submodel']).all():
-                            tested_models.append((model_date , model_num))
- 
-                models_not_tested = [model not in tested_models for model in model_iter]
-                print(f'# of models not tested: {sum(models_not_tested)}')
-                model_iter = Filtered(model_iter , models_not_tested)
+                tested_models = self.record.tested_models()
+                condition = [(model_date , model_num) not in tested_models or model_date == self.data.model_date_list[-1] for model_date , model_num in model_iter]
+                model_iter = Filtered(model_iter , condition)
+            iter_info += f'resuming {num_all_models - sum(condition)} models, {sum(condition)} to go!'
         #elif self.status.stage == 'test' and self.status.fitted_model_num <= 0:
         #    model_iter = []
         else:
-            print(f'# of models to go: {len(model_iter)}')
-        
+            iter_info += f'{num_all_models} to go!'
+        print(iter_info)
         return model_iter
 
     def iter_model_submodels(self):

@@ -213,27 +213,29 @@ class PortfolioGroupBuilder:
         analytic : bool = True
         attribution : bool = True
     '''
-    def __init__(self , 
-                 category : Literal['optim' , 'top' , 'screen' , 'revscreen'] | Any ,
-                 alpha_models : AlphaModel | list[AlphaModel] , 
-                 benchmarks : str | None | list = None , 
-                 add_lag : int = 0 , 
-                 param_groups : dict[Any,dict[str,Any]] = {} ,
-                 daily : bool = False ,
-                 analytic : bool = True ,
-                 attribution : bool = True ,
-                 trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
-                 verbosity : int = 1 ,
-                 resume : bool = False ,
-                 resume_path : Path | str | None = None ,
-                 caller = None ,
-                 **kwargs):
+    def __init__(
+        self , 
+        category : Literal['optim' , 'top' , 'screen' , 'revscreen'] | Any ,
+        alpha_models : AlphaModel | list[AlphaModel] , 
+        benchmarks : str | None | list = None , 
+        add_lag : int = 0 , 
+        param_groups : dict[Any,dict[str,Any]] = {} ,
+        daily : bool = False ,
+        analytic : bool = True ,
+        attribution : bool = True ,
+        trade_engine : Literal['default' , 'harvest' , 'yale'] = 'default' ,
+        verbosity : int = 1 ,
+        resume : bool = False ,
+        resume_path : Path | str | None = None ,
+        caller = None ,
+        **kwargs
+    ):
         
         self.category = category
 
         assert alpha_models , f'alpha_models must has elements!'
         self.alpha_models = alpha_models if isinstance(alpha_models , list) else [alpha_models]
-        self.relevant_dates = np.unique(np.concatenate([amodel.available_dates() for amodel in self.alpha_models])).astype(int)
+        self.relevant_dates = (np.unique(np.concatenate([amodel.available_dates() for amodel in self.alpha_models])) if self.alpha_models else np.array([])).astype(int)
         self.benchmarks = Benchmark.get_benchmarks(benchmarks)
 
         assert add_lag >= 0 , add_lag

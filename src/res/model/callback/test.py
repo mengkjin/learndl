@@ -181,12 +181,11 @@ class DetailedAlphaAnalysis(BaseCallBack):
             with Timer(f'FactorFMPTest.get_factor' , silent = self.verbosity < 1):
                 factor = self.get_factor(include_resume=False , interval = 1)
             with Timer(f'FactorFMPTest.get_alpha_models' , silent = self.verbosity < 1):
-                alpha_models = factor.alpha_models()
+                factor.alpha_models()
             with Timer(f'FactorFMPTest.get_universe' , silent = self.verbosity < 1):
-                dates = np.unique(np.concatenate([alpha.available_dates() for alpha in alpha_models]))
-                Universe('top-1000').to_portfolio(dates)
+                Universe('top-1000').to_portfolio(factor.date)
             with Timer(f'FactorFMPTest.load_risk_models' , silent = self.verbosity < 1):
-                RISK_MODEL.load_models(dates)
+                RISK_MODEL.load_models(factor.date)
             for task in self.fmp_tasks:
                 if self.verbosity > 0:
                     Logger.divider()

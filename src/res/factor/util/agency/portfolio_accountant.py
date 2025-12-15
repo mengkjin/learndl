@@ -91,7 +91,8 @@ class PortfolioAccountant:
     def setup(self):
         assert self.config is not None , 'config is not set'
         if len(self.port_dates) == 0:
-            raise ValueError('No portfolio dates to account!')
+            self.account = pd.DataFrame()
+            return self
         
         port_min , port_max = self.port_dates.min() , self.port_dates.max()
         start = np.max([port_min , self.config.start])

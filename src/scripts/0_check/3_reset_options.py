@@ -13,7 +13,7 @@ from src.app import ScriptTool
 @ScriptTool('reset_options')
 def main(**kwargs):
     Options.cache.clear()
-    Logger.success(f'Success : reset options cache')
+    Logger.success(f'Reset Options Cache Successfully!')
 
 if __name__ == '__main__':
     main()
